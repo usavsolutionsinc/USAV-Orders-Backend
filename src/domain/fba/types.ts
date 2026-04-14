@@ -1,10 +1,23 @@
 /**
  * Clean domain types for the FBA flow.
  *
- * Naming conventions:
- *   "Plan"     = internal concept (what the ops team creates). Maps to `fba_shipments`.
- *   "Shipment" = Amazon's concept (the FBA Shipment ID). Just a field on a Plan.
- *   "Box"      = a carrier tracking number with items allocated to it.
+ * Two workflow phases live on the same `fba_shipments` row:
+ *
+ *   **Plan** — the prep-queue phase. An FNSKU (or a group of them) has been
+ *   added to the DB so every tech can see it on their station up-next (via
+ *   `FbaItemCard` in `UpNextOrder`). At this stage there is no Amazon FBA ID
+ *   and no UPS tracking; just "these SKUs need to be prepped for FBA".
+ *
+ *   **Shipment** — the outbound phase. An Amazon FBA shipment ID now pairs
+ *   one-or-more UPS tracking numbers (one per physical box). Same FBA ID →
+ *   many UPS trackings → many boxes. Rendered via `FbaShipmentCard` and
+ *   `FbaActiveShipments`.
+ *
+ * Naming in this file is historical — the outbound record type is called
+ * `FbaPlan` because "plan" was the original name before the prep queue grew
+ * on top. Do not rename; UI copy disambiguates per surface (plan vs shipment).
+ *
+ *   "Box" = a carrier tracking number with items allocated to it.
  */
 
 // ── Plan ────────────────────────────────────────────────────────────────────

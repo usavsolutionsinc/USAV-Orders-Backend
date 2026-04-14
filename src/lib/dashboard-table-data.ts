@@ -186,6 +186,66 @@ export async function fetchUnshippedOrdersData({
   return records.filter((record) => record.shipment_id == null);
 }
 
+export interface DashboardShippedSearchMeta {
+  outOfScope: boolean;
+  outOfScopeSuggestion: { filter: string; count: number } | null;
+  debug: Record<string, unknown> | null;
+}
+
+export interface DashboardShippedSearchResult {
+  records: ShippedOrder[];
+  meta: DashboardShippedSearchMeta;
+}
+
+export async function fetchDashboardShippedSearch({
+  searchQuery,
+  packedBy,
+  testedBy,
+  shippedFilter,
+  searchField,
+}: {
+  searchQuery: string;
+  packedBy?: number;
+  testedBy?: number;
+  shippedFilter?: string;
+  searchField?: ShippedSearchField;
+}): Promise<DashboardShippedSearchResult> {
+  const params = new URLSearchParams();
+  params.set('q', searchQuery.trim());
+  if (searchField && searchField !== 'all') params.set('searchField', searchField);
+  if (packedBy !== undefined) params.set('packedBy', String(packedBy));
+  if (testedBy !== undefined) params.set('testedBy', String(testedBy));
+  if (shippedFilter) params.set('shippedFilter', shippedFilter);
+
+  const res = await fetch(`/api/shipped?${params.toString()}`, FRESH_FETCH_OPTIONS);
+  if (!res.ok) throw new Error('Failed to fetch shipped orders');
+
+  const debugHeader = res.headers.get('x-search-debug');
+  let debug: Record<string, unknown> | null = null;
+  if (debugHeader) {
+    try { debug = JSON.parse(debugHeader); } catch { debug = null; }
+  }
+
+  const data = await res.json();
+  const shipped = Array.isArray(data.orders)
+    ? data.orders
+    : Array.isArray(data.shipped)
+      ? data.shipped
+      : Array.isArray(data.results)
+        ? data.results
+        : [];
+  const records = dedupeByOrderId((shipped || []).map(toOrderRecord) as ShippedOrder[]);
+  const scoped = shippedFilter ? records : records.filter(isNonFbaRecord);
+  return {
+    records: scoped,
+    meta: {
+      outOfScope: Boolean(data.outOfScope),
+      outOfScopeSuggestion: data.outOfScopeSuggestion ?? null,
+      debug,
+    },
+  };
+}
+
 export async function fetchDashboardShippedData({
   searchQuery = '',
   packedBy,

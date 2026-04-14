@@ -22,7 +22,7 @@ import {
 import WeekHeader from '@/components/ui/WeekHeader';
 import { formatDateWithOrdinal, getCurrentPSTDateKey, toPSTDateKey } from '@/utils/date';
 import { ShippedOrder } from '@/lib/neon/orders-queries';
-import { fetchDashboardPackedRecords, fetchDashboardShippedData } from '@/lib/dashboard-table-data';
+import { fetchDashboardPackedRecords, fetchDashboardShippedSearch, type DashboardShippedSearchMeta } from '@/lib/dashboard-table-data';
 import { getWeekRangeForOffset } from '@/lib/dashboard-week-range';
 import { dispatchCloseShippedDetails, dispatchOpenShippedDetails, getOpenShippedDetailsPayload } from '@/utils/events';
 import type { PackerRecord } from '@/hooks/usePackerLogs';
@@ -91,13 +91,13 @@ export function DashboardShippedTable({
   const queryClient = useQueryClient();
   const [selectedDetailId, setSelectedDetailId] = useState<number | null>(null);
   const [searchFallbackRecords, setSearchFallbackRecords] = useState<PackerRecord[]>([]);
+  const [searchMeta, setSearchMeta] = useState<DashboardShippedSearchMeta | null>(null);
   const [stickyDate, setStickyDate] = useState('');
   const [currentCount, setCurrentCount] = useState(0);
   const [isResolvingSearch, setIsResolvingSearch] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const resolvedSearchKeyRef = useRef('');
 
-  const search = searchParams.get('search') || '';
   const shippedSearchField = normalizeShippedSearchField(searchParams.get('shippedSearchField'));
   const shippedFilterParam = searchParams.get('shippedFilter');
   const shippedFilter = useMemo(() => {
@@ -119,6 +119,9 @@ export function DashboardShippedTable({
 
   const queryKey = ['dashboard-table', 'shipped', { weekStart: weekRange.startStr, weekEnd: weekRange.endStr, packedBy, testedBy, shippedFilter }] as const;
 
+  const search = searchParams.get('search') || '';
+  const normalizedSearch = search.trim().toLowerCase();
+
   const query = useQuery({
     queryKey,
     queryFn: () =>
@@ -129,6 +132,12 @@ export function DashboardShippedTable({
         weekEnd: weekRange.endStr,
         shippedFilter,
       }),
+    // When a search is active, skip the packer_logs prefetch and drive the
+    // table directly from /api/shipped via searchFallbackRecords. This closes
+    // the gap where an order exists in the DB but has no packer_logs row for
+    // the current week, which previously returned "no results" even when the
+    // shipped API would have found it.
+    enabled: !normalizedSearch,
     staleTime: 5 * 60 * 1000,
     gcTime: 15 * 60 * 1000,
     placeholderData: (previousData) => previousData,
@@ -186,6 +195,7 @@ export function DashboardShippedTable({
     params.delete('search');
     resolvedSearchKeyRef.current = '';
     setSearchFallbackRecords([]);
+    setSearchMeta(null);
     setIsResolvingSearch(false);
     const nextSearch = params.toString();
     const nextPath = pathname || '/dashboard';
@@ -193,7 +203,6 @@ export function DashboardShippedTable({
   };
 
   const rawRecords = useMemo(() => query.data || [], [query.data]);
-  const normalizedSearch = search.trim().toLowerCase();
 
   const toDetailRecord = useCallback((record: PackerRecord): ShippedOrder => ({
     id: record.order_row_id || record.id,
@@ -338,6 +347,7 @@ export function DashboardShippedTable({
     if (!normalizedSearch) {
       resolvedSearchKeyRef.current = '';
       setSearchFallbackRecords([]);
+      setSearchMeta(null);
       setIsResolvingSearch(false);
       return;
     }
@@ -363,7 +373,7 @@ export function DashboardShippedTable({
     const resolveSearch = async () => {
       setIsResolvingSearch(true);
       try {
-        const shippedResults = await fetchDashboardShippedData({
+        const { records: shippedResults, meta } = await fetchDashboardShippedSearch({
           searchQuery: search,
           packedBy,
           testedBy,
@@ -375,10 +385,12 @@ export function DashboardShippedTable({
         const normalizedResults = shippedResults.map(toSearchResultRecord);
         resolvedSearchKeyRef.current = searchKey;
         setSearchFallbackRecords(normalizedResults);
+        setSearchMeta(meta);
       } catch {
         if (!cancelled) {
           resolvedSearchKeyRef.current = searchKey;
           setSearchFallbackRecords([]);
+          setSearchMeta(null);
         }
       } finally {
         if (!cancelled) setIsResolvingSearch(false);
@@ -587,13 +599,36 @@ export function DashboardShippedTable({
             {Object.keys(groupedRecords).length === 0 ? (
               <div className="flex flex-col items-center justify-center py-40 text-center">
                 {search ? (
-                  <OrderSearchEmptyState
-                    query={search}
-                    title={searchEmptyTitle}
-                    resultLabel={searchResultLabel}
-                    clearLabel={clearSearchLabel}
-                    onClear={clearSearch}
-                  />
+                  <>
+                    <OrderSearchEmptyState
+                      query={search}
+                      title={searchEmptyTitle}
+                      resultLabel={searchResultLabel}
+                      clearLabel={clearSearchLabel}
+                      onClear={clearSearch}
+                    />
+                    {searchMeta?.outOfScope && searchMeta.outOfScopeSuggestion ? (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const params = new URLSearchParams(searchParams.toString());
+                          params.set('shippedFilter', searchMeta.outOfScopeSuggestion!.filter);
+                          const nextSearch = params.toString();
+                          const nextPath = pathname || '/dashboard';
+                          router.replace(
+                            nextSearch ? `${nextPath}?${nextSearch}` : nextPath,
+                            { scroll: false },
+                          );
+                        }}
+                        className="mt-4 rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-800 hover:bg-amber-100"
+                      >
+                        Found {searchMeta.outOfScopeSuggestion.count} match
+                        {searchMeta.outOfScopeSuggestion.count === 1 ? '' : 'es'} in the{' '}
+                        <span className="uppercase">{searchMeta.outOfScopeSuggestion.filter}</span>{' '}
+                        tab — switch?
+                      </button>
+                    ) : null}
+                  </>
                 ) : (
                   <div className="max-w-xs mx-auto animate-in fade-in zoom-in duration-300">
                     <p className="text-gray-500 font-semibold italic opacity-20">No shipped records for this week</p>

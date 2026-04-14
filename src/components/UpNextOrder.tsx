@@ -162,7 +162,7 @@ export default function UpNextOrder({ techId, onStart, onMissingParts, onAllComp
     },
     {
       id: 'fba',
-      label: 'FBA Pending Items',
+      label: 'FBA Plan Items',
       headerColor: 'purple' as const,
       count: filteredFbaItems.length,
       render: () => (
@@ -327,7 +327,7 @@ export default function UpNextOrder({ techId, onStart, onMissingParts, onAllComp
 
             ) : effectiveTab === 'fba' ? (
               filteredFbaItems.length === 0 ? (
-                <EmptySlate label={isFiltering ? "No results" : "No active FBA items"} color={isFiltering ? "gray" : "purple"} />
+                <EmptySlate label={isFiltering ? "No results" : "No FBA plan items"} color={isFiltering ? "gray" : "purple"} />
               ) : (
                 renderRows(
                   filteredFbaItems.map((item) => (

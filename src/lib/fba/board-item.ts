@@ -35,17 +35,3 @@ export function shipmentItemToBoardItem(
   };
 }
 
-/** Build multiple FbaBoardItems from a shipment's items (e.g. for paired review prefill). */
-export function shipmentItemsToBoardItems(
-  shipment: Pick<ActiveShipment, 'id' | 'shipment_ref' | 'amazon_shipment_id'>,
-  rows: ShipmentCardItem[],
-  getQty?: (item: ShipmentCardItem) => number,
-): FbaBoardItem[] {
-  return rows.map((item) =>
-    shipmentItemToBoardItem(item, shipment, {
-      expected_qty: getQty ? getQty(item) : item.expected_qty,
-      item_status: item.status,
-      shipment_status: item.status,
-    }),
-  );
-}

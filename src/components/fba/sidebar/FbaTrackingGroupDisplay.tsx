@@ -23,6 +23,8 @@ export interface FbaTrackingGroupDisplayProps {
   onRemoveItem?: (item: ShipmentCardItem) => void;
   onAdjustQty?: (item: ShipmentCardItem, delta: number) => void;
   onSetQty?: (item: ShipmentCardItem, qty: number) => void;
+  /** When true, rows render with no leading checkbox column (read-only display). */
+  hideCheckbox?: boolean;
 }
 
 /**
@@ -41,6 +43,7 @@ export function FbaTrackingGroupDisplay({
   onRemoveItem,
   onAdjustQty,
   onSetQty,
+  hideCheckbox = false,
 }: FbaTrackingGroupDisplayProps) {
   const resolveQty = (item: ShipmentCardItem) => (getQty ? getQty(item) : item.expected_qty);
   const totalQty = items.reduce((s, i) => s + resolveQty(i), 0);
@@ -77,6 +80,7 @@ export function FbaTrackingGroupDisplay({
               stationTheme={stationTheme}
               checked={isSelected}
               checkboxDisabled={!editable}
+              hideCheckbox={hideCheckbox}
               onCheckedChange={(next) => {
                 if (onCheckedChange) onCheckedChange(item.item_id, next);
                 else if (!next && onRemoveItem) onRemoveItem(item);

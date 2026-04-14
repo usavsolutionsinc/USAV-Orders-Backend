@@ -135,6 +135,8 @@ export function FbaTrackingBundleCard({
           >
             {bundle.collapsed ? <ChevronDown className="h-3 w-3" /> : <ChevronUp className="h-3 w-3" />}
           </button>
+          {/* Divider + extra padding so the destructive trash button is harder to mis-tap next to the chevron */}
+          <span aria-hidden className="mx-0.5 h-3 w-px bg-gray-200" />
           <button
             type="button"
             onClick={() => onRemoveBundle(bundleIndex)}

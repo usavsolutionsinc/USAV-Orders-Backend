@@ -48,33 +48,6 @@
     "label": "google-sheets-transfer-orders"
   },
   {
-    "scheduleId": "zoho-purchase-orders-half-hour",
-    "cron": "20,50 * * * *",
-    "path": "/api/zoho/purchase-orders/sync",
-    "body": {
-      "days_back": 2,
-      "per_page": 200,
-      "max_pages": 20,
-      "max_items": 2000
-    },
-    "retries": 3,
-    "timeout": 300,
-    "label": "zoho-purchase-orders-sync"
-  },
-  {
-    "scheduleId": "zoho-purchase-receives-half-hour",
-    "cron": "25,55 * * * *",
-    "path": "/api/zoho/purchase-receives/sync",
-    "body": {
-      "per_page": 100,
-      "max_pages": 10,
-      "max_items": 1000
-    },
-    "retries": 3,
-    "timeout": 300,
-    "label": "zoho-purchase-receives-sync"
-  },
-  {
     "scheduleId": "staff-goal-history-nightly-pacific",
     "cron": "CRON_TZ=America/Los_Angeles 30 17 * * *",
     "path": "/api/qstash/staff-goals/history",

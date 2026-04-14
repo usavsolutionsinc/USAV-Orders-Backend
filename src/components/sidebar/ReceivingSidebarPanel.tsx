@@ -1,14 +1,16 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { renderToStaticMarkup } from 'react-dom/server';
 import { useRouter, useSearchParams } from 'next/navigation';
+import QRCode from 'react-qr-code';
 import {
   sidebarHeaderBandClass,
   sidebarHeaderControlClass,
   sidebarHeaderRowClass,
 } from '@/components/layout/header-shell';
 import { Barcode, Clipboard, Printer, RefreshCw, X } from '@/components/Icons';
-import { OrderIdChip, TrackingChip, getLast4 } from '@/components/ui/CopyChip';
+import { TrackingChip, getLast4 } from '@/components/ui/CopyChip';
 import { SearchBar } from '@/components/ui/SearchBar';
 import { ViewDropdown } from '@/components/ui/ViewDropdown';
 import StaffSelector from '@/components/StaffSelector';
@@ -17,12 +19,18 @@ import {
   ReceivingReturnBanner,
   type ReturnEvent,
 } from '@/components/sidebar/ReceivingReturnBanner';
+import { ScanStatusChip } from '@/components/sidebar/ScanStatusChip';
+import { PhonePairModal } from '@/components/sidebar/PhonePairModal';
+import { useAblyChannel } from '@/hooks/useAblyChannel';
+import { useAblyClient } from '@/contexts/AblyContext';
 import { printProductLabel } from '@/lib/print/printProductLabel';
+import { loadBarcodeLibrary, renderBarcode } from '@/utils/barcode';
 import { LocalPickupIntakeForm } from '@/components/work-orders/LocalPickupIntakeForm';
 import {
   QA_OPTS,
   DISPOSITION_OPTS,
   CONDITION_OPTS,
+  COND_LABEL,
 } from '@/components/station/receiving-constants';
 import type { ReceivingLineRow } from '@/components/station/ReceivingLinesTable';
 import { dispatchLineUpdated } from '@/components/station/ReceivingLinesTable';
@@ -50,18 +58,186 @@ type PoLineSummary = {
   image_url: string | null;
   quantity_expected: number | null;
   quantity_received: number;
+  zoho_purchaseorder_id: string | null;
+  zoho_purchaseorder_number: string | null;
+  receiving_type: string | null;
+  condition_grade: string | null;
+};
+
+type ReceivingPackageMeta = {
+  received_at: string | null;
+  unboxed_at: string | null;
+  created_at: string | null;
+  return_platform: string | null;
+  source_platform: string | null;
+  is_return: boolean;
 };
 
 type PoContext = {
   receiving_id: number;
   po_ids: string[];
   lines: PoLineSummary[];
+  receiving_package: ReceivingPackageMeta | null;
 };
 
-type UnmatchedEntry = {
+const RETURN_PLATFORM_LABELS: Record<string, string> = {
+  AMZ: 'Amazon',
+  EBAY_DRAGONH: 'eBay (DH)',
+  EBAY_USAV: 'eBay (USAV)',
+  EBAY_MK: 'eBay (MK)',
+  FBA: 'FBA',
+  WALMART: 'Walmart',
+  ECWID: 'Ecwid',
+};
+
+const RECEIVING_TYPE_OPTS = [
+  { value: 'PO', label: 'PO' },
+  { value: 'RETURN', label: 'Return' },
+  { value: 'TRADE_IN', label: 'Trade In' },
+  { value: 'PICKUP', label: 'Pick Up' },
+];
+
+const SOURCE_PLATFORM_OPTS: Array<{ value: string; label: string }> = [
+  { value: '',           label: 'Auto' },
+  { value: 'zoho',       label: 'Zoho' },
+  { value: 'ebay',       label: 'eBay' },
+  { value: 'amazon',     label: 'Amazon' },
+  { value: 'aliexpress', label: 'AliExp' },
+  { value: 'walmart',    label: 'Walmart' },
+  { value: 'other',      label: 'Other' },
+];
+
+const SOURCE_PLATFORM_LABELS: Record<string, string> = {
+  zoho: 'Zoho',
+  ebay: 'eBay',
+  amazon: 'Amazon',
+  aliexpress: 'AliExpress',
+  walmart: 'Walmart',
+  other: 'Other',
+};
+
+function parseReceivingPackage(raw: unknown): ReceivingPackageMeta | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const o = raw as Record<string, unknown>;
+  return {
+    received_at: o.received_at != null ? String(o.received_at) : null,
+    unboxed_at: o.unboxed_at != null ? String(o.unboxed_at) : null,
+    created_at: o.created_at != null ? String(o.created_at) : null,
+    return_platform: o.return_platform != null ? String(o.return_platform) : null,
+    source_platform: o.source_platform != null ? String(o.source_platform) : null,
+    is_return: Boolean(o.is_return),
+  };
+}
+
+function mapApiLineToPoSummary(l: {
+  id: number;
+  sku: string | null;
+  item_name: string | null;
+  image_url: string | null;
+  quantity_expected: number | null;
+  quantity_received: number;
+  zoho_purchaseorder_id?: string | null;
+  zoho_purchaseorder_number?: string | null;
+  receiving_type?: string | null;
+  condition_grade?: string | null;
+}): PoLineSummary {
+  return {
+    id: l.id,
+    sku: l.sku,
+    item_name: l.item_name,
+    image_url: l.image_url ?? null,
+    quantity_expected: l.quantity_expected,
+    quantity_received: l.quantity_received,
+    zoho_purchaseorder_id: l.zoho_purchaseorder_id ?? null,
+    zoho_purchaseorder_number: l.zoho_purchaseorder_number ?? null,
+    receiving_type: l.receiving_type ?? 'PO',
+    condition_grade: l.condition_grade ?? 'BRAND_NEW',
+  };
+}
+
+function receivingTypeLabel(value: string | null | undefined): string {
+  const v = String(value || 'PO').trim().toUpperCase() || 'PO';
+  return RECEIVING_TYPE_OPTS.find((o) => o.value === v)?.label ?? v.replace(/_/g, ' ');
+}
+
+function platformLabel(
+  pkg: ReceivingPackageMeta | null,
+  lineReceivingType: string | null | undefined,
+): string {
+  const override = (pkg?.source_platform || '').trim().toLowerCase();
+  if (override) return SOURCE_PLATFORM_LABELS[override] ?? override;
+  const t = String(lineReceivingType || 'PO').trim().toUpperCase();
+  if (t === 'PICKUP') return 'Local pickup';
+  if (pkg?.is_return && pkg.return_platform) {
+    return RETURN_PLATFORM_LABELS[pkg.return_platform] ?? pkg.return_platform.replace(/_/g, ' ');
+  }
+  if (pkg?.is_return) return 'Return';
+  return 'Zoho';
+}
+
+function formatPackageUnboxDate(pkg: ReceivingPackageMeta | null): string {
+  const raw = pkg?.unboxed_at || pkg?.received_at || pkg?.created_at;
+  if (!raw) return '—';
+  const d = new Date(raw);
+  if (Number.isNaN(d.getTime())) return '—';
+  return d.toLocaleDateString('en-US', { month: 'numeric', day: 'numeric', year: '2-digit' });
+}
+
+function resolvePoScanValue(
+  line: PoLineSummary | null | undefined,
+  poIds: string[],
+  receivingId?: number | null,
+): string {
+  const fromLine = (line?.zoho_purchaseorder_number || '').trim();
+  if (fromLine) return fromLine;
+  const fromIds = (poIds[0] || '').trim();
+  if (fromIds) return fromIds;
+  const fromLineId = (line?.zoho_purchaseorder_id || '').trim();
+  if (fromLineId) return fromLineId;
+  if (receivingId != null) return `RCV-${receivingId}`;
+  return '';
+}
+
+function conditionShort(code: string | null | undefined): string {
+  const c = String(code || 'BRAND_NEW').trim().toUpperCase();
+  if (c === 'BRAND_NEW') return 'New';
+  if (c === 'PARTS') return 'Parts';
+  if (c.startsWith('USED_')) {
+    const letter = COND_LABEL[c] || c.replace('USED_', '');
+    return `U-${letter}`;
+  }
+  return c.replace(/_/g, ' ');
+}
+
+function ConditionHeaderDisplay({ code }: { code: string }) {
+  const c = String(code || 'BRAND_NEW').trim().toUpperCase();
+  if (c === 'BRAND_NEW') {
+    return <span className="font-black text-gray-900">New</span>;
+  }
+  if (c === 'PARTS') {
+    return <span className="font-black text-gray-900">Parts</span>;
+  }
+  if (c.startsWith('USED_')) {
+    const letter = COND_LABEL[c] || c.replace('USED_', '');
+    return (
+      <span className="inline-flex items-baseline gap-0 font-black tracking-tight text-gray-900">
+        <span className="underline decoration-gray-900 decoration-2 underline-offset-2">U</span>
+        <span>-{letter}</span>
+      </span>
+    );
+  }
+  return <span className="font-semibold text-gray-800">{c.replace(/_/g, ' ')}</span>;
+}
+
+type PendingScan = {
   id: string;
   tracking: string;
-  at: number;
+  status: 'checking' | 'matched' | 'unmatched' | 'error';
+  startedAt: number;
+  receiving_id?: number;
+  po_ids?: string[];
+  scan_id?: number;
+  errorMessage?: string;
 };
 
 function randomId(): string {
@@ -71,47 +247,219 @@ function randomId(): string {
   return `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
 }
 
-const RECEIVING_TYPE_OPTS = [
-  { value: 'PO', label: 'PO' },
-  { value: 'RETURN', label: 'Return' },
-  { value: 'TRADE_IN', label: 'Trade In' },
-  { value: 'PICKUP', label: 'Pick Up' },
-];
-
 const SELECT_CLASS =
   'w-full rounded-md border border-gray-200 bg-white px-2 py-1.5 text-[11px] font-bold text-gray-900 focus:border-blue-300 focus:outline-none focus:ring-2 focus:ring-blue-500/10';
 const INPUT_CLASS =
   'w-full rounded-md border border-gray-200 bg-white px-2 py-1.5 text-[11px] font-semibold text-gray-900 placeholder:text-gray-400 focus:border-blue-300 focus:outline-none focus:ring-2 focus:ring-blue-500/10';
 
-function printReceivingLabel(poNumber: string, receivingType: string) {
+type ReceivingLabelPayload = {
+  scanValue: string;        // PO#, PO id, or RCV-{receiving_id} fallback
+  platform: string;         // "Zoho" | "Return" | "Local pickup" | "eBay" ...
+  typeLabel: string;        // "PO" | "Return" | "Trade In" | "Pick Up"
+  conditionCode: string;    // raw condition grade enum: BRAND_NEW | USED_A | …
+  date: string;             // short date "4/14/26"
+};
+
+function escapeHtml(s: string): string {
+  return s
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+/**
+ * Generate a 2×1" label with info on the left and a pre-rendered QR SVG on
+ * the right. The QR is materialized in the parent window via react-qr-code
+ * + renderToStaticMarkup so the popup contains no external scripts — that
+ * removes the CDN race that sometimes left the print dialog hanging.
+ */
+function printReceivingLabel(payload: ReceivingLabelPayload) {
   if (typeof window === 'undefined') return;
-  const last4 = poNumber.length > 4 ? poNumber.slice(-4) : poNumber;
-  const barcodeValue = JSON.stringify(poNumber);
-  const today = new Date().toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: '2-digit' });
-  const typeLabel = (receivingType || 'PO').replace(/_/g, ' ');
+  const scanValue = payload.scanValue.trim();
+  if (!scanValue) return;
+
+  // Pre-render the QR as an SVG string in the parent so the popup does not
+  // need to fetch a qrcode library from a CDN.
+  const qrSvg = renderToStaticMarkup(
+    <QRCode
+      value={scanValue}
+      size={80}
+      level="M"
+      fgColor="#000000"
+      bgColor="#ffffff"
+    />,
+  );
+
+  const condShort = conditionShort(payload.conditionCode);
+  const condHtml = condShort === 'New' || condShort === 'Parts'
+    ? escapeHtml(condShort)
+    : `<u>U</u>-${escapeHtml(condShort.replace(/^U-/, ''))}`;
+
   const html = `<!doctype html><html><head><meta charset="utf-8"/><title>Label</title>
-<script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.5/dist/JsBarcode.all.min.js"><\/script>
 <style>
   @page{size:2in 1in;margin:0}
-  body{font-family:Arial,sans-serif;padding:0;margin:0;width:2in;height:1in;display:flex;flex-direction:column;justify-content:center}
-  canvas{display:block;margin:0 auto}
-  .row{display:flex;justify-content:space-between;align-items:center;padding:0 6px;margin-top:2px}
-  .date{font-size:9px;font-weight:bold;color:#333}
-  .type{font-size:10px;font-weight:900;text-transform:uppercase;letter-spacing:1px}
-  .po{font-size:14px;font-weight:900;letter-spacing:2px}
+  *,*::before,*::after{box-sizing:border-box}
+  html,body{width:2in;height:1in;padding:0;margin:0;font-family:Arial,sans-serif;color:#111}
+  .wrap{width:2in;height:1in;display:flex;align-items:stretch;gap:4px;padding:4px 5px}
+  .info{flex:1 1 auto;min-width:0;display:flex;flex-direction:column;justify-content:space-between;height:100%}
+  .row{display:flex;justify-content:space-between;align-items:baseline;gap:4px;line-height:1}
+  .platform{font-size:11px;font-weight:700;color:#374151;text-transform:capitalize;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .type{font-size:12px;font-weight:900;text-transform:uppercase;letter-spacing:0.3px;color:#111;white-space:nowrap;text-align:center}
+  .cond{font-size:13px;font-weight:900;color:#111;white-space:nowrap}
+  .po{font-size:12px;font-weight:900;letter-spacing:0.3px;line-height:1.05;color:#111;white-space:nowrap;font-variant-numeric:tabular-nums}
+  .cond u{text-decoration:underline;text-underline-offset:1px}
+  .date{font-size:11px;font-weight:700;color:#4b5563;white-space:nowrap;tabular-nums:true;font-variant-numeric:tabular-nums}
+  .qr{flex:0 0 auto;width:0.86in;height:0.86in;display:flex;align-items:center;justify-content:center}
+  .qr svg{width:100%;height:100%;display:block}
 </style></head><body>
-<canvas id="b"></canvas>
-<div class="row">
-  <span class="date">${today}</span>
-  <span class="type">${typeLabel}</span>
-  <span class="po">${last4}</span>
+<div class="wrap">
+  <div class="info">
+    <div class="row">
+      <span class="platform">${escapeHtml(payload.platform)}</span>
+      <span class="date">${escapeHtml(payload.date)}</span>
+    </div>
+    <div class="type">${escapeHtml(payload.typeLabel)}</div>
+    <div class="row">
+      <span class="cond">${condHtml}</span>
+      <span class="po">${escapeHtml(getLast4(scanValue))}</span>
+    </div>
+  </div>
+  <div class="qr">${qrSvg}</div>
 </div>
-<script>window.onload=function(){JsBarcode("#b",${barcodeValue},{format:"CODE128",lineColor:"#000",width:2,height:32,displayValue:false});setTimeout(function(){window.print();window.close()},500)}<\/script>
+<script>
+window.onload=function(){
+  // Defer just long enough for layout to settle, then trigger the native
+  // print dialog. window.close() runs after print resolves / cancels.
+  setTimeout(function(){window.focus();window.print();},120);
+};
+window.onafterprint=function(){setTimeout(function(){window.close();},80);};
+</script>
 </body></html>`;
-  const w = window.open('', '', 'width=250,height=150');
-  if (!w) return;
+
+  const w = window.open('', '_blank', 'width=320,height=220');
+  if (!w) {
+    console.warn('printReceivingLabel: popup blocked');
+    return;
+  }
+  w.document.open();
   w.document.write(html);
   w.document.close();
+}
+
+/** On-screen preview matching {@link printReceivingLabel} (2×1in layout). */
+function ReceivingPoLabelPreview({
+  scanValue,
+  platform,
+  typeLabel,
+  conditionCode,
+  date,
+}: ReceivingLabelPayload) {
+  const safe = scanValue.trim();
+  if (!safe) return null;
+  return (
+    <div className="border-t border-gray-200 bg-gray-50">
+      <div className="flex items-center gap-3 px-3 pt-3 pb-2">
+        <span className="text-[9px] font-black tabular-nums text-gray-500 tracking-widest">03</span>
+        <span className="text-[9px] font-black uppercase tracking-[0.18em] text-gray-600">
+          Review &amp; print
+        </span>
+      </div>
+      <div className="px-3 pb-3">
+        <div className="w-full rounded border border-gray-200 bg-white px-2 py-2 shadow-sm">
+          <div className="flex flex-nowrap items-stretch gap-3 min-h-[5rem]">
+            <div className="min-w-0 flex-1 flex flex-col justify-between py-0.5">
+              <div className="flex items-baseline justify-between gap-2 text-[12px] leading-none">
+                <span className="truncate font-bold text-gray-700">{platform}</span>
+                <span className="shrink-0 tabular-nums font-semibold text-gray-600">
+                  {date}
+                </span>
+              </div>
+              <div className="text-center text-[13px] font-black uppercase tracking-wide text-gray-900 leading-none">
+                {typeLabel}
+              </div>
+              <div className="flex items-baseline justify-between gap-2 text-[13px] leading-none">
+                <ConditionHeaderDisplay code={conditionCode} />
+                <span className="shrink-0 tabular-nums font-black text-gray-900">
+                  {getLast4(safe)}
+                </span>
+              </div>
+            </div>
+            <div className="shrink-0 flex items-center">
+              <QRCode value={safe} size={80} level="M" fgColor="#000000" bgColor="#ffffff" />
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/** On-screen preview matching {@link printProductLabel} (SKU + Code128). */
+function ReceivingProductLabelPreview({
+  sku,
+  title,
+  serialNumber,
+}: {
+  sku: string;
+  title: string;
+  serialNumber: string;
+}) {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const [libReady, setLibReady] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    loadBarcodeLibrary()
+      .then(() => {
+        if (!cancelled) setLibReady(true);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!libReady || !sku.trim()) return;
+    renderBarcode(canvasRef.current, sku.trim(), {
+      format: 'CODE128',
+      lineColor: '#000',
+      width: 2,
+      height: 50,
+      displayValue: false,
+    });
+  }, [libReady, sku]);
+
+  if (!sku.trim()) return null;
+
+  return (
+    <div className="border-t border-gray-200 bg-gray-50">
+      <div className="flex items-center gap-3 px-3 pt-3 pb-2">
+        <span className="text-[9px] font-black tabular-nums text-gray-500 tracking-widest">03</span>
+        <span className="text-[9px] font-black uppercase tracking-[0.18em] text-gray-600">
+          Review & print
+        </span>
+      </div>
+      <div className="px-3 pb-3">
+        <div className="flex flex-nowrap items-start justify-between gap-3 border border-gray-200 bg-white px-3 py-3">
+          <div className="min-w-0 flex-1">
+            <p className="font-mono text-base font-black tracking-tight text-gray-900">{sku.trim()}</p>
+            {title.trim() ? (
+              <p className="mt-1 line-clamp-3 text-[11px] text-gray-500 leading-snug">{title}</p>
+            ) : null}
+            {serialNumber.trim() ? (
+              <p className="mt-1 text-[10px] font-mono text-gray-500">SN: {serialNumber.trim()}</p>
+            ) : null}
+          </div>
+          <div className="shrink-0 self-center">
+            <canvas ref={canvasRef} className="max-w-[min(100%,9rem)]" />
+          </div>
+        </div>
+      </div>
+    </div>
+  );
 }
 
 function LineEditPanel({
@@ -136,6 +484,8 @@ function LineEditPanel({
   const [serialSubmitting, setSerialSubmitting] = useState(false);
   const [receiving, setReceiving] = useState(false);
   const [imgKey, setImgKey] = useState(0);
+  const [sourcePlatform, setSourcePlatform] = useState<string>('');
+  const [platformSaving, setPlatformSaving] = useState(false);
   const serialRef = useRef<HTMLInputElement>(null);
   const listingRef = useRef<HTMLInputElement>(null);
 
@@ -149,6 +499,41 @@ function LineEditPanel({
     setZendesk('');
     setListingLink('');
   }, [row.id, row.qa_status, row.disposition_code, row.condition_grade, row.notes, row.tracking_number, row.receiving_type]);
+
+  // Load the parent receiving row's source_platform so the dropdown reflects
+  // the current shipment-level override (platform is per-carton, not per-line).
+  useEffect(() => {
+    if (row.receiving_id == null) {
+      setSourcePlatform('');
+      return;
+    }
+    let cancelled = false;
+    fetch(`/api/receiving-lines?receiving_id=${row.receiving_id}`)
+      .then((r) => r.json())
+      .then((data) => {
+        if (cancelled) return;
+        const pkg = parseReceivingPackage(data?.receiving_package);
+        setSourcePlatform((pkg?.source_platform || '').toLowerCase());
+      })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, [row.receiving_id]);
+
+  const savePlatform = useCallback(async (next: string) => {
+    if (row.receiving_id == null) return;
+    setPlatformSaving(true);
+    try {
+      await fetch(`/api/receiving/${row.receiving_id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ source_platform: next || null }),
+      });
+    } catch {
+      /* silent */
+    } finally {
+      setPlatformSaving(false);
+    }
+  }, [row.receiving_id]);
 
   const patch = useCallback(async (fields: Record<string, unknown>) => {
     setSaving(true);
@@ -259,6 +644,19 @@ function LineEditPanel({
   }, [receiving, row, qa, disp, cond, notes, zendesk, listingLink, serialInput, staffId, patch]);
 
   const poNumber = (row.zoho_purchaseorder_number || row.zoho_purchaseorder_id || '').trim();
+  const scanValue = poNumber || (row.receiving_id != null ? `RCV-${row.receiving_id}` : '');
+  const labelPlatform = sourcePlatform
+    ? (SOURCE_PLATFORM_LABELS[sourcePlatform] ?? sourcePlatform)
+    : String(receivingType || 'PO').toUpperCase() === 'PICKUP' ? 'Local pickup' : 'Zoho';
+  const labelType = receivingTypeLabel(receivingType);
+  const labelDate = new Date().toLocaleDateString('en-US', { month: 'numeric', day: 'numeric', year: '2-digit' });
+  const labelPayload: ReceivingLabelPayload = {
+    scanValue,
+    platform: labelPlatform,
+    typeLabel: labelType,
+    conditionCode: cond,
+    date: labelDate,
+  };
   const imgUrl = row.image_url ?? null;
 
   return (
@@ -301,17 +699,41 @@ function LineEditPanel({
         {row.item_name || row.sku || `Line #${row.id}`}
       </p>
 
-      {/* Type dropdown */}
-      <div className="px-3 pb-2">
-        <select
-          value={receivingType}
-          onChange={(e) => { setReceivingType(e.target.value); patch({ receiving_type: e.target.value }); }}
-          className={SELECT_CLASS}
-        >
-          {RECEIVING_TYPE_OPTS.map((opt) => (
-            <option key={opt.value} value={opt.value}>{opt.label}</option>
-          ))}
-        </select>
+      {/* Platform / Type dropdowns */}
+      <div className="grid grid-cols-2 gap-2 px-3 pb-2">
+        <div>
+          <p className="mb-1 text-[9px] font-black uppercase tracking-widest text-gray-500">
+            Platform{platformSaving ? '…' : ''}
+          </p>
+          <select
+            value={sourcePlatform}
+            onChange={(e) => {
+              const next = e.target.value;
+              setSourcePlatform(next);
+              void savePlatform(next);
+            }}
+            disabled={row.receiving_id == null}
+            className={SELECT_CLASS}
+          >
+            {SOURCE_PLATFORM_OPTS.map((opt) => (
+              <option key={opt.value || 'auto'} value={opt.value}>{opt.label}</option>
+            ))}
+          </select>
+        </div>
+        <div>
+          <p className="mb-1 text-[9px] font-black uppercase tracking-widest text-gray-500">
+            Type
+          </p>
+          <select
+            value={receivingType}
+            onChange={(e) => { setReceivingType(e.target.value); patch({ receiving_type: e.target.value }); }}
+            className={SELECT_CLASS}
+          >
+            {RECEIVING_TYPE_OPTS.map((opt) => (
+              <option key={opt.value} value={opt.value}>{opt.label}</option>
+            ))}
+          </select>
+        </div>
       </div>
 
       {/* QA / Disposition / Condition */}
@@ -442,10 +864,10 @@ function LineEditPanel({
           <button
             type="button"
             onClick={() => {
-              if (poNumber) printReceivingLabel(poNumber, receivingType);
+              if (scanValue) printReceivingLabel(labelPayload);
               else if (row.sku) printProductLabel({ sku: row.sku, title: row.item_name ?? undefined, serialNumber: serialInput.trim() || undefined });
             }}
-            disabled={!poNumber && !row.sku}
+            disabled={!scanValue && !row.sku}
             className="inline-flex items-center gap-1.5 rounded-md border border-gray-200 bg-white px-3 py-2 text-[10px] font-black uppercase tracking-wider text-gray-700 transition-colors hover:border-gray-300 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-40"
           >
             <Printer className="h-3.5 w-3.5" />
@@ -460,6 +882,20 @@ function LineEditPanel({
             {receiving ? 'Receiving' : 'Receive'}
           </button>
         </div>
+
+        {(scanValue || row.sku) && (
+          <div className="-mx-3">
+            {scanValue ? (
+              <ReceivingPoLabelPreview {...labelPayload} />
+            ) : row.sku ? (
+              <ReceivingProductLabelPreview
+                sku={row.sku}
+                title={row.item_name ?? ''}
+                serialNumber={serialInput.trim()}
+              />
+            ) : null}
+          </div>
+        )}
       </div>
     </div>
   );
@@ -480,9 +916,11 @@ export function ReceivingSidebarPanel() {
   }, [mode]);
 
   const [bulkTracking, setBulkTracking] = useState('');
-  const [bulkSubmitting, setBulkSubmitting] = useState(false);
+  const [scanBarKey, setScanBarKey] = useState(0);
   const [workflowFilter, setWorkflowFilter] = useState('');
-  const [unmatchedEntries, setUnmatchedEntries] = useState<UnmatchedEntry[]>([]);
+  const [pendingScans, setPendingScans] = useState<PendingScan[]>([]);
+  const [pairModalOpen, setPairModalOpen] = useState(false);
+  const anyScanChecking = pendingScans.some((s) => s.status === 'checking');
   const [imgKey, setImgKey] = useState(0);
   const [selectedLine, setSelectedLine] = useState<ReceivingLineRow | null>(null);
 
@@ -580,22 +1018,22 @@ export function ReceivingSidebarPanel() {
         const res = await fetch(`/api/receiving-lines?receiving_id=${id}`);
         const data = await res.json();
         if (!data?.success) return;
-        const lines: PoLineSummary[] = (data.receiving_lines || []).map((l: {
-          id: number;
-          sku: string | null;
-          item_name: string | null;
-          image_url: string | null;
-          quantity_expected: number | null;
-          quantity_received: number;
-        }) => ({
-          id: l.id,
-          sku: l.sku,
-          item_name: l.item_name,
-          image_url: l.image_url ?? null,
-          quantity_expected: l.quantity_expected,
-          quantity_received: l.quantity_received,
-        }));
-        setPoContext({ receiving_id: id, po_ids: [], lines });
+        const lines: PoLineSummary[] = (data.receiving_lines || []).map((l: Record<string, unknown>) =>
+          mapApiLineToPoSummary(l as Parameters<typeof mapApiLineToPoSummary>[0]),
+        );
+        const poIds = [
+          ...new Set(
+            lines
+              .map((l) => (l.zoho_purchaseorder_id || '').trim())
+              .filter((x) => x.length > 0),
+          ),
+        ];
+        setPoContext({
+          receiving_id: id,
+          po_ids: poIds,
+          lines,
+          receiving_package: parseReceivingPackage(data.receiving_package),
+        });
         setArmedLineId(null);
       } catch {
         /* ignore — sidebar stays empty */
@@ -605,97 +1043,180 @@ export function ReceivingSidebarPanel() {
     return () => window.removeEventListener('receiving-active', handleActive);
   }, [poContext?.receiving_id]);
 
-  const submitTrackingScan = useCallback(async (rawTracking?: string) => {
+  const submitTrackingScan = useCallback((rawTracking?: string, opts?: { onResult?: (result: { tracking: string; matched: boolean; po_ids: string[]; receiving_id?: number; error?: string }) => void }) => {
     const trackingNumber = (rawTracking ?? bulkTracking).trim();
-    if (!trackingNumber || bulkSubmitting) return;
+    if (!trackingNumber) return;
 
+    // 1. Clear the input immediately + insert a "checking" chip. Never blocks.
     setBulkTracking('');
-    setBulkSubmitting(true);
-    setPoContext(null);
-    setArmedLineId(null);
-    setPendingCandidates([]);
+    setScanBarKey((k) => k + 1); // force remount so SearchField's internal draft resets
+    const scanUiId = randomId();
+    setPendingScans((prev) => {
+      const fresh: PendingScan = {
+        id: scanUiId,
+        tracking: trackingNumber,
+        status: 'checking',
+        startedAt: Date.now(),
+      };
+      return [
+        fresh,
+        ...prev.filter((s) => s.tracking !== trackingNumber || s.status !== 'checking'),
+      ].slice(0, 10);
+    });
 
-    try {
-      const res = await fetch('/api/receiving/lookup-po', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          trackingNumber,
-          staffId: Number(staffId),
-        }),
-      });
-      const data = await res.json();
-
-      if (data?.success && data.lines?.length > 0) {
-        const ctx: PoContext = {
-          receiving_id: Number(data.receiving_id),
-          po_ids: Array.isArray(data.po_ids) ? data.po_ids : [],
-          lines: (data.lines || []).map((l: {
-            id: number;
-            sku: string | null;
-            item_name: string | null;
-            image_url: string | null;
-            quantity_expected: number | null;
-            quantity_received: number;
-          }) => ({
-            id: l.id,
-            sku: l.sku,
-            item_name: l.item_name,
-            image_url: l.image_url ?? null,
-            quantity_expected: l.quantity_expected,
-            quantity_received: l.quantity_received,
-          })),
-        };
-        setPoContext(ctx);
-
-        const openLines = ctx.lines.filter(
-          (l) =>
-            l.quantity_expected == null ||
-            l.quantity_received < (l.quantity_expected ?? 0),
-        );
-        if (openLines.length === 1) {
-          setArmedLineId(openLines[0].id);
-        }
-
-        window.dispatchEvent(
-          new CustomEvent('receiving-po-loaded', {
-            detail: { receiving_id: ctx.receiving_id, lines: ctx.lines },
-          }),
-        );
-
-        setTimeout(() => serialInputRef.current?.focus(), 60);
-      } else {
-        const entryRes = await fetch('/api/receiving-entry', {
+    // 2. Fire-and-forget. Closure captures scanUiId so concurrent scans
+    //    update their own chip independently.
+    void (async () => {
+      try {
+        const res = await fetch('/api/receiving/lookup-po', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             trackingNumber,
-            qaStatus: 'PENDING',
-            dispositionCode: 'HOLD',
-            conditionGrade: 'USED_A',
-            isReturn: false,
-            needsTest: true,
-            skipZohoMatch: true,
+            staffId: Number(staffId),
           }),
         });
-        if (entryRes.ok) {
-          const entryData = await entryRes.json();
-          if (entryData?.record) {
-            window.dispatchEvent(
-              new CustomEvent('receiving-entry-added', { detail: entryData.record }),
-            );
-          }
+        const data = await res.json();
+
+        if (!data?.success) {
+          throw new Error(data?.error || 'Lookup failed');
         }
-        setUnmatchedEntries((prev) =>
-          [{ id: randomId(), tracking: trackingNumber, at: Date.now() }, ...prev].slice(0, 20),
+
+        const isMatched = Boolean(data.matched) && Array.isArray(data.lines) && data.lines.length > 0;
+
+        if (isMatched) {
+          opts?.onResult?.({
+            tracking: trackingNumber,
+            matched: true,
+            po_ids: Array.isArray(data.po_ids) ? data.po_ids : [],
+            receiving_id: Number(data.receiving_id),
+          });
+
+          const ctx: PoContext = {
+            receiving_id: Number(data.receiving_id),
+            po_ids: Array.isArray(data.po_ids) ? data.po_ids : [],
+            lines: (data.lines || []).map((l: Record<string, unknown>) =>
+              mapApiLineToPoSummary(l as Parameters<typeof mapApiLineToPoSummary>[0]),
+            ),
+            receiving_package: parseReceivingPackage(data.receiving_package),
+          };
+
+          setPoContext(ctx);
+          setPendingCandidates([]);
+
+          const openLines = ctx.lines.filter(
+            (l) =>
+              l.quantity_expected == null ||
+              l.quantity_received < (l.quantity_expected ?? 0),
+          );
+          setArmedLineId(openLines.length === 1 ? openLines[0].id : null);
+
+          window.dispatchEvent(
+            new CustomEvent('receiving-po-loaded', {
+              detail: { receiving_id: ctx.receiving_id, lines: ctx.lines },
+            }),
+          );
+          setTimeout(() => serialInputRef.current?.focus(), 60);
+
+          setPendingScans((prev) =>
+            prev.map((s) =>
+              s.id === scanUiId
+                ? {
+                    ...s,
+                    status: 'matched',
+                    receiving_id: Number(data.receiving_id),
+                    po_ids: Array.isArray(data.po_ids) ? data.po_ids : [],
+                    scan_id: typeof data.scan_id === 'number' ? data.scan_id : undefined,
+                  }
+                : s,
+            ),
+          );
+
+          // Auto-fade matched chip after 2s so the panel stays calm.
+          setTimeout(() => {
+            setPendingScans((prev) => prev.filter((s) => s.id !== scanUiId));
+          }, 2000);
+        } else {
+          opts?.onResult?.({
+            tracking: trackingNumber,
+            matched: false,
+            po_ids: [],
+            receiving_id: typeof data.receiving_id === 'number' ? data.receiving_id : undefined,
+          });
+          setPendingScans((prev) =>
+            prev.map((s) =>
+              s.id === scanUiId
+                ? {
+                    ...s,
+                    status: 'unmatched',
+                    receiving_id: typeof data.receiving_id === 'number' ? data.receiving_id : undefined,
+                    scan_id: typeof data.scan_id === 'number' ? data.scan_id : undefined,
+                  }
+                : s,
+            ),
+          );
+          window.dispatchEvent(
+            new CustomEvent('receiving-entry-added', {
+              detail: { id: String(data.receiving_id), tracking: trackingNumber },
+            }),
+          );
+        }
+      } catch (err) {
+        const message = err instanceof Error ? err.message : 'Network error';
+        opts?.onResult?.({ tracking: trackingNumber, matched: false, po_ids: [], error: message });
+        setPendingScans((prev) =>
+          prev.map((s) =>
+            s.id === scanUiId ? { ...s, status: 'error', errorMessage: message } : s,
+          ),
         );
       }
-    } catch {
-      /* silently fail */
-    } finally {
-      setBulkSubmitting(false);
-    }
-  }, [bulkTracking, bulkSubmitting, staffId]);
+    })();
+  }, [bulkTracking, staffId]);
+
+  const retryPendingScan = useCallback((tracking: string, id: string) => {
+    setPendingScans((prev) => prev.filter((s) => s.id !== id));
+    submitTrackingScan(tracking);
+  }, [submitTrackingScan]);
+
+  const dismissPendingScan = useCallback((id: string) => {
+    setPendingScans((prev) => prev.filter((s) => s.id !== id));
+  }, []);
+
+  // Phone-paired scans: incoming `phone_scan` messages route straight through
+  // the same submitTrackingScan flow as if the desktop scanner had fired it.
+  // After the lookup, echo the result back on the station channel so the
+  // phone's chip can show matched/unmatched without a round-trip DB query.
+  const phoneChannelName = `phone:${Number(staffId) || 0}`;
+  const stationChannelName = `station:${Number(staffId) || 0}`;
+  const { getClient: getAblyClient } = useAblyClient();
+
+  useAblyChannel(
+    phoneChannelName,
+    'phone_scan',
+    (msg: { data?: { tracking?: string } }) => {
+      const tracking = String(msg?.data?.tracking || '').trim();
+      if (!tracking) return;
+      submitTrackingScan(tracking, {
+        onResult: async (result) => {
+          try {
+            const client = await getAblyClient();
+            if (!client) return;
+            const ch = client.channels.get(stationChannelName);
+            await ch.publish('phone_scan_result', {
+              tracking: result.tracking,
+              matched: result.matched,
+              po_ids: result.po_ids,
+              receiving_id: result.receiving_id ?? null,
+              error: result.error ?? null,
+            });
+          } catch (err) {
+            console.warn('phone_scan_result publish failed', err);
+          }
+        },
+      });
+    },
+    Number(staffId) > 0,
+  );
 
   // ─── Unboxing mode: serial scan → scan-serial → bump qty, maybe print ───
   const submitSerialScan = useCallback(
@@ -830,6 +1351,29 @@ export function ReceivingSidebarPanel() {
     setSerialInput('');
   }, []);
 
+  const updateSourcePlatform = useCallback(async (next: string) => {
+    if (!poContext) return;
+    const normalized = (next || '').toLowerCase();
+    const packageUpdate: ReceivingPackageMeta = {
+      received_at: poContext.receiving_package?.received_at ?? null,
+      unboxed_at: poContext.receiving_package?.unboxed_at ?? null,
+      created_at: poContext.receiving_package?.created_at ?? null,
+      return_platform: poContext.receiving_package?.return_platform ?? null,
+      source_platform: normalized || null,
+      is_return: poContext.receiving_package?.is_return ?? false,
+    };
+    setPoContext((prev) => (prev ? { ...prev, receiving_package: packageUpdate } : prev));
+    try {
+      await fetch(`/api/receiving/${poContext.receiving_id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ source_platform: normalized || null }),
+      });
+    } catch {
+      /* silent — realtime invalidation will reconcile */
+    }
+  }, [poContext]);
+
   const dismissReturn = useCallback((id: string) => {
     setReturns((prev) => prev.filter((r) => r.id !== id));
   }, []);
@@ -879,20 +1423,40 @@ export function ReceivingSidebarPanel() {
       ) : (
         <>
       {/* Tracking scan bar */}
-      <div className={`${sidebarHeaderBandClass} ${sidebarHeaderRowClass}`}>
-        <SearchBar
-          value={bulkTracking}
-          onChange={setBulkTracking}
-          onSearch={submitTrackingScan}
-          onClear={() => setBulkTracking('')}
-          placeholder="Scan tracking…"
-          variant="blue"
-          size="compact"
-          isSearching={bulkSubmitting}
-          leadingIcon={<Barcode className="w-[14px] h-[14px]" />}
-          className="w-full"
-        />
+      <div className={`${sidebarHeaderBandClass} ${sidebarHeaderRowClass} flex items-center gap-2`}>
+        <div className="flex-1 min-w-0">
+          <SearchBar
+            key={scanBarKey}
+            value={bulkTracking}
+            onChange={setBulkTracking}
+            onSearch={submitTrackingScan}
+            onClear={() => setBulkTracking('')}
+            placeholder="Scan tracking…"
+            variant="blue"
+            size="compact"
+            isSearching={anyScanChecking}
+            leadingIcon={<Barcode className="w-[14px] h-[14px]" />}
+            className="w-full"
+            autoFocus
+          />
+        </div>
+        <button
+          type="button"
+          onClick={() => setPairModalOpen(true)}
+          disabled={Number(staffId) <= 0}
+          aria-label="Pair phone"
+          title="Pair phone scanner"
+          className="shrink-0 inline-flex items-center gap-1 rounded-md border border-gray-200 bg-white px-2 py-1.5 text-[10px] font-black uppercase tracking-wider text-gray-700 transition-colors hover:border-gray-300 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-40"
+        >
+          <Barcode className="h-3 w-3" />
+          Phone
+        </button>
       </div>
+      <PhonePairModal
+        staffId={Number(staffId) || 0}
+        open={pairModalOpen}
+        onClose={() => setPairModalOpen(false)}
+      />
 
       {/* Workflow filter */}
       <div className="border-b border-gray-200 px-3 py-2">
@@ -911,8 +1475,8 @@ export function ReceivingSidebarPanel() {
         <>
           {/* PO header card */}
           <div className="border-b border-gray-200 bg-gray-50">
-            {/* Top bar: refresh | PO chip | close */}
-            <div className="flex items-center justify-between px-3 py-1.5">
+            {/* Top bar: refresh | close */}
+            <div className="flex items-center justify-between border-b border-gray-100/90 px-3 py-1.5">
               <button
                 type="button"
                 onClick={() => setImgKey((k) => k + 1)}
@@ -921,12 +1485,6 @@ export function ReceivingSidebarPanel() {
               >
                 <RefreshCw className="h-3.5 w-3.5" />
               </button>
-              {poContext.po_ids.length > 0 && (
-                <OrderIdChip
-                  value={poContext.po_ids[0]}
-                  display={getLast4(poContext.po_ids[0])}
-                />
-              )}
               <button
                 type="button"
                 onClick={clearPoContext}
@@ -936,6 +1494,59 @@ export function ReceivingSidebarPanel() {
                 <X className="h-3.5 w-3.5" />
               </button>
             </div>
+
+            {(() => {
+              const headerLine = armedLine ?? poContext.lines[0] ?? null;
+              const poScanValue = resolvePoScanValue(headerLine, poContext.po_ids, poContext.receiving_id);
+              const platform = platformLabel(poContext.receiving_package, headerLine?.receiving_type);
+              const typeLbl = receivingTypeLabel(headerLine?.receiving_type);
+              const condCode = headerLine?.condition_grade ?? 'BRAND_NEW';
+              const dateStr = formatPackageUnboxDate(poContext.receiving_package);
+              return (
+                <div className="flex flex-nowrap gap-3 px-3 py-2.5 items-start justify-between">
+                  <div className="min-w-0 flex-1 grid grid-cols-2 gap-x-3 gap-y-2 text-[10px] leading-tight">
+                    <div className="min-w-0">
+                      <select
+                        value={(poContext.receiving_package?.source_platform || '').toLowerCase()}
+                        onChange={(e) => updateSourcePlatform(e.target.value)}
+                        title={`Platform override (currently displayed: ${platform})`}
+                        className="w-full rounded border border-gray-200 bg-white px-1.5 py-1 text-[10px] font-bold text-gray-700 focus:border-blue-300 focus:outline-none focus:ring-2 focus:ring-blue-500/10"
+                      >
+                        {SOURCE_PLATFORM_OPTS.map((opt) => (
+                          <option key={opt.value || 'auto'} value={opt.value}>{opt.label}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div className="text-right font-black uppercase tracking-wide text-gray-900">
+                      {typeLbl}
+                    </div>
+                    <div className="min-w-0 self-end">
+                      <ConditionHeaderDisplay code={condCode} />
+                    </div>
+                    <div className="text-right tabular-nums font-semibold text-gray-600 self-end">
+                      {dateStr}
+                    </div>
+                  </div>
+                  {poScanValue ? (
+                    <div
+                      className="shrink-0 ml-auto flex items-center"
+                      role="img"
+                      aria-label={`Purchase order QR, ${poScanValue}`}
+                    >
+                      <div className="rounded-lg border border-gray-200 bg-white p-1.5 shadow-sm">
+                        <QRCode
+                          value={poScanValue}
+                          size={92}
+                          level="M"
+                          fgColor="#111827"
+                          bgColor="#ffffff"
+                        />
+                      </div>
+                    </div>
+                  ) : null}
+                </div>
+              );
+            })()}
 
             {/* Product image */}
             {(() => {
@@ -1059,39 +1670,35 @@ export function ReceivingSidebarPanel() {
         />
       )}
 
-      {/* Unmatched entries — blind receives with no PO */}
-      {unmatchedEntries.length > 0 && (
+      {/* Scan status chips — one per in-flight or terminal scan */}
+      {pendingScans.length > 0 && (
         <div className="min-h-0 flex-1 overflow-auto border-t border-gray-200">
           <div className="flex items-center justify-between px-3 pt-2 pb-1">
             <p className="text-[9px] font-black uppercase tracking-widest text-gray-500">
-              No PO Found · {unmatchedEntries.length}
+              Scans · {pendingScans.length}
             </p>
             <button
               type="button"
-              onClick={() => setUnmatchedEntries([])}
+              onClick={() => setPendingScans([])}
               className="text-[9px] font-black uppercase tracking-wider text-gray-400 hover:text-gray-700"
             >
               Clear
             </button>
           </div>
           <div className="flex flex-col">
-            {unmatchedEntries.map((entry) => (
-              <div
-                key={entry.id}
-                className="flex items-center justify-between gap-2 px-3 py-1.5 border-b border-gray-50 hover:bg-gray-50/50"
-              >
-                <div className="flex items-center gap-2 min-w-0">
-                  <span className="h-2 w-2 shrink-0 rounded-full bg-amber-400" />
-                  <TrackingChip value={entry.tracking} display={getLast4(entry.tracking)} />
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setUnmatchedEntries((prev) => prev.filter((e) => e.id !== entry.id))}
-                  className="flex-shrink-0 text-gray-300 hover:text-gray-600"
-                >
-                  <X className="h-3 w-3" />
-                </button>
-              </div>
+            {pendingScans.map((scan) => (
+              <ScanStatusChip
+                key={scan.id}
+                tracking={scan.tracking}
+                status={scan.status}
+                errorMessage={scan.errorMessage}
+                onRetry={
+                  scan.status === 'error'
+                    ? () => retryPendingScan(scan.tracking, scan.id)
+                    : undefined
+                }
+                onDismiss={() => dismissPendingScan(scan.id)}
+              />
             ))}
           </div>
         </div>

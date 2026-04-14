@@ -126,6 +126,11 @@ export async function searchPurchaseReceivesByTracking(
   const trimmed = trackingNumber.trim();
   if (!trimmed) return [];
 
+  if (process.env.RECEIVING_MOCK_ZOHO === '1') {
+    const { getMockReceivesByTracking } = await import('./mock');
+    return getMockReceivesByTracking(trimmed);
+  }
+
   const data = await zohoGet<
     ZohoPagedResponse<ZohoPurchaseReceive> & { purchasereceives?: ZohoPurchaseReceive[] }
   >('/api/v1/purchasereceives', {
@@ -181,10 +186,15 @@ export async function searchPurchaseOrdersByTracking(
   const trimmed = trackingNumber.trim();
   if (!trimmed) return [];
 
+  if (process.env.RECEIVING_MOCK_ZOHO === '1') {
+    const { getMockPurchaseOrdersByTracking } = await import('./mock');
+    return getMockPurchaseOrdersByTracking(trimmed);
+  }
+
   const [byRef, bySearch] = await Promise.allSettled([
     zohoGet<ZohoPagedResponse<ZohoPurchaseOrder> & { purchaseorders?: ZohoPurchaseOrder[] }>(
       '/api/v1/purchaseorders',
-      { reference_number: trimmed, status: 'open', per_page: 10 }
+      { reference_number: trimmed, per_page: 10 }
     ),
     zohoGet<ZohoPagedResponse<ZohoPurchaseOrder> & { purchaseorders?: ZohoPurchaseOrder[] }>(
       '/api/v1/purchaseorders',

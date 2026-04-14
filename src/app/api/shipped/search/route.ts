@@ -15,15 +15,22 @@ export async function GET(req: NextRequest) {
             return NextResponse.json({ error: 'Search query is required' }, { status: 400 });
         }
 
-        const results = await searchShippedOrders(query, { searchField });
+        const { rows: results, debug } = await searchShippedOrders(query, { searchField });
         ok = true;
 
-        return NextResponse.json({
-            results,
-            count: results.length,
-            query: query,
-            searchField,
-        });
+        return NextResponse.json(
+            {
+                results,
+                count: results.length,
+                query: query,
+                searchField,
+            },
+            {
+                headers: {
+                    'x-search-debug': JSON.stringify(debug),
+                },
+            },
+        );
     } catch (error: any) {
         console.error('Error searching shipped table:', error);
         return NextResponse.json({ 

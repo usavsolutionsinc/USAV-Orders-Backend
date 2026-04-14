@@ -19,6 +19,7 @@ import {
 } from '@/design-system';
 import { FbaSelectedLineRow } from '@/components/fba/sidebar/FbaSelectedLineRow';
 import { FbaQtyDisplay } from '@/components/fba/sidebar/FbaQtyStepper';
+import { FbaStatusBadge } from '@/components/fba/shared/FbaStatusBadge';
 import type { StationTheme } from '@/utils/staff-colors';
 import type {
   ActiveShipment,
@@ -159,6 +160,7 @@ function ActiveShipmentCard({
               <span className="shrink-0 text-[10px] font-bold text-gray-400">
                 {shipment.items.length} SKU · {totalQty} units
               </span>
+              <FbaStatusBadge status={shipment.status} size="xs" />
             </div>
             <div className="flex min-w-0 items-center gap-1.5">
               <p className="truncate font-mono text-[10px] font-bold text-gray-400">

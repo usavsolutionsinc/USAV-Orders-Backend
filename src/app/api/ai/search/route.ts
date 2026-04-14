@@ -1,11 +1,14 @@
+/**
+ * @deprecated The route name is legacy; backend is now the local Hermes gateway.
+ */
 import { NextRequest, NextResponse } from 'next/server';
 import { checkRateLimit } from '@/lib/api-guard';
 import { isAllowedAdminOrigin } from '@/lib/security/allowed-origin';
 
 export const runtime = 'nodejs';
 
-const OPENCLAW_GATEWAY_URL = process.env.OPENCLAW_GATEWAY_URL || '';
-const OPENCLAW_USAV_TOKEN = process.env.OPENCLAW_USAV_TOKEN || '';
+const HERMES_API_URL = process.env.HERMES_API_URL || 'http://127.0.0.1:8642/v1';
+const HERMES_API_KEY = process.env.HERMES_API_KEY || '';
 
 type SearchRequestBody = {
   page?: string;
@@ -58,19 +61,15 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Missing search query' }, { status: 400 });
     }
 
-    if (!OPENCLAW_GATEWAY_URL) {
-      return NextResponse.json({ error: 'OPENCLAW_GATEWAY_URL not configured' }, { status: 503 });
-    }
-
-    const res = await fetch(`${OPENCLAW_GATEWAY_URL}/v1/chat/completions`, {
+    const res = await fetch(`${HERMES_API_URL}/chat/completions`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${OPENCLAW_USAV_TOKEN}`,
-        'X-Source': 'usav',
+        ...(HERMES_API_KEY && { 'Authorization': `Bearer ${HERMES_API_KEY}` }),
+        'X-Source': 'usav-search',
       },
       body: JSON.stringify({
-        model: 'openclaw/usav-ops',
+        model: 'hermes-agent',
         messages: [
           { role: 'system', content: getSystemPrompt() },
           {
@@ -114,7 +113,7 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({
       ok: true,
-      model: data?.model ?? 'openclaw/usav-ops',
+      model: data?.model ?? 'hermes-agent',
       result: parsed,
     });
   } catch (error: any) {

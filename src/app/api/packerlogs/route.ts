@@ -40,7 +40,7 @@ export async function GET(req: NextRequest) {
     const CACHE_HEADERS = { 'Cache-Control': `private, max-age=${cacheTTL}, stale-while-revalidate=30` };
 
     try {
-        const cached = await getCachedJson<any[]>('api:packing-logs-v3', cacheLookup);
+        const cached = await getCachedJson<any[]>('api:packing-logs-v4', cacheLookup);
         if (cached) {
             return NextResponse.json(cached, { headers: { 'x-cache': 'HIT', ...CACHE_HEADERS } });
         }
@@ -119,7 +119,11 @@ export async function GET(req: NextRequest) {
                 COALESCE(o.account_source, CASE WHEN sal.fnsku IS NOT NULL THEN 'fba' ELSE null END) AS account_source,
                 COALESCE(order_trackings.tracking_numbers, '[]'::json) AS tracking_numbers,
                 COALESCE(order_trackings.tracking_number_rows, '[]'::json) AS tracking_number_rows,
-                COALESCE(ff.product_title, o.product_title) AS product_title,
+                COALESCE(
+                    ff.product_title,
+                    o.product_title,
+                    sku_catalog_lookup.catalog_product_title
+                ) AS product_title,
                 to_char(wa_deadline.deadline_at, 'YYYY-MM-DD HH24:MI:SS') AS ship_by_date,
                 to_char(wa_deadline.deadline_at, 'YYYY-MM-DD HH24:MI:SS') AS deadline_at,
                 o.item_number,
@@ -152,7 +156,10 @@ export async function GET(req: NextRequest) {
             FROM station_activity_logs sal
             LEFT JOIN packer_logs pl ON pl.id = sal.packer_log_id
             LEFT JOIN LATERAL (
-                SELECT sk.id AS sku_table_id, sk.serial_number AS sku_table_serial
+                SELECT
+                    sk.id AS sku_table_id,
+                    sk.serial_number AS sku_table_serial,
+                    sk.static_sku AS sku_table_static_sku
                 FROM sku sk
                 WHERE sk.static_sku IS NOT NULL AND BTRIM(sk.static_sku) <> ''
                   AND (
@@ -211,6 +218,35 @@ export async function GET(req: NextRequest) {
                 LIMIT 1
             ) order_match ON TRUE
             LEFT JOIN orders o ON o.id = order_match.id
+            LEFT JOIN LATERAL (
+                SELECT sc.product_title AS catalog_product_title
+                FROM sku_catalog sc
+                WHERE EXISTS (
+                    SELECT 1
+                    FROM UNNEST(ARRAY[
+                        NULLIF(BTRIM(split_part(COALESCE(sku_lookup.sku_table_static_sku, ''), ':', 1)), ''),
+                        NULLIF(BTRIM(COALESCE(sku_lookup.sku_table_static_sku, '')), ''),
+                        NULLIF(BTRIM(split_part(COALESCE(sal.metadata->>'sku', ''), ':', 1)), ''),
+                        NULLIF(BTRIM(COALESCE(sal.metadata->>'sku', '')), ''),
+                        CASE
+                            WHEN POSITION(':' IN COALESCE(sal.scan_ref, '')) > 0
+                            THEN NULLIF(BTRIM(split_part(sal.scan_ref, ':', 1)), '')
+                            ELSE NULLIF(BTRIM(COALESCE(sal.scan_ref, '')), '')
+                        END,
+                        NULLIF(BTRIM(split_part(COALESCE(o.sku, ''), ':', 1)), ''),
+                        NULLIF(BTRIM(COALESCE(o.sku, '')), ''),
+                        NULLIF(BTRIM(split_part(COALESCE(ff.sku, ''), ':', 1)), ''),
+                        NULLIF(BTRIM(COALESCE(ff.sku, '')), '')
+                    ]) AS c(candidate)
+                    WHERE c.candidate IS NOT NULL AND BTRIM(c.candidate) <> ''
+                      AND (
+                          BTRIM(sc.sku) = BTRIM(c.candidate)
+                          OR regexp_replace(UPPER(TRIM(COALESCE(sc.sku, ''))), '^0+', '') =
+                             regexp_replace(UPPER(TRIM(c.candidate)), '^0+', '')
+                      )
+                )
+                LIMIT 1
+            ) sku_catalog_lookup ON TRUE
             LEFT JOIN LATERAL (
                 SELECT COALESCE(
                   json_agg(t.tracking_number_raw ORDER BY t.sort_key, t.tracking_number_raw)
@@ -325,7 +361,7 @@ export async function GET(req: NextRequest) {
             packer_photos_url: photosMap[r.packer_log_id] ?? [],
         }));
 
-        after(() => setCachedJson('api:packing-logs-v3', cacheLookup, rows, cacheTTL, ['packing-logs']));
+        after(() => setCachedJson('api:packing-logs-v4', cacheLookup, rows, cacheTTL, ['packing-logs']));
         return NextResponse.json(rows, { headers: { 'x-cache': 'MISS', ...CACHE_HEADERS } });
     } catch (error: any) {
         console.error('Error fetching packer logs:', error);

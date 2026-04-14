@@ -101,15 +101,29 @@ export async function GET(request: NextRequest) {
 
     // All lines for a specific package
     if (Number.isFinite(receivingId) && receivingId > 0) {
-      const rows = await pool.query(
-        `SELECT rl.*, r.receiving_tracking_number, r.carrier, r.zoho_purchaseorder_number AS receiving_zoho_purchaseorder_number, sc.image_url
-         FROM receiving_lines rl
-         LEFT JOIN receiving r ON r.id = rl.receiving_id
-         LEFT JOIN sku_catalog sc ON sc.sku = rl.sku
-         WHERE rl.receiving_id = $1
-         ORDER BY rl.id ASC`,
-        [receivingId],
-      );
+      const [rows, pkgRes] = await Promise.all([
+        pool.query(
+          `SELECT rl.*, r.receiving_tracking_number, r.carrier, r.zoho_purchaseorder_number AS receiving_zoho_purchaseorder_number, sc.image_url
+           FROM receiving_lines rl
+           LEFT JOIN receiving r ON r.id = rl.receiving_id
+           LEFT JOIN sku_catalog sc ON sc.sku = rl.sku
+           WHERE rl.receiving_id = $1
+           ORDER BY rl.id ASC`,
+          [receivingId],
+        ),
+        pool.query(
+          `SELECT received_at::text AS received_at,
+                  unboxed_at::text AS unboxed_at,
+                  created_at::text AS created_at,
+                  return_platform::text AS return_platform,
+                  source_platform,
+                  COALESCE(is_return, false) AS is_return
+           FROM receiving
+           WHERE id = $1
+           LIMIT 1`,
+          [receivingId],
+        ),
+      ]);
       const normalizedRows = rows.rows.map(normalizeRow);
       if (includeSerials) {
         const serialsByLine = await fetchSerialsForLines(normalizedRows.map((r) => r.id));
@@ -117,7 +131,17 @@ export async function GET(request: NextRequest) {
           (row as Record<string, unknown>).serials = serialsByLine.get(row.id) ?? [];
         }
       }
-      return NextResponse.json({ success: true, receiving_lines: normalizedRows });
+      const receiving_package = pkgRes.rows[0]
+        ? {
+            received_at: (pkgRes.rows[0].received_at as string | null) ?? null,
+            unboxed_at: (pkgRes.rows[0].unboxed_at as string | null) ?? null,
+            created_at: (pkgRes.rows[0].created_at as string | null) ?? null,
+            return_platform: (pkgRes.rows[0].return_platform as string | null) ?? null,
+            source_platform: (pkgRes.rows[0].source_platform as string | null) ?? null,
+            is_return: !!pkgRes.rows[0].is_return,
+          }
+        : null;
+      return NextResponse.json({ success: true, receiving_lines: normalizedRows, receiving_package });
     }
 
     // Paginated list — all lines, optionally filtered

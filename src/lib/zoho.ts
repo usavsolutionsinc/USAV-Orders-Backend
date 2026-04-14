@@ -184,7 +184,7 @@ export async function searchPurchaseOrdersByTracking(
   const [byRef, bySearch] = await Promise.allSettled([
     zohoGet<ZohoPagedResponse<ZohoPurchaseOrder> & { purchaseorders?: ZohoPurchaseOrder[] }>(
       '/api/v1/purchaseorders',
-      { reference_number: trimmed, status: 'open', per_page: 10 }
+      { reference_number: trimmed, per_page: 10 }
     ),
     zohoGet<ZohoPagedResponse<ZohoPurchaseOrder> & { purchaseorders?: ZohoPurchaseOrder[] }>(
       '/api/v1/purchaseorders',

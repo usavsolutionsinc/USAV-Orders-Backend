@@ -48,6 +48,41 @@ module.exports = {
       },
     },
 
+    // ─── MLX LM Server — Llama 3.2 3B (Hermes local chat agent) ───
+    // Serves Llama 3.2 3B Instruct 4bit on port 8086 for Hermes.
+    // Separate from mlx-server:8085 so the code pipeline's Qwen model
+    // stays put. Llama 3.2 3B has a 128K native context, which satisfies
+    // Hermes's 64K minimum and fits in ~2 GB RAM on this 8 GB M2.
+    {
+      name: 'mlx-server-llama',
+      script: path.join(process.env.HOME, '.venvs/localai/bin/python'),
+      args: '-m mlx_lm.server --port 8086 --model mlx-community/Llama-3.2-3B-Instruct-4bit',
+      autorestart: true,
+      max_restarts: 5,
+      restart_delay: 5000,
+    },
+
+    // ─── Hermes Gateway (local agent runtime + OpenAI-compat API on :8642) ─
+    // Runs the NousResearch/hermes-agent gateway as a foreground daemon.
+    // Launchd install was previously used; we moved here so MLX + Hermes
+    // + Redis + pipeline all show up in `pm2 ls` together. The gateway
+    // hosts the api_server platform adapter bound to 127.0.0.1:8642 —
+    // that is what /api/ai/openclaw-chat proxies to.
+    {
+      name: 'hermes-gateway',
+      // Invoke the hermes venv python directly. PM2 treats bare shell scripts
+      // as Node otherwise and chokes on the Python shebang.
+      script: path.join(process.env.HOME, '.hermes/hermes-agent/venv/bin/python'),
+      args: '-m hermes_cli.main gateway run',
+      autorestart: true,
+      max_restarts: 5,
+      restart_delay: 5000,
+      env: {
+        HERMES_HOME: path.join(process.env.HOME, '.hermes-usav'),
+        PATH: `${path.join(process.env.HOME, '.local/bin')}:${process.env.PATH || ''}`,
+      },
+    },
+
     // ─── Pipeline Orchestrator ─────────────────────────────
     // The main autonomous loop. Discovers tasks, implements via LLM,
     // validates with tests/lint/typecheck, and collects training data.

@@ -107,11 +107,11 @@ export function FbaAddToShipmentPanel({
             aria-label={
               open
                 ? undefined
-                : `Add FNSKU, ${sortedShipments.length} shipment${sortedShipments.length === 1 ? '' : 's'} available`
+                : `Add FNSKU to plan, ${sortedShipments.length} plan${sortedShipments.length === 1 ? '' : 's'} available`
             }
             id="add-fnsku-dropdown-trigger"
           >
-            <h2 className="text-sm font-black uppercase tracking-tight text-gray-900">Add FNSKU</h2>
+            <h2 className="text-sm font-black uppercase tracking-tight text-gray-900">Add FNSKU to plan</h2>
             {open ? (
               <p className={`${microBadge} tracking-widest ${chrome.sectionLabel}`}>Manual entry ready</p>
             ) : null}
@@ -148,10 +148,10 @@ export function FbaAddToShipmentPanel({
               disabled={!hasShipments}
               className={chrome.input}
             >
-              <option value="">Shipment…</option>
+              <option value="">Plan…</option>
               {sortedShipments.map((id) => (
                 <option key={id} value={id}>
-                  {planRefById.get(id) || `Shipment #${id}`}
+                  {planRefById.get(id) || `Plan #${id}`}
                 </option>
               ))}
             </select>
@@ -180,11 +180,11 @@ export function FbaAddToShipmentPanel({
               className={`flex h-10 items-center justify-center gap-1 ${chrome.primaryButton}`}
             >
               {addLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin text-white" /> : <Plus className="h-3.5 w-3.5" />}
-              Add to shipment
+              Add to plan
             </button>
             {!hasShipments ? (
               <p className="text-[10px] text-gray-500">
-                Open a plan or select a shipment to enable manual entries.
+                Open a plan to enable manual entries.
               </p>
             ) : null}
           </div>

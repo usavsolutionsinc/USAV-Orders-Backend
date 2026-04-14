@@ -23,6 +23,8 @@ export interface FbaSelectedLineRowProps {
   rightSlot: ReactNode;
   /** When provided, replaces the checkbox column with this node (e.g. a drag handle). */
   leadingSlot?: ReactNode;
+  /** When true, the leading column is removed entirely (no checkbox, no slot). Read-only displays. */
+  hideCheckbox?: boolean;
 }
 
 /** Optional microcopy + title + FNSKU below, left; optional right column (e.g. qty stepper). */
@@ -38,23 +40,33 @@ export function FbaSelectedLineRow({
   onEditDetails,
   rightSlot,
   leadingSlot,
+  hideCheckbox = false,
 }: FbaSelectedLineRowProps) {
   const microcopyColor = microcopyTone === 'success' ? 'text-emerald-700' : 'text-gray-500';
+  const showLeading = !hideCheckbox;
+  const gridCols = showLeading
+    ? 'grid-cols-[auto_minmax(0,1fr)_auto]'
+    : 'grid-cols-[minmax(0,1fr)_auto]';
+  const titleColStart = showLeading ? 'col-start-2' : 'col-start-1';
+  const metaColStart = showLeading ? 'col-start-2' : 'col-start-1';
+  const rightColStart = showLeading ? 'col-start-3' : 'col-start-2';
 
   return (
-    <div className="grid grid-cols-[auto_minmax(0,1fr)_auto] grid-rows-[auto_auto] items-start gap-x-2 gap-y-1 border-b border-gray-100 px-2 py-2 last:border-b-0">
-      <div className="row-span-2">
-        {leadingSlot ?? (
-          <PrintTableCheckbox
-            checked={checked}
-            stationTheme={stationTheme}
-            disabled={checkboxDisabled}
-            onChange={(next) => onCheckedChange?.(next)}
-            label={checked ? 'Unselect item' : 'Select item'}
-          />
-        )}
-      </div>
-      <div className="col-start-2 row-start-1 flex min-w-0 flex-col items-start gap-0.5 self-start">
+    <div className={`grid ${gridCols} grid-rows-[auto_auto] items-start gap-x-2 gap-y-1 border-b border-gray-100 px-2 py-2 last:border-b-0`}>
+      {showLeading && (
+        <div className="row-span-2">
+          {leadingSlot ?? (
+            <PrintTableCheckbox
+              checked={checked}
+              stationTheme={stationTheme}
+              disabled={checkboxDisabled}
+              onChange={(next) => onCheckedChange?.(next)}
+              label={checked ? 'Unselect item' : 'Select item'}
+            />
+          )}
+        </div>
+      )}
+      <div className={`${titleColStart} row-start-1 flex min-w-0 flex-col items-start gap-0.5 self-start`}>
         {microcopyAboveTitle ? (
           <p className={`w-full ${fieldLabel} ${microcopyColor}`}>
             {microcopyAboveTitle}
@@ -64,7 +76,7 @@ export function FbaSelectedLineRow({
           {displayTitle}
         </p>
       </div>
-      <div className="col-start-2 row-start-2 flex items-center justify-end gap-1.5 self-end pt-0.5">
+      <div className={`${metaColStart} row-start-2 flex items-center justify-end gap-1.5 self-end pt-0.5`}>
         <button
           type="button"
           onClick={(e) => {
@@ -85,7 +97,7 @@ export function FbaSelectedLineRow({
         </button>
         <FnskuChip value={fnsku} />
       </div>
-      <div className="col-start-3 row-span-2 flex shrink-0 flex-col items-start pt-0.5">{rightSlot}</div>
+      <div className={`${rightColStart} row-span-2 flex shrink-0 flex-col items-start pt-0.5`}>{rightSlot}</div>
     </div>
   );
 }

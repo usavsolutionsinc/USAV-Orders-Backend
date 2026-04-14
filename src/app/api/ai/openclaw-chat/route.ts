@@ -1,3 +1,9 @@
+/**
+ * @deprecated The `openclaw-` name is retained only for URL compatibility with
+ * AiChatPanel.tsx and admin/AiChatTab.tsx. The backend is now the local Hermes
+ * gateway on 127.0.0.1:8642 (NousResearch/hermes-agent). OpenClaw is no longer
+ * called. See /Users/salessupport/.claude/plans/fizzy-conjuring-knuth.md.
+ */
 import { NextRequest, NextResponse } from 'next/server';
 import { buildContextBlock } from '@/lib/ai/context-fetchers';
 import { detectIntents, extractParams } from '@/lib/ai/intent-router';
@@ -14,8 +20,10 @@ type OpenClawChatBody = {
   message?: string;
 };
 
-const OPENCLAW_GATEWAY_URL = process.env.OPENCLAW_GATEWAY_URL || '';
-const OPENCLAW_USAV_TOKEN = process.env.OPENCLAW_USAV_TOKEN || '';
+// Local Hermes gateway — OpenAI-compatible API server exposed by
+// NousResearch/hermes-agent (gateway/platforms/api_server.py).
+const HERMES_API_URL = process.env.HERMES_API_URL || 'http://127.0.0.1:8642/v1';
+const HERMES_API_KEY = process.env.HERMES_API_KEY || '';
 
 export async function POST(req: NextRequest) {
   const rate = checkRateLimit({
@@ -145,31 +153,31 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // 3. Send to OpenClaw gateway — it handles all model routing internally
-    if (!OPENCLAW_GATEWAY_URL) {
-      return NextResponse.json(
-        { error: 'OPENCLAW_GATEWAY_URL not configured' },
-        { status: 503 },
-      );
-    }
-
-    const openclawRes = await fetch(`${OPENCLAW_GATEWAY_URL}/v1/chat/completions`, {
+    // 3. Send to local Hermes gateway. Hermes loads our skills (00/10/40),
+    // injects business context, and may call our Python tool CLI via its
+    // terminal toolset when the query needs fresh Neon data.
+    //
+    // Session continuity is handled via the X-Hermes-Session-Id header —
+    // Hermes persists the conversation in ~/.hermes-usav/state.db so
+    // follow-up turns ("and yesterday?") see the prior context.
+    const hermesRes = await fetch(`${HERMES_API_URL}/chat/completions`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${OPENCLAW_USAV_TOKEN}`,
+        ...(HERMES_API_KEY && { 'Authorization': `Bearer ${HERMES_API_KEY}` }),
+        'X-Hermes-Session-Id': sessionId,
         'X-Source': 'usav',
       },
       body: JSON.stringify({
-        model: 'openclaw/usav-ops',
+        model: 'hermes-agent',
         messages: [
           {
             role: 'system',
             content:
-              'You are the USAV Ops Assistant specializing in Bose product repair and warehouse operations. ' +
-              'Answer questions about Bose speakers, amplifiers, receivers, and audio equipment repair. ' +
-              'Provide specific part numbers, troubleshooting steps, and repair procedures when possible. ' +
-              'Be concise and practical.',
+              'You are the USAV Ops Assistant embedded in the operations app. ' +
+              'Staff at a 5-person shop ask about orders, stock, staff pace, ' +
+              'receiving, and repairs. Keep answers concrete and numeric, 1-4 ' +
+              'sentences. Use ISO Pacific dates. Call tools for fresh data.',
           },
           { role: 'user', content: enrichedMessage },
         ],
@@ -180,16 +188,16 @@ export async function POST(req: NextRequest) {
       signal: AbortSignal.timeout(120_000),
     });
 
-    if (!openclawRes.ok) {
-      const errBody = await openclawRes.text().catch(() => '');
-      console.error('[openclaw-chat] gateway error:', openclawRes.status, errBody.slice(0, 300));
+    if (!hermesRes.ok) {
+      const errBody = await hermesRes.text().catch(() => '');
+      console.error('[openclaw-chat] Hermes gateway error:', hermesRes.status, errBody.slice(0, 300));
       return NextResponse.json(
-        { error: `AI backend returned ${openclawRes.status}` },
+        { error: `Local AI returned ${hermesRes.status}. Is the hermes-gateway PM2 app running?` },
         { status: 502 },
       );
     }
 
-    const data = await openclawRes.json();
+    const data = await hermesRes.json();
     const rawReply =
       data?.choices?.[0]?.message?.content ||
       data?.reply ||
@@ -198,8 +206,8 @@ export async function POST(req: NextRequest) {
     // Strip <think>...</think> reasoning blocks if model includes them
     const reply = rawReply.replace(/<think>[\s\S]*?<\/think>/g, '').trim() || rawReply;
 
-    console.info('[openclaw-chat] OpenClaw answered', {
-      model: data?.model ?? 'openclaw/usav-ops',
+    console.info('[openclaw-chat] Hermes answered', {
+      model: data?.model ?? 'hermes-agent',
       chars: reply.length,
     });
 

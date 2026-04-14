@@ -1,5 +1,11 @@
 'use client';
 
+/**
+ * Despite the filename, this form creates an FBA **plan** (the prep-queue
+ * record shown on UpNextOrder for techs), not an outbound shipment. The
+ * shipment phase — with Amazon FBA IDs pairing 1..N UPS tracking numbers —
+ * is added later via FbaShipmentEditorForm.
+ */
 import { type Dispatch, type SetStateAction, useEffect, useMemo, useRef } from 'react';
 import { Loader2, Package, Plus, Trash2 } from '@/components/Icons';
 import { DeferredQtyInput } from '@/design-system/primitives';
@@ -84,7 +90,7 @@ export function FbaCreateShipmentForm({
 
   return (
     <SidebarIntakeFormShell
-      title="New FBA shipment"
+      title="New FBA plan"
       subtitle="Plan mode"
       subtitleAccent={stationTheme}
       onClose={onClose}
@@ -103,7 +109,7 @@ export function FbaCreateShipmentForm({
           ) : (
             <span className="flex items-center justify-center gap-2">
               <Package className="h-4 w-4" />
-              Create shipment
+              Create plan
             </span>
           )}
         </button>

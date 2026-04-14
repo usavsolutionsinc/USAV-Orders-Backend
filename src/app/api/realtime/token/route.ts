@@ -54,6 +54,10 @@ async function createTokenRequest(req: NextRequest) {
     [getStaffChannelName()]: ['subscribe'],
     [getFbaChannelName()]: ['subscribe'],
     [`${getDbChannelPrefix()}:*`]: ['subscribe'],
+    // Desktop listens for phone-originated scans on its own per-staff channel.
+    'phone:*': ['subscribe'],
+    // Desktop echoes scan results back to paired phones on per-staff station channel.
+    'station:*': ['subscribe', 'publish'],
   };
 
   if (aiSessionChannel) {

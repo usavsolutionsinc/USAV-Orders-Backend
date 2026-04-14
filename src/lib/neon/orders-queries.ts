@@ -296,6 +296,16 @@ const ORDER_SERIALS_CTE = `
              pack_sal.created_at, test_sal.created_at
   )`;
 
+// Search path variant: drops the carrier-accepted gate so orders with a shipment
+// assigned but not yet scanned by the carrier are still discoverable by order_id /
+// tracking / SKU. The is_shipped column remains populated so the client can badge
+// the row as "pending carrier scan."
+const ORDER_SERIALS_CTE_ALL = ORDER_SERIALS_CTE.replace(
+  `WHERE COALESCE(stn.is_carrier_accepted OR stn.is_in_transit
+            OR stn.is_out_for_delivery OR stn.is_delivered, false)`,
+  ''
+);
+
 // ─── Shipped Orders (Read) ────────────────────────────────────────────────────
 
 /**
@@ -650,21 +660,37 @@ export async function getShippedOrderById(id: number): Promise<ShippedOrder | nu
   }
 }
 
+export interface ShippedSearchDebug {
+  variantCount: number;
+  resultCount: number;
+  topScore: number;
+  searchField: ShippedSearchField;
+  ctePathway: 'all' | 'shipped_only';
+  limit: number;
+}
+
+export interface ShippedSearchResult {
+  rows: ShippedOrder[];
+  debug: ShippedSearchDebug;
+}
+
 /**
  * Search shipped orders by tracking number, order ID, product title, or serial number.
- * Uses ORDER_SERIALS_CTE (carrier-shipped only). For packed-but-not-yet-carrier-shipped
- * orders, use searchPackedOrders as fallback.
+ * Uses ORDER_SERIALS_CTE_ALL so packed-but-not-yet-carrier-scanned orders are also
+ * discoverable; the is_shipped column on each row lets the UI distinguish "shipped"
+ * from "pending carrier scan".
  */
 export async function searchShippedOrders(
   query: string,
-  options?: { shippedFilter?: ShippedFilterMode; searchField?: ShippedSearchField },
-): Promise<ShippedOrder[]> {
+  options?: { shippedFilter?: ShippedFilterMode; searchField?: ShippedSearchField; limit?: number },
+): Promise<ShippedSearchResult> {
   try {
     const trimmedQuery = String(query || '').trim();
     const digitsOnly = trimmedQuery.replace(/\D/g, '');
     const last8 = digitsOnly.length >= 8 ? digitsOnly.slice(-8) : '';
     const key18 = normalizeTrackingKey18(trimmedQuery);
     const searchField = options?.searchField ?? 'all';
+    const resultLimit = Math.min(500, Math.max(25, Number(options?.limit) || 200));
 
     // Build an optional AND clause for the type filter
     let typeFilterClause = '';
@@ -809,9 +835,13 @@ export async function searchShippedOrders(
       }
 
       if (numericParam) {
+        // Demoted from 1420 → 600: previously a search for order_id "12345" could
+        // surface an unrelated record whose primary key is 12345 and outrank the
+        // real order_id match. 600 keeps this as a useful tiebreaker without
+        // overriding exact/prefix hits on order_id or tracking.
         variants.push({
           predicate: `os.id = ${numericParam}`,
-          score: 1420,
+          score: 600,
         });
       }
 
@@ -841,8 +871,10 @@ export async function searchShippedOrders(
 
       const { whereClause, rankClause } = buildRankedSearchSql(variants);
 
-      return pool.query(
-        `WITH ${ORDER_SERIALS_CTE}
+      const limitParam = pushParam(resultLimit);
+
+      const queryResult = await pool.query(
+        `WITH ${ORDER_SERIALS_CTE_ALL}
          SELECT
            os.*,
            s1.name AS tested_by_name,
@@ -860,9 +892,10 @@ export async function searchShippedOrders(
            search_rank DESC,
            COALESCE(os.packed_at, os.created_at)::timestamp DESC NULLS LAST,
            os.id DESC
-         LIMIT 100`,
+         LIMIT ${limitParam}`,
         params,
       );
+      return { queryResult, variantCount: variants.length };
     };
 
     const searchExceptionTrackingRows = async (): Promise<ShippedOrder[]> => {
@@ -978,12 +1011,35 @@ export async function searchShippedOrders(
           if (dateA !== dateB) return dateB - dateA;
           return Number(b.id) - Number(a.id);
         })
-        .slice(0, 100);
+        .slice(0, resultLimit);
+
+    const buildResult = (
+      queryResult: { rows: ShippedOrder[] },
+      variantCount: number,
+      exceptionRows: ShippedOrder[],
+    ): ShippedSearchResult => {
+      const merged = mergeSearchRows(queryResult.rows, exceptionRows);
+      const topScore = merged.reduce(
+        (max, row) => Math.max(max, Number((row as any).search_rank || 0)),
+        0,
+      );
+      return {
+        rows: merged,
+        debug: {
+          variantCount,
+          resultCount: merged.length,
+          topScore,
+          searchField,
+          ctePathway: 'all',
+          limit: resultLimit,
+        },
+      };
+    };
 
     try {
-      const result = await runSearch(true);
+      const { queryResult, variantCount } = await runSearch(true);
       const exceptionRows = await searchExceptionTrackingRows();
-      return mergeSearchRows(result.rows, exceptionRows);
+      return buildResult(queryResult, variantCount, exceptionRows);
     } catch (error) {
       const message = error instanceof Error ? error.message.toLowerCase() : '';
       const pgTrgmUnavailable =
@@ -993,9 +1049,9 @@ export async function searchShippedOrders(
 
       if (pgTrgmUnavailable) {
         console.warn('pg_trgm is unavailable for shipped search; falling back to exact/prefix/contains search.');
-        const fallbackResult = await runSearch(false);
+        const { queryResult, variantCount } = await runSearch(false);
         const exceptionRows = await searchExceptionTrackingRows();
-        return mergeSearchRows(fallbackResult.rows, exceptionRows);
+        return buildResult(queryResult, variantCount, exceptionRows);
       }
 
       throw error;

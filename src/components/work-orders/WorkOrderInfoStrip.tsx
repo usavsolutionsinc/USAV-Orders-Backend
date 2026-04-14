@@ -19,7 +19,7 @@ export function WorkOrderInfoChips({ row }: { row: WorkOrderRow }) {
       return (
         <>
           <OrderIdChip value={orderValue} display={getLast4(orderValue)} />
-          <TrackingOrSkuScanChip value={trackingValue} />
+          <TrackingChip value={trackingValue} display={getLast4(trackingValue)} />
         </>
       );
     }

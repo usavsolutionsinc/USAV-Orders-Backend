@@ -1,28 +1,20 @@
+/**
+ * @deprecated The `openclaw-` name is retained only for URL compatibility.
+ * Health now pings the local Hermes gateway on 127.0.0.1:8642.
+ */
 import { NextResponse } from 'next/server';
 import { formatPSTTimestamp } from '@/utils/date';
 
 export const runtime = 'nodejs';
 
-const OPENCLAW_GATEWAY_URL = process.env.OPENCLAW_GATEWAY_URL || '';
-const OPENCLAW_USAV_TOKEN = process.env.OPENCLAW_USAV_TOKEN || '';
+const HERMES_API_URL = process.env.HERMES_API_URL || 'http://127.0.0.1:8642/v1';
 
-/**
- * Health check — pings the single OpenClaw gateway (via Cloudflare tunnel).
- */
 export async function GET() {
   const timestamp = formatPSTTimestamp();
 
-  if (!OPENCLAW_GATEWAY_URL) {
-    return NextResponse.json(
-      { ok: false, backend: null, error: 'OPENCLAW_GATEWAY_URL not configured', timestamp },
-      { status: 503 },
-    );
-  }
-
   try {
-    const res = await fetch(`${OPENCLAW_GATEWAY_URL}/v1/models`, {
-      headers: { Authorization: `Bearer ${OPENCLAW_USAV_TOKEN}` },
-      signal: AbortSignal.timeout(8_000),
+    const res = await fetch(`${HERMES_API_URL}/models`, {
+      signal: AbortSignal.timeout(4_000),
     });
 
     if (res.ok) {
@@ -30,20 +22,25 @@ export async function GET() {
       const models = data?.data ?? [];
       return NextResponse.json({
         ok: true,
-        backend: 'openclaw',
-        model: models[0]?.id ?? 'openclaw/usav-ops',
+        backend: 'hermes-local',
+        model: models[0]?.id ?? 'hermes-agent',
         models: models.map((m: { id?: string }) => m.id),
         timestamp,
       });
     }
 
     return NextResponse.json(
-      { ok: false, backend: 'openclaw', error: `Gateway returned ${res.status}`, timestamp },
+      { ok: false, backend: 'hermes-local', error: `Hermes returned ${res.status}`, timestamp },
       { status: 503 },
     );
   } catch (err: any) {
     return NextResponse.json(
-      { ok: false, backend: null, error: err?.message ?? 'OpenClaw unreachable', timestamp },
+      {
+        ok: false,
+        backend: 'hermes-local',
+        error: err?.message ?? 'Hermes gateway unreachable — is the hermes-gateway PM2 app running?',
+        timestamp,
+      },
       { status: 503 },
     );
   }

@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { DndContext, DragOverlay, PointerSensor, useSensor, useSensors } from '@dnd-kit/core';
 import type { DragStartEvent, DragEndEvent } from '@dnd-kit/core';
 import { useDroppable } from '@dnd-kit/core';
@@ -10,6 +11,7 @@ import { getLast4 } from '@/components/ui/CopyChip';
 import { FbaTrackingBundleCard } from '@/components/fba/sidebar/FbaTrackingBundleCard';
 import type { BundleItemAllocation, TrackingBundleDraft } from '@/components/fba/sidebar/FbaTrackingBundleCard';
 import { FbaDraggableLineRow } from '@/components/fba/sidebar/FbaDraggableLineRow';
+import { FbaSelectedLineRow } from '@/components/fba/sidebar/FbaSelectedLineRow';
 import { FbaQtyStepper } from '@/components/fba/sidebar/FbaQtyStepper';
 import { FbaQtySplitPopover } from '@/components/fba/sidebar/FbaQtySplitPopover';
 import { PrintTableCheckbox } from '@/components/fba/table/Checkbox';
@@ -121,6 +123,8 @@ function UnallocatedDropZone({
   onToggleSelect,
   onSelectAllUnallocated,
   onRemoveItem,
+  moveUndo,
+  onRestoreToBundle,
 }: {
   items: ShipmentCardItem[];
   stationTheme: StationTheme;
@@ -128,6 +132,8 @@ function UnallocatedDropZone({
   onToggleSelect: (itemId: number) => void;
   onSelectAllUnallocated: () => void;
   onRemoveItem: (itemId: number) => void;
+  moveUndo: Map<number, { qty: number; maxQty: number; link_id: number | null; tracking_number: string; carrier: string }>;
+  onRestoreToBundle: (itemId: number) => void;
 }) {
   const { setNodeRef, isOver } = useDroppable({ id: UNALLOCATED_ID });
   const totalUnits = items.reduce((s, i) => s + i.expected_qty, 0);
@@ -174,27 +180,44 @@ function UnallocatedDropZone({
         </div>
       ) : (
         <div className="border-t border-gray-100">
-          {items.map((item) => (
-            <FbaDraggableLineRow
-              key={item.item_id}
-              dragId={`editor-drag-${item.item_id}-unallocated`}
-              dragData={{ itemId: item.item_id, sourceContainer: UNALLOCATED_ID }}
-              displayTitle={item.display_title || 'No title'}
-              fnsku={String(item.fnsku || '').toUpperCase()}
-              stationTheme={stationTheme}
-              checked
-              selected={selectedIds.has(item.item_id)}
-              onToggleSelect={() => onToggleSelect(item.item_id)}
-              onCheckedChange={() => onRemoveItem(item.item_id)}
-              rightSlot={
-                <FbaQtyStepper
-                  value={item.expected_qty}
-                  onChange={() => {}}
-                  fnsku={item.fnsku}
-                />
-              }
-            />
-          ))}
+          {items.map((item) => {
+            const pendingUndo = moveUndo.get(item.item_id);
+            return (
+              <FbaDraggableLineRow
+                key={item.item_id}
+                dragId={`editor-drag-${item.item_id}-unallocated`}
+                dragData={{ itemId: item.item_id, sourceContainer: UNALLOCATED_ID }}
+                displayTitle={item.display_title || 'No title'}
+                fnsku={String(item.fnsku || '').toUpperCase()}
+                stationTheme={stationTheme}
+                checked
+                selected={selectedIds.has(item.item_id)}
+                onToggleSelect={() => onToggleSelect(item.item_id)}
+                onCheckedChange={() => onRemoveItem(item.item_id)}
+                rightSlot={
+                  <div className="flex items-center gap-1">
+                    {pendingUndo && (
+                      <button
+                        type="button"
+                        onClick={() => onRestoreToBundle(item.item_id)}
+                        className="flex h-5 items-center gap-0.5 rounded-md border border-amber-200 bg-amber-50 px-1.5 text-[8px] font-black uppercase tracking-wider text-amber-700 transition-colors hover:border-amber-300 hover:bg-amber-100"
+                        aria-label="Undo move — return to previous box"
+                        title="Return to previous box"
+                      >
+                        <RotateCcw className="h-2.5 w-2.5" />
+                        Undo
+                      </button>
+                    )}
+                    <FbaQtyStepper
+                      value={item.expected_qty}
+                      onChange={() => {}}
+                      fnsku={item.fnsku}
+                    />
+                  </div>
+                }
+              />
+            );
+          })}
         </div>
       )}
     </div>
@@ -403,11 +426,33 @@ export function FbaShipmentEditorForm({
 
   // ── Bundle CRUD ──
   const addBundle = useCallback(() => {
-    setBundles((prev) => [...prev, { link_id: null, tracking_number: '', carrier: 'UPS', allocations: [], collapsed: false }]);
+    // Prepend so newly added tracking sits above already-added ones
+    setBundles((prev) => [{ link_id: null, tracking_number: '', carrier: 'UPS', allocations: [], collapsed: false }, ...prev]);
   }, []);
 
   const removeBundle = useCallback((index: number) => {
-    setBundles((prev) => prev.filter((_, i) => i !== index));
+    setBundles((prev) => {
+      const bundle = prev[index];
+      if (bundle && bundle.allocations.length > 0) {
+        // Stash a per-item undo entry so each freshly-unallocated item can be
+        // restored to this bundle (lookup by link_id / tracking_number; bundle
+        // gets recreated on first undo click if it's fully gone).
+        setMoveUndo((prevMap) => {
+          const n = new Map(prevMap);
+          for (const alloc of bundle.allocations) {
+            n.set(alloc.item_id, {
+              qty: alloc.qty,
+              maxQty: alloc.max_qty,
+              link_id: bundle.link_id,
+              tracking_number: bundle.tracking_number,
+              carrier: bundle.carrier,
+            });
+          }
+          return n;
+        });
+      }
+      return prev.filter((_, i) => i !== index);
+    });
   }, []);
 
   const updateTrackingNumber = useCallback((index: number, value: string) => {
@@ -418,14 +463,89 @@ export function FbaShipmentEditorForm({
     setBundles((prev) => prev.map((b, i) => (i === index ? { ...b, collapsed: !b.collapsed } : b)));
   }, []);
 
+  // Move-undo: tracks items recently moved to unallocated (via qty-to-0 deallocate
+  // OR bundle trash). Keyed by bundle link_id / tracking_number so lookups stay
+  // stable even if indexes shift or the bundle gets recreated via undo.
+  type MoveUndoEntry = {
+    qty: number;
+    maxQty: number;
+    link_id: number | null;
+    tracking_number: string;
+    carrier: string;
+  };
+  const [moveUndo, setMoveUndo] = useState<Map<number, MoveUndoEntry>>(new Map());
+
   const deallocateItem = useCallback((bundleIndex: number, itemId: number) => {
     const bundle = bundles[bundleIndex];
     const alloc = bundle?.allocations.find((a) => a.item_id === itemId);
-    if (alloc) pushUndo({ item_id: alloc.item_id, fnsku: alloc.fnsku, display_title: alloc.display_title, expected_qty: alloc.qty, bundleIndex });
-    setRemovedItemIds((prev) => new Set(prev).add(itemId));
+    if (alloc && bundle) {
+      setMoveUndo((prev) => {
+        const n = new Map(prev);
+        n.set(itemId, {
+          qty: alloc.qty,
+          maxQty: alloc.max_qty,
+          link_id: bundle.link_id,
+          tracking_number: bundle.tracking_number,
+          carrier: bundle.carrier,
+        });
+        return n;
+      });
+    }
     setBundles((prev) => prev.map((b, i) => (i !== bundleIndex ? b : { ...b, allocations: b.allocations.filter((a) => a.item_id !== itemId) })));
     setSelectedIds((prev) => { const n = new Set(prev); n.delete(itemId); return n; });
-  }, [bundles, pushUndo]);
+  }, [bundles]);
+
+  // Find an existing bundle by stable identity (link_id preferred, tracking_number as fallback)
+  const findBundleIndexByIdentity = (list: TrackingBundleDraft[], link_id: number | null, tracking_number: string): number => {
+    if (link_id != null) {
+      const i = list.findIndex((b) => b.link_id === link_id);
+      if (i >= 0) return i;
+    }
+    const trimmed = tracking_number.trim().toUpperCase();
+    if (trimmed) {
+      const i = list.findIndex((b) => b.tracking_number.trim().toUpperCase() === trimmed);
+      if (i >= 0) return i;
+    }
+    return -1;
+  };
+
+  const restoreToBundle = useCallback((itemId: number) => {
+    const entry = moveUndo.get(itemId);
+    if (!entry) return;
+    const item = items.find((i) => i.item_id === itemId);
+    if (!item) return;
+    setBundles((prev) => {
+      const idx = findBundleIndexByIdentity(prev, entry.link_id, entry.tracking_number);
+      const newAlloc: BundleItemAllocation = {
+        item_id: itemId,
+        fnsku: item.fnsku,
+        display_title: item.display_title,
+        qty: entry.qty,
+        max_qty: entry.maxQty,
+      };
+      if (idx >= 0) {
+        // Bundle still exists (or was recreated by a sibling undo) — merge allocation
+        return prev.map((b, i) => {
+          if (i !== idx) return b;
+          if (b.allocations.some((a) => a.item_id === itemId)) return b;
+          return { ...b, allocations: [...b.allocations, newAlloc] };
+        });
+      }
+      // Bundle gone — recreate it (preserving link_id so save path PATCHes instead of POSTing a dupe)
+      return [
+        { link_id: entry.link_id, tracking_number: entry.tracking_number, carrier: entry.carrier, allocations: [newAlloc], collapsed: false },
+        ...prev,
+      ];
+    });
+    setMoveUndo((prev) => { const n = new Map(prev); n.delete(itemId); return n; });
+  }, [moveUndo, items]);
+
+  const clearMoveUndo = useCallback((itemId: number) => {
+    setMoveUndo((prev) => {
+      if (!prev.has(itemId)) return prev;
+      const n = new Map(prev); n.delete(itemId); return n;
+    });
+  }, []);
 
   const changeAllocationQty = useCallback((bundleIndex: number, itemId: number, qty: number) => {
     setBundles((prev) => prev.map((b, i) => (i !== bundleIndex ? b : { ...b, allocations: b.allocations.map((a) => (a.item_id === itemId ? { ...a, qty } : a)) })));
@@ -547,7 +667,8 @@ export function FbaShipmentEditorForm({
   const handleDragStart = useCallback((event: DragStartEvent) => {
     const data = event.active.data.current as { itemId: number } | undefined;
     setActiveItemId(data?.itemId ?? null);
-  }, []);
+    if (data?.itemId != null) clearMoveUndo(data.itemId);
+  }, [clearMoveUndo]);
 
   const handleDragEnd = useCallback(
     (event: DragEndEvent) => {
@@ -721,17 +842,13 @@ export function FbaShipmentEditorForm({
         </div>
 
         <DndContext sensors={sensors} onDragStart={handleDragStart} onDragEnd={handleDragEnd} onDragCancel={handleDragCancel}>
-          {/* UPS Tracking section — + button at top, then boxes */}
+          {/* UPS Tracking section — + button at very top, then boxes */}
           <div className="space-y-2">
-            <div className="flex items-center justify-between">
-              <p className="text-[8px] font-black uppercase tracking-widest text-purple-700">UPS Tracking ({bundles.length})</p>
-            </div>
-
             <button type="button" onClick={addBundle}
               className="flex w-full items-center justify-center gap-1 rounded-lg border border-dashed border-gray-300 bg-gray-50/50 px-2 py-1.5 text-[9px] font-bold uppercase tracking-wider text-gray-500 transition-colors hover:border-purple-300 hover:bg-purple-50/50 hover:text-purple-600"
             >
               <Plus className="h-2.5 w-2.5" />
-              UPS Tracking
+              UPS Tracking{bundles.length > 0 ? ` (${bundles.length})` : ''}
             </button>
 
             {bundles.map((bundle, idx) => (
@@ -751,6 +868,7 @@ export function FbaShipmentEditorForm({
               items={unallocatedItems} stationTheme={stationTheme}
               selectedIds={selectedIds} onToggleSelect={toggleSelect}
               onSelectAllUnallocated={selectAllUnallocated} onRemoveItem={removeUnallocatedItem}
+              moveUndo={moveUndo} onRestoreToBundle={restoreToBundle}
             />
           )}
 
@@ -807,19 +925,20 @@ export function FbaShipmentEditorForm({
         </button>
       </div>
 
-      {/* FNSKU search popup */}
-      <AnimatePresence>
-        {fnskuSearchOpen && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: 0.15 }}
-            className="fixed inset-0 z-[110] flex items-start justify-center p-4 pt-[12vh]"
+      {/* FNSKU search popup — portaled to body so it escapes any transformed ancestor */}
+      {typeof document !== 'undefined' && createPortal(
+        <AnimatePresence>
+          {fnskuSearchOpen && (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.15 }}
+              className="fixed inset-0 z-[200] flex items-stretch justify-center p-4 sm:p-6 md:p-10"
           >
             <button
               type="button"
-              className="absolute inset-0 bg-black/40"
+              className="absolute inset-0 bg-black/50"
               aria-label="Close FNSKU search"
               onClick={() => setFnskuSearchOpen(false)}
             />
@@ -828,7 +947,7 @@ export function FbaShipmentEditorForm({
               animate={{ opacity: 1, y: 0, scale: 1 }}
               exit={{ opacity: 0, y: -12, scale: 0.98 }}
               transition={{ duration: 0.18, ease: [0.22, 1, 0.36, 1] }}
-              className="relative z-[111] w-full max-w-xl overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-2xl shadow-zinc-900/20"
+              className="relative z-[111] flex w-full max-w-5xl flex-col overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-2xl shadow-zinc-900/20"
             >
               {/* Header: search input */}
               <div className="border-b border-zinc-200 px-4 py-3">
@@ -860,76 +979,68 @@ export function FbaShipmentEditorForm({
               </div>
 
               {/* Body: search results */}
-              <div className="max-h-[60vh] overflow-y-auto px-3 py-3">
+              <div className="flex-1 overflow-y-auto px-3 py-3">
                 {fnskuQuery.trim().length < 2 ? (
-                  <div className="py-12 text-center">
+                  <div className="py-16 text-center">
                     <Search className="mx-auto h-6 w-6 text-zinc-300" />
                     <p className="mt-2 text-xs font-semibold text-zinc-400">
                       Type at least 2 characters to search
                     </p>
                   </div>
                 ) : fnskuSearching ? (
-                  <div className="flex items-center justify-center gap-2 py-12">
+                  <div className="flex items-center justify-center gap-2 py-16">
                     <Loader2 className="h-4 w-4 animate-spin text-zinc-400" />
                     <p className="text-xs font-semibold text-zinc-500">Searching...</p>
                   </div>
                 ) : fnskuResults.length === 0 ? (
-                  <div className="py-12 text-center">
+                  <div className="py-16 text-center">
                     <p className="text-xs font-semibold text-zinc-400">No matching FNSKUs found</p>
                     <p className="mt-1 text-[10px] text-zinc-400">Try a different search term</p>
                   </div>
                 ) : (
-                  <div className="space-y-1">
+                  <div className="divide-y divide-gray-100 overflow-hidden rounded-lg border border-gray-200">
                     {fnskuResults.map((result) => {
                       const alreadyAdded = items.some(
                         (i) => i.fnsku.toUpperCase() === result.fnsku.toUpperCase(),
                       );
                       const isAdding = addingFnsku === result.fnsku;
                       return (
-                        <button
+                        <FbaSelectedLineRow
                           key={result.fnsku}
-                          type="button"
-                          disabled={alreadyAdded || isAdding}
-                          onClick={() => void handleAddFnskuToShipment(result)}
-                          className={`flex w-full items-center gap-3 rounded-lg border px-3 py-2.5 text-left transition-colors ${
-                            alreadyAdded
-                              ? 'cursor-default border-emerald-100 bg-emerald-50/40'
-                              : 'border-zinc-200 bg-white hover:border-purple-300 hover:bg-purple-50/60'
-                          }`}
-                        >
-                          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-purple-50">
-                            <Package className="h-4 w-4 text-purple-500" />
-                          </div>
-                          <div className="min-w-0 flex-1">
-                            <p className="truncate text-sm font-bold text-zinc-900">
-                              {result.product_title || result.fnsku}
-                            </p>
-                            <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5">
-                              <span className="font-mono text-[10px] font-bold text-purple-700">
-                                {result.fnsku}
-                              </span>
-                              {result.asin && (
-                                <span className="font-mono text-[10px] text-zinc-500">
-                                  ASIN {result.asin}
-                                </span>
-                              )}
-                              {result.sku && (
-                                <span className="font-mono text-[10px] text-zinc-500">
-                                  SKU {result.sku}
-                                </span>
-                              )}
+                          displayTitle={result.product_title || result.fnsku}
+                          fnsku={result.fnsku.toUpperCase()}
+                          stationTheme={stationTheme}
+                          leadingSlot={
+                            <div className="flex h-5 w-5 items-center justify-center rounded-md bg-purple-50">
+                              <Package className="h-3 w-3 text-purple-500" />
                             </div>
-                          </div>
-                          <div className="flex h-7 w-7 shrink-0 items-center justify-center">
-                            {isAdding ? (
-                              <Loader2 className="h-4 w-4 animate-spin text-purple-500" />
-                            ) : alreadyAdded ? (
-                              <Check className="h-4 w-4 text-emerald-500" />
-                            ) : (
-                              <Plus className="h-4 w-4 text-purple-500" />
-                            )}
-                          </div>
-                        </button>
+                          }
+                          rightSlot={
+                            <button
+                              type="button"
+                              disabled={alreadyAdded || isAdding}
+                              onClick={() => void handleAddFnskuToShipment(result)}
+                              className={[
+                                'flex h-7 w-7 items-center justify-center rounded-lg border transition-colors',
+                                alreadyAdded
+                                  ? 'cursor-default border-emerald-200 bg-emerald-50 text-emerald-600'
+                                  : isAdding
+                                    ? 'cursor-wait border-purple-200 bg-purple-50 text-purple-500'
+                                    : 'border-purple-200 bg-white text-purple-600 hover:border-purple-400 hover:bg-purple-50',
+                              ].join(' ')}
+                              aria-label={alreadyAdded ? 'Already in shipment' : `Add ${result.fnsku} to shipment`}
+                              title={alreadyAdded ? 'Already in shipment' : 'Add to shipment'}
+                            >
+                              {isAdding ? (
+                                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                              ) : alreadyAdded ? (
+                                <Check className="h-3.5 w-3.5" />
+                              ) : (
+                                <Plus className="h-3.5 w-3.5" />
+                              )}
+                            </button>
+                          }
+                        />
                       );
                     })}
                   </div>
@@ -938,7 +1049,9 @@ export function FbaShipmentEditorForm({
             </motion.div>
           </motion.div>
         )}
-      </AnimatePresence>
+        </AnimatePresence>,
+        document.body,
+      )}
 
       {/* Footer */}
       <div className="border-t border-gray-200 bg-white px-3 py-2">
