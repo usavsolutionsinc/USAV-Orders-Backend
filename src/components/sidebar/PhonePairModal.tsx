@@ -232,6 +232,13 @@ export function PhonePairModal() {
                       {Math.floor(remaining / 60)}:{String(remaining % 60).padStart(2, '0')}
                     </p>
                   </div>
+                  <button
+                    type="button"
+                    onClick={() => selectedStaffId && void requestCode(selectedStaffId)}
+                    className="rounded-lg bg-gray-900 px-3 py-1.5 text-[10px] font-black uppercase tracking-widest text-white shadow-sm hover:bg-gray-800"
+                  >
+                    Refresh
+                  </button>
                 </div>
                 <p className="mt-4 text-[10px] leading-snug text-gray-400">
                   Link:{' '}

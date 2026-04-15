@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Ably from 'ably';
 import { getStaffThemeById, stationThemeColors } from '@/utils/staff-colors';
+import { useBarcodeScanner } from '@/hooks/useBarcodeScanner';
 
 type PairSession = {
   staff_id: number;
@@ -58,21 +59,17 @@ function randomId(): string {
 
 export default function MobileScanPage() {
   const router = useRouter();
-  const videoRef = useRef<HTMLVideoElement>(null);
-  const streamRef = useRef<MediaStream | null>(null);
-  const detectorRef = useRef<{ detect: (source: CanvasImageSource) => Promise<Array<{ rawValue: string }>> } | null>(null);
   const phoneChannelRef = useRef<Ably.RealtimeChannel | null>(null);
   const stationChannelRef = useRef<Ably.RealtimeChannel | null>(null);
   const realtimeRef = useRef<Ably.Realtime | null>(null);
-  const lastDetectRef = useRef<{ value: string; at: number } | null>(null);
-  const runningRef = useRef(false);
 
   const [session, setSession] = useState<PairSession | null>(null);
   const [connState, setConnState] = useState<string>('connecting');
-  const [camState, setCamState] = useState<'idle' | 'ready' | 'denied' | 'unsupported'>('idle');
   const [scans, setScans] = useState<PhoneScan[]>([]);
   const [input, setInput] = useState('');
   const [autoSend, setAutoSend] = useState(true);
+
+  const scanner = useBarcodeScanner({ dedupMs: DUP_WINDOW_MS });
 
   // 1. Load the paired session (redirect if not paired).
   useEffect(() => {
@@ -174,88 +171,33 @@ export default function MobileScanPage() {
     setInput('');
   }, []);
 
-  // 4. Start camera + detection loop. Detection populates the input; user
-  //    either lets auto-send fire, or edits first and taps Send.
+  // 4. Start/stop camera with the paired session. ZXing (@zxing/browser) is
+  //    used via useBarcodeScanner — same stack as packer/receiving sheets,
+  //    which works on iOS Safari where native BarcodeDetector does not.
   useEffect(() => {
     if (!session) return;
-    let cancelled = false;
-
-    async function start() {
-      const video = videoRef.current;
-      if (!video) return;
-
-      const BarcodeDetectorCtor = (window as unknown as {
-        BarcodeDetector?: new (opts?: { formats?: string[] }) => {
-          detect: (source: CanvasImageSource) => Promise<Array<{ rawValue: string }>>;
-        };
-      }).BarcodeDetector;
-      if (!BarcodeDetectorCtor) {
-        setCamState('unsupported');
-        return;
-      }
-
-      try {
-        const stream = await navigator.mediaDevices.getUserMedia({
-          video: { facingMode: { ideal: 'environment' }, width: { ideal: 1280 }, height: { ideal: 720 } },
-          audio: false,
-        });
-        if (cancelled) { stream.getTracks().forEach((t) => t.stop()); return; }
-        streamRef.current = stream;
-        video.srcObject = stream;
-        await video.play().catch(() => { /* ignore — Safari needs user gesture sometimes */ });
-        detectorRef.current = new BarcodeDetectorCtor({ formats: ['qr_code', 'code_128', 'code_39'] });
-        setCamState('ready');
-        runningRef.current = true;
-        scanTick();
-      } catch (err) {
-        console.warn('camera access denied', err);
-        setCamState('denied');
-      }
-    }
-
-    function handleDetected(value: string) {
-      const now = Date.now();
-      const last = lastDetectRef.current;
-      if (last && last.value === value && now - last.at < DUP_WINDOW_MS) return;
-      lastDetectRef.current = { value, at: now };
-
-      if (autoSend) {
-        sendScan(value);
-      } else {
-        // Park the value in the input so the user can edit + confirm.
-        setInput(value);
-        vibrate(15);
-      }
-    }
-
-    function scanTick() {
-      if (!runningRef.current || cancelled) return;
-      const video = videoRef.current;
-      const detector = detectorRef.current;
-      if (!video || !detector) {
-        requestAnimationFrame(scanTick);
-        return;
-      }
-      if (video.readyState >= 2) {
-        void detector.detect(video).then((codes) => {
-          if (codes.length > 0) {
-            const raw = codes[0].rawValue.trim();
-            if (raw) handleDetected(raw);
-          }
-        }).catch(() => { /* per-frame errors are fine */ });
-      }
-      setTimeout(() => requestAnimationFrame(scanTick), 100);
-    }
-
-    void start();
+    void scanner.startScanning();
     return () => {
-      cancelled = true;
-      runningRef.current = false;
-      streamRef.current?.getTracks().forEach((t) => t.stop());
-      streamRef.current = null;
+      void scanner.stopScanning();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [session, autoSend, sendScan]);
+  }, [session]);
+
+  // React to decodes from the scanner.
+  useEffect(() => {
+    const value = scanner.lastScannedValue;
+    if (!value) return;
+    if (autoSend) {
+      sendScan(value);
+      scanner.acceptScan();
+      window.setTimeout(() => scanner.resetLastScan(), 600);
+    } else {
+      setInput(value);
+      vibrate(15);
+      scanner.acceptScan();
+      scanner.resetLastScan();
+    }
+  }, [scanner.lastScannedValue, autoSend, sendScan, scanner]);
 
   if (!session) return null;
 
@@ -263,9 +205,15 @@ export default function MobileScanPage() {
   const themeColors = stationThemeColors[theme];
 
   return (
-    <div className="min-h-dvh w-full bg-black text-white flex flex-col">
-      <div className="relative flex-1 min-h-[55vh] overflow-hidden bg-black">
-        <video ref={videoRef} playsInline muted className="absolute inset-0 h-full w-full object-cover" />
+    <div className="min-h-dvh w-full bg-white text-gray-900 flex flex-col">
+      <div className="relative flex-1 min-h-[55vh] overflow-hidden bg-gray-900">
+        <video
+          ref={scanner.videoRef as React.RefObject<HTMLVideoElement>}
+          autoPlay
+          playsInline
+          muted
+          className="absolute inset-0 h-full w-full object-cover"
+        />
         <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
           <div className={`h-56 w-56 rounded-2xl border-2 shadow-[0_0_0_9999px_rgba(0,0,0,0.35)] ${themeColors.border.replace('border-', 'border-')}`} style={{ borderColor: 'currentColor' }} />
         </div>
@@ -273,35 +221,47 @@ export default function MobileScanPage() {
           <span className={`rounded-full px-2 py-1 text-white ${themeColors.bg}`}>
             {session.staff_name || `Staff #${session.staff_id}`}
           </span>
-          <span
-            className={`rounded-full px-2 py-1 ${
-              connState === 'connected' ? 'bg-emerald-500/80' : 'bg-amber-500/80'
-            }`}
-          >
-            {connState}
-          </span>
-        </div>
-        {camState === 'denied' && (
-          <div className="absolute inset-0 flex items-center justify-center bg-black/80 p-6 text-center">
-            <p className="text-sm text-red-300">
-              Camera access denied. Enable camera permission in Settings and reload.
-            </p>
+          <div className="flex items-center gap-2">
+            {scanner.isScanning && (
+              <button
+                type="button"
+                onClick={scanner.toggleTorch}
+                className={`rounded-full px-2 py-1 ${scanner.torchOn ? 'bg-yellow-400/80 text-black' : 'bg-white/10 text-white/80'}`}
+                aria-label="Toggle flashlight"
+              >
+                ⚡
+              </button>
+            )}
+            <span
+              className={`rounded-full px-2 py-1 ${
+                connState === 'connected' ? 'bg-emerald-500/80' : 'bg-amber-500/80'
+              }`}
+            >
+              {connState}
+            </span>
           </div>
-        )}
-        {camState === 'unsupported' && (
-          <div className="absolute inset-0 flex items-center justify-center bg-black/80 p-6 text-center">
-            <p className="text-sm text-amber-300">
-              QR scanning isn't supported on this browser. Use the manual input below.
+        </div>
+        {scanner.scanStatus === 'error' && (
+          <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/80 p-6 text-center gap-3">
+            <p className="text-sm text-red-300 max-w-[280px]">
+              {scanner.error || 'Camera unavailable. Check browser permissions and reload.'}
             </p>
+            <button
+              type="button"
+              onClick={() => void scanner.startScanning()}
+              className="rounded-lg bg-white/10 px-4 py-2 text-[11px] font-black uppercase tracking-widest text-white hover:bg-white/20"
+            >
+              Try Again
+            </button>
           </div>
         )}
       </div>
 
-      <div className="border-t border-white/10 bg-gray-950 p-3 space-y-3">
+      <div className="border-t border-gray-200 bg-white p-3 space-y-3">
         {/* Editable tracking input — camera detections populate this, you can
             fix typos, then Send. Enter submits. */}
         <div>
-          <label className="block text-[10px] font-black uppercase tracking-widest text-white/50 mb-1">
+          <label className="block text-[10px] font-black uppercase tracking-widest text-gray-500 mb-1">
             Tracking
           </label>
           <div className="flex gap-2">
@@ -314,7 +274,7 @@ export default function MobileScanPage() {
               autoComplete="off"
               autoCapitalize="characters"
               spellCheck={false}
-              className="flex-1 rounded-lg border border-white/20 bg-white/5 px-3 py-2 text-[14px] font-mono text-white placeholder:text-white/30 focus:outline-none focus:border-white/60"
+              className="flex-1 rounded-lg border border-gray-300 bg-white px-3 py-2 text-[14px] font-mono text-gray-900 placeholder:text-gray-400 focus:outline-none focus:border-gray-500"
             />
             <button
               type="button"
@@ -325,7 +285,7 @@ export default function MobileScanPage() {
               Send
             </button>
           </div>
-          <label className="mt-2 flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-white/50">
+          <label className="mt-2 flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-gray-500">
             <input
               type="checkbox"
               checked={autoSend}
@@ -337,23 +297,23 @@ export default function MobileScanPage() {
         </div>
 
         <div>
-          <p className="text-[10px] font-black uppercase tracking-widest text-white/50 mb-1">
+          <p className="text-[10px] font-black uppercase tracking-widest text-gray-500 mb-1">
             Scans · {scans.length}
           </p>
           <div className="flex flex-col gap-1 max-h-40 overflow-auto">
             {scans.length === 0 ? (
-              <p className="text-[11px] text-white/30">Nothing yet.</p>
+              <p className="text-[11px] text-gray-400">Nothing yet.</p>
             ) : (
               scans.map((s) => (
                 <div
                   key={s.id}
-                  className="flex items-center justify-between gap-2 rounded border border-white/10 bg-white/5 px-2 py-1"
+                  className="flex items-center justify-between gap-2 rounded border border-gray-200 bg-gray-50 px-2 py-1"
                 >
                   <div className="flex items-center gap-2 min-w-0">
                     <StatusDot status={s.status} />
-                    <span className="truncate font-mono text-[12px] text-white/90">{s.tracking}</span>
+                    <span className="truncate font-mono text-[12px] text-gray-800">{s.tracking}</span>
                   </div>
-                  <span className="shrink-0 text-[10px] text-white/40 uppercase tracking-wider">
+                  <span className="shrink-0 text-[10px] text-gray-400 uppercase tracking-wider">
                     {statusLabel(s)}
                   </span>
                 </div>
@@ -368,11 +328,11 @@ export default function MobileScanPage() {
 
 function StatusDot({ status }: { status: ScanStatus }) {
   const cls = {
-    pending: 'bg-blue-400 animate-pulse',
-    sent: 'bg-blue-300',
-    matched: 'bg-emerald-400',
-    unmatched: 'bg-amber-400',
-    error: 'bg-red-400',
+    pending: 'bg-blue-500 animate-pulse',
+    sent: 'bg-blue-400',
+    matched: 'bg-emerald-500',
+    unmatched: 'bg-amber-500',
+    error: 'bg-red-500',
   }[status];
   return <span className={`h-2 w-2 shrink-0 rounded-full ${cls}`} />;
 }

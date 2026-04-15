@@ -60,22 +60,22 @@ export default function MobilePairPage({ params }: { params: Promise<{ code: str
   }, [code, router]);
 
   return (
-    <div className="min-h-dvh w-full bg-gray-950 text-white flex flex-col items-center justify-center px-6 text-center">
+    <div className="min-h-dvh w-full bg-white text-gray-900 flex flex-col items-center justify-center px-6 text-center">
       {status === 'claiming' && (
         <>
-          <div className="h-10 w-10 rounded-full border-2 border-white/20 border-t-white animate-spin mb-4" />
-          <p className="text-sm font-black uppercase tracking-widest text-white/70">Pairing</p>
-          <p className="mt-1 text-xs font-mono text-white/40">{code}</p>
+          <div className="h-10 w-10 rounded-full border-2 border-gray-200 border-t-gray-700 animate-spin mb-4" />
+          <p className="text-sm font-black uppercase tracking-widest text-gray-600">Pairing</p>
+          <p className="mt-1 text-xs font-mono text-gray-400">{code}</p>
         </>
       )}
       {status === 'ok' && (
-        <p className="text-sm font-black uppercase tracking-widest text-emerald-400">Paired · opening scanner…</p>
+        <p className="text-sm font-black uppercase tracking-widest text-emerald-600">Paired · opening scanner…</p>
       )}
       {status === 'error' && (
         <>
-          <p className="text-sm font-black uppercase tracking-widest text-red-400">Pairing failed</p>
-          <p className="mt-2 text-xs text-white/60 max-w-xs">{errorMessage}</p>
-          <p className="mt-4 text-[11px] text-white/40">Ask the desktop to generate a new code.</p>
+          <p className="text-sm font-black uppercase tracking-widest text-red-600">Pairing failed</p>
+          <p className="mt-2 text-xs text-gray-500 max-w-xs">{errorMessage}</p>
+          <p className="mt-4 text-[11px] text-gray-400">Ask the desktop to generate a new code.</p>
         </>
       )}
     </div>
