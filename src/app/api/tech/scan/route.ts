@@ -104,7 +104,7 @@ async function getScannedSkuCodes(
 
   const r = await db.query(
     `SELECT DISTINCT BTRIM(static_sku) AS static_sku
-     FROM sku
+     FROM v_sku
      WHERE (shipment_id = $1)
         OR ($2::text <> '' AND BTRIM(COALESCE(shipping_tracking_number, '')) = BTRIM($2))
      ORDER BY BTRIM(static_sku) ASC`,

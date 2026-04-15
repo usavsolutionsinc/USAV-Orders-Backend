@@ -148,8 +148,8 @@ export async function GET(request: NextRequest) {
       zoho_purchaseorder_id: string | null;
     }>(
       `SELECT DISTINCT r.id,
-              r.receiving_tracking_number,
-              r.carrier,
+              COALESCE(stn.tracking_number_raw, r.receiving_tracking_number) AS receiving_tracking_number,
+              COALESCE(NULLIF(stn.carrier, 'UNKNOWN'), r.carrier) AS carrier,
               ${receivedAtSelect},
               ${receivingDateSelect},
               r.qa_status,
@@ -158,6 +158,7 @@ export async function GET(request: NextRequest) {
               r.zoho_purchase_receive_id,
               r.zoho_purchaseorder_id
        FROM receiving r
+       LEFT JOIN shipping_tracking_numbers stn ON stn.id = r.shipment_id
        WHERE r.unboxed_at IS NULL
          AND (
            ${workflowFilterClause}

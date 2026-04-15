@@ -5,6 +5,7 @@ import {
   FnskuChip,
   OrderIdChip,
   TicketChip,
+  TrackingChip,
   TrackingOrSkuScanChip,
   getLast4,
 } from '@/components/ui/CopyChip';

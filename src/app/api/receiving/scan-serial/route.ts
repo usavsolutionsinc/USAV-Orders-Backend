@@ -8,6 +8,7 @@ import {
   stampReceivingTsnSerialUnitId,
 } from '@/lib/neon/serial-units-queries';
 import { getSkuCatalogBySku } from '@/lib/neon/sku-catalog-queries';
+import { publishStockLedgerEvent } from '@/lib/realtime/publish';
 
 interface ReceivingLineTarget {
   id: number;
@@ -208,6 +209,41 @@ export async function POST(request: NextRequest) {
       quantity_expected: targetLine.quantity_expected,
       workflow_status: targetLine.workflow_status,
     };
+
+    // Emit a RECEIVED/WAREHOUSE ledger row — only on truly-new serials.
+    // Re-scans (is_new=false) have already been counted.
+    if (result.is_new && targetLine.sku) {
+      try {
+        const ledgerInsert = await pool.query<{ id: number }>(
+          `INSERT INTO sku_stock_ledger
+             (sku, delta, reason, dimension, staff_id,
+              ref_serial_unit_id, ref_receiving_line_id, notes)
+           VALUES ($1, 1, 'RECEIVED', 'WAREHOUSE', $2, $3, $4, $5)
+           RETURNING id`,
+          [
+            targetLine.sku,
+            staffId,
+            result.unit.id,
+            targetLine.id,
+            `Receiving scan: ${serialNumber.toUpperCase()}`,
+          ],
+        );
+        const ledgerId = ledgerInsert.rows[0]?.id ?? null;
+        if (ledgerId) {
+          await publishStockLedgerEvent({
+            ledgerId,
+            sku: targetLine.sku,
+            delta: 1,
+            reason: 'RECEIVED',
+            dimension: 'WAREHOUSE',
+            staffId,
+            source: 'receiving.scan-serial',
+          });
+        }
+      } catch (err) {
+        console.warn('scan-serial: ledger RECEIVED insert failed (non-fatal)', err);
+      }
+    }
 
     // ─── Background: catalog enrichment (on miss) + cache/realtime ─────────
     const needsEnrichment = !catalog;

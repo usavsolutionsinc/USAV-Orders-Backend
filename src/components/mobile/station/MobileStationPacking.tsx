@@ -133,6 +133,13 @@ export function MobileStationPacking({
     });
   }, []);
 
+  // Global mobile FAB delegates to the packer scan sheet on /packer.
+  useEffect(() => {
+    const h = () => handleOpenScanSheet();
+    window.addEventListener('mobile-scan-fab-open', h);
+    return () => window.removeEventListener('mobile-scan-fab-open', h);
+  }, [handleOpenScanSheet]);
+
   // ── Step 4: Photo uploaded ─────────────────────────────────────────────────
 
   const handlePhotoAdded = useCallback((photo: CapturedPhoto) => {

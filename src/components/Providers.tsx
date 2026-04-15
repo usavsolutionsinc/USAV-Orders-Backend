@@ -4,6 +4,8 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { Toaster } from 'sonner';
 import { useState } from 'react';
 import { AblyProvider } from '@/contexts/AblyContext';
+import { PhonePairProvider } from '@/contexts/PhonePairContext';
+import { MobilePairProvider } from '@/contexts/MobilePairContext';
 import { SiteTooltipProvider } from '@/components/providers/SiteTooltipProvider';
 import { UIModeProvider } from '@/design-system/providers/UIModeProvider';
 
@@ -24,9 +26,13 @@ export default function Providers({ children }: { children: React.ReactNode }) {
         <QueryClientProvider client={queryClient}>
             <AblyProvider>
                 <UIModeProvider>
-                    <SiteTooltipProvider>
-                        {children}
-                    </SiteTooltipProvider>
+                    <PhonePairProvider>
+                        <MobilePairProvider>
+                            <SiteTooltipProvider>
+                                {children}
+                            </SiteTooltipProvider>
+                        </MobilePairProvider>
+                    </PhonePairProvider>
                 </UIModeProvider>
                 <Toaster position="bottom-right" richColors closeButton />
             </AblyProvider>

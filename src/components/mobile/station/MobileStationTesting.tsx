@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { LayoutGroup, AnimatePresence, motion } from 'framer-motion';
 import { MobileShell, type MobileShellProps } from '@/design-system/components/mobile/MobileShell';
 import { MobileBottomActionBar } from '@/design-system/components/mobile/MobileBottomActionBar';
@@ -211,6 +211,14 @@ export function MobileStationTesting({
       setScanSheetOpen(true);
     });
   }, []);
+
+  // Global mobile FAB routes its tap to the tech page when pathname starts
+  // with /tech — open the existing station-testing scan sheet.
+  useEffect(() => {
+    const h = () => handleOpenScanSheet();
+    window.addEventListener('mobile-scan-fab-open', h);
+    return () => window.removeEventListener('mobile-scan-fab-open', h);
+  }, [handleOpenScanSheet]);
 
   // ── UpNext tab-change handler ──
   const handleUpNextTabChange = useCallback(

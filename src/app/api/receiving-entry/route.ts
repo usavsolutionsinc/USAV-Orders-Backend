@@ -7,6 +7,7 @@ import { publishReceivingLogChanged } from '@/lib/realtime/publish';
 import { searchPurchaseOrdersByTracking, searchPurchaseReceivesByTracking } from '@/lib/zoho';
 import { importZohoPurchaseOrderToReceiving } from '@/lib/zoho-receiving-sync';
 import { getReceivingSchema } from '@/lib/receiving-schema-cache';
+import { registerShipmentPermissive } from '@/lib/shipping/sync-shipment';
 
 /**
  * Compute Mon–Fri week range (PST date strings) for a given PST timestamp string
@@ -75,17 +76,25 @@ export async function POST(request: NextRequest) {
             }, { status: 400 });
         }
 
-        const detectedCarrier = providedCarrier && providedCarrier !== 'Unknown' 
-            ? providedCarrier 
+        const detectedCarrier = providedCarrier && providedCarrier !== 'Unknown'
+            ? providedCarrier
             : getCarrier(trackingNumber);
 
         // Always stamp on the server in PST/PDT to avoid client timezone drift.
         const now = formatPSTTimestamp();
 
+        // Register the tracking number in shipping_tracking_numbers so the
+        // receiving row links via shipment_id (canonical inbound identity).
+        const shipment = await registerShipmentPermissive({
+            trackingNumber,
+            sourceSystem: 'receiving_entry',
+        });
+
         const { columns: availableColumns, dateColumn } = await getReceivingSchema();
         const valuesByColumn: Record<string, any> = {
             [dateColumn]: now,
             receiving_tracking_number: trackingNumber,
+            shipment_id: shipment?.id ?? null,
             carrier: detectedCarrier,
             received_at: now,
             condition_grade: conditionGrade,

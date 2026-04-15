@@ -15,13 +15,24 @@ export async function GET(req: NextRequest) {
         const { dateColumn, hasQuantity } = await resolveReceivingSchema();
         const countExpr = hasQuantity ? "COALESCE(quantity, '1')" : "'1'";
 
+        // Search across both the canonical shipment tracking (stn.tracking_number_raw)
+        // and the legacy receiving_tracking_number text column. The JOIN is a LEFT JOIN
+        // so rows without a shipment_id still match via the legacy column.
         const logs = await pool.query(
-            `SELECT id, ${dateColumn} AS timestamp, receiving_tracking_number AS tracking, carrier AS status, ${countExpr} AS count
-             FROM receiving
-             WHERE
-               (RIGHT(receiving_tracking_number::text, 8) = $1 OR receiving_tracking_number::text ILIKE $2)
-               AND receiving_tracking_number IS NOT NULL AND receiving_tracking_number != ''
-             ORDER BY id DESC`,
+            `SELECT r.id,
+                    r.${dateColumn} AS timestamp,
+                    COALESCE(stn.tracking_number_raw, r.receiving_tracking_number) AS tracking,
+                    COALESCE(NULLIF(stn.carrier, 'UNKNOWN'), r.carrier) AS status,
+                    ${countExpr} AS count
+             FROM receiving r
+             LEFT JOIN shipping_tracking_numbers stn ON stn.id = r.shipment_id
+             WHERE (
+                    RIGHT(COALESCE(stn.tracking_number_raw, r.receiving_tracking_number)::text, 8) = $1
+                 OR COALESCE(stn.tracking_number_raw, r.receiving_tracking_number)::text ILIKE $2
+               )
+               AND COALESCE(stn.tracking_number_raw, r.receiving_tracking_number) IS NOT NULL
+               AND COALESCE(stn.tracking_number_raw, r.receiving_tracking_number) <> ''
+             ORDER BY r.id DESC`,
             [last8, `%${query}%`]
         );
 

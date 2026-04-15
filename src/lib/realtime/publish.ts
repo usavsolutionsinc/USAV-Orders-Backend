@@ -452,6 +452,10 @@ type ActivityLoggedPayload = {
   scanRef?: string | null;
   fnsku?: string | null;
   source: string;
+  // Stock ledger events carry these — undefined for regular activity rows.
+  delta?: number | null;
+  dimension?: string | null;
+  reason?: string | null;
 };
 
 export async function publishActivityLogged(payload: ActivityLoggedPayload) {
@@ -466,6 +470,9 @@ export async function publishActivityLogged(payload: ActivityLoggedPayload) {
     scanRef: payload.scanRef,
     fnsku: payload.fnsku,
     source: payload.source,
+    delta: payload.delta ?? null,
+    dimension: payload.dimension ?? null,
+    reason: payload.reason ?? null,
     timestamp: formatPSTTimestamp(),
   });
 
@@ -480,5 +487,50 @@ export async function publishActivityLogged(payload: ActivityLoggedPayload) {
       summary: payload.scanRef || payload.fnsku || 'Activity logged',
       staff_id: payload.staffId
     }
+  });
+}
+
+// ─── Stock Ledger Event Helper ───────────────────────────────────────────────
+
+export type StockLedgerEventInput = {
+  /** Row id from sku_stock_ledger (positive int). Negated on the wire so feed ids never collide with station_activity_logs ids. */
+  ledgerId: number;
+  sku: string;
+  delta: number;
+  reason: string;       // PICKED | PACKED | SHIPPED | RECEIVED | RETURNED | ADJUSTMENT | SET | CYCLE_COUNT | DAMAGED | SOLD
+  dimension: string;    // WAREHOUSE | BOXED
+  staffId?: number | null;
+  staffName?: string | null;
+  source: string;
+};
+
+function reasonToStation(reason: string): string {
+  switch (reason) {
+    case 'PICKED':   return 'TECH';
+    case 'PACKED':
+    case 'SHIPPED':  return 'PACK';
+    case 'RECEIVED':
+    case 'RETURNED': return 'RECEIVING';
+    default:         return 'ADMIN';
+  }
+}
+
+/**
+ * Fire the live-feed event for a sku_stock_ledger row. Call immediately
+ * after each ledger INSERT so ActivityFeed.tsx can append without waiting
+ * for its 120s poll.
+ */
+export async function publishStockLedgerEvent(input: StockLedgerEventInput) {
+  await publishActivityLogged({
+    id: -Math.abs(input.ledgerId),
+    station: reasonToStation(input.reason),
+    activityType: `STOCK_DELTA_${input.reason}`,
+    staffId: input.staffId ?? null,
+    staffName: input.staffName ?? null,
+    scanRef: input.sku,
+    source: input.source,
+    delta: input.delta,
+    dimension: input.dimension,
+    reason: input.reason,
   });
 }

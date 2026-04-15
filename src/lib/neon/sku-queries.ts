@@ -151,7 +151,7 @@ export async function getAllSkuRecords(options?: {
     const normalized = `%${q.replace(/[^a-zA-Z0-9]/g, '')}%`;
     const result = await pool.query(
       `SELECT id, static_sku, serial_number, shipping_tracking_number, notes, location, created_at, updated_at
-       FROM sku
+       FROM v_sku
        WHERE static_sku ILIKE $1 OR serial_number ILIKE $1 OR shipping_tracking_number ILIKE $1
           OR static_sku ILIKE $2
           OR regexp_replace(static_sku, '[^a-zA-Z0-9]', '', 'g') ILIKE $3
@@ -164,57 +164,34 @@ export async function getAllSkuRecords(options?: {
 
   const result = await pool.query(
     `SELECT id, static_sku, serial_number, shipping_tracking_number, notes, location, created_at, updated_at
-     FROM sku ORDER BY id DESC LIMIT $1 OFFSET $2`,
+     FROM v_sku ORDER BY id DESC LIMIT $1 OFFSET $2`,
     [limit, offset],
   );
   return result.rows;
 }
 
 /**
- * Get a sku record by ID
+ * Get a sku record by ID (reads live data via the v_sku compat view).
  */
 export async function getSkuRecordById(id: number): Promise<SkuRecord | null> {
-  const result = await pool.query('SELECT * FROM sku WHERE id = $1', [id]);
+  const result = await pool.query('SELECT * FROM v_sku WHERE id = $1', [id]);
   return result.rows[0] ?? null;
 }
 
 /**
- * Create a new sku record
+ * Deprecated: the `sku` table was retired 2026-04-15 (INSERTs blocked by trigger).
+ * Use `upsertSerialUnit` from `./serial-units-queries` instead.
  */
-export async function createSkuRecord(data: {
+export async function createSkuRecord(_data: {
   staticSku: string;
   serialNumber?: string | null;
   shippingTrackingNumber?: string | null;
   notes?: string | null;
   location?: string | null;
 }): Promise<SkuRecord> {
-  const result = await pool.query(
-    `INSERT INTO sku (static_sku, serial_number, shipping_tracking_number, notes, location)
-     VALUES ($1, $2, $3, $4, $5) RETURNING *`,
-    [data.staticSku, data.serialNumber ?? null, data.shippingTrackingNumber ?? null, data.notes ?? null, data.location ?? null],
+  throw new Error(
+    'createSkuRecord is retired. Write to serial_units via upsertSerialUnit() in serial-units-queries.ts.',
   );
-
-  const row = result.rows[0];
-
-  // Register in the serial_units master and stamp the FK back.
-  // Fire-and-forget — insert has committed and the caller doesn't need
-  // to wait on master sync. Dynamic import avoids circular dep.
-  if (row?.serial_number) {
-    import('./serial-units-queries')
-      .then(({ syncSkuToSerialUnit }) =>
-        syncSkuToSerialUnit({
-          id: Number(row.id),
-          serial_number: row.serial_number,
-          static_sku: row.static_sku,
-          location: row.location,
-        }),
-      )
-      .catch((err) => {
-        console.warn('createSkuRecord: syncSkuToSerialUnit failed', err);
-      });
-  }
-
-  return row;
 }
 
 /**

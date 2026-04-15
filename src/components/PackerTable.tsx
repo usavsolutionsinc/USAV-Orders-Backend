@@ -291,7 +291,10 @@ export function PackerTable({ packedBy }: PackerTableProps) {
                                   title={SOURCE_DOT_LABEL[dotType]}
                                 />
                                 <div className="text-[11px] font-bold text-gray-900 truncate">
-                                  {record.product_title || 'Unknown Product'}
+                                  {record.product_title
+                                    || record.item_number
+                                    || record.sku
+                                    || 'Unknown Product'}
                                 </div>
                               </div>
                               <div className="text-[9px] font-black text-gray-500 uppercase tracking-widest truncate mt-0.5 pl-4">

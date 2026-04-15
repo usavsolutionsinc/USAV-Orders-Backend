@@ -3,6 +3,7 @@ import pool from '@/lib/db';
 import { publishReceivingLogChanged } from '@/lib/realtime/publish';
 import { invalidateCacheTags } from '@/lib/cache/upstash-cache';
 import type { SerialUnitRow } from '@/lib/neon/serial-units-queries';
+import { registerShipmentPermissive } from '@/lib/shipping/sync-shipment';
 
 type LineSerial = {
   id: number;
@@ -75,16 +76,38 @@ export async function GET(request: NextRequest) {
     const workflowFilter = String(searchParams.get('workflow_status') || '').trim().toUpperCase();
     const weekStart = String(searchParams.get('week_start') || '').trim();
     const weekEnd   = String(searchParams.get('week_end') || '').trim();
+    const viewRaw   = String(searchParams.get('view') || '').trim().toLowerCase();
+    const view: 'recent' | 'received' | null =
+      viewRaw === 'recent' ? 'recent' : viewRaw === 'received' ? 'received' : null;
     const include     = String(searchParams.get('include') || '').trim().toLowerCase();
     const includeSerials = include.split(',').map((s) => s.trim()).includes('serials');
 
     // Single row
     if (Number.isFinite(id) && id > 0) {
       const one = await pool.query(
-        `SELECT rl.*, r.receiving_tracking_number, r.carrier, r.source_platform AS receiving_source_platform, r.zoho_purchaseorder_number AS receiving_zoho_purchaseorder_number, sc.image_url
+        `SELECT rl.*,
+                r.receiving_tracking_number,
+                r.carrier,
+                r.source_platform            AS receiving_source_platform,
+                r.zoho_purchaseorder_number  AS receiving_zoho_purchaseorder_number,
+                stn.tracking_number_raw      AS shipment_tracking_number,
+                stn.carrier                  AS shipment_carrier,
+                stn.latest_status_category   AS shipment_status_category,
+                stn.is_delivered             AS shipment_is_delivered,
+                stn.delivered_at             AS shipment_delivered_at,
+                sc.image_url
          FROM receiving_lines rl
-         LEFT JOIN receiving r ON r.id = rl.receiving_id
-         LEFT JOIN sku_catalog sc ON sc.sku = rl.sku
+         -- Soft JOIN: direct FK when set, else PO#-based fallback. Partial
+         -- unique index ux_receiving_zoho_po_matched (source='zoho_po') ensures
+         -- at most one PO-matched receiving row per PO, so no dedup needed.
+         LEFT JOIN receiving r ON (
+              r.id = rl.receiving_id
+           OR (rl.receiving_id IS NULL
+               AND r.source = 'zoho_po'
+               AND r.zoho_purchaseorder_id = rl.zoho_purchaseorder_id)
+         )
+         LEFT JOIN shipping_tracking_numbers stn ON stn.id = r.shipment_id
+         LEFT JOIN sku_catalog sc                ON sc.sku = rl.sku
          WHERE rl.id = $1`,
         [id],
       );
@@ -103,10 +126,21 @@ export async function GET(request: NextRequest) {
     if (Number.isFinite(receivingId) && receivingId > 0) {
       const [rows, pkgRes] = await Promise.all([
         pool.query(
-          `SELECT rl.*, r.receiving_tracking_number, r.carrier, r.source_platform AS receiving_source_platform, r.zoho_purchaseorder_number AS receiving_zoho_purchaseorder_number, sc.image_url
+          `SELECT rl.*,
+                  r.receiving_tracking_number,
+                  r.carrier,
+                  r.source_platform            AS receiving_source_platform,
+                  r.zoho_purchaseorder_number  AS receiving_zoho_purchaseorder_number,
+                  stn.tracking_number_raw      AS shipment_tracking_number,
+                  stn.carrier                  AS shipment_carrier,
+                  stn.latest_status_category   AS shipment_status_category,
+                  stn.is_delivered             AS shipment_is_delivered,
+                  stn.delivered_at             AS shipment_delivered_at,
+                  sc.image_url
            FROM receiving_lines rl
-           LEFT JOIN receiving r ON r.id = rl.receiving_id
-           LEFT JOIN sku_catalog sc ON sc.sku = rl.sku
+           LEFT JOIN receiving r                   ON r.id  = rl.receiving_id
+           LEFT JOIN shipping_tracking_numbers stn ON stn.id = r.shipment_id
+           LEFT JOIN sku_catalog sc                ON sc.sku = rl.sku
            WHERE rl.receiving_id = $1
            ORDER BY rl.id ASC`,
           [receivingId],
@@ -168,27 +202,83 @@ export async function GET(request: NextRequest) {
       conditions.push(`rl.workflow_status = $${idx++}::inbound_workflow_status_enum`);
       values.push(workflowFilter);
     }
-    if (/^\d{4}-\d{2}-\d{2}$/.test(weekStart) && /^\d{4}-\d{2}-\d{2}$/.test(weekEnd)) {
+    // `view` overrides week-range scoping. Otherwise week range still applies.
+    if (view === 'recent') {
+      // Recently scanned, not yet fully received. Include terminal-adjacent
+      // states so unboxed/awaiting-test lines stay visible until they pass.
+      conditions.push(
+        `rl.workflow_status IN ('EXPECTED','ARRIVED','MATCHED','UNBOXED','AWAITING_TEST','IN_TEST')`,
+      );
+    } else if (view === 'received') {
+      conditions.push(`rl.workflow_status IN ('PASSED','DONE')`);
+    } else if (/^\d{4}-\d{2}-\d{2}$/.test(weekStart) && /^\d{4}-\d{2}-\d{2}$/.test(weekEnd)) {
       conditions.push(`rl.created_at >= $${idx++}::date AND rl.created_at < ($${idx++}::date + INTERVAL '1 day')`);
       values.push(weekStart, weekEnd);
     }
 
     const where = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
+
+    // view=recent sorts by the most recent tracking→PO pairing event for the
+    // carton (max receiving_scans.scanned_at), so freshly-paired lines rise
+    // to the top. Falls back to receiving.received_at, then rl.created_at.
+    // view=received sorts by updated_at (when the line was last touched).
+    // Default mirrors the prior behavior.
+    const orderBy =
+      view === 'recent'
+        ? `ORDER BY COALESCE(rs_agg.last_scan::text, r.received_at::text, rl.created_at::text) DESC, rl.id DESC`
+        : view === 'received'
+        ? `ORDER BY COALESCE(rl.updated_at::text, rl.created_at::text) DESC, rl.id DESC`
+        : `ORDER BY COALESCE(rl.zoho_last_modified_time, rl.created_at::text) DESC, rl.id DESC`;
+    // The lateral aggregate is only needed for view=recent. For other views
+    // it's a no-op LEFT JOIN against an empty subquery, cheap at this scale.
+    const recentScansJoin = view === 'recent'
+      ? `LEFT JOIN LATERAL (
+            SELECT MAX(rs.scanned_at) AS last_scan
+            FROM receiving_scans rs
+            WHERE rs.receiving_id = r.id
+         ) rs_agg ON TRUE`
+      : '';
+
     values.push(limit, offset);
 
     const [rowsRes, countRes] = await Promise.all([
       pool.query(
-        `SELECT rl.*, r.receiving_tracking_number, r.carrier, r.source_platform AS receiving_source_platform, r.zoho_purchaseorder_number AS receiving_zoho_purchaseorder_number, sc.image_url
+        `SELECT rl.*,
+                r.receiving_tracking_number,
+                r.carrier,
+                r.source_platform            AS receiving_source_platform,
+                r.zoho_purchaseorder_number  AS receiving_zoho_purchaseorder_number,
+                stn.tracking_number_raw      AS shipment_tracking_number,
+                stn.carrier                  AS shipment_carrier,
+                stn.latest_status_category   AS shipment_status_category,
+                stn.is_delivered             AS shipment_is_delivered,
+                stn.delivered_at             AS shipment_delivered_at,
+                sc.image_url
          FROM receiving_lines rl
-         LEFT JOIN receiving r ON r.id = rl.receiving_id
-         LEFT JOIN sku_catalog sc ON sc.sku = rl.sku
+         -- Soft JOIN: direct FK when set, else PO#-based fallback (see note above).
+         LEFT JOIN receiving r ON (
+              r.id = rl.receiving_id
+           OR (rl.receiving_id IS NULL
+               AND r.source = 'zoho_po'
+               AND r.zoho_purchaseorder_id = rl.zoho_purchaseorder_id)
+         )
+         LEFT JOIN shipping_tracking_numbers stn ON stn.id = r.shipment_id
+         LEFT JOIN sku_catalog sc                ON sc.sku = rl.sku
+         ${recentScansJoin}
          ${where}
-         ORDER BY COALESCE(rl.zoho_last_modified_time, rl.created_at::text) DESC, rl.id DESC
+         ${orderBy}
          LIMIT $${idx} OFFSET $${idx + 1}`,
         values,
       ),
       pool.query(
-        `SELECT COUNT(*) AS total FROM receiving_lines rl ${where}`,
+        `SELECT COUNT(*) AS total FROM receiving_lines rl
+         LEFT JOIN receiving r ON (
+              r.id = rl.receiving_id
+           OR (rl.receiving_id IS NULL
+               AND r.source = 'zoho_po'
+               AND r.zoho_purchaseorder_id = rl.zoho_purchaseorder_id)
+         )
+         ${where}`,
         values.slice(0, -2),
       ),
     ]);
@@ -298,16 +388,20 @@ export async function PATCH(request: NextRequest) {
     const values: unknown[] = [];
     let idx = 1;
 
+    // zoho_reference_number dropped in 2026-04-15_drop_zoho_reference_number.sql.
+    // A body payload for that key is still accepted (sidebar tracking edits
+    // send it) — handled below via the canonical shipment path, not a column
+    // write.
     const textFields: Array<[string, string | null]> = [
-      ['item_name',                String(body?.item_name ?? '').trim() || null],
-      ['sku',                      String(body?.sku ?? '').trim() || null],
-      ['zoho_item_id',             String(body?.zoho_item_id ?? '').trim() || null],
-      ['zoho_line_item_id',        String(body?.zoho_line_item_id ?? '').trim() || null],
-      ['zoho_purchase_receive_id', String(body?.zoho_purchase_receive_id ?? '').trim() || null],
-      ['zoho_purchaseorder_id',    String(body?.zoho_purchaseorder_id ?? '').trim() || null],
-      ['notes',                    String(body?.notes ?? '').trim() || null],
-      ['receiving_type',           String(body?.receiving_type ?? '').trim() || null],
-      ['zoho_reference_number',    String(body?.zoho_reference_number ?? '').trim() || null],
+      ['item_name',                 String(body?.item_name ?? '').trim() || null],
+      ['sku',                       String(body?.sku ?? '').trim() || null],
+      ['zoho_item_id',              String(body?.zoho_item_id ?? '').trim() || null],
+      ['zoho_line_item_id',         String(body?.zoho_line_item_id ?? '').trim() || null],
+      ['zoho_purchase_receive_id',  String(body?.zoho_purchase_receive_id ?? '').trim() || null],
+      ['zoho_purchaseorder_id',     String(body?.zoho_purchaseorder_id ?? '').trim() || null],
+      ['zoho_purchaseorder_number', String(body?.zoho_purchaseorder_number ?? '').trim() || null],
+      ['notes',                     String(body?.notes ?? '').trim() || null],
+      ['receiving_type',            String(body?.receiving_type ?? '').trim() || null],
     ];
     for (const [col, val] of textFields) {
       if (Object.prototype.hasOwnProperty.call(body, col.replace('zoho_item_id', 'zoho_item_id'))) {
@@ -397,24 +491,85 @@ export async function PATCH(request: NextRequest) {
       values.push(nextNeedsTest);
     }
 
-    if (updates.length === 0) {
+    const hasTrackingEdit = body?.zoho_reference_number !== undefined;
+    if (updates.length === 0 && !hasTrackingEdit) {
       return NextResponse.json({ success: false, error: 'No valid fields to update' }, { status: 400 });
     }
 
-    values.push(id);
-    const result = await pool.query(
-      `UPDATE receiving_lines SET ${updates.join(', ')} WHERE id = $${values.length} RETURNING *`,
-      values,
-    );
+    // Run the UPDATE only when there are real column writes. A tracking-only
+    // edit (zoho_reference_number body key) runs purely through the shipment
+    // path below since the column it used to write to was dropped in
+    // 2026-04-15_drop_zoho_reference_number.sql.
+    let updatedRow: { id: number; receiving_id: number | null } | null = null;
+    if (updates.length > 0) {
+      values.push(id);
+      const result = await pool.query(
+        `UPDATE receiving_lines SET ${updates.join(', ')} WHERE id = $${values.length} RETURNING id, receiving_id`,
+        values,
+      );
+      if (result.rows.length === 0) {
+        return NextResponse.json({ success: false, error: 'receiving_line not found' }, { status: 404 });
+      }
+      updatedRow = result.rows[0];
+    }
 
-    if (result.rows.length === 0) {
-      return NextResponse.json({ success: false, error: 'receiving_line not found' }, { status: 404 });
+    // Canonical tracking path: a manual tracking submission registers the
+    // shipment and attaches it to the line's receiving row. Overrides any
+    // auto-attached shipment because a manual edit is explicit intent.
+    if (hasTrackingEdit) {
+      const tracking = String(body.zoho_reference_number ?? '').trim();
+      const shipment = tracking
+        ? await registerShipmentPermissive({
+            trackingNumber: tracking,
+            sourceSystem: 'receiving_lines_patch',
+          })
+        : null;
+      let receivingIdForLine = updatedRow?.receiving_id ?? null;
+      if (receivingIdForLine == null) {
+        const existing = await pool.query<{ receiving_id: number | null }>(
+          `SELECT receiving_id FROM receiving_lines WHERE id = $1`,
+          [id],
+        );
+        if (existing.rows.length === 0) {
+          return NextResponse.json({ success: false, error: 'receiving_line not found' }, { status: 404 });
+        }
+        receivingIdForLine = existing.rows[0].receiving_id ?? null;
+      }
+      if (shipment && receivingIdForLine != null) {
+        await pool.query(
+          `UPDATE receiving SET shipment_id = $1 WHERE id = $2`,
+          [shipment.id, receivingIdForLine],
+        );
+      }
     }
 
     await invalidateCacheTags(['receiving-logs', 'receiving-lines']);
     await publishReceivingLogChanged({ action: 'update', rowId: String(id), source: 'receiving-lines.update' });
 
-    return NextResponse.json({ success: true, receiving_line: normalizeRow(result.rows[0]) });
+    // Re-fetch with the shipment JOIN so the response carries the just-attached
+    // shipment's tracking/carrier/status fields.
+    const fresh = await pool.query(
+      `SELECT rl.*,
+              r.receiving_tracking_number,
+              r.carrier,
+              r.source_platform            AS receiving_source_platform,
+              r.zoho_purchaseorder_number  AS receiving_zoho_purchaseorder_number,
+              stn.tracking_number_raw      AS shipment_tracking_number,
+              stn.carrier                  AS shipment_carrier,
+              stn.latest_status_category   AS shipment_status_category,
+              stn.is_delivered             AS shipment_is_delivered,
+              stn.delivered_at             AS shipment_delivered_at
+         FROM receiving_lines rl
+         LEFT JOIN receiving r                   ON r.id  = rl.receiving_id
+         LEFT JOIN shipping_tracking_numbers stn ON stn.id = r.shipment_id
+        WHERE rl.id = $1`,
+      [id],
+    );
+    if (fresh.rows.length === 0) {
+      return NextResponse.json({ success: false, error: 'receiving_line not found' }, { status: 404 });
+    }
+
+    return NextResponse.json({ success: true, receiving_line: normalizeRow(fresh.rows[0]) });
   } catch (error: unknown) {
     const msg = error instanceof Error ? error.message : 'Failed to update receiving line';
     console.error('receiving-lines PATCH failed:', error);
@@ -449,19 +604,43 @@ export async function DELETE(request: NextRequest) {
 
 // ─── Normalize ────────────────────────────────────────────────────────────────
 function normalizeRow(row: Record<string, unknown>) {
-  // Zoho PO Reference# carries the tracking number per the inbound contract.
-  // Fall back to it when no receiving row is physically linked yet so the UI
-  // shows the PO's tracking instead of "No package linked".
-  const receivingTracking = (row.receiving_tracking_number as string | null) ?? null;
+  // Tracking identity resolves in priority order:
+  //   1. shipping_tracking_numbers (canonical — joined via receiving.shipment_id)
+  //   2. receiving.receiving_tracking_number (legacy text on the package)
+  //   3. receiving_lines.zoho_reference_number (legacy text on the line;
+  //      column may be absent post-retirement — guarded below)
+  // See inbound-tracking unification plan (2026-04-15 migrations).
+  const shipmentTracking    = (row.shipment_tracking_number as string | null) ?? null;
+  const receivingTracking   = (row.receiving_tracking_number as string | null) ?? null;
   const zohoReferenceNumber = (row.zoho_reference_number as string | null) ?? null;
+
+  const tracking =
+    shipmentTracking ?? receivingTracking ?? zohoReferenceNumber ?? null;
+  const trackingSource =
+    shipmentTracking ? 'shipment'
+    : receivingTracking ? 'receiving'
+    : zohoReferenceNumber ? 'zoho_reference'
+    : null;
+
+  // Carrier from the canonical shipment row wins; fall back to the legacy
+  // receiving.carrier text. 'UNKNOWN' sentinel (from permissive registration)
+  // is hidden — surfaces as null so UI renders plainly.
+  const shipmentCarrierRaw = (row.shipment_carrier as string | null) ?? null;
+  const shipmentCarrier = shipmentCarrierRaw && shipmentCarrierRaw.toUpperCase() !== 'UNKNOWN'
+    ? shipmentCarrierRaw
+    : null;
+  const carrier = shipmentCarrier ?? (row.carrier as string | null) ?? null;
+
   return {
     id:                       Number(row.id),
     receiving_id:             row.receiving_id != null ? Number(row.receiving_id) : null,
-    // Joined from receiving table when available; otherwise Zoho PO Reference#
-    tracking_number:          receivingTracking ?? zohoReferenceNumber,
-    tracking_source:          receivingTracking ? 'receiving' : zohoReferenceNumber ? 'zoho_reference' : null,
+    tracking_number:          tracking,
+    tracking_source:          trackingSource,
     zoho_reference_number:    zohoReferenceNumber,
-    carrier:                  (row.carrier as string | null) ?? null,
+    carrier,
+    shipment_status:          (row.shipment_status_category as string | null) ?? null,
+    is_delivered:             !!row.shipment_is_delivered,
+    delivered_at:             (row.shipment_delivered_at as string | null) ?? null,
     zoho_item_id:             (row.zoho_item_id as string | null) ?? null,
     zoho_line_item_id:        (row.zoho_line_item_id as string | null) ?? null,
     zoho_purchase_receive_id: (row.zoho_purchase_receive_id as string | null) ?? null,

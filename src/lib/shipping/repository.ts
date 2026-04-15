@@ -187,6 +187,7 @@ export async function updateShipmentSummary(
   shipmentId: number,
   result: CarrierTrackingResult
 ): Promise<void> {
+  const { emitShippedLedgerForShipment } = await import('@/lib/neon/stock-ledger-helpers');
   const client = await pool.connect();
   try {
     const status = result.latestStatusCategory;
@@ -255,6 +256,24 @@ export async function updateShipmentSummary(
         shipmentId,                                    // $23
       ]
     );
+
+    // If carrier just accepted the package, drain boxed_stock for this
+    // shipment. Idempotent: helper skips if a SHIPPED row already exists
+    // for this shipment_id.
+    if (
+      status === 'ACCEPTED' ||
+      status === 'IN_TRANSIT' ||
+      status === 'OUT_FOR_DELIVERY' ||
+      status === 'DELIVERED'
+    ) {
+      try {
+        await emitShippedLedgerForShipment(client, shipmentId, {
+          source: `carrier-sync.${status}`,
+        });
+      } catch (err) {
+        console.warn('[updateShipmentSummary] SHIPPED ledger emit failed', err);
+      }
+    }
   } finally {
     client.release();
   }

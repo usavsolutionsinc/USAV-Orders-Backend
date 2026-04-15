@@ -11,29 +11,71 @@ export async function GET(req: NextRequest) {
     const since = searchParams.get('since') || null;
 
     const params: any[] = [limit];
-    let sinceClause = '';
+    let sinceClauseSAL = '';
+    let sinceClauseLedger = '';
     if (since) {
-      sinceClause = 'AND sal.created_at > $2';
+      sinceClauseSAL = 'AND sal.created_at > $2';
+      sinceClauseLedger = 'AND l.created_at > $2';
       params.push(since);
     }
 
+    // Unified feed: station activity + stock-ledger deltas. Ledger rows are
+    // synthesized into the same shape; their id is negated to avoid collision
+    // with real station_activity_logs ids. Client treats them as first-class
+    // events and renders with reason-aware labels.
     const result = await pool.query(
-      `SELECT
-        sal.id,
-        sal.station,
-        sal.activity_type,
-        sal.staff_id,
-        s.name AS staff_name,
-        sal.scan_ref,
-        sal.fnsku,
-        sal.shipment_id,
-        sal.notes,
-        sal.created_at
-      FROM station_activity_logs sal
-      LEFT JOIN staff s ON s.id = sal.staff_id
-      WHERE 1=1 ${sinceClause}
-      ORDER BY sal.created_at DESC
-      LIMIT $1`,
+      `WITH sal_events AS (
+         SELECT
+           sal.id                            AS id,
+           sal.station                       AS station,
+           sal.activity_type                 AS activity_type,
+           sal.staff_id                      AS staff_id,
+           s.name                            AS staff_name,
+           sal.scan_ref                      AS scan_ref,
+           sal.fnsku                         AS fnsku,
+           sal.shipment_id                   AS shipment_id,
+           sal.notes                         AS notes,
+           sal.created_at                    AS created_at,
+           NULL::int                         AS delta,
+           NULL::text                        AS dimension,
+           NULL::text                        AS reason
+         FROM station_activity_logs sal
+         LEFT JOIN staff s ON s.id = sal.staff_id
+         WHERE 1=1 ${sinceClauseSAL}
+       ),
+       ledger_events AS (
+         SELECT
+           -l.id                             AS id,
+           CASE l.reason
+             WHEN 'PICKED'         THEN 'TECH'
+             WHEN 'PACKED'         THEN 'PACK'
+             WHEN 'SHIPPED'        THEN 'PACK'
+             WHEN 'RECEIVED'       THEN 'RECEIVING'
+             WHEN 'RETURNED'       THEN 'RECEIVING'
+             ELSE 'ADMIN'
+           END                               AS station,
+           CONCAT('STOCK_DELTA_', l.reason)  AS activity_type,
+           l.staff_id                        AS staff_id,
+           s.name                            AS staff_name,
+           l.sku                             AS scan_ref,
+           NULL::text                        AS fnsku,
+           l.ref_shipment_id                 AS shipment_id,
+           l.notes                           AS notes,
+           l.created_at                      AS created_at,
+           l.delta                           AS delta,
+           l.dimension                       AS dimension,
+           l.reason                          AS reason
+         FROM sku_stock_ledger l
+         LEFT JOIN staff s ON s.id = l.staff_id
+         WHERE l.reason <> 'INITIAL_BALANCE' ${sinceClauseLedger}
+       )
+       SELECT * FROM (
+         SELECT * FROM sal_events
+         UNION ALL
+         SELECT * FROM ledger_events
+       ) u
+       ORDER BY created_at DESC
+       LIMIT $1`,
       params
     );
 
@@ -50,6 +92,9 @@ export async function GET(req: NextRequest) {
         shipment_id: row.shipment_id ? Number(row.shipment_id) : null,
         notes: row.notes || null,
         created_at: row.created_at,
+        delta: row.delta != null ? Number(row.delta) : null,
+        dimension: row.dimension || null,
+        reason: row.reason || null,
       })),
     });
   } catch (error: any) {

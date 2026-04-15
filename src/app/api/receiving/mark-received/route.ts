@@ -3,7 +3,7 @@ import pool from '@/lib/db';
 import { formatPSTTimestamp } from '@/utils/date';
 import { invalidateCacheTags } from '@/lib/cache/upstash-cache';
 import { publishReceivingLogChanged } from '@/lib/realtime/publish';
-import { createPurchaseReceive, updatePurchaseOrder } from '@/lib/zoho';
+import { createPurchaseReceive, getPurchaseOrderById, updatePurchaseOrder } from '@/lib/zoho';
 
 export async function POST(request: NextRequest) {
   try {
@@ -68,6 +68,25 @@ export async function POST(request: NextRequest) {
       ).catch(() => {});
     }
 
+    // Resolve tracking# for the reference_number push. Prefer the canonical
+    // shipping_tracking_numbers row via receiving.shipment_id; fall back to
+    // receiving.receiving_tracking_number. Computed before the Zoho sync so
+    // it's available inside the background block.
+    let localTracking: string | null = null;
+    if (receivingId) {
+      try {
+        const trackingRes = await pool.query<{ tracking: string | null }>(
+          `SELECT COALESCE(stn.tracking_number_raw, r.receiving_tracking_number) AS tracking
+             FROM receiving r
+             LEFT JOIN shipping_tracking_numbers stn ON stn.id = r.shipment_id
+            WHERE r.id = $1
+            LIMIT 1`,
+          [receivingId],
+        );
+        localTracking = (trackingRes.rows[0]?.tracking || '').trim() || null;
+      } catch { /* silent — Zoho push will just skip */ }
+    }
+
     // 4. Background: sync to Zoho — create purchase receive + update PO notes
     after(async () => {
       try {
@@ -101,6 +120,20 @@ export async function POST(request: NextRequest) {
           }).catch((err: unknown) => {
             console.warn('mark-received: updatePurchaseOrder notes failed', err);
           });
+
+          // Push local tracking# → Zoho PO reference_number. Idempotent: reads
+          // the current reference_number first and only PATCHes when it differs.
+          if (localTracking) {
+            try {
+              const existing = await getPurchaseOrderById(zohoPoId);
+              const currentRef = (existing?.purchaseorder?.reference_number || '').trim();
+              if (currentRef !== localTracking) {
+                await updatePurchaseOrder(zohoPoId, { reference_number: localTracking });
+              }
+            } catch (err) {
+              console.warn('mark-received: updatePurchaseOrder reference_number failed', err);
+            }
+          }
         }
       } catch (err) {
         console.warn('mark-received: Zoho background sync failed', err);

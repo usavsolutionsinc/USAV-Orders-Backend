@@ -7,6 +7,7 @@ import { publishReceivingLogChanged } from '@/lib/realtime/publish';
 import { searchPurchaseOrdersByTracking, searchPurchaseReceivesByTracking } from '@/lib/zoho';
 import { importZohoPurchaseOrderToReceiving } from '@/lib/zoho-receiving-sync';
 import { ensureSkuCatalogEntry } from '@/lib/neon/sku-catalog-queries';
+import { registerShipmentPermissive } from '@/lib/shipping/sync-shipment';
 
 async function parallelLimit<T, R>(
   items: T[],
@@ -120,13 +121,17 @@ async function createUnmatchedReceiving(
   staffId: number | null,
 ): Promise<number> {
   const now = formatPSTTimestamp();
+  const shipment = await registerShipmentPermissive({
+    trackingNumber,
+    sourceSystem: 'receiving_lookup_po',
+  });
   const result = await pool.query<{ id: number }>(
     `INSERT INTO receiving
-       (source, receiving_tracking_number, carrier, receiving_date_time,
+       (source, receiving_tracking_number, shipment_id, carrier, receiving_date_time,
         received_at, received_by, qa_status, needs_test, updated_at)
-     VALUES ('unmatched', $1, $2, $3::timestamp, $3::timestamptz, $4, 'PENDING', true, $3::timestamptz)
+     VALUES ('unmatched', $1, $2, $3, $4::timestamp, $4::timestamptz, $5, 'PENDING', true, $4::timestamptz)
      RETURNING id`,
-    [trackingNumber, carrier || null, now, staffId],
+    [trackingNumber, shipment?.id ?? null, carrier || null, now, staffId],
   );
   return Number(result.rows[0].id);
 }

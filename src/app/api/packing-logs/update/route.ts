@@ -6,6 +6,7 @@ import { resolveShipmentId } from '@/lib/shipping/resolve';
 import { formatPSTTimestamp, normalizePSTTimestamp } from '@/utils/date';
 import { createStationActivityLog } from '@/lib/station-activity';
 import { createAuditLog } from '@/lib/audit-logs';
+import { publishStockLedgerEvent } from '@/lib/realtime/publish';
 
 const LEGACY_PACKER_ALIAS_TO_STAFF_ID: Record<string, number> = {
   '1': 4,
@@ -201,7 +202,61 @@ export async function POST(req: NextRequest) {
         `, [orderId, staffId]);
       }
 
+      // 4. Emit PACKED ledger rows per SKU in the shipment. The trigger
+      //    fn_recompute_sku_stock updates sku_stock.boxed_stock automatically.
+      //    orders.quantity is TEXT, coerce per-row before aggregation.
+      const ledgerRows: Array<{ id: number; sku: string; delta: number }> = [];
+      if (resolvedShipmentId) {
+        const ledgerResult = await client.query<{ id: number; sku: string; delta: number }>(
+          `INSERT INTO sku_stock_ledger
+             (sku, delta, reason, dimension, staff_id,
+              ref_packer_log_id, ref_shipment_id, notes)
+           SELECT
+             q.sku,
+             SUM(q.qty_int)::int,
+             'PACKED',
+             'BOXED',
+             $1,
+             $2,
+             $3,
+             $4
+           FROM (
+             SELECT
+               o.sku,
+               COALESCE(
+                 NULLIF(regexp_replace(COALESCE(o.quantity, ''), '[^0-9-]', '', 'g'), '')::int,
+                 1
+               ) AS qty_int
+             FROM orders o
+             WHERE o.shipment_id = $3
+               AND o.sku IS NOT NULL
+               AND BTRIM(o.sku) <> ''
+           ) q
+           GROUP BY q.sku
+           RETURNING id, sku, delta`,
+          [staffId, packerLogId, resolvedShipmentId, 'Mobile pack scan'],
+        );
+        ledgerRows.push(...ledgerResult.rows);
+      }
+
       await client.query('COMMIT');
+
+      // Publish one Ably event per ledger row so ActivityFeed updates live.
+      for (const row of ledgerRows) {
+        try {
+          await publishStockLedgerEvent({
+            ledgerId: row.id,
+            sku: row.sku,
+            delta: row.delta,
+            reason: 'PACKED',
+            dimension: 'BOXED',
+            staffId,
+            source: 'packing-logs.update',
+          });
+        } catch (err) {
+          console.warn('[packing-logs.update] realtime publish failed', err);
+        }
+      }
 
       await invalidateCacheTags(['packing-logs', 'orders', 'orders-next', 'shipped']);
 

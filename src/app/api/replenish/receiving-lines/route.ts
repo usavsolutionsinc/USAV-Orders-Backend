@@ -50,16 +50,17 @@ export async function GET(req: NextRequest) {
         rl.zoho_purchaseorder_id,
         rl.created_at,
         rl.updated_at,
-        r.receiving_tracking_number,
-        r.carrier,
+        COALESCE(stn.tracking_number_raw, r.receiving_tracking_number) AS receiving_tracking_number,
+        COALESCE(NULLIF(stn.carrier, 'UNKNOWN'), r.carrier)             AS carrier,
         r.received_at,
         rr.id AS replenishment_request_id,
         rr.zoho_po_number,
         rr.status AS replenishment_status,
         rr.item_name AS replenishment_item_name
       FROM receiving_lines rl
-      LEFT JOIN receiving r ON r.id = rl.receiving_id
-      LEFT JOIN replenishment_requests rr ON rr.zoho_po_id = rl.zoho_purchaseorder_id
+      LEFT JOIN receiving r                   ON r.id  = rl.receiving_id
+      LEFT JOIN shipping_tracking_numbers stn ON stn.id = r.shipment_id
+      LEFT JOIN replenishment_requests rr     ON rr.zoho_po_id = rl.zoho_purchaseorder_id
       WHERE ${conditions.join(' AND ')}
       ORDER BY rl.created_at DESC
       LIMIT $${idx}

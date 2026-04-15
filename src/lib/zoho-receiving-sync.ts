@@ -14,6 +14,7 @@ import { getPurchaseOrderById, getPurchaseReceiveById, listPurchaseOrders } from
 import { formatApiOffsetTimestamp, formatPSTTimestamp } from '@/utils/date';
 import type { PoolClient } from 'pg';
 import { getSyncCursor, updateSyncCursor } from '@/lib/sync-cursors';
+import { registerShipmentPermissive } from '@/lib/shipping/sync-shipment';
 
 type AnyRow = Record<string, unknown>;
 type WorkflowStatus = 'EXPECTED' | 'MATCHED';
@@ -91,6 +92,20 @@ async function syncPurchaseOrderLines(
   const lineItems = Array.isArray(po.line_items) ? po.line_items : [];
   const lineCols = await getReceivingLineColumns(client);
 
+  // Zoho PO Reference# carries the tracking number per the inbound contract.
+  // Register it in shipping_tracking_numbers once per PO so receiving rows can
+  // link via receiving.shipment_id (canonical, replaces the legacy
+  // receiving_lines.zoho_reference_number text column).
+  const poReference = asString(po.reference_number);
+  let shipmentId: number | null = null;
+  if (poReference) {
+    const shipment = await registerShipmentPermissive({
+      trackingNumber: poReference,
+      sourceSystem: 'zoho_po',
+    });
+    shipmentId = shipment?.id ?? null;
+  }
+
   let synced = 0;
   let skipped = 0;
   let linked = 0;
@@ -136,7 +151,6 @@ async function syncPurchaseOrderLines(
       zoho_line_item_id: zohoLineItemId,
       zoho_purchaseorder_id: normalizedPoId,
       zoho_purchaseorder_number: poNumber,
-      zoho_reference_number: asString(po.reference_number),
       item_name: asString(line.name, line.item_name),
       sku: asString(line.sku),
       quantity_received: 0,
@@ -158,7 +172,6 @@ async function syncPurchaseOrderLines(
         'zoho_item_id',
         'zoho_line_item_id',
         'zoho_purchaseorder_number',
-        'zoho_reference_number',
         'item_name',
         'sku',
         'quantity_expected',
@@ -209,6 +222,17 @@ async function syncPurchaseOrderLines(
     }
 
     synced++;
+  }
+
+  // Attach the PO's canonical shipment to the physical receiving row (idempotent).
+  // COALESCE preserves a shipment_id set earlier by a scan/lookup writer.
+  if (options.receivingId && shipmentId != null) {
+    await client.query(
+      `UPDATE receiving
+          SET shipment_id = COALESCE(shipment_id, $1)
+        WHERE id = $2`,
+      [shipmentId, options.receivingId],
+    );
   }
 
   return {

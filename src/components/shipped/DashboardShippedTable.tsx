@@ -738,7 +738,10 @@ export function DashboardShippedTable({
                                     title={SOURCE_DOT_LABEL[dotType]}
                                   />
                                   <div className="text-[11px] font-bold text-gray-900 truncate">
-                                    {record.product_title || 'Unknown Product'}
+                                    {record.product_title
+                                      || record.item_number
+                                      || record.sku
+                                      || 'Unknown Product'}
                                   </div>
                                 </div>
                                 <div className="mt-0.5 flex items-center gap-2">

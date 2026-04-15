@@ -1,4 +1,4 @@
-import type { CarrierCode } from './types';
+import type { CarrierCode, ShipmentRow } from './types';
 import { detectCarrier, normalizeTrackingNumber } from './normalize';
 import {
   getShipmentById,
@@ -147,6 +147,46 @@ export async function registerAndSyncShipment(params: {
 
   if (!shipment.last_checked_at && !shipment.latest_status_category) {
     await syncShipment({ shipmentId: shipment.id });
+  }
+
+  return shipment;
+}
+
+/**
+ * Permissive shipment registration for inputs that may not be real carrier tracking
+ * numbers (e.g. Zoho PO Reference#, supplier invoice refs). Returns null instead of
+ * throwing when the value can't be normalized or carrier-detected; stores the row
+ * with carrier='UNKNOWN' when the number looks plausible but isn't one of the
+ * carriers we actively sync with.
+ */
+export async function registerShipmentPermissive(params: {
+  trackingNumber: string | null | undefined;
+  sourceSystem: string;
+}): Promise<ShipmentRow | null> {
+  const raw = (params.trackingNumber ?? '').trim();
+  if (!raw) return null;
+  // SKU-formatted scans ("PROD:qty", ":tag") are never carrier tracking numbers.
+  if (raw.includes(':')) return null;
+
+  const normalized = normalizeTrackingNumber(raw);
+  if (!normalized || normalized.length < 8) return null;
+
+  const detected = detectCarrier(normalized);
+  // shipping_tracking_numbers.carrier is TEXT NOT NULL; 'UNKNOWN' is a valid
+  // sentinel mirroring NormalizedShipmentStatus. Cast is safe — the column
+  // doesn't enforce the CarrierCode enum.
+  const carrier = (detected ?? 'UNKNOWN') as CarrierCode;
+
+  const shipment = await upsertShipment({
+    trackingNumberRaw: raw,
+    trackingNumberNormalized: normalized,
+    carrier,
+    sourceSystem: params.sourceSystem,
+  });
+
+  // Best-effort carrier sync for known carriers only. Never throw into the caller.
+  if (detected && !shipment.last_checked_at) {
+    void syncShipment({ shipmentId: shipment.id }).catch(() => {});
   }
 
   return shipment;

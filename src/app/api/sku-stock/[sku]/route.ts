@@ -37,7 +37,7 @@ export async function GET(
         // 2. sku history rows (inventory log entries for this static_sku)
         pool.query(
           `SELECT id, static_sku, serial_number, shipping_tracking_number, notes, location, created_at, updated_at
-           FROM sku
+           FROM v_sku
            WHERE static_sku = $1
            ORDER BY id DESC
            LIMIT 50`,

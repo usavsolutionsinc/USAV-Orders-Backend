@@ -13,6 +13,7 @@ import {
   resolveTechSerialSalContext,
 } from '@/lib/tech/insertTechSerialForSalContext';
 import { normalizeTrackingKey18 } from '@/lib/tracking-format';
+import { publishStockLedgerEvent } from '@/lib/realtime/publish';
 
 const ROUTE = 'tech.scan-sku';
 
@@ -113,9 +114,12 @@ export async function POST(req: NextRequest) {
     //  3. Normalized fuzzy match on base SKU
     let skuRecord: { id: number; serial_number: string | null; notes: string | null; static_sku: string | null } | null = null;
 
+    // Reads go through v_sku (compat view over serial_units) now that the sku
+    // table is retired. v_sku preserves legacy ids for rows migrated from sku
+    // and synthesizes ids (+1_000_000_000) for post-retirement serials.
     const tryExact = async (value: string) => {
       const r = await client.query(
-        `SELECT id, serial_number, notes, static_sku FROM sku WHERE BTRIM(static_sku) = BTRIM($1) LIMIT 1`,
+        `SELECT id, serial_number, notes, static_sku FROM v_sku WHERE BTRIM(static_sku) = BTRIM($1) LIMIT 1`,
         [value],
       );
       return r.rows[0] ?? null;
@@ -126,7 +130,7 @@ export async function POST(req: NextRequest) {
 
     if (!skuRecord) {
       const fuzzy = await client.query(
-        `SELECT id, serial_number, notes, static_sku FROM sku WHERE static_sku IS NOT NULL AND BTRIM(static_sku) <> ''`,
+        `SELECT id, serial_number, notes, static_sku FROM v_sku WHERE static_sku IS NOT NULL AND BTRIM(static_sku) <> ''`,
       );
       skuRecord =
         fuzzy.rows.find((r: any) => normalizeSku(String(r.static_sku || '')) === normalizedSkuToMatch) ?? null;
@@ -135,16 +139,11 @@ export async function POST(req: NextRequest) {
     if (!skuRecord) {
       return NextResponse.json({
         success: false,
-        error: `SKU "${skuToMatch}" not found in sku table`,
+        error: `SKU "${skuToMatch}" not found`,
       });
     }
 
     const serialsFromSku = parseSerialCsvField(skuRecord.serial_number);
-    const trackingStr = String(tracking || '').trim();
-    const normalizedTracking = trackingStr.toUpperCase().replace(/[^A-Z0-9]/g, '');
-    const isFnskuTracking = /^(X00|X0|B0)/i.test(normalizedTracking);
-    // pairingTracking is null when no tracking was provided — sku update is skipped below.
-    const pairingTracking = trackingStr ? (isFnskuTracking ? normalizedTracking : trackingStr) : null;
 
     const salIdNum = Number(salId);
     if (!Number.isFinite(salIdNum) || salIdNum <= 0) {
@@ -162,6 +161,8 @@ export async function POST(req: NextRequest) {
 
     const insertedSerials: string[] = [];
     let productTitle = '';
+    let ledgerIdForPublish: number | null = null;
+    let canonicalSkuForPublish: string | null = null;
 
     await client.query('BEGIN');
 
@@ -185,38 +186,42 @@ export async function POST(req: NextRequest) {
         }
       }
 
-      const stockRows = await client.query(`SELECT id, stock, sku, product_title FROM sku_stock`);
-      const stockTarget = stockRows.rows.find(
-        (r: any) => normalizeSku(String(r.sku || '')) === normalizedSkuToMatch,
+      // Resolve canonical sku + product title — exact match first, then fuzzy.
+      let canonicalSku: string = skuToMatch;
+      const exact = await client.query(
+        `SELECT sku, product_title FROM sku_stock WHERE sku = $1 LIMIT 1`,
+        [skuToMatch],
       );
-      productTitle = String(stockTarget?.product_title || '').trim();
-      if (stockTarget) {
-        const currentQty = parseInt(String(stockTarget.stock || '0'), 10) || 0;
-        const nextQty = Math.max(0, currentQty - qtyToDecrement);
-        await client.query(`UPDATE sku_stock SET stock = $1 WHERE id = $2`, [String(nextQty), stockTarget.id]);
-      }
-
-      // Write tracking + shipment_id FK back to the sku row.
-      // Only update each column when the value is known.
-      if (pairingTracking || resolvedShipmentId) {
-        const setClauses: string[] = [];
-        const params: unknown[] = [];
-
-        if (pairingTracking) {
-          params.push(pairingTracking);
-          setClauses.push(`shipping_tracking_number = $${params.length}`);
-        }
-        if (resolvedShipmentId) {
-          params.push(resolvedShipmentId);
-          setClauses.push(`shipment_id = $${params.length}`);
-        }
-
-        params.push(skuRecord.id);
-        await client.query(
-          `UPDATE sku SET ${setClauses.join(', ')} WHERE id = $${params.length}`,
-          params,
+      if (exact.rows[0]) {
+        canonicalSku = String(exact.rows[0].sku);
+        productTitle = String(exact.rows[0].product_title || '').trim();
+      } else {
+        const all = await client.query(`SELECT sku, product_title FROM sku_stock`);
+        const match = all.rows.find(
+          (r: any) => normalizeSku(String(r.sku || '')) === normalizedSkuToMatch,
         );
+        if (match) {
+          canonicalSku = String(match.sku);
+          productTitle = String(match.product_title || '').trim();
+        }
       }
+
+      // Emit one ledger delta. Trigger fn_recompute_sku_stock keeps sku_stock
+      // in sync automatically — no direct UPDATE on sku_stock from this route.
+      const ledgerInsert = await client.query<{ id: number }>(
+        `INSERT INTO sku_stock_ledger
+           (sku, delta, reason, dimension, staff_id, ref_sal_id, notes)
+         VALUES ($1, $2, 'PICKED', 'WAREHOUSE', $3, $4, $5)
+         RETURNING id`,
+        [canonicalSku, -qtyToDecrement, staffId, salIdNum, `tech.scan-sku ${fullSkuCode}`],
+      );
+      ledgerIdForPublish = ledgerInsert.rows[0]?.id ?? null;
+      canonicalSkuForPublish = canonicalSku;
+
+      // Tracking + shipment_id were already written to serial_units upstream
+      // by insertTechSerialForSalContext → syncTsnToSerialUnit. The old
+      // UPDATE on sku is no longer needed — sku is retired and the pairing
+      // state now lives on serial_units.
 
       await client.query('COMMIT');
     } catch (e) {
@@ -232,6 +237,22 @@ export async function POST(req: NextRequest) {
       action: 'update',
       source: 'tech.scan-sku',
     });
+
+    if (ledgerIdForPublish && canonicalSkuForPublish) {
+      try {
+        await publishStockLedgerEvent({
+          ledgerId: ledgerIdForPublish,
+          sku: canonicalSkuForPublish,
+          delta: -qtyToDecrement,
+          reason: 'PICKED',
+          dimension: 'WAREHOUSE',
+          staffId,
+          source: 'tech.scan-sku',
+        });
+      } catch (err) {
+        console.warn('[tech.scan-sku] realtime publish failed', err);
+      }
+    }
 
     const responsePayload: Record<string, unknown> = {
       success: true,

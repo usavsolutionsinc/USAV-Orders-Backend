@@ -88,20 +88,31 @@ async function searchFba(query: string, limit: number): Promise<SearchResult[]> 
 }
 
 async function searchReceiving(query: string, limit: number): Promise<SearchResult[]> {
+  // Join shipping_tracking_numbers so search matches rows reachable only via
+  // receiving.shipment_id (post inbound-tracking unification). Falls back to
+  // the legacy receiving_tracking_number text column during the deprecation
+  // window. A normalized-tracking match catches queries typed without the
+  // hyphens/spaces carriers sometimes include.
+  const normalizedQuery = query.replace(/[^A-Za-z0-9]/g, '').toUpperCase();
   const result = await pool.query(
-    `SELECT id, receiving_tracking_number, carrier
-     FROM receiving
-     WHERE receiving_tracking_number ILIKE $1
-        OR CAST(id AS TEXT) = $2
-     ORDER BY id DESC
-     LIMIT $3`,
-    [`%${query}%`, query, limit],
+    `SELECT r.id,
+            COALESCE(stn.tracking_number_raw, r.receiving_tracking_number) AS tracking_number,
+            COALESCE(NULLIF(stn.carrier, 'UNKNOWN'), r.carrier)             AS carrier
+     FROM receiving r
+     LEFT JOIN shipping_tracking_numbers stn ON stn.id = r.shipment_id
+     WHERE r.receiving_tracking_number ILIKE $1
+        OR stn.tracking_number_raw     ILIKE $1
+        OR stn.tracking_number_normalized = $3
+        OR CAST(r.id AS TEXT) = $2
+     ORDER BY r.id DESC
+     LIMIT $4`,
+    [`%${query}%`, query, normalizedQuery, limit],
   );
 
   return result.rows.map((row: any) => ({
     id: Number(row.id),
     entityType: 'receiving' as const,
-    title: String(row.receiving_tracking_number || `Receiving #${row.id}`),
+    title: String(row.tracking_number || `Receiving #${row.id}`),
     subtitle: String(row.carrier || 'Unknown carrier'),
     href: '/receiving',
     matchField: 'receiving',

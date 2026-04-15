@@ -274,8 +274,9 @@ async function getReceiving(): Promise<WorkOrderRow[]> {
   const result = await pool.query(
     `SELECT
        r.id,
-       r.receiving_tracking_number,
-       r.carrier,
+       COALESCE(stn.tracking_number_raw, r.receiving_tracking_number) AS receiving_tracking_number,
+       COALESCE(NULLIF(stn.carrier, 'UNKNOWN'), r.carrier)             AS carrier,
+       r.receiving_tracking_number                                     AS raw_receiving_tracking_number,
        r.is_return,
        r.target_channel,
        r.notes AS receiving_notes,
@@ -291,6 +292,7 @@ async function getReceiving(): Promise<WorkOrderRow[]> {
        st.name AS tech_name,
        sp.name AS packer_name
      FROM receiving r
+     LEFT JOIN shipping_tracking_numbers stn ON stn.id = r.shipment_id
      LEFT JOIN LATERAL (
        SELECT *
        FROM work_assignments wa
@@ -320,7 +322,7 @@ async function getReceiving(): Promise<WorkOrderRow[]> {
   return result.rows.map((row) => {
     const isLocalPickup =
       String(row.carrier || '').toUpperCase() === 'LOCAL' ||
-      String(row.receiving_tracking_number || '').toUpperCase().startsWith('LOCAL-');
+      String(row.raw_receiving_tracking_number || '').toUpperCase().startsWith('LOCAL-');
     const queueKey = isLocalPickup
       ? 'local_pickups'
       : row.is_return

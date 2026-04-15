@@ -46,27 +46,38 @@ export async function GET(request: NextRequest) {
         const countExpr = hasQuantity ? "COALESCE(quantity, '1')" : "'1'";
         const hasColumn = (name: string) => availableColumns.has(name);
 
+        // Shipment join is additive during the deprecation window — only applied
+        // when receiving.shipment_id exists on the schema. See
+        // 2026-04-15_receiving_attach_shipment_id.sql.
+        const hasShipmentId = hasColumn('shipment_id');
+        const trackingExpr = hasShipmentId
+            ? 'COALESCE(stn.tracking_number_raw, r.receiving_tracking_number) AS tracking'
+            : 'r.receiving_tracking_number AS tracking';
+        const statusExpr = hasShipmentId
+            ? "COALESCE(NULLIF(stn.carrier, 'UNKNOWN'), r.carrier) AS status"
+            : 'r.carrier AS status';
+
         const selectFields: string[] = [
-            'id',
-            `to_char(${dateColumn}::timestamp, 'YYYY-MM-DD HH24:MI:SS') AS timestamp`,
-            'receiving_tracking_number AS tracking',
-            'carrier AS status',
+            'r.id',
+            `to_char(r.${dateColumn}::timestamp, 'YYYY-MM-DD HH24:MI:SS') AS timestamp`,
+            trackingExpr,
+            statusExpr,
             `${countExpr} AS count`,
-            hasColumn('qa_status') ? 'qa_status' : "NULL::text AS qa_status",
-            hasColumn('disposition_code') ? 'disposition_code' : "NULL::text AS disposition_code",
-            hasColumn('condition_grade') ? 'condition_grade' : "NULL::text AS condition_grade",
-            hasColumn('is_return') ? 'is_return' : 'FALSE AS is_return',
-            hasColumn('return_platform') ? 'return_platform' : "NULL::text AS return_platform",
-            hasColumn('return_reason') ? 'return_reason' : "NULL::text AS return_reason",
-            hasColumn('needs_test') ? 'needs_test' : 'FALSE AS needs_test',
-            hasColumn('assigned_tech_id') ? 'assigned_tech_id' : 'NULL::int AS assigned_tech_id',
-            hasColumn('target_channel') ? 'target_channel' : "NULL::text AS target_channel",
-            hasColumn('received_at') ? "to_char(received_at::timestamp, 'YYYY-MM-DD HH24:MI:SS') AS received_at" : 'NULL::text AS received_at',
-            hasColumn('received_by') ? 'received_by' : 'NULL::int AS received_by',
-            hasColumn('unboxed_at') ? "to_char(unboxed_at::timestamp, 'YYYY-MM-DD HH24:MI:SS') AS unboxed_at" : 'NULL::text AS unboxed_at',
-            hasColumn('unboxed_by') ? 'unboxed_by' : 'NULL::int AS unboxed_by',
-            hasColumn('zoho_purchase_receive_id') ? 'zoho_purchase_receive_id' : "NULL::text AS zoho_purchase_receive_id",
-            hasColumn('zoho_warehouse_id') ? 'zoho_warehouse_id' : "NULL::text AS zoho_warehouse_id",
+            hasColumn('qa_status') ? 'r.qa_status' : "NULL::text AS qa_status",
+            hasColumn('disposition_code') ? 'r.disposition_code' : "NULL::text AS disposition_code",
+            hasColumn('condition_grade') ? 'r.condition_grade' : "NULL::text AS condition_grade",
+            hasColumn('is_return') ? 'r.is_return' : 'FALSE AS is_return',
+            hasColumn('return_platform') ? 'r.return_platform' : "NULL::text AS return_platform",
+            hasColumn('return_reason') ? 'r.return_reason' : "NULL::text AS return_reason",
+            hasColumn('needs_test') ? 'r.needs_test' : 'FALSE AS needs_test',
+            hasColumn('assigned_tech_id') ? 'r.assigned_tech_id' : 'NULL::int AS assigned_tech_id',
+            hasColumn('target_channel') ? 'r.target_channel' : "NULL::text AS target_channel",
+            hasColumn('received_at') ? "to_char(r.received_at::timestamp, 'YYYY-MM-DD HH24:MI:SS') AS received_at" : 'NULL::text AS received_at',
+            hasColumn('received_by') ? 'r.received_by' : 'NULL::int AS received_by',
+            hasColumn('unboxed_at') ? "to_char(r.unboxed_at::timestamp, 'YYYY-MM-DD HH24:MI:SS') AS unboxed_at" : 'NULL::text AS unboxed_at',
+            hasColumn('unboxed_by') ? 'r.unboxed_by' : 'NULL::int AS unboxed_by',
+            hasColumn('zoho_purchase_receive_id') ? 'r.zoho_purchase_receive_id' : "NULL::text AS zoho_purchase_receive_id",
+            hasColumn('zoho_warehouse_id') ? 'r.zoho_warehouse_id' : "NULL::text AS zoho_warehouse_id",
         ];
 
         // Build optional week pre-filter with a one-day boundary buffer for edge-case records.
@@ -76,8 +87,8 @@ export async function GET(request: NextRequest) {
             queryParams.push(weekStart, weekEnd);
             // Cast dateColumn to timestamptz so the date-arithmetic operators resolve
             // regardless of whether the column is stored as text or timestamp.
-            weekClause = `AND ${dateColumn}::timestamptz >= ($1::date - interval '1 day')
-              AND ${dateColumn}::timestamptz <  ($2::date + interval '2 days')`;
+            weekClause = `AND r.${dateColumn}::timestamptz >= ($1::date - interval '1 day')
+              AND r.${dateColumn}::timestamptz <  ($2::date + interval '2 days')`;
         }
         queryParams.push(limit, offset);
         const limitIdx = queryParams.length - 1;
@@ -86,18 +97,29 @@ export async function GET(request: NextRequest) {
         // Optional needs_test filter
         let needsTestClause = '';
         if (needsTestParam === 'true' && hasColumn('needs_test')) {
-            needsTestClause = 'AND needs_test = TRUE';
+            needsTestClause = 'AND r.needs_test = TRUE';
         } else if (needsTestParam === 'false' && hasColumn('needs_test')) {
-            needsTestClause = 'AND needs_test = FALSE';
+            needsTestClause = 'AND r.needs_test = FALSE';
         }
+
+        // Surface rows with canonical shipment identity even when the legacy
+        // text column is NULL. Falls back to text-only filter during Phase 1
+        // (before the shipment_id column exists).
+        const shipmentJoin = hasShipmentId
+            ? 'LEFT JOIN shipping_tracking_numbers stn ON stn.id = r.shipment_id'
+            : '';
+        const hasTrackingClause = hasShipmentId
+            ? "(r.shipment_id IS NOT NULL OR (r.receiving_tracking_number IS NOT NULL AND r.receiving_tracking_number <> ''))"
+            : "r.receiving_tracking_number IS NOT NULL AND r.receiving_tracking_number <> ''";
 
         const logs = await pool.query(`
             SELECT ${selectFields.join(', ')}
-            FROM receiving
-            WHERE receiving_tracking_number IS NOT NULL AND receiving_tracking_number != ''
+            FROM receiving r
+            ${shipmentJoin}
+            WHERE ${hasTrackingClause}
               ${weekClause}
               ${needsTestClause}
-            ORDER BY id DESC
+            ORDER BY r.id DESC
             LIMIT $${limitIdx} OFFSET $${offsetIdx}
         `, queryParams);
 

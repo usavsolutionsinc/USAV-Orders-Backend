@@ -71,6 +71,20 @@ export async function POST(req: NextRequest) {
 
     const staffName = await fetchStaffName(claim.staffId);
 
+    // Notify the desktop that issued the code. Best-effort; failure here
+    // must not block the phone's pairing — the modal has a manual close too.
+    try {
+      const pairChannel = rest.channels.get(`pair:${code}`);
+      await pairChannel.publish('paired', {
+        staff_id: claim.staffId,
+        staff_name: staffName,
+        phone_channel: phoneChannel,
+        station_channel: stationChannel,
+      });
+    } catch (err) {
+      console.warn('pair/claim: failed to publish paired event', err);
+    }
+
     return NextResponse.json({
       success: true,
       staff_id: claim.staffId,

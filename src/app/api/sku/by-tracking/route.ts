@@ -48,7 +48,7 @@ export async function GET(req: NextRequest) {
              FILTER (WHERE p.url IS NOT NULL),
            ARRAY[]::text[]
          ) AS photos
-       FROM sku s
+       FROM v_sku s
        LEFT JOIN sku_stock ss
          ON regexp_replace(UPPER(TRIM(COALESCE(ss.sku, ''))), '^0+', '') =
             regexp_replace(UPPER(TRIM(split_part(COALESCE(s.static_sku, ''), ':', 1))), '^0+', '')

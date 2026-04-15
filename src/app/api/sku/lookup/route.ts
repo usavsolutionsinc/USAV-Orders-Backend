@@ -22,7 +22,7 @@ export async function GET(req: NextRequest) {
       }
       const r = await pool.query(
         `SELECT id, static_sku, serial_number, shipping_tracking_number, notes, location
-         FROM sku WHERE id = $1 LIMIT 1`,
+         FROM v_sku WHERE id = $1 LIMIT 1`,
         [id],
       );
       const row = r.rows[0];
@@ -47,7 +47,7 @@ export async function GET(req: NextRequest) {
     let row = (
       await pool.query(
         `SELECT id, static_sku, serial_number, shipping_tracking_number, notes, location
-         FROM sku WHERE BTRIM(static_sku) = BTRIM($1) LIMIT 1`,
+         FROM v_sku WHERE BTRIM(static_sku) = BTRIM($1) LIMIT 1`,
         [base],
       )
     ).rows[0];
@@ -55,7 +55,7 @@ export async function GET(req: NextRequest) {
     if (!row) {
       const fuzzy = await pool.query(
         `SELECT id, static_sku, serial_number, shipping_tracking_number, notes, location
-         FROM sku WHERE static_sku IS NOT NULL AND BTRIM(static_sku) <> ''`,
+         FROM v_sku WHERE static_sku IS NOT NULL AND BTRIM(static_sku) <> ''`,
       );
       row = fuzzy.rows.find((r: { static_sku?: string }) =>
         normalizeSku(String(r.static_sku || '')) === normalized,

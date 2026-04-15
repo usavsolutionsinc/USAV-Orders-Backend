@@ -122,7 +122,12 @@ export async function GET(req: NextRequest) {
                 COALESCE(
                     ff.product_title,
                     o.product_title,
-                    sku_catalog_lookup.catalog_product_title
+                    sku_catalog_lookup.catalog_product_title,
+                    -- Last resort: show the identifier we do have instead of null.
+                    -- PackerTable/DashboardShippedTable fall back to "Unknown Product"
+                    -- on null, so surfacing the sku/item_number is always better.
+                    NULLIF(BTRIM(o.item_number), ''),
+                    NULLIF(BTRIM(o.sku), '')
                 ) AS product_title,
                 to_char(wa_deadline.deadline_at, 'YYYY-MM-DD HH24:MI:SS') AS ship_by_date,
                 to_char(wa_deadline.deadline_at, 'YYYY-MM-DD HH24:MI:SS') AS deadline_at,
@@ -160,7 +165,7 @@ export async function GET(req: NextRequest) {
                     sk.id AS sku_table_id,
                     sk.serial_number AS sku_table_serial,
                     sk.static_sku AS sku_table_static_sku
-                FROM sku sk
+                FROM v_sku sk
                 WHERE sk.static_sku IS NOT NULL AND BTRIM(sk.static_sku) <> ''
                   AND (
                       (sal.shipment_id IS NOT NULL AND sk.shipment_id = sal.shipment_id)
@@ -233,8 +238,16 @@ export async function GET(req: NextRequest) {
                             THEN NULLIF(BTRIM(split_part(sal.scan_ref, ':', 1)), '')
                             ELSE NULLIF(BTRIM(COALESCE(sal.scan_ref, '')), '')
                         END,
+                        -- Cover ":TAG" scans: the after-colon segment may itself be the sku
+                        CASE
+                            WHEN POSITION(':' IN COALESCE(sal.scan_ref, '')) > 0
+                            THEN NULLIF(BTRIM(split_part(sal.scan_ref, ':', 2)), '')
+                            ELSE NULL
+                        END,
                         NULLIF(BTRIM(split_part(COALESCE(o.sku, ''), ':', 1)), ''),
                         NULLIF(BTRIM(COALESCE(o.sku, '')), ''),
+                        -- Ecwid/manual orders often key on item_number instead of sku
+                        NULLIF(BTRIM(COALESCE(o.item_number, '')), ''),
                         NULLIF(BTRIM(split_part(COALESCE(ff.sku, ''), ':', 1)), ''),
                         NULLIF(BTRIM(COALESCE(ff.sku, '')), '')
                     ]) AS c(candidate)

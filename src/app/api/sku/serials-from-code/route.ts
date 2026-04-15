@@ -30,7 +30,7 @@ export async function GET(req: NextRequest) {
 
     const exactSku = await pool.query(
       `SELECT id, serial_number, notes, static_sku
-       FROM sku
+       FROM v_sku
        WHERE BTRIM(static_sku) = BTRIM($1)
        LIMIT 1`,
       [skuToMatch],
@@ -40,7 +40,7 @@ export async function GET(req: NextRequest) {
     if (!skuRecord) {
       const fuzzy = await pool.query(
         `SELECT id, serial_number, notes, static_sku
-         FROM sku
+         FROM v_sku
          WHERE static_sku IS NOT NULL AND BTRIM(static_sku) <> ''`,
       );
       skuRecord =

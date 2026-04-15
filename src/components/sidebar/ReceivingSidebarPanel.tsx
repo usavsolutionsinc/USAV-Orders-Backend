@@ -20,7 +20,6 @@ import {
   type ReturnEvent,
 } from '@/components/sidebar/ReceivingReturnBanner';
 import { ScanStatusChip } from '@/components/sidebar/ScanStatusChip';
-import { PhonePairModal } from '@/components/sidebar/PhonePairModal';
 import { useAblyChannel } from '@/hooks/useAblyChannel';
 import { useAblyClient } from '@/contexts/AblyContext';
 import { printProductLabel } from '@/lib/print/printProductLabel';
@@ -40,14 +39,20 @@ const RECEIVING_MODE_OPTIONS = [
   { value: 'pickup', label: 'Local Pickup' },
 ];
 
-const WORKFLOW_FILTERS: HorizontalSliderItem[] = [
-  { id: '',         label: 'All' },
-  { id: 'EXPECTED', label: 'Expected' },
-  { id: 'MATCHED',  label: 'Received' },
-  { id: 'UNBOXED',  label: 'Unboxed' },
-  { id: 'PASSED',   label: 'Passed' },
-  { id: 'FAILED',   label: 'Failed' },
+// Recent / Received lead because they cover the day-to-day receiver workflow.
+// The per-status chips follow for targeted lookups (QA, rework, audits).
+const VIEW_FILTERS: HorizontalSliderItem[] = [
+  { id: 'recent',   label: 'Recent' },
+  { id: 'received', label: 'Received' },
+  { id: 'expected', label: 'Expected' },
+  { id: 'unboxed',  label: 'Unboxed' },
+  { id: 'passed',   label: 'Passed' },
+  { id: 'failed',   label: 'Failed' },
+  { id: 'all',      label: 'All' },
 ];
+
+type ViewId = 'recent' | 'received' | 'expected' | 'unboxed' | 'passed' | 'failed' | 'all';
+const VALID_VIEW_IDS = new Set<ViewId>(['recent', 'received', 'expected', 'unboxed', 'passed', 'failed', 'all']);
 
 type ReceivingMode = 'receive' | 'pickup';
 
@@ -463,10 +468,12 @@ function ReceivingProductLabelPreview({
 function LineEditPanel({
   row,
   staffId,
+  compact = false,
   onClose,
 }: {
   row: ReceivingLineRow;
   staffId: string;
+  compact?: boolean;
   onClose: () => void;
 }) {
   const [receivingType, setReceivingType] = useState(row.receiving_type || 'PO');
@@ -484,6 +491,8 @@ function LineEditPanel({
   const [imgKey, setImgKey] = useState(0);
   const [sourcePlatform, setSourcePlatform] = useState<string>('');
   const [platformSaving, setPlatformSaving] = useState(false);
+  const [detailsOpen, setDetailsOpen] = useState(!compact);
+  const [zohoSyncing, setZohoSyncing] = useState(false);
   const serialRef = useRef<HTMLInputElement>(null);
   const listingRef = useRef<HTMLInputElement>(null);
 
@@ -673,17 +682,100 @@ function LineEditPanel({
   };
   const imgUrl = row.image_url ?? null;
 
+  // Refresh ↔ Zoho. Always searches by tracking# (PO# search is a future upd).
+  // Flow:
+  //   1. find-po by tracking# — Zoho is the source of truth.
+  //   2. Reconcile the line: if Zoho's purchaseorder_id or number differs
+  //      from the local line, PATCH /api/receiving-lines. No-op on match.
+  //   3. Reconcile the carton (receiving row): PATCH with PO# + tracking#
+  //      when `receiving_id` is set. Otherwise fall back to /api/receiving/
+  //      lookup-po which creates/links a carton from the tracking#.
+  const syncWithZoho = useCallback(async () => {
+    if (zohoSyncing) return;
+    const tracking = (row.tracking_number || '').trim();
+    if (!tracking) {
+      setImgKey((k) => k + 1); // nothing to sync — at least refresh the image
+      return;
+    }
+    setZohoSyncing(true);
+    try {
+      const findRes = await fetch('/api/zoho/find-po', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ trackingNumber: tracking }),
+      });
+      const findData = await findRes.json();
+      const po = findData?.success && findData.matched ? findData.purchase_order : null;
+
+      // 2. Reconcile the line's PO#/number only if Zoho disagrees. Zoho wins.
+      if (po) {
+        const zohoId = (po.zoho_purchaseorder_id || '').trim() || null;
+        const zohoNum = (po.zoho_purchaseorder_number || '').trim() || null;
+        const localId = (row.zoho_purchaseorder_id || '').trim() || null;
+        const localNum = (row.zoho_purchaseorder_number || '').trim() || null;
+        const patchBody: Record<string, unknown> = { id: row.id };
+        if (zohoId && zohoId !== localId) patchBody.zoho_purchaseorder_id = zohoId;
+        if (zohoNum && zohoNum !== localNum) patchBody.zoho_purchaseorder_number = zohoNum;
+        if (Object.keys(patchBody).length > 1) {
+          await fetch('/api/receiving-lines', {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(patchBody),
+          });
+        }
+      }
+
+      // 3. Reconcile the carton.
+      if (row.receiving_id) {
+        if (po) {
+          await fetch(`/api/receiving/${row.receiving_id}`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              zoho_purchaseorder_id: po.zoho_purchaseorder_id || null,
+              zoho_purchaseorder_number: po.zoho_purchaseorder_number || null,
+              reference_number: po.reference_number || tracking,
+            }),
+          });
+        }
+      } else {
+        // No carton yet — let lookup-po create/link one from the tracking#.
+        await fetch('/api/receiving/lookup-po', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ trackingNumber: tracking, staffId: Number(staffId) }),
+        });
+        window.dispatchEvent(new CustomEvent('usav-refresh-data'));
+      }
+
+      // Re-fetch the line so sidebar + table pick up every change.
+      const lineRes = await fetch(`/api/receiving-lines?id=${row.id}`);
+      const lineData = await lineRes.json();
+      if (lineData?.success && lineData.receiving_line) {
+        dispatchLineUpdated(lineData.receiving_line as ReceivingLineRow);
+      }
+      setImgKey((k) => k + 1);
+    } catch {
+      /* silent — user can retry */
+    } finally {
+      setZohoSyncing(false);
+    }
+  }, [zohoSyncing, row.id, row.receiving_id, row.tracking_number,
+      row.zoho_purchaseorder_id, row.zoho_purchaseorder_number, staffId]);
+
   return (
     <div className="border-b border-gray-200 bg-gray-50">
       {/* Top bar: refresh | close */}
       <div className="flex items-center justify-between px-3 py-1.5">
         <button
           type="button"
-          onClick={() => setImgKey((k) => k + 1)}
-          aria-label="Reload image"
-          className="text-gray-400 transition-colors hover:text-gray-700"
+          onClick={syncWithZoho}
+          disabled={zohoSyncing}
+          aria-label="Sync with Zoho by tracking number"
+          title="Sync with Zoho by tracking number"
+          className="text-gray-400 transition-colors hover:text-gray-700 disabled:cursor-not-allowed disabled:opacity-50"
         >
-          <RefreshCw className="h-3.5 w-3.5" />
+          <RefreshCw className={`h-3.5 w-3.5 ${zohoSyncing ? 'animate-spin' : ''}`} />
         </button>
         <button
           type="button"
@@ -697,19 +789,19 @@ function LineEditPanel({
 
       {/* Product image */}
       {imgUrl && (
-        <div className="flex justify-center px-3 pb-2">
+        <div className={`flex justify-center px-3 ${compact ? 'pb-1.5' : 'pb-2'}`}>
           <img
             key={imgKey}
             src={imgUrl}
             alt={row.item_name ?? 'Product'}
-            className="h-28 w-28 rounded-lg border border-gray-200 bg-white object-contain"
+            className={`rounded-lg border border-gray-200 bg-white object-contain ${compact ? 'h-20 w-20' : 'h-28 w-28'}`}
             onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }}
           />
         </div>
       )}
 
       {/* Product title */}
-      <p className="px-3 pb-1 text-[12px] font-bold leading-snug text-gray-900 break-words">
+      <p className={`px-3 pb-1 font-bold leading-snug text-gray-900 break-words ${compact ? 'text-[11px] line-clamp-2' : 'text-[12px]'}`}>
         {row.item_name || row.sku || `Line #${row.id}`}
       </p>
 
@@ -810,70 +902,84 @@ function LineEditPanel({
       </div>
 
       {/* Fields */}
-      <div className="bg-white px-3 py-3 space-y-2.5">
+      <div className={`bg-white px-3 ${compact ? 'py-2 space-y-2' : 'py-3 space-y-2.5'}`}>
         {saving && (
           <p className="text-[9px] font-black uppercase tracking-wider text-blue-500">Saving</p>
         )}
 
-        {/* Zendesk ticket with paste */}
-        <div>
-          <p className="mb-1 text-[9px] font-black uppercase tracking-widest text-gray-500">Zendesk Ticket</p>
-          <div className="flex gap-1">
-            <input
-              type="text"
-              value={zendesk}
-              onChange={(e) => setZendesk(e.target.value)}
-              placeholder="Ticket # or URL"
-              className={`${INPUT_CLASS} flex-1 min-w-0`}
-            />
-            <button
-              type="button"
-              onClick={async () => { try { const t = await navigator.clipboard.readText(); if (t) setZendesk(t.trim()); } catch {} }}
-              title="Paste from clipboard"
-              className="shrink-0 rounded-md border border-gray-200 bg-white px-2 py-1.5 text-gray-500 transition-colors hover:bg-gray-50 hover:text-gray-700"
-            >
-              <Clipboard className="h-3.5 w-3.5" />
-            </button>
-          </div>
-        </div>
+        {/* Details disclosure (Zendesk / Listing / Notes) — collapsed by default in compact mode */}
+        {compact ? (
+          <button
+            type="button"
+            onClick={() => setDetailsOpen((o) => !o)}
+            className="flex w-full items-center justify-between rounded-md border border-gray-200 bg-gray-50 px-2 py-1.5 text-[9px] font-black uppercase tracking-widest text-gray-600 transition-colors hover:bg-gray-100"
+            aria-expanded={detailsOpen}
+          >
+            <span>Details · Zendesk · Listing · Notes</span>
+            <span className="text-gray-400">{detailsOpen ? '−' : '+'}</span>
+          </button>
+        ) : null}
 
-        {/* Listing link */}
-        <div>
-          <p className="mb-1 text-[9px] font-black uppercase tracking-widest text-gray-500">Listing Link</p>
-          <div className="flex gap-1">
-            <input
-              ref={listingRef}
-              type="text"
-              value={listingLink}
-              onChange={(e) => setListingLink(e.target.value)}
-              placeholder="Paste listing URL"
-              className={`${INPUT_CLASS} flex-1 min-w-0`}
-            />
-            <button
-              type="button"
-              onClick={pasteToListing}
-              title="Paste from clipboard"
-              className="shrink-0 rounded-md border border-gray-200 bg-white px-2 py-1.5 text-gray-500 transition-colors hover:bg-gray-50 hover:text-gray-700"
-            >
-              <Clipboard className="h-3.5 w-3.5" />
-            </button>
-          </div>
-        </div>
+        {(detailsOpen || !compact) && (
+          <>
+            <div>
+              <p className="mb-1 text-[9px] font-black uppercase tracking-widest text-gray-500">Zendesk Ticket</p>
+              <div className="flex gap-1">
+                <input
+                  type="text"
+                  value={zendesk}
+                  onChange={(e) => setZendesk(e.target.value)}
+                  placeholder="Ticket # or URL"
+                  className={`${INPUT_CLASS} flex-1 min-w-0`}
+                />
+                <button
+                  type="button"
+                  onClick={async () => { try { const t = await navigator.clipboard.readText(); if (t) setZendesk(t.trim()); } catch {} }}
+                  title="Paste from clipboard"
+                  className="shrink-0 rounded-md border border-gray-200 bg-white px-2 py-1.5 text-gray-500 transition-colors hover:bg-gray-50 hover:text-gray-700"
+                >
+                  <Clipboard className="h-3.5 w-3.5" />
+                </button>
+              </div>
+            </div>
 
-        {/* Notes */}
-        <div>
-          <p className="mb-1 text-[9px] font-black uppercase tracking-widest text-gray-500">Notes</p>
-          <textarea
-            value={notes}
-            onChange={(e) => setNotes(e.target.value)}
-            onBlur={() => { if (notes !== (row.notes || '')) patch({ notes }); }}
-            rows={2}
-            placeholder="Add notes…"
-            className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-[12px] leading-relaxed text-gray-900 placeholder:text-gray-400 focus:border-blue-300 focus:outline-none focus:ring-2 focus:ring-blue-500/10 resize-none"
-          />
-        </div>
+            <div>
+              <p className="mb-1 text-[9px] font-black uppercase tracking-widest text-gray-500">Listing Link</p>
+              <div className="flex gap-1">
+                <input
+                  ref={listingRef}
+                  type="text"
+                  value={listingLink}
+                  onChange={(e) => setListingLink(e.target.value)}
+                  placeholder="Paste listing URL"
+                  className={`${INPUT_CLASS} flex-1 min-w-0`}
+                />
+                <button
+                  type="button"
+                  onClick={pasteToListing}
+                  title="Paste from clipboard"
+                  className="shrink-0 rounded-md border border-gray-200 bg-white px-2 py-1.5 text-gray-500 transition-colors hover:bg-gray-50 hover:text-gray-700"
+                >
+                  <Clipboard className="h-3.5 w-3.5" />
+                </button>
+              </div>
+            </div>
 
-        {/* Print (left) / Receive (right) */}
+            <div>
+              <p className="mb-1 text-[9px] font-black uppercase tracking-widest text-gray-500">Notes</p>
+              <textarea
+                value={notes}
+                onChange={(e) => setNotes(e.target.value)}
+                onBlur={() => { if (notes !== (row.notes || '')) patch({ notes }); }}
+                rows={compact ? 2 : 2}
+                placeholder="Add notes…"
+                className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-[12px] leading-relaxed text-gray-900 placeholder:text-gray-400 focus:border-blue-300 focus:outline-none focus:ring-2 focus:ring-blue-500/10 resize-none"
+              />
+            </div>
+          </>
+        )}
+
+        {/* Print (left) / Receive (right) + Print-on-scan (when provided) */}
         <div className="flex items-center gap-2 pt-1">
           <button
             type="button"
@@ -897,6 +1003,7 @@ function LineEditPanel({
           </button>
         </div>
 
+        {/* Label preview is always rendered — no toggle. */}
         {(scanValue || row.sku) && (
           <div className="-mx-3">
             {scanValue ? (
@@ -931,12 +1038,17 @@ export function ReceivingSidebarPanel() {
 
   const [bulkTracking, setBulkTracking] = useState('');
   const [scanBarKey, setScanBarKey] = useState(0);
-  const [workflowFilter, setWorkflowFilter] = useState('');
+  // Recent/Received lead; status filters follow. Table consumes the id verbatim.
+  const [viewMode, setViewMode] = useState<ViewId>('recent');
   const [pendingScans, setPendingScans] = useState<PendingScan[]>([]);
-  const [pairModalOpen, setPairModalOpen] = useState(false);
   const anyScanChecking = pendingScans.some((s) => s.status === 'checking');
-  const [imgKey, setImgKey] = useState(0);
   const [selectedLine, setSelectedLine] = useState<ReceivingLineRow | null>(null);
+  // `scanDriven` flips the LineEditPanel into compact mode; scans open it,
+  // row-clicks open it in full mode. Cleared on close / filter change.
+  const [scanDriven, setScanDriven] = useState(false);
+  // Full ReceivingLineRow[] fetched after a tracking scan matches multiple
+  // lines — rendered as a picker above LineEditPanel until one is chosen.
+  const [scanMatchedRows, setScanMatchedRows] = useState<ReceivingLineRow[]>([]);
 
   // ─── Unboxing mode state ─────────────────────────────────────────────────
   const [poContext, setPoContext] = useState<PoContext | null>(null);
@@ -963,11 +1075,11 @@ export function ReceivingSidebarPanel() {
   }, [printOnScan]);
 
   useEffect(() => {
-    window.dispatchEvent(new CustomEvent('receiving-workflow-filter', { detail: workflowFilter }));
-  }, [workflowFilter]);
+    window.dispatchEvent(new CustomEvent('receiving-workflow-filter', { detail: viewMode }));
+  }, [viewMode]);
 
   useEffect(() => {
-    const handler = () => setWorkflowFilter('');
+    const handler = () => setViewMode('recent');
     window.addEventListener('receiving-workflow-filter-reset', handler);
     return () => window.removeEventListener('receiving-workflow-filter-reset', handler);
   }, []);
@@ -987,6 +1099,9 @@ export function ReceivingSidebarPanel() {
     const handleSelect = (e: Event) => {
       const row = (e as CustomEvent<ReceivingLineRow | null>).detail;
       setSelectedLine(row ?? null);
+      // Row clicks always open the full LineEditPanel (scan-driven → compact).
+      setScanDriven(false);
+      setScanMatchedRows([]);
     };
     const handleUpdated = (e: Event) => {
       const updated = (e as CustomEvent<ReceivingLineRow>).detail;
@@ -1124,6 +1239,33 @@ export function ReceivingSidebarPanel() {
               l.quantity_received < (l.quantity_expected ?? 0),
           );
           setArmedLineId(openLines.length === 1 ? openLines[0].id : null);
+
+          // Fetch full ReceivingLineRow[] so the unified LineEditPanel can
+          // open directly. Single open line → auto-select. Multiple open →
+          // render the scan-line picker above LineEditPanel so the user picks.
+          void (async () => {
+            try {
+              const linesRes = await fetch(`/api/receiving-lines?receiving_id=${ctx.receiving_id}`);
+              const linesData = await linesRes.json();
+              const rows = Array.isArray(linesData?.receiving_lines)
+                ? (linesData.receiving_lines as ReceivingLineRow[])
+                : [];
+              setScanMatchedRows(rows);
+              const openRows = rows.filter(
+                (r) => r.quantity_expected == null || r.quantity_received < (r.quantity_expected ?? 0),
+              );
+              const pick = openRows.length === 1 ? openRows[0] : openRows.length === 0 && rows.length === 1 ? rows[0] : null;
+              if (pick) {
+                setSelectedLine(pick);
+                setScanDriven(true);
+              } else {
+                setSelectedLine(null);
+                setScanDriven(true);
+              }
+            } catch {
+              /* silent — sidebar still has poContext for serial scans */
+            }
+          })();
 
           window.dispatchEvent(
             new CustomEvent('receiving-po-loaded', {
@@ -1481,231 +1623,83 @@ export function ReceivingSidebarPanel() {
             autoFocus
           />
         </div>
-        <button
-          type="button"
-          onClick={() => setPairModalOpen(true)}
-          disabled={Number(staffId) <= 0}
-          aria-label="Pair phone"
-          title="Pair phone scanner"
-          className="shrink-0 inline-flex items-center gap-1 rounded-md border border-gray-200 bg-white px-2 py-1.5 text-[10px] font-black uppercase tracking-wider text-gray-700 transition-colors hover:border-gray-300 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-40"
-        >
-          <Barcode className="h-3 w-3" />
-          Phone
-        </button>
       </div>
-      <PhonePairModal
-        staffId={Number(staffId) || 0}
-        open={pairModalOpen}
-        onClose={() => setPairModalOpen(false)}
-      />
 
-      {/* Workflow filter */}
+      {/* View filter — Recent & Received lead, then per-status chips */}
       <div className="border-b border-gray-200 px-3 py-2">
         <HorizontalButtonSlider
-          items={WORKFLOW_FILTERS}
-          value={workflowFilter}
-          onChange={setWorkflowFilter}
+          items={VIEW_FILTERS}
+          value={viewMode}
+          onChange={(next) => {
+            const id = next as ViewId;
+            setViewMode(VALID_VIEW_IDS.has(id) ? id : 'recent');
+          }}
           variant="slate"
-          aria-label="Filter by workflow status"
+          aria-label="Filter by view"
         />
       </div>
 
       <ReceivingReturnBanner returns={returns} onDismiss={dismissReturn} />
 
-      {poContext && (
-        <>
-          {/* PO header card */}
-          <div className="border-b border-gray-200 bg-gray-50">
-            {/* Top bar: refresh | close */}
-            <div className="flex items-center justify-between border-b border-gray-100/90 px-3 py-1.5">
-              <button
-                type="button"
-                onClick={() => setImgKey((k) => k + 1)}
-                aria-label="Reload image"
-                className="text-gray-400 transition-colors hover:text-gray-700"
-              >
-                <RefreshCw className="h-3.5 w-3.5" />
-              </button>
-              <button
-                type="button"
-                onClick={clearPoContext}
-                aria-label="Clear PO"
-                className="text-gray-400 transition-colors hover:text-gray-700"
-              >
-                <X className="h-3.5 w-3.5" />
-              </button>
-            </div>
-
-            {(() => {
-              const headerLine = armedLine ?? poContext.lines[0] ?? null;
-              const poScanValue = resolvePoScanValue(headerLine, poContext.po_ids, poContext.receiving_id);
-              const platform = platformLabel(poContext.receiving_package, headerLine?.receiving_type);
-              const typeLbl = receivingTypeLabel(headerLine?.receiving_type);
-              const condCode = headerLine?.condition_grade ?? 'BRAND_NEW';
-              const dateStr = formatPackageUnboxDate(poContext.receiving_package);
-              return (
-                <div className="flex flex-nowrap gap-3 px-3 py-2.5 items-start justify-between">
-                  <div className="min-w-0 flex-1 grid grid-cols-2 gap-x-3 gap-y-2 text-[10px] leading-tight">
-                    <div className="min-w-0">
-                      <select
-                        value={(poContext.receiving_package?.source_platform || '').toLowerCase()}
-                        onChange={(e) => updateSourcePlatform(e.target.value)}
-                        title={`Platform override (currently displayed: ${platform})`}
-                        className="w-full rounded border border-gray-200 bg-white px-1.5 py-1 text-[10px] font-bold text-gray-700 focus:border-blue-300 focus:outline-none focus:ring-2 focus:ring-blue-500/10"
-                      >
-                        {SOURCE_PLATFORM_OPTS.map((opt) => (
-                          <option key={opt.value || 'auto'} value={opt.value}>{opt.label}</option>
-                        ))}
-                      </select>
-                    </div>
-                    <div className="text-right font-black uppercase tracking-wide text-gray-900">
-                      {typeLbl}
-                    </div>
-                    <div className="min-w-0 self-end">
-                      <ConditionHeaderDisplay code={condCode} />
-                    </div>
-                    <div className="text-right tabular-nums font-semibold text-gray-600 self-end">
-                      {dateStr}
-                    </div>
-                  </div>
-                  {poScanValue ? (
-                    <div
-                      className="shrink-0 ml-auto flex items-center"
-                      role="img"
-                      aria-label={`Purchase order QR, ${poScanValue}`}
-                    >
-                      <div className="rounded-lg border border-gray-200 bg-white p-1.5 shadow-sm">
-                        <QRCode
-                          value={poScanValue}
-                          size={92}
-                          level="M"
-                          fgColor="#111827"
-                          bgColor="#ffffff"
-                        />
-                      </div>
-                    </div>
-                  ) : null}
-                </div>
-              );
-            })()}
-
-            {/* Product image */}
-            {(() => {
-              const imgUrl = (armedLine?.image_url || poContext.lines[0]?.image_url) ?? null;
-              return imgUrl ? (
-                <div className="flex justify-center px-3 pb-2">
-                  <img
-                    key={imgKey}
-                    src={imgUrl}
-                    alt={(armedLine?.item_name || poContext.lines[0]?.item_name) ?? 'Product'}
-                    className="h-28 w-28 rounded-lg border border-gray-200 bg-white object-contain"
-                    onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }}
-                  />
-                </div>
-              ) : null;
-            })()}
-
-            {/* Product title */}
-            <p className="px-3 pb-2 text-[12px] font-bold leading-snug text-gray-900 break-words">
-              {(armedLine?.item_name || poContext.lines[0]?.item_name) ?? 'Unnamed product'}
+      {/* Scan-line picker: shown when a tracking scan matches multiple open
+          lines and the user hasn't picked one yet. Single matches skip this. */}
+      {scanDriven && !selectedLine && scanMatchedRows.length > 1 && (
+        <div className="border-b border-blue-200 bg-blue-50/60 px-3 py-2">
+          <div className="mb-1 flex items-center justify-between">
+            <p className="text-[9px] font-black uppercase tracking-wider text-blue-700">
+              Pick a line
             </p>
+            <button
+              type="button"
+              onClick={() => {
+                setScanDriven(false);
+                setScanMatchedRows([]);
+                clearPoContext();
+              }}
+              aria-label="Cancel scan"
+              className="text-blue-400 transition-colors hover:text-blue-700"
+            >
+              <X className="h-3.5 w-3.5" />
+            </button>
           </div>
-
-          {/* Serial scan row */}
-          <div className={`${sidebarHeaderBandClass} ${sidebarHeaderRowClass}`}>
-            <SearchBar
-              value={serialInput}
-              onChange={setSerialInput}
-              onSearch={(value) => submitSerialScan(undefined, value)}
-              onClear={() => setSerialInput('')}
-              inputRef={serialInputRef}
-              placeholder={
-                armedLine
-                  ? `Serial for ${armedLine.sku || '—'}…`
-                  : 'Scan serial (auto-pick)…'
-              }
-              variant="blue"
-              size="compact"
-              isSearching={serialSubmitting}
-              leadingIcon={<Barcode className="w-[14px] h-[14px]" />}
-              className="w-full"
-            />
+          <div className="flex flex-col gap-1">
+            {scanMatchedRows.map((line) => {
+              const open = line.quantity_expected == null
+                || line.quantity_received < (line.quantity_expected ?? 0);
+              return (
+                <button
+                  key={line.id}
+                  type="button"
+                  onClick={() => setSelectedLine(line)}
+                  className={`rounded border px-2 py-1 text-left text-[10px] font-bold transition-colors ${
+                    open
+                      ? 'border-blue-200 bg-white text-blue-900 hover:bg-blue-100'
+                      : 'border-gray-200 bg-gray-50 text-gray-500 hover:bg-gray-100'
+                  }`}
+                >
+                  <span className="truncate">{line.sku || line.item_name || `Line #${line.id}`}</span>
+                  {' · '}
+                  {line.quantity_received}/{line.quantity_expected ?? '?'}
+                  {open ? '' : ' · complete'}
+                </button>
+              );
+            })}
           </div>
-
-          {/* Armed line chip + print button + print-on-scan toggle */}
-          <div className="flex items-center justify-between gap-2 border-b border-gray-100 bg-white px-3 py-1.5">
-            {armedLine ? (
-              <span className="rounded bg-blue-50 px-2 py-0.5 text-[9px] font-black uppercase tracking-wider text-blue-700">
-                Armed: {armedLine.sku || '—'}
-              </span>
-            ) : (
-              <span className="text-[9px] font-black uppercase tracking-wider text-gray-400">
-                Auto-pick
-              </span>
-            )}
-            <div className="flex items-center gap-2">
-              <button
-                type="button"
-                onClick={() => {
-                  const line = armedLine ?? poContext.lines[0] ?? null;
-                  if (!line?.sku) return;
-                  printProductLabel({
-                    sku: line.sku,
-                    title: line.item_name ?? undefined,
-                    serialNumber: serialInput.trim() || undefined,
-                  });
-                }}
-                disabled={!(armedLine?.sku || poContext.lines[0]?.sku)}
-                className="inline-flex items-center gap-1 rounded border border-gray-200 bg-white px-2 py-1 text-[9px] font-black uppercase tracking-wider text-gray-700 transition-colors hover:border-gray-300 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-40"
-                title="Print label now"
-              >
-                <Printer className="h-3 w-3" />
-                Print
-              </button>
-              <label className="flex cursor-pointer items-center gap-1.5 text-[9px] font-black uppercase tracking-wider text-gray-500">
-                <input
-                  type="checkbox"
-                  checked={printOnScan}
-                  onChange={(e) => setPrintOnScan(e.target.checked)}
-                  className="h-3 w-3"
-                />
-                Print on scan
-              </label>
-            </div>
-          </div>
-
-          {/* Line selection picker when backend reports ambiguity */}
-          {pendingCandidates.length > 0 && (
-            <div className="border-b border-amber-200 bg-amber-50 px-3 py-2">
-              <p className="mb-1 text-[9px] font-black uppercase tracking-wider text-amber-700">
-                Pick a line for this serial
-              </p>
-              <div className="flex flex-col gap-1">
-                {pendingCandidates.map((line) => (
-                  <button
-                    key={line.id}
-                    type="button"
-                    onClick={() => submitSerialScan(line.id)}
-                    className="rounded border border-amber-200 bg-white px-2 py-1 text-left text-[10px] font-bold text-amber-900 hover:bg-amber-100"
-                  >
-                    {line.sku || '—'}
-                    {' · '}
-                    {line.quantity_received}/{line.quantity_expected ?? '?'}
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
-        </>
+        </div>
       )}
 
-      {/* Line edit panel — QA / Disposition / Condition / Notes */}
+      {/* Unified line edit panel — scan-driven renders in compact mode, row
+          clicks render in full mode. Either way this is the only display. */}
       {selectedLine && (
         <LineEditPanel
           row={selectedLine}
           staffId={staffId}
+          compact={scanDriven}
           onClose={() => {
             setSelectedLine(null);
+            setScanDriven(false);
+            setScanMatchedRows([]);
+            clearPoContext();
             window.dispatchEvent(new CustomEvent('receiving-clear-line'));
           }}
         />

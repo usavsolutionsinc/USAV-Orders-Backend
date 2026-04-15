@@ -58,6 +58,9 @@ async function createTokenRequest(req: NextRequest) {
     'phone:*': ['subscribe'],
     // Desktop echoes scan results back to paired phones on per-staff station channel.
     'station:*': ['subscribe', 'publish'],
+    // Desktop subscribes to pair:{code} while the pairing modal is open to
+    // learn the moment a phone redeems the code (server publishes on claim).
+    'pair:*': ['subscribe'],
   };
 
   if (aiSessionChannel) {

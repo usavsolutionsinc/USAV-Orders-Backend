@@ -58,6 +58,13 @@ export function MobileSkuStockDashboard() {
 
   const { recentScans, addScan, removeScan, clearScans } = useRecentScans();
 
+  // Global mobile FAB delegates to the sku-stock scan sheet on /sku-stock.
+  useEffect(() => {
+    const h = () => setScanSheetOpen(true);
+    window.addEventListener('mobile-scan-fab-open', h);
+    return () => window.removeEventListener('mobile-scan-fab-open', h);
+  }, []);
+
   // ── URL manipulation helpers ──
 
   const updateParams = useCallback(

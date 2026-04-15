@@ -10,6 +10,9 @@ import { useUIMode } from '@/design-system/providers/UIModeProvider';
 import { X } from '@/components/Icons';
 import { getSidebarRouteKey, isSidebarRouteMobileRestricted, APP_SIDEBAR_NAV } from '@/lib/sidebar-navigation';
 import { MobileDefaultTopBanner } from '@/components/mobile/shared/MobileDefaultTopBanner';
+import { PhonePairFab } from '@/components/layout/PhonePairFab';
+import { PhonePairModal } from '@/components/sidebar/PhonePairModal';
+import { MobileScanFab } from '@/components/mobile/shared/MobileScanFab';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -122,6 +125,8 @@ export function ResponsiveLayout({ children }: ResponsiveLayoutProps) {
           </main>
         </div>
         <CommandBar />
+        <PhonePairFab />
+        <PhonePairModal />
       </div>
     );
   }
@@ -195,6 +200,11 @@ export function ResponsiveLayout({ children }: ResponsiveLayoutProps) {
       </AnimatePresence>
 
       {/* CommandBar is desktop-only — cmd+k search has no mobile equivalent */}
+
+      {/* Global mobile scan FAB — opens route-specific sheet on tech / packer /
+          sku-stock (via a window event), or the generic pair + PO sheet
+          everywhere else. */}
+      <MobileScanFab />
     </div>
   );
 }
