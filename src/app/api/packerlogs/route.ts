@@ -123,9 +123,8 @@ export async function GET(req: NextRequest) {
                     ff.product_title,
                     o.product_title,
                     sku_catalog_lookup.catalog_product_title,
+                    sku_stock_lookup.stock_product_title,
                     -- Last resort: show the identifier we do have instead of null.
-                    -- PackerTable/DashboardShippedTable fall back to "Unknown Product"
-                    -- on null, so surfacing the sku/item_number is always better.
                     NULLIF(BTRIM(o.item_number), ''),
                     NULLIF(BTRIM(o.sku), '')
                 ) AS product_title,
@@ -260,6 +259,50 @@ export async function GET(req: NextRequest) {
                 )
                 LIMIT 1
             ) sku_catalog_lookup ON TRUE
+            -- Parallel lookup in sku_stock — many SKUs have titles there that
+            -- haven't been mirrored into sku_catalog yet (e.g. "01103" Bose
+            -- Companion speakers). Leading-zero normalization matches the
+            -- sku_catalog lookup above so ":1103" resolves to "01103".
+            LEFT JOIN LATERAL (
+                SELECT ss.product_title AS stock_product_title
+                FROM sku_stock ss
+                WHERE EXISTS (
+                    SELECT 1
+                    FROM UNNEST(ARRAY[
+                        NULLIF(BTRIM(split_part(COALESCE(sku_lookup.sku_table_static_sku, ''), ':', 1)), ''),
+                        NULLIF(BTRIM(COALESCE(sku_lookup.sku_table_static_sku, '')), ''),
+                        NULLIF(BTRIM(split_part(COALESCE(sal.metadata->>'sku', ''), ':', 1)), ''),
+                        NULLIF(BTRIM(COALESCE(sal.metadata->>'sku', '')), ''),
+                        CASE
+                            WHEN POSITION(':' IN COALESCE(sal.scan_ref, '')) > 0
+                            THEN NULLIF(BTRIM(split_part(sal.scan_ref, ':', 1)), '')
+                            ELSE NULLIF(BTRIM(COALESCE(sal.scan_ref, '')), '')
+                        END,
+                        CASE
+                            WHEN POSITION(':' IN COALESCE(sal.scan_ref, '')) > 0
+                            THEN NULLIF(BTRIM(split_part(sal.scan_ref, ':', 2)), '')
+                            ELSE NULL
+                        END,
+                        NULLIF(BTRIM(split_part(COALESCE(o.sku, ''), ':', 1)), ''),
+                        NULLIF(BTRIM(COALESCE(o.sku, '')), ''),
+                        NULLIF(BTRIM(COALESCE(o.item_number, '')), ''),
+                        NULLIF(BTRIM(split_part(COALESCE(ff.sku, ''), ':', 1)), ''),
+                        NULLIF(BTRIM(COALESCE(ff.sku, '')), '')
+                    ]) AS c(candidate)
+                    WHERE c.candidate IS NOT NULL AND BTRIM(c.candidate) <> ''
+                      AND (
+                          BTRIM(ss.sku) = BTRIM(c.candidate)
+                          OR regexp_replace(UPPER(TRIM(COALESCE(ss.sku, ''))), '^0+', '') =
+                             regexp_replace(UPPER(TRIM(c.candidate)), '^0+', '')
+                      )
+                )
+                ORDER BY
+                    -- Prefer rows with a non-empty title over placeholders
+                    CASE WHEN NULLIF(BTRIM(COALESCE(ss.product_title, '')), '') IS NULL THEN 1 ELSE 0 END,
+                    ss.stock DESC NULLS LAST,
+                    ss.id DESC
+                LIMIT 1
+            ) sku_stock_lookup ON TRUE
             LEFT JOIN LATERAL (
                 SELECT COALESCE(
                   json_agg(t.tracking_number_raw ORDER BY t.sort_key, t.tracking_number_raw)

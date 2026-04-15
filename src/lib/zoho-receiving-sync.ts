@@ -54,6 +54,105 @@ function getZohoLastModifiedTime(row: AnyRow): string | null {
   );
 }
 
+// A Zoho PO with "LCPU" or "LOCALPICKUP" in its reference#, PO number, or PO id
+// is intake-marked as a local pickup, not a carrier-shipped package. Detection
+// is case-insensitive and checks any of the three identifiers so a single
+// convention (whichever Zoho field operations populates) is enough.
+function isLocalPickupPo(...candidates: Array<string | null | undefined>): boolean {
+  const re = /(LCPU|LOCALPICKUP)/i;
+  for (const value of candidates) {
+    if (typeof value === 'string' && re.test(value)) return true;
+  }
+  return false;
+}
+
+type LocalPickupSyncInput = {
+  normalizedPoId: string;
+  poNumber: string;
+  poReference: string | null;
+  lineItems: unknown[];
+};
+
+// Idempotent upsert of a Zoho PO into local_pickup_orders + items. Skips the
+// receiving / receiving_lines / shipping_tracking_numbers tables entirely —
+// local pickups have no carrier identity and are operated entirely from the
+// local-pickup queue UI.
+async function syncLocalPickupOrder(
+  client: PoolClient,
+  input: LocalPickupSyncInput,
+): Promise<SyncPOLinesResult> {
+  const { normalizedPoId, poNumber, poReference, lineItems } = input;
+
+  // Upsert the order header keyed on the Zoho PO id (partial-unique index
+  // ux_local_pickup_orders_zoho_po). Existing rows are touched lightly so a
+  // re-sync refreshes the displayed PO# and reference# without overwriting
+  // operator-curated fields like customer_name, status, or notes.
+  const orderRes = await client.query<{ id: number; xmax: string }>(
+    `INSERT INTO local_pickup_orders (
+       zoho_po_id, zoho_purchaseorder_number, zoho_reference_number, status
+     )
+     VALUES ($1, $2, $3, 'DRAFT')
+     ON CONFLICT (zoho_po_id) WHERE zoho_po_id IS NOT NULL
+     DO UPDATE SET
+       zoho_purchaseorder_number = EXCLUDED.zoho_purchaseorder_number,
+       zoho_reference_number     = EXCLUDED.zoho_reference_number,
+       updated_at                = NOW()
+     RETURNING id, xmax::text`,
+    [normalizedPoId, poNumber, poReference],
+  );
+  const orderId = Number(orderRes.rows[0].id);
+  const orderPreexisting = orderRes.rows[0].xmax !== '0';
+
+  let synced = 0;
+  let skipped = 0;
+
+  for (const rawLine of lineItems) {
+    const line = asObject(rawLine);
+    if (!line) {
+      skipped++;
+      continue;
+    }
+
+    const zohoItemId     = asString(line.item_id);
+    const zohoLineItemId = asString(line.line_item_id, line.id);
+    const sku            = asString(line.sku);
+    const productTitle   = asString(line.name, line.item_name);
+    const quantity       = asPositiveInt(line.quantity);
+
+    // SKU is NOT NULL on local_pickup_order_items; quantity must be > 0.
+    if (!zohoLineItemId || !sku || quantity <= 0) {
+      skipped++;
+      continue;
+    }
+
+    await client.query(
+      `INSERT INTO local_pickup_order_items (
+         order_id, sku, product_title, quantity,
+         zoho_item_id, zoho_line_item_id
+       )
+       VALUES ($1, $2, $3, $4, $5, $6)
+       ON CONFLICT (order_id, zoho_line_item_id) WHERE zoho_line_item_id IS NOT NULL
+       DO UPDATE SET
+         sku           = EXCLUDED.sku,
+         product_title = EXCLUDED.product_title,
+         quantity      = EXCLUDED.quantity,
+         zoho_item_id  = EXCLUDED.zoho_item_id,
+         updated_at    = NOW()`,
+      [orderId, sku, productTitle, quantity, zohoItemId, zohoLineItemId],
+    );
+    synced++;
+  }
+
+  return {
+    purchaseorder_id: normalizedPoId,
+    purchaseorder_number: poNumber,
+    line_items_synced: synced,
+    line_items_skipped: skipped,
+    line_items_linked: 0,
+    mode: orderPreexisting ? 'updated' : 'inserted',
+  };
+}
+
 async function getReceivingLineColumns(client: PoolClient) {
   const lineColsRes = await client.query<{ column_name: string }>(
     `SELECT column_name FROM information_schema.columns WHERE table_name = 'receiving_lines'`
@@ -90,13 +189,28 @@ async function syncPurchaseOrderLines(
   const normalizedPoId = asString(po.purchaseorder_id, poId) || poId;
   const poNumber = asString(po.purchaseorder_number) || normalizedPoId;
   const lineItems = Array.isArray(po.line_items) ? po.line_items : [];
+  const poReference = asString(po.reference_number);
+
+  // Auto-route: a PO whose reference#/PO number/PO id contains "LCPU" or
+  // "LOCALPICKUP" is a local pickup, not a carrier shipment. Local pickups
+  // have no tracking and live entirely in local_pickup_orders +
+  // local_pickup_order_items — they bypass receiving / receiving_lines /
+  // shipping_tracking_numbers altogether.
+  if (isLocalPickupPo(poReference, poNumber, normalizedPoId)) {
+    return syncLocalPickupOrder(client, {
+      normalizedPoId,
+      poNumber,
+      poReference,
+      lineItems,
+    });
+  }
+
   const lineCols = await getReceivingLineColumns(client);
 
   // Zoho PO Reference# carries the tracking number per the inbound contract.
   // Register it in shipping_tracking_numbers once per PO so receiving rows can
   // link via receiving.shipment_id (canonical, replaces the legacy
   // receiving_lines.zoho_reference_number text column).
-  const poReference = asString(po.reference_number);
   let shipmentId: number | null = null;
   if (poReference) {
     const shipment = await registerShipmentPermissive({

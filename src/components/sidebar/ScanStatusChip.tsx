@@ -1,5 +1,6 @@
 'use client';
 
+import { useState } from 'react';
 import { RefreshCw, X } from '@/components/Icons';
 import { TrackingChip, getLast4 } from '@/components/ui/CopyChip';
 
@@ -9,7 +10,10 @@ export type ScanStatusChipProps = {
   tracking: string;
   status: ScanStatus;
   errorMessage?: string;
+  exceptionId?: number | null;
+  exceptionReason?: string | null;
   onRetry?: () => void;
+  onRefetch?: () => Promise<void> | void;
   onDismiss?: () => void;
 };
 
@@ -38,10 +42,26 @@ export function ScanStatusChip({
   tracking,
   status,
   errorMessage,
+  exceptionId,
+  exceptionReason,
   onRetry,
+  onRefetch,
   onDismiss,
 }: ScanStatusChipProps) {
+  const [refetching, setRefetching] = useState(false);
   const label = status === 'error' && errorMessage ? errorMessage : LABELS[status];
+
+  // Show the refetch button on terminal non-error states — scans that landed
+  // "unmatched" can be re-pinged once Zoho has the PO, and scans that matched
+  // can be forced to re-import lines (e.g. after truncation).
+  const canRefetch = !!onRefetch && (status === 'unmatched' || status === 'matched');
+
+  const handleRefetch = async () => {
+    if (!onRefetch || refetching) return;
+    setRefetching(true);
+    try { await onRefetch(); } finally { setRefetching(false); }
+  };
+
   return (
     <div className="flex items-center justify-between gap-2 px-3 py-1.5 border-b border-gray-50 hover:bg-gray-50/50 transition-colors">
       <div className="flex items-center gap-2 min-w-0">
@@ -52,6 +72,17 @@ export function ScanStatusChip({
         >
           {label}
         </span>
+        {status === 'unmatched' && exceptionId ? (
+          <a
+            href={`/tracking-exceptions?q=${encodeURIComponent(tracking)}`}
+            target="_blank"
+            rel="noreferrer"
+            title={exceptionReason ? `Queued #${exceptionId} · ${exceptionReason}` : `Queued #${exceptionId}`}
+            className="shrink-0 rounded-full bg-amber-100 px-1.5 py-0.5 text-[8px] font-black uppercase tracking-widest text-amber-700 ring-1 ring-amber-200 hover:bg-amber-200"
+          >
+            #{exceptionId}
+          </a>
+        ) : null}
       </div>
       <div className="flex items-center gap-1">
         {status === 'error' && onRetry && (
@@ -62,6 +93,18 @@ export function ScanStatusChip({
             className="flex-shrink-0 text-gray-400 hover:text-gray-700"
           >
             <RefreshCw className="h-3 w-3" />
+          </button>
+        )}
+        {canRefetch && (
+          <button
+            type="button"
+            onClick={handleRefetch}
+            disabled={refetching}
+            aria-label="Refetch from Zoho"
+            title="Refetch from Zoho"
+            className="flex-shrink-0 text-gray-400 hover:text-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            <RefreshCw className={`h-3 w-3 ${refetching ? 'animate-spin' : ''}`} />
           </button>
         )}
         {onDismiss && (

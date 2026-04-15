@@ -4,7 +4,15 @@ import { invalidateCacheTags } from '@/lib/cache/upstash-cache';
 import { publishReceivingLogChanged } from '@/lib/realtime/publish';
 import { registerShipmentPermissive } from '@/lib/shipping/sync-shipment';
 
-const SOURCE_PLATFORMS = new Set(['zoho', 'ebay', 'amazon', 'aliexpress', 'walmart', 'other']);
+const SOURCE_PLATFORMS = new Set([
+  'zoho',
+  'ebay',
+  'amazon',
+  'aliexpress',
+  'walmart',
+  'other',
+  'goodwill',
+]);
 
 export async function PATCH(
   request: NextRequest,

@@ -48,12 +48,10 @@ function normalizePartsStatus(raw: unknown): 'COMPLETE' | 'MISSING_PARTS' {
 
 async function fetchPickupDates(search: string) {
   const params: unknown[] = [];
-  let where = `
-    WHERE (
-      UPPER(COALESCE(r.carrier, '')) = 'LOCAL'
-      OR UPPER(COALESCE(r.receiving_tracking_number, '')) LIKE 'LOCAL-%'
-    )
-  `;
+  // carrier='LOCAL' is the canonical local-pickup signal. The legacy
+  // LIKE 'LOCAL-%' detector was redundant — every LOCAL row in the DB also
+  // carries carrier='LOCAL'. See Phase 9b-1 in the inbound-tracking plan.
+  let where = `WHERE UPPER(COALESCE(r.carrier, '')) = 'LOCAL'`;
 
   if (search) {
     params.push(`%${search}%`);
@@ -61,7 +59,6 @@ async function fetchPickupDates(search: string) {
       AND (
         COALESCE(lpi.product_title, '') ILIKE $${params.length}
         OR COALESCE(lpi.sku, '') ILIKE $${params.length}
-        OR COALESCE(r.receiving_tracking_number, '') ILIKE $${params.length}
         OR COALESCE(lpi.condition_note, '') ILIKE $${params.length}
       )
     `;
@@ -110,7 +107,6 @@ async function fetchPickupRows(pickupDate: string, search: string): Promise<Loca
       AND (
         COALESCE(lpi.product_title, '') ILIKE $${params.length}
         OR COALESCE(lpi.sku, '') ILIKE $${params.length}
-        OR COALESCE(r.receiving_tracking_number, '') ILIKE $${params.length}
         OR COALESCE(lpi.condition_note, '') ILIKE $${params.length}
       )
     `;
@@ -125,7 +121,7 @@ async function fetchPickupRows(pickupDate: string, search: string): Promise<Loca
           (r.received_at AT TIME ZONE 'America/Los_Angeles')::date,
           (r.created_at AT TIME ZONE 'America/Los_Angeles')::date
         )::text AS pickup_date,
-        COALESCE(sp_ecwid.display_name, sc.product_title, lpi.product_title, r.receiving_tracking_number, 'Local Pickup') AS product_title,
+        COALESCE(sp_ecwid.display_name, sc.product_title, lpi.product_title, 'Local Pickup') AS product_title,
         lpi.sku,
         sc.category AS category,
         COALESCE(sp_ecwid.image_url, sc.image_url) AS image_url,
@@ -139,7 +135,7 @@ async function fetchPickupRows(pickupDate: string, search: string): Promise<Loca
           lpi.total,
           COALESCE(lpi.offer_price, 0) * COALESCE(lpi.quantity, 1)
         )::numeric(12,2)::text AS total,
-        r.receiving_tracking_number AS tracking_number,
+        NULL::text AS tracking_number,
         r.carrier,
         COALESCE(r.received_at, r.created_at)::text AS received_at,
         wa.status AS work_order_status
@@ -164,10 +160,7 @@ async function fetchPickupRows(pickupDate: string, search: string): Promise<Loca
         ORDER BY wa.updated_at DESC NULLS LAST, wa.id DESC
         LIMIT 1
       ) wa ON TRUE
-      WHERE (
-        UPPER(COALESCE(r.carrier, '')) = 'LOCAL'
-        OR UPPER(COALESCE(r.receiving_tracking_number, '')) LIKE 'LOCAL-%'
-      )
+      WHERE UPPER(COALESCE(r.carrier, '')) = 'LOCAL'
       AND COALESCE(
         lpi.pickup_date,
         (r.received_at AT TIME ZONE 'America/Los_Angeles')::date,

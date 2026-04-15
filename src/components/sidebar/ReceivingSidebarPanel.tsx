@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { useRouter, useSearchParams } from 'next/navigation';
 import QRCode from 'react-qr-code';
@@ -9,7 +9,7 @@ import {
   sidebarHeaderControlClass,
   sidebarHeaderRowClass,
 } from '@/components/layout/header-shell';
-import { Barcode, Clipboard, Printer, RefreshCw, X } from '@/components/Icons';
+import { Barcode, ChevronDown, ChevronUp, Clipboard, Printer, RefreshCw, X } from '@/components/Icons';
 import { TrackingChip, getLast4 } from '@/components/ui/CopyChip';
 import { SearchBar } from '@/components/ui/SearchBar';
 import { ViewDropdown } from '@/components/ui/ViewDropdown';
@@ -33,26 +33,65 @@ import {
 } from '@/components/station/receiving-constants';
 import type { ReceivingLineRow } from '@/components/station/ReceivingLinesTable';
 import { dispatchLineUpdated } from '@/components/station/ReceivingLinesTable';
+import {
+  parseSerialFromLineDescription,
+  parseZendeskListingFromPoNotes,
+} from '@/lib/zoho-po-prefill';
+
+/** Carton-level scratch (Zendesk, listing, notes) for Receive; survives line-to-line nav. */
+const RECEIVING_LINE_DETAILS_STORAGE_KEY = (receivingId: number) =>
+  `receiving.sidebar.lineDetails.v1:${receivingId}`;
+
+type ReceivingLineDetailScratch = { zendesk: string; listing: string; notes: string };
+
+function readReceivingLineDetailsScratch(receivingId: number | null): ReceivingLineDetailScratch {
+  if (receivingId == null || typeof window === 'undefined') {
+    return { zendesk: '', listing: '', notes: '' };
+  }
+  try {
+    const raw = window.localStorage.getItem(RECEIVING_LINE_DETAILS_STORAGE_KEY(receivingId));
+    if (!raw) return { zendesk: '', listing: '', notes: '' };
+    const o = JSON.parse(raw) as Partial<ReceivingLineDetailScratch>;
+    return {
+      zendesk: typeof o.zendesk === 'string' ? o.zendesk : '',
+      listing: typeof o.listing === 'string' ? o.listing : '',
+      notes: typeof o.notes === 'string' ? o.notes : '',
+    };
+  } catch {
+    return { zendesk: '', listing: '', notes: '' };
+  }
+}
+
+function writeReceivingLineDetailsScratch(receivingId: number, d: ReceivingLineDetailScratch) {
+  if (typeof window === 'undefined') return;
+  try {
+    window.localStorage.setItem(
+      RECEIVING_LINE_DETAILS_STORAGE_KEY(receivingId),
+      JSON.stringify({ zendesk: d.zendesk, listing: d.listing, notes: d.notes }),
+    );
+  } catch {
+    /* quota / private mode */
+  }
+}
 
 const RECEIVING_MODE_OPTIONS = [
   { value: 'receive', label: 'Receiving' },
   { value: 'pickup', label: 'Local Pickup' },
 ];
 
-// Recent / Received lead because they cover the day-to-day receiver workflow.
-// The per-status chips follow for targeted lookups (QA, rework, audits).
+// Two-tab surface covering the full receiver workflow:
+//   Recent   = in-flight lines (pre-match through in-test), sorted by most
+//              recent scan pairing event so new scans bubble up.
+//   Received = physically received in the warehouse (MATCHED → DONE),
+//              sorted by updated_at so recent receives bubble up.
 const VIEW_FILTERS: HorizontalSliderItem[] = [
+  { id: 'all',      label: 'All' },
   { id: 'recent',   label: 'Recent' },
   { id: 'received', label: 'Received' },
-  { id: 'expected', label: 'Expected' },
-  { id: 'unboxed',  label: 'Unboxed' },
-  { id: 'passed',   label: 'Passed' },
-  { id: 'failed',   label: 'Failed' },
-  { id: 'all',      label: 'All' },
 ];
 
-type ViewId = 'recent' | 'received' | 'expected' | 'unboxed' | 'passed' | 'failed' | 'all';
-const VALID_VIEW_IDS = new Set<ViewId>(['recent', 'received', 'expected', 'unboxed', 'passed', 'failed', 'all']);
+type ViewId = 'all' | 'recent' | 'received';
+const VALID_VIEW_IDS = new Set<ViewId>(['all', 'recent', 'received']);
 
 type ReceivingMode = 'receive' | 'pickup';
 
@@ -108,6 +147,7 @@ const SOURCE_PLATFORM_OPTS: Array<{ value: string; label: string }> = [
   { value: 'amazon',     label: 'Amazon' },
   { value: 'aliexpress', label: 'AliExp' },
   { value: 'walmart',    label: 'Walmart' },
+  { value: 'goodwill',   label: 'Goodwill' },
   { value: 'other',      label: 'Other' },
 ];
 
@@ -116,6 +156,7 @@ const SOURCE_PLATFORM_LABELS: Record<string, string> = {
   amazon: 'Amazon',
   aliexpress: 'AliExpress',
   walmart: 'Walmart',
+  goodwill: 'Goodwill',
   other: 'Other',
 };
 
@@ -207,7 +248,7 @@ function conditionShort(code: string | null | undefined): string {
   if (c === 'PARTS') return 'Parts';
   if (c.startsWith('USED_')) {
     const letter = COND_LABEL[c] || c.replace('USED_', '');
-    return `U-${letter}`;
+    return `USED-${letter}`;
   }
   return c.replace(/_/g, ' ');
 }
@@ -223,9 +264,8 @@ function ConditionHeaderDisplay({ code }: { code: string }) {
   if (c.startsWith('USED_')) {
     const letter = COND_LABEL[c] || c.replace('USED_', '');
     return (
-      <span className="inline-flex items-baseline gap-0 font-black tracking-tight text-gray-900">
-        <span className="underline decoration-gray-900 decoration-2 underline-offset-2">U</span>
-        <span>-{letter}</span>
+      <span className="font-black tracking-tight text-gray-900">
+        USED-{letter}
       </span>
     );
   }
@@ -240,7 +280,21 @@ type PendingScan = {
   receiving_id?: number;
   po_ids?: string[];
   scan_id?: number;
+  exception_id?: number | null;
+  exception_reason?: string | null;
   errorMessage?: string;
+};
+
+// Persistent row surfaced from the tracking_exceptions DB table. Mirrors the
+// subset of columns the sidebar cares about; full shape lives on the triage
+// page. Distinct from PendingScan (session-only, cleared on reload).
+type OpenException = {
+  id: number;
+  tracking_number: string;
+  exception_reason: string;
+  created_at: string;
+  last_zoho_check_at: string | null;
+  zoho_check_count: number;
 };
 
 function randomId(): string {
@@ -296,9 +350,7 @@ function printReceivingLabel(payload: ReceivingLabelPayload) {
   );
 
   const condShort = conditionShort(payload.conditionCode);
-  const condHtml = condShort === 'New' || condShort === 'Parts'
-    ? escapeHtml(condShort)
-    : `<u>U</u>-${escapeHtml(condShort.replace(/^U-/, ''))}`;
+  const condHtml = escapeHtml(condShort);
 
   const html = `<!doctype html><html><head><meta charset="utf-8"/><title>Label</title>
 <style>
@@ -312,7 +364,6 @@ function printReceivingLabel(payload: ReceivingLabelPayload) {
   .type{font-size:12px;font-weight:900;text-transform:uppercase;letter-spacing:0.3px;color:#111;white-space:nowrap;text-align:center}
   .cond{font-size:13px;font-weight:900;color:#111;white-space:nowrap}
   .po{font-size:12px;font-weight:900;letter-spacing:0.3px;line-height:1.05;color:#111;white-space:nowrap;font-variant-numeric:tabular-nums}
-  .cond u{text-decoration:underline;text-underline-offset:1px}
   .date{font-size:11px;font-weight:700;color:#4b5563;white-space:nowrap;tabular-nums:true;font-variant-numeric:tabular-nums}
   .qr{flex:0 0 auto;width:0.86in;height:0.86in;display:flex;align-items:center;justify-content:center}
   .qr svg{width:100%;height:100%;display:block}
@@ -470,17 +521,38 @@ function LineEditPanel({
   staffId,
   compact = false,
   onClose,
+  onPrev,
+  onNext,
+  canPrev = false,
+  canNext = false,
+  progressReceived,
+  progressTotal,
 }: {
   row: ReceivingLineRow;
   staffId: string;
   compact?: boolean;
+  onPrev?: () => void;
+  onNext?: () => void;
+  canPrev?: boolean;
+  canNext?: boolean;
+  progressReceived?: number;
+  progressTotal?: number;
   onClose: () => void;
 }) {
   const [receivingType, setReceivingType] = useState(row.receiving_type || 'PO');
-  const [qa, setQa] = useState(row.qa_status);
-  const [disp, setDisp] = useState(row.disposition_code);
-  const [cond, setCond] = useState(row.condition_grade);
-  const [notes, setNotes] = useState(row.notes || '');
+  // Pre-receipt placeholders (PENDING/HOLD) get promoted to the common
+  // happy-path defaults (PASSED/ACCEPT/USED_A). If a line was previously
+  // saved with a more specific status (e.g. FAILED_DAMAGED, RTV,
+  // BRAND_NEW), we preserve that — the override only replaces the
+  // pre-receipt placeholders.
+  const [qa, setQa] = useState(
+    !row.qa_status || row.qa_status === 'PENDING' ? 'PASSED' : row.qa_status,
+  );
+  const [disp, setDisp] = useState(
+    !row.disposition_code || row.disposition_code === 'HOLD' ? 'ACCEPT' : row.disposition_code,
+  );
+  const [cond, setCond] = useState(row.condition_grade || 'USED_A');
+  const [notes, setNotes] = useState('');
   const [trackingEdit, setTrackingEdit] = useState(row.tracking_number || '');
   const [zendesk, setZendesk] = useState('');
   const [serialInput, setSerialInput] = useState('');
@@ -496,16 +568,136 @@ function LineEditPanel({
   const serialRef = useRef<HTMLInputElement>(null);
   const listingRef = useRef<HTMLInputElement>(null);
 
+  const persistZendeskRef = useRef(zendesk);
+  const persistListingRef = useRef(listingLink);
+  const persistNotesRef = useRef(notes);
+  persistZendeskRef.current = zendesk;
+  persistListingRef.current = listingLink;
+  persistNotesRef.current = notes;
+
   useEffect(() => {
     setReceivingType(row.receiving_type || 'PO');
-    setQa(row.qa_status);
-    setDisp(row.disposition_code);
-    setCond(row.condition_grade);
-    setNotes(row.notes || '');
+    // Mirror the initial-state promotion logic on row change so a freshly
+    // loaded PO line shows the happy-path defaults (PASSED / ACCEPT / USED_A)
+    // instead of the raw placeholders (PENDING / HOLD) written when the line
+    // was first created. Non-placeholder values (e.g. FAILED_DAMAGED, RTV,
+    // BRAND_NEW) are preserved as-is.
+    setQa(!row.qa_status || row.qa_status === 'PENDING' ? 'PASSED' : row.qa_status);
+    setDisp(!row.disposition_code || row.disposition_code === 'HOLD' ? 'ACCEPT' : row.disposition_code);
+    setCond(row.condition_grade || 'USED_A');
     setTrackingEdit(row.tracking_number || '');
-    setZendesk('');
-    setListingLink('');
-  }, [row.id, row.qa_status, row.disposition_code, row.condition_grade, row.notes, row.tracking_number, row.receiving_type]);
+  }, [row.id, row.qa_status, row.disposition_code, row.condition_grade, row.tracking_number, row.receiving_type]);
+
+  // When the carton changes, flush scratch for the previous receiving_id
+  // so localStorage is not lost before loading the next carton’s scratch.
+  const prevReceivingIdForFlushRef = useRef<number | null>(null);
+  useEffect(() => {
+    const prev = prevReceivingIdForFlushRef.current;
+    const next = row.receiving_id;
+    if (prev != null && prev !== next) {
+      writeReceivingLineDetailsScratch(prev, {
+        zendesk: persistZendeskRef.current,
+        listing: persistListingRef.current,
+        notes: persistNotesRef.current,
+      });
+    }
+    prevReceivingIdForFlushRef.current = next ?? null;
+  }, [row.receiving_id]);
+
+  // Restore Zendesk, listing, notes from localStorage when switching cartons (layout phase
+  // so persist effect sees hydrated values). Same carton + different line: unchanged.
+  useLayoutEffect(() => {
+    if (row.receiving_id == null) {
+      setZendesk('');
+      setListingLink('');
+      setNotes('');
+      return;
+    }
+    const d = readReceivingLineDetailsScratch(row.receiving_id);
+    setZendesk(d.zendesk);
+    setListingLink(d.listing);
+    setNotes(d.notes);
+  }, [row.receiving_id]);
+
+  // Serial is per line; when moving between lines, prefill from the row's
+  // already-recorded serials (most recent wins) so the sidebar reflects what
+  // the table chip shows. Falls back to empty when the line has none.
+  useEffect(() => {
+    const localSerials = (row.serials ?? []) as Array<{ serial_number?: string | null }>;
+    const latest = localSerials.length > 0
+      ? String(localSerials[localSerials.length - 1]?.serial_number || '').trim()
+      : '';
+    setSerialInput(latest);
+  }, [row.id, row.serials]);
+
+  // Prefill Zendesk, listing, and serial from Zoho PO notes + line description.
+  useEffect(() => {
+    const poId = (row.zoho_purchaseorder_id || '').trim();
+    if (!poId) return;
+
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch(
+          `/api/zoho/purchase-orders?purchaseorder_id=${encodeURIComponent(poId)}`,
+        );
+        const data = await res.json();
+        if (cancelled || !data?.success || !data.purchaseorder) return;
+
+        const po = data.purchaseorder as {
+          notes?: string | null;
+          line_items?: Array<{ line_item_id?: string; description?: string | null }>;
+        };
+
+        const rid = row.receiving_id;
+        const scratch = readReceivingLineDetailsScratch(rid);
+        const { zendesk: zPo, listing: lPo } = parseZendeskListingFromPoNotes(po.notes ?? '');
+        if (!scratch.zendesk.trim() && zPo) setZendesk(zPo);
+        if (!scratch.listing.trim() && lPo) setListingLink(lPo);
+
+        const lineItemId = (row.zoho_line_item_id || '').trim();
+        if (!lineItemId || !Array.isArray(po.line_items)) return;
+        const li = po.line_items.find(
+          (l) => String(l.line_item_id || '').trim() === lineItemId,
+        );
+        // Local serials (from serial_units via receiving-lines `include=serials`)
+        // win over the Zoho PO description. Only fall back to Zoho when the
+        // line has no local serial on file yet.
+        const hasLocalSerial = (row.serials ?? []).some((s) => (s.serial_number || '').trim());
+        if (hasLocalSerial) return;
+        const sn = parseSerialFromLineDescription(li?.description ?? null);
+        if (sn) setSerialInput(sn);
+      } catch {
+        /* Zoho unavailable — fields stay empty */
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [row.id, row.receiving_id, row.zoho_purchaseorder_id, row.zoho_line_item_id]);
+
+  // Persist scratch per carton. Skip one write right after receiving_id
+  // changes (flush already saved the previous carton; load will hydrate this one).
+  const previousReceivingIdForPersistRef = useRef<number | null | undefined>(undefined);
+  useEffect(() => {
+    const prev = previousReceivingIdForPersistRef.current;
+    const cur = row.receiving_id;
+
+    if (cur == null) {
+      previousReceivingIdForPersistRef.current = cur;
+      return;
+    }
+
+    const transitioned = prev !== cur && prev !== undefined;
+    previousReceivingIdForPersistRef.current = cur;
+
+    if (transitioned) {
+      return;
+    }
+
+    writeReceivingLineDetailsScratch(cur, { zendesk, listing: listingLink, notes });
+  }, [zendesk, listingLink, notes, row.receiving_id]);
 
   // Load the parent receiving row's source_platform so the dropdown reflects
   // the current shipment-level override (platform is per-carton, not per-line).
@@ -591,15 +783,22 @@ function LineEditPanel({
         }),
       });
       const data = await res.json();
-      if (data?.success) {
+      if (data?.success && data.line_state && typeof data.line_state.id === 'number') {
         setSerialInput('');
+        const ls = data.line_state;
+        dispatchLineUpdated({
+          id: ls.id,
+          quantity_received: ls.quantity_received,
+          quantity_expected: ls.quantity_expected,
+          workflow_status: ls.workflow_status ?? undefined,
+        });
         window.dispatchEvent(new CustomEvent('receiving-serial-scanned', {
           detail: {
             line_id: row.id,
-            new_qty: data.line_state?.quantity_received,
+            new_qty: ls.quantity_received,
             serial_unit: data.serial_unit,
             is_return: !!data.is_return,
-            is_complete: !!data.line_state?.is_complete,
+            is_complete: !!ls.is_complete,
           },
         }));
         setTimeout(() => serialRef.current?.focus(), 40);
@@ -617,46 +816,37 @@ function LineEditPanel({
   }, []);
 
   const handleReceive = useCallback(async () => {
-    if (receiving) return;
+    if (receiving || row.receiving_id == null) return;
     setReceiving(true);
     try {
-      const combinedNotes = [
-        notes,
-        zendesk ? `Zendesk: ${zendesk}` : '',
-        listingLink ? `Listing: ${listingLink}` : '',
-      ].filter(Boolean).join(' | ');
+      const perLineNotes = notes.trim() || null;
 
-      await patch({
-        qa_status: qa,
-        disposition_code: disp,
-        condition_grade: cond,
-        notes: combinedNotes || notes,
+      const markRes = await fetch('/api/receiving/mark-received-po', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          receiving_id: row.receiving_id,
+          receiving_line_id: row.id,
+          qa_status: qa,
+          disposition_code: disp,
+          condition_grade: cond,
+          serial_number: serialInput.trim() || undefined,
+          zendesk_ticket: zendesk.trim() || undefined,
+          listing_link: listingLink.trim() || undefined,
+          notes: perLineNotes || undefined,
+          staff_id: Number(staffId),
+        }),
       });
-
-      if (row.zoho_purchaseorder_id && row.zoho_line_item_id) {
+      const markData = await markRes.json().catch(() => null);
+      if (markRes.ok && markData?.success) {
         try {
-          await fetch('/api/receiving/mark-received', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              receiving_line_id: row.id,
-              receiving_id: row.receiving_id,
-              zoho_purchaseorder_id: row.zoho_purchaseorder_id,
-              zoho_line_item_id: row.zoho_line_item_id,
-              zoho_item_id: row.zoho_item_id,
-              qa_status: qa,
-              disposition_code: disp,
-              condition_grade: cond,
-              serial_number: serialInput.trim() || undefined,
-              zendesk_ticket: zendesk.trim() || undefined,
-              listing_link: listingLink.trim() || undefined,
-              notes: combinedNotes || undefined,
-              staff_id: Number(staffId),
-            }),
-          });
-        } catch {
-          /* Zoho sync failed — local data is saved */
-        }
+          const linesRes = await fetch(`/api/receiving-lines?receiving_id=${row.receiving_id}`);
+          const lineData = await linesRes.json();
+          const rows = Array.isArray(lineData?.receiving_lines) ? lineData.receiving_lines : [];
+          for (const r of rows) {
+            dispatchLineUpdated(r as ReceivingLineRow);
+          }
+        } catch { /* table may still reflect partial state */ }
       }
 
       window.dispatchEvent(new CustomEvent('receiving-entry-added'));
@@ -664,7 +854,7 @@ function LineEditPanel({
     } catch { /* silent */ } finally {
       setReceiving(false);
     }
-  }, [receiving, row, qa, disp, cond, notes, zendesk, listingLink, serialInput, staffId, patch]);
+  }, [receiving, row.receiving_id, qa, disp, cond, notes, zendesk, listingLink, serialInput, staffId]);
 
   const poNumber = (row.zoho_purchaseorder_number || row.zoho_purchaseorder_id || '').trim();
   const scanValue = poNumber || (row.receiving_id != null ? `RCV-${row.receiving_id}` : '');
@@ -763,28 +953,76 @@ function LineEditPanel({
   }, [zohoSyncing, row.id, row.receiving_id, row.tracking_number,
       row.zoho_purchaseorder_id, row.zoho_purchaseorder_number, staffId]);
 
+  const hasProgress = typeof progressReceived === 'number' && typeof progressTotal === 'number' && progressTotal > 0;
+
   return (
     <div className="border-b border-gray-200 bg-gray-50">
-      {/* Top bar: refresh | close */}
-      <div className="flex items-center justify-between px-3 py-1.5">
-        <button
-          type="button"
-          onClick={syncWithZoho}
-          disabled={zohoSyncing}
-          aria-label="Sync with Zoho by tracking number"
-          title="Sync with Zoho by tracking number"
-          className="text-gray-400 transition-colors hover:text-gray-700 disabled:cursor-not-allowed disabled:opacity-50"
+      {/* Top bar: refresh · up/down · status · close */}
+      <div className="flex items-center justify-between gap-2 px-3 py-1.5">
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={syncWithZoho}
+            disabled={zohoSyncing}
+            aria-label="Sync with Zoho by tracking number"
+            title="Sync with Zoho by tracking number"
+            className="text-gray-400 transition-colors hover:text-gray-700 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            <RefreshCw className="h-3.5 w-3.5" />
+          </button>
+          <button
+            type="button"
+            onClick={onPrev}
+            disabled={!onPrev || !canPrev}
+            aria-label="Previous line in PO"
+            title="Previous line"
+            className="text-gray-400 transition-colors hover:text-gray-700 disabled:cursor-not-allowed disabled:opacity-30"
+          >
+            <ChevronUp className="h-4 w-4" />
+          </button>
+          <button
+            type="button"
+            onClick={onNext}
+            disabled={!onNext || !canNext}
+            aria-label="Next line in PO"
+            title="Next line"
+            className="text-gray-400 transition-colors hover:text-gray-700 disabled:cursor-not-allowed disabled:opacity-30"
+          >
+            <ChevronDown className="h-4 w-4" />
+          </button>
+        </div>
+        {/* Status chip — shows saving / syncing state in the center. */}
+        <div
+          aria-live="polite"
+          className="flex min-w-0 flex-1 items-center justify-center text-[9px] font-black uppercase tracking-[0.18em]"
         >
-          <RefreshCw className={`h-3.5 w-3.5 ${zohoSyncing ? 'animate-spin' : ''}`} />
-        </button>
-        <button
-          type="button"
-          onClick={onClose}
-          aria-label="Close line edit"
-          className="text-gray-400 transition-colors hover:text-gray-700"
-        >
-          <X className="h-3.5 w-3.5" />
-        </button>
+          {zohoSyncing ? (
+            <span className="inline-flex items-center gap-1 text-blue-600">
+              <RefreshCw className="h-3 w-3 animate-spin" />
+              Syncing
+            </span>
+          ) : saving || platformSaving ? (
+            <span className="inline-flex items-center gap-1 text-blue-600">
+              <RefreshCw className="h-3 w-3 animate-spin" />
+              Saving
+            </span>
+          ) : null}
+        </div>
+        <div className="flex items-center gap-2">
+          {hasProgress && (
+            <span className="text-[10px] font-black tracking-wider text-gray-600">
+              {progressReceived}/{progressTotal}
+            </span>
+          )}
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Close line edit"
+            className="text-gray-400 transition-colors hover:text-gray-700"
+          >
+            <X className="h-3.5 w-3.5" />
+          </button>
+        </div>
       </div>
 
       {/* Product image */}
@@ -805,11 +1043,50 @@ function LineEditPanel({
         {row.item_name || row.sku || `Line #${row.id}`}
       </p>
 
+      {/* Item condition — per receiving line; drives the same condition_grade shown in the table */}
+      <div className="px-3 pb-2 pt-0.5">
+        <p className="mb-1 text-[9px] font-black uppercase tracking-widest text-gray-500">
+          Item condition
+        </p>
+        <select
+          value={cond}
+          onChange={(e) => {
+            const v = e.target.value;
+            setCond(v);
+            void patch({ condition_grade: v });
+          }}
+          className={SELECT_CLASS}
+          aria-label="Condition grade for this line item"
+        >
+          {CONDITION_OPTS.map((opt) => (
+            <option key={opt.value} value={opt.value}>{opt.label}</option>
+          ))}
+        </select>
+      </div>
+
+      {/* Serial scan — scoped to this line only. (PO-wide serial input
+          lives in the sidebar shell when a PO is loaded.) */}
+      <div className={`${sidebarHeaderBandClass} ${sidebarHeaderRowClass}`}>
+        <SearchBar
+          value={serialInput}
+          onChange={setSerialInput}
+          onSearch={(v) => submitSerial(v)}
+          onClear={() => setSerialInput('')}
+          inputRef={serialRef}
+          placeholder={`Scan serial for ${row.sku || '—'}`}
+          variant="blue"
+          size="compact"
+          isSearching={serialSubmitting}
+          leadingIcon={<Barcode className="w-[14px] h-[14px]" />}
+          className="w-full"
+        />
+      </div>
+
       {/* Platform / Type dropdowns */}
-      <div className="grid grid-cols-2 gap-2 px-3 pb-2">
+      <div className="grid grid-cols-2 gap-2 px-3 pt-3 pb-2">
         <div>
           <p className="mb-1 text-[9px] font-black uppercase tracking-widest text-gray-500">
-            Platform{platformSaving ? '…' : ''}
+            Platform
           </p>
           <select
             value={sourcePlatform}
@@ -842,24 +1119,18 @@ function LineEditPanel({
         </div>
       </div>
 
-      {/* QA / Disposition / Condition */}
-      <div className="grid grid-cols-3 gap-2 px-3 pb-2">
+      {/* QA / Disposition (condition is above serial — item-scoped) */}
+      <div className="grid grid-cols-2 gap-2 px-3 pb-2">
         <div>
           <p className="mb-1 text-[9px] font-black uppercase tracking-widest text-gray-500">QA</p>
-          <select value={qa} onChange={(e) => { setQa(e.target.value); patch({ qa_status: e.target.value }); }} className={SELECT_CLASS}>
+          <select value={qa} onChange={(e) => { setQa(e.target.value); void patch({ qa_status: e.target.value }); }} className={SELECT_CLASS}>
             {QA_OPTS.map((opt) => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
           </select>
         </div>
         <div>
           <p className="mb-1 text-[9px] font-black uppercase tracking-widest text-gray-500">Disposition</p>
-          <select value={disp} onChange={(e) => { setDisp(e.target.value); patch({ disposition_code: e.target.value }); }} className={SELECT_CLASS}>
+          <select value={disp} onChange={(e) => { setDisp(e.target.value); void patch({ disposition_code: e.target.value }); }} className={SELECT_CLASS}>
             {DISPOSITION_OPTS.map((opt) => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
-          </select>
-        </div>
-        <div>
-          <p className="mb-1 text-[9px] font-black uppercase tracking-widest text-gray-500">Condition</p>
-          <select value={cond} onChange={(e) => { setCond(e.target.value); patch({ condition_grade: e.target.value }); }} className={SELECT_CLASS}>
-            {CONDITION_OPTS.map((opt) => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
           </select>
         </div>
       </div>
@@ -884,28 +1155,9 @@ function LineEditPanel({
         />
       </div>
 
-      {/* Serial scan row */}
-      <div className={`${sidebarHeaderBandClass} ${sidebarHeaderRowClass}`}>
-        <SearchBar
-          value={serialInput}
-          onChange={setSerialInput}
-          onSearch={(v) => submitSerial(v)}
-          onClear={() => setSerialInput('')}
-          inputRef={serialRef}
-          placeholder={`Scan serial for ${row.sku || '—'}`}
-          variant="blue"
-          size="compact"
-          isSearching={serialSubmitting}
-          leadingIcon={<Barcode className="w-[14px] h-[14px]" />}
-          className="w-full"
-        />
-      </div>
-
       {/* Fields */}
       <div className={`bg-white px-3 ${compact ? 'py-2 space-y-2' : 'py-3 space-y-2.5'}`}>
-        {saving && (
-          <p className="text-[9px] font-black uppercase tracking-wider text-blue-500">Saving</p>
-        )}
+        {/* Saving indicator moved to the top-bar status chip. */}
 
         {/* Details disclosure (Zendesk / Listing / Notes) — collapsed by default in compact mode */}
         {compact ? (
@@ -996,10 +1248,15 @@ function LineEditPanel({
           <button
             type="button"
             onClick={handleReceive}
-            disabled={receiving}
+            disabled={receiving || row.receiving_id == null}
+            title={
+              row.receiving_id == null
+                ? 'Line must be linked to a shipment'
+                : 'Mark every open line on this shipment received and sync to Zoho'
+            }
             className="flex-1 inline-flex items-center justify-center gap-1.5 rounded-md bg-emerald-600 px-3 py-2 text-[10px] font-black uppercase tracking-wider text-white transition-colors hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-60"
           >
-            {receiving ? 'Receiving' : 'Receive'}
+            {receiving ? 'Receiving…' : 'Receive PO'}
           </button>
         </div>
 
@@ -1042,6 +1299,61 @@ export function ReceivingSidebarPanel() {
   const [viewMode, setViewMode] = useState<ViewId>('recent');
   const [pendingScans, setPendingScans] = useState<PendingScan[]>([]);
   const anyScanChecking = pendingScans.some((s) => s.status === 'checking');
+  const [openExceptions, setOpenExceptions] = useState<OpenException[]>([]);
+  const [refreshingExceptionIds, setRefreshingExceptionIds] = useState<Set<number>>(new Set());
+
+  const fetchOpenExceptions = useCallback(async () => {
+    try {
+      const res = await fetch('/api/tracking-exceptions?domain=receiving&status=open&limit=50', {
+        cache: 'no-store',
+      });
+      const data = await res.json();
+      if (!data?.success) return;
+      const rows = Array.isArray(data.rows) ? data.rows : [];
+      setOpenExceptions(
+        rows.map((r: Record<string, unknown>) => ({
+          id: Number(r.id),
+          tracking_number: String(r.tracking_number || ''),
+          exception_reason: String(r.exception_reason || 'not_found'),
+          created_at: String(r.created_at || ''),
+          last_zoho_check_at: r.last_zoho_check_at ? String(r.last_zoho_check_at) : null,
+          zoho_check_count: Number(r.zoho_check_count || 0),
+        })),
+      );
+    } catch {
+      /* silent — sidebar keeps prior list */
+    }
+  }, []);
+
+  useEffect(() => {
+    void fetchOpenExceptions();
+  }, [fetchOpenExceptions]);
+
+  const refreshException = useCallback(
+    async (exceptionId: number) => {
+      setRefreshingExceptionIds((prev) => {
+        const next = new Set(prev);
+        next.add(exceptionId);
+        return next;
+      });
+      try {
+        const res = await fetch(`/api/tracking-exceptions/${exceptionId}/refresh`, {
+          method: 'POST',
+        });
+        await res.json().catch(() => null);
+      } catch {
+        /* ignore — fetchOpenExceptions below reflects whatever state is real */
+      } finally {
+        setRefreshingExceptionIds((prev) => {
+          const next = new Set(prev);
+          next.delete(exceptionId);
+          return next;
+        });
+        await fetchOpenExceptions();
+      }
+    },
+    [fetchOpenExceptions],
+  );
   const [selectedLine, setSelectedLine] = useState<ReceivingLineRow | null>(null);
   // `scanDriven` flips the LineEditPanel into compact mode; scans open it,
   // row-clicks open it in full mode. Cleared on close / filter change.
@@ -1068,6 +1380,82 @@ export function ReceivingSidebarPanel() {
     if (armedLineId == null || !poContext) return null;
     return poContext.lines.find((l) => l.id === armedLineId) ?? null;
   }, [armedLineId, poContext]);
+
+  // When the user row-clicks a line in the dashboard table, scanMatchedRows
+  // is empty — which would disable the up/down nav. Populate it lazily by
+  // fetching all sibling lines for the same receiving_id. Skipped when
+  // scanMatchedRows already contains the selected line (scan-driven entry
+  // or a prior fetch).
+  useEffect(() => {
+    const receivingId = selectedLine?.receiving_id;
+    if (!receivingId) return;
+    if (scanMatchedRows.some((r) => r.id === selectedLine.id)) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch(`/api/receiving-lines?receiving_id=${receivingId}`);
+        const data = await res.json();
+        if (cancelled) return;
+        const rows = Array.isArray(data?.receiving_lines)
+          ? (data.receiving_lines as ReceivingLineRow[])
+          : [];
+        if (rows.length > 0) setScanMatchedRows(rows);
+      } catch { /* silent — nav stays disabled if fetch fails */ }
+    })();
+    return () => { cancelled = true; };
+  }, [selectedLine, scanMatchedRows]);
+
+  // Navigation + progress derived from the full sibling-line list. Counter
+  // sums *units* across every matched line (received vs expected) so the pill
+  // mirrors the table row's quantityText (e.g. 0/5) instead of a line count
+  // (0/1). A line with workflow_status=DONE is treated as fully received even
+  // if quantity_received lags behind the expectation.
+  const { currentIndex, canPrev, canNext, progressReceived, progressTotal } = useMemo(() => {
+    if (!selectedLine || scanMatchedRows.length === 0) {
+      return { currentIndex: -1, canPrev: false, canNext: false, progressReceived: 0, progressTotal: 0 };
+    }
+    const idx = scanMatchedRows.findIndex((r) => r.id === selectedLine.id);
+    let receivedUnits = 0;
+    let totalUnits = 0;
+    for (const r of scanMatchedRows) {
+      const expected = Math.max(0, Number(r.quantity_expected ?? 0));
+      const received = Math.max(0, Number(r.quantity_received ?? 0));
+      const isDone = String(r.workflow_status || '').toUpperCase() === 'DONE';
+      const expectedSafe = expected > 0 ? expected : 1;
+      totalUnits += expectedSafe;
+      receivedUnits += isDone ? expectedSafe : Math.min(received, expectedSafe);
+    }
+    return {
+      currentIndex: idx,
+      canPrev: idx > 0,
+      canNext: idx >= 0 && idx < scanMatchedRows.length - 1,
+      progressReceived: receivedUnits,
+      progressTotal: totalUnits,
+    };
+  }, [selectedLine, scanMatchedRows]);
+
+  // Prev/next flips the local selectedLine and fires the dedicated
+  // receiving-highlight-line event so the dashboard table's blue row
+  // indicator follows along. We avoid dispatching receiving-select-line
+  // because that handler wipes scanMatchedRows (row-click semantics) and
+  // would break subsequent nav.
+  const goPrevLine = useCallback(() => {
+    if (currentIndex <= 0) return;
+    const target = scanMatchedRows[currentIndex - 1];
+    if (target) {
+      setSelectedLine(target);
+      window.dispatchEvent(new CustomEvent('receiving-highlight-line', { detail: target.id }));
+    }
+  }, [currentIndex, scanMatchedRows]);
+
+  const goNextLine = useCallback(() => {
+    if (currentIndex < 0 || currentIndex >= scanMatchedRows.length - 1) return;
+    const target = scanMatchedRows[currentIndex + 1];
+    if (target) {
+      setSelectedLine(target);
+      window.dispatchEvent(new CustomEvent('receiving-highlight-line', { detail: target.id }));
+    }
+  }, [currentIndex, scanMatchedRows]);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -1104,9 +1492,12 @@ export function ReceivingSidebarPanel() {
       setScanMatchedRows([]);
     };
     const handleUpdated = (e: Event) => {
-      const updated = (e as CustomEvent<ReceivingLineRow>).detail;
-      if (!updated) return;
-      setSelectedLine((prev) => (prev?.id === updated.id ? updated : prev));
+      const updated = (e as CustomEvent<Partial<ReceivingLineRow> & { id: number }>).detail;
+      if (!updated || typeof updated.id !== 'number') return;
+      setSelectedLine((prev) => (prev?.id === updated.id ? { ...prev, ...updated } : prev));
+      setScanMatchedRows((rows) =>
+        rows.map((r) => (r.id === updated.id ? { ...r, ...updated } : r)),
+      );
     };
     window.addEventListener('receiving-select-line', handleSelect);
     window.addEventListener('receiving-line-updated', handleUpdated);
@@ -1172,7 +1563,7 @@ export function ReceivingSidebarPanel() {
     return () => window.removeEventListener('receiving-active', handleActive);
   }, [poContext?.receiving_id]);
 
-  const submitTrackingScan = useCallback((rawTracking?: string, opts?: { onResult?: (result: { tracking: string; matched: boolean; po_ids: string[]; receiving_id?: number; error?: string }) => void }) => {
+  const submitTrackingScan = useCallback((rawTracking?: string, opts?: { onResult?: (result: { tracking: string; matched: boolean; po_ids: string[]; receiving_id?: number; exception_id?: number | null; exception_reason?: string | null; error?: string }) => void }) => {
     const trackingNumber = (rawTracking ?? bulkTracking).trim();
     if (!trackingNumber) return;
 
@@ -1292,12 +1683,18 @@ export function ReceivingSidebarPanel() {
           setTimeout(() => {
             setPendingScans((prev) => prev.filter((s) => s.id !== scanUiId));
           }, 2000);
+          // Matched path may have resolved a prior open exception; refresh list.
+          void fetchOpenExceptions();
         } else {
+          const exceptionId = typeof data.exception_id === 'number' ? data.exception_id : null;
+          const exceptionReason = typeof data.exception_reason === 'string' ? data.exception_reason : null;
           opts?.onResult?.({
             tracking: trackingNumber,
             matched: false,
             po_ids: [],
             receiving_id: typeof data.receiving_id === 'number' ? data.receiving_id : undefined,
+            exception_id: exceptionId,
+            exception_reason: exceptionReason,
           });
           setPendingScans((prev) =>
             prev.map((s) =>
@@ -1307,6 +1704,8 @@ export function ReceivingSidebarPanel() {
                     status: 'unmatched',
                     receiving_id: typeof data.receiving_id === 'number' ? data.receiving_id : undefined,
                     scan_id: typeof data.scan_id === 'number' ? data.scan_id : undefined,
+                    exception_id: exceptionId,
+                    exception_reason: exceptionReason,
                   }
                 : s,
             ),
@@ -1316,6 +1715,8 @@ export function ReceivingSidebarPanel() {
               detail: { id: String(data.receiving_id), tracking: trackingNumber },
             }),
           );
+          // Unmatched path always upserts into tracking_exceptions — surface it.
+          void fetchOpenExceptions();
         }
       } catch (err) {
         const message = err instanceof Error ? err.message : 'Network error';
@@ -1327,10 +1728,21 @@ export function ReceivingSidebarPanel() {
         );
       }
     })();
-  }, [bulkTracking, staffId]);
+  }, [bulkTracking, staffId, fetchOpenExceptions]);
 
   const retryPendingScan = useCallback((tracking: string, id: string) => {
     setPendingScans((prev) => prev.filter((s) => s.id !== id));
+    submitTrackingScan(tracking);
+  }, [submitTrackingScan]);
+
+  // Re-run the lookup on an existing scan chip: flip its status back to
+  // 'checking', re-submit the tracking, and let the normal result handler
+  // update the chip in place. Same flow as a fresh scan but without
+  // re-inserting the chip.
+  const refetchPendingScan = useCallback((tracking: string, id: string) => {
+    setPendingScans((prev) => prev.map((s) =>
+      s.id === id ? { ...s, status: 'checking', errorMessage: undefined } : s,
+    ));
     submitTrackingScan(tracking);
   }, [submitTrackingScan]);
 
@@ -1363,6 +1775,8 @@ export function ReceivingSidebarPanel() {
               matched: result.matched,
               po_ids: result.po_ids,
               receiving_id: result.receiving_id ?? null,
+              exception_id: result.exception_id ?? null,
+              exception_reason: result.exception_reason ?? null,
               error: result.error ?? null,
             });
           } catch (err) {
@@ -1411,11 +1825,19 @@ export function ReceivingSidebarPanel() {
           item_name: string | null;
           quantity_received: number;
           quantity_expected: number | null;
+          workflow_status?: string | null;
           is_complete: boolean;
         } = data.line_state;
 
         // Clear input immediately for the next scan
         setSerialInput('');
+
+        dispatchLineUpdated({
+          id: state.id,
+          quantity_received: state.quantity_received,
+          quantity_expected: state.quantity_expected,
+          workflow_status: state.workflow_status ?? undefined,
+        });
 
         // Optimistic local update
         setPoContext((prev) => {
@@ -1641,6 +2063,10 @@ export function ReceivingSidebarPanel() {
 
       <ReceivingReturnBanner returns={returns} onDismiss={dismissReturn} />
 
+      {/* Scrollable body — all content below the fixed header scrolls as one
+          region so tall LineEditPanels + pending scans don't fight for space. */}
+      <div className="min-h-0 flex-1 overflow-auto">
+
       {/* Scan-line picker: shown when a tracking scan matches multiple open
           lines and the user hasn't picked one yet. Single matches skip this. */}
       {scanDriven && !selectedLine && scanMatchedRows.length > 1 && (
@@ -1695,6 +2121,12 @@ export function ReceivingSidebarPanel() {
           row={selectedLine}
           staffId={staffId}
           compact={scanDriven}
+          onPrev={goPrevLine}
+          onNext={goNextLine}
+          canPrev={canPrev}
+          canNext={canNext}
+          progressReceived={progressReceived}
+          progressTotal={progressTotal}
           onClose={() => {
             setSelectedLine(null);
             setScanDriven(false);
@@ -1707,7 +2139,7 @@ export function ReceivingSidebarPanel() {
 
       {/* Scan status chips — one per in-flight or terminal scan */}
       {pendingScans.length > 0 && (
-        <div className="min-h-0 flex-1 overflow-auto border-t border-gray-200">
+        <div className="border-t border-gray-200">
           <div className="flex items-center justify-between px-3 pt-2 pb-1">
             <p className="text-[9px] font-black uppercase tracking-widest text-gray-500">
               Scans · {pendingScans.length}
@@ -1727,9 +2159,16 @@ export function ReceivingSidebarPanel() {
                 tracking={scan.tracking}
                 status={scan.status}
                 errorMessage={scan.errorMessage}
+                exceptionId={scan.exception_id ?? null}
+                exceptionReason={scan.exception_reason ?? null}
                 onRetry={
                   scan.status === 'error'
                     ? () => retryPendingScan(scan.tracking, scan.id)
+                    : undefined
+                }
+                onRefetch={
+                  scan.status === 'unmatched' || scan.status === 'matched'
+                    ? () => refetchPendingScan(scan.tracking, scan.id)
                     : undefined
                 }
                 onDismiss={() => dismissPendingScan(scan.id)}
@@ -1738,6 +2177,8 @@ export function ReceivingSidebarPanel() {
           </div>
         </div>
       )}
+
+      </div>{/* /scrollable body */}
         </>
       )}
     </div>

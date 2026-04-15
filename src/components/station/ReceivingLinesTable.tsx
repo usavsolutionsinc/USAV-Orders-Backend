@@ -2,26 +2,12 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { Loader2 } from '@/components/Icons';
-import { TrackingChip, OrderIdChip, SkuScanRefChip, getLast4 } from '@/components/ui/CopyChip';
+import { Loader2, RefreshCw } from '@/components/Icons';
+import { TrackingChip, OrderIdChip, SkuScanRefChip, SerialChip, getLast4, getLast6Serial } from '@/components/ui/CopyChip';
+import { conditionGradeTableLabel } from '@/components/station/receiving-constants';
 
-// View id dispatched from the sidebar. 'recent'/'received' go through the API
-// `view` param; single-status filters go through `workflow_status`.
-export type ReceivingView =
-  | 'recent'
-  | 'received'
-  | 'expected'
-  | 'unboxed'
-  | 'passed'
-  | 'failed'
-  | 'all';
-
-const STATUS_VIEWS: Record<string, string> = {
-  expected: 'EXPECTED',
-  unboxed: 'UNBOXED',
-  passed: 'PASSED',
-  failed: 'FAILED',
-};
+// View id dispatched from the sidebar. Both go through the API `view` param.
+export type ReceivingView = 'all' | 'recent' | 'received';
 
 export interface ReceivingLineRow {
   id: number;
@@ -56,6 +42,7 @@ export interface ReceivingLineRow {
   created_at: string | null;
   image_url: string | null;
   source_platform: string | null;
+  serials?: Array<{ id: number; serial_number: string }> | null;
 }
 
 interface ApiResponse {
@@ -70,7 +57,7 @@ export function dispatchSelectLine(row: ReceivingLineRow | null) {
   window.dispatchEvent(new CustomEvent('receiving-select-line', { detail: row }));
 }
 
-export function dispatchLineUpdated(row: ReceivingLineRow) {
+export function dispatchLineUpdated(row: Partial<ReceivingLineRow> & { id: number }) {
   window.dispatchEvent(new CustomEvent('receiving-line-updated', { detail: row }));
 }
 
@@ -95,11 +82,13 @@ function OrderRow({
   row,
   isSelected,
   onSelect,
+  onResolve,
   index,
 }: {
   row: ReceivingLineRow;
   isSelected: boolean;
   onSelect: () => void;
+  onResolve: (row: ReceivingLineRow) => Promise<void> | void;
   index: number;
 }) {
   const productTitle = row.item_name || row.zoho_item_id || 'Unnamed inbound line';
@@ -107,11 +96,36 @@ function OrderRow({
   const qtyExpected = row.quantity_expected ?? 0;
   const workflowLabel = getStatusLabel(row.workflow_status || 'EXPECTED');
   const condGrade = (row.condition_grade || '').toUpperCase();
-  const conditionLabel = condGrade === 'BRAND_NEW' ? 'NEW' : condGrade === 'PARTS' ? 'PARTS' : condGrade.startsWith('USED') ? 'USED' : condGrade || 'N/A';
-  const conditionColor = condGrade === 'BRAND_NEW' ? 'text-yellow-600' : condGrade === 'PARTS' ? 'text-amber-800' : 'text-gray-500';
+  const conditionLabel = conditionGradeTableLabel(row.condition_grade);
+  const conditionColor =
+    condGrade === 'BRAND_NEW'
+      ? 'text-yellow-600'
+      : condGrade === 'PARTS'
+        ? 'text-amber-800'
+        : condGrade.startsWith('USED')
+          ? 'text-gray-500'
+          : 'text-gray-500';
   const trackingValue = (row.tracking_number || '').trim();
   const skuValue = (row.sku || '').trim();
   const poValue = (row.zoho_purchaseorder_number || row.zoho_purchaseorder_id || '').trim();
+  // Join all serials so SerialChip's CSV-aware helper picks the most recent and
+  // shows its last 6 chars. Clipboard carries the full list for traceability.
+  const serialsCsv = (row.serials ?? [])
+    .map((s) => (s.serial_number || '').trim())
+    .filter(Boolean)
+    .join(', ');
+
+  // Show the resolve button when the line isn't fully paired: no carton link
+  // yet (receiving_id null) OR no tracking on this row. Keep the icon left of
+  // the TrackingChip so it visually anchors to the chip it refreshes.
+  const [resolving, setResolving] = useState(false);
+  const needsResolve = (!row.receiving_id || !trackingValue);
+  const handleResolve = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (resolving) return;
+    setResolving(true);
+    try { await onResolve(row); } finally { setResolving(false); }
+  };
 
   return (
     <div
@@ -158,7 +172,20 @@ function OrderRow({
       <div className="flex shrink-0 items-center gap-0.5 pr-2">
         <OrderIdChip value={poValue} display={getLast4(poValue)} />
         <SkuScanRefChip value={skuValue} display={getLast4(skuValue)} />
+        {needsResolve && (
+          <button
+            type="button"
+            onClick={handleResolve}
+            disabled={resolving}
+            aria-label="Refetch tracking / PO from Zoho"
+            title="Refetch from Zoho"
+            className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded text-gray-400 transition-colors hover:bg-blue-50 hover:text-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            <RefreshCw className={`h-3.5 w-3.5 ${resolving ? 'animate-spin' : ''}`} />
+          </button>
+        )}
         <TrackingChip value={trackingValue} display={getLast4(trackingValue)} />
+        <SerialChip value={serialsCsv} display={getLast6Serial(serialsCsv)} />
       </div>
     </div>
   );
@@ -168,10 +195,12 @@ function OrdersList({
   rows,
   selectedId,
   onSelect,
+  onResolve,
 }: {
   rows: ReceivingLineRow[];
   selectedId: number | null;
   onSelect: (row: ReceivingLineRow) => void;
+  onResolve: (row: ReceivingLineRow) => Promise<void> | void;
 }) {
   return (
     <div className="flex flex-col w-full">
@@ -182,6 +211,7 @@ function OrdersList({
           index={index}
           isSelected={selectedId === row.id}
           onSelect={() => onSelect(row)}
+          onResolve={onResolve}
         />
       ))}
     </div>
@@ -203,16 +233,12 @@ export default function ReceivingLinesTable({ receivingId }: ReceivingLinesTable
 
   const buildParams = useCallback(() => {
     const p = new URLSearchParams({ limit: String(LIMIT), offset: '0' });
+    p.set('include', 'serials');
     if (receivingId) {
       p.set('receiving_id', String(receivingId));
       return p.toString();
     }
-    if (view === 'recent' || view === 'received') {
-      p.set('view', view);
-    } else if (STATUS_VIEWS[view]) {
-      p.set('workflow_status', STATUS_VIEWS[view]);
-    }
-    // view==='all' → no filter param; API returns everything.
+    p.set('view', view);
     return p.toString();
   }, [receivingId, view]);
 
@@ -254,9 +280,17 @@ export default function ReceivingLinesTable({ receivingId }: ReceivingLinesTable
 
   useEffect(() => {
     const handler = (event: Event) => {
-      const updated = (event as CustomEvent<ReceivingLineRow>).detail;
-      if (!updated) return;
-      setLocalRows((rows) => rows.map((row) => (row.id === updated.id ? updated : row)));
+      const updated = (event as CustomEvent<Partial<ReceivingLineRow>>).detail;
+      if (!updated || typeof updated.id !== 'number') return;
+      // Merge — some dispatchers (e.g. mark-received) return the raw DB
+      // row without the joined fields the list endpoint computes
+      // (tracking_number, carrier, zoho_purchaseorder_number, etc). A
+      // wholesale replace would blank those. Shallow-merge keeps the
+      // existing joined data while applying whatever fresh columns came
+      // through (quantity_received, qa_status, workflow_status, …).
+      setLocalRows((rows) =>
+        rows.map((row) => (row.id === updated.id ? { ...row, ...updated } as ReceivingLineRow : row)),
+      );
     };
     window.addEventListener('receiving-line-updated', handler);
     return () => window.removeEventListener('receiving-line-updated', handler);
@@ -268,18 +302,23 @@ export default function ReceivingLinesTable({ receivingId }: ReceivingLinesTable
     return () => window.removeEventListener('receiving-clear-line', handler);
   }, []);
 
+  // External highlight — the sidebar's up/down arrows fire this event to
+  // move the selected-row indicator in the table without the full
+  // row-click semantics (which would wipe sidebar state). detail is the
+  // receiving_line id or null to clear.
+  useEffect(() => {
+    const handler = (event: Event) => {
+      const detail = (event as CustomEvent<number | null>).detail;
+      setSelectedId(typeof detail === 'number' ? detail : null);
+    };
+    window.addEventListener('receiving-highlight-line', handler);
+    return () => window.removeEventListener('receiving-highlight-line', handler);
+  }, []);
+
   useEffect(() => {
     const handler = (e: Event) => {
       const raw = String((e as CustomEvent<string>).detail ?? '').toLowerCase();
-      const next: ReceivingView =
-        raw === 'received' ? 'received'
-        : raw === 'expected' ? 'expected'
-        : raw === 'unboxed' ? 'unboxed'
-        : raw === 'passed' ? 'passed'
-        : raw === 'failed' ? 'failed'
-        : raw === 'all' ? 'all'
-        : 'recent';
-      setView(next);
+      setView(raw === 'received' ? 'received' : raw === 'all' ? 'all' : 'recent');
     };
     window.addEventListener('receiving-workflow-filter', handler);
     return () => window.removeEventListener('receiving-workflow-filter', handler);
@@ -299,11 +338,27 @@ export default function ReceivingLinesTable({ receivingId }: ReceivingLinesTable
     dispatchSelectLine(next ? row : null);
   }, []);
 
-  const emptyMessage =
-    view === 'received' ? 'No received lines yet.'
-    : view === 'recent' ? 'No recent scans — start scanning to populate.'
-    : view === 'all' ? 'No inbound lines found.'
-    : `No ${view} lines.`;
+  // Row-level resolve: posts the line's tracking# to /api/receiving/lookup-po
+  // so the server re-pings Zoho (with digit-suffix candidates) and repairs
+  // the pairing. Invalidates the query cache when done.
+  const handleResolveRow = useCallback(async (row: ReceivingLineRow) => {
+    const tracking = (row.tracking_number || '').trim();
+    if (!tracking) return;
+    try {
+      await fetch('/api/receiving/lookup-po', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ trackingNumber: tracking }),
+      });
+    } catch { /* silent — user can retry */ }
+    await queryClient.invalidateQueries({ queryKey: ['receiving-lines-table'] });
+  }, [queryClient]);
+
+  const emptyMessage = view === 'received'
+    ? 'No received lines yet.'
+    : view === 'all'
+    ? 'No lines yet — start scanning to populate.'
+    : 'No recent scans — start scanning to populate.';
 
   return (
     <div className="flex h-full min-w-0 overflow-hidden bg-white">
@@ -318,7 +373,12 @@ export default function ReceivingLinesTable({ receivingId }: ReceivingLinesTable
               <p className="text-[14px] font-semibold text-gray-500">{emptyMessage}</p>
             </div>
           ) : (
-            <OrdersList rows={localRows} selectedId={selectedId} onSelect={handleSelectRow} />
+            <OrdersList
+              rows={localRows}
+              selectedId={selectedId}
+              onSelect={handleSelectRow}
+              onResolve={handleResolveRow}
+            />
           )}
         </div>
       </div>

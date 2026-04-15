@@ -265,11 +265,13 @@ export function TrackingOrSkuScanChip({ value }: { value: string }) {
 export const SerialChip = ({
   value,
   display,
-  width = 'min-w-[63px] w-max max-w-full shrink-0',
+  width = 'w-[84px] shrink-0',
 }: {
   value: string;
   display: string;
-  /** Tailwind width utilities on the wrapper; default is min width for short codes + grow with content. */
+  /** Tailwind width utilities on the wrapper; default is a fixed width sized
+   *  for the Barcode icon + 6-char mono value so every row aligns identically
+   *  across all tables (tech / packer / shipped / receiving). */
   width?: string;
 }) => (
   <CopyChip
@@ -291,7 +293,7 @@ export const SerialChip = ({
 export const SkuSerialChip = ({
   value,
   display,
-  width = 'min-w-[63px] w-max max-w-full shrink-0',
+  width = 'w-[84px] shrink-0',
 }: {
   value: string;
   display: string;

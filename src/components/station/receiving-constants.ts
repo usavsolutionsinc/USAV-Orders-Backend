@@ -98,3 +98,15 @@ export const COND_LABEL: Record<string, string> = {
   USED_C:    'C',
   PARTS:     'Parts',
 };
+
+/** Compact label for list rows — matches sidebar / label copy (USED-A, NEW, …). */
+export function conditionGradeTableLabel(code: string | null | undefined): string {
+  const c = String(code || '').trim().toUpperCase();
+  if (!c) return 'N/A';
+  if (c === 'BRAND_NEW') return 'NEW';
+  if (c === 'PARTS') return 'PARTS';
+  if (c === 'USED_A') return 'USED-A';
+  if (c === 'USED_B') return 'USED-B';
+  if (c === 'USED_C') return 'USED-C';
+  return c.replace(/_/g, ' ');
+}

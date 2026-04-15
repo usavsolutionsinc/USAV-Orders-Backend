@@ -1,13 +1,17 @@
 import { NextRequest, NextResponse, after } from 'next/server';
 import pool from '@/lib/db';
 import { formatPSTTimestamp } from '@/utils/date';
-import { getCarrier } from '@/lib/tracking-format';
+import { getCarrier, normalizeTrackingNumber } from '@/lib/tracking-format';
 import { invalidateCacheTags } from '@/lib/cache/upstash-cache';
 import { publishReceivingLogChanged } from '@/lib/realtime/publish';
 import { searchPurchaseOrdersByTracking, searchPurchaseReceivesByTracking } from '@/lib/zoho';
 import { importZohoPurchaseOrderToReceiving } from '@/lib/zoho-receiving-sync';
 import { ensureSkuCatalogEntry } from '@/lib/neon/sku-catalog-queries';
 import { registerShipmentPermissive } from '@/lib/shipping/sync-shipment';
+import {
+  upsertOpenTrackingException,
+  resolveReceivingExceptionsByReceivingId,
+} from '@/lib/tracking-exceptions';
 
 async function parallelLimit<T, R>(
   items: T[],
@@ -82,7 +86,8 @@ async function fetchReceivingPackage(receivingId: number): Promise<ReceivingPack
 async function findScanByTracking(
   trackingNumber: string,
 ): Promise<{ scan_id: number; receiving_id: number } | null> {
-  const result = await pool.query<{ scan_id: number; receiving_id: number }>(
+  // 1. Exact match on what's been scanned before.
+  const exact = await pool.query<{ scan_id: number; receiving_id: number }>(
     `SELECT id AS scan_id, receiving_id
      FROM receiving_scans
      WHERE tracking_number = $1
@@ -90,7 +95,57 @@ async function findScanByTracking(
      LIMIT 1`,
     [trackingNumber],
   );
-  return result.rows[0] ?? null;
+  if (exact.rows[0]) return exact.rows[0];
+
+  // 2. Last-8-digit suffix fallback. Handles barcode scans that include a
+  //    USPS IMpb / SCS prefix (e.g. "9622…380368793934") where the actual
+  //    carrier tracking # is just the trailing segment. Matches the
+  //    same convention used in orders-exceptions.ts / sheet-sync-common.ts.
+  //    Last-4 collides too often at scale; last-8 is the established norm.
+  const digits = String(trackingNumber || '').replace(/\D/g, '');
+  if (digits.length < 8) return null;
+  const last8 = digits.slice(-8);
+
+  // Try receiving_scans first (known physical scans), then
+  // shipping_tracking_numbers (canonical shipment backbone) — if either yields
+  // exactly one match, take it. Ambiguity (≥2 hits) falls through to Zoho.
+  const scanHit = await pool.query<{ scan_id: number; receiving_id: number }>(
+    `SELECT id AS scan_id, receiving_id
+       FROM receiving_scans
+      WHERE RIGHT(regexp_replace(tracking_number, '\\D', '', 'g'), 8) = $1
+      ORDER BY id DESC
+      LIMIT 2`,
+    [last8],
+  );
+  if (scanHit.rows.length === 1) return scanHit.rows[0];
+
+  const shipHit = await pool.query<{ receiving_id: number; source: string }>(
+    `SELECT r.id AS receiving_id, r.source
+       FROM shipping_tracking_numbers stn
+       JOIN receiving r ON r.shipment_id = stn.id
+      WHERE RIGHT(regexp_replace(stn.tracking_number_normalized, '\\D', '', 'g'), 8) = $1
+      ORDER BY r.id DESC
+      LIMIT 2`,
+    [last8],
+  );
+  if (shipHit.rows.length === 1) {
+    // Record the scan so future scans of this tracking short-circuit via the
+    // exact-match branch. Use the parent receiving row's own source.
+    const { receiving_id, source } = shipHit.rows[0];
+    const scanSource: 'zoho_po' | 'unmatched' = source === 'zoho_po' ? 'zoho_po' : 'unmatched';
+    const inserted = await pool.query<{ id: number }>(
+      `INSERT INTO receiving_scans
+         (receiving_id, tracking_number, scanned_at, source)
+       VALUES ($1, $2, NOW(), $3)
+       ON CONFLICT (tracking_number, receiving_id) DO UPDATE
+         SET scanned_at = EXCLUDED.scanned_at
+       RETURNING id`,
+      [receiving_id, trackingNumber, scanSource],
+    );
+    return { scan_id: Number(inserted.rows[0].id), receiving_id };
+  }
+
+  return null;
 }
 
 async function upsertMatchedReceiving(
@@ -119,7 +174,7 @@ async function createUnmatchedReceiving(
   trackingNumber: string,
   carrier: string,
   staffId: number | null,
-): Promise<number> {
+): Promise<{ receivingId: number; shipmentId: number | null }> {
   const now = formatPSTTimestamp();
   const shipment = await registerShipmentPermissive({
     trackingNumber,
@@ -133,7 +188,10 @@ async function createUnmatchedReceiving(
      RETURNING id`,
     [trackingNumber, shipment?.id ?? null, carrier || null, now, staffId],
   );
-  return Number(result.rows[0].id);
+  return {
+    receivingId: Number(result.rows[0].id),
+    shipmentId: shipment?.id ?? null,
+  };
 }
 
 async function recordScan(
@@ -177,66 +235,95 @@ export async function POST(request: NextRequest) {
         : getCarrier(trackingNumber);
 
     // 1. Dedup short-circuit — scan already logged against a receiving row.
+    //    Short-circuit ONLY when the receiving row has lines. If lines are
+    //    empty (e.g. receiving_lines was truncated, or the row was created
+    //    as 'unmatched' before Zoho synced the PO), fall through to the
+    //    Zoho lookup so we can repopulate the PO linkage on this same row.
     const existingScan = await findScanByTracking(trackingNumber);
+    let preassignedReceivingId: number | null = null;
+    let preassignedScanId: number | null = null;
     if (existingScan) {
       const [lines, receiving_package] = await Promise.all([
         fetchLines(existingScan.receiving_id),
         fetchReceivingPackage(existingScan.receiving_id),
       ]);
-      const poIdsSet = new Set<string>();
-      for (const l of lines) {
-        if (l.zoho_purchaseorder_id) poIdsSet.add(l.zoho_purchaseorder_id);
+      if (lines.length > 0) {
+        const poIdsSet = new Set<string>();
+        for (const l of lines) {
+          if (l.zoho_purchaseorder_id) poIdsSet.add(l.zoho_purchaseorder_id);
+        }
+        return NextResponse.json({
+          success: true,
+          receiving_id: existingScan.receiving_id,
+          scan_id: existingScan.scan_id,
+          preexisting: true,
+          deduped: true,
+          matched: true,
+          po_matched: true,
+          po_ids: Array.from(poIdsSet),
+          receiving_package,
+          lines: lines.map((l) => ({
+            id: l.id,
+            sku: l.sku,
+            item_name: l.item_name,
+            image_url: l.image_url,
+            zoho_item_id: l.zoho_item_id,
+            zoho_purchaseorder_id: l.zoho_purchaseorder_id,
+            quantity_expected: l.quantity_expected,
+            quantity_received: l.quantity_received,
+          })),
+        });
       }
-      return NextResponse.json({
-        success: true,
-        receiving_id: existingScan.receiving_id,
-        scan_id: existingScan.scan_id,
-        preexisting: true,
-        deduped: true,
-        matched: lines.length > 0,
-        po_matched: lines.length > 0,
-        po_ids: Array.from(poIdsSet),
-        receiving_package,
-        lines: lines.map((l) => ({
-          id: l.id,
-          sku: l.sku,
-          item_name: l.item_name,
-          image_url: l.image_url,
-          zoho_item_id: l.zoho_item_id,
-          zoho_purchaseorder_id: l.zoho_purchaseorder_id,
-          quantity_expected: l.quantity_expected,
-          quantity_received: l.quantity_received,
-        })),
-      });
+      // Empty lines — carry the existing ids forward so the Zoho branch
+      // promotes this same row instead of creating a duplicate.
+      preassignedReceivingId = existingScan.receiving_id;
+      preassignedScanId = existingScan.scan_id;
     }
 
-    // 2. Zoho lookup for PO ids.
+    // 2. Zoho lookup for PO ids. Try progressively shorter trailing forms —
+    //    barcode scanners emit concatenated IMpb/SCS strings (e.g.
+    //    "9622…380368793934"), but Zoho only knows the carrier tracking#
+    //    (e.g. "380368793934"). Order: raw → normalized → last-22/18/12.
     const zohoPoIds = new Set<string>();
     let zohoReachable = true;
-    try {
-      const receives = await searchPurchaseReceivesByTracking(trackingNumber).catch((err) => {
-        zohoReachable = false;
-        console.warn('lookup-po: searchPurchaseReceivesByTracking failed', err);
-        return [];
-      });
-      for (const r of receives) {
-        const poId = String(r.purchaseorder_id || '');
-        if (poId) zohoPoIds.add(poId);
-      }
 
-      if (zohoPoIds.size === 0 && zohoReachable) {
-        const pos = await searchPurchaseOrdersByTracking(trackingNumber).catch((err) => {
+    const normalized = normalizeTrackingNumber(trackingNumber);
+    const digits = trackingNumber.replace(/\D/g, '');
+    const candidates = Array.from(new Set([
+      trackingNumber,
+      normalized,
+      digits.length > 22 ? digits.slice(-22) : '',
+      digits.length > 18 ? digits.slice(-18) : '',
+      digits.length > 15 ? digits.slice(-15) : '',
+      digits.length > 12 ? digits.slice(-12) : '',
+    ].filter((c) => c && c.length >= 8)));
+
+    for (const candidate of candidates) {
+      if (!zohoReachable || zohoPoIds.size > 0) break;
+      try {
+        const receives = await searchPurchaseReceivesByTracking(candidate).catch((err) => {
           zohoReachable = false;
-          console.warn('lookup-po: searchPurchaseOrdersByTracking failed', err);
+          console.warn(`lookup-po: searchPurchaseReceivesByTracking(${candidate}) failed`, err);
           return [];
         });
-        for (const po of pos) {
-          if (po.purchaseorder_id) zohoPoIds.add(po.purchaseorder_id);
+        for (const r of receives) {
+          const poId = String(r.purchaseorder_id || '');
+          if (poId) zohoPoIds.add(poId);
         }
+        if (zohoPoIds.size === 0 && zohoReachable) {
+          const pos = await searchPurchaseOrdersByTracking(candidate).catch((err) => {
+            zohoReachable = false;
+            console.warn(`lookup-po: searchPurchaseOrdersByTracking(${candidate}) failed`, err);
+            return [];
+          });
+          for (const po of pos) {
+            if (po.purchaseorder_id) zohoPoIds.add(po.purchaseorder_id);
+          }
+        }
+      } catch (err) {
+        zohoReachable = false;
+        console.warn(`lookup-po: Zoho lookup failed for candidate ${candidate}`, err);
       }
-    } catch (err) {
-      zohoReachable = false;
-      console.warn('lookup-po: Zoho lookup failed', err);
     }
 
     // 3a. MATCHED path — one receiving row per PO.
@@ -244,18 +331,59 @@ export async function POST(request: NextRequest) {
       const poIds = Array.from(zohoPoIds).slice(0, 3);
       const primaryPoId = poIds[0];
 
-      const { receivingId: primaryReceivingId, preexisting } = await upsertMatchedReceiving(
-        primaryPoId,
-        carrier,
-        staffId,
-      );
-      const scanId = await recordScan(
+      let primaryReceivingId: number;
+      let preexisting: boolean;
+
+      if (preassignedReceivingId) {
+        // Promote the existing (unmatched) receiving row to 'zoho_po' in
+        // place so we keep its shipment_id/tracking# link. If a separate
+        // 'zoho_po' row already claims this PO (unique index conflict),
+        // fall back to the normal upsert + re-parent the scan.
+        try {
+          const promoted = await pool.query<{ id: number }>(
+            `UPDATE receiving
+                SET source = 'zoho_po',
+                    zoho_purchaseorder_id = $1,
+                    carrier = COALESCE(NULLIF(carrier, ''), $2),
+                    updated_at = NOW()
+              WHERE id = $3
+                AND (source = 'unmatched' OR zoho_purchaseorder_id IS NULL)
+              RETURNING id`,
+            [primaryPoId, carrier || null, preassignedReceivingId],
+          );
+          if (promoted.rows[0]) {
+            primaryReceivingId = Number(promoted.rows[0].id);
+            preexisting = true;
+          } else {
+            ({ receivingId: primaryReceivingId, preexisting } =
+              await upsertMatchedReceiving(primaryPoId, carrier, staffId));
+          }
+        } catch (err) {
+          console.warn('lookup-po: promote preassigned receiving failed — using upsert', err);
+          ({ receivingId: primaryReceivingId, preexisting } =
+            await upsertMatchedReceiving(primaryPoId, carrier, staffId));
+        }
+      } else {
+        ({ receivingId: primaryReceivingId, preexisting } =
+          await upsertMatchedReceiving(primaryPoId, carrier, staffId));
+      }
+
+      const scanId = preassignedScanId ?? await recordScan(
         primaryReceivingId,
         trackingNumber,
         carrier,
         staffId,
         'zoho_po',
       );
+      // If the scan was attached to a different receiving row (rare race
+      // between promote and upsert fallback), re-parent it now.
+      if (preassignedScanId && preassignedReceivingId !== primaryReceivingId) {
+        await pool.query(
+          `UPDATE receiving_scans SET receiving_id = $1, source = 'zoho_po'
+            WHERE id = $2`,
+          [primaryReceivingId, preassignedScanId],
+        ).catch(() => {});
+      }
 
       await importZohoPurchaseOrderToReceiving(primaryPoId, {
         receivingId: primaryReceivingId,
@@ -319,6 +447,7 @@ export async function POST(request: NextRequest) {
             'receiving-lines',
             'pending-unboxing',
             'sku-catalog',
+            'tracking-exceptions',
           ]);
           await publishReceivingLogChanged({
             action: preexisting ? 'update' : 'insert',
@@ -327,6 +456,13 @@ export async function POST(request: NextRequest) {
           });
         } catch (err) {
           console.warn('lookup-po: cache/realtime update failed', err);
+        }
+        try {
+          // If this tracking had previously landed as 'unmatched' and logged
+          // a receiving exception, the Zoho hit now retroactively resolves it.
+          await resolveReceivingExceptionsByReceivingId(primaryReceivingId);
+        } catch (err) {
+          console.warn('lookup-po: resolveReceivingExceptionsByReceivingId failed', err);
         }
       });
 
@@ -354,8 +490,11 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    // 3b. UNMATCHED path — Zoho had no hit (or was unreachable). Log it.
-    const unmatchedReceivingId = await createUnmatchedReceiving(trackingNumber, carrier, staffId);
+    // 3b. UNMATCHED path — Zoho had no hit (or was unreachable). Log it, and
+    //     upsert a row into tracking_exceptions so the triage/reconciliation
+    //     worker can retry this tracking once Zoho catches up.
+    const { receivingId: unmatchedReceivingId, shipmentId: unmatchedShipmentId } =
+      await createUnmatchedReceiving(trackingNumber, carrier, staffId);
     const unmatchedScanId = await recordScan(
       unmatchedReceivingId,
       trackingNumber,
@@ -364,9 +503,38 @@ export async function POST(request: NextRequest) {
       'unmatched',
     );
 
+    const exceptionReason = zohoReachable ? 'not_found' : 'zoho_unreachable';
+    const exception = await upsertOpenTrackingException({
+      trackingNumber,
+      domain: 'receiving',
+      sourceStation: 'receiving',
+      staffId,
+      reason: exceptionReason,
+      notes: zohoReachable
+        ? 'Receiving scan: tracking not found in Zoho purchase orders or receives'
+        : 'Receiving scan: Zoho API unreachable during lookup',
+      shipmentId: unmatchedShipmentId,
+      receivingId: unmatchedReceivingId,
+      lastError: zohoReachable ? null : 'zoho_unreachable',
+      domainMetadata: {
+        carrier: carrier || null,
+        candidates_tried: candidates,
+        zoho_reachable: zohoReachable,
+        scan_id: unmatchedScanId,
+      },
+    }).catch((err) => {
+      console.warn('lookup-po: upsertOpenTrackingException (receiving) failed', err);
+      return null;
+    });
+
     after(async () => {
       try {
-        await invalidateCacheTags(['receiving-logs', 'receiving-lines', 'pending-unboxing']);
+        await invalidateCacheTags([
+          'receiving-logs',
+          'receiving-lines',
+          'pending-unboxing',
+          'tracking-exceptions',
+        ]);
         await publishReceivingLogChanged({
           action: 'insert',
           rowId: String(unmatchedReceivingId),
@@ -383,6 +551,8 @@ export async function POST(request: NextRequest) {
       success: true,
       receiving_id: unmatchedReceivingId,
       scan_id: unmatchedScanId,
+      exception_id: exception?.id ?? null,
+      exception_reason: exception ? exceptionReason : null,
       preexisting: false,
       deduped: false,
       matched: false,

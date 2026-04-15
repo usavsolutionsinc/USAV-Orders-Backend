@@ -34,6 +34,8 @@ export type MobileScan = {
   at: number;
   po_ids: string[];
   error: string | null;
+  exception_id?: number | null;
+  exception_reason?: string | null;
 };
 
 type ClaimResponse = {
@@ -150,6 +152,8 @@ export function MobilePairProvider({ children }: { children: ReactNode }) {
             matched?: boolean;
             po_ids?: string[];
             error?: string | null;
+            exception_id?: number | null;
+            exception_reason?: string | null;
           };
         }) => {
           const data = msg?.data;
@@ -170,6 +174,8 @@ export function MobilePairProvider({ children }: { children: ReactNode }) {
                 status: data?.matched ? 'matched' : 'unmatched',
                 po_ids: Array.isArray(data?.po_ids) ? data!.po_ids! : [],
                 error: null,
+                exception_id: typeof data?.exception_id === 'number' ? data.exception_id : null,
+                exception_reason: typeof data?.exception_reason === 'string' ? data.exception_reason : null,
               };
             }),
           );

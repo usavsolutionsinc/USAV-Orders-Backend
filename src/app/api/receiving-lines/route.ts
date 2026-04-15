@@ -77,8 +77,11 @@ export async function GET(request: NextRequest) {
     const weekStart = String(searchParams.get('week_start') || '').trim();
     const weekEnd   = String(searchParams.get('week_end') || '').trim();
     const viewRaw   = String(searchParams.get('view') || '').trim().toLowerCase();
-    const view: 'recent' | 'received' | null =
-      viewRaw === 'recent' ? 'recent' : viewRaw === 'received' ? 'received' : null;
+    const view: 'all' | 'recent' | 'received' | null =
+      viewRaw === 'recent' ? 'recent'
+        : viewRaw === 'received' ? 'received'
+        : viewRaw === 'all' ? 'all'
+        : null;
     const include     = String(searchParams.get('include') || '').trim().toLowerCase();
     const includeSerials = include.split(',').map((s) => s.trim()).includes('serials');
 
@@ -204,13 +207,26 @@ export async function GET(request: NextRequest) {
     }
     // `view` overrides week-range scoping. Otherwise week range still applies.
     if (view === 'recent') {
-      // Recently scanned, not yet fully received. Include terminal-adjacent
-      // states so unboxed/awaiting-test lines stay visible until they pass.
+      // Recently scanned, not yet matched to a PO or received. MATCHED and
+      // anything further live in the Received tab.
       conditions.push(
-        `rl.workflow_status IN ('EXPECTED','ARRIVED','MATCHED','UNBOXED','AWAITING_TEST','IN_TEST')`,
+        `rl.workflow_status IN ('EXPECTED','ARRIVED')`,
       );
     } else if (view === 'received') {
-      conditions.push(`rl.workflow_status IN ('PASSED','DONE')`);
+      // "Received" = physically in the warehouse. Anything from MATCHED
+      // onward qualifies (the row strip labels MATCHED as "RECEIVED").
+      // Terminal fails (SCRAP, RTV, FAILED) are excluded — they land in
+      // the per-status filters instead.
+      conditions.push(
+        `rl.workflow_status IN ('MATCHED','UNBOXED','AWAITING_TEST','IN_TEST','PASSED','DONE')`,
+      );
+    } else if (view === 'all') {
+      // Union of recent + received. Includes NULL workflow_status so legacy
+      // rows without a status still appear. Terminal fails (SCRAP/RTV/FAILED)
+      // stay in per-status filters.
+      conditions.push(
+        `(rl.workflow_status IS NULL OR rl.workflow_status IN ('EXPECTED','ARRIVED','MATCHED','UNBOXED','AWAITING_TEST','IN_TEST','PASSED','DONE'))`,
+      );
     } else if (/^\d{4}-\d{2}-\d{2}$/.test(weekStart) && /^\d{4}-\d{2}-\d{2}$/.test(weekEnd)) {
       conditions.push(`rl.created_at >= $${idx++}::date AND rl.created_at < ($${idx++}::date + INTERVAL '1 day')`);
       values.push(weekStart, weekEnd);
@@ -224,14 +240,14 @@ export async function GET(request: NextRequest) {
     // view=received sorts by updated_at (when the line was last touched).
     // Default mirrors the prior behavior.
     const orderBy =
-      view === 'recent'
+      view === 'recent' || view === 'all'
         ? `ORDER BY COALESCE(rs_agg.last_scan::text, r.received_at::text, rl.created_at::text) DESC, rl.id DESC`
         : view === 'received'
         ? `ORDER BY COALESCE(rl.updated_at::text, rl.created_at::text) DESC, rl.id DESC`
         : `ORDER BY COALESCE(rl.zoho_last_modified_time, rl.created_at::text) DESC, rl.id DESC`;
-    // The lateral aggregate is only needed for view=recent. For other views
-    // it's a no-op LEFT JOIN against an empty subquery, cheap at this scale.
-    const recentScansJoin = view === 'recent'
+    // The lateral aggregate is needed for view=recent and view=all so the
+    // most recently paired cartons bubble up. Cheap at this scale.
+    const recentScansJoin = view === 'recent' || view === 'all'
       ? `LEFT JOIN LATERAL (
             SELECT MAX(rs.scanned_at) AS last_scan
             FROM receiving_scans rs
@@ -283,9 +299,16 @@ export async function GET(request: NextRequest) {
       ),
     ]);
 
+    const normalizedList = rowsRes.rows.map(normalizeRow);
+    if (includeSerials) {
+      const serialsByLine = await fetchSerialsForLines(normalizedList.map((r) => r.id));
+      for (const row of normalizedList) {
+        (row as Record<string, unknown>).serials = serialsByLine.get(row.id) ?? [];
+      }
+    }
     return NextResponse.json({
       success: true,
-      receiving_lines: rowsRes.rows.map(normalizeRow),
+      receiving_lines: normalizedList,
       total: Number(countRes.rows[0]?.total ?? 0),
       limit,
       offset,

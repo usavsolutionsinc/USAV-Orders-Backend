@@ -160,7 +160,13 @@ function ActiveShipmentCard({
               <span className="shrink-0 text-[10px] font-bold text-gray-400">
                 {shipment.items.length} SKU · {totalQty} units
               </span>
-              <FbaStatusBadge status={shipment.status} size="xs" />
+              <FbaStatusBadge
+                status={shipment.status}
+                size="xs"
+                iconOnly={
+                  shipment.status === 'PLANNED' || shipment.status === 'READY_TO_GO'
+                }
+              />
             </div>
             <div className="flex min-w-0 items-center gap-1.5">
               <p className="truncate font-mono text-[10px] font-bold text-gray-400">

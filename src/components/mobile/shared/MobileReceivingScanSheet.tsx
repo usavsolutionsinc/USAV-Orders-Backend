@@ -142,28 +142,28 @@ export function MobileReceivingScanSheet({
           animate={framerPresenceMobile.camera.animate}
           exit={framerPresenceMobile.camera.exit}
           transition={framerTransitionMobile.cameraEnter}
-          className="fixed inset-0 z-[200] flex flex-col bg-black"
+          className="fixed inset-0 z-[200] flex flex-col bg-white"
           role="dialog"
           aria-modal="true"
           aria-label={headerLabel}
         >
           {/* Top bar */}
-          <div className="flex-shrink-0 flex items-center justify-between px-4 pt-[max(0.75rem,env(safe-area-inset-top))] pb-2">
+          <div className="flex-shrink-0 flex items-center justify-between px-4 pt-[max(0.75rem,env(safe-area-inset-top))] pb-2 bg-white border-b border-gray-200">
             <div className="flex-1 min-w-0">
-              <p className="text-[10px] font-black uppercase tracking-[0.2em] text-white/60">
+              <p className="text-[10px] font-black uppercase tracking-[0.2em] text-gray-500">
                 {headerLabel}
               </p>
               <div className="mt-1 flex items-center gap-2">
                 <span
                   className={`inline-block h-2 w-2 rounded-full ${
                     paired && connState === 'connected'
-                      ? 'bg-emerald-400'
+                      ? 'bg-emerald-500'
                       : paired
-                        ? 'bg-amber-400'
-                        : 'bg-gray-500'
+                        ? 'bg-amber-500'
+                        : 'bg-gray-400'
                   }`}
                 />
-                <p className="text-[10px] font-bold text-white/70">
+                <p className="text-[10px] font-bold text-gray-700">
                   {paired
                     ? session?.staff_name
                       ? `Paired · ${session.staff_name}`
@@ -174,7 +174,7 @@ export function MobileReceivingScanSheet({
                   <button
                     type="button"
                     onClick={disconnect}
-                    className="ml-2 text-[9px] font-black uppercase tracking-wider text-white/40 hover:text-white/70"
+                    className="ml-2 text-[9px] font-black uppercase tracking-wider text-gray-400 hover:text-gray-700"
                   >
                     Disconnect
                   </button>
@@ -185,14 +185,14 @@ export function MobileReceivingScanSheet({
               type="button"
               onClick={onClose}
               aria-label="Close"
-              className="h-11 w-11 flex items-center justify-center rounded-full bg-white/10 text-white active:bg-white/20 transition-colors"
+              className="h-11 w-11 flex items-center justify-center rounded-full bg-gray-100 text-gray-700 active:bg-gray-200 transition-colors"
             >
               <X className="h-5 w-5" />
             </button>
           </div>
 
-          {/* Body */}
-          <div className="flex-1 relative overflow-hidden">
+          {/* Body — camera viewport stays dark (it's a video feed) */}
+          <div className="flex-1 relative overflow-hidden bg-gray-900">
             {/* Camera */}
             <video
               ref={scanner.videoRef as React.RefObject<HTMLVideoElement>}
@@ -206,9 +206,9 @@ export function MobileReceivingScanSheet({
 
             {/* Camera error */}
             {scanner.scanStatus === 'error' && (
-              <div className="absolute inset-0 flex flex-col items-center justify-center px-6 text-center">
-                <p className="text-sm font-bold text-white mb-1">Camera unavailable</p>
-                <p className="text-xs text-gray-400 mb-4 max-w-[260px]">
+              <div className="absolute inset-0 flex flex-col items-center justify-center px-6 text-center bg-white">
+                <p className="text-sm font-bold text-gray-900 mb-1">Camera unavailable</p>
+                <p className="text-xs text-gray-500 mb-4 max-w-[260px]">
                   {scanner.error || 'Enable camera access in your browser settings.'}
                 </p>
                 <button
@@ -248,8 +248,8 @@ export function MobileReceivingScanSheet({
                   onClick={() => scanner.toggleTorch()}
                   className={`h-10 w-10 rounded-full flex items-center justify-center ${
                     scanner.torchOn
-                      ? 'bg-yellow-400/30 text-yellow-300 border border-yellow-400/50'
-                      : 'bg-white/10 text-white/60 border border-white/20'
+                      ? 'bg-yellow-400/30 text-yellow-200 border border-yellow-400/50'
+                      : 'bg-white/15 text-white/80 border border-white/25'
                   }`}
                   aria-label={scanner.torchOn ? 'Turn off flashlight' : 'Turn on flashlight'}
                 >
@@ -267,9 +267,9 @@ export function MobileReceivingScanSheet({
 
             {/* Claim-in-flight overlay */}
             {claiming && (
-              <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/50">
-                <div className="h-10 w-10 rounded-full border-2 border-white/20 border-t-white animate-spin mb-3" />
-                <p className="text-[11px] font-black uppercase tracking-widest text-white">
+              <div className="absolute inset-0 flex flex-col items-center justify-center bg-white/70 backdrop-blur-sm">
+                <div className="h-10 w-10 rounded-full border-2 border-gray-200 border-t-gray-700 animate-spin mb-3" />
+                <p className="text-[11px] font-black uppercase tracking-widest text-gray-800">
                   Pairing…
                 </p>
               </div>
@@ -277,8 +277,8 @@ export function MobileReceivingScanSheet({
 
             {/* Unpaired + code-entry mode — hide camera, show big input */}
             {!paired && pairMode === 'code' && (
-              <div className="absolute inset-0 bg-black flex flex-col items-center justify-center px-6">
-                <p className="text-[11px] font-bold text-white/60 uppercase tracking-widest mb-4">
+              <div className="absolute inset-0 bg-white flex flex-col items-center justify-center px-6">
+                <p className="text-[11px] font-bold text-gray-500 uppercase tracking-widest mb-4">
                   Type the 6-char code
                 </p>
                 <form
@@ -294,7 +294,7 @@ export function MobileReceivingScanSheet({
                     autoComplete="off"
                     autoCapitalize="characters"
                     spellCheck={false}
-                    className="h-14 rounded-xl bg-white/10 border border-white/20 px-4 text-center text-[22px] font-mono font-black tracking-[0.4em] text-white placeholder:text-white/30 focus:outline-none focus:border-blue-400 focus:ring-1 focus:ring-blue-400/50"
+                    className="h-14 rounded-xl bg-gray-50 border border-gray-300 px-4 text-center text-[22px] font-mono font-black tracking-[0.4em] text-gray-900 placeholder:text-gray-300 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500/40"
                   />
                   <button
                     type="submit"
@@ -315,23 +315,32 @@ export function MobileReceivingScanSheet({
                     key={s.id}
                     className={`rounded-lg border px-3 py-2 text-[11px] backdrop-blur-sm ${
                       s.status === 'matched'
-                        ? 'bg-emerald-500/20 border-emerald-400/40 text-emerald-100'
+                        ? 'bg-emerald-50/90 border-emerald-300 text-emerald-800'
                         : s.status === 'unmatched'
-                          ? 'bg-amber-500/20 border-amber-400/40 text-amber-100'
+                          ? 'bg-amber-50/90 border-amber-300 text-amber-800'
                           : s.status === 'error'
-                            ? 'bg-red-500/20 border-red-400/40 text-red-100'
-                            : 'bg-white/10 border-white/20 text-white/80'
+                            ? 'bg-red-50/90 border-red-300 text-red-800'
+                            : 'bg-white/90 border-gray-200 text-gray-800'
                     }`}
                   >
                     <div className="flex items-center justify-between gap-2">
                       <span className="font-mono font-black truncate">{s.tracking}</span>
                       <span className="text-[9px] font-black uppercase tracking-widest opacity-80">
-                        {s.status}
+                        {s.status === 'unmatched' && s.exception_id
+                          ? `queued · #${s.exception_id}`
+                          : s.status}
                       </span>
                     </div>
                     {s.po_ids.length > 0 && (
                       <p className="text-[10px] mt-0.5 opacity-80">
                         PO: <span className="font-mono">{s.po_ids.join(', ')}</span>
+                      </p>
+                    )}
+                    {s.status === 'unmatched' && s.exception_reason && (
+                      <p className="text-[10px] mt-0.5 opacity-70">
+                        {s.exception_reason === 'zoho_unreachable'
+                          ? 'Zoho unreachable — will retry'
+                          : 'No PO yet — logged for review'}
                       </p>
                     )}
                   </div>
@@ -341,9 +350,9 @@ export function MobileReceivingScanSheet({
           </div>
 
           {/* Bottom area: mode toggle (unpaired) OR manual tracking input (paired) */}
-          <div className="flex-shrink-0 bg-black/80 backdrop-blur-sm px-4 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] space-y-3">
+          <div className="flex-shrink-0 bg-white border-t border-gray-200 px-4 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] space-y-3">
             {claimError && (
-              <p className="text-[11px] font-bold text-red-300 text-center">{claimError}</p>
+              <p className="text-[11px] font-bold text-red-600 text-center">{claimError}</p>
             )}
 
             {!paired ? (
@@ -353,8 +362,8 @@ export function MobileReceivingScanSheet({
                   onClick={() => setPairMode('scan')}
                   className={`flex-1 h-11 rounded-xl text-[10px] font-black uppercase tracking-widest transition-colors ${
                     pairMode === 'scan'
-                      ? 'bg-white/20 text-white border border-white/30'
-                      : 'bg-white/5 text-white/60 border border-white/10'
+                      ? 'bg-gray-900 text-white border border-gray-900'
+                      : 'bg-white text-gray-600 border border-gray-300'
                   }`}
                 >
                   Scan QR
@@ -367,8 +376,8 @@ export function MobileReceivingScanSheet({
                   }}
                   className={`flex-1 h-11 rounded-xl text-[10px] font-black uppercase tracking-widest transition-colors ${
                     pairMode === 'code'
-                      ? 'bg-white/20 text-white border border-white/30'
-                      : 'bg-white/5 text-white/60 border border-white/10'
+                      ? 'bg-gray-900 text-white border border-gray-900'
+                      : 'bg-white text-gray-600 border border-gray-300'
                   }`}
                 >
                   Enter code
@@ -384,7 +393,7 @@ export function MobileReceivingScanSheet({
                   placeholder="Type tracking…"
                   autoComplete="off"
                   autoCapitalize="characters"
-                  className="flex-1 h-12 rounded-xl bg-white/10 border border-white/20 px-4 text-sm font-bold text-white placeholder:text-white/40 focus:outline-none focus:border-emerald-400 focus:ring-1 focus:ring-emerald-400/50"
+                  className="flex-1 h-12 rounded-xl bg-gray-50 border border-gray-300 px-4 text-sm font-bold text-gray-900 placeholder:text-gray-400 focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500/40"
                 />
                 <button
                   type="submit"

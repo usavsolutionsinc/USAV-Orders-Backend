@@ -276,7 +276,6 @@ async function getReceiving(): Promise<WorkOrderRow[]> {
        r.id,
        COALESCE(stn.tracking_number_raw, r.receiving_tracking_number) AS receiving_tracking_number,
        COALESCE(NULLIF(stn.carrier, 'UNKNOWN'), r.carrier)             AS carrier,
-       r.receiving_tracking_number                                     AS raw_receiving_tracking_number,
        r.is_return,
        r.target_channel,
        r.notes AS receiving_notes,
@@ -314,15 +313,12 @@ async function getReceiving(): Promise<WorkOrderRow[]> {
      WHERE COALESCE(r.needs_test, false) = true
         OR COALESCE(r.is_return, false) = true
         OR UPPER(COALESCE(r.carrier, '')) = 'LOCAL'
-        OR UPPER(COALESCE(r.receiving_tracking_number, '')) LIKE 'LOCAL-%'
      ORDER BY COALESCE(wa.deadline_at, r.received_at, r.created_at) ASC, r.id ASC
      LIMIT 500`
   );
 
   return result.rows.map((row) => {
-    const isLocalPickup =
-      String(row.carrier || '').toUpperCase() === 'LOCAL' ||
-      String(row.raw_receiving_tracking_number || '').toUpperCase().startsWith('LOCAL-');
+    const isLocalPickup = String(row.carrier || '').toUpperCase() === 'LOCAL';
     const queueKey = isLocalPickup
       ? 'local_pickups'
       : row.is_return
