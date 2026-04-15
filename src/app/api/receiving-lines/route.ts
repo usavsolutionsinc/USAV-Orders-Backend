@@ -81,7 +81,7 @@ export async function GET(request: NextRequest) {
     // Single row
     if (Number.isFinite(id) && id > 0) {
       const one = await pool.query(
-        `SELECT rl.*, r.receiving_tracking_number, r.carrier, r.zoho_purchaseorder_number AS receiving_zoho_purchaseorder_number, sc.image_url
+        `SELECT rl.*, r.receiving_tracking_number, r.carrier, r.source_platform AS receiving_source_platform, r.zoho_purchaseorder_number AS receiving_zoho_purchaseorder_number, sc.image_url
          FROM receiving_lines rl
          LEFT JOIN receiving r ON r.id = rl.receiving_id
          LEFT JOIN sku_catalog sc ON sc.sku = rl.sku
@@ -103,7 +103,7 @@ export async function GET(request: NextRequest) {
     if (Number.isFinite(receivingId) && receivingId > 0) {
       const [rows, pkgRes] = await Promise.all([
         pool.query(
-          `SELECT rl.*, r.receiving_tracking_number, r.carrier, r.zoho_purchaseorder_number AS receiving_zoho_purchaseorder_number, sc.image_url
+          `SELECT rl.*, r.receiving_tracking_number, r.carrier, r.source_platform AS receiving_source_platform, r.zoho_purchaseorder_number AS receiving_zoho_purchaseorder_number, sc.image_url
            FROM receiving_lines rl
            LEFT JOIN receiving r ON r.id = rl.receiving_id
            LEFT JOIN sku_catalog sc ON sc.sku = rl.sku
@@ -178,7 +178,7 @@ export async function GET(request: NextRequest) {
 
     const [rowsRes, countRes] = await Promise.all([
       pool.query(
-        `SELECT rl.*, r.receiving_tracking_number, r.carrier, r.zoho_purchaseorder_number AS receiving_zoho_purchaseorder_number, sc.image_url
+        `SELECT rl.*, r.receiving_tracking_number, r.carrier, r.source_platform AS receiving_source_platform, r.zoho_purchaseorder_number AS receiving_zoho_purchaseorder_number, sc.image_url
          FROM receiving_lines rl
          LEFT JOIN receiving r ON r.id = rl.receiving_id
          LEFT JOIN sku_catalog sc ON sc.sku = rl.sku
@@ -485,5 +485,6 @@ function normalizeRow(row: Record<string, unknown>) {
     receiving_type:            (row.receiving_type as string | null) ?? 'PO',
     created_at:               (row.created_at as string | null) ?? null,
     image_url:                (row.image_url as string | null) ?? null,
+    source_platform:          (row.receiving_source_platform as string | null) ?? null,
   };
 }

@@ -37,6 +37,7 @@ export interface ReceivingLineRow {
   notes: string | null;
   created_at: string | null;
   image_url: string | null;
+  source_platform: string | null;
 }
 
 interface ApiResponse {
@@ -94,20 +95,132 @@ function MetaChip({ label, value, mono = false }: { label: string; value: string
   );
 }
 
+const INLINE_PLATFORM_OPTS: Array<{ value: string; label: string }> = [
+  { value: '',           label: 'Unknown' },
+  { value: 'ebay',       label: 'eBay' },
+  { value: 'amazon',     label: 'Amazon' },
+  { value: 'aliexpress', label: 'AliExp' },
+  { value: 'walmart',    label: 'Walmart' },
+  { value: 'other',      label: 'Other' },
+];
+
 function InlineDetail({ row }: { row: ReceivingLineRow }) {
   const trackingValue = (row.tracking_number || '').trim();
+  const [platform, setPlatform] = useState<string>(() => (row.source_platform || '').toLowerCase());
+  const [platformSaving, setPlatformSaving] = useState(false);
+  const [notes, setNotes] = useState<string>(row.notes || '');
+  const [notesSaving, setNotesSaving] = useState(false);
+  const notesDirtyRef = useRef(false);
+
+  useEffect(() => {
+    setPlatform((row.source_platform || '').toLowerCase());
+  }, [row.source_platform, row.receiving_id]);
+
+  useEffect(() => {
+    if (!notesDirtyRef.current) setNotes(row.notes || '');
+  }, [row.notes, row.id]);
+
+  // Keep the inline platform in sync when another surface (top PO card,
+  // sidebar inspector) mutates source_platform for the same receiving_id.
+  useEffect(() => {
+    if (row.receiving_id == null) return;
+    const handler = (e: Event) => {
+      const detail = (e as CustomEvent<{ receiving_id?: number; source_platform?: string | null }>).detail;
+      if (!detail || detail.receiving_id !== row.receiving_id) return;
+      setPlatform((detail.source_platform || '').toLowerCase());
+    };
+    window.addEventListener('receiving-package-updated', handler);
+    return () => window.removeEventListener('receiving-package-updated', handler);
+  }, [row.receiving_id]);
+
+  const savePlatform = useCallback(async (next: string) => {
+    if (row.receiving_id == null) return;
+    setPlatformSaving(true);
+    try {
+      await fetch(`/api/receiving/${row.receiving_id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ source_platform: next || null }),
+      });
+      window.dispatchEvent(new CustomEvent('receiving-package-updated', {
+        detail: { receiving_id: row.receiving_id, source_platform: next || null },
+      }));
+    } catch {
+      /* silent */
+    } finally {
+      setPlatformSaving(false);
+    }
+  }, [row.receiving_id]);
+
+  const saveNotes = useCallback(async (next: string) => {
+    if (next === (row.notes || '')) return;
+    setNotesSaving(true);
+    try {
+      const res = await fetch('/api/receiving-lines', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: row.id, notes: next || null }),
+      });
+      const data = await res.json();
+      if (data?.success && data.receiving_line) {
+        dispatchLineUpdated(data.receiving_line as ReceivingLineRow);
+        notesDirtyRef.current = false;
+      }
+    } catch {
+      /* silent */
+    } finally {
+      setNotesSaving(false);
+    }
+  }, [row.id, row.notes]);
 
   return (
     <div className="px-5 pb-3 pt-2">
-      <div className="grid gap-3 grid-cols-2 sm:grid-cols-4">
-        <MetaChip label="Inbound ID" value={`#${row.id}`} mono />
-        <MetaChip label="Purchase Receive" value={row.zoho_purchase_receive_id || 'Not linked'} mono />
+      <div className="grid gap-3 grid-cols-1 sm:grid-cols-5">
+        {/* Notes — leftmost, spans 2 columns for room to read/edit. */}
+        <div className="sm:col-span-2 min-w-0">
+          <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-gray-500">
+            Notes{notesSaving ? ' · Saving' : ''}
+          </p>
+          <textarea
+            value={notes}
+            onChange={(e) => { notesDirtyRef.current = true; setNotes(e.target.value); }}
+            onBlur={() => { if (notesDirtyRef.current) void saveNotes(notes); }}
+            onClick={(e) => e.stopPropagation()}
+            onKeyDown={(e) => e.stopPropagation()}
+            placeholder="Add notes for this line…"
+            rows={3}
+            className="mt-1 w-full resize-none rounded-md border border-gray-200 bg-white px-2 py-1.5 text-[12px] leading-snug text-gray-900 placeholder:text-gray-400 focus:border-blue-300 focus:outline-none focus:ring-2 focus:ring-blue-500/10"
+          />
+        </div>
+
+        {/* Platform dropdown — one edit propagates to every line on the same receiving row. */}
+        <div className="min-w-0">
+          <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-gray-500">
+            Platform{platformSaving ? ' · …' : ''}
+          </p>
+          <select
+            value={platform}
+            onChange={(e) => {
+              const next = e.target.value;
+              setPlatform(next);
+              void savePlatform(next);
+            }}
+            onClick={(e) => e.stopPropagation()}
+            disabled={row.receiving_id == null}
+            className="mt-1 w-full rounded-md border border-gray-200 bg-white px-2 py-1.5 text-[12px] font-semibold text-gray-900 focus:border-blue-300 focus:outline-none focus:ring-2 focus:ring-blue-500/10 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {INLINE_PLATFORM_OPTS.map((opt) => (
+              <option key={opt.value || 'auto'} value={opt.value}>{opt.label}</option>
+            ))}
+          </select>
+        </div>
+
         <MetaChip label="Tracking" value={trackingValue || 'No package linked'} mono />
-        <MetaChip label="Carrier" value={row.carrier || 'Unmatched'} />
         <MetaChip label="Created" value={formatExpandedDate(row.created_at)} />
-        <MetaChip label="Testing" value={row.needs_test ? `Required${row.assigned_tech_id ? ` · Tech #${row.assigned_tech_id}` : ''}` : 'Cleared'} />
-        <MetaChip label="Sync Source" value={row.zoho_sync_source || 'Local only'} />
-        <MetaChip label="Zoho Modified" value={formatExpandedDate(row.zoho_last_modified_time)} />
+        <MetaChip
+          label="Testing"
+          value={row.needs_test ? `Required${row.assigned_tech_id ? ` · Tech #${row.assigned_tech_id}` : ''}` : 'Cleared'}
+        />
       </div>
     </div>
   );

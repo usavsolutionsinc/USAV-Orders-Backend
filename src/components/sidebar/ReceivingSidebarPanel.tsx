@@ -98,8 +98,7 @@ const RECEIVING_TYPE_OPTS = [
 ];
 
 const SOURCE_PLATFORM_OPTS: Array<{ value: string; label: string }> = [
-  { value: '',           label: 'Auto' },
-  { value: 'zoho',       label: 'Zoho' },
+  { value: '',           label: 'Unknown' },
   { value: 'ebay',       label: 'eBay' },
   { value: 'amazon',     label: 'Amazon' },
   { value: 'aliexpress', label: 'AliExp' },
@@ -108,7 +107,6 @@ const SOURCE_PLATFORM_OPTS: Array<{ value: string; label: string }> = [
 ];
 
 const SOURCE_PLATFORM_LABELS: Record<string, string> = {
-  zoho: 'Zoho',
   ebay: 'eBay',
   amazon: 'Amazon',
   aliexpress: 'AliExpress',
@@ -172,7 +170,7 @@ function platformLabel(
     return RETURN_PLATFORM_LABELS[pkg.return_platform] ?? pkg.return_platform.replace(/_/g, ' ');
   }
   if (pkg?.is_return) return 'Return';
-  return 'Zoho';
+  return 'Unknown';
 }
 
 function formatPackageUnboxDate(pkg: ReceivingPackageMeta | null): string {
@@ -528,11 +526,27 @@ function LineEditPanel({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ source_platform: next || null }),
       });
+      window.dispatchEvent(new CustomEvent('receiving-package-updated', {
+        detail: { receiving_id: row.receiving_id, source_platform: next || null },
+      }));
     } catch {
       /* silent */
     } finally {
       setPlatformSaving(false);
     }
+  }, [row.receiving_id]);
+
+  // Keep this inspector in sync when the platform is changed elsewhere
+  // (top PO card, another open inspector for the same receiving row).
+  useEffect(() => {
+    if (row.receiving_id == null) return;
+    const handler = (e: Event) => {
+      const detail = (e as CustomEvent<{ receiving_id?: number; source_platform?: string | null }>).detail;
+      if (!detail || detail.receiving_id !== row.receiving_id) return;
+      setSourcePlatform((detail.source_platform || '').toLowerCase());
+    };
+    window.addEventListener('receiving-package-updated', handler);
+    return () => window.removeEventListener('receiving-package-updated', handler);
   }, [row.receiving_id]);
 
   const patch = useCallback(async (fields: Record<string, unknown>) => {
@@ -1363,16 +1377,43 @@ export function ReceivingSidebarPanel() {
       is_return: poContext.receiving_package?.is_return ?? false,
     };
     setPoContext((prev) => (prev ? { ...prev, receiving_package: packageUpdate } : prev));
+    const receivingId = poContext.receiving_id;
     try {
-      await fetch(`/api/receiving/${poContext.receiving_id}`, {
+      await fetch(`/api/receiving/${receivingId}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ source_platform: normalized || null }),
       });
+      window.dispatchEvent(new CustomEvent('receiving-package-updated', {
+        detail: { receiving_id: receivingId, source_platform: normalized || null },
+      }));
     } catch {
       /* silent — realtime invalidation will reconcile */
     }
   }, [poContext]);
+
+  // Mirror platform changes originating from a line inspector back into the
+  // top PO card's context so the label + dropdown reflect immediately.
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const detail = (e as CustomEvent<{ receiving_id?: number; source_platform?: string | null }>).detail;
+      if (!detail) return;
+      setPoContext((prev) => {
+        if (!prev || prev.receiving_id !== detail.receiving_id) return prev;
+        const nextPkg: ReceivingPackageMeta = {
+          received_at: prev.receiving_package?.received_at ?? null,
+          unboxed_at: prev.receiving_package?.unboxed_at ?? null,
+          created_at: prev.receiving_package?.created_at ?? null,
+          return_platform: prev.receiving_package?.return_platform ?? null,
+          source_platform: (detail.source_platform || '').toLowerCase() || null,
+          is_return: prev.receiving_package?.is_return ?? false,
+        };
+        return { ...prev, receiving_package: nextPkg };
+      });
+    };
+    window.addEventListener('receiving-package-updated', handler);
+    return () => window.removeEventListener('receiving-package-updated', handler);
+  }, []);
 
   const dismissReturn = useCallback((id: string) => {
     setReturns((prev) => prev.filter((r) => r.id !== id));
