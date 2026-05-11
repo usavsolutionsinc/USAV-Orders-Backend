@@ -33,6 +33,7 @@ import {
   type ActiveFbaScan,
 } from '@/hooks/station/packingWizardReducer';
 import { useMobilePackingLookup } from '@/hooks/station/useMobilePackingLookup';
+import { useAblyClient } from '@/contexts/AblyContext';
 
 // Re-export types for consumers (e.g. MobilePackingConfirmCard)
 export type { ActivePackingOrder, ActiveFbaScan, CapturedPhoto } from '@/hooks/station/packingWizardReducer';
@@ -73,6 +74,7 @@ export function MobileStationPacking({
   shellClassName,
 }: MobileStationPackingProps) {
   const [state, dispatch] = useReducer(wizardReducer, initialWizardState);
+  const knownPreviewUrlsRef = useRef<Set<string>>(new Set());
   const [inputValue, setInputValue] = useState('');
   const [scanSheetOpen, setScanSheetOpen] = useState(false);
   const [lastOrderRefreshKey, setLastOrderRefreshKey] = useState(0);
@@ -91,6 +93,64 @@ export function MobileStationPacking({
   const { theme: themeColor } = useStationTheme({ staffId });
   const { normalizeTracking } = useLast8TrackingSearch();
   const { handleLookup } = useMobilePackingLookup({ userId, userName, normalizeTracking, dispatch });
+  const { getClient: getAblyClient } = useAblyClient();
+
+  // ── Broadcast wizard transitions to packer:{staffId} ───────────────────────
+  // Paired desktop displays subscribe to mirror the phone's current state.
+  useEffect(() => {
+    const channelName = `packer:${staffId}`;
+    const orderSummary = state.resolvedOrder
+      ? {
+          orderId: state.resolvedOrder.orderId,
+          productTitle: state.resolvedOrder.productTitle,
+          tracking: state.resolvedOrder.tracking,
+          qty: state.resolvedOrder.qty,
+          condition: state.resolvedOrder.condition,
+          shipByDate: state.resolvedOrder.shipByDate,
+        }
+      : state.resolvedFba
+        ? {
+            fnsku: state.resolvedFba.fnsku,
+            productTitle: state.resolvedFba.productTitle,
+            shipmentRef: state.resolvedFba.shipmentRef,
+            plannedQty: state.resolvedFba.plannedQty,
+          }
+        : null;
+
+    const payload = {
+      step: state.step,
+      variant: state.orderVariant,
+      scannedValue: state.scannedValue,
+      orderSummary,
+      photoCount: state.capturedPhotos.length,
+      ts: Date.now(),
+    };
+
+    let cancelled = false;
+    void getAblyClient().then((client) => {
+      if (cancelled || !client) return;
+      try {
+        const ch = client.channels.get(channelName);
+        ch.publish('state', payload).catch(() => {
+          // best-effort; broadcast failure is non-fatal to the packer flow
+        });
+      } catch {
+        // best-effort
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    state.step,
+    state.orderVariant,
+    state.scannedValue,
+    state.resolvedOrder,
+    state.resolvedFba,
+    state.capturedPhotos.length,
+    staffId,
+    getAblyClient,
+  ]);
 
   // ── Manual input submit (typed/pasted tracking) ────────────────────────────
 
@@ -140,15 +200,52 @@ export function MobileStationPacking({
     return () => window.removeEventListener('mobile-scan-fab-open', h);
   }, [handleOpenScanSheet]);
 
-  // ── Step 4: Photo uploaded ─────────────────────────────────────────────────
+  // ── Revoke stale preview URLs ──────────────────────────────────────────────
+  // After every render, any object URL that was known previously but is no
+  // longer in capturedPhotos (RESET, PHOTO_REMOVED, batch replace) is freed.
+  // Also revokes the whole set on unmount.
+  useEffect(() => {
+    const known = knownPreviewUrlsRef.current;
+    const current = new Set(state.capturedPhotos.map((p) => p.previewUrl));
+    for (const url of known) {
+      if (!current.has(url)) {
+        URL.revokeObjectURL(url);
+        known.delete(url);
+      }
+    }
+    for (const url of current) known.add(url);
+  }, [state.capturedPhotos]);
 
-  const handlePhotoAdded = useCallback((photo: CapturedPhoto) => {
-    dispatch({ type: 'PHOTO_ADDED', photo });
+  useEffect(() => {
+    const known = knownPreviewUrlsRef.current;
+    return () => {
+      for (const url of known) URL.revokeObjectURL(url);
+      known.clear();
+    };
   }, []);
 
-  const handlePhotoRemoved = useCallback((index: number) => {
-    dispatch({ type: 'PHOTO_REMOVED', index });
+  // ── Step 4: Photos captured (batch) ────────────────────────────────────────
+
+  const handlePhotosBatched = useCallback((photos: CapturedPhoto[]) => {
+    dispatch({ type: 'CAPTURE_PHOTOS_BATCH', photos });
   }, []);
+
+  const handlePhotoRemoved = useCallback((id: string) => {
+    dispatch({ type: 'PHOTO_REMOVED', id });
+  }, []);
+
+  const handlePhotoStatus = useCallback(
+    (update: {
+      id: string;
+      status: import('@/hooks/station/packingWizardReducer').PhotoUploadStatus;
+      serverPath?: string | null;
+      photoId?: number | null;
+      errorMessage?: string | null;
+    }) => {
+      dispatch({ type: 'UPLOAD_PHOTO_STATUS', ...update });
+    },
+    [],
+  );
 
   // ── Step 5: Complete packing ───────────────────────────────────────────────
 
@@ -168,7 +265,9 @@ export function MobileStationPacking({
           trackingType,
           packDateTime: formatPSTTimestamp(),
           packedBy: userId,
-          packerPhotosUrl: state.capturedPhotos.map(p => p.blobUrl),
+          packerPhotosUrl: state.capturedPhotos
+            .map(p => p.serverPath)
+            .filter((u): u is string => !!u),
           orderId,
         }),
       });
@@ -380,10 +479,7 @@ export function MobileStationPacking({
                   packerId={userId}
                   packerLogId={state.packerLogId}
                   photos={state.capturedPhotos}
-                  onPhotoAdded={handlePhotoAdded}
-                  onPhotoRemoved={handlePhotoRemoved}
-                  onDone={() => dispatch({ type: 'PHOTOS_DONE' })}
-                  onSkip={() => dispatch({ type: 'PHOTOS_SKIP' })}
+                  onPhotosBatched={handlePhotosBatched}
                   onBack={() => dispatch({ type: 'BACK' })}
                 />
               </motion.div>
@@ -403,8 +499,12 @@ export function MobileStationPacking({
                   fba={state.resolvedFba}
                   variant={state.orderVariant}
                   photos={state.capturedPhotos}
-                  isLoading={state.isLoading}
+                  packerId={userId}
+                  packerLogId={state.packerLogId}
+                  isCompleting={state.isLoading}
                   errorMessage={state.errorMessage}
+                  onPhotoStatus={handlePhotoStatus}
+                  onPhotoRemoved={handlePhotoRemoved}
                   onComplete={handleComplete}
                   onBack={() => dispatch({ type: 'BACK' })}
                 />

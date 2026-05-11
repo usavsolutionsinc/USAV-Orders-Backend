@@ -454,7 +454,7 @@ export async function fetchInventoryContext(params: IntentParams): Promise<strin
       SELECT
         sku,
         product_title,
-        COALESCE(NULLIF(regexp_replace(COALESCE(stock, ''), '[^0-9]', '', 'g'), ''), '0')::int AS qty
+        COALESCE(stock, 0) AS qty
       FROM sku_stock
       ORDER BY qty ASC, sku ASC NULLS LAST
       LIMIT 10

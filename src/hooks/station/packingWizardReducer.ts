@@ -23,11 +23,23 @@ export interface ActiveFbaScan {
   isNew: boolean;
 }
 
+export type PhotoUploadStatus = 'pending' | 'uploading' | 'uploaded' | 'failed';
+
 export interface CapturedPhoto {
+  /** Local UUID for React keying + status updates. */
+  id: string;
+  /** Raw JPEG blob — source of truth until the upload completes. */
+  blob: Blob;
+  /** Object URL for thumbnail rendering. Revoked on RESET / removal. */
   previewUrl: string;
-  blobUrl: string;
+  /** Upload lifecycle. `pending` until batch upload starts. */
+  uploadStatus: PhotoUploadStatus;
+  /** Vercel Blob URL once the photo has been persisted. */
+  serverPath: string | null;
+  /** DB row id once the row is inserted into the photos table. */
   photoId: number | null;
-  index: number;
+  /** Last upload error message (only set when uploadStatus === 'failed'). */
+  errorMessage: string | null;
 }
 
 // ─── Wizard state machine ──────────────────────────────────────────────────
@@ -60,7 +72,9 @@ export type WizardAction =
   | { type: 'CONFIRM_YES' }
   | { type: 'CONFIRM_NO' }
   | { type: 'PHOTO_ADDED'; photo: CapturedPhoto }
-  | { type: 'PHOTO_REMOVED'; index: number }
+  | { type: 'PHOTO_REMOVED'; id: string }
+  | { type: 'CAPTURE_PHOTOS_BATCH'; photos: CapturedPhoto[] }
+  | { type: 'UPLOAD_PHOTO_STATUS'; id: string; status: PhotoUploadStatus; serverPath?: string | null; photoId?: number | null; errorMessage?: string | null }
   | { type: 'PHOTOS_DONE' }
   | { type: 'PHOTOS_SKIP' }
   | { type: 'COMPLETE_START' }
@@ -138,7 +152,24 @@ export function wizardReducer(state: PackingWizardState, action: WizardAction): 
     case 'PHOTO_ADDED':
       return { ...state, capturedPhotos: [...state.capturedPhotos, action.photo] };
     case 'PHOTO_REMOVED':
-      return { ...state, capturedPhotos: state.capturedPhotos.filter((_, i) => i !== action.index) };
+      return { ...state, capturedPhotos: state.capturedPhotos.filter((p) => p.id !== action.id) };
+    case 'CAPTURE_PHOTOS_BATCH':
+      return { ...state, capturedPhotos: action.photos, step: 'review' };
+    case 'UPLOAD_PHOTO_STATUS':
+      return {
+        ...state,
+        capturedPhotos: state.capturedPhotos.map((p) =>
+          p.id === action.id
+            ? {
+                ...p,
+                uploadStatus: action.status,
+                serverPath: action.serverPath !== undefined ? action.serverPath : p.serverPath,
+                photoId: action.photoId !== undefined ? action.photoId : p.photoId,
+                errorMessage: action.errorMessage !== undefined ? action.errorMessage : p.errorMessage,
+              }
+            : p,
+        ),
+      };
     case 'PHOTOS_DONE':
     case 'PHOTOS_SKIP':
       return { ...state, step: 'review' };

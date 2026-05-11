@@ -39,12 +39,12 @@ export function PhotoCapture({ onCapture, disabled = false, className }: PhotoCa
   }, [stream]);
 
   // ── Mobile: native file input ──────────────────────────────────────────────
+  // Stay in 'idle' on mobile so the user can immediately tap "Take Photo" again
+  // and snap back-to-back shots. The parent owns the captured-photo strip.
   const handleMobileCapture = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
     const url = URL.createObjectURL(file);
-    setPreview(url);
-    setMode('preview');
     onCapture(file, url);
     // Reset so the same file can be re-captured
     e.target.value = '';

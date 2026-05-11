@@ -286,6 +286,8 @@ export async function adjustBinQty(data: {
   staffId?: number | null;
   reason?: string;
 }): Promise<{ binContent: BinContent; newStockQty: number }> {
+  const rawSku = data.sku.trim();
+  const baseSku = rawSku.includes(':') ? rawSku.split(':')[0].trim() : rawSku;
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
@@ -299,7 +301,7 @@ export async function adjustBinQty(data: {
          qty = GREATEST(0, bin_contents.qty + $3),
          updated_at = NOW()
        RETURNING *`,
-      [data.locationId, data.sku.trim(), data.delta],
+      [data.locationId, baseSku, data.delta],
     );
 
     // 2. Adjust sku_stock aggregate
@@ -309,14 +311,14 @@ export async function adjustBinQty(data: {
        ON CONFLICT (sku)
        DO UPDATE SET stock = GREATEST(0, sku_stock.stock + $2)
        RETURNING stock`,
-      [data.sku.trim(), data.delta],
+      [baseSku, data.delta],
     );
 
     // 3. Log to stock ledger
     await client.query(
       `INSERT INTO sku_stock_ledger (sku, delta, reason, staff_id)
        VALUES ($1, $2, $3, $4)`,
-      [data.sku.trim(), data.delta, data.reason || 'BIN_ADJUST', data.staffId || null],
+      [baseSku, data.delta, data.reason || 'BIN_ADJUST', data.staffId || null],
     ).catch(() => {}); // best-effort
 
     await client.query('COMMIT');

@@ -548,7 +548,7 @@ async function getSkuStock(): Promise<WorkOrderRow[]> {
        ELSE 4
      END,
      wa.priority ASC,
-     COALESCE(NULLIF(regexp_replace(COALESCE(ss.stock, ''), '[^0-9-]+', '', 'g'), ''), '0')::int ASC,
+     COALESCE(ss.stock, 0) ASC,
      ss.id DESC
      LIMIT 500`
   );

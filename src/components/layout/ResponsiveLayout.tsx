@@ -11,6 +11,7 @@ import { X } from '@/components/Icons';
 import { getSidebarRouteKey, isSidebarRouteMobileRestricted, APP_SIDEBAR_NAV } from '@/lib/sidebar-navigation';
 import { MobileDefaultTopBanner } from '@/components/mobile/shared/MobileDefaultTopBanner';
 import { PhonePairFab } from '@/components/layout/PhonePairFab';
+import { GlobalDesktopSkuScanner } from '@/components/layout/GlobalDesktopSkuScanner';
 import { PhonePairModal } from '@/components/sidebar/PhonePairModal';
 import { MobileScanFab } from '@/components/mobile/shared/MobileScanFab';
 
@@ -125,6 +126,9 @@ export function ResponsiveLayout({ children }: ResponsiveLayoutProps) {
           </main>
         </div>
         <CommandBar />
+        <Suspense fallback={null}>
+          <GlobalDesktopSkuScanner />
+        </Suspense>
         <PhonePairFab />
         <PhonePairModal />
       </div>

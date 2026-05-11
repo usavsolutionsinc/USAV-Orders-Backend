@@ -2,7 +2,6 @@ import { NextRequest, NextResponse } from 'next/server';
 import pool from '@/lib/db';
 import { formatPSTTimestamp } from '@/utils/date';
 import { getSkuCatalogBySku } from '@/lib/neon/sku-catalog-queries';
-import { publishStockLedgerEvent } from '@/lib/realtime/publish';
 
 export async function POST(request: NextRequest) {
     const client = await pool.connect();
@@ -16,23 +15,23 @@ export async function POST(request: NextRequest) {
 
         const timestamp = formatPSTTimestamp(new Date());
         const skuStr = String(sku).trim();
+        const baseSku = skuStr.includes(':') ? skuStr.split(':')[0].trim() : skuStr;
         const trackingStr = shippingTrackingNumber ? String(shippingTrackingNumber).trim() : null;
         const notesStr = notes ? String(notes) : null;
         const locationStr = location ? String(location).trim() : null;
 
-        const catalog = await getSkuCatalogBySku(skuStr);
+        const catalog = await getSkuCatalogBySku(baseSku) ?? await getSkuCatalogBySku(skuStr);
         const catalogId = catalog?.id ?? null;
 
         await client.query('BEGIN');
 
         const insertedIds: number[] = [];
-        let newSerialCount = 0; // only newly-created rows count toward stock delta
         for (const raw of serialNumbers) {
             const serial = String(raw || '').trim();
             if (!serial) continue;
             const normalized = serial.toUpperCase();
 
-            const result = await client.query<{ id: number; was_insert: boolean }>(
+            const result = await client.query<{ id: number }>(
                 `INSERT INTO serial_units (
                     serial_number, normalized_serial, sku, sku_catalog_id,
                     current_status, current_location,
@@ -48,48 +47,17 @@ export async function POST(request: NextRequest) {
                     legacy_notes             = COALESCE(EXCLUDED.legacy_notes, serial_units.legacy_notes),
                     legacy_date_time         = COALESCE(serial_units.legacy_date_time, EXCLUDED.legacy_date_time),
                     updated_at               = NOW()
-                 RETURNING id, (xmax = 0) AS was_insert`,
+                 RETURNING id`,
                 [serial, normalized, skuStr, catalogId, locationStr, trackingStr, notesStr, timestamp],
             );
-            const row = result.rows[0];
-            if (row?.id) insertedIds.push(row.id);
-            if (row?.was_insert) newSerialCount += 1;
-        }
-
-        // Emit a single RECEIVED delta covering only truly-new serials. Trigger
-        // fn_recompute_sku_stock updates sku_stock.stock automatically.
-        let ledgerId: number | null = null;
-        if (newSerialCount > 0) {
-            const ledgerInsert = await client.query<{ id: number }>(
-                `INSERT INTO sku_stock_ledger (sku, delta, reason, dimension, notes)
-                 VALUES ($1, $2, 'RECEIVED', 'WAREHOUSE', $3)
-                 RETURNING id`,
-                [skuStr, newSerialCount, `post-multi-sn: ${newSerialCount} serial(s) registered`],
-            );
-            ledgerId = ledgerInsert.rows[0]?.id ?? null;
+            if (result.rows[0]?.id) insertedIds.push(result.rows[0].id);
         }
 
         await client.query('COMMIT');
 
-        if (ledgerId) {
-            try {
-                await publishStockLedgerEvent({
-                    ledgerId,
-                    sku: skuStr,
-                    delta: newSerialCount,
-                    reason: 'RECEIVED',
-                    dimension: 'WAREHOUSE',
-                    source: 'post-multi-sn',
-                });
-            } catch (err) {
-                console.warn('[post-multi-sn] realtime publish failed', err);
-            }
-        }
-
         return NextResponse.json({
             success: true,
             serialUnitIds: insertedIds,
-            // Preserve legacy response shape — first id used by some callers as the "row id"
             id: insertedIds[0] ?? null,
         });
     } catch (error: any) {

@@ -11,7 +11,8 @@ export async function POST(request: NextRequest) {
             return NextResponse.json({ error: 'Missing sku or location' }, { status: 400 });
         }
 
-        const skuStr = String(sku).trim();
+        const rawSku = String(sku).trim();
+        const skuStr = rawSku.includes(':') ? rawSku.split(':')[0].trim() : rawSku;
         const locationStr = String(location).trim();
 
         await client.query('BEGIN');

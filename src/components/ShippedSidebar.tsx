@@ -1,6 +1,6 @@
 'use client';
 
-import { ReactNode, useState, useEffect, useCallback } from 'react';
+import { ReactNode, useState, useEffect, useRef } from 'react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { Search, ChevronLeft, ChevronRight, Copy, Check, AlertTriangle, Plus } from './Icons';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -10,9 +10,10 @@ import { ShippedOrder } from '@/lib/neon/orders-queries';
 import { SearchBar } from './ui/SearchBar';
 import { TabSwitch } from './ui/TabSwitch';
 import { HorizontalButtonSlider } from './ui/HorizontalButtonSlider';
-import { useLast8TrackingSearch } from '@/hooks/useLast8TrackingSearch';
+import { useShippedSearch } from '@/hooks/useShippedSearch';
+import { useDebounce } from '@/hooks';
 import { formatDateTimePST } from '@/utils/date';
-import { dispatchCloseShippedDetails, dispatchOpenShippedDetails, getOpenShippedDetailsPayload } from '@/utils/events';
+import { dispatchCloseShippedDetails, dispatchOpenShippedDetails, getOpenShippedDetailsPayload, DASHBOARD_SHIPPED_FOCUS_SEARCH_PARAM } from '@/utils/events';
 import { RecentSearchesList } from '@/components/sidebar/RecentSearchesList';
 import { getStaffName } from '@/utils/staff';
 import { sectionLabel, microBadge } from '@/design-system/tokens/typography/presets';
@@ -45,26 +46,15 @@ interface ShippedSidebarProps {
     onShippedFilterChange?: (value: ShippedTypeFilter) => void;
     shippedSearchField?: ShippedSearchField;
     onShippedSearchFieldChange?: (value: ShippedSearchField) => void;
+    /** Embedded dashboard only: focuses shipped search bar once when URL includes `focusShippedSearch=1`. */
+    autoFocusSearch?: boolean;
 }
 
-
-function toShippedOrder(order: any): ShippedOrder {
-    const primaryTracking = order.shipping_tracking_number || order.tracking_number || null;
-    return {
-        ...order,
-        packed_at: order.packed_at || null,
-        packed_by: order.packed_by ?? null,
-        tested_by: order.tested_by ?? null,
-        serial_number: order.serial_number || '',
-        condition: order.condition || '',
-        shipping_tracking_number: primaryTracking,
-    };
-}
 
 const SHIPPED_FILTER_TABS: { id: ShippedTypeFilter; label: string }[] = [
-    { id: 'sku', label: 'SKU' },
-    { id: 'all', label: 'All' },
     { id: 'orders', label: 'Orders' },
+    { id: 'all', label: 'All' },
+    { id: 'sku', label: 'SKU' },
     { id: 'fba', label: 'FBA' },
 ];
 
@@ -82,28 +72,89 @@ export default function ShippedSidebar({
     onShippedFilterChange,
     shippedSearchField = 'all',
     onShippedSearchFieldChange,
+    autoFocusSearch = false,
 }: ShippedSidebarProps) {
     const pathname = usePathname();
     const router = useRouter();
     const searchParams = useSearchParams();
-    const [searchQuery, setSearchQuery] = useState('');
-    const [results, setResults] = useState<ShippedOrder[]>([]);
-    const [isSearching, setIsSearching] = useState(false);
-    const [hasSearched, setHasSearched] = useState(false);
+    // Industry-standard search pipeline:
+    //   1) Input owns its own state (`inputValue`). Nothing else writes to it.
+    //   2) `useDebounce` collapses keystrokes into a committed value (250ms quiet period).
+    //   3) `useShippedSearch` (TanStack Query) owns the network + cache. Same key in
+    //      DashboardShippedTable = one shared fetch, identical results everywhere.
+    //   4) The URL is downstream — we write the committed value upstream after debounce;
+    //      we never read it back into the input. No more bidirectional sync, no echo loop.
+    const [inputValue, setInputValue] = useState(searchValue);
+    const debouncedQuery = useDebounce(inputValue, 250);
+    const trimmedQuery = debouncedQuery.trim();
+
+    const searchResult = useShippedSearch({
+        query: trimmedQuery,
+        shippedFilter,
+        searchField: shippedSearchField,
+    });
+    const results: ShippedOrder[] = searchResult.data?.records ?? [];
+    const isSearching = searchResult.isFetching;
+    const hasSearched = trimmedQuery.length > 0;
+
     const [searchHistory, setSearchHistory] = useState<SearchHistory[]>([]);
     const [showAllSearchHistory, setShowAllSearchHistory] = useState(false);
     const [selectedShipped, setSelectedShipped] = useState<ShippedOrder | null>(null);
     const [copiedId, setCopiedId] = useState<number | null>(null);
-    const { normalizeTrackingQuery } = useLast8TrackingSearch();
     const searchHistoryStorageKey = embedded && hideSectionHeader ? 'dashboard_search_history' : 'shipped_search_history';
 
+    // Stable ref for upstream URL writes — parent recreates `setSearch` after every
+    // router.replace; the ref keeps this effect from re-firing on identity churn.
+    const onSearchChangeRef = useRef(onSearchChange);
+    onSearchChangeRef.current = onSearchChange;
     useEffect(() => {
-        setSearchQuery(searchValue);
-        if (!String(searchValue || '').trim()) {
-            setResults([]);
-            setHasSearched(false);
+        onSearchChangeRef.current?.(trimmedQuery);
+    }, [trimmedQuery]);
+
+    // Side effects per resolved search: persist to history + auto-open the single match
+    // when running standalone (NOT on dashboard — the table inline shows the row and
+    // closing the panel here would yank any unrelated open panel).
+    // Keyed off the trimmed query so refetches don't re-fire side effects.
+    const lastHandledQueryRef = useRef<string | null>(null);
+    useEffect(() => {
+        const data = searchResult.data;
+        if (!data || !trimmedQuery) return;
+        if (lastHandledQueryRef.current === trimmedQuery) return;
+        lastHandledQueryRef.current = trimmedQuery;
+
+        const records = data.records;
+        setSearchHistory((current) => {
+            const next: SearchHistory[] = [
+                { query: trimmedQuery, timestamp: new Date(), resultCount: records.length },
+                ...current.filter((h) => h.query !== trimmedQuery).slice(0, 4),
+            ];
+            localStorage.setItem(searchHistoryStorageKey, JSON.stringify(next));
+            return next;
+        });
+
+        if (records.length === 1 && pathname !== '/dashboard') {
+            dispatchOpenShippedDetails(records[0], 'shipped');
+            setSelectedShipped(records[0]);
         }
-    }, [searchValue]);
+    }, [searchResult.data, trimmedQuery, pathname, searchHistoryStorageKey]);
+
+    /** One-shot strip of `focusShippedSearch` from URL after the input mounts with autoFocus */
+    useEffect(() => {
+        if (!embedded || !autoFocusSearch) return;
+        let cancelled = false;
+        const timer = window.setTimeout(() => {
+            if (cancelled) return;
+            const params = new URLSearchParams(searchParams.toString());
+            if (!params.has(DASHBOARD_SHIPPED_FOCUS_SEARCH_PARAM)) return;
+            params.delete(DASHBOARD_SHIPPED_FOCUS_SEARCH_PARAM);
+            const qs = params.toString();
+            router.replace(qs ? `${pathname || '/dashboard'}?${qs}` : pathname || '/dashboard', { scroll: false });
+        }, 150);
+        return () => {
+            cancelled = true;
+            window.clearTimeout(timer);
+        };
+    }, [embedded, autoFocusSearch, pathname, router, searchParams]);
 
     // Listen for custom events to coordinate details panel
     useEffect(() => {
@@ -185,86 +236,6 @@ Shipped: ${result.packed_at ? formatDateTimePST(result.packed_at) : 'Not Shipped
         }
     }, [searchHistoryStorageKey]);
 
-    // Save search history to localStorage
-    const saveSearchHistory = (query: string, resultCount: number) => {
-        const newHistory = [
-            { query, timestamp: new Date(), resultCount },
-            ...searchHistory.filter(h => h.query !== query).slice(0, 4)
-        ];
-        setSearchHistory(newHistory);
-        localStorage.setItem(searchHistoryStorageKey, JSON.stringify(newHistory));
-    };
-
-    // Handle search
-    const handleSearch = useCallback(async (query: string) => {
-        const trimmedQuery = query.trim();
-        if (!trimmedQuery) {
-            setResults([]);
-            setHasSearched(false);
-            await onSearchChange?.('');
-            return;
-        }
-
-        const normalizedQuery = normalizeTrackingQuery(trimmedQuery);
-        setIsSearching(true);
-        setHasSearched(true);
-        try {
-            const runSearch = async (value: string) => {
-                const params = new URLSearchParams({ q: value });
-                if (shippedFilter !== 'all') params.set('shippedFilter', shippedFilter);
-                if (shippedSearchField !== 'all') params.set('searchField', shippedSearchField);
-                const res = await fetch(`/api/shipped?${params.toString()}`);
-                if (!res.ok) {
-                    const data = await res.json().catch(() => null);
-                    throw new Error(data?.details || data?.error || 'Failed to search shipped orders');
-                }
-                const data = await res.json();
-                const orders = Array.isArray(data?.results)
-                    ? data.results
-                    : Array.isArray(data?.shipped)
-                        ? data.shipped
-                        : [];
-                return orders.map(toShippedOrder);
-            };
-
-            let records = await runSearch(trimmedQuery);
-
-            // Fallback for tracking searches: retry with normalized last-8 if no results.
-            if (records.length === 0 && normalizedQuery !== trimmedQuery) {
-                records = await runSearch(normalizedQuery);
-            }
-            
-            setResults(records);
-            saveSearchHistory(trimmedQuery, records.length);
-            await onSearchChange?.(trimmedQuery);
-
-            if (records.length === 1) {
-                if (pathname === '/dashboard') {
-                    window.dispatchEvent(new CustomEvent('close-shipped-details'));
-                } else {
-                    openDetails(records[0]);
-                }
-            }
-        } catch (error) {
-            console.error('Search error:', error);
-            setResults([]);
-            await onSearchChange?.(trimmedQuery);
-        } finally {
-            setIsSearching(false);
-        }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [pathname, normalizeTrackingQuery, onSearchChange, shippedFilter, shippedSearchField]);
-
-    const handleInputChange = useCallback((value: string) => {
-        setSearchQuery(value);
-        void handleSearch(value);
-    }, [handleSearch]);
-
-    useEffect(() => {
-        if (!searchQuery.trim() || !hasSearched) return;
-        void handleSearch(searchQuery);
-    }, [handleSearch, hasSearched, searchQuery, shippedFilter, shippedSearchField]);
-
     const clearSearchHistory = () => {
         setSearchHistory([]);
         setShowAllSearchHistory(false);
@@ -317,11 +288,12 @@ Shipped: ${result.packed_at ? formatDateTimePST(result.packed_at) : 'Not Shipped
                     <motion.div variants={itemVariants} className="space-y-4">
                         {/* Search Bar */}
                         <SearchBar
-                            value={searchQuery}
-                            onChange={handleInputChange}
+                            value={inputValue}
+                            onChange={setInputValue}
                             placeholder={getShippedSearchPlaceholder(shippedSearchField)}
                             isSearching={isSearching}
                             variant="blue"
+                            autoFocus={Boolean(embedded && autoFocusSearch)}
                             rightElement={
                                 <button
                                     type="button"
@@ -375,10 +347,7 @@ Shipped: ${result.packed_at ? formatDateTimePST(result.packed_at) : 'Not Shipped
                                         {results.length} Result{results.length !== 1 ? 's' : ''}
                                     </p>
                                     <button
-                                        onClick={() => {
-                                            setResults([]);
-                                            setHasSearched(false);
-                                        }}
+                                        onClick={() => setInputValue('')}
                                         className={`${microBadge} text-blue-600 hover:underline`}
                                     >
                                         Clear
@@ -435,7 +404,7 @@ Shipped: ${result.packed_at ? formatDateTimePST(result.packed_at) : 'Not Shipped
                                 </div>
                                 <h3 className="text-sm font-black text-blue-900 uppercase tracking-tight mb-1">No matching shipped records</h3>
                                 <p className={`${sectionLabel} text-blue-700 leading-relaxed`}>
-                                    No shipped records matched "{searchQuery}". Try searching all fields or checking the tracking number.
+                                    No shipped records matched "{trimmedQuery}". Try searching all fields or checking the tracking number.
                                 </p>
                                 <div className="mt-4 flex items-center justify-center gap-3">
                                     {shippedSearchField !== 'all' && onShippedSearchFieldChange ? (
@@ -451,12 +420,7 @@ Shipped: ${result.packed_at ? formatDateTimePST(result.packed_at) : 'Not Shipped
                                     ) : null}
                                     <button
                                         type="button"
-                                        onClick={() => {
-                                            setSearchQuery('');
-                                            setResults([]);
-                                            setHasSearched(false);
-                                            void onSearchChange?.('');
-                                        }}
+                                        onClick={() => setInputValue('')}
                                         className={`rounded-xl border border-blue-200 bg-white px-4 py-2 text-blue-700 ${sectionLabel} transition-colors hover:border-blue-300 hover:bg-blue-100`}
                                     >
                                         Clear Search
@@ -473,10 +437,7 @@ Shipped: ${result.packed_at ? formatDateTimePST(result.packed_at) : 'Not Shipped
                                 expanded={showAllSearchHistory}
                                 onToggleExpanded={() => setShowAllSearchHistory((current) => !current)}
                                 onClear={clearSearchHistory}
-                                onSelect={(query) => {
-                                    setSearchQuery(query);
-                                    handleSearch(query);
-                                }}
+                                onSelect={(query) => setInputValue(query)}
                                 getDisplayQuery={(item) =>
                                     item.query.match(/^\d+$/) && item.query.length > 8
                                         ? item.query.slice(-8)
@@ -521,7 +482,7 @@ Shipped: ${result.packed_at ? formatDateTimePST(result.packed_at) : 'Not Shipped
                             setSelectedShipped(null);
                             window.dispatchEvent(new CustomEvent('close-shipped-details'));
                         }}
-                        onUpdate={() => handleSearch(searchQuery)}
+                        onUpdate={() => searchResult.refetch()}
                     />
                 )}
             </AnimatePresence>

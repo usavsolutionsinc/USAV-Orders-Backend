@@ -277,6 +277,49 @@ export function formatTimePST(
   return withSeconds ? timePart : timePart.split(':').slice(0, 2).join(':');
 }
 
+/** Wall-clock time in America/Los_Angeles (12-hour with AM/PM). */
+export function formatTime12hPST(
+  input: string | Date | null | undefined,
+  options?: { withSeconds?: boolean }
+): string {
+  const placeholder = '--:--';
+  const withSeconds = options?.withSeconds ?? false;
+
+  if (input instanceof Date) {
+    if (Number.isNaN(input.getTime())) return placeholder;
+    return new Intl.DateTimeFormat('en-US', {
+      timeZone: PST_TIME_ZONE,
+      hour: 'numeric',
+      minute: '2-digit',
+      ...(withSeconds ? { second: '2-digit' } : {}),
+      hour12: true,
+    }).format(input);
+  }
+
+  const raw = String(input ?? '').trim();
+  if (!raw || raw === '1') return placeholder;
+
+  const normalized = normalizePSTTimestamp(raw, { fallbackToNow: false });
+  if (!normalized) return placeholder;
+
+  const timePart = normalized.split(' ')[1];
+  if (!timePart) return placeholder;
+
+  const [hhRaw, mmRaw, ssRaw = '0'] = timePart.split(':');
+  const h24 = Number(hhRaw);
+  const m = Number(mmRaw);
+  const s = Number(ssRaw);
+  if (!Number.isFinite(h24) || !Number.isFinite(m) || !Number.isFinite(s)) return placeholder;
+
+  const period = h24 >= 12 ? 'PM' : 'AM';
+  const h12 = h24 % 12 === 0 ? 12 : h24 % 12;
+  const min = pad2(m);
+  if (withSeconds) {
+    return `${h12}:${min}:${pad2(s)} ${period}`;
+  }
+  return `${h12}:${min} ${period}`;
+}
+
 export function isSamePSTDate(
   a: string | Date | null | undefined,
   b: string | Date | null | undefined

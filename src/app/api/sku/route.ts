@@ -49,16 +49,32 @@ export async function GET(req: NextRequest) {
       LIMIT $${params.length}
     `;
 
-    const [skuResult, stockResult] = await Promise.all([
+    const [skuResult, titleResult] = await Promise.all([
       pool.query(sql, params),
-      pool.query(`SELECT sku, product_title FROM sku_stock ORDER BY id DESC`),
+      pool.query(
+        `SELECT
+           sc.sku,
+           COALESCE(sp.display_name, sc.product_title) AS product_title
+         FROM sku_catalog sc
+         LEFT JOIN LATERAL (
+           SELECT e.display_name
+           FROM sku_platform_ids e
+           WHERE e.sku_catalog_id = sc.id
+             AND e.platform = 'ecwid'
+             AND e.is_active = true
+             AND e.display_name IS NOT NULL
+           LIMIT 1
+         ) sp ON TRUE
+         WHERE sc.is_active = true`
+      ),
     ]);
 
     const titleByBaseSku = new Map<string, string>();
-    for (const row of stockResult.rows) {
+    for (const row of titleResult.rows) {
       const baseSku = getBaseSku(String(row.sku || ''));
-      if (!baseSku || titleByBaseSku.has(baseSku)) continue;
-      titleByBaseSku.set(baseSku, String(row.product_title || '').trim());
+      const title = String(row.product_title || '').trim();
+      if (!baseSku || !title) continue;
+      titleByBaseSku.set(baseSku, title);
     }
 
     let rows = skuResult.rows.map((row) => {

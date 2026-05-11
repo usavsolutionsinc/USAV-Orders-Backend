@@ -61,6 +61,9 @@ async function createTokenRequest(req: NextRequest) {
     // Desktop subscribes to pair:{code} while the pairing modal is open to
     // learn the moment a phone redeems the code (server publishes on claim).
     'pair:*': ['subscribe'],
+    // Mobile packer wizard publishes step transitions; paired desktop display
+    // subscribes to mirror state (scan → confirm → camera → review → success).
+    'packer:*': ['subscribe', 'publish'],
   };
 
   if (aiSessionChannel) {

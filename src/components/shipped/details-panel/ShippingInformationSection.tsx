@@ -7,7 +7,13 @@ import { AnimatePresence, motion } from 'framer-motion';
 import { Check, Clipboard, Copy, ExternalLink, Image as ImageIcon, Pencil, Plus, Trash2, X } from '@/components/Icons';
 import { ShippedOrder } from '@/lib/neon/orders-queries';
 import { getAccountSourceLabel, getOrderIdUrl, getTrackingUrl } from '@/utils/order-links';
-import { formatDateTimePST, getCurrentPSTDateKey, toPSTDateKey, getDaysLateNumber } from '@/utils/date';
+import {
+  formatDateTimePST,
+  formatTime12hPST,
+  getCurrentPSTDateKey,
+  getDaysLateNumber,
+  toPSTDateKey,
+} from '@/utils/date';
 import { normalizeTrackingKey } from '@/lib/tracking-format';
 import { useExternalItemUrl } from '@/hooks/useExternalItemUrl';
 import { CopyableValueFieldBlock } from '@/components/shipped/details-panel/blocks/CopyableValueFieldBlock';
@@ -1153,6 +1159,8 @@ export function ShippingInformationSection({
     || (shipped as any).tested_by_name
     || getStaffName((shipped as any).tested_by ?? (shipped as any).tester_id ?? null)
   ).trim() || 'Not specified';
+  const packedByTimeRight = formatTime12hPST(shipped.packed_at ?? null);
+  const testedByTimeRight = formatTime12hPST(shipped.test_date_time ?? null);
   const serialNumberRows = parseSerialRows(shipped.serial_number)
     .map((row) => row.trim())
     .filter(Boolean);
@@ -1556,7 +1564,13 @@ export function ShippingInformationSection({
                 <p className="shrink-0 text-sm font-bold text-gray-900">{packerNameDisplay}</p>
               </div>
             </DetailsPanelRow>
-            <DetailsPanelRow label="Serial Numbers">
+            <DetailsPanelRow label="Tested By">
+              <div className="flex items-center justify-between gap-3">
+                <p className="truncate text-sm font-bold text-gray-900">{techNameDisplay}</p>
+                <p className="shrink-0 font-mono text-sm font-bold text-gray-900">{testedByTimeRight}</p>
+              </div>
+            </DetailsPanelRow>
+            <DetailsPanelRow label="Serial Numbers" className="last:border-b-0">
               {serialNumberRows.length > 0 ? (
                 <div className="divide-y divide-gray-100">
                   {serialNumberRows.map((serial, idx) => (
@@ -1566,9 +1580,6 @@ export function ShippingInformationSection({
               ) : (
                 <p className="py-0.5 text-sm font-bold text-gray-400">N/A</p>
               )}
-            </DetailsPanelRow>
-            <DetailsPanelRow label="Tested By" className="last:border-b-0">
-              <p className="text-sm font-bold text-gray-900">{techNameDisplay}</p>
             </DetailsPanelRow>
           </div>
         </div>
@@ -1680,6 +1691,29 @@ export function ShippingInformationSection({
             allowEdit={false}
           />
 
+          {prepackedSku ? <PrepackedSkuRow sku={prepackedSku} /> : null}
+
+          {metaFields ? (
+            <>
+              {metaFields.packedByName ? (
+                <DetailsPanelRow label="Packed By">
+                  <div className="flex items-center justify-between gap-3">
+                    <p className="truncate text-sm font-bold text-gray-900">{metaFields.packedByName}</p>
+                    <p className="shrink-0 font-mono text-sm font-bold text-gray-900">{packedByTimeRight}</p>
+                  </div>
+                </DetailsPanelRow>
+              ) : null}
+              {metaFields.testedByName ? (
+                <DetailsPanelRow label="Tested By">
+                  <div className="flex items-center justify-between gap-3">
+                    <p className="truncate text-sm font-bold text-gray-900">{metaFields.testedByName}</p>
+                    <p className="shrink-0 font-mono text-sm font-bold text-gray-900">{testedByTimeRight}</p>
+                  </div>
+                </DetailsPanelRow>
+              ) : null}
+            </>
+          ) : null}
+
           {showSerialNumber ? (
             <ShippingSerialNumberRow
               rowId={shipped.id}
@@ -1691,29 +1725,6 @@ export function ShippingInformationSection({
               onUpdate={onUpdate}
               allowEdit={false}
             />
-          ) : null}
-
-          {prepackedSku ? <PrepackedSkuRow sku={prepackedSku} /> : null}
-
-          {metaFields ? (
-            <>
-              {metaFields.packedByName ? (
-                <DetailsPanelRow label="Packed By">
-                  <div className="flex items-center justify-between gap-3">
-                    <p className="truncate text-sm font-bold text-gray-900">{metaFields.packedByName}</p>
-                    <p className="shrink-0 font-mono text-sm font-bold text-gray-900">{metaFields.packingDuration}</p>
-                  </div>
-                </DetailsPanelRow>
-              ) : null}
-              {metaFields.testedByName ? (
-                <DetailsPanelRow label="Tested By">
-                  <div className="flex items-center justify-between gap-3">
-                    <p className="truncate text-sm font-bold text-gray-900">{metaFields.testedByName}</p>
-                    <p className="shrink-0 font-mono text-sm font-bold text-gray-900">{metaFields.testingDuration}</p>
-                  </div>
-                </DetailsPanelRow>
-              ) : null}
-            </>
           ) : null}
 
           {ef.isSaving ? (

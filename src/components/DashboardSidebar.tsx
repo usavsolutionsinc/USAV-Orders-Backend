@@ -34,7 +34,7 @@ import {
   type SidebarNavItem,
 } from '@/lib/sidebar-navigation';
 import type { ShippedFormData } from '@/components/shipped';
-import { dispatchCloseShippedDetails } from '@/utils/events';
+import { dispatchCloseShippedDetails, DASHBOARD_SHIPPED_FOCUS_SEARCH_PARAM } from '@/utils/events';
 import { getDashboardOrderViewFromSearch, parseDashboardOpenOrderId } from '@/utils/dashboard-search-state';
 import { useDashboardSearchController } from '@/hooks/useDashboardSearchController';
 import { DeviceModeToggle } from '@/components/sidebar/DeviceModeToggle';
@@ -236,6 +236,7 @@ function SidebarContextPanel({ onBackToAppNav }: { onBackToAppNav?: () => void }
 
   if (routeKey === 'dashboard') {
     const activeTabId: string = dashboardSearch.orderView;
+    const focusShippedSearch = searchParams.get(DASHBOARD_SHIPPED_FOCUS_SEARCH_PARAM) === '1';
     const filterControl = (
       <SidebarTabSwitchChrome>
         <TabSwitch
@@ -263,6 +264,7 @@ function SidebarContextPanel({ onBackToAppNav }: { onBackToAppNav?: () => void }
           onShippedFilterChange={dashboardSearch.setShippedFilter}
           shippedSearchField={dashboardSearch.shippedSearchField}
           onShippedSearchFieldChange={dashboardSearch.setShippedSearchField}
+          autoFocusSearch={focusShippedSearch}
         />
       );
     }

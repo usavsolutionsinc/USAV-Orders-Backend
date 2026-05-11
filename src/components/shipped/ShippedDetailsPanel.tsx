@@ -10,6 +10,7 @@ import { TechDetailsStack } from './stacks/TechDetailsStack';
 import { PackerDetailsStack } from './stacks/PackerDetailsStack';
 import { DetailsStackDurationData } from './stacks/types';
 import { ShippedDetailsPanelContent } from './ShippedDetailsPanelContent';
+import { PanelActionBar } from './details-panel/PanelActionBar';
 import { QtyBadge } from '@/components/ui/QtyBadge';
 import { useDeleteOrderRow } from '@/hooks';
 import { dispatchNavigateShippedDetails } from '@/utils/events';
@@ -350,33 +351,36 @@ export function ShippedDetailsPanel({
               actionBar={stackActionBar}
             />
           ) : (
-            <ShippedDetailsPanelContent
-              shipped={{
-                ...shipped,
-                order_id: orderNumber,
-                item_number: itemNumber,
-                shipping_tracking_number: shippingTrackingNumber,
-              }}
-              durationData={durationData}
-              copiedAll={copiedAll}
-              onCopyAll={handleCopyAll}
-              onUpdate={_onUpdate}
-              editableShippingFields={{
-                orderNumber,
-                itemNumber,
-                trackingNumber: shippingTrackingNumber,
-                shipByDate,
-                isSaving: isSavingInlineFields,
-                isSavingShipByDate,
-                onOrderNumberChange: setOrderNumber,
-                onItemNumberChange: setItemNumber,
-                onTrackingNumberChange: setShippingTrackingNumber,
-                onShipByDateChange: setShipByDate,
-                onBlur: () => { void saveInlineFields(); },
-                onShipByDateBlur: () => { void saveShipByDate(shipByDate); },
-              }}
-              showShippingTimestamp={false}
-            />
+            <>
+              <PanelActionBar {...stackActionBar} />
+              <ShippedDetailsPanelContent
+                shipped={{
+                  ...shipped,
+                  order_id: orderNumber,
+                  item_number: itemNumber,
+                  shipping_tracking_number: shippingTrackingNumber,
+                }}
+                durationData={durationData}
+                copiedAll={copiedAll}
+                onCopyAll={handleCopyAll}
+                onUpdate={_onUpdate}
+                editableShippingFields={{
+                  orderNumber,
+                  itemNumber,
+                  trackingNumber: shippingTrackingNumber,
+                  shipByDate,
+                  isSaving: isSavingInlineFields,
+                  isSavingShipByDate,
+                  onOrderNumberChange: setOrderNumber,
+                  onItemNumberChange: setItemNumber,
+                  onTrackingNumberChange: setShippingTrackingNumber,
+                  onShipByDateChange: setShipByDate,
+                  onBlur: () => { void saveInlineFields(); },
+                  onShipByDateBlur: () => { void saveShipByDate(shipByDate); },
+                }}
+                showShippingTimestamp={false}
+              />
+            </>
           )}
 
           {context === 'shipped' && (

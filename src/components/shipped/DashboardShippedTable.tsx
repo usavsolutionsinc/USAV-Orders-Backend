@@ -22,7 +22,8 @@ import {
 import WeekHeader from '@/components/ui/WeekHeader';
 import { formatDateWithOrdinal, getCurrentPSTDateKey, toPSTDateKey } from '@/utils/date';
 import { ShippedOrder } from '@/lib/neon/orders-queries';
-import { fetchDashboardPackedRecords, fetchDashboardShippedSearch, type DashboardShippedSearchMeta } from '@/lib/dashboard-table-data';
+import { fetchDashboardPackedRecords } from '@/lib/dashboard-table-data';
+import { useShippedSearch } from '@/hooks/useShippedSearch';
 import { getWeekRangeForOffset } from '@/lib/dashboard-week-range';
 import { dispatchCloseShippedDetails, dispatchOpenShippedDetails, getOpenShippedDetailsPayload } from '@/utils/events';
 import type { PackerRecord } from '@/hooks/usePackerLogs';
@@ -90,13 +91,9 @@ export function DashboardShippedTable({
   const searchParams = useSearchParams();
   const queryClient = useQueryClient();
   const [selectedDetailId, setSelectedDetailId] = useState<number | null>(null);
-  const [searchFallbackRecords, setSearchFallbackRecords] = useState<PackerRecord[]>([]);
-  const [searchMeta, setSearchMeta] = useState<DashboardShippedSearchMeta | null>(null);
   const [stickyDate, setStickyDate] = useState('');
   const [currentCount, setCurrentCount] = useState(0);
-  const [isResolvingSearch, setIsResolvingSearch] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
-  const resolvedSearchKeyRef = useRef('');
 
   const shippedSearchField = normalizeShippedSearchField(searchParams.get('shippedSearchField'));
   const shippedFilterParam = searchParams.get('shippedFilter');
@@ -132,15 +129,23 @@ export function DashboardShippedTable({
         weekEnd: weekRange.endStr,
         shippedFilter,
       }),
-    // When a search is active, skip the packer_logs prefetch and drive the
-    // table directly from /api/shipped via searchFallbackRecords. This closes
-    // the gap where an order exists in the DB but has no packer_logs row for
-    // the current week, which previously returned "no results" even when the
-    // shipped API would have found it.
+    // When a search is active, packer_logs (week-scoped) is bypassed and we drive
+    // from /api/shipped via the universal `useShippedSearch` hook — same TanStack
+    // Query cache key as `ShippedSidebar`, so both views show identical results.
     enabled: !normalizedSearch,
     staleTime: 5 * 60 * 1000,
     gcTime: 15 * 60 * 1000,
     placeholderData: (previousData) => previousData,
+  });
+
+  // Universal search subscription. Same params as ShippedSidebar → shared cache,
+  // one network call total. Disabled when search is empty.
+  const searchResult = useShippedSearch({
+    query: search,
+    shippedFilter,
+    searchField: shippedSearchField,
+    packedBy,
+    testedBy,
   });
 
   useEffect(() => {
@@ -193,10 +198,6 @@ export function DashboardShippedTable({
   const clearSearch = () => {
     const params = new URLSearchParams(searchParams.toString());
     params.delete('search');
-    resolvedSearchKeyRef.current = '';
-    setSearchFallbackRecords([]);
-    setSearchMeta(null);
-    setIsResolvingSearch(false);
     const nextSearch = params.toString();
     const nextPath = pathname || '/dashboard';
     router.replace(nextSearch ? `${nextPath}?${nextSearch}` : nextPath, { scroll: false });
@@ -308,125 +309,32 @@ export function DashboardShippedTable({
     [dedupedRecords, shippedFilter],
   );
 
-  const filteredRecords = useMemo(() =>
-    normalizedSearch
-      ? typeFilteredRecords.filter((record) => {
-        const haystackByField: Record<ShippedSearchField, Array<unknown>> = {
-          all: [
-            record.product_title,
-            record.order_id,
-            record.shipping_tracking_number,
-            record.scan_ref,
-            record.sku,
-            record.serial_number,
-          ],
-          order_id: [record.order_id],
-          tracking: [record.shipping_tracking_number, record.scan_ref],
-          product_title: [record.product_title],
-          sku: [record.sku],
-          serial_number: [record.serial_number],
-        };
-        const values = haystackByField[shippedSearchField]
-          .map((value) => String(value || '').trim().toLowerCase())
-          .filter(Boolean);
-        if (shippedSearchField === 'order_id') {
-          return values.some((value) => value === normalizedSearch || value.startsWith(normalizedSearch));
-        }
-        return values.join(' ').includes(normalizedSearch);
-      })
-    : typeFilteredRecords,
-    [normalizedSearch, shippedSearchField, typeFilteredRecords],
+  // Single source of truth for what the table renders.
+  //   - Searching: render the universal hook's `/api/shipped` result, mapped into the table's
+  //     PackerRecord shape. Same cache key as ShippedSidebar = identical rows, one fetch.
+  //   - Not searching: show this week's packer_logs scoped by shippedFilter.
+  const searchRecords = useMemo<PackerRecord[]>(
+    () => (searchResult.data?.records ?? []).map(toSearchResultRecord),
+    [searchResult.data, toSearchResultRecord],
   );
-
   const records = useMemo(
-    () => filteredRecords.length > 0 ? filteredRecords : searchFallbackRecords,
-    [filteredRecords, searchFallbackRecords],
+    () => (normalizedSearch ? searchRecords : typeFilteredRecords),
+    [normalizedSearch, searchRecords, typeFilteredRecords],
   );
-
-  useEffect(() => {
-    if (!normalizedSearch) {
-      resolvedSearchKeyRef.current = '';
-      setSearchFallbackRecords([]);
-      setSearchMeta(null);
-      setIsResolvingSearch(false);
-      return;
-    }
-
-    if (filteredRecords.length > 0 || query.isLoading || query.isFetching) {
-      return;
-    }
-
-    const searchKey = [
-      normalizedSearch,
-      packedBy ?? '',
-      testedBy ?? '',
-      shippedFilter,
-      shippedSearchField,
-    ].join('|');
-
-    if (resolvedSearchKeyRef.current === searchKey) {
-      return;
-    }
-
-    let cancelled = false;
-
-    const resolveSearch = async () => {
-      setIsResolvingSearch(true);
-      try {
-        const { records: shippedResults, meta } = await fetchDashboardShippedSearch({
-          searchQuery: search,
-          packedBy,
-          testedBy,
-          shippedFilter,
-          searchField: shippedSearchField,
-        });
-        if (cancelled) return;
-
-        const normalizedResults = shippedResults.map(toSearchResultRecord);
-        resolvedSearchKeyRef.current = searchKey;
-        setSearchFallbackRecords(normalizedResults);
-        setSearchMeta(meta);
-      } catch {
-        if (!cancelled) {
-          resolvedSearchKeyRef.current = searchKey;
-          setSearchFallbackRecords([]);
-          setSearchMeta(null);
-        }
-      } finally {
-        if (!cancelled) setIsResolvingSearch(false);
-      }
-    };
-
-    void resolveSearch();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [
-    filteredRecords.length,
-    normalizedSearch,
-    packedBy,
-    query.isFetching,
-    query.isLoading,
-    search,
-    shippedSearchField,
-    shippedFilter,
-    testedBy,
-    toSearchResultRecord,
-  ]);
+  const searchMeta = searchResult.data?.meta ?? null;
+  const isResolvingSearch = searchResult.isFetching && normalizedSearch.length > 0;
 
   const handleRowClick = useCallback((record: PackerRecord) => {
     const detail = toDetailRecord(record);
     const detailId = getDetailId(record);
-
+    // Single state writer: dispatch the event and let the listener (line ~172)
+    // update `selectedDetailId`. Writing it here too caused two state updates
+    // per click and was the visible "duplicate open/close function".
     if (selectedDetailId !== null && detailId === selectedDetailId) {
       dispatchCloseShippedDetails();
-      setSelectedDetailId(null);
       return;
     }
-
     dispatchOpenShippedDetails(detail, 'shipped');
-    setSelectedDetailId(detailId);
   }, [getDetailId, selectedDetailId, toDetailRecord]);
 
   const groupedRecords = useMemo(() => {
@@ -473,8 +381,8 @@ export function DashboardShippedTable({
       if (!nextRecord) return;
 
       const nextDetail = toDetailRecord(nextRecord);
+      // Listener at line ~172 will sync `selectedDetailId` from this event.
       dispatchOpenShippedDetails(nextDetail, 'shipped');
-      setSelectedDetailId(getDetailId(nextRecord));
     };
 
     window.addEventListener('navigate-shipped-details' as any, handleNavigate as any);

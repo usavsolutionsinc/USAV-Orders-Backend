@@ -60,3 +60,25 @@ export function dispatchCloseShippingEditCard(): void {
   if (typeof window === 'undefined') return;
   window.dispatchEvent(new CustomEvent('close-shipping-edit-card'));
 }
+
+// ── SKU Stock (desktop) ─────────────────────────────────────────────────────
+
+/** `GlobalDesktopSkuScanner` listens for this to open camera scan from Quick tools FAB. */
+export const SKU_STOCK_DESKTOP_SCAN_EVENT = 'sku-stock:open-desktop-scanner';
+
+export function dispatchSkuStockDesktopScanner(): void {
+  if (typeof window === 'undefined') return;
+  window.dispatchEvent(new CustomEvent(SKU_STOCK_DESKTOP_SCAN_EVENT));
+}
+
+// ── Dashboard shipped search ─────────────────────────────────────────────────
+
+/** When `=1`, embedded Shipped sidebar focuses search, then strips this param from the URL. */
+export const DASHBOARD_SHIPPED_FOCUS_SEARCH_PARAM = 'focusShippedSearch';
+
+export function dashboardShippedFocusSearchHref(): string {
+  const p = new URLSearchParams();
+  p.set('shipped', '');
+  p.set(DASHBOARD_SHIPPED_FOCUS_SEARCH_PARAM, '1');
+  return `/dashboard?${p.toString()}`;
+}

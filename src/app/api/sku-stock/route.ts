@@ -12,11 +12,21 @@ export async function GET(req: NextRequest) {
     const normalizedQuery = query.toLowerCase().replace(/[^a-z0-9]+/g, '');
     let sql = `
       SELECT
-        id,
-        stock,
-        sku,
-        product_title
-      FROM sku_stock
+        ss.id,
+        ss.stock,
+        ss.sku,
+        COALESCE(sp.display_name, sc.product_title, NULLIF(ss.product_title, '')) AS product_title
+      FROM sku_stock ss
+      LEFT JOIN sku_catalog sc ON sc.sku = ss.sku
+      LEFT JOIN LATERAL (
+        SELECT e.display_name
+        FROM sku_platform_ids e
+        WHERE e.sku_catalog_id = sc.id
+          AND e.platform = 'ecwid'
+          AND e.is_active = true
+          AND e.display_name IS NOT NULL
+        LIMIT 1
+      ) sp ON TRUE
     `;
 
     if (query) {
@@ -24,20 +34,20 @@ export async function GET(req: NextRequest) {
       params.push(`%${fuzzyQuery}%`);
       params.push(`%${normalizedQuery}%`);
       sql += `
-        WHERE COALESCE(sku, '') ILIKE $1
-           OR COALESCE(product_title, '') ILIKE $1
-           OR COALESCE(product_title, '') ILIKE $2
-           OR regexp_replace(lower(COALESCE(product_title, '')), '[^a-z0-9]+', '', 'g') ILIKE $3
-           OR COALESCE(stock, '') ILIKE $1
+        WHERE COALESCE(ss.sku, '') ILIKE $1
+           OR COALESCE(sp.display_name, sc.product_title, ss.product_title, '') ILIKE $1
+           OR COALESCE(sp.display_name, sc.product_title, ss.product_title, '') ILIKE $2
+           OR regexp_replace(lower(COALESCE(sp.display_name, sc.product_title, ss.product_title, '')), '[^a-z0-9]+', '', 'g') ILIKE $3
+           OR COALESCE(ss.stock::text, '') ILIKE $1
       `;
     }
 
     params.push(limit);
     sql += `
-      ORDER BY COALESCE(NULLIF(regexp_replace(COALESCE(stock, ''), '[^0-9-]+', '', 'g'), ''), '0')::integer DESC,
-               COALESCE(product_title, '') ASC,
-               COALESCE(sku, '') ASC,
-               id DESC
+      ORDER BY COALESCE(ss.stock, 0) DESC,
+               COALESCE(sp.display_name, sc.product_title, ss.product_title, '') ASC,
+               COALESCE(ss.sku, '') ASC,
+               ss.id DESC
       LIMIT $${params.length}
     `;
 

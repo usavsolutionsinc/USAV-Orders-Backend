@@ -154,10 +154,14 @@ export function useDashboardSelectedOrder(detailsEnabled: boolean) {
 
   useEffect(() => {
     if (openOrderId == null) {
+      // CRITICAL: bail if a router.replace from applySelectedOrder hasn't landed yet.
+      // Without this, the render between setSelectedShipped(A) and the URL catching up
+      // to ?openOrderId=A sees `openOrderId == null && selectedShipped` and clears the
+      // brand-new selection — producing the "panel opens, closes, reopens" jitter.
+      if (pendingOrderIdRef.current != null) return;
       if (selectedShipped) {
         clearSelectedOrder(false);
       }
-      pendingOrderIdRef.current = null;
       return;
     }
 

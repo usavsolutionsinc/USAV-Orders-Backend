@@ -135,7 +135,7 @@ function DashboardPageContent() {
                     ) : (
                         <ShippedDetailsPanel
                             shipped={selectedShipped}
-                            context="shipped"
+                            context="dashboard"
                             onClose={requestCloseSelectedOrder}
                             onUpdate={() => {
                                 window.dispatchEvent(new CustomEvent('dashboard-refresh'));
