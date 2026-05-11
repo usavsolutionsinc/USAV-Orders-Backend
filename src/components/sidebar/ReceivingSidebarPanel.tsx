@@ -392,7 +392,7 @@ window.onafterprint=function(){setTimeout(function(){window.close();},80);};
 </script>
 </body></html>`;
 
-  const w = window.open('', '_blank', 'width=320,height=220');
+  const w = window.open('', '_blank', 'width=900,height=700');
   if (!w) {
     console.warn('printReceivingLabel: popup blocked');
     return;
