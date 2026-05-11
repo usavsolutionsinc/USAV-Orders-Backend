@@ -274,11 +274,15 @@ export function PackerTable({ packedBy }: PackerTableProps) {
                         });
                         return (
                           <motion.div
+                            key={
+                              record.id != null
+                                ? `pkr-${record.id}`
+                                : `pkr-${date}-${index}-${record.shipping_tracking_number || record.scan_ref || record.order_id || 'row'}`
+                            }
                             {...framerPresence.tableRow}
                             transition={framerTransition.tableRowMount}
                             whileHover={{ x: 2 }}
                             whileTap={{ scale: 0.998 }}
-                            key={record.id}
                             onClick={() => openDetails(record)}
                             className={`grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2 px-3 py-1.5 transition-all border-b border-gray-300 cursor-pointer hover:bg-blue-50/40 ${
                               index % 2 === 0 ? 'bg-white' : 'bg-gray-50/10'
