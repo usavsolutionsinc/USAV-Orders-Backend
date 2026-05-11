@@ -121,7 +121,7 @@ export function MobilePackingConfirmCard({
         {/* Body */}
         <div className="px-4 py-4 space-y-4">
           {!compact && (
-            <p className="text-[10px] font-black text-gray-400 uppercase tracking-wider">Does this look right?</p>
+            <p className="text-[10px] font-black text-gray-400 uppercase tracking-wider">Ready to pack?</p>
           )}
           <h3 className="text-base font-black text-gray-900 leading-tight">{fba.productTitle}</h3>
 
@@ -204,7 +204,7 @@ export function MobilePackingConfirmCard({
       <div className="px-4 py-4 space-y-4">
         {!compact && (
           <p className="text-[10px] font-black text-gray-400 uppercase tracking-wider">
-            {variant === 'exception' ? 'No matching order found — proceed anyway?' : 'Does this order look right?'}
+            {variant === 'exception' ? 'No matching order — pack anyway?' : 'Ready to pack?'}
           </p>
         )}
 

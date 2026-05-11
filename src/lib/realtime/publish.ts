@@ -374,6 +374,53 @@ export async function publishPackerLogChanged(payload: PackerLogChangedPayload) 
   });
 }
 
+// ─── Packer mobile hand-off ───────────────────────────────────────────────
+// Fired when a desktop scan creates a fresh packer_log row. The paired phone
+// (subscribed to packer:{staffId}) lands on the confirm step so the packer
+// can answer "Ready to pack?" and proceed to the photo camera.
+
+export interface PackerScanReadyPayload {
+  staffId: number;
+  packerLogId: number | null;
+  variant: 'order' | 'fba' | 'exception';
+  scannedValue: string;
+  trackingType: string | null;
+  order: {
+    orderId: string;
+    productTitle: string;
+    qty: number;
+    condition: string;
+    tracking: string;
+    sku?: string | null;
+    itemNumber?: string | null;
+    shipByDate?: string | null;
+  } | null;
+  fba: {
+    fnsku: string;
+    productTitle: string;
+    shipmentRef: string | null;
+    plannedQty: number;
+    combinedPackScannedQty: number;
+    isNew: boolean;
+  } | null;
+  source: string;
+}
+
+export async function publishPackerScanReady(payload: PackerScanReadyPayload) {
+  await publishEvent(`packer:${payload.staffId}`, 'scan_ready', {
+    type: 'packer.scan_ready',
+    staffId: payload.staffId,
+    packerLogId: payload.packerLogId,
+    variant: payload.variant,
+    scannedValue: payload.scannedValue,
+    trackingType: payload.trackingType,
+    order: payload.order,
+    fba: payload.fba,
+    source: payload.source,
+    timestamp: formatPSTTimestamp(),
+  });
+}
+
 export async function publishReceivingLogChanged(payload: ReceivingLogChangedPayload) {
   await publishEvent(getStationChannelName(), 'receiving-log.changed', {
     type: 'receiving-log.changed',

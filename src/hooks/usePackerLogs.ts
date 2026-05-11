@@ -85,7 +85,9 @@ export function usePackerLogs(packerId: number, options: UsePackerLogsOptions = 
         params.set('weekStart', weekRange.startStr);
         params.set('weekEnd', weekRange.endStr);
       }
-      const res = await fetch(`/api/packerlogs?${params}`);
+      // API sets Cache-Control max-age; without no-store, refetches after DELETE can
+      // return a stale browser-cached body and the table won't update until cache expires.
+      const res = await fetch(`/api/packerlogs?${params}`, { cache: 'no-store' });
       if (!res.ok) throw new Error('Failed to fetch packer logs');
       const data = await res.json();
       return Array.isArray(data) ? data : [];

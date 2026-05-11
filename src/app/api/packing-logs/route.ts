@@ -10,7 +10,7 @@ import { formatPSTTimestamp, normalizePSTTimestamp, getCurrentPSTDateKey } from 
 import { resolveShipmentId } from '@/lib/shipping/resolve';
 import { createStationActivityLog } from '@/lib/station-activity';
 import { createAuditLog } from '@/lib/audit-logs';
-import { publishActivityLogged, publishOrderChanged, publishPackerLogChanged } from '@/lib/realtime/publish';
+import { publishActivityLogged, publishOrderChanged, publishPackerLogChanged, publishPackerScanReady } from '@/lib/realtime/publish';
 import { ensureReplenishmentForOrder } from '@/lib/replenishment';
 
 const LEGACY_PACKER_ALIAS_TO_STAFF_ID: Record<string, number> = {
@@ -303,6 +303,25 @@ export async function POST(req: NextRequest) {
                     await invalidateCacheTags(['packing-logs', 'fba-board']);
                     if (fbaRecord.id) await prependToPackerLogsCache(staffId, fbaRecord);
 
+                    // Hand off to a paired phone (if any) for the photo flow.
+                    publishPackerScanReady({
+                        staffId,
+                        packerLogId: fbaPackerLogId,
+                        variant: 'fba',
+                        scannedValue: scanInput,
+                        trackingType: 'FBA',
+                        order: null,
+                        fba: {
+                            fnsku: String(fba.fnskus || '').split(',')[0]?.trim() || '',
+                            productTitle: productTitle,
+                            shipmentRef: fba.shipment_ref || null,
+                            plannedQty: Number(fba.total_qty ?? 0),
+                            combinedPackScannedQty: Number(fba.total_qty ?? 0),
+                            isNew: false,
+                        },
+                        source: 'packing-logs.fba',
+                    }).catch(() => {});
+
                     return NextResponse.json({
                         success: true,
                         trackingType: 'FBA',
@@ -429,6 +448,26 @@ export async function POST(req: NextRequest) {
                 await invalidateCacheTags(['packing-logs', 'orders', 'orders-next', 'shipped']);
                 if (nfSalId) publishActivityLogged({ id: nfSalId, station: 'PACK', activityType: 'PACK_COMPLETED', staffId, scanRef: nfScanRef ?? scanInput, fnsku: null, source: 'packing-logs' }).catch(() => {});
                 if (notFoundRecord.id) await prependToPackerLogsCache(staffId, notFoundRecord);
+
+                publishPackerScanReady({
+                    staffId,
+                    packerLogId: notFoundPackerLogId,
+                    variant: 'exception',
+                    scannedValue: scanInput,
+                    trackingType: classification.trackingType,
+                    order: {
+                        orderId: '',
+                        productTitle: 'Unmatched tracking — exception queue',
+                        qty: 1,
+                        condition: 'N/A',
+                        tracking: scanInput,
+                        sku: null,
+                        itemNumber: null,
+                        shipByDate: null,
+                    },
+                    fba: null,
+                    source: 'packing-logs.exception',
+                }).catch(() => {});
 
                 return NextResponse.json({
                     success: true,
@@ -568,6 +607,25 @@ export async function POST(req: NextRequest) {
                     action: 'insert',
                     packerLogId: foundPackerLogId ?? undefined,
                     source: 'packing-logs',
+                }),
+                publishPackerScanReady({
+                    staffId,
+                    packerLogId: foundPackerLogId,
+                    variant: 'order',
+                    scannedValue: scanInput,
+                    trackingType: classification.trackingType,
+                    order: {
+                        orderId: String(order.order_id ?? '').trim(),
+                        productTitle: String(order.product_title ?? '').trim() || 'Unknown product',
+                        qty: Math.max(1, Number(order.quantity ?? 1) || 1),
+                        condition: String(order.condition ?? '').trim() || 'N/A',
+                        tracking: String(order.tracking_number ?? scanInput).trim(),
+                        sku: order.sku ?? null,
+                        itemNumber: order.item_number ?? null,
+                        shipByDate: order.ship_by_date ?? null,
+                    },
+                    fba: null,
+                    source: 'packing-logs.order',
                 }),
             ]);
 

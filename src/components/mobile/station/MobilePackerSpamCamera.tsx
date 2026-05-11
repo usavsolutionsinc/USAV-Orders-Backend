@@ -171,7 +171,7 @@ export function MobilePackerSpamCamera({
           type="button"
           onClick={handleCancel}
           aria-label="Close camera"
-          className="h-11 w-11 flex items-center justify-center rounded-full bg-white/10 text-white active:bg-white/20"
+          className="h-11 w-11 flex items-center justify-center rounded-full bg-red-600 text-white shadow-lg shadow-red-600/40 active:bg-red-700 transition-colors"
         >
           <X className="h-5 w-5" />
         </button>

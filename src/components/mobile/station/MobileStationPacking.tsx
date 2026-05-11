@@ -51,6 +51,8 @@ interface MobileStationPackingProps {
   toolbar?: MobileShellProps['toolbar'];
   /** When true, no MobileShell top bar on scan/lookup — parent provides {@link MobilePageHeader} (packer mobile). */
   suppressShellToolbar?: boolean;
+  /** When true, hides the bottom search + camera dock (packer mobile full-bleed content). */
+  suppressBottomActionBar?: boolean;
   /** Fills parent flex region (e.g. `min-h-0 flex-1 h-full`). */
   shellClassName?: string;
 }
@@ -71,6 +73,7 @@ export function MobileStationPacking({
   onComplete,
   toolbar: externalToolbar,
   suppressShellToolbar = false,
+  suppressBottomActionBar = false,
   shellClassName,
 }: MobileStationPackingProps) {
   const [state, dispatch] = useReducer(wizardReducer, initialWizardState);
@@ -200,6 +203,48 @@ export function MobileStationPacking({
     return () => window.removeEventListener('mobile-scan-fab-open', h);
   }, [handleOpenScanSheet]);
 
+  // ── Subscribe to desktop-originated packer scans ───────────────────────────
+  // When the desktop (PackerSidebarPanel / StationPacking) scans a tracking
+  // number and writes packer_logs, the API publishes `scan_ready` on
+  // packer:{staffId}. We land on the confirm step here ("Ready to pack?").
+  useEffect(() => {
+    const channelName = `packer:${staffId}`;
+    let channelRef: any = null;
+    let listener: any = null;
+    let cancelled = false;
+
+    void getAblyClient().then((client) => {
+      if (cancelled || !client) return;
+      try {
+        const ch = client.channels.get(channelName);
+        channelRef = ch;
+        listener = (msg: any) => {
+          const data = msg?.data || {};
+          if (!data || data.type !== 'packer.scan_ready') return;
+          dispatch({
+            type: 'REMOTE_SCAN_READY',
+            order: data.order ?? null,
+            fba: data.fba ?? null,
+            variant: data.variant || 'order',
+            packerLogId: data.packerLogId ?? null,
+            scanType: data.trackingType || 'ORDERS',
+            scannedValue: data.scannedValue || '',
+          });
+        };
+        ch.subscribe('scan_ready', listener);
+      } catch {
+        // best-effort; absent realtime should not break the wizard
+      }
+    });
+
+    return () => {
+      cancelled = true;
+      try {
+        if (channelRef && listener) channelRef.unsubscribe('scan_ready', listener);
+      } catch {}
+    };
+  }, [staffId, getAblyClient]);
+
   // ── Revoke stale preview URLs ──────────────────────────────────────────────
   // After every render, any object URL that was known previously but is no
   // longer in capturedPhotos (RESET, PHOTO_REMOVED, batch replace) is freed.
@@ -303,7 +348,7 @@ export function MobileStationPacking({
 
   // ── Render ─────────────────────────────────────────────────────────────────
 
-  const showBottomBar = state.step === 'scan';
+  const showBottomBar = state.step === 'scan' && !suppressBottomActionBar;
 
   const noTopShellToolbar =
     suppressShellToolbar && (state.step === 'scan' || state.step === 'lookup');
@@ -413,9 +458,11 @@ export function MobileStationPacking({
                     <Barcode className="w-7 h-7 text-gray-400" />
                   </div>
                   <p className="text-sm font-bold text-gray-500">Scan a tracking number to start</p>
-                  <p className="text-[11px] text-gray-400 mt-1">
-                    Use the camera button or type below
-                  </p>
+                  {!suppressBottomActionBar && (
+                    <p className="text-[11px] text-gray-400 mt-1">
+                      Use the camera button or type below
+                    </p>
+                  )}
                 </div>
 
                 <div className="pt-4 border-t border-gray-50 text-center">
@@ -479,8 +526,13 @@ export function MobileStationPacking({
                   packerId={userId}
                   packerLogId={state.packerLogId}
                   photos={state.capturedPhotos}
+                  productTitle={
+                    state.resolvedOrder?.productTitle
+                      || state.resolvedFba?.productTitle
+                      || null
+                  }
                   onPhotosBatched={handlePhotosBatched}
-                  onBack={() => dispatch({ type: 'BACK' })}
+                  onBack={() => dispatch({ type: 'RESET' })}
                 />
               </motion.div>
             )}

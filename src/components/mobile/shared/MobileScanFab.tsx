@@ -15,6 +15,9 @@ const ROUTE_SPECIFIC_PREFIXES = ['/tech', '/packer', '/sku-stock'];
 // landing). Don't double-mount the FAB there.
 const HIDDEN_PREFIXES = ['/m/'];
 
+/** Packer page provides its own layout; suppress the global scan FAB there. */
+const SUPPRESS_GLOBAL_SCAN_FAB_PREFIXES = ['/packer'];
+
 function matchesPrefix(pathname: string | null, prefixes: string[]): boolean {
   if (!pathname) return false;
   return prefixes.some((p) => pathname === p || pathname.startsWith(p.endsWith('/') ? p : `${p}/`));
@@ -30,6 +33,7 @@ export function MobileScanFab() {
   const [sheetOpen, setSheetOpen] = useState(false);
 
   const hidden = matchesPrefix(pathname, HIDDEN_PREFIXES);
+  const suppressGlobalFab = matchesPrefix(pathname, SUPPRESS_GLOBAL_SCAN_FAB_PREFIXES);
   const routeHasOwnFlow = matchesPrefix(pathname, ROUTE_SPECIFIC_PREFIXES);
   const paired = Boolean(session);
   const hasNotification = paired && unreadEchoCount > 0;
@@ -49,7 +53,7 @@ export function MobileScanFab() {
     setSheetOpen(false);
   }, [pathname]);
 
-  if (hidden) return null;
+  if (hidden || suppressGlobalFab) return null;
 
   return (
     <>

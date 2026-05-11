@@ -11,6 +11,8 @@ interface MobilePackingPhotoStepProps {
   packerId: string;
   packerLogId: number | null;
   photos: CapturedPhoto[];
+  /** Product title rendered as the camera header (so the packer can verify what they're packing). */
+  productTitle?: string | null;
   /** Called with the full batch of new photos on Done. Replaces existing batch. */
   onPhotosBatched: (photos: CapturedPhoto[]) => void;
   onBack: () => void;
@@ -31,6 +33,7 @@ interface MobilePackingPhotoStepProps {
  */
 export function MobilePackingPhotoStep({
   photos: _photos,
+  productTitle,
   onPhotosBatched,
   onBack,
   maxPhotos = 5,
@@ -55,11 +58,21 @@ export function MobilePackingPhotoStep({
     [onPhotosBatched, onBack],
   );
 
+  const headerNode = productTitle ? (
+    <div className="min-w-0">
+      <p className="text-[9px] font-black uppercase tracking-[0.2em] text-white/50">
+        Ready to pack
+      </p>
+      <p className="text-[13px] font-black text-white truncate">{productTitle}</p>
+    </div>
+  ) : undefined;
+
   return (
     <MobilePackerSpamCamera
       onDone={handleDone}
       onCancel={onBack}
       maxPhotos={maxPhotos}
+      header={headerNode}
     />
   );
 }

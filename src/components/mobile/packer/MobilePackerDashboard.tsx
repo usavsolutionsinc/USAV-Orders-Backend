@@ -212,6 +212,7 @@ export function MobilePackerDashboard({ packerId }: MobilePackerDashboardProps) 
               goal={dailyGoal}
               onComplete={refreshHistory}
               suppressShellToolbar
+              suppressBottomActionBar
               shellClassName={shellFill}
             />
           ) : (

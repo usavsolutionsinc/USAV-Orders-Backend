@@ -8,7 +8,7 @@ import {
 } from '@/design-system/foundations/motion-framer';
 import { Clock, Camera, ChevronRight, Image, Edit, X, Trash2, RotateCcw } from '@/components/Icons';
 import { getLast4 } from '@/components/ui/CopyChip';
-import { PhotoCapture } from '@/components/station/PhotoCapture';
+import { MobilePackerSpamCamera, type CapturedShot } from './MobilePackerSpamCamera';
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -98,59 +98,63 @@ export function MobileLastOrderCard({ staffId, packerId, refreshKey = 0 }: Mobil
     return () => window.removeEventListener('usav-refresh-data', handler);
   }, [fetchLastOrder]);
 
-  // ── Add photo handler ──
+  // ── Batch add photos (uses the spam camera) ──
 
-  const handleAddPhoto = useCallback(async (blob: Blob) => {
-    if (!lastOrder) return;
+  const handleAddPhotos = useCallback(async (shots: CapturedShot[]) => {
+    if (!lastOrder || shots.length === 0) {
+      setIsAddingPhoto(false);
+      return;
+    }
+    setIsAddingPhoto(false);
     setIsUploading(true);
 
-    try {
-      const reader = new FileReader();
-      const base64 = await new Promise<string>((resolve, reject) => {
-        reader.onload = () => resolve(reader.result as string);
-        reader.onerror = reject;
-        reader.readAsDataURL(blob);
-      });
+    const orderId = lastOrder.orderId || lastOrder.tracking || 'unknown';
+    const baseIndex = lastOrder.photos.length;
 
-      const res = await fetch('/api/packing-logs/save-photo', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          photo: base64,
-          orderId: lastOrder.orderId || lastOrder.tracking || 'unknown',
-          packerId,
-          photoIndex: lastOrder.photos.length,
-          packerLogId: lastOrder.packerLogId,
-          photoType: 'packer_photo',
-        }),
-      });
+    const results = await Promise.allSettled(
+      shots.map(async (shot, i) => {
+        const reader = new FileReader();
+        const base64 = await new Promise<string>((resolve, reject) => {
+          reader.onload = () => resolve(reader.result as string);
+          reader.onerror = reject;
+          reader.readAsDataURL(shot.blob);
+        });
+        const res = await fetch('/api/packing-logs/save-photo', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            photo: base64,
+            orderId,
+            packerId,
+            photoIndex: baseIndex + i,
+            packerLogId: lastOrder.packerLogId,
+            photoType: 'packer_photo',
+          }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data?.error || 'Upload failed');
+        return data as { path: string; photoId: number | null };
+      }),
+    );
 
-      const data = await res.json();
-      if (!res.ok) throw new Error(data?.error || 'Upload failed');
+    const uploaded = results
+      .filter((r): r is PromiseFulfilledResult<{ path: string; photoId: number | null }> => r.status === 'fulfilled')
+      .map((r, i) => ({
+        id: r.value.photoId ?? Date.now() + i,
+        url: r.value.path,
+        photoType: 'packer_photo',
+        createdAt: new Date().toISOString(),
+      }));
 
-      // Append new photo to local state
+    // Free the blob URLs now that we own the server paths
+    shots.forEach((s) => URL.revokeObjectURL(s.previewUrl));
+
+    if (uploaded.length > 0) {
       setLastOrder((prev) =>
-        prev
-          ? {
-              ...prev,
-              photos: [
-                ...prev.photos,
-                {
-                  id: data.photoId ?? Date.now(),
-                  url: data.path,
-                  photoType: 'packer_photo',
-                  createdAt: new Date().toISOString(),
-                },
-              ],
-            }
-          : prev,
+        prev ? { ...prev, photos: [...prev.photos, ...uploaded] } : prev,
       );
-      setIsAddingPhoto(false);
-    } catch (err: any) {
-      console.error('Failed to add photo:', err);
-    } finally {
-      setIsUploading(false);
     }
+    setIsUploading(false);
   }, [lastOrder, packerId]);
 
   // ── Don't render if no data ──
@@ -308,43 +312,38 @@ export function MobileLastOrderCard({ staffId, packerId, refreshKey = 0 }: Mobil
                   )}
                 </div>
 
-                {/* ── Add photo inline capture ── */}
-                <AnimatePresence>
-                  {isAddingPhoto && (
-                    <motion.div
-                      initial={{ opacity: 0, height: 0 }}
-                      animate={{ opacity: 1, height: 'auto' }}
-                      exit={{ opacity: 0, height: 0 }}
-                      transition={{ duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
-                      className="overflow-hidden"
-                    >
-                      <div className="relative">
-                        {isUploading && (
-                          <div className="absolute inset-0 z-10 bg-white/80 rounded-2xl flex items-center justify-center">
-                            <p className="text-[11px] font-bold text-gray-500 animate-pulse">Uploading...</p>
-                          </div>
-                        )}
-                        <PhotoCapture
-                          onCapture={handleAddPhoto}
-                          disabled={isUploading}
-                          className="w-full"
-                        />
-                        <button
-                          type="button"
-                          onClick={() => setIsAddingPhoto(false)}
-                          className="mt-2 w-full text-center text-[10px] font-bold text-gray-400 active:text-gray-600 transition-colors"
-                        >
-                          Cancel
-                        </button>
-                      </div>
-                    </motion.div>
-                  )}
-                </AnimatePresence>
+                {/* Inline uploading hint after batch upload starts */}
+                {isUploading && (
+                  <p className="text-[10px] font-bold text-gray-500 animate-pulse">
+                    Uploading photos…
+                  </p>
+                )}
               </div>
             </motion.div>
           )}
         </AnimatePresence>
       </motion.div>
+
+      {/* ── Fullscreen spam camera for adding photos to the last packed order ── */}
+      <AnimatePresence>
+        {isAddingPhoto && (
+          <MobilePackerSpamCamera
+            onDone={handleAddPhotos}
+            onCancel={() => setIsAddingPhoto(false)}
+            maxPhotos={5}
+            header={
+              <div className="min-w-0">
+                <p className="text-[9px] font-black uppercase tracking-[0.2em] text-white/50">
+                  Add photos · last packed
+                </p>
+                <p className="text-[13px] font-black text-white truncate">
+                  {lastOrder.productTitle || lastOrder.tracking || 'Last order'}
+                </p>
+              </div>
+            }
+          />
+        )}
+      </AnimatePresence>
 
       {/* ── Fullscreen photo lightbox ── */}
       <AnimatePresence>
