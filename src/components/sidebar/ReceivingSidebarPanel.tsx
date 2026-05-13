@@ -10,7 +10,7 @@ import {
   sidebarHeaderRowClass,
 } from '@/components/layout/header-shell';
 import { Barcode, ChevronDown, ChevronUp, Clipboard, Printer, RefreshCw, X } from '@/components/Icons';
-import { TrackingChip, getLast4 } from '@/components/ui/CopyChip';
+import { TrackingChip, OrderIdChip, getLast4 } from '@/components/ui/CopyChip';
 import { SearchBar } from '@/components/ui/SearchBar';
 import { ViewDropdown } from '@/components/ui/ViewDropdown';
 import StaffSelector from '@/components/StaffSelector';
@@ -195,7 +195,7 @@ function mapApiLineToPoSummary(l: {
     zoho_purchaseorder_id: l.zoho_purchaseorder_id ?? null,
     zoho_purchaseorder_number: l.zoho_purchaseorder_number ?? null,
     receiving_type: l.receiving_type ?? 'PO',
-    condition_grade: l.condition_grade ?? 'BRAND_NEW',
+    condition_grade: l.condition_grade ?? 'USED_A',
   };
 }
 
@@ -957,324 +957,264 @@ function LineEditPanel({
 
   return (
     <div className="border-b border-gray-200 bg-gray-50">
-      {/* Top bar: refresh · up/down · status · close */}
-      <div className="flex items-center justify-between gap-2 px-3 py-1.5">
-        <div className="flex items-center gap-2">
-          <button
-            type="button"
-            onClick={syncWithZoho}
-            disabled={zohoSyncing}
-            aria-label="Sync with Zoho by tracking number"
-            title="Sync with Zoho by tracking number"
-            className="text-gray-400 transition-colors hover:text-gray-700 disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            <RefreshCw className="h-3.5 w-3.5" />
-          </button>
-          <button
-            type="button"
-            onClick={onPrev}
-            disabled={!onPrev || !canPrev}
-            aria-label="Previous line in PO"
-            title="Previous line"
-            className="text-gray-400 transition-colors hover:text-gray-700 disabled:cursor-not-allowed disabled:opacity-30"
-          >
-            <ChevronUp className="h-4 w-4" />
-          </button>
-          <button
-            type="button"
-            onClick={onNext}
-            disabled={!onNext || !canNext}
-            aria-label="Next line in PO"
-            title="Next line"
-            className="text-gray-400 transition-colors hover:text-gray-700 disabled:cursor-not-allowed disabled:opacity-30"
-          >
-            <ChevronDown className="h-4 w-4" />
-          </button>
-        </div>
-        {/* Status chip — shows saving / syncing state in the center. */}
-        <div
-          aria-live="polite"
-          className="flex min-w-0 flex-1 items-center justify-center text-[9px] font-black uppercase tracking-[0.18em]"
+      {/* Top bar: refresh · progress · up/down · PO chip */}
+      <div className="flex items-center gap-2 px-3 py-1.5">
+        <button
+          type="button"
+          onClick={syncWithZoho}
+          disabled={zohoSyncing}
+          aria-label="Sync with Zoho by tracking number"
+          title="Sync with Zoho by tracking number"
+          className="text-gray-400 transition-colors hover:text-gray-700 disabled:cursor-not-allowed disabled:opacity-50"
         >
-          {zohoSyncing ? (
-            <span className="inline-flex items-center gap-1 text-blue-600">
-              <RefreshCw className="h-3 w-3 animate-spin" />
-              Syncing
-            </span>
-          ) : saving || platformSaving ? (
-            <span className="inline-flex items-center gap-1 text-blue-600">
-              <RefreshCw className="h-3 w-3 animate-spin" />
-              Saving
-            </span>
-          ) : null}
-        </div>
-        <div className="flex items-center gap-2">
-          {hasProgress && (
-            <span className="text-[10px] font-black tracking-wider text-gray-600">
-              {progressReceived}/{progressTotal}
-            </span>
-          )}
-          <button
-            type="button"
-            onClick={onClose}
-            aria-label="Close line edit"
-            className="text-gray-400 transition-colors hover:text-gray-700"
-          >
-            <X className="h-3.5 w-3.5" />
-          </button>
-        </div>
+          <RefreshCw className={`h-3.5 w-3.5 ${zohoSyncing ? 'animate-spin' : ''}`} />
+        </button>
+        {(zohoSyncing || saving || platformSaving) && (
+          <span className="inline-flex items-center gap-1 text-[9px] font-black uppercase tracking-[0.18em] text-blue-600" aria-live="polite">
+            <RefreshCw className="h-3 w-3 animate-spin" />
+            {zohoSyncing ? 'Syncing' : 'Saving'}
+          </span>
+        )}
+        <div className="flex-1" />
+        {hasProgress && (
+          <span className="text-[10px] font-black tracking-wider text-gray-600">
+            {progressReceived}/{progressTotal}
+          </span>
+        )}
+        <button
+          type="button"
+          onClick={onPrev}
+          disabled={!onPrev || !canPrev}
+          aria-label="Previous line in PO"
+          title="Previous line"
+          className="text-gray-400 transition-colors hover:text-gray-700 disabled:cursor-not-allowed disabled:opacity-30"
+        >
+          <ChevronUp className="h-4 w-4" />
+        </button>
+        <button
+          type="button"
+          onClick={onNext}
+          disabled={!onNext || !canNext}
+          aria-label="Next line in PO"
+          title="Next line"
+          className="text-gray-400 transition-colors hover:text-gray-700 disabled:cursor-not-allowed disabled:opacity-30"
+        >
+          <ChevronDown className="h-4 w-4" />
+        </button>
+        <OrderIdChip value={scanValue} display={getLast4(scanValue)} />
       </div>
 
-      {/* Product image */}
-      {imgUrl && (
-        <div className={`flex justify-center px-3 ${compact ? 'pb-1.5' : 'pb-2'}`}>
-          <img
-            key={imgKey}
-            src={imgUrl}
-            alt={row.item_name ?? 'Product'}
-            className={`rounded-lg border border-gray-200 bg-white object-contain ${compact ? 'h-20 w-20' : 'h-28 w-28'}`}
-            onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }}
+      {/* ── RECEIVING FIELDS ── */}
+      <div className="border-b border-gray-100 pb-2">
+        <div className={`${sidebarHeaderBandClass} ${sidebarHeaderRowClass}`}>
+          <SearchBar
+            value={trackingEdit}
+            onChange={setTrackingEdit}
+            onSearch={(v) => {
+              const trimmed = v.trim();
+              if (trimmed !== (row.tracking_number || '').trim()) {
+                patch({ zoho_reference_number: trimmed || null });
+              }
+            }}
+            onClear={() => setTrackingEdit('')}
+            placeholder="Scan tracking"
+            variant="blue"
+            size="compact"
+            leadingIcon={<Barcode className="w-[14px] h-[14px]" />}
+            className="w-full"
           />
         </div>
-      )}
-
-      {/* Product title */}
-      <p className={`px-3 pb-1 font-bold leading-snug text-gray-900 break-words ${compact ? 'text-[11px] line-clamp-2' : 'text-[12px]'}`}>
-        {row.item_name || row.sku || `Line #${row.id}`}
-      </p>
-
-      {/* Item condition — per receiving line; drives the same condition_grade shown in the table */}
-      <div className="px-3 pb-2 pt-0.5">
-        <p className="mb-1 text-[9px] font-black uppercase tracking-widest text-gray-500">
-          Item condition
-        </p>
-        <select
-          value={cond}
-          onChange={(e) => {
-            const v = e.target.value;
-            setCond(v);
-            void patch({ condition_grade: v });
-          }}
-          className={SELECT_CLASS}
-          aria-label="Condition grade for this line item"
-        >
-          {CONDITION_OPTS.map((opt) => (
-            <option key={opt.value} value={opt.value}>{opt.label}</option>
-          ))}
-        </select>
-      </div>
-
-      {/* Serial scan — scoped to this line only. (PO-wide serial input
-          lives in the sidebar shell when a PO is loaded.) */}
-      <div className={`${sidebarHeaderBandClass} ${sidebarHeaderRowClass}`}>
-        <SearchBar
-          value={serialInput}
-          onChange={setSerialInput}
-          onSearch={(v) => submitSerial(v)}
-          onClear={() => setSerialInput('')}
-          inputRef={serialRef}
-          placeholder={`Scan serial for ${row.sku || '—'}`}
-          variant="blue"
-          size="compact"
-          isSearching={serialSubmitting}
-          leadingIcon={<Barcode className="w-[14px] h-[14px]" />}
-          className="w-full"
-        />
-      </div>
-
-      {/* Platform / Type dropdowns */}
-      <div className="grid grid-cols-2 gap-2 px-3 pt-3 pb-2">
-        <div>
-          <p className="mb-1 text-[9px] font-black uppercase tracking-widest text-gray-500">
-            Platform
-          </p>
-          <select
-            value={sourcePlatform}
-            onChange={(e) => {
-              const next = e.target.value;
-              setSourcePlatform(next);
-              void savePlatform(next);
-            }}
-            disabled={row.receiving_id == null}
-            className={SELECT_CLASS}
-          >
-            {SOURCE_PLATFORM_OPTS.map((opt) => (
-              <option key={opt.value || 'auto'} value={opt.value}>{opt.label}</option>
-            ))}
-          </select>
+        <div className="grid grid-cols-2 gap-2 px-3 pt-2 pb-2">
+          <div>
+            <select
+              value={sourcePlatform}
+              onChange={(e) => {
+                const next = e.target.value;
+                setSourcePlatform(next);
+                void savePlatform(next);
+              }}
+              disabled={row.receiving_id == null}
+              className={SELECT_CLASS}
+            >
+              {SOURCE_PLATFORM_OPTS.map((opt) => (
+                <option key={opt.value || 'auto'} value={opt.value}>{opt.label}</option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <select
+              value={receivingType}
+              onChange={(e) => { setReceivingType(e.target.value); patch({ receiving_type: e.target.value }); }}
+              className={SELECT_CLASS}
+            >
+              {RECEIVING_TYPE_OPTS.map((opt) => (
+                <option key={opt.value} value={opt.value}>{opt.label}</option>
+              ))}
+            </select>
+          </div>
         </div>
-        <div>
-          <p className="mb-1 text-[9px] font-black uppercase tracking-widest text-gray-500">
-            Type
-          </p>
+      </div>
+
+      {/* ── PO ITEM DETAILS ── */}
+      <div className="border-b border-gray-100 pb-2">
+        <p className="px-3 pt-2 pb-1.5 text-[9px] font-black uppercase tracking-widest text-gray-400">PO Item Details</p>
+        <p className={`px-3 pb-1 font-bold leading-snug text-gray-900 break-words ${compact ? 'text-[11px] line-clamp-2' : 'text-[12px]'}`}>
+          {row.item_name || row.sku || `Line #${row.id}`}
+        </p>
+        <div className="px-3 pb-2 pt-0.5">
           <select
-            value={receivingType}
-            onChange={(e) => { setReceivingType(e.target.value); patch({ receiving_type: e.target.value }); }}
+            value={cond}
+            onChange={(e) => {
+              const v = e.target.value;
+              setCond(v);
+              void patch({ condition_grade: v });
+            }}
             className={SELECT_CLASS}
+            aria-label="Condition grade for this line item"
           >
-            {RECEIVING_TYPE_OPTS.map((opt) => (
+            {CONDITION_OPTS.map((opt) => (
               <option key={opt.value} value={opt.value}>{opt.label}</option>
             ))}
           </select>
         </div>
+        <div className={`${sidebarHeaderBandClass} ${sidebarHeaderRowClass}`}>
+          <SearchBar
+            value={serialInput}
+            onChange={setSerialInput}
+            onSearch={(v) => submitSerial(v)}
+            onClear={() => setSerialInput('')}
+            inputRef={serialRef}
+            placeholder={`Scan serial for ${row.sku || '—'}`}
+            variant="blue"
+            size="compact"
+            isSearching={serialSubmitting}
+            leadingIcon={<Barcode className="w-[14px] h-[14px]" />}
+            className="w-full"
+          />
+        </div>
       </div>
 
-      {/* QA / Disposition (condition is above serial — item-scoped) */}
-      <div className="grid grid-cols-2 gap-2 px-3 pb-2">
-        <div>
-          <p className="mb-1 text-[9px] font-black uppercase tracking-widest text-gray-500">QA</p>
-          <select value={qa} onChange={(e) => { setQa(e.target.value); void patch({ qa_status: e.target.value }); }} className={SELECT_CLASS}>
-            {QA_OPTS.map((opt) => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
-          </select>
-        </div>
-        <div>
-          <p className="mb-1 text-[9px] font-black uppercase tracking-widest text-gray-500">Disposition</p>
-          <select value={disp} onChange={(e) => { setDisp(e.target.value); void patch({ disposition_code: e.target.value }); }} className={SELECT_CLASS}>
-            {DISPOSITION_OPTS.map((opt) => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
-          </select>
+      {/* ── SUPPORT ── */}
+      <div className="border-b border-gray-100 pb-2">
+        <div className={`px-3 ${compact ? 'pt-1 space-y-2' : 'pt-2 space-y-2.5'}`}>
+          {compact ? (
+            <button
+              type="button"
+              onClick={() => setDetailsOpen((o) => !o)}
+              className="flex w-full items-center justify-between rounded-md border border-gray-200 bg-gray-50 px-2 py-1.5 text-[9px] font-black uppercase tracking-widest text-gray-600 transition-colors hover:bg-gray-100"
+              aria-expanded={detailsOpen}
+            >
+              <span>Support</span>
+              <span className="text-gray-400">{detailsOpen ? '−' : '+'}</span>
+            </button>
+          ) : (
+            <p className="pb-0.5 text-[9px] font-black uppercase tracking-widest text-gray-400">Support</p>
+          )}
+
+          {(detailsOpen || !compact) && (
+            <>
+              <div>
+                <p className="mb-1 text-[9px] font-black uppercase tracking-widest text-gray-500">Zendesk Ticket</p>
+                <div className="flex gap-1">
+                  <input
+                    type="text"
+                    value={zendesk}
+                    onChange={(e) => setZendesk(e.target.value)}
+                    placeholder="Ticket # or URL"
+                    className={`${INPUT_CLASS} flex-1 min-w-0`}
+                  />
+                  <button
+                    type="button"
+                    onClick={async () => { try { const t = await navigator.clipboard.readText(); if (t) setZendesk(t.trim()); } catch {} }}
+                    title="Paste from clipboard"
+                    className="shrink-0 rounded-md border border-gray-200 bg-white px-2 py-1.5 text-gray-500 transition-colors hover:bg-gray-50 hover:text-gray-700"
+                  >
+                    <Clipboard className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+              </div>
+
+              <div>
+                <p className="mb-1 text-[9px] font-black uppercase tracking-widest text-gray-500">Listing Link</p>
+                <div className="flex gap-1">
+                  <input
+                    ref={listingRef}
+                    type="text"
+                    value={listingLink}
+                    onChange={(e) => setListingLink(e.target.value)}
+                    placeholder="Paste listing URL"
+                    className={`${INPUT_CLASS} flex-1 min-w-0`}
+                  />
+                  <button
+                    type="button"
+                    onClick={pasteToListing}
+                    title="Paste from clipboard"
+                    className="shrink-0 rounded-md border border-gray-200 bg-white px-2 py-1.5 text-gray-500 transition-colors hover:bg-gray-50 hover:text-gray-700"
+                  >
+                    <Clipboard className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+              </div>
+
+              <div>
+                <p className="mb-1 text-[9px] font-black uppercase tracking-widest text-gray-500">Notes</p>
+                <textarea
+                  value={notes}
+                  onChange={(e) => setNotes(e.target.value)}
+                  onBlur={() => { if (notes !== (row.notes || '')) patch({ notes }); }}
+                  rows={compact ? 2 : 2}
+                  placeholder="Add notes…"
+                  className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-[12px] leading-relaxed text-gray-900 placeholder:text-gray-400 focus:border-blue-300 focus:outline-none focus:ring-2 focus:ring-blue-500/10 resize-none"
+                />
+              </div>
+            </>
+          )}
         </div>
       </div>
 
-      {/* Tracking scan row */}
-      <div className={`${sidebarHeaderBandClass} ${sidebarHeaderRowClass}`}>
-        <SearchBar
-          value={trackingEdit}
-          onChange={setTrackingEdit}
-          onSearch={(v) => {
-            const trimmed = v.trim();
-            if (trimmed !== (row.tracking_number || '').trim()) {
-              patch({ zoho_reference_number: trimmed || null });
-            }
+      {/* Print (left) / Receive (right) + Print-on-scan (when provided) */}
+      <div className="flex items-center gap-2 px-3 pt-1 pb-2">
+        <button
+          type="button"
+          onClick={() => {
+            if (scanValue) printReceivingLabel(labelPayload);
+            else if (row.sku) printProductLabel({ sku: row.sku, title: row.item_name ?? undefined, serialNumber: serialInput.trim() || undefined });
           }}
-          onClear={() => setTrackingEdit('')}
-          placeholder="Scan tracking"
-          variant="blue"
-          size="compact"
-          leadingIcon={<Barcode className="w-[14px] h-[14px]" />}
-          className="w-full"
-        />
+          disabled={!scanValue && !row.sku}
+          className="inline-flex items-center gap-1.5 rounded-md border border-gray-200 bg-white px-3 py-2 text-[10px] font-black uppercase tracking-wider text-gray-700 transition-colors hover:border-gray-300 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-40"
+        >
+          <Printer className="h-3.5 w-3.5" />
+          Print
+        </button>
+        <button
+          type="button"
+          onClick={handleReceive}
+          disabled={receiving || row.receiving_id == null}
+          title={
+            row.receiving_id == null
+              ? 'Line must be linked to a shipment'
+              : 'Mark every open line on this shipment received and sync to Zoho'
+          }
+          className="flex-1 inline-flex items-center justify-center gap-1.5 rounded-md bg-emerald-600 px-3 py-2 text-[10px] font-black uppercase tracking-wider text-white transition-colors hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-60"
+        >
+          {receiving ? 'Receiving…' : 'Receive PO'}
+        </button>
       </div>
 
-      {/* Fields */}
-      <div className={`bg-white px-3 ${compact ? 'py-2 space-y-2' : 'py-3 space-y-2.5'}`}>
-        {/* Saving indicator moved to the top-bar status chip. */}
-
-        {/* Details disclosure (Zendesk / Listing / Notes) — collapsed by default in compact mode */}
-        {compact ? (
-          <button
-            type="button"
-            onClick={() => setDetailsOpen((o) => !o)}
-            className="flex w-full items-center justify-between rounded-md border border-gray-200 bg-gray-50 px-2 py-1.5 text-[9px] font-black uppercase tracking-widest text-gray-600 transition-colors hover:bg-gray-100"
-            aria-expanded={detailsOpen}
-          >
-            <span>Details · Zendesk · Listing · Notes</span>
-            <span className="text-gray-400">{detailsOpen ? '−' : '+'}</span>
-          </button>
-        ) : null}
-
-        {(detailsOpen || !compact) && (
-          <>
-            <div>
-              <p className="mb-1 text-[9px] font-black uppercase tracking-widest text-gray-500">Zendesk Ticket</p>
-              <div className="flex gap-1">
-                <input
-                  type="text"
-                  value={zendesk}
-                  onChange={(e) => setZendesk(e.target.value)}
-                  placeholder="Ticket # or URL"
-                  className={`${INPUT_CLASS} flex-1 min-w-0`}
-                />
-                <button
-                  type="button"
-                  onClick={async () => { try { const t = await navigator.clipboard.readText(); if (t) setZendesk(t.trim()); } catch {} }}
-                  title="Paste from clipboard"
-                  className="shrink-0 rounded-md border border-gray-200 bg-white px-2 py-1.5 text-gray-500 transition-colors hover:bg-gray-50 hover:text-gray-700"
-                >
-                  <Clipboard className="h-3.5 w-3.5" />
-                </button>
-              </div>
-            </div>
-
-            <div>
-              <p className="mb-1 text-[9px] font-black uppercase tracking-widest text-gray-500">Listing Link</p>
-              <div className="flex gap-1">
-                <input
-                  ref={listingRef}
-                  type="text"
-                  value={listingLink}
-                  onChange={(e) => setListingLink(e.target.value)}
-                  placeholder="Paste listing URL"
-                  className={`${INPUT_CLASS} flex-1 min-w-0`}
-                />
-                <button
-                  type="button"
-                  onClick={pasteToListing}
-                  title="Paste from clipboard"
-                  className="shrink-0 rounded-md border border-gray-200 bg-white px-2 py-1.5 text-gray-500 transition-colors hover:bg-gray-50 hover:text-gray-700"
-                >
-                  <Clipboard className="h-3.5 w-3.5" />
-                </button>
-              </div>
-            </div>
-
-            <div>
-              <p className="mb-1 text-[9px] font-black uppercase tracking-widest text-gray-500">Notes</p>
-              <textarea
-                value={notes}
-                onChange={(e) => setNotes(e.target.value)}
-                onBlur={() => { if (notes !== (row.notes || '')) patch({ notes }); }}
-                rows={compact ? 2 : 2}
-                placeholder="Add notes…"
-                className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-[12px] leading-relaxed text-gray-900 placeholder:text-gray-400 focus:border-blue-300 focus:outline-none focus:ring-2 focus:ring-blue-500/10 resize-none"
-              />
-            </div>
-          </>
-        )}
-
-        {/* Print (left) / Receive (right) + Print-on-scan (when provided) */}
-        <div className="flex items-center gap-2 pt-1">
-          <button
-            type="button"
-            onClick={() => {
-              if (scanValue) printReceivingLabel(labelPayload);
-              else if (row.sku) printProductLabel({ sku: row.sku, title: row.item_name ?? undefined, serialNumber: serialInput.trim() || undefined });
-            }}
-            disabled={!scanValue && !row.sku}
-            className="inline-flex items-center gap-1.5 rounded-md border border-gray-200 bg-white px-3 py-2 text-[10px] font-black uppercase tracking-wider text-gray-700 transition-colors hover:border-gray-300 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-40"
-          >
-            <Printer className="h-3.5 w-3.5" />
-            Print
-          </button>
-          <button
-            type="button"
-            onClick={handleReceive}
-            disabled={receiving || row.receiving_id == null}
-            title={
-              row.receiving_id == null
-                ? 'Line must be linked to a shipment'
-                : 'Mark every open line on this shipment received and sync to Zoho'
-            }
-            className="flex-1 inline-flex items-center justify-center gap-1.5 rounded-md bg-emerald-600 px-3 py-2 text-[10px] font-black uppercase tracking-wider text-white transition-colors hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-60"
-          >
-            {receiving ? 'Receiving…' : 'Receive PO'}
-          </button>
+      {/* Label preview is always rendered — no toggle. */}
+      {(scanValue || row.sku) && (
+        <div>
+          {scanValue ? (
+            <ReceivingPoLabelPreview {...labelPayload} />
+          ) : row.sku ? (
+            <ReceivingProductLabelPreview
+              sku={row.sku}
+              title={row.item_name ?? ''}
+              serialNumber={serialInput.trim()}
+            />
+          ) : null}
         </div>
-
-        {/* Label preview is always rendered — no toggle. */}
-        {(scanValue || row.sku) && (
-          <div className="-mx-3">
-            {scanValue ? (
-              <ReceivingPoLabelPreview {...labelPayload} />
-            ) : row.sku ? (
-              <ReceivingProductLabelPreview
-                sku={row.sku}
-                title={row.item_name ?? ''}
-                serialNumber={serialInput.trim()}
-              />
-            ) : null}
-          </div>
-        )}
-      </div>
+      )}
     </div>
   );
 }
