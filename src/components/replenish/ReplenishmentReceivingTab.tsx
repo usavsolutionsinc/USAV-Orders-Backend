@@ -2,6 +2,7 @@
 
 import { useQuery } from '@tanstack/react-query';
 import { Loader2 } from '@/components/Icons';
+import { workflowStatusTableLabel } from '@/components/station/receiving-constants';
 import { sectionLabel, fieldLabel, tableHeader } from '@/design-system/tokens/typography/presets';
 import { mainStickyHeaderClass, mainStickyHeaderRowClass } from '@/components/layout/header-shell';
 import { type ReceivingLineRow, workflowStatusColor, numText } from './replenish-types';
@@ -110,7 +111,7 @@ export function ReplenishmentReceivingTab({ skuSearch }: ReplenishmentReceivingT
                     {/* Workflow status */}
                     <div>
                       <span className={`inline-flex items-center rounded-full border px-2 py-1 text-[9px] font-black uppercase tracking-wider ${workflowStatusColor(row.workflow_status)}`}>
-                        {row.workflow_status.replace(/_/g, ' ')}
+                        {workflowStatusTableLabel(row.workflow_status)}
                       </span>
                     </div>
 

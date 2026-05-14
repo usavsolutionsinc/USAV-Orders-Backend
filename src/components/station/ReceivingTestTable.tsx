@@ -2,7 +2,7 @@
 
 import { AnimatePresence, motion } from 'framer-motion';
 import { Package } from '@/components/Icons';
-import { WORKFLOW_BADGE, QA_BADGE } from './receiving-constants';
+import { QA_BADGE, WORKFLOW_BADGE, workflowStatusTableLabel } from './receiving-constants';
 import type { ReceivingQueueItem } from './upnext/upnext-types';
 
 export type { ReceivingQueueItem as ReceivingTestRow };
@@ -103,7 +103,7 @@ export function ReceivingTestTable({
                 {/* Status badges */}
                 <div className="flex flex-col items-end gap-1">
                   <span className={`text-[8px] font-black uppercase tracking-widest rounded-md px-1.5 py-0.5 whitespace-nowrap ${workflowCls}`}>
-                    {(item.workflow_status ?? 'EXPECTED').replace(/_/g, ' ')}
+                    {workflowStatusTableLabel(item.workflow_status ?? 'EXPECTED')}
                   </span>
                   {item.qa_status && item.qa_status !== 'PENDING' && (
                     <span className={`text-[8px] font-black uppercase tracking-widest rounded-md px-1.5 py-0.5 whitespace-nowrap ${qaCls}`}>

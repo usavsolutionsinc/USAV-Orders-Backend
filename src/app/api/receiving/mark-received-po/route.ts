@@ -4,11 +4,24 @@ import { formatPSTTimestamp } from '@/utils/date';
 import { invalidateCacheTags } from '@/lib/cache/upstash-cache';
 import { publishReceivingLogChanged } from '@/lib/realtime/publish';
 import { createPurchaseReceive, getPurchaseOrderById, updatePurchaseOrder } from '@/lib/zoho';
+import { receiveLineUnits } from '@/lib/receiving/receive-line';
+
+interface CandidateRow {
+  id: number;
+  sku: string | null;
+  item_name: string | null;
+  quantity_expected: number | null;
+  quantity_received: number;
+  zoho_purchaseorder_id: string | null;
+  zoho_line_item_id: string | null;
+}
 
 /**
  * Receive every incomplete line on a carton (receiving_id) with shared QA /
  * disposition / condition / notes, sync quantities to Zoho in one purchase
- * receive, and append a single PO notes entry (no per-line description edits).
+ * receive, and append a single PO notes entry. All quantity / serial / event
+ * writes go through receiveLineUnits() so the sku_stock_ledger and
+ * inventory_events tables stay in sync for serialized AND non-serialized lines.
  */
 export async function POST(request: NextRequest) {
   try {
@@ -18,7 +31,9 @@ export async function POST(request: NextRequest) {
       Number.isFinite(receivingIdRaw) && receivingIdRaw > 0 ? Math.floor(receivingIdRaw) : null;
     const receivingLineIdRaw = Number(body?.receiving_line_id);
     const receivingLineIdHint =
-      Number.isFinite(receivingLineIdRaw) && receivingLineIdRaw > 0 ? Math.floor(receivingLineIdRaw) : null;
+      Number.isFinite(receivingLineIdRaw) && receivingLineIdRaw > 0
+        ? Math.floor(receivingLineIdRaw)
+        : null;
     const qaStatus = String(body?.qa_status || 'PASSED').trim();
     const dispositionCode = String(body?.disposition_code || 'ACCEPT').trim();
     const conditionGrade = String(body?.condition_grade || 'USED_A').trim();
@@ -26,30 +41,42 @@ export async function POST(request: NextRequest) {
     const zendeskTicket = String(body?.zendesk_ticket || '').trim() || null;
     const listingLink = String(body?.listing_link || '').trim() || null;
     const notes = String(body?.notes || '').trim() || null;
-    const staffId = Number(body?.staff_id);
+    const staffIdRaw = Number(body?.staff_id);
+    const staffId =
+      Number.isFinite(staffIdRaw) && staffIdRaw > 0 ? Math.floor(staffIdRaw) : null;
+    const clientEventId = String(body?.client_event_id ?? '').trim() || null;
+    const stationRaw = String(body?.station ?? '').trim().toUpperCase();
+    const station =
+      stationRaw === 'MOBILE' || stationRaw === 'TECH' ? stationRaw : 'RECEIVING';
 
     let staffName = String(body?.staff_name || '').trim();
-    if (!staffName && Number.isFinite(staffId) && staffId > 0) {
+    if (!staffName && staffId != null && staffId > 0) {
       try {
         const staffLookup = await pool.query<{ name: string | null }>(
           `SELECT name FROM staff WHERE id = $1 LIMIT 1`,
           [staffId],
         );
         staffName = (staffLookup.rows[0]?.name || '').trim();
-      } catch { /* silent */ }
+      } catch {
+        /* silent */
+      }
     }
     if (!staffName) {
-      staffName = Number.isFinite(staffId) && staffId > 0 ? `Staff #${staffId}` : 'Unknown';
+      staffName = staffId != null && staffId > 0 ? `Staff #${staffId}` : 'Unknown';
     }
 
     if (receivingId == null) {
-      return NextResponse.json({ success: false, error: 'receiving_id is required' }, { status: 400 });
+      return NextResponse.json(
+        { success: false, error: 'receiving_id is required' },
+        { status: 400 },
+      );
     }
 
     const now = formatPSTTimestamp();
 
-    const candidates = await pool.query(
-      `SELECT *
+    const candidates = await pool.query<CandidateRow>(
+      `SELECT id, sku, item_name, quantity_expected, quantity_received,
+              zoho_purchaseorder_id, zoho_line_item_id
        FROM receiving_lines
        WHERE receiving_id = $1
          AND (
@@ -72,69 +99,77 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    const updatedLines: Record<string, unknown>[] = [];
+    // Decide which line (if any) gets the inline serial. Behavior matches the
+    // prior implementation: explicit hint wins; sole line falls through.
+    const serialOwnerLineId: number | null = (() => {
+      if (!serialNumber) return null;
+      if (receivingLineIdHint &&
+          candidates.rows.some((r) => r.id === receivingLineIdHint)) {
+        return receivingLineIdHint;
+      }
+      return candidates.rows.length === 1 ? candidates.rows[0].id : null;
+    })();
+
+    const updatedLines: Array<{
+      id: number;
+      sku: string | null;
+      item_name: string | null;
+      quantity_received: number;
+      quantity_expected: number | null;
+      workflow_status: string | null;
+      zoho_purchaseorder_id: string | null;
+      zoho_line_item_id: string | null;
+    }> = [];
 
     for (const lineRow of candidates.rows) {
-      const lineId = Number(lineRow.id);
-      const lineUpdate = await pool.query(
-        `UPDATE receiving_lines
-         SET qa_status = $1,
-             disposition_code = $2,
-             condition_grade = $3,
-             notes = $4,
-             workflow_status = 'DONE'::inbound_workflow_status_enum,
-             quantity_received = GREATEST(
-               COALESCE(quantity_received, 0),
-               COALESCE(quantity_expected, 1)
-             )
-         WHERE id = $5
-         RETURNING *`,
-        [qaStatus, dispositionCode, conditionGrade, notes, lineId],
+      // Force-complete semantics: bump to at least expected (or 1 when
+      // expected is unknown). Already-received units are not double-counted.
+      const currentQty = Number(lineRow.quantity_received ?? 0);
+      const targetQty = Math.max(
+        currentQty,
+        Number(lineRow.quantity_expected ?? 1),
       );
-      if (lineUpdate.rows[0]) {
-        updatedLines.push(lineUpdate.rows[0]);
-      }
-    }
+      const unitsToAdd = Math.max(0, targetQty - currentQty);
 
-    // Persist the inline serial (from the sidebar text field) to its specific
-    // line. Prefer the explicit receiving_line_id hint when the client sent one
-    // and the line was actually updated; fall back to the sole line when it's
-    // a single-line carton. Multi-line cartons without a hint skip the insert —
-    // those serials should come through /api/receiving/scan-serial instead.
-    const inlineSerialLine = (() => {
-      if (!serialNumber) return null;
-      if (receivingLineIdHint) {
-        const match = updatedLines.find((raw) => Number((raw as { id?: number }).id) === receivingLineIdHint);
-        if (match) return match;
-      }
-      return updatedLines.length === 1 ? updatedLines[0] : null;
-    })() as { id: number; sku: string | null; zoho_item_id: string | null } | null;
+      const serialsForLine =
+        serialNumber && lineRow.id === serialOwnerLineId ? [serialNumber] : [];
 
-    if (serialNumber && inlineSerialLine) {
-      await pool.query(
-        `INSERT INTO serial_units (serial_number, normalized_serial, sku, zoho_item_id, current_status, origin_source, origin_receiving_line_id, received_at, received_by, condition_grade)
-         VALUES ($1, UPPER(TRIM($1)), $2, $3, 'RECEIVED', 'receiving', $4, $5, $6, $7)
-         ON CONFLICT (normalized_serial)
-         DO UPDATE SET current_status = 'RECEIVED', received_at = $5, received_by = $6, condition_grade = $7`,
-        [
-          serialNumber,
-          inlineSerialLine.sku,
-          inlineSerialLine.zoho_item_id || null,
-          inlineSerialLine.id,
-          now,
-          staffId > 0 ? staffId : null,
-          conditionGrade,
-        ],
-      );
+      // Even when unitsToAdd is 0 (line already fully scanned via /scan-serial)
+      // we still call the helper so QA/disp/cond/workflow_status get set.
+      const lineClientEventId = clientEventId
+        ? `${clientEventId}:line-${lineRow.id}`
+        : null;
+
+      const result = await receiveLineUnits({
+        receiving_line_id: lineRow.id,
+        units: Math.max(unitsToAdd, serialsForLine.length),
+        serials: serialsForLine,
+        qa_status: qaStatus,
+        disposition_code: dispositionCode,
+        condition_grade: conditionGrade,
+        notes,
+        set_workflow_status: 'DONE',
+        staff_id: staffId,
+        station,
+        client_event_id: lineClientEventId,
+      });
+
+      updatedLines.push({
+        id: result.line_state.id,
+        sku: result.line_state.sku,
+        item_name: result.line_state.item_name,
+        quantity_received: result.line_state.quantity_received,
+        quantity_expected: result.line_state.quantity_expected,
+        workflow_status: result.line_state.workflow_status,
+        zoho_purchaseorder_id: lineRow.zoho_purchaseorder_id,
+        zoho_line_item_id: lineRow.zoho_line_item_id,
+      });
     }
 
     // Aggregate every serial attached to any of the updated lines so the Zoho
-    // note reflects the full carton — not just the one in the request body.
-    // Pulls from serial_units (populated incrementally via /scan-serial and
-    // the inline insert above).
-    const updatedLineIds = updatedLines
-      .map((raw) => Number((raw as { id?: number }).id))
-      .filter((n) => Number.isFinite(n) && n > 0);
+    // note reflects the full carton — not just the inline one. Pulls from
+    // serial_units (kept up-to-date by receiveLineUnits → upsertSerialUnit).
+    const updatedLineIds = updatedLines.map((l) => l.id);
     let aggregatedSerials: string[] = [];
     if (updatedLineIds.length > 0) {
       const serialsRes = await pool.query<{ serial_number: string }>(
@@ -155,10 +190,12 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    await pool.query(
-      `UPDATE receiving SET unboxed_at = COALESCE(unboxed_at, $1), updated_at = $1 WHERE id = $2`,
-      [now, receivingId],
-    ).catch(() => {});
+    await pool
+      .query(
+        `UPDATE receiving SET unboxed_at = COALESCE(unboxed_at, $1), updated_at = $1 WHERE id = $2`,
+        [now, receivingId],
+      )
+      .catch(() => {});
 
     let localTracking: string | null = null;
     try {
@@ -171,23 +208,19 @@ export async function POST(request: NextRequest) {
         [receivingId],
       );
       localTracking = (trackingRes.rows[0]?.tracking || '').trim() || null;
-    } catch { /* silent */ }
+    } catch {
+      /* silent */
+    }
 
     const linesHuman = updatedLines
-      .map((raw) => {
-        const l = raw as { sku?: string | null; item_name?: string | null; id?: number; quantity_received?: number };
+      .map((l) => {
         const label = (l.sku || l.item_name || `line #${l.id}`).trim();
         return `${label} ×${Number(l.quantity_received ?? 0)}`;
       })
       .join(', ');
 
     const byPo = new Map<string, { line_item_id: string; quantity_received: number }[]>();
-    for (const raw of updatedLines) {
-      const l = raw as {
-        zoho_purchaseorder_id?: string | null;
-        zoho_line_item_id?: string | null;
-        quantity_received?: number;
-      };
+    for (const l of updatedLines) {
       const poId = String(l.zoho_purchaseorder_id || '').trim();
       const liId = String(l.zoho_line_item_id || '').trim();
       if (!poId || !liId) continue;
@@ -229,7 +262,9 @@ export async function POST(request: NextRequest) {
               `QA: ${qaStatus}`,
               `Disposition: ${dispositionCode}`,
               `Condition: ${conditionGrade}`,
-              ...(serialsForNote.length > 0 ? [`${serialLabel}: ${serialsForNote.join(', ')}`] : []),
+              ...(serialsForNote.length > 0
+                ? [`${serialLabel}: ${serialsForNote.join(', ')}`]
+                : []),
               `Lines: ${linesHuman}`,
               ...(notes ? [`Notes: ${notes}`] : []),
             ].join(' | ');
@@ -252,15 +287,12 @@ export async function POST(request: NextRequest) {
 
       try {
         await invalidateCacheTags(['receiving-logs', 'receiving-lines', 'serial-units']);
-        for (const raw of updatedLines) {
-          const l = raw as { id?: number };
-          if (l.id != null) {
-            await publishReceivingLogChanged({
-              action: 'update',
-              rowId: String(l.id),
-              source: 'receiving.mark-received-po',
-            });
-          }
+        for (const l of updatedLines) {
+          await publishReceivingLogChanged({
+            action: 'update',
+            rowId: String(l.id),
+            source: 'receiving.mark-received-po',
+          });
         }
       } catch (err) {
         console.warn('mark-received-po: cache/realtime failed', err);

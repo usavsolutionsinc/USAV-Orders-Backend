@@ -1,4 +1,5 @@
 export * from './ActionButtonGroup';
+export * from './AppTopBar';
 export * from './CardShell';
 export * from './ChevronToggle';
 export * from './ConditionText';

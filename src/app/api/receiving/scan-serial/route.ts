@@ -2,51 +2,34 @@ import { NextRequest, NextResponse, after } from 'next/server';
 import pool from '@/lib/db';
 import { invalidateCacheTags } from '@/lib/cache/upstash-cache';
 import { publishReceivingLogChanged } from '@/lib/realtime/publish';
-import {
-  upsertSerialUnit,
-  enrichSerialUnitCatalog,
-  stampReceivingTsnSerialUnitId,
-} from '@/lib/neon/serial-units-queries';
-import { getSkuCatalogBySku } from '@/lib/neon/sku-catalog-queries';
-import { publishStockLedgerEvent } from '@/lib/realtime/publish';
+import { enrichSerialUnitCatalog } from '@/lib/neon/serial-units-queries';
+import { receiveLineUnits } from '@/lib/receiving/receive-line';
 
-interface ReceivingLineTarget {
+interface ReceivingLineCandidate {
   id: number;
   receiving_id: number | null;
   sku: string | null;
-  item_name: string | null;
-  zoho_item_id: string | null;
-  zoho_purchaseorder_id: string | null;
   quantity_expected: number | null;
   quantity_received: number;
-  workflow_status: string | null;
+  zoho_item_id: string | null;
+  zoho_purchaseorder_id: string | null;
 }
 
-async function loadLineById(lineId: number): Promise<ReceivingLineTarget | null> {
-  const result = await pool.query<ReceivingLineTarget>(
-    `SELECT id, receiving_id, sku, item_name, zoho_item_id, zoho_purchaseorder_id,
-            quantity_expected, quantity_received, workflow_status
-     FROM receiving_lines
-     WHERE id = $1
-     LIMIT 1`,
-    [lineId],
-  );
-  return result.rows[0] ?? null;
-}
-
-async function loadCandidateLines(receivingId: number): Promise<ReceivingLineTarget[]> {
-  const result = await pool.query<ReceivingLineTarget>(
-    `SELECT id, receiving_id, sku, item_name, zoho_item_id, zoho_purchaseorder_id,
-            quantity_expected, quantity_received, workflow_status
+async function loadCandidateLines(receivingId: number): Promise<ReceivingLineCandidate[]> {
+  const r = await pool.query<ReceivingLineCandidate>(
+    `SELECT id, receiving_id, sku, quantity_expected, quantity_received,
+            zoho_item_id, zoho_purchaseorder_id
      FROM receiving_lines
      WHERE receiving_id = $1
      ORDER BY id ASC`,
     [receivingId],
   );
-  return result.rows;
+  return r.rows;
 }
 
-function pickAutoLine(lines: ReceivingLineTarget[]): ReceivingLineTarget | 'ambiguous' | null {
+function pickAutoLine(
+  lines: ReceivingLineCandidate[],
+): ReceivingLineCandidate | 'ambiguous' | null {
   const open = lines.filter(
     (l) => l.quantity_expected == null || l.quantity_received < (l.quantity_expected ?? 0),
   );
@@ -63,12 +46,21 @@ export async function POST(request: NextRequest) {
     const receivingIdRaw = Number(body?.receiving_id);
     const receivingLineIdRaw = Number(body?.receiving_line_id);
     const staffIdRaw = Number(body?.staff_id ?? body?.staffId);
-    const conditionGrade = String(body?.condition_grade ?? body?.conditionGrade ?? '').trim() || null;
+    const conditionGrade =
+      String(body?.condition_grade ?? body?.conditionGrade ?? '').trim() || null;
+    const clientEventId = String(body?.client_event_id ?? '').trim() || null;
+    const scanToken = String(body?.scan_token ?? '').trim() || null;
+    const stationRaw = String(body?.station ?? '').trim().toUpperCase();
+    const station =
+      stationRaw === 'MOBILE' || stationRaw === 'TECH' ? stationRaw : 'RECEIVING';
 
-    const staffId = Number.isFinite(staffIdRaw) && staffIdRaw > 0 ? Math.floor(staffIdRaw) : null;
+    const staffId =
+      Number.isFinite(staffIdRaw) && staffIdRaw > 0 ? Math.floor(staffIdRaw) : null;
     const receivingId =
-      Number.isFinite(receivingIdRaw) && receivingIdRaw > 0 ? Math.floor(receivingIdRaw) : null;
-    const receivingLineId =
+      Number.isFinite(receivingIdRaw) && receivingIdRaw > 0
+        ? Math.floor(receivingIdRaw)
+        : null;
+    let receivingLineId =
       Number.isFinite(receivingLineIdRaw) && receivingLineIdRaw > 0
         ? Math.floor(receivingLineIdRaw)
         : null;
@@ -87,17 +79,9 @@ export async function POST(request: NextRequest) {
     }
 
     // ─── Resolve target line ────────────────────────────────────────────────
-    let targetLine: ReceivingLineTarget | null = null;
+    let targetReceivingId = receivingId;
 
-    if (receivingLineId) {
-      targetLine = await loadLineById(receivingLineId);
-      if (!targetLine) {
-        return NextResponse.json(
-          { success: false, error: `receiving_line ${receivingLineId} not found` },
-          { status: 404 },
-        );
-      }
-    } else if (receivingId) {
+    if (!receivingLineId && receivingId) {
       const candidates = await loadCandidateLines(receivingId);
       if (candidates.length === 0) {
         return NextResponse.json(
@@ -130,139 +114,53 @@ export async function POST(request: NextRequest) {
             })),
         });
       }
-      targetLine = picked;
+      receivingLineId = picked.id;
+      targetReceivingId = picked.receiving_id;
     }
 
-    if (!targetLine) {
+    if (!receivingLineId) {
       return NextResponse.json(
         { success: false, error: 'could not resolve target line' },
         { status: 400 },
       );
     }
 
-    // ─── sku_catalog fast path (cache-only, no Zoho call on the hot path) ──
-    const catalog = targetLine.sku ? await getSkuCatalogBySku(targetLine.sku) : null;
-
-    // ─── upsert into serial_units master ────────────────────────────────────
-    const result = await upsertSerialUnit({
-      serial_number: serialNumber,
-      sku: targetLine.sku,
-      sku_catalog_id: catalog?.id ?? null,
-      zoho_item_id: targetLine.zoho_item_id,
-      origin_source: 'receiving',
-      origin_receiving_line_id: targetLine.id,
-      actor_id: staffId,
+    // ─── Single writer ──────────────────────────────────────────────────────
+    const result = await receiveLineUnits({
+      receiving_line_id: receivingLineId,
+      units: 1,
+      serials: [serialNumber],
       condition_grade: conditionGrade,
-      target_status: 'RECEIVED',
+      staff_id: staffId,
+      station,
+      client_event_id: clientEventId,
+      scan_token: scanToken,
     });
 
-    if (!result) {
+    const serialResult = result.serials_recorded[0];
+    if (!serialResult) {
       return NextResponse.json(
         { success: false, error: 'invalid serial number' },
         { status: 400 },
       );
     }
 
-    // ─── Audit row in tech_serial_numbers (lineage + existing GET compat) ──
-    // Stamp the FK on the TSN row(s) so downstream queries can JOIN through
-    // the master. Uses an idempotent UPDATE so it handles both the freshly
-    // inserted row and any prior dupe caught by ON CONFLICT DO NOTHING.
-    try {
-      await pool.query(
-        `INSERT INTO tech_serial_numbers
-           (serial_number, serial_type, tested_by, station_source, receiving_line_id, shipment_id, scan_ref, serial_unit_id)
-         VALUES ($1, 'SERIAL', $2, 'RECEIVING', $3, NULL, NULL, $4)
-         ON CONFLICT DO NOTHING`,
-        [serialNumber.toUpperCase(), staffId, targetLine.id, result.unit.id],
-      );
-      await stampReceivingTsnSerialUnitId({
-        serial_unit_id: result.unit.id,
-        serial_number: serialNumber,
-        receiving_line_id: targetLine.id,
-      });
-    } catch (err) {
-      console.warn('scan-serial: tsn audit insert failed (non-fatal)', err);
-    }
-
-    // ─── Bump quantity on the line, flip workflow_status when complete ─────
-    const bumped = await pool.query<{
-      quantity_received: number;
-      quantity_expected: number | null;
-      workflow_status: string | null;
-    }>(
-      `UPDATE receiving_lines
-       SET quantity_received = quantity_received + 1,
-           workflow_status = CASE
-             WHEN quantity_expected IS NOT NULL
-                  AND quantity_received + 1 >= quantity_expected
-               THEN 'RECEIVED'::inbound_workflow_status_enum
-             ELSE workflow_status
-           END,
-           updated_at = NOW()
-       WHERE id = $1
-       RETURNING quantity_received, quantity_expected, workflow_status::text AS workflow_status`,
-      [targetLine.id],
-    );
-
-    const lineState = bumped.rows[0] ?? {
-      quantity_received: targetLine.quantity_received + 1,
-      quantity_expected: targetLine.quantity_expected,
-      workflow_status: targetLine.workflow_status,
-    };
-
-    // Emit a RECEIVED/WAREHOUSE ledger row — only on truly-new serials.
-    // Re-scans (is_new=false) have already been counted.
-    if (result.is_new && targetLine.sku) {
-      try {
-        const ledgerInsert = await pool.query<{ id: number }>(
-          `INSERT INTO sku_stock_ledger
-             (sku, delta, reason, dimension, staff_id,
-              ref_serial_unit_id, ref_receiving_line_id, notes)
-           VALUES ($1, 1, 'RECEIVED', 'WAREHOUSE', $2, $3, $4, $5)
-           RETURNING id`,
-          [
-            targetLine.sku,
-            staffId,
-            result.unit.id,
-            targetLine.id,
-            `Receiving scan: ${serialNumber.toUpperCase()}`,
-          ],
-        );
-        const ledgerId = ledgerInsert.rows[0]?.id ?? null;
-        if (ledgerId) {
-          await publishStockLedgerEvent({
-            ledgerId,
-            sku: targetLine.sku,
-            delta: 1,
-            reason: 'RECEIVED',
-            dimension: 'WAREHOUSE',
-            staffId,
-            source: 'receiving.scan-serial',
-          });
-        }
-      } catch (err) {
-        console.warn('scan-serial: ledger RECEIVED insert failed (non-fatal)', err);
-      }
-    }
-
-    // ─── Background: catalog enrichment (on miss) + cache/realtime ─────────
-    const needsEnrichment = !catalog;
-    const serialUnitId = result.unit.id;
-    const skuForEnrichment = targetLine.sku;
-    const zohoItemForEnrichment = targetLine.zoho_item_id;
-    const zohoPoForEnrichment = targetLine.zoho_purchaseorder_id;
-    const receivingIdForEvent = targetLine.receiving_id ?? receivingId;
+    // ─── Background: catalog enrichment + cache/realtime ────────────────────
+    const serialUnitId = serialResult.serial_unit.id;
+    const skuForEnrichment = result.line_state.sku;
+    const receivingIdForEvent = targetReceivingId;
 
     after(async () => {
-      if (needsEnrichment && skuForEnrichment) {
+      if (skuForEnrichment && !serialResult.serial_unit.sku_catalog_id) {
         await enrichSerialUnitCatalog({
           serial_unit_id: serialUnitId,
           sku: skuForEnrichment,
-          zoho_item_id: zohoItemForEnrichment,
-          zoho_purchaseorder_id: zohoPoForEnrichment,
+          zoho_item_id: serialResult.serial_unit.zoho_item_id,
+          zoho_purchaseorder_id: null,
+        }).catch((err) => {
+          console.warn('scan-serial: enrichSerialUnitCatalog failed', err);
         });
       }
-
       try {
         await invalidateCacheTags([
           'receiving-lines',
@@ -283,23 +181,13 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({
       success: true,
-      serial_unit: result.unit,
-      is_new: result.is_new,
-      prior_status: result.prior_status,
-      is_return: result.is_return,
-      warnings: result.warnings,
-      line_state: {
-        id: targetLine.id,
-        sku: targetLine.sku,
-        item_name: targetLine.item_name,
-        quantity_received: Number(lineState.quantity_received),
-        quantity_expected:
-          lineState.quantity_expected != null ? Number(lineState.quantity_expected) : null,
-        workflow_status: lineState.workflow_status,
-        is_complete:
-          lineState.quantity_expected != null &&
-          Number(lineState.quantity_received) >= Number(lineState.quantity_expected),
-      },
+      serial_unit: serialResult.serial_unit,
+      is_new: serialResult.is_new,
+      prior_status: serialResult.prior_status,
+      is_return: serialResult.is_return,
+      warnings: serialResult.warnings,
+      line_state: result.line_state,
+      inventory_event_ids: result.inventory_event_ids,
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Failed to scan serial';

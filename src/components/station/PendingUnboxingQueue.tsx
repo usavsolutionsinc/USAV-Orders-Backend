@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { ChevronRight, Loader2, Package, X } from '@/components/Icons';
+import { workflowStatusTableLabel } from '@/components/station/receiving-constants';
 import { TabSwitch } from '@/design-system/components';
 import { sectionLabel, chipText, dataValue, microBadge } from '@/design-system/tokens/typography/presets';
 import { framerTransition, framerPresence } from '@/design-system/foundations/motion-framer';
@@ -275,7 +276,7 @@ function LineItemsPanel({
                       )}
                       <div className="flex flex-wrap items-center gap-1 mt-1">
                         <span className={`${microBadge} tracking-wider rounded px-1.5 py-0.5 ${badge}`}>
-                          {line.workflow_status.replace(/_/g, ' ')}
+                          {workflowStatusTableLabel(line.workflow_status)}
                         </span>
                         {line.needs_test && (
                           <span className={`${microBadge} tracking-wider rounded px-1.5 py-0.5 bg-orange-100 text-orange-600`}>

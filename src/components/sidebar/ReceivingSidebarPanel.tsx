@@ -1,38 +1,73 @@
 'use client';
 
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import { renderToStaticMarkup } from 'react-dom/server';
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
+import { renderToStaticMarkup } from 'react-dom/server';
 import QRCode from 'react-qr-code';
 import {
   sidebarHeaderBandClass,
   sidebarHeaderControlClass,
   sidebarHeaderRowClass,
 } from '@/components/layout/header-shell';
-import { Barcode, ChevronDown, ChevronUp, Clipboard, Printer, RefreshCw, X } from '@/components/Icons';
+import { Barcode, ChevronDown, ChevronUp, Clipboard, ExternalLink, Plus, Printer, RefreshCw, X } from '@/components/Icons';
+import { useUIModeOptional } from '@/design-system/providers/UIModeProvider';
+import { MobileReceivingActionsPane } from '@/components/sidebar/MobileReceivingActionsPane';
+import { receivingLabelPoCornerDisplay } from '@/lib/print/printReceivingLabel';
 import { TrackingChip, OrderIdChip, getLast4 } from '@/components/ui/CopyChip';
 import { SearchBar } from '@/components/ui/SearchBar';
 import { ViewDropdown } from '@/components/ui/ViewDropdown';
 import StaffSelector from '@/components/StaffSelector';
-import { HorizontalButtonSlider, type HorizontalSliderItem } from '@/components/ui/HorizontalButtonSlider';
 import {
   ReceivingReturnBanner,
   type ReturnEvent,
 } from '@/components/sidebar/ReceivingReturnBanner';
 import { ScanStatusChip } from '@/components/sidebar/ScanStatusChip';
+import { ReceivingPhotoStrip } from '@/components/sidebar/ReceivingPhotoStrip';
 import { useAblyChannel } from '@/hooks/useAblyChannel';
 import { useAblyClient } from '@/contexts/AblyContext';
 import { printProductLabel } from '@/lib/print/printProductLabel';
+import { mobileQrUrl } from '@/lib/barcode-routing';
 import { loadBarcodeLibrary, renderBarcode } from '@/utils/barcode';
 import { LocalPickupIntakeForm } from '@/components/work-orders/LocalPickupIntakeForm';
 import {
-  QA_OPTS,
-  DISPOSITION_OPTS,
   CONDITION_OPTS,
   COND_LABEL,
 } from '@/components/station/receiving-constants';
-import type { ReceivingLineRow } from '@/components/station/ReceivingLinesTable';
-import { dispatchLineUpdated } from '@/components/station/ReceivingLinesTable';
+import {
+  dispatchLineUpdated,
+  type ReceivingLineRow,
+} from '@/components/station/ReceivingLinesTable';
+
+/**
+ * Shape of the `receiving-select-line` CustomEvent's detail. Defined here
+ * because the table currently dispatches just the row, while the sidebar
+ * also recognizes a richer `{ row, expandFlowSections }` payload — accept
+ * both shapes so the contract is forward/back compatible.
+ */
+type ReceivingSelectLineDetail =
+  | ReceivingLineRow
+  | null
+  | { row: ReceivingLineRow | null; expandFlowSections?: boolean };
+
+function readSelectLineDetail(
+  detail: ReceivingSelectLineDetail,
+): { row: ReceivingLineRow | null; expandFlowSections: boolean } {
+  if (detail && typeof detail === 'object' && 'row' in detail) {
+    return {
+      row: detail.row ?? null,
+      expandFlowSections: detail.expandFlowSections === true,
+    };
+  }
+  return { row: (detail as ReceivingLineRow | null) ?? null, expandFlowSections: false };
+}
 import {
   parseSerialFromLineDescription,
   parseZendeskListingFromPoNotes,
@@ -42,23 +77,34 @@ import {
 const RECEIVING_LINE_DETAILS_STORAGE_KEY = (receivingId: number) =>
   `receiving.sidebar.lineDetails.v1:${receivingId}`;
 
-type ReceivingLineDetailScratch = { zendesk: string; listing: string; notes: string };
+type ReceivingLineDetailScratch = {
+  zendesk: string;
+  listing: string;
+  notes: string;
+  /** Extra carrier refs for multi-piece POs; primary tracking still PATCHes shipment. */
+  extra_trackings: string[];
+};
 
 function readReceivingLineDetailsScratch(receivingId: number | null): ReceivingLineDetailScratch {
   if (receivingId == null || typeof window === 'undefined') {
-    return { zendesk: '', listing: '', notes: '' };
+    return { zendesk: '', listing: '', notes: '', extra_trackings: [] };
   }
   try {
     const raw = window.localStorage.getItem(RECEIVING_LINE_DETAILS_STORAGE_KEY(receivingId));
-    if (!raw) return { zendesk: '', listing: '', notes: '' };
+    if (!raw) return { zendesk: '', listing: '', notes: '', extra_trackings: [] };
     const o = JSON.parse(raw) as Partial<ReceivingLineDetailScratch>;
+    const extrasRaw = o.extra_trackings;
+    const extra_trackings = Array.isArray(extrasRaw)
+      ? extrasRaw.filter((x): x is string => typeof x === 'string')
+      : [];
     return {
       zendesk: typeof o.zendesk === 'string' ? o.zendesk : '',
       listing: typeof o.listing === 'string' ? o.listing : '',
       notes: typeof o.notes === 'string' ? o.notes : '',
+      extra_trackings,
     };
   } catch {
-    return { zendesk: '', listing: '', notes: '' };
+    return { zendesk: '', listing: '', notes: '', extra_trackings: [] };
   }
 }
 
@@ -67,7 +113,12 @@ function writeReceivingLineDetailsScratch(receivingId: number, d: ReceivingLineD
   try {
     window.localStorage.setItem(
       RECEIVING_LINE_DETAILS_STORAGE_KEY(receivingId),
-      JSON.stringify({ zendesk: d.zendesk, listing: d.listing, notes: d.notes }),
+      JSON.stringify({
+        zendesk: d.zendesk,
+        listing: d.listing,
+        notes: d.notes,
+        extra_trackings: d.extra_trackings,
+      }),
     );
   } catch {
     /* quota / private mode */
@@ -78,20 +129,6 @@ const RECEIVING_MODE_OPTIONS = [
   { value: 'receive', label: 'Receiving' },
   { value: 'pickup', label: 'Local Pickup' },
 ];
-
-// Two-tab surface covering the full receiver workflow:
-//   Recent   = in-flight lines (pre-match through in-test), sorted by most
-//              recent scan pairing event so new scans bubble up.
-//   Received = physically received in the warehouse (MATCHED → DONE),
-//              sorted by updated_at so recent receives bubble up.
-const VIEW_FILTERS: HorizontalSliderItem[] = [
-  { id: 'all',      label: 'All' },
-  { id: 'recent',   label: 'Recent' },
-  { id: 'received', label: 'Received' },
-];
-
-type ViewId = 'all' | 'recent' | 'received';
-const VALID_VIEW_IDS = new Set<ViewId>(['all', 'recent', 'received']);
 
 type ReceivingMode = 'receive' | 'pickup';
 
@@ -199,11 +236,6 @@ function mapApiLineToPoSummary(l: {
   };
 }
 
-function receivingTypeLabel(value: string | null | undefined): string {
-  const v = String(value || 'PO').trim().toUpperCase() || 'PO';
-  return RECEIVING_TYPE_OPTS.find((o) => o.value === v)?.label ?? v.replace(/_/g, ' ');
-}
-
 function platformLabel(
   pkg: ReceivingPackageMeta | null,
   lineReceivingType: string | null | undefined,
@@ -309,13 +341,137 @@ const SELECT_CLASS =
 const INPUT_CLASS =
   'w-full rounded-md border border-gray-200 bg-white px-2 py-1.5 text-[11px] font-semibold text-gray-900 placeholder:text-gray-400 focus:border-blue-300 focus:outline-none focus:ring-2 focus:ring-blue-500/10';
 
+/** Safe http(s) href for opening a pasted or typed listing URL. */
+function listingUrlForOpen(raw: string): string | null {
+  const t = raw.trim();
+  if (!t) return null;
+  try {
+    const withProto = /^https?:\/\//i.test(t) ? t : `https://${t}`;
+    const u = new URL(withProto);
+    if (u.protocol !== 'http:' && u.protocol !== 'https:') return null;
+    return u.href;
+  } catch {
+    return null;
+  }
+}
+
+const FLOW_SECTION_LABEL =
+  'block text-[9px] font-black uppercase tracking-[0.14em] text-slate-500';
+
+/** Sidebar collapsible triggers: same min-height and padding vibe as sidebar header rows / ViewDropdown. */
+const FLOW_SECTION_BTN_CLASS =
+  'flex min-h-[44px] w-full items-center gap-2 px-3 py-1 text-left transition-colors hover:bg-gray-50';
+
+const FLOW_SECTION_TITLE_CLASS =
+  'shrink-0 text-[10px] font-black uppercase tracking-wider text-gray-700';
+
+/** Tracking · platform · notes preview (and plain string summaries) — one size/weight/color. */
+const FLOW_SECTION_SUMMARY_CLASS =
+  'inline-flex min-w-0 max-w-full flex-wrap items-center justify-end gap-x-1 gap-y-0.5 text-[9px] font-semibold leading-none tracking-wide text-gray-600';
+
+/** Middot separators in flow summaries; stays subtle at 9px. */
+const FLOW_SECTION_SUMMARY_SEP_CLASS = 'shrink-0 select-none font-normal text-gray-400';
+
+/**
+ * Hairline under scan strips: separate block so the rule stays full-bleed in FlowSection
+ * (parent has px-3; -mx-3 negates it) — avoids short/offset borders vs flex children.
+ */
+const RECEIVING_SCAN_RULE_LINE_CLASS =
+  '-mx-3 h-px shrink-0 bg-slate-300 transition-colors group-focus-within:bg-blue-500';
+
+/**
+ * Matches {@link SearchField} trailing slot geometry (paste / clear / spinner)
+ * so header actions (+), row removes (×), and section chevrons share one vertical
+ * alignment column with scan rows.
+ */
+const RECEIVING_TRAIL_SLOT_CLASS =
+  'flex h-[14px] w-[14px] shrink-0 items-center justify-center';
+
+/** Tap target fills the 14×14 trail column; icon centers like paste/clear. */
+const RECEIVING_TRAIL_BTN_CLASS =
+  'flex h-full w-full items-center justify-center rounded-sm transition-colors duration-100 ease-out active:scale-95';
+
+const TRACKING_REMOVE_BTN_CLASS = `${RECEIVING_TRAIL_BTN_CLASS} text-gray-400 hover:text-gray-900`;
+
+const TRACKING_ADD_BTN_CLASS = `${RECEIVING_TRAIL_BTN_CLASS} text-slate-500 hover:text-slate-800`;
+
+/** Matches SearchField leading icon: muted until row is focused. */
+const TRACKING_ROW_LEADING_ICON_CLASS =
+  'shrink-0 text-gray-400 transition-colors duration-100 ease-out group-focus-within:text-gray-900';
+
+function FlowSection({
+  title,
+  summary,
+  open,
+  onToggle,
+  bodyClassName = 'px-3 py-3',
+  children,
+}: {
+  title: string;
+  summary?: ReactNode;
+  open: boolean;
+  onToggle: () => void;
+  /** Wrapping paddings around section body when open (default matches other panels). */
+  bodyClassName?: string;
+  children: ReactNode;
+}) {
+  return (
+    <div className="bg-white">
+      <button
+        type="button"
+        onClick={onToggle}
+        aria-expanded={open}
+        className={FLOW_SECTION_BTN_CLASS}
+      >
+        <span className={FLOW_SECTION_TITLE_CLASS}>{title}</span>
+        {summary != null && summary !== '' ? (
+          <span className="min-w-0 flex-1 text-right">
+            <span className={FLOW_SECTION_SUMMARY_CLASS}>{summary}</span>
+          </span>
+        ) : (
+          <span className="min-w-0 flex-1" />
+        )}
+        <span className={RECEIVING_TRAIL_SLOT_CLASS}>
+          <ChevronDown
+            className={`h-[14px] w-[14px] shrink-0 text-gray-400 transition-transform duration-200 ${open ? 'rotate-180' : ''}`}
+          />
+        </span>
+      </button>
+      {open ? (
+        <>
+          <div className="border-t border-slate-100" aria-hidden />
+          <div className={bodyClassName}>{children}</div>
+        </>
+      ) : null}
+    </div>
+  );
+}
+
 type ReceivingLabelPayload = {
-  scanValue: string;        // PO#, PO id, or RCV-{receiving_id} fallback
-  platform: string;         // "Zoho" | "Return" | "Local pickup" | "eBay" ...
-  typeLabel: string;        // "PO" | "Return" | "Trade In" | "Pick Up"
-  conditionCode: string;    // raw condition grade enum: BRAND_NEW | USED_A | …
-  date: string;             // short date "4/14/26"
+  /** Numeric receiving id — used to build the phone-scannable QR URL. */
+  receivingId?: number | null;
+  /** Human-readable PO/RCV identifier shown as the "last 4" on the label face. */
+  scanValue: string;
+  platform: string;
+  zendeskTicket?: string;
+  /** Support / carton notes printed in the label center — any free text. */
+  notes: string;
+  conditionCode: string;
+  date: string;
 };
+
+/**
+ * The string actually encoded into the printed QR. When we know the
+ * receiving id we encode the full mobile URL so a phone scanning the label
+ * opens the carton page natively. Falls back to the human-readable
+ * scanValue for legacy callers (no receivingId provided).
+ */
+function resolveReceivingLabelQrValue(payload: ReceivingLabelPayload): string {
+  if (payload.receivingId != null && Number.isFinite(payload.receivingId)) {
+    return mobileQrUrl('r', payload.receivingId);
+  }
+  return payload.scanValue.trim();
+}
 
 function escapeHtml(s: string): string {
   return s
@@ -326,22 +482,15 @@ function escapeHtml(s: string): string {
     .replace(/'/g, '&#39;');
 }
 
-/**
- * Generate a 2×1" label with info on the left and a pre-rendered QR SVG on
- * the right. The QR is materialized in the parent window via react-qr-code
- * + renderToStaticMarkup so the popup contains no external scripts — that
- * removes the CDN race that sometimes left the print dialog hanging.
- */
 function printReceivingLabel(payload: ReceivingLabelPayload) {
   if (typeof window === 'undefined') return;
   const scanValue = payload.scanValue.trim();
-  if (!scanValue) return;
+  const qrPayload = resolveReceivingLabelQrValue(payload);
+  if (!qrPayload) return;
 
-  // Pre-render the QR as an SVG string in the parent so the popup does not
-  // need to fetch a qrcode library from a CDN.
   const qrSvg = renderToStaticMarkup(
     <QRCode
-      value={scanValue}
+      value={qrPayload}
       size={80}
       level="M"
       fgColor="#000000"
@@ -361,10 +510,10 @@ function printReceivingLabel(payload: ReceivingLabelPayload) {
   .info{flex:1 1 auto;min-width:0;display:flex;flex-direction:column;justify-content:space-between;height:100%}
   .row{display:flex;justify-content:space-between;align-items:baseline;gap:4px;line-height:1}
   .platform{font-size:11px;font-weight:700;color:#374151;text-transform:capitalize;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-  .type{font-size:12px;font-weight:900;text-transform:uppercase;letter-spacing:0.3px;color:#111;white-space:nowrap;text-align:center}
+  .notes{flex:1 1 auto;min-height:0;font-size:10px;font-weight:600;color:#111;text-transform:none;letter-spacing:0;text-align:center;line-height:1.12;overflow:hidden;padding:0 1px;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:3;overflow-wrap:anywhere;word-break:break-word;align-self:stretch;-webkit-hyphens:auto;hyphens:auto}
   .cond{font-size:13px;font-weight:900;color:#111;white-space:nowrap}
   .po{font-size:12px;font-weight:900;letter-spacing:0.3px;line-height:1.05;color:#111;white-space:nowrap;font-variant-numeric:tabular-nums}
-  .date{font-size:11px;font-weight:700;color:#4b5563;white-space:nowrap;tabular-nums:true;font-variant-numeric:tabular-nums}
+  .date{font-size:11px;font-weight:700;color:#4b5563;white-space:nowrap;font-variant-numeric:tabular-nums}
   .qr{flex:0 0 auto;width:0.86in;height:0.86in;display:flex;align-items:center;justify-content:center}
   .qr svg{width:100%;height:100%;display:block}
 </style></head><body>
@@ -374,18 +523,16 @@ function printReceivingLabel(payload: ReceivingLabelPayload) {
       <span class="platform">${escapeHtml(payload.platform)}</span>
       <span class="date">${escapeHtml(payload.date)}</span>
     </div>
-    <div class="type">${escapeHtml(payload.typeLabel)}</div>
+    <div class="notes">${escapeHtml((payload.notes || '').trim())}</div>
     <div class="row">
       <span class="cond">${condHtml}</span>
-      <span class="po">${escapeHtml(getLast4(scanValue))}</span>
+      <span class="po">${escapeHtml(receivingLabelPoCornerDisplay(payload))}</span>
     </div>
   </div>
   <div class="qr">${qrSvg}</div>
 </div>
 <script>
 window.onload=function(){
-  // Defer just long enough for layout to settle, then trigger the native
-  // print dialog. window.close() runs after print resolves / cancels.
   setTimeout(function(){window.focus();window.print();},120);
 };
 window.onafterprint=function(){setTimeout(function(){window.close();},80);};
@@ -402,16 +549,67 @@ window.onafterprint=function(){setTimeout(function(){window.close();},80);};
   w.document.close();
 }
 
-/** On-screen preview matching {@link printReceivingLabel} (2×1in layout). */
 function ReceivingPoLabelPreview({
+  receivingId,
   scanValue,
   platform,
-  typeLabel,
+  notes,
+  zendeskTicket,
   conditionCode,
   date,
-}: ReceivingLabelPayload) {
+  embedded,
+}: ReceivingLabelPayload & { embedded?: boolean }) {
   const safe = scanValue.trim();
-  if (!safe) return null;
+  const qrPayload = resolveReceivingLabelQrValue({
+    receivingId,
+    scanValue,
+    platform,
+    notes,
+    zendeskTicket,
+    conditionCode,
+    date,
+  });
+  if (!qrPayload) return null;
+  const innerShell = embedded
+    ? 'w-full bg-white'
+    : 'w-full rounded-lg border border-gray-200/80 bg-white px-3 py-3 shadow-sm';
+  const inner = (
+    <div className={innerShell}>
+      <div className="flex min-h-[6.5rem] flex-nowrap items-stretch gap-4">
+        <div className="min-w-0 flex flex-1 flex-col justify-between py-1">
+          <div className="flex items-baseline justify-between gap-2 text-[14px] leading-none">
+            <span className="truncate font-bold text-gray-700">{platform}</span>
+            <span className="shrink-0 tabular-nums font-semibold text-gray-600">{date}</span>
+          </div>
+          <div className="flex min-h-0 flex-1 min-w-0 items-center justify-center px-0.5">
+            <span className="line-clamp-3 w-full text-center text-[11px] font-semibold leading-tight tracking-normal text-gray-900 normal-case">
+              {notes.trim()}
+            </span>
+          </div>
+          <div className="flex items-baseline justify-between gap-2 text-[15px] leading-none">
+            <ConditionHeaderDisplay code={conditionCode} />
+            <span className="shrink-0 tabular-nums font-black text-gray-900">
+              {receivingLabelPoCornerDisplay({
+                receivingId,
+                scanValue: safe,
+                platform,
+                notes,
+                zendeskTicket,
+                conditionCode,
+                date,
+              })}
+            </span>
+          </div>
+        </div>
+        <div className="flex shrink-0 items-center [&_svg]:block">
+          <QRCode value={qrPayload} size={96} level="M" fgColor="#000000" bgColor="#ffffff" />
+        </div>
+      </div>
+    </div>
+  );
+  if (embedded) {
+    return inner;
+  }
   return (
     <div className="border-t border-gray-200 bg-gray-50">
       <div className="flex items-center gap-3 px-3 pt-3 pb-2">
@@ -420,45 +618,21 @@ function ReceivingPoLabelPreview({
           Review &amp; print
         </span>
       </div>
-      <div className="px-3 pb-3">
-        <div className="w-full rounded border border-gray-200 bg-white px-2 py-2 shadow-sm">
-          <div className="flex flex-nowrap items-stretch gap-3 min-h-[5rem]">
-            <div className="min-w-0 flex-1 flex flex-col justify-between py-0.5">
-              <div className="flex items-baseline justify-between gap-2 text-[12px] leading-none">
-                <span className="truncate font-bold text-gray-700">{platform}</span>
-                <span className="shrink-0 tabular-nums font-semibold text-gray-600">
-                  {date}
-                </span>
-              </div>
-              <div className="text-center text-[13px] font-black uppercase tracking-wide text-gray-900 leading-none">
-                {typeLabel}
-              </div>
-              <div className="flex items-baseline justify-between gap-2 text-[13px] leading-none">
-                <ConditionHeaderDisplay code={conditionCode} />
-                <span className="shrink-0 tabular-nums font-black text-gray-900">
-                  {getLast4(safe)}
-                </span>
-              </div>
-            </div>
-            <div className="shrink-0 flex items-center">
-              <QRCode value={safe} size={80} level="M" fgColor="#000000" bgColor="#ffffff" />
-            </div>
-          </div>
-        </div>
-      </div>
+      <div className="px-3 pb-3">{inner}</div>
     </div>
   );
 }
 
-/** On-screen preview matching {@link printProductLabel} (SKU + Code128). */
 function ReceivingProductLabelPreview({
   sku,
   title,
   serialNumber,
+  embedded,
 }: {
   sku: string;
   title: string;
   serialNumber: string;
+  embedded?: boolean;
 }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [libReady, setLibReady] = useState(false);
@@ -488,6 +662,28 @@ function ReceivingProductLabelPreview({
 
   if (!sku.trim()) return null;
 
+  const innerShell = embedded
+    ? 'flex w-full flex-nowrap items-start justify-between gap-3 bg-white'
+    : 'flex flex-nowrap items-start justify-between gap-3 rounded-lg border border-gray-200/80 bg-white px-3 py-3 shadow-sm';
+  const inner = (
+    <div className={innerShell}>
+      <div className="min-w-0 flex-1">
+        <p className="font-mono text-base font-black tracking-tight text-gray-900">{sku.trim()}</p>
+        {title.trim() ? (
+          <p className="mt-1 line-clamp-3 text-[11px] text-gray-500 leading-snug">{title}</p>
+        ) : null}
+        {serialNumber.trim() ? (
+          <p className="mt-1 text-[10px] font-mono text-gray-500">SN: {serialNumber.trim()}</p>
+        ) : null}
+      </div>
+      <div className="shrink-0 self-center">
+        <canvas ref={canvasRef} className="max-w-[min(100%,9rem)]" />
+      </div>
+    </div>
+  );
+  if (embedded) {
+    return inner;
+  }
   return (
     <div className="border-t border-gray-200 bg-gray-50">
       <div className="flex items-center gap-3 px-3 pt-3 pb-2">
@@ -496,22 +692,7 @@ function ReceivingProductLabelPreview({
           Review & print
         </span>
       </div>
-      <div className="px-3 pb-3">
-        <div className="flex flex-nowrap items-start justify-between gap-3 border border-gray-200 bg-white px-3 py-3">
-          <div className="min-w-0 flex-1">
-            <p className="font-mono text-base font-black tracking-tight text-gray-900">{sku.trim()}</p>
-            {title.trim() ? (
-              <p className="mt-1 line-clamp-3 text-[11px] text-gray-500 leading-snug">{title}</p>
-            ) : null}
-            {serialNumber.trim() ? (
-              <p className="mt-1 text-[10px] font-mono text-gray-500">SN: {serialNumber.trim()}</p>
-            ) : null}
-          </div>
-          <div className="shrink-0 self-center">
-            <canvas ref={canvasRef} className="max-w-[min(100%,9rem)]" />
-          </div>
-        </div>
-      </div>
+      <div className="px-3 pb-3">{inner}</div>
     </div>
   );
 }
@@ -520,31 +701,31 @@ function LineEditPanel({
   row,
   staffId,
   compact = false,
+  accordionBootstrap = 'default',
   onClose,
   onPrev,
   onNext,
   canPrev = false,
   canNext = false,
-  progressReceived,
-  progressTotal,
+  itemIndex,
+  itemTotal,
 }: {
   row: ReceivingLineRow;
   staffId: string;
   compact?: boolean;
+  /** `'all'` opens Shipment PO, Item, and Support sections (table row selection). */
+  accordionBootstrap?: 'default' | 'all';
   onPrev?: () => void;
   onNext?: () => void;
   canPrev?: boolean;
   canNext?: boolean;
-  progressReceived?: number;
-  progressTotal?: number;
+  /** 0-based index of the current item within the PO */
+  itemIndex?: number;
+  /** Total number of items in the PO */
+  itemTotal?: number;
   onClose: () => void;
 }) {
   const [receivingType, setReceivingType] = useState(row.receiving_type || 'PO');
-  // Pre-receipt placeholders (PENDING/HOLD) get promoted to the common
-  // happy-path defaults (PASSED/ACCEPT/USED_A). If a line was previously
-  // saved with a more specific status (e.g. FAILED_DAMAGED, RTV,
-  // BRAND_NEW), we preserve that — the override only replaces the
-  // pre-receipt placeholders.
   const [qa, setQa] = useState(
     !row.qa_status || row.qa_status === 'PENDING' ? 'PASSED' : row.qa_status,
   );
@@ -560,10 +741,20 @@ function LineEditPanel({
   const [saving, setSaving] = useState(false);
   const [serialSubmitting, setSerialSubmitting] = useState(false);
   const [receiving, setReceiving] = useState(false);
-  const [imgKey, setImgKey] = useState(0);
   const [sourcePlatform, setSourcePlatform] = useState<string>('');
   const [platformSaving, setPlatformSaving] = useState(false);
-  const [detailsOpen, setDetailsOpen] = useState(!compact);
+  type FlowSecKey = 'shipment' | 'item' | 'support';
+  const [flowOpen, setFlowOpen] = useState<Record<FlowSecKey, boolean>>(() =>
+    accordionBootstrap === 'all'
+      ? { shipment: true, item: true, support: true }
+      : {
+          shipment: true,
+          item: !compact,
+          support: false,
+        },
+  );
+  const [extraTrackings, setExtraTrackings] = useState<string[]>([]);
+  const [extraSerials, setExtraSerials] = useState<string[]>([]);
   const [zohoSyncing, setZohoSyncing] = useState(false);
   const serialRef = useRef<HTMLInputElement>(null);
   const listingRef = useRef<HTMLInputElement>(null);
@@ -571,17 +762,30 @@ function LineEditPanel({
   const persistZendeskRef = useRef(zendesk);
   const persistListingRef = useRef(listingLink);
   const persistNotesRef = useRef(notes);
+  const persistExtraTrackingsRef = useRef(extraTrackings);
   persistZendeskRef.current = zendesk;
   persistListingRef.current = listingLink;
   persistNotesRef.current = notes;
+  persistExtraTrackingsRef.current = extraTrackings;
+
+  const toggleFlow = useCallback((key: FlowSecKey) => {
+    setFlowOpen((prev) => ({ ...prev, [key]: !prev[key] }));
+  }, []);
+
+  useEffect(() => {
+    setFlowOpen(
+      accordionBootstrap === 'all'
+        ? { shipment: true, item: true, support: true }
+        : {
+            shipment: true,
+            item: !compact,
+            support: false,
+          },
+    );
+  }, [compact, row.id, accordionBootstrap]);
 
   useEffect(() => {
     setReceivingType(row.receiving_type || 'PO');
-    // Mirror the initial-state promotion logic on row change so a freshly
-    // loaded PO line shows the happy-path defaults (PASSED / ACCEPT / USED_A)
-    // instead of the raw placeholders (PENDING / HOLD) written when the line
-    // was first created. Non-placeholder values (e.g. FAILED_DAMAGED, RTV,
-    // BRAND_NEW) are preserved as-is.
     setQa(!row.qa_status || row.qa_status === 'PENDING' ? 'PASSED' : row.qa_status);
     setDisp(!row.disposition_code || row.disposition_code === 'HOLD' ? 'ACCEPT' : row.disposition_code);
     setCond(row.condition_grade || 'USED_A');
@@ -599,6 +803,7 @@ function LineEditPanel({
         zendesk: persistZendeskRef.current,
         listing: persistListingRef.current,
         notes: persistNotesRef.current,
+        extra_trackings: persistExtraTrackingsRef.current.filter((t) => t.trim().length > 0),
       });
     }
     prevReceivingIdForFlushRef.current = next ?? null;
@@ -611,12 +816,14 @@ function LineEditPanel({
       setZendesk('');
       setListingLink('');
       setNotes('');
+      setExtraTrackings([]);
       return;
     }
     const d = readReceivingLineDetailsScratch(row.receiving_id);
     setZendesk(d.zendesk);
     setListingLink(d.listing);
     setNotes(d.notes);
+    setExtraTrackings(d.extra_trackings.length > 0 ? d.extra_trackings : []);
   }, [row.receiving_id]);
 
   // Serial is per line; when moving between lines, prefill from the row's
@@ -696,8 +903,13 @@ function LineEditPanel({
       return;
     }
 
-    writeReceivingLineDetailsScratch(cur, { zendesk, listing: listingLink, notes });
-  }, [zendesk, listingLink, notes, row.receiving_id]);
+    writeReceivingLineDetailsScratch(cur, {
+      zendesk,
+      listing: listingLink,
+      notes,
+      extra_trackings: extraTrackings.map((t) => t.trim()).filter(Boolean),
+    });
+  }, [zendesk, listingLink, notes, extraTrackings, row.receiving_id]);
 
   // Load the parent receiving row's source_platform so the dropdown reflects
   // the current shipment-level override (platform is per-carton, not per-line).
@@ -767,6 +979,18 @@ function LineEditPanel({
     }
   }, [row.id]);
 
+  const refreshLineWithSerials = useCallback(async () => {
+    try {
+      const res = await fetch(`/api/receiving-lines?id=${row.id}&include=serials`);
+      const data = await res.json();
+      if (data?.success && data.receiving_line) {
+        dispatchLineUpdated(data.receiving_line as ReceivingLineRow);
+      }
+    } catch {
+      /* silent */
+    }
+  }, [row.id]);
+
   const submitSerial = useCallback(async (raw?: string) => {
     const serial = (raw ?? serialInput).trim();
     if (!serial || !row.receiving_id || serialSubmitting) return;
@@ -802,18 +1026,19 @@ function LineEditPanel({
           },
         }));
         setTimeout(() => serialRef.current?.focus(), 40);
+        void refreshLineWithSerials();
       }
     } catch { /* silent */ } finally {
       setSerialSubmitting(false);
     }
-  }, [serialInput, row.receiving_id, row.id, staffId, serialSubmitting]);
+  }, [serialInput, row.receiving_id, row.id, staffId, serialSubmitting, refreshLineWithSerials]);
 
-  const pasteToListing = useCallback(async () => {
-    try {
-      const text = await navigator.clipboard.readText();
-      if (text) setListingLink(text.trim());
-    } catch { /* clipboard not available */ }
-  }, []);
+  const submitExtraSerial = useCallback(async (idx: number) => {
+    const serial = (extraSerials[idx] ?? '').trim();
+    if (!serial) return;
+    await submitSerial(serial);
+    setExtraSerials((xs) => xs.filter((_, j) => j !== idx));
+  }, [extraSerials, submitSerial]);
 
   const handleReceive = useCallback(async () => {
     if (receiving || row.receiving_id == null) return;
@@ -849,28 +1074,91 @@ function LineEditPanel({
         } catch { /* table may still reflect partial state */ }
       }
 
+      if (!markRes.ok || !markData?.success) {
+        // Surface server-side errors instead of failing silently — the user has
+        // no other feedback that the Receive button did anything.
+        console.error('receiving/mark-received-po failed', {
+          status: markRes.status,
+          error: markData?.error,
+        });
+      }
+
       window.dispatchEvent(new CustomEvent('receiving-entry-added'));
       window.dispatchEvent(new CustomEvent('usav-refresh-data'));
-    } catch { /* silent */ } finally {
+    } catch (err) {
+      console.error('receiving/mark-received-po threw', err);
+    } finally {
       setReceiving(false);
     }
-  }, [receiving, row.receiving_id, qa, disp, cond, notes, zendesk, listingLink, serialInput, staffId]);
+  }, [receiving, row.receiving_id, row.id, qa, disp, cond, notes, zendesk, listingLink, serialInput, staffId]);
 
   const poNumber = (row.zoho_purchaseorder_number || row.zoho_purchaseorder_id || '').trim();
   const scanValue = poNumber || (row.receiving_id != null ? `RCV-${row.receiving_id}` : '');
+  const trackingHint = (row.tracking_number || trackingEdit || '').trim();
   const labelPlatform = sourcePlatform
     ? (SOURCE_PLATFORM_LABELS[sourcePlatform] ?? sourcePlatform)
-    : String(receivingType || 'PO').toUpperCase() === 'PICKUP' ? 'Local pickup' : 'Zoho';
-  const labelType = receivingTypeLabel(receivingType);
+    : String(receivingType || 'PO').toUpperCase() === 'PICKUP' ? 'Local pickup' : 'Unknown';
   const labelDate = new Date().toLocaleDateString('en-US', { month: 'numeric', day: 'numeric', year: '2-digit' });
   const labelPayload: ReceivingLabelPayload = {
+    receivingId: row.receiving_id ?? null,
     scanValue,
     platform: labelPlatform,
-    typeLabel: labelType,
+    zendeskTicket: zendesk.trim() || undefined,
+    notes: notes.trim(),
     conditionCode: cond,
     date: labelDate,
   };
-  const imgUrl = row.image_url ?? null;
+
+  const notesPreview = notes.trim();
+  const inboundSummary = (
+    <>
+      <span className="min-w-0 truncate" title={trackingHint || undefined}>
+        {trackingHint ? getLast4(trackingHint) : '—'}
+      </span>
+      <span className={FLOW_SECTION_SUMMARY_SEP_CLASS} aria-hidden>
+        ·
+      </span>
+      <span className="min-w-0 max-w-full break-words text-right">{labelPlatform}</span>
+      {notesPreview ? (
+        <>
+          <span className={FLOW_SECTION_SUMMARY_SEP_CLASS} aria-hidden>
+            ·
+          </span>
+          <span className="min-w-0 max-w-[min(11rem,50%)] truncate text-right" title={notesPreview}>
+            {notesPreview}
+          </span>
+        </>
+      ) : null}
+    </>
+  );
+
+  const runPrintLabel = useCallback(() => {
+    if (scanValue.trim()) {
+      printReceivingLabel(labelPayload);
+      return;
+    }
+    const skuTrim = (row.sku || '').trim();
+    if (skuTrim) {
+      printProductLabel({
+        sku: skuTrim,
+        title: row.item_name ?? undefined,
+        serialNumber: serialInput.trim() || undefined,
+      });
+    }
+  }, [scanValue, labelPayload, row.sku, row.item_name, serialInput]);
+
+  const handlePrintAndReceive = useCallback(async () => {
+    runPrintLabel();
+    await handleReceive();
+  }, [runPrintLabel, handleReceive]);
+
+  const canPrintReview = Boolean(scanValue.trim() || (row.sku || '').trim());
+  const canReceiveReview = row.receiving_id != null && !receiving;
+  const combinedReviewDisabled = receiving || (!canPrintReview && !canReceiveReview);
+
+  const recordedSerials = row.serials ?? [];
+
+  const listingOpenHref = listingUrlForOpen(listingLink);
 
   // Refresh ↔ Zoho. Always searches by tracking# (PO# search is a future upd).
   // Flow:
@@ -883,12 +1171,38 @@ function LineEditPanel({
   const syncWithZoho = useCallback(async () => {
     if (zohoSyncing) return;
     const tracking = (row.tracking_number || '').trim();
-    if (!tracking) {
-      setImgKey((k) => k + 1); // nothing to sync — at least refresh the image
-      return;
-    }
+    if (!tracking) return;
     setZohoSyncing(true);
     try {
+      const knownPoId = (row.zoho_purchaseorder_id || '').trim();
+
+      // Fast path: PO ID already known — skip the slow find-po search and
+      // go straight to the single-PO fetch for notes/listing prefill.
+      if (knownPoId) {
+        // Re-fetch the line to pick up any server-side changes.
+        const lineRes = await fetch(`/api/receiving-lines?id=${row.id}`);
+        const lineData = await lineRes.json();
+        if (lineData?.success && lineData.receiving_line) {
+          dispatchLineUpdated(lineData.receiving_line as ReceivingLineRow);
+        }
+
+        // Fetch full PO for notes → prefill listing / zendesk.
+        try {
+          const poRes = await fetch(
+            `/api/zoho/purchase-orders?purchaseorder_id=${encodeURIComponent(knownPoId)}`,
+          );
+          const poData = await poRes.json();
+          if (poData?.success && poData.purchaseorder) {
+            const poNotes = (poData.purchaseorder as { notes?: string | null }).notes ?? '';
+            const parsed = parseZendeskListingFromPoNotes(poNotes);
+            if (!listingLink.trim() && parsed.listing) setListingLink(parsed.listing);
+            if (!zendesk.trim() && parsed.zendesk) setZendesk(parsed.zendesk);
+          }
+        } catch { /* PO fetch failed — fields stay as-is */ }
+        return;
+      }
+
+      // Slow path: no PO ID yet — search Zoho by tracking number.
       const findRes = await fetch('/api/zoho/find-po', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -897,7 +1211,7 @@ function LineEditPanel({
       const findData = await findRes.json();
       const po = findData?.success && findData.matched ? findData.purchase_order : null;
 
-      // 2. Reconcile the line's PO#/number only if Zoho disagrees. Zoho wins.
+      // Reconcile the line's PO#/number only if Zoho disagrees.
       if (po) {
         const zohoId = (po.zoho_purchaseorder_id || '').trim() || null;
         const zohoNum = (po.zoho_purchaseorder_number || '').trim() || null;
@@ -915,7 +1229,7 @@ function LineEditPanel({
         }
       }
 
-      // 3. Reconcile the carton.
+      // Reconcile the carton.
       if (row.receiving_id) {
         if (po) {
           await fetch(`/api/receiving/${row.receiving_id}`, {
@@ -929,7 +1243,6 @@ function LineEditPanel({
           });
         }
       } else {
-        // No carton yet — let lookup-po create/link one from the tracking#.
         await fetch('/api/receiving/lookup-po', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -944,277 +1257,518 @@ function LineEditPanel({
       if (lineData?.success && lineData.receiving_line) {
         dispatchLineUpdated(lineData.receiving_line as ReceivingLineRow);
       }
-      setImgKey((k) => k + 1);
+
+      // Prefill listing / zendesk from PO notes if still empty.
+      const resolvedPoId = (po?.zoho_purchaseorder_id || '').trim();
+      if (resolvedPoId) {
+        try {
+          const poRes = await fetch(
+            `/api/zoho/purchase-orders?purchaseorder_id=${encodeURIComponent(resolvedPoId)}`,
+          );
+          const poData = await poRes.json();
+          if (poData?.success && poData.purchaseorder) {
+            const poNotes = (poData.purchaseorder as { notes?: string | null }).notes ?? '';
+            const parsed = parseZendeskListingFromPoNotes(poNotes);
+            if (!listingLink.trim() && parsed.listing) setListingLink(parsed.listing);
+            if (!zendesk.trim() && parsed.zendesk) setZendesk(parsed.zendesk);
+          }
+        } catch { /* PO fetch failed — fields stay as-is */ }
+      }
     } catch {
       /* silent — user can retry */
     } finally {
       setZohoSyncing(false);
     }
   }, [zohoSyncing, row.id, row.receiving_id, row.tracking_number,
-      row.zoho_purchaseorder_id, row.zoho_purchaseorder_number, staffId]);
+      row.zoho_purchaseorder_id, row.zoho_purchaseorder_number, staffId,
+      listingLink, zendesk]);
 
-  const hasProgress = typeof progressReceived === 'number' && typeof progressTotal === 'number' && progressTotal > 0;
+  const hasItemNav = typeof itemIndex === 'number' && typeof itemTotal === 'number' && itemTotal > 0;
+  const itemCountSummary = hasItemNav && (itemTotal ?? 0) > 1
+    ? `${itemTotal} items`
+    : undefined;
 
   return (
-    <div className="border-b border-gray-200 bg-gray-50">
-      {/* Top bar: refresh · progress · up/down · PO chip */}
-      <div className="flex items-center gap-2 px-3 py-1.5">
+    <div className="border-b border-slate-200 bg-slate-50">
+      <div className="flex items-center gap-2 border-b border-slate-200 bg-white px-3 py-1.5">
         <button
           type="button"
           onClick={syncWithZoho}
           disabled={zohoSyncing}
           aria-label="Sync with Zoho by tracking number"
           title="Sync with Zoho by tracking number"
-          className="text-gray-400 transition-colors hover:text-gray-700 disabled:cursor-not-allowed disabled:opacity-50"
+          className="text-slate-400 transition-colors hover:text-slate-700 disabled:cursor-not-allowed disabled:opacity-50"
         >
           <RefreshCw className={`h-3.5 w-3.5 ${zohoSyncing ? 'animate-spin' : ''}`} />
         </button>
         {(zohoSyncing || saving || platformSaving) && (
-          <span className="inline-flex items-center gap-1 text-[9px] font-black uppercase tracking-[0.18em] text-blue-600" aria-live="polite">
-            <RefreshCw className="h-3 w-3 animate-spin" />
+          <span className="text-[9px] font-black uppercase tracking-[0.18em] text-blue-600" aria-live="polite">
             {zohoSyncing ? 'Syncing' : 'Saving'}
           </span>
         )}
         <div className="flex-1" />
-        {hasProgress && (
-          <span className="text-[10px] font-black tracking-wider text-gray-600">
-            {progressReceived}/{progressTotal}
-          </span>
-        )}
         <button
           type="button"
-          onClick={onPrev}
-          disabled={!onPrev || !canPrev}
-          aria-label="Previous line in PO"
-          title="Previous line"
-          className="text-gray-400 transition-colors hover:text-gray-700 disabled:cursor-not-allowed disabled:opacity-30"
+          onClick={() => window.dispatchEvent(new CustomEvent('receiving-navigate-table', { detail: 'prev' }))}
+          aria-label="Previous row in table"
+          title="Previous row"
+          className="text-slate-400 transition-colors hover:text-slate-700"
         >
           <ChevronUp className="h-4 w-4" />
         </button>
         <button
           type="button"
-          onClick={onNext}
-          disabled={!onNext || !canNext}
-          aria-label="Next line in PO"
-          title="Next line"
-          className="text-gray-400 transition-colors hover:text-gray-700 disabled:cursor-not-allowed disabled:opacity-30"
+          onClick={() => window.dispatchEvent(new CustomEvent('receiving-navigate-table', { detail: 'next' }))}
+          aria-label="Next row in table"
+          title="Next row"
+          className="text-slate-400 transition-colors hover:text-slate-700"
         >
           <ChevronDown className="h-4 w-4" />
         </button>
-        <OrderIdChip value={scanValue} display={getLast4(scanValue)} />
       </div>
 
-      {/* ── RECEIVING FIELDS ── */}
-      <div className="border-b border-gray-100 pb-2">
-        <div className={`${sidebarHeaderBandClass} ${sidebarHeaderRowClass}`}>
-          <SearchBar
-            value={trackingEdit}
-            onChange={setTrackingEdit}
-            onSearch={(v) => {
-              const trimmed = v.trim();
-              if (trimmed !== (row.tracking_number || '').trim()) {
-                patch({ zoho_reference_number: trimmed || null });
-              }
-            }}
-            onClear={() => setTrackingEdit('')}
-            placeholder="Scan tracking"
-            variant="blue"
-            size="compact"
-            leadingIcon={<Barcode className="w-[14px] h-[14px]" />}
-            className="w-full"
-          />
-        </div>
-        <div className="grid grid-cols-2 gap-2 px-3 pt-2 pb-2">
-          <div>
-            <select
-              value={sourcePlatform}
-              onChange={(e) => {
-                const next = e.target.value;
-                setSourcePlatform(next);
-                void savePlatform(next);
-              }}
-              disabled={row.receiving_id == null}
-              className={SELECT_CLASS}
-            >
-              {SOURCE_PLATFORM_OPTS.map((opt) => (
-                <option key={opt.value || 'auto'} value={opt.value}>{opt.label}</option>
+      <div className="divide-y divide-slate-200 border-t border-slate-200">
+        {/* ── SHIPMENT PO ── */}
+        <FlowSection
+          title="Shipment PO"
+          summary={inboundSummary}
+          open={flowOpen.shipment}
+          onToggle={() => toggleFlow('shipment')}
+        >
+          <div className="space-y-3">
+            <div>
+              <div className="flex items-center gap-2">
+                <span className={`${FLOW_SECTION_LABEL} mb-0 min-w-0 flex-1 leading-none`}>
+                  Tracking numbers
+                </span>
+                <span className={RECEIVING_TRAIL_SLOT_CLASS}>
+                  <button
+                    type="button"
+                    onClick={() => setExtraTrackings((xs) => [...xs, ''])}
+                    aria-label="Add tracking number row"
+                    title="Add tracking number"
+                    className={TRACKING_ADD_BTN_CLASS}
+                  >
+                    <Plus className="h-3 w-3" />
+                  </button>
+                </span>
+              </div>
+              <div className="group mt-1">
+                <SearchBar
+                  value={trackingEdit}
+                  onChange={setTrackingEdit}
+                  onSearch={(v) => {
+                    const trimmed = v.trim();
+                    if (trimmed !== (row.tracking_number || '').trim()) {
+                      patch({ zoho_reference_number: trimmed || null });
+                    }
+                  }}
+                  placeholder="Tracking"
+                  variant="blue"
+                  size="compact"
+                  hideUnderline
+                  hideClear
+                  leadingIcon={<Barcode className="h-[14px] w-[14px]" />}
+                  className="w-full"
+                />
+                <div className={RECEIVING_SCAN_RULE_LINE_CLASS} aria-hidden />
+              </div>
+              {extraTrackings.map((t, i) => (
+                <div key={i} className="group mt-2 w-full min-w-0">
+                  <div className="flex w-full min-w-0 items-center gap-2 pb-1">
+                    <span className={TRACKING_ROW_LEADING_ICON_CLASS} aria-hidden>
+                      <Barcode className="h-[14px] w-[14px]" />
+                    </span>
+                    <input
+                      type="text"
+                      value={t}
+                      onChange={(e) => {
+                        const v = e.target.value;
+                        setExtraTrackings((xs) => xs.map((x, j) => (j === i ? v : x)));
+                      }}
+                      placeholder="Tracking"
+                      className="h-7 min-w-0 flex-1 border-0 bg-transparent px-0 text-[13px] font-bold text-gray-900 outline-none placeholder:font-medium placeholder:text-gray-400"
+                    />
+                    <span className={RECEIVING_TRAIL_SLOT_CLASS}>
+                      <button
+                        type="button"
+                        onClick={() => setExtraTrackings((xs) => xs.filter((_, j) => j !== i))}
+                        aria-label="Remove this tracking row"
+                        title="Remove"
+                        className={TRACKING_REMOVE_BTN_CLASS}
+                      >
+                        <X className="h-3 w-3" />
+                      </button>
+                    </span>
+                  </div>
+                  <div className={RECEIVING_SCAN_RULE_LINE_CLASS} aria-hidden />
+                </div>
               ))}
-            </select>
+            </div>
+
+            <div>
+              <span className={FLOW_SECTION_LABEL}>Listing URL</span>
+              <div className="group mt-1">
+                <SearchBar
+                  value={listingLink}
+                  onChange={setListingLink}
+                  onClear={() => setListingLink('')}
+                  inputRef={listingRef}
+                  placeholder="Listing URL"
+                  variant="blue"
+                  size="compact"
+                  hideUnderline
+                  leadingIcon={
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (listingOpenHref) {
+                          window.open(listingOpenHref, '_blank', 'noopener,noreferrer');
+                        }
+                      }}
+                      disabled={listingOpenHref == null}
+                      aria-label="Open listing URL in new tab"
+                      title={listingOpenHref ? 'Open link' : 'Enter a valid URL'}
+                      className="-m-0.5 rounded p-0.5 text-inherit transition-colors hover:text-blue-600 disabled:cursor-not-allowed disabled:opacity-35"
+                    >
+                      <ExternalLink className="h-[14px] w-[14px]" />
+                    </button>
+                  }
+                  className="w-full"
+                />
+                <div className={RECEIVING_SCAN_RULE_LINE_CLASS} aria-hidden />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <span className={FLOW_SECTION_LABEL}>Platform</span>
+                <select
+                  value={sourcePlatform}
+                  onChange={(e) => {
+                    const next = e.target.value;
+                    setSourcePlatform(next);
+                    void savePlatform(next);
+                  }}
+                  disabled={row.receiving_id == null}
+                  className={`${SELECT_CLASS} mt-1`}
+                >
+                  {SOURCE_PLATFORM_OPTS.map((opt) => (
+                    <option key={opt.value || 'auto'} value={opt.value}>{opt.label}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <span className={FLOW_SECTION_LABEL}>Type</span>
+                <select
+                  value={receivingType}
+                  onChange={(e) => {
+                    setReceivingType(e.target.value);
+                    patch({ receiving_type: e.target.value });
+                  }}
+                  className={`${SELECT_CLASS} mt-1`}
+                >
+                  {RECEIVING_TYPE_OPTS.map((opt) => (
+                    <option key={opt.value} value={opt.value}>{opt.label}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
           </div>
-          <div>
-            <select
-              value={receivingType}
-              onChange={(e) => { setReceivingType(e.target.value); patch({ receiving_type: e.target.value }); }}
-              className={SELECT_CLASS}
-            >
-              {RECEIVING_TYPE_OPTS.map((opt) => (
-                <option key={opt.value} value={opt.value}>{opt.label}</option>
+        </FlowSection>
+
+        {/* ── ITEM ── */}
+        <FlowSection
+          title="Item"
+          summary={itemCountSummary}
+          open={flowOpen.item}
+          onToggle={() => toggleFlow('item')}
+          bodyClassName="px-3 pt-3 pb-0"
+        >
+          <div className="space-y-3">
+            {/* Item position nav: only shown when multiple items */}
+            {hasItemNav && (itemTotal ?? 0) > 1 && (
+              <div className="flex items-center gap-1.5">
+                <span className="text-[10px] font-black tabular-nums tracking-wider text-slate-500">
+                  {(itemIndex ?? 0) + 1}/{itemTotal}
+                </span>
+                <div className="flex-1" />
+                <button
+                  type="button"
+                  onClick={onPrev}
+                  disabled={!onPrev || !canPrev}
+                  aria-label="Previous item in PO"
+                  title="Previous item"
+                  className="shrink-0 rounded p-0.5 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-700 disabled:cursor-not-allowed disabled:opacity-30"
+                >
+                  <ChevronUp className="h-4 w-4" />
+                </button>
+                <button
+                  type="button"
+                  onClick={onNext}
+                  disabled={!onNext || !canNext}
+                  aria-label="Next item in PO"
+                  title="Next item"
+                  className="shrink-0 rounded p-0.5 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-700 disabled:cursor-not-allowed disabled:opacity-30"
+                >
+                  <ChevronDown className="h-4 w-4" />
+                </button>
+              </div>
+            )}
+
+            {/* Product title */}
+            <div>
+              <span className={FLOW_SECTION_LABEL}>Product title</span>
+              <p
+                className={`mt-1 font-bold leading-snug text-slate-900 break-words ${compact ? 'text-[11px] line-clamp-3' : 'text-[12px]'}`}
+              >
+                {row.item_name || row.sku || `Line #${row.id}`}
+              </p>
+            </div>
+
+            <div>
+              <label htmlFor={`cond-${row.id}`} className={FLOW_SECTION_LABEL}>
+                Condition
+              </label>
+              <select
+                id={`cond-${row.id}`}
+                value={cond}
+                onChange={(e) => {
+                  const v = e.target.value;
+                  setCond(v);
+                  void patch({ condition_grade: v });
+                }}
+                className={`${SELECT_CLASS} mt-1`}
+                aria-label="Condition grade for this line item"
+              >
+                {CONDITION_OPTS.map((opt) => (
+                  <option key={opt.value} value={opt.value}>{opt.label}</option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <div className="flex items-center gap-2">
+                <span className={`${FLOW_SECTION_LABEL} mb-0 min-w-0 flex-1 leading-none`}>
+                  Serial numbers
+                </span>
+                <span className={RECEIVING_TRAIL_SLOT_CLASS}>
+                  <button
+                    type="button"
+                    onClick={() => setExtraSerials((xs) => [...xs, ''])}
+                    aria-label="Add serial number row"
+                    title="Add serial number"
+                    className={TRACKING_ADD_BTN_CLASS}
+                  >
+                    <Plus className="h-3 w-3" />
+                  </button>
+                </span>
+              </div>
+              <div className="group mt-1">
+                <SearchBar
+                  value={serialInput}
+                  onChange={setSerialInput}
+                  onSearch={(v) => submitSerial(v)}
+                  onClear={() => setSerialInput('')}
+                  inputRef={serialRef}
+                  placeholder="Serial"
+                  variant="blue"
+                  size="compact"
+                  hideUnderline
+                  isSearching={serialSubmitting}
+                  leadingIcon={<Barcode className="w-[14px] h-[14px]" />}
+                  className="w-full"
+                />
+                <div className={RECEIVING_SCAN_RULE_LINE_CLASS} aria-hidden />
+              </div>
+              {extraSerials.map((s, i) => (
+                <div key={i} className="group mt-2 w-full min-w-0">
+                  <div className="flex w-full min-w-0 items-center gap-2 pb-1">
+                    <span className={TRACKING_ROW_LEADING_ICON_CLASS} aria-hidden>
+                      <Barcode className="h-[14px] w-[14px]" />
+                    </span>
+                    <input
+                      type="text"
+                      value={s}
+                      onChange={(e) => {
+                        const v = e.target.value;
+                        setExtraSerials((xs) => xs.map((x, j) => (j === i ? v : x)));
+                      }}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') { e.preventDefault(); void submitExtraSerial(i); }
+                      }}
+                      placeholder="Serial"
+                      className="h-7 min-w-0 flex-1 border-0 bg-transparent px-0 text-[13px] font-bold text-gray-900 outline-none placeholder:font-medium placeholder:text-gray-400"
+                    />
+                    <span className={RECEIVING_TRAIL_SLOT_CLASS}>
+                      <button
+                        type="button"
+                        onClick={() => setExtraSerials((xs) => xs.filter((_, j) => j !== i))}
+                        aria-label="Remove this serial row"
+                        title="Remove"
+                        className={TRACKING_REMOVE_BTN_CLASS}
+                      >
+                        <X className="h-3 w-3" />
+                      </button>
+                    </span>
+                  </div>
+                  <div className={RECEIVING_SCAN_RULE_LINE_CLASS} aria-hidden />
+                </div>
               ))}
-            </select>
+            </div>
           </div>
-        </div>
-      </div>
+        </FlowSection>
 
-      {/* ── PO ITEM DETAILS ── */}
-      <div className="border-b border-gray-100 pb-2">
-        <p className="px-3 pt-2 pb-1.5 text-[9px] font-black uppercase tracking-widest text-gray-400">PO Item Details</p>
-        <p className={`px-3 pb-1 font-bold leading-snug text-gray-900 break-words ${compact ? 'text-[11px] line-clamp-2' : 'text-[12px]'}`}>
-          {row.item_name || row.sku || `Line #${row.id}`}
-        </p>
-        <div className="px-3 pb-2 pt-0.5">
-          <select
-            value={cond}
-            onChange={(e) => {
-              const v = e.target.value;
-              setCond(v);
-              void patch({ condition_grade: v });
-            }}
-            className={SELECT_CLASS}
-            aria-label="Condition grade for this line item"
-          >
-            {CONDITION_OPTS.map((opt) => (
-              <option key={opt.value} value={opt.value}>{opt.label}</option>
-            ))}
-          </select>
-        </div>
-        <div className={`${sidebarHeaderBandClass} ${sidebarHeaderRowClass}`}>
-          <SearchBar
-            value={serialInput}
-            onChange={setSerialInput}
-            onSearch={(v) => submitSerial(v)}
-            onClear={() => setSerialInput('')}
-            inputRef={serialRef}
-            placeholder={`Scan serial for ${row.sku || '—'}`}
-            variant="blue"
-            size="compact"
-            isSearching={serialSubmitting}
-            leadingIcon={<Barcode className="w-[14px] h-[14px]" />}
-            className="w-full"
-          />
-        </div>
-      </div>
+        <FlowSection
+          title="Support"
+          summary={zendesk.trim() ? 'Zendesk' : undefined}
+          open={flowOpen.support}
+          onToggle={() => toggleFlow('support')}
+        >
+          <div className="space-y-3">
+            <div>
+              <span className={FLOW_SECTION_LABEL}>Zendesk</span>
+              <div className="mt-1 flex gap-1">
+                <input
+                  type="text"
+                  value={zendesk}
+                  onChange={(e) => setZendesk(e.target.value)}
+                  placeholder="Ticket # or URL"
+                  className={`${INPUT_CLASS} flex-1 min-w-0`}
+                />
+                <button
+                  type="button"
+                  onClick={async () => {
+                    try {
+                      const t = await navigator.clipboard.readText();
+                      if (t) setZendesk(t.trim());
+                    } catch { /* */ }
+                  }}
+                  title="Paste"
+                  className="shrink-0 border border-slate-200 bg-white px-2 py-1.5 text-slate-500 transition-colors hover:bg-slate-50"
+                >
+                  <Clipboard className="h-3.5 w-3.5" />
+                </button>
+              </div>
+            </div>
+            <div>
+              <span className={FLOW_SECTION_LABEL}>Notes</span>
+              <textarea
+                value={notes}
+                onChange={(e) => setNotes(e.target.value)}
+                onBlur={() => {
+                  if (notes !== (row.notes || '')) patch({ notes });
+                }}
+                rows={2}
+                placeholder="Notes"
+                className="mt-1 w-full resize-none border border-slate-200 bg-white px-3 py-2 text-[12px] leading-relaxed text-slate-900 placeholder:text-slate-400 focus:border-blue-300 focus:outline-none focus:ring-2 focus:ring-blue-500/10"
+              />
+            </div>
+          </div>
+        </FlowSection>
 
-      {/* ── SUPPORT ── */}
-      <div className="border-b border-gray-100 pb-2">
-        <div className={`px-3 ${compact ? 'pt-1 space-y-2' : 'pt-2 space-y-2.5'}`}>
-          {compact ? (
+        <div className="space-y-3 bg-white px-3 py-3">
+          <div className="relative z-20 flex w-full overflow-visible rounded border border-emerald-600 bg-emerald-600">
+            <div className="group/split-menu relative flex shrink-0 self-stretch">
+              <button
+                type="button"
+                aria-haspopup="menu"
+                aria-label="Print only or receive only"
+                title="Hover for print-only or receive-only actions"
+                className="flex h-auto min-h-[42px] items-center justify-center border-r border-emerald-500/50 px-2.5 text-white outline-none transition-colors hover:bg-emerald-700 focus-visible:z-30 focus-visible:ring-2 focus-visible:ring-white/80 focus-visible:ring-offset-2 focus-visible:ring-offset-emerald-600"
+              >
+                <ChevronDown className="h-4 w-4 opacity-95" aria-hidden />
+              </button>
+              <div
+                className="
+                    invisible absolute left-0 top-full z-50 pt-1.5 opacity-0
+                    transition-opacity duration-75
+                    group-hover/split-menu:pointer-events-auto group-hover/split-menu:visible group-hover/split-menu:opacity-100
+                    group-focus-within/split-menu:pointer-events-auto group-focus-within/split-menu:visible group-focus-within/split-menu:opacity-100
+                  "
+                role="presentation"
+              >
+                <ul
+                  role="menu"
+                  aria-label="Single-action review controls"
+                  className="min-w-[11rem] rounded-lg border border-slate-200 bg-white py-1 shadow-xl ring-1 ring-slate-200/80"
+                >
+                  <li role="none">
+                    <button
+                      role="menuitem"
+                      type="button"
+                      disabled={!canPrintReview}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        runPrintLabel();
+                      }}
+                      className="flex w-full items-center gap-2 px-3 py-2 text-left text-[10px] font-black uppercase tracking-wider text-slate-800 transition-colors hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-35"
+                    >
+                      <Printer className="h-3.5 w-3.5 shrink-0" aria-hidden />
+                      Print only
+                    </button>
+                  </li>
+                  <li role="none">
+                    <button
+                      role="menuitem"
+                      type="button"
+                      disabled={!canReceiveReview}
+                      title={
+                        row.receiving_id == null
+                          ? 'Line must be linked to a shipment'
+                          : undefined
+                      }
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        void handleReceive();
+                      }}
+                      className="flex w-full items-center gap-2 px-3 py-2 text-left text-[10px] font-black uppercase tracking-wider text-slate-800 transition-colors hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-35"
+                    >
+                      {receiving ? 'Receiving…' : 'Receive only'}
+                    </button>
+                  </li>
+                </ul>
+              </div>
+            </div>
             <button
               type="button"
-              onClick={() => setDetailsOpen((o) => !o)}
-              className="flex w-full items-center justify-between rounded-md border border-gray-200 bg-gray-50 px-2 py-1.5 text-[9px] font-black uppercase tracking-widest text-gray-600 transition-colors hover:bg-gray-100"
-              aria-expanded={detailsOpen}
+              onClick={() => void handlePrintAndReceive()}
+              disabled={combinedReviewDisabled}
+              title={
+                row.receiving_id == null && !scanValue.trim() && !(row.sku || '').trim()
+                  ? 'Need a shipment link or SKU to continue'
+                  : 'Print label (if available) then receive PO'
+              }
+              className="inline-flex min-h-[42px] min-w-0 flex-1 items-center justify-center gap-2 px-3 py-2.5 text-[10px] font-black uppercase tracking-wider text-white outline-none transition-colors hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-60 focus-visible:z-30 focus-visible:ring-2 focus-visible:ring-white/70 focus-visible:ring-offset-2 focus-visible:ring-offset-emerald-600"
             >
-              <span>Support</span>
-              <span className="text-gray-400">{detailsOpen ? '−' : '+'}</span>
+              <Printer className="h-3.5 w-3.5 shrink-0" aria-hidden />
+              {receiving ? 'Receiving…' : 'Print · receive PO'}
             </button>
-          ) : (
-            <p className="pb-0.5 text-[9px] font-black uppercase tracking-widest text-gray-400">Support</p>
-          )}
-
-          {(detailsOpen || !compact) && (
-            <>
-              <div>
-                <p className="mb-1 text-[9px] font-black uppercase tracking-widest text-gray-500">Zendesk Ticket</p>
-                <div className="flex gap-1">
-                  <input
-                    type="text"
-                    value={zendesk}
-                    onChange={(e) => setZendesk(e.target.value)}
-                    placeholder="Ticket # or URL"
-                    className={`${INPUT_CLASS} flex-1 min-w-0`}
-                  />
-                  <button
-                    type="button"
-                    onClick={async () => { try { const t = await navigator.clipboard.readText(); if (t) setZendesk(t.trim()); } catch {} }}
-                    title="Paste from clipboard"
-                    className="shrink-0 rounded-md border border-gray-200 bg-white px-2 py-1.5 text-gray-500 transition-colors hover:bg-gray-50 hover:text-gray-700"
-                  >
-                    <Clipboard className="h-3.5 w-3.5" />
-                  </button>
-                </div>
-              </div>
-
-              <div>
-                <p className="mb-1 text-[9px] font-black uppercase tracking-widest text-gray-500">Listing Link</p>
-                <div className="flex gap-1">
-                  <input
-                    ref={listingRef}
-                    type="text"
-                    value={listingLink}
-                    onChange={(e) => setListingLink(e.target.value)}
-                    placeholder="Paste listing URL"
-                    className={`${INPUT_CLASS} flex-1 min-w-0`}
-                  />
-                  <button
-                    type="button"
-                    onClick={pasteToListing}
-                    title="Paste from clipboard"
-                    className="shrink-0 rounded-md border border-gray-200 bg-white px-2 py-1.5 text-gray-500 transition-colors hover:bg-gray-50 hover:text-gray-700"
-                  >
-                    <Clipboard className="h-3.5 w-3.5" />
-                  </button>
-                </div>
-              </div>
-
-              <div>
-                <p className="mb-1 text-[9px] font-black uppercase tracking-widest text-gray-500">Notes</p>
-                <textarea
-                  value={notes}
-                  onChange={(e) => setNotes(e.target.value)}
-                  onBlur={() => { if (notes !== (row.notes || '')) patch({ notes }); }}
-                  rows={compact ? 2 : 2}
-                  placeholder="Add notes…"
-                  className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-[12px] leading-relaxed text-gray-900 placeholder:text-gray-400 focus:border-blue-300 focus:outline-none focus:ring-2 focus:ring-blue-500/10 resize-none"
+          </div>
+          {scanValue || row.sku ? (
+            <div className="-mx-3 border-t border-slate-200 px-3 py-3">
+              {scanValue ? (
+                <ReceivingPoLabelPreview {...labelPayload} embedded />
+              ) : row.sku ? (
+                <ReceivingProductLabelPreview
+                  sku={row.sku}
+                  title={row.item_name ?? ''}
+                  serialNumber={serialInput.trim()}
+                  embedded
                 />
-              </div>
-            </>
-          )}
-        </div>
-      </div>
-
-      {/* Print (left) / Receive (right) + Print-on-scan (when provided) */}
-      <div className="flex items-center gap-2 px-3 pt-1 pb-2">
-        <button
-          type="button"
-          onClick={() => {
-            if (scanValue) printReceivingLabel(labelPayload);
-            else if (row.sku) printProductLabel({ sku: row.sku, title: row.item_name ?? undefined, serialNumber: serialInput.trim() || undefined });
-          }}
-          disabled={!scanValue && !row.sku}
-          className="inline-flex items-center gap-1.5 rounded-md border border-gray-200 bg-white px-3 py-2 text-[10px] font-black uppercase tracking-wider text-gray-700 transition-colors hover:border-gray-300 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-40"
-        >
-          <Printer className="h-3.5 w-3.5" />
-          Print
-        </button>
-        <button
-          type="button"
-          onClick={handleReceive}
-          disabled={receiving || row.receiving_id == null}
-          title={
-            row.receiving_id == null
-              ? 'Line must be linked to a shipment'
-              : 'Mark every open line on this shipment received and sync to Zoho'
-          }
-          className="flex-1 inline-flex items-center justify-center gap-1.5 rounded-md bg-emerald-600 px-3 py-2 text-[10px] font-black uppercase tracking-wider text-white transition-colors hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-60"
-        >
-          {receiving ? 'Receiving…' : 'Receive PO'}
-        </button>
-      </div>
-
-      {/* Label preview is always rendered — no toggle. */}
-      {(scanValue || row.sku) && (
-        <div>
-          {scanValue ? (
-            <ReceivingPoLabelPreview {...labelPayload} />
-          ) : row.sku ? (
-            <ReceivingProductLabelPreview
-              sku={row.sku}
-              title={row.item_name ?? ''}
-              serialNumber={serialInput.trim()}
-            />
+              ) : null}
+            </div>
+          ) : null}
+          {row.receiving_id != null ? (
+            <div className="-mx-3 border-t border-slate-200">
+              <ReceivingPhotoStrip
+                receivingId={row.receiving_id}
+                staffId={Number(staffId) || 0}
+              />
+            </div>
           ) : null}
         </div>
-      )}
+      </div>
     </div>
   );
 }
@@ -1222,10 +1776,43 @@ function LineEditPanel({
 export function ReceivingSidebarPanel() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const { isMobile } = useUIModeOptional();
   const rawMode = searchParams.get('mode');
   const mode: ReceivingMode = rawMode === 'pickup' ? 'pickup' : 'receive';
   const staffId = searchParams.get('staffId') || '7';
+  const staffIdNum = Number(staffId) || 0;
 
+  // Ably handles are needed both for the existing phone-scan bridge (later in
+  // this file) and the new photo-request publisher below. Hoisting the client
+  // + channel names up here keeps the publisher's closure honest.
+  const { getClient: getAblyClient } = useAblyClient();
+  const phoneChannelName = `phone:${staffIdNum}`;
+  const stationChannelName = `station:${staffIdNum}`;
+
+  /**
+   * Publish a `receiving_photo_request` on `station:{staffId}` so a phone
+   * loaded on the same staff id auto-navigates to the photo capture page.
+   * Implicit pairing: the channel name is the gate — no claim flow required.
+   */
+  const publishPhotoRequestFor = useCallback(
+    async (receivingId: number, tracking: string) => {
+      if (!Number.isFinite(receivingId) || receivingId <= 0 || staffIdNum <= 0) return;
+      try {
+        const client = await getAblyClient();
+        if (!client) return;
+        const ch = client.channels.get(stationChannelName);
+        await ch.publish('receiving_photo_request', {
+          receiving_id: receivingId,
+          tracking,
+          request_id: randomId(),
+          requested_by_staff_id: staffIdNum,
+        });
+      } catch (err) {
+        console.warn('receiving-sidebar: photo request publish failed', err);
+      }
+    },
+    [getAblyClient, staffIdNum, stationChannelName],
+  );
 
   useEffect(() => {
     if (mode === 'pickup') {
@@ -1235,8 +1822,6 @@ export function ReceivingSidebarPanel() {
 
   const [bulkTracking, setBulkTracking] = useState('');
   const [scanBarKey, setScanBarKey] = useState(0);
-  // Recent/Received lead; status filters follow. Table consumes the id verbatim.
-  const [viewMode, setViewMode] = useState<ViewId>('recent');
   const [pendingScans, setPendingScans] = useState<PendingScan[]>([]);
   const anyScanChecking = pendingScans.some((s) => s.status === 'checking');
   const [openExceptions, setOpenExceptions] = useState<OpenException[]>([]);
@@ -1295,6 +1880,10 @@ export function ReceivingSidebarPanel() {
     [fetchOpenExceptions],
   );
   const [selectedLine, setSelectedLine] = useState<ReceivingLineRow | null>(null);
+  /** `'all'` when the line was chosen from the main table — expands sidebar FlowSections. */
+  const [lineAccordionBootstrap, setLineAccordionBootstrap] = useState<'default' | 'all'>(
+    'default',
+  );
   // `scanDriven` flips the LineEditPanel into compact mode; scans open it,
   // row-clicks open it in full mode. Cleared on close / filter change.
   const [scanDriven, setScanDriven] = useState(false);
@@ -1383,6 +1972,7 @@ export function ReceivingSidebarPanel() {
     if (currentIndex <= 0) return;
     const target = scanMatchedRows[currentIndex - 1];
     if (target) {
+      setLineAccordionBootstrap('default');
       setSelectedLine(target);
       window.dispatchEvent(new CustomEvent('receiving-highlight-line', { detail: target.id }));
     }
@@ -1392,6 +1982,7 @@ export function ReceivingSidebarPanel() {
     if (currentIndex < 0 || currentIndex >= scanMatchedRows.length - 1) return;
     const target = scanMatchedRows[currentIndex + 1];
     if (target) {
+      setLineAccordionBootstrap('default');
       setSelectedLine(target);
       window.dispatchEvent(new CustomEvent('receiving-highlight-line', { detail: target.id }));
     }
@@ -1401,16 +1992,6 @@ export function ReceivingSidebarPanel() {
     if (typeof window === 'undefined') return;
     window.localStorage.setItem('receiving.printOnScan', String(printOnScan));
   }, [printOnScan]);
-
-  useEffect(() => {
-    window.dispatchEvent(new CustomEvent('receiving-workflow-filter', { detail: viewMode }));
-  }, [viewMode]);
-
-  useEffect(() => {
-    const handler = () => setViewMode('recent');
-    window.addEventListener('receiving-workflow-filter-reset', handler);
-    return () => window.removeEventListener('receiving-workflow-filter-reset', handler);
-  }, []);
 
   useEffect(() => {
     if (mode === 'pickup') {
@@ -1425,8 +2006,12 @@ export function ReceivingSidebarPanel() {
   // ─── Selected line from table row click ──────────────────────────────────
   useEffect(() => {
     const handleSelect = (e: Event) => {
-      const row = (e as CustomEvent<ReceivingLineRow | null>).detail;
-      setSelectedLine(row ?? null);
+      const { row, expandFlowSections } = readSelectLineDetail(
+        (e as CustomEvent<ReceivingSelectLineDetail>).detail,
+      );
+      const expand = Boolean(row != null && expandFlowSections);
+      setLineAccordionBootstrap(expand ? 'all' : 'default');
+      setSelectedLine(row);
       // Row clicks always open the full LineEditPanel (scan-driven → compact).
       setScanDriven(false);
       setScanMatchedRows([]);
@@ -1582,14 +2167,26 @@ export function ReceivingSidebarPanel() {
                 ? (linesData.receiving_lines as ReceivingLineRow[])
                 : [];
               setScanMatchedRows(rows);
+              // Simpler workflow: surface every matched line at the top of the
+              // History table immediately. The sidebar's deeper edit flow still
+              // runs, but the user no longer has to scroll/search for what just
+              // scanned in — and multi-line cartons show in full instead of
+              // showing one at a time in the picker.
+              if (rows.length > 0) {
+                window.dispatchEvent(
+                  new CustomEvent('receiving-lines-prepended', { detail: rows }),
+                );
+              }
               const openRows = rows.filter(
                 (r) => r.quantity_expected == null || r.quantity_received < (r.quantity_expected ?? 0),
               );
               const pick = openRows.length === 1 ? openRows[0] : openRows.length === 0 && rows.length === 1 ? rows[0] : null;
               if (pick) {
+                setLineAccordionBootstrap('default');
                 setSelectedLine(pick);
                 setScanDriven(true);
               } else {
+                setLineAccordionBootstrap('default');
                 setSelectedLine(null);
                 setScanDriven(true);
               }
@@ -1603,6 +2200,9 @@ export function ReceivingSidebarPanel() {
               detail: { receiving_id: ctx.receiving_id, lines: ctx.lines },
             }),
           );
+          // Signal any phone listening on station:{staffId} that this carton
+          // is the active one — the phone will auto-open its camera page.
+          void publishPhotoRequestFor(ctx.receiving_id, trackingNumber);
           setTimeout(() => serialInputRef.current?.focus(), 60);
 
           setPendingScans((prev) =>
@@ -1694,9 +2294,8 @@ export function ReceivingSidebarPanel() {
   // the same submitTrackingScan flow as if the desktop scanner had fired it.
   // After the lookup, echo the result back on the station channel so the
   // phone's chip can show matched/unmatched without a round-trip DB query.
-  const phoneChannelName = `phone:${Number(staffId) || 0}`;
-  const stationChannelName = `station:${Number(staffId) || 0}`;
-  const { getClient: getAblyClient } = useAblyClient();
+  // (phoneChannelName / stationChannelName / getAblyClient are hoisted to
+  //  the top of this component so the photo-request publisher can use them.)
 
   useAblyChannel(
     phoneChannelName,
@@ -1935,6 +2534,13 @@ export function ReceivingSidebarPanel() {
     router.replace(`/receiving?${nextParams.toString()}`);
   };
 
+  // On mobile, the desktop tree (staff selector, scan bar, accordion sections,
+  // lines list, etc.) is replaced by a focused "Take Photos for this PO" view.
+  // All hooks above still run unconditionally to preserve Rules of Hooks.
+  if (isMobile) {
+    return <MobileReceivingActionsPane />;
+  }
+
   return (
     <div className="h-full flex flex-col overflow-hidden">
       {/* Staff + mode selector */}
@@ -1987,20 +2593,6 @@ export function ReceivingSidebarPanel() {
         </div>
       </div>
 
-      {/* View filter — Recent & Received lead, then per-status chips */}
-      <div className="border-b border-gray-200 px-3 py-2">
-        <HorizontalButtonSlider
-          items={VIEW_FILTERS}
-          value={viewMode}
-          onChange={(next) => {
-            const id = next as ViewId;
-            setViewMode(VALID_VIEW_IDS.has(id) ? id : 'recent');
-          }}
-          variant="slate"
-          aria-label="Filter by view"
-        />
-      </div>
-
       <ReceivingReturnBanner returns={returns} onDismiss={dismissReturn} />
 
       {/* Scrollable body — all content below the fixed header scrolls as one
@@ -2036,7 +2628,10 @@ export function ReceivingSidebarPanel() {
                 <button
                   key={line.id}
                   type="button"
-                  onClick={() => setSelectedLine(line)}
+                  onClick={() => {
+                    setLineAccordionBootstrap('default');
+                    setSelectedLine(line);
+                  }}
                   className={`rounded border px-2 py-1 text-left text-[10px] font-bold transition-colors ${
                     open
                       ? 'border-blue-200 bg-white text-blue-900 hover:bg-blue-100'
@@ -2061,14 +2656,16 @@ export function ReceivingSidebarPanel() {
           row={selectedLine}
           staffId={staffId}
           compact={scanDriven}
+          accordionBootstrap={lineAccordionBootstrap}
           onPrev={goPrevLine}
           onNext={goNextLine}
           canPrev={canPrev}
           canNext={canNext}
-          progressReceived={progressReceived}
-          progressTotal={progressTotal}
+          itemIndex={currentIndex}
+          itemTotal={scanMatchedRows.length}
           onClose={() => {
             setSelectedLine(null);
+            setLineAccordionBootstrap('default');
             setScanDriven(false);
             setScanMatchedRows([]);
             clearPoContext();

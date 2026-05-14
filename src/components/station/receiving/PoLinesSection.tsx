@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Check, ChevronDown, Loader2, Package } from '@/components/Icons';
+import { workflowStatusTableLabel } from '@/components/station/receiving-constants';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 
 interface ReceivingLine {
@@ -29,6 +30,7 @@ const WORKFLOW_BADGE: Record<string, string> = {
   IN_TEST:       'bg-teal-100 text-teal-700',
   PASSED:        'bg-emerald-100 text-emerald-700',
   FAILED:        'bg-red-100 text-red-600',
+  DONE:          'bg-emerald-100 text-emerald-700',
 };
 
 interface PoLinesSectionProps {
@@ -157,7 +159,7 @@ export function PoLinesSection({ receivingId, trackingNumber }: PoLinesSectionPr
                           )}
                           <div className="flex items-center gap-2 mt-1.5 flex-wrap">
                             <span className={`text-[9px] font-black uppercase tracking-widest rounded px-1.5 py-0.5 ${badgeCls}`}>
-                              {line.workflow_status.replace('_', ' ')}
+                              {workflowStatusTableLabel(line.workflow_status)}
                             </span>
                             {line.needs_test && (
                               <span className="text-[9px] font-black uppercase tracking-widest rounded px-1.5 py-0.5 bg-orange-100 text-orange-700">

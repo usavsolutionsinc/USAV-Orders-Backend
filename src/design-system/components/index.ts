@@ -22,6 +22,7 @@ export * from './CopyChip';
 export * from './TabSwitch';
 export * from './Skeletons';
 export * from './ResponsiveShell';
+export * from './RouteShell';
 export * from './desktop';
 export * from './mobile';
 export * from './PlatformBadge';

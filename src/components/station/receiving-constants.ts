@@ -89,7 +89,17 @@ export const WORKFLOW_BADGE: Record<string, string> = {
   IN_TEST:       'bg-teal-100 text-teal-700',
   PASSED:        'bg-emerald-100 text-emerald-700',
   FAILED:        'bg-red-100 text-red-600',
+  DONE:          'bg-emerald-100 text-emerald-700',
 };
+
+/** List-row / badge copy for inbound workflow; DB enums unchanged (`MATCHED`, `DONE`, …). */
+export function workflowStatusTableLabel(status: string | null | undefined): string {
+  const raw = String(status ?? '').trim().toUpperCase();
+  if (!raw) return 'UNKNOWN';
+  if (raw === 'MATCHED') return 'SCANNED';
+  if (raw === 'DONE') return 'RECEIVED';
+  return raw.replace(/_/g, ' ');
+}
 
 export const COND_LABEL: Record<string, string> = {
   BRAND_NEW: 'New',

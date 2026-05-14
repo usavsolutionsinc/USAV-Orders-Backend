@@ -9,11 +9,20 @@ import { CommandBar } from '@/components/CommandBar';
 import { useUIMode } from '@/design-system/providers/UIModeProvider';
 import { X } from '@/components/Icons';
 import { getSidebarRouteKey, isSidebarRouteMobileRestricted, APP_SIDEBAR_NAV } from '@/lib/sidebar-navigation';
-import { MobileDefaultTopBanner } from '@/components/mobile/shared/MobileDefaultTopBanner';
+import { AppTopBar } from '@/design-system/primitives/AppTopBar';
 import { PhonePairFab } from '@/components/layout/PhonePairFab';
 import { GlobalDesktopSkuScanner } from '@/components/layout/GlobalDesktopSkuScanner';
 import { PhonePairModal } from '@/components/sidebar/PhonePairModal';
-import { MobileScanFab } from '@/components/mobile/shared/MobileScanFab';
+import { usePhoneReceivingPhotoBridge } from '@/hooks/usePhoneReceivingPhotoBridge';
+
+/**
+ * Mount-only component. Runs the phone-side Ably listener that auto-navigates
+ * to the receiving photo page when the desktop publishes a request.
+ */
+function PhoneReceivingPhotoBridgeMount() {
+  usePhoneReceivingPhotoBridge();
+  return null;
+}
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -41,14 +50,6 @@ const drawerTransition = {
 };
 
 // ─── Mobile nav helpers ─────────────────────────────────────────────────────
-
-/** Routes that render their own mobile top bar — skip the default banner. */
-const SELF_NAV_PREFIXES = ['/tech', '/packer', '/sku-stock'];
-
-function hasSelfNav(pathname: string | null): boolean {
-  if (!pathname) return false;
-  return SELF_NAV_PREFIXES.some((p) => pathname === p || pathname.startsWith(`${p}/`));
-}
 
 function getMobileTitle(pathname: string | null): string {
   const key = getSidebarRouteKey(pathname);
@@ -139,18 +140,15 @@ export function ResponsiveLayout({ children }: ResponsiveLayoutProps) {
     return <div className="flex h-full w-full bg-white" aria-hidden="true" />;
   }
 
-  // ── Mobile layout: full-width content + drawer sidebar ──
-  const showDefaultBanner = !hasSelfNav(pathname);
-
+  // ── Mobile layout: global top app bar + drawer sidebar ──
   return (
     <div className="flex flex-col h-full w-full overflow-hidden">
-      {/* Default top banner for pages without their own */}
-      {showDefaultBanner && (
-        <MobileDefaultTopBanner
-          title={getMobileTitle(pathname)}
-          onBack={openDrawer}
-        />
-      )}
+      {/* Global mobile-side bridge: listens for receiving photo requests on
+          station:{staffId} and auto-navigates to the camera page. */}
+      <PhoneReceivingPhotoBridgeMount />
+
+      {/* Always-on slim top app bar — hamburger is the only chrome-level nav surface. */}
+      <AppTopBar title={getMobileTitle(pathname)} onOpenDrawer={openDrawer} />
 
       {/* Main content — full width */}
       <main className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
@@ -204,11 +202,6 @@ export function ResponsiveLayout({ children }: ResponsiveLayoutProps) {
       </AnimatePresence>
 
       {/* CommandBar is desktop-only — cmd+k search has no mobile equivalent */}
-
-      {/* Global mobile scan FAB — opens route-specific sheet on tech / packer /
-          sku-stock (via a window event), or the generic pair + PO sheet
-          everywhere else. */}
-      <MobileScanFab />
     </div>
   );
 }

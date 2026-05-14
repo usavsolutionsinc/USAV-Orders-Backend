@@ -56,6 +56,13 @@ export interface SearchFieldProps {
   autoFocus?: boolean;
   /** Debounce delay in ms before onChange fires. Default 320ms. */
   debounceMs?: number;
+  /**
+   * Omit the field’s own bottom border so a parent can draw a single full-width rule
+   * (e.g. sidebar scan strips).
+   */
+  hideUnderline?: boolean;
+  /** Hide the clear (X) control when the field has a value. */
+  hideClear?: boolean;
 }
 
 /**
@@ -85,6 +92,8 @@ export function SearchField({
   leadingIcon,
   autoFocus = false,
   debounceMs = 320,
+  hideUnderline = false,
+  hideClear = false,
 }: SearchFieldProps) {
   // Internal draft — avoid churn from async parent updates during typing.
   const [draft, setDraft] = useState(value);
@@ -147,8 +156,16 @@ export function SearchField({
   const hasValue = Boolean(draft.trim());
 
   const sizeClasses = size === 'compact'
-    ? { field: 'border-b pb-1', input: 'h-7 text-[13px]', rightSlot: 'h-7' }
-    : { field: 'border-b-2',    input: 'h-8 text-[13px]', rightSlot: 'h-8' };
+    ? {
+        field: hideUnderline ? 'pb-1' : 'border-b pb-1',
+        input: 'h-7 text-[13px]',
+        rightSlot: 'h-7',
+      }
+    : {
+        field: hideUnderline ? 'pb-1' : 'border-b-2',
+        input: 'h-8 text-[13px]',
+        rightSlot: 'h-8',
+      };
 
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -185,7 +202,9 @@ export function SearchField({
     <div className={`flex w-full min-w-0 items-center gap-2 ${className}`.trim()}>
       <form
         onSubmit={handleSubmit}
-        className={`group flex min-w-0 flex-1 items-center gap-2 transition-colors duration-150 ease-out ${sizeClasses.field} ${toneClassName[tone]}`.trim()}
+        className={`group flex min-w-0 flex-1 items-center gap-2 transition-colors duration-150 ease-out ${sizeClasses.field} ${
+          hideUnderline ? 'border-transparent' : toneClassName[tone]
+        }`.trim()}
       >
         <span className="shrink-0 text-gray-400 transition-colors duration-100 ease-out group-focus-within:text-gray-900">
           {icon}
@@ -209,15 +228,19 @@ export function SearchField({
             // Subtle pulsing dot while debounce is in-flight — no spinner jitter.
             <span className={`block h-[5px] w-[5px] rounded-full animate-pulse ${loaderToneClass[tone]} bg-current opacity-60`} />
           ) : hasValue ? (
-            <button
-              type="button"
-              onClick={handleClear}
-              className="text-gray-400 transition-colors duration-100 ease-out hover:text-gray-900 active:scale-95"
-              aria-label="Clear search"
-              title="Clear"
-            >
-              <X className="h-[14px] w-[14px]" />
-            </button>
+            hideClear ? (
+              <span className="h-[14px] w-[14px] shrink-0" aria-hidden />
+            ) : (
+              <button
+                type="button"
+                onClick={handleClear}
+                className="text-gray-400 transition-colors duration-100 ease-out hover:text-gray-900 active:scale-95"
+                aria-label="Clear search"
+                title="Clear"
+              >
+                <X className="h-[14px] w-[14px]" />
+              </button>
+            )
           ) : (
             <button
               type="button"

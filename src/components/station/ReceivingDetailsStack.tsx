@@ -6,7 +6,7 @@ import { formatDateTimePST } from '@/utils/date';
 import { ViewDropdown } from '@/components/ui/ViewDropdown';
 import { getStaffThemeById, stationThemeColors } from '@/utils/staff-colors';
 import { PoLinesSection } from './receiving/PoLinesSection';
-import { ReceivingPhotosSection } from './receiving/ReceivingPhotosSection';
+import { ReceivingOverviewCard } from './receiving/ReceivingOverviewCard';
 import { useReceivingDetailForm, normalizeCarrier } from '@/hooks/useReceivingDetailForm';
 
 export interface ReceivingDetailsLog {
@@ -28,6 +28,9 @@ export interface ReceivingDetailsLog {
   received_by?: number | null;
   unboxed_at?: string | null;
   unboxed_by?: number | null;
+  /** Earliest `receiving_scans` row for this carton (when present). */
+  tracking_scanned_at?: string | null;
+  tracking_scanned_by?: number | null;
   zoho_purchase_receive_id?: string | null;
   zoho_warehouse_id?: string | null;
 }
@@ -110,9 +113,9 @@ export function ReceivingDetailsStack({ log, onClose, onUpdated, onDeleted }: Re
 
       <div className="min-h-[calc(100vh-96px)] px-8 py-6">
         <div className="space-y-4">
+          <ReceivingOverviewCard log={log} />
 
           <PoLinesSection receivingId={log.id} trackingNumber={log.tracking} />
-          <ReceivingPhotosSection receivingId={log.id} />
 
           {/* Tracking */}
           <div className="space-y-1.5">
@@ -236,7 +239,6 @@ export function ReceivingDetailsStack({ log, onClose, onUpdated, onDeleted }: Re
           {/* Metadata */}
           <div className="rounded-2xl border border-gray-100 bg-gray-50 p-3 text-[10px] font-bold uppercase tracking-widest text-gray-500">
             <p>Received At: {log.received_at ? formatDateTimePST(log.received_at) : '-'}</p>
-            <p className="mt-1">Unboxed At: {log.unboxed_at ? formatDateTimePST(log.unboxed_at) : '-'}</p>
             <p className="mt-1">Zoho Receive: {log.zoho_purchase_receive_id || '-'}</p>
           </div>
 

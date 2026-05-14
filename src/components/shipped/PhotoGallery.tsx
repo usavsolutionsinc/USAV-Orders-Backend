@@ -11,6 +11,8 @@ interface PhotoGalleryProps {
   orderId?: string;
   className?: string;
   compact?: boolean;
+  /** Main label on the launcher button (default: packing copy). Viewer/modal unchanged. */
+  launcherTitle?: string;
 }
 
 interface PhotoItem {
@@ -19,7 +21,13 @@ interface PhotoItem {
   index: number;
 }
 
-export function PhotoGallery({ photos, orderId, className = '', compact = false }: PhotoGalleryProps) {
+export function PhotoGallery({
+  photos,
+  orderId,
+  className = '',
+  compact = false,
+  launcherTitle = 'View Packing Photos',
+}: PhotoGalleryProps) {
   const [photoItems, setPhotoItems] = useState<PhotoItem[]>([]);
   const [viewerOpen, setViewerOpen] = useState(false);
   const [currentIndex, setCurrentIndex] = useState(0);
@@ -457,9 +465,7 @@ export function PhotoGallery({ photos, orderId, className = '', compact = false 
               <ImageIcon className="h-5 w-5 text-white" />
             </div>
             <div className="flex flex-col items-start">
-              <span className="text-sm font-bold text-gray-900">
-                View Packing Photos
-              </span>
+              <span className="text-sm font-bold text-gray-900">{launcherTitle}</span>
               <div className="flex items-center gap-2 mt-0.5">
                 <span className="text-[10px] font-black text-blue-600 uppercase tracking-wider">
                   {photoItems.length} {photoItems.length === 1 ? 'Photo' : 'Photos'}

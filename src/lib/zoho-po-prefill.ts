@@ -24,6 +24,13 @@ export function parseZendeskListingFromPoNotes(notes: string | null | undefined)
     if (zendesk && listing) break;
   }
 
+  // Fallback: pick up any https URL in the notes (e.g. eBay, Goodwill, Amazon…).
+  // Common format from purchasing imports: "<product title>: https://example.com/item/..."
+  if (!listing) {
+    const urlMatch = text.match(/https?:\/\/\S+/i);
+    if (urlMatch) listing = urlMatch[0].trim();
+  }
+
   return { zendesk, listing };
 }
 

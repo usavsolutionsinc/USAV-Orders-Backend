@@ -20,6 +20,9 @@ export interface SearchBarProps {
   leadingIcon?: React.ReactNode;
   autoFocus?: boolean;
   debounceMs?: number;
+  /** Parent draws one bottom rule; field omits its own underline. */
+  hideUnderline?: boolean;
+  hideClear?: boolean;
 }
 
 function toSearchFieldTone(variant: SearchBarProps['variant']): SearchFieldTone {
@@ -59,6 +62,8 @@ export function SearchBar({
   leadingIcon,
   autoFocus = false,
   debounceMs,
+  hideUnderline = false,
+  hideClear = false,
 }: SearchBarProps) {
   const isMobile = useIsMobile();
   const internalRef = useRef<HTMLInputElement>(null);
@@ -93,6 +98,8 @@ export function SearchBar({
         leadingIcon={leadingIcon}
         autoFocus={autoFocus}
         debounceMs={debounceMs}
+        hideUnderline={hideUnderline}
+        hideClear={hideClear}
       />
     </div>
   );

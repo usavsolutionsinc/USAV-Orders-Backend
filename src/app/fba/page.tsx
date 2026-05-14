@@ -17,6 +17,8 @@ import { usePersistedStaffId } from '@/hooks/usePersistedStaffId';
 import { useFbaRealtimeInvalidation } from '@/hooks/useFbaRealtimeInvalidation';
 import { getCurrentPSTDateKey, toPSTDateKey } from '@/utils/date';
 import { USAV_REFRESH_DATA, FBA_PRINT_SHIPPED, FBA_BOARD_INJECT_ITEM, FBA_BOARD_REMOVE_ITEMS } from '@/lib/fba/events';
+import { FbaSidebarPanel } from '@/components/fba/sidebar';
+import { RouteShell } from '@/design-system/components/RouteShell';
 
 type Tab = 'combine' | 'shipped';
 
@@ -319,7 +321,7 @@ export default function FbaPage() {
         </div>
       }
     >
-      <FbaPageContent />
+      <RouteShell actions={<FbaSidebarPanel />} history={<FbaPageContent />} />
     </Suspense>
   );
 }

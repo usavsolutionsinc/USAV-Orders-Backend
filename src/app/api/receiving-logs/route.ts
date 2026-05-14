@@ -1,5 +1,10 @@
 import { NextRequest, NextResponse, after } from 'next/server';
 import pool from '@/lib/db';
+import { getReceivingSchema } from '@/lib/receiving-schema-cache';
+import { createCacheLookupKey, getCachedJson, invalidateCacheTags, setCachedJson } from '@/lib/cache/upstash-cache';
+import { upsertReceivingAssignment } from '@/lib/receiving/assignment-upsert';
+import { getCurrentPSTDateKey } from '@/utils/date';
+import { publishReceivingLogChanged } from '@/lib/realtime/publish';
 
 // Module-level singleton — the `receiving` table is never dropped at runtime,
 // so we only need to check once per Fluid instance lifetime.
@@ -13,11 +18,20 @@ async function checkReceivingTableExists(): Promise<boolean> {
     _receivingTableExists = exists;
     return exists;
 }
-import { getReceivingSchema } from '@/lib/receiving-schema-cache';
-import { createCacheLookupKey, getCachedJson, invalidateCacheTags, setCachedJson } from '@/lib/cache/upstash-cache';
-import { upsertReceivingAssignment } from '@/lib/receiving/assignment-upsert';
-import { getCurrentPSTDateKey } from '@/utils/date';
-import { publishReceivingLogChanged } from '@/lib/realtime/publish';
+
+let _receivingScansTableExists: boolean | null = null;
+async function checkReceivingScansTableExists(): Promise<boolean> {
+    if (_receivingScansTableExists !== null) return _receivingScansTableExists;
+    const check = await pool.query(
+        `SELECT EXISTS (
+            SELECT FROM information_schema.tables
+            WHERE table_schema = 'public' AND table_name = 'receiving_scans'
+        ) AS exists`,
+    );
+    const exists = check.rows[0]?.exists ?? false;
+    _receivingScansTableExists = exists;
+    return exists;
+}
 
 export async function GET(request: NextRequest) {
     try {
@@ -27,7 +41,7 @@ export async function GET(request: NextRequest) {
         const weekStart = searchParams.get('weekStart') || '';
         const weekEnd = searchParams.get('weekEnd') || '';
         const needsTestParam = searchParams.get('needs_test');
-        const cacheLookup = createCacheLookupKey({ limit, offset, weekStart, weekEnd, needsTestParam });
+        const cacheLookup = createCacheLookupKey({ limit, offset, weekStart, weekEnd, needsTestParam, scanMeta: true });
 
         const today = getCurrentPSTDateKey();
         const cacheTTL = weekEnd && weekEnd < today ? 86400 : 60;
@@ -57,6 +71,18 @@ export async function GET(request: NextRequest) {
             ? "COALESCE(NULLIF(stn.carrier, 'UNKNOWN'), r.carrier) AS status"
             : 'r.carrier AS status';
 
+        const hasReceivingScans = await checkReceivingScansTableExists();
+        const scanJoin = hasReceivingScans
+            ? `LEFT JOIN LATERAL (
+                  SELECT to_char(rs.scanned_at::timestamp, 'YYYY-MM-DD HH24:MI:SS') AS tracking_scanned_at,
+                         rs.scanned_by AS tracking_scanned_by
+                  FROM receiving_scans rs
+                  WHERE rs.receiving_id = r.id
+                  ORDER BY rs.scanned_at ASC NULLS LAST, rs.id ASC
+                  LIMIT 1
+              ) rs_first ON TRUE`
+            : '';
+
         const selectFields: string[] = [
             'r.id',
             `to_char(r.${dateColumn}::timestamp, 'YYYY-MM-DD HH24:MI:SS') AS timestamp`,
@@ -78,6 +104,12 @@ export async function GET(request: NextRequest) {
             hasColumn('unboxed_by') ? 'r.unboxed_by' : 'NULL::int AS unboxed_by',
             hasColumn('zoho_purchase_receive_id') ? 'r.zoho_purchase_receive_id' : "NULL::text AS zoho_purchase_receive_id",
             hasColumn('zoho_warehouse_id') ? 'r.zoho_warehouse_id' : "NULL::text AS zoho_warehouse_id",
+            ...(hasReceivingScans
+                ? [
+                    'rs_first.tracking_scanned_at AS tracking_scanned_at',
+                    'rs_first.tracking_scanned_by AS tracking_scanned_by',
+                ]
+                : ['NULL::text AS tracking_scanned_at', 'NULL::int AS tracking_scanned_by']),
         ];
 
         // Build optional week pre-filter with a one-day boundary buffer for edge-case records.
@@ -116,6 +148,7 @@ export async function GET(request: NextRequest) {
             SELECT ${selectFields.join(', ')}
             FROM receiving r
             ${shipmentJoin}
+            ${scanJoin}
             WHERE ${hasTrackingClause}
               ${weekClause}
               ${needsTestClause}
@@ -142,6 +175,8 @@ export async function GET(request: NextRequest) {
             received_by: log.received_by ? Number(log.received_by) : null,
             unboxed_at: log.unboxed_at || null,
             unboxed_by: log.unboxed_by ? Number(log.unboxed_by) : null,
+            tracking_scanned_at: log.tracking_scanned_at || null,
+            tracking_scanned_by: log.tracking_scanned_by != null ? Number(log.tracking_scanned_by) : null,
             zoho_purchase_receive_id: log.zoho_purchase_receive_id || null,
             zoho_warehouse_id: log.zoho_warehouse_id || null,
         }));

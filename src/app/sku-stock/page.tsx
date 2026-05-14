@@ -2,18 +2,17 @@
 
 import { Suspense } from 'react';
 import SkuBrowser from '@/components/sku/SkuBrowser';
-import { MobileSkuStockDashboard } from '@/components/mobile/sku-stock/MobileSkuStockDashboard';
+import { SkuStockSidebarPanel } from '@/components/sidebar/SkuStockSidebarPanel';
+import { RouteShell } from '@/design-system/components/RouteShell';
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
-import { useUIMode } from '@/design-system/providers/UIModeProvider';
 
 function SkuStockPageContent() {
-    const { isMobile } = useUIMode();
-
-    if (isMobile) {
-        return <MobileSkuStockDashboard />;
-    }
-
-    return <SkuBrowser />;
+    return (
+        <RouteShell
+            actions={<SkuStockSidebarPanel />}
+            history={<SkuBrowser />}
+        />
+    );
 }
 
 export default function SkuStockPage() {

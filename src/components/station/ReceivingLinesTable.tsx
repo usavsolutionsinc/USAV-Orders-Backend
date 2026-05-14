@@ -1,10 +1,20 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { Loader2, RefreshCw } from '@/components/Icons';
+import { useUIModeOptional } from '@/design-system/providers/UIModeProvider';
+import { Loader2 } from '@/components/Icons';
 import { TrackingChip, OrderIdChip, SkuScanRefChip, SerialChip, getLast4, getLast6Serial } from '@/components/ui/CopyChip';
-import { conditionGradeTableLabel } from '@/components/station/receiving-constants';
+import { conditionGradeTableLabel, workflowStatusTableLabel } from '@/components/station/receiving-constants';
+import WeekHeader from '@/components/ui/WeekHeader';
+import { DesktopDateGroupHeader } from '@/components/ui/DesktopDateGroupHeader';
+import {
+  computeWeekRange,
+  formatDateWithOrdinal,
+  getCurrentPSTDateKey,
+  toPSTDateKey,
+} from '@/utils/date';
 
 // View id dispatched from the sidebar. Both go through the API `view` param.
 export type ReceivingView = 'all' | 'recent' | 'received';
@@ -72,29 +82,21 @@ function getStatusDotBg(status: string | null | undefined) {
   return 'bg-gray-400';
 }
 
-function getStatusLabel(status: string | null | undefined) {
-  const raw = String(status || 'Unknown').trim().toUpperCase();
-  if (raw === 'MATCHED') return 'RECEIVED';
-  return raw.replace(/_/g, ' ');
-}
-
 function OrderRow({
   row,
   isSelected,
   onSelect,
-  onResolve,
   index,
 }: {
   row: ReceivingLineRow;
   isSelected: boolean;
   onSelect: () => void;
-  onResolve: (row: ReceivingLineRow) => Promise<void> | void;
   index: number;
 }) {
   const productTitle = row.item_name || row.zoho_item_id || 'Unnamed inbound line';
   const quantityText = `${row.quantity_received}/${row.quantity_expected ?? '?'}`;
   const qtyExpected = row.quantity_expected ?? 0;
-  const workflowLabel = getStatusLabel(row.workflow_status || 'EXPECTED');
+  const workflowLabel = workflowStatusTableLabel(row.workflow_status || 'EXPECTED');
   const condGrade = (row.condition_grade || '').toUpperCase();
   const conditionLabel = conditionGradeTableLabel(row.condition_grade);
   const conditionColor =
@@ -114,18 +116,6 @@ function OrderRow({
     .map((s) => (s.serial_number || '').trim())
     .filter(Boolean)
     .join(', ');
-
-  // Show the resolve button when the line isn't fully paired: no carton link
-  // yet (receiving_id null) OR no tracking on this row. Keep the icon left of
-  // the TrackingChip so it visually anchors to the chip it refreshes.
-  const [resolving, setResolving] = useState(false);
-  const needsResolve = (!row.receiving_id || !trackingValue);
-  const handleResolve = async (e: React.MouseEvent) => {
-    e.stopPropagation();
-    if (resolving) return;
-    setResolving(true);
-    try { await onResolve(row); } finally { setResolving(false); }
-  };
 
   return (
     <div
@@ -172,48 +162,9 @@ function OrderRow({
       <div className="flex shrink-0 items-center gap-0.5 pr-2">
         <OrderIdChip value={poValue} display={getLast4(poValue)} />
         <SkuScanRefChip value={skuValue} display={getLast4(skuValue)} />
-        {needsResolve && (
-          <button
-            type="button"
-            onClick={handleResolve}
-            disabled={resolving}
-            aria-label="Refetch tracking / PO from Zoho"
-            title="Refetch from Zoho"
-            className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded text-gray-400 transition-colors hover:bg-blue-50 hover:text-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            <RefreshCw className={`h-3.5 w-3.5 ${resolving ? 'animate-spin' : ''}`} />
-          </button>
-        )}
         <TrackingChip value={trackingValue} display={getLast4(trackingValue)} />
         <SerialChip value={serialsCsv} display={getLast6Serial(serialsCsv)} />
       </div>
-    </div>
-  );
-}
-
-function OrdersList({
-  rows,
-  selectedId,
-  onSelect,
-  onResolve,
-}: {
-  rows: ReceivingLineRow[];
-  selectedId: number | null;
-  onSelect: (row: ReceivingLineRow) => void;
-  onResolve: (row: ReceivingLineRow) => Promise<void> | void;
-}) {
-  return (
-    <div className="flex flex-col w-full">
-      {rows.map((row, index) => (
-        <OrderRow
-          key={row.id}
-          row={row}
-          index={index}
-          isSelected={selectedId === row.id}
-          onSelect={() => onSelect(row)}
-          onResolve={onResolve}
-        />
-      ))}
     </div>
   );
 }
@@ -224,12 +175,20 @@ interface ReceivingLinesTableProps {
 
 export default function ReceivingLinesTable({ receivingId }: ReceivingLinesTableProps = {}) {
   const queryClient = useQueryClient();
-  // Default to 'recent'. Sidebar can switch to any supported view id.
-  const [view, setView] = useState<ReceivingView>('recent');
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const { isMobile } = useUIModeOptional();
+  // History always shows every line — no view filter, no sidebar toggle.
+  const view: ReceivingView = 'all';
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [localRows, setLocalRows] = useState<ReceivingLineRow[]>([]);
+  const [weekOffset, setWeekOffset] = useState(0);
+  const [stickyDate, setStickyDate] = useState<string>('');
+  const [currentCount, setCurrentCount] = useState<number>(0);
   const scrollRef = useRef<HTMLDivElement>(null);
   const LIMIT = 500;
+
+  const weekRange = computeWeekRange(weekOffset);
 
   const buildParams = useCallback(() => {
     const p = new URLSearchParams({ limit: String(LIMIT), offset: '0' });
@@ -302,6 +261,27 @@ export default function ReceivingLinesTable({ receivingId }: ReceivingLinesTable
     return () => window.removeEventListener('receiving-clear-line', handler);
   }, []);
 
+  // Tracking scan match → prepend every matched line to the top of the table.
+  // Dedupe by id so a re-scan moves the existing row up instead of duplicating.
+  // Also jumps to the current week and scrolls to top so the new rows are in view.
+  useEffect(() => {
+    const handler = (event: Event) => {
+      const incoming = (event as CustomEvent<ReceivingLineRow[]>).detail;
+      if (!Array.isArray(incoming) || incoming.length === 0) return;
+      setLocalRows((rows) => {
+        const incomingIds = new Set(incoming.map((r) => r.id));
+        const kept = rows.filter((r) => !incomingIds.has(r.id));
+        return [...incoming, ...kept];
+      });
+      setWeekOffset(0);
+      requestAnimationFrame(() => {
+        scrollRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
+      });
+    };
+    window.addEventListener('receiving-lines-prepended', handler);
+    return () => window.removeEventListener('receiving-lines-prepended', handler);
+  }, []);
+
   // External highlight — the sidebar's up/down arrows fire this event to
   // move the selected-row indicator in the table without the full
   // row-click semantics (which would wipe sidebar state). detail is the
@@ -313,15 +293,6 @@ export default function ReceivingLinesTable({ receivingId }: ReceivingLinesTable
     };
     window.addEventListener('receiving-highlight-line', handler);
     return () => window.removeEventListener('receiving-highlight-line', handler);
-  }, []);
-
-  useEffect(() => {
-    const handler = (e: Event) => {
-      const raw = String((e as CustomEvent<string>).detail ?? '').toLowerCase();
-      setView(raw === 'received' ? 'received' : raw === 'all' ? 'all' : 'recent');
-    };
-    window.addEventListener('receiving-workflow-filter', handler);
-    return () => window.removeEventListener('receiving-workflow-filter', handler);
   }, []);
 
   // Track selectedId in a ref so the click handler can read the current value
@@ -336,49 +307,130 @@ export default function ReceivingLinesTable({ receivingId }: ReceivingLinesTable
     const next = selectedIdRef.current === row.id ? null : row.id;
     setSelectedId(next);
     dispatchSelectLine(next ? row : null);
+    // On mobile, tapping a row should reveal the Actions pane with the
+    // chosen carton already loaded. We persist `recvId` in the URL so the
+    // selection survives Actions↔History tab flips (RouteShell unmounts
+    // the inactive pane on mobile).
+    if (next && isMobile) {
+      const params = new URLSearchParams(searchParams.toString());
+      params.set('pane', 'actions');
+      if (row.receiving_id) params.set('recvId', String(row.receiving_id));
+      router.replace(`?${params.toString()}`, { scroll: false });
+    }
+  }, [isMobile, router, searchParams]);
+
+  // ── Day grouping (PST) ────────────────────────────────────────────────────
+  const groupedRecords = useMemo(() => {
+    const groups: Record<string, ReceivingLineRow[]> = {};
+    for (const row of localRows) {
+      let date = 'Unknown';
+      try {
+        date = toPSTDateKey(row.created_at) || 'Unknown';
+      } catch {
+        date = 'Unknown';
+      }
+      if (!groups[date]) groups[date] = [];
+      groups[date].push(row);
+    }
+    return groups;
+  }, [localRows]);
+
+  // Week filter — applied when no specific carton is pinned. When receivingId
+  // is set, the user wants every line on that carton regardless of date.
+  const filteredGroupedRecords = useMemo(() => {
+    if (receivingId) return groupedRecords;
+    return Object.fromEntries(
+      Object.entries(groupedRecords).filter(
+        ([date]) => date >= weekRange.startStr && date <= weekRange.endStr,
+      ),
+    );
+  }, [groupedRecords, weekRange.startStr, weekRange.endStr, receivingId]);
+
+  // ── Scroll-based sticky header (matches TechTable) ────────────────────────
+  const handleScroll = useCallback(() => {
+    if (!scrollRef.current) return;
+    const { scrollTop } = scrollRef.current;
+    const headers = scrollRef.current.querySelectorAll('[data-day-header]');
+    let activeDate = '';
+    let activeCount = 0;
+    for (let i = 0; i < headers.length; i++) {
+      const header = headers[i] as HTMLElement;
+      if (header.offsetTop - scrollRef.current.offsetTop <= scrollTop + 5) {
+        activeDate = header.getAttribute('data-date') || '';
+        activeCount = parseInt(header.getAttribute('data-count') || '0', 10);
+      } else {
+        break;
+      }
+    }
+    if (activeDate) setStickyDate(formatDateWithOrdinal(activeDate));
+    if (activeCount) setCurrentCount(activeCount);
   }, []);
 
-  // Row-level resolve: posts the line's tracking# to /api/receiving/lookup-po
-  // so the server re-pings Zoho (with digit-suffix candidates) and repairs
-  // the pairing. Invalidates the query cache when done.
-  const handleResolveRow = useCallback(async (row: ReceivingLineRow) => {
-    const tracking = (row.tracking_number || '').trim();
-    if (!tracking) return;
-    try {
-      await fetch('/api/receiving/lookup-po', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ trackingNumber: tracking }),
-      });
-    } catch { /* silent — user can retry */ }
-    await queryClient.invalidateQueries({ queryKey: ['receiving-lines-table'] });
-  }, [queryClient]);
+  useEffect(() => {
+    const container = scrollRef.current;
+    if (!container) return;
+    container.addEventListener('scroll', handleScroll);
+    const t = setTimeout(() => handleScroll(), 100);
+    return () => {
+      container.removeEventListener('scroll', handleScroll);
+      clearTimeout(t);
+    };
+  }, [handleScroll, localRows]);
 
-  const emptyMessage = view === 'received'
-    ? 'No received lines yet.'
-    : view === 'all'
-    ? 'No lines yet — start scanning to populate.'
-    : 'No recent scans — start scanning to populate.';
+  const getWeekCount = () =>
+    Object.values(filteredGroupedRecords).reduce((sum, rows) => sum + rows.length, 0);
+
+  const formatHeaderDate = () => formatDateWithOrdinal(getCurrentPSTDateKey());
+
+  const emptyMessage = 'No lines yet — start scanning to populate.';
 
   return (
     <div className="flex h-full min-w-0 overflow-hidden bg-white">
       <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
+        <WeekHeader
+          stickyDate={stickyDate}
+          fallbackDate={formatHeaderDate()}
+          count={currentCount || getWeekCount()}
+          weekRange={weekRange}
+          weekOffset={weekOffset}
+          onPrevWeek={() => setWeekOffset(weekOffset + 1)}
+          onNextWeek={() => setWeekOffset(Math.max(0, weekOffset - 1))}
+        />
         <div ref={scrollRef} className="min-h-0 flex-1 overflow-auto">
           {isLoading && localRows.length === 0 ? (
             <div className="flex h-full items-center justify-center">
               <Loader2 className="h-8 w-8 animate-spin text-gray-500" />
             </div>
-          ) : localRows.length === 0 ? (
+          ) : Object.keys(filteredGroupedRecords).length === 0 ? (
             <div className="flex h-full flex-col items-center justify-center gap-3 px-6 text-center">
               <p className="text-[14px] font-semibold text-gray-500">{emptyMessage}</p>
             </div>
           ) : (
-            <OrdersList
-              rows={localRows}
-              selectedId={selectedId}
-              onSelect={handleSelectRow}
-              onResolve={handleResolveRow}
-            />
+            <div className="flex w-full flex-col">
+              {Object.entries(filteredGroupedRecords)
+                .sort((a, b) => b[0].localeCompare(a[0]))
+                .map(([date, dateRows]) => {
+                  const sortedRows = [...dateRows].sort((a, b) => {
+                    const tA = new Date(a.created_at || 0).getTime();
+                    const tB = new Date(b.created_at || 0).getTime();
+                    return tB - tA;
+                  });
+                  return (
+                    <div key={date} className="flex flex-col">
+                      <DesktopDateGroupHeader date={date} total={dateRows.length} />
+                      {sortedRows.map((row, index) => (
+                        <OrderRow
+                          key={row.id}
+                          row={row}
+                          index={index}
+                          isSelected={selectedId === row.id}
+                          onSelect={() => handleSelectRow(row)}
+                        />
+                      ))}
+                    </div>
+                  );
+                })}
+            </div>
           )}
         </div>
       </div>

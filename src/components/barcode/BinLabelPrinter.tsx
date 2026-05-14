@@ -1,10 +1,13 @@
 'use client';
 
 import React, { useMemo, useState, useCallback } from 'react';
+import { renderToStaticMarkup } from 'react-dom/server';
+import QRCode from 'react-qr-code';
 import { useLocations } from '@/hooks/useLocations';
 import { ViewDropdown, type ViewDropdownOption } from '@/components/ui/ViewDropdown';
 import { Check, Loader2, MapPin, Printer, Plus, X } from '@/components/Icons';
 import { sectionLabel } from '@/design-system/tokens/typography/presets';
+import { mobileQrUrl } from '@/lib/barcode-routing';
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -161,13 +164,28 @@ export function BinLabelPrinter({ isActive }: BinLabelPrinterProps) {
       const meta = [bin.binType, bin.capacity != null ? `CAP ${bin.capacity}` : null]
         .filter(Boolean)
         .join(' · ');
+      // Pre-render the QR in the parent so the popup needs no extra fetches.
+      const qrSvg = renderToStaticMarkup(
+        React.createElement(QRCode, {
+          value: mobileQrUrl('b', bin.barcode),
+          size: 80,
+          level: 'M',
+          fgColor: '#000000',
+          bgColor: '#ffffff',
+        }),
+      );
       return `
       <div class="label">
+        <div class="row top">
+          <div class="info">
+            <div class="room">${bin.room}</div>
+            <div class="address">Row ${bin.row} &middot; Col ${bin.col}</div>
+            ${meta ? `<div class="meta">${meta}</div>` : ''}
+          </div>
+          <div class="qr">${qrSvg}</div>
+        </div>
         <canvas id="bc-${bin.barcode.replace(/[^a-zA-Z0-9]/g, '_')}"></canvas>
         <div class="barcode-text">${bin.barcode}</div>
-        <div class="room">${bin.room}</div>
-        <div class="address">Row ${bin.row} &middot; Col ${bin.col}</div>
-        ${meta ? `<div class="meta">${meta}</div>` : ''}
         <div class="name">${bin.name}</div>
       </div>
     `;
@@ -197,8 +215,12 @@ export function BinLabelPrinter({ isActive }: BinLabelPrinterProps) {
               text-align: center;
               vertical-align: top;
             }
-            canvas { display: block; margin: 0 auto 4px; max-width: 100%; }
+            canvas { display: block; margin: 4px auto; max-width: 100%; }
             .barcode-text { font-size: 14px; font-weight: bold; font-family: monospace; margin: 2px 0; }
+            .row.top { display: flex; align-items: center; justify-content: space-between; gap: 8px; text-align: left; margin-bottom: 4px; }
+            .info { min-width: 0; flex: 1 1 auto; }
+            .qr { flex: 0 0 auto; width: 0.86in; height: 0.86in; display: flex; align-items: center; justify-content: center; }
+            .qr svg { width: 100%; height: 100%; display: block; }
             .room { font-size: 11px; font-weight: bold; color: #333; text-transform: uppercase; letter-spacing: 1px; }
             .address { font-size: 12px; font-weight: bold; color: #555; margin: 2px 0; }
             .meta { font-size: 9px; font-weight: bold; color: #2563eb; text-transform: uppercase; letter-spacing: 0.5px; margin: 2px 0; }

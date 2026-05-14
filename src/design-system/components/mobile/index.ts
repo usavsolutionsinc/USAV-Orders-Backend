@@ -4,9 +4,6 @@ export type { MobileShellProps } from './MobileShell';
 export { MobileNavBar } from './MobileNavBar';
 export type { MobileNavBarProps, MobileNavItem } from './MobileNavBar';
 
-export { MobileActionButton } from './MobileActionButton';
-export type { MobileActionButtonProps } from './MobileActionButton';
-
 export { MobileToolbar } from './MobileToolbar';
 export type { MobileToolbarProps } from './MobileToolbar';
 

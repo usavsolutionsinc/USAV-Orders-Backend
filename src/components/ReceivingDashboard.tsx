@@ -21,18 +21,12 @@ export default function ReceivingDashboard() {
             if (detail?.receiving_id) setActiveReceivingId(detail.receiving_id);
         };
         const handleClear = () => setActiveReceivingId(null);
-        // Switching view tabs (All/Recent/Received) must drop any per-package
-        // scope — otherwise the table stays stuck on the currently-loaded PO
-        // and every tab looks identical.
-        const handleViewChange = () => setActiveReceivingId(null);
 
         window.addEventListener('receiving-po-loaded', handlePoLoaded);
         window.addEventListener('receiving-clear-line', handleClear);
-        window.addEventListener('receiving-workflow-filter', handleViewChange);
         return () => {
             window.removeEventListener('receiving-po-loaded', handlePoLoaded);
             window.removeEventListener('receiving-clear-line', handleClear);
-            window.removeEventListener('receiving-workflow-filter', handleViewChange);
         };
     }, []);
 

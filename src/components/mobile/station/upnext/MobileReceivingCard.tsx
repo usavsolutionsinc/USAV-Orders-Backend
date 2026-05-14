@@ -4,6 +4,7 @@ import { motion } from 'framer-motion';
 import { ExternalLink, Package } from '@/components/Icons';
 import { framerPresenceMobile, framerTransitionMobile } from '@/design-system';
 import type { ReceivingQueueItem } from '@/components/station/upnext/upnext-types';
+import { workflowStatusTableLabel } from '@/components/station/receiving-constants';
 
 /* ── Helpers (same logic as desktop ReceivingAssignmentCard) ────────────────── */
 
@@ -16,6 +17,7 @@ const WORKFLOW_COLORS: Record<string, string> = {
   IN_TEST:       'bg-teal-100 text-teal-700 border-teal-200',
   PASSED:        'bg-emerald-100 text-emerald-700 border-emerald-200',
   FAILED:        'bg-red-100 text-red-700 border-red-200',
+  DONE:          'bg-emerald-100 text-emerald-700 border-emerald-200',
 };
 
 function assignedAgo(assignedAt: string | null): string | null {
@@ -76,7 +78,7 @@ export function MobileReceivingCard({ item }: MobileReceivingCardProps) {
             <span className="text-[14px] font-black text-gray-900">{item.line_count || 1}</span>
             <span className="text-[14px] font-black uppercase tracking-wider text-gray-500">-</span>
             <span className="text-[14px] font-black uppercase truncate text-gray-900">
-              {(item.workflow_status ?? 'EXPECTED').replaceAll('_', ' ')}
+              {workflowStatusTableLabel(item.workflow_status)}
             </span>
           </div>
           <span className="text-[14px] font-mono font-black text-gray-900 px-1.5 py-0.5 rounded border border-gray-300">
@@ -111,11 +113,11 @@ export function MobileReceivingCard({ item }: MobileReceivingCardProps) {
             {item.assigned_tech_name || 'Receiving Queue'}
           </div>
           <div className="text-[11px] text-gray-500 truncate">
-            {(item.workflow_status ?? 'EXPECTED').replaceAll('_', ' ')}
+            {workflowStatusTableLabel(item.workflow_status)}
           </div>
         </div>
         <span className={`text-[10px] font-black uppercase tracking-widest border rounded-lg px-2 py-0.5 ${statusCls}`}>
-          {(item.workflow_status ?? 'EXPECTED').replace('_', ' ')}
+          {workflowStatusTableLabel(item.workflow_status)}
         </span>
         <button
           onClick={(e) => { e.stopPropagation(); openReceiving(); }}
