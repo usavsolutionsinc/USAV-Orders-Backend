@@ -243,13 +243,17 @@ export async function createPurchaseReceive(params: {
   date?: string;
   lineItems: ZohoPurchaseReceiveLine[];
 }): Promise<ZohoPagedResponse<ZohoPurchaseReceive> & { purchasereceive?: ZohoPurchaseReceive }> {
+  // Zoho's POST /purchasereceives expects each line as `quantity` — the qty being
+  // received in *this* receive event. (`quantity_received` is a read-only running
+  // tally on the PO line response; sending it on create is silently ignored, which
+  // leaves the PO's status unchanged.)
   return zohoPost('/api/v1/purchasereceives', {
     purchaseorder_id: params.purchaseOrderId,
     date: params.date || getCurrentPSTDateKey(),
     warehouse_id: params.warehouseId,
     line_items: params.lineItems.map((line) => ({
       line_item_id: line.line_item_id,
-      quantity_received: line.quantity_received,
+      quantity: line.quantity_received,
     })),
   });
 }

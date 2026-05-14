@@ -20,6 +20,7 @@ import {
 import { Barcode, ChevronDown, ChevronUp, Clipboard, ExternalLink, Plus, Printer, RefreshCw, X } from '@/components/Icons';
 import { useUIModeOptional } from '@/design-system/providers/UIModeProvider';
 import { MobileReceivingActionsPane } from '@/components/sidebar/MobileReceivingActionsPane';
+import { toast } from '@/lib/toast';
 import { receivingLabelPoCornerDisplay } from '@/lib/print/printReceivingLabel';
 import { TrackingChip, OrderIdChip, getLast4 } from '@/components/ui/CopyChip';
 import { SearchBar } from '@/components/ui/SearchBar';
@@ -337,9 +338,9 @@ function randomId(): string {
 }
 
 const SELECT_CLASS =
-  'w-full rounded-md border border-gray-200 bg-white px-2 py-1.5 text-[11px] font-bold text-gray-900 focus:border-blue-300 focus:outline-none focus:ring-2 focus:ring-blue-500/10';
+  'w-full rounded-md border border-gray-200 bg-white px-1.5 py-0.5 text-[10px] font-bold text-gray-900 focus:border-blue-300 focus:outline-none focus:ring-2 focus:ring-blue-500/10';
 const INPUT_CLASS =
-  'w-full rounded-md border border-gray-200 bg-white px-2 py-1.5 text-[11px] font-semibold text-gray-900 placeholder:text-gray-400 focus:border-blue-300 focus:outline-none focus:ring-2 focus:ring-blue-500/10';
+  'w-full rounded-md border border-gray-200 bg-white px-1.5 py-0.5 text-[10px] font-semibold text-gray-900 placeholder:text-gray-400 focus:border-blue-300 focus:outline-none focus:ring-2 focus:ring-blue-500/10';
 
 /** Safe http(s) href for opening a pasted or typed listing URL. */
 function listingUrlForOpen(raw: string): string | null {
@@ -356,18 +357,18 @@ function listingUrlForOpen(raw: string): string | null {
 }
 
 const FLOW_SECTION_LABEL =
-  'block text-[9px] font-black uppercase tracking-[0.14em] text-slate-500';
+  'block text-[8px] font-black uppercase tracking-[0.14em] text-slate-500';
 
-/** Sidebar collapsible triggers: same min-height and padding vibe as sidebar header rows / ViewDropdown. */
+/** Sidebar collapsible triggers: tightened to reduce wasted vertical space. */
 const FLOW_SECTION_BTN_CLASS =
-  'flex min-h-[44px] w-full items-center gap-2 px-3 py-1 text-left transition-colors hover:bg-gray-50';
+  'flex min-h-[28px] w-full items-center gap-2 px-2 py-0.5 text-left transition-colors hover:bg-gray-50';
 
 const FLOW_SECTION_TITLE_CLASS =
-  'shrink-0 text-[10px] font-black uppercase tracking-wider text-gray-700';
+  'shrink-0 text-[9px] font-black uppercase tracking-wider text-gray-700';
 
 /** Tracking · platform · notes preview (and plain string summaries) — one size/weight/color. */
 const FLOW_SECTION_SUMMARY_CLASS =
-  'inline-flex min-w-0 max-w-full flex-wrap items-center justify-end gap-x-1 gap-y-0.5 text-[9px] font-semibold leading-none tracking-wide text-gray-600';
+  'inline-flex min-w-0 max-w-full flex-wrap items-center justify-end gap-x-1 gap-y-0.5 text-[8px] font-semibold leading-none tracking-wide text-gray-600';
 
 /** Middot separators in flow summaries; stays subtle at 9px. */
 const FLOW_SECTION_SUMMARY_SEP_CLASS = 'shrink-0 select-none font-normal text-gray-400';
@@ -404,7 +405,7 @@ function FlowSection({
   summary,
   open,
   onToggle,
-  bodyClassName = 'px-3 py-3',
+  bodyClassName = 'px-2 py-1.5',
   children,
 }: {
   title: string;
@@ -1075,18 +1076,40 @@ function LineEditPanel({
       }
 
       if (!markRes.ok || !markData?.success) {
-        // Surface server-side errors instead of failing silently — the user has
-        // no other feedback that the Receive button did anything.
-        console.error('receiving/mark-received-po failed', {
-          status: markRes.status,
-          error: markData?.error,
-        });
+        console.error('receiving/mark-received-po failed', { status: markRes.status, error: markData?.error });
+        toast.error(markData?.error || `Receive failed (HTTP ${markRes.status})`);
+      } else {
+        const zoho = markData?.zoho as
+          | {
+              attempted?: number;
+              ok?: boolean;
+              rate_limited?: boolean;
+              error?: string | null;
+              results?: Array<{ receive_id: string | null; error: string | null; error_kind?: string | null }>;
+            }
+          | undefined;
+        if (zoho?.attempted) {
+          if (zoho.rate_limited) {
+            toast.error('Zoho daily API quota exhausted — PO was NOT marked received in Zoho. Local DB updated.', {
+              description: 'Wait for the daily reset or reduce other Zoho-touching workflows for now.',
+              duration: 8000,
+            });
+          } else if (!zoho.ok) {
+            toast.error(`Zoho receive failed: ${zoho.error || 'unknown error'}`, { duration: 6000 });
+          } else {
+            const firstId = zoho.results?.find((r) => r.receive_id)?.receive_id;
+            toast.success(`PO marked received in Zoho${firstId ? ` (receive ${firstId})` : ''}`);
+          }
+        } else {
+          toast.success('Line received');
+        }
       }
 
       window.dispatchEvent(new CustomEvent('receiving-entry-added'));
       window.dispatchEvent(new CustomEvent('usav-refresh-data'));
     } catch (err) {
       console.error('receiving/mark-received-po threw', err);
+      toast.error(err instanceof Error ? err.message : 'Receive failed');
     } finally {
       setReceiving(false);
     }
@@ -1290,7 +1313,7 @@ function LineEditPanel({
 
   return (
     <div className="border-b border-slate-200 bg-slate-50">
-      <div className="flex items-center gap-2 border-b border-slate-200 bg-white px-3 py-1.5">
+      <div className="flex items-center gap-2 border-b border-slate-200 bg-white px-2 py-0.5">
         <button
           type="button"
           onClick={syncWithZoho}
@@ -1335,7 +1358,7 @@ function LineEditPanel({
           open={flowOpen.shipment}
           onToggle={() => toggleFlow('shipment')}
         >
-          <div className="space-y-3">
+          <div className="space-y-1.5">
             <div>
               <div className="flex items-center gap-2">
                 <span className={`${FLOW_SECTION_LABEL} mb-0 min-w-0 flex-1 leading-none`}>
@@ -1353,7 +1376,7 @@ function LineEditPanel({
                   </button>
                 </span>
               </div>
-              <div className="group mt-1">
+              <div className="group mt-0.5">
                 <SearchBar
                   value={trackingEdit}
                   onChange={setTrackingEdit}
@@ -1374,7 +1397,7 @@ function LineEditPanel({
                 <div className={RECEIVING_SCAN_RULE_LINE_CLASS} aria-hidden />
               </div>
               {extraTrackings.map((t, i) => (
-                <div key={i} className="group mt-2 w-full min-w-0">
+                <div key={i} className="group mt-1 w-full min-w-0">
                   <div className="flex w-full min-w-0 items-center gap-2 pb-1">
                     <span className={TRACKING_ROW_LEADING_ICON_CLASS} aria-hidden>
                       <Barcode className="h-[14px] w-[14px]" />
@@ -1387,7 +1410,7 @@ function LineEditPanel({
                         setExtraTrackings((xs) => xs.map((x, j) => (j === i ? v : x)));
                       }}
                       placeholder="Tracking"
-                      className="h-7 min-w-0 flex-1 border-0 bg-transparent px-0 text-[13px] font-bold text-gray-900 outline-none placeholder:font-medium placeholder:text-gray-400"
+                      className="h-5 min-w-0 flex-1 border-0 bg-transparent px-0 text-[11px] font-bold text-gray-900 outline-none placeholder:font-medium placeholder:text-gray-400"
                     />
                     <span className={RECEIVING_TRAIL_SLOT_CLASS}>
                       <button
@@ -1408,7 +1431,7 @@ function LineEditPanel({
 
             <div>
               <span className={FLOW_SECTION_LABEL}>Listing URL</span>
-              <div className="group mt-1">
+              <div className="group mt-0.5">
                 <SearchBar
                   value={listingLink}
                   onChange={setListingLink}
@@ -1451,7 +1474,7 @@ function LineEditPanel({
                     void savePlatform(next);
                   }}
                   disabled={row.receiving_id == null}
-                  className={`${SELECT_CLASS} mt-1`}
+                  className={`${SELECT_CLASS} mt-0.5`}
                 >
                   {SOURCE_PLATFORM_OPTS.map((opt) => (
                     <option key={opt.value || 'auto'} value={opt.value}>{opt.label}</option>
@@ -1466,7 +1489,7 @@ function LineEditPanel({
                     setReceivingType(e.target.value);
                     patch({ receiving_type: e.target.value });
                   }}
-                  className={`${SELECT_CLASS} mt-1`}
+                  className={`${SELECT_CLASS} mt-0.5`}
                 >
                   {RECEIVING_TYPE_OPTS.map((opt) => (
                     <option key={opt.value} value={opt.value}>{opt.label}</option>
@@ -1483,9 +1506,9 @@ function LineEditPanel({
           summary={itemCountSummary}
           open={flowOpen.item}
           onToggle={() => toggleFlow('item')}
-          bodyClassName="px-3 pt-3 pb-0"
+          bodyClassName="px-2 pt-1.5 pb-0"
         >
-          <div className="space-y-3">
+          <div className="space-y-1.5">
             {/* Item position nav: only shown when multiple items */}
             {hasItemNav && (itemTotal ?? 0) > 1 && (
               <div className="flex items-center gap-1.5">
@@ -1520,7 +1543,7 @@ function LineEditPanel({
             <div>
               <span className={FLOW_SECTION_LABEL}>Product title</span>
               <p
-                className={`mt-1 font-bold leading-snug text-slate-900 break-words ${compact ? 'text-[11px] line-clamp-3' : 'text-[12px]'}`}
+                className={`mt-0.5 font-bold leading-snug text-slate-900 break-words ${compact ? 'text-[10px] line-clamp-3' : 'text-[11px]'}`}
               >
                 {row.item_name || row.sku || `Line #${row.id}`}
               </p>
@@ -1538,7 +1561,7 @@ function LineEditPanel({
                   setCond(v);
                   void patch({ condition_grade: v });
                 }}
-                className={`${SELECT_CLASS} mt-1`}
+                className={`${SELECT_CLASS} mt-0.5`}
                 aria-label="Condition grade for this line item"
               >
                 {CONDITION_OPTS.map((opt) => (
@@ -1564,7 +1587,7 @@ function LineEditPanel({
                   </button>
                 </span>
               </div>
-              <div className="group mt-1">
+              <div className="group mt-0.5">
                 <SearchBar
                   value={serialInput}
                   onChange={setSerialInput}
@@ -1582,7 +1605,7 @@ function LineEditPanel({
                 <div className={RECEIVING_SCAN_RULE_LINE_CLASS} aria-hidden />
               </div>
               {extraSerials.map((s, i) => (
-                <div key={i} className="group mt-2 w-full min-w-0">
+                <div key={i} className="group mt-1 w-full min-w-0">
                   <div className="flex w-full min-w-0 items-center gap-2 pb-1">
                     <span className={TRACKING_ROW_LEADING_ICON_CLASS} aria-hidden>
                       <Barcode className="h-[14px] w-[14px]" />
@@ -1598,7 +1621,7 @@ function LineEditPanel({
                         if (e.key === 'Enter') { e.preventDefault(); void submitExtraSerial(i); }
                       }}
                       placeholder="Serial"
-                      className="h-7 min-w-0 flex-1 border-0 bg-transparent px-0 text-[13px] font-bold text-gray-900 outline-none placeholder:font-medium placeholder:text-gray-400"
+                      className="h-5 min-w-0 flex-1 border-0 bg-transparent px-0 text-[11px] font-bold text-gray-900 outline-none placeholder:font-medium placeholder:text-gray-400"
                     />
                     <span className={RECEIVING_TRAIL_SLOT_CLASS}>
                       <button
@@ -1625,10 +1648,10 @@ function LineEditPanel({
           open={flowOpen.support}
           onToggle={() => toggleFlow('support')}
         >
-          <div className="space-y-3">
+          <div className="space-y-1.5">
             <div>
               <span className={FLOW_SECTION_LABEL}>Zendesk</span>
-              <div className="mt-1 flex gap-1">
+              <div className="mt-0.5 flex gap-1">
                 <input
                   type="text"
                   value={zendesk}
@@ -1645,9 +1668,9 @@ function LineEditPanel({
                     } catch { /* */ }
                   }}
                   title="Paste"
-                  className="shrink-0 border border-slate-200 bg-white px-2 py-1.5 text-slate-500 transition-colors hover:bg-slate-50"
+                  className="shrink-0 border border-slate-200 bg-white px-1.5 py-0.5 text-slate-500 transition-colors hover:bg-slate-50"
                 >
-                  <Clipboard className="h-3.5 w-3.5" />
+                  <Clipboard className="h-3 w-3" />
                 </button>
               </div>
             </div>
@@ -1661,21 +1684,21 @@ function LineEditPanel({
                 }}
                 rows={2}
                 placeholder="Notes"
-                className="mt-1 w-full resize-none border border-slate-200 bg-white px-3 py-2 text-[12px] leading-relaxed text-slate-900 placeholder:text-slate-400 focus:border-blue-300 focus:outline-none focus:ring-2 focus:ring-blue-500/10"
+                className="mt-0.5 w-full resize-none border border-slate-200 bg-white px-2 py-1 text-[10px] leading-snug text-slate-900 placeholder:text-slate-400 focus:border-blue-300 focus:outline-none focus:ring-2 focus:ring-blue-500/10"
               />
             </div>
           </div>
         </FlowSection>
 
-        <div className="space-y-3 bg-white px-3 py-3">
+        <div className="space-y-1.5 bg-white px-2 py-1.5">
           <div className="relative z-20 flex w-full overflow-visible rounded border border-emerald-600 bg-emerald-600">
             <div className="group/split-menu relative flex shrink-0 self-stretch">
               <button
                 type="button"
                 aria-haspopup="menu"
-                aria-label="Print only or receive only"
-                title="Hover for print-only or receive-only actions"
-                className="flex h-auto min-h-[42px] items-center justify-center border-r border-emerald-500/50 px-2.5 text-white outline-none transition-colors hover:bg-emerald-700 focus-visible:z-30 focus-visible:ring-2 focus-visible:ring-white/80 focus-visible:ring-offset-2 focus-visible:ring-offset-emerald-600"
+                aria-label="Print only or receive all (no print)"
+                title="Hover for print-only or receive-all (no print) actions"
+                className="flex h-auto min-h-[28px] items-center justify-center border-r border-emerald-500/50 px-2 text-white outline-none transition-colors hover:bg-emerald-700 focus-visible:z-30 focus-visible:ring-2 focus-visible:ring-white/80 focus-visible:ring-offset-2 focus-visible:ring-offset-emerald-600"
               >
                 <ChevronDown className="h-4 w-4 opacity-95" aria-hidden />
               </button>
@@ -1724,7 +1747,7 @@ function LineEditPanel({
                       }}
                       className="flex w-full items-center gap-2 px-3 py-2 text-left text-[10px] font-black uppercase tracking-wider text-slate-800 transition-colors hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-35"
                     >
-                      {receiving ? 'Receiving…' : 'Receive only'}
+                      {receiving ? 'Receiving…' : 'Receive all'}
                     </button>
                   </li>
                 </ul>
@@ -1737,16 +1760,16 @@ function LineEditPanel({
               title={
                 row.receiving_id == null && !scanValue.trim() && !(row.sku || '').trim()
                   ? 'Need a shipment link or SKU to continue'
-                  : 'Print label (if available) then receive PO'
+                  : 'Print label (if available), then receive every open line on this PO in Zoho'
               }
-              className="inline-flex min-h-[42px] min-w-0 flex-1 items-center justify-center gap-2 px-3 py-2.5 text-[10px] font-black uppercase tracking-wider text-white outline-none transition-colors hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-60 focus-visible:z-30 focus-visible:ring-2 focus-visible:ring-white/70 focus-visible:ring-offset-2 focus-visible:ring-offset-emerald-600"
+              className="inline-flex min-h-[28px] min-w-0 flex-1 items-center justify-center gap-2 px-2 py-1 text-[9px] font-black uppercase tracking-wider text-white outline-none transition-colors hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-60 focus-visible:z-30 focus-visible:ring-2 focus-visible:ring-white/70 focus-visible:ring-offset-2 focus-visible:ring-offset-emerald-600"
             >
               <Printer className="h-3.5 w-3.5 shrink-0" aria-hidden />
-              {receiving ? 'Receiving…' : 'Print · receive PO'}
+              {receiving ? 'Receiving…' : 'Print · receive all'}
             </button>
           </div>
           {scanValue || row.sku ? (
-            <div className="-mx-3 border-t border-slate-200 px-3 py-3">
+            <div className="-mx-2 border-t border-slate-200 px-2 py-1.5">
               {scanValue ? (
                 <ReceivingPoLabelPreview {...labelPayload} embedded />
               ) : row.sku ? (

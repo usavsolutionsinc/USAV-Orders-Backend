@@ -12,7 +12,7 @@ const REWRITES: Array<{ prefix: string; target: string }> = [
   { prefix: '/m/u/', target: '/serial/' },
 ];
 
-export function middleware(request: NextRequest) {
+export function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
   for (const { prefix, target } of REWRITES) {
     if (pathname.startsWith(prefix)) {

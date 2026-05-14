@@ -229,16 +229,55 @@ export async function POST(request: NextRequest) {
       byPo.get(poId)!.push({ line_item_id: liId, quantity_received: qty });
     }
 
+    // Run the Purchase Receive POST synchronously so the user sees whether Zoho
+    // actually accepted it. Notes/reference updates stay in after() — they're
+    // observability, not the core "PO is now received" signal.
+    const zohoResults: Array<{
+      purchaseorder_id: string;
+      receive_id: string | null;
+      error: string | null;
+      error_kind: 'rate_limit' | 'circuit_open' | 'api' | 'other' | null;
+    }> = [];
+    for (const [zohoPoId, lineItems] of byPo) {
+      try {
+        const receiveResp = await createPurchaseReceive({
+          purchaseOrderId: zohoPoId,
+          lineItems,
+        });
+        const receiveId =
+          (receiveResp as { purchasereceive?: { purchase_receive_id?: string } })
+            .purchasereceive?.purchase_receive_id ?? null;
+        zohoResults.push({ purchaseorder_id: zohoPoId, receive_id: receiveId, error: null, error_kind: null });
+        console.log('mark-received-po: createPurchaseReceive ok', JSON.stringify({ zohoPoId, lineItems, receiveId }));
+      } catch (err) {
+        const name = err instanceof Error ? err.name : '';
+        const message = err instanceof Error ? err.message : String(err);
+        const kind: 'rate_limit' | 'circuit_open' | 'api' | 'other' =
+          name === 'ZohoRateLimitError'
+            ? 'rate_limit'
+            : name === 'ZohoCircuitOpenError'
+              ? 'circuit_open'
+              : name === 'ZohoApiError'
+                ? 'api'
+                : 'other';
+        zohoResults.push({ purchaseorder_id: zohoPoId, receive_id: null, error: message, error_kind: kind });
+        console.error('mark-received-po: createPurchaseReceive failed', zohoPoId, JSON.stringify({ lineItems, name, message }));
+      }
+    }
+
+    // Skip the entire notes/reference patch when nothing changed — saves the
+    // getPurchaseOrderById + updatePurchaseOrder round trip and keeps the
+    // org's daily Zoho call budget intact. We only need the patch when the
+    // user supplied extra context (zendesk/listing/notes), a serial was
+    // recorded, or we need to backfill the tracking reference.
+    const needsHeaderPatch =
+      Boolean(localTracking) || Boolean(zendeskTicket) || Boolean(listingLink) ||
+      Boolean(notes) || aggregatedSerials.length > 0 || Boolean(serialNumber);
+
     after(async () => {
       try {
-        for (const [zohoPoId, lineItems] of byPo) {
-          await createPurchaseReceive({
-            purchaseOrderId: zohoPoId,
-            lineItems,
-          }).catch((err) => {
-            console.warn('mark-received-po: createPurchaseReceive failed', zohoPoId, err);
-          });
-
+        if (!needsHeaderPatch) return;
+        for (const [zohoPoId] of byPo) {
           try {
             const existing = await getPurchaseOrderById(zohoPoId);
             const poHeader = (existing?.purchaseorder || {}) as Record<string, unknown>;
@@ -299,11 +338,21 @@ export async function POST(request: NextRequest) {
       }
     });
 
+    const zohoOk = zohoResults.length > 0 && zohoResults.every((r) => !r.error);
+    const rateLimited = zohoResults.some((r) => r.error_kind === 'rate_limit');
+    const firstZohoError = zohoResults.find((r) => r.error)?.error ?? null;
     return NextResponse.json({
       success: true,
       updated_count: updatedLines.length,
       receiving_lines: updatedLines,
       receiving_id: receivingId,
+      zoho: {
+        attempted: zohoResults.length,
+        ok: zohoOk,
+        rate_limited: rateLimited,
+        results: zohoResults,
+        error: firstZohoError,
+      },
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Failed to mark PO as received';

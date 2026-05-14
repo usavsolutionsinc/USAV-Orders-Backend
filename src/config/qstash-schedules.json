@@ -57,15 +57,6 @@
     "label": "staff-goal-history-snapshot"
   },
   {
-    "scheduleId": "replenishment-sync-daily-6am-pacific",
-    "cron": "CRON_TZ=America/Los_Angeles 0 6 * * *",
-    "path": "/api/qstash/replenishment/sync",
-    "body": {},
-    "retries": 3,
-    "timeout": 300,
-    "label": "replenishment-sync"
-  },
-  {
     "scheduleId": "shipping-sync-all-carriers-5pm-weekdays-pacific",
     "cron": "CRON_TZ=America/Los_Angeles 0 17 * * 1-5",
     "path": "/api/qstash/shipping/sync-due",
