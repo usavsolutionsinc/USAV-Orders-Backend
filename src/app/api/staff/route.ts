@@ -16,6 +16,36 @@ function isDatabaseUnavailable(error: unknown) {
 export async function GET(request: NextRequest) {
     try {
         const { searchParams } = new URL(request.url);
+
+        // Lightweight single-id lookup — used by useStaffRole() and any other
+        // caller that just needs role/name for one person. Bypasses the
+        // schedule join below.
+        const idParam = searchParams.get('id');
+        if (idParam) {
+            const numId = Number(idParam);
+            if (!Number.isFinite(numId) || numId <= 0) {
+                return NextResponse.json(
+                    { error: 'Invalid id' },
+                    { status: 400 },
+                );
+            }
+            const r = await pool.query<{
+                id: number;
+                name: string;
+                role: string | null;
+                employee_id: string | null;
+                active: boolean;
+            }>(
+                `SELECT id, name, role, employee_id, active
+                 FROM staff WHERE id = $1 LIMIT 1`,
+                [numId],
+            );
+            if (r.rows.length === 0) {
+                return NextResponse.json({ error: 'Not found' }, { status: 404 });
+            }
+            return NextResponse.json({ staff: r.rows[0] });
+        }
+
         const role = searchParams.get('role');
         const activeOnly = searchParams.get('active') !== 'false';
         const presentToday = searchParams.get('presentToday') === 'true';

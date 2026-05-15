@@ -1,0 +1,11 @@
+sequenceDiagram
+    participant Browser as Browser
+    participant Page as Next Page (RSC)
+    participant API as Next API Route
+    participant DB as Database
+    Browser->>Page: GET /some-route
+    Page->>API: fetch('/api/...')
+    API->>DB: query
+    DB-->>API: rows
+    API-->>Page: JSON
+    Page-->>Browser: HTML + hydration

@@ -28,22 +28,42 @@ export interface ScanRoute {
 }
 
 const MOBILE_PATH_RE = /\/m\/(r|l|u)\/([^/?#\s]+)/i;
+const SKU_STOCK_LOCATION_RE = /\/sku-stock\/location\/([^/?#\s]+)/i;
+// GS1 Digital Link — capture gtin and optional serial after /21/.
+const GS1_PATH_RE = /\/01\/(\d{8,14})(?:\/21\/([^/?#\s]+))?/i;
 
 function pathToRoute(path: string, value: string): ScanRoute | null {
   const m = MOBILE_PATH_RE.exec(path);
-  if (!m) return null;
-  const [, classKey, idRaw] = m;
-  const id = decodeURIComponent(idRaw);
-  switch (classKey.toLowerCase()) {
-    case 'r':
-      return { type: 'receiving',      value, redirect: `/m/r/${id}` };
-    case 'l':
-      return { type: 'receiving-line', value, redirect: `/m/l/${id}` };
-    case 'u':
-      return { type: 'serial-unit',    value, redirect: `/m/u/${id}` };
-    default:
-      return null;
+  if (m) {
+    const [, classKey, idRaw] = m;
+    const id = decodeURIComponent(idRaw);
+    switch (classKey.toLowerCase()) {
+      case 'r':
+        return { type: 'receiving',      value, redirect: `/m/r/${id}` };
+      case 'l':
+        return { type: 'receiving-line', value, redirect: `/m/l/${id}` };
+      case 'u':
+        return { type: 'serial-unit',    value, redirect: `/m/u/${id}` };
+      default:
+        return null;
+    }
   }
+  const binMatch = SKU_STOCK_LOCATION_RE.exec(path);
+  if (binMatch) {
+    const barcode = decodeURIComponent(binMatch[1]);
+    return { type: 'bin', value, redirect: `/sku-stock/location/${barcode}` };
+  }
+  // GS1 Digital Link form. Page-side resolvers translate gtin → sku and
+  // serial → unit at runtime, so we just dispatch to the catch-all paths.
+  const gs1 = GS1_PATH_RE.exec(path);
+  if (gs1) {
+    const [, gtin, serial] = gs1;
+    if (serial) {
+      return { type: 'serial-unit', value, redirect: `/01/${gtin}/21/${decodeURIComponent(serial)}` };
+    }
+    return { type: 'sku', value, redirect: `/01/${gtin}` };
+  }
+  return null;
 }
 
 /**
@@ -104,12 +124,50 @@ export const QR_BASE_URL =
  * Build the absolute URL embedded in a printed QR. Always anchors to
  * {@link QR_BASE_URL} so printed labels work regardless of which environment
  * they were printed from.
+ *
+ * Bin labels (kind='b') route into the SKU Stock area's Location view so the
+ * bin editor lives next to the rest of the SKU tooling. Other kinds stay on
+ * their dedicated /m/* pages for the receiving / unit flows.
  */
 export function mobileQrUrl(
   kind: 'r' | 'l' | 'u' | 'b' | 'k',
   id: string | number,
 ): string {
-  const path = `/m/${kind}/${encodeURIComponent(String(id))}`;
+  const encoded = encodeURIComponent(String(id));
+  const path =
+    kind === 'b'
+      ? `/sku-stock/location/${encoded}`
+      : `/m/${kind}/${encoded}`;
+  try {
+    return new URL(path, QR_BASE_URL).toString();
+  } catch {
+    return `${QR_BASE_URL.replace(/\/$/, '')}${path}`;
+  }
+}
+
+/**
+ * GS1 Digital Link URL. Encodes a GTIN, optionally with a serial number.
+ *   /01/{gtin}                  — product class
+ *   /01/{gtin}/21/{serial}      — unique item
+ *
+ * Anchored to the QR_BASE_URL so the same domain that hosts our own QR
+ * payloads also hosts the GS1 form — phones scanning either land here and
+ * our resolver redirects to the right page.
+ */
+export function gs1DigitalLinkUrl(opts: {
+  gtin: string;
+  serial?: string | null;
+  batch?: string | null;
+}): string {
+  const gtin = encodeURIComponent(String(opts.gtin || '').trim());
+  if (!gtin) return QR_BASE_URL;
+  let path = `/01/${gtin}`;
+  if (opts.serial && opts.serial.trim()) {
+    path += `/21/${encodeURIComponent(opts.serial.trim())}`;
+  }
+  if (opts.batch && opts.batch.trim()) {
+    path += `/10/${encodeURIComponent(opts.batch.trim())}`;
+  }
   try {
     return new URL(path, QR_BASE_URL).toString();
   } catch {

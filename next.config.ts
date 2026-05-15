@@ -7,6 +7,12 @@ const withPWA = withPWAInit({
     aggressiveFrontEndNavCaching: true,
     reloadOnOnline: true,
     disable: process.env.NODE_ENV === "development",
+    // Served when a navigation request fails AND we have no cached version of
+    // the target route. Mostly relevant for receivers/pickers walking out of
+    // Wi-Fi range. The shell + last-cached responses still render.
+    fallbacks: {
+        document: "/offline",
+    },
     workboxOptions: {
         disableDevLogs: true,
         runtimeCaching: [

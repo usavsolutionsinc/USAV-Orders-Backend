@@ -7,7 +7,15 @@ import { Loader2, Search } from '@/components/Icons';
 import { sectionLabel } from '@/design-system/tokens/typography/presets';
 import SkuDetailView from './SkuDetailView';
 
-export type SkuView = 'sku_stock' | 'sku_history';
+export type SkuView = 'sku_stock' | 'sku_history' | 'location';
+
+function parseSkuView(raw: string | null): SkuView {
+  if (raw === 'sku_history') return 'sku_history';
+  if (raw === 'location') return 'location';
+  return 'sku_stock';
+}
+
+export { parseSkuView };
 
 type SkuStockRow = {
   id: number;
@@ -30,7 +38,7 @@ type SkuHistoryRow = {
 export default function SkuBrowser() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const view = (searchParams.get('view') === 'sku_history' ? 'sku_history' : 'sku_stock') as SkuView;
+  const view: SkuView = parseSkuView(searchParams.get('view'));
   const searchQuery = String(searchParams.get('search') || '').trim();
   const openSku = searchParams.get('sku') || null;
   const [loading, setLoading] = useState(true);
@@ -58,6 +66,17 @@ export default function SkuBrowser() {
 
   useEffect(() => {
     let cancelled = false;
+
+    // Location view has no list endpoint — the active bin is loaded by the
+    // dedicated /sku-stock/location/[barcode] page. The empty state here just
+    // prompts the user to scan/enter a barcode.
+    if (view === 'location') {
+      setLoading(false);
+      setError('');
+      return () => {
+        cancelled = true;
+      };
+    }
 
     async function load() {
       setError('');
@@ -150,6 +169,8 @@ export default function SkuBrowser() {
             <div className="flex h-full items-center justify-center bg-gray-50 px-6 text-center">
               <p className="text-sm font-semibold text-red-600">{error}</p>
             </div>
+          ) : view === 'location' ? (
+            <LocationEmptyState />
           ) : activeCount === 0 ? (
             <div className="flex h-full flex-col items-center justify-center py-40 text-center">
               <div className="max-w-xs animate-in fade-in zoom-in duration-300">
@@ -265,6 +286,59 @@ export default function SkuBrowser() {
           />
         )}
       </AnimatePresence>
+    </div>
+  );
+}
+
+// ─── Location empty state ──────────────────────────────────────────────────
+
+function LocationEmptyState() {
+  const router = useRouter();
+  const [value, setValue] = useState('');
+  const submit = useCallback(() => {
+    const code = value.trim();
+    if (!code) return;
+    router.push(`/sku-stock/location/${encodeURIComponent(code)}`);
+  }, [router, value]);
+
+  return (
+    <div className="flex h-full flex-col items-center justify-center px-6 py-20 text-center">
+      <div className="max-w-sm">
+        <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-blue-50">
+          <Search className="h-8 w-8 text-blue-400" />
+        </div>
+        <h3 className="mb-1 text-lg font-black uppercase tracking-tight text-gray-900">
+          Scan a bin label
+        </h3>
+        <p className="mb-6 text-xs font-bold uppercase tracking-widest leading-relaxed text-gray-500">
+          Open this page from a bin QR, or type a barcode below.
+        </p>
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            submit();
+          }}
+          className="flex w-full items-stretch gap-2"
+        >
+          <input
+            type="text"
+            inputMode="text"
+            autoComplete="off"
+            autoFocus
+            placeholder="Bin barcode (e.g. Z1-A-03)"
+            value={value}
+            onChange={(e) => setValue(e.target.value)}
+            className="flex-1 rounded-md border border-gray-300 px-3 py-3 text-center font-mono text-base font-bold text-gray-900 focus:border-blue-500 focus:outline-none"
+          />
+          <button
+            type="submit"
+            disabled={!value.trim()}
+            className="rounded-md bg-blue-600 px-4 py-3 text-sm font-bold text-white active:bg-blue-700 disabled:opacity-50"
+          >
+            Open
+          </button>
+        </form>
+      </div>
     </div>
   );
 }

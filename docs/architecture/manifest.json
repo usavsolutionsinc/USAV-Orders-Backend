@@ -1,0 +1,32 @@
+{
+  "generated_at": "2026-05-14 23:49:08 UTC",
+  "project_name": "USAV-Orders-Backend",
+  "project_flags": {
+    "next": true,
+    "express": true,
+    "python": false,
+    "react": true,
+    "prisma": false,
+    "github_actions": true
+  },
+  "files_scanned": 1078,
+  "git_head": "b680dbdfc9c1e09db8e567db969ad5d3ac991bf3",
+  "files_fingerprint": "42260deb8ca0",
+  "diagrams": {
+    "mindmap": {
+      "title": "Project Overview"
+    },
+    "modules": {
+      "title": "Module Dependencies"
+    },
+    "routes": {
+      "title": "Next.js Routes"
+    },
+    "data_flow": {
+      "title": "Data Flow"
+    },
+    "recent": {
+      "title": "Recent Changes"
+    }
+  }
+}

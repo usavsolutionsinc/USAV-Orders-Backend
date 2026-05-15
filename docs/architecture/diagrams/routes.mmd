@@ -1,0 +1,222 @@
+flowchart LR
+  root(["/"])
+  01["01"]
+  root --> 01
+  01__gtin(["[gtin]"])
+  01 --> 01__gtin
+  click 01__gtin "src/app/01/[gtin]/page.tsx" "page: src/app/01/[gtin]/page.tsx"
+  01__gtin__21["21"]
+  01__gtin --> 01__gtin__21
+  01__gtin__21__serial(["[serial]"])
+  01__gtin__21 --> 01__gtin__21__serial
+  click 01__gtin__21__serial "src/app/01/[gtin]/21/[serial]/page.tsx" "page: src/app/01/[gtin]/21/[serial]/page.tsx"
+  admin(["admin"])
+  root --> admin
+  click admin "src/app/admin/page.tsx" "page: src/app/admin/page.tsx"
+  ai(["ai"])
+  root --> ai
+  click ai "src/app/ai/page.tsx" "page: src/app/ai/page.tsx"
+  api["api"]
+  root --> api
+  api_activity["activity"]
+  api --> api_activity
+  api_activity_feed["feed"]
+  api_activity --> api_activity_feed
+  click api_activity_feed "src/app/api/activity/feed/route.ts" "route: src/app/api/activity/feed/route.ts"
+  api_admin["admin"]
+  api --> api_admin
+  api_admin_fba_fnskus["fba-fnskus"]
+  api_admin --> api_admin_fba_fnskus
+  click api_admin_fba_fnskus "src/app/api/admin/fba-fnskus/route.ts" "route: src/app/api/admin/fba-fnskus/route.ts"
+  api_admin_fba_fnskus__fnsku["[fnsku]"]
+  api_admin_fba_fnskus --> api_admin_fba_fnskus__fnsku
+  click api_admin_fba_fnskus__fnsku "src/app/api/admin/fba-fnskus/[fnsku]/route.ts" "route: src/app/api/admin/fba-fnskus/[fnsku]/route.ts"
+  api_admin_fba_fnskus_upload["upload"]
+  api_admin_fba_fnskus --> api_admin_fba_fnskus_upload
+  click api_admin_fba_fnskus_upload "src/app/api/admin/fba-fnskus/upload/route.ts" "route: src/app/api/admin/fba-fnskus/upload/route.ts"
+  api_admin_features["features"]
+  api_admin --> api_admin_features
+  click api_admin_features "src/app/api/admin/features/route.ts" "route: src/app/api/admin/features/route.ts"
+  api_admin_features__id["[id]"]
+  api_admin_features --> api_admin_features__id
+  click api_admin_features__id "src/app/api/admin/features/[id]/route.ts" "route: src/app/api/admin/features/[id]/route.ts"
+  api_admin_fix_status["fix-status"]
+  api_admin --> api_admin_fix_status
+  click api_admin_fix_status "src/app/api/admin/fix-status/route.ts" "route: src/app/api/admin/fix-status/route.ts"
+  api_admin_logs["logs"]
+  api_admin --> api_admin_logs
+  click api_admin_logs "src/app/api/admin/logs/route.ts" "route: src/app/api/admin/logs/route.ts"
+  api_admin_qstash_status["qstash-status"]
+  api_admin --> api_admin_qstash_status
+  click api_admin_qstash_status "src/app/api/admin/qstash-status/route.ts" "route: src/app/api/admin/qstash-status/route.ts"
+  api_ai["ai"]
+  api --> api_ai
+  api_ai_chat_sessions["chat-sessions"]
+  api_ai --> api_ai_chat_sessions
+  click api_ai_chat_sessions "src/app/api/ai/chat-sessions/route.ts" "route: src/app/api/ai/chat-sessions/route.ts"
+  api_ai_chat_sessions__sessionId["[sessionId]"]
+  api_ai_chat_sessions --> api_ai_chat_sessions__sessionId
+  api_ai_chat_sessions__sessionId__messages["messages"]
+  api_ai_chat_sessions__sessionId --> api_ai_chat_sessions__sessionId__messages
+  click api_ai_chat_sessions__sessionId__messages "src/app/api/ai/chat-sessions/[sessionId]/messages/route.ts" "route: src/app/api/ai/chat-sessions/[sessionId]/messages/route.ts"
+  api_ai_health["health"]
+  api_ai --> api_ai_health
+  click api_ai_health "src/app/api/ai/health/route.ts" "route: src/app/api/ai/health/route.ts"
+  api_ai_openclaw_chat["openclaw-chat"]
+  api_ai --> api_ai_openclaw_chat
+  click api_ai_openclaw_chat "src/app/api/ai/openclaw-chat/route.ts" "route: src/app/api/ai/openclaw-chat/route.ts"
+  api_ai_openclaw_health["openclaw-health"]
+  api_ai --> api_ai_openclaw_health
+  click api_ai_openclaw_health "src/app/api/ai/openclaw-health/route.ts" "route: src/app/api/ai/openclaw-health/route.ts"
+  api_ai_openclaw_session["openclaw-session"]
+  api_ai --> api_ai_openclaw_session
+  click api_ai_openclaw_session "src/app/api/ai/openclaw-session/route.ts" "route: src/app/api/ai/openclaw-session/route.ts"
+  api_ai_search["search"]
+  api_ai --> api_ai_search
+  click api_ai_search "src/app/api/ai/search/route.ts" "route: src/app/api/ai/search/route.ts"
+  api_ai_tunnel_session["tunnel-session"]
+  api_ai --> api_ai_tunnel_session
+  click api_ai_tunnel_session "src/app/api/ai/tunnel-session/route.ts" "route: src/app/api/ai/tunnel-session/route.ts"
+  api_assignments["assignments"]
+  api --> api_assignments
+  click api_assignments "src/app/api/assignments/route.ts" "route: src/app/api/assignments/route.ts"
+  api_assignments_next["next"]
+  api_assignments --> api_assignments_next
+  click api_assignments_next "src/app/api/assignments/next/route.ts" "route: src/app/api/assignments/next/route.ts"
+  api_assignments_sku_search["sku-search"]
+  api_assignments --> api_assignments_sku_search
+  click api_assignments_sku_search "src/app/api/assignments/sku-search/route.ts" "route: src/app/api/assignments/sku-search/route.ts"
+  api_check_tracking["check-tracking"]
+  api --> api_check_tracking
+  click api_check_tracking "src/app/api/check-tracking/route.ts" "route: src/app/api/check-tracking/route.ts"
+  api_cron["cron"]
+  api --> api_cron
+  api_cron_refresh_reports["refresh-reports"]
+  api_cron --> api_cron_refresh_reports
+  click api_cron_refresh_reports "src/app/api/cron/refresh-reports/route.ts" "route: src/app/api/cron/refresh-reports/route.ts"
+  api_cron_stock_alerts["stock-alerts"]
+  api_cron --> api_cron_stock_alerts
+  click api_cron_stock_alerts "src/app/api/cron/stock-alerts/route.ts" "route: src/app/api/cron/stock-alerts/route.ts"
+  api_cycle_counts["cycle-counts"]
+  api --> api_cycle_counts
+  api_cycle_counts_campaigns["campaigns"]
+  api_cycle_counts --> api_cycle_counts_campaigns
+  click api_cycle_counts_campaigns "src/app/api/cycle-counts/campaigns/route.ts" "route: src/app/api/cycle-counts/campaigns/route.ts"
+  api_cycle_counts_campaigns__id["[id]"]
+  api_cycle_counts_campaigns --> api_cycle_counts_campaigns__id
+  click api_cycle_counts_campaigns__id "src/app/api/cycle-counts/campaigns/[id]/route.ts" "route: src/app/api/cycle-counts/campaigns/[id]/route.ts"
+  api_cycle_counts_lines["lines"]
+  api_cycle_counts --> api_cycle_counts_lines
+  api_cycle_counts_lines__id["[id]"]
+  api_cycle_counts_lines --> api_cycle_counts_lines__id
+  click api_cycle_counts_lines__id "src/app/api/cycle-counts/lines/[id]/route.ts" "route: src/app/api/cycle-counts/lines/[id]/route.ts"
+  api_dashboard["dashboard"]
+  api --> api_dashboard
+  api_dashboard_fba_shipments["fba-shipments"]
+  api_dashboard --> api_dashboard_fba_shipments
+  click api_dashboard_fba_shipments "src/app/api/dashboard/fba-shipments/route.ts" "route: src/app/api/dashboard/fba-shipments/route.ts"
+  api_dashboard_operations["operations"]
+  api_dashboard --> api_dashboard_operations
+  click api_dashboard_operations "src/app/api/dashboard/operations/route.ts" "route: src/app/api/dashboard/operations/route.ts"
+  api_db["db"]
+  api --> api_db
+  api_db_ping["ping"]
+  api_db --> api_db_ping
+  click api_db_ping "src/app/api/db/ping/route.ts" "route: src/app/api/db/ping/route.ts"
+  api_debug_tracking["debug-tracking"]
+  api --> api_debug_tracking
+  click api_debug_tracking "src/app/api/debug-tracking/route.ts" "route: src/app/api/debug-tracking/route.ts"
+  api_diagnose_migration["diagnose-migration"]
+  api --> api_diagnose_migration
+  click api_diagnose_migration "src/app/api/diagnose-migration/route.ts" "route: src/app/api/diagnose-migration/route.ts"
+  api_drizzle_setup["drizzle-setup"]
+  api --> api_drizzle_setup
+  click api_drizzle_setup "src/app/api/drizzle-setup/route.ts" "route: src/app/api/drizzle-setup/route.ts"
+  api_ebay["ebay"]
+  api --> api_ebay
+  api_ebay_accounts["accounts"]
+  api_ebay --> api_ebay_accounts
+  click api_ebay_accounts "src/app/api/ebay/accounts/route.ts" "route: src/app/api/ebay/accounts/route.ts"
+  api_ebay_refresh_token["refresh-token"]
+  api_ebay --> api_ebay_refresh_token
+  click api_ebay_refresh_token "src/app/api/ebay/refresh-token/route.ts" "route: src/app/api/ebay/refresh-token/route.ts"
+  api_ebay_refresh_tokens["refresh-tokens"]
+  api_ebay --> api_ebay_refresh_tokens
+  click api_ebay_refresh_tokens "src/app/api/ebay/refresh-tokens/route.ts" "route: src/app/api/ebay/refresh-tokens/route.ts"
+  api_ebay_search["search"]
+  api_ebay --> api_ebay_search
+  click api_ebay_search "src/app/api/ebay/search/route.ts" "route: src/app/api/ebay/search/route.ts"
+  api_ebay_sync["sync"]
+  api_ebay --> api_ebay_sync
+  click api_ebay_sync "src/app/api/ebay/sync/route.ts" "route: src/app/api/ebay/sync/route.ts"
+  api_ecwid_square["ecwid-square"]
+  api --> api_ecwid_square
+  api_ecwid_square_sync["sync"]
+  api_ecwid_square --> api_ecwid_square_sync
+  click api_ecwid_square_sync "src/app/api/ecwid-square/sync/route.ts" "route: src/app/api/ecwid-square/sync/route.ts"
+  api_ecwid["ecwid"]
+  api --> api_ecwid
+  api_ecwid_products["products"]
+  api_ecwid --> api_ecwid_products
+  api_ecwid_products_search["search"]
+  api_ecwid_products --> api_ecwid_products_search
+  click api_ecwid_products_search "src/app/api/ecwid/products/search/route.ts" "route: src/app/api/ecwid/products/search/route.ts"
+  api_ecwid_sync_exception_tracking["sync-exception-tracking"]
+  api_ecwid --> api_ecwid_sync_exception_tracking
+  click api_ecwid_sync_exception_tracking "src/app/api/ecwid/sync-exception-tracking/route.ts" "route: src/app/api/ecwid/sync-exception-tracking/route.ts"
+  api_ecwid_transfer_orders["transfer-orders"]
+  api_ecwid --> api_ecwid_transfer_orders
+  click api_ecwid_transfer_orders "src/app/api/ecwid/transfer-orders/route.ts" "route: src/app/api/ecwid/transfer-orders/route.ts"
+  api_favorites["favorites"]
+  api --> api_favorites
+  click api_favorites "src/app/api/favorites/route.ts" "route: src/app/api/favorites/route.ts"
+  api_favorites__id["[id]"]
+  api_favorites --> api_favorites__id
+  click api_favorites__id "src/app/api/favorites/[id]/route.ts" "route: src/app/api/favorites/[id]/route.ts"
+  api_fba["fba"]
+  api --> api_fba
+  api_fba_board["board"]
+  api_fba --> api_fba_board
+  click api_fba_board "src/app/api/fba/board/route.ts" "route: src/app/api/fba/board/route.ts"
+  api_fba_board__fnsku["[fnsku]"]
+  api_fba_board --> api_fba_board__fnsku
+  api_fba_board__fnsku__entries["entries"]
+  api_fba_board__fnsku --> api_fba_board__fnsku__entries
+  click api_fba_board__fnsku__entries "src/app/api/fba/board/[fnsku]/entries/route.ts" "route: src/app/api/fba/board/[fnsku]/entries/route.ts"
+  api_fba_fnskus["fnskus"]
+  api_fba --> api_fba_fnskus
+  click api_fba_fnskus "src/app/api/fba/fnskus/route.ts" "route: src/app/api/fba/fnskus/route.ts"
+  api_fba_fnskus__fnsku["[fnsku]"]
+  api_fba_fnskus --> api_fba_fnskus__fnsku
+  click api_fba_fnskus__fnsku "src/app/api/fba/fnskus/[fnsku]/route.ts" "route: src/app/api/fba/fnskus/[fnsku]/route.ts"
+  api_fba_fnskus_bulk["bulk"]
+  api_fba_fnskus --> api_fba_fnskus_bulk
+  click api_fba_fnskus_bulk "src/app/api/fba/fnskus/bulk/route.ts" "route: src/app/api/fba/fnskus/bulk/route.ts"
+  api_fba_fnskus_search["search"]
+  api_fba_fnskus --> api_fba_fnskus_search
+  click api_fba_fnskus_search "src/app/api/fba/fnskus/search/route.ts" "route: src/app/api/fba/fnskus/search/route.ts"
+  api_fba_fnskus_validate["validate"]
+  api_fba_fnskus --> api_fba_fnskus_validate
+  click api_fba_fnskus_validate "src/app/api/fba/fnskus/validate/route.ts" "route: src/app/api/fba/fnskus/validate/route.ts"
+  api_fba_items["items"]
+  api_fba --> api_fba_items
+  api_fba_items_queue["queue"]
+  api_fba_items --> api_fba_items_queue
+  click api_fba_items_queue "src/app/api/fba/items/queue/route.ts" "route: src/app/api/fba/items/queue/route.ts"
+  api_fba_items_ready["ready"]
+  api_fba_items --> api_fba_items_ready
+  click api_fba_items_ready "src/app/api/fba/items/ready/route.ts" "route: src/app/api/fba/items/ready/route.ts"
+  api_fba_items_scan["scan"]
+  api_fba_items --> api_fba_items_scan
+  click api_fba_items_scan "src/app/api/fba/items/scan/route.ts" "route: src/app/api/fba/items/scan/route.ts"
+  api_fba_items_verify["verify"]
+  api_fba_items --> api_fba_items_verify
+  click api_fba_items_verify "src/app/api/fba/items/verify/route.ts" "route: src/app/api/fba/items/verify/route.ts"
+  api_fba_labels["labels"]
+  api_fba --> api_fba_labels
+  api_fba_labels_bind["bind"]
+  api_fba_labels --> api_fba_labels_bind
+  click api_fba_labels_bind "src/app/api/fba/labels/bind/route.ts" "route: src/app/api/fba/labels/bind/route.ts"
+  api_fba_logs["logs"]
+  api_fba --> api_fba_logs
+  click api_fba_logs "src/app/api/fba/logs/route.ts" "route: src/app/api/fba/logs/route.ts"

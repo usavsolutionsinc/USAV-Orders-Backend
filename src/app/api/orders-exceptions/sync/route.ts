@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { isQStashOrigin } from '@/lib/qstash';
+import { invalidateCacheTags } from '@/lib/cache/upstash-cache';
 import { syncOrderExceptionsToOrders } from '@/lib/orders-exceptions';
 import { formatPSTTimestamp } from '@/utils/date';
 
@@ -28,6 +29,9 @@ export async function POST(request: NextRequest) {
 
   try {
     const result = await syncOrderExceptionsToOrders();
+    if (result.matched > 0) {
+      await invalidateCacheTags(['orders']);
+    }
     return NextResponse.json({
       success: true,
       ...result,

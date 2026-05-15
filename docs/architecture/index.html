@@ -1,0 +1,499 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>USAV-Orders-Backend — Architecture</title>
+<style>
+  :root {
+    --bg: #ffffff;
+    --bg-elev: #f7f8fa;
+    --bg-sidebar: #f1f3f5;
+    --fg: #1a1d21;
+    --fg-muted: #6b7280;
+    --border: #e4e7eb;
+    --accent: #3b82f6;
+    --accent-fg: #ffffff;
+    --code-bg: #f3f4f6;
+  }
+  [data-theme="dark"] {
+    --bg: #0b0d10;
+    --bg-elev: #14171c;
+    --bg-sidebar: #0f1216;
+    --fg: #e6e8eb;
+    --fg-muted: #8b93a1;
+    --border: #1e2227;
+    --accent: #60a5fa;
+    --accent-fg: #0b0d10;
+    --code-bg: #1a1d22;
+  }
+
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; height: 100%; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
+    background: var(--bg);
+    color: var(--fg);
+    font-size: 14px;
+    line-height: 1.5;
+    overflow: hidden;
+  }
+
+  .app { display: grid; grid-template-columns: 240px 1fr; height: 100vh; }
+
+  /* Sidebar */
+  .sidebar {
+    background: var(--bg-sidebar);
+    border-right: 1px solid var(--border);
+    display: flex; flex-direction: column;
+    overflow-y: auto;
+  }
+  .sidebar header {
+    padding: 18px 18px 12px;
+    border-bottom: 1px solid var(--border);
+  }
+  .sidebar h1 { font-size: 13px; font-weight: 700; margin: 0 0 4px; }
+  .sidebar .subtitle { font-size: 11px; color: var(--fg-muted); }
+  .sidebar nav { padding: 8px 6px; flex: 1; }
+  .nav-btn {
+    display: block; width: 100%; text-align: left;
+    background: transparent; border: none; cursor: pointer;
+    color: var(--fg); padding: 8px 12px; font-size: 13px;
+    border-radius: 6px; margin-bottom: 2px;
+    font-family: inherit;
+  }
+  .nav-btn:hover { background: var(--bg-elev); }
+  .nav-btn.active { background: var(--accent); color: var(--accent-fg); font-weight: 600; }
+  .sidebar footer {
+    padding: 10px 14px; border-top: 1px solid var(--border);
+    display: flex; flex-direction: column; gap: 6px;
+  }
+  .footer-btn {
+    background: var(--bg-elev); border: 1px solid var(--border);
+    color: var(--fg); padding: 6px 10px; font-size: 11px;
+    border-radius: 5px; cursor: pointer; font-family: inherit;
+    text-align: left;
+  }
+  .footer-btn:hover { border-color: var(--accent); }
+  .meta { font-size: 10px; color: var(--fg-muted); margin-top: 6px; line-height: 1.4; }
+
+  /* Main */
+  .main { display: flex; flex-direction: column; overflow: hidden; }
+  .main-header {
+    padding: 14px 22px;
+    border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; justify-content: space-between;
+    gap: 12px;
+  }
+  .main-header h2 { margin: 0; font-size: 17px; font-weight: 700; }
+  .main-header .desc { color: var(--fg-muted); font-size: 12px; margin-top: 2px; }
+  .actions { display: flex; gap: 6px; flex-shrink: 0; }
+  .action-btn {
+    background: var(--bg-elev); color: var(--fg);
+    border: 1px solid var(--border);
+    padding: 5px 10px; font-size: 11px;
+    border-radius: 5px; cursor: pointer; font-family: inherit;
+    font-weight: 500;
+  }
+  .action-btn:hover { border-color: var(--accent); color: var(--accent); }
+
+  /* Diagram area */
+  .diagram-wrap {
+    flex: 1; overflow: auto; position: relative;
+    background:
+      radial-gradient(circle, var(--border) 1px, transparent 1px);
+    background-size: 24px 24px;
+    background-color: var(--bg);
+  }
+  .diagram-inner {
+    padding: 32px;
+    min-height: 100%;
+    display: flex; align-items: flex-start; justify-content: center;
+  }
+  .mermaid-host {
+    background: var(--bg-elev);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 28px;
+    /* Don't cap width — let big diagrams overflow horizontally and use scroll.
+       Otherwise wide flowcharts (deep route trees) get crushed into slivers. */
+    min-width: min(900px, 95%);
+    box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+    overflow: auto;
+  }
+  .mermaid-host svg {
+    /* Honor Mermaid's intrinsic width — diagram-wrap handles overflow */
+    height: auto; display: block;
+    max-width: none;
+  }
+
+  /* Side panel for click-to-inspect */
+  .side-panel {
+    position: fixed; top: 0; right: -340px; width: 340px; height: 100vh;
+    background: var(--bg-elev); border-left: 1px solid var(--border);
+    padding: 20px; overflow-y: auto;
+    transition: right 0.2s ease; z-index: 50;
+  }
+  .side-panel.open { right: 0; }
+  .side-panel h3 { margin: 0 0 12px; font-size: 14px; }
+  .side-panel .close {
+    position: absolute; top: 12px; right: 12px;
+    background: none; border: none; color: var(--fg-muted);
+    cursor: pointer; font-size: 18px; line-height: 1;
+  }
+  .side-panel .file-path {
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: 11px; background: var(--code-bg);
+    padding: 8px 10px; border-radius: 5px;
+    word-break: break-all; margin-bottom: 12px;
+  }
+  .side-panel a { color: var(--accent); font-size: 12px; text-decoration: none; }
+  .side-panel a:hover { text-decoration: underline; }
+
+  /* Modal */
+  .modal-backdrop {
+    position: fixed; inset: 0; background: rgba(0,0,0,0.5);
+    display: none; align-items: center; justify-content: center; z-index: 100;
+  }
+  .modal-backdrop.open { display: flex; }
+  .modal {
+    background: var(--bg-elev); border: 1px solid var(--border);
+    border-radius: 10px; padding: 24px; max-width: 540px; width: 90%;
+  }
+  .modal h3 { margin: 0 0 12px; }
+  .modal pre {
+    background: var(--code-bg); padding: 12px; border-radius: 6px;
+    font-size: 12px; overflow-x: auto;
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  }
+  .modal .modal-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 16px; }
+
+  /* Empty state for offline Mermaid */
+  .offline-warn {
+    padding: 18px; background: #fef3c7; color: #78350f;
+    border: 1px solid #fde68a; border-radius: 8px;
+    font-size: 13px; margin-bottom: 16px;
+  }
+  [data-theme="dark"] .offline-warn {
+    background: #422006; color: #fde68a; border-color: #78350f;
+  }
+
+  @media (max-width: 768px) {
+    .app { grid-template-columns: 1fr; }
+    .sidebar { display: none; }
+  }
+</style>
+</head>
+<body>
+
+<div class="app">
+  <aside class="sidebar">
+    <header>
+      <h1>USAV-Orders-Backend</h1>
+      <div class="subtitle">Architecture Dashboard</div>
+    </header>
+    <nav id="nav"></nav>
+    <footer>
+      <button class="footer-btn" id="theme-toggle">🌓 Toggle theme</button>
+      <button class="footer-btn" id="refresh-btn">↻ How to refresh</button>
+      <div class="meta">
+        Generated: 2026-05-14 23:49:08 UTC<br>
+        Mermaid 10.x via CDN
+      </div>
+    </footer>
+  </aside>
+
+  <main class="main">
+    <header class="main-header">
+      <div>
+        <h2 id="title">…</h2>
+        <div class="desc" id="desc"></div>
+      </div>
+      <div class="actions">
+        <button class="action-btn" data-export="svg">SVG</button>
+        <button class="action-btn" data-export="png">PNG</button>
+        <button class="action-btn" data-export="mmd">Mermaid</button>
+        <button class="action-btn" data-export="print">Print/PDF</button>
+      </div>
+    </header>
+    <div class="diagram-wrap">
+      <div class="diagram-inner">
+        <div class="mermaid-host" id="host">
+          <div class="mermaid" id="mermaid-target">flowchart TD
+  A[Loading…]</div>
+        </div>
+      </div>
+    </div>
+  </main>
+</div>
+
+<aside class="side-panel" id="side-panel">
+  <button class="close" id="side-close">✕</button>
+  <h3 id="side-title">Node Info</h3>
+  <div class="file-path" id="side-path"></div>
+  <div id="side-actions"></div>
+</aside>
+
+<div class="modal-backdrop" id="modal-backdrop">
+  <div class="modal">
+    <h3>How to refresh diagrams</h3>
+    <p style="margin: 0 0 10px; color: var(--fg-muted); font-size: 13px;">
+      Browsers can't run shell commands. Re-generate from your terminal:
+    </p>
+    <pre id="refresh-cmd"></pre>
+    <p style="margin: 12px 0 0; color: var(--fg-muted); font-size: 12px;">
+      Or wire up the post-commit git hook to do it automatically — see
+      <code>~/.hermes-usav/skills/software-development/codebase-visualizer/scripts/install-hook.sh</code>
+    </p>
+    <div class="modal-actions">
+      <button class="action-btn" id="copy-cmd">Copy command</button>
+      <button class="action-btn" id="modal-close">Close</button>
+    </div>
+  </div>
+</div>
+
+<!-- Embedded data — written by generate.py -->
+<script id="diagrams-data" type="application/json">{"mindmap": {"title": "Project Overview", "mermaid": "mindmap\n  root((USAV-Orders-Backend))\n    Stack\n      Next.js\n      Express\n      React\n    src/\n      app[app]\n        admin_app[admin]\n        bin_app[bin]\n        dashboard_app[dashboard]\n        operations_app[operations]\n        sku_stock_app[sku-stock]\n        work_orders_app[work-orders]\n      components[components]\n        activity_components[activity]\n        layout_components[layout]\n        sidebar_components[sidebar]\n        ui_components[ui]\n        unshipped_components[unshipped]\n        work_orders_components[work-orders]\n      config[config]\n      contexts[contexts]\n      design_system[design-system]\n        components_design_system[components]\n        foundations_design_system[foundations]\n        primitives_design_system[primitives]\n        providers_design_system[providers]\n        themes_design_system[themes]\n        utils_design_system[utils]\n      domain[domain]\n        fba_domain[fba]\n      features[features]\n        operations_features[operations]\n      hooks[hooks]\n        admin_hooks[admin]\n        fba_hooks[fba]\n        station_hooks[station]\n      lib[lib]\n        auth_lib[auth]\n        cache_lib[cache]\n        migrations_lib[migrations]\n        pipeline_lib[pipeline]\n        security_lib[security]\n        work_orders_lib[work-orders]\n      queries[queries]\n      services[services]\n      styles[styles]", "description": "High-level mind map of the codebase structure."}, "modules": {"title": "Module Dependencies", "mermaid": "flowchart LR\n  hooks[\"hooks\"]\n  click hooks \"src/hooks/useShippedTableData.ts\" \"Open src/hooks/useShippedTableData.ts\"\n  utils[\"utils\"]\n  click utils \"src/utils/upnext-shared.ts\" \"Open src/utils/upnext-shared.ts\"\n  app_api[\"app/api\"]\n  click app_api \"src/app/api/scan-tracking/route.ts\" \"Open src/app/api/scan-tracking/route.ts\"\n  design_system[\"design-system\"]\n  click design_system \"src/design-system/index.ts\" \"Open src/design-system/index.ts\"\n  components_sidebar[\"components/sidebar\"]\n  click components_sidebar \"src/components/sidebar/DeviceModeToggle.tsx\" \"Open src/components/sidebar/DeviceModeToggle.tsx\"\n  components_Icons_tsx[\"components/Icons.tsx\"]\n  click components_Icons_tsx \"src/components/Icons.tsx\" \"Open src/components/Icons.tsx\"\n  components_ui[\"components/ui\"]\n  click components_ui \"src/components/ui/DeleteButton.tsx\" \"Open src/components/ui/DeleteButton.tsx\"\n  components_shipped[\"components/shipped\"]\n  click components_shipped \"src/components/shipped/DateGroupHeader.tsx\" \"Open src/components/shipped/DateGroupHeader.tsx\"\n  lib_neon[\"lib/neon\"]\n  click lib_neon \"src/lib/neon/serial-units-queries.ts\" \"Open src/lib/neon/serial-units-queries.ts\"\n  components_layout[\"components/layout\"]\n  click components_layout \"src/components/layout/OfflineBanner.tsx\" \"Open src/components/layout/OfflineBanner.tsx\"\n  components_station[\"components/station\"]\n  click components_station \"src/components/station/BarcodeScanner.tsx\" \"Open src/components/station/BarcodeScanner.tsx\"\n  components_fba[\"components/fba\"]\n  click components_fba \"src/components/fba/FbaShippedTable.tsx\" \"Open src/components/fba/FbaShippedTable.tsx\"\n  lib_db_ts[\"lib/db.ts\"]\n  click lib_db_ts \"src/lib/db.ts\" \"Open src/lib/db.ts\"\n  components_work_orders[\"components/work-orders\"]\n  click components_work_orders \"src/components/work-orders/WorkOrderInfoStrip.tsx\" \"Open src/components/work-orders/WorkOrderInfoStrip.tsx\"\n  components_admin[\"components/admin\"]\n  click components_admin \"src/components/admin/FeaturesManagementTab.tsx\" \"Open src/components/admin/FeaturesManagementTab.tsx\"\n  lib_realtime[\"lib/realtime\"]\n  click lib_realtime \"src/lib/realtime/db-events.ts\" \"Open src/lib/realtime/db-events.ts\"\n  components_DashboardSidebar_tsx[\"components/DashboardSidebar\u2026\"]\n  click components_DashboardSidebar_tsx \"src/components/DashboardSidebar.tsx\" \"Open src/components/DashboardSidebar.tsx\"\n  components_dashboard[\"components/dashboard\"]\n  click components_dashboard \"src/components/dashboard/StockZohoOrdersTable.tsx\" \"Open src/components/dashboard/StockZohoOrdersTable.tsx\"\n  components_mobile[\"components/mobile\"]\n  click components_mobile \"src/components/mobile/MobileDateGroupHeader.tsx\" \"Open src/components/mobile/MobileDateGroupHeader.tsx\"\n  lib_tracking_format_ts[\"lib/tracking-format.ts\"]\n  click lib_tracking_format_ts \"src/lib/tracking-format.ts\" \"Open src/lib/tracking-format.ts\"\n  components_unshipped[\"components/unshipped\"]\n  click components_unshipped \"src/components/unshipped/UnshippedTable.tsx\" \"Open src/components/unshipped/UnshippedTable.tsx\"\n  components_repair[\"components/repair\"]\n  click components_repair \"src/components/repair/SignaturePad.tsx\" \"Open src/components/repair/SignaturePad.tsx\"\n  lib_jobs[\"lib/jobs\"]\n  click lib_jobs \"src/lib/jobs/ebay-sync.ts\" \"Open src/lib/jobs/ebay-sync.ts\"\n  components_TechDashboard_tsx[\"components/TechDashboard.tsx\"]\n  click components_TechDashboard_tsx \"src/components/TechDashboard.tsx\" \"Open src/components/TechDashboard.tsx\"\n  components_walk_in[\"components/walk-in\"]\n  click components_walk_in \"src/components/walk-in/SalesDetailsPanel.tsx\" \"Open src/components/walk-in/SalesDetailsPanel.tsx\"\n  lib_scan_resolver_ts[\"lib/scan-resolver.ts\"]\n  click lib_scan_resolver_ts \"src/lib/scan-resolver.ts\" \"Open src/lib/scan-resolver.ts\"\n  contexts[\"contexts\"]\n  click contexts \"src/contexts/HeaderContext.tsx\" \"Open src/contexts/HeaderContext.tsx\"\n  components_ShippedSidebar_tsx[\"components/ShippedSidebar.t\u2026\"]\n  click components_ShippedSidebar_tsx \"src/components/ShippedSidebar.tsx\" \"Open src/components/ShippedSidebar.tsx\"\n  components_manuals[\"components/manuals\"]\n  click components_manuals \"src/components/manuals/SkuPairingPanel.tsx\" \"Open src/components/manuals/SkuPairingPanel.tsx\"\n  components_sku[\"components/sku\"]\n  click components_sku \"src/components/sku/BinRowDetailsSheet.tsx\" \"Open src/components/sku/BinRowDetailsSheet.tsx\"\n  lib_ai[\"lib/ai\"]\n  click lib_ai \"src/lib/ai/date-range.test.ts\" \"Open src/lib/ai/date-range.test.ts\"\n  lib_fba[\"lib/fba\"]\n  click lib_fba \"src/lib/fba/board-item.ts\" \"Open src/lib/fba/board-item.ts\"\n  app_fba[\"app/fba\"]\n  click app_fba \"src/app/fba/page.tsx\" \"Open src/app/fba/page.tsx\"\n  components_PendingOrdersTable_tsx[\"components/PendingOrdersTab\u2026\"]\n  click components_PendingOrdersTable_tsx \"src/components/PendingOrdersTable.tsx\" \"Open src/components/PendingOrdersTable.tsx\"\n  lib_dashboard_table_data_ts[\"lib/dashboard-table-data.ts\"]\n  click lib_dashboard_table_data_ts \"src/lib/dashboard-table-data.ts\" \"Open src/lib/dashboard-table-data.ts\"\n  lib_shipping[\"lib/shipping\"]\n  click lib_shipping \"src/lib/shipping/repository.ts\" \"Open src/lib/shipping/repository.ts\"\n  app_dashboard[\"app/dashboard\"]\n  click app_dashboard \"src/app/dashboard/page.tsx\" \"Open src/app/dashboard/page.tsx\"\n  components_UpNextOrder_tsx[\"components/UpNextOrder.tsx\"]\n  click components_UpNextOrder_tsx \"src/components/UpNextOrder.tsx\" \"Open src/components/UpNextOrder.tsx\"\n  components_TechTable_tsx[\"components/TechTable.tsx\"]\n  click components_TechTable_tsx \"src/components/TechTable.tsx\" \"Open src/components/TechTable.tsx\"\n  components_PackerTable_tsx[\"components/PackerTable.tsx\"]\n  click components_PackerTable_tsx \"src/components/PackerTable.tsx\" \"Open src/components/PackerTable.tsx\"\n  components_shipping[\"components/shipping\"]\n  click components_shipping \"src/components/shipping/StaffButtonGrid.tsx\" \"Open src/components/shipping/StaffButtonGrid.tsx\"\n  components_replenish[\"components/replenish\"]\n  click components_replenish \"src/components/replenish/ReplenishmentReceivingTab.tsx\" \"Open src/components/replenish/ReplenishmentReceivingTab.tsx\"\n  components_receiving[\"components/receiving\"]\n  click components_receiving \"src/components/receiving/Mode2Unboxing.tsx\" \"Open src/components/receiving/Mode2Unboxing.tsx\"\n  components_packer[\"components/packer\"]\n  click components_packer \"src/components/packer/PackerPageContent.tsx\" \"Open src/components/packer/PackerPageContent.tsx\"\n  lib_staffCache_ts[\"lib/staffCache.ts\"]\n  click lib_staffCache_ts \"src/lib/staffCache.ts\" \"Open src/lib/staffCache.ts\"\n  lib_zoho[\"lib/zoho\"]\n  click lib_zoho \"src/lib/zoho/mock.ts\" \"Open src/lib/zoho/mock.ts\"\n  lib_ebay[\"lib/ebay\"]\n  click lib_ebay \"src/lib/ebay/token-refresh.ts\" \"Open src/lib/ebay/token-refresh.ts\"\n  app_walk_in[\"app/walk-in\"]\n  click app_walk_in \"src/app/walk-in/page.tsx\" \"Open src/app/walk-in/page.tsx\"\n  features[\"features\"]\n  click features \"src/features/operations/types.ts\" \"Open src/features/operations/types.ts\"\n  components_BarcodeSidebar_tsx[\"components/BarcodeSidebar.t\u2026\"]\n  click components_BarcodeSidebar_tsx \"src/components/BarcodeSidebar.tsx\" \"Open src/components/BarcodeSidebar.tsx\"\n  components_StaffSelector_tsx[\"components/StaffSelector.tsx\"]\n  click components_StaffSelector_tsx \"src/components/StaffSelector.tsx\" \"Open src/components/StaffSelector.tsx\"\n  components_barcode[\"components/barcode\"]\n  click components_barcode \"src/components/barcode/SkuInput.tsx\" \"Open src/components/barcode/SkuInput.tsx\"\n  lib_zoho_receiving_sync_ts[\"lib/zoho-receiving-sync.ts\"]\n  click lib_zoho_receiving_sync_ts \"src/lib/zoho-receiving-sync.ts\" \"Open src/lib/zoho-receiving-sync.ts\"\n  lib_tech[\"lib/tech\"]\n  click lib_tech \"src/lib/tech/resolveStaffIdFromTechParam.ts\" \"Open src/lib/tech/resolveStaffIdFromTechParam.ts\"\n  app_layout_tsx[\"app/layout.tsx\"]\n  click app_layout_tsx \"src/app/layout.tsx\" \"Open src/app/layout.tsx\"\n  app_receiving[\"app/receiving\"]\n  click app_receiving \"src/app/receiving/page.tsx\" \"Open src/app/receiving/page.tsx\"\n  components_MultiSkuSnBarcode_tsx[\"components/MultiSkuSnBarcod\u2026\"]\n  click components_MultiSkuSnBarcode_tsx \"src/components/MultiSkuSnBarcode.tsx\" \"Open src/components/MultiSkuSnBarcode.tsx\"\n  components_UpdateManualsView_tsx[\"components/UpdateManualsVie\u2026\"]\n  click components_UpdateManualsView_tsx \"src/components/UpdateManualsView.tsx\" \"Open src/components/UpdateManualsView.tsx\"\n  components_support[\"components/support\"]\n  click components_support \"src/components/support/SupportDashboard.tsx\" \"Open src/components/support/SupportDashboard.tsx\"\n  components_ai[\"components/ai\"]\n  click components_ai \"src/components/ai/AiPromptChips.tsx\" \"Open src/components/ai/AiPromptChips.tsx\"\n  app_api --> lib_ai\n  app_api --> lib_db_ts\n  app_api --> lib_ebay\n  app_api --> lib_fba\n  app_api --> lib_jobs\n  app_api --> lib_neon\n  app_api --> lib_realtime\n  app_api --> lib_scan_resolver_ts\n  app_api --> lib_shipping\n  app_api --> lib_tech\n  app_api --> lib_tracking_format_ts\n  app_api --> lib_zoho\n  app_api --> lib_zoho_receiving_sync_ts\n  app_api --> utils\n  app_dashboard --> components_Icons_tsx\n  app_dashboard --> components_PendingOrdersTable_tsx\n  app_dashboard --> components_dashboard\n  app_dashboard --> components_shipped\n  app_dashboard --> components_shipping\n  app_dashboard --> components_unshipped\n  app_dashboard --> hooks\n  app_fba --> components_Icons_tsx\n  app_fba --> components_fba\n  app_fba --> components_station\n  app_fba --> components_ui\n  app_fba --> design_system\n  app_fba --> hooks\n  app_fba --> lib_fba\n  app_fba --> utils\n  app_layout_tsx --> components_layout\n  app_layout_tsx --> components_station\n  app_layout_tsx --> contexts\n  app_receiving --> components_sidebar\n  app_receiving --> components_station\n  app_receiving --> design_system\n  app_receiving --> hooks\n  app_walk_in --> components_repair\n  app_walk_in --> components_sidebar\n  app_walk_in --> components_ui\n  app_walk_in --> components_walk_in\n  app_walk_in --> design_system\n  app_walk_in --> hooks\n  components_BarcodeSidebar_tsx --> components_MultiSkuSnBarcode_tsx\n  components_BarcodeSidebar_tsx --> components_sidebar\n  components_BarcodeSidebar_tsx --> components_sku\n  components_BarcodeSidebar_tsx --> components_ui\n  components_DashboardSidebar_tsx --> components_BarcodeSidebar_tsx\n  components_DashboardSidebar_tsx --> components_Icons_tsx\n  components_DashboardSidebar_tsx --> components_ShippedSidebar_tsx\n  components_DashboardSidebar_tsx --> components_admin\n  components_DashboardSidebar_tsx --> components_fba\n  components_DashboardSidebar_tsx --> components_manuals\n  components_DashboardSidebar_tsx --> components_shipped\n  components_DashboardSidebar_tsx --> components_sidebar\n  components_DashboardSidebar_tsx --> components_ui\n  components_DashboardSidebar_tsx --> components_unshipped\n  components_DashboardSidebar_tsx --> design_system\n  components_DashboardSidebar_tsx --> hooks\n  components_DashboardSidebar_tsx --> utils\n  components_MultiSkuSnBarcode_tsx --> components_barcode\n  components_MultiSkuSnBarcode_tsx --> utils\n  components_PackerTable_tsx --> components_Icons_tsx\n  components_PackerTable_tsx --> components_ui\n  components_PackerTable_tsx --> design_system\n  components_PackerTable_tsx --> hooks\n  components_PackerTable_tsx --> lib_neon\n  components_PackerTable_tsx --> utils\n  components_PendingOrdersTable_tsx --> components_dashboard\n  components_PendingOrdersTable_tsx --> hooks\n  components_PendingOrdersTable_tsx --> lib_dashboard_table_data_ts\n  components_PendingOrdersTable_tsx --> lib_realtime\n  components_PendingOrdersTable_tsx --> utils\n  components_ShippedSidebar_tsx --> components_Icons_tsx\n  components_ShippedSidebar_tsx --> components_shipped\n  components_ShippedSidebar_tsx --> components_sidebar\n  components_ShippedSidebar_tsx --> components_ui\n  components_ShippedSidebar_tsx --> design_system\n  components_ShippedSidebar_tsx --> hooks\n  components_ShippedSidebar_tsx --> lib_neon\n  components_ShippedSidebar_tsx --> utils\n  components_StaffSelector_tsx --> components_Icons_tsx\n  components_StaffSelector_tsx --> hooks\n  components_StaffSelector_tsx --> utils\n  components_TechDashboard_tsx --> components_Icons_tsx\n  components_TechDashboard_tsx --> components_PendingOrdersTable_tsx\n  components_TechDashboard_tsx --> components_TechTable_tsx\n  components_TechDashboard_tsx --> components_UpdateManualsView_tsx\n  components_TechDashboard_tsx --> components_repair\n  components_TechDashboard_tsx --> components_shipped\n  components_TechDashboard_tsx --> components_station\n  components_TechDashboard_tsx --> components_ui\n  components_TechDashboard_tsx --> hooks\n  components_TechDashboard_tsx --> lib_neon\n  components_TechTable_tsx --> components_Icons_tsx\n  components_TechTable_tsx --> components_ui\n  components_TechTable_tsx --> design_system\n  components_TechTable_tsx --> hooks\n  components_TechTable_tsx --> lib_tracking_format_ts\n  components_TechTable_tsx --> utils\n  components_UpNextOrder_tsx --> components_Icons_tsx\n  components_UpNextOrder_tsx --> components_station\n  components_UpNextOrder_tsx --> components_ui\n  components_UpNextOrder_tsx --> design_system\n  components_UpNextOrder_tsx --> hooks\n  components_UpNextOrder_tsx --> utils\n  components_UpdateManualsView_tsx --> components_Icons_tsx\n  components_UpdateManualsView_tsx --> components_admin\n  components_UpdateManualsView_tsx --> components_layout\n  components_UpdateManualsView_tsx --> components_manuals\n  components_admin --> components_Icons_tsx\n  components_admin --> components_ai\n  components_admin --> components_fba\n  components_admin --> components_layout\n  components_admin --> components_receiving\n  components_admin --> components_shipped\n  components_admin --> components_sidebar\n  components_admin --> components_ui\n  components_admin --> design_system\n  components_admin --> hooks\n  components_admin --> lib_ai\n  components_admin --> lib_realtime\n  components_admin --> lib_staffCache_ts\n  components_admin --> utils\n  components_ai --> components_layout\n  components_ai --> design_system\n  components_ai --> lib_ai\n  components_barcode --> components_Icons_tsx\n  components_barcode --> components_ui\n  components_barcode --> design_system\n  components_barcode --> hooks\n  components_dashboard --> components_Icons_tsx\n  components_dashboard --> components_fba\n  components_dashboard --> components_layout\n  components_dashboard --> components_shipped\n  components_dashboard --> components_ui\n  components_dashboard --> design_system\n  components_dashboard --> hooks\n  components_dashboard --> lib_fba\n  components_dashboard --> lib_neon\n  components_dashboard --> utils\n  components_fba --> components_Icons_tsx\n  components_fba --> components_StaffSelector_tsx\n  components_fba --> components_layout\n  components_fba --> components_shipped\n  components_fba --> components_sidebar\n  components_fba --> components_station\n  components_fba --> components_ui\n  components_fba --> contexts\n  components_fba --> design_system\n  components_fba --> hooks\n  components_fba --> lib_fba\n  components_fba --> lib_realtime\n  components_fba --> lib_scan_resolver_ts\n  components_fba --> lib_tracking_format_ts\n  components_fba --> utils\n  components_layout --> components_DashboardSidebar_tsx\n  components_layout --> components_Icons_tsx\n  components_layout --> components_sidebar\n  components_layout --> contexts\n  components_layout --> design_system\n  components_layout --> hooks\n  components_layout --> utils\n  components_manuals --> components_Icons_tsx\n  components_manuals --> components_admin\n  components_manuals --> components_layout\n  components_manuals --> components_ui\n  components_manuals --> design_system\n  components_manuals --> hooks\n  components_manuals --> utils\n  components_mobile --> components_Icons_tsx\n  components_mobile --> components_StaffSelector_tsx\n  components_mobile --> components_layout\n  components_mobile --> components_station\n  components_mobile --> components_ui\n  components_mobile --> components_work_orders\n  components_mobile --> contexts\n  components_mobile --> design_system\n  components_mobile --> hooks\n  components_mobile --> lib_scan_resolver_ts\n  components_mobile --> utils\n  components_packer --> components_mobile\n  components_packer --> components_sidebar\n  components_packer --> design_system\n  components_packer --> hooks\n  components_receiving --> components_Icons_tsx\n  components_receiving --> design_system\n  components_receiving --> lib_staffCache_ts\n  components_receiving --> utils\n  components_repair --> components_Icons_tsx\n  components_repair --> components_layout\n  components_repair --> components_shipped\n  components_repair --> components_sidebar\n  components_repair --> components_ui\n  components_repair --> design_system\n  components_repair --> hooks\n  components_repair --> lib_neon\n  components_repair --> lib_staffCache_ts\n  components_repair --> utils\n  components_replenish --> components_Icons_tsx\n  components_replenish --> components_layout\n  components_replenish --> components_station\n  components_replenish --> components_ui\n  components_replenish --> design_system\n  components_replenish --> hooks\n  components_shipped --> components_Icons_tsx\n  components_shipped --> components_dashboard\n  components_shipped --> components_fba\n  components_shipped --> components_layout\n  components_shipped --> components_mobile\n  components_shipped --> components_ui\n  components_shipped --> components_work_orders\n  components_shipped --> design_system\n  components_shipped --> hooks\n  components_shipped --> lib_dashboard_table_data_ts\n  components_shipped --> lib_neon\n  components_shipped --> lib_staffCache_ts\n  components_shipped --> lib_tracking_format_ts\n  components_shipped --> utils\n  components_shipping --> components_Icons_tsx\n  components_shipping --> design_system\n  components_shipping --> hooks\n  components_shipping --> lib_neon\n  components_shipping --> utils\n  components_sidebar --> components_Icons_tsx\n  components_sidebar --> components_MultiSkuSnBarcode_tsx\n  components_sidebar --> components_StaffSelector_tsx\n  components_sidebar --> components_dashboard\n  components_sidebar --> components_layout\n  components_sidebar --> components_shipped\n  components_sidebar --> components_sku\n  components_sidebar --> components_station\n  components_sidebar --> components_ui\n  components_sidebar --> components_walk_in\n  components_sidebar --> components_work_orders\n  components_sidebar --> contexts\n  components_sidebar --> design_system\n  components_sidebar --> features\n  components_sidebar --> hooks\n  components_sidebar --> lib_fba\n  components_sidebar --> lib_neon\n  components_sidebar --> lib_staffCache_ts\n  components_sidebar --> utils\n  components_sku --> components_Icons_tsx\n  components_sku --> design_system\n  components_sku --> hooks\n  components_sku --> lib_realtime\n  components_station --> components_Icons_tsx\n  components_station --> components_UpNextOrder_tsx\n  components_station --> components_fba\n  components_station --> components_layout\n  components_station --> components_shipped\n  components_station --> components_ui\n  components_station --> components_work_orders\n  components_station --> design_system\n  components_station --> hooks\n  components_station --> lib_fba\n  components_station --> lib_neon\n  components_station --> lib_realtime\n  components_station --> lib_scan_resolver_ts\n  components_station --> utils\n  components_support --> components_Icons_tsx\n  components_support --> components_layout\n  components_support --> design_system\n  components_support --> utils\n  components_ui --> components_Icons_tsx\n  components_ui --> components_layout\n  components_ui --> design_system\n  components_ui --> hooks\n  components_ui --> utils\n  components_unshipped --> components_Icons_tsx\n  components_unshipped --> components_dashboard\n  components_unshipped --> components_shipped\n  components_unshipped --> components_sidebar\n  components_unshipped --> components_ui\n  components_unshipped --> design_system\n  components_unshipped --> hooks\n  components_unshipped --> lib_dashboard_table_data_ts\n  components_unshipped --> lib_neon\n  components_unshipped --> lib_realtime\n  components_unshipped --> utils\n  components_walk_in --> components_Icons_tsx\n  components_walk_in --> components_shipped\n  components_walk_in --> components_ui\n  components_walk_in --> design_system\n  components_walk_in --> hooks\n  components_walk_in --> lib_neon\n  components_walk_in --> utils\n  components_work_orders --> components_Icons_tsx\n  components_work_orders --> components_layout\n  components_work_orders --> components_shipped\n  components_work_orders --> components_ui\n  components_work_orders --> design_system\n  components_work_orders --> hooks\n  components_work_orders --> lib_neon\n  components_work_orders --> utils\n  contexts --> components_fba\n  design_system --> components_Icons_tsx\n  design_system --> components_layout\n  design_system --> components_mobile\n  design_system --> components_shipping\n  design_system --> components_ui\n  design_system --> components_work_orders\n  design_system --> hooks\n  design_system --> lib_scan_resolver_ts\n  design_system --> utils\n  features --> components_PendingOrdersTable_tsx\n  features --> components_work_orders\n  features --> design_system\n  features --> hooks\n  hooks --> components_admin\n  hooks --> components_fba\n  hooks --> components_station\n  hooks --> components_work_orders\n  hooks --> contexts\n  hooks --> lib_dashboard_table_data_ts\n  hooks --> lib_fba\n  hooks --> lib_neon\n  hooks --> lib_realtime\n  hooks --> lib_scan_resolver_ts\n  hooks --> lib_staffCache_ts\n  hooks --> lib_tracking_format_ts\n  hooks --> utils\n  lib_ai --> lib_db_ts\n  lib_ai --> lib_neon\n  lib_ai --> lib_tracking_format_ts\n  lib_ai --> utils\n  lib_dashboard_table_data_ts --> hooks\n  lib_dashboard_table_data_ts --> lib_neon\n  lib_dashboard_table_data_ts --> utils\n  lib_ebay --> lib_db_ts\n  lib_ebay --> lib_neon\n  lib_ebay --> lib_tracking_format_ts\n  lib_ebay --> utils\n  lib_fba --> lib_tracking_format_ts\n  lib_jobs --> lib_db_ts\n  lib_jobs --> lib_ebay\n  lib_jobs --> lib_neon\n  lib_jobs --> lib_realtime\n  lib_jobs --> lib_shipping\n  lib_jobs --> utils\n  lib_neon --> lib_db_ts\n  lib_neon --> lib_realtime\n  lib_neon --> lib_shipping\n  lib_neon --> lib_tracking_format_ts\n  lib_neon --> utils\n  lib_realtime --> lib_db_ts\n  lib_realtime --> utils\n  lib_scan_resolver_ts --> lib_tracking_format_ts\n  lib_scan_resolver_ts --> utils\n  lib_shipping --> lib_db_ts\n  lib_shipping --> lib_realtime\n  lib_shipping --> lib_scan_resolver_ts\n  lib_staffCache_ts --> utils\n  lib_tech --> lib_realtime\n  lib_tech --> lib_tracking_format_ts\n  lib_tech --> utils\n  lib_tracking_format_ts --> utils\n  lib_zoho --> lib_db_ts\n  lib_zoho --> utils\n  lib_zoho_receiving_sync_ts --> lib_db_ts\n  lib_zoho_receiving_sync_ts --> lib_shipping\n  lib_zoho_receiving_sync_ts --> utils\n  utils --> components_station\n  utils --> components_ui\n  utils --> components_work_orders\n  utils --> lib_db_ts\n  utils --> lib_neon\n  utils --> lib_scan_resolver_ts\n  utils --> lib_tracking_format_ts\n  %% truncated: 110 more groups not shown", "description": "Top-level folders and how they import each other. Click a node to see its file path."}, "routes": {"title": "Next.js Routes", "mermaid": "flowchart LR\n  root([\"/\"])\n  01[\"01\"]\n  root --> 01\n  01__gtin([\"[gtin]\"])\n  01 --> 01__gtin\n  click 01__gtin \"src/app/01/[gtin]/page.tsx\" \"page: src/app/01/[gtin]/page.tsx\"\n  01__gtin__21[\"21\"]\n  01__gtin --> 01__gtin__21\n  01__gtin__21__serial([\"[serial]\"])\n  01__gtin__21 --> 01__gtin__21__serial\n  click 01__gtin__21__serial \"src/app/01/[gtin]/21/[serial]/page.tsx\" \"page: src/app/01/[gtin]/21/[serial]/page.tsx\"\n  admin([\"admin\"])\n  root --> admin\n  click admin \"src/app/admin/page.tsx\" \"page: src/app/admin/page.tsx\"\n  ai([\"ai\"])\n  root --> ai\n  click ai \"src/app/ai/page.tsx\" \"page: src/app/ai/page.tsx\"\n  api[\"api\"]\n  root --> api\n  api_activity[\"activity\"]\n  api --> api_activity\n  api_activity_feed[\"feed\"]\n  api_activity --> api_activity_feed\n  click api_activity_feed \"src/app/api/activity/feed/route.ts\" \"route: src/app/api/activity/feed/route.ts\"\n  api_admin[\"admin\"]\n  api --> api_admin\n  api_admin_fba_fnskus[\"fba-fnskus\"]\n  api_admin --> api_admin_fba_fnskus\n  click api_admin_fba_fnskus \"src/app/api/admin/fba-fnskus/route.ts\" \"route: src/app/api/admin/fba-fnskus/route.ts\"\n  api_admin_fba_fnskus__fnsku[\"[fnsku]\"]\n  api_admin_fba_fnskus --> api_admin_fba_fnskus__fnsku\n  click api_admin_fba_fnskus__fnsku \"src/app/api/admin/fba-fnskus/[fnsku]/route.ts\" \"route: src/app/api/admin/fba-fnskus/[fnsku]/route.ts\"\n  api_admin_fba_fnskus_upload[\"upload\"]\n  api_admin_fba_fnskus --> api_admin_fba_fnskus_upload\n  click api_admin_fba_fnskus_upload \"src/app/api/admin/fba-fnskus/upload/route.ts\" \"route: src/app/api/admin/fba-fnskus/upload/route.ts\"\n  api_admin_features[\"features\"]\n  api_admin --> api_admin_features\n  click api_admin_features \"src/app/api/admin/features/route.ts\" \"route: src/app/api/admin/features/route.ts\"\n  api_admin_features__id[\"[id]\"]\n  api_admin_features --> api_admin_features__id\n  click api_admin_features__id \"src/app/api/admin/features/[id]/route.ts\" \"route: src/app/api/admin/features/[id]/route.ts\"\n  api_admin_fix_status[\"fix-status\"]\n  api_admin --> api_admin_fix_status\n  click api_admin_fix_status \"src/app/api/admin/fix-status/route.ts\" \"route: src/app/api/admin/fix-status/route.ts\"\n  api_admin_logs[\"logs\"]\n  api_admin --> api_admin_logs\n  click api_admin_logs \"src/app/api/admin/logs/route.ts\" \"route: src/app/api/admin/logs/route.ts\"\n  api_admin_qstash_status[\"qstash-status\"]\n  api_admin --> api_admin_qstash_status\n  click api_admin_qstash_status \"src/app/api/admin/qstash-status/route.ts\" \"route: src/app/api/admin/qstash-status/route.ts\"\n  api_ai[\"ai\"]\n  api --> api_ai\n  api_ai_chat_sessions[\"chat-sessions\"]\n  api_ai --> api_ai_chat_sessions\n  click api_ai_chat_sessions \"src/app/api/ai/chat-sessions/route.ts\" \"route: src/app/api/ai/chat-sessions/route.ts\"\n  api_ai_chat_sessions__sessionId[\"[sessionId]\"]\n  api_ai_chat_sessions --> api_ai_chat_sessions__sessionId\n  api_ai_chat_sessions__sessionId__messages[\"messages\"]\n  api_ai_chat_sessions__sessionId --> api_ai_chat_sessions__sessionId__messages\n  click api_ai_chat_sessions__sessionId__messages \"src/app/api/ai/chat-sessions/[sessionId]/messages/route.ts\" \"route: src/app/api/ai/chat-sessions/[sessionId]/messages/route.ts\"\n  api_ai_health[\"health\"]\n  api_ai --> api_ai_health\n  click api_ai_health \"src/app/api/ai/health/route.ts\" \"route: src/app/api/ai/health/route.ts\"\n  api_ai_openclaw_chat[\"openclaw-chat\"]\n  api_ai --> api_ai_openclaw_chat\n  click api_ai_openclaw_chat \"src/app/api/ai/openclaw-chat/route.ts\" \"route: src/app/api/ai/openclaw-chat/route.ts\"\n  api_ai_openclaw_health[\"openclaw-health\"]\n  api_ai --> api_ai_openclaw_health\n  click api_ai_openclaw_health \"src/app/api/ai/openclaw-health/route.ts\" \"route: src/app/api/ai/openclaw-health/route.ts\"\n  api_ai_openclaw_session[\"openclaw-session\"]\n  api_ai --> api_ai_openclaw_session\n  click api_ai_openclaw_session \"src/app/api/ai/openclaw-session/route.ts\" \"route: src/app/api/ai/openclaw-session/route.ts\"\n  api_ai_search[\"search\"]\n  api_ai --> api_ai_search\n  click api_ai_search \"src/app/api/ai/search/route.ts\" \"route: src/app/api/ai/search/route.ts\"\n  api_ai_tunnel_session[\"tunnel-session\"]\n  api_ai --> api_ai_tunnel_session\n  click api_ai_tunnel_session \"src/app/api/ai/tunnel-session/route.ts\" \"route: src/app/api/ai/tunnel-session/route.ts\"\n  api_assignments[\"assignments\"]\n  api --> api_assignments\n  click api_assignments \"src/app/api/assignments/route.ts\" \"route: src/app/api/assignments/route.ts\"\n  api_assignments_next[\"next\"]\n  api_assignments --> api_assignments_next\n  click api_assignments_next \"src/app/api/assignments/next/route.ts\" \"route: src/app/api/assignments/next/route.ts\"\n  api_assignments_sku_search[\"sku-search\"]\n  api_assignments --> api_assignments_sku_search\n  click api_assignments_sku_search \"src/app/api/assignments/sku-search/route.ts\" \"route: src/app/api/assignments/sku-search/route.ts\"\n  api_check_tracking[\"check-tracking\"]\n  api --> api_check_tracking\n  click api_check_tracking \"src/app/api/check-tracking/route.ts\" \"route: src/app/api/check-tracking/route.ts\"\n  api_cron[\"cron\"]\n  api --> api_cron\n  api_cron_refresh_reports[\"refresh-reports\"]\n  api_cron --> api_cron_refresh_reports\n  click api_cron_refresh_reports \"src/app/api/cron/refresh-reports/route.ts\" \"route: src/app/api/cron/refresh-reports/route.ts\"\n  api_cron_stock_alerts[\"stock-alerts\"]\n  api_cron --> api_cron_stock_alerts\n  click api_cron_stock_alerts \"src/app/api/cron/stock-alerts/route.ts\" \"route: src/app/api/cron/stock-alerts/route.ts\"\n  api_cycle_counts[\"cycle-counts\"]\n  api --> api_cycle_counts\n  api_cycle_counts_campaigns[\"campaigns\"]\n  api_cycle_counts --> api_cycle_counts_campaigns\n  click api_cycle_counts_campaigns \"src/app/api/cycle-counts/campaigns/route.ts\" \"route: src/app/api/cycle-counts/campaigns/route.ts\"\n  api_cycle_counts_campaigns__id[\"[id]\"]\n  api_cycle_counts_campaigns --> api_cycle_counts_campaigns__id\n  click api_cycle_counts_campaigns__id \"src/app/api/cycle-counts/campaigns/[id]/route.ts\" \"route: src/app/api/cycle-counts/campaigns/[id]/route.ts\"\n  api_cycle_counts_lines[\"lines\"]\n  api_cycle_counts --> api_cycle_counts_lines\n  api_cycle_counts_lines__id[\"[id]\"]\n  api_cycle_counts_lines --> api_cycle_counts_lines__id\n  click api_cycle_counts_lines__id \"src/app/api/cycle-counts/lines/[id]/route.ts\" \"route: src/app/api/cycle-counts/lines/[id]/route.ts\"\n  api_dashboard[\"dashboard\"]\n  api --> api_dashboard\n  api_dashboard_fba_shipments[\"fba-shipments\"]\n  api_dashboard --> api_dashboard_fba_shipments\n  click api_dashboard_fba_shipments \"src/app/api/dashboard/fba-shipments/route.ts\" \"route: src/app/api/dashboard/fba-shipments/route.ts\"\n  api_dashboard_operations[\"operations\"]\n  api_dashboard --> api_dashboard_operations\n  click api_dashboard_operations \"src/app/api/dashboard/operations/route.ts\" \"route: src/app/api/dashboard/operations/route.ts\"\n  api_db[\"db\"]\n  api --> api_db\n  api_db_ping[\"ping\"]\n  api_db --> api_db_ping\n  click api_db_ping \"src/app/api/db/ping/route.ts\" \"route: src/app/api/db/ping/route.ts\"\n  api_debug_tracking[\"debug-tracking\"]\n  api --> api_debug_tracking\n  click api_debug_tracking \"src/app/api/debug-tracking/route.ts\" \"route: src/app/api/debug-tracking/route.ts\"\n  api_diagnose_migration[\"diagnose-migration\"]\n  api --> api_diagnose_migration\n  click api_diagnose_migration \"src/app/api/diagnose-migration/route.ts\" \"route: src/app/api/diagnose-migration/route.ts\"\n  api_drizzle_setup[\"drizzle-setup\"]\n  api --> api_drizzle_setup\n  click api_drizzle_setup \"src/app/api/drizzle-setup/route.ts\" \"route: src/app/api/drizzle-setup/route.ts\"\n  api_ebay[\"ebay\"]\n  api --> api_ebay\n  api_ebay_accounts[\"accounts\"]\n  api_ebay --> api_ebay_accounts\n  click api_ebay_accounts \"src/app/api/ebay/accounts/route.ts\" \"route: src/app/api/ebay/accounts/route.ts\"\n  api_ebay_refresh_token[\"refresh-token\"]\n  api_ebay --> api_ebay_refresh_token\n  click api_ebay_refresh_token \"src/app/api/ebay/refresh-token/route.ts\" \"route: src/app/api/ebay/refresh-token/route.ts\"\n  api_ebay_refresh_tokens[\"refresh-tokens\"]\n  api_ebay --> api_ebay_refresh_tokens\n  click api_ebay_refresh_tokens \"src/app/api/ebay/refresh-tokens/route.ts\" \"route: src/app/api/ebay/refresh-tokens/route.ts\"\n  api_ebay_search[\"search\"]\n  api_ebay --> api_ebay_search\n  click api_ebay_search \"src/app/api/ebay/search/route.ts\" \"route: src/app/api/ebay/search/route.ts\"\n  api_ebay_sync[\"sync\"]\n  api_ebay --> api_ebay_sync\n  click api_ebay_sync \"src/app/api/ebay/sync/route.ts\" \"route: src/app/api/ebay/sync/route.ts\"\n  api_ecwid_square[\"ecwid-square\"]\n  api --> api_ecwid_square\n  api_ecwid_square_sync[\"sync\"]\n  api_ecwid_square --> api_ecwid_square_sync\n  click api_ecwid_square_sync \"src/app/api/ecwid-square/sync/route.ts\" \"route: src/app/api/ecwid-square/sync/route.ts\"\n  api_ecwid[\"ecwid\"]\n  api --> api_ecwid\n  api_ecwid_products[\"products\"]\n  api_ecwid --> api_ecwid_products\n  api_ecwid_products_search[\"search\"]\n  api_ecwid_products --> api_ecwid_products_search\n  click api_ecwid_products_search \"src/app/api/ecwid/products/search/route.ts\" \"route: src/app/api/ecwid/products/search/route.ts\"\n  api_ecwid_sync_exception_tracking[\"sync-exception-tracking\"]\n  api_ecwid --> api_ecwid_sync_exception_tracking\n  click api_ecwid_sync_exception_tracking \"src/app/api/ecwid/sync-exception-tracking/route.ts\" \"route: src/app/api/ecwid/sync-exception-tracking/route.ts\"\n  api_ecwid_transfer_orders[\"transfer-orders\"]\n  api_ecwid --> api_ecwid_transfer_orders\n  click api_ecwid_transfer_orders \"src/app/api/ecwid/transfer-orders/route.ts\" \"route: src/app/api/ecwid/transfer-orders/route.ts\"\n  api_favorites[\"favorites\"]\n  api --> api_favorites\n  click api_favorites \"src/app/api/favorites/route.ts\" \"route: src/app/api/favorites/route.ts\"\n  api_favorites__id[\"[id]\"]\n  api_favorites --> api_favorites__id\n  click api_favorites__id \"src/app/api/favorites/[id]/route.ts\" \"route: src/app/api/favorites/[id]/route.ts\"\n  api_fba[\"fba\"]\n  api --> api_fba\n  api_fba_board[\"board\"]\n  api_fba --> api_fba_board\n  click api_fba_board \"src/app/api/fba/board/route.ts\" \"route: src/app/api/fba/board/route.ts\"\n  api_fba_board__fnsku[\"[fnsku]\"]\n  api_fba_board --> api_fba_board__fnsku\n  api_fba_board__fnsku__entries[\"entries\"]\n  api_fba_board__fnsku --> api_fba_board__fnsku__entries\n  click api_fba_board__fnsku__entries \"src/app/api/fba/board/[fnsku]/entries/route.ts\" \"route: src/app/api/fba/board/[fnsku]/entries/route.ts\"\n  api_fba_fnskus[\"fnskus\"]\n  api_fba --> api_fba_fnskus\n  click api_fba_fnskus \"src/app/api/fba/fnskus/route.ts\" \"route: src/app/api/fba/fnskus/route.ts\"\n  api_fba_fnskus__fnsku[\"[fnsku]\"]\n  api_fba_fnskus --> api_fba_fnskus__fnsku\n  click api_fba_fnskus__fnsku \"src/app/api/fba/fnskus/[fnsku]/route.ts\" \"route: src/app/api/fba/fnskus/[fnsku]/route.ts\"\n  api_fba_fnskus_bulk[\"bulk\"]\n  api_fba_fnskus --> api_fba_fnskus_bulk\n  click api_fba_fnskus_bulk \"src/app/api/fba/fnskus/bulk/route.ts\" \"route: src/app/api/fba/fnskus/bulk/route.ts\"\n  api_fba_fnskus_search[\"search\"]\n  api_fba_fnskus --> api_fba_fnskus_search\n  click api_fba_fnskus_search \"src/app/api/fba/fnskus/search/route.ts\" \"route: src/app/api/fba/fnskus/search/route.ts\"\n  api_fba_fnskus_validate[\"validate\"]\n  api_fba_fnskus --> api_fba_fnskus_validate\n  click api_fba_fnskus_validate \"src/app/api/fba/fnskus/validate/route.ts\" \"route: src/app/api/fba/fnskus/validate/route.ts\"\n  api_fba_items[\"items\"]\n  api_fba --> api_fba_items\n  api_fba_items_queue[\"queue\"]\n  api_fba_items --> api_fba_items_queue\n  click api_fba_items_queue \"src/app/api/fba/items/queue/route.ts\" \"route: src/app/api/fba/items/queue/route.ts\"\n  api_fba_items_ready[\"ready\"]\n  api_fba_items --> api_fba_items_ready\n  click api_fba_items_ready \"src/app/api/fba/items/ready/route.ts\" \"route: src/app/api/fba/items/ready/route.ts\"\n  api_fba_items_scan[\"scan\"]\n  api_fba_items --> api_fba_items_scan\n  click api_fba_items_scan \"src/app/api/fba/items/scan/route.ts\" \"route: src/app/api/fba/items/scan/route.ts\"\n  api_fba_items_verify[\"verify\"]\n  api_fba_items --> api_fba_items_verify\n  click api_fba_items_verify \"src/app/api/fba/items/verify/route.ts\" \"route: src/app/api/fba/items/verify/route.ts\"\n  api_fba_labels[\"labels\"]\n  api_fba --> api_fba_labels\n  api_fba_labels_bind[\"bind\"]\n  api_fba_labels --> api_fba_labels_bind\n  click api_fba_labels_bind \"src/app/api/fba/labels/bind/route.ts\" \"route: src/app/api/fba/labels/bind/route.ts\"\n  api_fba_logs[\"logs\"]\n  api_fba --> api_fba_logs\n  click api_fba_logs \"src/app/api/fba/logs/route.ts\" \"route: src/app/api/fba/logs/route.ts\"", "description": "Pages and API routes under src/app."}, "data_flow": {"title": "Data Flow", "mermaid": "sequenceDiagram\n    participant Browser as Browser\n    participant Page as Next Page (RSC)\n    participant API as Next API Route\n    participant DB as Database\n    Browser->>Page: GET /some-route\n    Page->>API: fetch('/api/...')\n    API->>DB: query\n    DB-->>API: rows\n    API-->>Page: JSON\n    Page-->>Browser: HTML + hydration", "description": "Typical request/response sequence for this stack."}, "recent": {"title": "Recent Changes", "mermaid": "flowchart TB\n  c0[\"2026-05-14 \u00b7 b680dbd<br/>updated the proxy problem\"]\n  c1[\"2026-05-13 \u00b7 433578b<br/>updated the whole receiving pipeline\"]\n  c0 --> c1\n  c2[\"2026-05-13 \u00b7 7ae9802<br/>udpated the receiving side bar to be more modern\"]\n  c1 --> c2\n  c3[\"2026-05-11 \u00b7 b4c236d<br/>updated the print window sizing for the receiving\u2026\"]\n  c2 --> c3\n  c4[\"2026-05-11 \u00b7 f87910d<br/>updated the unique key bug in packer table\"]\n  c3 --> c4\n  c5[\"2026-05-11 \u00b7 c955543<br/>udpated the packer flow to included the photos in\u2026\"]\n  c4 --> c5\n  c6[\"2026-05-11 \u00b7 dc87e8b<br/>updates to websocket for packers for photo upload\u2026\"]\n  c5 --> c6", "description": "Git commits in the last 14 days."}}</script>
+<script id="manifest-data" type="application/json">{
+  "generated_at": "2026-05-14 23:49:08 UTC",
+  "project_name": "USAV-Orders-Backend",
+  "project_flags": {
+    "next": true,
+    "express": true,
+    "python": false,
+    "react": true,
+    "prisma": false,
+    "github_actions": true
+  },
+  "files_scanned": 1078,
+  "git_head": "b680dbdfc9c1e09db8e567db969ad5d3ac991bf3",
+  "files_fingerprint": "42260deb8ca0",
+  "diagrams": {
+    "mindmap": {
+      "title": "Project Overview"
+    },
+    "modules": {
+      "title": "Module Dependencies"
+    },
+    "routes": {
+      "title": "Next.js Routes"
+    },
+    "data_flow": {
+      "title": "Data Flow"
+    },
+    "recent": {
+      "title": "Recent Changes"
+    }
+  }
+}</script>
+
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+
+<script>
+(function () {
+  'use strict';
+
+  const diagrams = JSON.parse(document.getElementById('diagrams-data').textContent);
+  const manifest = JSON.parse(document.getElementById('manifest-data').textContent);
+  const keys = Object.keys(diagrams);
+  let activeKey = keys[0];
+
+  // Theme
+  const root = document.documentElement;
+  const savedTheme = localStorage.getItem('cbv-theme');
+  if (savedTheme) {
+    root.setAttribute('data-theme', savedTheme);
+  } else if (window.matchMedia('(prefers-color-scheme: light)').matches) {
+    root.setAttribute('data-theme', 'light');
+  }
+
+  function initMermaid() {
+    if (typeof mermaid === 'undefined') {
+      document.getElementById('host').insertAdjacentHTML(
+        'afterbegin',
+        '<div class="offline-warn">⚠️ Mermaid CDN failed to load. Download <code>mermaid.min.js</code> to <code>docs/architecture/vendor/</code> and adjust the script src.</div>'
+      );
+      return;
+    }
+    mermaid.initialize({
+      startOnLoad: false,
+      theme: root.getAttribute('data-theme') === 'dark' ? 'dark' : 'default',
+      securityLevel: 'loose', // needed for click handlers
+      flowchart: { useMaxWidth: false, htmlLabels: true },
+      mindmap: { useMaxWidth: false },
+      sequence: { useMaxWidth: false },
+    });
+  }
+
+  function buildNav() {
+    const nav = document.getElementById('nav');
+    nav.innerHTML = '';
+    keys.forEach((k) => {
+      const btn = document.createElement('button');
+      btn.className = 'nav-btn' + (k === activeKey ? ' active' : '');
+      btn.textContent = diagrams[k].title;
+      btn.onclick = () => selectDiagram(k);
+      nav.appendChild(btn);
+    });
+  }
+
+  async function selectDiagram(k) {
+    activeKey = k;
+    document.getElementById('title').textContent = diagrams[k].title;
+    document.getElementById('desc').textContent = diagrams[k].description || '';
+    document.querySelectorAll('.nav-btn').forEach((b, i) => {
+      b.classList.toggle('active', keys[i] === k);
+    });
+
+    const host = document.getElementById('host');
+    host.innerHTML = '<div class="mermaid" id="mermaid-target"></div>';
+    const target = document.getElementById('mermaid-target');
+    target.textContent = diagrams[k].mermaid;
+
+    try {
+      const { svg, bindFunctions } = await mermaid.render('m-' + k + '-' + Date.now(), diagrams[k].mermaid);
+      target.innerHTML = svg;
+      if (bindFunctions) bindFunctions(target);
+
+      // Fit huge diagrams to viewport on initial render. Mermaid emits intrinsic
+      // pixel sizes for everything when useMaxWidth:false; for big graphs this means
+      // the user opens the tab and sees blank whitespace in the corner. Scale the
+      // SVG to fit the available width while preserving aspect ratio. User can still
+      // pan/scroll to zoom by adjusting browser zoom.
+      const svgEl = target.querySelector('svg');
+      if (svgEl) {
+        const host = document.querySelector('.mermaid-host');
+        const intrinsicW = svgEl.viewBox.baseVal.width || svgEl.getBBox().width || 0;
+        const availW = host.clientWidth - 60; // padding
+        if (intrinsicW > availW && availW > 0) {
+          const scale = availW / intrinsicW;
+          svgEl.setAttribute('width', availW + 'px');
+          svgEl.removeAttribute('height'); // let aspect drive height
+          svgEl.style.height = 'auto';
+          svgEl.dataset.scaleHint = scale.toFixed(2);
+        }
+      }
+
+      // Intercept clicks on nodes that have data-href (Mermaid generates <a> for clicks)
+      target.querySelectorAll('a').forEach((a) => {
+        const href = a.getAttribute('xlink:href') || a.getAttribute('href');
+        if (!href) return;
+        a.addEventListener('click', (e) => {
+          e.preventDefault();
+          const tooltip = a.querySelector('title')?.textContent || href;
+          openSidePanel(href, tooltip);
+        });
+      });
+    } catch (err) {
+      target.innerHTML = '<div class="offline-warn">Mermaid render error: ' + (err.message || err) + '</div>';
+    }
+  }
+
+  function openSidePanel(path, tooltip) {
+    document.getElementById('side-title').textContent = 'File';
+    document.getElementById('side-path').textContent = path;
+    const actions = document.getElementById('side-actions');
+    actions.innerHTML = `
+      <p style="font-size:12px;color:var(--fg-muted);margin:0 0 8px">${tooltip}</p>
+      <a href="vscode://file/${encodeURIComponent(path)}">Open in VS Code →</a><br>
+      <a href="cursor://file/${encodeURIComponent(path)}">Open in Cursor →</a>
+    `;
+    document.getElementById('side-panel').classList.add('open');
+  }
+
+  document.getElementById('side-close').onclick = () => {
+    document.getElementById('side-panel').classList.remove('open');
+  };
+
+  // Theme toggle
+  document.getElementById('theme-toggle').onclick = () => {
+    const next = root.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
+    root.setAttribute('data-theme', next);
+    localStorage.setItem('cbv-theme', next);
+    initMermaid();
+    selectDiagram(activeKey);
+  };
+
+  // Refresh modal
+  const refreshCmd = 'python3 ~/.hermes-usav/skills/software-development/codebase-visualizer/scripts/generate.py';
+  document.getElementById('refresh-cmd').textContent = refreshCmd;
+  document.getElementById('refresh-btn').onclick = () =>
+    document.getElementById('modal-backdrop').classList.add('open');
+  document.getElementById('modal-close').onclick = () =>
+    document.getElementById('modal-backdrop').classList.remove('open');
+  document.getElementById('modal-backdrop').onclick = (e) => {
+    if (e.target.id === 'modal-backdrop')
+      document.getElementById('modal-backdrop').classList.remove('open');
+  };
+  document.getElementById('copy-cmd').onclick = () => {
+    navigator.clipboard.writeText(refreshCmd).then(() => {
+      const btn = document.getElementById('copy-cmd');
+      const old = btn.textContent;
+      btn.textContent = 'Copied!';
+      setTimeout(() => (btn.textContent = old), 1200);
+    });
+  };
+
+  // Exports
+  function getSvgEl() {
+    return document.querySelector('#mermaid-target svg');
+  }
+  function downloadBlob(blob, filename) {
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = filename;
+    document.body.appendChild(a); a.click();
+    document.body.removeChild(a); URL.revokeObjectURL(url);
+  }
+
+  document.querySelectorAll('[data-export]').forEach((btn) => {
+    btn.onclick = async () => {
+      const kind = btn.getAttribute('data-export');
+      const svg = getSvgEl();
+      const baseName = activeKey + '-' + manifest.project_name;
+      if (kind === 'mmd') {
+        downloadBlob(new Blob([diagrams[activeKey].mermaid], { type: 'text/plain' }), baseName + '.mmd');
+        return;
+      }
+      if (!svg) return;
+      if (kind === 'svg') {
+        const data = new XMLSerializer().serializeToString(svg);
+        downloadBlob(new Blob([data], { type: 'image/svg+xml' }), baseName + '.svg');
+        return;
+      }
+      if (kind === 'png') {
+        const data = new XMLSerializer().serializeToString(svg);
+        const img = new Image();
+        const blob = new Blob([data], { type: 'image/svg+xml' });
+        const url = URL.createObjectURL(blob);
+        img.onload = () => {
+          const scale = 2;
+          const canvas = document.createElement('canvas');
+          canvas.width = (svg.viewBox.baseVal.width || svg.clientWidth) * scale;
+          canvas.height = (svg.viewBox.baseVal.height || svg.clientHeight) * scale;
+          const ctx = canvas.getContext('2d');
+          ctx.fillStyle = getComputedStyle(document.body).backgroundColor;
+          ctx.fillRect(0, 0, canvas.width, canvas.height);
+          ctx.scale(scale, scale);
+          ctx.drawImage(img, 0, 0);
+          canvas.toBlob((b) => downloadBlob(b, baseName + '.png'), 'image/png');
+          URL.revokeObjectURL(url);
+        };
+        img.src = url;
+        return;
+      }
+      if (kind === 'print') {
+        window.print();
+      }
+    };
+  });
+
+  // Boot
+  initMermaid();
+  buildNav();
+  selectDiagram(activeKey);
+})();
+</script>
+
+</body>
+</html>

@@ -15,7 +15,13 @@ export async function GET(req: NextRequest) {
         ss.id,
         ss.stock,
         ss.sku,
-        COALESCE(sp.display_name, sc.product_title, NULLIF(ss.product_title, '')) AS product_title
+        COALESCE(
+          NULLIF(ss.display_name_override, ''),
+          sp.display_name,
+          sc.product_title,
+          NULLIF(ss.product_title, '')
+        ) AS product_title,
+        ss.display_name_override
       FROM sku_stock ss
       LEFT JOIN sku_catalog sc ON sc.sku = ss.sku
       LEFT JOIN LATERAL (

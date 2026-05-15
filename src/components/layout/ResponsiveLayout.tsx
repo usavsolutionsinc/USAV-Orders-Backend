@@ -14,6 +14,8 @@ import { PhonePairFab } from '@/components/layout/PhonePairFab';
 import { GlobalDesktopSkuScanner } from '@/components/layout/GlobalDesktopSkuScanner';
 import { PhonePairModal } from '@/components/sidebar/PhonePairModal';
 import { usePhoneReceivingPhotoBridge } from '@/hooks/usePhoneReceivingPhotoBridge';
+import { useGlobalWedgeScanner } from '@/hooks/useGlobalWedgeScanner';
+import { OfflineBanner } from '@/components/layout/OfflineBanner';
 
 /**
  * Mount-only component. Runs the phone-side Ably listener that auto-navigates
@@ -21,6 +23,16 @@ import { usePhoneReceivingPhotoBridge } from '@/hooks/usePhoneReceivingPhotoBrid
  */
 function PhoneReceivingPhotoBridgeMount() {
   usePhoneReceivingPhotoBridge();
+  return null;
+}
+
+/**
+ * Mount-only component. Listens for HID wedge / Bluetooth ring-scanner
+ * keystrokes anywhere in the app. URL-shaped scans navigate; bare codes
+ * fire a `wedge-scan` CustomEvent for page-level handlers.
+ */
+function GlobalWedgeScannerMount() {
+  useGlobalWedgeScanner();
   return null;
 }
 
@@ -118,6 +130,10 @@ export function ResponsiveLayout({ children }: ResponsiveLayoutProps) {
   if (!isMobile) {
     return (
       <div className="flex h-full w-full overflow-hidden">
+        {/* Global wedge / Bluetooth ring-scanner listener — URL-shaped scans
+            navigate; bare codes fire a `wedge-scan` CustomEvent. */}
+        <GlobalWedgeScannerMount />
+        <OfflineBanner />
         <Suspense fallback={null}>
           <DashboardSidebar />
         </Suspense>
@@ -146,6 +162,11 @@ export function ResponsiveLayout({ children }: ResponsiveLayoutProps) {
       {/* Global mobile-side bridge: listens for receiving photo requests on
           station:{staffId} and auto-navigates to the camera page. */}
       <PhoneReceivingPhotoBridgeMount />
+
+      {/* Same wedge scanner listener as desktop — works for HID-over-USB on
+          tablets and Bluetooth ring scanners paired to a phone. */}
+      <GlobalWedgeScannerMount />
+      <OfflineBanner />
 
       {/* Always-on slim top app bar — hamburger is the only chrome-level nav surface. */}
       <AppTopBar title={getMobileTitle(pathname)} onOpenDrawer={openDrawer} />

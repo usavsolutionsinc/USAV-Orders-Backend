@@ -1,6 +1,21 @@
 import { NextRequest, NextResponse } from 'next/server';
 import pool from '@/lib/db';
 import { getActiveLocations, logLocationTransfer, getTransfersForSku } from '@/lib/neon/location-queries';
+import { recordInventoryEvent } from '@/lib/inventory/events';
+import {
+  getApiIdempotencyResponse,
+  readIdempotencyKey,
+  saveApiIdempotencyResponse,
+} from '@/lib/api-idempotency';
+import {
+  assertPermission,
+  PermissionDeniedError,
+  permissionDeniedResponse,
+} from '@/lib/auth/permissions';
+import { SkuStockPatchBody } from '@/lib/schemas/locations';
+import { parseBody } from '@/lib/schemas/parse';
+
+const ROUTE_SKU_STOCK_PATCH = 'sku-stock.sku.patch';
 
 const ECWID_BASE_URL = 'https://app.ecwid.com/api/v3';
 
@@ -200,13 +215,52 @@ export async function PATCH(
 
   try {
     const body = await request.json();
-    const { action, delta, absoluteQty, location, reason, staffId } = body as {
-      action: 'adjust' | 'set' | 'location';
+
+    // ─── Schema validation (defense-in-depth) ────────────────────────────────
+    const parsed = parseBody(SkuStockPatchBody, body);
+    if (parsed instanceof NextResponse) return parsed;
+
+    // ─── Idempotency: replay cached response for the same key ────────────────
+    const idempotencyKey = readIdempotencyKey(
+      request,
+      body?.clientEventId ?? body?.idempotencyKey,
+    );
+    const idempotencyStaffId = Number(body?.staffId);
+    if (idempotencyKey) {
+      const cached = await getApiIdempotencyResponse(pool, idempotencyKey, ROUTE_SKU_STOCK_PATCH);
+      if (cached) {
+        return NextResponse.json(cached.response_body, { status: cached.status_code });
+      }
+    }
+    const respond = async (payload: Record<string, unknown>, status = 200) => {
+      if (idempotencyKey && status < 500) {
+        await saveApiIdempotencyResponse(pool, {
+          idempotencyKey,
+          route: ROUTE_SKU_STOCK_PATCH,
+          staffId:
+            Number.isFinite(idempotencyStaffId) && idempotencyStaffId > 0
+              ? Math.floor(idempotencyStaffId)
+              : null,
+          statusCode: status,
+          responseBody: payload,
+        }).catch((err) => {
+          console.warn('sku-stock PATCH: idempotency save failed (non-fatal)', err);
+        });
+      }
+      return NextResponse.json(payload, { status });
+    };
+
+    const { action, delta, absoluteQty, location, reason, staffId, productTitle, clearOverride } = body as {
+      action: 'adjust' | 'set' | 'location' | 'rename';
       delta?: number;
       absoluteQty?: number;
       location?: string;
       reason?: string;
       staffId?: number;
+      /** New custom title to set as display_name_override. */
+      productTitle?: string;
+      /** When true, sets display_name_override back to NULL. */
+      clearOverride?: boolean;
     };
 
     if (action === 'adjust' && typeof delta === 'number') {
@@ -289,6 +343,73 @@ export async function PATCH(
       }
 
       return NextResponse.json({ success: true, location: location.trim() });
+    }
+
+    if (action === 'rename') {
+      try {
+        await assertPermission(staffId ?? null, 'bin.rename');
+      } catch (err) {
+        if (err instanceof PermissionDeniedError) {
+          return respond(permissionDeniedResponse(err), 403);
+        }
+        throw err;
+      }
+      const nextTitle = clearOverride
+        ? null
+        : typeof productTitle === 'string'
+        ? productTitle.trim() || null
+        : undefined;
+      if (nextTitle === undefined) {
+        return respond(
+          { error: 'productTitle (or clearOverride:true) is required for rename' },
+          400,
+        );
+      }
+
+      // Capture the prior title so the audit row carries the diff.
+      const prior = await pool
+        .query<{ display_name_override: string | null; product_title: string | null }>(
+          `SELECT display_name_override, product_title FROM sku_stock WHERE sku = $1 LIMIT 1`,
+          [skuValue],
+        )
+        .then((r) => r.rows[0] ?? null);
+
+      await pool.query(
+        `INSERT INTO sku_stock (sku, display_name_override, stock)
+         VALUES ($1, $2, 0)
+         ON CONFLICT (sku)
+         DO UPDATE SET display_name_override = EXCLUDED.display_name_override,
+                       updated_at = NOW()`,
+        [skuValue, nextTitle],
+      );
+
+      // Audit — non-quantity event lives in inventory_events alongside the
+      // ledger rows so /audit can show the full lifecycle of a SKU.
+      try {
+        await recordInventoryEvent({
+          event_type: 'NOTE',
+          actor_staff_id: staffId ?? null,
+          station: 'MOBILE',
+          sku: skuValue,
+          prev_status: prior?.display_name_override ?? null,
+          next_status: nextTitle,
+          notes: `Renamed display_name_override`,
+          payload: {
+            action: 'rename',
+            prev_title: prior?.display_name_override ?? null,
+            next_title: nextTitle,
+            catalog_title: prior?.product_title ?? null,
+          },
+        });
+      } catch (err) {
+        console.warn('rename: audit insert failed (non-fatal)', err);
+      }
+
+      return respond({
+        success: true,
+        sku: skuValue,
+        display_name_override: nextTitle,
+      });
     }
 
     return NextResponse.json({ error: 'Invalid action' }, { status: 400 });

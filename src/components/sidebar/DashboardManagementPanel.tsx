@@ -342,11 +342,16 @@ export function DashboardManagementPanel({
       if (ecwidResult.status === 'rejected') setEcwidTask({ status: 'error', summary: 'Network error' });
       if (exceptionsResult.status === 'rejected') setExceptionsTask({ status: 'error', summary: 'Network error' });
 
+      window.dispatchEvent(new CustomEvent('dashboard-refresh'));
+      window.dispatchEvent(new CustomEvent('usav-refresh-data'));
+
       await Promise.all([
-        queryClient.invalidateQueries({ queryKey: ['dashboard-table', 'pending'], refetchType: 'active' }),
         queryClient.invalidateQueries({ queryKey: ['dashboard-table', 'unshipped'], refetchType: 'active' }),
         queryClient.invalidateQueries({ queryKey: ['dashboard-table', 'shipped'], refetchType: 'active' }),
+        queryClient.invalidateQueries({ queryKey: ['dashboard-table', 'shipped-fba'], refetchType: 'active' }),
         queryClient.invalidateQueries({ queryKey: ['shipped-table'], refetchType: 'active' }),
+        queryClient.invalidateQueries({ queryKey: ['dashboard-stock-zoho'], refetchType: 'active' }),
+        queryClient.invalidateQueries({ queryKey: ['dashboard-fba-shipments'], refetchType: 'active' }),
       ]);
 
       const anyFailed = [sheetsResult, ecwidResult, exceptionsResult].some(
@@ -594,7 +599,14 @@ export function DashboardManagementPanel({
                                 {label}
                               </span>
                               {task.summary && task.status !== 'running' && (
-                                <span className="text-[9px] font-medium text-gray-400 ml-auto truncate max-w-[120px]">
+                                <span
+                                  title={task.status === 'error' ? task.summary : undefined}
+                                  className={`text-[9px] font-medium ml-auto ${
+                                    task.status === 'error'
+                                      ? 'max-w-[min(260px,50vw)] text-red-600 whitespace-normal leading-snug text-right'
+                                      : 'max-w-[120px] truncate text-gray-400'
+                                  }`}
+                                >
                                   {task.summary}
                                 </span>
                               )}

@@ -215,7 +215,11 @@ export async function getTransfersForSku(sku: string, limit = 25): Promise<Locat
 export async function getBinContents(locationId: number): Promise<BinContent[]> {
   const result = await pool.query(
     `SELECT bc.*, l.name AS location_name, l.room, l.row_label, l.col_label, l.barcode,
-            ss.product_title
+            COALESCE(
+              NULLIF(ss.display_name_override, ''),
+              NULLIF(ss.product_title, '')
+            ) AS product_title,
+            ss.display_name_override
      FROM bin_contents bc
      JOIN locations l ON l.id = bc.location_id
      LEFT JOIN sku_stock ss ON ss.sku = bc.sku
@@ -230,7 +234,11 @@ export async function getBinContents(locationId: number): Promise<BinContent[]> 
 export async function getBinLocationsBySku(sku: string): Promise<BinContent[]> {
   const result = await pool.query(
     `SELECT bc.*, l.name AS location_name, l.room, l.row_label, l.col_label, l.barcode,
-            ss.product_title
+            COALESCE(
+              NULLIF(ss.display_name_override, ''),
+              NULLIF(ss.product_title, '')
+            ) AS product_title,
+            ss.display_name_override
      FROM bin_contents bc
      JOIN locations l ON l.id = bc.location_id
      LEFT JOIN sku_stock ss ON ss.sku = bc.sku
@@ -276,6 +284,80 @@ export async function upsertBinContent(data: {
 }
 
 /**
+ * Versioned variant of {@link upsertBinContent} — UPDATE only succeeds when
+ * the caller-supplied `expectedUpdatedAt` matches the current row.
+ *
+ * Returns:
+ *   • `{ ok: true,  row }`     — write applied
+ *   • `{ ok: false, current }` — stale version; caller should re-fetch
+ *
+ * Insert path (row doesn't exist yet) never collides with version; the
+ * caller should treat that as a successful write.
+ */
+export async function upsertBinContentIfVersion(data: {
+  locationId: number;
+  sku: string;
+  qty: number;
+  minQty?: number | null;
+  maxQty?: number | null;
+  expectedUpdatedAt: string;
+}): Promise<
+  | { ok: true; row: BinContent }
+  | { ok: false; current: BinContent | null }
+> {
+  // Try the conditional UPDATE first. We compare with millisecond-level
+  // truncation on both sides because the API roundtrips timestamps as ISO
+  // strings (millisecond precision) while Postgres stores microseconds.
+  const updated = await pool.query<BinContent>(
+    `UPDATE bin_contents
+       SET qty = $3,
+           min_qty = COALESCE($4, min_qty),
+           max_qty = COALESCE($5, max_qty),
+           updated_at = NOW()
+     WHERE location_id = $1
+       AND sku = $2
+       AND date_trunc('milliseconds', updated_at) = date_trunc('milliseconds', $6::timestamptz)
+     RETURNING *`,
+    [
+      data.locationId,
+      data.sku.trim(),
+      data.qty,
+      data.minQty ?? null,
+      data.maxQty ?? null,
+      data.expectedUpdatedAt,
+    ],
+  );
+  if (updated.rows[0]) return { ok: true, row: updated.rows[0] };
+
+  // No row updated — either the version was stale, or the row never existed.
+  const existing = await pool.query<BinContent>(
+    `SELECT * FROM bin_contents WHERE location_id = $1 AND sku = $2 LIMIT 1`,
+    [data.locationId, data.sku.trim()],
+  );
+  if (existing.rows[0]) {
+    return { ok: false, current: existing.rows[0] };
+  }
+
+  // First-time insert — race-free because the UNIQUE (location_id, sku)
+  // constraint serializes concurrent inserts.
+  const inserted = await pool.query<BinContent>(
+    `INSERT INTO bin_contents (location_id, sku, qty, min_qty, max_qty)
+     VALUES ($1, $2, $3, $4, $5)
+     ON CONFLICT (location_id, sku) DO NOTHING
+     RETURNING *`,
+    [data.locationId, data.sku.trim(), data.qty, data.minQty ?? null, data.maxQty ?? null],
+  );
+  if (inserted.rows[0]) return { ok: true, row: inserted.rows[0] };
+
+  // Someone else inserted between our checks — fetch and report stale.
+  const after = await pool.query<BinContent>(
+    `SELECT * FROM bin_contents WHERE location_id = $1 AND sku = $2 LIMIT 1`,
+    [data.locationId, data.sku.trim()],
+  );
+  return { ok: false, current: after.rows[0] ?? null };
+}
+
+/**
  * Adjust bin quantity by delta (positive = put, negative = take).
  * Also adjusts sku_stock in the same transaction for consistency.
  */
@@ -285,7 +367,11 @@ export async function adjustBinQty(data: {
   delta: number;
   staffId?: number | null;
   reason?: string;
-}): Promise<{ binContent: BinContent; newStockQty: number }> {
+  /** FK into reason_codes — newer callers should send this so reports can group cleanly. */
+  reasonCodeId?: number | null;
+  /** Free-text note (used by reason codes like DAMAGED / FOUND that require explanation). */
+  notes?: string | null;
+}): Promise<{ binContent: BinContent; newStockQty: number; ledgerId: number | null }> {
   const rawSku = data.sku.trim();
   const baseSku = rawSku.includes(':') ? rawSku.split(':')[0].trim() : rawSku;
   const client = await pool.connect();
@@ -314,18 +400,35 @@ export async function adjustBinQty(data: {
       [baseSku, data.delta],
     );
 
-    // 3. Log to stock ledger
-    await client.query(
-      `INSERT INTO sku_stock_ledger (sku, delta, reason, staff_id)
-       VALUES ($1, $2, $3, $4)`,
-      [baseSku, data.delta, data.reason || 'BIN_ADJUST', data.staffId || null],
-    ).catch(() => {}); // best-effort
+    // 3. Log to stock ledger — preserves the text `reason` for back-compat
+    //    while also stamping `reason_code_id` so reporting can group cleanly.
+    let ledgerId: number | null = null;
+    try {
+      const ledgerRes = await client.query<{ id: number }>(
+        `INSERT INTO sku_stock_ledger
+           (sku, delta, reason, staff_id, reason_code_id, notes)
+         VALUES ($1, $2, $3, $4, $5, $6)
+         RETURNING id`,
+        [
+          baseSku,
+          data.delta,
+          data.reason || 'BIN_ADJUST',
+          data.staffId || null,
+          data.reasonCodeId ?? null,
+          data.notes ?? null,
+        ],
+      );
+      ledgerId = ledgerRes.rows[0]?.id ?? null;
+    } catch {
+      /* best-effort — adjustment still succeeds even if ledger write fails */
+    }
 
     await client.query('COMMIT');
 
     return {
       binContent: binResult.rows[0],
       newStockQty: Number(stockResult.rows[0]?.stock) || 0,
+      ledgerId,
     };
   } catch (err) {
     await client.query('ROLLBACK');

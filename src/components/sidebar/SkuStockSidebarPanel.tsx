@@ -1,13 +1,13 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { sidebarHeaderBandClass } from '@/components/layout/header-shell';
 import { ViewDropdown } from '@/components/ui/ViewDropdown';
 import { SearchBar } from '@/components/ui/SearchBar';
 import { FavoritesWorkspaceSection } from '@/components/sidebar/FavoritesWorkspaceSection';
 import MultiSkuSnBarcode from '@/components/MultiSkuSnBarcode';
-import type { SkuView } from '@/components/sku/SkuBrowser';
+import { parseSkuView, type SkuView } from '@/components/sku/SkuBrowser';
 import type { FavoriteSkuRecord } from '@/lib/favorites/sku-favorites';
 
 // ─── Component ──────────────────────────────────────────────────────────────
@@ -19,11 +19,20 @@ interface SkuStockSidebarPanelProps {
 
 export function SkuStockSidebarPanel({ hideSearch = false }: SkuStockSidebarPanelProps) {
   const router = useRouter();
+  const pathname = usePathname();
   const searchParams = useSearchParams();
   const currentSearch = searchParams.get('search') || '';
   const [searchInput, setSearchInput] = useState(currentSearch);
   const [activeFilledSku, setActiveFilledSku] = useState('');
-  const view = (searchParams.get('view') === 'sku_history' ? 'sku_history' : 'sku_stock') as SkuView;
+  // When navigating to /sku-stock/location/{barcode} the URL has no
+  // ?view param — force the dropdown to "Location" anyway so it doesn't
+  // flicker back to SKU Stock while the route is bin-scoped.
+  const onLocationRoute = Boolean(
+    pathname && pathname.startsWith('/sku-stock/location'),
+  );
+  const view: SkuView = onLocationRoute
+    ? 'location'
+    : parseSkuView(searchParams.get('view'));
 
   // Sync external search param changes
   useEffect(() => {
@@ -60,8 +69,14 @@ export function SkuStockSidebarPanel({ hideSearch = false }: SkuStockSidebarPane
   }, []);
 
   const updateSearch = (value: string) => {
-    const nextParams = new URLSearchParams(searchParams.toString());
     const trimmed = value.trim();
+    // In Location view, the search bar is a bin-barcode field — route to the
+    // dedicated location page instead of fanning out a list query.
+    if (view === 'location' && trimmed) {
+      router.push(`/sku-stock/location/${encodeURIComponent(trimmed)}`);
+      return;
+    }
+    const nextParams = new URLSearchParams(searchParams.toString());
     if (trimmed) {
       nextParams.set('search', trimmed);
     } else {
@@ -90,8 +105,9 @@ export function SkuStockSidebarPanel({ hideSearch = false }: SkuStockSidebarPane
         <div className={sidebarHeaderBandClass}>
           <ViewDropdown
             options={[
-              { value: 'sku_stock', label: 'SKU STOCK' },
+              { value: 'sku_stock', label: 'SKU EDIT' },
               { value: 'sku_history', label: 'SKU HISTORY' },
+              { value: 'location', label: 'LOCATION' },
             ]}
             value={view}
             onChange={(nextView) => {
@@ -118,6 +134,8 @@ export function SkuStockSidebarPanel({ hideSearch = false }: SkuStockSidebarPane
             placeholder={
               view === 'sku_stock'
                 ? 'Search stock, sku, or product title...'
+                : view === 'location'
+                ? 'Type or scan a bin barcode...'
                 : 'Search sku, serial, location, tracking, notes...'
             }
             isSearching={false}

@@ -1,4 +1,4 @@
-export type AdminSection = 'goals' | 'staff' | 'connections' | 'fba' | 'manuals' | 'features' | 'logs' | 'jobs' | 'ai_chat';
+export type AdminSection = 'goals' | 'staff' | 'connections' | 'fba' | 'manuals' | 'features' | 'logs' | 'jobs' | 'ai_chat' | 'architecture';
 
 export interface AdminSectionOption {
   value: AdminSection;
@@ -16,4 +16,5 @@ export const ADMIN_SECTION_OPTIONS: AdminSectionOption[] = [
   { value: 'logs', label: 'Logs', description: 'Unified audit + station activity logs' },
   { value: 'jobs', label: 'Jobs', description: 'QStash scheduled jobs and execution logs' },
   { value: 'ai_chat', label: 'AI Chat', description: 'Ops assistant + Bose service manual lookup' },
+  { value: 'architecture', label: 'Architecture', description: 'Live codebase diagrams — module deps, routes, recent commits' },
 ];

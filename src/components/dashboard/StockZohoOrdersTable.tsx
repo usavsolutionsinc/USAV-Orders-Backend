@@ -1,7 +1,7 @@
 'use client';
 
-import { useMemo } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useEffect, useMemo } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Loader2, Search } from '@/components/Icons';
 import { sectionLabel, fieldLabel, tableHeader } from '@/design-system/tokens/typography/presets';
 import { mainStickyHeaderClass, mainStickyHeaderRowClass } from '@/components/layout/header-shell';
@@ -73,6 +73,20 @@ function normalizeNumberText(value: string | null | undefined) {
 }
 
 export default function StockZohoOrdersTable({ searchValue, onClearSearch }: StockZohoOrdersTableProps) {
+  const queryClient = useQueryClient();
+
+  useEffect(() => {
+    const refresh = () => {
+      queryClient.invalidateQueries({ queryKey: ['dashboard-stock-zoho'] });
+    };
+    window.addEventListener('usav-refresh-data', refresh);
+    window.addEventListener('dashboard-refresh', refresh);
+    return () => {
+      window.removeEventListener('usav-refresh-data', refresh);
+      window.removeEventListener('dashboard-refresh', refresh);
+    };
+  }, [queryClient]);
+
   const query = useQuery({
     queryKey: ['dashboard-stock-zoho', STOCK_STATUSES],
     queryFn: async () => {

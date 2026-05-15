@@ -60,6 +60,37 @@ function fail(status: number, error: string): never {
   throw new GoogleSheetsTransferOrdersJobError(status, { success: false, error });
 }
 
+function failJson(status: number, body: Record<string, unknown>): never {
+  throw new GoogleSheetsTransferOrdersJobError(status, body);
+}
+
+const FIXED_COL_INDICES_DEFAULT = {
+  shipByDate: 0,
+  orderNumber: 1,
+  itemNumber: 2,
+  itemTitle: 3,
+  quantity: 4,
+  usavSku: 5,
+  condition: 6,
+  tracking: 7,
+  note: 8,
+  platform: 9,
+};
+
+/** Sheet row 1 headers mapped to ingestion fields (same candidates as findHeaderIndex uses). */
+const SHEET_HEADER_BINDINGS: { field: keyof typeof FIXED_COL_INDICES_DEFAULT; candidates: string[] }[] = [
+  { field: 'shipByDate', candidates: ['Ship by date'] },
+  { field: 'orderNumber', candidates: ['Order Number', 'Order - Number'] },
+  { field: 'itemNumber', candidates: ['Item Number'] },
+  { field: 'itemTitle', candidates: ['Item title', 'Item Title'] },
+  { field: 'quantity', candidates: ['Quantity'] },
+  { field: 'usavSku', candidates: ['USAV SKU'] },
+  { field: 'condition', candidates: ['Condition'] },
+  { field: 'tracking', candidates: ['Tracking', 'Shipment - Tracking Number'] },
+  { field: 'note', candidates: ['Note', 'Notes'] },
+  { field: 'platform', candidates: ['Platform', 'Account Source', 'Channel'] },
+];
+
 function findHeaderIndex(headers: any[], candidates: string[]) {
   return headers.findIndex((header) => {
     const normalized = String(header || '').trim().toLowerCase();
@@ -184,12 +215,7 @@ export async function runGoogleSheetsTransferOrders(
   try {
     // ─── Source-aware data fetching ────────────────────────────────────
     // Fixed column indices used when there is no sheet header row (ecwid-only mode)
-    const FIXED_COL_INDICES = {
-      shipByDate: 0, orderNumber: 1, itemNumber: 2, itemTitle: 3,
-      quantity: 4, usavSku: 5, condition: 6, tracking: 7, note: 8, platform: 9,
-    };
-
-    let colIndices = FIXED_COL_INDICES;
+    let colIndices = { ...FIXED_COL_INDICES_DEFAULT };
     let targetTabName = source === 'ecwid' ? '(ecwid-api)' : '';
     let eligibleSourceRows: any[][] = [];
     let ecwidApiRows = 0;
@@ -240,25 +266,35 @@ export async function runGoogleSheetsTransferOrders(
       }
 
       const headerRow = sourceRows[0];
-      colIndices = {
-        shipByDate: findHeaderIndex(headerRow, ['Ship by date']),
-        orderNumber: findHeaderIndex(headerRow, ['Order Number', 'Order - Number']),
-        itemNumber: findHeaderIndex(headerRow, ['Item Number']),
-        itemTitle: findHeaderIndex(headerRow, ['Item title', 'Item Title']),
-        quantity: findHeaderIndex(headerRow, ['Quantity']),
-        usavSku: findHeaderIndex(headerRow, ['USAV SKU']),
-        condition: findHeaderIndex(headerRow, ['Condition']),
-        tracking: findHeaderIndex(headerRow, ['Tracking', 'Shipment - Tracking Number']),
-        note: findHeaderIndex(headerRow, ['Note', 'Notes']),
-        platform: findHeaderIndex(headerRow, ['Platform', 'Account Source', 'Channel']),
-      };
+      colIndices = { ...FIXED_COL_INDICES_DEFAULT };
+      for (const { field, candidates } of SHEET_HEADER_BINDINGS) {
+        colIndices[field] = findHeaderIndex(headerRow, candidates);
+      }
 
-      const missingCols = Object.entries(colIndices)
-        .filter(([_, index]) => index === -1)
-        .map(([name]) => name);
-
-      if (missingCols.length > 0) {
-        fail(400, `Missing columns in source: ${missingCols.join(', ')}`);
+      const missingBindings = SHEET_HEADER_BINDINGS.filter((b) => colIndices[b.field] === -1);
+      if (missingBindings.length > 0) {
+        const headersReceived = headerRow.map((cell) => String(cell ?? '').trim());
+        const missingExplain = missingBindings
+          .map(
+            (b) =>
+              `"${b.field}" needs a column titled one of: ${b.candidates.map((c) => `"${c}"`).join(', ')}`,
+          )
+          .join('; ');
+        const receivedExplain = headersReceived
+          .map((text, i) => {
+            const label = text === '' ? '(blank)' : `"${text}"`;
+            return `${i + 1}:${label}`;
+          })
+          .join(', ');
+        failJson(400, {
+          success: false,
+          error: `Missing required sheet header(s): ${missingExplain}. Headers found in row 1 (${headersReceived.length} cells): ${receivedExplain}`,
+          missingColumns: missingBindings.map((b) => ({
+            field: b.field,
+            expectedLabels: b.candidates,
+          })),
+          headersReceived,
+        });
       }
 
       sheetTotalRows = sourceRows.length - 1;

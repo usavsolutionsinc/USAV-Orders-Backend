@@ -83,32 +83,77 @@ async function fetchReceivingPackage(receivingId: number): Promise<ReceivingPack
   return r.rows[0] ?? null;
 }
 
+/**
+ * Audit + memoize a successful lookup match. Every successful STN resolution
+ * writes a `receiving_scans` row so we have a full event log AND so future
+ * identical-byte scans hit the cheap `receiving_scans` fallback path.
+ *
+ * Distinct from the full `recordScan` below (which captures carrier + staff
+ * during the main scan flow) — this is the minimal audit during lookup.
+ */
+async function memoizeLookupHit(
+  receivingId: number,
+  trackingNumber: string,
+  receivingSource: string,
+): Promise<number> {
+  const scanSource: 'zoho_po' | 'unmatched' = receivingSource === 'zoho_po' ? 'zoho_po' : 'unmatched';
+  const inserted = await pool.query<{ id: number }>(
+    `INSERT INTO receiving_scans
+       (receiving_id, tracking_number, scanned_at, source)
+     VALUES ($1, $2, NOW(), $3)
+     ON CONFLICT (tracking_number, receiving_id) DO UPDATE
+       SET scanned_at = EXCLUDED.scanned_at
+     RETURNING id`,
+    [receivingId, trackingNumber, scanSource],
+  );
+  return Number(inserted.rows[0].id);
+}
+
+/**
+ * Resolve an inbound carrier scan to a local `receiving` row WITHOUT calling
+ * Zoho. Authoritative source is `shipping_tracking_numbers` (STN) joined to
+ * `receiving` via `receiving.shipment_id`. Zoho webhooks populate STN, so
+ * once webhooks are live, this function handles almost every scan locally.
+ *
+ * Matching rule (uniform across every layer): **last 8 digits of the carrier
+ * tracking number.** Scanners emit a wild range of envelopes — USPS IMpb
+ * prefix, UPS short form, hand-typed digits — but they all share the same
+ * trailing carrier-tracking digits. Using last-8 everywhere removes the
+ * "exact then fuzzy then variant" stack and gives every layer the same key.
+ *
+ * Order of attempts:
+ *   1. STN (`tracking_number_raw` OR `tracking_number_normalized`) ⋈ receiving.
+ *   2. `receiving_scans` — fallback for rows where `shipment_id` is NULL
+ *      (unmatched walk-in scans / pre-webhook legacy data).
+ *
+ * Ambiguity (≥2 distinct receiving rows on the same last-8 suffix) drops to
+ * Zoho where the PO header can disambiguate.
+ */
 async function findScanByTracking(
   trackingNumber: string,
 ): Promise<{ scan_id: number; receiving_id: number } | null> {
-  // 1. Exact match on what's been scanned before.
-  const exact = await pool.query<{ scan_id: number; receiving_id: number }>(
-    `SELECT id AS scan_id, receiving_id
-     FROM receiving_scans
-     WHERE tracking_number = $1
-     ORDER BY id DESC
-     LIMIT 1`,
-    [trackingNumber],
-  );
-  if (exact.rows[0]) return exact.rows[0];
-
-  // 2. Last-8-digit suffix fallback. Handles barcode scans that include a
-  //    USPS IMpb / SCS prefix (e.g. "9622…380368793934") where the actual
-  //    carrier tracking # is just the trailing segment. Matches the
-  //    same convention used in orders-exceptions.ts / sheet-sync-common.ts.
-  //    Last-4 collides too often at scale; last-8 is the established norm.
   const digits = String(trackingNumber || '').replace(/\D/g, '');
   if (digits.length < 8) return null;
   const last8 = digits.slice(-8);
 
-  // Try receiving_scans first (known physical scans), then
-  // shipping_tracking_numbers (canonical shipment backbone) — if either yields
-  // exactly one match, take it. Ambiguity (≥2 hits) falls through to Zoho.
+  // ── 1. STN last-8 (canonical) ───────────────────────────────────────────
+  const stnHit = await pool.query<{ receiving_id: number; source: string }>(
+    `SELECT r.id AS receiving_id, r.source
+       FROM shipping_tracking_numbers stn
+       JOIN receiving r ON r.shipment_id = stn.id
+      WHERE RIGHT(regexp_replace(stn.tracking_number_normalized, '\\D', '', 'g'), 8) = $1
+         OR RIGHT(regexp_replace(stn.tracking_number_raw,        '\\D', '', 'g'), 8) = $1
+      ORDER BY r.id DESC
+      LIMIT 2`,
+    [last8],
+  );
+  if (stnHit.rows.length === 1) {
+    const { receiving_id, source } = stnHit.rows[0];
+    const scan_id = await memoizeLookupHit(receiving_id, trackingNumber, source);
+    return { scan_id, receiving_id };
+  }
+
+  // ── 2. receiving_scans fallback (STN-less rows) ─────────────────────────
   const scanHit = await pool.query<{ scan_id: number; receiving_id: number }>(
     `SELECT id AS scan_id, receiving_id
        FROM receiving_scans
@@ -118,32 +163,6 @@ async function findScanByTracking(
     [last8],
   );
   if (scanHit.rows.length === 1) return scanHit.rows[0];
-
-  const shipHit = await pool.query<{ receiving_id: number; source: string }>(
-    `SELECT r.id AS receiving_id, r.source
-       FROM shipping_tracking_numbers stn
-       JOIN receiving r ON r.shipment_id = stn.id
-      WHERE RIGHT(regexp_replace(stn.tracking_number_normalized, '\\D', '', 'g'), 8) = $1
-      ORDER BY r.id DESC
-      LIMIT 2`,
-    [last8],
-  );
-  if (shipHit.rows.length === 1) {
-    // Record the scan so future scans of this tracking short-circuit via the
-    // exact-match branch. Use the parent receiving row's own source.
-    const { receiving_id, source } = shipHit.rows[0];
-    const scanSource: 'zoho_po' | 'unmatched' = source === 'zoho_po' ? 'zoho_po' : 'unmatched';
-    const inserted = await pool.query<{ id: number }>(
-      `INSERT INTO receiving_scans
-         (receiving_id, tracking_number, scanned_at, source)
-       VALUES ($1, $2, NOW(), $3)
-       ON CONFLICT (tracking_number, receiving_id) DO UPDATE
-         SET scanned_at = EXCLUDED.scanned_at
-       RETURNING id`,
-      [receiving_id, trackingNumber, scanSource],
-    );
-    return { scan_id: Number(inserted.rows[0].id), receiving_id };
-  }
 
   return null;
 }
@@ -280,30 +299,22 @@ export async function POST(request: NextRequest) {
       preassignedScanId = existingScan.scan_id;
     }
 
-    // 2. Zoho lookup for PO ids. Try progressively shorter trailing forms —
-    //    barcode scanners emit concatenated IMpb/SCS strings (e.g.
-    //    "9622…380368793934"), but Zoho only knows the carrier tracking#
-    //    (e.g. "380368793934"). Order: raw → normalized → last-22/18/12.
+    // 2. Zoho lookup for PO ids. Single search key: last 8 digits of the
+    //    tracking number — same key used at every local layer above, so a
+    //    miss here means the PO genuinely isn't in Zoho yet (rather than a
+    //    format mismatch). At most 2 Zoho calls per scan (receives, then
+    //    orders), down from 8 in the old variant ladder.
     const zohoPoIds = new Set<string>();
     let zohoReachable = true;
 
-    const normalized = normalizeTrackingNumber(trackingNumber);
     const digits = trackingNumber.replace(/\D/g, '');
-    const candidates = Array.from(new Set([
-      trackingNumber,
-      normalized,
-      digits.length > 22 ? digits.slice(-22) : '',
-      digits.length > 18 ? digits.slice(-18) : '',
-      digits.length > 15 ? digits.slice(-15) : '',
-      digits.length > 12 ? digits.slice(-12) : '',
-    ].filter((c) => c && c.length >= 8)));
+    const last8 = digits.length >= 8 ? digits.slice(-8) : '';
 
-    for (const candidate of candidates) {
-      if (!zohoReachable || zohoPoIds.size > 0) break;
+    if (last8) {
       try {
-        const receives = await searchPurchaseReceivesByTracking(candidate).catch((err) => {
+        const receives = await searchPurchaseReceivesByTracking(last8).catch((err) => {
           zohoReachable = false;
-          console.warn(`lookup-po: searchPurchaseReceivesByTracking(${candidate}) failed`, err);
+          console.warn(`lookup-po: searchPurchaseReceivesByTracking(${last8}) failed`, err);
           return [];
         });
         for (const r of receives) {
@@ -311,9 +322,9 @@ export async function POST(request: NextRequest) {
           if (poId) zohoPoIds.add(poId);
         }
         if (zohoPoIds.size === 0 && zohoReachable) {
-          const pos = await searchPurchaseOrdersByTracking(candidate).catch((err) => {
+          const pos = await searchPurchaseOrdersByTracking(last8).catch((err) => {
             zohoReachable = false;
-            console.warn(`lookup-po: searchPurchaseOrdersByTracking(${candidate}) failed`, err);
+            console.warn(`lookup-po: searchPurchaseOrdersByTracking(${last8}) failed`, err);
             return [];
           });
           for (const po of pos) {
@@ -322,7 +333,7 @@ export async function POST(request: NextRequest) {
         }
       } catch (err) {
         zohoReachable = false;
-        console.warn(`lookup-po: Zoho lookup failed for candidate ${candidate}`, err);
+        console.warn(`lookup-po: Zoho lookup failed for last8 ${last8}`, err);
       }
     }
 
@@ -518,7 +529,7 @@ export async function POST(request: NextRequest) {
       lastError: zohoReachable ? null : 'zoho_unreachable',
       domainMetadata: {
         carrier: carrier || null,
-        candidates_tried: candidates,
+        candidates_tried: last8 ? [last8] : [],
         zoho_reachable: zohoReachable,
         scan_id: unmatchedScanId,
       },

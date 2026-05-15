@@ -7,6 +7,7 @@ import { ManualAssignmentTab } from '@/components/admin/ManualAssignmentTab';
 import { AdminLogsTab } from '@/components/admin/AdminLogsTab';
 import { AdminJobsTab } from '@/components/admin/AdminJobsTab';
 import AiChatTab from '@/components/admin/AiChatTab';
+import { ArchitectureTab } from '@/components/admin/ArchitectureTab';
 import { ADMIN_SECTION_OPTIONS, type AdminSection } from '@/components/admin/admin-sections';
 
 interface AdminPageProps {
@@ -57,6 +58,10 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
         ) : activeTab === 'ai_chat' ? (
           <div className="h-full min-h-0 w-full">
             <AiChatTab />
+          </div>
+        ) : activeTab === 'architecture' ? (
+          <div className="h-full min-h-0 w-full">
+            <ArchitectureTab />
           </div>
         ) : activeTab === 'connections' || activeTab === 'goals' || activeTab === 'staff' || activeTab === 'fba' ? (
           <div className="h-full min-h-0 w-full">
