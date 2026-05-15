@@ -77,6 +77,9 @@ flowchart LR
   api_ai_tunnel_session["tunnel-session"]
   api_ai --> api_ai_tunnel_session
   click api_ai_tunnel_session "src/app/api/ai/tunnel-session/route.ts" "route: src/app/api/ai/tunnel-session/route.ts"
+  api_architecture["architecture"]
+  api --> api_architecture
+  click api_architecture "src/app/api/architecture/route.ts" "route: src/app/api/architecture/route.ts"
   api_assignments["assignments"]
   api --> api_assignments
   click api_assignments "src/app/api/assignments/route.ts" "route: src/app/api/assignments/route.ts"
@@ -217,6 +220,3 @@ flowchart LR
   api_fba_labels_bind["bind"]
   api_fba_labels --> api_fba_labels_bind
   click api_fba_labels_bind "src/app/api/fba/labels/bind/route.ts" "route: src/app/api/fba/labels/bind/route.ts"
-  api_fba_logs["logs"]
-  api_fba --> api_fba_logs
-  click api_fba_logs "src/app/api/fba/logs/route.ts" "route: src/app/api/fba/logs/route.ts"
