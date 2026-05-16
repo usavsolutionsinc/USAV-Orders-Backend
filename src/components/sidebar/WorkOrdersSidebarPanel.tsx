@@ -69,9 +69,13 @@ export function WorkOrdersSidebarPanel() {
   useEffect(() => {
     window.addEventListener('dashboard-refresh', fetchCounts);
     window.addEventListener('dashboard-refresh', fetchPickupDates);
+    window.addEventListener('usav-refresh-data', fetchCounts);
+    window.addEventListener('usav-refresh-data', fetchPickupDates);
     return () => {
       window.removeEventListener('dashboard-refresh', fetchCounts);
       window.removeEventListener('dashboard-refresh', fetchPickupDates);
+      window.removeEventListener('usav-refresh-data', fetchCounts);
+      window.removeEventListener('usav-refresh-data', fetchPickupDates);
     };
   }, [fetchCounts, fetchPickupDates]);
 

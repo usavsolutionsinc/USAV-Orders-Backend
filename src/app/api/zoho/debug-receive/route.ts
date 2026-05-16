@@ -1,5 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createPurchaseReceive, getPurchaseOrderById } from '@/lib/zoho';
+import {
+  createPurchaseReceive,
+  getPurchaseOrderById,
+  mergeCatalogItemIdsFromPurchaseOrder,
+  type ZohoPurchaseReceiveLine,
+} from '@/lib/zoho';
 
 export const dynamic = 'force-dynamic';
 
@@ -12,7 +17,9 @@ export const dynamic = 'force-dynamic';
  * Body:
  * {
  *   purchaseorder_id: "5623409000002250332",
- *   line_items: [{ line_item_id: "...", quantity_received: 1 }]
+ *   receive_number: "optional — generated if omitted",
+ *   line_items: [{ line_item_id: "...", quantity or quantity_received: 1, item_id?: "..." }]
+ *   (createPurchaseReceive maps counts to Zoho's `quantity` field on the wire.)
  * }
  */
 export async function POST(request: NextRequest) {
@@ -24,17 +31,39 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ ok: false, error: 'purchaseorder_id and line_items required' }, { status: 400 });
     }
 
+    const zohoBillId = String(body?.zoho_bill_id ?? '').trim() || undefined;
+    const zohoBillNumber = String(body?.zoho_bill_number ?? '').trim() || undefined;
+
     const poBefore = await getPurchaseOrderById(purchaseOrderId).catch((e) => ({ error: String(e) }));
+
+    const normalizedLines =
+      lineItems.length > 0
+        ? lineItems.map((l: Record<string, unknown>) => ({
+            line_item_id: String(l.line_item_id || ''),
+            quantity_received: Number(l.quantity_received || l.quantity || 0),
+            item_id: String(l.item_id || '').trim(),
+          }))
+        : [];
+
+    const mergedLines =
+      poBefore &&
+      typeof poBefore === 'object' &&
+      'purchaseorder' in poBefore &&
+      (poBefore as { purchaseorder?: unknown }).purchaseorder
+        ? mergeCatalogItemIdsFromPurchaseOrder(
+            poBefore as { purchaseorder?: { line_items?: unknown[] } },
+            normalizedLines,
+          )
+        : normalizedLines;
 
     let response: unknown;
     let zohoError: unknown = null;
     try {
       response = await createPurchaseReceive({
         purchaseOrderId,
-        lineItems: lineItems.map((l: Record<string, unknown>) => ({
-          line_item_id: String(l.line_item_id || ''),
-          quantity_received: Number(l.quantity_received || 0),
-        })),
+        lineItems: mergedLines,
+        ...(zohoBillId ? { billId: zohoBillId } : {}),
+        ...(zohoBillNumber ? { billNumberHint: zohoBillNumber } : {}),
       });
     } catch (err) {
       zohoError = err instanceof Error
@@ -48,9 +77,11 @@ export async function POST(request: NextRequest) {
       ok: !zohoError,
       requestSent: {
         purchaseOrderId,
-        lineItems: lineItems.map((l: Record<string, unknown>) => ({
-          line_item_id: String(l.line_item_id || ''),
-          quantity: Number(l.quantity_received || 0),
+        note: 'receive_number is auto-generated in createPurchaseReceive when omitted',
+        lineItems: mergedLines.map((l: ZohoPurchaseReceiveLine) => ({
+          line_item_id: l.line_item_id,
+          quantity_received: l.quantity_received,
+          item_id: l.item_id,
         })),
       },
       zohoResponse: response ?? null,

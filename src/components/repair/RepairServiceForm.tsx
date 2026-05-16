@@ -1,7 +1,8 @@
 'use client'
 
-import React, { useEffect, useRef } from 'react'
-import { loadBarcodeLibrary, renderBarcode } from '@/utils/barcode'
+import React, { useEffect, useMemo, useState } from 'react'
+import QRCode from 'react-qr-code'
+import { buildRepairDetailsDeepLink } from '@/lib/repair/repair-deep-link'
 
 type RepairServiceFormProps = {
   repairServiceId: string | number
@@ -26,36 +27,24 @@ const RepairServiceForm: React.FC<RepairServiceFormProps> = ({
   price,
   startDateTime
 }) => {
-  const barcodeRef = useRef<HTMLCanvasElement>(null)
-  const repairServiceCode = `RS-${String(repairServiceId || '').trim()}`
+  const repairNumericId = Number(String(repairServiceId || '').trim())
+  const repairServiceCode = Number.isFinite(repairNumericId) && repairNumericId > 0
+    ? `RS-${repairNumericId}`
+    : `RS-${String(repairServiceId || '').trim()}`
+
+  const [origin, setOrigin] = useState('')
+  useEffect(() => {
+    setOrigin(window.location.origin)
+  }, [])
+
+  const manageUrl = useMemo(() => {
+    if (!origin || !Number.isFinite(repairNumericId) || repairNumericId <= 0) return ''
+    return buildRepairDetailsDeepLink(repairNumericId, origin)
+  }, [origin, repairNumericId])
 
   // Format contact display as "Name, Phone, Email"
   const contactDisplay = [name, contact].filter(Boolean).join(', ')
   const externalTicket = String(ticketNumber || '').trim()
-
-  useEffect(() => {
-    const value = repairServiceCode
-    if (!value) return
-
-    let active = true
-
-    loadBarcodeLibrary()
-      .then(() => {
-        if (!active) return
-        renderBarcode(barcodeRef.current, value, {
-          width: 1.6,
-          height: 42,
-          margin: 0,
-        })
-      })
-      .catch((error) => {
-        console.warn('Failed to render repair barcode:', error)
-      })
-
-    return () => {
-      active = false
-    }
-  }, [repairServiceCode])
   
   return (
     <div className="w-[8.5in] min-h-[11in] mx-auto bg-white text-gray-900 font-sans p-8 print:p-6">
@@ -78,8 +67,20 @@ const RepairServiceForm: React.FC<RepairServiceFormProps> = ({
           )}
         </div>
         <div className="flex flex-col items-end">
-          <canvas ref={barcodeRef} aria-label={`Barcode for repair service ${repairServiceCode}`} />
-          <p className="mt-1 text-xs font-semibold tracking-[0.2em] text-gray-500">RS ID</p>
+          <div className="rounded-lg border border-gray-200 bg-white p-1.5 shadow-sm">
+            {manageUrl ? (
+              <QRCode
+                value={manageUrl}
+                size={112}
+                level="M"
+                aria-label={`QR link to manage repair ${repairServiceCode}`}
+              />
+            ) : (
+              <div className="h-28 w-28 bg-gray-50" aria-hidden />
+            )}
+          </div>
+          <p className="mt-1 text-center text-xs font-semibold tracking-[0.2em] text-gray-500">Scan to update</p>
+          <p className="text-[10px] font-bold text-gray-400">{repairServiceCode}</p>
         </div>
       </div>
 

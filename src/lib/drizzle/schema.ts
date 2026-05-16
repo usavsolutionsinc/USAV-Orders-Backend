@@ -681,6 +681,8 @@ export const receiving = pgTable('receiving', {
   zohoPurchaseReceiveId: text('zoho_purchase_receive_id'),
   zohoWarehouseId: text('zoho_warehouse_id'),
   quantity: text('quantity'),
+  /** Carton-level support / ops notes (not per receiving_lines row). */
+  supportNotes: text('support_notes'),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 });

@@ -37,6 +37,9 @@ import { useAblyClient } from '@/contexts/AblyContext';
 import { printProductLabel } from '@/lib/print/printProductLabel';
 import { mobileQrUrl } from '@/lib/barcode-routing';
 import { loadBarcodeLibrary, renderBarcode } from '@/utils/barcode';
+import { formatDatePST, formatTime12hPST } from '@/utils/date';
+import { getStaffName } from '@/utils/staff';
+import { getStaffThemeById, stationThemeColors } from '@/utils/staff-colors';
 import { LocalPickupIntakeForm } from '@/components/work-orders/LocalPickupIntakeForm';
 import {
   CONDITION_OPTS,
@@ -74,25 +77,24 @@ import {
   parseZendeskListingFromPoNotes,
 } from '@/lib/zoho-po-prefill';
 
-/** Carton-level scratch (Zendesk, listing, notes) for Receive; survives line-to-line nav. */
+/** Carton-level scratch (Zendesk, listing) for Receive; survives line-to-line nav. PO item notes live in DB (`receiving_lines.notes`) per line, not here. */
 const RECEIVING_LINE_DETAILS_STORAGE_KEY = (receivingId: number) =>
   `receiving.sidebar.lineDetails.v1:${receivingId}`;
 
 type ReceivingLineDetailScratch = {
   zendesk: string;
   listing: string;
-  notes: string;
   /** Extra carrier refs for multi-piece POs; primary tracking still PATCHes shipment. */
   extra_trackings: string[];
 };
 
 function readReceivingLineDetailsScratch(receivingId: number | null): ReceivingLineDetailScratch {
   if (receivingId == null || typeof window === 'undefined') {
-    return { zendesk: '', listing: '', notes: '', extra_trackings: [] };
+    return { zendesk: '', listing: '', extra_trackings: [] };
   }
   try {
     const raw = window.localStorage.getItem(RECEIVING_LINE_DETAILS_STORAGE_KEY(receivingId));
-    if (!raw) return { zendesk: '', listing: '', notes: '', extra_trackings: [] };
+    if (!raw) return { zendesk: '', listing: '', extra_trackings: [] };
     const o = JSON.parse(raw) as Partial<ReceivingLineDetailScratch>;
     const extrasRaw = o.extra_trackings;
     const extra_trackings = Array.isArray(extrasRaw)
@@ -101,11 +103,10 @@ function readReceivingLineDetailsScratch(receivingId: number | null): ReceivingL
     return {
       zendesk: typeof o.zendesk === 'string' ? o.zendesk : '',
       listing: typeof o.listing === 'string' ? o.listing : '',
-      notes: typeof o.notes === 'string' ? o.notes : '',
       extra_trackings,
     };
   } catch {
-    return { zendesk: '', listing: '', notes: '', extra_trackings: [] };
+    return { zendesk: '', listing: '', extra_trackings: [] };
   }
 }
 
@@ -117,7 +118,6 @@ function writeReceivingLineDetailsScratch(receivingId: number, d: ReceivingLineD
       JSON.stringify({
         zendesk: d.zendesk,
         listing: d.listing,
-        notes: d.notes,
         extra_trackings: d.extra_trackings,
       }),
     );
@@ -338,9 +338,9 @@ function randomId(): string {
 }
 
 const SELECT_CLASS =
-  'w-full rounded-md border border-gray-200 bg-white px-1.5 py-0.5 text-[10px] font-bold text-gray-900 focus:border-blue-300 focus:outline-none focus:ring-2 focus:ring-blue-500/10';
+  'w-full rounded-md border border-gray-200 bg-white px-1.5 py-0.5 text-[11px] font-semibold text-gray-900 focus:border-blue-300 focus:outline-none focus:ring-2 focus:ring-blue-500/10';
 const INPUT_CLASS =
-  'w-full rounded-md border border-gray-200 bg-white px-1.5 py-0.5 text-[10px] font-semibold text-gray-900 placeholder:text-gray-400 focus:border-blue-300 focus:outline-none focus:ring-2 focus:ring-blue-500/10';
+  'w-full rounded-md border border-gray-200 bg-white px-1.5 py-0.5 text-[11px] font-semibold text-gray-900 placeholder:text-gray-400 focus:border-blue-300 focus:outline-none focus:ring-2 focus:ring-blue-500/10';
 
 /** Safe http(s) href for opening a pasted or typed listing URL. */
 function listingUrlForOpen(raw: string): string | null {
@@ -356,19 +356,51 @@ function listingUrlForOpen(raw: string): string | null {
   }
 }
 
-const FLOW_SECTION_LABEL =
-  'block text-[8px] font-black uppercase tracking-[0.14em] text-slate-500';
+/* ────────────────────────────────────────────────────────────────────────
+ * RECEIVING SIDEBAR TYPE SCALE
+ * One source of truth for typography inside this panel. Used everywhere
+ * fields, labels, summaries, and titles render so the three lanes share
+ * one consistent rhythm.
+ *
+ *   SECTION   10/black/upper      — dropdown header titles
+ *   LABEL      9/black/upper      — field labels above inputs
+ *   META       9/semibold         — header summary previews + meta chips
+ *   INPUT     11/semibold         — every input + select value
+ *   BODY      11/medium           — plain text (notes, descriptions)
+ *   TITLE     14/extrabold/snug   — product title (visual anchor of Item lane)
+ * ──────────────────────────────────────────────────────────────────────── */
+
+/** Product-title anchor. Bigger + heavier than anything else inside Item. */
+const TYPE_PRODUCT_TITLE_CLASS =
+  'text-[14px] font-extrabold leading-snug tracking-tight text-slate-900 break-words';
+
+const TYPE_PRODUCT_TITLE_COMPACT_CLASS =
+  'text-[13px] font-extrabold leading-snug tracking-tight text-slate-900 break-words line-clamp-3';
+
+/** Section header title (one per dropdown trigger). */
+const TYPE_SECTION_TITLE_CLASS =
+  'shrink-0 text-[10px] font-black uppercase tracking-wider';
+
+/** Field label above an input — neutral slate so the colored lanes carry the chroma. */
+const TYPE_FIELD_LABEL_CLASS =
+  'block text-[9px] font-black uppercase tracking-[0.14em] text-slate-500';
+
+/** Summary text on a section header (tracking · platform, item count, etc.). */
+const TYPE_HEADER_SUMMARY_CLASS =
+  'inline-flex min-w-0 max-w-full flex-wrap items-center justify-end gap-x-1 gap-y-0.5 text-[9px] font-semibold leading-none tracking-wide text-gray-600';
+
+/** Inline text input baseline (used by raw <input>s inside extra-row patterns). */
+const TYPE_INPUT_INLINE_CLASS =
+  'text-[11px] font-semibold text-gray-900 placeholder:font-medium placeholder:text-gray-400';
 
 /** Sidebar collapsible triggers: tightened to reduce wasted vertical space. */
 const FLOW_SECTION_BTN_CLASS =
   'flex min-h-[28px] w-full items-center gap-2 px-2 py-0.5 text-left transition-colors hover:bg-gray-50';
 
-const FLOW_SECTION_TITLE_CLASS =
-  'shrink-0 text-[9px] font-black uppercase tracking-wider text-gray-700';
-
-/** Tracking · platform · notes preview (and plain string summaries) — one size/weight/color. */
-const FLOW_SECTION_SUMMARY_CLASS =
-  'inline-flex min-w-0 max-w-full flex-wrap items-center justify-end gap-x-1 gap-y-0.5 text-[8px] font-semibold leading-none tracking-wide text-gray-600';
+const FLOW_SECTION_TITLE_CLASS = TYPE_SECTION_TITLE_CLASS;
+const FLOW_SECTION_SUMMARY_CLASS = TYPE_HEADER_SUMMARY_CLASS;
+/** Back-compat alias — field labels above inputs. */
+const FLOW_SECTION_LABEL = TYPE_FIELD_LABEL_CLASS;
 
 /** Middot separators in flow summaries; stays subtle at 9px. */
 const FLOW_SECTION_SUMMARY_SEP_CLASS = 'shrink-0 select-none font-normal text-gray-400';
@@ -400,31 +432,66 @@ const TRACKING_ADD_BTN_CLASS = `${RECEIVING_TRAIL_BTN_CLASS} text-slate-500 hove
 const TRACKING_ROW_LEADING_ICON_CLASS =
   'shrink-0 text-gray-400 transition-colors duration-100 ease-out group-focus-within:text-gray-900';
 
+/**
+ * Per-section tone tokens. Color lives ONLY on the dropdown header (trigger
+ * row) — body + container stay neutral white so the dense fields read clean.
+ * Each header gets a tinted background, a colored left accent rail, and a
+ * matching title color so the three lanes (Shipment / Item / Support) are
+ * instantly distinguishable.
+ */
+type FlowSectionTone = 'shipment' | 'item' | 'support';
+
+const FLOW_SECTION_TONE_STYLES: Record<
+  FlowSectionTone,
+  { header: string; rail: string; title: string }
+> = {
+  shipment: {
+    header: 'bg-red-50 hover:bg-red-100/70',
+    rail: 'bg-red-500',
+    title: 'text-red-900',
+  },
+  item: {
+    header: 'bg-blue-50 hover:bg-blue-100/70',
+    rail: 'bg-blue-500',
+    title: 'text-blue-900',
+  },
+  support: {
+    header: 'bg-orange-50 hover:bg-orange-100/70',
+    rail: 'bg-orange-500',
+    title: 'text-orange-900',
+  },
+};
+
 function FlowSection({
   title,
   summary,
   open,
   onToggle,
-  bodyClassName = 'px-2 py-1.5',
+  tone,
+  bodyClassName = 'px-2 py-2.5',
   children,
 }: {
   title: string;
   summary?: ReactNode;
   open: boolean;
   onToggle: () => void;
+  /** Color lane for this section — applied to the header trigger only. */
+  tone: FlowSectionTone;
   /** Wrapping paddings around section body when open (default matches other panels). */
   bodyClassName?: string;
   children: ReactNode;
 }) {
+  const styles = FLOW_SECTION_TONE_STYLES[tone];
   return (
     <div className="bg-white">
       <button
         type="button"
         onClick={onToggle}
         aria-expanded={open}
-        className={FLOW_SECTION_BTN_CLASS}
+        className={`${FLOW_SECTION_BTN_CLASS} ${styles.header} relative`}
       >
-        <span className={FLOW_SECTION_TITLE_CLASS}>{title}</span>
+        <span className={`absolute inset-y-0 left-0 w-[3px] ${styles.rail}`} aria-hidden />
+        <span className={`${FLOW_SECTION_TITLE_CLASS} ${styles.title}`}>{title}</span>
         {summary != null && summary !== '' ? (
           <span className="min-w-0 flex-1 text-right">
             <span className={FLOW_SECTION_SUMMARY_CLASS}>{summary}</span>
@@ -443,6 +510,159 @@ function FlowSection({
           <div className="border-t border-slate-100" aria-hidden />
           <div className={bodyClassName}>{children}</div>
         </>
+      ) : null}
+    </div>
+  );
+}
+
+type ReceivingCartonStaffApiRow = {
+  received_at?: string | null;
+  received_by?: number | null;
+  updated_at?: string | null;
+};
+
+/** Staff / received timestamps — black rail on the trigger only; expanded body is white. */
+function ReceivingCartonStaffDropdown({
+  receivingId,
+  staffId,
+}: {
+  receivingId: number | null;
+  staffId: string;
+}) {
+  const [open, setOpen] = useState(true);
+  const [state, setState] = useState<
+    | { status: 'idle' }
+    | { status: 'loading' }
+    | { status: 'error'; message?: string }
+    | { status: 'ok'; carton: ReceivingCartonStaffApiRow }
+  >({ status: 'idle' });
+
+  useEffect(() => {
+    if (receivingId != null) setOpen(true);
+  }, [receivingId]);
+
+  useEffect(() => {
+    if (receivingId == null) {
+      setState({ status: 'idle' });
+      return;
+    }
+    let cancelled = false;
+    setState({ status: 'loading' });
+    void (async () => {
+      try {
+        const res = await fetch(`/api/receiving/${receivingId}`);
+        const data = (await res.json().catch(() => null)) as {
+          success?: boolean;
+          error?: string;
+          receiving?: ReceivingCartonStaffApiRow;
+        } | null;
+        if (cancelled) return;
+        const carton = data?.receiving;
+        if (!data?.success || !carton) {
+          const msg =
+            typeof data?.error === 'string'
+              ? data.error
+              : !res.ok
+                ? `HTTP ${res.status}`
+                : undefined;
+          setState({ status: 'error', message: msg });
+          return;
+        }
+        setState({ status: 'ok', carton });
+      } catch {
+        if (!cancelled) setState({ status: 'error', message: 'Network error' });
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [receivingId]);
+
+  if (receivingId == null) return null;
+
+  return (
+    <div className="bg-white">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        aria-expanded={open}
+        className={`${FLOW_SECTION_BTN_CLASS} relative bg-zinc-50 hover:bg-zinc-100/70`}
+      >
+        <span className="absolute inset-y-0 left-0 w-[3px] bg-black" aria-hidden />
+        <span className={`${FLOW_SECTION_TITLE_CLASS} text-zinc-900`}>Staff Scanned & Received</span>
+        <span className="min-w-0 flex-1 text-right">
+          <span className={FLOW_SECTION_SUMMARY_CLASS}>RCV-{receivingId}</span>
+        </span>
+        <span className={RECEIVING_TRAIL_SLOT_CLASS}>
+          <ChevronDown
+            className={`h-[14px] w-[14px] shrink-0 text-gray-400 transition-transform duration-200 ${open ? 'rotate-180' : ''}`}
+            aria-hidden
+          />
+        </span>
+      </button>
+      {open ? (
+        <div className="border-b border-slate-200 bg-white px-2 py-2.5 space-y-3">
+          {state.status === 'loading' ? (
+            <div
+              className="space-y-2.5"
+              aria-busy="true"
+              aria-label="Loading receiving details"
+              role="status"
+            >
+              <div className="flex items-baseline justify-between gap-3">
+                <div className="h-[13px] w-[min(7rem,45%)] max-w-[45%] animate-pulse rounded-sm bg-slate-200/90" />
+                <div className="h-[13px] w-[6.5rem] shrink-0 animate-pulse rounded-sm bg-slate-200/90" />
+              </div>
+              <div className="flex items-baseline justify-between gap-3">
+                <div className="h-[10px] w-[4.5rem] shrink-0 animate-pulse rounded-sm bg-slate-200/70" />
+                <div className="h-[13px] w-[6.5rem] shrink-0 animate-pulse rounded-sm bg-slate-200/90" />
+              </div>
+            </div>
+          ) : state.status === 'error' ? (
+            <p className="text-[11px] font-medium text-rose-600">
+              {state.message
+                ? `Could not load receiving details: ${state.message}`
+                : 'Could not load receiving details.'}
+            </p>
+          ) : state.status === 'ok' ? (
+            <div className="space-y-2.5">
+              <div className="flex items-baseline justify-between gap-3">
+                <span
+                  className={`min-w-0 truncate text-[11px] font-semibold ${
+                    state.carton.received_by
+                      ? stationThemeColors[getStaffThemeById(state.carton.received_by)].text
+                      : 'text-slate-900'
+                  }`}
+                >
+                  {state.carton.received_by
+                    ? getStaffName(state.carton.received_by)
+                    : '—'}
+                </span>
+                <span className="shrink-0 text-right text-[11px] font-semibold tabular-nums text-slate-900">
+                  {state.carton.received_at
+                    ? `${formatDatePST(state.carton.received_at)} ${formatTime12hPST(state.carton.received_at)}`
+                    : '—'}
+                </span>
+              </div>
+              <div className="flex items-baseline justify-between gap-3">
+                <span className="shrink-0 text-[9px] font-black uppercase tracking-widest text-slate-500">
+                  Last updated
+                </span>
+                <span className="shrink-0 text-right text-[11px] font-semibold tabular-nums text-slate-900">
+                  {state.carton.updated_at
+                    ? `${formatDatePST(state.carton.updated_at)} ${formatTime12hPST(state.carton.updated_at)}`
+                    : '—'}
+                </span>
+              </div>
+            </div>
+          ) : null}
+          <div className="border-t border-slate-100 pt-3">
+            <ReceivingPhotoStrip
+              receivingId={receivingId}
+              staffId={Number(staffId) || 0}
+            />
+          </div>
+        </div>
       ) : null}
     </div>
   );
@@ -698,6 +918,365 @@ function ReceivingProductLabelPreview({
   );
 }
 
+/* ──────────────────────────────────────────────────────────────────────────
+ * ReceiveResponsePanel
+ *
+ * Surfaces the last POST /api/receiving/mark-received-po response below
+ * the print preview so operators can see WHY a Zoho receive succeeded,
+ * was skipped, or failed. The previous toast-only UX hid critical
+ * details (especially "Zoho attempted: 0" — the no-PO-link case — which
+ * silently fell through to a generic "Line received" success toast).
+ *
+ * Verdict mapping (mirrors the server's error_kind taxonomy):
+ *   ✓ success      — zoho.attempted ≥ 1, zoho.ok = true, zoho.error null
+ *                    (toast + panel: SN/notes line, then “marked as Received”)
+ *   ⚠ skipped      — zoho.attempted === 0  (no linked PO/line item ids;
+ *                                            local DB updated, Zoho untouched)
+ *   ✗ rate_limit   — Zoho daily API quota exhausted
+ *   ✗ circuit_open — internal circuit breaker tripped from recent failures
+ *   ✗ api          — Zoho rejected the request (4xx/5xx with a Zoho code)
+ *   ✗ other        — unexpected error / network failure
+ *   ✓ verified     — dashboard already DONE but Zoho GET confirms fully received
+ *                    (skip_reason zoho_already_fully_received; receive_id null)
+ * ────────────────────────────────────────────────────────────────────────── */
+type ReceiveResponsePanelProps = {
+  response: {
+    at: number;
+    durationMs: number;
+    httpStatus: number;
+    ok: boolean;
+    body: unknown;
+    networkError?: string;
+  };
+  expanded: boolean;
+  onToggle: () => void;
+  onDismiss: () => void;
+};
+
+type ZohoResultRow = {
+  purchaseorder_id?: string;
+  receive_id?: string | null;
+  error?: string | null;
+  error_kind?: 'rate_limit' | 'circuit_open' | 'api' | 'other' | null;
+};
+
+function classifyReceiveResponse(r: ReceiveResponsePanelProps['response']): {
+  verdict: 'success' | 'skipped' | 'rate_limit' | 'circuit_open' | 'api_error' | 'http_error' | 'network';
+  headline: string;
+  detail: string;
+  tone: 'emerald' | 'amber' | 'rose';
+} {
+  if (r.networkError) {
+    return {
+      verdict: 'network',
+      headline: 'Network error',
+      tone: 'rose',
+      detail: r.networkError,
+    };
+  }
+  const body = (r.body || {}) as Record<string, unknown>;
+  if (!r.ok) {
+    const zoho = (body.zoho || {}) as {
+      attempted?: number;
+      ok?: boolean;
+      error?: string | null;
+      rate_limited?: boolean;
+      results?: ZohoResultRow[];
+    };
+    const errParts: string[] = [];
+    if (typeof body.error === 'string' && body.error.trim()) errParts.push(body.error.trim());
+    if (typeof zoho.error === 'string' && zoho.error.trim()) errParts.push(zoho.error.trim());
+    for (const row of zoho.results ?? []) {
+      if (typeof row.error === 'string' && row.error.trim()) {
+        errParts.push(row.error.trim());
+        break;
+      }
+    }
+    const detail =
+      errParts.length > 0
+        ? [...new Set(errParts)].join(' · ')
+        : 'Request did not complete successfully. Expand Raw response below for details.';
+    const http2xx = r.httpStatus >= 200 && r.httpStatus < 300;
+    if (http2xx && zoho.rate_limited) {
+      return {
+        verdict: 'rate_limit',
+        headline: 'Zoho daily API quota exhausted',
+        tone: 'rose',
+        detail,
+      };
+    }
+    if (http2xx && Number(zoho.attempted ?? 0) > 0 && zoho.ok === false) {
+      return {
+        verdict: 'api_error',
+        headline: 'Zoho rejected the purchase receive',
+        tone: 'rose',
+        detail,
+      };
+    }
+    if (http2xx) {
+      return {
+        verdict: 'http_error',
+        headline: 'Receive failed',
+        tone: 'rose',
+        detail,
+      };
+    }
+    return {
+      verdict: 'http_error',
+      headline: `Server error · HTTP ${r.httpStatus}`,
+      tone: 'rose',
+      detail,
+    };
+  }
+  const zoho = (body.zoho || {}) as {
+    attempted?: number;
+    ok?: boolean;
+    rate_limited?: boolean;
+    error?: string | null;
+    skip_reason?: string | null;
+    results?: ZohoResultRow[];
+  };
+  if (zoho.skip_reason === 'zoho_already_fully_received') {
+    return {
+      verdict: 'success',
+      headline: 'Zoho confirms PO fully received',
+      tone: 'emerald',
+      detail:
+        'Every line is done locally; we checked Zoho Inventory and there is nothing left to receive on the linked PO line(s).',
+    };
+  }
+  if (zoho.skip_reason === 'no_receiving_lines') {
+    return {
+      verdict: 'skipped',
+      headline: 'No lines on this shipment',
+      tone: 'amber',
+      detail: 'There are no receiving_lines rows for this carton yet.',
+    };
+  }
+  if (zoho.skip_reason === 'no_zoho_link') {
+    return {
+      verdict: 'skipped',
+      headline: 'Zoho NOT updated — no PO link',
+      tone: 'amber',
+      detail:
+        'No Zoho purchaseorder_id / line_item_id is attached to this carton. Click the refresh icon to sync with Zoho first, then try again.',
+    };
+  }
+  if (zoho.skip_reason === 'scan_only') {
+    return {
+      verdict: 'success',
+      headline: 'Marked scanned locally (Zoho skipped)',
+      tone: 'emerald',
+      detail:
+        'Quantities and QA were saved. PO-linked lines stay Scanned until you run Receive from the same menu.',
+    };
+  }
+  if (!zoho.attempted) {
+    return {
+      verdict: 'skipped',
+      headline: 'Zoho NOT updated — no PO link',
+      tone: 'amber',
+      detail:
+        'Lines were saved locally but no Zoho purchaseorder_id / line_item_id is attached to this carton. Click the refresh icon to sync with Zoho first, then try again.',
+    };
+  }
+  if (zoho.rate_limited) {
+    return {
+      verdict: 'rate_limit',
+      headline: 'Zoho daily API quota exhausted',
+      tone: 'rose',
+      detail:
+        'Local DB updated, but Zoho purchase receive was rejected with rate-limit. Wait for the daily reset or pause other Zoho-touching workflows.',
+    };
+  }
+  const firstErrorKind = zoho.results?.find((x) => x.error_kind)?.error_kind ?? null;
+  if (!zoho.ok && firstErrorKind === 'circuit_open') {
+    return {
+      verdict: 'circuit_open',
+      headline: 'Zoho circuit breaker tripped',
+      tone: 'rose',
+      detail:
+        zoho.error ||
+        'Recent Zoho failures caused the client to suppress new requests for a cooldown window. Retry in a minute.',
+    };
+  }
+  if (!zoho.ok) {
+    return {
+      verdict: 'api_error',
+      headline: 'Zoho API rejected the receive',
+      tone: 'rose',
+      detail: zoho.error || 'Zoho returned an error — see the raw response below for the exact reason.',
+    };
+  }
+  return {
+    verdict: 'success',
+    headline: 'Successfully added SN# & notes to PO item',
+    tone: 'emerald',
+    detail: 'Successfully marked the PO as Received',
+  };
+}
+
+function ReceiveResponsePanel({
+  response,
+  expanded,
+  onToggle,
+  onDismiss,
+}: ReceiveResponsePanelProps) {
+  const body = (response.body || {}) as Record<string, unknown>;
+  const classification = classifyReceiveResponse(response);
+  const showApiErrorCallout =
+    !response.ok &&
+    typeof body.error === 'string' &&
+    body.error.trim().length > 0;
+  const toneStyles = {
+    emerald: {
+      bar: 'bg-emerald-500',
+      bg: 'bg-emerald-50',
+      border: 'border-emerald-200',
+      title: 'text-emerald-900',
+      dot: 'bg-emerald-500',
+    },
+    amber: {
+      bar: 'bg-amber-500',
+      bg: 'bg-amber-50',
+      border: 'border-amber-200',
+      title: 'text-amber-900',
+      dot: 'bg-amber-500',
+    },
+    rose: {
+      bar: 'bg-rose-500',
+      bg: 'bg-rose-50',
+      border: 'border-rose-200',
+      title: 'text-rose-900',
+      dot: 'bg-rose-500',
+    },
+  }[classification.tone];
+
+  const zoho = (body.zoho || {}) as {
+    attempted?: number;
+    ok?: boolean;
+    rate_limited?: boolean;
+    error?: string | null;
+    skip_reason?: string | null;
+    results?: ZohoResultRow[];
+  };
+  const results = zoho.results ?? [];
+  const timestamp = new Date(response.at).toLocaleTimeString([], {
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+  });
+
+  return (
+    <div className={`-mx-2 mt-1.5 border-t ${toneStyles.border} px-2 pt-1.5 pb-2`}>
+      <div className={`relative overflow-hidden rounded-md border ${toneStyles.border} ${toneStyles.bg}`}>
+        <span className={`absolute inset-y-0 left-0 w-[3px] ${toneStyles.bar}`} aria-hidden />
+        <div className="flex items-start gap-2 px-2 py-1.5">
+          <span className={`mt-1 inline-block h-1.5 w-1.5 shrink-0 rounded-full ${toneStyles.dot}`} aria-hidden />
+          <div className="min-w-0 flex-1">
+            <div className="flex items-baseline gap-2">
+              <p className={`text-[10px] font-black uppercase tracking-wider ${toneStyles.title}`}>
+                {classification.headline}
+              </p>
+              <span className="text-[9px] font-semibold tabular-nums text-slate-500">
+                {timestamp} · {response.durationMs}ms · HTTP {response.httpStatus || '—'}
+              </span>
+            </div>
+            <p className="mt-0.5 text-[10px] font-medium leading-snug text-slate-700">
+              {classification.detail}
+            </p>
+            {showApiErrorCallout ? (
+              <div className="mt-1.5 rounded border border-rose-200 bg-rose-50/90 px-1.5 py-1">
+                <p className="text-[8px] font-black uppercase tracking-wide text-rose-800">API response</p>
+                <p className="break-words font-mono text-[10px] leading-snug text-rose-950">
+                  {String(body.error)}
+                </p>
+              </div>
+            ) : null}
+            {results.length > 0 ? (
+              <ul className="mt-1.5 space-y-0.5">
+                {results.map((r, i) => {
+                  const ok = !r.error;
+                  return (
+                    <li
+                      key={i}
+                      className="flex items-center gap-1.5 text-[10px] leading-tight"
+                    >
+                      <span
+                        className={`inline-block h-1.5 w-1.5 shrink-0 rounded-full ${ok ? 'bg-emerald-500' : 'bg-rose-500'}`}
+                        aria-hidden
+                      />
+                      <span className="truncate font-mono font-semibold text-slate-800">
+                        PO {r.purchaseorder_id ?? '?'}
+                      </span>
+                      <span className="text-slate-400">·</span>
+                      <span className="truncate text-slate-600">
+                        {ok
+                          ? `receive ${r.receive_id ?? '—'}`
+                          : `${r.error_kind ?? 'error'}: ${r.error ?? 'unknown'}`}
+                      </span>
+                    </li>
+                  );
+                })}
+              </ul>
+            ) : null}
+          </div>
+          <div className="flex shrink-0 items-center gap-0.5">
+            <button
+              type="button"
+              onClick={onToggle}
+              aria-label={expanded ? 'Hide raw response' : 'Show raw response'}
+              title={expanded ? 'Hide raw response' : 'Show raw response'}
+              className="rounded p-0.5 text-slate-400 transition-colors hover:bg-white/60 hover:text-slate-700"
+            >
+              <ChevronDown
+                className={`h-3.5 w-3.5 transition-transform duration-150 ${expanded ? 'rotate-180' : ''}`}
+              />
+            </button>
+            <button
+              type="button"
+              onClick={onDismiss}
+              aria-label="Dismiss response"
+              title="Dismiss"
+              className="rounded p-0.5 text-slate-400 transition-colors hover:bg-white/60 hover:text-slate-700"
+            >
+              <X className="h-3 w-3" />
+            </button>
+          </div>
+        </div>
+        {expanded ? (
+          <div className={`border-t ${toneStyles.border} bg-white/70 px-2 py-1.5`}>
+            <p className="mb-1 text-[8px] font-black uppercase tracking-widest text-slate-500">
+              Raw response · /api/receiving/mark-received-po
+            </p>
+            <pre className="max-h-56 overflow-auto rounded border border-slate-200 bg-white p-1.5 font-mono text-[9px] leading-relaxed text-slate-700">
+{JSON.stringify(response.body ?? { networkError: response.networkError }, null, 2)}
+            </pre>
+            <div className="mt-1 flex justify-end">
+              <button
+                type="button"
+                onClick={() => {
+                  try {
+                    void navigator.clipboard.writeText(
+                      JSON.stringify(response.body ?? { networkError: response.networkError }, null, 2),
+                    );
+                    toast.success('Response copied');
+                  } catch {
+                    /* clipboard unavailable */
+                  }
+                }}
+                className="rounded border border-slate-200 bg-white px-1.5 py-0.5 text-[9px] font-black uppercase tracking-wider text-slate-600 transition-colors hover:bg-slate-50"
+              >
+                Copy JSON
+              </button>
+            </div>
+          </div>
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
 function LineEditPanel({
   row,
   staffId,
@@ -735,6 +1314,7 @@ function LineEditPanel({
   );
   const [cond, setCond] = useState(row.condition_grade || 'USED_A');
   const [notes, setNotes] = useState('');
+  const [supportNotes, setSupportNotes] = useState('');
   const [trackingEdit, setTrackingEdit] = useState(row.tracking_number || '');
   const [zendesk, setZendesk] = useState('');
   const [serialInput, setSerialInput] = useState('');
@@ -745,28 +1325,45 @@ function LineEditPanel({
   const [sourcePlatform, setSourcePlatform] = useState<string>('');
   const [platformSaving, setPlatformSaving] = useState(false);
   type FlowSecKey = 'shipment' | 'item' | 'support';
-  const [flowOpen, setFlowOpen] = useState<Record<FlowSecKey, boolean>>(() =>
-    accordionBootstrap === 'all'
-      ? { shipment: true, item: true, support: true }
-      : {
-          shipment: true,
-          item: !compact,
-          support: false,
-        },
-  );
+  // All three sections expanded by default — including Support — so the user
+  // sees every field at a glance without an extra click. Per-section color
+  // tinting (see FlowSection `tone` prop) keeps them visually distinct.
+  const [flowOpen, setFlowOpen] = useState<Record<FlowSecKey, boolean>>(() => ({
+    shipment: true,
+    item: true,
+    support: true,
+  }));
   const [extraTrackings, setExtraTrackings] = useState<string[]>([]);
   const [extraSerials, setExtraSerials] = useState<string[]>([]);
   const [zohoSyncing, setZohoSyncing] = useState(false);
+  /**
+   * Last response from POST /api/receiving/mark-received-po. Surfaced in the
+   * UI directly below the print preview so operators can see exactly why a
+   * Zoho receive succeeded, was skipped (missing zoho ids), or failed
+   * (rate_limit, circuit_open, api, other). No more silent failures.
+   */
+  type ReceiveResponseRecord = {
+    at: number;
+    /** ms wall-clock from POST → response */
+    durationMs: number;
+    httpStatus: number;
+    ok: boolean;
+    /** Raw JSON body returned from the API. */
+    body: unknown;
+    /** Network-level error message (thrown before/after the fetch). */
+    networkError?: string;
+  };
+  const [lastReceiveResponse, setLastReceiveResponse] =
+    useState<ReceiveResponseRecord | null>(null);
+  const [responseExpanded, setResponseExpanded] = useState(false);
   const serialRef = useRef<HTMLInputElement>(null);
   const listingRef = useRef<HTMLInputElement>(null);
 
   const persistZendeskRef = useRef(zendesk);
   const persistListingRef = useRef(listingLink);
-  const persistNotesRef = useRef(notes);
   const persistExtraTrackingsRef = useRef(extraTrackings);
   persistZendeskRef.current = zendesk;
   persistListingRef.current = listingLink;
-  persistNotesRef.current = notes;
   persistExtraTrackingsRef.current = extraTrackings;
 
   const toggleFlow = useCallback((key: FlowSecKey) => {
@@ -774,15 +1371,9 @@ function LineEditPanel({
   }, []);
 
   useEffect(() => {
-    setFlowOpen(
-      accordionBootstrap === 'all'
-        ? { shipment: true, item: true, support: true }
-        : {
-            shipment: true,
-            item: !compact,
-            support: false,
-          },
-    );
+    // Keep every section expanded across row changes — including Support —
+    // so the user never has to re-open them after switching lines.
+    setFlowOpen({ shipment: true, item: true, support: true });
   }, [compact, row.id, accordionBootstrap]);
 
   useEffect(() => {
@@ -803,15 +1394,14 @@ function LineEditPanel({
       writeReceivingLineDetailsScratch(prev, {
         zendesk: persistZendeskRef.current,
         listing: persistListingRef.current,
-        notes: persistNotesRef.current,
         extra_trackings: persistExtraTrackingsRef.current.filter((t) => t.trim().length > 0),
       });
     }
     prevReceivingIdForFlushRef.current = next ?? null;
   }, [row.receiving_id]);
 
-  // Restore Zendesk, listing, notes from localStorage when switching cartons (layout phase
-  // so persist effect sees hydrated values). Same carton + different line: unchanged.
+  // Restore Zendesk, listing from localStorage when switching cartons (layout phase
+  // so persist effect sees hydrated values). PO item notes load from `row.notes` (see effect below).
   useLayoutEffect(() => {
     if (row.receiving_id == null) {
       setZendesk('');
@@ -823,9 +1413,16 @@ function LineEditPanel({
     const d = readReceivingLineDetailsScratch(row.receiving_id);
     setZendesk(d.zendesk);
     setListingLink(d.listing);
-    setNotes(d.notes);
     setExtraTrackings(d.extra_trackings.length > 0 ? d.extra_trackings : []);
   }, [row.receiving_id]);
+
+  useLayoutEffect(() => {
+    setNotes(row.notes ?? '');
+  }, [row.id, row.notes]);
+
+  useEffect(() => {
+    setSupportNotes(row.receiving_support_notes || '');
+  }, [row.id, row.receiving_id, row.receiving_support_notes]);
 
   // Serial is per line; when moving between lines, prefill from the row's
   // already-recorded serials (most recent wins) so the sidebar reflects what
@@ -907,10 +1504,9 @@ function LineEditPanel({
     writeReceivingLineDetailsScratch(cur, {
       zendesk,
       listing: listingLink,
-      notes,
       extra_trackings: extraTrackings.map((t) => t.trim()).filter(Boolean),
     });
-  }, [zendesk, listingLink, notes, extraTrackings, row.receiving_id]);
+  }, [zendesk, listingLink, extraTrackings, row.receiving_id]);
 
   // Load the parent receiving row's source_platform so the dropdown reflects
   // the current shipment-level override (platform is per-carton, not per-line).
@@ -950,14 +1546,45 @@ function LineEditPanel({
     }
   }, [row.receiving_id]);
 
+  const saveSupportNotes = useCallback(async () => {
+    if (row.receiving_id == null) return;
+    const trimmed = supportNotes.trim();
+    const prev = (row.receiving_support_notes || '').trim();
+    if (trimmed === prev) return;
+    try {
+      const res = await fetch(`/api/receiving/${row.receiving_id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ support_notes: trimmed || null }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!data?.success) return;
+      const nextSn = (data.receiving?.support_notes as string | null) ?? null;
+      window.dispatchEvent(new CustomEvent('receiving-package-updated', {
+        detail: { receiving_id: row.receiving_id, support_notes: nextSn },
+      }));
+    } catch {
+      /* silent */
+    }
+  }, [row.receiving_id, row.receiving_support_notes, supportNotes]);
+
   // Keep this inspector in sync when the platform is changed elsewhere
   // (top PO card, another open inspector for the same receiving row).
   useEffect(() => {
     if (row.receiving_id == null) return;
     const handler = (e: Event) => {
-      const detail = (e as CustomEvent<{ receiving_id?: number; source_platform?: string | null }>).detail;
+      const detail = (e as CustomEvent<{
+        receiving_id?: number;
+        source_platform?: string | null;
+        support_notes?: string | null;
+      }>).detail;
       if (!detail || detail.receiving_id !== row.receiving_id) return;
-      setSourcePlatform((detail.source_platform || '').toLowerCase());
+      if (detail.source_platform !== undefined) {
+        setSourcePlatform((detail.source_platform || '').toLowerCase());
+      }
+      if (detail.support_notes !== undefined) {
+        setSupportNotes(detail.support_notes || '');
+      }
     };
     window.addEventListener('receiving-package-updated', handler);
     return () => window.removeEventListener('receiving-package-updated', handler);
@@ -1041,9 +1668,18 @@ function LineEditPanel({
     setExtraSerials((xs) => xs.filter((_, j) => j !== idx));
   }, [extraSerials, submitSerial]);
 
-  const handleReceive = useCallback(async () => {
-    if (receiving || row.receiving_id == null) return;
-    setReceiving(true);
+  const handleReceive = useCallback(
+    async (receiveIntent: 'zoho_receive' | 'scan_only' = 'zoho_receive') => {
+      if (receiving) return;
+      if (row.receiving_id == null) {
+        toast.error('Cannot receive — link this item to a shipment first.', {
+          description: 'Scan tracking or use lookup so this line has a receiving (carton) id.',
+          duration: 6000,
+        });
+        return;
+      }
+      setReceiving(true);
+    const startedAt = Date.now();
     try {
       const perLineNotes = notes.trim() || null;
 
@@ -1053,6 +1689,7 @@ function LineEditPanel({
         body: JSON.stringify({
           receiving_id: row.receiving_id,
           receiving_line_id: row.id,
+          receive_intent: receiveIntent,
           qa_status: qa,
           disposition_code: disp,
           condition_grade: cond,
@@ -1064,7 +1701,20 @@ function LineEditPanel({
         }),
       });
       const markData = await markRes.json().catch(() => null);
-      if (markRes.ok && markData?.success) {
+
+      // Capture the raw API response so the UI panel below the print preview
+      // can show exactly what the server (and Zoho) returned. Auto-expand on
+      // anything that wasn't a clean Zoho success so the operator sees why.
+      const respRecord: ReceiveResponseRecord = {
+        at: Date.now(),
+        durationMs: Date.now() - startedAt,
+        httpStatus: markRes.status,
+        ok: markRes.ok && Boolean(markData?.success),
+        body: markData,
+      };
+      setLastReceiveResponse(respRecord);
+
+      if (markRes.ok) {
         try {
           const linesRes = await fetch(`/api/receiving-lines?receiving_id=${row.receiving_id}`);
           const lineData = await linesRes.json();
@@ -1078,6 +1728,7 @@ function LineEditPanel({
       if (!markRes.ok || !markData?.success) {
         console.error('receiving/mark-received-po failed', { status: markRes.status, error: markData?.error });
         toast.error(markData?.error || `Receive failed (HTTP ${markRes.status})`);
+        setResponseExpanded(true);
       } else {
         const zoho = markData?.zoho as
           | {
@@ -1085,23 +1736,59 @@ function LineEditPanel({
               ok?: boolean;
               rate_limited?: boolean;
               error?: string | null;
-              results?: Array<{ receive_id: string | null; error: string | null; error_kind?: string | null }>;
+              skip_reason?: string | null;
+              results?: Array<{ purchaseorder_id?: string; receive_id: string | null; error: string | null; error_kind?: string | null }>;
             }
           | undefined;
         if (zoho?.attempted) {
           if (zoho.rate_limited) {
-            toast.error('Zoho daily API quota exhausted — PO was NOT marked received in Zoho. Local DB updated.', {
+            toast.error('Zoho daily API quota exhausted — PO was NOT marked received in Zoho. Lines stay in Scanned until Zoho succeeds.', {
               description: 'Wait for the daily reset or reduce other Zoho-touching workflows for now.',
               duration: 8000,
             });
+            setResponseExpanded(true);
           } else if (!zoho.ok) {
             toast.error(`Zoho receive failed: ${zoho.error || 'unknown error'}`, { duration: 6000 });
+            setResponseExpanded(true);
+          } else if (zoho.skip_reason === 'zoho_already_fully_received') {
+            toast.success('Zoho already shows this PO as fully received.', {
+              description: 'Purchase receive was not needed; inventory matches the dashboard.',
+              duration: 5000,
+            });
+            setResponseExpanded(false);
           } else {
-            const firstId = zoho.results?.find((r) => r.receive_id)?.receive_id;
-            toast.success(`PO marked received in Zoho${firstId ? ` (receive ${firstId})` : ''}`);
+            toast.success(
+              <div className="flex flex-col gap-1 text-left">
+                <span className="leading-snug">Successfully added SN# & notes to PO item</span>
+                <span className="leading-snug">Successfully marked the PO as Received</span>
+              </div>,
+              { duration: 6000 },
+            );
+            setResponseExpanded(false);
           }
         } else {
-          toast.success('Line received');
+          const skipReason = zoho?.skip_reason;
+          if (skipReason === 'scan_only') {
+            toast.success('Marked as scanned locally (Zoho not updated). Run Receive when ready to sync inventory.', {
+              duration: 6500,
+            });
+            setResponseExpanded(false);
+          } else if (skipReason === 'zoho_already_fully_received') {
+            toast.success('Zoho already shows this PO as fully received.', {
+              description: 'Purchase receive was not needed; inventory matches the dashboard.',
+              duration: 5000,
+            });
+            setResponseExpanded(false);
+          } else if (skipReason === 'no_receiving_lines') {
+            toast.message('No receiving lines on this shipment.', { duration: 5000 });
+            setResponseExpanded(true);
+          } else {
+            toast.error('Lines saved locally — Zoho was NOT updated (no PO link found).', {
+              description: 'Sync with Zoho first (refresh icon) to link this carton to a PO.',
+              duration: 7000,
+            });
+            setResponseExpanded(true);
+          }
         }
       }
 
@@ -1109,7 +1796,17 @@ function LineEditPanel({
       window.dispatchEvent(new CustomEvent('usav-refresh-data'));
     } catch (err) {
       console.error('receiving/mark-received-po threw', err);
-      toast.error(err instanceof Error ? err.message : 'Receive failed');
+      const message = err instanceof Error ? err.message : 'Receive failed';
+      toast.error(message);
+      setLastReceiveResponse({
+        at: Date.now(),
+        durationMs: Date.now() - startedAt,
+        httpStatus: 0,
+        ok: false,
+        body: null,
+        networkError: message,
+      });
+      setResponseExpanded(true);
     } finally {
       setReceiving(false);
     }
@@ -1132,7 +1829,6 @@ function LineEditPanel({
     date: labelDate,
   };
 
-  const notesPreview = notes.trim();
   const inboundSummary = (
     <>
       <span className="min-w-0 truncate" title={trackingHint || undefined}>
@@ -1142,16 +1838,6 @@ function LineEditPanel({
         ·
       </span>
       <span className="min-w-0 max-w-full break-words text-right">{labelPlatform}</span>
-      {notesPreview ? (
-        <>
-          <span className={FLOW_SECTION_SUMMARY_SEP_CLASS} aria-hidden>
-            ·
-          </span>
-          <span className="min-w-0 max-w-[min(11rem,50%)] truncate text-right" title={notesPreview}>
-            {notesPreview}
-          </span>
-        </>
-      ) : null}
     </>
   );
 
@@ -1172,12 +1858,28 @@ function LineEditPanel({
 
   const handlePrintAndReceive = useCallback(async () => {
     runPrintLabel();
-    await handleReceive();
+    await handleReceive('zoho_receive');
   }, [runPrintLabel, handleReceive]);
 
   const canPrintReview = Boolean(scanValue.trim() || (row.sku || '').trim());
   const canReceiveReview = row.receiving_id != null && !receiving;
-  const combinedReviewDisabled = receiving || (!canPrintReview && !canReceiveReview);
+  /** Print · receive must do both; previously SKU alone enabled the button while receive no-opped. */
+  const combinedReviewDisabled = receiving || !canReceiveReview || !canPrintReview;
+  const isSinglePoItem = itemTotal === 1;
+  const receiveMenuLabel = receiving ? 'Receiving…' : isSinglePoItem ? 'Receive' : 'Receive all';
+  const printReceivePrimaryLabel = receiving ? 'Receiving…' : 'Print · receive';
+  const splitMenuAriaLabel = isSinglePoItem
+    ? 'Print only, mark as scanned, or receive (no print)'
+    : 'Print only, mark as scanned, or receive all (no print)';
+  const splitMenuHoverTitle = isSinglePoItem
+    ? 'Hover for print-only, mark as scanned, or receive without print'
+    : 'Hover for print-only, mark as scanned, or receive all without print';
+  const printThenReceiveTitle =
+    row.receiving_id == null && !scanValue.trim() && !(row.sku || '').trim()
+      ? 'Need a shipment link or SKU to continue'
+      : isSinglePoItem
+        ? 'Print label (if available), then receive this line'
+        : 'Print label (if available), then receive every open line on this PO';
 
   const recordedSerials = row.serials ?? [];
 
@@ -1307,9 +2009,7 @@ function LineEditPanel({
       listingLink, zendesk]);
 
   const hasItemNav = typeof itemIndex === 'number' && typeof itemTotal === 'number' && itemTotal > 0;
-  const itemCountSummary = hasItemNav && (itemTotal ?? 0) > 1
-    ? `${itemTotal} items`
-    : undefined;
+  const itemCountSummary = hasItemNav && (itemTotal ?? 0) > 1 ? `${itemTotal} items` : undefined;
 
   return (
     <div className="border-b border-slate-200 bg-slate-50">
@@ -1351,14 +2051,16 @@ function LineEditPanel({
       </div>
 
       <div className="divide-y divide-slate-200 border-t border-slate-200">
+        <ReceivingCartonStaffDropdown receivingId={row.receiving_id} staffId={staffId} />
         {/* ── SHIPMENT PO ── */}
         <FlowSection
           title="Shipment PO"
           summary={inboundSummary}
           open={flowOpen.shipment}
           onToggle={() => toggleFlow('shipment')}
+          tone="shipment"
         >
-          <div className="space-y-1.5">
+          <div className="space-y-2.5">
             <div>
               <div className="flex items-center gap-2">
                 <span className={`${FLOW_SECTION_LABEL} mb-0 min-w-0 flex-1 leading-none`}>
@@ -1376,7 +2078,7 @@ function LineEditPanel({
                   </button>
                 </span>
               </div>
-              <div className="group mt-0.5">
+              <div className="group mt-1">
                 <SearchBar
                   value={trackingEdit}
                   onChange={setTrackingEdit}
@@ -1431,7 +2133,7 @@ function LineEditPanel({
 
             <div>
               <span className={FLOW_SECTION_LABEL}>Listing URL</span>
-              <div className="group mt-0.5">
+              <div className="group mt-1">
                 <SearchBar
                   value={listingLink}
                   onChange={setListingLink}
@@ -1474,7 +2176,7 @@ function LineEditPanel({
                     void savePlatform(next);
                   }}
                   disabled={row.receiving_id == null}
-                  className={`${SELECT_CLASS} mt-0.5`}
+                  className={`${SELECT_CLASS} mt-1`}
                 >
                   {SOURCE_PLATFORM_OPTS.map((opt) => (
                     <option key={opt.value || 'auto'} value={opt.value}>{opt.label}</option>
@@ -1489,7 +2191,7 @@ function LineEditPanel({
                     setReceivingType(e.target.value);
                     patch({ receiving_type: e.target.value });
                   }}
-                  className={`${SELECT_CLASS} mt-0.5`}
+                  className={`${SELECT_CLASS} mt-1`}
                 >
                   {RECEIVING_TYPE_OPTS.map((opt) => (
                     <option key={opt.value} value={opt.value}>{opt.label}</option>
@@ -1506,9 +2208,10 @@ function LineEditPanel({
           summary={itemCountSummary}
           open={flowOpen.item}
           onToggle={() => toggleFlow('item')}
-          bodyClassName="px-2 pt-1.5 pb-0"
+          tone="item"
+          bodyClassName="px-2 pt-2.5 pb-1"
         >
-          <div className="space-y-1.5">
+          <div className="space-y-2.5">
             {/* Item position nav: only shown when multiple items */}
             {hasItemNav && (itemTotal ?? 0) > 1 && (
               <div className="flex items-center gap-1.5">
@@ -1539,11 +2242,13 @@ function LineEditPanel({
               </div>
             )}
 
-            {/* Product title */}
+            {/* Product title — visual anchor of the Item lane.
+                Bigger + heavier than anything else so the operator's eye
+                lands here first when a line is selected. */}
             <div>
               <span className={FLOW_SECTION_LABEL}>Product title</span>
               <p
-                className={`mt-0.5 font-bold leading-snug text-slate-900 break-words ${compact ? 'text-[10px] line-clamp-3' : 'text-[11px]'}`}
+                className={`mt-1 ${compact ? TYPE_PRODUCT_TITLE_COMPACT_CLASS : TYPE_PRODUCT_TITLE_CLASS}`}
               >
                 {row.item_name || row.sku || `Line #${row.id}`}
               </p>
@@ -1561,7 +2266,7 @@ function LineEditPanel({
                   setCond(v);
                   void patch({ condition_grade: v });
                 }}
-                className={`${SELECT_CLASS} mt-0.5`}
+                className={`${SELECT_CLASS} mt-1`}
                 aria-label="Condition grade for this line item"
               >
                 {CONDITION_OPTS.map((opt) => (
@@ -1587,7 +2292,7 @@ function LineEditPanel({
                   </button>
                 </span>
               </div>
-              <div className="group mt-0.5">
+              <div className="group mt-1">
                 <SearchBar
                   value={serialInput}
                   onChange={setSerialInput}
@@ -1638,20 +2343,44 @@ function LineEditPanel({
                   <div className={RECEIVING_SCAN_RULE_LINE_CLASS} aria-hidden />
                 </div>
               ))}
+              <div className="mt-2">
+                <label htmlFor={`po-item-notes-${row.id}`} className={FLOW_SECTION_LABEL}>
+                  PO item notes
+                </label>
+                <textarea
+                  key={`po-item-notes-${row.id}`}
+                  id={`po-item-notes-${row.id}`}
+                  value={notes}
+                  onChange={(e) => setNotes(e.target.value)}
+                  onBlur={() => {
+                    if (notes !== (row.notes || '')) void patch({ notes });
+                  }}
+                  rows={2}
+                  placeholder="Notes for this PO line (saved to receiving line)"
+                  className="mt-1 w-full resize-none rounded-md border border-slate-200 bg-white px-2 py-1 text-[11px] font-medium leading-snug text-slate-900 placeholder:text-slate-400 focus:border-blue-300 focus:outline-none focus:ring-2 focus:ring-blue-500/10"
+                />
+              </div>
             </div>
           </div>
         </FlowSection>
 
         <FlowSection
           title="Support"
-          summary={zendesk.trim() ? 'Zendesk' : undefined}
+          summary={
+            zendesk.trim()
+              ? 'Zendesk'
+              : supportNotes.trim()
+                ? 'Notes'
+                : undefined
+          }
           open={flowOpen.support}
           onToggle={() => toggleFlow('support')}
+          tone="support"
         >
-          <div className="space-y-1.5">
+          <div className="space-y-2.5">
             <div>
               <span className={FLOW_SECTION_LABEL}>Zendesk</span>
-              <div className="mt-0.5 flex gap-1">
+              <div className="mt-1 flex gap-1">
                 <input
                   type="text"
                   value={zendesk}
@@ -1675,16 +2404,22 @@ function LineEditPanel({
               </div>
             </div>
             <div>
-              <span className={FLOW_SECTION_LABEL}>Notes</span>
+              <label htmlFor={`support-notes-${row.receiving_id ?? 'none'}-${row.id}`} className={FLOW_SECTION_LABEL}>
+                Support notes
+              </label>
               <textarea
-                value={notes}
-                onChange={(e) => setNotes(e.target.value)}
-                onBlur={() => {
-                  if (notes !== (row.notes || '')) patch({ notes });
-                }}
+                id={`support-notes-${row.receiving_id ?? 'none'}-${row.id}`}
+                value={supportNotes}
+                onChange={(e) => setSupportNotes(e.target.value)}
+                onBlur={() => void saveSupportNotes()}
+                disabled={row.receiving_id == null}
                 rows={2}
-                placeholder="Notes"
-                className="mt-0.5 w-full resize-none border border-slate-200 bg-white px-2 py-1 text-[10px] leading-snug text-slate-900 placeholder:text-slate-400 focus:border-blue-300 focus:outline-none focus:ring-2 focus:ring-blue-500/10"
+                placeholder={
+                  row.receiving_id == null
+                    ? 'Link this line to a shipment to save support notes'
+                    : 'Ticket context, vendor issues, PO-wide notes…'
+                }
+                className="mt-1 w-full resize-none rounded-md border border-slate-200 bg-white px-2 py-1 text-[11px] font-medium leading-snug text-slate-900 placeholder:text-slate-400 focus:border-blue-300 focus:outline-none focus:ring-2 focus:ring-blue-500/10 disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-400"
               />
             </div>
           </div>
@@ -1696,8 +2431,8 @@ function LineEditPanel({
               <button
                 type="button"
                 aria-haspopup="menu"
-                aria-label="Print only or receive all (no print)"
-                title="Hover for print-only or receive-all (no print) actions"
+                aria-label={splitMenuAriaLabel}
+                title={splitMenuHoverTitle}
                 className="flex h-auto min-h-[28px] items-center justify-center border-r border-emerald-500/50 px-2 text-white outline-none transition-colors hover:bg-emerald-700 focus-visible:z-30 focus-visible:ring-2 focus-visible:ring-white/80 focus-visible:ring-offset-2 focus-visible:ring-offset-emerald-600"
               >
                 <ChevronDown className="h-4 w-4 opacity-95" aria-hidden />
@@ -1736,6 +2471,22 @@ function LineEditPanel({
                       role="menuitem"
                       type="button"
                       disabled={!canReceiveReview}
+                      title="Save quantities as Scanned only; skip Zoho purchase receive (no print)"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        void handleReceive('scan_only');
+                      }}
+                      className="flex w-full items-center gap-2 px-3 py-2 text-left text-[10px] font-black uppercase tracking-wider text-slate-800 transition-colors hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-35"
+                    >
+                      <Clipboard className="h-3.5 w-3.5 shrink-0" aria-hidden />
+                      Mark as scanned
+                    </button>
+                  </li>
+                  <li role="none">
+                    <button
+                      role="menuitem"
+                      type="button"
+                      disabled={!canReceiveReview}
                       title={
                         row.receiving_id == null
                           ? 'Line must be linked to a shipment'
@@ -1743,11 +2494,11 @@ function LineEditPanel({
                       }
                       onClick={(e) => {
                         e.stopPropagation();
-                        void handleReceive();
+                        void handleReceive('zoho_receive');
                       }}
                       className="flex w-full items-center gap-2 px-3 py-2 text-left text-[10px] font-black uppercase tracking-wider text-slate-800 transition-colors hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-35"
                     >
-                      {receiving ? 'Receiving…' : 'Receive all'}
+                      {receiveMenuLabel}
                     </button>
                   </li>
                 </ul>
@@ -1757,15 +2508,11 @@ function LineEditPanel({
               type="button"
               onClick={() => void handlePrintAndReceive()}
               disabled={combinedReviewDisabled}
-              title={
-                row.receiving_id == null && !scanValue.trim() && !(row.sku || '').trim()
-                  ? 'Need a shipment link or SKU to continue'
-                  : 'Print label (if available), then receive every open line on this PO in Zoho'
-              }
+              title={printThenReceiveTitle}
               className="inline-flex min-h-[28px] min-w-0 flex-1 items-center justify-center gap-2 px-2 py-1 text-[9px] font-black uppercase tracking-wider text-white outline-none transition-colors hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-60 focus-visible:z-30 focus-visible:ring-2 focus-visible:ring-white/70 focus-visible:ring-offset-2 focus-visible:ring-offset-emerald-600"
             >
               <Printer className="h-3.5 w-3.5 shrink-0" aria-hidden />
-              {receiving ? 'Receiving…' : 'Print · receive all'}
+              {printReceivePrimaryLabel}
             </button>
           </div>
           {scanValue || row.sku ? (
@@ -1782,13 +2529,16 @@ function LineEditPanel({
               ) : null}
             </div>
           ) : null}
-          {row.receiving_id != null ? (
-            <div className="-mx-3 border-t border-slate-200">
-              <ReceivingPhotoStrip
-                receivingId={row.receiving_id}
-                staffId={Number(staffId) || 0}
-              />
-            </div>
+          {lastReceiveResponse ? (
+            <ReceiveResponsePanel
+              response={lastReceiveResponse}
+              expanded={responseExpanded}
+              onToggle={() => setResponseExpanded((v) => !v)}
+              onDismiss={() => {
+                setLastReceiveResponse(null);
+                setResponseExpanded(false);
+              }}
+            />
           ) : null}
         </div>
       </div>
@@ -1951,7 +2701,14 @@ export function ReceivingSidebarPanel() {
         const rows = Array.isArray(data?.receiving_lines)
           ? (data.receiving_lines as ReceivingLineRow[])
           : [];
-        if (rows.length > 0) setScanMatchedRows(rows);
+        if (rows.length > 0) {
+          setScanMatchedRows(rows);
+          setSelectedLine((prev) => {
+            if (!prev) return prev;
+            const hit = rows.find((r) => r.id === prev.id);
+            return hit ?? prev;
+          });
+        }
       } catch { /* silent — nav stays disabled if fetch fails */ }
     })();
     return () => { cancelled = true; };
@@ -2047,11 +2804,28 @@ export function ReceivingSidebarPanel() {
         rows.map((r) => (r.id === updated.id ? { ...r, ...updated } : r)),
       );
     };
+    const handlePackageMeta = (e: Event) => {
+      const detail = (e as CustomEvent<{
+        receiving_id?: number;
+        support_notes?: string | null;
+      }>).detail;
+      if (!detail || detail.receiving_id == null || detail.support_notes === undefined) return;
+      const rid = detail.receiving_id;
+      const sn = detail.support_notes;
+      setSelectedLine((prev) =>
+        prev?.receiving_id === rid ? { ...prev, receiving_support_notes: sn } : prev,
+      );
+      setScanMatchedRows((rows) =>
+        rows.map((r) => (r.receiving_id === rid ? { ...r, receiving_support_notes: sn } : r)),
+      );
+    };
     window.addEventListener('receiving-select-line', handleSelect);
     window.addEventListener('receiving-line-updated', handleUpdated);
+    window.addEventListener('receiving-package-updated', handlePackageMeta);
     return () => {
       window.removeEventListener('receiving-select-line', handleSelect);
       window.removeEventListener('receiving-line-updated', handleUpdated);
+      window.removeEventListener('receiving-package-updated', handlePackageMeta);
     };
   }, []);
 
@@ -2218,11 +2992,6 @@ export function ReceivingSidebarPanel() {
             }
           })();
 
-          window.dispatchEvent(
-            new CustomEvent('receiving-po-loaded', {
-              detail: { receiving_id: ctx.receiving_id, lines: ctx.lines },
-            }),
-          );
           // Signal any phone listening on station:{staffId} that this carton
           // is the active one — the phone will auto-open its camera page.
           void publishPhotoRequestFor(ctx.receiving_id, trackingNumber);
@@ -2523,7 +3292,7 @@ export function ReceivingSidebarPanel() {
   useEffect(() => {
     const handler = (e: Event) => {
       const detail = (e as CustomEvent<{ receiving_id?: number; source_platform?: string | null }>).detail;
-      if (!detail) return;
+      if (!detail || detail.source_platform === undefined) return;
       setPoContext((prev) => {
         if (!prev || prev.receiving_id !== detail.receiving_id) return prev;
         const nextPkg: ReceivingPackageMeta = {

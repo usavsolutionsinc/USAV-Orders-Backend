@@ -213,7 +213,7 @@ export function FavoritesWorkspaceSection({
   const [editingFavoriteId, setEditingFavoriteId] = useState<number | null>(null);
   // header pencil toggle — shows trash delete buttons on rows
   const [isManageMode, setIsManageMode] = useState(false);
-  const [isListOpen, setIsListOpen] = useState(true);
+  const [isListOpen, setIsListOpen] = useState(false);
   const accentClasses = useMemo(() => getAccentClasses(accent), [accent]);
   const buttonClasses = useMemo(() => getAccentClasses(buttonAccent ?? accent), [accent, buttonAccent]);
 

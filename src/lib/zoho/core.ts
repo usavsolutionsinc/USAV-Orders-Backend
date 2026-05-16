@@ -17,12 +17,20 @@ export function requireOrgId(): string {
   return ZOHO_ORG_ID;
 }
 
+/**
+ * Inventory API root per region. Docs use:
+ * `https://www.zohoapis.com/inventory/v1/...` (US) and
+ * `https://www.zohoapis.eu/inventory/v1/...` (EU), i.e. `/inventory/v1` — not
+ * `/inventory/api/v1` and not the legacy `inventory.zohoapis.*` host.
+ * Paths passed to buildZohoUrl may be `/api/v1/...`; that prefix is stripped
+ * before appending here.
+ */
 export function getInventoryBaseUrl() {
-  if (ZOHO_DOMAIN.includes('.eu')) return 'https://inventory.zohoapis.eu/api/v1';
-  if (ZOHO_DOMAIN.includes('.in')) return 'https://inventory.zohoapis.in/api/v1';
-  if (ZOHO_DOMAIN.includes('.com.au')) return 'https://inventory.zohoapis.com.au/api/v1';
-  if (ZOHO_DOMAIN.includes('.ca')) return 'https://inventory.zohoapis.ca/api/v1';
-  if (ZOHO_DOMAIN.includes('.jp')) return 'https://inventory.zohoapis.jp/api/v1';
+  if (ZOHO_DOMAIN.includes('.eu')) return 'https://www.zohoapis.eu/inventory/v1';
+  if (ZOHO_DOMAIN.includes('.in')) return 'https://www.zohoapis.in/inventory/v1';
+  if (ZOHO_DOMAIN.includes('.com.au')) return 'https://www.zohoapis.com.au/inventory/v1';
+  if (ZOHO_DOMAIN.includes('.ca')) return 'https://www.zohoapis.ca/inventory/v1';
+  if (ZOHO_DOMAIN.includes('.jp')) return 'https://www.zohoapis.jp/inventory/v1';
   return 'https://www.zohoapis.com/inventory/v1';
 }
 

@@ -1,6 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server';
 import pool from '@/lib/db';
-import { createPurchaseReceive } from '@/lib/zoho';
+import {
+  createPurchaseReceive,
+  getPurchaseOrderById,
+  assertPurchaseOrderReceivable,
+  getPurchaseReceiveIdFromCreateResponse,
+  mergeCatalogItemIdsFromPurchaseOrder,
+  searchItemBySku,
+  type ZohoPurchaseReceiveLine,
+} from '@/lib/zoho';
 import { formatPSTTimestamp, getCurrentPSTDateKey, normalizePSTTimestamp } from '@/utils/date';
 
 export const dynamic = 'force-dynamic';
@@ -62,6 +70,8 @@ export async function POST(request: NextRequest) {
       .trim()
       .toUpperCase();
     const notes = String(body?.notes || '').trim() || null;
+    const zohoBillId = String(body?.zoho_bill_id ?? '').trim() || undefined;
+    const zohoBillNumber = String(body?.zoho_bill_number ?? '').trim() || undefined;
 
     const rawLines: Record<string, unknown>[] = Array.isArray(body?.line_items) ? body.line_items : [];
     const lineItems = rawLines
@@ -91,21 +101,39 @@ export async function POST(request: NextRequest) {
     const receiveDate =
       String(body?.receive_date || '').trim() || getCurrentPSTDateKey();
 
+    const poForReceive = await getPurchaseOrderById(purchaseOrderId);
+    assertPurchaseOrderReceivable(poForReceive);
+
+    let zohoReceiveLines: ZohoPurchaseReceiveLine[] = lineItems.map((l) => ({
+      line_item_id: l.line_item_id,
+      quantity_received: l.quantity_received,
+      item_id: l.item_id,
+    }));
+    zohoReceiveLines = mergeCatalogItemIdsFromPurchaseOrder(poForReceive, zohoReceiveLines);
+    for (let i = 0; i < zohoReceiveLines.length; i++) {
+      if (String(zohoReceiveLines[i].item_id ?? '').trim()) continue;
+      const sku = lineItems[i]?.sku;
+      if (!sku) continue;
+      try {
+        const hit = await searchItemBySku(sku);
+        const id = hit?.item_id ? String(hit.item_id).trim() : '';
+        if (id) zohoReceiveLines[i] = { ...zohoReceiveLines[i], item_id: id };
+      } catch {
+        /* leave missing — createPurchaseReceive will throw a clear error */
+      }
+    }
+
     const zohoReceive = await createPurchaseReceive({
       purchaseOrderId,
       warehouseId: warehouseId || undefined,
       date: receiveDate,
-      lineItems: lineItems.map((l) => ({
-        line_item_id: l.line_item_id,
-        quantity_received: l.quantity_received,
-      })),
+      lineItems: zohoReceiveLines,
+      bills: poForReceive.purchaseorder?.bills,
+      ...(zohoBillId ? { billId: zohoBillId } : {}),
+      ...(zohoBillNumber ? { billNumberHint: zohoBillNumber } : {}),
     });
 
-    const purchaseReceiveId = String(
-      (zohoReceive as Record<string, unknown>)?.purchasereceive
-        ? ((zohoReceive as Record<string, unknown>).purchasereceive as Record<string, unknown>)?.purchase_receive_id
-        : (zohoReceive as Record<string, unknown>)?.purchase_receive_id ?? ''
-    ).trim();
+    const purchaseReceiveId = getPurchaseReceiveIdFromCreateResponse(zohoReceive) ?? '';
 
     // ── 2. Persist to local DB ──────────────────────────────────────────────
     const normalizedDate = normalizePSTTimestamp(`${receiveDate} 00:00:00`, { fallbackToNow: true })!;

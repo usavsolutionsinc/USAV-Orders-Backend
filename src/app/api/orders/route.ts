@@ -79,8 +79,6 @@ export async function GET(req: NextRequest) {
     const excludePacked      = searchParams.get('excludePacked') === 'true';
     /** awaitingOnly=true → only orders without shipment_id (Awaiting tab: no tracking yet) */
     const awaitingOnly       = searchParams.get('awaitingOnly') === 'true';
-    /** Client-driven bust of Upstash list cache (imports, dashboard refresh). */
-    const skipListCache      = searchParams.get('skipCache') === '1';
     const shippedByCarrierOrLatestStatusSql = SHIPPED_BY_CARRIER_SQL;
 
     const cacheLookup = createCacheLookupKey({
@@ -103,7 +101,7 @@ export async function GET(req: NextRequest) {
 
     const CACHE_HEADERS = { 'Cache-Control': 'private, max-age=300, stale-while-revalidate=60' };
 
-    if (!singleOrderMode && !hasSearchQuery && !skipListCache) {
+    if (!singleOrderMode && !hasSearchQuery) {
       const cached = await getCachedJson<any>('api:orders', cacheLookup);
       if (cached) {
         ok = true;
@@ -591,7 +589,7 @@ export async function GET(req: NextRequest) {
       weekStart: weekStart || null,
       weekEnd:   weekEnd   || null,
     };
-    if (!singleOrderMode && !hasSearchQuery && !skipListCache) {
+    if (!singleOrderMode && !hasSearchQuery) {
       await setCachedJson('api:orders', cacheLookup, payload, 300, ['orders']);
       cache = 'MISS';
     } else {
@@ -600,8 +598,7 @@ export async function GET(req: NextRequest) {
     ok = true;
     return NextResponse.json(payload, {
       headers: {
-        'x-cache':
-          singleOrderMode || hasSearchQuery || skipListCache ? 'BYPASS' : 'MISS',
+        'x-cache': singleOrderMode || hasSearchQuery ? 'BYPASS' : 'MISS',
         ...CACHE_HEADERS,
       },
     });

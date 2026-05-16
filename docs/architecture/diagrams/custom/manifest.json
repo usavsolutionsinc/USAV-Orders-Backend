@@ -1,0 +1,9 @@
+{
+  "_comment": "Hand-authored diagrams. Survives codebase-visualizer post-commit regeneration because generate.py only rewrites ../../manifest.json and ../*.mmd. Merged into /api/architecture's response after the generated diagrams.",
+  "diagrams": {
+    "receiving_pipeline": {
+      "title": "Receiving Pipeline",
+      "description": "End-to-end map of the receiving flow: UI modes → API routes → core lib → Zoho/QStash/realtime → Neon tables. Dashed edges are cache invalidations."
+    }
+  }
+}

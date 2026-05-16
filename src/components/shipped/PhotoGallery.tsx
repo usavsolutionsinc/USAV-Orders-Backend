@@ -4,7 +4,18 @@ import { useState, useEffect, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { framerTransition } from '@/design-system/foundations/motion-framer';
-import { X, Download, ZoomIn, ZoomOut, ChevronLeft, ChevronRight, Image as ImageIcon, AlertCircle } from '../Icons';
+import {
+  X,
+  Download,
+  ZoomIn,
+  ZoomOut,
+  ChevronLeft,
+  ChevronRight,
+  Image as ImageIcon,
+  AlertCircle,
+  Copy,
+  Check,
+} from '../Icons';
 
 interface PhotoGalleryProps {
   photos: Array<string | { url: string; index: number; uploadedAt: string }>;
@@ -13,6 +24,10 @@ interface PhotoGalleryProps {
   compact?: boolean;
   /** Main label on the launcher button (default: packing copy). Viewer/modal unchanged. */
   launcherTitle?: string;
+  /**
+   * `toolbar` — slim row with download-all, copy links, and fullscreen (shipped UX uses `default`).
+   */
+  launcherLayout?: 'default' | 'toolbar';
 }
 
 interface PhotoItem {
@@ -25,8 +40,9 @@ export function PhotoGallery({
   photos,
   orderId,
   className = '',
-  compact = false,
+  compact: _compact = false,
   launcherTitle = 'View Packing Photos',
+  launcherLayout = 'default',
 }: PhotoGalleryProps) {
   const [photoItems, setPhotoItems] = useState<PhotoItem[]>([]);
   const [viewerOpen, setViewerOpen] = useState(false);
@@ -36,6 +52,8 @@ export function PhotoGallery({
   const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
   const [imagePosition, setImagePosition] = useState({ x: 0, y: 0 });
   const [mounted, setMounted] = useState(false);
+  const [downloadingAll, setDownloadingAll] = useState(false);
+  const [linksCopied, setLinksCopied] = useState(false);
 
   useEffect(() => {
     setMounted(true);
@@ -153,20 +171,19 @@ export function PhotoGallery({
     setImagePosition({ x: 0, y: 0 });
   };
 
-  const handleDownload = async () => {
-    const currentPhoto = photoItems[currentIndex];
-    if (!currentPhoto) return;
+  const downloadPhotoAtIndex = async (index: number) => {
+    const photo = photoItems[index];
+    if (!photo?.url) return;
 
     try {
-      const response = await fetch(currentPhoto.url);
+      const response = await fetch(photo.url);
       const blob = await response.blob();
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      // Use order_id in filename if available
-      const filename = orderId 
-        ? `${orderId}_photo_${currentIndex + 1}.jpg`
-        : `photo-${currentIndex + 1}.jpg`;
+      const filename = orderId
+        ? `${orderId}_photo_${index + 1}.jpg`
+        : `photo-${index + 1}.jpg`;
       a.download = filename;
       document.body.appendChild(a);
       a.click();
@@ -174,6 +191,36 @@ export function PhotoGallery({
       window.URL.revokeObjectURL(url);
     } catch (error) {
       console.error('Failed to download image:', error);
+    }
+  };
+
+  const handleDownload = () => downloadPhotoAtIndex(currentIndex);
+
+  const handleDownloadAll = async () => {
+    if (downloadingAll || photoItems.length === 0) return;
+    setDownloadingAll(true);
+    try {
+      for (let i = 0; i < photoItems.length; i++) {
+        await downloadPhotoAtIndex(i);
+        await new Promise((r) => setTimeout(r, 280));
+      }
+    } finally {
+      setDownloadingAll(false);
+    }
+  };
+
+  const copyAllPhotoUrls = async () => {
+    const text = photoItems
+      .map((p) => p.url)
+      .filter(Boolean)
+      .join('\n');
+    if (!text) return;
+    try {
+      await navigator.clipboard.writeText(text);
+      setLinksCopied(true);
+      window.setTimeout(() => setLinksCopied(false), 2000);
+    } catch (err) {
+      console.error('Failed to copy photo links:', err);
     }
   };
 
@@ -452,40 +499,111 @@ export function PhotoGallery({
     );
   };
 
+  const toolbarIconBtn =
+    'p-2 rounded-lg bg-white/90 border border-blue-200/90 text-blue-700 shadow-sm hover:bg-blue-50 hover:border-blue-300 transition-all disabled:opacity-40 disabled:pointer-events-none';
+
   return (
     <>
-      {/* Compact View All Button */}
-      <button
-        onClick={() => openViewer(0)}
-        className={`w-full bg-gradient-to-r from-blue-50 to-blue-100/50 hover:from-blue-100 hover:to-blue-100 border border-blue-200 hover:border-blue-300 rounded-xl px-4 py-3 transition-all active:scale-[0.98] group ${className}`}
-      >
-        <div className="flex items-center justify-between gap-3">
-          <div className="flex items-center gap-3">
-            <div className="h-10 w-10 bg-blue-500 rounded-lg flex items-center justify-center shadow-sm">
-              <ImageIcon className="h-5 w-5 text-white" />
-            </div>
-            <div className="flex flex-col items-start">
-              <span className="text-sm font-bold text-gray-900">{launcherTitle}</span>
-              <div className="flex items-center gap-2 mt-0.5">
-                <span className="text-[10px] font-black text-blue-600 uppercase tracking-wider">
-                  {photoItems.length} {photoItems.length === 1 ? 'Photo' : 'Photos'}
+      {launcherLayout === 'toolbar' ? (
+        <div
+          className={`flex w-full min-h-[3.25rem] items-stretch gap-1 rounded-xl border border-blue-200 bg-gradient-to-r from-blue-50 to-blue-100/50 pl-2 pr-1 py-1 ${className}`}
+        >
+          <button
+            type="button"
+            onClick={() => openViewer(0)}
+            className="flex min-w-0 flex-1 items-center justify-between gap-2 rounded-lg px-2 py-1 text-left transition-all hover:bg-blue-100/50 active:scale-[0.995]"
+            aria-label="View photos fullscreen"
+            title="View photos fullscreen"
+          >
+            <div className="flex min-w-0 items-center gap-2">
+              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-blue-500 shadow-sm">
+                <ImageIcon className="h-4 w-4 text-white" />
+              </div>
+              <div className="flex min-w-0 flex-col">
+                <span className="text-[10px] font-black uppercase tracking-wider text-blue-600">
+                  {photoItems.length} {photoItems.length === 1 ? 'photo' : 'photos'}
                 </span>
-                {loadedCount < photoItems.length && errorCount === 0 && (
-                  <span className="text-[10px] font-semibold text-amber-600">
-                    • Loading...
-                  </span>
-                )}
-                {errorCount > 0 && (
-                  <span className="text-[10px] font-semibold text-red-600">
-                    • {errorCount} Failed
-                  </span>
-                )}
+                <div className="flex flex-wrap items-center gap-x-2 gap-y-0 text-[10px] font-semibold">
+                  {loadedCount < photoItems.length && errorCount === 0 ? (
+                    <span className="text-amber-600">Loading…</span>
+                  ) : null}
+                  {errorCount > 0 ? <span className="text-red-600">{errorCount} failed</span> : null}
+                </div>
               </div>
             </div>
+            <ChevronRight className="h-4 w-4 shrink-0 text-blue-600" aria-hidden />
+          </button>
+          <div className="flex shrink-0 items-center gap-0.5 self-center">
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                void handleDownloadAll();
+              }}
+              disabled={
+                downloadingAll ||
+                photoItems.length === 0 ||
+                photoItems.every((p) => p.status === 'error')
+              }
+              className={toolbarIconBtn}
+              aria-label="Download all photos"
+              title="Download all photos"
+            >
+              <Download className="h-4 w-4" />
+            </button>
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                void copyAllPhotoUrls();
+              }}
+              disabled={photoItems.length === 0}
+              className={toolbarIconBtn}
+              aria-label="Copy all photo links"
+              title={linksCopied ? 'Copied' : 'Copy all photo links'}
+            >
+              {linksCopied ? (
+                <Check className="h-4 w-4 text-emerald-600" />
+              ) : (
+                <Copy className="h-4 w-4" />
+              )}
+            </button>
           </div>
-          <ChevronRight className="h-5 w-5 text-blue-600 group-hover:translate-x-1 transition-transform" />
         </div>
-      </button>
+      ) : (
+        <button
+          type="button"
+          onClick={() => openViewer(0)}
+          className={`w-full bg-gradient-to-r from-blue-50 to-blue-100/50 hover:from-blue-100 hover:to-blue-100 border border-blue-200 hover:border-blue-300 rounded-xl px-4 py-3 transition-all active:scale-[0.98] group ${className}`}
+        >
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex items-center gap-3">
+              <div className="h-10 w-10 bg-blue-500 rounded-lg flex items-center justify-center shadow-sm">
+                <ImageIcon className="h-5 w-5 text-white" />
+              </div>
+              <div className="flex flex-col items-start">
+                <span className="text-sm font-bold text-gray-900">{launcherTitle}</span>
+                <div className="flex items-center gap-2 mt-0.5">
+                  <span className="text-[10px] font-black text-blue-600 uppercase tracking-wider">
+                    {photoItems.length} {photoItems.length === 1 ? 'Photo' : 'Photos'}
+                  </span>
+                  {loadedCount < photoItems.length && errorCount === 0 && (
+                    <span className="text-[10px] font-semibold text-amber-600">
+                      • Loading...
+                    </span>
+                  )}
+                  {errorCount > 0 && (
+                    <span className="text-[10px] font-semibold text-red-600">
+                      • {errorCount} Failed
+                    </span>
+                  )}
+                </div>
+              </div>
+            </div>
+            <ChevronRight className="h-5 w-5 text-blue-600 group-hover:translate-x-1 transition-transform" />
+          </div>
+        </button>
+      )}
 
       {/* Render modal using Portal */}
       {mounted && typeof document !== 'undefined' && createPortal(

@@ -355,11 +355,11 @@ export default function MultiSkuSnBarcode() {
     };
 
     return (
-        <div className="h-full flex flex-col bg-white text-gray-900">
+        <div className="flex h-full min-w-0 flex-col bg-white text-gray-900">
             {/* Mode Selector — full-width tab slider */}
             <ModeSelector mode={mode} onModeChange={handleModeChange} />
 
-            <div ref={scrollRef} className="flex-1 overflow-y-auto">
+            <div ref={scrollRef} className="min-h-0 min-w-0 flex-1 overflow-y-auto">
                 {/* Step 1: SKU (hidden in bin-labels mode) */}
                 {mode !== 'bin-labels' && (
                 <SkuInput

@@ -7,20 +7,14 @@ import Script from 'next/script';
  * ArchitectureTab — live renderer for the codebase-visualizer diagrams.
  *
  * Fetches /api/architecture (which reads docs/architecture/ from disk on the
- * server) and renders each Mermaid diagram in a tabbed view. Mirrors the
- * standalone docs/architecture/index.html viewer but embedded in the admin
- * UI so it tracks the same content the generator produces.
+ * server) and renders each Mermaid diagram in a tabbed view. Generated
+ * diagrams (mindmap, modules, routes, data_flow, recent) come from the
+ * post-commit hook; hand-authored ones live in diagrams/custom/.
  *
- * The post-commit git hook regenerates the source files on every commit, so
- * this tab is always live — just refetch after a commit and you'll see the
- * new graphs. The Refresh button does exactly that (no server-side trigger
- * because the browser can't shell out to run generate.py).
- *
- * Mermaid is loaded once via next/script from the jsdelivr CDN and exposed
- * on window as `mermaid`. We re-initialize whenever the theme flips so dark
- * mode in the admin actually changes diagram colors. Render errors are
- * surfaced inline rather than swallowed — bad Mermaid syntax means the
- * generator is buggy, and we want to know.
+ * Styled in the warm Claude palette so the embedded diagrams feel like part
+ * of the product rather than a default Mermaid render. The same palette is
+ * pushed into Mermaid via themeVariables so even the generated diagrams
+ * inherit it.
  */
 
 type DiagramPayload = { title: string; description: string; mermaid: string };
@@ -48,6 +42,64 @@ declare global {
 
 const MERMAID_CDN = 'https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js';
 
+// Claude-warm palette. Used for both the chrome and the Mermaid theme so
+// generated diagrams visually belong to the same family.
+const CLAUDE_LIGHT = {
+  bg: '#faf9f5',
+  surface: '#f5f4ee',
+  surfaceAlt: '#efece2',
+  border: '#e8e6dc',
+  borderStrong: '#d8d2c2',
+  text: '#3d3929',
+  textMuted: '#8b8473',
+  accent: '#cc785c',
+  accentSoft: '#f0dcd2',
+};
+
+const CLAUDE_DARK = {
+  bg: '#1f1d1a',
+  surface: '#27241f',
+  surfaceAlt: '#2e2a24',
+  border: '#3a352d',
+  borderStrong: '#4a443a',
+  text: '#ece9e2',
+  textMuted: '#9c9485',
+  accent: '#e08a6e',
+  accentSoft: '#3d2a23',
+};
+
+const MERMAID_LIGHT_VARS = {
+  fontFamily: 'ui-sans-serif, -apple-system, system-ui, sans-serif',
+  fontSize: '13px',
+  background: CLAUDE_LIGHT.bg,
+  primaryColor: CLAUDE_LIGHT.bg,
+  primaryTextColor: CLAUDE_LIGHT.text,
+  primaryBorderColor: '#c9b89a',
+  lineColor: '#a39e8e',
+  secondaryColor: '#f5efe4',
+  tertiaryColor: CLAUDE_LIGHT.surface,
+  clusterBkg: CLAUDE_LIGHT.bg,
+  clusterBorder: CLAUDE_LIGHT.borderStrong,
+  edgeLabelBackground: CLAUDE_LIGHT.bg,
+  titleColor: CLAUDE_LIGHT.text,
+};
+
+const MERMAID_DARK_VARS = {
+  fontFamily: 'ui-sans-serif, -apple-system, system-ui, sans-serif',
+  fontSize: '13px',
+  background: CLAUDE_DARK.bg,
+  primaryColor: CLAUDE_DARK.surface,
+  primaryTextColor: CLAUDE_DARK.text,
+  primaryBorderColor: '#5a5142',
+  lineColor: '#6b6354',
+  secondaryColor: CLAUDE_DARK.surfaceAlt,
+  tertiaryColor: CLAUDE_DARK.surface,
+  clusterBkg: CLAUDE_DARK.bg,
+  clusterBorder: CLAUDE_DARK.borderStrong,
+  edgeLabelBackground: CLAUDE_DARK.surface,
+  titleColor: CLAUDE_DARK.text,
+};
+
 export function ArchitectureTab() {
   const [data, setData] = useState<ArchitectureResponse | null>(null);
   const [loading, setLoading] = useState(true);
@@ -59,6 +111,8 @@ export function ArchitectureTab() {
     return window.matchMedia?.('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
   });
   const targetRef = useRef<HTMLDivElement>(null);
+
+  const palette = theme === 'dark' ? CLAUDE_DARK : CLAUDE_LIGHT;
 
   const loadData = useCallback(async () => {
     setLoading(true);
@@ -82,31 +136,31 @@ export function ArchitectureTab() {
     void loadData();
   }, [loadData]);
 
-  // (Re)initialize Mermaid whenever the script becomes available or the theme
-  // changes. Mermaid keeps its config in a singleton, so calling initialize
-  // again is the supported way to flip themes.
+  // (Re)initialize Mermaid when the script becomes available or the theme
+  // changes. We push the Claude palette via themeVariables so generated
+  // diagrams (which have no init directive of their own) inherit the look.
   useEffect(() => {
     if (!mermaidReady || !window.mermaid) return;
     window.mermaid.initialize({
       startOnLoad: false,
-      theme: theme === 'dark' ? 'dark' : 'default',
+      theme: 'base',
+      themeVariables: theme === 'dark' ? MERMAID_DARK_VARS : MERMAID_LIGHT_VARS,
       securityLevel: 'loose',
-      flowchart: { useMaxWidth: false, htmlLabels: true },
+      flowchart: { useMaxWidth: false, htmlLabels: true, curve: 'basis' },
       mindmap: { useMaxWidth: false },
-      sequence: { useMaxWidth: false },
+      sequence: { useMaxWidth: false, actorBkg: palette.surface, actorBorder: palette.borderStrong },
     });
-  }, [mermaidReady, theme]);
+  }, [mermaidReady, theme, palette.surface, palette.borderStrong]);
 
-  // Render the active diagram any time the diagram, theme, or Mermaid-ready
-  // flag changes. Each render uses a unique id so Mermaid doesn't dedupe
-  // against a previous SVG still in the DOM.
+  // Render the active diagram any time inputs change. Unique render id per
+  // call so Mermaid doesn't dedupe against an SVG still in the DOM.
   useEffect(() => {
     if (!mermaidReady || !data?.ok || !activeKey || !targetRef.current) return;
     const diagram = data.diagrams[activeKey];
     if (!diagram) return;
 
     const node = targetRef.current;
-    node.innerHTML = '<div style="color:#888;font-size:12px">Rendering…</div>';
+    node.innerHTML = `<div style="color:${palette.textMuted};font-size:12px;padding:8px">Rendering…</div>`;
     setRenderError(null);
 
     const renderId = `arch-${activeKey}-${Date.now()}`;
@@ -117,7 +171,7 @@ export function ArchitectureTab() {
         if (bindFunctions) bindFunctions(node);
 
         // Fit-to-width for huge diagrams so the user doesn't see a tiny
-        // corner of a 6000px-wide graph. Same logic as the standalone HTML.
+        // corner of a 6000px-wide graph.
         const svgEl = node.querySelector('svg');
         if (svgEl) {
           const intrinsicW = svgEl.viewBox.baseVal.width || svgEl.getBoundingClientRect().width || 0;
@@ -129,8 +183,7 @@ export function ArchitectureTab() {
           }
         }
 
-        // Wire click handlers (Mermaid emits <a xlink:href=...>) to open
-        // the file path in VS Code / Cursor via the protocol handler.
+        // Open file paths in VS Code / Cursor via the protocol handler.
         node.querySelectorAll('a').forEach((a) => {
           const href = a.getAttribute('xlink:href') || a.getAttribute('href');
           if (!href) return;
@@ -145,7 +198,7 @@ export function ArchitectureTab() {
         setRenderError(msg);
         node.innerHTML = '';
       });
-  }, [mermaidReady, data, activeKey, theme]);
+  }, [mermaidReady, data, activeKey, theme, palette.textMuted]);
 
   const diagramList = useMemo(() => {
     if (!data?.ok) return [];
@@ -161,110 +214,180 @@ export function ArchitectureTab() {
         strategy="afterInteractive"
         onLoad={() => setMermaidReady(true)}
       />
-      <div className="flex h-full w-full flex-col bg-gray-50">
+      <div
+        className="flex h-full w-full flex-col"
+        style={{ background: palette.bg, color: palette.text }}
+      >
         {/* Header */}
-        <div className="flex items-center justify-between gap-3 border-b border-gray-200 bg-white px-4 py-2">
+        <header
+          className="flex items-center justify-between gap-3 px-6 py-4"
+          style={{ borderBottom: `1px solid ${palette.border}`, background: palette.bg }}
+        >
           <div className="min-w-0">
-            <h2 className="text-sm font-bold text-gray-900">
-              Architecture · Live Diagrams
+            <h2
+              className="text-base font-semibold tracking-tight"
+              style={{ color: palette.text, fontFamily: 'ui-serif, Georgia, "Times New Roman", serif' }}
+            >
+              Architecture
             </h2>
             {data?.ok && (
-              <p className="text-[10px] text-gray-500">
-                {data.manifest.project_name} · {data.manifest.files_scanned} files ·
-                {' '}generated {data.manifest.generated_at} · git {data.manifest.git_head.slice(0, 7)}
+              <p className="mt-0.5 text-[12px]" style={{ color: palette.textMuted }}>
+                {data.manifest.project_name} · {data.manifest.files_scanned.toLocaleString()} files ·
+                {' '}generated {data.manifest.generated_at} · {data.manifest.git_head.slice(0, 7)}
               </p>
             )}
           </div>
-          <div className="flex items-center gap-2 shrink-0">
-            <button
-              type="button"
+          <div className="flex shrink-0 items-center gap-2">
+            <PillButton
+              palette={palette}
               onClick={() => setTheme((t) => (t === 'dark' ? 'light' : 'dark'))}
-              className="rounded border border-gray-300 bg-white px-2 py-1 text-[10px] font-bold uppercase tracking-wider text-gray-700 hover:border-gray-400"
-              title="Toggle Mermaid theme"
+              title="Toggle theme"
             >
-              🌓 {theme}
-            </button>
-            <button
-              type="button"
+              {theme === 'dark' ? 'Dark' : 'Light'}
+            </PillButton>
+            <PillButton
+              palette={palette}
               onClick={() => void loadData()}
               disabled={loading}
-              className="rounded border border-blue-300 bg-blue-50 px-2 py-1 text-[10px] font-bold uppercase tracking-wider text-blue-700 hover:bg-blue-100 disabled:opacity-50"
-              title="Re-fetch the latest generated diagrams from disk"
+              accent
+              title="Re-fetch generated diagrams"
             >
-              ↻ Refresh
-            </button>
+              {loading ? 'Loading…' : 'Refresh'}
+            </PillButton>
           </div>
-        </div>
+        </header>
 
         {/* Body: sidebar tabs + diagram pane */}
         <div className="flex min-h-0 flex-1">
-          <aside className="w-44 shrink-0 overflow-y-auto border-r border-gray-200 bg-white">
-            <nav className="p-2">
-              {diagramList.map(({ key, title }) => (
-                <button
-                  key={key}
-                  type="button"
-                  onClick={() => setActiveKey(key)}
-                  className={`mb-1 block w-full rounded px-2 py-1.5 text-left text-[11px] font-semibold transition-colors ${
-                    activeKey === key
-                      ? 'bg-blue-600 text-white'
-                      : 'text-gray-700 hover:bg-gray-100'
-                  }`}
-                >
-                  {title}
-                </button>
-              ))}
+          <aside
+            className="w-56 shrink-0 overflow-y-auto"
+            style={{ borderRight: `1px solid ${palette.border}`, background: palette.surface }}
+          >
+            <div className="px-4 pb-2 pt-4">
+              <p
+                className="text-[10px] font-medium uppercase tracking-[0.12em]"
+                style={{ color: palette.textMuted }}
+              >
+                Diagrams
+              </p>
+            </div>
+            <nav className="px-2 pb-4">
+              {diagramList.map(({ key, title }) => {
+                const active = activeKey === key;
+                return (
+                  <button
+                    key={key}
+                    type="button"
+                    onClick={() => setActiveKey(key)}
+                    className="mb-0.5 block w-full rounded-md px-3 py-2 text-left text-[13px] font-medium transition-colors"
+                    style={{
+                      background: active ? palette.bg : 'transparent',
+                      color: active ? palette.text : palette.textMuted,
+                      border: `1px solid ${active ? palette.borderStrong : 'transparent'}`,
+                      boxShadow: active ? `inset 3px 0 0 ${palette.accent}` : 'none',
+                    }}
+                    onMouseEnter={(e) => {
+                      if (!active) e.currentTarget.style.background = palette.surfaceAlt;
+                    }}
+                    onMouseLeave={(e) => {
+                      if (!active) e.currentTarget.style.background = 'transparent';
+                    }}
+                  >
+                    {title}
+                  </button>
+                );
+              })}
               {diagramList.length === 0 && !loading && (
-                <p className="px-2 py-2 text-[10px] text-gray-500">
+                <p className="px-3 py-2 text-[12px]" style={{ color: palette.textMuted }}>
                   No diagrams yet.
                 </p>
               )}
             </nav>
           </aside>
 
-          <main className="min-w-0 flex-1 overflow-auto">
+          <main className="min-w-0 flex-1 overflow-auto" style={{ background: palette.bg }}>
             {loading && (
-              <div className="p-6 text-sm text-gray-500">Loading diagrams…</div>
+              <div className="p-8 text-sm" style={{ color: palette.textMuted }}>
+                Loading diagrams…
+              </div>
             )}
 
             {data && !data.ok && (
-              <div className="m-4 rounded border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
-                <p className="font-bold">Diagrams haven&apos;t been generated yet.</p>
-                <p className="mt-2">{data.hint || data.reason}</p>
-                <pre className="mt-3 overflow-x-auto rounded bg-amber-100 p-2 text-[11px]">
+              <div
+                className="m-6 rounded-lg p-5 text-sm"
+                style={{
+                  background: palette.accentSoft,
+                  border: `1px solid ${palette.borderStrong}`,
+                  color: palette.text,
+                }}
+              >
+                <p className="font-semibold">Diagrams haven&apos;t been generated yet.</p>
+                <p className="mt-2 text-[13px]" style={{ color: palette.textMuted }}>
+                  {data.hint || data.reason}
+                </p>
+                <pre
+                  className="mt-3 overflow-x-auto rounded-md p-3 text-[12px]"
+                  style={{ background: palette.surface, color: palette.text }}
+                >
                   python3 ~/.hermes-usav/skills/software-development/codebase-visualizer/scripts/generate.py
                 </pre>
-                <p className="mt-2 text-[11px]">
-                  The post-commit git hook also runs this automatically after every commit
+                <p className="mt-2 text-[12px]" style={{ color: palette.textMuted }}>
+                  The post-commit git hook runs this automatically after every commit
                   that touches source files.
                 </p>
               </div>
             )}
 
             {data?.ok && activeDiagram && (
-              <div className="p-4">
-                <div className="mb-2">
-                  <h3 className="text-sm font-bold text-gray-900">{activeDiagram.title}</h3>
-                  <p className="text-[11px] text-gray-500">{activeDiagram.description}</p>
+              <div className="p-6">
+                <div className="mb-4 max-w-3xl">
+                  <h3
+                    className="text-xl font-semibold tracking-tight"
+                    style={{
+                      color: palette.text,
+                      fontFamily: 'ui-serif, Georgia, "Times New Roman", serif',
+                    }}
+                  >
+                    {activeDiagram.title}
+                  </h3>
+                  {activeDiagram.description && (
+                    <p
+                      className="mt-1 text-[13px] leading-relaxed"
+                      style={{ color: palette.textMuted }}
+                    >
+                      {activeDiagram.description}
+                    </p>
+                  )}
                 </div>
                 {renderError && (
-                  <div className="mb-3 rounded border border-red-300 bg-red-50 p-3 text-xs text-red-800">
-                    <p className="font-bold">Render error</p>
+                  <div
+                    className="mb-4 rounded-md p-3 text-xs"
+                    style={{
+                      background: '#fcecea',
+                      border: '1px solid #e8b8b0',
+                      color: '#7a2820',
+                    }}
+                  >
+                    <p className="font-semibold">Render error</p>
                     <pre className="mt-1 whitespace-pre-wrap text-[11px]">{renderError}</pre>
                   </div>
                 )}
                 <div
-                  className={`rounded border p-4 ${
-                    theme === 'dark'
-                      ? 'border-gray-700 bg-gray-900'
-                      : 'border-gray-200 bg-white'
-                  }`}
-                  style={{ overflow: 'auto' }}
+                  className="rounded-lg p-6"
+                  style={{
+                    background: palette.bg,
+                    border: `1px solid ${palette.border}`,
+                    boxShadow:
+                      theme === 'dark'
+                        ? '0 1px 2px rgba(0,0,0,0.4)'
+                        : '0 1px 2px rgba(61,57,41,0.05)',
+                    overflow: 'auto',
+                  }}
                 >
                   <div ref={targetRef} className="mermaid-target" />
                 </div>
-                <p className="mt-2 text-[10px] text-gray-400">
-                  Tip: click nodes with file paths to open them in VS Code.
+                <p className="mt-3 text-[11px]" style={{ color: palette.textMuted }}>
+                  Click nodes with file paths to open them in VS Code.
                 </p>
               </div>
             )}
@@ -272,5 +395,48 @@ export function ArchitectureTab() {
         </div>
       </div>
     </>
+  );
+}
+
+type PaletteShape = typeof CLAUDE_LIGHT;
+
+function PillButton({
+  palette,
+  onClick,
+  disabled,
+  accent,
+  title,
+  children,
+}: {
+  palette: PaletteShape;
+  onClick: () => void;
+  disabled?: boolean;
+  accent?: boolean;
+  title?: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      title={title}
+      className="rounded-md px-3 py-1.5 text-[12px] font-medium transition-colors disabled:opacity-50"
+      style={{
+        background: accent ? palette.accent : palette.bg,
+        color: accent ? '#ffffff' : palette.text,
+        border: `1px solid ${accent ? palette.accent : palette.borderStrong}`,
+      }}
+      onMouseEnter={(e) => {
+        if (disabled) return;
+        e.currentTarget.style.background = accent ? '#b3674e' : palette.surface;
+      }}
+      onMouseLeave={(e) => {
+        if (disabled) return;
+        e.currentTarget.style.background = accent ? palette.accent : palette.bg;
+      }}
+    >
+      {children}
+    </button>
   );
 }

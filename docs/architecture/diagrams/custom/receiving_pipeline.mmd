@@ -1,0 +1,167 @@
+%%{init: {'theme':'base','themeVariables':{'fontFamily':'ui-sans-serif, -apple-system, system-ui, sans-serif','fontSize':'13px','primaryColor':'#faf9f5','primaryTextColor':'#3d3929','primaryBorderColor':'#c9b89a','lineColor':'#a39e8e','tertiaryColor':'#f5f4ee','clusterBkg':'#faf9f5','clusterBorder':'#d8d2c2'}}}%%
+flowchart TD
+    %% ============================================================
+    %% UI LAYER
+    %% ============================================================
+    subgraph UI["&nbsp;UI · src/app/receiving + src/components/receiving&nbsp;"]
+        direction TB
+        Page["receiving/page.tsx<br/><span style='color:#8b8473;font-size:11px'>Dashboard + Sidebar</span>"]
+        LinePage["receiving/lines/[id]/page.tsx<br/><span style='color:#8b8473;font-size:11px'>Line detail · timeline · putaway</span>"]
+        M1["Mode 1 · Bulk Scan<br/><span style='color:#8b8473;font-size:11px'>scan carrier tracking #</span>"]
+        M2["Mode 2 · Unboxing<br/><span style='color:#8b8473;font-size:11px'>PO-driven receive + QA</span>"]
+        M3["Mode 3 · Local Pickup<br/><span style='color:#8b8473;font-size:11px'>manual SKU + qty</span>"]
+        Page --> M1
+        Page --> M2
+        Page --> M3
+    end
+
+    %% ============================================================
+    %% API ROUTES
+    %% ============================================================
+    subgraph API["&nbsp;API · src/app/api&nbsp;"]
+        direction TB
+        ApiEntry["POST /receiving-entry<br/><span style='color:#8b8473;font-size:11px'>bulk scan → receiving row</span>"]
+        ApiLookup["POST /receiving/lookup-po<br/><span style='color:#8b8473;font-size:11px'>match PO · sync lines</span>"]
+        ApiScanSerial["POST /receiving/scan-serial<br/><span style='color:#8b8473;font-size:11px'>per-unit serial scan</span>"]
+        ApiMark["POST /receiving/mark-received<br/><span style='color:#8b8473;font-size:11px'>finalize a line</span>"]
+        ApiMarkPO["POST /receiving/mark-received-po<br/><span style='color:#8b8473;font-size:11px'>finalize all lines on PO</span>"]
+        ApiZohoReceive["POST /zoho/purchase-orders/receive<br/><span style='color:#8b8473;font-size:11px'>create Zoho Purchase Receive</span>"]
+        ApiStatus["POST /receiving/lines/[id]/status<br/><span style='color:#8b8473;font-size:11px'>workflow transition</span>"]
+        ApiPutaway["POST /receiving/lines/[id]/putaway<br/><span style='color:#8b8473;font-size:11px'>bin assignment</span>"]
+        ApiPhotos["POST /receiving-photos"]
+        ApiLines["GET&nbsp;&nbsp;/receiving-lines"]
+        ApiLogs["GET&nbsp;&nbsp;/receiving-logs"]
+        ApiPending["GET&nbsp;&nbsp;/receiving/pending-unboxing"]
+    end
+
+    %% ============================================================
+    %% CORE LIB
+    %% ============================================================
+    subgraph LIB["&nbsp;Core Lib · src/lib&nbsp;"]
+        direction TB
+        ReceiveLine["receiveLineUnits()<br/><span style='color:#8b8473;font-size:11px'>receive-line.ts · central write path</span>"]
+        Assignment["assignment-upsert.ts<br/><span style='color:#8b8473;font-size:11px'>work_assignments upsert/cancel</span>"]
+        ZohoSync["zoho-receiving-sync.ts<br/><span style='color:#8b8473;font-size:11px'>importZohoPurchaseOrderToReceiving()</span>"]
+        Queries["neon/receiving-queries.ts<br/><span style='color:#8b8473;font-size:11px'>SQL helpers</span>"]
+    end
+
+    %% ============================================================
+    %% CACHE
+    %% ============================================================
+    subgraph CACHE["&nbsp;Cache&nbsp;"]
+        direction TB
+        InMem["receivingCache.ts<br/><span style='color:#8b8473;font-size:11px'>in-memory · 500 rows</span>"]
+        SchemaCache["receiving-schema-cache.ts<br/><span style='color:#8b8473;font-size:11px'>5-min TTL introspection</span>"]
+        Upstash["Upstash Redis<br/><span style='color:#8b8473;font-size:11px'>invalidateCacheTags(receiving-logs)</span>"]
+    end
+
+    %% ============================================================
+    %% EXTERNAL
+    %% ============================================================
+    subgraph EXT["&nbsp;External&nbsp;"]
+        direction TB
+        Zoho["Zoho Inventory API<br/><span style='color:#8b8473;font-size:11px'>POs · Purchase Receives</span>"]
+        Realtime["Realtime pub/sub<br/><span style='color:#8b8473;font-size:11px'>publishStockLedgerEvent</span>"]
+        QStash["QStash<br/><span style='color:#8b8473;font-size:11px'>purchase-receives-sync</span>"]
+    end
+
+    %% ============================================================
+    %% DATABASE
+    %% ============================================================
+    subgraph DB["&nbsp;Neon Postgres&nbsp;"]
+        direction LR
+        TblRecv[("receiving")]
+        TblLines[("receiving_lines")]
+        TblSerial[("serial_units")]
+        TblTech[("tech_serial_numbers")]
+        TblLedger[("sku_stock_ledger")]
+        TblEvents[("inventory_events")]
+        TblWork[("work_assignments")]
+        TblPhotos[("receiving_photos")]
+        TblPickup[("local_pickup_orders")]
+        TblScans[("receiving_scans")]
+    end
+
+    %% ============================================================
+    %% UI -> API
+    %% ============================================================
+    M1 --> ApiEntry
+    M2 --> ApiLookup
+    M2 --> ApiScanSerial
+    M2 --> ApiMarkPO
+    M2 --> ApiMark
+    M2 --> ApiPhotos
+    M3 --> ApiZohoReceive
+    Page --> ApiLogs
+    Page --> ApiPending
+    LinePage --> ApiLines
+    LinePage --> ApiStatus
+    LinePage --> ApiPutaway
+    LinePage --> ApiScanSerial
+
+    %% ============================================================
+    %% API -> LIB
+    %% ============================================================
+    ApiEntry --> ZohoSync
+    ApiLookup --> ZohoSync
+    ApiZohoReceive --> ZohoSync
+    ApiScanSerial --> ReceiveLine
+    ApiMark --> ReceiveLine
+    ApiMarkPO --> ReceiveLine
+    ApiStatus --> Assignment
+    ApiStatus --> ReceiveLine
+    ApiLines --> Queries
+    ApiPending --> Queries
+    ApiLogs --> InMem
+
+    %% ============================================================
+    %% LIB -> EXTERNAL / DB
+    %% ============================================================
+    ZohoSync --> Zoho
+    ApiZohoReceive --> Zoho
+    ReceiveLine --> Realtime
+    ApiEntry --> Realtime
+    QStash --> ZohoSync
+
+    ReceiveLine --> TblSerial
+    ReceiveLine --> TblTech
+    ReceiveLine --> TblLedger
+    ReceiveLine --> TblEvents
+    ReceiveLine --> TblLines
+    Assignment --> TblWork
+    ZohoSync --> TblRecv
+    ZohoSync --> TblLines
+    ZohoSync --> TblPickup
+    ApiEntry --> TblRecv
+    ApiLookup --> TblScans
+    ApiPhotos --> TblPhotos
+    Queries --> TblRecv
+    Queries --> TblLines
+    InMem --> TblRecv
+    SchemaCache --> TblLines
+
+    %% ============================================================
+    %% Cache invalidation (dashed)
+    %% ============================================================
+    ApiEntry -. invalidate .-> Upstash
+    ApiMark -. invalidate .-> Upstash
+    ApiMarkPO -. invalidate .-> Upstash
+    ApiScanSerial -. invalidate .-> Upstash
+    Upstash -. broadcast .-> Page
+
+    %% ============================================================
+    %% CLAUDE-WARM PALETTE
+    %% ============================================================
+    classDef ui    fill:#f5efe4,stroke:#c9b89a,color:#5c4a2a,stroke-width:1.2px
+    classDef api   fill:#f3e9d2,stroke:#cfa96e,color:#5c4218,stroke-width:1.2px
+    classDef lib   fill:#e7ecd6,stroke:#9eaa7a,color:#3d4520,stroke-width:1.2px
+    classDef cache fill:#ebe3ec,stroke:#a89aab,color:#4a3d4e,stroke-width:1.2px
+    classDef ext   fill:#f0dcd2,stroke:#cc785c,color:#7a3d28,stroke-width:1.2px
+    classDef db    fill:#ece9e2,stroke:#a39e8e,color:#3d3929,stroke-width:1.2px
+
+    class Page,LinePage,M1,M2,M3 ui
+    class ApiEntry,ApiLookup,ApiScanSerial,ApiMark,ApiMarkPO,ApiZohoReceive,ApiLines,ApiStatus,ApiPutaway,ApiPhotos,ApiLogs,ApiPending api
+    class ReceiveLine,Assignment,ZohoSync,Queries lib
+    class Zoho,QStash,Realtime ext
+    class TblRecv,TblLines,TblSerial,TblTech,TblLedger,TblEvents,TblWork,TblPhotos,TblPickup,TblScans db
+    class InMem,SchemaCache,Upstash cache

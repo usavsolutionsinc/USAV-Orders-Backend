@@ -52,6 +52,52 @@ const DIAGRAM_DESCRIPTIONS: Record<string, string> = {
   recent: 'Git commits in the last 14 days.',
 };
 
+type CustomManifest = { diagrams?: Record<string, DiagramMeta> };
+
+// Hand-authored diagrams live in docs/architecture/diagrams/custom/. They
+// survive the post-commit regeneration (generate.py only touches the parent
+// manifest + sibling .mmd files), and they get merged in *after* generated
+// diagrams so they appear at the bottom of the tab list.
+async function loadCustomDiagrams(archDir: string): Promise<{
+  meta: Record<string, DiagramMeta>;
+  payloads: Record<string, DiagramPayload>;
+}> {
+  const customDir = path.join(archDir, 'diagrams', 'custom');
+  const customManifestPath = path.join(customDir, 'manifest.json');
+
+  let raw: string;
+  try {
+    raw = await fs.readFile(customManifestPath, 'utf-8');
+  } catch {
+    return { meta: {}, payloads: {} };
+  }
+
+  let parsed: CustomManifest;
+  try {
+    parsed = JSON.parse(raw) as CustomManifest;
+  } catch {
+    return { meta: {}, payloads: {} };
+  }
+
+  const meta: Record<string, DiagramMeta> = {};
+  const payloads: Record<string, DiagramPayload> = {};
+  for (const [key, m] of Object.entries(parsed.diagrams ?? {})) {
+    const mmdPath = path.join(customDir, `${key}.mmd`);
+    try {
+      const mermaid = await fs.readFile(mmdPath, 'utf-8');
+      meta[key] = m;
+      payloads[key] = {
+        title: m.title,
+        description: m.description ?? '',
+        mermaid,
+      };
+    } catch {
+      // Skip — manifest references a .mmd that isn't on disk yet.
+    }
+  }
+  return { meta, payloads };
+}
+
 export async function GET() {
   const repoRoot = process.cwd();
   const archDir = path.join(repoRoot, 'docs', 'architecture');
@@ -95,6 +141,12 @@ export async function GET() {
     } catch {
       // Skip missing diagrams — manifest may reference one whose .mmd was deleted.
     }
+  }
+
+  const custom = await loadCustomDiagrams(archDir);
+  for (const [key, payload] of Object.entries(custom.payloads)) {
+    diagrams[key] = payload;
+    manifest.diagrams[key] = custom.meta[key];
   }
 
   return NextResponse.json({ ok: true, manifest, diagrams });

@@ -1,11 +1,13 @@
 'use client';
 
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useMemo } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { AnimatePresence } from 'framer-motion';
-import { Loader2, Search } from '@/components/Icons';
+import { Loader2, Search, ChevronRight, MapPin } from '@/components/Icons';
 import { sectionLabel } from '@/design-system/tokens/typography/presets';
 import SkuDetailView from './SkuDetailView';
+import { SkuScanRefChip, TrackingChip, SerialChip } from '@/components/ui/CopyChip';
+import { DesktopDateGroupHeader } from '@/components/ui/DesktopDateGroupHeader';
 
 export type SkuView = 'sku_stock' | 'sku_history' | 'location';
 
@@ -35,6 +37,83 @@ type SkuHistoryRow = {
   notes: string | null;
 };
 
+// ─── Activity dot (audit row indicator) ──────────────────────────────────
+
+function activityDot(row: SkuHistoryRow): { color: string; label: string } {
+  if (String(row.shipping_tracking_number || '').trim()) return { color: 'bg-blue-500', label: 'Shipped' };
+  if (String(row.location || '').trim()) return { color: 'bg-emerald-500', label: 'Located' };
+  if (String(row.notes || '').trim()) return { color: 'bg-amber-500', label: 'Noted' };
+  return { color: 'bg-gray-300', label: 'Updated' };
+}
+
+// ─── Time formatting + date-key grouping ─────────────────────────────────
+
+function parseTimestamp(raw: string | null): Date | null {
+  if (!raw) return null;
+  const normalized = raw.includes('T') ? raw : raw.replace(' ', 'T');
+  const date = new Date(normalized);
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
+function formatRelativeTime(raw: string | null): { relative: string; absolute: string } {
+  const date = parseTimestamp(raw);
+  if (!date) return { relative: '—', absolute: '' };
+  const diffMs = Date.now() - date.getTime();
+  const diffMin = Math.floor(diffMs / 60_000);
+
+  let relative: string;
+  if (diffMin < 1) relative = 'just now';
+  else if (diffMin < 60) relative = `${diffMin}m ago`;
+  else if (diffMin < 1440) relative = `${Math.floor(diffMin / 60)}h ago`;
+  else if (diffMin < 10080) relative = `${Math.floor(diffMin / 1440)}d ago`;
+  else relative = date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+
+  const absolute = date.toLocaleString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+    hour12: true,
+  });
+
+  return { relative, absolute };
+}
+
+function dateKeyFor(date: Date | null): string {
+  if (!date) return '';
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, '0');
+  const d = String(date.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
+}
+
+function groupByDate(rows: SkuHistoryRow[]): Array<{ key: string; rows: SkuHistoryRow[] }> {
+  const groups = new Map<string, SkuHistoryRow[]>();
+  const order: string[] = [];
+  for (const row of rows) {
+    const date = parseTimestamp(row.updated_at);
+    const key = dateKeyFor(date) || 'no-date';
+    if (!groups.has(key)) {
+      groups.set(key, []);
+      order.push(key);
+    }
+    groups.get(key)!.push(row);
+  }
+  return order.map((key) => ({ key, rows: groups.get(key)! }));
+}
+
+// ─── Stock threshold tint ─────────────────────────────────────────────────
+
+function stockClassFor(value: string | null | undefined): string {
+  const n = parseInt(String(value ?? '').trim() || '0', 10) || 0;
+  if (n <= 0) return 'text-red-600 bg-red-50/60';
+  if (n <= 5) return 'text-amber-600';
+  return 'text-gray-900';
+}
+
+// ─── Main component ───────────────────────────────────────────────────────
+
 export default function SkuBrowser() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -45,15 +124,17 @@ export default function SkuBrowser() {
   const [error, setError] = useState('');
   const [skuStockRows, setSkuStockRows] = useState<SkuStockRow[]>([]);
   const [skuHistoryRows, setSkuHistoryRows] = useState<SkuHistoryRow[]>([]);
-  const [copiedSku, setCopiedSku] = useState('');
 
-  const openSkuPanel = useCallback((skuValue: string) => {
-    const s = skuValue.trim();
-    if (!s) return;
-    const nextParams = new URLSearchParams(searchParams.toString());
-    nextParams.set('sku', s);
-    router.replace(`/sku-stock?${nextParams.toString()}`);
-  }, [router, searchParams]);
+  const openSkuPanel = useCallback(
+    (skuValue: string) => {
+      const s = skuValue.trim();
+      if (!s) return;
+      const nextParams = new URLSearchParams(searchParams.toString());
+      nextParams.set('sku', s);
+      router.replace(`/sku-stock?${nextParams.toString()}`);
+    },
+    [router, searchParams],
+  );
 
   const closeSkuPanel = useCallback(() => {
     const nextParams = new URLSearchParams(searchParams.toString());
@@ -62,14 +143,11 @@ export default function SkuBrowser() {
     router.replace(qs ? `/sku-stock?${qs}` : '/sku-stock');
   }, [router, searchParams]);
 
-  // SKU camera scan opens from Quick tools FAB via `GlobalDesktopSkuScanner`.
-
   useEffect(() => {
     let cancelled = false;
 
     // Location view has no list endpoint — the active bin is loaded by the
-    // dedicated /sku-stock/location/[barcode] page. The empty state here just
-    // prompts the user to scan/enter a barcode.
+    // dedicated /sku-stock/location/[barcode] page.
     if (view === 'location') {
       setLoading(false);
       setError('');
@@ -107,16 +185,11 @@ export default function SkuBrowser() {
       } catch (err: any) {
         if (!cancelled) {
           setError(err?.message || 'Failed to load SKU records');
-          if (view === 'sku_stock') {
-            setSkuStockRows([]);
-          } else {
-            setSkuHistoryRows([]);
-          }
+          if (view === 'sku_stock') setSkuStockRows([]);
+          else setSkuHistoryRows([]);
         }
       } finally {
-        if (!cancelled) {
-          setLoading(false);
-        }
+        if (!cancelled) setLoading(false);
       }
     }
 
@@ -127,31 +200,18 @@ export default function SkuBrowser() {
     };
   }, [view, searchQuery]);
 
-  const handleCopySku = async (value: string | null | undefined) => {
-    const text = String(value || '').trim();
-    if (!text) return;
-
-    // Fill the barcode panel on the left and auto-trigger its search
-    window.dispatchEvent(new CustomEvent('sku:fill', { detail: { sku: text } }));
-
-    try {
-      await navigator.clipboard.writeText(text);
-      setCopiedSku(text);
-      window.setTimeout(() => {
-        setCopiedSku((current) => (current === text ? '' : current));
-      }, 1200);
-    } catch {
-      // clipboard denied — the fill still happened via the event
-    }
-  };
-
-  // Open detail panel on row click
   const handleRowClick = (skuValue: string | null) => {
     const s = String(skuValue || '').trim();
     if (!s) return;
     openSkuPanel(s);
   };
 
+  const handleSkuFill = useCallback((value: string) => {
+    if (!value) return;
+    window.dispatchEvent(new CustomEvent('sku:fill', { detail: { sku: value } }));
+  }, []);
+
+  const groupedHistory = useMemo(() => groupByDate(skuHistoryRows), [skuHistoryRows]);
   const activeCount = view === 'sku_stock' ? skuStockRows.length : skuHistoryRows.length;
 
   return (
@@ -177,9 +237,15 @@ export default function SkuBrowser() {
                 <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-red-50">
                   <Search className="h-8 w-8 text-red-400" />
                 </div>
-                <h3 className="mb-1 text-lg font-black uppercase tracking-tight text-gray-900">No records found</h3>
+                <h3 className="mb-1 text-lg font-black uppercase tracking-tight text-gray-900">
+                  {view === 'sku_stock' ? 'No stock records' : 'No activity yet'}
+                </h3>
                 <p className="text-xs font-bold uppercase tracking-widest leading-relaxed text-gray-500">
-                  {searchQuery ? `No ${view === 'sku_stock' ? 'stock' : 'sku'} records match "${searchQuery}"` : 'There are no records to display'}
+                  {searchQuery
+                    ? `Nothing matches "${searchQuery}"`
+                    : view === 'sku_stock'
+                      ? 'There is no stock to display'
+                      : 'No SKU updates have been recorded'}
                 </p>
               </div>
             </div>
@@ -187,85 +253,104 @@ export default function SkuBrowser() {
             <div className="flex w-full flex-col">
               {view === 'sku_stock' ? (
                 <>
-                  <div className="grid grid-cols-[64px_140px_minmax(220px,1fr)] items-center gap-1 border-b border-gray-200 bg-gray-50 px-2 py-1">
+                  <div className="grid grid-cols-[64px_minmax(220px,1fr)_160px_28px] items-center gap-2 border-b border-gray-200 bg-gray-50 px-3 py-1.5">
                     <div className={sectionLabel}>Stock</div>
-                    <div className={sectionLabel}>Stock SKU</div>
-                    <div className={sectionLabel}>Product Title</div>
+                    <div className={sectionLabel}>Product</div>
+                    <div className={sectionLabel}>SKU</div>
+                    <div />
                   </div>
                   {skuStockRows.map((row, index) => (
                     <div
                       key={row.id}
                       onClick={() => handleRowClick(row.sku)}
-                      className={`grid grid-cols-[64px_140px_minmax(220px,1fr)] items-center gap-1 border-b border-gray-50 px-2 py-1.5 cursor-pointer hover:bg-blue-50/60 transition-colors ${
+                      className={`grid grid-cols-[64px_minmax(220px,1fr)_160px_28px] items-center gap-2 border-b border-gray-50 px-3 py-2 cursor-pointer hover:bg-blue-50/60 transition-colors ${
                         index % 2 === 0 ? 'bg-white' : 'bg-gray-50/10'
                       }`}
                     >
-                      <div className="text-[12px] font-bold text-gray-900">
-                        {String(row.stock ?? '').trim() || '0'}
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() => handleCopySku(row.sku)}
-                        className="truncate text-left text-[12px] font-bold text-gray-900 hover:text-blue-600 transition-colors"
-                        title="Click to fill barcode panel"
+                      <div
+                        className={`rounded-md py-0.5 text-left text-[14px] font-black tabular-nums ${stockClassFor(row.stock)}`}
                       >
-                        {copiedSku === String(row.sku || '').trim()
-                          ? <span className="text-blue-600">↑ filled</span>
-                          : String(row.sku ?? '').trim() || '—'}
-                      </button>
-                      <div className="text-[12px] font-bold text-gray-900 truncate">
+                        {parseInt(String(row.stock ?? '').trim() || '0', 10) || 0}
+                      </div>
+                      <div className="truncate text-[12px] font-bold text-gray-900">
                         {String(row.product_title ?? '').trim() || '—'}
                       </div>
+                      <SkuScanRefChip
+                        value={String(row.sku ?? '')}
+                        display={String(row.sku ?? '—')}
+                        onCopy={handleSkuFill}
+                      />
+                      <ChevronRight className="h-4 w-4 text-gray-300" />
                     </div>
                   ))}
                 </>
               ) : (
                 <>
-                  <div className="grid grid-cols-[156px_140px_minmax(180px,1fr)_180px_88px_150px_200px] items-center gap-1 border-b border-gray-200 bg-gray-50 px-2 py-1">
-                    <div className={sectionLabel}>Updated</div>
-                    <div className={sectionLabel}>SKU</div>
-                    <div className={sectionLabel}>Product Title</div>
-                    <div className={sectionLabel}>Serial Number</div>
-                    <div className={sectionLabel}>Location</div>
-                    <div className={sectionLabel}>Tracking</div>
-                    <div className={sectionLabel}>Notes</div>
-                  </div>
-                  {skuHistoryRows.map((row, index) => (
-                    <div
-                      key={row.id}
-                      onClick={() => handleRowClick(row.static_sku)}
-                      className={`grid grid-cols-[156px_140px_minmax(180px,1fr)_180px_88px_150px_200px] items-center gap-1 border-b border-gray-50 px-2 py-1.5 cursor-pointer hover:bg-blue-50/60 transition-colors ${
-                        index % 2 === 0 ? 'bg-white' : 'bg-gray-50/10'
-                      }`}
-                    >
-                      <div className="text-[11px] font-bold text-gray-500">
-                        {String(row.updated_at ?? '').trim() || '—'}
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() => handleCopySku(row.static_sku)}
-                        className="truncate text-left text-[12px] font-bold text-gray-900 hover:text-blue-600 transition-colors"
-                        title="Click to fill barcode panel"
-                      >
-                        {copiedSku === String(row.static_sku || '').trim()
-                          ? <span className="text-blue-600">↑ filled</span>
-                          : String(row.static_sku ?? '').trim() || '—'}
-                      </button>
-                      <div className="truncate text-[12px] font-bold text-gray-900">
-                        {String(row.product_title ?? '').trim() || '—'}
-                      </div>
-                      <div className="truncate text-[11px] font-bold text-gray-500">
-                        {String(row.serial_number ?? '').trim() || '—'}
-                      </div>
-                      <div className="truncate text-[11px] font-bold uppercase tracking-widest text-gray-500">
-                        {String(row.location ?? '').trim() || '—'}
-                      </div>
-                      <div className="truncate text-[11px] font-bold text-gray-500">
-                        {String(row.shipping_tracking_number ?? '').trim() || '—'}
-                      </div>
-                      <div className="truncate text-[11px] font-bold text-gray-500">
-                        {String(row.notes ?? '').trim() || '—'}
-                      </div>
+                  {groupedHistory.map((group) => (
+                    <div key={group.key} className="flex flex-col">
+                      {group.key !== 'no-date' ? (
+                        <DesktopDateGroupHeader date={group.key} total={group.rows.length} />
+                      ) : null}
+                      {group.rows.map((row, index) => {
+                        const { relative, absolute } = formatRelativeTime(row.updated_at);
+                        const dot = activityDot(row);
+                        const tracking = String(row.shipping_tracking_number || '').trim();
+                        const location = String(row.location || '').trim();
+                        const notes = String(row.notes || '').trim();
+                        const serial = String(row.serial_number || '').trim();
+                        const sku = String(row.static_sku ?? '');
+                        const productTitle =
+                          String(row.product_title ?? '').trim() || 'Unknown Product';
+
+                        return (
+                          <div
+                            key={row.id}
+                            onClick={() => handleRowClick(row.static_sku)}
+                            title={absolute}
+                            className={`grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2 border-b border-gray-200 px-3 py-1.5 cursor-pointer hover:bg-blue-50/40 transition-colors ${
+                              index % 2 === 0 ? 'bg-white' : 'bg-gray-50/10'
+                            }`}
+                          >
+                            <div className="flex min-w-0 items-center gap-2">
+                              <span
+                                className={`h-2 w-2 shrink-0 rounded-full ${dot.color}`}
+                                title={dot.label}
+                              />
+                              <span className="shrink-0 text-[10px] font-black uppercase tracking-widest text-gray-500 tabular-nums">
+                                {relative}
+                              </span>
+                              <span className="shrink-0 text-gray-300">·</span>
+                              <div className="truncate text-[11px] font-bold text-gray-900">
+                                {productTitle}
+                              </div>
+                            </div>
+
+                            <div className="flex shrink-0 items-center">
+                              {location ? (
+                                <span className="inline-flex items-center gap-1 px-1.5 text-[11px] font-bold uppercase tracking-widest text-emerald-700">
+                                  <MapPin className="h-3.5 w-3.5" />
+                                  {location}
+                                </span>
+                              ) : null}
+                              {notes && !tracking && !location ? (
+                                <span className="max-w-[140px] truncate px-1.5 text-[11px] font-semibold text-amber-700">
+                                  {notes}
+                                </span>
+                              ) : null}
+                              {tracking ? (
+                                <TrackingChip value={tracking} display={tracking} />
+                              ) : null}
+                              <SkuScanRefChip
+                                value={sku}
+                                display={sku || '—'}
+                                onCopy={handleSkuFill}
+                              />
+                              {serial ? <SerialChip value={serial} display={serial} /> : null}
+                              <ChevronRight className="ml-1 h-4 w-4 text-gray-300" />
+                            </div>
+                          </div>
+                        );
+                      })}
                     </div>
                   ))}
                 </>

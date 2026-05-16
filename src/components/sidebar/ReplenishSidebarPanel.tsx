@@ -88,7 +88,11 @@ export function ReplenishSidebarPanel() {
 
   useEffect(() => {
     window.addEventListener('dashboard-refresh', fetchCounts);
-    return () => window.removeEventListener('dashboard-refresh', fetchCounts);
+    window.addEventListener('usav-refresh-data', fetchCounts);
+    return () => {
+      window.removeEventListener('dashboard-refresh', fetchCounts);
+      window.removeEventListener('usav-refresh-data', fetchCounts);
+    };
   }, [fetchCounts]);
 
   useEffect(() => {

@@ -3,8 +3,7 @@ import { db } from '@/lib/drizzle/db';
 import pool from '@/lib/db';
 import { customers as customersTable, orders as ordersTable } from '@/lib/drizzle/schema';
 import { getGoogleAuth } from '@/lib/google-auth';
-import { invalidateOrderViews } from '@/lib/orders/invalidation';
-import { invalidateCacheTags } from '@/lib/cache/upstash-cache';
+import { invalidateAllOrdersApiCaches, invalidateOrderViews } from '@/lib/orders/invalidation';
 import { publishOrderChanged } from '@/lib/realtime/publish';
 import { normalizeTrackingNumber } from '@/lib/shipping/normalize';
 import { resolveShipmentId } from '@/lib/shipping/resolve';
@@ -758,7 +757,7 @@ export async function runGoogleSheetsTransferOrders(
       new Set(allProcessedOrderIds.filter((id) => Number.isFinite(id) && id > 0))
     );
 
-    await invalidateCacheTags(['orders']);
+    await invalidateAllOrdersApiCaches();
     if (uniqueProcessedIds.length > 0) {
       await publishOrderChanged({
         orderIds: uniqueProcessedIds,

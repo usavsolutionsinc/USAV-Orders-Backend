@@ -57,6 +57,7 @@ export async function GET(
          r.condition_grade,
          r.zoho_purchase_receive_id,
          r.zoho_warehouse_id,
+         r.support_notes,
          to_char(r.received_at::timestamp, 'YYYY-MM-DD HH24:MI:SS')  AS received_at,
          r.received_by,
          to_char(r.unboxed_at::timestamp, 'YYYY-MM-DD HH24:MI:SS')   AS unboxed_at,
@@ -93,11 +94,13 @@ export async function GET(
          rl.zoho_purchaseorder_number,
          rl.zoho_line_item_id,
          rl.receiving_type,
-         rl.tracking_number,
+         COALESCE(stn_line.tracking_number_raw, r_cart.receiving_tracking_number) AS tracking_number,
          rl.notes,
          to_char(rl.created_at::timestamp, 'YYYY-MM-DD HH24:MI:SS') AS created_at,
          to_char(rl.updated_at::timestamp, 'YYYY-MM-DD HH24:MI:SS') AS updated_at
        FROM receiving_lines rl
+       LEFT JOIN receiving r_cart ON r_cart.id = rl.receiving_id
+       LEFT JOIN shipping_tracking_numbers stn_line ON stn_line.id = r_cart.shipment_id
        WHERE rl.receiving_id = $1
        ORDER BY rl.id ASC`,
       [id],
@@ -168,8 +171,13 @@ export async function GET(
       { expected: 0, received: 0, lines: 0, lines_complete: 0 },
     );
 
-    // Recent timeline for this carton.
-    const recentEvents = await readTimeline({ receiving_id: id, limit: 30 });
+    // Recent timeline for this carton — non-fatal if inventory_events is unavailable.
+    let recentEvents: Awaited<ReturnType<typeof readTimeline>> = [];
+    try {
+      recentEvents = await readTimeline({ receiving_id: id, limit: 30 });
+    } catch (timelineErr) {
+      console.warn('receiving/[id] GET: readTimeline failed (events omitted)', timelineErr);
+    }
 
     // Enrich event subject names (staff, bin, serial).
     const staffIds = Array.from(
@@ -268,6 +276,13 @@ export async function PATCH(
     const values: unknown[] = [];
     let idx = 1;
 
+    if (Object.prototype.hasOwnProperty.call(body, 'support_notes')) {
+      const raw = body.support_notes;
+      const next = raw == null || raw === '' ? null : String(raw).trim() || null;
+      updates.push(`support_notes = $${idx++}`);
+      values.push(next);
+    }
+
     if (Object.prototype.hasOwnProperty.call(body, 'source_platform')) {
       const raw = body.source_platform;
       const next = raw == null || raw === '' ? null : String(raw).trim().toLowerCase();
@@ -338,9 +353,10 @@ export async function PATCH(
       zoho_purchaseorder_id: string | null;
       zoho_purchaseorder_number: string | null;
       shipment_id: number | null;
+      support_notes: string | null;
     }>(
       `UPDATE receiving SET ${updates.join(', ')} WHERE id = $${values.length}
-       RETURNING id, source_platform, zoho_purchaseorder_id, zoho_purchaseorder_number, shipment_id`,
+       RETURNING id, source_platform, zoho_purchaseorder_id, zoho_purchaseorder_number, shipment_id, support_notes`,
       values,
     );
 

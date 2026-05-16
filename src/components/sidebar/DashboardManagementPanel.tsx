@@ -25,6 +25,7 @@ import { getPresentStaffForToday } from '@/lib/staffCache';
 import { saveWorkOrder } from '@/lib/work-orders/saveWorkOrder';
 import { SIDEBAR_GRAY_ASSIGN_BUTTON_CLASS } from '@/components/ui/sidebarPrimaryButtons';
 import { sectionLabel, fieldLabel, microBadge } from '@/design-system/tokens/typography/presets';
+import { dispatchUsavRefreshData, invalidateDashboardOrderQueries } from '@/lib/dashboard-query-invalidation';
 
 type PendingStockFilter = 'all' | 'pending' | 'stock';
 
@@ -162,12 +163,12 @@ export function DashboardManagementPanel({
         deadlineAt: deadline,
         notes: row.notes,
       });
-      window.dispatchEvent(new CustomEvent('dashboard-refresh'));
-      window.dispatchEvent(new CustomEvent('usav-refresh-data'));
+      await invalidateDashboardOrderQueries(queryClient);
+      dispatchUsavRefreshData();
     } catch {
       // Silent — the card already optimistically updated; a full refresh will reconcile.
     }
-  }, []);
+  }, [queryClient]);
 
   useEffect(() => {
     setSearchQuery(searchValue);
@@ -342,17 +343,8 @@ export function DashboardManagementPanel({
       if (ecwidResult.status === 'rejected') setEcwidTask({ status: 'error', summary: 'Network error' });
       if (exceptionsResult.status === 'rejected') setExceptionsTask({ status: 'error', summary: 'Network error' });
 
-      window.dispatchEvent(new CustomEvent('dashboard-refresh'));
-      window.dispatchEvent(new CustomEvent('usav-refresh-data'));
-
-      await Promise.all([
-        queryClient.invalidateQueries({ queryKey: ['dashboard-table', 'unshipped'], refetchType: 'active' }),
-        queryClient.invalidateQueries({ queryKey: ['dashboard-table', 'shipped'], refetchType: 'active' }),
-        queryClient.invalidateQueries({ queryKey: ['dashboard-table', 'shipped-fba'], refetchType: 'active' }),
-        queryClient.invalidateQueries({ queryKey: ['shipped-table'], refetchType: 'active' }),
-        queryClient.invalidateQueries({ queryKey: ['dashboard-stock-zoho'], refetchType: 'active' }),
-        queryClient.invalidateQueries({ queryKey: ['dashboard-fba-shipments'], refetchType: 'active' }),
-      ]);
+      await invalidateDashboardOrderQueries(queryClient);
+      dispatchUsavRefreshData();
 
       const anyFailed = [sheetsResult, ecwidResult, exceptionsResult].some(
         (r) => r.status === 'rejected' || (r.status === 'fulfilled' && !r.value?.success),

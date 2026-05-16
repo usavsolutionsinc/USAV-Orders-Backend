@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getRepairById } from '@/lib/neon/repair-service-queries';
 import { formatPhoneNumber } from '@/utils/phone';
 import pool from '@/lib/db';
+import { buildRepairDetailsDeepLink } from '@/lib/repair/repair-deep-link';
 
 /**
  * GET /api/repair-service/print/[id] - Render printable repair service form
@@ -120,6 +121,9 @@ export async function GET(
       console.warn(`Failed to resolve repair signature for RS ${canonicalRsCode}:`, signatureError);
     }
 
+    const repairManageUrl = buildRepairDetailsDeepLink(repair.id, req.nextUrl.origin);
+    const repairManageUrlJson = JSON.stringify(repairManageUrl);
+
     // Generate HTML matching Repair Service Paper exactly
     const formHtml = `
       <div class="bg-white text-gray-900 font-sans p-8">
@@ -140,8 +144,9 @@ export async function GET(
             ${externalTicketNumber ? `<p class="text-sm font-medium text-gray-600">Ticket #: ${externalTicketNumber}</p>` : ''}
           </div>
           <div class="flex flex-col items-end">
-            <svg id="rs-barcode"></svg>
-            <p class="mt-1 text-xs font-semibold tracking-[0.2em] text-gray-500">RS ID</p>
+            <canvas id="rs-qr" width="132" height="132"></canvas>
+            <p class="mt-1 text-center text-xs font-semibold tracking-[0.2em] text-gray-500">Scan to update</p>
+            <p class="mt-0.5 text-center text-[10px] font-bold text-gray-400">${repairServiceCode}</p>
           </div>
         </div>
 
@@ -225,7 +230,7 @@ export async function GET(
   <meta charset="utf-8">
   <title>Repair Service - ${repairServiceCode}</title>
   <script src="https://cdn.tailwindcss.com"></script>
-  <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.6/dist/JsBarcode.all.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
   <style>
     * {
       margin: 0;
@@ -253,20 +258,17 @@ export async function GET(
   </style>
   <script>
     window.onload = function() {
-      if (window.JsBarcode) {
-        try {
-          window.JsBarcode("#rs-barcode", "${repairServiceCode}", {
-            format: "CODE128",
-            width: 1.6,
-            height: 42,
-            displayValue: false,
-            margin: 0
-          });
-        } catch (error) {
-          console.warn('Repair barcode render failed', error);
-        }
+      var url = ${repairManageUrlJson};
+      var canvas = document.getElementById("rs-qr");
+      var startPrint = function() { window.print(); };
+      if (window.QRCode && canvas) {
+        window.QRCode.toCanvas(canvas, url, { margin: 2, width: 120, color: { dark: "#111827", light: "#ffffff" } }, function (err) {
+          if (err) console.warn("Repair QR render failed", err);
+          startPrint();
+        });
+      } else {
+        startPrint();
       }
-      window.print();
     }
   </script>
 </head>

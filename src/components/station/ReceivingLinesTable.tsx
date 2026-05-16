@@ -16,7 +16,7 @@ import {
   toPSTDateKey,
 } from '@/utils/date';
 
-// View id dispatched from the sidebar. Both go through the API `view` param.
+/** Passed to `/api/receiving-lines` as `view`. The station dashboard uses a single full list. */
 export type ReceivingView = 'all' | 'recent' | 'received';
 
 export interface ReceivingLineRow {
@@ -49,6 +49,8 @@ export interface ReceivingLineRow {
   zoho_synced_at: string | null;
   receiving_type: string | null;
   notes: string | null;
+  /** Carton-level support notes from `receiving.support_notes` (same for all lines on the package). */
+  receiving_support_notes?: string | null;
   created_at: string | null;
   image_url: string | null;
   source_platform: string | null;
@@ -131,22 +133,22 @@ function OrderRow({
       tabIndex={0}
       aria-pressed={isSelected}
       aria-label={`Select receiving line ${row.id}`}
-      className={`grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2 border-b border-gray-50 px-3 py-1.5 transition-colors cursor-pointer hover:bg-blue-50/50 ${
+      className={`flex flex-col gap-1.5 border-b border-gray-50 px-3 py-1.5 transition-colors cursor-pointer hover:bg-blue-50/50 md:grid md:grid-cols-[minmax(0,1fr)_auto] md:items-center md:gap-2 ${
         isSelected ? 'bg-blue-50/80' : index % 2 === 0 ? 'bg-white' : 'bg-gray-50/10'
       }`}
     >
-      <div className="flex flex-col min-w-0">
-        <div className="flex items-center gap-2 min-w-0">
+      <div className="flex min-w-0 flex-col">
+        <div className="flex min-w-0 items-center gap-2">
           <span
             className={`h-2 w-2 shrink-0 rounded-full ${getStatusDotBg(row.workflow_status)}`}
             title={workflowLabel}
           />
-          <div className="text-[13px] font-bold text-gray-900 truncate">
+          <div className="truncate text-[13px] font-bold text-gray-900">
             {productTitle}
           </div>
         </div>
         <div className="mt-0.5 flex items-center gap-2">
-          <div className="text-[11px] font-black text-gray-500 uppercase tracking-widest truncate min-w-0 flex-1 pl-4">
+          <div className="min-w-0 flex-1 truncate pl-4 text-[11px] font-black uppercase tracking-widest text-gray-500">
             <span className={qtyExpected > 1 ? 'text-yellow-600' : row.quantity_expected && row.quantity_received >= row.quantity_expected ? 'text-emerald-600' : 'text-gray-700'}>
               {quantityText}
             </span>
@@ -159,7 +161,7 @@ function OrderRow({
         </div>
       </div>
 
-      <div className="flex shrink-0 items-center gap-0.5 pr-2">
+      <div className="flex shrink-0 flex-wrap items-center gap-0.5 pl-4 md:justify-end md:pl-0 md:pr-2">
         <OrderIdChip value={poValue} display={getLast4(poValue)} />
         <SkuScanRefChip value={skuValue} display={getLast4(skuValue)} />
         <TrackingChip value={trackingValue} display={getLast4(trackingValue)} />
@@ -169,16 +171,11 @@ function OrderRow({
   );
 }
 
-interface ReceivingLinesTableProps {
-  receivingId?: number | null;
-}
-
-export default function ReceivingLinesTable({ receivingId }: ReceivingLinesTableProps = {}) {
+export default function ReceivingLinesTable() {
   const queryClient = useQueryClient();
   const router = useRouter();
   const searchParams = useSearchParams();
   const { isMobile } = useUIModeOptional();
-  // History always shows every line — no view filter, no sidebar toggle.
   const view: ReceivingView = 'all';
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [localRows, setLocalRows] = useState<ReceivingLineRow[]>([]);
@@ -193,15 +190,11 @@ export default function ReceivingLinesTable({ receivingId }: ReceivingLinesTable
   const buildParams = useCallback(() => {
     const p = new URLSearchParams({ limit: String(LIMIT), offset: '0' });
     p.set('include', 'serials');
-    if (receivingId) {
-      p.set('receiving_id', String(receivingId));
-      return p.toString();
-    }
     p.set('view', view);
     return p.toString();
-  }, [receivingId, view]);
+  }, [view]);
 
-  const queryKey = ['receiving-lines-table', receivingId, view];
+  const queryKey = ['receiving-lines-table', view] as const;
   const { data, isLoading } = useQuery<ApiResponse>({
     queryKey,
     queryFn: async () => {
@@ -335,16 +328,15 @@ export default function ReceivingLinesTable({ receivingId }: ReceivingLinesTable
     return groups;
   }, [localRows]);
 
-  // Week filter — applied when no specific carton is pinned. When receivingId
-  // is set, the user wants every line on that carton regardless of date.
-  const filteredGroupedRecords = useMemo(() => {
-    if (receivingId) return groupedRecords;
-    return Object.fromEntries(
-      Object.entries(groupedRecords).filter(
-        ([date]) => date >= weekRange.startStr && date <= weekRange.endStr,
+  const filteredGroupedRecords = useMemo(
+    () =>
+      Object.fromEntries(
+        Object.entries(groupedRecords).filter(
+          ([date]) => date >= weekRange.startStr && date <= weekRange.endStr,
+        ),
       ),
-    );
-  }, [groupedRecords, weekRange.startStr, weekRange.endStr, receivingId]);
+    [groupedRecords, weekRange.startStr, weekRange.endStr],
+  );
 
   // ── Scroll-based sticky header (matches TechTable) ────────────────────────
   const handleScroll = useCallback(() => {

@@ -36,10 +36,11 @@ export interface ReceiveLineUnitsInput {
   notes?: string | null;
 
   // Workflow target. 'DONE' = line finalized. 'UNBOXED' = physically received,
-  // awaiting test. Anything else is left to the implicit qty rule below.
+  // awaiting test. 'MATCHED' = scanned / staged (UI label "SCANNED") — e.g. awaiting Zoho receive.
+  // Anything else is left to the implicit qty rule below.
   // ('RECEIVED' is *not* a valid value — the inbound_workflow_status_enum has no
   // such label; using it crashes the whole query at plan time in Postgres.)
-  set_workflow_status?: 'UNBOXED' | 'DONE' | null;
+  set_workflow_status?: 'UNBOXED' | 'DONE' | 'MATCHED' | null;
 
   // Actor + provenance.
   staff_id?: number | null;
@@ -379,6 +380,8 @@ export async function receiveLineUnits(
              THEN 'DONE'::inbound_workflow_status_enum
            WHEN $7::text = 'UNBOXED'
              THEN 'UNBOXED'::inbound_workflow_status_enum
+           WHEN $7::text = 'MATCHED'
+             THEN 'MATCHED'::inbound_workflow_status_enum
            WHEN quantity_expected IS NOT NULL
                 AND (quantity_received + $2) >= quantity_expected
              THEN 'UNBOXED'::inbound_workflow_status_enum

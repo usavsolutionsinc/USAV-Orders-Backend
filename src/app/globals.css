@@ -77,6 +77,44 @@ body {
   touch-action: manipulation;
 }
 
+/*
+ * Print-only render zone used by the Bin Label Printer.
+ * On screen the zone is hidden; on print, the entire document is masked
+ * except the labels in `.label-print-zone`, giving a clean page.
+ */
+.label-print-zone {
+  display: none;
+}
+@media print {
+  body {
+    overflow: visible !important;
+    height: auto !important;
+    background: #fff !important;
+    padding: 0 !important;
+  }
+  body * {
+    visibility: hidden;
+  }
+  .label-print-zone,
+  .label-print-zone * {
+    visibility: visible;
+  }
+  .label-print-zone {
+    display: block !important;
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+  }
+  .label-print-card {
+    page-break-inside: avoid;
+    break-inside: avoid;
+  }
+  @page {
+    margin: 0.25in;
+  }
+}
+
 /* iOS PWA: smooth momentum scrolling in overflow containers */
 .overflow-y-auto,
 .overflow-y-scroll,

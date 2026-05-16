@@ -3,7 +3,16 @@ import pool from '@/lib/db';
 import { formatPSTTimestamp } from '@/utils/date';
 import { invalidateCacheTags } from '@/lib/cache/upstash-cache';
 import { publishReceivingLogChanged } from '@/lib/realtime/publish';
-import { createPurchaseReceive, getPurchaseOrderById, updatePurchaseOrder } from '@/lib/zoho';
+import {
+  assertPurchaseOrderLineItemsEditable,
+  assertPurchaseOrderReceivable,
+  buildPurchaseOrderLineItemsForDescriptionPut,
+  catalogItemIdFromZohoPoLineItem,
+  createPurchaseReceive,
+  getPurchaseOrderById,
+  searchItemBySku,
+  updatePurchaseOrder,
+} from '@/lib/zoho';
 
 export async function POST(request: NextRequest) {
   try {
@@ -18,7 +27,6 @@ export async function POST(request: NextRequest) {
     const conditionGrade = String(body?.condition_grade || 'USED_A').trim();
     const serialNumber = String(body?.serial_number || '').trim() || null;
     const zendeskTicket = String(body?.zendesk_ticket || '').trim() || null;
-    const listingLink = String(body?.listing_link || '').trim() || null;
     const notes = String(body?.notes || '').trim() || null;
     const staffId = Number(body?.staff_id);
 
@@ -46,32 +54,37 @@ export async function POST(request: NextRequest) {
 
     const now = formatPSTTimestamp();
 
-    // 1. Update the receiving line locally — mark as RECEIVED workflow.
-    //    Also bump quantity_received up to quantity_expected so dashboards
-    //    reflect the line as fully received. GREATEST keeps any higher
-    //    count (e.g. from prior per-serial scans) intact.
+    const hasZohoReceive = Boolean(zohoPoId && zohoLineItemId);
+
+    // 1. Update the line locally. When Zoho receive is required, stay MATCHED
+    //    (UI: "SCANNED") until createPurchaseReceive succeeds; then we set DONE.
     const lineUpdate = await pool.query(
       `UPDATE receiving_lines
        SET qa_status = $1,
            disposition_code = $2,
            condition_grade = $3,
            notes = $4,
-           workflow_status = 'DONE'::inbound_workflow_status_enum,
+           workflow_status = CASE
+             WHEN $6 THEN 'MATCHED'::inbound_workflow_status_enum
+             ELSE 'DONE'::inbound_workflow_status_enum
+           END,
            quantity_received = GREATEST(
              COALESCE(quantity_received, 0),
              COALESCE(quantity_expected, 1)
            )
        WHERE id = $5
        RETURNING *`,
-      [qaStatus, dispositionCode, conditionGrade, notes, receivingLineId],
+      [qaStatus, dispositionCode, conditionGrade, notes, receivingLineId, hasZohoReceive],
     );
 
     if (lineUpdate.rows.length === 0) {
       return NextResponse.json({ success: false, error: 'receiving_line not found' }, { status: 404 });
     }
 
-    const line = lineUpdate.rows[0];
+    let line = lineUpdate.rows[0];
     const qtyReceived = Number(line.quantity_received) || 1;
+    let zohoReceiveOk = !hasZohoReceive;
+    let zohoReceiveError: string | null = null;
 
     // 2. If serial number provided, upsert serial_units with RECEIVED status
     if (serialNumber) {
@@ -94,8 +107,7 @@ export async function POST(request: NextRequest) {
 
     // Resolve tracking# for the reference_number push. Prefer the canonical
     // shipping_tracking_numbers row via receiving.shipment_id; fall back to
-    // receiving.receiving_tracking_number. Computed before the Zoho sync so
-    // it's available inside the background block.
+    // receiving.receiving_tracking_number. Computed before the Zoho receive call.
     let localTracking: string | null = null;
     if (receivingId) {
       try {
@@ -111,66 +123,114 @@ export async function POST(request: NextRequest) {
       } catch { /* silent — Zoho push will just skip */ }
     }
 
-    // 4. Background: sync to Zoho (purchase receive qty + PO header only).
-    //    Serial / line detail is not written to Zoho line items — only appended
-    //    to PO notes with QA / disposition / condition / Lines: … / Notes.
-    after(async () => {
+    // 4. Zoho purchase receive (await before responding). PO notes/serials only after receive succeeds.
+    if (hasZohoReceive) {
       try {
-        if (zohoPoId && zohoLineItemId) {
-          await createPurchaseReceive({
-            purchaseOrderId: zohoPoId,
-            lineItems: [{ line_item_id: zohoLineItemId, quantity_received: qtyReceived }],
-          }).catch((err) => {
-            console.warn('mark-received: createPurchaseReceive failed', err);
-          });
-
-          // PO-header fields: reference_number (tracking) + notes append.
-          // Read once, write once — combine both patches into a single
-          // request when possible to save a round-trip.
-          try {
-            const existing = await getPurchaseOrderById(zohoPoId);
-            const poHeader = (existing?.purchaseorder || {}) as Record<string, unknown>;
-            const currentRef = String(poHeader.reference_number || '').trim();
-            const currentNotes = String(poHeader.notes || '');
-
-            const headerPatch: Record<string, unknown> = {};
-
-            if (localTracking && currentRef !== localTracking) {
-              headerPatch.reference_number = localTracking;
-            }
-
-            const noteLead: string[] = [`${staffName} ${now}`];
-            if (zendeskTicket) noteLead.push(`Zendesk: ${zendeskTicket}`);
-            if (listingLink) noteLead.push(`Listing: ${listingLink}`);
-            const skuLabel = String(line.sku || line.item_name || `line #${line.id}`).trim();
-            const qaTail = [
-              `QA: ${qaStatus}`,
-              `Disposition: ${dispositionCode}`,
-              `Condition: ${conditionGrade}`,
-              ...(serialNumber ? [`SN: ${serialNumber}`] : []),
-              `Lines: ${skuLabel} ×${qtyReceived}`,
-              ...(notes ? [`Notes: ${notes}`] : []),
-            ].join(' | ');
-            const newLine = `${noteLead.join(' · ')} · ${qaTail}`;
-
-            // Skip if this exact line already appears (idempotent double-receive).
-            if (!currentNotes.includes(newLine)) {
-              headerPatch.notes = currentNotes
-                ? `${newLine}\n${currentNotes}`
-                : newLine;
-            }
-
-            if (Object.keys(headerPatch).length > 0) {
-              await updatePurchaseOrder(zohoPoId, headerPatch);
-            }
-          } catch (err) {
-            console.warn('mark-received: updatePurchaseOrder header sync failed', err);
+        const poResp = await getPurchaseOrderById(zohoPoId);
+        assertPurchaseOrderReceivable(poResp);
+        let catalogId = zohoItemId && zohoItemId.length > 0 ? zohoItemId : '';
+        if (!catalogId) {
+          const items = poResp.purchaseorder?.line_items || [];
+          for (const raw of items) {
+            if (!raw || typeof raw !== 'object') continue;
+            const li = raw as unknown as Record<string, unknown>;
+            const id = String(li.line_item_id ?? li.id ?? '').trim();
+            if (id !== zohoLineItemId) continue;
+            catalogId = catalogItemIdFromZohoPoLineItem(raw) || '';
+            break;
           }
         }
-      } catch (err) {
-        console.warn('mark-received: Zoho background sync failed', err);
-      }
+        if (!catalogId && line.sku) {
+          try {
+            const hit = await searchItemBySku(String(line.sku));
+            catalogId = hit?.item_id ? String(hit.item_id).trim() : '';
+          } catch {
+            catalogId = '';
+          }
+        }
+        if (!catalogId) {
+          throw new Error(
+            `Cannot resolve Zoho catalog item_id for PO line ${zohoLineItemId}.`,
+          );
+        }
+        await createPurchaseReceive({
+          purchaseOrderId: zohoPoId,
+          lineItems: [
+            {
+              line_item_id: zohoLineItemId,
+              quantity_received: qtyReceived,
+              item_id: catalogId,
+            },
+          ],
+          bills: poResp.purchaseorder?.bills,
+        });
+        zohoReceiveOk = true;
+        const doneUp = await pool.query(
+          `UPDATE receiving_lines
+             SET workflow_status = 'DONE'::inbound_workflow_status_enum,
+                 updated_at = NOW()
+           WHERE id = $1
+           RETURNING *`,
+          [receivingLineId],
+        );
+        if (doneUp.rows[0]) line = doneUp.rows[0];
 
+        try {
+          const existing = await getPurchaseOrderById(zohoPoId);
+          const patch: Record<string, unknown> = {};
+
+          if (serialNumber) {
+            try {
+              assertPurchaseOrderLineItemsEditable(existing);
+              if (existing.purchaseorder) {
+                const built = buildPurchaseOrderLineItemsForDescriptionPut(
+                  existing.purchaseorder,
+                  { [zohoLineItemId]: `SN: ${serialNumber.trim()}` },
+                );
+                if (built.length > 0) {
+                  patch.line_items = built;
+                }
+              }
+            } catch (e) {
+              console.warn('mark-received: Zoho PO line description skipped', e);
+            }
+          }
+
+          const poHeader = (existing?.purchaseorder || {}) as Record<string, unknown>;
+          const currentRef = String(poHeader.reference_number || '').trim();
+          const currentNotes = String(poHeader.notes || '');
+
+          if (localTracking && currentRef !== localTracking) {
+            patch.reference_number = localTracking;
+          }
+
+          const noteLead: string[] = [`${staffName} ${now}`];
+          if (zendeskTicket) noteLead.push(`Zendesk: ${zendeskTicket}`);
+          const noteHead = noteLead.join(' · ');
+          const noteTail = [
+            ...(serialNumber ? [`SN: ${serialNumber}`] : []),
+            ...(notes ? [`Notes: ${notes}`] : []),
+          ].join(' | ');
+          const newLine = noteTail ? `${noteHead} · ${noteTail}` : noteHead;
+
+          if (!currentNotes.includes(newLine)) {
+            patch.notes = currentNotes ? `${newLine}\n${currentNotes}` : newLine;
+          }
+
+          if (Object.keys(patch).length > 0) {
+            await updatePurchaseOrder(zohoPoId, patch);
+          }
+        } catch (err) {
+          console.warn('mark-received: updatePurchaseOrder sync failed', err);
+        }
+      } catch (err) {
+        zohoReceiveOk = false;
+        zohoReceiveError = err instanceof Error ? err.message : String(err);
+        console.warn('mark-received: createPurchaseReceive failed', err);
+      }
+    }
+
+    after(async () => {
       try {
         await invalidateCacheTags(['receiving-logs', 'receiving-lines', 'serial-units']);
         await publishReceivingLogChanged({
@@ -183,11 +243,15 @@ export async function POST(request: NextRequest) {
       }
     });
 
+    const workflowStatus =
+      String(line.workflow_status ?? '').trim() || (hasZohoReceive ? 'MATCHED' : 'DONE');
+
     return NextResponse.json({
-      success: true,
+      success: zohoReceiveOk,
       receiving_line_id: receivingLineId,
-      workflow_status: 'DONE',
-      zoho_synced: !!(zohoPoId && zohoLineItemId),
+      workflow_status: workflowStatus,
+      zoho_synced: zohoReceiveOk,
+      ...(zohoReceiveError ? { zoho_error: zohoReceiveError } : {}),
       receiving_line: line,
     });
   } catch (error) {

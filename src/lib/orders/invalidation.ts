@@ -1,6 +1,12 @@
 import { invalidateCacheTags } from '@/lib/cache/upstash-cache';
 import { publishOrderChanged } from '@/lib/realtime/publish';
 
+/** Bust `/api/orders` Upstash snapshots and any other entries tagged `orders`. */
+export async function invalidateAllOrdersApiCaches(extraTags: string[] = []) {
+  const tags = Array.from(new Set(['orders', ...extraTags].filter(Boolean)));
+  await invalidateCacheTags(tags);
+}
+
 type InvalidateOrderViewsOptions = {
   orderIds: number[];
   source: string;
@@ -22,7 +28,6 @@ export async function invalidateOrderViews({
   );
   if (normalizedIds.length === 0) return;
 
-  const tags = Array.from(new Set(['orders', ...extraTags].filter(Boolean)));
-  await invalidateCacheTags(tags);
+  await invalidateAllOrdersApiCaches(extraTags);
   await publishOrderChanged({ orderIds: normalizedIds, source });
 }

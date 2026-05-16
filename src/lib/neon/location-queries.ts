@@ -178,6 +178,169 @@ export async function updateLocation(
   return result.rows[0] ?? null;
 }
 
+// ─── Room-level helpers ─────────────────────────────────────────────────────
+
+/**
+ * Rename a room across every location that references it. Returns the count
+ * of rows touched (room parent + all child bins).
+ */
+export async function renameRoom(
+  oldName: string,
+  newName: string,
+): Promise<{ updated: number; barcodesRekeyed: number }> {
+  const from = oldName.trim();
+  const to = newName.trim();
+  if (!from || !to || from === to) return { updated: 0, barcodesRekeyed: 0 };
+
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const update = await client.query(
+      `UPDATE locations
+         SET room = $2,
+             name = CASE WHEN name = $1 THEN $2 ELSE name END,
+             updated_at = NOW()
+       WHERE room = $1 OR (row_label IS NULL AND col_label IS NULL AND name = $1)
+       RETURNING id, row_label, col_label, barcode`,
+      [from, to],
+    );
+
+    // Re-key barcodes for renamed bins so the room prefix matches the new name.
+    let barcodesRekeyed = 0;
+    const fromRoomCode = from.replace(/\s+/g, '').replace(/zone/i, 'Z');
+    const toRoomCode = to.replace(/\s+/g, '').replace(/zone/i, 'Z');
+    for (const r of update.rows) {
+      if (!r.row_label || !r.col_label || !r.barcode) continue;
+      if (!r.barcode.startsWith(`${fromRoomCode}-`)) continue;
+      const rest = r.barcode.slice(fromRoomCode.length + 1);
+      const next = `${toRoomCode}-${rest}`;
+      await client.query(
+        `UPDATE locations SET barcode = $1, updated_at = NOW() WHERE id = $2`,
+        [next, r.id],
+      );
+      barcodesRekeyed += 1;
+    }
+
+    await client.query('COMMIT');
+    return { updated: update.rowCount ?? 0, barcodesRekeyed };
+  } catch (err) {
+    await client.query('ROLLBACK');
+    throw err;
+  } finally {
+    client.release();
+  }
+}
+
+/**
+ * Reorder rooms — apply `sort_order` to each room name in `order` by index.
+ * Updates only the room-level parent row (no row/col) so child bins keep
+ * their own ordering. Returns the count of rooms updated.
+ */
+export async function reorderRooms(order: string[]): Promise<{ updated: number }> {
+  const clean = order.map((s) => s.trim()).filter(Boolean);
+  if (clean.length === 0) return { updated: 0 };
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    let updated = 0;
+    for (let i = 0; i < clean.length; i += 1) {
+      const r = await client.query(
+        `UPDATE locations
+            SET sort_order = $2, updated_at = NOW()
+          WHERE row_label IS NULL AND col_label IS NULL
+            AND (name = $1 OR room = $1)`,
+        [clean[i], i],
+      );
+      updated += r.rowCount ?? 0;
+    }
+    await client.query('COMMIT');
+    return { updated };
+  } catch (err) {
+    await client.query('ROLLBACK');
+    throw err;
+  } finally {
+    client.release();
+  }
+}
+
+/** Soft-delete a room and every bin under it (sets is_active = false). */
+export async function softDeleteRoom(name: string): Promise<{ deactivated: number }> {
+  const room = name.trim();
+  if (!room) return { deactivated: 0 };
+  const r = await pool.query(
+    `UPDATE locations
+        SET is_active = false, updated_at = NOW()
+      WHERE (room = $1 OR (row_label IS NULL AND col_label IS NULL AND name = $1))
+        AND is_active = true`,
+    [room],
+  );
+  return { deactivated: r.rowCount ?? 0 };
+}
+
+/**
+ * Bulk-create bins for a row across a column range. Idempotent on barcode —
+ * existing bins are returned untouched so the caller can simply re-print.
+ */
+export async function bulkCreateBinRange(data: {
+  room: string;
+  rowLabel: string;
+  colStart: number;
+  colEnd: number;
+  binType?: string | null;
+  capacity?: number | null;
+}): Promise<{ created: number; bins: Location[] }> {
+  const room = data.room.trim();
+  const rowLabel = data.rowLabel.trim();
+  const lo = Math.min(data.colStart, data.colEnd);
+  const hi = Math.max(data.colStart, data.colEnd);
+  const roomCode = room.replace(/\s+/g, '').replace(/zone/i, 'Z');
+  const bins: Location[] = [];
+  let created = 0;
+
+  for (let n = lo; n <= hi; n += 1) {
+    const colLabel = String(n);
+    const barcode = `${roomCode}-${rowLabel}-${colLabel.padStart(2, '0')}`;
+    const existing = await pool.query(
+      `SELECT * FROM locations WHERE barcode = $1 LIMIT 1`,
+      [barcode],
+    );
+    if (existing.rows[0]) {
+      // Re-activate if soft-deleted so re-prints work after a delete cycle.
+      if (existing.rows[0].is_active === false) {
+        const reactivated = await pool.query(
+          `UPDATE locations SET is_active = true, updated_at = NOW()
+             WHERE id = $1 RETURNING *`,
+          [existing.rows[0].id],
+        );
+        bins.push(reactivated.rows[0]);
+      } else {
+        bins.push(existing.rows[0]);
+      }
+      continue;
+    }
+
+    const insert = await pool.query(
+      `INSERT INTO locations
+        (name, room, barcode, row_label, col_label, bin_type, capacity, sort_order)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+       RETURNING *`,
+      [
+        `${roomCode} ${rowLabel}${colLabel}`,
+        room,
+        barcode,
+        rowLabel,
+        colLabel,
+        data.binType?.trim() || null,
+        data.capacity ?? null,
+        n,
+      ],
+    );
+    bins.push(insert.rows[0]);
+    created += 1;
+  }
+  return { created, bins };
+}
+
 // ─── Location Transfers ─────────────────────────────────────────────────────
 
 export async function logLocationTransfer(data: {

@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useRef } from 'react';
+import { useEffect, useMemo } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { getOrdersChannelName } from '@/lib/realtime/channels';
@@ -76,23 +76,17 @@ export default function PendingOrdersTable({
     if (pendingFilterParam === 'pending') return 'pending';
     return readPendingFilterPreference() ?? 'all';
   }, [overridePendingFilter, pendingFilterParam]);
-  /** Next pending-list fetch skips Upstash snapshot (Redis may lag invalidation). */
-  const pendingListBypassServerCacheRef = useRef(false);
   const queryKey = ['dashboard-table', 'pending', { searchQuery, packedBy, testedBy, strictSearchScope }] as const;
 
   const query = useQuery({
     queryKey,
-    queryFn: async () => {
-      const skipListCache = pendingListBypassServerCacheRef.current;
-      pendingListBypassServerCacheRef.current = false;
-      return fetchPendingOrdersData({
+    queryFn: () =>
+      fetchPendingOrdersData({
         searchQuery,
         packedBy,
         testedBy,
         strictSearchScope,
-        skipListCache,
-      });
-    },
+      }),
     staleTime: 60000,
     gcTime: 10 * 60 * 1000,
     placeholderData: (previousData) => previousData,
@@ -177,8 +171,7 @@ export default function PendingOrdersTable({
     ordersChannelName,
     'order.changed',
     () => {
-      pendingListBypassServerCacheRef.current = true;
-      queryClient.invalidateQueries({ queryKey: ['dashboard-table', 'pending'] });
+      void queryClient.invalidateQueries({ queryKey: ['dashboard-table', 'pending'], refetchType: 'active' });
     },
     true,
   );
@@ -188,9 +181,9 @@ export default function PendingOrdersTable({
   }, [pendingFilter]);
 
   useEffect(() => {
+    /** Same path as sidebar import/work-order saves: invalidate so the table refetches a full `/api/orders` snapshot. */
     const handleRefresh = () => {
-      pendingListBypassServerCacheRef.current = true;
-      void queryClient.refetchQueries({ queryKey: ['dashboard-table', 'pending'], type: 'active' });
+      void queryClient.invalidateQueries({ queryKey: ['dashboard-table', 'pending'], refetchType: 'active' });
     };
 
     const handlePendingOrderRefetch = (e: Event) => {

@@ -93,6 +93,7 @@ export async function GET(request: NextRequest) {
                 r.carrier,
                 r.source_platform            AS receiving_source_platform,
                 r.zoho_purchaseorder_number  AS receiving_zoho_purchaseorder_number,
+                r.support_notes              AS receiving_support_notes,
                 stn.tracking_number_raw      AS shipment_tracking_number,
                 stn.carrier                  AS shipment_carrier,
                 stn.latest_status_category   AS shipment_status_category,
@@ -122,7 +123,12 @@ export async function GET(request: NextRequest) {
         const serialsByLine = await fetchSerialsForLines([normalized.id]);
         (normalized as Record<string, unknown>).serials = serialsByLine.get(normalized.id) ?? [];
       }
-      return NextResponse.json({ success: true, receiving_line: normalized });
+      // Mobile `/receiving/lines/:id` historically read `receiving_lines[]`; desktop sidebar uses `receiving_line`.
+      return NextResponse.json({
+        success: true,
+        receiving_line: normalized,
+        receiving_lines: [normalized],
+      });
     }
 
     // All lines for a specific package
@@ -134,6 +140,7 @@ export async function GET(request: NextRequest) {
                   r.carrier,
                   r.source_platform            AS receiving_source_platform,
                   r.zoho_purchaseorder_number  AS receiving_zoho_purchaseorder_number,
+                  r.support_notes              AS receiving_support_notes,
                   stn.tracking_number_raw      AS shipment_tracking_number,
                   stn.carrier                  AS shipment_carrier,
                   stn.latest_status_category   AS shipment_status_category,
@@ -264,6 +271,7 @@ export async function GET(request: NextRequest) {
                 r.carrier,
                 r.source_platform            AS receiving_source_platform,
                 r.zoho_purchaseorder_number  AS receiving_zoho_purchaseorder_number,
+                r.support_notes              AS receiving_support_notes,
                 stn.tracking_number_raw      AS shipment_tracking_number,
                 stn.carrier                  AS shipment_carrier,
                 stn.latest_status_category   AS shipment_status_category,
@@ -577,6 +585,7 @@ export async function PATCH(request: NextRequest) {
               r.carrier,
               r.source_platform            AS receiving_source_platform,
               r.zoho_purchaseorder_number  AS receiving_zoho_purchaseorder_number,
+              r.support_notes              AS receiving_support_notes,
               stn.tracking_number_raw      AS shipment_tracking_number,
               stn.carrier                  AS shipment_carrier,
               stn.latest_status_category   AS shipment_status_category,
@@ -684,6 +693,7 @@ function normalizeRow(row: Record<string, unknown>) {
     zoho_last_modified_time:  (row.zoho_last_modified_time as string | null) ?? null,
     zoho_synced_at:           (row.zoho_synced_at as string | null) ?? null,
     notes:                    (row.notes as string | null) ?? null,
+    receiving_support_notes:  (row.receiving_support_notes as string | null) ?? null,
     receiving_type:            (row.receiving_type as string | null) ?? 'PO',
     created_at:               (row.created_at as string | null) ?? null,
     image_url:                (row.image_url as string | null) ?? null,

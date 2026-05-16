@@ -31,7 +31,7 @@ export function RepairTable({ filter }: RepairTableProps) {
   const [payingRepairId, setPayingRepairId] = useState<number | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
 
-  const { data: repairs = [], isLoading: loading } = useRepairsTable(search, filter);
+  const { data: repairs = [], isLoading: loading, refetch: refetchRepairs } = useRepairsTable(search, filter);
 
   const handleScroll = useCallback(() => {
     if (!scrollRef.current) return;
@@ -64,6 +64,46 @@ export function RepairTable({ filter }: RepairTableProps) {
       if (timeoutId !== null) window.clearTimeout(timeoutId);
     };
   }, [handleScroll, repairs]);
+
+  /** Open RepairDetailsPanel when landing from printed repair QR (/walk-in?openRepair=). */
+  useEffect(() => {
+    const raw = searchParams.get('openRepair');
+    if (!raw) return;
+    const openId = parseInt(raw, 10);
+    if (!Number.isFinite(openId) || openId <= 0) return;
+    if (loading) return;
+
+    let cancelled = false;
+
+    const run = async () => {
+      const fromList = repairs.find((r) => r.id === openId);
+      if (fromList) {
+        if (!cancelled) setSelectedRepair(fromList);
+      } else {
+        try {
+          const res = await fetch(`/api/repair-service/${openId}`);
+          if (!res.ok) return;
+          const data = (await res.json()) as RSRecord;
+          if (!cancelled && data?.id) setSelectedRepair(data);
+        } catch {
+          /* ignore */
+        }
+      }
+
+      if (cancelled) return;
+      const next = new URLSearchParams(searchParams.toString());
+      if (!next.has('openRepair')) return;
+      next.delete('openRepair');
+      const qs = next.toString();
+      router.replace(qs ? `${pathname}?${qs}` : pathname);
+    };
+
+    void run();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [loading, pathname, repairs, router, searchParams]);
 
   const handleRowClick = (repair: RSRecord) => setSelectedRepair(repair);
   const handleCloseDetails = () => setSelectedRepair(null);
@@ -350,11 +390,13 @@ export function RepairTable({ filter }: RepairTableProps) {
           <RepairDetailsPanel
             repair={selectedRepair}
             onClose={handleCloseDetails}
-            onUpdate={handleCloseDetails}
+            onUpdate={() => {
+              void refetchRepairs();
+            }}
             onMoveUp={handleMoveUp}
             onMoveDown={handleMoveDown}
             disableMoveUp={selectedIndex <= 0}
-            disableMoveDown={selectedIndex >= flatRepairs.length - 1}
+            disableMoveDown={selectedIndex < 0 || selectedIndex >= flatRepairs.length - 1}
           />
         )}
       </AnimatePresence>

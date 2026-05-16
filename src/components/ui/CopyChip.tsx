@@ -80,6 +80,8 @@ export interface CopyChipProps {
    * Use for chips like serial numbers that must grow past a min width without shrinking the glyphs.
    */
   fitDisplayWidth?: boolean;
+  /** Called after a successful clipboard write. Use for side-effects (e.g. dispatch a custom event). */
+  onCopy?: (value: string) => void;
 }
 
 export function CopyChip({
@@ -92,6 +94,7 @@ export function CopyChip({
   disableCopy = false,
   truncateDisplay = true,
   fitDisplayWidth = false,
+  onCopy,
 }: CopyChipProps) {
   const anchorId = useId();
   const chipRef = useRef<HTMLDivElement | null>(null);
@@ -140,6 +143,7 @@ export function CopyChip({
     e.stopPropagation();
     if (!canCopy) return;
     navigator.clipboard.writeText(normalizedValue);
+    onCopy?.(normalizedValue);
     if (tooltipCtxRef.current?.isActiveAnchor(anchorId)) {
       tooltipCtxRef.current.notifyCopied(anchorId);
     }
@@ -221,13 +225,22 @@ export const TrackingChip = ({ value, display }: { value: string; display: strin
 /**
  * Static SKU code shown where a tracking column is reused (e.g. `SKU:qty`). Yellow / pencil — not carrier tracking.
  */
-export const SkuScanRefChip = ({ value, display }: { value: string; display: string }) => (
+export const SkuScanRefChip = ({
+  value,
+  display,
+  onCopy,
+}: {
+  value: string;
+  display: string;
+  onCopy?: (value: string) => void;
+}) => (
   <CopyChip
     value={value}
     display={isEmptyDisplayValue(display) || String(display || '').trim() === '---' ? '----' : display}
     icon={<Pencil className="h-4 w-4 shrink-0" />}
     underlineClass="border-yellow-500"
     iconClass="inline-flex items-center justify-center text-yellow-600"
+    onCopy={onCopy}
   />
 );
 

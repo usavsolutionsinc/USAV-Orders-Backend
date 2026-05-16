@@ -67,14 +67,11 @@ export async function fetchPendingOrdersData({
   packedBy,
   testedBy,
   strictSearchScope = false,
-  skipListCache = false,
 }: {
   searchQuery?: string;
   packedBy?: number;
   testedBy?: number;
   strictSearchScope?: boolean;
-  /** Bypass Upstash cached `/api/orders` list snapshot (imports, manual refresh). */
-  skipListCache?: boolean;
 }) {
   const params = new URLSearchParams();
   if (searchQuery.trim()) {
@@ -85,9 +82,6 @@ export async function fetchPendingOrdersData({
   params.set('excludePacked', 'true');
   if (packedBy !== undefined) params.set('packedBy', String(packedBy));
   if (testedBy !== undefined) params.set('testedBy', String(testedBy));
-  if (skipListCache && !searchQuery.trim()) {
-    params.set('skipCache', '1');
-  }
 
   const url = params.toString() ? `/api/orders?${params.toString()}` : '/api/orders';
   const res = await fetch(url, FRESH_FETCH_OPTIONS);

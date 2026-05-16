@@ -136,7 +136,7 @@ export default function BarcodeSidebar({ embedded = false }: BarcodeSidebarProps
                     variant="blue"
                 />
             </motion.div>
-            <motion.div variants={itemVariants} className="flex-1 overflow-y-auto scrollbar-hide">
+            <motion.div variants={itemVariants} className="min-h-0 min-w-0 flex-1 overflow-y-auto scrollbar-hide">
                 <div className="p-4">
                     <FavoritesWorkspaceSection
                         workspaceKey="sku-stock"

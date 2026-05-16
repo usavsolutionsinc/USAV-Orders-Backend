@@ -174,3 +174,84 @@ export function gs1DigitalLinkUrl(opts: {
     return `${QR_BASE_URL.replace(/\/$/, '')}${path}`;
   }
 }
+
+// ─── Warehouse-location helpers (Zone / Aisle / Bay / Level / Position) ────
+
+/**
+ * Placeholder GLN used by GS1 in their documentation and sandbox examples.
+ * Swap to your real GLN once registered with GS1 US.
+ */
+export const DEFAULT_GLN = '0614141000005';
+
+/** Pad a numeric segment to 2 digits — 01, 02, 03 … */
+export function pad2(n: number | string): string {
+  const num = typeof n === 'string' ? parseInt(n, 10) : n;
+  if (!Number.isFinite(num)) return String(n).padStart(2, '0');
+  return String(Math.max(0, Math.floor(num))).padStart(2, '0');
+}
+
+/** No padding — used for the Level tier (1, 2, …, 10). */
+export function noPad(n: number | string): string {
+  const num = typeof n === 'string' ? parseInt(n, 10) : n;
+  if (!Number.isFinite(num)) return String(n);
+  return String(Math.max(0, Math.floor(num)));
+}
+
+export interface LocationSegments {
+  /** Single uppercase letter A–Z. Tied to a named room (e.g. "Cage 4" → "C"). */
+  zone: string;
+  aisle: number | string;
+  bay: number | string;
+  level: number | string;
+  position: number | string;
+}
+
+/** Normalize zone input to a single uppercase letter; fallback to 'X' if invalid. */
+function zoneLetter(z: string | number | undefined | null): string {
+  const c = String(z ?? '').trim().toUpperCase().charAt(0);
+  return /[A-Z]/.test(c) ? c : 'X';
+}
+
+/**
+ * Compact dash-separated location code — A-01-01-1-01.
+ *   zone letter · 2-digit aisle · 2-digit bay · unpadded level · 2-digit position.
+ */
+export function locationCode(s: LocationSegments): string {
+  return `${zoneLetter(s.zone)}-${pad2(s.aisle)}-${pad2(s.bay)}-${noPad(s.level)}-${pad2(s.position)}`;
+}
+
+/** Tight all-caps code (no dashes) used inside the GS1 URI. */
+export function locationCodeFlat(s: LocationSegments): string {
+  return `${zoneLetter(s.zone)}${pad2(s.aisle)}${pad2(s.bay)}${noPad(s.level)}${pad2(s.position)}`;
+}
+
+/**
+ * Bays alternate sides of the aisle: odd → Left, even → Right.
+ * Used as a guide label on printed stickers so staff know which way to face.
+ */
+export function bayHand(bay: number | string): 'Left' | 'Right' {
+  const n = typeof bay === 'string' ? parseInt(bay, 10) : bay;
+  return Number.isFinite(n) && n % 2 === 0 ? 'Right' : 'Left';
+}
+
+/**
+ * GS1 Digital Link URI for a warehouse location.
+ *   /414/{gln}/254/{code}
+ *
+ * AI 414 = Identification of a physical location (GLN).
+ * AI 254 = GLN extension component (our Z/A/B/L/P breakdown).
+ */
+export function gs1LocationUrl(
+  s: LocationSegments,
+  opts?: { gln?: string; baseUrl?: string },
+): string {
+  const gln = (opts?.gln || DEFAULT_GLN).trim();
+  const baseUrl = (opts?.baseUrl || QR_BASE_URL).replace(/\/$/, '');
+  const code = locationCodeFlat(s);
+  const path = `/414/${encodeURIComponent(gln)}/254/${encodeURIComponent(code)}`;
+  try {
+    return new URL(path, baseUrl).toString();
+  } catch {
+    return `${baseUrl}${path}`;
+  }
+}

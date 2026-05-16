@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React from 'react';
 import { useSearchParams } from 'next/navigation';
 import ReceivingLinesTable from './station/ReceivingLinesTable';
 import { LocalPickupCatalogPanel } from './work-orders/LocalPickupCatalogPanel';
@@ -8,27 +8,11 @@ import { useRealtimeInvalidation } from '@/hooks/useRealtimeInvalidation';
 import { useRealtimeToasts } from '@/hooks/useRealtimeToasts';
 
 export default function ReceivingDashboard() {
-    const [activeReceivingId, setActiveReceivingId] = useState<number | null>(null);
     useRealtimeInvalidation({ receiving: true });
     useRealtimeToasts('receiving');
     const searchParams = useSearchParams();
     const mode = searchParams.get('mode') ?? 'receive';
     const isPickupMode = mode === 'pickup';
-
-    useEffect(() => {
-        const handlePoLoaded = (e: Event) => {
-            const detail = (e as CustomEvent<{ receiving_id?: number }>).detail;
-            if (detail?.receiving_id) setActiveReceivingId(detail.receiving_id);
-        };
-        const handleClear = () => setActiveReceivingId(null);
-
-        window.addEventListener('receiving-po-loaded', handlePoLoaded);
-        window.addEventListener('receiving-clear-line', handleClear);
-        return () => {
-            window.removeEventListener('receiving-po-loaded', handlePoLoaded);
-            window.removeEventListener('receiving-clear-line', handleClear);
-        };
-    }, []);
 
     return (
         <div className="flex h-full w-full overflow-hidden bg-[linear-gradient(180deg,#f8fbfb_0%,#ffffff_16%)]">
@@ -40,7 +24,7 @@ export default function ReceivingDashboard() {
                         </div>
                     ) : (
                         <div className="flex-1 min-w-0 overflow-hidden">
-                            <ReceivingLinesTable receivingId={activeReceivingId} />
+                            <ReceivingLinesTable />
                         </div>
                     )}
                 </div>

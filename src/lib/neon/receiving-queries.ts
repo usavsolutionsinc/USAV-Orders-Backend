@@ -118,10 +118,16 @@ export async function getReceivingLogById(id: number): Promise<ReceivingLog | nu
  */
 export async function getReceivingLogByTracking(tracking: string): Promise<ReceivingLog | null> {
   const last8 = tracking.replace(/\D/g, '').slice(-8);
+  if (last8.length < 8) return null;
   const result = await pool.query(
-    `SELECT * FROM receiving
-     WHERE RIGHT(regexp_replace(tracking_number, '\\D', '', 'g'), 8) = $1
-     ORDER BY received_at DESC NULLS LAST, id DESC LIMIT 1`,
+    `SELECT r.*
+       FROM receiving r
+       LEFT JOIN shipping_tracking_numbers stn ON stn.id = r.shipment_id
+      WHERE RIGHT(regexp_replace(COALESCE(stn.tracking_number_normalized, ''), '\\D', '', 'g'), 8) = $1
+         OR RIGHT(regexp_replace(COALESCE(stn.tracking_number_raw, ''), '\\D', '', 'g'), 8) = $1
+         OR RIGHT(regexp_replace(COALESCE(r.receiving_tracking_number, ''), '\\D', '', 'g'), 8) = $1
+      ORDER BY r.received_at DESC NULLS LAST, r.id DESC
+      LIMIT 1`,
     [last8],
   );
   return result.rows[0] ?? null;
@@ -153,7 +159,7 @@ export async function getPendingUnboxing(limit = 100): Promise<ReceivingLog[]> {
 export async function createReceivingLog(params: CreateReceivingLogParams): Promise<ReceivingLog> {
   const result = await pool.query(
     `INSERT INTO receiving
-       (tracking_number, carrier, received_at, qa_status, disposition_code, condition_grade,
+       (receiving_tracking_number, carrier, received_at, qa_status, disposition_code, condition_grade,
         is_return, return_platform, needs_test, assigned_tech_id, target_channel,
         zoho_po_id, zoho_pr_id, notes)
      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
@@ -186,7 +192,7 @@ export async function updateReceivingLog(
   updates: Partial<Record<string, any>>,
 ): Promise<ReceivingLog | null> {
   const allowed = [
-    'tracking_number', 'carrier', 'received_at', 'qa_status', 'disposition_code',
+    'receiving_tracking_number', 'carrier', 'received_at', 'qa_status', 'disposition_code',
     'condition_grade', 'is_return', 'return_platform', 'needs_test', 'assigned_tech_id',
     'target_channel', 'unboxed_by', 'unboxed_at', 'zoho_po_id', 'zoho_pr_id', 'notes',
   ];
@@ -270,10 +276,11 @@ export async function getAllReceivingLines(options?: {
 
   const result = await pool.query(
     `SELECT rl.*,
-            r.tracking_number,
-            r.carrier
+            COALESCE(stn.tracking_number_raw, r.receiving_tracking_number) AS tracking_number,
+            COALESCE(NULLIF(stn.carrier, 'UNKNOWN'), r.carrier) AS carrier
      FROM receiving_lines rl
      LEFT JOIN receiving r ON r.id = rl.receiving_id
+     LEFT JOIN shipping_tracking_numbers stn ON stn.id = r.shipment_id
      ${where}
      ORDER BY rl.id DESC
      LIMIT $${idx++} OFFSET $${idx}`,

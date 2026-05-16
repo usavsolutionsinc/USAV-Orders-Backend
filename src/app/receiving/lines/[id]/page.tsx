@@ -117,7 +117,11 @@ function LinePageInner() {
       const lineData = await lineRes.json();
       const timelineData = await timelineRes.json();
       if (!lineRes.ok) throw new Error(lineData?.error || `HTTP ${lineRes.status}`);
-      const rows = Array.isArray(lineData?.receiving_lines) ? lineData.receiving_lines : [];
+      const rows = Array.isArray(lineData?.receiving_lines)
+        ? lineData.receiving_lines
+        : lineData?.receiving_line
+          ? [lineData.receiving_line]
+          : [];
       setLine(rows[0] ?? null);
       setEvents(
         timelineData?.success && Array.isArray(timelineData.events) ? timelineData.events : [],
