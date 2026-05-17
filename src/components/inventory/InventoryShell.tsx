@@ -1,0 +1,149 @@
+'use client';
+
+/**
+ * Main-area host for the inventory hub. Reads `?tab=` and dispatches to the
+ * right sub-view. The sidebar (InventorySidebarPanel) drives `?tab=`, the
+ * Bins tab also reads `?status=`, `?room=`, `?q=` from the URL.
+ */
+
+import { useMemo, useState } from 'react';
+import { useSearchParams } from 'next/navigation';
+import { useLocations } from '@/hooks/useLocations';
+import { useBinsOverview, type BinsOverviewRow } from '@/hooks/useBinsOverview';
+import { BinsTable } from './BinsTable';
+import { BinsFilterBar, useBinsFilterParams, filterRowsByStatus } from './BinsFilterBar';
+import { BinsBulkActionBar } from './BinsBulkActionBar';
+import { BinDetailFlyout } from './BinDetailFlyout';
+import { RoomsBoard } from './RoomsBoard';
+import { LabelPrintWorkspace } from './LabelPrintWorkspace';
+import { WarehouseMap, type MapViewMode } from './WarehouseMap';
+
+type InventoryTab = 'rooms' | 'bins' | 'labels' | 'map';
+
+function parseTab(raw: string | null): InventoryTab {
+  if (raw === 'bins' || raw === 'labels' || raw === 'map') return raw;
+  return 'rooms';
+}
+
+export function InventoryShell() {
+  const searchParams = useSearchParams();
+  const tab = parseTab(searchParams.get('tab'));
+
+  if (tab === 'rooms')  return <RoomsBoard />;
+  if (tab === 'labels') return <LabelPrintWorkspace />;
+  if (tab === 'map')    return <MapTabBody />;
+  return <BinsTabBody />;
+}
+
+// ── Bins tab ────────────────────────────────────────────────────────────────
+
+function BinsTabBody() {
+  const { status, room, q, onParamChange } = useBinsFilterParams();
+  const { rooms } = useLocations();
+  const { rows, counts, loading } = useBinsOverview({ room, q });
+  const [selected, setSelected] = useState<Set<number>>(new Set());
+  const [flyoutRow, setFlyoutRow] = useState<BinsOverviewRow | null>(null);
+
+  const visibleRows = useMemo(
+    () => filterRowsByStatus(rows, status),
+    [rows, status],
+  );
+
+  // Drop selections that no longer match the visible set (filter changed).
+  const reconciledSelected = useMemo(() => {
+    if (selected.size === 0) return selected;
+    const visibleIds = new Set(visibleRows.map((r) => r.id));
+    let changed = false;
+    const next = new Set<number>();
+    for (const id of selected) {
+      if (visibleIds.has(id)) next.add(id);
+      else changed = true;
+    }
+    return changed ? next : selected;
+  }, [selected, visibleRows]);
+
+  return (
+    <>
+      <div className="space-y-4">
+        <header className="flex items-baseline justify-between">
+          <div>
+            <h1 className="text-xl font-semibold text-gray-900">Bins</h1>
+            <p className="text-sm text-gray-500">
+              {loading
+                ? 'Loading…'
+                : `${visibleRows.length} of ${counts.total} bin${counts.total === 1 ? '' : 's'}`}
+            </p>
+          </div>
+        </header>
+
+        <BinsFilterBar
+          counts={counts}
+          rooms={rooms}
+          status={status}
+          room={room}
+          onParamChange={onParamChange}
+        />
+
+        <BinsTable
+          rows={visibleRows}
+          loading={loading}
+          selected={reconciledSelected}
+          onSelectChange={setSelected}
+          onRowClick={(row) => setFlyoutRow(row)}
+        />
+      </div>
+
+      <BinsBulkActionBar
+        selected={reconciledSelected}
+        rows={visibleRows}
+        onClearSelection={() => setSelected(new Set())}
+      />
+
+      <BinDetailFlyout
+        row={flyoutRow}
+        onClose={() => setFlyoutRow(null)}
+      />
+    </>
+  );
+}
+
+// ── Map tab ─────────────────────────────────────────────────────────────────
+
+function MapTabBody() {
+  const searchParams = useSearchParams();
+  const mode = parseMapMode(searchParams.get('view'));
+  const { rows, loading } = useBinsOverview({ pollMs: 60_000 });
+  const [flyoutRow, setFlyoutRow] = useState<BinsOverviewRow | null>(null);
+
+  return (
+    <>
+      <div className="space-y-4">
+        <header className="flex items-baseline justify-between">
+          <div>
+            <h1 className="text-xl font-semibold text-gray-900">Warehouse map</h1>
+            <p className="text-sm text-gray-500">
+              {loading ? 'Loading…' : `Viewing by ${mode === 'fill' ? 'fill %' : mode === 'age' ? 'last counted' : 'issues'}`}
+            </p>
+          </div>
+        </header>
+
+        <WarehouseMap
+          rows={rows}
+          loading={loading}
+          mode={mode}
+          onCellClick={(row) => setFlyoutRow(row)}
+        />
+      </div>
+
+      <BinDetailFlyout
+        row={flyoutRow}
+        onClose={() => setFlyoutRow(null)}
+      />
+    </>
+  );
+}
+
+function parseMapMode(raw: string | null): MapViewMode {
+  if (raw === 'age' || raw === 'issues') return raw;
+  return 'fill';
+}

@@ -35,7 +35,6 @@ interface LastOrder {
 }
 
 interface MobileLastOrderCardProps {
-  staffId: number | string;
   packerId: string;
   /** Trigger a refetch when this value changes (e.g. increment after pack complete). */
   refreshKey?: number;
@@ -65,7 +64,7 @@ function carrierBadgeColor(carrier: string | null): string {
 
 // ─── Component ──────────────────────────────────────────────────────────────
 
-export function MobileLastOrderCard({ staffId, packerId, refreshKey = 0 }: MobileLastOrderCardProps) {
+export function MobileLastOrderCard({ packerId, refreshKey = 0 }: MobileLastOrderCardProps) {
   const [lastOrder, setLastOrder] = useState<LastOrder | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [expanded, setExpanded] = useState(false);
@@ -77,7 +76,7 @@ export function MobileLastOrderCard({ staffId, packerId, refreshKey = 0 }: Mobil
 
   const fetchLastOrder = useCallback(async () => {
     try {
-      const res = await fetch(`/api/packing-logs/last-order?staffId=${staffId}`);
+      const res = await fetch('/api/packing-logs/last-order', { credentials: 'include' });
       const data = await res.json();
       setLastOrder(data.lastOrder ?? null);
     } catch {
@@ -85,7 +84,7 @@ export function MobileLastOrderCard({ staffId, packerId, refreshKey = 0 }: Mobil
     } finally {
       setIsLoading(false);
     }
-  }, [staffId]);
+  }, []);
 
   useEffect(() => {
     fetchLastOrder();

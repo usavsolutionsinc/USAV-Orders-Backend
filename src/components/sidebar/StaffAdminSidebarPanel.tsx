@@ -1,111 +1,193 @@
 'use client';
 
-import { useRouter, useSearchParams } from 'next/navigation';
-import { Plus, X } from '@/components/Icons';
+import { useMemo } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { SearchBar } from '@/components/ui/SearchBar';
-import { ViewDropdown } from '@/components/ui/ViewDropdown';
-import { dataValue, fieldLabel } from '@/design-system/tokens/typography/presets';
+import {
+  AdminSidebarShell,
+  AdminFilterChips,
+  AdminPickerRow,
+  useAdminUrlState,
+} from '@/components/admin/shared';
+import { getStaffThemeById, stationThemeColors } from '@/utils/staff-colors';
+
+type StaffViewMode = 'all' | 'active' | 'inactive' | 'technician' | 'packer';
+
+interface StaffRow {
+  id: number;
+  name: string;
+  role: string;
+  active: boolean;
+  employee_id: string | null;
+}
 
 const STAFF_VIEW_OPTIONS = [
-  { value: 'all', label: 'All Staff' },
-  { value: 'active', label: 'Active Only' },
-  { value: 'inactive', label: 'Inactive Only' },
-  { value: 'technician', label: 'Technicians' },
-  { value: 'packer', label: 'Packers' },
+  { value: 'all' as StaffViewMode, label: 'All' },
+  { value: 'active' as StaffViewMode, label: 'Active' },
+  { value: 'inactive' as StaffViewMode, label: 'Inactive' },
 ] as const;
 
-type StaffViewMode = (typeof STAFF_VIEW_OPTIONS)[number]['value'];
+const ROLE_OPTIONS = [
+  { value: 'all' as StaffViewMode, label: 'All roles' },
+  { value: 'technician' as StaffViewMode, label: 'Tech' },
+  { value: 'packer' as StaffViewMode, label: 'Pack' },
+] as const;
 
 function emitOpenAddStaff() {
   window.dispatchEvent(new CustomEvent('admin-staff-open-add'));
 }
 
+function initials(name: string): string {
+  return name
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((p) => p[0]?.toUpperCase() ?? '')
+    .join('');
+}
+
 export function StaffAdminSidebarPanel() {
-  const router = useRouter();
-  const searchParams = useSearchParams();
-  const searchValue = searchParams.get('search') || '';
+  const { searchParams, setParam } = useAdminUrlState();
+  const search = searchParams.get('search') ?? '';
   const staffView = (searchParams.get('staffView') as StaffViewMode) || 'all';
+  const selectedStaffId = (() => {
+    const raw = searchParams.get('staffId');
+    if (!raw) return null;
+    const n = Number(raw);
+    return Number.isFinite(n) && n > 0 ? n : null;
+  })();
 
-  const updateParams = (patch: { search?: string; staffView?: StaffViewMode }) => {
-    const nextParams = new URLSearchParams(searchParams.toString());
-    nextParams.set('section', 'staff');
+  const { data: staff = [], isLoading } = useQuery<StaffRow[]>({
+    queryKey: ['staff'],
+    queryFn: async () => {
+      const res = await fetch('/api/staff?active=false');
+      if (!res.ok) throw new Error('Failed to load staff');
+      const data = await res.json();
+      return Array.isArray(data) ? data : [];
+    },
+  });
 
-    if (patch.search !== undefined) {
-      const value = patch.search.trim();
-      if (value) nextParams.set('search', value);
-      else nextParams.delete('search');
-    }
+  const filtered = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    return staff.filter((m) => {
+      const matchesSearch =
+        !q ||
+        m.name.toLowerCase().includes(q) ||
+        (m.employee_id ?? '').toLowerCase().includes(q);
+      const matchesView =
+        staffView === 'active'
+          ? Boolean(m.active)
+          : staffView === 'inactive'
+            ? !m.active
+            : staffView === 'technician'
+              ? m.role === 'technician'
+              : staffView === 'packer'
+                ? m.role === 'packer'
+                : true;
+      return matchesSearch && matchesView;
+    });
+  }, [staff, search, staffView]);
 
-    if (patch.staffView !== undefined) {
-      if (patch.staffView === 'all') nextParams.delete('staffView');
-      else nextParams.set('staffView', patch.staffView);
-    }
-
-    const nextSearch = nextParams.toString();
-    router.replace(nextSearch ? `/admin?${nextSearch}` : '/admin');
+  const setStaffView = (next: StaffViewMode) => {
+    setParam((p) => {
+      if (next === 'all') p.delete('staffView');
+      else p.set('staffView', next);
+    });
   };
 
-  const clearFilters = () => {
-    const nextParams = new URLSearchParams(searchParams.toString());
-    nextParams.set('section', 'staff');
-    nextParams.delete('search');
-    nextParams.delete('staffView');
-    const nextSearch = nextParams.toString();
-    router.replace(nextSearch ? `/admin?${nextSearch}` : '/admin');
-  };
-
+  // Two chip groups stack vertically; the second goes in `stats` slot so the
+  // separators read cleanly.
   return (
-    <div className="flex h-full flex-col overflow-hidden bg-white">
-      <div className="border-b border-gray-200">
-        <ViewDropdown
-          options={STAFF_VIEW_OPTIONS}
-          value={staffView}
-          onChange={(nextValue) => updateParams({ staffView: nextValue as StaffViewMode })}
-          variant="boxy"
-          buttonClassName={`h-full w-full appearance-none bg-white px-4 py-3 pr-8 text-left ${fieldLabel} outline-none transition-all hover:bg-gray-50`}
-          optionClassName={fieldLabel}
-        />
-      </div>
-
-      <div className="border-b border-gray-200 px-3 py-3">
+    <AdminSidebarShell
+      search={
         <SearchBar
-          value={searchValue}
-          onChange={(value) => updateParams({ search: value })}
-          onClear={() => updateParams({ search: '' })}
+          value={search}
+          onChange={(v) =>
+            setParam((p) => {
+              if (v.trim()) p.set('search', v.trim());
+              else p.delete('search');
+            })
+          }
+          onClear={() => setParam((p) => p.delete('search'))}
           placeholder="Search name or ID"
           variant="blue"
+          className="w-full"
         />
-      </div>
-
-      <div className="flex-1 overflow-y-auto">
+      }
+      filters={
+        <AdminFilterChips
+          options={STAFF_VIEW_OPTIONS}
+          value={
+            staffView === 'technician' || staffView === 'packer'
+              ? 'all'
+              : staffView
+          }
+          onChange={setStaffView}
+        />
+      }
+      stats={
+        <AdminFilterChips
+          options={ROLE_OPTIONS}
+          value={staffView === 'technician' || staffView === 'packer' ? staffView : 'all'}
+          onChange={setStaffView}
+        />
+      }
+      action={
         <button
           type="button"
           onClick={emitOpenAddStaff}
-          className="flex w-full items-center justify-between border-b border-gray-200 px-4 py-3 text-left transition-colors hover:bg-gray-50"
+          className="inline-flex w-full items-center justify-center gap-1.5 rounded-lg border border-dashed border-gray-300 bg-white px-3 py-1.5 text-[12px] font-semibold text-gray-700 transition hover:border-blue-400 hover:bg-blue-50 hover:text-blue-700"
         >
-          <div>
-            <p className={dataValue}>Add Team Member</p>
-            <p className={`mt-0.5 ${fieldLabel} text-gray-500`}>Open the form to create a new staff record</p>
-          </div>
-          <span className="inline-flex h-10 w-12 items-center justify-center border-l border-gray-200 text-gray-600">
-            <Plus className="h-3.5 w-3.5" />
-          </span>
+          <svg
+            className="h-3.5 w-3.5"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2.5"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
+            <path d="M12 5v14" />
+            <path d="M5 12h14" />
+          </svg>
+          Add staff
         </button>
-
-        <button
-          type="button"
-          onClick={clearFilters}
-          className="flex w-full items-center justify-between border-b border-gray-200 px-4 py-3 text-left transition-colors hover:bg-gray-50"
-        >
-          <div>
-            <p className={dataValue}>Clear Filters</p>
-            <p className={`mt-0.5 ${fieldLabel} text-gray-500`}>Reset search and staff view</p>
-          </div>
-          <span className="inline-flex h-10 w-12 items-center justify-center border-l border-gray-200 text-gray-600">
-            <X className="h-3.5 w-3.5" />
-          </span>
-        </button>
-      </div>
-    </div>
+      }
+    >
+      {isLoading ? (
+        <div className="px-2 py-6 text-center text-xs text-gray-400">Loading staff…</div>
+      ) : filtered.length === 0 ? (
+        <div className="px-2 py-6 text-center text-xs text-gray-400">No matches.</div>
+      ) : (
+        <ul className="space-y-1.5">
+          {filtered.map((row) => {
+            const sc = stationThemeColors[getStaffThemeById(row.id)];
+            return (
+              <li key={row.id}>
+                <AdminPickerRow
+                  selected={selectedStaffId === row.id}
+                  onPick={() => setParam((p) => p.set('staffId', String(row.id)))}
+                  leading={
+                    <div
+                      className={`flex h-8 w-8 items-center justify-center rounded-full ${sc.bg} text-[11px] font-bold text-white`}
+                    >
+                      {initials(row.name)}
+                    </div>
+                  }
+                  title={row.name}
+                  subtitle={row.role.replace(/_/g, ' ')}
+                  trailing={
+                    <span
+                      title={row.active ? 'Active' : 'Inactive'}
+                      className={`h-2 w-2 rounded-full ${row.active ? 'bg-emerald-500' : 'bg-gray-400'}`}
+                    />
+                  }
+                />
+              </li>
+            );
+          })}
+        </ul>
+      )}
+    </AdminSidebarShell>
   );
 }

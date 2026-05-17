@@ -2,6 +2,10 @@ import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import QRCode from 'react-qr-code';
 import { QR_BASE_URL, mobileQrUrl } from '@/lib/barcode-routing';
+import { printHtmlSilent } from '@/lib/print/silentPrint';
+
+// Same 2in × 1in stock as the receiving label
+const PRODUCT_PAGE_SIZE = { width: 50800, height: 25400 } as const;
 
 function escapeHtml(str: string): string {
   return str
@@ -109,12 +113,20 @@ export function printProductLabel(input: PrintProductLabelInput): void {
 
   const serialNumber = input.serialNumber?.trim() ?? '';
   const title = input.title?.trim() ?? '';
+  const html = buildLabelHtml(sku, title, serialNumber);
 
-  const printWindow = window.open('', '', 'width=420,height=320');
-  if (!printWindow) return;
-
-  printWindow.document.write(buildLabelHtml(sku, title, serialNumber));
-  printWindow.document.close();
+  void printHtmlSilent(html, {
+    pageSize: PRODUCT_PAGE_SIZE,
+    margins: { marginType: 'none' },
+    // JsBarcode loads from CDN — give it a beat to render before printing
+    waitMs: 600,
+  }).then((handled) => {
+    if (handled) return;
+    const printWindow = window.open('', '', 'width=420,height=320');
+    if (!printWindow) return;
+    printWindow.document.write(html);
+    printWindow.document.close();
+  });
 }
 
 export type PrintProductLabelsInput = {

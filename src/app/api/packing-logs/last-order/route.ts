@@ -1,19 +1,19 @@
 import { NextRequest, NextResponse } from 'next/server';
 import pool from '@/lib/db';
+import { getCurrentUser } from '@/lib/auth/current-user';
 
 /**
- * GET /api/packing-logs/last-order?staffId=X
+ * GET /api/packing-logs/last-order
  *
- * Returns the most recently packed order for a given staff member,
- * including order details and associated photos.
+ * Returns the most recently packed order for the signed-in staff member,
+ * including order details and associated photos. Auth comes from the
+ * `usav_sid` cookie.
  */
-export async function GET(req: NextRequest) {
+export async function GET(_req: NextRequest) {
   try {
-    const { searchParams } = new URL(req.url);
-    const staffId = searchParams.get('staffId');
-
-    if (!staffId) {
-      return NextResponse.json({ error: 'staffId is required' }, { status: 400 });
+    const user = await getCurrentUser();
+    if (!user) {
+      return NextResponse.json({ lastOrder: null });
     }
 
     const result = await pool.query(
@@ -36,7 +36,7 @@ export async function GET(req: NextRequest) {
        WHERE pl.packed_by = $1
        ORDER BY pl.id DESC
        LIMIT 1`,
-      [Number(staffId)],
+      [user.staffId],
     );
 
     if (result.rows.length === 0) {
@@ -45,7 +45,6 @@ export async function GET(req: NextRequest) {
 
     const row = result.rows[0];
 
-    // Fetch associated photos
     const photosResult = await pool.query(
       `SELECT id, url, photo_type, created_at
        FROM photos

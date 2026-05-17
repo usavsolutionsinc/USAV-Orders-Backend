@@ -16,6 +16,8 @@ export interface LocationRecord {
   bin_type: string | null;
   capacity: number | null;
   parent_id: number | null;
+  /** Zone letter A-Z for parent room rows only. */
+  zone_letter: string | null;
 }
 
 export interface CreateLocationPayload {
@@ -42,7 +44,7 @@ interface LocationsResponse {
 }
 
 async function fetchLocations(): Promise<LocationsResponse> {
-  const res = await fetch('/api/locations');
+  const res = await fetch('/api/locations', { cache: 'no-store' });
   const data = await res.json();
   if (!res.ok) throw new Error(data?.error || 'Failed to fetch locations');
   return {
@@ -62,7 +64,11 @@ async function postLocation(payload: CreateLocationPayload): Promise<LocationRec
   return data.location;
 }
 
-async function postRoom(payload: { name: string; description?: string | null }): Promise<LocationRecord> {
+async function postRoom(payload: {
+  name: string;
+  description?: string | null;
+  zoneLetter?: string | null;
+}): Promise<LocationRecord> {
   const res = await fetch('/api/rooms', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -73,14 +79,21 @@ async function postRoom(payload: { name: string; description?: string | null }):
   return data.room;
 }
 
-async function patchRoom(args: { oldName: string; newName: string }): Promise<{ updated: number; barcodesRekeyed: number }> {
+async function patchRoom(args: {
+  oldName: string;
+  newName?: string;
+  zoneLetter?: string | null;
+}): Promise<{ updated: number; barcodesRekeyed: number }> {
+  const body: Record<string, unknown> = {};
+  if (args.newName !== undefined) body.name = args.newName;
+  if (args.zoneLetter !== undefined) body.zoneLetter = args.zoneLetter;
   const res = await fetch(`/api/rooms/${encodeURIComponent(args.oldName)}`, {
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ name: args.newName }),
+    body: JSON.stringify(body),
   });
   const data = await res.json();
-  if (!res.ok) throw new Error(data?.error || 'Failed to rename room');
+  if (!res.ok) throw new Error(data?.error || 'Failed to update room');
   return data;
 }
 
@@ -141,9 +154,13 @@ export interface UseLocationsResult {
   creating: boolean;
   createError: Error | null;
   /** Create a brand-new room (just a parent entry; no bins). */
-  createRoom: (name: string) => Promise<LocationRecord | null>;
+  createRoom: (name: string, zoneLetter?: string | null) => Promise<LocationRecord | null>;
   /** Rename a room everywhere it appears (parent + all bins + barcodes). */
-  renameRoom: (oldName: string, newName: string) => Promise<{ updated: number; barcodesRekeyed: number } | null>;
+  renameRoom: (
+    oldName: string,
+    newName?: string,
+    zoneLetter?: string | null,
+  ) => Promise<{ updated: number; barcodesRekeyed: number } | null>;
   /** Soft-delete a room and all of its bins. */
   removeRoom: (name: string) => Promise<{ deactivated: number } | null>;
   /** Bulk-create bins from a range spec ({room, rowLabel, colStart, colEnd}). */
@@ -183,8 +200,8 @@ export function useLocations(): UseLocationsResult {
   const { mutate: reorderRoomsRaw, loading: reordering, error: reorderError } = useMutation(postReorderRooms);
 
   const createRoom = useCallback(
-    async (name: string) => {
-      const result = await createRoomRaw({ name });
+    async (name: string, zoneLetter?: string | null) => {
+      const result = await createRoomRaw({ name, zoneLetter: zoneLetter ?? null });
       if (result) refetch();
       return result as LocationRecord | null;
     },
@@ -192,8 +209,8 @@ export function useLocations(): UseLocationsResult {
   );
 
   const renameRoomFn = useCallback(
-    async (oldName: string, newName: string) => {
-      const result = await renameRoomRaw({ oldName, newName });
+    async (oldName: string, newName?: string, zoneLetter?: string | null) => {
+      const result = await renameRoomRaw({ oldName, newName, zoneLetter });
       if (result) refetch();
       return result as { updated: number; barcodesRekeyed: number } | null;
     },

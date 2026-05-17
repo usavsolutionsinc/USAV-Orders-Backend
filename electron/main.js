@@ -60,6 +60,89 @@ function registerIpcHandlers() {
       return { success: false, error: err.message };
     }
   });
+
+  // -------------------------------------------------------------------------
+  // Silent printing — renders HTML in a hidden BrowserWindow and prints to
+  // the given device with no dialog. Used for label / receipt printing.
+  // -------------------------------------------------------------------------
+  ipcMain.handle('list-printers', async () => {
+    try {
+      const wc = mainWindow?.webContents;
+      if (!wc) return [];
+      const printers = await wc.getPrintersAsync();
+      return printers.map((p) => ({
+        name: p.name,
+        displayName: p.displayName || p.name,
+        description: p.description || '',
+        isDefault: !!p.isDefault,
+        status: p.status,
+      }));
+    } catch (err) {
+      console.error('[print] list-printers failed:', err.message);
+      return [];
+    }
+  });
+
+  ipcMain.handle('print-html', async (_event, { html, options = {} } = {}) => {
+    if (typeof html !== 'string' || !html.trim()) {
+      return { success: false, reason: 'no html provided' };
+    }
+
+    return new Promise((resolve) => {
+      const printWin = new BrowserWindow({
+        show: false,
+        webPreferences: { sandbox: true, contextIsolation: true, nodeIntegration: false },
+      });
+
+      let settled = false;
+      const finish = (result) => {
+        if (settled) return;
+        settled = true;
+        try {
+          if (!printWin.isDestroyed()) printWin.destroy();
+        } catch (_) {}
+        resolve(result);
+      };
+
+      printWin.webContents.once('did-fail-load', (_e, code, desc) => {
+        finish({ success: false, reason: `load failed: ${desc} (${code})` });
+      });
+
+      printWin.webContents.once('did-finish-load', () => {
+        // Give in-page scripts (JsBarcode, web fonts, etc.) a moment to render
+        const waitMs = Number.isFinite(options.waitMs) ? options.waitMs : 450;
+        setTimeout(() => {
+          try {
+            const printOptions = {
+              silent: true,
+              printBackground: options.printBackground !== false,
+              copies: Math.max(1, Number(options.copies) || 1),
+              margins: options.margins || { marginType: 'none' },
+              color: options.color !== false,
+              landscape: !!options.landscape,
+            };
+            if (options.deviceName) printOptions.deviceName = options.deviceName;
+            if (options.pageSize) printOptions.pageSize = options.pageSize;
+            if (Number.isFinite(options.scaleFactor)) printOptions.scaleFactor = options.scaleFactor;
+            if (Number.isFinite(options.dpi?.horizontal) && Number.isFinite(options.dpi?.vertical)) {
+              printOptions.dpi = options.dpi;
+            }
+
+            printWin.webContents.print(printOptions, (success, reason) => {
+              finish({ success, reason: reason ?? null });
+            });
+          } catch (err) {
+            finish({ success: false, reason: err.message });
+          }
+        }, waitMs);
+      });
+
+      const dataUrl =
+        'data:text/html;charset=utf-8;base64,' +
+        Buffer.from(html, 'utf8').toString('base64');
+      printWin.loadURL(dataUrl).catch((err) => finish({ success: false, reason: err.message }));
+    });
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -201,19 +284,23 @@ function createWindow() {
 // App lifecycle
 // ---------------------------------------------------------------------------
 app.whenReady().then(async () => {
-  // Point the default session's cache at a persistent location under userData
-  // so static assets survive between app launches.
-  const cachePath = path.join(app.getPath('userData'), 'http-cache');
-  await session.defaultSession.clearCache().catch(() => {});
-  session.defaultSession.setSpellCheckerDictionaryDownloadURL(''); // silence unrelated warning
+  try {
+    await session.defaultSession.clearCache().catch(() => {});
 
-  await startSidecar();
-  registerIpcHandlers();
-  createWindow();
+    await startSidecar();
+    registerIpcHandlers();
+    createWindow();
 
-  app.on('activate', () => {
-    if (BrowserWindow.getAllWindows().length === 0) createWindow();
-  });
+    app.on('activate', () => {
+      if (BrowserWindow.getAllWindows().length === 0) createWindow();
+    });
+  } catch (err) {
+    // Never let an unexpected error stop the window from showing — the user
+    // ends up staring at a headless process otherwise. Log and try anyway.
+    console.error('[startup] unexpected error:', err);
+    try { registerIpcHandlers(); } catch (_) {}
+    try { createWindow(); } catch (e2) { console.error('[startup] createWindow failed:', e2); }
+  }
 });
 
 app.on('window-all-closed', () => {

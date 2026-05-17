@@ -54,14 +54,12 @@ async function createTokenRequest(req: NextRequest) {
     [getStaffChannelName()]: ['subscribe'],
     [getFbaChannelName()]: ['subscribe'],
     [`${getDbChannelPrefix()}:*`]: ['subscribe'],
-    // Desktop listens for phone-originated scans on its own per-staff channel.
-    'phone:*': ['subscribe'],
-    // Desktop echoes scan results back to paired phones on per-staff station channel.
+    // Per-staff phone↔station bridge: phone publishes scans on phone:{staffId},
+    // desktop echoes lookup results on station:{staffId}. Keyed by the
+    // signed-in user on each side — no separate pair handshake.
+    'phone:*': ['subscribe', 'publish'],
     'station:*': ['subscribe', 'publish'],
-    // Desktop subscribes to pair:{code} while the pairing modal is open to
-    // learn the moment a phone redeems the code (server publishes on claim).
-    'pair:*': ['subscribe'],
-    // Mobile packer wizard publishes step transitions; paired desktop display
+    // Mobile packer wizard publishes step transitions; desktop display
     // subscribes to mirror state (scan → confirm → camera → review → success).
     'packer:*': ['subscribe', 'publish'],
   };

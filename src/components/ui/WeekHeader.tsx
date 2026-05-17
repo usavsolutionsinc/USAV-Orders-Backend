@@ -3,7 +3,7 @@
 import { ReactNode } from 'react';
 import { ChevronLeft, ChevronRight } from '../Icons';
 import { mainStickyHeaderClass } from '@/components/layout/header-shell';
-import { formatDateWithOrdinal, getCurrentPSTDateKey } from '@/utils/date';
+import { formatDateWithOrdinal, formatWeekRangeCompact, getCurrentPSTDateKey } from '@/utils/date';
 
 /** Inner row for the week strip — use for sticky day/group rows so they align with WeekHeader. */
 export const weekHeaderInnerRowClass =
@@ -93,7 +93,7 @@ export default function WeekHeader({
           ) : weekRange && onPrevWeek && onNextWeek ? (
             <div className="flex items-center gap-1.5">
               <span className="text-[11px] font-black uppercase tracking-widest text-neutral-900">
-                {formatDateWithOrdinal(weekRange.startStr)} - {formatDateWithOrdinal(weekRange.endStr)}
+                {formatWeekRangeCompact(weekRange.startStr, weekRange.endStr)}
               </span>
               <button
                 onClick={onPrevWeek}

@@ -11,11 +11,14 @@ import {
   createPurchaseReceive,
   getPurchaseOrderById,
   getPurchaseReceiveIdFromCreateResponse,
+  markPurchaseOrderAsUnreceived,
   searchItemBySku,
   sumWarehouseReceivedByPoLineItem,
   updatePurchaseOrder,
 } from '@/lib/zoho';
 import { receiveLineUnits } from '@/lib/receiving/receive-line';
+import { withAuth } from '@/lib/auth/withAuth';
+import { recordAudit, AUDIT_ACTION, AUDIT_ENTITY } from '@/lib/audit-logs';
 
 function normalizeSkuKey(s: string | null | undefined): string {
   return String(s ?? '').trim().toLowerCase();
@@ -137,7 +140,7 @@ interface CandidateRow {
  * writes go through receiveLineUnits() so the sku_stock_ledger and
  * inventory_events tables stay in sync for serialized AND non-serialized lines.
  */
-export async function POST(request: NextRequest) {
+export const POST = withAuth(async (request, ctx) => {
   try {
     const body = await request.json();
     const receivingIdRaw = Number(body?.receiving_id);
@@ -154,9 +157,11 @@ export async function POST(request: NextRequest) {
     const serialNumber = String(body?.serial_number || '').trim() || null;
     const zendeskTicket = String(body?.zendesk_ticket || '').trim() || null;
     const notes = String(body?.notes || '').trim() || null;
-    const staffIdRaw = Number(body?.staff_id);
-    const staffId =
-      Number.isFinite(staffIdRaw) && staffIdRaw > 0 ? Math.floor(staffIdRaw) : null;
+    const bodyStaffIdRaw = Number(body?.staff_id);
+    const bodyStaffId =
+      Number.isFinite(bodyStaffIdRaw) && bodyStaffIdRaw > 0 ? Math.floor(bodyStaffIdRaw) : null;
+    // Server-trusted actor when AUTH_V2 is active; fall back to body for legacy callers.
+    const staffId = ctx.staffId ?? bodyStaffId;
     const clientEventId = String(body?.client_event_id ?? '').trim() || null;
     const stationRaw = String(body?.station ?? '').trim().toUpperCase();
     const station =
@@ -192,23 +197,45 @@ export async function POST(request: NextRequest) {
 
     const now = formatPSTTimestamp();
 
+    // scan_only is a local-only state action: include ALL lines (even DONE) so
+    // "Mark as scanned" can flip a previously-DONE line back to MATCHED for
+    // re-testing. Non-scan flows keep the DONE guard to avoid double-receiving
+    // in Zoho.
     const candidates = await pool.query<CandidateRow>(
-      `SELECT id, sku, item_name, quantity_expected, quantity_received,
-              zoho_purchaseorder_id, zoho_line_item_id
-       FROM receiving_lines
-       WHERE receiving_id = $1
-         AND (
-           workflow_status IS DISTINCT FROM 'DONE'::inbound_workflow_status_enum
-           OR (
-             quantity_expected IS NOT NULL
-             AND COALESCE(quantity_received, 0) < quantity_expected
-           )
-         )
-       ORDER BY id ASC`,
+      skipZohoReceive
+        ? `SELECT id, sku, item_name, quantity_expected, quantity_received,
+                  zoho_purchaseorder_id, zoho_line_item_id
+           FROM receiving_lines
+           WHERE receiving_id = $1
+           ORDER BY id ASC`
+        : `SELECT id, sku, item_name, quantity_expected, quantity_received,
+                  zoho_purchaseorder_id, zoho_line_item_id
+           FROM receiving_lines
+           WHERE receiving_id = $1
+             AND (
+               workflow_status IS DISTINCT FROM 'DONE'::inbound_workflow_status_enum
+               OR (
+                 quantity_expected IS NOT NULL
+                 AND COALESCE(quantity_received, 0) < quantity_expected
+               )
+             )
+           ORDER BY id ASC`,
       [receivingId],
     );
 
     const openForReceive = candidates.rows;
+
+    // Snapshot before-state per line for audit_logs before/after diffs.
+    const beforeByLineId = new Map<
+      number,
+      { quantity_received: number; quantity_expected: number | null }
+    >();
+    for (const r of openForReceive) {
+      beforeByLineId.set(r.id, {
+        quantity_received: Number(r.quantity_received ?? 0),
+        quantity_expected: r.quantity_expected,
+      });
+    }
 
     /** When every line is already DONE locally, we still verify/receive in Zoho — load carton lines, skip receiveLineUnits. */
     let verifyOnlyLines: Array<CandidateRow & { workflow_status: string | null }> | null = null;
@@ -492,6 +519,41 @@ export async function POST(request: NextRequest) {
       error: string | null;
       error_kind: 'rate_limit' | 'circuit_open' | 'api' | 'other' | null;
     }> = [];
+    if (skipZohoReceive) {
+      // "Mark as scanned" intent: flip every linked Zoho PO back to issued so
+      // the local SCANNED state stays consistent with Zoho. Idempotent on POs
+      // not currently in `received` status.
+      for (const zohoPoId of byPo.keys()) {
+        try {
+          await markPurchaseOrderAsUnreceived(zohoPoId);
+          zohoResults.push({
+            purchaseorder_id: zohoPoId,
+            receive_id: null,
+            error: null,
+            error_kind: null,
+          });
+        } catch (err) {
+          const name = err instanceof Error ? err.name : '';
+          const message = err instanceof Error ? err.message : String(err);
+          const kind: 'rate_limit' | 'circuit_open' | 'api' | 'other' =
+            name === 'ZohoRateLimitError'
+              ? 'rate_limit'
+              : name === 'ZohoCircuitOpenError'
+                ? 'circuit_open'
+                : name === 'ZohoApiError'
+                  ? 'api'
+                  : 'other';
+          zohoResults.push({
+            purchaseorder_id: zohoPoId,
+            receive_id: null,
+            error: message,
+            error_kind: kind,
+          });
+          console.error('mark-received-po: markasunreceived failed', zohoPoId, message);
+        }
+      }
+    }
+
     if (!skipZohoReceive) {
       for (const zohoPoId of byPo.keys()) {
         let lineItemsPosted: {
@@ -693,15 +755,52 @@ export async function POST(request: NextRequest) {
       }
     });
 
-    const zohoOk = skipZohoReceive
-      ? true
-      : byPo.size > 0 &&
-        zohoResults.length === byPo.size &&
-        zohoResults.every((r) => !r.error);
+    // Audit one row per touched line. Source = mobile-scanner when the call
+    // came from the phone station, else receiving-station. Action =
+    // PO_RECEIVE_REVERSE for scan_only (markasunreceived), else PO_RECEIVE.
+    const auditSource = station === 'MOBILE' ? 'mobile-scanner' : 'receiving-station';
+    const auditAction = skipZohoReceive
+      ? AUDIT_ACTION.PO_RECEIVE_REVERSE
+      : AUDIT_ACTION.PO_RECEIVE;
+    for (const l of updatedLines) {
+      const before = beforeByLineId.get(l.id) ?? null;
+      await recordAudit(pool, ctx, request, {
+        source: auditSource,
+        action: auditAction,
+        entityType: AUDIT_ENTITY.RECEIVING_LINE,
+        entityId: l.id,
+        before: before
+          ? { quantity_received: before.quantity_received, quantity_expected: before.quantity_expected }
+          : null,
+        after: {
+          quantity_received: l.quantity_received,
+          quantity_expected: l.quantity_expected,
+          workflow_status: l.workflow_status,
+        },
+        scanRef: localTracking,
+        method: station === 'MOBILE' ? 'scan' : 'manual',
+        actorStaffIdOverride: bodyStaffId,
+        extra: {
+          receiving_id: receivingId,
+          zoho_purchaseorder_id: l.zoho_purchaseorder_id,
+          zoho_line_item_id: l.zoho_line_item_id,
+          qa_status: qaStatus,
+          disposition_code: dispositionCode,
+          condition_grade: conditionGrade,
+          station,
+          ...(zendeskTicket ? { zendesk_ticket: zendeskTicket } : {}),
+        },
+      });
+    }
+
+    const zohoOk =
+      zohoResults.length === 0
+        ? skipZohoReceive /* scan_only with no linked PO is still success */
+        : zohoResults.every((r) => !r.error);
     const rateLimited = zohoResults.some((r) => r.error_kind === 'rate_limit');
     const firstZohoError = zohoResults.find((r) => r.error)?.error ?? null;
 
-    const zohoAttemptHadError = skipZohoReceive ? false : zohoResults.some((r) => r.error);
+    const zohoAttemptHadError = zohoResults.some((r) => r.error);
     const responseSuccess = !zohoAttemptHadError;
 
     let skipReason: string | null = null;
@@ -742,4 +841,4 @@ export async function POST(request: NextRequest) {
     console.error('receiving/mark-received-po POST failed:', error);
     return NextResponse.json({ success: false, error: message }, { status: 500 });
   }
-}
+}, { allowAnonymous: true });

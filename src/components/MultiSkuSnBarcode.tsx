@@ -7,7 +7,6 @@ import { ModeSelector, BarcodeMode } from './barcode/ModeSelector';
 import { SkuInput } from './barcode/SkuInput';
 import { SerialNumberInput } from './barcode/SerialNumberInput';
 import { BarcodePreview } from './barcode/BarcodePreview';
-import { BinLabelPrinter } from './barcode/BinLabelPrinter';
 
 // Import utilities
 import { normalizeSku, getSerialLast6 } from '@/utils/sku';
@@ -43,7 +42,7 @@ export default function MultiSkuSnBarcode() {
     const printRef = useRef<HTMLDivElement>(null);
     const skuInputRef = useRef<HTMLInputElement>(null);
     const snInputRef = useRef<HTMLInputElement>(null);
-    const scrollRef = useRef<HTMLDivElement>(null);
+    const bottomAnchorRef = useRef<HTMLDivElement>(null);
 
     useEffect(() => {
         loadBarcodeLibrary()
@@ -62,11 +61,14 @@ export default function MultiSkuSnBarcode() {
         }
     }, [uniqueSku, step, mode, renderBarcodeCanvas]);
 
-    // Scroll to bottom when a new step becomes visible
+    // Scroll the parent scroll container to reveal the newly added step.
+    // scrollIntoView walks up to the nearest scroll ancestor, so this works
+    // whether the parent is SkuStockSidebarPanel, BarcodeSidebar, or any
+    // future host that wraps us in a scrollable container.
     useEffect(() => {
         if (step >= 2) {
             setTimeout(() => {
-                scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' });
+                bottomAnchorRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
             }, 50);
         }
     }, [step]);
@@ -355,13 +357,18 @@ export default function MultiSkuSnBarcode() {
     };
 
     return (
-        <div className="flex h-full min-w-0 flex-col bg-white text-gray-900">
+        <div className="flex min-w-0 flex-col bg-white text-gray-900">
             {/* Mode Selector — full-width tab slider */}
             <ModeSelector mode={mode} onModeChange={handleModeChange} />
 
-            <div ref={scrollRef} className="min-h-0 min-w-0 flex-1 overflow-y-auto">
-                {/* Step 1: SKU (hidden in bin-labels mode) */}
-                {mode !== 'bin-labels' && (
+            {/*
+             * No internal scroll. Our parent (SkuStockSidebarPanel /
+             * BarcodeSidebar) already provides the scroll container; trying
+             * to nest a second one breaks because `h-full` resolves against
+             * the parent's content height, not a viewport height.
+             */}
+            <div className="min-w-0">
+                {/* Step 1: SKU */}
                 <SkuInput
                     sku={sku}
                     uniqueSku={uniqueSku}
@@ -372,10 +379,9 @@ export default function MultiSkuSnBarcode() {
                     onNext={handleNextStepSku}
                     onFillAndSearch={handleSkuFillAndSearch}
                 />
-                )}
 
                 {/* Step 2: Serial Numbers & Details */}
-                {mode !== 'reprint' && mode !== 'bin-labels' && step >= 2 && (
+                {mode !== 'reprint' && step >= 2 && (
                     <SerialNumberInput
                         sku={sku}
                         mode={mode}
@@ -400,7 +406,7 @@ export default function MultiSkuSnBarcode() {
                 )}
 
                 {/* Step 3: Preview & Print */}
-                {mode !== 'change-location' && mode !== 'bin-labels' && step >= 3 && (
+                {mode !== 'change-location' && step >= 3 && (
                     <BarcodePreview
                         mode={mode}
                         uniqueSku={uniqueSku}
@@ -420,10 +426,7 @@ export default function MultiSkuSnBarcode() {
                     />
                 )}
 
-                {/* Bin Labels mode: standalone bulk printer */}
-                {mode === 'bin-labels' && (
-                    <BinLabelPrinter isActive={true} />
-                )}
+                <div ref={bottomAnchorRef} aria-hidden />
             </div>
 
             {error && (

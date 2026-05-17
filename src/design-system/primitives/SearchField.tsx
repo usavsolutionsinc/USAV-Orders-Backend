@@ -63,6 +63,13 @@ export interface SearchFieldProps {
   hideUnderline?: boolean;
   /** Hide the clear (X) control when the field has a value. */
   hideClear?: boolean;
+  /**
+   * Replaces the default trailing slot (spinner / pending / clear / paste).
+   * Use with {@link rightElement} when paste/clear should sit outside the form (e.g. row remove X left of paste).
+   */
+  customTrailingSlot?: ReactNode;
+  /** When true, trailing slot shows only paste (clipboard); never the clear (X) button when the field has text. */
+  pasteOnlyTrailing?: boolean;
 }
 
 /**
@@ -94,6 +101,8 @@ export function SearchField({
   debounceMs = 320,
   hideUnderline = false,
   hideClear = false,
+  customTrailingSlot,
+  pasteOnlyTrailing = false,
 }: SearchFieldProps) {
   // Internal draft — avoid churn from async parent updates during typing.
   const [draft, setDraft] = useState(value);
@@ -167,6 +176,8 @@ export function SearchField({
         rightSlot: 'h-8',
       };
 
+  const fieldGapClass = size === 'compact' ? 'gap-1' : 'gap-2';
+
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     // Flush debounce immediately on Enter.
@@ -199,10 +210,10 @@ export function SearchField({
   const icon = leadingIcon || <Search className="h-[14px] w-[14px]" />;
 
   return (
-    <div className={`flex w-full min-w-0 items-center gap-2 ${className}`.trim()}>
+    <div className={`flex w-full min-w-0 items-center ${fieldGapClass} ${className}`.trim()}>
       <form
         onSubmit={handleSubmit}
-        className={`group flex min-w-0 flex-1 items-center gap-2 transition-colors duration-150 ease-out ${sizeClasses.field} ${
+        className={`group flex min-w-0 flex-1 items-center ${fieldGapClass} transition-colors duration-150 ease-out ${sizeClasses.field} ${
           hideUnderline ? 'border-transparent' : toneClassName[tone]
         }`.trim()}
       >
@@ -220,13 +231,25 @@ export function SearchField({
           className={`w-full border-0 bg-transparent px-0 font-bold text-gray-900 outline-none placeholder:font-medium placeholder:text-gray-400 ${sizeClasses.input}`.trim()}
         />
 
-        {/* Right-slot: spinner > pending dot > clear > paste — never shifts layout */}
+        {/* Right-slot: spinner > pending > clear > paste — or custom (e.g. row remove X before paste in rightElement). */}
         <span className="flex h-[14px] w-[14px] shrink-0 items-center justify-center">
-          {isSearching ? (
+          {customTrailingSlot !== undefined ? (
+            customTrailingSlot
+          ) : isSearching ? (
             <Loader2 className={`h-[14px] w-[14px] animate-spin ${loaderToneClass[tone]}`} />
           ) : isPending ? (
             // Subtle pulsing dot while debounce is in-flight — no spinner jitter.
             <span className={`block h-[5px] w-[5px] rounded-full animate-pulse ${loaderToneClass[tone]} bg-current opacity-60`} />
+          ) : pasteOnlyTrailing ? (
+            <button
+              type="button"
+              onClick={handlePaste}
+              className="text-gray-400 transition-colors duration-100 ease-out hover:text-blue-600 active:scale-95"
+              aria-label="Paste from clipboard"
+              title="Paste"
+            >
+              <Clipboard className="h-[14px] w-[14px]" />
+            </button>
           ) : hasValue ? (
             hideClear ? (
               <span className="h-[14px] w-[14px] shrink-0" aria-hidden />

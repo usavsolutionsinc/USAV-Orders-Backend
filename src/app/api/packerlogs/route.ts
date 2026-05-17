@@ -122,6 +122,10 @@ export async function GET(req: NextRequest) {
                 COALESCE(
                     ff.product_title,
                     o.product_title,
+                    -- Ecwid platform mapping (sku_platform_ids platform='ecwid')
+                    -- takes priority for SKU pack scans like '1071-B:A12' where
+                    -- the part before ':' is the Ecwid platform SKU.
+                    ecwid_lookup.ecwid_product_title,
                     sku_catalog_lookup.catalog_product_title,
                     sku_stock_lookup.stock_product_title,
                     -- Last resort: show the identifier we do have instead of null.
@@ -222,6 +226,49 @@ export async function GET(req: NextRequest) {
                 LIMIT 1
             ) order_match ON TRUE
             LEFT JOIN orders o ON o.id = order_match.id
+            -- Ecwid platform lookup: match a SKU pack scan (e.g. '1071-B:A12')
+            -- against sku_platform_ids.platform_sku where platform='ecwid'.
+            -- Prefers sku_catalog.product_title (canonical) and falls back to
+            -- the Ecwid platform display_name when the platform row is unpaired.
+            LEFT JOIN LATERAL (
+                SELECT COALESCE(
+                    NULLIF(BTRIM(sc_e.product_title), ''),
+                    NULLIF(BTRIM(sp_e.display_name), '')
+                ) AS ecwid_product_title
+                FROM sku_platform_ids sp_e
+                LEFT JOIN sku_catalog sc_e ON sc_e.id = sp_e.sku_catalog_id
+                WHERE sp_e.platform = 'ecwid'
+                  AND sp_e.is_active = true
+                  AND EXISTS (
+                    SELECT 1
+                    FROM UNNEST(ARRAY[
+                        NULLIF(BTRIM(split_part(COALESCE(sku_lookup.sku_table_static_sku, ''), ':', 1)), ''),
+                        NULLIF(BTRIM(COALESCE(sku_lookup.sku_table_static_sku, '')), ''),
+                        NULLIF(BTRIM(split_part(COALESCE(sal.metadata->>'sku', ''), ':', 1)), ''),
+                        NULLIF(BTRIM(COALESCE(sal.metadata->>'sku', '')), ''),
+                        CASE
+                            WHEN POSITION(':' IN COALESCE(sal.scan_ref, '')) > 0
+                            THEN NULLIF(BTRIM(split_part(sal.scan_ref, ':', 1)), '')
+                            ELSE NULLIF(BTRIM(COALESCE(sal.scan_ref, '')), '')
+                        END,
+                        NULLIF(BTRIM(split_part(COALESCE(o.sku, ''), ':', 1)), ''),
+                        NULLIF(BTRIM(COALESCE(o.sku, '')), ''),
+                        NULLIF(BTRIM(COALESCE(o.item_number, '')), '')
+                    ]) AS c(candidate)
+                    WHERE c.candidate IS NOT NULL AND BTRIM(c.candidate) <> ''
+                      AND (
+                          BTRIM(sp_e.platform_sku) = BTRIM(c.candidate)
+                          OR BTRIM(sp_e.platform_item_id) = BTRIM(c.candidate)
+                          OR regexp_replace(UPPER(TRIM(COALESCE(sp_e.platform_sku, ''))), '^0+', '') =
+                             regexp_replace(UPPER(TRIM(c.candidate)), '^0+', '')
+                      )
+                  )
+                ORDER BY
+                    CASE WHEN NULLIF(BTRIM(COALESCE(sc_e.product_title, '')), '') IS NOT NULL THEN 0 ELSE 1 END,
+                    sp_e.created_at DESC NULLS LAST,
+                    sp_e.id DESC
+                LIMIT 1
+            ) ecwid_lookup ON TRUE
             LEFT JOIN LATERAL (
                 SELECT sc.product_title AS catalog_product_title
                 FROM sku_catalog sc

@@ -11,6 +11,7 @@ import {
 } from '@/components/Icons';
 import { successFeedback, errorFeedback, scanFeedback } from '@/lib/feedback/confirm';
 import { useLocations } from '@/hooks/useLocations';
+import { useHorizontalWheelScroll } from '@/hooks/useHorizontalWheelScroll';
 import {
   DEFAULT_GLN,
   QR_BASE_URL,
@@ -201,6 +202,25 @@ export function BinLabelPrinter({ isActive }: BinLabelPrinterProps) {
     return Array.from(set);
   }, [rooms, roomNames]);
 
+  // ─── Server-of-record zone-letter map (room name → letter A-Z) ──────────
+  // Built from parent rows on the locations table. Falls back to the
+  // legacy client-only zoneMap in config so existing mappings aren't lost
+  // before the next server save promotes them. Server letters always win.
+  const serverZoneMap = useMemo(() => {
+    const map: Record<string, string> = {};
+    for (const r of rooms) {
+      const key = (r.room || r.name)?.trim();
+      if (!key) continue;
+      if (r.zone_letter && /^[A-Z]$/.test(r.zone_letter)) map[key] = r.zone_letter;
+    }
+    return map;
+  }, [rooms]);
+
+  const effectiveZoneMap = useMemo(() => {
+    const merged: Record<string, string> = { ...config.zoneMap, ...serverZoneMap };
+    return merged;
+  }, [config.zoneMap, serverZoneMap]);
+
   const orderedRooms = useMemo(() => {
     const baseline = localOrder
       ? localOrder.filter((n) => allRoomNames.includes(n))
@@ -309,14 +329,14 @@ export function BinLabelPrinter({ isActive }: BinLabelPrinterProps) {
   }, [selectedRoom, aisle, bay, level, position, computedStep, activeStep]);
 
   const allSelected = selectedRoom != null && aisle != null && bay != null && level != null && position != null;
-  const zoneLetter = selectedRoom ? config.zoneMap[selectedRoom] : undefined;
+  const zoneLetter = selectedRoom ? effectiveZoneMap[selectedRoom] : undefined;
 
   const currentSegments: LocationSegments | null = allSelected && zoneLetter
     ? { zone: zoneLetter, aisle: aisle!, bay: bay!, level: level!, position: position! }
     : null;
 
   // ─── Room CRUD: create / rename / delete / reorder (optimistic) ────────
-  const usedLetters = useMemo(() => new Set(Object.values(config.zoneMap)), [config.zoneMap]);
+  const usedLetters = useMemo(() => new Set(Object.values(effectiveZoneMap)), [effectiveZoneMap]);
 
   const upsertZoneLetter = useCallback((roomName: string, letter: string) => {
     setConfig((cur) => {
@@ -342,9 +362,9 @@ export function BinLabelPrinter({ isActive }: BinLabelPrinterProps) {
   const handleAddRoom = useCallback(async (name: string, letter: string) => {
     const next = [name, ...(localOrder ?? orderedRooms)].filter((v, i, arr) => arr.indexOf(v) === i);
     setLocalOrder(next);
-    upsertZoneLetter(name, letter);
+    upsertZoneLetter(name, letter); // optimistic, will be confirmed once server returns
     try {
-      const result = await createRoom(name);
+      const result = await createRoom(name, letter);
       if (!result) throw new Error('Create failed');
       successFeedback();
       toast.success(`Room "${name}" added (Zone ${letter})`);
@@ -361,42 +381,46 @@ export function BinLabelPrinter({ isActive }: BinLabelPrinterProps) {
     newName: string,
     letter: string,
   ) => {
-    // Letter-only update is local; no API.
-    if (oldName === newName) {
-      upsertZoneLetter(newName, letter);
-      successFeedback();
-      toast.success(`Zone letter updated to ${letter}`);
-      return;
-    }
-    // Rename + letter update.
+    const upperLetter = letter.toUpperCase();
+    const isRename = oldName !== newName;
+
     try {
-      const result = await renameRoom(oldName, newName);
-      if (!result) throw new Error('Rename failed');
-      // Move the letter to the new name and drop the old key.
+      // One server call now carries both name + letter.
+      const result = await renameRoom(oldName, isRename ? newName : undefined, upperLetter);
+      if (!result) throw new Error('Save failed');
+
+      // Move the letter in the optimistic-cache (config.zoneMap) so the UI
+      // doesn't blink if refetch lands later than the next render.
       setConfig((cur) => {
         const map = { ...cur.zoneMap };
-        delete map[oldName];
-        map[newName] = letter.toUpperCase();
+        if (isRename) delete map[oldName];
+        map[newName] = upperLetter;
         const next = { ...cur, zoneMap: map };
         saveConfig(next);
         return next;
       });
-      if (selectedRoom === oldName) setSelectedRoom(newName);
-      setLocalOrder((cur) => {
-        if (!cur) return cur;
-        const idx = cur.indexOf(oldName);
-        if (idx === -1) return cur;
-        const arr = [...cur];
-        arr[idx] = newName;
-        return arr;
-      });
+      if (isRename && selectedRoom === oldName) setSelectedRoom(newName);
+      if (isRename) {
+        setLocalOrder((cur) => {
+          if (!cur) return cur;
+          const idx = cur.indexOf(oldName);
+          if (idx === -1) return cur;
+          const arr = [...cur];
+          arr[idx] = newName;
+          return arr;
+        });
+      }
       successFeedback();
-      toast.success(`Renamed to "${newName}" (Zone ${letter})`);
+      toast.success(
+        isRename
+          ? `Renamed to "${newName}" (Zone ${upperLetter})`
+          : `Zone letter updated to ${upperLetter}`,
+      );
     } catch (err: any) {
       errorFeedback();
       toast.error(err?.message || 'Could not save');
     }
-  }, [renameRoom, selectedRoom, upsertZoneLetter]);
+  }, [renameRoom, selectedRoom]);
 
   const handleConfirmDelete = useCallback(async () => {
     const name = confirmDeleteRoom;
@@ -552,7 +576,7 @@ export function BinLabelPrinter({ isActive }: BinLabelPrinterProps) {
           <ZoneRoomsList
             rooms={orderedRooms}
             binCounts={binCounts}
-            zoneMap={config.zoneMap}
+            zoneMap={effectiveZoneMap}
             loading={loading}
             editMode={editMode}
             mutating={roomMutating}
@@ -739,9 +763,9 @@ export function BinLabelPrinter({ isActive }: BinLabelPrinterProps) {
         message="Rename the friendly label and/or change which zone letter (A–Z) it maps to."
         confirmLabel="Save"
         initialName={editingRoom ?? ''}
-        initialLetter={editingRoom ? config.zoneMap[editingRoom] ?? nextFreeLetter(usedLetters) : 'A'}
+        initialLetter={editingRoom ? effectiveZoneMap[editingRoom] ?? nextFreeLetter(usedLetters) : 'A'}
         lockedLetters={new Set(
-          Object.entries(config.zoneMap)
+          Object.entries(effectiveZoneMap)
             .filter(([k]) => k !== editingRoom)
             .map(([, v]) => v),
         )}
@@ -1110,9 +1134,13 @@ function StepPills({ activeStep, zoneLetter, roomName, aisle, bay, level, positi
     level: level != null ? noPad(level) : undefined,
     position: position != null ? pad2(position) : undefined,
   };
+  const scrollRef = useRef<HTMLDivElement>(null);
+  useHorizontalWheelScroll(scrollRef);
+
   return (
     // Outer flex + overflow-x-auto + inner flex-none/w-max: reliable horizontal scroll (incl. nested vertical scroll parents).
     <div
+      ref={scrollRef}
       className="flex w-full min-w-0 overflow-x-scroll overflow-y-hidden overscroll-x-contain py-3 [-ms-overflow-style:none] [scrollbar-width:none] [-webkit-overflow-scrolling:touch] [&::-webkit-scrollbar]:hidden"
       role="navigation"
       aria-label="Bin location steps"

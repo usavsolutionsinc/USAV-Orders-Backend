@@ -15,6 +15,10 @@ import {
   getCurrentPSTDateKey,
   toPSTDateKey,
 } from '@/utils/date';
+import {
+  dashboardOrderRowChipsClass,
+  dashboardOrderRowShellClass,
+} from '@/lib/dashboard-order-row-layout';
 
 /** Passed to `/api/receiving-lines` as `view`. The station dashboard uses a single full list. */
 export type ReceivingView = 'all' | 'recent' | 'received';
@@ -55,6 +59,8 @@ export interface ReceivingLineRow {
   image_url: string | null;
   source_platform: string | null;
   serials?: Array<{ id: number; serial_number: string }> | null;
+  /** Count of photos attached to this line's carton (from photos table, entity_type='RECEIVING'). */
+  photo_count?: number;
 }
 
 interface ApiResponse {
@@ -89,11 +95,13 @@ function OrderRow({
   isSelected,
   onSelect,
   index,
+  isMobile,
 }: {
   row: ReceivingLineRow;
   isSelected: boolean;
   onSelect: () => void;
   index: number;
+  isMobile: boolean;
 }) {
   const productTitle = row.item_name || row.zoho_item_id || 'Unnamed inbound line';
   const quantityText = `${row.quantity_received}/${row.quantity_expected ?? '?'}`;
@@ -133,7 +141,7 @@ function OrderRow({
       tabIndex={0}
       aria-pressed={isSelected}
       aria-label={`Select receiving line ${row.id}`}
-      className={`flex flex-col gap-1.5 border-b border-gray-50 px-3 py-1.5 transition-colors cursor-pointer hover:bg-blue-50/50 md:grid md:grid-cols-[minmax(0,1fr)_auto] md:items-center md:gap-2 ${
+      className={`${dashboardOrderRowShellClass(isMobile)} border-b border-gray-50 px-3 py-1.5 transition-colors cursor-pointer hover:bg-blue-50/50 ${
         isSelected ? 'bg-blue-50/80' : index % 2 === 0 ? 'bg-white' : 'bg-gray-50/10'
       }`}
     >
@@ -161,7 +169,7 @@ function OrderRow({
         </div>
       </div>
 
-      <div className="flex shrink-0 flex-wrap items-center gap-0.5 pl-4 md:justify-end md:pl-0 md:pr-2">
+      <div className={dashboardOrderRowChipsClass(isMobile)}>
         <OrderIdChip value={poValue} display={getLast4(poValue)} />
         <SkuScanRefChip value={skuValue} display={getLast4(skuValue)} />
         <TrackingChip value={trackingValue} display={getLast4(trackingValue)} />
@@ -296,21 +304,59 @@ export default function ReceivingLinesTable() {
   const selectedIdRef = useRef<number | null>(null);
   useEffect(() => { selectedIdRef.current = selectedId; }, [selectedId]);
 
+  const deepLinkAppliedRef = useRef(false);
+  const initialAutoSelectRef = useRef(false);
+
+  // Deep link from shared URL: /receiving?recvId=…&lineId=… (lineId optional).
+  useEffect(() => {
+    const recvIdParam = searchParams.get('recvId');
+    if (!recvIdParam || !/^\d+$/.test(recvIdParam)) return;
+    if (isLoading || localRows.length === 0) return;
+    if (deepLinkAppliedRef.current) return;
+
+    const recvId = Number(recvIdParam);
+    const lineIdParam = searchParams.get('lineId');
+    const lineId =
+      lineIdParam && /^\d+$/.test(lineIdParam) ? Number(lineIdParam) : null;
+
+    let target =
+      lineId != null
+        ? localRows.find((r) => r.id === lineId && r.receiving_id === recvId) ??
+          localRows.find((r) => r.id === lineId)
+        : undefined;
+    if (!target) {
+      target = localRows.find((r) => r.receiving_id === recvId);
+    }
+    if (!target) return;
+
+    deepLinkAppliedRef.current = true;
+    initialAutoSelectRef.current = true;
+    setSelectedId(target.id);
+    dispatchSelectLine(target);
+    window.dispatchEvent(new CustomEvent('receiving-highlight-line', { detail: target.id }));
+  }, [isLoading, localRows, searchParams]);
+
+  // On first visit to Receiving (no row selected yet), auto-select the latest
+  // line from the API list (ORDER BY last scan / received_at / created_at DESC).
+  useEffect(() => {
+    if (initialAutoSelectRef.current) return;
+    if (isLoading || localRows.length === 0) return;
+    if (selectedIdRef.current != null) return;
+    const recvIdParam = searchParams.get('recvId');
+    if (recvIdParam && /^\d+$/.test(recvIdParam)) return;
+
+    initialAutoSelectRef.current = true;
+    const latest = localRows[0];
+    setSelectedId(latest.id);
+    dispatchSelectLine(latest);
+    window.dispatchEvent(new CustomEvent('receiving-highlight-line', { detail: latest.id }));
+  }, [isLoading, localRows, searchParams]);
+
   const handleSelectRow = useCallback((row: ReceivingLineRow) => {
     const next = selectedIdRef.current === row.id ? null : row.id;
     setSelectedId(next);
     dispatchSelectLine(next ? row : null);
-    // On mobile, tapping a row should reveal the Actions pane with the
-    // chosen carton already loaded. We persist `recvId` in the URL so the
-    // selection survives Actions↔History tab flips (RouteShell unmounts
-    // the inactive pane on mobile).
-    if (next && isMobile) {
-      const params = new URLSearchParams(searchParams.toString());
-      params.set('pane', 'actions');
-      if (row.receiving_id) params.set('recvId', String(row.receiving_id));
-      router.replace(`?${params.toString()}`, { scroll: false });
-    }
-  }, [isMobile, router, searchParams]);
+  }, []);
 
   // ── Day grouping (PST) ────────────────────────────────────────────────────
   const groupedRecords = useMemo(() => {
@@ -337,6 +383,49 @@ export default function ReceivingLinesTable() {
       ),
     [groupedRecords, weekRange.startStr, weekRange.endStr],
   );
+
+  /** Flat list in render order (newest day first, newest line first within day). */
+  const orderedVisibleRows = useMemo(
+    () =>
+      Object.entries(filteredGroupedRecords)
+        .sort((a, b) => b[0].localeCompare(a[0]))
+        .flatMap(([, dateRows]) =>
+          [...dateRows].sort((a, b) => {
+            const tA = new Date(a.created_at || 0).getTime();
+            const tB = new Date(b.created_at || 0).getTime();
+            return tB - tA;
+          }),
+        ),
+    [filteredGroupedRecords],
+  );
+
+  // Sidebar chevrons / arrow keys dispatch receiving-navigate-table.
+  useEffect(() => {
+    const handler = (event: Event) => {
+      const direction = (event as CustomEvent<'prev' | 'next'>).detail;
+      if (direction !== 'prev' && direction !== 'next') return;
+      if (orderedVisibleRows.length === 0) return;
+
+      const step = direction === 'prev' ? -1 : 1;
+      const currentIndex = orderedVisibleRows.findIndex((row) => row.id === selectedIdRef.current);
+      if (currentIndex < 0) return;
+
+      const nextRow = orderedVisibleRows[currentIndex + step];
+      if (!nextRow) return;
+      handleSelectRow(nextRow);
+    };
+    window.addEventListener('receiving-navigate-table', handler);
+    return () => window.removeEventListener('receiving-navigate-table', handler);
+  }, [handleSelectRow, orderedVisibleRows]);
+
+  // Keep the active row in view when selection changes from sidebar nav.
+  useEffect(() => {
+    if (!selectedId || !scrollRef.current) return;
+    const rowEl = scrollRef.current.querySelector(
+      `[data-line-row-id="${selectedId}"]`,
+    ) as HTMLElement | null;
+    rowEl?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+  }, [selectedId]);
 
   // ── Scroll-based sticky header (matches TechTable) ────────────────────────
   const handleScroll = useCallback(() => {
@@ -415,6 +504,7 @@ export default function ReceivingLinesTable() {
                           key={row.id}
                           row={row}
                           index={index}
+                          isMobile={isMobile}
                           isSelected={selectedId === row.id}
                           onSelect={() => handleSelectRow(row)}
                         />

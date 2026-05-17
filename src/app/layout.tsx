@@ -5,9 +5,13 @@ import Providers from "../components/Providers";
 import { ResponsiveLayout } from "../components/layout/ResponsiveLayout";
 import { HeaderProvider } from "../contexts/HeaderContext";
 import { FbaWorkspaceProvider } from "../contexts/FbaWorkspaceContext";
+import { AuthProvider } from "../contexts/AuthContext";
+import { StaffSwitcherProvider } from "../contexts/StaffSwitcherContext";
+import { SwitchStaffSheet } from "../components/auth/SwitchStaffSheet";
 import { designTokenStyleText } from '@/styles/tokens';
 import { OfflineBanner } from "../components/station/OfflineBanner";
 import { InstallPrompt } from "../components/station/InstallPrompt";
+import { AppearanceApplier } from "../components/settings/AppearanceApplier";
 
 export default function RootLayout({
     children,
@@ -37,15 +41,21 @@ export default function RootLayout({
             <body className="antialiased" style={{ margin: 0, padding: 0, overflow: 'hidden', height: '100vh' }}>
                 <OfflineBanner />
                 <Providers>
-                    <HeaderProvider>
-                        <FbaWorkspaceProvider>
-                            <ResponsiveLayout>
-                                {children}
-                            </ResponsiveLayout>
-                        </FbaWorkspaceProvider>
-                    </HeaderProvider>
+                    <AuthProvider>
+                        <StaffSwitcherProvider>
+                            <HeaderProvider>
+                                <FbaWorkspaceProvider>
+                                    <ResponsiveLayout>
+                                        {children}
+                                    </ResponsiveLayout>
+                                </FbaWorkspaceProvider>
+                            </HeaderProvider>
+                            <SwitchStaffSheet />
+                        </StaffSwitcherProvider>
+                    </AuthProvider>
                 </Providers>
                 <InstallPrompt />
+                <AppearanceApplier />
             </body>
         </html>
     );

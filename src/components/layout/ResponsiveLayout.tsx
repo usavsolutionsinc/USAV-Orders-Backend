@@ -8,12 +8,12 @@ import DashboardSidebar from '@/components/DashboardSidebar';
 import { CommandBar } from '@/components/CommandBar';
 import { useUIMode } from '@/design-system/providers/UIModeProvider';
 import { X } from '@/components/Icons';
-import { getSidebarRouteKey, isSidebarRouteMobileRestricted, APP_SIDEBAR_NAV } from '@/lib/sidebar-navigation';
-import { AppTopBar } from '@/design-system/primitives/AppTopBar';
-import { PhonePairFab } from '@/components/layout/PhonePairFab';
+import { getSidebarRouteKey, isSidebarRouteMobileRestricted } from '@/lib/sidebar-navigation';
+import { MobileAppHeader, MobileAppHeaderFallback } from '@/components/layout/MobileAppHeader';
+import { QuickAccessFab } from '@/components/layout/QuickAccessFab';
 import { GlobalDesktopSkuScanner } from '@/components/layout/GlobalDesktopSkuScanner';
-import { PhonePairModal } from '@/components/sidebar/PhonePairModal';
 import { usePhoneReceivingPhotoBridge } from '@/hooks/usePhoneReceivingPhotoBridge';
+import { usePhoneScanBridge } from '@/hooks/usePhoneScanBridge';
 import { useGlobalWedgeScanner } from '@/hooks/useGlobalWedgeScanner';
 import { OfflineBanner } from '@/components/layout/OfflineBanner';
 
@@ -23,6 +23,17 @@ import { OfflineBanner } from '@/components/layout/OfflineBanner';
  */
 function PhoneReceivingPhotoBridgeMount() {
   usePhoneReceivingPhotoBridge();
+  return null;
+}
+
+/**
+ * Mount-only component. Subscribes to phone-originated scans on
+ * `phone:{staffId}` for the signed-in user and echoes lookups back on
+ * `station:{staffId}`. Runs on both desktop and mobile so either side can
+ * service a scan from the other.
+ */
+function PhoneScanBridgeMount() {
+  usePhoneScanBridge();
   return null;
 }
 
@@ -60,14 +71,6 @@ const drawerTransition = {
   stiffness: 320,
   mass: 0.8,
 };
-
-// ─── Mobile nav helpers ─────────────────────────────────────────────────────
-
-function getMobileTitle(pathname: string | null): string {
-  const key = getSidebarRouteKey(pathname);
-  const nav = APP_SIDEBAR_NAV.find((item) => item.id === key);
-  return nav?.label || 'USAV';
-}
 
 // ─── Component ───────────────────────────────────────────────────────────────
 
@@ -133,6 +136,8 @@ export function ResponsiveLayout({ children }: ResponsiveLayoutProps) {
         {/* Global wedge / Bluetooth ring-scanner listener — URL-shaped scans
             navigate; bare codes fire a `wedge-scan` CustomEvent. */}
         <GlobalWedgeScannerMount />
+        {/* Listen for phone-originated scans on phone:{staffId}. */}
+        <PhoneScanBridgeMount />
         <OfflineBanner />
         <Suspense fallback={null}>
           <DashboardSidebar />
@@ -146,8 +151,7 @@ export function ResponsiveLayout({ children }: ResponsiveLayoutProps) {
         <Suspense fallback={null}>
           <GlobalDesktopSkuScanner />
         </Suspense>
-        <PhonePairFab />
-        <PhonePairModal />
+        <QuickAccessFab />
       </div>
     );
   }
@@ -163,13 +167,19 @@ export function ResponsiveLayout({ children }: ResponsiveLayoutProps) {
           station:{staffId} and auto-navigates to the camera page. */}
       <PhoneReceivingPhotoBridgeMount />
 
+      {/* Mirror of desktop: subscribe to phone:{staffId} so any device the
+          user is signed in on can service the lookup. */}
+      <PhoneScanBridgeMount />
+
       {/* Same wedge scanner listener as desktop — works for HID-over-USB on
           tablets and Bluetooth ring scanners paired to a phone. */}
       <GlobalWedgeScannerMount />
       <OfflineBanner />
 
-      {/* Always-on slim top app bar — hamburger is the only chrome-level nav surface. */}
-      <AppTopBar title={getMobileTitle(pathname)} onOpenDrawer={openDrawer} />
+      {/* Mobile header: app nav + contextual section browse/detail rows */}
+      <Suspense fallback={<MobileAppHeaderFallback onOpenAppNav={openDrawer} />}>
+        <MobileAppHeader onOpenAppNav={openDrawer} />
+      </Suspense>
 
       {/* Main content — full width */}
       <main className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">

@@ -3,14 +3,13 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useQueryClient } from '@tanstack/react-query';
-import { sidebarHeaderBandClass, sidebarHeaderControlClass } from '@/components/layout/header-shell';
-import { ViewDropdown } from '@/components/ui/ViewDropdown';
-import StaffSelector from '@/components/StaffSelector';
+import { sidebarHeaderBandClass } from '@/components/layout/header-shell';
+import { HorizontalButtonSlider, type HorizontalSliderItem } from '@/components/ui/HorizontalButtonSlider';
 import StationTesting from '@/components/station/StationTesting';
 import { getCurrentPSTDateKey, toPSTDateKey } from '@/utils/date';
 import { getStaffGoalById } from '@/lib/staffGoalsCache';
 import { useTechLogs, type TechRecord } from '@/hooks/useTechLogs';
-import { ChevronLeft } from '@/components/Icons';
+import { ChevronLeft, Clock, Edit, FileText, History, PackageCheck } from '@/components/Icons';
 import { useActiveStaffDirectory } from './hooks';
 
 function computeCurrentWeekRange() {
@@ -60,13 +59,13 @@ function deduplicateByTracking(records: TechRecord[]): TechRecord[] {
   return unique;
 }
 
-const TECH_VIEW_OPTIONS = [
-  { value: 'history', label: 'Tech History' },
-  { value: 'shipped', label: 'Shipped Orders' },
-  { value: 'pending', label: 'Pending Orders' },
-  { value: 'manual', label: 'Last Order Manual' },
-  { value: 'update-manuals', label: 'Update Manuals' },
-] as const;
+const TECH_VIEW_ITEMS: HorizontalSliderItem[] = [
+  { id: 'history',        label: 'History',        icon: History },
+  { id: 'shipped',        label: 'Shipped',        icon: PackageCheck },
+  { id: 'pending',        label: 'Pending',        icon: Clock },
+  { id: 'manual',         label: 'Manual',         icon: FileText },
+  { id: 'update-manuals', label: 'Update Manuals', icon: Edit },
+];
 
 type TechViewMode = 'history' | 'shipped' | 'pending' | 'manual' | 'update-manuals';
 
@@ -181,25 +180,14 @@ export function TechSidebarPanel({ techId, onBackToAppNav, contextNavTitle = 'Te
             </div>
           </button>
         ) : null}
-        <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)] divide-x divide-gray-400">
-          <div className="min-w-0">
-            <StaffSelector
-              role="technician"
-              variant="boxy"
-              selectedStaffId={parseInt(techId, 10)}
-              onSelect={(id) => router.push(`/tech?staffId=${id}`)}
-            />
-          </div>
-          <div className="relative min-w-0">
-            <ViewDropdown
-              options={TECH_VIEW_OPTIONS}
-              value={viewMode}
-              onChange={(nextView) => updateViewMode(nextView as TechViewMode)}
-              variant="boxy"
-              buttonClassName={sidebarHeaderControlClass}
-              optionClassName="text-[10px] font-black tracking-wider"
-            />
-          </div>
+        <div className="px-3">
+          <HorizontalButtonSlider
+            items={TECH_VIEW_ITEMS}
+            value={viewMode}
+            onChange={(next) => updateViewMode(next as TechViewMode)}
+            variant="nav"
+            aria-label="Technician view"
+          />
         </div>
       </div>
       <div className="flex min-h-0 flex-1 flex-col overflow-hidden">

@@ -1,6 +1,8 @@
 import { redirect } from 'next/navigation';
 
-export default async function PackerPage({ params }: { params: Promise<{ id: string }> }) {
-    const { id } = await params;
-    redirect(`/packer?staffId=${encodeURIComponent(id)}`);
+/**
+ * Legacy deep link `/packer/[id]` — see `/tech/[id]` for the rationale.
+ */
+export default async function PackerIdPage() {
+  redirect('/packer');
 }

@@ -17,6 +17,12 @@ export const ebayAccounts = pgTable('ebay_accounts', {
 });
 
 // Staff table
+//
+// Columns added across two migrations:
+//   2026-05-14_sso_foundation.sql  → ssoSubject, ssoProvider, lastLoginAt
+//   2026-05-17_auth_system.sql     → pinHash, pinSetAt, pinFailedCount,
+//                                    pinLockedUntil, employeeCode, status
+//   2026-05-18_staff_permission_overrides.sql → permissionsAdded, permissionsRemoved
 export const staff = pgTable('staff', {
   id: serial('id').primaryKey(),
   name: varchar('name', { length: 100 }).notNull(),
@@ -24,7 +30,108 @@ export const staff = pgTable('staff', {
   employeeId: varchar('employee_id', { length: 50 }).unique(),
   active: boolean('active').default(true),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
+  ssoSubject: text('sso_subject'),
+  ssoProvider: text('sso_provider'),
+  lastLoginAt: timestamp('last_login_at', { withTimezone: true }),
+  pinHash: text('pin_hash'),
+  pinSetAt: timestamp('pin_set_at', { withTimezone: true }),
+  pinFailedCount: integer('pin_failed_count').notNull().default(0),
+  pinLockedUntil: timestamp('pin_locked_until', { withTimezone: true }),
+  employeeCode: text('employee_code'),
+  status: text('status').notNull().default('active'),
+  permissionsAdded: text('permissions_added').array().notNull().default([]),
+  permissionsRemoved: text('permissions_removed').array().notNull().default([]),
+  sortOrder: integer('sort_order').notNull().default(0),
 });
+
+// Editable roles taxonomy. is_system rows are seeded built-ins and cannot
+// be deleted from the admin UI. See 2026-05-19_editable_roles.sql.
+export const roles = pgTable('roles', {
+  id: serial('id').primaryKey(),
+  key: text('key').notNull().unique(),
+  label: text('label').notNull(),
+  color: varchar('color', { length: 7 }).notNull().default('#6b7280'),
+  position: integer('position').notNull().default(100),
+  permissions: text('permissions').array().notNull().default([]),
+  isSystem: boolean('is_system').notNull().default(false),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+}, (table) => ({
+  positionIdx: index('idx_roles_position').on(table.position),
+}));
+
+// Many-to-many: a staff can hold several roles.
+export const staffRolesTable = pgTable('staff_roles', {
+  staffId: integer('staff_id').notNull().references(() => staff.id, { onDelete: 'cascade' }),
+  roleId: integer('role_id').notNull().references(() => roles.id, { onDelete: 'cascade' }),
+  grantedAt: timestamp('granted_at', { withTimezone: true }).notNull().defaultNow(),
+  grantedBy: integer('granted_by').references(() => staff.id, { onDelete: 'set null' }),
+}, (table) => ({
+  pk: primaryKey({ columns: [table.staffId, table.roleId] }),
+  roleIdx: index('idx_staff_roles_role').on(table.roleId),
+}));
+
+export const staffPasskeys = pgTable('staff_passkeys', {
+  id: bigserial('id', { mode: 'number' }).primaryKey(),
+  staffId: integer('staff_id').notNull().references(() => staff.id, { onDelete: 'cascade' }),
+  credentialId: text('credential_id').notNull().unique(),
+  publicKey: text('public_key').notNull(),
+  counter: bigint('counter', { mode: 'number' }).notNull().default(0),
+  transports: text('transports').array(),
+  aaguid: uuid('aaguid'),
+  deviceLabel: text('device_label'),
+  lastUsedAt: timestamp('last_used_at', { withTimezone: true }),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+}, (table) => ({
+  staffIdx: index('idx_staff_passkeys_staff').on(table.staffId),
+}));
+
+export const staffSessions = pgTable('staff_sessions', {
+  sid: text('sid').primaryKey(),
+  staffId: integer('staff_id').notNull().references(() => staff.id, { onDelete: 'cascade' }),
+  deviceKind: text('device_kind').notNull(),
+  deviceLabel: text('device_label'),
+  ip: text('ip'),
+  userAgent: text('user_agent'),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  lastSeenAt: timestamp('last_seen_at', { withTimezone: true }).notNull().defaultNow(),
+  expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+  revokedAt: timestamp('revoked_at', { withTimezone: true }),
+});
+
+export const staffEnrollments = pgTable('staff_enrollments', {
+  token: text('token').primaryKey(),
+  staffId: integer('staff_id').notNull().references(() => staff.id, { onDelete: 'cascade' }),
+  createdBy: integer('created_by').references(() => staff.id, { onDelete: 'set null' }),
+  expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+  consumedAt: timestamp('consumed_at', { withTimezone: true }),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const staffStepups = pgTable('staff_stepups', {
+  sid: text('sid').notNull().references(() => staffSessions.sid, { onDelete: 'cascade' }),
+  scope: text('scope').notNull(),
+  grantedAt: timestamp('granted_at', { withTimezone: true }).notNull().defaultNow(),
+  expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+  method: text('method').notNull(),
+}, (table) => ({
+  pk: primaryKey({ columns: [table.sid, table.scope] }),
+}));
+
+export const authAudit = pgTable('auth_audit', {
+  id: bigserial('id', { mode: 'number' }).primaryKey(),
+  staffId: integer('staff_id').references(() => staff.id, { onDelete: 'set null' }),
+  event: text('event').notNull(),
+  result: text('result').notNull(),
+  ip: text('ip'),
+  userAgent: text('user_agent'),
+  sid: text('sid'),
+  detail: jsonb('detail').notNull().default({}),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+}, (table) => ({
+  staffTimeIdx: index('idx_auth_audit_staff_time').on(table.staffId, table.createdAt),
+  eventTimeIdx: index('idx_auth_audit_event_time').on(table.event, table.createdAt),
+}));
 
 export const staffWeeklySchedule = pgTable('staff_weekly_schedule', {
   staffId: integer('staff_id').notNull().references(() => staff.id, { onDelete: 'cascade' }),

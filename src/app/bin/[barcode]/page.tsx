@@ -3,6 +3,7 @@
 import { Suspense, useCallback, useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { usePersistedStaffId } from '@/hooks/usePersistedStaffId';
+import { AuditTimeline } from '@/components/audit/AuditTimeline';
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -32,32 +33,6 @@ interface BinPayload {
   contents: BinContentRow[];
 }
 
-interface TimelineEvent {
-  id: number;
-  occurred_at: string;
-  event_type: string;
-  actor_name: string | null;
-  sku: string | null;
-  serial_number: string | null;
-  prev_bin_name: string | null;
-  bin_name: string | null;
-  notes: string | null;
-}
-
-// ─── Helpers ────────────────────────────────────────────────────────────────
-
-function formatAgo(iso: string | null | undefined): string {
-  if (!iso) return '';
-  const ms = Date.now() - new Date(iso).getTime();
-  const s = Math.max(0, Math.floor(ms / 1000));
-  if (s < 60) return `${s}s`;
-  const m = Math.floor(s / 60);
-  if (m < 60) return `${m}m`;
-  const h = Math.floor(m / 60);
-  if (h < 24) return `${h}h`;
-  return `${Math.floor(h / 24)}d`;
-}
-
 // ─── Page ───────────────────────────────────────────────────────────────────
 
 function BinPageInner() {
@@ -67,7 +42,6 @@ function BinPageInner() {
   const [staffId] = usePersistedStaffId();
 
   const [bin, setBin] = useState<BinPayload | null>(null);
-  const [events, setEvents] = useState<TimelineEvent[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -85,21 +59,6 @@ function BinPageInner() {
       const data = await res.json();
       if (!res.ok) throw new Error(data?.error || `HTTP ${res.status}`);
       setBin({ location: data.location, contents: data.contents ?? [] });
-
-      // Fetch recent inventory_events for this bin via the audit endpoint
-      // (added inline below; falls back to empty on failure).
-      try {
-        const evRes = await fetch(
-          `/api/inventory-events?bin_id=${data.location.id}&limit=20`,
-          { cache: 'no-store' },
-        );
-        if (evRes.ok) {
-          const ev = await evRes.json();
-          if (Array.isArray(ev?.events)) setEvents(ev.events);
-        }
-      } catch {
-        /* timeline is best-effort */
-      }
       setError(null);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load bin');
@@ -213,35 +172,8 @@ function BinPageInner() {
               )}
             </section>
 
-            {events.length > 0 && (
-              <section className="rounded-lg border border-slate-200 bg-white p-3 shadow-sm">
-                <p className="mb-2 text-[10px] font-black uppercase tracking-[0.16em] text-slate-500">
-                  Recent activity
-                </p>
-                <ul className="space-y-2">
-                  {events.map((ev) => (
-                    <li key={ev.id} className="flex items-start gap-2 text-[11px]">
-                      <span className="mt-[3px] inline-block h-1.5 w-1.5 rounded-full bg-slate-400 shrink-0" />
-                      <div className="min-w-0 flex-1">
-                        <p className="font-bold text-slate-900">
-                          {ev.event_type.replace(/_/g, ' ')}
-                          {ev.sku ? (
-                            <span className="ml-1 font-mono text-slate-600">· {ev.sku}</span>
-                          ) : null}
-                          {ev.serial_number ? (
-                            <span className="ml-1 font-mono text-slate-500">
-                              · {ev.serial_number}
-                            </span>
-                          ) : null}
-                        </p>
-                        <p className="text-slate-500">
-                          {ev.actor_name || 'Unknown'} · {formatAgo(ev.occurred_at)} ago
-                        </p>
-                      </div>
-                    </li>
-                  ))}
-                </ul>
-              </section>
+            {bin && (
+              <AuditTimeline binId={bin.location.id} limit={50} compact />
             )}
           </>
         )}

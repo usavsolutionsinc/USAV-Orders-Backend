@@ -7,17 +7,20 @@ import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { AnimatePresence, motion } from 'framer-motion';
 import {
   AlertTriangle,
+  Box,
   Check,
   Database,
+  Layout,
   Loader2,
   Plus,
   ShieldCheck,
+  Tool,
   X,
 } from '@/components/Icons';
 import { DashboardShippedSearchHandoffCard } from '@/components/dashboard/DashboardShippedSearchHandoffCard';
 import { RecentSearchesList } from '@/components/sidebar/RecentSearchesList';
 import { SearchBar } from '@/components/ui/SearchBar';
-import { TabSwitch } from '@/components/ui/TabSwitch';
+import { HorizontalButtonSlider, type HorizontalSliderItem } from '@/components/ui/HorizontalButtonSlider';
 import { ShippedIntakeForm, type ShippedFormData } from '@/components/shipped';
 import { WorkOrderAssignmentCard, type AssignmentConfirmPayload } from '@/components/work-orders/WorkOrderAssignmentCard';
 import type { WorkOrderRow } from '@/components/work-orders/types';
@@ -29,10 +32,10 @@ import { dispatchUsavRefreshData, invalidateDashboardOrderQueries } from '@/lib/
 
 type PendingStockFilter = 'all' | 'pending' | 'stock';
 
-const PENDING_STOCK_FILTER_TABS = [
-  { id: 'all', label: 'All', color: 'blue' as const },
-  { id: 'pending', label: 'Pick/Test', color: 'yellow' as const },
-  { id: 'stock', label: 'Stock', color: 'red' as const },
+const PENDING_STOCK_FILTER_ITEMS: HorizontalSliderItem[] = [
+  { id: 'all',     label: 'All',       icon: Layout },
+  { id: 'pending', label: 'Pick/Test', icon: Tool },
+  { id: 'stock',   label: 'Stock',     icon: Box },
 ];
 
 interface DashboardManagementPanelProps {
@@ -433,12 +436,13 @@ export function DashboardManagementPanel({
               />
             </motion.div>
             {showPendingFilterControl ? (
-              <motion.div variants={itemVariants} className="-mt-2">
-                <TabSwitch
-                  tabs={PENDING_STOCK_FILTER_TABS}
-                  activeTab={pendingFilterValue}
-                  highContrast={highContrastSliders}
-                  onTabChange={(tab) => onPendingFilterChange?.(tab === 'stock' ? 'stock' : tab === 'pending' ? 'pending' : 'all')}
+              <motion.div variants={itemVariants} className="-mt-2 px-1">
+                <HorizontalButtonSlider
+                  items={PENDING_STOCK_FILTER_ITEMS}
+                  value={pendingFilterValue ?? 'all'}
+                  onChange={(tab) => onPendingFilterChange?.(tab === 'stock' ? 'stock' : tab === 'pending' ? 'pending' : 'all')}
+                  variant="nav"
+                  aria-label="Pending stock filter"
                 />
               </motion.div>
             ) : null}

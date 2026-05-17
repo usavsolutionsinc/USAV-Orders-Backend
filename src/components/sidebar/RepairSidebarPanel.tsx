@@ -3,9 +3,15 @@
 import { useEffect, useState } from 'react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { createPortal } from 'react-dom';
-import { Barcode, Check, Loader2, Plus } from '@/components/Icons';
+import { Barcode, Check, Clock, Loader2, Plus, Tool } from '@/components/Icons';
 import { SearchBar } from '@/components/ui/SearchBar';
-import { SidebarTabSwitchChrome, TabSwitch } from '@/components/ui/TabSwitch';
+import { HorizontalButtonSlider, type HorizontalSliderItem } from '@/components/ui/HorizontalButtonSlider';
+
+const REPAIR_TAB_ITEMS: HorizontalSliderItem[] = [
+  { id: 'incoming', label: 'Incoming', icon: Clock },
+  { id: 'active',   label: 'Active',   icon: Tool },
+  { id: 'done',     label: 'Done',     icon: Check },
+];
 import {
   RepairIntakeForm,
   type RepairFormData,
@@ -267,23 +273,20 @@ export function RepairSidebarPanel({ embedded = false, hideSectionHeader = false
           />
         </div>
 
-        <SidebarTabSwitchChrome>
-          <TabSwitch
-            tabs={[
-              { id: 'incoming', label: 'Incoming', color: 'orange' },
-              { id: 'active', label: 'Active', color: 'orange' },
-              { id: 'done', label: 'Done', color: 'orange' },
-            ]}
-            activeTab={activeTab}
-            highContrast
-            onTabChange={(tab) =>
+        <div className="px-3 py-1">
+          <HorizontalButtonSlider
+            items={REPAIR_TAB_ITEMS}
+            value={activeTab}
+            onChange={(tab) =>
               updateParams((params) => {
                 if (tab === 'active') params.delete('tab');
                 else params.set('tab', tab);
               })
             }
+            variant="nav"
+            aria-label="Repair queue"
           />
-        </SidebarTabSwitchChrome>
+        </div>
       </div>
 
       <div className="relative flex-1 overflow-y-auto px-4 py-4">

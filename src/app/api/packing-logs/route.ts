@@ -31,20 +31,19 @@ function resolvePackerStaffId(rawId: string | number | null | undefined): number
     return Number.isInteger(numeric) && numeric > 0 ? numeric : null;
 }
 
-/** Compute Mon–Fri PST week range from the current server time. */
+/** Compute Sun–Sat PST week range from the current server time (matches client). */
 function getCurrentPSTWeekRange(): { startStr: string; endStr: string } {
     const dateKey = getCurrentPSTDateKey();
     const [year, month, day] = dateKey.split('-').map(Number);
     const date = new Date(year, month - 1, day);
-    const dow = date.getDay();
-    const daysFromMonday = dow === 0 ? 6 : dow - 1;
-    const monday = new Date(date);
-    monday.setDate(date.getDate() - daysFromMonday);
-    const friday = new Date(monday);
-    friday.setDate(monday.getDate() + 4);
+    const daysFromSunday = date.getDay();
+    const sunday = new Date(date);
+    sunday.setDate(date.getDate() - daysFromSunday);
+    const saturday = new Date(sunday);
+    saturday.setDate(sunday.getDate() + 6);
     const fmt = (d: Date) =>
         `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-    return { startStr: fmt(monday), endStr: fmt(friday) };
+    return { startStr: fmt(sunday), endStr: fmt(saturday) };
 }
 
 /**
@@ -651,7 +650,80 @@ export async function POST(req: NextRequest) {
             });
         }
 
-        // Non-order scans (SKU, FNSKU, etc.): store raw input in scan_ref
+        // Non-order scans (SKU, FNSKU, etc.): store raw input in scan_ref.
+        // For SKU scans, resolve product_title from sku_stock BEFORE building
+        // the response so the packer UI can render the actual product name
+        // instead of "Unknown product" / the raw SKU string.
+        let skuUpdated = false;
+        let resolvedSkuTitle: string | null = null;
+        let resolvedSkuBase: string | null = null;
+        let resolvedSkuQty: number | null = null;
+
+        if (classification.trackingType === 'SKU' && classification.skuBase) {
+            const addQty = classification.skuQty || 1;
+            const normalizedBase = normalizeSku(classification.skuBase || '');
+            resolvedSkuBase = normalizedBase;
+            resolvedSkuQty = addQty;
+
+            // 1) Prefer the Ecwid platform mapping (sku_platform_ids platform='ecwid').
+            //    For scans like '1071-B:A12', skuBase = '1071-B' — match against
+            //    platform_sku/platform_item_id and read the canonical product_title
+            //    from sku_catalog (falling back to the platform display_name if the
+            //    Ecwid row is unpaired).
+            const ecwidLookup = await pool.query(
+                `SELECT COALESCE(
+                            NULLIF(BTRIM(sc.product_title), ''),
+                            NULLIF(BTRIM(sp.display_name), '')
+                        ) AS product_title
+                 FROM sku_platform_ids sp
+                 LEFT JOIN sku_catalog sc ON sc.id = sp.sku_catalog_id
+                 WHERE sp.platform = 'ecwid'
+                   AND sp.is_active = true
+                   AND (
+                       BTRIM(sp.platform_sku) = $1
+                       OR BTRIM(sp.platform_item_id) = $1
+                       OR regexp_replace(UPPER(TRIM(COALESCE(sp.platform_sku, ''))), '^0+', '') =
+                          regexp_replace(UPPER($1), '^0+', '')
+                   )
+                 ORDER BY
+                   CASE WHEN NULLIF(BTRIM(COALESCE(sc.product_title, '')), '') IS NOT NULL THEN 0 ELSE 1 END,
+                   sp.created_at DESC NULLS LAST,
+                   sp.id DESC
+                 LIMIT 1`,
+                [normalizedBase],
+            );
+            resolvedSkuTitle = ecwidLookup.rows[0]?.product_title || null;
+
+            // 2) Fall back to sku_stock for the SKU update + title.
+            const skuRows = await pool.query('SELECT id, stock, sku, product_title FROM sku_stock');
+            const target = skuRows.rows.find(
+                (r: any) => normalizeSku(String(r.sku || '')) === normalizedBase
+            );
+
+            if (!resolvedSkuTitle) {
+                resolvedSkuTitle = target?.product_title || null;
+            }
+
+            if (target) {
+                const currentQty = parseInt(target.stock || '0', 10) || 0;
+                const nextQty = Math.max(0, currentQty + addQty);
+                await pool.query(
+                    `UPDATE sku_stock
+                     SET stock = $1,
+                         product_title = COALESCE(product_title, $2)
+                     WHERE id = $3`,
+                    [String(nextQty), resolvedSkuTitle, target.id]
+                );
+            } else {
+                await pool.query(
+                    `INSERT INTO sku_stock (stock, sku, product_title)
+                     VALUES ($1, $2, $3)`,
+                    [String(Math.max(0, addQty)), normalizedBase, resolvedSkuTitle]
+                );
+            }
+            skuUpdated = true;
+        }
+
         const nonOrderInsert = await pool.query(`
             INSERT INTO packer_logs (
                 scan_ref,
@@ -681,10 +753,10 @@ export async function POST(req: NextRequest) {
             tracking_number: classification.normalizedInput,
             packed_by: staffId,
             order_id: null,
-            product_title: null,
+            product_title: resolvedSkuTitle,
             condition: null,
-            quantity: null,
-            sku: null,
+            quantity: resolvedSkuQty,
+            sku: resolvedSkuBase,
         };
 
         const nonOrderSalId = await createStationActivityLog(pool, {
@@ -702,38 +774,6 @@ export async function POST(req: NextRequest) {
         });
         if (nonOrderSalId) publishActivityLogged({ id: nonOrderSalId, station: 'PACK', activityType: 'PACK_SCAN', staffId, scanRef: classification.normalizedInput, fnsku: null, source: 'packing-logs' }).catch(() => {});
 
-        let skuUpdated = false;
-        if (classification.trackingType === 'SKU' && classification.skuBase) {
-            const addQty = classification.skuQty || 1;
-            const normalizedBase = normalizeSku(classification.skuBase || '');
-
-            const skuRows = await pool.query('SELECT id, stock, sku, product_title FROM sku_stock');
-            const target = skuRows.rows.find(
-                (r: any) => normalizeSku(String(r.sku || '')) === normalizedBase
-            );
-
-            const resolvedTitle: string | null = target?.product_title || null;
-
-            if (target) {
-                const currentQty = parseInt(target.stock || '0', 10) || 0;
-                const nextQty = Math.max(0, currentQty + addQty);
-                await pool.query(
-                    `UPDATE sku_stock
-                     SET stock = $1,
-                         product_title = COALESCE(product_title, $2)
-                     WHERE id = $3`,
-                    [String(nextQty), resolvedTitle, target.id]
-                );
-            } else {
-                await pool.query(
-                    `INSERT INTO sku_stock (stock, sku, product_title)
-                     VALUES ($1, $2, $3)`,
-                    [String(Math.max(0, addQty)), normalizedBase, resolvedTitle]
-                );
-            }
-            skuUpdated = true;
-        }
-
         await invalidateCacheTags(['packing-logs', 'orders', 'orders-next', 'shipped']);
         if (nonOrderRecord.id) await prependToPackerLogsCache(staffId, nonOrderRecord);
 
@@ -741,6 +781,9 @@ export async function POST(req: NextRequest) {
             success: true,
             trackingType: classification.trackingType,
             shippingTrackingNumber: classification.normalizedInput,
+            productTitle: resolvedSkuTitle,
+            sku: resolvedSkuBase,
+            qty: resolvedSkuQty,
             packedBy: staffId,
             packDateTime,
             packerRecord: nonOrderRecord,

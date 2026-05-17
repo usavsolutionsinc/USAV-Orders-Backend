@@ -17,6 +17,8 @@ interface ActivePackingOrder {
   qty: number;
   condition: string;
   tracking: string;
+  scanType?: 'ORDERS' | 'SKU' | 'REPAIR';
+  sku?: string;
 }
 
 interface ActiveFbaScan {
@@ -124,13 +126,20 @@ export default function StationPacking({
             combinedPackScannedQty: Number(data.fba.total_qty ?? 0),
             isNew: false,
           });
-        } else if (resolvedScanType === 'ORDERS') {
+        } else if (resolvedScanType === 'ORDERS' || resolvedScanType === 'SKU') {
+          // SKU scans (e.g. '1071-B:A12') resolve productTitle via the Ecwid
+          // platform mapping in /api/packing-logs, so render the same active
+          // card the order path uses — but show the SKU in place of TRK#.
+          const isSku = resolvedScanType === 'SKU';
+          const skuValue = String(data?.sku || '').trim();
           setActiveOrder({
             orderId: String(data?.orderId || '').trim(),
             productTitle: String(data?.productTitle || '').trim() || 'Unknown product',
             qty: Math.max(1, Number(data?.qty ?? data?.quantity ?? data?.orderQty ?? 1) || 1),
             condition: String(data?.condition || '').trim() || 'N/A',
             tracking: String(data?.shippingTrackingNumber || scan).trim(),
+            scanType: isSku ? 'SKU' : 'ORDERS',
+            sku: skuValue || undefined,
           });
         }
 
@@ -272,8 +281,14 @@ export default function StationPacking({
                 className="p-4 bg-white rounded-2xl border border-gray-200 shadow-sm"
               >
                 <div className="flex items-center justify-between gap-3 mb-2">
-                  <p className="text-[10px] font-black text-gray-500 uppercase tracking-widest">Active Order</p>
-                  <span className="text-[10px] font-mono font-black text-gray-700">{activeOrder.orderId || 'N/A'}</span>
+                  <p className="text-[10px] font-black text-gray-500 uppercase tracking-widest">
+                    {activeOrder.scanType === 'SKU' ? 'Active SKU' : 'Active Order'}
+                  </p>
+                  <span className="text-[10px] font-mono font-black text-gray-700">
+                    {activeOrder.scanType === 'SKU'
+                      ? (activeOrder.sku || activeOrder.tracking || 'N/A')
+                      : (activeOrder.orderId || 'N/A')}
+                  </span>
                 </div>
                 <h3 className="text-base font-black text-gray-900 leading-tight">{activeOrder.productTitle}</h3>
                 <div className="mt-3 grid grid-cols-3 gap-3">
@@ -286,8 +301,14 @@ export default function StationPacking({
                     <p className="text-xs font-bold text-gray-800">{activeOrder.condition}</p>
                   </div>
                   <div className="bg-gray-50 rounded-xl px-3 py-2 border border-gray-100">
-                    <p className="text-[9px] font-black text-gray-400 uppercase tracking-wider mb-1">TRK #</p>
-                    <p className="text-xs font-mono font-bold text-gray-800">{normalizeTrackingQuery(activeOrder.tracking) || '—'}</p>
+                    <p className="text-[9px] font-black text-gray-400 uppercase tracking-wider mb-1">
+                      {activeOrder.scanType === 'SKU' ? 'SKU' : 'TRK #'}
+                    </p>
+                    <p className="text-xs font-mono font-bold text-gray-800">
+                      {activeOrder.scanType === 'SKU'
+                        ? (activeOrder.sku || activeOrder.tracking || '—')
+                        : (normalizeTrackingQuery(activeOrder.tracking) || '—')}
+                    </p>
                   </div>
                 </div>
               </motion.div>

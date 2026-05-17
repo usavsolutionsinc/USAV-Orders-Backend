@@ -4,13 +4,12 @@ import { Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, use
 import { fbaPaths } from '@/lib/fba/api-paths';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { Plus, X } from '@/components/Icons';
+import { Package, PackageCheck, Plus, X } from '@/components/Icons';
 import { FbaFnskuScanToast } from '@/components/fba/sidebar/FbaFnskuScanToast';
 import { SearchBar } from '@/components/ui/SearchBar';
 import { PrintTableCheckbox } from '@/components/fba/table/Checkbox';
-import { sidebarHeaderBandClass, sidebarHeaderControlClass } from '@/components/layout/header-shell';
-import StaffSelector from '@/components/StaffSelector';
-import { ViewDropdown } from '@/components/ui/ViewDropdown';
+import { sidebarHeaderBandClass } from '@/components/layout/header-shell';
+import { HorizontalButtonSlider, type HorizontalSliderItem } from '@/components/ui/HorizontalButtonSlider';
 import { useAblyChannel } from '@/hooks/useAblyChannel';
 import { getDbTableChannelName } from '@/lib/realtime/channels';
 import type { FbaPlanQueueItem } from '@/components/station/upnext/upnext-types';
@@ -38,10 +37,10 @@ const FBA_SHIPMENT_TRACKING_DB_CHANNEL = getDbTableChannelName('public', 'fba_sh
 
 type FbaTab = 'combine' | 'shipped';
 type PendingPlan = FbaPlanQueueItem;
-const FBA_VIEW_OPTIONS = [
-  { value: 'combine', label: 'Combine' },
-  { value: 'shipped', label: 'Shipped' },
-] as const;
+const FBA_VIEW_ITEMS: HorizontalSliderItem[] = [
+  { id: 'combine', label: 'Combine', icon: Package },
+  { id: 'shipped', label: 'Shipped', icon: PackageCheck },
+];
 
 function emitOpenAddFba() {
   window.dispatchEvent(new CustomEvent('admin-fba-open-add'));
@@ -444,33 +443,15 @@ function FbaWorkspaceSidebarInner() {
 
   return (
     <div className="relative flex h-full w-full flex-col overflow-hidden bg-white">
-      {/* Staff selector header */}
-      <div className={sidebarHeaderBandClass}>
-        <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)] divide-x divide-gray-400">
-          <div className="min-w-0">
-            <StaffSelector
-              role="all"
-              variant="boxy"
-              selectedStaffId={staffIdNum}
-              onSelect={(id) => {
-                const params = new URLSearchParams(searchParams.toString());
-                params.set('staffId', String(id));
-                const q = params.toString();
-                router.replace(q ? `/fba?${q}` : '/fba');
-              }}
-            />
-          </div>
-          <div className="relative min-w-0">
-            <ViewDropdown
-              options={FBA_VIEW_OPTIONS}
-              value={activeTab}
-              onChange={(nextView) => updateFbaParams({ tab: nextView as FbaTab })}
-              variant="boxy"
-              buttonClassName={sidebarHeaderControlClass}
-              optionClassName="text-[10px] font-black tracking-wider"
-            />
-          </div>
-        </div>
+      {/* View pills (2nd row) */}
+      <div className={`${sidebarHeaderBandClass} px-3`}>
+        <HorizontalButtonSlider
+          items={FBA_VIEW_ITEMS}
+          value={activeTab}
+          onChange={(next) => updateFbaParams({ tab: next as FbaTab })}
+          variant="nav"
+          aria-label="FBA view"
+        />
       </div>
 
       {/* Single scroll container */}

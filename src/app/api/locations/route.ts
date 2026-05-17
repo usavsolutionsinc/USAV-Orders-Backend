@@ -1,10 +1,23 @@
 import { NextRequest, NextResponse } from 'next/server';
+import pool from '@/lib/db';
 import {
   getActiveLocations,
   getRooms,
   createLocation,
   getLowStockBins,
 } from '@/lib/neon/location-queries';
+import { recordAudit, AUDIT_ACTION, AUDIT_ENTITY } from '@/lib/audit-logs';
+import type { AuthContext } from '@/lib/auth/withAuth';
+import { getCurrentUserBySid } from '@/lib/auth/current-user';
+import { SESSION_COOKIE_NAME } from '@/lib/auth/session';
+
+async function resolveCtx(req: NextRequest): Promise<AuthContext> {
+  const sid = req.cookies.get(SESSION_COOKIE_NAME)?.value ?? null;
+  const user = await getCurrentUserBySid(sid);
+  return user
+    ? { user, session: user.session, staffId: user.staffId, role: user.role, permissions: user.permissions }
+    : { user: null, session: null, staffId: null, role: null, permissions: new Set() };
+}
 
 /** GET /api/locations — list active locations. ?type=zones for zone-only, ?type=low-stock for alerts */
 export async function GET(req: NextRequest) {
@@ -76,6 +89,25 @@ export async function POST(req: NextRequest) {
       binType: binType?.trim() || null,
       capacity: capacity ?? null,
       parentId: parentId ?? null,
+    });
+
+    const ctx = await resolveCtx(req);
+    await recordAudit(pool, ctx, req, {
+      source: 'settings.locations',
+      action: AUDIT_ACTION.BIN_CREATE,
+      entityType: AUDIT_ENTITY.BIN,
+      entityId: (location as any)?.id ?? name.trim(),
+      after: {
+        name: name.trim(),
+        room: room?.trim() || null,
+        barcode: barcode?.trim() || null,
+        row_label: rowLabel?.trim() || null,
+        col_label: colLabel?.trim() || null,
+        bin_type: binType?.trim() || null,
+        capacity: capacity ?? null,
+      },
+      binCode: barcode?.trim() || null,
+      locationCode: name.trim(),
     });
 
     return NextResponse.json({ success: true, location });

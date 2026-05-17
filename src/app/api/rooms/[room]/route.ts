@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { renameRoom, softDeleteRoom } from '@/lib/neon/location-queries';
+import { renameRoom, setRoomZoneLetter, softDeleteRoom } from '@/lib/neon/location-queries';
 
 /**
  * PATCH /api/rooms/[room]
@@ -16,15 +16,50 @@ export async function PATCH(
   }
   try {
     const body = await req.json().catch(() => ({}));
-    const newName = String(body?.name ?? '').trim();
-    if (!newName) {
-      return NextResponse.json({ error: 'New name is required' }, { status: 400 });
+    const newName = typeof body?.name === 'string' ? body.name.trim() : '';
+    const zoneLetterRaw =
+      typeof body?.zoneLetter === 'string' ? body.zoneLetter : undefined;
+    // Treat empty string as "clear", undefined as "don't touch."
+    const zoneLetter =
+      zoneLetterRaw === undefined
+        ? undefined
+        : zoneLetterRaw.trim().toUpperCase().charAt(0) || null;
+
+    let renameResult = { updated: 0, barcodesRekeyed: 0 };
+    let didRename = false;
+    if (newName && newName !== oldName) {
+      renameResult = await renameRoom(oldName, newName);
+      if (renameResult.updated === 0 && renameResult.barcodesRekeyed === 0) {
+        return NextResponse.json(
+          { error: 'Room could not be renamed — the new name may already exist or the old room is gone.' },
+          { status: 409 },
+        );
+      }
+      didRename = true;
     }
-    if (newName === oldName) {
+
+    let letterResult: { ok: true } | { ok: false; reason: 'duplicate' | 'not_found' } | null = null;
+    if (zoneLetter !== undefined) {
+      const targetName = didRename ? newName : oldName;
+      letterResult = await setRoomZoneLetter(targetName, zoneLetter);
+      if (!letterResult.ok && letterResult.reason === 'duplicate') {
+        return NextResponse.json(
+          { error: 'Another room is already using that zone letter' },
+          { status: 409 },
+        );
+      }
+      if (!letterResult.ok && letterResult.reason === 'not_found' && !didRename) {
+        return NextResponse.json(
+          { error: 'Room not found' },
+          { status: 404 },
+        );
+      }
+    }
+
+    if (!didRename && letterResult === null) {
       return NextResponse.json({ success: true, updated: 0, barcodesRekeyed: 0 });
     }
-    const result = await renameRoom(oldName, newName);
-    return NextResponse.json({ success: true, ...result });
+    return NextResponse.json({ success: true, ...renameResult });
   } catch (err: any) {
     if (err?.code === '23505') {
       return NextResponse.json(

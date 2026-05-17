@@ -15,6 +15,8 @@ export interface Location {
   bin_type: string | null;
   capacity: number | null;
   parent_id: number | null;
+  /** A-Z, set on parent rows only. Drives the printed label and GS1 QR. */
+  zone_letter: string | null;
 }
 
 export interface BinContent {
@@ -53,7 +55,7 @@ export interface LocationTransfer {
 export async function getActiveLocations(): Promise<Location[]> {
   const result = await pool.query(
     `SELECT id, name, room, description, barcode, is_active, sort_order,
-            row_label, col_label, bin_type, capacity, parent_id
+            row_label, col_label, bin_type, capacity, parent_id, zone_letter
      FROM locations
      WHERE is_active = true
      ORDER BY room, sort_order, row_label, col_label, name`,
@@ -65,7 +67,7 @@ export async function getActiveLocations(): Promise<Location[]> {
 export async function getRooms(): Promise<Location[]> {
   const result = await pool.query(
     `SELECT id, name, room, description, barcode, is_active, sort_order,
-            row_label, col_label, bin_type, capacity, parent_id
+            row_label, col_label, bin_type, capacity, parent_id, zone_letter
      FROM locations
      WHERE is_active = true AND row_label IS NULL AND col_label IS NULL
      ORDER BY sort_order, name`,
@@ -77,13 +79,177 @@ export async function getRooms(): Promise<Location[]> {
 export async function getBinsByRoom(room: string): Promise<Location[]> {
   const result = await pool.query(
     `SELECT id, name, room, description, barcode, is_active, sort_order,
-            row_label, col_label, bin_type, capacity, parent_id
+            row_label, col_label, bin_type, capacity, parent_id, zone_letter
      FROM locations
      WHERE is_active = true AND room = $1 AND row_label IS NOT NULL
      ORDER BY row_label, col_label`,
     [room.trim()],
   );
   return result.rows;
+}
+
+/**
+ * Upsert the zone-letter for a room. The partial unique index enforces no
+ * two active rooms share a letter; we map the constraint violation to a
+ * structured error so the API can return 409.
+ */
+export async function setRoomZoneLetter(
+  roomName: string,
+  letter: string | null,
+): Promise<{ ok: true } | { ok: false; reason: 'duplicate' | 'not_found' }> {
+  const name = roomName.trim();
+  if (!name) return { ok: false, reason: 'not_found' };
+  const normalised = letter ? letter.trim().toUpperCase().charAt(0) : null;
+  if (normalised !== null && !/^[A-Z]$/.test(normalised)) {
+    return { ok: false, reason: 'duplicate' }; // bad letter; surface as 4xx
+  }
+  try {
+    const result = await pool.query(
+      `UPDATE locations
+         SET zone_letter = $2, updated_at = NOW()
+       WHERE row_label IS NULL
+         AND col_label IS NULL
+         AND (room = $1 OR name = $1)
+       RETURNING id`,
+      [name, normalised],
+    );
+    if ((result.rowCount ?? 0) === 0) return { ok: false, reason: 'not_found' };
+    return { ok: true };
+  } catch (err: any) {
+    if (err?.code === '23505') return { ok: false, reason: 'duplicate' };
+    throw err;
+  }
+}
+
+// ─── Bins overview ──────────────────────────────────────────────────────────
+
+export interface BinsOverviewRow {
+  id: number;
+  barcode: string | null;
+  name: string;
+  room: string | null;
+  row_label: string | null;
+  col_label: string | null;
+  capacity: number | null;
+  bin_type: string | null;
+  zone_letter: string | null;
+  /** Sum of qty across every SKU in this bin. */
+  total_qty: number;
+  /** Distinct SKUs in this bin. */
+  sku_count: number;
+  /** total_qty / capacity (0..1), null when capacity is null. */
+  fill_pct: number | null;
+  /** Newest last_counted across this bin's rows. */
+  last_counted: string | null;
+  is_empty: boolean;
+  is_stale: boolean;          // last_counted older than 90d (or never counted with stock)
+  has_low_stock: boolean;     // any bin_contents row with qty < min_qty
+  is_over_capacity: boolean;  // total_qty > capacity
+}
+
+export interface BinsOverviewCounts {
+  total: number;
+  empty: number;
+  stale: number;
+  low_stock: number;
+  over_capacity: number;
+}
+
+const STALE_DAYS = 90;
+
+/**
+ * One-shot read for the inventory bins tab. Joins locations with aggregated
+ * bin_contents so the client doesn't need to fan out N queries to enrich
+ * the list. Safe up to ~5k bins; switch to a materialized view if it grows.
+ */
+export async function getBinsOverview(filter?: {
+  room?: string | null;
+  q?: string | null;
+}): Promise<{ rows: BinsOverviewRow[]; counts: BinsOverviewCounts }> {
+  const room = filter?.room?.trim() || null;
+  const q = filter?.q?.trim() || null;
+
+  const params: unknown[] = [STALE_DAYS];
+  const where: string[] = [
+    "l.is_active = true",
+    "l.row_label IS NOT NULL",
+    "l.col_label IS NOT NULL",
+  ];
+
+  if (room) {
+    params.push(room);
+    where.push(`l.room = $${params.length}`);
+  }
+  if (q) {
+    params.push(`%${q}%`);
+    const idx = params.length;
+    // Match against the bin's own fields AND any product title / SKU stored
+    // in it. "Find me bins holding bose speakers" should just work — even
+    // though product_title lives on sku_stock, not on locations.
+    where.push(
+      `(
+        l.barcode ILIKE $${idx}
+        OR l.name ILIKE $${idx}
+        OR l.room ILIKE $${idx}
+        OR l.row_label ILIKE $${idx}
+        OR l.col_label ILIKE $${idx}
+        OR EXISTS (
+          SELECT 1
+          FROM bin_contents bc2
+          LEFT JOIN sku_stock ss ON ss.sku = bc2.sku
+          WHERE bc2.location_id = l.id
+            AND (bc2.sku ILIKE $${idx} OR ss.product_title ILIKE $${idx})
+        )
+      )`,
+    );
+  }
+
+  const sql = `
+    WITH agg AS (
+      SELECT
+        bc.location_id,
+        COALESCE(SUM(bc.qty), 0)::int        AS total_qty,
+        COUNT(DISTINCT bc.sku)::int          AS sku_count,
+        MAX(bc.last_counted)                 AS last_counted,
+        BOOL_OR(bc.qty < COALESCE(bc.min_qty, -1)) AS has_low_stock
+      FROM bin_contents bc
+      GROUP BY bc.location_id
+    )
+    SELECT
+      l.id, l.barcode, l.name, l.room, l.row_label, l.col_label,
+      l.capacity, l.bin_type, l.zone_letter,
+      COALESCE(agg.total_qty, 0)::int           AS total_qty,
+      COALESCE(agg.sku_count, 0)::int           AS sku_count,
+      CASE
+        WHEN l.capacity IS NULL OR l.capacity <= 0 THEN NULL::float
+        ELSE LEAST(COALESCE(agg.total_qty, 0)::float / l.capacity::float, 9.99)
+      END                                       AS fill_pct,
+      agg.last_counted                          AS last_counted,
+      (COALESCE(agg.total_qty, 0) = 0)          AS is_empty,
+      (
+        agg.last_counted IS NULL
+        OR agg.last_counted < NOW() - ($1 || ' days')::interval
+      )                                         AS is_stale,
+      COALESCE(agg.has_low_stock, false)        AS has_low_stock,
+      (l.capacity IS NOT NULL AND COALESCE(agg.total_qty, 0) > l.capacity) AS is_over_capacity
+    FROM locations l
+    LEFT JOIN agg ON agg.location_id = l.id
+    WHERE ${where.join(' AND ')}
+    ORDER BY l.room NULLS LAST, l.row_label, l.col_label, l.id
+  `;
+
+  const result = await pool.query(sql, params);
+  const rows = result.rows as BinsOverviewRow[];
+
+  const counts: BinsOverviewCounts = {
+    total: rows.length,
+    empty: rows.filter((r) => r.is_empty).length,
+    stale: rows.filter((r) => r.is_stale).length,
+    low_stock: rows.filter((r) => r.has_low_stock).length,
+    over_capacity: rows.filter((r) => r.is_over_capacity).length,
+  };
+
+  return { rows, counts };
 }
 
 /** Get distinct rows for a room (for cascading picker). */
@@ -127,6 +293,8 @@ export async function createLocation(data: {
   binType?: string | null;
   capacity?: number | null;
   parentId?: number | null;
+  /** Only meaningful on parent room rows (no row/col). */
+  zoneLetter?: string | null;
 }): Promise<Location> {
   // Auto-generate barcode if not provided and we have room+row+col
   let barcode = data.barcode?.trim() || null;
@@ -135,9 +303,13 @@ export async function createLocation(data: {
     barcode = `${roomCode}-${data.rowLabel.trim()}-${data.colLabel.trim().padStart(2, '0')}`;
   }
 
+  const zoneLetter = data.zoneLetter
+    ? data.zoneLetter.trim().toUpperCase().charAt(0)
+    : null;
+
   const result = await pool.query(
-    `INSERT INTO locations (name, room, description, barcode, sort_order, row_label, col_label, bin_type, capacity, parent_id)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+    `INSERT INTO locations (name, room, description, barcode, sort_order, row_label, col_label, bin_type, capacity, parent_id, zone_letter)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
      RETURNING *`,
     [
       data.name.trim(),
@@ -150,6 +322,7 @@ export async function createLocation(data: {
       data.binType?.trim() || null,
       data.capacity ?? null,
       data.parentId ?? null,
+      zoneLetter && /^[A-Z]$/.test(zoneLetter) ? zoneLetter : null,
     ],
   );
   return result.rows[0];
@@ -195,12 +368,28 @@ export async function renameRoom(
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
-    const update = await client.query(
+
+    // Parent room rows: force both name AND room to the new value. Match on
+    // either current `room` or current `name` so legacy rows where one drifted
+    // from the other still get fixed up.
+    const parentUpdate = await client.query(
       `UPDATE locations
-         SET room = $2,
-             name = CASE WHEN name = $1 THEN $2 ELSE name END,
-             updated_at = NOW()
-       WHERE room = $1 OR (row_label IS NULL AND col_label IS NULL AND name = $1)
+         SET room = $2, name = $2, updated_at = NOW()
+       WHERE row_label IS NULL
+         AND col_label IS NULL
+         AND (room = $1 OR name = $1)
+       RETURNING id`,
+      [from, to],
+    );
+
+    // Bin rows: only `room` gets rewritten. `name` on bins is a free-form
+    // label and should not be globally swapped by a room rename.
+    const binUpdate = await client.query(
+      `UPDATE locations
+         SET room = $2, updated_at = NOW()
+       WHERE row_label IS NOT NULL
+         AND col_label IS NOT NULL
+         AND room = $1
        RETURNING id, row_label, col_label, barcode`,
       [from, to],
     );
@@ -209,8 +398,8 @@ export async function renameRoom(
     let barcodesRekeyed = 0;
     const fromRoomCode = from.replace(/\s+/g, '').replace(/zone/i, 'Z');
     const toRoomCode = to.replace(/\s+/g, '').replace(/zone/i, 'Z');
-    for (const r of update.rows) {
-      if (!r.row_label || !r.col_label || !r.barcode) continue;
+    for (const r of binUpdate.rows) {
+      if (!r.barcode) continue;
       if (!r.barcode.startsWith(`${fromRoomCode}-`)) continue;
       const rest = r.barcode.slice(fromRoomCode.length + 1);
       const next = `${toRoomCode}-${rest}`;
@@ -221,8 +410,28 @@ export async function renameRoom(
       barcodesRekeyed += 1;
     }
 
+    const updated = (parentUpdate.rowCount ?? 0) + (binUpdate.rowCount ?? 0);
+
+    // If neither parent nor any bin matched, the room exists only in client
+    // state (localStorage zoneMap from the legacy label printer). Materialise
+    // the parent row with the new name so subsequent reads see it.
+    let parentCreated = 0;
+    if (updated === 0) {
+      const insert = await client.query(
+        `INSERT INTO locations (name, room, is_active, sort_order)
+         VALUES ($1, $1, true, COALESCE(
+           (SELECT MAX(sort_order) + 1 FROM locations WHERE row_label IS NULL AND col_label IS NULL),
+           0
+         ))
+         ON CONFLICT DO NOTHING
+         RETURNING id`,
+        [to],
+      );
+      parentCreated = insert.rowCount ?? 0;
+    }
+
     await client.query('COMMIT');
-    return { updated: update.rowCount ?? 0, barcodesRekeyed };
+    return { updated: updated + parentCreated, barcodesRekeyed };
   } catch (err) {
     await client.query('ROLLBACK');
     throw err;

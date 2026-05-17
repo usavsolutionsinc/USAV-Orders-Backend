@@ -9,6 +9,7 @@ let electronProcess;
 const nextProcess = spawn(npmCmd, ['run', 'dev'], {
   stdio: 'inherit',
   env: process.env,
+  shell: isWindows,
 });
 
 function shutdown(code = 0) {
@@ -44,6 +45,7 @@ waitOn({
       ...process.env,
       ELECTRON_START_URL: 'http://127.0.0.1:3000',
     },
+    shell: isWindows,
   });
 
   electronProcess.on('exit', (code) => {

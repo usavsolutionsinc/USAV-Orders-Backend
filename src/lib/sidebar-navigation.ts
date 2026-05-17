@@ -8,6 +8,7 @@ import {
   Monitor,
   Package,
   PackageCheck,
+  Settings,
   ShieldCheck,
   ShoppingCart,
   Tool,
@@ -27,13 +28,16 @@ export type SidebarRouteKey =
   | 'work-orders'
   | 'replenish'
   | 'sku-stock'
+  | 'inventory'
   | 'tech'
   | 'packer'
   | 'support'
   | 'previous-quarters'
   | 'admin'
+  | 'audit-log'
   | 'manuals'
   | 'ai'
+  | 'settings'
   | 'unknown';
 
 export type SidebarIconComponent = (props: { className?: string }) => JSX.Element;
@@ -44,6 +48,12 @@ export interface SidebarNavItem {
   href: string;
   icon: SidebarIconComponent;
   kind?: 'main' | 'station' | 'bottom';
+  /**
+   * Permission required to see this item. If omitted, the item is visible
+   * to anyone signed in (and to unauthenticated callers during rollout —
+   * see filtering rules in getSidebarNavItems).
+   */
+  requires?: string;
 }
 
 const MOBILE_RESTRICTED_SIDEBAR_IDS = new Set<SidebarRouteKey>([
@@ -53,33 +63,55 @@ const MOBILE_RESTRICTED_SIDEBAR_IDS = new Set<SidebarRouteKey>([
   'support',
   'previous-quarters',
   'admin',
+  'audit-log',
 ]);
 
 export const APP_SIDEBAR_NAV: SidebarNavItem[] = [
-  { id: 'operations', label: 'Operations', href: '/operations', icon: Monitor, kind: 'main' },
-  { id: 'dashboard', label: 'Dashboard', href: '/dashboard', icon: LayoutDashboard, kind: 'main' },
-  { id: 'fba', label: 'FBA', href: '/fba', icon: Package, kind: 'main' },
-  { id: 'walk-in', label: 'Walk-In', href: '/walk-in', icon: ShoppingCart, kind: 'main' },
-  { id: 'work-orders', label: 'Work Orders', href: '/work-orders', icon: PackageCheck, kind: 'main' },
-  { id: 'replenish', label: 'Replenish', href: '/replenish', icon: RefreshCw, kind: 'main' },
-  { id: 'receiving', label: 'Receiving', href: '/receiving', icon: ClipboardList, kind: 'station' },
-  { id: 'tech', label: 'Technicians', href: '/tech?staffId=1', icon: Wrench, kind: 'station' },
-  { id: 'packer', label: 'Packers', href: '/packer?staffId=4', icon: User, kind: 'station' },
-  { id: 'sku-stock', label: 'Sku Stock', href: '/sku-stock', icon: Box, kind: 'station' },
-  { id: 'ai', label: 'AI Chat', href: '/ai', icon: Zap, kind: 'bottom' },
-  { id: 'manuals', label: 'Products', href: '/manuals', icon: FileText, kind: 'bottom' },
-  { id: 'support', label: 'Support', href: '/support', icon: AlertCircle, kind: 'bottom' },
-  { id: 'previous-quarters', label: 'Quarters', href: '/previous-quarters', icon: Calendar, kind: 'bottom' },
-  { id: 'admin', label: 'Admin', href: '/admin', icon: ShieldCheck, kind: 'bottom' },
+  { id: 'operations',        label: 'Operations',  href: '/operations',         icon: Monitor,         kind: 'main',    requires: 'operations.view' },
+  { id: 'dashboard',         label: 'Dashboard',   href: '/dashboard',          icon: LayoutDashboard, kind: 'main',    requires: 'dashboard.view' },
+  { id: 'fba',               label: 'FBA',         href: '/fba',                icon: Package,         kind: 'main',    requires: 'fba.view' },
+  { id: 'walk-in',           label: 'Walk-In',     href: '/walk-in',            icon: ShoppingCart,    kind: 'main',    requires: 'walk_in.view' },
+  { id: 'work-orders',       label: 'Work Orders', href: '/work-orders',        icon: PackageCheck,    kind: 'main',    requires: 'work_orders.view' },
+  { id: 'replenish',         label: 'Replenish',   href: '/replenish',          icon: RefreshCw,       kind: 'main',    requires: 'replenish.view' },
+  { id: 'receiving',         label: 'Receiving',   href: '/receiving',          icon: ClipboardList,   kind: 'station', requires: 'receiving.view' },
+  { id: 'tech',              label: 'Technicians', href: '/tech',               icon: Wrench,          kind: 'station', requires: 'tech.view' },
+  { id: 'packer',            label: 'Packers',     href: '/packer',             icon: User,            kind: 'station', requires: 'packing.view' },
+  { id: 'sku-stock',         label: 'Sku Stock',   href: '/sku-stock',          icon: Box,             kind: 'station', requires: 'sku_stock.view' },
+  { id: 'inventory',         label: 'Inventory',   href: '/inventory',          icon: Package,         kind: 'station', requires: 'sku_stock.view' },
+  { id: 'ai',                label: 'AI Chat',     href: '/ai',                 icon: Zap,             kind: 'bottom' },
+  { id: 'manuals',           label: 'Products',    href: '/manuals',            icon: FileText,        kind: 'bottom' },
+  { id: 'support',           label: 'Support',     href: '/support',            icon: AlertCircle,     kind: 'bottom' },
+  { id: 'previous-quarters', label: 'Quarters',    href: '/previous-quarters',  icon: Calendar,        kind: 'bottom', requires: 'reports.view' },
+  { id: 'audit-log',         label: 'Audit Log',   href: '/audit-log/receiving', icon: FileText,       kind: 'bottom', requires: 'admin.view_logs' },
+  { id: 'admin',             label: 'Admin',       href: '/admin',              icon: ShieldCheck,     kind: 'bottom', requires: 'admin.view' },
+  { id: 'settings',          label: 'Settings',    href: '/settings',           icon: Settings,        kind: 'bottom' },
 ];
 
 export function isSidebarRouteMobileRestricted(routeKey: SidebarRouteKey): boolean {
   return MOBILE_RESTRICTED_SIDEBAR_IDS.has(routeKey);
 }
 
-export function getSidebarNavItems({ mobileRestricted = false }: { mobileRestricted?: boolean } = {}): SidebarNavItem[] {
-  if (!mobileRestricted) return APP_SIDEBAR_NAV;
-  return APP_SIDEBAR_NAV.filter((item) => !isSidebarRouteMobileRestricted(item.id as SidebarRouteKey));
+export interface GetSidebarNavItemsOpts {
+  mobileRestricted?: boolean;
+  /**
+   * Set of permission strings the current user holds. When provided, items
+   * whose `requires` is not in the set are filtered out. When undefined
+   * (unauthenticated, or pre-sign-in shadow mode), no permission filtering
+   * is applied — preserves legacy behavior for the rollout window.
+   */
+  permissions?: ReadonlySet<string>;
+}
+
+export function getSidebarNavItems(opts: GetSidebarNavItemsOpts = {}): SidebarNavItem[] {
+  const { mobileRestricted = false, permissions } = opts;
+  let items: SidebarNavItem[] = APP_SIDEBAR_NAV;
+  if (mobileRestricted) {
+    items = items.filter((item) => !isSidebarRouteMobileRestricted(item.id as SidebarRouteKey));
+  }
+  if (permissions) {
+    items = items.filter((item) => !item.requires || permissions.has(item.requires));
+  }
+  return items;
 }
 
 export function getSidebarRouteKey(pathname: string | null): SidebarRouteKey {
@@ -93,13 +125,16 @@ export function getSidebarRouteKey(pathname: string | null): SidebarRouteKey {
   if (pathname === '/work-orders' || pathname.startsWith('/work-orders/')) return 'work-orders';
   if (pathname === '/replenish' || pathname.startsWith('/replenish/')) return 'replenish';
   if (pathname === '/sku-stock' || pathname.startsWith('/sku-stock/')) return 'sku-stock';
+  if (pathname === '/inventory' || pathname.startsWith('/inventory/')) return 'inventory';
   if (pathname === '/support' || pathname.startsWith('/support/')) return 'support';
   if (pathname === '/previous-quarters' || pathname.startsWith('/previous-quarters/')) return 'previous-quarters';
   if (pathname === '/admin' || pathname.startsWith('/admin/')) return 'admin';
+  if (pathname === '/audit-log' || pathname.startsWith('/audit-log/')) return 'audit-log';
   if (pathname === '/tech' || pathname.startsWith('/tech/')) return 'tech';
   if (pathname === '/packer' || pathname.startsWith('/packer/')) return 'packer';
   if (pathname === '/manuals' || pathname.startsWith('/manuals/')) return 'manuals';
   if (pathname === '/ai' || pathname.startsWith('/ai/')) return 'ai';
+  if (pathname === '/settings' || pathname.startsWith('/settings/')) return 'settings';
   return 'unknown';
 }
 
@@ -119,4 +154,43 @@ export function isSidebarNavActive(pathname: string | null, href: string): boole
   }
 
   return pathname === href || pathname.startsWith(`${href}/`);
+}
+
+/**
+ * Route → required permission map. Used by middleware to redirect users to
+ * `/not-authorized` if they navigate (via URL) to an area they can't access,
+ * and by per-page guards as a single source of truth.
+ *
+ * Entries are checked in order; the first prefix match wins. Add new entries
+ * with the longest path first (e.g. `/admin/staff` before `/admin`).
+ */
+export const ROUTE_PERMISSIONS: ReadonlyArray<{ prefix: string; permission: string }> = [
+  { prefix: '/audit-log',          permission: 'admin.view_logs' },
+  { prefix: '/admin',              permission: 'admin.view' },
+  { prefix: '/operations',         permission: 'operations.view' },
+  { prefix: '/dashboard',          permission: 'dashboard.view' },
+  { prefix: '/fba',                permission: 'fba.view' },
+  { prefix: '/walk-in',            permission: 'walk_in.view' },
+  { prefix: '/repair',             permission: 'repair.view' },
+  { prefix: '/work-orders',        permission: 'work_orders.view' },
+  { prefix: '/replenish',          permission: 'replenish.view' },
+  { prefix: '/receiving',          permission: 'receiving.view' },
+  { prefix: '/tech',               permission: 'tech.view' },
+  { prefix: '/packer',             permission: 'packing.view' },
+  { prefix: '/packers',            permission: 'packing.view' },
+  { prefix: '/sku-stock',          permission: 'sku_stock.view' },
+  { prefix: '/inventory',          permission: 'sku_stock.view' },
+  { prefix: '/previous-quarters',  permission: 'reports.view' },
+  // /settings is intentionally NOT gated — every signed-in user can manage
+  // their own workstation/appearance settings; admin tabs gate themselves.
+  // /manuals, /support, /ai are always visible.
+];
+
+export function permissionForPath(pathname: string): string | null {
+  for (const entry of ROUTE_PERMISSIONS) {
+    if (pathname === entry.prefix || pathname.startsWith(entry.prefix + '/')) {
+      return entry.permission;
+    }
+  }
+  return null;
 }

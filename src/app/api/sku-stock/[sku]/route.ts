@@ -14,6 +14,24 @@ import {
 } from '@/lib/auth/permissions';
 import { SkuStockPatchBody } from '@/lib/schemas/locations';
 import { parseBody } from '@/lib/schemas/parse';
+import { recordAudit, AUDIT_ACTION, AUDIT_ENTITY } from '@/lib/audit-logs';
+import type { AuthContext } from '@/lib/auth/withAuth';
+import { getCurrentUserBySid } from '@/lib/auth/current-user';
+import { SESSION_COOKIE_NAME } from '@/lib/auth/session';
+
+/**
+ * Build a lightweight AuthContext from the session cookie without going
+ * through withAuth() — this route uses Next's typed second arg `{ params }`
+ * for the dynamic `[sku]` segment, which conflicts with withAuth's wrapper
+ * signature. We still want server-trusted actor + ip/ua on audit rows.
+ */
+async function resolveCtx(req: NextRequest): Promise<AuthContext> {
+  const sid = req.cookies.get(SESSION_COOKIE_NAME)?.value ?? null;
+  const user = await getCurrentUserBySid(sid);
+  return user
+    ? { user, session: user.session, staffId: user.staffId, role: user.role, permissions: user.permissions }
+    : { user: null, session: null, staffId: null, role: null, permissions: new Set() };
+}
 
 const ROUTE_SKU_STOCK_PATCH = 'sku-stock.sku.patch';
 
@@ -263,7 +281,17 @@ export async function PATCH(
       clearOverride?: boolean;
     };
 
+    const ctx = await resolveCtx(request);
+    const effectiveStaffId = ctx.staffId ?? (staffId && staffId > 0 ? staffId : null);
+
     if (action === 'adjust' && typeof delta === 'number') {
+      // Capture before-state for the audit diff.
+      const before = await pool.query(
+        `SELECT stock FROM sku_stock WHERE sku = $1`,
+        [skuValue],
+      );
+      const beforeQty = Number((before.rows as Array<{ stock: number | null }>)[0]?.stock ?? 0);
+
       // Increment/decrement stock
       const result = await pool.query(
         `INSERT INTO sku_stock (sku, stock)
@@ -281,6 +309,18 @@ export async function PATCH(
           [skuValue, delta, reason || 'ADJUSTMENT', staffId || null],
         )
         .catch(() => {});
+
+      await recordAudit(pool, ctx, request, {
+        source: 'sku-stock-page',
+        action: AUDIT_ACTION.SKU_STOCK_ADJUST,
+        entityType: AUDIT_ENTITY.SKU_STOCK,
+        entityId: skuValue,
+        before: { stock: beforeQty },
+        after: { stock: Number(result.rows[0]?.stock ?? beforeQty + delta) },
+        reasonCode: reason || 'ADJUSTMENT',
+        actorStaffIdOverride: effectiveStaffId,
+        extra: { delta },
+      });
 
       return NextResponse.json({ success: true, stock: result.rows[0] });
     }
@@ -313,6 +353,18 @@ export async function PATCH(
           .catch(() => {});
       }
 
+      await recordAudit(pool, ctx, request, {
+        source: 'sku-stock-page',
+        action: AUDIT_ACTION.SKU_STOCK_ADJUST,
+        entityType: AUDIT_ENTITY.SKU_STOCK,
+        entityId: skuValue,
+        before: { stock: currentQty },
+        after: { stock: absoluteQty },
+        reasonCode: reason || 'SET',
+        actorStaffIdOverride: effectiveStaffId,
+        extra: { delta: ledgerDelta, mode: 'set' },
+      });
+
       return NextResponse.json({ success: true, stock: result.rows[0] });
     }
 
@@ -324,10 +376,11 @@ export async function PATCH(
       );
       const fromLocation = current.rows[0]?.location || null;
       const entityId = current.rows[0]?.id;
+      const toLocation = location.trim();
 
       await pool.query(
         `UPDATE sku_stock SET location = $1 WHERE sku = $2`,
-        [location.trim(), skuValue],
+        [toLocation, skuValue],
       );
 
       // Log the transfer
@@ -337,12 +390,23 @@ export async function PATCH(
           entityId,
           sku: skuValue,
           fromLocation,
-          toLocation: location.trim(),
+          toLocation,
           staffId: staffId || null,
         }).catch(() => {});
       }
 
-      return NextResponse.json({ success: true, location: location.trim() });
+      await recordAudit(pool, ctx, request, {
+        source: 'sku-stock-page',
+        action: AUDIT_ACTION.SKU_STOCK_LOCATION_SET,
+        entityType: AUDIT_ENTITY.SKU_STOCK,
+        entityId: skuValue,
+        before: { location: fromLocation },
+        after: { location: toLocation },
+        locationCode: toLocation,
+        actorStaffIdOverride: effectiveStaffId,
+      });
+
+      return NextResponse.json({ success: true, location: toLocation });
     }
 
     if (action === 'rename') {
@@ -404,6 +468,16 @@ export async function PATCH(
       } catch (err) {
         console.warn('rename: audit insert failed (non-fatal)', err);
       }
+
+      await recordAudit(pool, ctx, request, {
+        source: 'sku-stock-page',
+        action: 'sku.rename',
+        entityType: AUDIT_ENTITY.SKU_STOCK,
+        entityId: skuValue,
+        before: { display_name_override: prior?.display_name_override ?? null },
+        after: { display_name_override: nextTitle },
+        actorStaffIdOverride: effectiveStaffId,
+      });
 
       return respond({
         success: true,

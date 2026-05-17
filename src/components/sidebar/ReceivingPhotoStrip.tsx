@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback } from 'react';
+import { memo, useCallback, useMemo } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useAblyChannel } from '@/hooks/useAblyChannel';
 import { PhotoGallery } from '@/components/shipped/PhotoGallery';
@@ -27,7 +27,10 @@ interface ReceivingPhotoStripProps {
  * Receiving carton photos — same launcher + full-screen viewer as shipped
  * packing photos ({@link PhotoGallery}).
  */
-export function ReceivingPhotoStrip({ receivingId, staffId }: ReceivingPhotoStripProps) {
+export const ReceivingPhotoStrip = memo(function ReceivingPhotoStrip({
+  receivingId,
+  staffId,
+}: ReceivingPhotoStripProps) {
   const queryClient = useQueryClient();
   const queryKey = ['receiving-photos', receivingId];
 
@@ -56,7 +59,10 @@ export function ReceivingPhotoStrip({ receivingId, staffId }: ReceivingPhotoStri
   );
   useAblyChannel(phoneChannel, 'receiving_photo_uploaded', handlePhoneMessage, staffId > 0);
 
-  const urls = (data?.photos ?? []).map((p) => p.photoUrl).filter((u) => u && u.trim());
+  const urls = useMemo(
+    () => (data?.photos ?? []).map((p) => p.photoUrl).filter((u): u is string => !!u?.trim()),
+    [data],
+  );
 
   if (isLoading && urls.length === 0) {
     return (
@@ -80,4 +86,4 @@ export function ReceivingPhotoStrip({ receivingId, staffId }: ReceivingPhotoStri
       launcherLayout="toolbar"
     />
   );
-}
+});

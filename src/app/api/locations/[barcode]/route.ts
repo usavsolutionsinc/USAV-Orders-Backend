@@ -21,8 +21,20 @@ import {
 } from '@/lib/auth/permissions';
 import { LocationsPatchBody } from '@/lib/schemas/locations';
 import { parseBody } from '@/lib/schemas/parse';
+import { recordAudit, AUDIT_ACTION, AUDIT_ENTITY } from '@/lib/audit-logs';
+import type { AuthContext } from '@/lib/auth/withAuth';
+import { getCurrentUserBySid } from '@/lib/auth/current-user';
+import { SESSION_COOKIE_NAME } from '@/lib/auth/session';
 
 const ROUTE_LOCATION_PATCH = 'locations.barcode.patch';
+
+async function resolveCtx(req: NextRequest): Promise<AuthContext> {
+  const sid = req.cookies.get(SESSION_COOKIE_NAME)?.value ?? null;
+  const user = await getCurrentUserBySid(sid);
+  return user
+    ? { user, session: user.session, staffId: user.staffId, role: user.role, permissions: user.permissions }
+    : { user: null, session: null, staffId: null, role: null, permissions: new Set() };
+}
 
 /**
  * GET /api/locations/[barcode]
@@ -196,15 +208,37 @@ export async function PATCH(
       }
     }
 
+    const ctx = await resolveCtx(request);
+    const effectiveStaffId = ctx.staffId ?? (staffId && staffId > 0 ? staffId : null);
+    const binCode = loc.barcode ?? code;
+    const binLabel = loc.name ?? null;
+    const trimmedSku = sku.trim();
+
     if (action === 'take' && typeof qty === 'number' && qty > 0) {
       const result = await adjustBinQty({
         locationId: loc.id,
-        sku: sku.trim(),
+        sku: trimmedSku,
         delta: -qty,
         staffId,
         reason: reason || 'TAKEN',
         reasonCodeId: reasonCodeId ?? null,
         notes: notes ?? null,
+      });
+      await recordAudit(pool, ctx, request, {
+        source: 'mobile-scanner',
+        action: AUDIT_ACTION.SKU_STOCK_ADJUST,
+        entityType: AUDIT_ENTITY.BIN,
+        entityId: loc.id,
+        before: { qty: Number(result.binContent.qty) + qty },
+        after: { qty: Number(result.binContent.qty) },
+        binCode,
+        locationCode: binLabel,
+        scanRef: code,
+        method: 'scan',
+        reasonCode: reason || 'TAKEN',
+        note: notes ?? null,
+        actorStaffIdOverride: effectiveStaffId,
+        extra: { sku: trimmedSku, delta: -qty, total_stock: result.newStockQty, ledger_id: result.ledgerId },
       });
       return respond({
         success: true,
@@ -218,12 +252,28 @@ export async function PATCH(
     if (action === 'put' && typeof qty === 'number' && qty > 0) {
       const result = await adjustBinQty({
         locationId: loc.id,
-        sku: sku.trim(),
+        sku: trimmedSku,
         delta: qty,
         staffId,
         reason: reason || 'RECEIVED',
         reasonCodeId: reasonCodeId ?? null,
         notes: notes ?? null,
+      });
+      await recordAudit(pool, ctx, request, {
+        source: 'mobile-scanner',
+        action: AUDIT_ACTION.SKU_STOCK_ADJUST,
+        entityType: AUDIT_ENTITY.BIN,
+        entityId: loc.id,
+        before: { qty: Number(result.binContent.qty) - qty },
+        after: { qty: Number(result.binContent.qty) },
+        binCode,
+        locationCode: binLabel,
+        scanRef: code,
+        method: 'scan',
+        reasonCode: reason || 'RECEIVED',
+        note: notes ?? null,
+        actorStaffIdOverride: effectiveStaffId,
+        extra: { sku: trimmedSku, delta: qty, total_stock: result.newStockQty, ledger_id: result.ledgerId },
       });
       return respond({
         success: true,
@@ -266,16 +316,43 @@ export async function PATCH(
       }
       const result = await upsertBinContent({
         locationId: loc.id,
-        sku: sku.trim(),
+        sku: trimmedSku,
         qty,
         minQty: minQty ?? null,
         maxQty: maxQty ?? null,
+      });
+      await recordAudit(pool, ctx, request, {
+        source: 'mobile-scanner',
+        action: AUDIT_ACTION.SKU_STOCK_ADJUST,
+        entityType: AUDIT_ENTITY.BIN,
+        entityId: loc.id,
+        after: { qty, min_qty: minQty ?? null, max_qty: maxQty ?? null },
+        binCode,
+        locationCode: binLabel,
+        scanRef: code,
+        method: 'scan',
+        reasonCode: reason || 'SET',
+        note: notes ?? null,
+        actorStaffIdOverride: effectiveStaffId,
+        extra: { sku: trimmedSku, mode: 'set' },
       });
       return respond({ success: true, binContent: result as unknown as Record<string, unknown> });
     }
 
     if (action === 'count') {
-      await markBinCounted(loc.id, sku.trim());
+      await markBinCounted(loc.id, trimmedSku);
+      await recordAudit(pool, ctx, request, {
+        source: 'mobile-scanner',
+        action: 'bin.count',
+        entityType: AUDIT_ENTITY.BIN,
+        entityId: loc.id,
+        binCode,
+        locationCode: binLabel,
+        scanRef: code,
+        method: 'scan',
+        actorStaffIdOverride: effectiveStaffId,
+        extra: { sku: trimmedSku },
+      });
       return respond({ success: true });
     }
 

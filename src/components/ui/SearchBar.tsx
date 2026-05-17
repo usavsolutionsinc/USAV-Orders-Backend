@@ -23,6 +23,10 @@ export interface SearchBarProps {
   /** Parent draws one bottom rule; field omits its own underline. */
   hideUnderline?: boolean;
   hideClear?: boolean;
+  /** Passed through to {@link SearchField}; pairs with {@link rightElement} for paste-after-remove rows. */
+  customTrailingSlot?: React.ReactNode;
+  /** Trailing slot shows clipboard paste only (no clear X when filled). */
+  pasteOnlyTrailing?: boolean;
 }
 
 function toSearchFieldTone(variant: SearchBarProps['variant']): SearchFieldTone {
@@ -64,6 +68,8 @@ export function SearchBar({
   debounceMs,
   hideUnderline = false,
   hideClear = false,
+  customTrailingSlot,
+  pasteOnlyTrailing,
 }: SearchBarProps) {
   const isMobile = useIsMobile();
   const internalRef = useRef<HTMLInputElement>(null);
@@ -100,6 +106,8 @@ export function SearchBar({
         debounceMs={debounceMs}
         hideUnderline={hideUnderline}
         hideClear={hideClear}
+        customTrailingSlot={customTrailingSlot}
+        pasteOnlyTrailing={pasteOnlyTrailing}
       />
     </div>
   );

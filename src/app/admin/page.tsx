@@ -1,4 +1,6 @@
 import { StaffManagementTab } from '@/components/admin/StaffManagementTab';
+import { StaffAccessMatrixTab } from '@/components/admin/StaffAccessMatrixTab';
+import { RolesAdminTab } from '@/components/admin/RolesAdminTab';
 import { ConnectionsManagementTab } from '@/components/admin/ConnectionsManagementTab';
 import { GoalsAnalyticsTab } from '@/components/admin/GoalsAnalyticsTab';
 import { FBAManagementTab } from '@/components/admin/FBAManagementTab';
@@ -62,6 +64,14 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
         ) : activeTab === 'architecture' ? (
           <div className="h-full min-h-0 w-full">
             <ArchitectureTab />
+          </div>
+        ) : activeTab === 'access' ? (
+          <div className="h-full min-h-0 w-full">
+            <StaffAccessMatrixTab />
+          </div>
+        ) : activeTab === 'roles' ? (
+          <div className="h-full min-h-0 w-full">
+            <RolesAdminTab />
           </div>
         ) : activeTab === 'connections' || activeTab === 'goals' || activeTab === 'staff' || activeTab === 'fba' ? (
           <div className="h-full min-h-0 w-full">

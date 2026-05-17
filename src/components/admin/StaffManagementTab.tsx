@@ -11,6 +11,7 @@ import { getStaffChannelName } from '@/lib/realtime/channels';
 import { getCurrentPSTDateKey } from '@/utils/date';
 import { sectionLabel, tableHeader, dataValue } from '@/design-system/tokens/typography/presets';
 import { mainStickyHeaderClass, mainStickyHeaderShellRowClass } from '@/components/layout/header-shell';
+import { AdminEmptyDetail } from './shared';
 import {
   STAFF_SCHEDULE_TIMEZONE,
   type StaffDayOfWeek,
@@ -318,9 +319,20 @@ export function StaffManagementTab() {
 
   const searchTerm = (searchParams.get('search') || '').trim().toLowerCase();
   const staffView = searchParams.get('staffView') || 'all';
+  const selectedStaffId = (() => {
+    const raw = searchParams.get('staffId');
+    if (!raw) return null;
+    const n = Number(raw);
+    return Number.isFinite(n) && n > 0 ? n : null;
+  })();
 
   const filteredStaff = useMemo(() => {
     return staff.filter((member) => {
+      // When a staffer is selected from the sidebar, narrow the entire main
+      // pane to just that one. Search + view filters still apply (so deselect
+      // if they no longer match).
+      if (selectedStaffId != null && member.id !== selectedStaffId) return false;
+
       const matchesSearch =
         !searchTerm ||
         member.name.toLowerCase().includes(searchTerm) ||
@@ -339,7 +351,7 @@ export function StaffManagementTab() {
 
       return matchesSearch && matchesView;
     });
-  }, [searchTerm, staff, staffView]);
+  }, [searchTerm, staff, staffView, selectedStaffId]);
 
   const scheduleMap = useMemo<ScheduleMap>(() => {
     const map: ScheduleMap = {};
@@ -643,6 +655,18 @@ export function StaffManagementTab() {
     });
     bulkScheduleMutation.mutate({ updates });
   };
+
+  // When no staffer is selected from the sidebar and the add-staff form
+  // isn't open, the main pane is in the canonical detail-on-right empty
+  // state. Keeps the section consistent with Access/Roles/Goals.
+  if (selectedStaffId == null && !isAddingStaff) {
+    return (
+      <AdminEmptyDetail
+        title="Pick a staffer"
+        hint="Select a staff member on the left to view and edit their info, schedule, and availability rules."
+      />
+    );
+  }
 
   return (
     <section className="flex h-full min-h-0 w-full flex-col bg-[linear-gradient(180deg,#f8fafc_0%,#eef2f7_100%)]">

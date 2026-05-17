@@ -9,6 +9,11 @@ import { getDaysLateNullable, getDaysLateTone } from '@/utils/date';
 import { mainStickyHeaderClass, mainStickyHeaderRowClass } from '@/components/layout/header-shell';
 import { dataValue } from '@/design-system/tokens/typography/presets';
 import { framerTransition, framerPresence } from '@/design-system/foundations/motion-framer';
+import { useUIModeOptional } from '@/design-system/providers/UIModeProvider';
+import {
+  dashboardOrderRowChipsClass,
+  dashboardOrderRowShellClass,
+} from '@/lib/dashboard-order-row-layout';
 import { useStaffNameMap } from '@/hooks/useStaffNameMap';
 import { useTodayStaffAvailability } from '@/hooks/useTodayStaffAvailability';
 import { ShippedDetailsPanel } from '@/components/shipped/ShippedDetailsPanel';
@@ -81,6 +86,7 @@ export function WorkOrdersDashboard({ basePath = '/work-orders' }: { basePath?: 
   const [savingRowId, setSavingRowId] = useState<string | null>(null);
   const [assigningState, setAssigningState] = useState<AssigningState | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const { isMobile } = useUIModeOptional();
   const { getStaffName } = useStaffNameMap();
   const {
     all: staff,
@@ -405,6 +411,7 @@ export function WorkOrdersDashboard({ basePath = '/work-orders' }: { basePath?: 
                 <WorkOrderTableRow
                   key={row.id}
                   row={row}
+                  isMobile={isMobile}
                   isSelected={selectedId === row.id}
                   isSaving={savingRowId === row.id}
                   getStaffName={getStaffName}
@@ -515,6 +522,7 @@ function buildWorkOrderDashboardRecord(row: WorkOrderRow): ShippedOrder & { out_
 
 interface WorkOrderTableRowProps {
   row: WorkOrderRow;
+  isMobile: boolean;
   isSelected: boolean;
   isSaving: boolean;
   getStaffName: (id: number | null | undefined) => string;
@@ -524,6 +532,7 @@ interface WorkOrderTableRowProps {
 
 function WorkOrderTableRow({
   row,
+  isMobile,
   isSelected,
   isSaving,
   getStaffName,
@@ -564,7 +573,7 @@ function WorkOrderTableRow({
         if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onClick(row); }
       }}
       aria-pressed={isSelected}
-      className={`grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2 px-3 py-1.5 transition-all border-b border-gray-300 cursor-pointer hover:bg-blue-50/50 ${
+      className={`${dashboardOrderRowShellClass(isMobile)} px-3 py-1.5 transition-all border-b border-gray-300 cursor-pointer hover:bg-blue-50/50 ${
         isSelected ? 'bg-blue-50/80' : useAlternateStripe ? 'bg-white' : 'bg-gray-50/10'
       } ${isSaving ? 'opacity-50 pointer-events-none' : ''}`}
     >
@@ -601,7 +610,7 @@ function WorkOrderTableRow({
       </div>
 
       {/* Right: copy chips */}
-      <div className="flex items-center shrink-0 gap-1.5">
+      <div className={dashboardOrderRowChipsClass(isMobile)}>
         <WorkOrderInfoChips row={row} />
       </div>
     </motion.div>

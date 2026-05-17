@@ -1,9 +1,16 @@
 'use client';
 
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
-import { SidebarTabSwitchChrome, TabSwitch } from '@/components/ui/TabSwitch';
+import { sidebarHeaderBandClass } from '@/components/layout/header-shell';
+import { HorizontalButtonSlider, type HorizontalSliderItem } from '@/components/ui/HorizontalButtonSlider';
+import { DollarSign, Tool } from '@/components/Icons';
 import { RepairSidebarPanel } from './RepairSidebarPanel';
 import { SalesSidebarPanel } from './SalesSidebarPanel';
+
+const WALK_IN_MODE_ITEMS: HorizontalSliderItem[] = [
+  { id: 'repairs', label: 'Repairs', icon: Tool },
+  { id: 'sales',   label: 'Sales',   icon: DollarSign },
+];
 
 interface WalkInSidebarPanelProps {
   embedded?: boolean;
@@ -35,19 +42,15 @@ export function WalkInSidebarPanel({ embedded = false, hideSectionHeader = false
 
   const content = (
     <div className="flex h-full flex-col overflow-hidden bg-white">
-      {/* Top-level mode switcher */}
-      <div className="shrink-0">
-        <SidebarTabSwitchChrome>
-          <TabSwitch
-            tabs={[
-              { id: 'repairs', label: 'Repairs', color: 'orange' },
-              { id: 'sales', label: 'Sales', color: 'green' },
-            ]}
-            activeTab={mode}
-            highContrast
-            onTabChange={handleModeChange}
-          />
-        </SidebarTabSwitchChrome>
+      {/* Mode pills (2nd row) */}
+      <div className={`${sidebarHeaderBandClass} px-3 shrink-0`}>
+        <HorizontalButtonSlider
+          items={WALK_IN_MODE_ITEMS}
+          value={mode}
+          onChange={handleModeChange}
+          variant="nav"
+          aria-label="Walk-in mode"
+        />
       </div>
 
       {/* Mode content */}

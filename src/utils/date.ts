@@ -362,6 +362,43 @@ export function formatDateWithOrdinal(dateStr: string): string {
   }
 }
 
+/**
+ * Compact week range: "MAY 12th - 16th" when both dates share a month/year,
+ * "MAY 30th - JUN 2nd" when they cross months. Falls back to the start date
+ * alone when only one is parseable.
+ */
+export function formatWeekRangeCompact(startStr: string, endStr: string): string {
+  const getOrdinal = (value: number) => {
+    const suffixes = ['th', 'st', 'nd', 'rd'];
+    const mod100 = value % 100;
+    return value + (suffixes[(mod100 - 20) % 10] || suffixes[mod100] || suffixes[0]);
+  };
+  const months = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'];
+
+  const parse = (raw: string): Date | null => {
+    if (!raw) return null;
+    const key = toPSTDateKey(raw) || (ISO_DATE_ONLY_RE.test(raw) ? raw : '');
+    if (!key) {
+      const fallback = new Date(raw);
+      return Number.isNaN(fallback.getTime()) ? null : fallback;
+    }
+    const [y, m, d] = key.split('-').map(Number);
+    return new Date(y, m - 1, d);
+  };
+
+  const start = parse(startStr);
+  const end = parse(endStr);
+  if (!start && !end) return '';
+  if (!end) return `${months[start!.getMonth()]} ${getOrdinal(start!.getDate())}`;
+  if (!start) return `${months[end.getMonth()]} ${getOrdinal(end.getDate())}`;
+
+  const sameMonth = start.getMonth() === end.getMonth() && start.getFullYear() === end.getFullYear();
+  if (sameMonth) {
+    return `${months[start.getMonth()]} ${getOrdinal(start.getDate())} - ${getOrdinal(end.getDate())}`;
+  }
+  return `${months[start.getMonth()]} ${getOrdinal(start.getDate())} - ${months[end.getMonth()]} ${getOrdinal(end.getDate())}`;
+}
+
 export function formatShortDate(dateString: string | null | undefined): string {
   if (!dateString) return 'N/A';
 
@@ -445,23 +482,22 @@ export interface WeekRange {
   endStr: string;
 }
 
-/** Compute Monday–Friday date range for a given week offset (0 = current week, 1 = last week, etc.). */
+/** Compute Sunday–Saturday date range for a given week offset (0 = current week, 1 = last week, etc.). */
 export function computeWeekRange(weekOffset: number): WeekRange {
   const todayPst = getCurrentPSTDateKey();
   const [pstYear, pstMonth, pstDay] = todayPst.split('-').map(Number);
   const now = new Date(pstYear, (pstMonth || 1) - 1, pstDay || 1);
-  const currentDay = now.getDay();
-  const daysFromMonday = currentDay === 0 ? 6 : currentDay - 1;
-  const monday = new Date(now);
-  monday.setDate(now.getDate() - daysFromMonday - weekOffset * 7);
-  monday.setHours(0, 0, 0, 0);
-  const friday = new Date(monday);
-  friday.setDate(monday.getDate() + 4);
-  friday.setHours(23, 59, 59, 999);
+  const daysFromSunday = now.getDay();
+  const sunday = new Date(now);
+  sunday.setDate(now.getDate() - daysFromSunday - weekOffset * 7);
+  sunday.setHours(0, 0, 0, 0);
+  const saturday = new Date(sunday);
+  saturday.setDate(sunday.getDate() + 6);
+  saturday.setHours(23, 59, 59, 999);
   return {
-    start: monday,
-    end: friday,
-    startStr: `${monday.getFullYear()}-${String(monday.getMonth() + 1).padStart(2, '0')}-${String(monday.getDate()).padStart(2, '0')}`,
-    endStr: `${friday.getFullYear()}-${String(friday.getMonth() + 1).padStart(2, '0')}-${String(friday.getDate()).padStart(2, '0')}`,
+    start: sunday,
+    end: saturday,
+    startStr: `${sunday.getFullYear()}-${String(sunday.getMonth() + 1).padStart(2, '0')}-${String(sunday.getDate()).padStart(2, '0')}`,
+    endStr: `${saturday.getFullYear()}-${String(saturday.getMonth() + 1).padStart(2, '0')}-${String(saturday.getDate()).padStart(2, '0')}`,
   };
 }

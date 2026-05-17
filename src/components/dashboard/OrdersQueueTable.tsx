@@ -20,6 +20,11 @@ import { DateGroupHeader } from '@/components/shipped/DateGroupHeader';
 import { OrderSearchEmptyState } from '@/components/dashboard/OrderSearchEmptyState';
 import { getOpenShippedDetailsPayload } from '@/utils/events';
 import { isSkuSourceRecord } from '@/utils/source-dot';
+import { useUIModeOptional } from '@/design-system/providers/UIModeProvider';
+import {
+  dashboardOrderRowChipsClass,
+  dashboardOrderRowShellClass,
+} from '@/lib/dashboard-order-row-layout';
 
 
 function normalizePersonName(value: unknown): string {
@@ -53,10 +58,12 @@ const OrdersQueueTableRow = memo(function OrdersQueueTableRow({
   hasOutOfStock,
   outOfStockValue,
   daysLate,
+  isMobile,
   onRowClick,
 }: {
   record: QueueRowRecord;
   isSelected: boolean;
+  isMobile: boolean;
   useAlternateStripe: boolean;
   testerDisplay: string;
   packerDisplay: string;
@@ -110,7 +117,7 @@ const OrdersQueueTableRow = memo(function OrdersQueueTableRow({
       aria-pressed={isSelected}
       aria-label={`Open order ${record.order_id || record.id}`}
       data-order-row-id={String(record.id)}
-      className={`grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2 px-3 py-1.5 transition-all border-b border-gray-300 cursor-pointer hover:bg-blue-50/50 ${
+      className={`${dashboardOrderRowShellClass(isMobile)} border-b border-gray-300 px-3 py-1.5 transition-all cursor-pointer hover:bg-blue-50/50 ${
         isSelected ? 'bg-blue-50/80' : useAlternateStripe ? 'bg-white' : 'bg-gray-50/10'
       }`}
     >
@@ -154,7 +161,7 @@ const OrdersQueueTableRow = memo(function OrdersQueueTableRow({
         </div>
       </div>
 
-      <div className="flex shrink-0 items-center gap-0.5">
+      <div className={dashboardOrderRowChipsClass(isMobile)}>
         {platformLabel && !isFba ? (
           <PlatformChip
             label={platformLabel}
@@ -178,6 +185,7 @@ const OrdersQueueTableRow = memo(function OrdersQueueTableRow({
     </motion.div>
   );
 }, (prev, next) => {
+  if (prev.isMobile !== next.isMobile) return false;
   if (prev.record.id !== next.record.id) return false;
   if (prev.isSelected !== next.isSelected) return false;
   if (prev.useAlternateStripe !== next.useAlternateStripe) return false;
@@ -253,6 +261,7 @@ export function OrdersQueueTable({
   onCloseRecord,
   useWaForDisplay = false,
 }: OrdersQueueTableProps) {
+  const { isMobile } = useUIModeOptional();
   const { getStaffName } = useStaffNameMap();
   const [selectedRecord, setSelectedRecord] = useState<ShippedOrder | null>(null);
   const [stickyDate, setStickyDate] = useState('');
@@ -525,6 +534,7 @@ export function OrdersQueueTable({
                             key={record.id}
                             record={r}
                             isSelected={selectedRecord?.id === record.id}
+                            isMobile={isMobile}
                             useAlternateStripe={index % 2 === 0}
                             testerDisplay={testerDisplay}
                             packerDisplay={packerDisplay}

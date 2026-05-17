@@ -212,15 +212,71 @@ export function OrderIdChipPlaceholder() {
  * DESIGN SYSTEM RULE: Use ONLY for outbound carrier tracking numbers (UPS, FedEx, USPS…).
  * Do NOT use FNSKU codes — use FnskuChip (purple/Package) for those.
  */
-export const TrackingChip = ({ value, display }: { value: string; display: string }) => (
+export const TrackingChip = ({
+  value,
+  display,
+  disableCopy,
+  width = 'w-fit max-w-full',
+}: {
+  value: string;
+  display: string;
+  disableCopy?: boolean;
+  /** Tailwind width utilities on the wrapper (sidebar grids need `min-w-0 flex-1`). */
+  width?: string;
+}) => (
   <CopyChip
     value={value}
     display={isEmptyDisplayValue(display) || String(display || '').trim() === '---' ? '----' : display}
     icon={<MapPin className="h-4 w-4 shrink-0" />}
     underlineClass="border-blue-500"
     iconClass="inline-flex items-center justify-center text-blue-500"
+    width={width}
+    disableCopy={disableCopy}
   />
 );
+
+/**
+ * Marketplace listing URL: open link (left) + copy full URL (truncated preview label).
+ * Caller supplies {@link previewDisplay} (e.g. host + clipped path).
+ */
+export function ListingUrlChip({
+  rawUrl,
+  openHref,
+  previewDisplay,
+}: {
+  rawUrl: string;
+  openHref: string | null;
+  previewDisplay: string;
+}) {
+  const trimmed = normalizeCopyText(rawUrl);
+  const preview = normalizeCopyText(previewDisplay);
+  const chipDisplay = trimmed ? preview || '—' : '—';
+
+  return (
+    <div className="flex min-w-0 flex-1 basis-0 items-center gap-0.5">
+      <button
+        type="button"
+        disabled={openHref == null}
+        onClick={(e) => {
+          e.stopPropagation();
+          if (openHref) window.open(openHref, '_blank', 'noopener,noreferrer');
+        }}
+        aria-label="Open listing URL in new tab"
+        title={openHref ? 'Open link' : 'No valid URL'}
+        className="inline-flex h-[22px] w-[22px] shrink-0 items-center justify-center rounded text-slate-400 transition-colors hover:bg-slate-100 hover:text-blue-600 disabled:cursor-not-allowed disabled:opacity-35"
+      >
+        <ExternalLink className="h-3.5 w-3.5 shrink-0" />
+      </button>
+      <CopyChip
+        value={trimmed}
+        display={chipDisplay}
+        underlineClass="border-indigo-500"
+        width="min-w-0 flex-1 max-w-full"
+        disableCopy={!trimmed}
+      />
+    </div>
+  );
+}
 
 /**
  * Static SKU code shown where a tracking column is reused (e.g. `SKU:qty`). Yellow / pencil — not carrier tracking.

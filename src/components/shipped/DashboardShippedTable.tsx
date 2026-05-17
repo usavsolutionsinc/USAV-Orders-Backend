@@ -63,6 +63,11 @@ import { getStaffThemeById, stationThemeColors } from '@/utils/staff-colors';
 import { getStaffTextColor } from '@/design-system/components/StaffBadge';
 import { OrderSearchEmptyState } from '@/components/dashboard/OrderSearchEmptyState';
 import { isEmptyDisplayValue } from '@/utils/empty-display-value';
+import { useUIModeOptional } from '@/design-system/providers/UIModeProvider';
+import {
+  dashboardOrderRowChipsClass,
+  dashboardOrderRowShellClass,
+} from '@/lib/dashboard-order-row-layout';
 
 export interface DashboardShippedTableProps {
   packedBy?: number;
@@ -86,6 +91,7 @@ export function DashboardShippedTable({
   searchResultLabel = 'shipped orders',
   clearSearchLabel = 'Show All Shipped Orders',
 }: DashboardShippedTableProps = {}) {
+  const { isMobile } = useUIModeOptional();
   const pathname = usePathname();
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -635,7 +641,7 @@ export function DashboardShippedTable({
                               aria-pressed={selectedDetailId === detail.id}
                               aria-label={`Open shipped order ${record.order_id || record.id}`}
                               data-order-row-id={String(record.order_row_id || record.id)}
-                              className={`grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2 px-3 py-1.5 transition-colors border-b border-gray-50 cursor-pointer hover:bg-blue-50/50 ${
+                              className={`${dashboardOrderRowShellClass(isMobile)} border-b border-gray-50 px-3 py-1.5 transition-colors cursor-pointer hover:bg-blue-50/50 ${
                                 selectedDetailId === detail.id ? 'bg-blue-50/80' : index % 2 === 0 ? 'bg-white' : 'bg-gray-50/10'
                               }`}
                             >
@@ -669,7 +675,7 @@ export function DashboardShippedTable({
                                 </div>
                               </div>
 
-                              <div className="flex shrink-0 items-center gap-0.5 pr-2">
+                              <div className={dashboardOrderRowChipsClass(isMobile)}>
                                 {rowIsFba ? (
                                   <>
                                     <FnskuChip value={fnskuValue} />

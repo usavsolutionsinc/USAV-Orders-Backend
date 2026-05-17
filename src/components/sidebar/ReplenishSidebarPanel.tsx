@@ -4,10 +4,9 @@ import { useCallback, useEffect, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { sidebarHeaderBandClass, sidebarHeaderRowClass } from '@/components/layout/header-shell';
 import { SearchBar } from '@/components/ui/SearchBar';
-import { TabSwitch } from '@/design-system/components';
 import { HorizontalButtonSlider, type HorizontalSliderItem } from '@/components/ui/HorizontalButtonSlider';
 import { sectionLabel, fieldLabel } from '@/design-system/tokens/typography/presets';
-import { Loader2, RefreshCw } from '@/components/Icons';
+import { AlertTriangle, Loader2, Package, RefreshCw } from '@/components/Icons';
 
 type ReplenishTab = 'need' | 'incoming' | 'fifo';
 
@@ -29,10 +28,10 @@ const EMPTY_COUNTS: StatusCounts = {
   total_active: 0,
 };
 
-const TAB_ITEMS: Array<{ id: ReplenishTab; label: string; color: 'red' | 'blue' | 'emerald' }> = [
-  { id: 'need', label: 'Need to Order', color: 'red' },
-  { id: 'incoming', label: 'Incoming', color: 'blue' },
-  { id: 'fifo', label: 'FIFO Restock', color: 'emerald' },
+const TAB_ITEMS: HorizontalSliderItem[] = [
+  { id: 'need',     label: 'Need to Order', icon: AlertTriangle },
+  { id: 'incoming', label: 'Incoming',      icon: Package },
+  { id: 'fifo',     label: 'FIFO Restock',  icon: RefreshCw },
 ];
 
 const PIPELINE_ITEMS: Array<{ key: keyof Omit<StatusCounts, 'total_active'>; label: string; tone: 'red' | 'orange' | 'yellow' | 'purple' | 'blue' }> = [
@@ -155,16 +154,14 @@ export function ReplenishSidebarPanel() {
 
   return (
     <div className="font-dm-sans flex h-full flex-col overflow-hidden bg-white">
-      {/* Tabs */}
-      <div className={`${sidebarHeaderBandClass} px-3 py-2`}>
-        <TabSwitch
-          tabs={TAB_ITEMS.map((tab) => ({
-            id: tab.id,
-            label: tab.label,
-            color: tab.color,
-          }))}
-          activeTab={activeTab}
-          onTabChange={(id) => updateTab(id as ReplenishTab)}
+      {/* Tab pills (2nd row) */}
+      <div className={`${sidebarHeaderBandClass} px-3`}>
+        <HorizontalButtonSlider
+          items={TAB_ITEMS}
+          value={activeTab}
+          onChange={(id) => updateTab(id as ReplenishTab)}
+          variant="nav"
+          aria-label="Replenish view"
         />
       </div>
 

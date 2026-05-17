@@ -13,8 +13,10 @@ import {
   searchItemBySku,
   updatePurchaseOrder,
 } from '@/lib/zoho';
+import { withAuth } from '@/lib/auth/withAuth';
+import { recordAudit, AUDIT_ACTION, AUDIT_ENTITY } from '@/lib/audit-logs';
 
-export async function POST(request: NextRequest) {
+export const POST = withAuth(async (request, ctx) => {
   try {
     const body = await request.json();
     const receivingLineId = Number(body?.receiving_line_id);
@@ -28,7 +30,11 @@ export async function POST(request: NextRequest) {
     const serialNumber = String(body?.serial_number || '').trim() || null;
     const zendeskTicket = String(body?.zendesk_ticket || '').trim() || null;
     const notes = String(body?.notes || '').trim() || null;
-    const staffId = Number(body?.staff_id);
+    const bodyStaffIdRaw = Number(body?.staff_id);
+    const bodyStaffId =
+      Number.isFinite(bodyStaffIdRaw) && bodyStaffIdRaw > 0 ? Math.floor(bodyStaffIdRaw) : null;
+    // Server-trusted actor when AUTH_V2 is active; fall back to body for legacy callers.
+    const staffId = ctx.staffId ?? bodyStaffId ?? 0;
 
     // Resolve a human-readable staff name for Zoho payloads. Prefer the
     // value the client sent, then fall back to a DB lookup, and only as a
@@ -55,6 +61,22 @@ export async function POST(request: NextRequest) {
     const now = formatPSTTimestamp();
 
     const hasZohoReceive = Boolean(zohoPoId && zohoLineItemId);
+
+    // Capture before-state for audit_logs diff.
+    const beforeRes = await pool.query(
+      `SELECT quantity_received, quantity_expected, workflow_status, qa_status,
+              disposition_code, condition_grade
+         FROM receiving_lines WHERE id = $1`,
+      [receivingLineId],
+    );
+    const beforeRow = (beforeRes.rows as Array<{
+      quantity_received: number | null;
+      quantity_expected: number | null;
+      workflow_status: string | null;
+      qa_status: string | null;
+      disposition_code: string | null;
+      condition_grade: string | null;
+    }>)[0] ?? null;
 
     // 1. Update the line locally. When Zoho receive is required, stay MATCHED
     //    (UI: "SCANNED") until createPurchaseReceive succeeds; then we set DONE.
@@ -246,6 +268,42 @@ export async function POST(request: NextRequest) {
     const workflowStatus =
       String(line.workflow_status ?? '').trim() || (hasZohoReceive ? 'MATCHED' : 'DONE');
 
+    await recordAudit(pool, ctx, request, {
+      source: 'receiving-station',
+      action: AUDIT_ACTION.PO_RECEIVE,
+      entityType: AUDIT_ENTITY.RECEIVING_LINE,
+      entityId: receivingLineId,
+      before: beforeRow
+        ? {
+            quantity_received: beforeRow.quantity_received,
+            quantity_expected: beforeRow.quantity_expected,
+            workflow_status: beforeRow.workflow_status,
+            qa_status: beforeRow.qa_status,
+            disposition_code: beforeRow.disposition_code,
+            condition_grade: beforeRow.condition_grade,
+          }
+        : null,
+      after: {
+        quantity_received: line.quantity_received,
+        quantity_expected: line.quantity_expected,
+        workflow_status: workflowStatus,
+        qa_status: line.qa_status,
+        disposition_code: line.disposition_code,
+        condition_grade: line.condition_grade,
+      },
+      method: serialNumber ? 'scan' : 'manual',
+      actorStaffIdOverride: bodyStaffId,
+      extra: {
+        receiving_id: receivingId,
+        zoho_purchaseorder_id: zohoPoId || null,
+        zoho_line_item_id: zohoLineItemId || null,
+        zoho_synced: zohoReceiveOk,
+        ...(serialNumber ? { serial_number: serialNumber } : {}),
+        ...(zendeskTicket ? { zendesk_ticket: zendeskTicket } : {}),
+        ...(zohoReceiveError ? { zoho_error: zohoReceiveError } : {}),
+      },
+    });
+
     return NextResponse.json({
       success: zohoReceiveOk,
       receiving_line_id: receivingLineId,
@@ -259,4 +317,4 @@ export async function POST(request: NextRequest) {
     console.error('receiving/mark-received POST failed:', error);
     return NextResponse.json({ success: false, error: message }, { status: 500 });
   }
-}
+}, { allowAnonymous: true });

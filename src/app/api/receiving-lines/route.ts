@@ -99,7 +99,10 @@ export async function GET(request: NextRequest) {
                 stn.latest_status_category   AS shipment_status_category,
                 stn.is_delivered             AS shipment_is_delivered,
                 stn.delivered_at             AS shipment_delivered_at,
-                sc.image_url
+                sc.image_url,
+                (SELECT COUNT(*) FROM photos p
+                  WHERE p.entity_type = 'RECEIVING'
+                    AND p.entity_id = rl.receiving_id) AS photo_count
          FROM receiving_lines rl
          -- Soft JOIN: direct FK when set, else PO#-based fallback. Partial
          -- unique index ux_receiving_zoho_po_matched (source='zoho_po') ensures
@@ -146,7 +149,10 @@ export async function GET(request: NextRequest) {
                   stn.latest_status_category   AS shipment_status_category,
                   stn.is_delivered             AS shipment_is_delivered,
                   stn.delivered_at             AS shipment_delivered_at,
-                  sc.image_url
+                  sc.image_url,
+                  (SELECT COUNT(*) FROM photos p
+                    WHERE p.entity_type = 'RECEIVING'
+                      AND p.entity_id = rl.receiving_id) AS photo_count
            FROM receiving_lines rl
            LEFT JOIN receiving r                   ON r.id  = rl.receiving_id
            LEFT JOIN shipping_tracking_numbers stn ON stn.id = r.shipment_id
@@ -277,7 +283,10 @@ export async function GET(request: NextRequest) {
                 stn.latest_status_category   AS shipment_status_category,
                 stn.is_delivered             AS shipment_is_delivered,
                 stn.delivered_at             AS shipment_delivered_at,
-                sc.image_url
+                sc.image_url,
+                (SELECT COUNT(*) FROM photos p
+                  WHERE p.entity_type = 'RECEIVING'
+                    AND p.entity_id = rl.receiving_id) AS photo_count
          FROM receiving_lines rl
          -- Soft JOIN: direct FK when set, else PO#-based fallback (see note above).
          LEFT JOIN receiving r ON (
@@ -698,5 +707,6 @@ function normalizeRow(row: Record<string, unknown>) {
     created_at:               (row.created_at as string | null) ?? null,
     image_url:                (row.image_url as string | null) ?? null,
     source_platform:          (row.receiving_source_platform as string | null) ?? null,
+    photo_count:              row.photo_count != null ? Number(row.photo_count) : 0,
   };
 }

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createLocation, getRooms } from '@/lib/neon/location-queries';
+import { createLocation, getRooms, setRoomZoneLetter } from '@/lib/neon/location-queries';
 
 /** GET /api/rooms — list active rooms (parent rows with no row/col). */
 export async function GET() {
@@ -24,13 +24,27 @@ export async function POST(req: NextRequest) {
     if (!name) {
       return NextResponse.json({ error: 'Room name is required' }, { status: 400 });
     }
-    const room = await createLocation({
-      name,
-      room: name,
-      description: body?.description?.trim() || null,
-      sortOrder: typeof body?.sortOrder === 'number' ? body.sortOrder : 0,
-    });
-    return NextResponse.json({ success: true, room }, { status: 201 });
+    const zoneLetter =
+      typeof body?.zoneLetter === 'string' ? body.zoneLetter : null;
+    try {
+      const room = await createLocation({
+        name,
+        room: name,
+        description: body?.description?.trim() || null,
+        sortOrder: typeof body?.sortOrder === 'number' ? body.sortOrder : 0,
+        zoneLetter,
+      });
+      return NextResponse.json({ success: true, room }, { status: 201 });
+    } catch (err: any) {
+      // Duplicate zone_letter — partial unique index violation.
+      if (err?.code === '23505' && /zone_letter/.test(err?.message ?? '')) {
+        return NextResponse.json(
+          { error: 'Another room is already using that zone letter' },
+          { status: 409 },
+        );
+      }
+      throw err;
+    }
   } catch (err: any) {
     if (err?.code === '23505' || /unique/i.test(err?.message || '')) {
       return NextResponse.json({ error: 'Room already exists' }, { status: 409 });

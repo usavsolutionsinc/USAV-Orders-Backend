@@ -1,4 +1,4 @@
-export type AdminSection = 'goals' | 'staff' | 'connections' | 'fba' | 'manuals' | 'features' | 'logs' | 'jobs' | 'ai_chat' | 'architecture';
+export type AdminSection = 'goals' | 'staff' | 'access' | 'roles' | 'connections' | 'fba' | 'manuals' | 'features' | 'logs' | 'jobs' | 'ai_chat' | 'architecture';
 
 export interface AdminSectionOption {
   value: AdminSection;
@@ -9,6 +9,8 @@ export interface AdminSectionOption {
 export const ADMIN_SECTION_OPTIONS: AdminSectionOption[] = [
   { value: 'goals', label: 'Goals', description: 'Daily output targets and progress' },
   { value: 'staff', label: 'Staff', description: 'Team roles, status, and weekly schedule' },
+  { value: 'access', label: 'Access', description: 'Per-staff role + page-access matrix' },
+  { value: 'roles', label: 'Roles', description: 'Define what each role can do' },
   { value: 'connections', label: 'Connections', description: 'Marketplace, Zoho, and shipping sync tools' },
   { value: 'fba', label: 'FBA', description: 'FNSKU catalog rows and CSV imports' },
   { value: 'manuals', label: 'Manuals', description: 'Link product manuals to item numbers' },

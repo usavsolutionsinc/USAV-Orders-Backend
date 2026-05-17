@@ -1,42 +1,18 @@
+/**
+ * Server-side permission helpers — DB-backed pieces of the auth system.
+ *
+ * The pure types + role/permission matrix + `permissionsForRole` etc. live in
+ * `./permissions-shared.ts` so client components can import them without
+ * dragging `pg` into the browser bundle. This module re-exports everything
+ * from there for backwards compatibility, then adds the DB-using functions.
+ */
+
 import pool from '@/lib/db';
 
-// ─── Types ──────────────────────────────────────────────────────────────────
+export * from './permissions-shared';
 
-export type StaffRole =
-  | 'packer'
-  | 'receiving'
-  | 'technician'
-  | 'sales'
-  | 'admin'
-  | 'readonly'
-  | 'unknown';
-
-/**
- * Actions gated by role. New gates should be added here, not inline in
- * route handlers, so changes stay centralized.
- */
-export type PermissionAction =
-  | 'bin.adjust'           // put / take qty via the numpad
-  | 'bin.set'              // set qty / min / max (Apply Limits)
-  | 'bin.rename'           // change SKU display_name_override
-  | 'bin.swap'             // change which SKU is in a bin row
-  | 'bin.remove'           // soft-remove (set qty=0)
-  | 'bin.add_sku'          // BinAddSkuSheet → put new SKU into bin
-  | 'cycle_count.approve'; // future: variance approval
-
-const ROLE_PERMISSIONS: Record<Exclude<StaffRole, 'unknown'>, ReadonlyArray<PermissionAction>> = {
-  packer:     ['bin.adjust', 'bin.set', 'bin.add_sku'],
-  receiving:  ['bin.adjust', 'bin.set', 'bin.add_sku'],
-  technician: ['bin.adjust', 'bin.set', 'bin.add_sku'],
-  sales:      ['bin.adjust', 'bin.set', 'bin.add_sku'],
-  // Admin is a superset — destructive actions live here.
-  admin: [
-    'bin.adjust', 'bin.set', 'bin.add_sku',
-    'bin.rename', 'bin.swap', 'bin.remove',
-    'cycle_count.approve',
-  ],
-  readonly: [],
-};
+import type { PermissionAction, StaffRole } from './permissions-shared';
+import { canonicalRole, hasPermission, PermissionDeniedError } from './permissions-shared';
 
 // ─── Resolver cache (60s) ──────────────────────────────────────────────────
 
@@ -53,20 +29,19 @@ export async function getStaffRole(staffId: number): Promise<StaffRole> {
   if (cached && cached.expiresAt > Date.now()) return cached.role;
 
   try {
-    const r = await pool.query<{ role: string | null }>(
+    const r = await pool.query(
       `SELECT role FROM staff WHERE id = $1 LIMIT 1`,
       [staffId],
     );
-    const raw = (r.rows[0]?.role || '').trim().toLowerCase();
-    const role: StaffRole =
-      raw === 'packer' ||
-      raw === 'receiving' ||
-      raw === 'technician' ||
-      raw === 'sales' ||
-      raw === 'admin' ||
-      raw === 'readonly'
-        ? (raw as StaffRole)
-        : 'unknown';
+    const firstRow = r.rows[0] as { role: string | null } | undefined;
+    const raw = (firstRow?.role || '').trim().toLowerCase();
+    const known: ReadonlyArray<StaffRole> = [
+      'packer', 'receiver', 'receiving', 'technician', 'sales',
+      'shipper', 'inventory_manager', 'viewer', 'readonly', 'admin',
+    ];
+    const role: StaffRole = (known as ReadonlyArray<string>).includes(raw)
+      ? (raw as StaffRole)
+      : 'unknown';
     cache.set(staffId, { role, expiresAt: Date.now() + CACHE_TTL_MS });
     return role;
   } catch {
@@ -74,27 +49,10 @@ export async function getStaffRole(staffId: number): Promise<StaffRole> {
   }
 }
 
-export function hasPermission(role: StaffRole, action: PermissionAction): boolean {
-  if (role === 'unknown') return false;
-  if (role === 'readonly') return false;
-  return ROLE_PERMISSIONS[role].includes(action);
-}
-
 /**
  * Server-side gate: throw a normalized error if the staff lacks permission.
  * Route handlers catch this and convert to 403.
  */
-export class PermissionDeniedError extends Error {
-  constructor(
-    public readonly action: PermissionAction,
-    public readonly role: StaffRole,
-    public readonly staffId: number | null,
-  ) {
-    super(`Role "${role}" cannot perform "${action}"`);
-    this.name = 'PermissionDeniedError';
-  }
-}
-
 export async function assertPermission(
   staffId: number | null | undefined,
   action: PermissionAction,
@@ -105,17 +63,4 @@ export async function assertPermission(
     throw new PermissionDeniedError(action, role, Number.isFinite(id) ? id : null);
   }
   return { role };
-}
-
-/**
- * Normalized 403 body for clients to parse. Lets the UI render
- * "you need admin role" instead of a generic error.
- */
-export function permissionDeniedResponse(err: PermissionDeniedError) {
-  return {
-    error: 'FORBIDDEN',
-    action: err.action,
-    role: err.role,
-    message: `Your role (${err.role}) cannot perform this action.`,
-  };
 }

@@ -2,18 +2,10 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import Ably from 'ably';
 import { getStaffThemeById, stationThemeColors } from '@/utils/staff-colors';
 import { useBarcodeScanner } from '@/hooks/useBarcodeScanner';
-
-type PairSession = {
-  staff_id: number;
-  staff_name?: string | null;
-  phone_channel: string;
-  station_channel: string;
-  token_request: unknown;
-  paired_at: number;
-};
+import { useAblyClient } from '@/contexts/AblyContext';
+import { useAuth } from '@/contexts/AuthContext';
 
 type ScanStatus = 'pending' | 'sent' | 'matched' | 'unmatched' | 'error';
 
@@ -28,19 +20,6 @@ type PhoneScan = {
 };
 
 const DUP_WINDOW_MS = 2000;
-
-function loadSession(): PairSession | null {
-  if (typeof window === 'undefined') return null;
-  const raw = window.sessionStorage.getItem('usav.phonePair');
-  if (!raw) return null;
-  try {
-    const parsed = JSON.parse(raw) as PairSession;
-    if (!parsed?.staff_id || !parsed.phone_channel || !parsed.token_request) return null;
-    return parsed;
-  } catch {
-    return null;
-  }
-}
 
 function vibrate(pattern: number | number[]): void {
   try {
@@ -59,11 +38,14 @@ function randomId(): string {
 
 export default function MobileScanPage() {
   const router = useRouter();
-  const phoneChannelRef = useRef<Ably.RealtimeChannel | null>(null);
-  const stationChannelRef = useRef<Ably.RealtimeChannel | null>(null);
-  const realtimeRef = useRef<Ably.Realtime | null>(null);
+  const { user, isLoaded } = useAuth();
+  const { getClient } = useAblyClient();
+  const staffId = user?.staffId ?? 0;
+  const staffName = (user as { name?: string } | null)?.name ?? null;
 
-  const [session, setSession] = useState<PairSession | null>(null);
+  const phoneChannelRef = useRef<any>(null);
+  const stationChannelRef = useRef<any>(null);
+
   const [connState, setConnState] = useState<string>('connecting');
   const [scans, setScans] = useState<PhoneScan[]>([]);
   const [input, setInput] = useState('');
@@ -71,76 +53,68 @@ export default function MobileScanPage() {
 
   const scanner = useBarcodeScanner({ dedupMs: DUP_WINDOW_MS });
 
-  // 1. Load the paired session (redirect if not paired).
+  // 1. Bounce to signin if no session.
   useEffect(() => {
-    const s = loadSession();
-    if (!s) {
-      router.replace('/m/pair-needed');
-      return;
+    if (!isLoaded) return;
+    if (!user) {
+      router.replace('/signin?next=/m/scan');
     }
-    setSession(s);
-  }, [router]);
+  }, [isLoaded, user, router]);
 
-  // 2. Connect to Ably. Phone PUBLISHES on phone:{staff_id} and SUBSCRIBES on
-  //    station:{staff_id} for scan-result echoes from the desktop.
+  // 2. Attach to the shared Ably client and wire up channels keyed by staffId.
   useEffect(() => {
-    if (!session) return;
-    const realtime = new Ably.Realtime({
-      authCallback: (_params, cb) => {
-        cb(null, session.token_request as Ably.TokenRequest);
-      },
-      clientId: `phone-${session.staff_id}`,
-    });
-    realtimeRef.current = realtime;
+    if (staffId <= 0) return;
+    let disposed = false;
 
-    const phoneChannel = realtime.channels.get(session.phone_channel);
-    phoneChannelRef.current = phoneChannel;
+    (async () => {
+      const client = await getClient();
+      if (disposed || !client) return;
 
-    const stationChannel = realtime.channels.get(session.station_channel);
-    stationChannelRef.current = stationChannel;
+      const phoneChannel = client.channels.get(`phone:${staffId}`);
+      phoneChannelRef.current = phoneChannel;
 
-    const onState = (change: Ably.ConnectionStateChange) => setConnState(change.current);
-    realtime.connection.on(onState);
-    setConnState(realtime.connection.state);
+      const stationChannel = client.channels.get(`station:${staffId}`);
+      stationChannelRef.current = stationChannel;
 
-    // Desktop echoes back results on this channel. Match by tracking string.
-    const onResult = (msg: Ably.Message) => {
-      const data = msg.data as {
-        tracking?: string;
-        matched?: boolean;
-        po_ids?: string[];
-        error?: string;
-      } | undefined;
-      const tracking = (data?.tracking || '').trim();
-      if (!tracking) return;
-      setScans((prev) => prev.map((s) => {
-        if (s.tracking !== tracking || s.status === 'matched' || s.status === 'unmatched') return s;
-        if (data?.error) {
-          return { ...s, status: 'error', errorMessage: data.error, resultAt: Date.now() };
-        }
-        return {
-          ...s,
-          status: data?.matched ? 'matched' : 'unmatched',
-          po_ids: data?.po_ids ?? [],
-          resultAt: Date.now(),
-        };
-      }));
-    };
-    stationChannel.subscribe('phone_scan_result', onResult);
+      const onState = (change: { current: string }) => setConnState(change.current);
+      client.connection.on(onState);
+      setConnState(client.connection.state);
+
+      const onResult = (msg: { data?: { tracking?: string; matched?: boolean; po_ids?: string[]; error?: string } }) => {
+        const data = msg.data;
+        const tracking = (data?.tracking || '').trim();
+        if (!tracking) return;
+        setScans((prev) => prev.map((s) => {
+          if (s.tracking !== tracking || s.status === 'matched' || s.status === 'unmatched') return s;
+          if (data?.error) {
+            return { ...s, status: 'error', errorMessage: data.error, resultAt: Date.now() };
+          }
+          return {
+            ...s,
+            status: data?.matched ? 'matched' : 'unmatched',
+            po_ids: data?.po_ids ?? [],
+            resultAt: Date.now(),
+          };
+        }));
+      };
+      stationChannel.subscribe('phone_scan_result', onResult);
+
+      return () => {
+        client.connection.off(onState);
+        try { stationChannel.unsubscribe('phone_scan_result', onResult); } catch { /* noop */ }
+        try { phoneChannel.detach(); } catch { /* noop */ }
+        try { stationChannel.detach(); } catch { /* noop */ }
+      };
+    })();
 
     return () => {
-      try { stationChannel.unsubscribe('phone_scan_result', onResult); } catch { /* noop */ }
-      realtime.connection.off(onState);
-      try { phoneChannel.detach(); } catch { /* noop */ }
-      try { stationChannel.detach(); } catch { /* noop */ }
-      try { realtime.close(); } catch { /* noop */ }
-      realtimeRef.current = null;
+      disposed = true;
       phoneChannelRef.current = null;
       stationChannelRef.current = null;
     };
-  }, [session]);
+  }, [staffId, getClient]);
 
-  // 3. Send a tracking value — publishes to phone channel, adds optimistic chip.
+  // 3. Send a tracking value — publishes on phone:{staffId}, adds optimistic chip.
   const sendScan = useCallback((rawValue: string) => {
     const tracking = rawValue.trim();
     if (!tracking) return;
@@ -161,7 +135,7 @@ export default function MobileScanPage() {
       .then(() => {
         setScans((prev) => prev.map((s) => s.id === id ? { ...s, status: 'sent' } : s));
       })
-      .catch((err) => {
+      .catch((err: unknown) => {
         setScans((prev) => prev.map((s) => s.id === id
           ? { ...s, status: 'error', errorMessage: err instanceof Error ? err.message : 'Publish failed' }
           : s));
@@ -171,17 +145,15 @@ export default function MobileScanPage() {
     setInput('');
   }, []);
 
-  // 4. Start/stop camera with the paired session. ZXing (@zxing/browser) is
-  //    used via useBarcodeScanner — same stack as packer/receiving sheets,
-  //    which works on iOS Safari where native BarcodeDetector does not.
+  // 4. Start/stop camera with the signed-in session.
   useEffect(() => {
-    if (!session) return;
+    if (staffId <= 0) return;
     void scanner.startScanning();
     return () => {
       void scanner.stopScanning();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [session]);
+  }, [staffId]);
 
   // React to decodes from the scanner.
   useEffect(() => {
@@ -199,9 +171,9 @@ export default function MobileScanPage() {
     }
   }, [scanner.lastScannedValue, autoSend, sendScan, scanner]);
 
-  if (!session) return null;
+  if (!isLoaded || !user) return null;
 
-  const theme = getStaffThemeById(session.staff_id);
+  const theme = getStaffThemeById(staffId);
   const themeColors = stationThemeColors[theme];
 
   return (
@@ -219,7 +191,7 @@ export default function MobileScanPage() {
         </div>
         <div className="absolute top-3 left-3 right-3 flex items-center justify-between text-[10px] font-black uppercase tracking-widest">
           <span className={`rounded-full px-2 py-1 text-white ${themeColors.bg}`}>
-            {session.staff_name || `Staff #${session.staff_id}`}
+            {staffName || `Staff #${staffId}`}
           </span>
           <div className="flex items-center gap-2">
             {scanner.isScanning && (
@@ -258,8 +230,6 @@ export default function MobileScanPage() {
       </div>
 
       <div className="border-t border-gray-200 bg-white p-3 space-y-3">
-        {/* Editable tracking input — camera detections populate this, you can
-            fix typos, then Send. Enter submits. */}
         <div>
           <label className="block text-[10px] font-black uppercase tracking-widest text-gray-500 mb-1">
             Tracking

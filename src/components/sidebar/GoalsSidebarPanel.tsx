@@ -56,9 +56,13 @@ function matchesView(progress: number, goalView: GoalViewMode) {
 function CurrentGoalEntry({
   row,
   onSaved,
+  selected,
+  onSelect,
 }: {
   row: GoalRow;
   onSaved: () => Promise<void>;
+  selected: boolean;
+  onSelect: () => void;
 }) {
   const [isEditing, setIsEditing] = useState(false);
   const [editValue, setEditValue] = useState(String(row.daily_goal));
@@ -117,7 +121,22 @@ function CurrentGoalEntry({
   };
 
   return (
-    <div className="rounded-sm border border-slate-100 bg-white px-3 py-2.5 space-y-1.5 transition-all hover:border-slate-200 hover:shadow-sm">
+    <div
+      role="button"
+      tabIndex={0}
+      onClick={onSelect}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          onSelect();
+        }
+      }}
+      className={`cursor-pointer rounded-sm border bg-white px-3 py-2.5 space-y-1.5 transition-all hover:shadow-sm ${
+        selected
+          ? 'border-blue-300 ring-1 ring-blue-500/30 shadow-sm shadow-blue-200/40'
+          : 'border-slate-100 hover:border-slate-200'
+      }`}
+    >
       <div className="flex items-center justify-between gap-2">
         <div className="flex items-center gap-2 min-w-0">
           <div className={`h-5 w-5 rounded-sm ${colors.light} flex items-center justify-center text-[9px] font-black ${colors.text}`}>
@@ -147,7 +166,10 @@ function CurrentGoalEntry({
           {!isEditing ? (
             <button
               type="button"
-              onClick={() => setIsEditing(true)}
+              onClick={(e) => {
+                e.stopPropagation();
+                setIsEditing(true);
+              }}
               className="flex items-center gap-0.5 text-[10px] font-black tabular-nums text-slate-600 transition-colors hover:text-blue-600"
             >
               <span>{row.today_count}</span>
@@ -163,6 +185,7 @@ function CurrentGoalEntry({
                 ref={inputRef}
                 type="text"
                 value={editValue}
+                onClick={(e) => e.stopPropagation()}
                 onChange={(e) => setEditValue(e.target.value)}
                 onBlur={() => {
                   void handleSave();
@@ -194,6 +217,19 @@ export function GoalsSidebarPanel() {
   const searchParams = useSearchParams();
   const searchValue = searchParams.get('search') || '';
   const goalView = (searchParams.get('goalView') as GoalViewMode) || 'all';
+  const selectedStaffId = (() => {
+    const raw = searchParams.get('staffId');
+    if (!raw) return null;
+    const n = Number(raw);
+    return Number.isFinite(n) && n > 0 ? n : null;
+  })();
+
+  const selectStaff = (id: number) => {
+    const next = new URLSearchParams(searchParams.toString());
+    next.set('section', 'goals');
+    next.set('staffId', String(id));
+    router.replace(`/admin?${next.toString()}`);
+  };
 
   const [rows, setRows] = useState<GoalRow[]>([]);
   const [loading, setLoading] = useState(true);
@@ -314,6 +350,8 @@ export function GoalsSidebarPanel() {
                   key={`${row.staff_id}-${row.station}`}
                   row={row}
                   onSaved={fetchRows}
+                  selected={selectedStaffId === row.staff_id}
+                  onSelect={() => selectStaff(row.staff_id)}
                 />
               ))}
             </div>

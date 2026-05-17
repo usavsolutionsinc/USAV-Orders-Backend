@@ -1,8 +1,9 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useMemo } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
-import { mainStickyHeaderClass, mainStickyHeaderShellRowClass } from '@/components/layout/header-shell';
+import { AdminEmptyDetail } from './shared';
 
 type ScheduleRow = {
   scheduleId: string;
@@ -23,6 +24,8 @@ type LogRow = {
   error: string | null;
 };
 
+type JobsTab = 'schedules' | 'logs';
+
 const STATE_COLORS: Record<string, string> = {
   DELIVERED: 'text-emerald-700 bg-emerald-50',
   ACTIVE: 'text-blue-700 bg-blue-50',
@@ -40,18 +43,11 @@ function formatTime(ts: number) {
   return d.toLocaleString();
 }
 
-function shortUrl(url: string) {
-  try {
-    const u = new URL(url);
-    return u.pathname;
-  } catch {
-    return url;
-  }
-}
-
 export function AdminJobsTab() {
-  const [tab, setTab] = useState<'schedules' | 'logs'>('schedules');
-  const [logFilter, setLogFilter] = useState('');
+  const searchParams = useSearchParams();
+  const tab = (searchParams.get('jobsTab') as JobsTab) || 'schedules';
+  const selectedScheduleId = searchParams.get('scheduleId') ?? '';
+  const selectedMessageId = searchParams.get('messageId') ?? '';
 
   const query = useQuery({
     queryKey: ['admin-qstash-status'],
@@ -67,193 +63,123 @@ export function AdminJobsTab() {
     refetchInterval: 30_000,
   });
 
-  const schedules = query.data?.schedules ?? [];
-  const logs = query.data?.logs ?? [];
+  const selectedSchedule = useMemo(
+    () => query.data?.schedules.find((s) => s.scheduleId === selectedScheduleId) ?? null,
+    [query.data, selectedScheduleId],
+  );
 
-  const filteredLogs = useMemo(() => {
-    if (!logFilter.trim()) return logs;
-    const q = logFilter.toLowerCase();
-    return logs.filter(
-      (l) =>
-        (l.label ?? '').toLowerCase().includes(q) ||
-        l.url.toLowerCase().includes(q) ||
-        l.state.toLowerCase().includes(q) ||
-        (l.error ?? '').toLowerCase().includes(q),
+  const selectedLog = useMemo(
+    () => query.data?.logs.find((l) => l.messageId === selectedMessageId) ?? null,
+    [query.data, selectedMessageId],
+  );
+
+  if (query.isLoading) {
+    return <AdminEmptyDetail title="Loading jobs…" />;
+  }
+
+  if (tab === 'schedules' && !selectedSchedule) {
+    return (
+      <AdminEmptyDetail
+        title="Pick a schedule"
+        hint="Select a QStash schedule from the left to see its details and run history."
+      />
     );
-  }, [logs, logFilter]);
+  }
 
-  const scheduleSummary = useMemo(() => {
-    const total = schedules.length;
-    const paused = schedules.filter((s) => s.isPaused).length;
-    return { total, active: total - paused, paused };
-  }, [schedules]);
-
-  const logSummary = useMemo(() => {
-    const delivered = logs.filter((l) => l.state === 'DELIVERED').length;
-    const failed = logs.filter((l) => l.state === 'FAILED' || l.state === 'ERROR').length;
-    const retrying = logs.filter((l) => l.state === 'RETRY').length;
-    return { delivered, failed, retrying, total: logs.length };
-  }, [logs]);
+  if (tab === 'logs' && !selectedLog) {
+    return (
+      <AdminEmptyDetail
+        title="Pick a delivery"
+        hint="Select a delivery log from the left to see its full payload, headers, and error."
+      />
+    );
+  }
 
   return (
-    <section className="flex h-full min-h-0 w-full flex-col bg-white">
-      <div className={mainStickyHeaderClass}>
-        <div className={`${mainStickyHeaderShellRowClass} flex-wrap gap-y-2 px-6`}>
-          <div className="flex items-center gap-3">
-            <p className="text-xs font-semibold uppercase tracking-[0.14em] text-gray-900">
-              QStash Jobs
-            </p>
-            {query.isLoading ? (
-              <span className="text-[11px] text-gray-400">Loading...</span>
-            ) : (
-              <span className="text-[11px] text-gray-500">
-                {scheduleSummary.active} active schedules
-                {logSummary.failed > 0 && (
-                  <span className="ml-1.5 text-red-600">{logSummary.failed} failed</span>
-                )}
-              </span>
-            )}
-          </div>
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={() => setTab('schedules')}
-              className={`h-8 border px-3 text-xs font-semibold ${
-                tab === 'schedules'
-                  ? 'border-gray-900 bg-gray-900 text-white'
-                  : 'border-gray-300 text-gray-700'
-              }`}
-            >
-              Schedules ({scheduleSummary.total})
-            </button>
-            <button
-              type="button"
-              onClick={() => setTab('logs')}
-              className={`h-8 border px-3 text-xs font-semibold ${
-                tab === 'logs'
-                  ? 'border-gray-900 bg-gray-900 text-white'
-                  : 'border-gray-300 text-gray-700'
-              }`}
-            >
-              Logs ({logSummary.total})
-            </button>
-            <button
-              type="button"
-              onClick={() => query.refetch()}
-              disabled={query.isFetching}
-              className="h-8 border border-gray-300 px-3 text-xs text-gray-700 disabled:opacity-50"
-            >
-              {query.isFetching ? 'Refreshing...' : 'Refresh'}
-            </button>
-          </div>
-        </div>
-      </div>
-
-      <div className="min-h-0 flex-1 overflow-hidden px-6 py-5">
-        {tab === 'schedules' ? (
-          <div className="flex h-full min-h-0 flex-col overflow-hidden border border-gray-200">
-            <div className="min-h-0 flex-1 overflow-auto">
-              <div className="min-w-[900px]">
-                <div className="grid grid-cols-[1fr_120px_64px_64px_80px] gap-x-3 border-b border-gray-200 px-4 py-3 text-[10px] font-semibold uppercase tracking-[0.16em] text-gray-500">
-                  <p>Destination</p>
-                  <p>Cron</p>
-                  <p>Retries</p>
-                  <p>Method</p>
-                  <p>Status</p>
-                </div>
-
-                {schedules.length === 0 ? (
-                  <div className="px-4 py-6 text-xs text-gray-500">
-                    {query.isLoading ? 'Loading schedules...' : 'No schedules found.'}
-                  </div>
-                ) : (
-                  schedules.map((s) => (
-                    <div
-                      key={s.scheduleId}
-                      className="grid grid-cols-[1fr_120px_64px_64px_80px] gap-x-3 border-b border-gray-100 px-4 py-3 text-[11px] text-gray-700"
-                    >
-                      <div className="min-w-0">
-                        <p className="truncate font-medium">{shortUrl(s.destination)}</p>
-                        <p className="truncate text-[10px] text-gray-400">{s.scheduleId}</p>
-                      </div>
-                      <p className="font-mono text-[10px]">{s.cron}</p>
-                      <p>{s.retries}</p>
-                      <p>{s.method}</p>
-                      <p>
-                        <span
-                          className={`inline-block rounded px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider ${
-                            s.isPaused ? 'bg-amber-50 text-amber-700' : 'bg-emerald-50 text-emerald-700'
-                          }`}
-                        >
-                          {s.isPaused ? 'Paused' : 'Active'}
-                        </span>
-                      </p>
-                    </div>
-                  ))
-                )}
-              </div>
-            </div>
-          </div>
-        ) : (
-          <div className="flex h-full min-h-0 flex-col overflow-hidden border border-gray-200">
-            <div className="border-b border-gray-200 px-4 py-2">
-              <input
-                value={logFilter}
-                onChange={(e) => setLogFilter(e.target.value)}
-                placeholder="Filter by label, url, state, or error..."
-                className="h-8 w-full max-w-[400px] border border-gray-300 px-2 text-xs"
-              />
-            </div>
-            <div className="min-h-0 flex-1 overflow-auto">
-              <div className="min-w-[900px]">
-                <div className="grid grid-cols-[160px_80px_1fr_120px_1fr] gap-x-3 border-b border-gray-200 px-4 py-3 text-[10px] font-semibold uppercase tracking-[0.16em] text-gray-500">
-                  <p>Time</p>
-                  <p>State</p>
-                  <p>URL</p>
-                  <p>Label</p>
-                  <p>Error</p>
-                </div>
-
-                {filteredLogs.length === 0 ? (
-                  <div className="px-4 py-6 text-xs text-gray-500">
-                    {query.isLoading ? 'Loading logs...' : 'No logs found.'}
-                  </div>
-                ) : (
-                  filteredLogs.map((l, i) => (
-                    <div
-                      key={`${l.messageId}-${l.time}-${i}`}
-                      className="grid grid-cols-[160px_80px_1fr_120px_1fr] gap-x-3 border-b border-gray-100 px-4 py-3 text-[11px] text-gray-700"
-                    >
-                      <p className="tabular-nums">{formatTime(l.time)}</p>
-                      <p>
-                        <span
-                          className={`inline-block rounded px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider ${
-                            STATE_COLORS[l.state] ?? 'text-gray-600 bg-gray-100'
-                          }`}
-                        >
-                          {l.state}
-                        </span>
-                      </p>
-                      <p className="truncate">{shortUrl(l.url)}</p>
-                      <p className="truncate text-gray-500">{l.label || '-'}</p>
-                      <p className="truncate text-red-600">{l.error || '-'}</p>
-                    </div>
-                  ))
-                )}
-              </div>
-            </div>
-
-            <div className="flex items-center justify-between border-t border-gray-200 px-4 py-2">
-              <p className="text-xs text-gray-500">
-                {logSummary.delivered} delivered, {logSummary.failed} failed, {logSummary.retrying} retrying
-              </p>
-              <p className="text-xs text-gray-500">
-                Showing {filteredLogs.length} of {logs.length} logs
-              </p>
-            </div>
-          </div>
-        )}
+    <section className="flex h-full min-h-0 w-full flex-col overflow-hidden bg-gray-50">
+      <div className="min-h-0 flex-1 overflow-auto px-6 py-6">
+        {tab === 'schedules' && selectedSchedule ? (
+          <ScheduleDetail row={selectedSchedule} />
+        ) : tab === 'logs' && selectedLog ? (
+          <LogDetail row={selectedLog} />
+        ) : null}
       </div>
     </section>
+  );
+}
+
+function ScheduleDetail({ row }: { row: ScheduleRow }) {
+  return (
+    <div className="mx-auto max-w-3xl space-y-5">
+      <header className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <p className="text-[10px] font-bold uppercase tracking-widest text-gray-500">Schedule</p>
+          <h2 className="mt-0.5 break-all text-lg font-bold text-gray-900">
+            {row.destination}
+          </h2>
+          <p className="mt-0.5 break-all font-mono text-[11px] text-gray-400">{row.scheduleId}</p>
+        </div>
+        <span
+          className={`inline-flex flex-shrink-0 rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider ${
+            row.isPaused ? 'bg-amber-50 text-amber-700' : 'bg-emerald-50 text-emerald-700'
+          }`}
+        >
+          {row.isPaused ? 'Paused' : 'Active'}
+        </span>
+      </header>
+
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+        <DetailCard label="Cron" value={<span className="font-mono">{row.cron}</span>} />
+        <DetailCard label="Method" value={row.method} />
+        <DetailCard label="Retries" value={row.retries} />
+        <DetailCard label="Created" value={formatTime(row.createdAt)} />
+      </div>
+    </div>
+  );
+}
+
+function LogDetail({ row }: { row: LogRow }) {
+  return (
+    <div className="mx-auto max-w-3xl space-y-5">
+      <header className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <p className="text-[10px] font-bold uppercase tracking-widest text-gray-500">Delivery</p>
+          <h2 className="mt-0.5 break-all text-lg font-bold text-gray-900">
+            {row.label || row.url}
+          </h2>
+          <p className="mt-0.5 break-all font-mono text-[11px] text-gray-400">{row.messageId}</p>
+        </div>
+        <span
+          className={`inline-flex flex-shrink-0 rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider ${
+            STATE_COLORS[row.state] ?? 'bg-gray-100 text-gray-600'
+          }`}
+        >
+          {row.state}
+        </span>
+      </header>
+
+      <div className="grid grid-cols-2 gap-3">
+        <DetailCard label="Time" value={formatTime(row.time)} />
+        <DetailCard label="URL" value={<span className="break-all font-mono text-[11px]">{row.url}</span>} />
+      </div>
+
+      {row.error ? (
+        <div className="rounded-xl border border-red-200 bg-red-50 p-4">
+          <p className="text-[10px] font-bold uppercase tracking-widest text-red-700">Error</p>
+          <pre className="mt-2 whitespace-pre-wrap break-words text-[12px] text-red-800">
+            {row.error}
+          </pre>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function DetailCard({ label, value }: { label: string; value: React.ReactNode }) {
+  return (
+    <div className="rounded-xl border border-gray-200 bg-white p-3">
+      <p className="text-[10px] font-bold uppercase tracking-widest text-gray-500">{label}</p>
+      <div className="mt-1 break-words text-[13px] font-semibold text-gray-900">{value}</div>
+    </div>
   );
 }

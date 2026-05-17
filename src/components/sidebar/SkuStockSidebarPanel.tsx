@@ -3,12 +3,20 @@
 import { useEffect, useState } from 'react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { sidebarHeaderBandClass } from '@/components/layout/header-shell';
-import { ViewDropdown } from '@/components/ui/ViewDropdown';
+import { HorizontalButtonSlider, type HorizontalSliderItem } from '@/components/ui/HorizontalButtonSlider';
+import { History, Pencil } from '@/components/Icons';
 import { SearchBar } from '@/components/ui/SearchBar';
 import { FavoritesWorkspaceSection } from '@/components/sidebar/FavoritesWorkspaceSection';
 import MultiSkuSnBarcode from '@/components/MultiSkuSnBarcode';
 import { parseSkuView, type SkuView } from '@/components/sku/SkuBrowser';
 import type { FavoriteSkuRecord } from '@/lib/favorites/sku-favorites';
+
+// Location view moved to /inventory (Map tab) — bin browsing happens
+// there now. SKU edit / history remain here.
+const SKU_STOCK_VIEW_ITEMS: HorizontalSliderItem[] = [
+  { id: 'sku_stock',   label: 'SKU Edit',    icon: Pencil },
+  { id: 'sku_history', label: 'SKU History', icon: History },
+];
 
 // ─── Component ──────────────────────────────────────────────────────────────
 
@@ -100,15 +108,11 @@ export function SkuStockSidebarPanel({ hideSearch = false }: SkuStockSidebarPane
 
   return (
     <div className="h-full flex flex-col overflow-hidden bg-white">
-      {/* View toggle (desktop sidebar only) */}
+      {/* View pills (2nd row) */}
       {!hideSearch && (
-        <div className={sidebarHeaderBandClass}>
-          <ViewDropdown
-            options={[
-              { value: 'sku_stock', label: 'SKU EDIT' },
-              { value: 'sku_history', label: 'SKU HISTORY' },
-              { value: 'location', label: 'LOCATION' },
-            ]}
+        <div className={`${sidebarHeaderBandClass} px-3`}>
+          <HorizontalButtonSlider
+            items={SKU_STOCK_VIEW_ITEMS}
             value={view}
             onChange={(nextView) => {
               const nextParams = new URLSearchParams(searchParams.toString());
@@ -116,6 +120,8 @@ export function SkuStockSidebarPanel({ hideSearch = false }: SkuStockSidebarPane
               const qs = nextParams.toString();
               router.replace(qs ? `/sku-stock?${qs}` : '/sku-stock');
             }}
+            variant="nav"
+            aria-label="SKU stock view"
           />
         </div>
       )}

@@ -1,39 +1,54 @@
 'use client';
 
-import { useEffect } from 'react';
-import { useSearchParams } from 'next/navigation';
-import { useLocalStorage } from './_storage';
+/**
+ * DEPRECATED — kept as a session-backed shim during the Phase D rollout.
+ *
+ * Was: URL → localStorage → fallback bridge. The URL/localStorage paths are
+ * gone (Phase F). Now returns the signed-in staff's ID from AuthContext,
+ * with the original `fallback` honoured when there's no session yet.
+ *
+ * The setter is a no-op (staff switching happens via the FAB → Switch
+ * staff sheet, not via per-page mutation). Existing callers compile but
+ * stop driving identity from the page level.
+ *
+ * Delete this file once all callsites have been migrated to `useAuth()`
+ * directly (Phase H).
+ */
+
+import { useAuth } from '@/contexts/AuthContext';
 
 const DEFAULT_STAFF_ID = 8;
 
 interface PersistedStaffIdOptions {
+  /** Ignored; previously the localStorage key. Kept for type compatibility. */
   storageKey?: string;
+  /** Returned when no session is active. */
   fallback?: number;
 }
 
-/**
- * Resolves the active staff ID from URL → localStorage → fallback (default 8).
- * Persists the resolved value to localStorage so the last selection is remembered.
- */
+let warnedOnce = false;
+
 export function usePersistedStaffId(
   options?: PersistedStaffIdOptions,
 ): [staffId: number, setStaffId: (id: number) => void] {
-  const { storageKey = 'fba-staff-id', fallback = DEFAULT_STAFF_ID } = options ?? {};
+  const { fallback = DEFAULT_STAFF_ID } = options ?? {};
+  const { user } = useAuth();
 
-  const searchParams = useSearchParams();
-  const staffIdRaw = String(searchParams.get('staffId') || '').trim();
-  const staffIdFromUrl = /^\d+$/.test(staffIdRaw) ? parseInt(staffIdRaw, 10) : null;
+  if (typeof window !== 'undefined' && !warnedOnce) {
+    warnedOnce = true;
+    // eslint-disable-next-line no-console
+    console.warn(
+      '[usePersistedStaffId] deprecated — read useAuth().user?.staffId. ' +
+      'This shim returns the signed-in staff from the session cookie.',
+    );
+  }
 
-  const [saved, setSaved] = useLocalStorage<number>(storageKey, fallback);
-
-  const staffId = staffIdFromUrl ?? saved;
-
-  // Keep localStorage in sync when the URL provides a staffId
-  useEffect(() => {
-    if (staffIdFromUrl !== null && staffIdFromUrl !== saved) {
-      setSaved(staffIdFromUrl);
+  const staffId = user?.staffId ?? fallback;
+  const setStaffId = (_id: number) => {
+    if (typeof window !== 'undefined') {
+      // eslint-disable-next-line no-console
+      console.warn('[usePersistedStaffId.set] no-op — switch staff via the FAB.');
     }
-  }, [staffIdFromUrl, saved, setSaved]);
-
-  return [staffId, setSaved];
+  };
+  return [staffId, setStaffId];
 }

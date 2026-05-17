@@ -25,6 +25,7 @@ import {
   monoValue,
   cardTitle,
 } from '@/design-system/tokens/typography/presets';
+import { AuditTimeline } from '@/components/audit/AuditTimeline';
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -720,6 +721,15 @@ export default function SkuDetailView({ sku, variant = 'page', onClose }: SkuDet
             </div>
           </div>
         )}
+
+        {/* ── Audit history ── */}
+        <div className="bg-white rounded-2xl p-4">
+          <h2 className={`${sectionLabel} mb-3`}>
+            <History className="inline h-3 w-3 mr-1" />
+            History
+          </h2>
+          <AuditTimeline sku={sku} limit={50} compact noHeader />
+        </div>
       </div>
 
       {/* ── Photo Lightbox ── */}

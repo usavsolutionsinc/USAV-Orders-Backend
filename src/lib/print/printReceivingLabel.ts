@@ -3,6 +3,11 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import QRCode from 'react-qr-code';
 import { getLast4 } from '@/components/ui/CopyChip';
 import { mobileQrUrl } from '@/lib/barcode-routing';
+import { printHtmlSilent } from '@/lib/print/silentPrint';
+
+// 2in × 1in label in microns — used so Electron's silent-print picks the
+// right paper size on thermal label printers (Zebra, Brother QL, etc.)
+const RECEIVING_PAGE_SIZE = { width: 50800, height: 25400 } as const;
 
 export interface ReceivingLabelPayload {
   /** Numeric receiving id — used to build the QR URL when qrValue is not provided. */
@@ -139,12 +144,19 @@ window.onafterprint=function(){setTimeout(function(){window.close();},80);};
 </script>
 </body></html>`;
 
-  const w = window.open('', '_blank', 'width=900,height=700');
-  if (!w) {
-    console.warn('printReceivingLabel: popup blocked');
-    return;
-  }
-  w.document.open();
-  w.document.write(html);
-  w.document.close();
+  void printHtmlSilent(html, {
+    pageSize: RECEIVING_PAGE_SIZE,
+    margins: { marginType: 'none' },
+    waitMs: 250,
+  }).then((handled) => {
+    if (handled) return;
+    const w = window.open('', '_blank', 'width=900,height=700');
+    if (!w) {
+      console.warn('printReceivingLabel: popup blocked');
+      return;
+    }
+    w.document.open();
+    w.document.write(html);
+    w.document.close();
+  });
 }

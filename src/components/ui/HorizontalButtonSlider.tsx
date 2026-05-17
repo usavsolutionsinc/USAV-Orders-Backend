@@ -11,6 +11,17 @@ export type HorizontalSliderItem = {
   count?: number;
   /** Used when variant is `fba`. */
   tone?: HorizontalSliderTone;
+  /**
+   * Leading icon. Used by the `nav` variant where desktop pills collapse to
+   * icon-only and reveal the label on hover (or when active). Ignored by
+   * other variants.
+   */
+  icon?: (props: { className?: string }) => JSX.Element;
+  /**
+   * Renders the pill as a non-interactive placeholder (e.g. "coming soon"
+   * sections). Currently honored by the `nav` variant.
+   */
+  disabled?: boolean;
 };
 
 const FBA_TONE: Record<
@@ -59,8 +70,15 @@ export type HorizontalButtonSliderProps = {
   items: HorizontalSliderItem[];
   value: string;
   onChange: (id: string) => void;
-  /** `fba`: ring pills with per-item tone. `slate`: dark pill when active (work order status). */
-  variant?: 'fba' | 'slate';
+  /**
+   * Active-state visual language:
+   *   - `fba`   — ring pills with per-item tone (FBA filter rows).
+   *   - `slate` — dark pill when active (work-order status).
+   *   - `nav`   — filled blue active state matching the global sidebar nav
+   *               (sub-view switchers inside sidebar panels). Adds a subtle
+   *               scale-up on the active pill so the eye locks onto it.
+   */
+  variant?: 'fba' | 'slate' | 'nav';
   size?: 'md' | 'lg';
   className?: string;
   legend?: string;
@@ -85,6 +103,13 @@ export function HorizontalButtonSlider({
       ? 'min-h-10 px-3.5 py-2 text-[10px] tracking-wide'
       : 'h-8 px-3 text-[9px] tracking-wide';
 
+  // The `nav` variant uses a noticeable scale-up + shadow on the active pill;
+  // both of those would be clipped by `overflow-x-auto` (browsers treat any
+  // horizontal-scroll container as clipping the Y axis too, regardless of
+  // overflow-y). So we give the scroller vertical breathing room — pills sit
+  // INSIDE the scrollbox so their full render fits.
+  const scrollerPadY = variant === 'nav' ? 'py-2' : 'pb-0.5';
+
   return (
     <div className={className}>
       {legend ? (
@@ -97,22 +122,63 @@ export function HorizontalButtonSlider({
         role="tablist"
         aria-label={ariaLabel || legend || 'Filter'}
         onWheel={onWheel}
-        className="-mx-1 overflow-x-auto overscroll-x-contain pb-0.5 [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden"
+        className={`-mx-1 overflow-x-auto overscroll-x-contain ${scrollerPadY} [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden`}
       >
         <div className="flex min-w-max snap-x snap-mandatory gap-2 px-1">
           {items.map((item) => {
             const isActive = value === item.id;
-            if (variant === 'slate') {
+            if (variant === 'nav') {
+              const Icon = item.icon;
+              const isDisabled = !!item.disabled;
+              // Label is always visible — pill width stays constant so the
+              // click target doesn't jump around as the user hovers.
+              const labelClass = 'ml-1.5 max-w-[160px]';
+              const stateClass = isDisabled
+                ? 'cursor-not-allowed bg-gray-50 text-gray-400 ring-gray-200'
+                : isActive
+                  ? 'bg-blue-600 text-white ring-blue-600 shadow-md shadow-blue-600/25'
+                  : 'bg-white text-gray-500 ring-gray-200 hover:bg-gray-50 hover:text-gray-900 hover:ring-gray-300';
               return (
-                <button
+                <motion.button
                   key={item.id}
                   type="button"
                   role="tab"
                   aria-selected={isActive}
+                  aria-disabled={isDisabled || undefined}
+                  aria-label={isDisabled ? `${item.label} (coming soon)` : item.label}
+                  title={isDisabled ? `${item.label} (coming soon)` : item.label}
+                  disabled={isDisabled}
+                  animate={{ scale: isActive && !isDisabled ? 1.04 : 1 }}
+                  transition={{ type: 'spring', stiffness: 380, damping: 28, mass: 0.6 }}
+                  whileTap={isDisabled ? undefined : { scale: 0.96 }}
+                  onClick={isDisabled ? undefined : () => onChange(item.id)}
+                  className={`group relative inline-flex snap-start items-center whitespace-nowrap rounded-full font-black uppercase transition-colors ring-1 ring-inset ${sizeCls} ${stateClass}`}
+                >
+                  {Icon ? <Icon className="h-3.5 w-3.5 shrink-0" /> : null}
+                  <span className={`inline-block whitespace-nowrap ${labelClass}`}>
+                    {item.label}
+                  </span>
+                  {item.count != null && item.count > 0 ? (
+                    <span className={`ml-1.5 shrink-0 tabular-nums ${isActive ? 'opacity-90' : 'opacity-70'}`}>{item.count}</span>
+                  ) : null}
+                </motion.button>
+              );
+            }
+
+            if (variant === 'slate') {
+              return (
+                <motion.button
+                  key={item.id}
+                  type="button"
+                  role="tab"
+                  aria-selected={isActive}
+                  animate={{ scale: isActive ? 1.03 : 1 }}
+                  transition={{ type: 'spring', stiffness: 380, damping: 28, mass: 0.6 }}
+                  whileTap={{ scale: 0.95 }}
                   onClick={() => onChange(item.id)}
-                  className={`snap-start whitespace-nowrap rounded-full border font-black uppercase transition-all ${sizeCls} ${
+                  className={`snap-start whitespace-nowrap rounded-full border font-black uppercase transition-colors ${sizeCls} ${
                     isActive
-                      ? 'border-gray-900 bg-gray-900 text-white'
+                      ? 'border-gray-900 bg-gray-900 text-white shadow-md shadow-gray-900/20'
                       : 'border-gray-200 bg-white text-gray-600 hover:border-gray-300 hover:bg-gray-50'
                   }`}
                 >
@@ -120,7 +186,7 @@ export function HorizontalButtonSlider({
                   {item.count != null && item.count > 0 ? (
                     <span className="ml-1.5 tabular-nums opacity-80">{item.count}</span>
                   ) : null}
-                </button>
+                </motion.button>
               );
             }
 
@@ -131,6 +197,8 @@ export function HorizontalButtonSlider({
                 type="button"
                 role="tab"
                 aria-selected={isActive}
+                animate={{ scale: isActive ? 1.03 : 1 }}
+                transition={{ type: 'spring', stiffness: 380, damping: 28, mass: 0.6 }}
                 whileTap={{ scale: 0.92 }}
                 onClick={() => onChange(item.id)}
                 className={`snap-start whitespace-nowrap rounded-full font-black uppercase transition-colors ring-1 ring-inset ${sizeCls} ${

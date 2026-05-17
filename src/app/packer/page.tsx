@@ -1,13 +1,16 @@
 import { PackerPageContent } from '@/components/packer/PackerPageContent';
+import { getCurrentUser } from '@/lib/auth/current-user';
 
-export default async function PackerPage({
-  searchParams,
-}: {
-  searchParams: Promise<{ staffId?: string }>;
-}) {
-  const params = await searchParams;
-  const staffId = String(params?.staffId || '').trim();
-  const packerId = /^\d+$/.test(staffId) ? staffId : '4';
+/**
+ * /packer — the packer station landing.
+ *
+ * Identity from the session cookie. See `/tech` page for the migration
+ * notes. Fallback to staff #4 if signed out so the page still renders
+ * during rollout.
+ */
+export default async function PackerPage() {
+  const user = await getCurrentUser();
+  const packerId = user ? String(user.staffId) : '4';
 
   return <PackerPageContent packerId={packerId} />;
 }

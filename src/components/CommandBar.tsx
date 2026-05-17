@@ -1,14 +1,28 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react';
+/**
+ * CommandBar — global ⌘K / Ctrl+K command menu.
+ *
+ * Built on the `cmdk` primitive (same library used by Linear, Vercel,
+ * Raycast-style menus, shadcn/ui's CommandDialog). cmdk handles a11y,
+ * roving focus, arrow-key navigation, and group rendering; this component
+ * provides the visual shell (framer-motion modal + backdrop blur),
+ * server-side fuzzy search via /api/global-search, recents in localStorage,
+ * and an "Ask AI" affordance that deep-links into /ai with the query.
+ *
+ * `shouldFilter={false}` because we mix two filtering sources:
+ *  - static nav items (filtered manually below by query.includes)
+ *  - server search results (already filtered server-side)
+ * Letting cmdk also filter would double-filter and hide valid server hits.
+ */
+
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
+import { Command } from 'cmdk';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useRouter, usePathname } from 'next/navigation';
-import { framerTransition, framerPresence } from '@/design-system/foundations/motion-framer';
-import { sectionLabel, dataValue, microBadge } from '@/design-system/tokens/typography/presets';
 import {
   Search,
-  X,
   Loader2,
   Clock,
   LayoutDashboard,
@@ -25,19 +39,18 @@ import {
   Calendar,
   ShieldCheck,
   ChevronRight,
+  MessageSquare,
 } from '@/components/Icons';
-import { APP_SIDEBAR_NAV, type SidebarNavItem } from '@/lib/sidebar-navigation';
+import { APP_SIDEBAR_NAV, getSidebarNavItems, type SidebarNavItem } from '@/lib/sidebar-navigation';
+import { useAuth } from '@/contexts/AuthContext';
 
-// ── Types ────────────────────────────────────────────────────
+// ── Types ─────────────────────────────────────────────────────────────────
 
-interface CommandItem {
+interface RecentItem {
   id: string;
-  type: 'navigate' | 'search-result' | 'action' | 'recent';
   label: string;
   subtitle?: string;
   href?: string;
-  icon: (props: { className?: string }) => JSX.Element;
-  onSelect?: () => void;
   entityType?: string;
 }
 
@@ -49,12 +62,14 @@ interface SearchResult {
   href: string;
 }
 
-// ── Constants ────────────────────────────────────────────────
+type IconComponent = (props: { className?: string }) => JSX.Element;
+
+// ── Constants ─────────────────────────────────────────────────────────────
 
 const RECENT_KEY = 'command-bar-recent';
-const MAX_RECENT = 8;
+const MAX_RECENT = 6;
 
-const ENTITY_ICONS: Record<string, (props: { className?: string }) => JSX.Element> = {
+const ENTITY_ICONS: Record<string, IconComponent> = {
   order: LayoutDashboard,
   repair: Tool,
   fba: Package,
@@ -62,7 +77,7 @@ const ENTITY_ICONS: Record<string, (props: { className?: string }) => JSX.Elemen
   sku: Box,
 };
 
-const NAV_ICON_MAP: Record<string, (props: { className?: string }) => JSX.Element> = {
+const NAV_ICON_MAP: Record<string, IconComponent> = {
   dashboard: LayoutDashboard,
   fba: Package,
   repair: Tool,
@@ -78,63 +93,82 @@ const NAV_ICON_MAP: Record<string, (props: { className?: string }) => JSX.Elemen
   admin: ShieldCheck,
 };
 
-// ── Helpers ──────────────────────────────────────────────────
+// ── Helpers ───────────────────────────────────────────────────────────────
 
-function getRecent(): CommandItem[] {
+function getRecent(): RecentItem[] {
+  if (typeof window === 'undefined') return [];
   try {
-    const raw = localStorage.getItem(RECENT_KEY);
+    const raw = window.localStorage.getItem(RECENT_KEY);
     if (!raw) return [];
-    return JSON.parse(raw) as CommandItem[];
+    const parsed = JSON.parse(raw) as RecentItem[];
+    return Array.isArray(parsed) ? parsed : [];
   } catch {
     return [];
   }
 }
 
-function saveRecent(item: CommandItem) {
+function saveRecent(item: RecentItem): RecentItem[] {
+  if (typeof window === 'undefined') return [];
   try {
     const existing = getRecent().filter((r) => r.id !== item.id);
-    const updated = [{ ...item, type: 'recent' as const }, ...existing].slice(0, MAX_RECENT);
-    localStorage.setItem(RECENT_KEY, JSON.stringify(updated));
+    const updated = [item, ...existing].slice(0, MAX_RECENT);
+    window.localStorage.setItem(RECENT_KEY, JSON.stringify(updated));
+    return updated;
   } catch {
-    // noop
+    return [];
   }
 }
 
-function buildNavItems(): CommandItem[] {
-  return APP_SIDEBAR_NAV.map((nav: SidebarNavItem) => ({
-    id: `nav:${nav.id}`,
-    type: 'navigate' as const,
+interface NavOption {
+  id: string;
+  label: string;
+  href: string;
+  icon: IconComponent;
+}
+
+function buildNavItems(permissions?: ReadonlySet<string>): NavOption[] {
+  const items = permissions ? getSidebarNavItems({ permissions }) : APP_SIDEBAR_NAV;
+  return items.map((nav: SidebarNavItem) => ({
+    id: nav.id,
     label: nav.label,
-    subtitle: nav.href,
     href: nav.href,
     icon: NAV_ICON_MAP[nav.id] || ChevronRight,
   }));
 }
 
-// ── Component ────────────────────────────────────────────────
+// ── Component ─────────────────────────────────────────────────────────────
 
 export function CommandBar() {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
-  const [activeIndex, setActiveIndex] = useState(0);
   const [searchResults, setSearchResults] = useState<SearchResult[]>([]);
   const [searching, setSearching] = useState(false);
   const [mounted, setMounted] = useState(false);
+  const [recents, setRecents] = useState<RecentItem[]>([]);
 
-  const inputRef = useRef<HTMLInputElement>(null);
-  const listRef = useRef<HTMLDivElement>(null);
   const abortRef = useRef<AbortController | null>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout>>();
 
   const router = useRouter();
   const pathname = usePathname();
+  const { user: authUser, isLoaded: authLoaded } = useAuth();
 
-  useEffect(() => { setMounted(true); }, []);
+  useEffect(() => {
+    setMounted(true);
+    setRecents(getRecent());
+  }, []);
 
-  // Keyboard shortcut: Cmd+K / Ctrl+K
+  // ── Keyboard shortcut: ⌘K / Ctrl+K ──
   useEffect(() => {
     function handleKeyDown(e: globalThis.KeyboardEvent) {
       if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+        const target = e.target as HTMLElement | null;
+        // Don't fight typing in editable surfaces.
+        const tag = target?.tagName;
+        const editable =
+          tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' ||
+          target?.isContentEditable;
+        if (editable && !open) return;
         e.preventDefault();
         setOpen((prev) => !prev);
       }
@@ -146,37 +180,37 @@ export function CommandBar() {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [open]);
 
-  // Focus input on open
+  // External trigger — the QuickAccess FAB popover dispatches this when the
+  // user taps the Search button in its header.
+  useEffect(() => {
+    const onOpen = () => setOpen(true);
+    window.addEventListener('usav-command-bar-open', onOpen);
+    return () => window.removeEventListener('usav-command-bar-open', onOpen);
+  }, []);
+
+  // Reset state on open / close on route change.
   useEffect(() => {
     if (open) {
       setQuery('');
       setSearchResults([]);
-      setActiveIndex(0);
-      requestAnimationFrame(() => inputRef.current?.focus());
+      setRecents(getRecent());
     }
   }, [open]);
+  useEffect(() => { setOpen(false); }, [pathname]);
 
-  // Close on route change
-  useEffect(() => {
-    setOpen(false);
-  }, [pathname]);
-
-  // Debounced search
+  // Debounced server search.
   useEffect(() => {
     if (!query.trim()) {
       setSearchResults([]);
       setSearching(false);
       return;
     }
-
     setSearching(true);
     clearTimeout(debounceRef.current);
-
     debounceRef.current = setTimeout(async () => {
       abortRef.current?.abort();
       const controller = new AbortController();
       abortRef.current = controller;
-
       try {
         const res = await fetch(
           `/api/global-search?q=${encodeURIComponent(query.trim())}&limit=12`,
@@ -188,236 +222,268 @@ export function CommandBar() {
           setSearchResults(data.rows || []);
           setSearching(false);
         }
-      } catch (err: any) {
-        if (err?.name !== 'AbortError') {
-          setSearching(false);
-        }
+      } catch (err) {
+        if ((err as { name?: string }).name !== 'AbortError') setSearching(false);
       }
     }, 250);
-
     return () => clearTimeout(debounceRef.current);
   }, [query]);
 
-  // Build items list
-  const navItems = useMemo(() => buildNavItems(), []);
+  // Build nav items (perm-aware) and filter manually by query.
+  const authPermissions = useMemo<ReadonlySet<string> | undefined>(() => {
+    if (!authLoaded || !authUser) return undefined;
+    return new Set(authUser.permissions);
+  }, [authLoaded, authUser]);
+  const navItems = useMemo(() => buildNavItems(authPermissions), [authPermissions]);
+  const filteredNav = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    if (!q) return navItems;
+    return navItems.filter((n) =>
+      n.label.toLowerCase().includes(q) || n.href.toLowerCase().includes(q),
+    );
+  }, [navItems, query]);
 
-  const items = useMemo((): CommandItem[] => {
-    const trimmed = query.trim().toLowerCase();
+  // ── Selection handlers ──
 
-    if (trimmed) {
-      // Show search results + filtered nav items
-      const matchedNav = navItems.filter(
-        (item) =>
-          item.label.toLowerCase().includes(trimmed) ||
-          (item.subtitle || '').toLowerCase().includes(trimmed),
-      );
-
-      const resultItems: CommandItem[] = searchResults.map((r) => ({
-        id: `result:${r.entityType}:${r.id}`,
-        type: 'search-result' as const,
-        label: r.title,
-        subtitle: r.subtitle,
-        href: r.href,
-        icon: ENTITY_ICONS[r.entityType] || Search,
-        entityType: r.entityType,
-      }));
-
-      return [...matchedNav.slice(0, 4), ...resultItems];
-    }
-
-    // No query — show recent + all nav items
-    const recent = getRecent();
-    return [...recent, ...navItems];
-  }, [query, navItems, searchResults]);
-
-  // Reset active index when items change
-  useEffect(() => {
-    setActiveIndex(0);
-  }, [items.length]);
-
-  // Scroll active item into view
-  useEffect(() => {
-    const el = listRef.current?.children[activeIndex] as HTMLElement | undefined;
-    el?.scrollIntoView({ block: 'nearest' });
-  }, [activeIndex]);
-
-  const selectItem = useCallback(
-    (item: CommandItem) => {
-      if (item.onSelect) {
-        item.onSelect();
-      } else if (item.href) {
-        router.push(item.href);
-      }
-
-      // Save to recents
-      saveRecent(item);
+  const navigate = useCallback(
+    (item: RecentItem) => {
+      if (item.href) router.push(item.href);
+      setRecents(saveRecent(item));
       setOpen(false);
     },
     [router],
   );
 
-  const handleKeyDown = useCallback(
-    (e: KeyboardEvent<HTMLInputElement>) => {
-      if (e.key === 'ArrowDown') {
-        e.preventDefault();
-        setActiveIndex((prev) => Math.min(prev + 1, items.length - 1));
-      } else if (e.key === 'ArrowUp') {
-        e.preventDefault();
-        setActiveIndex((prev) => Math.max(prev - 1, 0));
-      } else if (e.key === 'Enter' && items[activeIndex]) {
-        e.preventDefault();
-        selectItem(items[activeIndex]);
-      }
-    },
-    [items, activeIndex, selectItem],
-  );
+  const handleAskAi = useCallback(() => {
+    const q = query.trim();
+    const href = q ? `/ai?q=${encodeURIComponent(q)}` : '/ai';
+    router.push(href);
+    setOpen(false);
+  }, [query, router]);
 
   if (!mounted) return null;
 
+  const showAskAi = query.trim().length >= 2;
+  const showSearchGroup = Boolean(query.trim());
+  const showRecentGroup = !query.trim() && recents.length > 0;
+
   return createPortal(
-    <>
-      <AnimatePresence>
-        {open && (
-          <>
-            {/* Scrim */}
-            <motion.div
-              key="command-scrim"
-              {...framerPresence.workOrderScrim}
-              transition={framerTransition.overlayScrim}
-              className="fixed inset-0 z-[1000] bg-black/40 backdrop-blur-sm"
-              onClick={() => setOpen(false)}
-            />
+    <AnimatePresence>
+      {open && (
+        <>
+          {/* Backdrop */}
+          <motion.div
+            key="cmdk-scrim"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.15, ease: 'easeOut' }}
+            className="fixed inset-0 z-[1000] bg-gray-900/40 backdrop-blur-md"
+            onClick={() => setOpen(false)}
+            aria-hidden
+          />
 
-            {/* Dialog */}
-            <motion.div
-              key="command-dialog"
-              initial={{ opacity: 0, scale: 0.96, y: -8 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.96, y: -8 }}
-              transition={framerTransition.dropdownOpen}
-              className="fixed inset-x-0 top-0 z-[1001] flex justify-center pt-[12vh] md:pt-[18vh] px-4"
+          {/* Dialog */}
+          <motion.div
+            key="cmdk-dialog"
+            initial={{ opacity: 0, scale: 0.96, y: -8 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.96, y: -8 }}
+            transition={{ type: 'spring', damping: 28, stiffness: 360, mass: 0.7 }}
+            className="fixed inset-x-0 top-0 z-[1001] flex justify-center px-4 pt-[12vh] md:pt-[16vh]"
+          >
+            <Command
+              label="Command menu"
+              shouldFilter={false}
+              loop
+              className="w-full max-w-[560px] overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-2xl shadow-gray-900/30 ring-1 ring-black/[0.04] flex flex-col max-h-[70vh]"
             >
-              <div className="w-full max-w-[520px] bg-white rounded-2xl shadow-2xl border border-gray-200 overflow-hidden flex flex-col max-h-[70vh]">
-                {/* Search input */}
-                <div className="flex items-center gap-3 px-4 py-3 border-b border-gray-100">
-                  {searching ? (
-                    <Loader2 className="h-4 w-4 text-gray-400 animate-spin flex-shrink-0" />
-                  ) : (
-                    <Search className="h-4 w-4 text-gray-400 flex-shrink-0" />
-                  )}
-                  <input
-                    ref={inputRef}
-                    type="text"
-                    value={query}
-                    onChange={(e) => setQuery(e.target.value)}
-                    onKeyDown={handleKeyDown}
-                    placeholder="Search or jump to..."
-                    className="flex-1 text-[15px] font-medium text-gray-900 placeholder:text-gray-400 bg-transparent outline-none"
-                    autoComplete="off"
-                    spellCheck={false}
-                  />
-                  {query && (
-                    <button
-                      type="button"
-                      onClick={() => { setQuery(''); inputRef.current?.focus(); }}
-                      className="text-gray-400 hover:text-gray-600 transition-colors"
-                    >
-                      <X className="w-4 h-4" />
-                    </button>
-                  )}
-                  <kbd className={`hidden md:inline-flex ${microBadge} text-gray-500 bg-gray-100 px-1.5 py-0.5 rounded border border-gray-200`}>
-                    ESC
-                  </kbd>
-                </div>
+              {/* Input row */}
+              <div className="flex items-center gap-3 border-b border-gray-100 px-4 py-3">
+                {searching ? (
+                  <Loader2 className="h-4 w-4 shrink-0 animate-spin text-gray-400" />
+                ) : (
+                  <Search className="h-4 w-4 shrink-0 text-gray-400" />
+                )}
+                <Command.Input
+                  value={query}
+                  onValueChange={setQuery}
+                  placeholder="Search pages, orders, repairs, SKUs…"
+                  autoFocus
+                  className="flex-1 bg-transparent text-[15px] font-medium text-gray-900 placeholder:text-gray-400 outline-none"
+                />
+                <kbd className="hidden shrink-0 rounded-md border border-gray-200 bg-gray-50 px-1.5 py-0.5 font-mono text-[10px] font-semibold text-gray-500 md:inline-flex">
+                  ESC
+                </kbd>
+              </div>
 
-                {/* Results list */}
-                <div ref={listRef} className="overflow-y-auto py-2 flex-1" role="listbox">
-                  {items.length === 0 && query.trim() && !searching && (
-                    <div className="px-4 py-8 text-center text-[13px] text-gray-500">
-                      No results for &ldquo;{query}&rdquo;
-                    </div>
-                  )}
+              {/* List */}
+              <Command.List
+                className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-2 py-2"
+              >
+                <Command.Empty className="px-4 py-10 text-center text-[13px] text-gray-500">
+                  {searching ? 'Searching…' : query.trim() ? `No matches for "${query}"` : 'Type to search'}
+                </Command.Empty>
 
-                  {items.map((item, index) => {
-                    const isActive = index === activeIndex;
-                    const isRecent = item.type === 'recent';
-                    const isResult = item.type === 'search-result';
+                {showRecentGroup && (
+                  <Command.Group
+                    heading="Recent"
+                    className="[&_[cmdk-group-heading]]:px-3 [&_[cmdk-group-heading]]:py-2 [&_[cmdk-group-heading]]:text-[10px] [&_[cmdk-group-heading]]:font-black [&_[cmdk-group-heading]]:uppercase [&_[cmdk-group-heading]]:tracking-widest [&_[cmdk-group-heading]]:text-gray-400"
+                  >
+                    {recents.map((r) => {
+                      const Icon = r.entityType
+                        ? ENTITY_ICONS[r.entityType] || Clock
+                        : Clock;
+                      return (
+                        <CmdRow
+                          key={`recent:${r.id}`}
+                          value={`recent ${r.label} ${r.href ?? ''}`}
+                          icon={<Icon className="h-4 w-4 text-gray-400" />}
+                          label={r.label}
+                          subLabel={r.subtitle ?? r.href ?? undefined}
+                          onSelect={() => navigate(r)}
+                        />
+                      );
+                    })}
+                  </Command.Group>
+                )}
 
-                    // Section headers
-                    const prevType = items[index - 1]?.type;
-                    const showSectionHeader =
-                      (index === 0 && isRecent) ||
-                      (isRecent && prevType !== 'recent') ||
-                      (item.type === 'navigate' && prevType !== 'navigate' && !query.trim()) ||
-                      (isResult && prevType !== 'search-result');
+                {filteredNav.length > 0 && (
+                  <Command.Group
+                    heading="Pages"
+                    className="[&_[cmdk-group-heading]]:px-3 [&_[cmdk-group-heading]]:py-2 [&_[cmdk-group-heading]]:text-[10px] [&_[cmdk-group-heading]]:font-black [&_[cmdk-group-heading]]:uppercase [&_[cmdk-group-heading]]:tracking-widest [&_[cmdk-group-heading]]:text-gray-400"
+                  >
+                    {filteredNav.map((n) => {
+                      const Icon = n.icon;
+                      return (
+                        <CmdRow
+                          key={`nav:${n.id}`}
+                          value={`page ${n.label} ${n.href}`}
+                          icon={<Icon className="h-4 w-4 text-gray-400" />}
+                          label={n.label}
+                          subLabel={n.href}
+                          onSelect={() =>
+                            navigate({ id: `nav:${n.id}`, label: n.label, href: n.href })
+                          }
+                        />
+                      );
+                    })}
+                  </Command.Group>
+                )}
 
-                    return (
-                      <div key={item.id}>
-                        {showSectionHeader && (
-                          <div className="px-4 pt-3 pb-1">
-                            <span className={sectionLabel}>
-                              {isRecent ? 'Recent' : isResult ? 'Search Results' : 'Pages'}
-                            </span>
-                          </div>
-                        )}
-                        <button
-                          type="button"
-                          role="option"
-                          aria-selected={isActive}
-                          onClick={() => selectItem(item)}
-                          onMouseEnter={() => setActiveIndex(index)}
-                          className={`w-full flex items-center gap-3 px-4 py-2.5 text-left transition-colors ${
-                            isActive ? 'bg-gray-100' : 'bg-transparent hover:bg-gray-50'
-                          }`}
-                        >
-                          <item.icon className="h-4 w-4 text-gray-400 flex-shrink-0" />
-                          <div className="flex-1 min-w-0">
-                            <div className={`truncate ${dataValue}`}>
-                              {item.label}
-                            </div>
-                            {item.subtitle && (
-                              <div className="text-[11px] font-semibold text-gray-500 truncate">
-                                {item.subtitle}
-                              </div>
-                            )}
-                          </div>
-                          {isResult && item.entityType && (
-                            <span className={`${microBadge} text-gray-500 flex-shrink-0`}>
-                              {item.entityType}
-                            </span>
-                          )}
-                          {isActive && (
-                            <ChevronRight className="w-3.5 h-3.5 text-gray-300 flex-shrink-0" />
-                          )}
-                        </button>
-                      </div>
-                    );
-                  })}
-                </div>
+                {showSearchGroup && searchResults.length > 0 && (
+                  <Command.Group
+                    heading="Search results"
+                    className="[&_[cmdk-group-heading]]:px-3 [&_[cmdk-group-heading]]:py-2 [&_[cmdk-group-heading]]:text-[10px] [&_[cmdk-group-heading]]:font-black [&_[cmdk-group-heading]]:uppercase [&_[cmdk-group-heading]]:tracking-widest [&_[cmdk-group-heading]]:text-gray-400"
+                  >
+                    {searchResults.map((r) => {
+                      const Icon = ENTITY_ICONS[r.entityType] || Search;
+                      return (
+                        <CmdRow
+                          key={`result:${r.entityType}:${r.id}`}
+                          value={`result ${r.entityType} ${r.id} ${r.title}`}
+                          icon={<Icon className="h-4 w-4 text-gray-400" />}
+                          label={r.title}
+                          subLabel={r.subtitle}
+                          badge={r.entityType}
+                          onSelect={() =>
+                            navigate({
+                              id: `result:${r.entityType}:${r.id}`,
+                              label: r.title,
+                              subtitle: r.subtitle,
+                              href: r.href,
+                              entityType: r.entityType,
+                            })
+                          }
+                        />
+                      );
+                    })}
+                  </Command.Group>
+                )}
 
-                {/* Footer */}
-                <div className="flex items-center justify-between px-4 py-2 border-t border-gray-100 bg-gray-50/60">
-                  <div className="flex items-center gap-3 text-[10px] font-bold text-gray-500">
-                    <span className="flex items-center gap-1">
-                      <kbd className="font-mono font-bold bg-gray-100 px-1 py-0.5 rounded border border-gray-200">↑↓</kbd>
-                      navigate
-                    </span>
-                    <span className="flex items-center gap-1">
-                      <kbd className="font-mono font-bold bg-gray-100 px-1 py-0.5 rounded border border-gray-200">↵</kbd>
-                      select
-                    </span>
-                  </div>
-                  <span className="hidden md:flex items-center gap-1 text-[10px] font-bold text-gray-500">
-                    <kbd className="font-mono font-bold bg-gray-100 px-1 py-0.5 rounded border border-gray-200">⌘K</kbd>
-                    toggle
+                {showAskAi && (
+                  <Command.Group
+                    heading="AI"
+                    className="[&_[cmdk-group-heading]]:px-3 [&_[cmdk-group-heading]]:py-2 [&_[cmdk-group-heading]]:text-[10px] [&_[cmdk-group-heading]]:font-black [&_[cmdk-group-heading]]:uppercase [&_[cmdk-group-heading]]:tracking-widest [&_[cmdk-group-heading]]:text-gray-400"
+                  >
+                    <CmdRow
+                      value={`ai ask ${query}`}
+                      icon={
+                        <span className="flex h-5 w-5 items-center justify-center rounded-md bg-gradient-to-br from-violet-500 to-indigo-600 text-white">
+                          <MessageSquare className="h-3 w-3" />
+                        </span>
+                      }
+                      label={`Ask AI: "${query}"`}
+                      subLabel="Open chat with this question"
+                      onSelect={handleAskAi}
+                    />
+                  </Command.Group>
+                )}
+              </Command.List>
+
+              {/* Footer */}
+              <div className="flex items-center justify-between gap-3 border-t border-gray-100 bg-gray-50/70 px-4 py-2 text-[10px] font-bold text-gray-500">
+                <div className="flex items-center gap-3">
+                  <span className="inline-flex items-center gap-1">
+                    <kbd className="rounded border border-gray-200 bg-white px-1 py-0.5 font-mono">↑↓</kbd>
+                    navigate
+                  </span>
+                  <span className="inline-flex items-center gap-1">
+                    <kbd className="rounded border border-gray-200 bg-white px-1 py-0.5 font-mono">↵</kbd>
+                    select
+                  </span>
+                  <span className="hidden sm:inline-flex items-center gap-1">
+                    <kbd className="rounded border border-gray-200 bg-white px-1 py-0.5 font-mono">esc</kbd>
+                    close
                   </span>
                 </div>
+                <span className="hidden md:inline-flex items-center gap-1">
+                  <kbd className="rounded border border-gray-200 bg-white px-1 py-0.5 font-mono">⌘K</kbd>
+                  toggle
+                </span>
               </div>
-            </motion.div>
-          </>
-        )}
-      </AnimatePresence>
-    </>,
+            </Command>
+          </motion.div>
+        </>
+      )}
+    </AnimatePresence>,
     document.body,
   );
 }
+
+// ── Row primitive ─────────────────────────────────────────────────────────
+
+interface CmdRowProps {
+  value: string;
+  icon: React.ReactNode;
+  label: string;
+  subLabel?: string;
+  badge?: string;
+  onSelect: () => void;
+}
+
+function CmdRow({ value, icon, label, subLabel, badge, onSelect }: CmdRowProps) {
+  return (
+    <Command.Item
+      value={value}
+      onSelect={onSelect}
+      className="group mx-1 flex cursor-pointer items-center gap-3 rounded-lg px-3 py-2 text-left text-[13px] text-gray-800 transition-colors data-[selected=true]:bg-gray-100 data-[selected=true]:text-gray-900 aria-selected:bg-gray-100"
+    >
+      <span className="flex h-5 w-5 shrink-0 items-center justify-center">{icon}</span>
+      <span className="min-w-0 flex-1">
+        <span className="block truncate font-semibold">{label}</span>
+        {subLabel && (
+          <span className="block truncate text-[11px] font-medium text-gray-500">{subLabel}</span>
+        )}
+      </span>
+      {badge && (
+        <span className="shrink-0 rounded-md bg-gray-100 px-1.5 py-0.5 text-[9px] font-black uppercase tracking-widest text-gray-500 group-data-[selected=true]:bg-white group-data-[selected=true]:text-gray-700">
+          {badge}
+        </span>
+      )}
+      <ChevronRight className="h-3.5 w-3.5 shrink-0 text-gray-300 opacity-0 transition-opacity group-data-[selected=true]:opacity-100" />
+    </Command.Item>
+  );
+}
+
+export default CommandBar;

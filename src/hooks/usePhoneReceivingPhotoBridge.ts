@@ -3,18 +3,19 @@
 import { useCallback, useRef } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import { useAblyChannel } from '@/hooks/useAblyChannel';
-import { usePersistedStaffId } from '@/hooks/usePersistedStaffId';
+import { useAuth } from '@/contexts/AuthContext';
 
 /**
  * Phone-side bridge that listens for `receiving_photo_request` on
  * `station:{staffId}` and auto-navigates the phone to the photo capture page.
  *
- * Pairing model: implicit via shared staffId. Desktop publishes on
- * `station:{currentStaffId}`; any phone loaded with the same staffId picks it
- * up. No QR pair flow required.
+ * Keyed by the signed-in staff (`useAuth().user.staffId`). Desktop publishes
+ * on `station:{currentStaffId}`; any phone signed in as the same staff picks
+ * it up — no separate pair handshake.
  */
 export function usePhoneReceivingPhotoBridge(): void {
-  const [staffId] = usePersistedStaffId();
+  const { user } = useAuth();
+  const staffId = user?.staffId ?? 0;
   const router = useRouter();
   const pathname = usePathname();
 

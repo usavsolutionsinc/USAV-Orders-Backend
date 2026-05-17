@@ -8,8 +8,19 @@ contextBridge.exposeInMainWorld('desktopApp', {
 
 // Full electronAPI surface — used by new components (EmbeddedBrowser, DocxUploader, etc.)
 contextBridge.exposeInMainWorld('electronAPI', {
+  // Flag callers can sniff to decide between silent print path and browser fallback
+  isElectron: true,
+
   // Printing — delegates to native lp (macOS) or PowerShell (Windows)
   printFile: (filePath) => ipcRenderer.invoke('print-file', filePath),
+
+  // Silent HTML printing — renders the HTML in a hidden window and prints to
+  // the chosen device (or system default) with no dialog. Returns
+  // { success: boolean, reason: string | null }.
+  printHtml: (html, options = {}) => ipcRenderer.invoke('print-html', { html, options }),
+
+  // Returns the list of installed printers as { name, displayName, isDefault, ... }
+  listPrinters: () => ipcRenderer.invoke('list-printers'),
 
   // Open a file with the default OS application
   openFile: (filePath) => ipcRenderer.invoke('open-file', filePath),
@@ -26,4 +37,14 @@ contextBridge.exposeInMainWorld('electronAPI', {
 
   // Sidecar base URL for React components that talk to the local Express server
   sidecarUrl: 'http://localhost:3001',
+
+  // Build / runtime info — surfaced in the Settings → About section
+  appInfo: {
+    platform: process.platform,
+    arch: process.arch,
+    electron: process.versions.electron,
+    chrome: process.versions.chrome,
+    node: process.versions.node,
+    v8: process.versions.v8,
+  },
 });

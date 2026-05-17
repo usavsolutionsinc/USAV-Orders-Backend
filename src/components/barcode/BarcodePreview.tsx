@@ -5,7 +5,7 @@ import { sectionLabel } from '@/design-system/tokens/typography/presets';
 import { Check } from '../Icons';
 
 interface BarcodePreviewProps {
-    mode: 'print' | 'sn-to-sku' | 'change-location' | 'reprint' | 'bin-labels';
+    mode: 'print' | 'sn-to-sku' | 'change-location' | 'reprint';
     uniqueSku: string;
     sku: string;
     title: string;

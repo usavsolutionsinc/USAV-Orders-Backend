@@ -2,8 +2,6 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { sidebarHeaderBandClass } from '@/components/layout/header-shell';
-import StaffSelector from '@/components/StaffSelector';
 import StationPacking from '@/components/station/StationPacking';
 import { getCurrentPSTDateKey, toPSTDateKey } from '@/utils/date';
 import { getStaffGoalById } from '@/lib/staffGoalsCache';
@@ -62,9 +60,6 @@ export function PackerSidebarPanel() {
   if (loading && history.length === 0) {
     return (
       <div className="h-full flex flex-col overflow-hidden bg-white">
-        <div className={sidebarHeaderBandClass}>
-          <div className="h-11 w-full bg-zinc-50 animate-pulse" />
-        </div>
         <div className="flex-1 p-4 space-y-4">
           <div className="h-24 w-full rounded-2xl bg-zinc-100 animate-pulse" />
           <div className="space-y-2">
@@ -82,16 +77,6 @@ export function PackerSidebarPanel() {
 
   return (
     <div className="h-full flex flex-col overflow-hidden">
-      <div className={sidebarHeaderBandClass}>
-        <div className="grid grid-cols-1">
-          <StaffSelector
-            role="all"
-            variant="boxy"
-            selectedStaffId={parseInt(packerId, 10)}
-            onSelect={(id) => router.push(`/packer?staffId=${id}`)}
-          />
-        </div>
-      </div>
       <div className="flex-1 overflow-hidden">
         <StationPacking
           embedded

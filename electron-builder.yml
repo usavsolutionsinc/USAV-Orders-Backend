@@ -28,7 +28,7 @@ asarUnpack:
 # ---------------------------------------------------------------------------
 mac:
   category: public.app-category.business
-  icon: public/icon.icns
+  # icon: public/icon.icns   # TODO: add 512×512 .icns
   # Build universal binary — works on both Intel and Apple Silicon
   target:
     - target: dmg
@@ -51,7 +51,7 @@ dmg:
 # Windows
 # ---------------------------------------------------------------------------
 win:
-  icon: public/icon.ico
+  # icon: public/icon.ico   # TODO: add 256×256+ multi-res .ico
   target:
     - target: nsis
       arch:
@@ -60,14 +60,14 @@ win:
 nsis:
   oneClick: false
   allowToChangeInstallationDirectory: true
-  installerIcon: public/icon.ico
-  uninstallerIcon: public/icon.ico
+  # installerIcon: public/icon.ico
+  # uninstallerIcon: public/icon.ico
 
 # ---------------------------------------------------------------------------
 # Linux (optional)
 # ---------------------------------------------------------------------------
 linux:
-  icon: public/icon.png
+  # icon: public/icon.png   # TODO: add 512×512 .png
   target:
     - AppImage
 
@@ -77,6 +77,6 @@ linux:
 # ---------------------------------------------------------------------------
 publish:
   provider: github
-  owner: your-github-username   # ← replace with your GitHub username
-  repo: usav-orders             # ← replace with your repo name
+  owner: usavsolutionsinc
+  repo: USAV-Orders-Backend
   releaseType: release          # only pull from published (non-draft) releases

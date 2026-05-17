@@ -5,7 +5,8 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { sidebarHeaderBandClass, sidebarHeaderRowClass } from '@/components/layout/header-shell';
 import { InlineNotice } from '@/design-system/components';
 import { SearchBar } from '@/components/ui/SearchBar';
-import { TabSwitch } from '@/design-system/components';
+import { HorizontalButtonSlider, type HorizontalSliderItem } from '@/components/ui/HorizontalButtonSlider';
+import { AlertCircle, Check } from '@/components/Icons';
 import {
   ASSIGN_SESSION_FEEDBACK_EVENT,
   OPEN_ASSIGN_SESSION_EVENT,
@@ -20,9 +21,9 @@ import {
   normalizeQueue,
 } from '@/components/work-orders/types';
 
-const ASSIGNMENT_FOCUS_TABS = [
-  { id: 'all_unassigned', label: 'Unassigned', color: 'orange' as const },
-  { id: 'all_assigned', label: 'Assigned', color: 'emerald' as const },
+const ASSIGNMENT_FOCUS_ITEMS: Pick<HorizontalSliderItem, 'id' | 'label' | 'icon'>[] = [
+  { id: 'all_unassigned', label: 'Unassigned', icon: AlertCircle },
+  { id: 'all_assigned',   label: 'Assigned',   icon: Check },
 ];
 
 const SIDEBAR_QUEUE_ITEMS = QUEUE_ITEMS.filter(
@@ -130,16 +131,16 @@ export function WorkOrdersSidebarPanel() {
 
   return (
     <div className="font-dm-sans flex h-full flex-col overflow-hidden bg-white">
-      <div className={`${sidebarHeaderBandClass} px-3 py-2`}>
-        <TabSwitch
-          tabs={ASSIGNMENT_FOCUS_TABS.map((tab) => ({
-            id: tab.id,
-            label: tab.label,
+      <div className={`${sidebarHeaderBandClass} px-3`}>
+        <HorizontalButtonSlider
+          items={ASSIGNMENT_FOCUS_ITEMS.map((tab) => ({
+            ...tab,
             count: counts[tab.id as QueueKey] ?? 0,
-            color: tab.color,
           }))}
-          activeTab={queue}
-          onTabChange={(id) => updateQueue(id as QueueKey)}
+          value={queue}
+          onChange={(id) => updateQueue(id as QueueKey)}
+          variant="nav"
+          aria-label="Work-orders queue"
         />
       </div>
 

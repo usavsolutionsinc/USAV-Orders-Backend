@@ -18,8 +18,20 @@ import {
 } from '@/lib/auth/permissions';
 import { LocationsSwapBody } from '@/lib/schemas/locations';
 import { parseBody } from '@/lib/schemas/parse';
+import { recordAudit, AUDIT_ACTION, AUDIT_ENTITY } from '@/lib/audit-logs';
+import type { AuthContext } from '@/lib/auth/withAuth';
+import { getCurrentUserBySid } from '@/lib/auth/current-user';
+import { SESSION_COOKIE_NAME } from '@/lib/auth/session';
 
 const ROUTE_LOCATION_SWAP = 'locations.barcode.swap';
+
+async function resolveCtx(req: NextRequest): Promise<AuthContext> {
+  const sid = req.cookies.get(SESSION_COOKIE_NAME)?.value ?? null;
+  const user = await getCurrentUserBySid(sid);
+  return user
+    ? { user, session: user.session, staffId: user.staffId, role: user.role, permissions: user.permissions }
+    : { user: null, session: null, staffId: null, role: null, permissions: new Set() };
+}
 
 /**
  * POST /api/locations/[barcode]/swap
@@ -165,6 +177,22 @@ export async function POST(
     } catch (err) {
       console.warn('swap: audit insert failed (non-fatal)', err);
     }
+
+    const ctx = await resolveCtx(request);
+    await recordAudit(pool, ctx, request, {
+      source: 'mobile-scanner',
+      action: AUDIT_ACTION.BIN_SWAP,
+      entityType: AUDIT_ENTITY.BIN,
+      entityId: loc.id,
+      before: { sku: oldSku, qty: oldQty },
+      after: { sku: newSku, qty: transferQty },
+      binCode: loc.barcode ?? code,
+      locationCode: loc.name ?? null,
+      scanRef: code,
+      method: 'scan',
+      actorStaffIdOverride: staffId,
+      extra: { old_sku: oldSku, new_sku: newSku, qty_transferred: transferQty },
+    });
 
     return respond({
       success: true,

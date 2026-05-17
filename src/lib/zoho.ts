@@ -529,6 +529,88 @@ const BILLED_PO_ERROR_SENTINELS = [
   'select an item',
 ];
 
+/** Idempotent check: Zoho says the PO is already received (varied phrasings). */
+function isAlreadyReceivedError(err: unknown): boolean {
+  if (!(err instanceof ZohoApiError)) return false;
+  const msg = err.message.toLowerCase();
+  return (
+    msg.includes('marked as received') ||
+    msg.includes('already fully received') ||
+    msg.includes('already received')
+  );
+}
+
+/**
+ * Reverses a prior `markasreceived` so the PO returns to "issued" status.
+ * Idempotent: a PO that is not currently received returns success.
+ */
+export async function markPurchaseOrderAsUnreceived(
+  poId: string,
+): Promise<void> {
+  const safeId = encodeURIComponent(String(poId || '').trim());
+  if (!safeId) throw new Error('poId is required');
+  try {
+    await zohoPost<Record<string, unknown>>(
+      `/api/v1/purchaseorders/${safeId}/markasunreceived`,
+      {},
+    );
+  } catch (err) {
+    if (
+      err instanceof ZohoApiError &&
+      err.message.toLowerCase().includes('not been marked as received')
+    ) {
+      return; /* already unreceived — idempotent success */
+    }
+    throw err;
+  }
+}
+
+/**
+ * Fallback: tell Zoho to mark the entire PO as received in one shot. Used when
+ * the standard purchasereceives POST is rejected with code 36504 ("Select an
+ * item.") on the billed-PO path — Zoho requires bill_item_id from the bill
+ * which is unreachable without the ZohoInventory.bills.READ OAuth scope.
+ *
+ * Caveat: receives the FULL pending quantity on EVERY open line of the PO.
+ * Callers that submit only a partial-line subset would over-receive missing
+ * lines; the existing mark-received-po caller always submits the full pending
+ * quantity per line so this is safe in practice.
+ */
+async function markPurchaseOrderAsReceived(
+  poId: string,
+): Promise<ZohoPagedResponse<ZohoPurchaseReceive> & { purchasereceive?: ZohoPurchaseReceive }> {
+  try {
+    await zohoPost<Record<string, unknown>>(
+      `/api/v1/purchaseorders/${encodeURIComponent(poId)}/markasreceived`,
+      {},
+    );
+  } catch (markErr) {
+    if (!isAlreadyReceivedError(markErr)) throw markErr;
+    /* PO is already received — treat as success, look up the existing receive */
+  }
+
+  let receiveId = '';
+  try {
+    const recs = await zohoGet<
+      ZohoPagedResponse<ZohoPurchaseReceive> & { purchasereceives?: ZohoPurchaseReceive[] }
+    >('/api/v1/purchasereceives', { purchaseorder_id: poId, per_page: 25 });
+    const matches = (recs.purchasereceives || []).filter(
+      (r) => String(r.purchaseorder_id ?? '').trim() === poId,
+    );
+    receiveId = String(matches[0]?.purchase_receive_id ?? '').trim();
+  } catch {
+    /* receive_id is best-effort; null is acceptable downstream */
+  }
+
+  return {
+    code: 0,
+    message: 'Purchase order marked as received',
+    ...(receiveId
+      ? { purchasereceive: { purchase_receive_id: receiveId } satisfies ZohoPurchaseReceive }
+      : {}),
+  };
+}
+
 function buildPurchaseReceiveBaseBody(
   lineItems: ZohoPurchaseReceiveLine[],
   receiveNumber: string,
@@ -630,16 +712,35 @@ export async function createPurchaseReceive(params: {
     billNumberHint: params.billNumberHint,
   });
 
-  if (billIdHint) {
+  async function tryBilledOrMarkReceived(billId: string) {
     const billBody = buildPurchaseReceiveBilledBody(
       poId,
       params.lineItems,
       receiveNumber,
       date,
-      billIdHint,
+      billId,
       params.warehouseId,
     );
-    return zohoPost('/api/v1/purchasereceives', billBody, query);
+    try {
+      return await zohoPost<
+        ZohoPagedResponse<ZohoPurchaseReceive> & { purchasereceive?: ZohoPurchaseReceive }
+      >('/api/v1/purchasereceives', billBody, query);
+    } catch (billedErr) {
+      if (isAlreadyReceivedError(billedErr)) {
+        return markPurchaseOrderAsReceived(poId);
+      }
+      // Zoho rejects the billed body with code 36504 ("Select an item.") when
+      // it expects bill_item_id from the bill's line items — unreachable
+      // without ZohoInventory.bills.READ scope. Fall back to markasreceived.
+      if (billedErr instanceof ZohoApiError && billedErr.zohoCode === 36504) {
+        return markPurchaseOrderAsReceived(poId);
+      }
+      throw billedErr;
+    }
+  }
+
+  if (billIdHint) {
+    return tryBilledOrMarkReceived(billIdHint);
   }
 
   const body = buildPurchaseReceiveBaseBody(
@@ -652,6 +753,11 @@ export async function createPurchaseReceive(params: {
   try {
     return await zohoPost('/api/v1/purchasereceives', body, query);
   } catch (err) {
+    // PO already marked received in Zoho — surface as success so retries on
+    // a previously-failed local line don't re-throw.
+    if (isAlreadyReceivedError(err)) {
+      return markPurchaseOrderAsReceived(poId);
+    }
     const isBilledPoReceive =
       err instanceof ZohoApiError &&
       BILLED_PO_ERROR_SENTINELS.some((sentinel) =>
@@ -676,17 +782,16 @@ export async function createPurchaseReceive(params: {
       });
     }
 
-    if (!billIdHint) throw err;
+    if (!billIdHint) {
+      // No bill found anywhere, but the PO is in the "billed without receive"
+      // state. Last-resort: have Zoho mark the whole PO as received.
+      if (err instanceof ZohoApiError && err.zohoCode === 36510) {
+        return markPurchaseOrderAsReceived(poId);
+      }
+      throw err;
+    }
 
-    const billBody = buildPurchaseReceiveBilledBody(
-      poId,
-      params.lineItems,
-      receiveNumber,
-      date,
-      billIdHint,
-      params.warehouseId,
-    );
-    return zohoPost('/api/v1/purchasereceives', billBody, query);
+    return tryBilledOrMarkReceived(billIdHint);
   }
 }
 

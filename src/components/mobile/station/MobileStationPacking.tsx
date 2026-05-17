@@ -434,7 +434,6 @@ export function MobileStationPacking({
 
                 {/* Last packed order — quick review + photo edit */}
                 <MobileLastOrderCard
-                  staffId={staffId}
                   packerId={userId}
                   refreshKey={lastOrderRefreshKey}
                 />

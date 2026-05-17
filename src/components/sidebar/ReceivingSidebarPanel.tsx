@@ -10,22 +10,20 @@ import {
   type ReactNode,
 } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
+import { createPortal } from 'react-dom';
 import { renderToStaticMarkup } from 'react-dom/server';
 import QRCode from 'react-qr-code';
 import {
   sidebarHeaderBandClass,
-  sidebarHeaderControlClass,
   sidebarHeaderRowClass,
 } from '@/components/layout/header-shell';
-import { Barcode, ChevronDown, ChevronUp, Clipboard, ExternalLink, Plus, Printer, RefreshCw, X } from '@/components/Icons';
+import { Barcode, ChevronDown, ChevronUp, Clipboard, ClipboardList, Copy, ExternalLink, Info, Link2, PackageCheck, Pencil, Plus, Printer, RefreshCw, ShoppingCart, X } from '@/components/Icons';
 import { useUIModeOptional } from '@/design-system/providers/UIModeProvider';
-import { MobileReceivingActionsPane } from '@/components/sidebar/MobileReceivingActionsPane';
 import { toast } from '@/lib/toast';
 import { receivingLabelPoCornerDisplay } from '@/lib/print/printReceivingLabel';
-import { TrackingChip, OrderIdChip, getLast4 } from '@/components/ui/CopyChip';
+import { ListingUrlChip, TrackingChip, OrderIdChip, getLast4 } from '@/components/ui/CopyChip';
 import { SearchBar } from '@/components/ui/SearchBar';
-import { ViewDropdown } from '@/components/ui/ViewDropdown';
-import StaffSelector from '@/components/StaffSelector';
+import { HorizontalButtonSlider, type HorizontalSliderItem } from '@/components/ui/HorizontalButtonSlider';
 import {
   ReceivingReturnBanner,
   type ReturnEvent,
@@ -37,7 +35,9 @@ import { useAblyClient } from '@/contexts/AblyContext';
 import { printProductLabel } from '@/lib/print/printProductLabel';
 import { mobileQrUrl } from '@/lib/barcode-routing';
 import { loadBarcodeLibrary, renderBarcode } from '@/utils/barcode';
-import { formatDatePST, formatTime12hPST } from '@/utils/date';
+import { formatDatePST, formatDateTimePST, formatTime12hPST } from '@/utils/date';
+import { buildReceivingCopyInfo } from '@/utils/copy-all-receiving';
+import { copyToClipboard } from '@/utils/_dom';
 import { getStaffName } from '@/utils/staff';
 import { getStaffThemeById, stationThemeColors } from '@/utils/staff-colors';
 import { LocalPickupIntakeForm } from '@/components/work-orders/LocalPickupIntakeForm';
@@ -126,9 +126,9 @@ function writeReceivingLineDetailsScratch(receivingId: number, d: ReceivingLineD
   }
 }
 
-const RECEIVING_MODE_OPTIONS = [
-  { value: 'receive', label: 'Receiving' },
-  { value: 'pickup', label: 'Local Pickup' },
+const RECEIVING_MODE_ITEMS: HorizontalSliderItem[] = [
+  { id: 'receive', label: 'Receiving',    icon: ClipboardList },
+  { id: 'pickup',  label: 'Local Pickup', icon: ShoppingCart },
 ];
 
 type ReceivingMode = 'receive' | 'pickup';
@@ -356,6 +356,25 @@ function listingUrlForOpen(raw: string): string | null {
   }
 }
 
+/** Short human-facing label for a listing URL (host + clipped path); not for navigation. */
+function listingLinkPreview(raw: string): string {
+  const t = raw.trim();
+  if (!t) return '';
+  try {
+    const withProto = /^https?:\/\//i.test(t) ? t : `https://${t}`;
+    const u = new URL(withProto);
+    const host = u.hostname.replace(/^www\./i, '');
+    const path = `${u.pathname}${u.search}`;
+    if (path && path !== '/') {
+      const clipped = path.length > 22 ? `${path.slice(0, 18)}…` : path;
+      return `${host}${clipped}`;
+    }
+    return host || t;
+  } catch {
+    return t.length > 32 ? `${t.slice(0, 28)}…` : t;
+  }
+}
+
 /* ────────────────────────────────────────────────────────────────────────
  * RECEIVING SIDEBAR TYPE SCALE
  * One source of truth for typography inside this panel. Used everywhere
@@ -431,6 +450,10 @@ const TRACKING_ADD_BTN_CLASS = `${RECEIVING_TRAIL_BTN_CLASS} text-slate-500 hove
 /** Matches SearchField leading icon: muted until row is focused. */
 const TRACKING_ROW_LEADING_ICON_CLASS =
   'shrink-0 text-gray-400 transition-colors duration-100 ease-out group-focus-within:text-gray-900';
+
+/** Pencil toggle beside compact chips — tap target aligned to chip row height. */
+const RECEIVING_CHIP_EDIT_BTN_CLASS =
+  'flex size-[22px] shrink-0 items-center justify-center rounded-sm text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-800 active:scale-95';
 
 /**
  * Per-section tone tokens. Color lives ONLY on the dropdown header (trigger
@@ -516,9 +539,10 @@ function FlowSection({
 }
 
 type ReceivingCartonStaffApiRow = {
-  received_at?: string | null;
   received_by?: number | null;
-  updated_at?: string | null;
+  received_at?: string | null;
+  unboxed_at?: string | null;
+  unboxed_by?: number | null;
 };
 
 /** Staff / received timestamps — black rail on the trigger only; expanded body is white. */
@@ -610,11 +634,11 @@ function ReceivingCartonStaffDropdown({
               role="status"
             >
               <div className="flex items-baseline justify-between gap-3">
-                <div className="h-[13px] w-[min(7rem,45%)] max-w-[45%] animate-pulse rounded-sm bg-slate-200/90" />
+                <div className="h-[13px] w-[min(8rem,55%)] max-w-[55%] animate-pulse rounded-sm bg-slate-200/90" />
                 <div className="h-[13px] w-[6.5rem] shrink-0 animate-pulse rounded-sm bg-slate-200/90" />
               </div>
               <div className="flex items-baseline justify-between gap-3">
-                <div className="h-[10px] w-[4.5rem] shrink-0 animate-pulse rounded-sm bg-slate-200/70" />
+                <div className="h-[13px] w-[4.75rem] shrink-0 animate-pulse rounded-sm bg-slate-200/90" />
                 <div className="h-[13px] w-[6.5rem] shrink-0 animate-pulse rounded-sm bg-slate-200/90" />
               </div>
             </div>
@@ -627,17 +651,27 @@ function ReceivingCartonStaffDropdown({
           ) : state.status === 'ok' ? (
             <div className="space-y-2.5">
               <div className="flex items-baseline justify-between gap-3">
-                <span
-                  className={`min-w-0 truncate text-[11px] font-semibold ${
+                <div
+                  className="flex min-w-0 flex-1 items-baseline gap-x-2 overflow-hidden whitespace-nowrap text-[11px] font-semibold"
+                  title={
                     state.carton.received_by
-                      ? stationThemeColors[getStaffThemeById(state.carton.received_by)].text
-                      : 'text-slate-900'
-                  }`}
+                      ? `${getStaffName(state.carton.received_by)} SCANNED`
+                      : undefined
+                  }
                 >
-                  {state.carton.received_by
-                    ? getStaffName(state.carton.received_by)
-                    : '—'}
-                </span>
+                  <span
+                    className={`min-w-0 shrink truncate ${
+                      state.carton.received_by
+                        ? stationThemeColors[getStaffThemeById(state.carton.received_by)].text
+                        : 'text-slate-900'
+                    }`}
+                  >
+                    {state.carton.received_by
+                      ? getStaffName(state.carton.received_by)
+                      : '—'}
+                  </span>
+                  <span className="shrink-0 uppercase text-slate-600">Scanned</span>
+                </div>
                 <span className="shrink-0 text-right text-[11px] font-semibold tabular-nums text-slate-900">
                   {state.carton.received_at
                     ? `${formatDatePST(state.carton.received_at)} ${formatTime12hPST(state.carton.received_at)}`
@@ -645,12 +679,12 @@ function ReceivingCartonStaffDropdown({
                 </span>
               </div>
               <div className="flex items-baseline justify-between gap-3">
-                <span className="shrink-0 text-[9px] font-black uppercase tracking-widest text-slate-500">
-                  Last updated
+                <span className="shrink-0 text-[11px] font-semibold uppercase text-slate-600">
+                  Unboxed at
                 </span>
                 <span className="shrink-0 text-right text-[11px] font-semibold tabular-nums text-slate-900">
-                  {state.carton.updated_at
-                    ? `${formatDatePST(state.carton.updated_at)} ${formatTime12hPST(state.carton.updated_at)}`
+                  {state.carton.unboxed_at
+                    ? `${formatDatePST(state.carton.unboxed_at)} ${formatTime12hPST(state.carton.unboxed_at)}`
                     : '—'}
                 </span>
               </div>
@@ -1039,10 +1073,9 @@ function classifyReceiveResponse(r: ReceiveResponsePanelProps['response']): {
   if (zoho.skip_reason === 'zoho_already_fully_received') {
     return {
       verdict: 'success',
-      headline: 'Zoho confirms PO fully received',
+      headline: 'Success — PO has been marked as received',
       tone: 'emerald',
-      detail:
-        'Every line is done locally; we checked Zoho Inventory and there is nothing left to receive on the linked PO line(s).',
+      detail: '',
     };
   }
   if (zoho.skip_reason === 'no_receiving_lines') {
@@ -1065,10 +1098,9 @@ function classifyReceiveResponse(r: ReceiveResponsePanelProps['response']): {
   if (zoho.skip_reason === 'scan_only') {
     return {
       verdict: 'success',
-      headline: 'Marked scanned locally (Zoho skipped)',
+      headline: 'Success — line marked as scanned',
       tone: 'emerald',
-      detail:
-        'Quantities and QA were saved. PO-linked lines stay Scanned until you run Receive from the same menu.',
+      detail: '',
     };
   }
   if (!zoho.attempted) {
@@ -1110,9 +1142,9 @@ function classifyReceiveResponse(r: ReceiveResponsePanelProps['response']): {
   }
   return {
     verdict: 'success',
-    headline: 'Successfully added SN# & notes to PO item',
+    headline: 'Success — PO has been marked as received',
     tone: 'emerald',
-    detail: 'Successfully marked the PO as Received',
+    detail: '',
   };
 }
 
@@ -1178,13 +1210,17 @@ function ReceiveResponsePanel({
               <p className={`text-[10px] font-black uppercase tracking-wider ${toneStyles.title}`}>
                 {classification.headline}
               </p>
-              <span className="text-[9px] font-semibold tabular-nums text-slate-500">
-                {timestamp} · {response.durationMs}ms · HTTP {response.httpStatus || '—'}
-              </span>
+              {classification.verdict !== 'success' ? (
+                <span className="text-[9px] font-semibold tabular-nums text-slate-500">
+                  {timestamp} · {response.durationMs}ms · HTTP {response.httpStatus || '—'}
+                </span>
+              ) : null}
             </div>
-            <p className="mt-0.5 text-[10px] font-medium leading-snug text-slate-700">
-              {classification.detail}
-            </p>
+            {classification.detail ? (
+              <p className="mt-0.5 text-[10px] font-medium leading-snug text-slate-700">
+                {classification.detail}
+              </p>
+            ) : null}
             {showApiErrorCallout ? (
               <div className="mt-1.5 rounded border border-rose-200 bg-rose-50/90 px-1.5 py-1">
                 <p className="text-[8px] font-black uppercase tracking-wide text-rose-800">API response</p>
@@ -1193,7 +1229,7 @@ function ReceiveResponsePanel({
                 </p>
               </div>
             ) : null}
-            {results.length > 0 ? (
+            {results.length > 0 && classification.verdict !== 'success' ? (
               <ul className="mt-1.5 space-y-0.5">
                 {results.map((r, i) => {
                   const ok = !r.error;
@@ -1274,6 +1310,203 @@ function ReceiveResponsePanel({
         ) : null}
       </div>
     </div>
+  );
+}
+
+type ReceivingAuditEvent = {
+  id: number;
+  occurred_at: string;
+  event_type: string;
+  actor_name: string | null;
+  station: string | null;
+  bin_name: string | null;
+  prev_bin_name: string | null;
+  prev_status: string | null;
+  next_status: string | null;
+  serial_number: string | null;
+  notes: string | null;
+  receiving_line_id: number | null;
+};
+
+function formatTimelineAgo(iso: string): string {
+  const ms = Date.now() - new Date(iso).getTime();
+  const s = Math.max(0, Math.floor(ms / 1000));
+  if (s < 60) return `${s}s`;
+  const m = Math.floor(s / 60);
+  if (m < 60) return `${m}m`;
+  const h = Math.floor(m / 60);
+  if (h < 24) return `${h}h`;
+  return `${Math.floor(h / 24)}d`;
+}
+
+/** Desktop receiving page deep link (`/receiving?recvId=…&lineId=…`). */
+function receivingShareUrl(receivingId: number, lineId?: number): string {
+  const path = '/receiving';
+  if (typeof window !== 'undefined') {
+    const u = new URL(path, window.location.origin);
+    u.searchParams.set('recvId', String(receivingId));
+    if (lineId != null && Number.isFinite(lineId) && lineId > 0) {
+      u.searchParams.set('lineId', String(lineId));
+    }
+    return u.toString();
+  }
+  const params = new URLSearchParams({ recvId: String(receivingId) });
+  if (lineId != null && Number.isFinite(lineId) && lineId > 0) {
+    params.set('lineId', String(lineId));
+  }
+  return `${path}?${params.toString()}`;
+}
+
+function ReceivingAuditModal({
+  open,
+  onClose,
+  receivingId,
+}: {
+  open: boolean;
+  onClose: () => void;
+  receivingId: number;
+}) {
+  const [portalNode, setPortalNode] = useState<HTMLElement | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [events, setEvents] = useState<ReceivingAuditEvent[]>([]);
+  const [cartonLabel, setCartonLabel] = useState<string>('');
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    setPortalNode(document.body);
+  }, []);
+
+  useEffect(() => {
+    if (!open) return;
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => {
+      document.body.style.overflow = prevOverflow;
+      window.removeEventListener('keydown', onKeyDown);
+    };
+  }, [open, onClose]);
+
+  useEffect(() => {
+    if (!open || !Number.isFinite(receivingId) || receivingId <= 0) return;
+    let cancelled = false;
+    (async () => {
+      setLoading(true);
+      setError(null);
+      try {
+        const res = await fetch(`/api/receiving/${receivingId}`, { cache: 'no-store' });
+        const data = await res.json();
+        if (cancelled) return;
+        if (!res.ok || !data?.success) {
+          throw new Error(data?.error || `HTTP ${res.status}`);
+        }
+        const receiving = data.receiving as { tracking?: string; id?: number } | undefined;
+        const tracking = (receiving?.tracking || '').trim();
+        setCartonLabel(
+          tracking
+            ? `Carton #${receivingId} · ${tracking}`
+            : `Carton #${receivingId}`,
+        );
+        setEvents(
+          Array.isArray(data.events) ? (data.events as ReceivingAuditEvent[]) : [],
+        );
+      } catch (err) {
+        if (!cancelled) {
+          setError(err instanceof Error ? err.message : 'Failed to load audit log');
+          setEvents([]);
+        }
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [open, receivingId]);
+
+  if (!open || !portalNode) return null;
+
+  return createPortal(
+    <div
+      className="fixed inset-0 z-[200] flex items-end justify-center bg-black/40 p-0 backdrop-blur-[1px] sm:items-center sm:p-4"
+      onClick={onClose}
+    >
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="receiving-audit-title"
+        className="flex max-h-[min(85vh,640px)] w-full max-w-lg flex-col rounded-t-xl border border-slate-200 bg-white shadow-xl sm:rounded-xl"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between border-b border-slate-200 px-3 py-2">
+          <div className="min-w-0">
+            <p
+              id="receiving-audit-title"
+              className="text-[10px] font-black uppercase tracking-[0.16em] text-slate-500"
+            >
+              Audit log
+            </p>
+            <p className="truncate text-xs font-semibold text-slate-900">{cartonLabel}</p>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Close audit log"
+            className="rounded p-1 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-700"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+        <div className="min-h-0 flex-1 overflow-y-auto px-3 py-2">
+          {loading ? (
+            <p className="py-6 text-center text-[11px] text-slate-500">Loading activity…</p>
+          ) : error ? (
+            <p className="py-6 text-center text-[11px] font-medium text-rose-600">{error}</p>
+          ) : events.length === 0 ? (
+            <p className="py-6 text-center text-[11px] text-slate-500">No activity recorded yet.</p>
+          ) : (
+            <ul className="space-y-2">
+              {events.map((ev) => (
+                <li key={ev.id} className="flex items-start gap-2 text-[11px]">
+                  <span className="mt-[3px] inline-block h-1.5 w-1.5 shrink-0 rounded-full bg-slate-400" aria-hidden />
+                  <div className="min-w-0 flex-1">
+                    <p className="font-bold text-slate-900">
+                      {ev.event_type.replace(/_/g, ' ')}
+                      {ev.bin_name ? (
+                        <span className="ml-1 font-semibold text-slate-600">→ {ev.bin_name}</span>
+                      ) : null}
+                      {ev.prev_bin_name && ev.bin_name && ev.prev_bin_name !== ev.bin_name ? (
+                        <span className="ml-1 font-normal text-slate-500">
+                          ({ev.prev_bin_name} → {ev.bin_name})
+                        </span>
+                      ) : null}
+                      {ev.serial_number ? (
+                        <span className="ml-1 font-mono text-slate-500">· {ev.serial_number}</span>
+                      ) : null}
+                    </p>
+                    <p className="text-slate-500">
+                      {ev.actor_name || 'Unknown'} · {formatTimelineAgo(ev.occurred_at)} ago
+                      {ev.station ? ` · ${ev.station}` : ''}
+                      {ev.receiving_line_id != null ? ` · line ${ev.receiving_line_id}` : ''}
+                    </p>
+                    <p className="text-[10px] tabular-nums text-slate-400">
+                      {formatDateTimePST(ev.occurred_at)}
+                    </p>
+                    {ev.notes ? (
+                      <p className="mt-0.5 italic text-slate-600">{ev.notes}</p>
+                    ) : null}
+                  </div>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      </div>
+    </div>,
+    portalNode,
   );
 }
 
@@ -1358,6 +1591,12 @@ function LineEditPanel({
   const [responseExpanded, setResponseExpanded] = useState(false);
   const serialRef = useRef<HTMLInputElement>(null);
   const listingRef = useRef<HTMLInputElement>(null);
+  /** Full editors for tracking rows — collapsed when carton already has numbers (expand to edit). */
+  const [trackingEditorsOpen, setTrackingEditorsOpen] = useState(true);
+  /** Full listing SearchBar — collapsed by default; pencil expands to paste/edit. */
+  const [listingEditorOpen, setListingEditorOpen] = useState(false);
+  const [auditOpen, setAuditOpen] = useState(false);
+  const [copyingAll, setCopyingAll] = useState(false);
 
   const persistZendeskRef = useRef(zendesk);
   const persistListingRef = useRef(listingLink);
@@ -1368,6 +1607,16 @@ function LineEditPanel({
 
   const toggleFlow = useCallback((key: FlowSecKey) => {
     setFlowOpen((prev) => ({ ...prev, [key]: !prev[key] }));
+  }, []);
+
+  const toggleTrackingEditors = useCallback(() => {
+    setTrackingEditorsOpen((prev) => {
+      const next = !prev;
+      if (prev && !next) {
+        setExtraTrackings((xs) => xs.filter((t) => t.trim().length > 0));
+      }
+      return next;
+    });
   }, []);
 
   useEffect(() => {
@@ -1408,13 +1657,24 @@ function LineEditPanel({
       setListingLink('');
       setNotes('');
       setExtraTrackings([]);
+      setListingEditorOpen(false);
+      setTrackingEditorsOpen(!(row.tracking_number || '').trim());
       return;
     }
     const d = readReceivingLineDetailsScratch(row.receiving_id);
     setZendesk(d.zendesk);
     setListingLink(d.listing);
-    setExtraTrackings(d.extra_trackings.length > 0 ? d.extra_trackings : []);
-  }, [row.receiving_id]);
+    const extras = d.extra_trackings.length > 0 ? d.extra_trackings : [];
+    setExtraTrackings(extras);
+    const primaryTr = (row.tracking_number || '').trim();
+    const hasExtras = extras.some((t) => t.trim().length > 0);
+    setTrackingEditorsOpen(!primaryTr && !hasExtras);
+  }, [row.receiving_id, row.tracking_number]);
+
+  /** Listing chip/editor: always start minimized when the selected line or carton changes. */
+  useLayoutEffect(() => {
+    setListingEditorOpen(false);
+  }, [row.id, row.receiving_id]);
 
   useLayoutEffect(() => {
     setNotes(row.notes ?? '');
@@ -1884,6 +2144,9 @@ function LineEditPanel({
   const recordedSerials = row.serials ?? [];
 
   const listingOpenHref = listingUrlForOpen(listingLink);
+  const primaryTrackingTrimmed = trackingEdit.trim();
+  const filledExtraTrackingsCount = extraTrackings.filter((t) => t.trim().length > 0).length;
+  const listingPreviewLabel = listingLinkPreview(listingLink);
 
   // Refresh ↔ Zoho. Always searches by tracking# (PO# search is a future upd).
   // Flow:
@@ -2008,10 +2271,65 @@ function LineEditPanel({
       row.zoho_purchaseorder_id, row.zoho_purchaseorder_number, staffId,
       listingLink, zendesk]);
 
+  const handleShare = useCallback(async () => {
+    if (!row.receiving_id) {
+      toast.error('No receiving carton linked yet');
+      return;
+    }
+    const url = receivingShareUrl(row.receiving_id, row.id);
+    const poLabel = row.zoho_purchaseorder_number || `Carton #${row.receiving_id}`;
+    const title = `Receiving — ${poLabel}`;
+    try {
+      if (typeof navigator !== 'undefined' && typeof navigator.share === 'function') {
+        await navigator.share({ title, url });
+        return;
+      }
+    } catch (err) {
+      if (err instanceof Error && err.name === 'AbortError') return;
+    }
+    const ok = await copyToClipboard(url);
+    if (ok) toast.success('Link copied to clipboard');
+    else toast.error('Could not copy link');
+  }, [row.receiving_id, row.zoho_purchaseorder_number, row.id]);
+
+  const handleCopyAll = useCallback(async () => {
+    if (!row.receiving_id) {
+      toast.error('No receiving carton linked yet');
+      return;
+    }
+    setCopyingAll(true);
+    try {
+      const res = await fetch(`/api/receiving/${row.receiving_id}`, { cache: 'no-store' });
+      const data = await res.json();
+      const lines = data?.success && Array.isArray(data.lines) ? data.lines : [];
+      const shareUrl = receivingShareUrl(row.receiving_id, row.id);
+      const text = buildReceivingCopyInfo({
+        carton: data?.success ? data.receiving : null,
+        lines,
+        scratch: {
+          zendesk,
+          listing: listingLink,
+          extraTrackings: extraTrackings.filter((t) => t.trim().length > 0),
+        },
+        currentLine: row,
+        shareUrl,
+      });
+      const ok = await copyToClipboard(text);
+      if (ok) toast.success('Copied receiving details');
+      else toast.error('Could not copy to clipboard');
+    } catch {
+      toast.error('Failed to build copy text');
+    } finally {
+      setCopyingAll(false);
+    }
+  }, [row, staffId, zendesk, listingLink, extraTrackings]);
+
   const hasItemNav = typeof itemIndex === 'number' && typeof itemTotal === 'number' && itemTotal > 0;
   const itemCountSummary = hasItemNav && (itemTotal ?? 0) > 1 ? `${itemTotal} items` : undefined;
+  const cartonActionsDisabled = !row.receiving_id;
 
   return (
+    <>
     <div className="border-b border-slate-200 bg-slate-50">
       <div className="flex items-center gap-2 border-b border-slate-200 bg-white px-2 py-0.5">
         <button
@@ -2023,6 +2341,36 @@ function LineEditPanel({
           className="text-slate-400 transition-colors hover:text-slate-700 disabled:cursor-not-allowed disabled:opacity-50"
         >
           <RefreshCw className={`h-3.5 w-3.5 ${zohoSyncing ? 'animate-spin' : ''}`} />
+        </button>
+        <button
+          type="button"
+          onClick={() => void handleShare()}
+          disabled={cartonActionsDisabled}
+          aria-label="Share receiving link"
+          title="Copy link to open this carton on Receiving"
+          className="text-slate-400 transition-colors hover:text-slate-700 disabled:cursor-not-allowed disabled:opacity-40"
+        >
+          <Link2 className="h-3.5 w-3.5" />
+        </button>
+        <button
+          type="button"
+          onClick={() => setAuditOpen(true)}
+          disabled={cartonActionsDisabled}
+          aria-label="View audit log"
+          title="Audit log (inventory events)"
+          className="text-slate-400 transition-colors hover:text-slate-700 disabled:cursor-not-allowed disabled:opacity-40"
+        >
+          <Info className="h-3.5 w-3.5" />
+        </button>
+        <button
+          type="button"
+          onClick={() => void handleCopyAll()}
+          disabled={cartonActionsDisabled || copyingAll}
+          aria-label="Copy all receiving details"
+          title="Copy carton + PO details to clipboard"
+          className="text-slate-400 transition-colors hover:text-slate-700 disabled:cursor-not-allowed disabled:opacity-40"
+        >
+          <Copy className={`h-3.5 w-3.5 ${copyingAll ? 'animate-pulse' : ''}`} />
         </button>
         {(zohoSyncing || saving || platformSaving) && (
           <span className="text-[9px] font-black uppercase tracking-[0.18em] text-blue-600" aria-live="polite">
@@ -2061,108 +2409,167 @@ function LineEditPanel({
           tone="shipment"
         >
           <div className="space-y-2.5">
-            <div>
-              <div className="flex items-center gap-2">
-                <span className={`${FLOW_SECTION_LABEL} mb-0 min-w-0 flex-1 leading-none`}>
-                  Tracking numbers
-                </span>
-                <span className={RECEIVING_TRAIL_SLOT_CLASS}>
+            <div className="flex min-w-0 flex-col gap-y-1">
+              <div className="flex min-w-0 items-end gap-2">
+                <div className="flex min-w-0 flex-1 basis-0 items-center gap-1">
+                  <ListingUrlChip
+                    rawUrl={listingLink}
+                    openHref={listingOpenHref}
+                    previewDisplay={listingPreviewLabel}
+                  />
                   <button
                     type="button"
-                    onClick={() => setExtraTrackings((xs) => [...xs, ''])}
-                    aria-label="Add tracking number row"
-                    title="Add tracking number"
-                    className={TRACKING_ADD_BTN_CLASS}
+                    onClick={() => {
+                      setListingEditorOpen((v) => {
+                        const next = !v;
+                        if (next) queueMicrotask(() => listingRef.current?.focus());
+                        return next;
+                      });
+                    }}
+                    aria-expanded={listingEditorOpen}
+                    aria-label={listingEditorOpen ? 'Collapse listing URL editor' : 'Edit listing URL'}
+                    title={listingEditorOpen ? 'Done editing listing' : 'Edit listing URL'}
+                    className={RECEIVING_CHIP_EDIT_BTN_CLASS}
                   >
-                    <Plus className="h-3 w-3" />
+                    <Pencil className="h-3 w-3" />
                   </button>
-                </span>
-              </div>
-              <div className="group mt-1">
-                <SearchBar
-                  value={trackingEdit}
-                  onChange={setTrackingEdit}
-                  onSearch={(v) => {
-                    const trimmed = v.trim();
-                    if (trimmed !== (row.tracking_number || '').trim()) {
-                      patch({ zoho_reference_number: trimmed || null });
-                    }
-                  }}
-                  placeholder="Tracking"
-                  variant="blue"
-                  size="compact"
-                  hideUnderline
-                  hideClear
-                  leadingIcon={<Barcode className="h-[14px] w-[14px]" />}
-                  className="w-full"
-                />
-                <div className={RECEIVING_SCAN_RULE_LINE_CLASS} aria-hidden />
-              </div>
-              {extraTrackings.map((t, i) => (
-                <div key={i} className="group mt-1 w-full min-w-0">
-                  <div className="flex w-full min-w-0 items-center gap-2 pb-1">
-                    <span className={TRACKING_ROW_LEADING_ICON_CLASS} aria-hidden>
-                      <Barcode className="h-[14px] w-[14px]" />
-                    </span>
-                    <input
-                      type="text"
-                      value={t}
-                      onChange={(e) => {
-                        const v = e.target.value;
-                        setExtraTrackings((xs) => xs.map((x, j) => (j === i ? v : x)));
-                      }}
-                      placeholder="Tracking"
-                      className="h-5 min-w-0 flex-1 border-0 bg-transparent px-0 text-[11px] font-bold text-gray-900 outline-none placeholder:font-medium placeholder:text-gray-400"
-                    />
-                    <span className={RECEIVING_TRAIL_SLOT_CLASS}>
-                      <button
-                        type="button"
-                        onClick={() => setExtraTrackings((xs) => xs.filter((_, j) => j !== i))}
-                        aria-label="Remove this tracking row"
-                        title="Remove"
-                        className={TRACKING_REMOVE_BTN_CLASS}
-                      >
-                        <X className="h-3 w-3" />
-                      </button>
-                    </span>
-                  </div>
-                  <div className={RECEIVING_SCAN_RULE_LINE_CLASS} aria-hidden />
                 </div>
-              ))}
-            </div>
-
-            <div>
-              <span className={FLOW_SECTION_LABEL}>Listing URL</span>
-              <div className="group mt-1">
-                <SearchBar
-                  value={listingLink}
-                  onChange={setListingLink}
-                  onClear={() => setListingLink('')}
-                  inputRef={listingRef}
-                  placeholder="Listing URL"
-                  variant="blue"
-                  size="compact"
-                  hideUnderline
-                  leadingIcon={
+                <div className="flex shrink-0 flex-col items-end gap-1">
+                  <div className="flex items-center gap-1">
+                    <div className="min-w-0 max-w-full [&_.relative]:max-w-full">
+                      <TrackingChip
+                        value={primaryTrackingTrimmed}
+                        display={getLast4(primaryTrackingTrimmed)}
+                        disableCopy={!primaryTrackingTrimmed}
+                        width="min-w-0 max-w-full"
+                      />
+                    </div>
+                    {filledExtraTrackingsCount > 0 ? (
+                      <span className="shrink-0 rounded bg-slate-200/90 px-1 py-px text-[9px] font-black tabular-nums text-slate-700">
+                        +{filledExtraTrackingsCount}
+                      </span>
+                    ) : null}
                     <button
                       type="button"
-                      onClick={() => {
-                        if (listingOpenHref) {
-                          window.open(listingOpenHref, '_blank', 'noopener,noreferrer');
-                        }
-                      }}
-                      disabled={listingOpenHref == null}
-                      aria-label="Open listing URL in new tab"
-                      title={listingOpenHref ? 'Open link' : 'Enter a valid URL'}
-                      className="-m-0.5 rounded p-0.5 text-inherit transition-colors hover:text-blue-600 disabled:cursor-not-allowed disabled:opacity-35"
+                      onClick={toggleTrackingEditors}
+                      aria-expanded={trackingEditorsOpen}
+                      aria-label={trackingEditorsOpen ? 'Collapse tracking editors' : 'Edit tracking numbers'}
+                      title={trackingEditorsOpen ? 'Done editing tracking' : 'Edit tracking'}
+                      className={RECEIVING_CHIP_EDIT_BTN_CLASS}
                     >
-                      <ExternalLink className="h-[14px] w-[14px]" />
+                      <Pencil className="h-3 w-3" />
                     </button>
-                  }
-                  className="w-full"
-                />
-                <div className={RECEIVING_SCAN_RULE_LINE_CLASS} aria-hidden />
+                  </div>
+                </div>
               </div>
+
+              {(trackingEditorsOpen || listingEditorOpen) ? (
+                <div className="mt-2 space-y-2.5 border-t border-slate-100 pt-2">
+                  {trackingEditorsOpen ? (
+                    <>
+                      <div className="flex items-center justify-between gap-2">
+                        <span className={`${FLOW_SECTION_LABEL} mb-0 leading-none`}>Tracking number</span>
+                        <span className={RECEIVING_TRAIL_SLOT_CLASS}>
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setExtraTrackings((xs) => (xs.length >= 1 ? xs : [...xs, '']))
+                            }
+                            disabled={extraTrackings.length >= 1}
+                            aria-label="Add second tracking number row"
+                            title={
+                              extraTrackings.length >= 1
+                                ? 'Only one extra tracking row'
+                                : 'Add tracking number'
+                            }
+                            className={TRACKING_ADD_BTN_CLASS}
+                          >
+                            <Plus className="h-3 w-3" />
+                          </button>
+                        </span>
+                      </div>
+                      <div className="group min-w-0">
+                        <SearchBar
+                          value={trackingEdit}
+                          onChange={setTrackingEdit}
+                          onSearch={(v) => {
+                            const trimmed = v.trim();
+                            if (trimmed !== (row.tracking_number || '').trim()) {
+                              patch({ zoho_reference_number: trimmed || null });
+                            }
+                          }}
+                          placeholder="Tracking"
+                          variant="blue"
+                          size="compact"
+                          hideUnderline
+                          pasteOnlyTrailing
+                          leadingIcon={<Barcode className="h-[14px] w-[14px]" />}
+                          className="w-full min-w-0"
+                        />
+                        <div className={RECEIVING_SCAN_RULE_LINE_CLASS} aria-hidden />
+                      </div>
+                      {extraTrackings.map((t, i) => (
+                        <div key={i} className="group min-w-0">
+                          <SearchBar
+                            value={t}
+                            onChange={(v) =>
+                              setExtraTrackings((xs) => xs.map((x, j) => (j === i ? v : x)))
+                            }
+                            placeholder="Tracking"
+                            variant="blue"
+                            size="compact"
+                            hideUnderline
+                            debounceMs={0}
+                            pasteOnlyTrailing
+                            leadingIcon={<Barcode className="h-[14px] w-[14px]" />}
+                            className="w-full min-w-0"
+                          />
+                          <div className={RECEIVING_SCAN_RULE_LINE_CLASS} aria-hidden />
+                        </div>
+                      ))}
+                    </>
+                  ) : null}
+                  {listingEditorOpen ? (
+                    <>
+                      <div className="flex items-center justify-between gap-2">
+                        <span className={`${FLOW_SECTION_LABEL} mb-0 leading-none`}>Listing URL</span>
+                        <span className={RECEIVING_TRAIL_SLOT_CLASS} aria-hidden />
+                      </div>
+                      <div className="group">
+                        <SearchBar
+                          value={listingLink}
+                          onChange={setListingLink}
+                          onClear={() => setListingLink('')}
+                          inputRef={listingRef}
+                          placeholder="Listing URL"
+                          variant="blue"
+                          size="compact"
+                          hideUnderline
+                          leadingIcon={
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.preventDefault();
+                                if (listingOpenHref) {
+                                  window.open(listingOpenHref, '_blank', 'noopener,noreferrer');
+                                }
+                              }}
+                              disabled={listingOpenHref == null}
+                              aria-label="Open listing URL in new tab"
+                              title={listingOpenHref ? 'Open link' : 'Enter a valid URL'}
+                              className="-m-0.5 rounded p-0.5 text-inherit transition-colors hover:text-blue-600 disabled:cursor-not-allowed disabled:opacity-35"
+                            >
+                              <ExternalLink className="h-[14px] w-[14px]" />
+                            </button>
+                          }
+                          className="w-full"
+                        />
+                        <div className={RECEIVING_SCAN_RULE_LINE_CLASS} aria-hidden />
+                      </div>
+                    </>
+                  ) : null}
+                </div>
+              ) : null}
             </div>
 
             <div className="grid grid-cols-2 gap-2">
@@ -2498,6 +2905,7 @@ function LineEditPanel({
                       }}
                       className="flex w-full items-center gap-2 px-3 py-2 text-left text-[10px] font-black uppercase tracking-wider text-slate-800 transition-colors hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-35"
                     >
+                      <PackageCheck className="h-3.5 w-3.5 shrink-0" aria-hidden />
                       {receiveMenuLabel}
                     </button>
                   </li>
@@ -2543,6 +2951,14 @@ function LineEditPanel({
         </div>
       </div>
     </div>
+    {row.receiving_id != null ? (
+      <ReceivingAuditModal
+        open={auditOpen}
+        onClose={() => setAuditOpen(false)}
+        receivingId={row.receiving_id}
+      />
+    ) : null}
+    </>
   );
 }
 
@@ -2767,6 +3183,24 @@ export function ReceivingSidebarPanel() {
       window.dispatchEvent(new CustomEvent('receiving-highlight-line', { detail: target.id }));
     }
   }, [currentIndex, scanMatchedRows]);
+
+  // Arrow keys move the main table selection (same as carton header chevrons).
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== 'ArrowUp' && event.key !== 'ArrowDown') return;
+      if (!selectedLine) return;
+      const target = event.target as HTMLElement | null;
+      if (target?.closest('input, textarea, select, [contenteditable="true"]')) return;
+      event.preventDefault();
+      window.dispatchEvent(
+        new CustomEvent('receiving-navigate-table', {
+          detail: event.key === 'ArrowUp' ? 'prev' : 'next',
+        }),
+      );
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [selectedLine]);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -3326,37 +3760,26 @@ export function ReceivingSidebarPanel() {
     router.replace(`/receiving?${nextParams.toString()}`);
   };
 
-  // On mobile, the desktop tree (staff selector, scan bar, accordion sections,
-  // lines list, etc.) is replaced by a focused "Take Photos for this PO" view.
-  // All hooks above still run unconditionally to preserve Rules of Hooks.
+  // Mobile receiving is photo-only and rendered directly by the page
+  // (MobileReceivingList). The sidebar/form tree never mounts on phones, but
+  // the guard stays here as belt-and-suspenders since all hooks above run
+  // unconditionally — returning null short-circuits cheaply if a future
+  // caller mounts this panel on a phone-width viewport.
   if (isMobile) {
-    return <MobileReceivingActionsPane />;
+    return null;
   }
 
   return (
     <div className="h-full flex flex-col overflow-hidden">
-      {/* Staff + mode selector */}
-      <div className={sidebarHeaderBandClass}>
-        <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)] divide-x divide-gray-200">
-          <div className="min-w-0">
-            <StaffSelector
-              role="all"
-              variant="boxy"
-              selectedStaffId={parseInt(staffId, 10)}
-              onSelect={updateStaff}
-            />
-          </div>
-          <div className="relative min-w-0">
-            <ViewDropdown
-              options={RECEIVING_MODE_OPTIONS}
-              value={mode}
-              onChange={(nextMode) => updateMode(nextMode as ReceivingMode)}
-              variant="boxy"
-              buttonClassName={sidebarHeaderControlClass}
-              optionClassName="text-[10px] font-black tracking-wider"
-            />
-          </div>
-        </div>
+      {/* Mode pills (2nd row) */}
+      <div className={`${sidebarHeaderBandClass} px-3`}>
+        <HorizontalButtonSlider
+          items={RECEIVING_MODE_ITEMS}
+          value={mode}
+          onChange={(next) => updateMode(next as ReceivingMode)}
+          variant="nav"
+          aria-label="Receiving mode"
+        />
       </div>
 
       {mode === 'pickup' ? (

@@ -19,6 +19,7 @@
 export {
   CopyChip,
   TrackingChip,
+  ListingUrlChip,
   SkuScanRefChip,
   TrackingOrSkuScanChip,
   isSkuFormattedScanRef,

@@ -2,10 +2,13 @@
 
 import React from 'react';
 import { motion, useReducedMotion } from 'framer-motion';
-import { Printer, Database, MapPin, RotateCcw, Barcode } from '../Icons';
+import { Printer, Database, MapPin, RotateCcw } from '../Icons';
 import { successFeedback } from '@/lib/feedback/confirm';
 
-export type BarcodeMode = 'print' | 'sn-to-sku' | 'change-location' | 'reprint' | 'bin-labels';
+// 'bin-labels' was previously bundled here; bin/zone printing now lives at
+// /inventory (InventorySidebarPanel → Labels tab). Keep this union focused
+// on per-SKU barcode workflows.
+export type BarcodeMode = 'print' | 'sn-to-sku' | 'change-location' | 'reprint';
 
 interface ModeSelectorProps {
     mode: BarcodeMode;
@@ -17,7 +20,6 @@ const MODES: { id: BarcodeMode; label: string; Icon: React.ComponentType<{ class
     { id: 'sn-to-sku',       label: 'Log SN',   Icon: Database  },
     { id: 'change-location', label: 'Location', Icon: MapPin    },
     { id: 'reprint',         label: 'Reprint',  Icon: RotateCcw },
-    { id: 'bin-labels',      label: 'Bins',     Icon: Barcode   },
 ];
 
 /**

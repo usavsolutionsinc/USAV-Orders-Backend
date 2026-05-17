@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { framerTransition } from '@/design-system/foundations/motion-framer';
@@ -54,6 +54,7 @@ export function PhotoGallery({
   const [mounted, setMounted] = useState(false);
   const [downloadingAll, setDownloadingAll] = useState(false);
   const [linksCopied, setLinksCopied] = useState(false);
+  const photosFingerprintRef = useRef<string | null>(null);
 
   useEffect(() => {
     setMounted(true);
@@ -64,18 +65,22 @@ export function PhotoGallery({
     };
   }, []);
 
-  // Parse and initialize photo items
+  // Parse and initialize photo items — skip resets when URL list is unchanged (avoids reload flicker when parents re-render with a new array reference).
   useEffect(() => {
-    const urls = photos.map((photo) => 
-      typeof photo === 'string' ? photo : photo.url
-    ).filter(url => url && url.trim());
+    const urls = photos
+      .map((photo) => (typeof photo === 'string' ? photo : photo.url))
+      .filter((url): url is string => !!url?.trim());
+
+    const fingerprint = urls.join('\u0000');
+    if (photosFingerprintRef.current === fingerprint) return;
+    photosFingerprintRef.current = fingerprint;
 
     setPhotoItems(
       urls.map((url, index) => ({
         url,
         status: 'loading',
         index,
-      }))
+      })),
     );
   }, [photos]);
 

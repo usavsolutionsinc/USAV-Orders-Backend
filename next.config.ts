@@ -40,6 +40,18 @@ const nextConfig: NextConfig = {
     outputFileTracingRoot: process.cwd(),
     experimental: {
         webpackMemoryOptimizations: true,
+        optimizePackageImports: [
+            'framer-motion',
+            'lucide-react',
+            'sonner',
+            'date-fns',
+            'date-fns-tz',
+            '@dnd-kit/core',
+            '@dnd-kit/sortable',
+            '@dnd-kit/utilities',
+            '@tanstack/react-query',
+            'react-markdown',
+        ],
     },
     productionBrowserSourceMaps: false,
     serverExternalPackages: [

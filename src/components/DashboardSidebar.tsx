@@ -4,12 +4,15 @@ import Link from 'next/link';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { motion } from 'framer-motion';
-import { ChevronLeft, Menu, X, Zap } from '@/components/Icons';
+import { AlertCircle, ChevronLeft, Clock, Menu, Package, PackageCheck, X, Zap } from '@/components/Icons';
+import { sidebarHeaderBandClass } from '@/components/layout/header-shell';
+import { HorizontalButtonSlider, type HorizontalSliderItem } from '@/components/ui/HorizontalButtonSlider';
 import { sectionLabel } from '@/design-system/tokens/typography/presets';
 import { AdminSidebar } from '@/components/admin/AdminSidebar';
 import { ADMIN_SECTION_OPTIONS, type AdminSection } from '@/components/admin/admin-sections';
 import BarcodeSidebar from '@/components/BarcodeSidebar';
 import { SkuStockSidebarPanel } from '@/components/sidebar/SkuStockSidebarPanel';
+import { InventorySidebarPanel } from '@/components/sidebar/InventorySidebarPanel';
 import { QuarterSidebar } from '@/components/QuarterSelector';
 import { DashboardManagementPanel } from '@/components/sidebar/DashboardManagementPanel';
 import { RepairSidebarPanel } from '@/components/sidebar/RepairSidebarPanel';
@@ -17,16 +20,18 @@ import { WalkInSidebarPanel } from '@/components/sidebar/WalkInSidebarPanel';
 import ShippedSidebar from '@/components/ShippedSidebar';
 import UnshippedSidebar from '@/components/unshipped/UnshippedSidebar';
 import { SkuCatalogSidebar } from '@/components/manuals/SkuCatalogSidebar';
-import { SidebarTabSwitchChrome, TabSwitch } from '@/components/ui/TabSwitch';
 import { TechSidebarPanel } from '@/components/sidebar/TechSidebarPanel';
 import { PackerSidebarPanel } from '@/components/sidebar/PackerSidebarPanel';
 import { ReceivingSidebarPanel } from '@/components/sidebar/ReceivingSidebarPanel';
 import { FbaSidebarPanel } from '@/components/fba/sidebar';
 import { SupportSidebarPanel } from '@/components/sidebar/SupportSidebarPanel';
+import { SettingsSidebarPanel } from '@/components/sidebar/SettingsSidebarPanel';
 import { WorkOrdersSidebarPanel } from '@/components/sidebar/WorkOrdersSidebarPanel';
 import { OperationsSidebarPanel } from '@/components/sidebar/OperationsSidebarPanel';
 import { ReplenishSidebarPanel } from '@/components/sidebar/ReplenishSidebarPanel';
+import { AuditLogSidebarPanel } from '@/components/sidebar/AuditLogSidebarPanel';
 import { useUIMode } from '@/design-system/providers/UIModeProvider';
+import { useAuth } from '@/contexts/AuthContext';
 import {
   getSidebarRouteKey,
   getSidebarNavItems,
@@ -41,11 +46,53 @@ import { DeviceModeToggle } from '@/components/sidebar/DeviceModeToggle';
 
 const MOBILE_SIDEBAR_MIN_WIDTH = 420;
 
-const DASHBOARD_TABS = [
-  { id: 'pending',   label: 'Pending',  color: 'blue' as const },
-  { id: 'shipped',   label: 'Shipped',  color: 'blue' as const },
-  { id: 'unshipped', label: 'Awaiting', color: 'blue' as const },
+const DASHBOARD_VIEW_ITEMS: HorizontalSliderItem[] = [
+  { id: 'pending',   label: 'Pending',  icon: Clock },
+  { id: 'shipped',   label: 'Shipped',  icon: PackageCheck },
+  { id: 'unshipped', label: 'Awaiting', icon: AlertCircle },
+  { id: 'fba',       label: 'FBA',      icon: Package },
 ];
+
+function SignedInChip({ user }: { user: NonNullable<ReturnType<typeof useAuth>['user']> }) {
+  const { signOut } = useAuth();
+  const [staffName, setStaffName] = useState<string>('You');
+  const role = (user.role || '').replace(/_/g, ' ');
+
+  useEffect(() => {
+    let cancelled = false;
+    fetch(`/api/staff?id=${user.staffId}`, { cache: 'no-store' })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data: { staff?: { name?: string } } | null) => {
+        if (!cancelled && data?.staff?.name) setStaffName(data.staff.name);
+      })
+      .catch(() => { /* fall back to "You" */ });
+    return () => { cancelled = true; };
+  }, [user.staffId]);
+
+  const initials = staffName
+    .split(/\s+/).filter(Boolean).slice(0, 2)
+    .map((p) => p[0]?.toUpperCase() ?? '').join('');
+
+  return (
+    <div className="flex items-center gap-2 rounded-xl border border-gray-200 bg-gray-50 px-2.5 py-2">
+      <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-gray-900 text-[11px] font-bold text-white">
+        {initials || '?'}
+      </div>
+      <div className="min-w-0 flex-1">
+        <div className="truncate text-xs font-semibold text-gray-900">{staffName}</div>
+        <div className="truncate text-[10px] uppercase tracking-wider text-gray-500">{role}</div>
+      </div>
+      <button
+        type="button"
+        onClick={() => { void signOut(); }}
+        className="rounded-md px-2 py-1 text-[11px] font-medium text-gray-600 hover:bg-white hover:text-gray-900"
+        aria-label="Sign out"
+      >
+        Sign out
+      </button>
+    </div>
+  );
+}
 
 function getPathStaffId(pathname: string | null, segment: 'tech' | 'packer'): string | null {
   if (!pathname) return null;
@@ -67,13 +114,16 @@ function getSidebarTitle(pathname: string | null) {
     'work-orders': 'Work Orders',
     replenish: 'Replenish',
     'sku-stock': 'Sku Stock',
+    inventory: 'Inventory',
     tech: 'Technicians',
     packer: 'Packers',
     support: 'Support',
     'previous-quarters': 'Quarters',
     admin: 'Admin',
+    'audit-log': 'Audit Log',
     manuals: 'Manuals',
     ai: 'AI Chat',
+    settings: 'Settings',
   };
   return titles[routeKey] ?? 'Home';
 }
@@ -238,14 +288,15 @@ function SidebarContextPanel({ onBackToAppNav }: { onBackToAppNav?: () => void }
     const activeTabId: string = dashboardSearch.orderView;
     const focusShippedSearch = searchParams.get(DASHBOARD_SHIPPED_FOCUS_SEARCH_PARAM) === '1';
     const filterControl = (
-      <SidebarTabSwitchChrome>
-        <TabSwitch
-          tabs={DASHBOARD_TABS}
-          activeTab={activeTabId}
-          highContrast
-          onTabChange={(tab) => dashboardSearch.setOrderView(tab as typeof dashboardSearch.orderView)}
+      <div className={`${sidebarHeaderBandClass} px-3`}>
+        <HorizontalButtonSlider
+          items={DASHBOARD_VIEW_ITEMS}
+          value={activeTabId}
+          onChange={(tab) => dashboardSearch.setOrderView(tab as typeof dashboardSearch.orderView)}
+          variant="nav"
+          aria-label="Dashboard view"
         />
-      </SidebarTabSwitchChrome>
+      </div>
     );
 
     if (dashboardSearch.orderView === 'shipped') {
@@ -325,11 +376,14 @@ function SidebarContextPanel({ onBackToAppNav }: { onBackToAppNav?: () => void }
 
   if (routeKey === 'ai') return <AiSidebarPanel />;
   if (routeKey === 'support') return <SupportSidebarPanel />;
+  if (routeKey === 'settings') return <SettingsSidebarPanel />;
+  if (routeKey === 'audit-log') return <AuditLogSidebarPanel />;
   if (routeKey === 'receiving') return <ReceivingSidebarPanel />;
   if (routeKey === 'fba') return <FbaSidebarPanel />;
   if (routeKey === 'work-orders') return <WorkOrdersSidebarPanel />;
   if (routeKey === 'replenish') return <ReplenishSidebarPanel />;
   if (routeKey === 'sku-stock') return <SkuStockSidebarPanel />;
+  if (routeKey === 'inventory') return <InventorySidebarPanel />;
   if (routeKey === 'walk-in') return <WalkInSidebarPanel embedded hideSectionHeader />;
   if (routeKey === 'repair') return <WalkInSidebarPanel embedded hideSectionHeader />;
   if (routeKey === 'previous-quarters') return <QuarterSidebar hideSectionHeader />;
@@ -375,6 +429,7 @@ function NavSection({
             key={item.id}
             href={href}
             onClick={onNavigate}
+            prefetch={process.env.NODE_ENV === 'production'}
             className={`group flex items-center gap-3 px-3 py-3 rounded-2xl transition-all duration-200 ${
               isActive
                 ? 'bg-blue-600 text-white shadow-lg shadow-blue-600/20'
@@ -405,8 +460,6 @@ export default function DashboardSidebar({ inDrawer = false, onNavigate }: { inD
   const [isMobileOpen, setIsMobileOpen] = useState(false);
   const [canShowMobileSidebar, setCanShowMobileSidebar] = useState(false);
   const [showHomeNavigation, setShowHomeNavigation] = useState(false);
-  const [lastTechHref, setLastTechHref] = useState('/tech?staffId=1');
-  const [lastPackerHref, setLastPackerHref] = useState('/packer?staffId=4');
 
   useEffect(() => {
     const syncMobileSidebarAvailability = () => {
@@ -420,43 +473,14 @@ export default function DashboardSidebar({ inDrawer = false, onNavigate }: { inD
     return () => window.removeEventListener('resize', syncMobileSidebarAvailability);
   }, []);
 
-  useEffect(() => {
-    const savedTechHref = localStorage.getItem('last-tech-station-href');
-    if (savedTechHref) {
-      const legacyId = savedTechHref.match(/^\/tech\/(\d+)$/)?.[1];
-      if (legacyId) setLastTechHref(`/tech?staffId=${legacyId}`);
-      else if (/^\/tech(\?.*)?$/.test(savedTechHref)) setLastTechHref(savedTechHref);
-    }
-    const savedPackerHref = localStorage.getItem('last-packer-station-href');
-    if (savedPackerHref) {
-      const legacyId = savedPackerHref.match(/^\/packer\/(\d+)$/)?.[1];
-      if (legacyId) setLastPackerHref(`/packer?staffId=${legacyId}`);
-      else if (/^\/packer(\?.*)?$/.test(savedPackerHref)) setLastPackerHref(savedPackerHref);
-    }
-  }, []);
+  // Phase F: no more per-station-href memory. The tech/packer hrefs are
+  // canonical (/tech, /packer) and identity comes from the session cookie.
+  // Stale localStorage keys are wiped one-shot by AuthProvider on mount.
 
   const prevPathnameRef = useRef(pathname);
 
   useEffect(() => {
     if (!pathname) return;
-    if (pathname.startsWith('/tech')) {
-      const params = new URLSearchParams(searchParams.toString());
-      const pathId = getPathStaffId(pathname, 'tech');
-      if (!params.get('staffId') && pathId) params.set('staffId', pathId);
-      if (!params.get('staffId')) params.set('staffId', '1');
-      const href = `/tech?${params.toString()}`;
-      localStorage.setItem('last-tech-station-href', href);
-      setLastTechHref(href);
-    }
-    if (pathname.startsWith('/packer')) {
-      const params = new URLSearchParams(searchParams.toString());
-      const pathId = getPathStaffId(pathname, 'packer');
-      if (!params.get('staffId') && pathId) params.set('staffId', pathId);
-      if (!params.get('staffId')) params.set('staffId', '4');
-      const href = `/packer?${params.toString()}`;
-      localStorage.setItem('last-packer-station-href', href);
-      setLastPackerHref(href);
-    }
     setShowHomeNavigation(false);
     setIsMobileOpen(false);
     // Only close the details panel on actual route changes, not search param
@@ -482,14 +506,26 @@ export default function DashboardSidebar({ inDrawer = false, onNavigate }: { inD
   }, []);
 
   const resolveHref = (item: SidebarNavItem) => {
-    if (item.id === 'tech') return lastTechHref;
-    if (item.id === 'packer') return lastPackerHref;
+    if (item.id === 'tech') return '/tech';
+    if (item.id === 'packer') return '/packer';
     return item.href;
   };
 
   const sidebarTitle = getSidebarTitle(pathname);
 
-  const visibleNavItems = getSidebarNavItems({ mobileRestricted: isMobile });
+  const { user: authUser, isLoaded: authLoaded } = useAuth();
+  // Only apply permission filtering once auth has loaded AND the user is
+  // signed in. Pre-sign-in (or while auth resolves) we render the full nav
+  // so the legacy `?staffId=…` flow keeps working during rollout.
+  const authPermissions = React.useMemo<Set<string> | undefined>(() => {
+    if (!authLoaded || !authUser) return undefined;
+    return new Set(authUser.permissions);
+  }, [authLoaded, authUser]);
+
+  const visibleNavItems = getSidebarNavItems({
+    mobileRestricted: isMobile,
+    permissions: authPermissions,
+  });
 
   const groupedNav = {
     main: visibleNavItems.filter((item) => item.kind === 'main'),
@@ -531,6 +567,14 @@ export default function DashboardSidebar({ inDrawer = false, onNavigate }: { inD
                 <NavSection items={groupedNav.bottom} pathname={pathname} resolveHref={resolveHref} onNavigate={() => { setShowHomeNavigation(false); onNavigate?.(); }} />
               </motion.div>
             </div>
+            {authUser && (
+              <motion.div
+                variants={itemVariants}
+                className="flex-shrink-0 px-3 pb-2"
+              >
+                <SignedInChip user={authUser} />
+              </motion.div>
+            )}
             <motion.div
               variants={itemVariants}
               className={`flex-shrink-0 ${inDrawer ? 'pb-[max(1rem,env(safe-area-inset-bottom))]' : ''}`}

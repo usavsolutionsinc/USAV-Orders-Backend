@@ -52,18 +52,17 @@ export interface UsePackerLogsOptions {
   weekRange?: { startStr: string; endStr: string };
 }
 
-/** Compute PST Mon–Fri range for the current week. */
+/** Compute PST Sun–Sat range for the current week (matches computeWeekRange + API cache key). */
 function computeCurrentPSTWeek(): { startStr: string; endStr: string } {
   const d = new Date();
   const pstMs = d.getTime() - 7 * 60 * 60 * 1000;
   const pst = new Date(pstMs);
-  const dow = pst.getUTCDay();
-  const daysFromMonday = dow === 0 ? 6 : dow - 1;
-  const mon = new Date(pstMs - daysFromMonday * 86400000);
-  const fri = new Date(pstMs + (4 - daysFromMonday) * 86400000);
+  const daysFromSunday = pst.getUTCDay();
+  const sun = new Date(pstMs - daysFromSunday * 86400000);
+  const sat = new Date(pstMs + (6 - daysFromSunday) * 86400000);
   const fmt = (x: Date) =>
     `${x.getUTCFullYear()}-${String(x.getUTCMonth() + 1).padStart(2, '0')}-${String(x.getUTCDate()).padStart(2, '0')}`;
-  return { startStr: fmt(mon), endStr: fmt(fri) };
+  return { startStr: fmt(sun), endStr: fmt(sat) };
 }
 
 const STATION_CHANNEL = getStationChannelName();

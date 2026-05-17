@@ -2,14 +2,13 @@
 
 import { ReactNode, useState, useEffect, useRef } from 'react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
-import { Search, ChevronLeft, ChevronRight, Copy, Check, AlertTriangle, Plus } from './Icons';
+import { Search, ChevronLeft, ChevronRight, Copy, Check, AlertTriangle, Plus, Barcode, ClipboardList, Layout, Package } from './Icons';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ShippedIntakeForm, type ShippedFormData } from './shipped';
 import { ShippedDetailsPanel } from './shipped/ShippedDetailsPanel';
 import { ShippedOrder } from '@/lib/neon/orders-queries';
 import { SearchBar } from './ui/SearchBar';
-import { TabSwitch } from './ui/TabSwitch';
-import { HorizontalButtonSlider } from './ui/HorizontalButtonSlider';
+import { HorizontalButtonSlider, type HorizontalSliderItem } from './ui/HorizontalButtonSlider';
 import { useShippedSearch } from '@/hooks/useShippedSearch';
 import { useDebounce } from '@/hooks';
 import { formatDateTimePST } from '@/utils/date';
@@ -51,11 +50,11 @@ interface ShippedSidebarProps {
 }
 
 
-const SHIPPED_FILTER_TABS: { id: ShippedTypeFilter; label: string }[] = [
-    { id: 'orders', label: 'Orders' },
-    { id: 'all', label: 'All' },
-    { id: 'sku', label: 'SKU' },
-    { id: 'fba', label: 'FBA' },
+const SHIPPED_FILTER_ITEMS: HorizontalSliderItem[] = [
+    { id: 'orders', label: 'Orders', icon: ClipboardList },
+    { id: 'all',    label: 'All',    icon: Layout },
+    { id: 'sku',    label: 'SKU',    icon: Barcode },
+    { id: 'fba',    label: 'FBA',    icon: Package },
 ];
 
 export default function ShippedSidebar({
@@ -312,12 +311,14 @@ Shipped: ${result.packed_at ? formatDateTimePST(result.packed_at) : 'Not Shipped
                             }
                         />
 
-                        {/* Type filter — canonical TabSwitch (see design system) */}
+                        {/* Type filter — nav pills */}
                         {onShippedFilterChange && (
-                            <TabSwitch
-                                tabs={SHIPPED_FILTER_TABS}
-                                activeTab={shippedFilter}
-                                onTabChange={(id) => onShippedFilterChange(id as ShippedTypeFilter)}
+                            <HorizontalButtonSlider
+                                items={SHIPPED_FILTER_ITEMS}
+                                value={shippedFilter}
+                                onChange={(id) => onShippedFilterChange(id as ShippedTypeFilter)}
+                                variant="nav"
+                                aria-label="Shipped type filter"
                             />
                         )}
 
