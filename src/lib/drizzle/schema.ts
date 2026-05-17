@@ -1,4 +1,5 @@
 import { pgTable, serial, text, varchar, boolean, timestamp, integer, date, primaryKey, json, jsonb, pgEnum, bigserial, bigint, uuid, numeric, uniqueIndex, index } from 'drizzle-orm/pg-core';
+import { sql } from 'drizzle-orm';
 
 // eBay Accounts table
 export const ebayAccounts = pgTable('ebay_accounts', {
@@ -1436,6 +1437,328 @@ export const techVerifications = pgTable('tech_verifications', {
 // ──────────────────────────────────────────────
 // AI Chat Sessions & Messages
 // ──────────────────────────────────────────────
+// Inventory v2 — Drizzle declarations for tables previously created via raw
+// SQL migration (Apr–May 2026) plus Phase 0 additions from
+// context/inventory_system_upgrade_plan.md. These were accessed via raw SQL
+// before; declaring them here unlocks typed reads/writes across the codebase.
+// Zero behavior change in this commit.
+// ──────────────────────────────────────────────
+
+/**
+ * locations — bin-addressable warehouse map (post 2026-04-09 bin upgrade).
+ * The room/row/col triple plus zone_letter encodes each bin; barcode is the
+ * scannable surface. NOT to be confused with zoho_locations (Zoho warehouse
+ * mirror) which still lives separately above.
+ */
+export const locations = pgTable('locations', {
+  id: serial('id').primaryKey(),
+  name: text('name').notNull().unique(),
+  room: text('room'),
+  description: text('description'),
+  barcode: text('barcode').unique(),
+  isActive: boolean('is_active').notNull().default(true),
+  sortOrder: integer('sort_order').notNull().default(0),
+  rowLabel: text('row_label'),
+  colLabel: text('col_label'),
+  binType: text('bin_type'),
+  capacity: integer('capacity'),
+  parentId: integer('parent_id'),
+  /** Server-of-record letter for the room. NULL on bin rows; set on the parent room row only. */
+  zoneLetter: text('zone_letter'),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+});
+
+/**
+ * bin_contents — what SKU lives in which bin, and how many.
+ * UNIQUE(location_id, sku). FK on sku → sku_catalog.sku since 2026-04-09.
+ */
+export const binContents = pgTable('bin_contents', {
+  id: serial('id').primaryKey(),
+  locationId: integer('location_id').notNull().references(() => locations.id),
+  sku: text('sku').notNull(),
+  qty: integer('qty').notNull().default(0),
+  minQty: integer('min_qty'),
+  maxQty: integer('max_qty'),
+  lastCounted: timestamp('last_counted', { withTimezone: true }),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+}, (table) => ({
+  locSkuUniq: uniqueIndex('bin_contents_location_id_sku_key').on(table.locationId, table.sku),
+}));
+
+/** location_transfers — audit log for every bin-to-bin SKU move. */
+export const locationTransfers = pgTable('location_transfers', {
+  id: serial('id').primaryKey(),
+  entityType: text('entity_type').notNull(),  // 'SKU_STOCK' | 'SKU_RECORD'
+  entityId: integer('entity_id').notNull(),
+  sku: text('sku').notNull(),
+  fromLocation: text('from_location'),
+  toLocation: text('to_location').notNull(),
+  staffId: integer('staff_id'),
+  notes: text('notes'),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+});
+
+/**
+ * serial_units — per-unit aggregate root (2026-04-10).
+ * Stores cradle-to-grave lifecycle state for every physical serialized unit.
+ * Relaxed: most columns nullable so legacy / batch-imported serials are
+ * first-class. New writes should always upsert by normalized_serial.
+ */
+export const serialUnits = pgTable('serial_units', {
+  id: serial('id').primaryKey(),
+  serialNumber: text('serial_number').notNull(),
+  normalizedSerial: text('normalized_serial').notNull().unique(),
+  sku: text('sku'),
+  skuCatalogId: integer('sku_catalog_id').references(() => skuCatalog.id, { onDelete: 'set null' }),
+  zohoItemId: text('zoho_item_id'),
+  currentStatus: serialStatusEnum('current_status').notNull().default('UNKNOWN'),
+  currentLocation: text('current_location'),
+  conditionGrade: conditionGradeEnum('condition_grade'),
+  originSource: text('origin_source'),
+  originReceivingLineId: integer('origin_receiving_line_id').references(() => receivingLines.id, { onDelete: 'set null' }),
+  originTsnId: integer('origin_tsn_id'),
+  originSkuId: integer('origin_sku_id'),
+  receivedAt: timestamp('received_at', { withTimezone: true }),
+  receivedBy: integer('received_by'),
+  notes: text('notes'),
+  metadata: jsonb('metadata').notNull().default(sql`'{}'::jsonb`),
+  /** Legacy-coverage columns added 2026-04-15 when the sku table was retired. */
+  shippingTrackingNumber: text('shipping_tracking_number'),
+  shipmentId: bigint('shipment_id', { mode: 'number' }),
+  legacyNotes: text('legacy_notes'),
+  legacyDateTime: timestamp('legacy_date_time'),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+});
+
+/**
+ * sku_stock_ledger — authoritative signed-delta ledger for SKU quantities.
+ * Marked authoritative 2026-04-15: sku_stock.stock / .boxed_stock are now
+ * trigger-maintained from SUM(delta) per (sku, dimension). All writes go here;
+ * direct mutations on sku_stock are forbidden.
+ *
+ * dimension ∈ ('WAREHOUSE','BOXED').
+ * reason: TEXT free-form; typed via reason_codes.reason_code_id since 2026-05-14.
+ */
+export const skuStockLedger = pgTable('sku_stock_ledger', {
+  id: serial('id').primaryKey(),
+  sku: text('sku').notNull(),
+  delta: integer('delta').notNull(),
+  reason: text('reason').notNull().default('ADJUSTMENT'),
+  staffId: integer('staff_id'),
+  dimension: text('dimension').notNull().default('WAREHOUSE'),
+  reasonCodeId: integer('reason_code_id'),
+  refSerialUnitId: integer('ref_serial_unit_id'),
+  refPackerLogId: integer('ref_packer_log_id'),
+  refTechLogId: integer('ref_tech_log_id'),
+  refSalId: integer('ref_sal_id'),
+  refOrderId: integer('ref_order_id'),
+  refShipmentId: integer('ref_shipment_id'),
+  refReceivingLineId: integer('ref_receiving_line_id'),
+  notes: text('notes'),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+});
+
+/**
+ * inventory_events — unified lifecycle / audit timeline (2026-05-13).
+ * Sibling to sku_stock_ledger: ledger holds quantity deltas, events hold the
+ * lifecycle context (status changes, putaway, move, test, etc.). They join
+ * on inventory_events.stock_ledger_id when an event also moved quantity.
+ *
+ * event_type ∈ RECEIVED | TEST_START | TEST_PASS | TEST_FAIL | PUTAWAY |
+ *              MOVED | PICKED | PACKED | SHIPPED | ADJUSTED | RETURNED |
+ *              SCRAPPED | LISTED | NOTE
+ * Phase 0 adds: ALLOCATED | RELEASED | TRIAGED | REPAIR_STARTED |
+ *               REPAIR_COMPLETED | GRADED | LABELED | STAGED | HELD |
+ *               RELEASED_HOLD
+ */
+export const inventoryEvents = pgTable('inventory_events', {
+  id: bigserial('id', { mode: 'number' }).primaryKey(),
+  occurredAt: timestamp('occurred_at', { withTimezone: true }).notNull().defaultNow(),
+  eventType: text('event_type').notNull(),
+  actorStaffId: integer('actor_staff_id').references(() => staff.id, { onDelete: 'set null' }),
+  station: text('station'),
+  receivingId: bigint('receiving_id', { mode: 'number' }),
+  receivingLineId: bigint('receiving_line_id', { mode: 'number' }),
+  serialUnitId: integer('serial_unit_id').references(() => serialUnits.id, { onDelete: 'set null' }),
+  sku: text('sku'),
+  binId: integer('bin_id').references(() => locations.id, { onDelete: 'set null' }),
+  prevBinId: integer('prev_bin_id').references(() => locations.id, { onDelete: 'set null' }),
+  prevStatus: text('prev_status'),
+  nextStatus: text('next_status'),
+  stockLedgerId: integer('stock_ledger_id').references(() => skuStockLedger.id, { onDelete: 'set null' }),
+  scanToken: text('scan_token'),
+  /** UNIQUE — mobile clients send this for idempotent retries. */
+  clientEventId: text('client_event_id').unique(),
+  notes: text('notes'),
+  payload: jsonb('payload').notNull().default(sql`'{}'::jsonb`),
+});
+
+/**
+ * reason_codes — typed lookup for ledger adjustments (2026-05-14).
+ * Replaces the free-text `reason` column with categorized codes that drive
+ * financial classification (shrinkage, sale, return, etc.).
+ */
+export const reasonCodes = pgTable('reason_codes', {
+  id: serial('id').primaryKey(),
+  code: text('code').notNull().unique(),
+  label: text('label').notNull(),
+  /** shrinkage | adjustment | sale | return | movement | initial */
+  category: text('category').notNull(),
+  /** in | out | either */
+  direction: text('direction').notNull(),
+  requiresNote: boolean('requires_note').notNull().default(false),
+  requiresPhoto: boolean('requires_photo').notNull().default(false),
+  isActive: boolean('is_active').notNull().default(true),
+  sortOrder: integer('sort_order').notNull().default(100),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+});
+
+/**
+ * printer_profiles — targets for /api/print/dispatch (2026-05-14).
+ * One row per physical printer with vendor + external dispatcher id +
+ * optional default label class (carton | product | bin).
+ */
+export const printerProfiles = pgTable('printer_profiles', {
+  id: serial('id').primaryKey(),
+  name: text('name').notNull(),
+  externalId: text('external_id').notNull(),
+  vendor: text('vendor').notNull().default('printnode'),
+  /** carton | product | bin | null (generic) */
+  defaultFor: text('default_for'),
+  isActive: boolean('is_active').notNull().default(true),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+});
+
+/**
+ * stock_alerts — daily-cron-generated bin signals (2026-05-14).
+ * alert_type ∈ LOW_STOCK | NEVER_COUNTED | STALE_COUNT. One open alert per
+ * (sku, bin_id, alert_type); closed alerts (resolved_at IS NOT NULL) stay
+ * for history.
+ */
+export const stockAlerts = pgTable('stock_alerts', {
+  id: bigserial('id', { mode: 'number' }).primaryKey(),
+  sku: text('sku').notNull(),
+  binId: integer('bin_id').references(() => locations.id, { onDelete: 'set null' }),
+  alertType: text('alert_type').notNull(),
+  threshold: integer('threshold'),
+  qtyAtTrigger: integer('qty_at_trigger'),
+  triggeredAt: timestamp('triggered_at', { withTimezone: true }).notNull().defaultNow(),
+  resolvedAt: timestamp('resolved_at', { withTimezone: true }),
+  notifiedAt: timestamp('notified_at', { withTimezone: true }),
+  notes: text('notes'),
+});
+
+/** cycle_count_campaigns — month-end / audit count campaigns (2026-05-14). */
+export const cycleCountCampaigns = pgTable('cycle_count_campaigns', {
+  id: serial('id').primaryKey(),
+  name: text('name').notNull(),
+  scope: jsonb('scope').notNull().default(sql`'{}'::jsonb`),
+  varianceTol: numeric('variance_tol', { precision: 5, scale: 2 }).notNull().default('0.05'),
+  /** open | closed */
+  status: text('status').notNull().default('open'),
+  createdBy: integer('created_by').references(() => staff.id, { onDelete: 'set null' }),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  closedAt: timestamp('closed_at', { withTimezone: true }),
+});
+
+/**
+ * cycle_count_lines — per (bin, sku) expected→counted rows. Within
+ * campaign.varianceTol auto-approves; over tolerance lands in pending_review.
+ */
+export const cycleCountLines = pgTable('cycle_count_lines', {
+  id: bigserial('id', { mode: 'number' }).primaryKey(),
+  campaignId: integer('campaign_id').notNull().references(() => cycleCountCampaigns.id, { onDelete: 'cascade' }),
+  binId: integer('bin_id').notNull().references(() => locations.id, { onDelete: 'cascade' }),
+  sku: text('sku').notNull(),
+  expectedQty: integer('expected_qty').notNull(),
+  countedQty: integer('counted_qty'),
+  /** GENERATED ALWAYS AS (counted_qty - expected_qty) STORED — read-only. */
+  variance: integer('variance'),
+  /** pending | counted | pending_review | approved | rejected */
+  status: text('status').notNull().default('pending'),
+  countedBy: integer('counted_by').references(() => staff.id, { onDelete: 'set null' }),
+  countedAt: timestamp('counted_at', { withTimezone: true }),
+  approvedBy: integer('approved_by').references(() => staff.id, { onDelete: 'set null' }),
+  approvedAt: timestamp('approved_at', { withTimezone: true }),
+  notes: text('notes'),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+}, (table) => ({
+  campaignBinSkuUniq: uniqueIndex('cycle_count_lines_unique').on(table.campaignId, table.binId, table.sku),
+}));
+
+// ──────────────────────────────────────────────
+// Phase 0 NEW tables (created by 2026-05-17_inventory_v2_phase0.sql)
+// ──────────────────────────────────────────────
+
+/**
+ * serial_unit_condition_history — per-unit grade timeline.
+ * Append-only. One row per condition change; links to the inventory_event
+ * that produced the assessment.
+ */
+export const serialUnitConditionHistory = pgTable('serial_unit_condition_history', {
+  id: bigserial('id', { mode: 'number' }).primaryKey(),
+  serialUnitId: integer('serial_unit_id').notNull().references(() => serialUnits.id, { onDelete: 'cascade' }),
+  assessedAt: timestamp('assessed_at', { withTimezone: true }).notNull().defaultNow(),
+  assessedByStaffId: integer('assessed_by_staff_id').references(() => staff.id, { onDelete: 'set null' }),
+  prevGrade: conditionGradeEnum('prev_grade'),
+  newGrade: conditionGradeEnum('new_grade').notNull(),
+  cosmeticNotes: text('cosmetic_notes'),
+  functionalNotes: text('functional_notes'),
+  inventoryEventId: bigint('inventory_event_id', { mode: 'number' }).references(() => inventoryEvents.id, { onDelete: 'set null' }),
+});
+
+/**
+ * order_unit_allocations — reservation of a specific serialized unit to an
+ * order line. Enforces "one live allocation per unit" via DEFERRABLE UNIQUE
+ * on serial_unit_id WHERE state != 'RELEASED'. Released rows stay for history.
+ *
+ * state ∈ ALLOCATED | PICKED | PACKED | SHIPPED | RELEASED
+ */
+export const orderUnitAllocations = pgTable('order_unit_allocations', {
+  id: bigserial('id', { mode: 'number' }).primaryKey(),
+  orderId: integer('order_id').notNull().references(() => orders.id, { onDelete: 'restrict' }),
+  serialUnitId: integer('serial_unit_id').notNull().references(() => serialUnits.id, { onDelete: 'restrict' }),
+  allocatedAt: timestamp('allocated_at', { withTimezone: true }).notNull().defaultNow(),
+  allocatedByStaffId: integer('allocated_by_staff_id').references(() => staff.id, { onDelete: 'set null' }),
+  state: text('state').notNull().default('ALLOCATED'),
+  releasedAt: timestamp('released_at', { withTimezone: true }),
+  releasedReason: text('released_reason'),
+});
+
+/**
+ * fba_shipment_item_units — links specific serialized units to FBA shipment
+ * item lines. Tier-3 (serialized) FNSKU scans populate this; Tier-1/2 lines
+ * remain pure quantity rows.
+ */
+export const fbaShipmentItemUnits = pgTable('fba_shipment_item_units', {
+  fbaShipmentItemId: integer('fba_shipment_item_id').notNull().references(() => fbaShipmentItems.id, { onDelete: 'cascade' }),
+  serialUnitId: integer('serial_unit_id').notNull().references(() => serialUnits.id, { onDelete: 'restrict' }),
+  addedAt: timestamp('added_at', { withTimezone: true }).notNull().defaultNow(),
+  addedByStaffId: integer('added_by_staff_id').references(() => staff.id, { onDelete: 'set null' }),
+}, (table) => ({
+  pk: primaryKey({ columns: [table.fbaShipmentItemId, table.serialUnitId] }),
+}));
+
+/**
+ * unit_id_sequences — per-SKU-per-year unit ID counter for GS1 unit labels.
+ * Format: {SKU_SHORT}-{YEAR}-{NEXT_SEQ:06}. Updated atomically in a single
+ * UPDATE … RETURNING; never read without writing.
+ */
+export const unitIdSequences = pgTable('unit_id_sequences', {
+  skuCatalogId: integer('sku_catalog_id').notNull().references(() => skuCatalog.id, { onDelete: 'cascade' }),
+  year: integer('year').notNull(),
+  nextSeq: integer('next_seq').notNull().default(1),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+}, (table) => ({
+  pk: primaryKey({ columns: [table.skuCatalogId, table.year] }),
+}));
+
+// ──────────────────────────────────────────────
 
 export const aiChatSessions = pgTable('ai_chat_sessions', {
   id: text('id').primaryKey(),                     // client-generated session ID (e.g. "oc-...")
@@ -1475,3 +1798,35 @@ export type QcCheckTemplate = typeof qcCheckTemplates.$inferSelect;
 export type NewQcCheckTemplate = typeof qcCheckTemplates.$inferInsert;
 export type TechVerification = typeof techVerifications.$inferSelect;
 export type NewTechVerification = typeof techVerifications.$inferInsert;
+
+// Inventory v2 type exports
+export type Location = typeof locations.$inferSelect;
+export type NewLocation = typeof locations.$inferInsert;
+export type BinContent = typeof binContents.$inferSelect;
+export type NewBinContent = typeof binContents.$inferInsert;
+export type LocationTransfer = typeof locationTransfers.$inferSelect;
+export type NewLocationTransfer = typeof locationTransfers.$inferInsert;
+export type SerialUnit = typeof serialUnits.$inferSelect;
+export type NewSerialUnit = typeof serialUnits.$inferInsert;
+export type SkuStockLedgerRow = typeof skuStockLedger.$inferSelect;
+export type NewSkuStockLedgerRow = typeof skuStockLedger.$inferInsert;
+export type InventoryEvent = typeof inventoryEvents.$inferSelect;
+export type NewInventoryEvent = typeof inventoryEvents.$inferInsert;
+export type ReasonCode = typeof reasonCodes.$inferSelect;
+export type NewReasonCode = typeof reasonCodes.$inferInsert;
+export type PrinterProfile = typeof printerProfiles.$inferSelect;
+export type NewPrinterProfile = typeof printerProfiles.$inferInsert;
+export type StockAlert = typeof stockAlerts.$inferSelect;
+export type NewStockAlert = typeof stockAlerts.$inferInsert;
+export type CycleCountCampaign = typeof cycleCountCampaigns.$inferSelect;
+export type NewCycleCountCampaign = typeof cycleCountCampaigns.$inferInsert;
+export type CycleCountLine = typeof cycleCountLines.$inferSelect;
+export type NewCycleCountLine = typeof cycleCountLines.$inferInsert;
+export type SerialUnitConditionHistoryRow = typeof serialUnitConditionHistory.$inferSelect;
+export type NewSerialUnitConditionHistoryRow = typeof serialUnitConditionHistory.$inferInsert;
+export type OrderUnitAllocation = typeof orderUnitAllocations.$inferSelect;
+export type NewOrderUnitAllocation = typeof orderUnitAllocations.$inferInsert;
+export type FbaShipmentItemUnit = typeof fbaShipmentItemUnits.$inferSelect;
+export type NewFbaShipmentItemUnit = typeof fbaShipmentItemUnits.$inferInsert;
+export type UnitIdSequence = typeof unitIdSequences.$inferSelect;
+export type NewUnitIdSequence = typeof unitIdSequences.$inferInsert;
