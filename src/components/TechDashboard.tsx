@@ -13,11 +13,12 @@ import ProductManualViewer from './station/ProductManualViewer';
 import { ReceivingInboundFeed } from './station/ReceivingInboundFeed';
 import { ReceivingDetailsStack, type ReceivingDetailsLog } from './station/ReceivingDetailsStack';
 import { RepairDetailsPanel } from './repair/RepairDetailsPanel';
+import { ActiveOrderWorkspace } from './tech/ActiveOrderWorkspace';
 import { OverlaySearchBar } from '@/components/ui/OverlaySearchBar';
 import { Search } from '@/components/Icons';
 import { resolveOrderSearchView } from '@/lib/order-search-resolver';
 import type { RSRecord } from '@/lib/neon/repair-service-queries';
-import type { ResolvedProductManual } from '@/hooks/useStationTestingController';
+import type { ActiveStationOrder, ResolvedProductManual } from '@/hooks/useStationTestingController';
 
 interface OpenRepairDetail {
   repairId:       number;
@@ -60,6 +61,14 @@ export default function TechDashboard({ techId }: TechDashboardProps) {
         assignedTechId: number | null;
     } | null>(null);
     const [loadingRepair, setLoadingRepair] = useState(false);
+    // Active-order workspace state — populated by `tech-active-order-changed`
+    // dispatched from `useStationTestingController`. When set, the history
+    // branch crossfades into `<ActiveOrderWorkspace/>` instead of `<TechTable/>`.
+    const [activeOrderPane, setActiveOrderPane] = useState<{
+        activeOrder: ActiveStationOrder;
+        manuals: ResolvedProductManual[];
+        isManualLoading: boolean;
+    } | null>(null);
 
     useEffect(() => {
         setSearchInput(currentSearch);
@@ -116,6 +125,21 @@ export default function TechDashboard({ techId }: TechDashboardProps) {
         };
         window.addEventListener('receiving-select-log', handleSelectLog);
         return () => window.removeEventListener('receiving-select-log', handleSelectLog);
+    }, []);
+
+    // Listen for active-order changes from useStationTestingController (sidebar).
+    // Payload is null when the active order clears — that returns the pane to history.
+    useEffect(() => {
+        const handler = (e: Event) => {
+            const detail = (e as CustomEvent<{
+                activeOrder: ActiveStationOrder;
+                manuals: ResolvedProductManual[];
+                isManualLoading: boolean;
+            } | null>).detail;
+            setActiveOrderPane(detail || null);
+        };
+        window.addEventListener('tech-active-order-changed', handler);
+        return () => window.removeEventListener('tech-active-order-changed', handler);
     }, []);
 
     const showPendingSearch = (rightViewMode === 'pending' || rightViewMode === 'shipped') && (searchOpen || Boolean(currentSearch));
@@ -232,7 +256,39 @@ export default function TechDashboard({ techId }: TechDashboardProps) {
                 ) : rightViewMode === 'receiving' ? (
                     <ReceivingInboundFeed onSelectLog={setSelectedLog} />
                 ) : (
-                    <TechTable testedBy={parseInt(techId)} />
+                    // History view: crossfades to the active-order workspace when
+                    // a scan resolves, and back to the global history when nothing
+                    // is active. The scan input stays mounted in the sidebar — no
+                    // route change, no focus loss.
+                    <AnimatePresence initial={false} mode="wait">
+                        {activeOrderPane ? (
+                            <ActiveOrderWorkspace
+                                key={`workspace-${activeOrderPane.activeOrder.tracking || activeOrderPane.activeOrder.orderId}`}
+                                activeOrder={activeOrderPane.activeOrder}
+                                manuals={activeOrderPane.manuals}
+                                isManualLoading={activeOrderPane.isManualLoading}
+                                techId={techId}
+                                onClose={() => setActiveOrderPane(null)}
+                                onViewManual={() => {
+                                    const nextParams = new URLSearchParams(searchParams.toString());
+                                    nextParams.set('staffId', techId);
+                                    nextParams.set('view', 'manual');
+                                    router.replace(`/tech?${nextParams.toString()}`);
+                                }}
+                            />
+                        ) : (
+                            <motion.div
+                                key="tech-history"
+                                initial={prefersReducedMotion ? { opacity: 1 } : { opacity: 0 }}
+                                animate={{ opacity: 1 }}
+                                exit={{ opacity: 0 }}
+                                transition={{ duration: 0.16 }}
+                                className="h-full w-full"
+                            >
+                                <TechTable testedBy={parseInt(techId)} />
+                            </motion.div>
+                        )}
+                    </AnimatePresence>
                 )}
 
                 <AnimatePresence initial={false} mode="wait">

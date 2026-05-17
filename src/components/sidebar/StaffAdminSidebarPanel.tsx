@@ -9,7 +9,7 @@ import {
   AdminPickerRow,
   useAdminUrlState,
 } from '@/components/admin/shared';
-import { getStaffThemeById, stationThemeColors } from '@/utils/staff-colors';
+import { getStaffColorHex } from '@/utils/staff-colors';
 
 type StaffViewMode = 'all' | 'active' | 'inactive' | 'technician' | 'packer';
 
@@ -19,6 +19,7 @@ interface StaffRow {
   role: string;
   active: boolean;
   employee_id: string | null;
+  color_hex?: string | null;
 }
 
 const STAFF_VIEW_OPTIONS = [
@@ -160,32 +161,30 @@ export function StaffAdminSidebarPanel() {
         <div className="px-2 py-6 text-center text-xs text-gray-400">No matches.</div>
       ) : (
         <ul className="space-y-1.5">
-          {filtered.map((row) => {
-            const sc = stationThemeColors[getStaffThemeById(row.id)];
-            return (
-              <li key={row.id}>
-                <AdminPickerRow
-                  selected={selectedStaffId === row.id}
-                  onPick={() => setParam((p) => p.set('staffId', String(row.id)))}
-                  leading={
-                    <div
-                      className={`flex h-8 w-8 items-center justify-center rounded-full ${sc.bg} text-[11px] font-bold text-white`}
-                    >
-                      {initials(row.name)}
-                    </div>
-                  }
-                  title={row.name}
-                  subtitle={row.role.replace(/_/g, ' ')}
-                  trailing={
-                    <span
-                      title={row.active ? 'Active' : 'Inactive'}
-                      className={`h-2 w-2 rounded-full ${row.active ? 'bg-emerald-500' : 'bg-gray-400'}`}
-                    />
-                  }
-                />
-              </li>
-            );
-          })}
+          {filtered.map((row) => (
+            <li key={row.id}>
+              <AdminPickerRow
+                selected={selectedStaffId === row.id}
+                onPick={() => setParam((p) => p.set('staffId', String(row.id)))}
+                leading={
+                  <div
+                    className="flex h-8 w-8 items-center justify-center rounded-full text-[11px] font-bold text-white"
+                    style={{ backgroundColor: getStaffColorHex(row) }}
+                  >
+                    {initials(row.name)}
+                  </div>
+                }
+                title={row.name}
+                subtitle={row.role.replace(/_/g, ' ')}
+                trailing={
+                  <span
+                    title={row.active ? 'Active' : 'Inactive'}
+                    className={`h-2 w-2 rounded-full ${row.active ? 'bg-emerald-500' : 'bg-gray-400'}`}
+                  />
+                }
+              />
+            </li>
+          ))}
         </ul>
       )}
     </AdminSidebarShell>

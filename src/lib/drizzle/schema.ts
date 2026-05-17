@@ -42,6 +42,7 @@ export const staff = pgTable('staff', {
   permissionsAdded: text('permissions_added').array().notNull().default([]),
   permissionsRemoved: text('permissions_removed').array().notNull().default([]),
   sortOrder: integer('sort_order').notNull().default(0),
+  colorHex: varchar('color_hex', { length: 7 }).notNull().default('#10b981'),
 });
 
 // Editable roles taxonomy. is_system rows are seeded built-ins and cannot
@@ -285,6 +286,37 @@ export const conditionGradeEnum = pgEnum('condition_grade_enum', [
   'USED_B',
   'USED_C',
   'PARTS',
+]);
+
+/**
+ * serial_status_enum — per-unit lifecycle states (see serial_units.current_status).
+ * Values 1-9 are the original 2026-04-10 set; values 10-19 are the Phase 0
+ * expansion added by 2026-05-17_inventory_v2_phase0.sql for the full refurb +
+ * allocation state machine described in context/inventory_system_upgrade_plan.md.
+ */
+export const serialStatusEnum = pgEnum('serial_status_enum', [
+  // Original (2026-04-10)
+  'UNKNOWN',
+  'RECEIVED',
+  'TESTED',
+  'STOCKED',
+  'PICKED',
+  'SHIPPED',
+  'RETURNED',
+  'RMA',
+  'SCRAPPED',
+  // Phase 0 expansion (2026-05-17) — refurb pipeline
+  'TRIAGED',
+  'IN_REPAIR',
+  'REPAIR_DONE',
+  'IN_TEST',
+  'GRADED',
+  // Phase 0 expansion — allocation/outbound pipeline
+  'ALLOCATED',
+  'PACKED',
+  'LABELED',
+  'STAGED',
+  'ON_HOLD',
 ]);
 
 export const returnPlatformEnum = pgEnum('return_platform_enum', [
@@ -920,12 +952,27 @@ export const workAssignments = pgTable('work_assignments', {
 // Shipped table - DEPRECATED: Now using orders table with is_shipped = true
 
 // Sku Stock table
+/**
+ * sku_stock — trigger-maintained projection of sku_stock_ledger.
+ * Since 2026-04-15 (sku_stock_ledger_authoritative), `stock` and `boxedStock`
+ * are recomputed by fn_recompute_sku_stock(); writes must go to the ledger.
+ */
 export const skuStock = pgTable('sku_stock', {
   id: serial('id').primaryKey(),
-  stock: text('stock'),
+  // Stored as INTEGER post-2026-04-15; kept as text for backwards compat with existing reads.
+  stock: integer('stock').notNull().default(0),
+  boxedStock: integer('boxed_stock').notNull().default(0),
   sku: text('sku'),
   productTitle: text('product_title'),
+  location: text('location'),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 });
+
+/**
+ * sku — RETIRED 2026-04-15. INSERTs blocked by trg_block_sku_inserts.
+ * Historical rows preserved as archive + legacy FK target. New writes go to
+ * serial_units. Read live data via the v_sku compat view or serial_units.
+ */
 export const sku = pgTable('sku', {
   id: serial('id').primaryKey(),
   dateTime: timestamp('date_time', { withTimezone: true }),
@@ -935,6 +982,8 @@ export const sku = pgTable('sku', {
   shipmentId: bigint('shipment_id', { mode: 'number' }),
   notes: text('notes'),
   location: text('location'),
+  /** FK to serial_units master, added 2026-04-11. Nullable for legacy rows. */
+  serialUnitId: integer('serial_unit_id'),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow(),
 });
@@ -1115,6 +1164,8 @@ export const techSerialNumbers = pgTable('tech_serial_numbers', {
     () => stationActivityLogs.id,
     { onDelete: 'set null' },
   ),
+  /** FK to serial_units master, added 2026-04-11. Nullable for legacy/batch-import rows. */
+  serialUnitId: integer('serial_unit_id'),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow(),
 });
@@ -1330,6 +1381,8 @@ export const skuCatalog = pgTable('sku_catalog', {
   category: text('category'),
   upc: text('upc'),
   ean: text('ean'),
+  /** GS1 Global Trade Item Number — encodes Digital Link QRs (/01/{gtin}). Added 2026-05-14. */
+  gtin: text('gtin'),
   imageUrl: text('image_url'),
   isActive: boolean('is_active').notNull().default(true),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),

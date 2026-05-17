@@ -12,9 +12,10 @@
  */
 
 import { useEffect, useMemo, useState } from 'react';
-import { getStaffThemeById, stationThemeColors, type StationTheme } from '@/utils/staff-colors';
+import { getStaffTheme, getStaffColorHex, type StationTheme } from '@/utils/staff-colors';
+import { SkeletonBase } from '@/design-system/components/Skeletons';
 
-export type StaffRow = { id: number; name: string; role: string; has_pin: boolean };
+export type StaffRow = { id: number; name: string; role: string; has_pin: boolean; color_hex: string };
 
 interface StaffPickerListProps {
   /** Staff that should appear at the top under a "RECENT" header. */
@@ -77,7 +78,7 @@ export function StaffPickerList({ recent = [], onPick, onMessage }: StaffPickerL
     return { recentRows: recents, otherRows: Array.from(map.values()) };
   }, [staff, recent]);
 
-  if (loading) return <div className="px-6 py-10 text-center text-sm text-gray-500">Loading staff…</div>;
+  if (loading) return <StaffPickerSkeleton />;
   if (staff.length === 0) {
     return (
       <div className="rounded-xl border border-dashed border-gray-300 px-6 py-10 text-center text-sm text-gray-500">
@@ -127,9 +128,8 @@ interface RowProps {
 }
 
 function Row({ staff: s, onPick, onMessage, isRecent }: RowProps) {
-  const theme = getStaffThemeById(s.id);
+  const theme = getStaffTheme(s);
   const t = THEME_ROW[theme];
-  const sc = stationThemeColors[theme];
   const needsSetup = !s.has_pin;
   return (
     <button
@@ -145,7 +145,10 @@ function Row({ staff: s, onPick, onMessage, isRecent }: RowProps) {
         {isRecent && (
           <span className={`absolute -right-0.5 -top-0.5 z-[1] h-2.5 w-2.5 rounded-full ${t.recentDot} ring-2 ring-white`} aria-hidden />
         )}
-        <div className={`flex h-11 w-11 items-center justify-center rounded-full ${sc.bg} text-[14px] font-bold text-white ring-4 ${t.avatarRing} transition-transform duration-150 group-hover:scale-[1.04]`}>
+        <div
+          className={`flex h-11 w-11 items-center justify-center rounded-full text-[14px] font-bold text-white ring-4 ${t.avatarRing} transition-transform duration-150 group-hover:scale-[1.04]`}
+          style={{ backgroundColor: getStaffColorHex(s) }}
+        >
           {initials(s.name)}
         </div>
       </div>
@@ -164,12 +167,32 @@ function Row({ staff: s, onPick, onMessage, isRecent }: RowProps) {
         </div>
       </div>
       <svg
-        className={`h-4 w-4 flex-shrink-0 text-gray-300 transition-all group-hover:translate-x-0.5 ${t.chevron}`}
+        className={`h-4 w-4 flex-shrink-0 transition-all group-hover:translate-x-0.5 ${t.chevron}`}
         viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden
       >
         <path d="M9 18l6-6-6-6"/>
       </svg>
     </button>
+  );
+}
+
+function StaffPickerSkeleton() {
+  return (
+    <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white/80 backdrop-blur-sm shadow-sm shadow-gray-900/[0.03]">
+      {Array.from({ length: 8 }).map((_, i) => (
+        <div
+          key={i}
+          className="flex w-full items-center gap-3 border-b border-gray-100 px-3.5 py-3 last:border-b-0"
+        >
+          <SkeletonBase circle width="44px" height="44px" className="flex-shrink-0" />
+          <div className="min-w-0 flex-1 space-y-2">
+            <SkeletonBase width="35%" height="0.95rem" />
+            <SkeletonBase width="22%" height="0.6rem" />
+          </div>
+          <SkeletonBase width="16px" height="16px" className="flex-shrink-0" />
+        </div>
+      ))}
+    </div>
   );
 }
 

@@ -19,6 +19,7 @@ import { usePathname, useRouter } from 'next/navigation';
 // off /signin or the enrollment landing while their session is null.
 const CLIENT_PUBLIC_PATHS: ReadonlyArray<RegExp> = [
   /^\/signin(?:$|\/)/,
+  /^\/m\/signin(?:$|\/)/,
   /^\/not-authorized(?:$|\/)/,
   /^\/m\/enroll\//,
   /^\/offline(?:$|\/)/,

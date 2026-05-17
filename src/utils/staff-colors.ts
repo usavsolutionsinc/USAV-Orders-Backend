@@ -188,28 +188,137 @@ export const packerInputThemeClasses: Record<PackerStationTheme, StationInputThe
   },
 };
 
-/** Single source of truth: staff ID → theme. */
-const STAFF_THEME_BY_ID: Record<number, StationTheme> = {
-  1: 'green',     // Michael  — technician
-  2: 'blue',      // Thuc     — technician
-  3: 'purple',    // Sang     — technician
-  4: 'black',     // Tuan     — packer
-  5: 'red',       // Thuy     — packer
-  6: 'yellow',    // Cuong    — technician
-  7: 'lightblue', // Kai      — receiving
-  8: 'pink',      // Lien     — sales
+/**
+ * Anchor hexes for each StationTheme. Used to map an arbitrary DB color_hex
+ * onto the nearest themed Tailwind class chain (FBA chrome, packer/tech
+ * inputs, print queue, etc.). Tuned to match the actual class palettes in
+ * {@link stationThemeColors} so the chrome stays visually coherent.
+ */
+const THEME_ANCHOR_HEX: Record<StationTheme, [number, number, number]> = {
+  green:     [16, 185, 129],   // emerald-500
+  blue:      [59, 130, 246],   // blue-500
+  purple:    [168, 85, 247],   // purple-500
+  yellow:    [245, 158, 11],   // amber-500
+  black:     [30, 41, 59],     // slate-800
+  red:       [239, 68, 68],    // red-500
+  lightblue: [14, 165, 233],   // sky-500
+  pink:      [236, 72, 153],   // pink-500
 };
+
+/**
+ * Module-level cache of staff color_hex values keyed by staff ID. Populated
+ * once on app boot by <StaffColorsProvider> (root layout). Drives the
+ * synchronous resolvers ({@link getStaffThemeById}, {@link getStaffColorHex})
+ * that 30+ components depend on without forcing every consumer to thread the
+ * staff record through props.
+ *
+ * Reactivity: when the cache is replaced (e.g. an admin changes a staff
+ * color), subscribers are notified. Components that need to re-render on
+ * color change should call {@link useStaffColorVersion}.
+ */
+const _staffColorCache = new Map<number, string>();
+let _staffColorVersion = 0;
+const _staffColorSubscribers = new Set<() => void>();
+
+export function setStaffColorCache(entries: Array<{ id: number; color_hex?: string | null }>): void {
+  _staffColorCache.clear();
+  for (const e of entries) {
+    if (e.color_hex && /^#[0-9a-fA-F]{6}$/.test(e.color_hex)) {
+      _staffColorCache.set(e.id, e.color_hex.toLowerCase());
+    }
+  }
+  _staffColorVersion += 1;
+  _staffColorSubscribers.forEach((fn) => fn());
+}
+
+export function _subscribeStaffColorCache(fn: () => void): () => void {
+  _staffColorSubscribers.add(fn);
+  return () => { _staffColorSubscribers.delete(fn); };
+}
+
+export function _getStaffColorVersion(): number {
+  return _staffColorVersion;
+}
 
 function parseStaffId(staffId: number | string | null | undefined): number | null {
   const parsed = Number(staffId);
   return Number.isFinite(parsed) ? parsed : null;
 }
 
+function hexToRgb(hex: string | null | undefined): [number, number, number] | null {
+  if (!hex) return null;
+  const m = /^#([0-9a-f]{6})$/i.exec(hex.trim());
+  if (!m) return null;
+  const n = parseInt(m[1], 16);
+  return [(n >> 16) & 0xff, (n >> 8) & 0xff, n & 0xff];
+}
+
+/** Nearest of the 8 station themes for an arbitrary hex (squared RGB distance). */
+export function themeFromHex(hex: string | null | undefined): StationTheme {
+  const rgb = hexToRgb(hex);
+  if (!rgb) return 'green';
+  let best: StationTheme = 'green';
+  let bestDist = Infinity;
+  for (const [name, anchor] of Object.entries(THEME_ANCHOR_HEX) as Array<[StationTheme, [number, number, number]]>) {
+    const dr = rgb[0] - anchor[0];
+    const dg = rgb[1] - anchor[1];
+    const db = rgb[2] - anchor[2];
+    const dist = dr * dr + dg * dg + db * db;
+    if (dist < bestDist) { bestDist = dist; best = name; }
+  }
+  return best;
+}
+
+/** Default fallback hex when no DB color is available (cache miss or pre-load). */
+const DEFAULT_COLOR_HEX = '#10b981';
+
+/**
+ * Sync theme resolver keyed by staff ID. Reads from the module-level color
+ * cache populated by <StaffColorsProvider>. Returns the emerald default when
+ * the cache hasn't been populated yet, when the ID is missing, or when the
+ * staff hasn't had a color assigned. There is no longer a hardcoded id→theme
+ * fallback — the DB column staff.color_hex is the only source of truth.
+ */
 export function getStaffThemeById(
   staffId: number | string | null | undefined,
 ): StationTheme {
   const id = parseStaffId(staffId);
-  return (id && STAFF_THEME_BY_ID[id]) || 'green';
+  if (!id) return 'green';
+  const hex = _staffColorCache.get(id);
+  if (!hex) return 'green';
+  return themeFromHex(hex);
+}
+
+/**
+ * Preferred resolver when the caller has the staff record (with color_hex)
+ * already loaded — skips the module cache. Falls back to the cache lookup if
+ * color_hex isn't on the record.
+ */
+export function getStaffTheme(
+  staff: { id?: number | string | null; color_hex?: string | null } | null | undefined,
+): StationTheme {
+  if (!staff) return 'green';
+  if (staff.color_hex) return themeFromHex(staff.color_hex);
+  return getStaffThemeById(staff.id);
+}
+
+/**
+ * Resolved hex for a staff record. Prefers the record's own color_hex, then
+ * the module cache (populated by StaffColorsProvider), then a neutral default
+ * so unset / pre-load staff don't render transparent.
+ */
+export function getStaffColorHex(
+  staff: { id?: number | string | null; color_hex?: string | null } | null | undefined,
+): string {
+  if (staff?.color_hex && /^#[0-9a-fA-F]{6}$/.test(staff.color_hex)) {
+    return staff.color_hex.toLowerCase();
+  }
+  const id = parseStaffId(staff?.id);
+  if (id) {
+    const cached = _staffColorCache.get(id);
+    if (cached) return cached;
+  }
+  return DEFAULT_COLOR_HEX;
 }
 
 function getTechThemeById(techId: number | string | null | undefined): TechStationTheme {

@@ -17,6 +17,7 @@ import QRCode from 'react-qr-code';
 import { StaffPickerList, type StaffPickerRow } from '@/components/auth/StaffPickerList';
 import { StaffPinPad } from '@/components/auth/StaffPinPad';
 import { SetPinPad } from '@/components/auth/SetPinPad';
+import { useAuth } from '@/contexts/AuthContext';
 
 const RECENT_KEY = 'usav.recentSignins';
 const MAX_RECENT = 3;
@@ -74,6 +75,7 @@ export default function SignInPage() {
   const router = useRouter();
   const params = useSearchParams();
   const next = params.get('next') || '';
+  const { refresh: refreshAuth } = useAuth();
   const [picked, setPicked] = useState<StaffPickerRow | null>(null);
   const [pickerMessage, setPickerMessage] = useState<string | null>(null);
   const [recent, setRecent] = useState<number[]>([]);
@@ -85,11 +87,15 @@ export default function SignInPage() {
 
   useEffect(() => { setRecent(readRecent()); }, []);
 
-  const finish = useCallback((staffId: number, role: string | null | undefined) => {
+  const finish = useCallback(async (staffId: number, role: string | null | undefined) => {
     writeRecent(staffId);
+    // Hydrate AuthContext with the new session BEFORE navigating. Without this,
+    // the still-null user state in AuthContext sees the next non-public route
+    // and immediately bounces us back to /signin (the "second sign-in loop").
+    await refreshAuth();
     const home = role ? ROLE_HOME[role.toLowerCase()] : '/dashboard';
     router.replace(next || home || '/dashboard');
-  }, [router, next]);
+  }, [router, next, refreshAuth]);
 
   const submitPin = useCallback(async (pin: string) => {
     if (!picked) return { ok: false as const, error: 'INTERNAL' };
@@ -107,7 +113,7 @@ export default function SignInPage() {
       const data = await r.json().catch(() => ({}));
       return { ok: false as const, error: humanError((data as { error?: string }).error) };
     }
-    finish(picked.id, picked.role);
+    await finish(picked.id, picked.role);
     return { ok: true as const };
   }, [picked, finish, rememberMe]);
 
@@ -127,7 +133,7 @@ export default function SignInPage() {
       const data = await r.json().catch(() => ({}));
       return { ok: false as const, error: humanError((data as { error?: string }).error) };
     }
-    finish(picked.id, picked.role);
+    await finish(picked.id, picked.role);
     return { ok: true as const };
   }, [picked, finish, rememberMe]);
 
@@ -150,7 +156,7 @@ export default function SignInPage() {
       const data = await finishRes.json().catch(() => ({}));
       throw new Error(humanError((data as { error?: string }).error));
     }
-    finish(picked.id, picked.role);
+    await finish(picked.id, picked.role);
   }, [picked, finish]);
 
   return (
@@ -172,6 +178,14 @@ export default function SignInPage() {
             />
           )}
           <RememberMeToggle checked={rememberMe} onChange={setRememberMe} />
+          <button
+            type="button"
+            onClick={() => setShowPhoneQr(true)}
+            className="group inline-flex items-center gap-2 rounded-full border border-gray-200 bg-white/70 px-4 py-2 text-[12px] font-medium text-gray-600 shadow-sm shadow-gray-900/[0.03] backdrop-blur transition-all hover:border-gray-300 hover:bg-white hover:text-gray-900"
+          >
+            <PhoneQrIcon />
+            Use your phone to sign in
+          </button>
         </div>
       ) : (
         <div className="w-full max-w-md">

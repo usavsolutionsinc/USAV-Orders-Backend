@@ -26,6 +26,7 @@ const SESSION_COOKIE_NAME = 'usav_sid';
 
 const PUBLIC_PATHS: ReadonlyArray<RegExp> = [
   /^\/signin(?:$|\/)/,
+  /^\/m\/signin(?:$|\/)/,
   /^\/not-authorized(?:$|\/)/,
   /^\/m\/enroll\//,
   /^\/api\/auth\//,

@@ -35,8 +35,9 @@ export async function GET(request: NextRequest) {
                 role: string | null;
                 employee_id: string | null;
                 active: boolean;
+                color_hex: string;
             }>(
-                `SELECT id, name, role, employee_id, active
+                `SELECT id, name, role, employee_id, active, color_hex
                  FROM staff WHERE id = $1 LIMIT 1`,
                 [numId],
             );
@@ -131,7 +132,7 @@ export async function GET(request: NextRequest) {
         }
 
         const sql = `
-          SELECT s.id, s.name, s.role, s.employee_id, s.active, s.created_at
+          SELECT s.id, s.name, s.role, s.employee_id, s.active, s.color_hex, s.created_at
           ${scheduledTodaySelect}
           FROM staff s
           ${scheduleJoin}
@@ -173,7 +174,7 @@ export async function GET(request: NextRequest) {
             }
 
             const fallbackSql = `
-              SELECT s.id, s.name, s.role, s.employee_id, s.active, s.created_at
+              SELECT s.id, s.name, s.role, s.employee_id, s.active, s.color_hex, s.created_at
               FROM staff s
               ${fallbackConditions.length > 0 ? `WHERE ${fallbackConditions.join(' AND ')}` : ''}
               ORDER BY s.role ASC, s.name ASC
@@ -247,7 +248,7 @@ export async function POST(request: NextRequest) {
 export async function PUT(request: NextRequest) {
     try {
         const body = await request.json();
-        const { id, name, role, employee_id, active } = body;
+        const { id, name, role, employee_id, active, color_hex } = body;
 
         if (!id) {
             return NextResponse.json({ error: 'id is required' }, { status: 400 });
@@ -263,6 +264,12 @@ export async function PUT(request: NextRequest) {
         }
         if (employee_id !== undefined) updateData.employeeId = employee_id || null;
         if (active !== undefined) updateData.active = active;
+        if (color_hex !== undefined) {
+            if (typeof color_hex !== 'string' || !/^#[0-9a-fA-F]{6}$/.test(color_hex)) {
+                return NextResponse.json({ error: 'color_hex must be a #RRGGBB hex string' }, { status: 400 });
+            }
+            updateData.colorHex = color_hex.toLowerCase();
+        }
 
         const [result] = await db
             .update(staff)

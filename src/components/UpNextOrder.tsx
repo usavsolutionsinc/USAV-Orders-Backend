@@ -5,17 +5,26 @@ import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { framerPresence, framerTransition, framerVariants, SkeletonList } from '@/design-system';
 import confetti from 'canvas-confetti';
-import { Package } from './Icons';
-import { TabSwitch } from './ui/TabSwitch';
+import { AlertCircle, ClipboardList, List, Package, ShoppingCart, Wrench } from './Icons';
 import { OrderCard } from './station/upnext/OrderCard';
 import { RepairCard } from './station/upnext/RepairCard';
 import { FbaItemCard } from './station/upnext/FbaItemCard';
 import { ReceivingAssignmentCard } from './station/upnext/ReceivingAssignmentCard';
 import { UpNextFilterBar } from './station/upnext/UpNextFilterBar';
-import { getTechStationLightChromeOutlineClass } from '@/utils/staff-colors';
-import { SLIDER_PRESETS, type HorizontalSliderItem } from './ui/HorizontalButtonSlider';
+import { HorizontalButtonSlider, SLIDER_PRESETS, type HorizontalSliderItem } from './ui/HorizontalButtonSlider';
 import { QUICK_FILTER_ITEMS, SORT_FILTER_IDS, type UpNextTabId } from '@/utils/upnext-shared';
 import { useUpNextController } from '@/hooks/station/useUpNextController';
+
+/** Tab → icon mapping for the Up Next slider (nav variant). Keeps the bar
+ *  visually consistent with the global sidebar's view switcher. */
+const UP_NEXT_TAB_ICONS: Record<UpNextTabId, (props: { className?: string }) => JSX.Element> = {
+  all: List,
+  orders: ShoppingCart,
+  fba: Package,
+  repair: Wrench,
+  stock: AlertCircle,
+  receiving: ClipboardList,
+};
 
 type TabId = UpNextTabId;
 
@@ -47,8 +56,20 @@ export default function UpNextOrder({ techId, onStart, onMissingParts, onAllComp
     lateCount, dueTodayCount, shouldShowStockSection, showNoCurrentOrdersBanner,
   } = ctrl;
   const tabCounts = rawTabCounts;
-  const stationTabChromeOutline = useMemo(() => getTechStationLightChromeOutlineClass(techId), [techId]);
   const orders = nonStockOrders;
+
+  // Map controller-supplied tabs to HorizontalButtonSlider's `nav` shape:
+  // icons + counts; uniform blue active state matches the global sidebar.
+  const sliderItems: HorizontalSliderItem[] = useMemo(
+    () =>
+      visibleTabs.map((tab) => ({
+        id: tab.id,
+        label: tab.label,
+        count: tab.count,
+        icon: UP_NEXT_TAB_ICONS[tab.id as UpNextTabId],
+      })),
+    [visibleTabs],
+  );
 
   useEffect(() => {
     const isCompletionView = (effectiveTab === 'orders' || effectiveTab === 'all') && showNoCurrentOrdersBanner;
@@ -227,15 +248,16 @@ export default function UpNextOrder({ techId, onStart, onMissingParts, onAllComp
 
   return (
     <div className="relative flex flex-col">
-        {/* ── Sticky tab bar — pinned above scrolling card list ── */}
+        {/* ── Sticky tab bar — pinned above scrolling card list. Uses the
+              shared HorizontalButtonSlider (nav variant) so /tech's Up Next
+              switcher matches the global sidebar's view switcher. ── */}
         <div className="sticky top-0 z-10 bg-white pb-1.5">
-          <TabSwitch
-            tabs={visibleTabs}
-            activeTab={effectiveTab}
-            onTabChange={(tab) => selectTab(tab as TabId)}
-            scrollable
-            variant="upNext"
-            stationChromeOutlineClassName={stationTabChromeOutline}
+          <HorizontalButtonSlider
+            items={sliderItems}
+            value={effectiveTab}
+            onChange={(id) => selectTab(id as TabId)}
+            variant="nav"
+            aria-label="Up Next tabs"
           />
 
           {/* ── Urgency summary bar ── */}

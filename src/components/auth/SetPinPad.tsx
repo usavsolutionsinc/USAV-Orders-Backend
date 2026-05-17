@@ -13,10 +13,10 @@
  */
 
 import { useCallback, useState } from 'react';
-import { getStaffThemeById, stationThemeColors, type StationTheme } from '@/utils/staff-colors';
+import { getStaffTheme, getStaffColorHex, type StationTheme } from '@/utils/staff-colors';
 
 interface SetPinPadProps {
-  staff: { id: number; name: string; role: string };
+  staff: { id: number; name: string; role: string; color_hex?: string };
   /** Submit handler. Resolve/reject controls error display + re-entry. */
   onSubmit: (pin: string) => Promise<{ ok: true } | { ok: false; error?: string }>;
   /** Tap to go back to the picker. */
@@ -54,9 +54,8 @@ export function SetPinPad({ staff, onSubmit, onBack }: SetPinPadProps) {
   const [confirmPin, setConfirmPin] = useState('');
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
-  const theme = getStaffThemeById(staff.id);
+  const theme = getStaffTheme(staff);
   const t = THEME_NUMPAD[theme];
-  const sc = stationThemeColors[theme];
 
   const target = step === 'enter' ? pin : confirmPin;
   const setTarget = step === 'enter' ? setPin : setConfirmPin;
@@ -147,7 +146,10 @@ export function SetPinPad({ staff, onSubmit, onBack }: SetPinPadProps) {
 
       <div className="relative">
         <div className={`absolute -inset-3 rounded-full bg-gradient-radial ${t.haloFrom} to-transparent blur-2xl opacity-70`} aria-hidden />
-        <div className={`relative flex h-20 w-20 items-center justify-center rounded-full ${sc.bg} text-2xl font-bold text-white shadow-lg shadow-gray-900/10 ring-4 ring-white`}>
+        <div
+          className="relative flex h-20 w-20 items-center justify-center rounded-full text-2xl font-bold text-white shadow-lg shadow-gray-900/10 ring-4 ring-white"
+          style={{ backgroundColor: getStaffColorHex(staff) }}
+        >
           {initials(staff.name)}
         </div>
       </div>

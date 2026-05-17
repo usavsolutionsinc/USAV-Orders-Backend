@@ -4,6 +4,8 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { motion } from 'framer-motion';
+import { StaffColorWheel } from './StaffColorWheel';
+import { getStaffColorHex } from '@/utils/staff-colors';
 import type { Staff, StaffAvailabilityRule } from './types';
 import { toast } from '@/lib/toast';
 import { useAblyChannel } from '@/hooks/useAblyChannel';
@@ -58,6 +60,7 @@ export function StaffManagementTab() {
   const [editRole, setEditRole] = useState<StaffRole>('technician');
   const [editEmployeeId, setEditEmployeeId] = useState('');
   const [editActive, setEditActive] = useState(true);
+  const [editColorHex, setEditColorHex] = useState('#10b981');
   const [savingScheduleKey, setSavingScheduleKey] = useState<string | null>(null);
   const [optimisticScheduleMap, setOptimisticScheduleMap] = useState<ScheduleMap>({});
   const [pendingScheduleMap, setPendingScheduleMap] = useState<PendingScheduleMap>({});
@@ -103,6 +106,7 @@ export function StaffManagementTab() {
       role?: StaffRole;
       employee_id?: string;
       active?: boolean;
+      color_hex?: string;
     }) => {
       const res = await fetch('/api/staff', {
         method: 'PUT',
@@ -293,6 +297,7 @@ export function StaffManagementTab() {
     setEditRole((member.role as StaffRole) || 'technician');
     setEditEmployeeId(member.employee_id || '');
     setEditActive(Boolean(member.active));
+    setEditColorHex(getStaffColorHex(member));
   };
 
   useEffect(() => {
@@ -890,14 +895,22 @@ export function StaffManagementTab() {
                     member.active ? 'bg-white' : 'bg-gray-50 text-gray-500'
                   }`}
                 >
-                  <div className="min-w-0 pr-3">
-                    <p className={`${dataValue} truncate uppercase tracking-[0.02em]`}>
-                      {member.name}
-                    </p>
-                    <div className={`${tableHeader} mt-0.5 flex items-center gap-2`}>
-                      <span>{member.role}</span>
-                      {member.employee_id ? <span>ID {member.employee_id}</span> : null}
-                      <span>{member.active ? 'Active' : 'Inactive'}</span>
+                  <div className="flex min-w-0 items-start gap-2.5 pr-3">
+                    <span
+                      aria-hidden
+                      className="mt-1 inline-block h-3 w-3 flex-shrink-0 rounded-full ring-1 ring-black/5"
+                      style={{ backgroundColor: getStaffColorHex(member) }}
+                      title={`Color: ${getStaffColorHex(member)}`}
+                    />
+                    <div className="min-w-0">
+                      <p className={`${dataValue} truncate uppercase tracking-[0.02em]`}>
+                        {member.name}
+                      </p>
+                      <div className={`${tableHeader} mt-0.5 flex items-center gap-2`}>
+                        <span>{member.role}</span>
+                        {member.employee_id ? <span>ID {member.employee_id}</span> : null}
+                        <span>{member.active ? 'Active' : 'Inactive'}</span>
+                      </div>
                     </div>
                   </div>
 
@@ -1032,6 +1045,11 @@ export function StaffManagementTab() {
                       </select>
                     </div>
 
+                    <div className="mt-3 flex items-center gap-4">
+                      <span className={`${sectionLabel} text-gray-600`}>Color</span>
+                      <StaffColorWheel value={editColorHex} onChange={setEditColorHex} />
+                    </div>
+
                     <label className={`${sectionLabel} mt-3 inline-flex items-center gap-2 text-gray-600`}>
                       <input
                         type="checkbox"
@@ -1045,15 +1063,28 @@ export function StaffManagementTab() {
                     <div className="mt-3 flex gap-2">
                       <button
                         type="button"
-                        onClick={() =>
-                          updateStaffMutation.mutate({
-                            id: member.id,
-                            name: editName.trim(),
-                            role: editRole,
-                            employee_id: editEmployeeId.trim(),
-                            active: editActive,
-                          })
-                        }
+                        onClick={() => {
+                          const payload: {
+                            id: number; name?: string; role?: StaffRole;
+                            employee_id?: string; active?: boolean; color_hex?: string;
+                          } = { id: member.id };
+                          if (editName.trim() !== member.name) payload.name = editName.trim();
+                          if (editEmployeeId.trim() !== (member.employee_id || '')) payload.employee_id = editEmployeeId.trim();
+                          if (editActive !== member.active) payload.active = editActive;
+                          if (editColorHex.toLowerCase() !== (member.color_hex || '').toLowerCase()) {
+                            payload.color_hex = editColorHex;
+                          }
+                          // Role select only offers technician/packer — only send it
+                          // if the staff is currently one of those AND the value changed.
+                          // Sending role='admin' (etc.) trips the API's tech/packer-only check.
+                          if (
+                            editRole !== member.role &&
+                            (member.role === 'technician' || member.role === 'packer')
+                          ) {
+                            payload.role = editRole;
+                          }
+                          updateStaffMutation.mutate(payload);
+                        }}
                         className={`${sectionLabel} h-9 border border-gray-900 bg-gray-900 px-4 text-white`}
                       >
                         Save
@@ -1084,14 +1115,22 @@ export function StaffManagementTab() {
                     !member.active ? 'bg-gray-50 text-gray-500' : 'bg-white'
                   }`}
                 >
-                  <div className="min-w-0 pr-3">
-                    <p className={`${dataValue} truncate uppercase tracking-[0.02em]`}>
-                      {member.name}
-                    </p>
-                    <div className={`${tableHeader} mt-0.5 flex items-center gap-2`}>
-                      <span>{member.role}</span>
-                      {member.employee_id ? <span>ID {member.employee_id}</span> : null}
-                      <span>{member.active ? 'Active' : 'Inactive'}</span>
+                  <div className="flex min-w-0 items-center gap-2.5 pr-3">
+                    <span
+                      aria-hidden
+                      className="inline-block h-3 w-3 flex-shrink-0 rounded-full ring-1 ring-black/5"
+                      style={{ backgroundColor: getStaffColorHex(member) }}
+                      title={`Color: ${getStaffColorHex(member)}`}
+                    />
+                    <div className="min-w-0">
+                      <p className={`${dataValue} truncate uppercase tracking-[0.02em]`}>
+                        {member.name}
+                      </p>
+                      <div className={`${tableHeader} mt-0.5 flex items-center gap-2`}>
+                        <span>{member.role}</span>
+                        {member.employee_id ? <span>ID {member.employee_id}</span> : null}
+                        <span>{member.active ? 'Active' : 'Inactive'}</span>
+                      </div>
                     </div>
                   </div>
 
@@ -1211,9 +1250,16 @@ export function StaffManagementTab() {
                       member.active ? 'bg-white' : 'bg-gray-50'
                     }`}
                   >
-                    <p className={`${dataValue} truncate uppercase tracking-[0.02em] ${member.active ? 'text-gray-900' : 'text-gray-500'}`}>
-                      {member.name}
-                    </p>
+                    <div className="flex min-w-0 items-center gap-2.5">
+                      <span
+                        aria-hidden
+                        className="inline-block h-3 w-3 flex-shrink-0 rounded-full ring-1 ring-black/5"
+                        style={{ backgroundColor: getStaffColorHex(member) }}
+                      />
+                      <p className={`${dataValue} truncate uppercase tracking-[0.02em] ${member.active ? 'text-gray-900' : 'text-gray-500'}`}>
+                        {member.name}
+                      </p>
+                    </div>
                     {nextBusinessDays.map((day) => {
                       const { isScheduled, blockedByRule, hasConflict } = getScheduleCellMeta(member.id, day.date, day.dayOfWeek, 'next');
                       const buttonKey = `${member.id}:${day.date}`;

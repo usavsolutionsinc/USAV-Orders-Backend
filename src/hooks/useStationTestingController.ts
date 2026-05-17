@@ -241,6 +241,18 @@ export function useStationTestingController({
     }
   }, [activeOrder]);
 
+  // ── right-pane bridge ─────────────────────────────────────────────────────────
+  // Publish active-order state so TechDashboard's right pane can swap from the
+  // global history table into a focused workspace. Listeners consume this via
+  // `tech-active-order-changed` — payload is null when nothing is active.
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const payload = activeOrder && isActiveOrderVisible
+      ? { activeOrder, manuals: resolvedManuals, isManualLoading }
+      : null;
+    window.dispatchEvent(new CustomEvent('tech-active-order-changed', { detail: payload }));
+  }, [activeOrder, isActiveOrderVisible, resolvedManuals, isManualLoading]);
+
   useEffect(() => {
     const handleUndoApplied = (e: any) => {
       const tracking = String(e?.detail?.tracking || '');

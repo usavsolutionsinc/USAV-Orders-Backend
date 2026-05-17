@@ -9,10 +9,10 @@
  */
 
 import { useCallback, useState } from 'react';
-import { getStaffThemeById, stationThemeColors, type StationTheme } from '@/utils/staff-colors';
+import { getStaffTheme, getStaffColorHex, type StationTheme } from '@/utils/staff-colors';
 
 interface StaffPinPadProps {
-  staff: { id: number; name: string; role: string };
+  staff: { id: number; name: string; role: string; color_hex?: string };
   /** Submit handler. Resolve/reject controls error display + re-entry. */
   onSubmit: (pin: string) => Promise<{ ok: true } | { ok: false; error?: string }>;
   /** Optional passkey shortcut, e.g. /signin's passkey button. */
@@ -52,9 +52,8 @@ export function StaffPinPad({ staff, onSubmit, onPasskey, submitLabel, onBack, i
   const [pin, setPin] = useState('');
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(initialError);
-  const theme = getStaffThemeById(staff.id);
+  const theme = getStaffTheme(staff);
   const t = THEME_NUMPAD[theme];
-  const sc = stationThemeColors[theme];
 
   const submit = useCallback(async (rawPin?: string) => {
     const enteredPin = rawPin ?? pin;
@@ -97,7 +96,10 @@ export function StaffPinPad({ staff, onSubmit, onPasskey, submitLabel, onBack, i
 
       <div className="relative">
         <div className={`absolute -inset-3 rounded-full bg-gradient-radial ${t.haloFrom} to-transparent blur-2xl opacity-70`} aria-hidden />
-        <div className={`relative flex h-20 w-20 items-center justify-center rounded-full ${sc.bg} text-2xl font-bold text-white shadow-lg shadow-gray-900/10 ring-4 ring-white`}>
+        <div
+          className="relative flex h-20 w-20 items-center justify-center rounded-full text-2xl font-bold text-white shadow-lg shadow-gray-900/10 ring-4 ring-white"
+          style={{ backgroundColor: getStaffColorHex(staff) }}
+        >
           {initials(staff.name)}
         </div>
       </div>
@@ -137,8 +139,10 @@ export function StaffPinPad({ staff, onSubmit, onPasskey, submitLabel, onBack, i
             ariaLabel="Sign in with passkey"
             icon={(
               <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <rect x="3" y="11" width="18" height="11" rx="2"/>
-                <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+                <circle cx="12" cy="6.5" r="3.5"/>
+                <path d="M12 10v11"/>
+                <path d="M12 16h3"/>
+                <path d="M12 19h2"/>
               </svg>
             )}
           />

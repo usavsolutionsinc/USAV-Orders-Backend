@@ -1,9 +1,10 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { usePathname } from 'next/navigation';
 import { Search, X } from '@/components/Icons';
-import { getStaffThemeById, stationThemeColors } from '@/utils/staff-colors';
+import { getStaffColorHex } from '@/utils/staff-colors';
+import { useStaffColorVersion } from '@/contexts/StaffColorsProvider';
 import { useQuickAccess } from '@/lib/quick-access/use-quick-access';
 import { useQuickAccessHotkey } from '@/lib/quick-access/use-hotkey';
 import { QuickAccessPopover } from '@/components/quick-access/QuickAccessPopover';
@@ -43,7 +44,10 @@ export function QuickAccessFab() {
     return () => { cancelled = true; };
   }, [authStaffId]);
   const staffChipActive = Boolean(authStaffId && showStaffChip);
-  const staffTheme = useMemo(() => (authStaffId ? getStaffThemeById(authStaffId) : null), [authStaffId]);
+  // Subscribe to the module-level color cache so admin color changes
+  // re-render the chip in real time without a manual refetch.
+  useStaffColorVersion();
+  const staffColorHex = authStaffId ? getStaffColorHex({ id: authStaffId }) : null;
 
   // Close everything on route change
   useEffect(() => {
@@ -88,8 +92,11 @@ export function QuickAccessFab() {
     setHistoryOpen(true);
   }, []);
 
-  // Hidden only when user explicitly disabled it in settings.
+  // Hidden when user explicitly disabled it in settings, or when nobody is
+  // signed in (e.g. on /signin, /m/enroll, /not-authorized). The FAB's
+  // contents are all authenticated actions, so it has nothing to show pre-login.
   if (!settings.enabled) return null;
+  if (!authUser) return null;
 
   return (
     <div ref={wrapperRef} className="fixed bottom-4 right-4 z-40 flex flex-col items-end gap-2">
@@ -116,13 +123,18 @@ export function QuickAccessFab() {
         }
         aria-expanded={menuOpen}
         title={menuOpen ? 'Close' : staffChipActive && staffName ? `${staffName} — Quick access (⌘K)` : 'Quick access (⌘K)'}
-        className={`relative flex h-11 w-11 items-center justify-center rounded-full shadow-lg transition-all active:scale-95 ring-2 ring-white ${
+        className={`relative flex h-11 w-11 items-center justify-center rounded-full shadow-lg transition-all active:scale-95 ring-2 ring-white text-white ${
           menuOpen
-            ? 'bg-gray-700 text-white hover:bg-gray-600'
-            : staffChipActive && staffTheme
-              ? `${stationThemeColors[staffTheme].bg} text-white ${stationThemeColors[staffTheme].hover}`
-              : 'bg-gray-900 text-white hover:bg-gray-800'
+            ? 'bg-gray-700 hover:bg-gray-600'
+            : staffChipActive && staffColorHex
+              ? 'hover:brightness-110'
+              : 'bg-gray-900 hover:bg-gray-800'
         }`}
+        style={
+          !menuOpen && staffChipActive && staffColorHex
+            ? { backgroundColor: staffColorHex }
+            : undefined
+        }
       >
         {menuOpen ? <X className="h-5 w-5" /> : <Search className="h-5 w-5" />}
       </button>

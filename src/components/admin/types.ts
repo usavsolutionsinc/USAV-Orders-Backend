@@ -4,6 +4,7 @@ export interface Staff {
   role: string;
   employee_id: string | null;
   active: boolean;
+  color_hex: string;
   created_at?: string | null;
 }
 

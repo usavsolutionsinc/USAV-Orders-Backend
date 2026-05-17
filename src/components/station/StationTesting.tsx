@@ -1,10 +1,9 @@
 'use client';
 
 import { useState, useCallback, useRef } from 'react';
-import { LayoutGroup, motion, AnimatePresence } from 'framer-motion';
+import { motion } from 'framer-motion';
 import UpNextOrder from '../UpNextOrder';
 import { Barcode, Loader2, Package, MapPin, Settings } from '../Icons';
-import ActiveStationOrderCard from './ActiveStationOrderCard';
 import StationGoalBar from './StationGoalBar';
 import { StationScanBar } from './StationScanBar';
 import { getStationInputMode, type StationInputMode, useStationTestingController } from '@/hooks/useStationTestingController';
@@ -52,12 +51,8 @@ export default function StationTesting({
     inputRef,
     activeOrder,
     setActiveOrder,
-    isActiveOrderVisible,
-    resolvedManuals,
-    isManualLoading,
     handleSubmit,
     triggerGlobalRefresh,
-    activeColor,
     clearFeedback,
     reopenLastActiveOrderCard,
   } = useStationTestingController({
@@ -126,53 +121,6 @@ export default function StationTesting({
       handleSubmit(undefined, overrideTracking, manualForcedType ? { forcedType: manualForcedType } : undefined);
     },
     [inputValue, manualMode, forcedTypeForManualMode, handleSubmit, setManualMode]
-  );
-
-  const handleRemoveSerial = useCallback(
-    async (_serial: string, serialIndex: number) => {
-      if (!activeOrder) return;
-      const nextSerials = activeOrder.serialNumbers.filter((_, idx) => idx !== serialIndex);
-
-      // Use new unified serial endpoint with salId when available, fall back to old API
-      const useSalPath = activeOrder.salId != null;
-      const response = useSalPath
-        ? await fetch('/api/tech/serial', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              action: 'update',
-              salId: activeOrder.salId,
-              serials: nextSerials,
-              techId: userId,
-            }),
-          })
-        : await fetch('/api/tech/update-serials', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              tracking: activeOrder.tracking || null,
-              serialNumbers: nextSerials,
-              techId: userId,
-              fnskuLogId: activeOrder.fnskuLogId ?? null,
-            }),
-          });
-
-      const data = await response.json().catch(() => null);
-      if (!response.ok || !data?.success) {
-        throw new Error(data?.details || data?.error || 'Failed to remove serial');
-      }
-
-      const savedSerials = Array.isArray(data.serialNumbers)
-        ? data.serialNumbers.map((row: unknown) => String(row || '').trim().toUpperCase()).filter(Boolean)
-        : nextSerials;
-
-      setActiveOrder({
-        ...activeOrder,
-        serialNumbers: savedSerials,
-      });
-      triggerGlobalRefresh();
-    },
-    [activeOrder, setActiveOrder, triggerGlobalRefresh, userId]
   );
 
   const trimmedInput = inputValue.trim();
@@ -404,38 +352,24 @@ export default function StationTesting({
           {!isMobile && scanBarBlock}
         </div>
 
-        {/* ── Scrollable content ── */}
+        {/* ── Scrollable content — Up Next queue. Active-order details now live
+              in the right pane (see ActiveOrderWorkspace via TechDashboard);
+              this sidebar stays focused on the scan input + queue. ── */}
         <div className={`flex-1 overflow-y-auto no-scrollbar px-4 space-y-3 ${isMobile ? 'pb-2' : 'pb-4'}`}>
-          <LayoutGroup id="station-active-upnext">
-            <AnimatePresence mode="popLayout" initial={false}>
-              {activeOrder && isActiveOrderVisible ? (
-                <ActiveStationOrderCard
-                  key={activeOrder.tracking}
-                  activeOrder={activeOrder}
-                  activeColorTextClass={activeColor.text}
-                  resolvedManuals={resolvedManuals}
-                  isManualLoading={isManualLoading}
-                  onViewManual={onViewManual}
-                  onRemoveSerial={handleRemoveSerial}
-                />
-              ) : null}
-            </AnimatePresence>
-
-            <div className="space-y-2 mt-2">
-              <UpNextOrder
-                techId={userId}
-                onStart={(tracking) => {
-                  setActiveOrder(null);
-                  clearFeedback();
-                  setTimeout(() => handleFormSubmit(undefined, tracking), 50);
-                }}
-                onMissingParts={() => {
-                  triggerGlobalRefresh();
-                }}
-                filterBarPortalRef={filterBarPortalRef}
-              />
-            </div>
-          </LayoutGroup>
+          <div className="space-y-2 mt-2">
+            <UpNextOrder
+              techId={userId}
+              onStart={(tracking) => {
+                setActiveOrder(null);
+                clearFeedback();
+                setTimeout(() => handleFormSubmit(undefined, tracking), 50);
+              }}
+              onMissingParts={() => {
+                triggerGlobalRefresh();
+              }}
+              filterBarPortalRef={filterBarPortalRef}
+            />
+          </div>
 
           <div className="mt-auto pt-6 border-t border-gray-50 text-center">
             <p className="text-[9px] font-black text-gray-300 uppercase tracking-[0.3em]">USAV TECH v2.6</p>

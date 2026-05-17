@@ -19,12 +19,13 @@ interface Row {
   name: string;
   role: string;
   has_pin: boolean;
+  color_hex: string;
 }
 
 export async function GET() {
   try {
     const r = await pool.query(
-      `SELECT id, name, role, (pin_hash IS NOT NULL) AS has_pin
+      `SELECT id, name, role, color_hex, (pin_hash IS NOT NULL) AS has_pin
          FROM staff
         WHERE COALESCE(status, 'active') IN ('active', 'invited')
           AND COALESCE(active, true) = true
