@@ -448,6 +448,19 @@ export default async function InventoryV2AdminPage() {
           </footer>
         </section>
 
+        {/* Quick links to operations tools */}
+        <nav className="flex flex-wrap gap-2">
+          <Link href="/admin/inventory-v2/events" className="rounded-md border border-gray-300 bg-white px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50">
+            Events explorer →
+          </Link>
+          <Link href="/admin/inventory-v2/bulk-allocate" className="rounded-md border border-gray-300 bg-white px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50">
+            Bulk allocate →
+          </Link>
+          <Link href="/admin/inventory-v2/holds" className="rounded-md border border-gray-300 bg-white px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50">
+            Holds →
+          </Link>
+        </nav>
+
         {/* Open DRIFT alerts — surfaced by /api/qstash/inventory/drift-check */}
         {openDriftAlerts.length > 0 ? (
           <section className="rounded-lg border border-red-200 bg-red-50 shadow-sm">
