@@ -2,6 +2,7 @@ import { requirePermission } from '@/lib/auth/page-guard';
 import { queryRaw } from '@/lib/neon-client';
 import { inventoryV2FlagSnapshot } from '@/lib/feature-flags';
 import { redirect } from 'next/navigation';
+import Link from 'next/link';
 
 export const dynamic = 'force-dynamic';
 
@@ -10,6 +11,14 @@ async function lookupUnit(formData: FormData): Promise<void> {
   'use server';
   const ref = String(formData.get('ref') ?? '').trim();
   if (ref) redirect(`/admin/inventory-v2/units/${encodeURIComponent(ref)}`);
+  redirect('/admin/inventory-v2');
+}
+
+/** Server action: redirect to the SKU detail page on form submit. */
+async function lookupSku(formData: FormData): Promise<void> {
+  'use server';
+  const sku = String(formData.get('sku') ?? '').trim();
+  if (sku) redirect(`/admin/inventory-v2/sku/${encodeURIComponent(sku)}`);
   redirect('/admin/inventory-v2');
 }
 
@@ -228,25 +237,46 @@ export default async function InventoryV2AdminPage() {
           </p>
         </header>
 
-        {/* Unit lookup */}
-        <form action={lookupUnit} className="flex items-center gap-3 rounded-lg border border-gray-200 bg-white px-4 py-3 shadow-sm">
-          <label htmlFor="ref" className="text-sm font-medium text-gray-700 whitespace-nowrap">
-            Look up unit
-          </label>
-          <input
-            id="ref"
-            name="ref"
-            type="text"
-            placeholder="serial number or serial_units.id"
-            className="flex-1 rounded-md border border-gray-300 px-3 py-1.5 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-          />
-          <button
-            type="submit"
-            className="rounded-md bg-blue-600 px-4 py-1.5 text-sm font-medium text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-1"
-          >
-            Open timeline
-          </button>
-        </form>
+        {/* Lookup forms — side by side on md+, stacked on mobile */}
+        <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+          <form action={lookupUnit} className="flex items-center gap-3 rounded-lg border border-gray-200 bg-white px-4 py-3 shadow-sm">
+            <label htmlFor="ref" className="text-sm font-medium text-gray-700 whitespace-nowrap">
+              Unit
+            </label>
+            <input
+              id="ref"
+              name="ref"
+              type="text"
+              placeholder="serial or id"
+              className="flex-1 rounded-md border border-gray-300 px-3 py-1.5 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+            />
+            <button
+              type="submit"
+              className="rounded-md bg-blue-600 px-4 py-1.5 text-sm font-medium text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-1"
+            >
+              Timeline →
+            </button>
+          </form>
+
+          <form action={lookupSku} className="flex items-center gap-3 rounded-lg border border-gray-200 bg-white px-4 py-3 shadow-sm">
+            <label htmlFor="sku" className="text-sm font-medium text-gray-700 whitespace-nowrap">
+              SKU
+            </label>
+            <input
+              id="sku"
+              name="sku"
+              type="text"
+              placeholder="SKU code"
+              className="flex-1 rounded-md border border-gray-300 px-3 py-1.5 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+            />
+            <button
+              type="submit"
+              className="rounded-md bg-blue-600 px-4 py-1.5 text-sm font-medium text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-1"
+            >
+              Detail →
+            </button>
+          </form>
+        </div>
 
         {/* Feature flag snapshot */}
         <section className="rounded-lg border border-gray-200 bg-white shadow-sm">
@@ -438,9 +468,17 @@ export default async function InventoryV2AdminPage() {
                       <td className="px-6 py-2 font-mono text-xs">{e.event_type}</td>
                       <td className="px-6 py-2 text-xs text-gray-600">{e.station ?? '—'}</td>
                       <td className="px-6 py-2 text-xs">
-                        {e.serial_unit_id ? `#${e.serial_unit_id}` : ''}
-                        {e.serial_unit_id && e.sku ? ' · ' : ''}
-                        {e.sku ?? ''}
+                        {e.serial_unit_id ? (
+                          <Link href={`/admin/inventory-v2/units/${e.serial_unit_id}`} className="text-blue-600 hover:underline">
+                            #{e.serial_unit_id}
+                          </Link>
+                        ) : null}
+                        {e.serial_unit_id && e.sku ? <span className="px-1 text-gray-300">·</span> : null}
+                        {e.sku ? (
+                          <Link href={`/admin/inventory-v2/sku/${encodeURIComponent(e.sku)}`} className="text-blue-600 hover:underline">
+                            {e.sku}
+                          </Link>
+                        ) : null}
                       </td>
                       <td className="px-6 py-2 text-xs text-gray-600">
                         {e.prev_status && e.next_status

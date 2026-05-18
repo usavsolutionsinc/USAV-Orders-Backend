@@ -279,7 +279,13 @@ export default async function UnitTimelinePage({ params }: { params: Promise<{ r
             <h2 className="text-lg font-medium text-gray-900">Current state</h2>
           </header>
           <dl className="grid grid-cols-2 gap-x-6 gap-y-3 px-6 py-4 text-sm md:grid-cols-3">
-            <Field label="SKU">{unit.sku ?? '—'}</Field>
+            <Field label="SKU">
+              {unit.sku ? (
+                <Link href={`/admin/inventory-v2/sku/${encodeURIComponent(unit.sku)}`} className="text-blue-600 hover:underline">
+                  {unit.sku}
+                </Link>
+              ) : '—'}
+            </Field>
             <Field label="Location">{unit.current_location ?? '—'}</Field>
             <Field label="Origin">{unit.origin_source ?? '—'}</Field>
             <Field label="Received at">{unit.received_at ? new Date(unit.received_at).toLocaleString() : '—'}</Field>
