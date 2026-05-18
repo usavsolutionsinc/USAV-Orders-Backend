@@ -1,12 +1,23 @@
 import { NextRequest, NextResponse } from 'next/server';
 import pool from '@/lib/db';
+import { isQStashOrigin } from '@/lib/qstash';
+
+export const dynamic = 'force-dynamic';
+export const maxDuration = 120;
 
 /**
- * GET /api/cron/refresh-reports
+ * POST /api/cron/refresh-reports
  * Nightly REFRESH MATERIALIZED VIEW pass. Each view has a unique pkey index
  * so CONCURRENTLY refreshes don't block reads.
+ *
+ * Triggered by QStash on a daily schedule (see src/config/qstash-schedules.json).
+ * Previously a Vercel cron — migrated 2026-05-18 to avoid Vercel cron billing.
  */
-export async function GET(_req: NextRequest) {
+export async function POST(request: NextRequest) {
+  if (!isQStashOrigin(request.headers)) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
   const startedAt = Date.now();
   const refreshed: string[] = [];
   const failed: Array<{ view: string; error: string }> = [];
@@ -26,4 +37,9 @@ export async function GET(_req: NextRequest) {
     failed,
     elapsed_ms: Date.now() - startedAt,
   });
+}
+
+/** Health probe — no auth required, no work performed. */
+export async function GET() {
+  return NextResponse.json({ ok: true, queue: 'qstash', job: 'refresh-reports' });
 }

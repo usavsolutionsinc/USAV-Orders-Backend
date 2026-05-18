@@ -1,10 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server';
 import pool from '@/lib/db';
+import { isQStashOrigin } from '@/lib/qstash';
+
+export const dynamic = 'force-dynamic';
+export const maxDuration = 60;
 
 const STALE_DAYS = Number(process.env.STOCK_ALERT_STALE_DAYS || 60);
 
 /**
- * GET /api/cron/stock-alerts
+ * POST /api/cron/stock-alerts
  *
  * Scans bin_contents and:
  *   • Opens new alerts where conditions are met (LOW_STOCK, NEVER_COUNTED,
@@ -14,9 +18,23 @@ const STALE_DAYS = Number(process.env.STOCK_ALERT_STALE_DAYS || 60);
  * Idempotent — the UNIQUE-on-open constraint dedupes new inserts; resolutions
  * just stamp resolved_at on still-open rows that no longer match.
  *
- * Scheduled via vercel.json cron (e.g. daily at 14:00 UTC).
+ * Triggered by QStash on a daily schedule (see src/config/qstash-schedules.json).
+ * Previously a Vercel cron — migrated 2026-05-18 to avoid Vercel cron billing.
+ * Requests must carry the QStash signature OR a `Bearer $QSTASH_TOKEN` header.
  */
-export async function GET(_req: NextRequest) {
+export async function POST(request: NextRequest) {
+  if (!isQStashOrigin(request.headers)) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+  return runStockAlerts();
+}
+
+/** Health probe — no auth required, no work performed. */
+export async function GET() {
+  return NextResponse.json({ ok: true, queue: 'qstash', job: 'stock-alerts' });
+}
+
+async function runStockAlerts() {
   const startedAt = Date.now();
   try {
     const c = await pool.connect();

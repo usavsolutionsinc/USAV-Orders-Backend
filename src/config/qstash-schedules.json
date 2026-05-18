@@ -68,5 +68,23 @@
     "retries": 3,
     "timeout": 300,
     "label": "shipping-sync-all-carriers-eod"
+  },
+  {
+    "scheduleId": "stock-alerts-daily-1400-utc",
+    "cron": "0 14 * * *",
+    "path": "/api/cron/stock-alerts",
+    "body": {},
+    "retries": 3,
+    "timeout": 60,
+    "label": "stock-alerts"
+  },
+  {
+    "scheduleId": "refresh-reports-daily-1030-utc",
+    "cron": "30 10 * * *",
+    "path": "/api/cron/refresh-reports",
+    "body": {},
+    "retries": 3,
+    "timeout": 120,
+    "label": "refresh-reports"
   }
 ]
