@@ -84,15 +84,19 @@ async function main() {
     const remaining = targetLimit - processed;
     const fetchSize = Math.min(batchSize, remaining);
 
+    // tech_serial_numbers has no sku column — pull it from the legacy sku
+    // table via source_sku_id when available so the serial_units upsert
+    // can fill in sku for legacy rows.
     const rowsQ = await pool.query(
       `
-      SELECT id, serial_number, sku, scan_ref, station_source
-      FROM tech_serial_numbers
-      WHERE serial_unit_id IS NULL
-        AND serial_number IS NOT NULL
-        AND BTRIM(serial_number) <> ''
-        AND COALESCE(UPPER(serial_type), 'SERIAL') <> 'FNSKU'
-      ORDER BY id ASC
+      SELECT tsn.id, tsn.serial_number, s.static_sku AS sku, tsn.scan_ref, tsn.station_source
+      FROM tech_serial_numbers tsn
+      LEFT JOIN sku s ON s.id = tsn.source_sku_id
+      WHERE tsn.serial_unit_id IS NULL
+        AND tsn.serial_number IS NOT NULL
+        AND BTRIM(tsn.serial_number) <> ''
+        AND COALESCE(UPPER(tsn.serial_type), 'SERIAL') <> 'FNSKU'
+      ORDER BY tsn.id ASC
       LIMIT $1 OFFSET $2
       `,
       [fetchSize, offset],
