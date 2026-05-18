@@ -614,9 +614,17 @@ export default async function InventoryV2AdminPage() {
 
         {/* Recent inventory_events */}
         <section className="rounded-lg border border-gray-200 bg-white shadow-sm">
-          <header className="border-b border-gray-100 px-6 py-4">
-            <h2 className="text-lg font-medium text-gray-900">Recent inventory events</h2>
-            <p className="mt-1 text-xs text-gray-500">Last 50 across all phases. Empty until a flagged path emits.</p>
+          <header className="flex items-center justify-between border-b border-gray-100 px-6 py-4">
+            <div>
+              <h2 className="text-lg font-medium text-gray-900">Recent inventory events</h2>
+              <p className="mt-1 text-xs text-gray-500">Last 50 across all phases. Empty until a flagged path emits.</p>
+            </div>
+            <Link
+              href="/admin/inventory-v2/events"
+              className="rounded-md border border-gray-300 bg-white px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50"
+            >
+              Open explorer →
+            </Link>
           </header>
           {events.length === 0 ? (
             <p className="px-6 py-4 text-sm text-gray-600">No events yet.</p>
