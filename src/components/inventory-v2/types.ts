@@ -25,14 +25,65 @@ export interface PulseEventsResponse {
     events: PulseEventRow[];
 }
 
-export type InventoryV2View = 'pulse' | 'by-sku' | 'by-bin' | 'by-unit';
+export type InventoryV2View = 'pulse' | 'by-sku' | 'by-bin' | 'by-unit' | 'by-filter';
 
 export interface InventoryV2ViewState {
     view: InventoryV2View;
     sku: string | null;
     bin: string | null;
     unit: string | null;
+    states: string[];
+    conditions: string[];
 }
+
+export interface UnitListRow {
+    id: number;
+    serial_number: string;
+    sku: string | null;
+    product_title: string;
+    current_status: string;
+    condition_grade: string | null;
+    current_location: string | null;
+    updated_at: string;
+}
+
+export interface UnitListResponse {
+    success: true;
+    items: UnitListRow[];
+    total: number;
+    limit: number;
+    offset: number;
+}
+
+export const SERIAL_STATUS_VALUES = [
+    'UNKNOWN',
+    'RECEIVED',
+    'TRIAGED',
+    'IN_TEST',
+    'IN_REPAIR',
+    'REPAIR_DONE',
+    'TESTED',
+    'GRADED',
+    'STOCKED',
+    'ALLOCATED',
+    'PICKED',
+    'PACKED',
+    'LABELED',
+    'STAGED',
+    'SHIPPED',
+    'RETURNED',
+    'RMA',
+    'ON_HOLD',
+    'SCRAPPED',
+] as const;
+
+export const CONDITION_GRADE_VALUES = [
+    'BRAND_NEW',
+    'USED_A',
+    'USED_B',
+    'USED_C',
+    'PARTS',
+] as const;
 
 export interface SerialUnitDetailPayload {
     success: true;
