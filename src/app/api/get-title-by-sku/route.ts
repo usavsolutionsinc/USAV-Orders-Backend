@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import pool from '@/lib/db';
+import { withAuth } from '@/lib/auth/withAuth';
 
-export async function GET(request: NextRequest) {
+export const GET = withAuth(async (request: NextRequest) => {
     try {
         const { searchParams } = new URL(request.url);
         const sku = searchParams.get('sku');
@@ -91,4 +92,4 @@ export async function GET(request: NextRequest) {
         console.error('API error', error);
         return NextResponse.json({ error: 'Internal Server Error', details: error.message }, { status: 500 });
     }
-}
+}, { permission: 'sku_stock.view' });
