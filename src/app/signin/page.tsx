@@ -48,7 +48,7 @@ const ROLE_HOME: Record<string, string> = {
   packer: '/packer',
   technician: '/tech',
   shipper: '/dashboard',
-  inventory_manager: '/sku-stock',
+  inventory_manager: '/inventory',
   sales: '/dashboard',
   viewer: '/dashboard',
   readonly: '/dashboard',
@@ -84,6 +84,9 @@ export default function SignInPage() {
   // (12hr idle / 30d absolute). Default off: a shared workstation should
   // sign out reasonably soon. Personal laptops should tick this.
   const [rememberMe, setRememberMe] = useState(false);
+  // Pinless rollout flag, surfaced by the staff-picker endpoint. When true,
+  // tapping a name signs the staff in immediately — no PIN pad shown.
+  const [pinless, setPinless] = useState(false);
 
   useEffect(() => { setRecent(readRecent()); }, []);
 
@@ -129,6 +132,35 @@ export default function SignInPage() {
     await finish(picked.id, picked.role, (data as { defaultHomePath?: string | null }).defaultHomePath);
     return { ok: true as const };
   }, [picked, finish, rememberMe]);
+
+  // Pinless rollout: tapping a name skips the PIN pad and signs in directly.
+  // Failures surface in the picker message area instead of an inline PinPad
+  // (no pad is mounted to display them).
+  const submitPinless = useCallback(async (row: StaffPickerRow) => {
+    const r = await fetch('/api/auth/signin', {
+      method: 'POST',
+      credentials: 'include',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        staffId: row.id,
+        deviceKind: rememberMe ? 'personal' : 'station',
+      }),
+    });
+    const data = await r.json().catch(() => ({}));
+    if (!r.ok) {
+      setPickerMessage(humanError((data as { error?: string }).error));
+      return;
+    }
+    await finish(row.id, row.role, (data as { defaultHomePath?: string | null }).defaultHomePath);
+  }, [finish, rememberMe]);
+
+  const handlePick = useCallback((row: StaffPickerRow) => {
+    if (pinless) {
+      void submitPinless(row);
+      return;
+    }
+    setPicked(row);
+  }, [pinless, submitPinless]);
 
   const submitCreatePin = useCallback(async (pin: string) => {
     if (!picked) return { ok: false as const, error: 'INTERNAL' };
@@ -211,8 +243,9 @@ export default function SignInPage() {
           <div className="mt-8">
             <StaffPickerList
               recent={recent}
-              onPick={setPicked}
+              onPick={handlePick}
               onMessage={setPickerMessage}
+              onPolicy={(p) => setPinless(p.pinless)}
             />
             {pickerMessage && (
               <div className="mt-4 rounded-lg bg-red-50 px-3 py-2 text-xs font-medium text-red-700">

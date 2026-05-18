@@ -1,8 +1,8 @@
 'use client';
 
 /**
- * Main-area host for the inventory hub. Reads `?tab=` and dispatches to the
- * right sub-view. The sidebar (InventorySidebarPanel) drives `?tab=`, the
+ * Main-area host for the warehouse map. Reads `?tab=` and dispatches to the
+ * right sub-view. The sidebar (WarehouseSidebarPanel) drives `?tab=`, the
  * Bins tab also reads `?status=`, `?room=`, `?q=` from the URL.
  */
 
@@ -25,7 +25,7 @@ function parseTab(raw: string | null): InventoryTab {
   return 'rooms';
 }
 
-export function InventoryShell() {
+export function WarehouseShell() {
   const searchParams = useSearchParams();
   const tab = parseTab(searchParams.get('tab'));
 

@@ -1,13 +1,20 @@
 /**
  * POST /api/auth/signin
  *
- * Body: { staffId: number, pin: string, deviceKind?: 'station' | 'personal', deviceLabel?: string }
+ * Body: { staffId: number, pin?: string, deviceKind?: 'station' | 'personal', deviceLabel?: string }
  *
- * Verifies the PIN, creates a session, sets the httpOnly `usav_sid` cookie,
- * audits the result. Rate-limited indirectly by the PIN lockout in pin.ts.
+ * Default: verifies the PIN, creates a session, sets the httpOnly `usav_sid`
+ * cookie, audits the result. Rate-limited indirectly by the PIN lockout in
+ * pin.ts.
+ *
+ * Pinless mode: when `AUTH_PINLESS_SIGNIN=true`, an empty/missing `pin` skips
+ * verification and signs the staff in by name alone (active status still
+ * required). Audited as `signin.pinless`. Temporary measure during rollout
+ * — flip the env var off to restore the PIN gate.
  */
 
 import { NextRequest, NextResponse } from 'next/server';
+import pool from '@/lib/db';
 import { verifyStaffPin, PinError } from '@/lib/auth/pin';
 import {
   createSession,
@@ -19,6 +26,11 @@ import { audit } from '@/lib/auth/audit';
 import { findActiveShift, clockIn } from '@/lib/auth/shift-clock';
 
 export const runtime = 'nodejs';
+
+function isPinlessEnabled(): boolean {
+  const v = (process.env.AUTH_PINLESS_SIGNIN ?? '').toLowerCase().trim();
+  return v === 'true' || v === '1' || v === 'on' || v === 'yes';
+}
 
 function clientIp(req: NextRequest): string | null {
   const xff = req.headers.get('x-forwarded-for');
@@ -47,14 +59,38 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'INVALID_REQUEST', field: 'staffId' }, { status: 400 });
     }
     staffIdForAudit = staffId;
-    if (!pin) {
+
+    const pinless = !pin && isPinlessEnabled();
+
+    if (!pin && !pinless) {
       return NextResponse.json({ error: 'INVALID_REQUEST', field: 'pin' }, { status: 400 });
     }
 
-    const row = await verifyStaffPin(staffId, pin);
+    let row: { name: string; role: string; status: string; default_home_path: string | null };
+    if (pinless) {
+      const lookup = await pool.query<{ name: string; role: string; status: string; default_home_path: string | null }>(
+        `SELECT name, role, COALESCE(status, 'active') AS status, default_home_path
+           FROM staff
+          WHERE id = $1
+            AND COALESCE(active, true) = true
+          LIMIT 1`,
+        [staffId],
+      );
+      const found = lookup.rows[0];
+      if (!found) {
+        await audit({
+          staffId, event: 'signin.pinless', result: 'denied', ip, userAgent: ua,
+          detail: { reason: 'not_found' },
+        });
+        return NextResponse.json({ error: 'NOT_FOUND' }, { status: 404 });
+      }
+      row = found;
+    } else {
+      row = await verifyStaffPin(staffId, pin);
+    }
     if (row.status !== 'active') {
       await audit({
-        staffId, event: 'signin.pin', result: 'denied', ip, userAgent: ua,
+        staffId, event: pinless ? 'signin.pinless' : 'signin.pin', result: 'denied', ip, userAgent: ua,
         detail: { reason: 'status', status: row.status },
       });
       return NextResponse.json({ error: 'ACCOUNT_NOT_ACTIVE', status: row.status }, { status: 403 });
@@ -82,10 +118,10 @@ export async function POST(req: NextRequest) {
     const punch = await clockIn(staffId, activeShift?.id ?? null, 'pin');
 
     await audit({
-      staffId, sid: session.sid, event: 'signin.pin', result: 'ok',
+      staffId, sid: session.sid, event: pinless ? 'signin.pinless' : 'signin.pin', result: 'ok',
       ip, userAgent: ua,
       detail: {
-        deviceKind, deviceLabel,
+        deviceKind, deviceLabel, pinless,
         shiftId: activeShift?.id ?? null,
         punchId: punch?.id ?? null,
         unscheduled: !activeShift,

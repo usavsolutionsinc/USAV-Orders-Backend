@@ -26,7 +26,7 @@ function escapeHtml(str: string): string {
  *   2. GS1 Digital Link form when both `gtin` and `serialNumber` are
  *      present. Format: {origin}/01/{gtin}/21/{serialNumber}.
  *   3. Legacy /m/u/{serial} for serialized labels without a GTIN.
- *   4. /sku-stock/{sku} for labels without a serial.
+ *   4. /inventory/sku/{sku} for labels without a serial.
  *
  * Anchored to QR_BASE_URL (production domain) so localhost prints still
  * scan correctly out in the warehouse.
@@ -42,7 +42,7 @@ function buildUnitQrValue(args: {
     return buildGs1UnitUrl(QR_BASE_URL, args.gtin, args.serialNumber);
   }
   if (args.serialNumber) return mobileQrUrl('u', args.serialNumber);
-  const path = `/sku-stock/${encodeURIComponent(args.sku)}`;
+  const path = `/inventory/sku/${encodeURIComponent(args.sku)}`;
   try {
     return new URL(path, QR_BASE_URL).toString();
   } catch {

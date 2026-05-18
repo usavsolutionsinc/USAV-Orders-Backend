@@ -23,7 +23,7 @@ import { audit } from '@/lib/auth/audit';
 import { getStaffRole } from '@/lib/auth/permissions';
 import { findActiveShift, clockIn } from '@/lib/auth/shift-clock';
 import pool from '@/lib/db';
-import type { AuthenticationResponseJSON } from '@simplewebauthn/server';
+import type { AuthenticationResponseJSON } from '@simplewebauthn/types';
 
 export const runtime = 'nodejs';
 

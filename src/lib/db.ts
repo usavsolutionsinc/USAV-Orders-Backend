@@ -35,8 +35,10 @@ const idleTimeoutMillis = readPositiveInt(process.env.PG_IDLE_TIMEOUT_MS, isDev 
 
 const connectionString = process.env.DATABASE_URL || 'postgres://localhost:5432/postgres';
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-let pool: any;
+// Typed as PgPool because both drivers share the same query<T>() / connect()
+// surface our callers use; NeonPool is cast at construction so call sites can
+// keep their `pool.query<{ id: number }>(...)` generic arguments.
+let pool: PgPool;
 
 if (isDev) {
     pool = new PgPool({
@@ -60,7 +62,7 @@ if (isDev) {
         max: poolMax,
         idleTimeoutMillis,
         options: '-c timezone=America/Los_Angeles',
-    });
+    }) as unknown as PgPool;
 }
 
 export default pool;

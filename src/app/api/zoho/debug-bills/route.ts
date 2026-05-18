@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { listBillsForPurchaseOrder, getPurchaseOrderById } from '@/lib/zoho';
 import { withAuth } from '@/lib/auth/withAuth';
+import { zohoGet } from '@/lib/zoho/httpClient';
 
 export const dynamic = 'force-dynamic';
 
@@ -17,9 +18,14 @@ export const GET = withAuth(async (request: NextRequest) => {
     return NextResponse.json({ ok: false, error: 'purchaseorder_id required' }, { status: 400 });
   }
 
-  const [billsResult, poResult] = await Promise.allSettled([
+  const billIdParam = (request.nextUrl.searchParams.get('bill_id') || '').trim();
+
+  const [billsResult, poResult, billDetailResult] = await Promise.allSettled([
     listBillsForPurchaseOrder(purchaseorderId),
     getPurchaseOrderById(purchaseorderId),
+    billIdParam
+      ? zohoGet<{ bill?: Record<string, unknown> }>(`/api/v1/bills/${billIdParam}`)
+      : Promise.resolve(null),
   ]);
 
   return NextResponse.json({
@@ -41,5 +47,9 @@ export const GET = withAuth(async (request: NextRequest) => {
               ?.received_status,
           }
         : null,
+    bill_detail:
+      billDetailResult.status === 'fulfilled'
+        ? billDetailResult.value
+        : { error: String((billDetailResult as PromiseRejectedResult).reason) },
   });
 }, { permission: 'integrations.zoho' });

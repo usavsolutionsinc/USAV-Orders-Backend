@@ -1,16 +1,21 @@
-'use client';
-
 import { Suspense } from 'react';
-import { InventoryShell } from '@/components/inventory/InventoryShell';
+import { InventoryV2Shell } from '@/components/inventory-v2/InventoryV2Shell';
+import { InventoryMovedBanner } from '@/components/inventory-v2/InventoryMovedBanner';
+import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
 
 export default function InventoryPage() {
-  return (
-    <div className="min-h-full bg-gray-50">
-      <div className="mx-auto max-w-5xl px-4 py-6 sm:px-6">
-        <Suspense fallback={<div className="p-6 text-sm text-gray-400">Loading…</div>}>
-          <InventoryShell />
-        </Suspense>
-      </div>
-    </div>
-  );
+    return (
+        <div className="flex h-full min-h-0 flex-col">
+            <InventoryMovedBanner />
+            <Suspense
+                fallback={
+                    <div className="flex h-full w-full items-center justify-center bg-gray-50">
+                        <LoadingSpinner size="lg" className="text-blue-600" />
+                    </div>
+                }
+            >
+                <InventoryV2Shell />
+            </Suspense>
+        </div>
+    );
 }

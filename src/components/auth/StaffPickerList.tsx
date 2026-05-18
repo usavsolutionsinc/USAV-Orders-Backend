@@ -24,6 +24,8 @@ interface StaffPickerListProps {
   onPick: (s: StaffRow) => void;
   /** Optional error display when a no-PIN row is tapped. */
   onMessage?: (msg: string | null) => void;
+  /** Surfaces the server-side auth policy (e.g. pinless rollout flag). */
+  onPolicy?: (policy: { pinless: boolean }) => void;
 }
 
 const THEME_ROW: Record<StationTheme, {
@@ -48,7 +50,7 @@ function initials(name: string): string {
   return name.split(/\s+/).filter(Boolean).slice(0, 2).map((p) => p[0]?.toUpperCase() ?? '').join('');
 }
 
-export function StaffPickerList({ recent = [], onPick, onMessage }: StaffPickerListProps) {
+export function StaffPickerList({ recent = [], onPick, onMessage, onPolicy }: StaffPickerListProps) {
   const [staff, setStaff] = useState<StaffRow[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -58,15 +60,18 @@ export function StaffPickerList({ recent = [], onPick, onMessage }: StaffPickerL
       try {
         const r = await fetch('/api/auth/staff-picker', { cache: 'no-store' });
         if (r.ok) {
-          const data = (await r.json()) as { staff: StaffRow[] };
-          if (!cancelled) setStaff(data.staff || []);
+          const data = (await r.json()) as { staff: StaffRow[]; pinless?: boolean };
+          if (!cancelled) {
+            setStaff(data.staff || []);
+            onPolicy?.({ pinless: Boolean(data.pinless) });
+          }
         }
       } finally {
         if (!cancelled) setLoading(false);
       }
     })();
     return () => { cancelled = true; };
-  }, []);
+  }, [onPolicy]);
 
   const { recentRows, otherRows } = useMemo(() => {
     const map = new Map(staff.map((s) => [s.id, s] as const));

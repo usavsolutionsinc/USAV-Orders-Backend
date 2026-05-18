@@ -3,7 +3,7 @@
 import React from 'react';
 import { sectionLabel } from '@/design-system/tokens/typography/presets';
 import { Check } from '../Icons';
-import type { BarcodeDensity } from './SkuInput';
+export type BarcodeDensity = 'comfortable' | 'compact';
 
 interface BarcodePreviewProps {
     mode: 'print' | 'sn-to-sku' | 'change-location' | 'reprint';

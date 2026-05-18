@@ -29,6 +29,8 @@ export type SidebarRouteKey =
   | 'replenish'
   | 'sku-stock'
   | 'inventory'
+  | 'products'
+  | 'warehouse'
   | 'tech'
   | 'packer'
   | 'support'
@@ -76,10 +78,11 @@ export const APP_SIDEBAR_NAV: SidebarNavItem[] = [
   { id: 'receiving',         label: 'Receiving',   href: '/receiving',          icon: ClipboardList,   kind: 'station', requires: 'receiving.view' },
   { id: 'tech',              label: 'Testing',     href: '/tech',               icon: Wrench,          kind: 'station', requires: 'tech.view' },
   { id: 'packer',            label: 'Packing',     href: '/packer',             icon: User,            kind: 'station', requires: 'packing.view' },
-  { id: 'sku-stock',         label: 'Sku Stock',   href: '/sku-stock',          icon: Box,             kind: 'station', requires: 'sku_stock.view' },
+  { id: 'products',          label: 'Products',    href: '/products',           icon: Box,             kind: 'station', requires: 'sku_stock.view' },
   { id: 'inventory',         label: 'Inventory',   href: '/inventory',          icon: Package,         kind: 'station', requires: 'sku_stock.view' },
+  { id: 'warehouse',         label: 'Warehouse',   href: '/warehouse',          icon: Package,         kind: 'station', requires: 'sku_stock.view' },
   { id: 'ai',                label: 'AI Chat',     href: '/ai',                 icon: Zap,             kind: 'bottom' },
-  { id: 'manuals',           label: 'Products',    href: '/manuals',            icon: FileText,        kind: 'bottom' },
+  { id: 'manuals',           label: 'Manuals',     href: '/manuals',            icon: FileText,        kind: 'bottom' },
   { id: 'support',           label: 'Support',     href: '/support',            icon: AlertCircle,     kind: 'bottom' },
   { id: 'previous-quarters', label: 'Quarters',    href: '/previous-quarters',  icon: Calendar,        kind: 'bottom', requires: 'reports.view' },
   { id: 'audit-log',         label: 'Audit Log',   href: '/audit-log/receiving', icon: FileText,       kind: 'bottom', requires: 'admin.view_logs' },
@@ -124,6 +127,8 @@ export function getSidebarRouteKey(pathname: string | null): SidebarRouteKey {
   if (pathname === '/repair' || pathname.startsWith('/repair/')) return 'walk-in';
   if (pathname === '/work-orders' || pathname.startsWith('/work-orders/')) return 'work-orders';
   if (pathname === '/replenish' || pathname.startsWith('/replenish/')) return 'replenish';
+  if (pathname === '/products' || pathname.startsWith('/products/')) return 'products';
+  if (pathname === '/warehouse' || pathname.startsWith('/warehouse/')) return 'warehouse';
   if (pathname === '/sku-stock' || pathname.startsWith('/sku-stock/')) return 'sku-stock';
   if (pathname === '/inventory' || pathname.startsWith('/inventory/')) return 'inventory';
   if (pathname === '/support' || pathname.startsWith('/support/')) return 'support';
@@ -178,6 +183,8 @@ export const ROUTE_PERMISSIONS: ReadonlyArray<{ prefix: string; permission: stri
   { prefix: '/tech',               permission: 'tech.view' },
   { prefix: '/packer',             permission: 'packing.view' },
   { prefix: '/packers',            permission: 'packing.view' },
+  { prefix: '/products',           permission: 'sku_stock.view' },
+  { prefix: '/warehouse',          permission: 'sku_stock.view' },
   { prefix: '/sku-stock',          permission: 'sku_stock.view' },
   { prefix: '/inventory',          permission: 'sku_stock.view' },
   { prefix: '/previous-quarters',  permission: 'reports.view' },

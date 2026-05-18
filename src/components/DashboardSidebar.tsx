@@ -11,7 +11,7 @@ import { sectionLabel } from '@/design-system/tokens/typography/presets';
 import { AdminSidebar } from '@/components/admin/AdminSidebar';
 import { ADMIN_SECTION_OPTIONS, type AdminSection } from '@/components/admin/admin-sections';
 import { SkuStockSidebarPanel } from '@/components/sidebar/SkuStockSidebarPanel';
-import { InventorySidebarPanel } from '@/components/sidebar/InventorySidebarPanel';
+import { WarehouseSidebarPanel } from '@/components/sidebar/WarehouseSidebarPanel';
 import { QuarterSidebar } from '@/components/QuarterSelector';
 import { DashboardManagementPanel } from '@/components/sidebar/DashboardManagementPanel';
 import { RepairSidebarPanel } from '@/components/sidebar/RepairSidebarPanel';
@@ -116,6 +116,8 @@ function getSidebarTitle(pathname: string | null) {
     replenish: 'Replenish',
     'sku-stock': 'Sku Stock',
     inventory: 'Inventory',
+    products: 'Products',
+    warehouse: 'Warehouse',
     tech: 'Testing',
     packer: 'Packing',
     support: 'Support',
@@ -385,7 +387,12 @@ function SidebarContextPanel({ onBackToAppNav }: { onBackToAppNav?: () => void }
   if (routeKey === 'work-orders') return <WorkOrdersSidebarPanel />;
   if (routeKey === 'replenish') return <ReplenishSidebarPanel />;
   if (routeKey === 'sku-stock') return <SkuStockSidebarPanel />;
-  if (routeKey === 'inventory') return <InventorySidebarPanel />;
+  // /inventory owns its own header search + filter chips inside
+  // <InventoryV2Shell>, so the desktop sidebar slot stays empty here.
+  // /products is the same shape (its toolbar lives in <ProductsShell>) —
+  // no branch needed; the function falls through to `return null` below.
+  if (routeKey === 'inventory') return null;
+  if (routeKey === 'warehouse') return <WarehouseSidebarPanel />;
   if (routeKey === 'walk-in') return <WalkInSidebarPanel embedded hideSectionHeader />;
   if (routeKey === 'repair') return <WalkInSidebarPanel embedded hideSectionHeader />;
   if (routeKey === 'previous-quarters') return <QuarterSidebar hideSectionHeader />;

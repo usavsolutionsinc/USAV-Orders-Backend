@@ -14,12 +14,14 @@ import {
   generateRegistrationOptions,
   verifyAuthenticationResponse,
   verifyRegistrationResponse,
-  type AuthenticationResponseJSON,
-  type AuthenticatorTransportFuture,
-  type PublicKeyCredentialCreationOptionsJSON,
-  type PublicKeyCredentialRequestOptionsJSON,
-  type RegistrationResponseJSON,
 } from '@simplewebauthn/server';
+import type {
+  AuthenticationResponseJSON,
+  AuthenticatorTransportFuture,
+  PublicKeyCredentialCreationOptionsJSON,
+  PublicKeyCredentialRequestOptionsJSON,
+  RegistrationResponseJSON,
+} from '@simplewebauthn/types';
 import pool from '@/lib/db';
 
 export const PASSKEY_CHALLENGE_COOKIE = 'usav_wac';

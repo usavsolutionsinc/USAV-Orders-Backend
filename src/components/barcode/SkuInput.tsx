@@ -3,7 +3,7 @@
 import React from 'react';
 import { Search, Clipboard } from '../Icons';
 
-export type BarcodeDensity = 'compact' | 'comfortable';
+import type { BarcodeDensity } from './BarcodePreview';
 
 interface SkuInputProps {
     sku: string;
@@ -11,6 +11,7 @@ interface SkuInputProps {
     mode: 'print' | 'sn-to-sku' | 'change-location' | 'reprint';
     skuInputRef: React.RefObject<HTMLInputElement>;
     isActive: boolean;
+    /** Visual density hint — accepted for parity with the horizontal layout. */
     density?: BarcodeDensity;
     onChange: (value: string) => void;
     onNext: () => void;

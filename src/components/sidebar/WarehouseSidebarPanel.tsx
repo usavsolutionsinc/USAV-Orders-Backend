@@ -1,9 +1,10 @@
 'use client';
 
 /**
- * Inventory sidebar panel.
+ * Warehouse sidebar panel.
  *
- * The dashboard chrome owns the "Inventory" title. This panel renders:
+ * Mounted on /warehouse. The dashboard chrome owns the title. This panel
+ * renders:
  *   - The SKU/bin finder (always visible)
  *   - Pills with counts: Rooms · Bins · Labels · Map
  *   - Tab-specific body:
@@ -13,7 +14,7 @@
  *       map    → view-mode toggle + legend
  *
  * Everything else (bin tables, room board, warehouse grid) lives in the
- * main area via InventoryShell.
+ * main area via WarehouseShell.
  */
 
 import { useCallback, useMemo } from 'react';
@@ -26,10 +27,10 @@ import {
 import { LayoutDashboard, Box, Printer, MapPin } from '@/components/Icons';
 import { useLocations } from '@/hooks/useLocations';
 import { useBinsOverview } from '@/hooks/useBinsOverview';
-import { RoomManager } from '@/components/inventory/RoomManager';
+import { RoomManager } from '@/components/warehouse/RoomManager';
 import { BinLabelPrinter } from '@/components/barcode/BinLabelPrinter';
-import { SkuLocationFinder } from '@/components/inventory/SkuLocationFinder';
-import { MapLegend, type MapViewMode } from '@/components/inventory/WarehouseMap';
+import { SkuLocationFinder } from '@/components/warehouse/SkuLocationFinder';
+import { MapLegend, type MapViewMode } from '@/components/warehouse/WarehouseMap';
 
 type InventoryTab = 'rooms' | 'bins' | 'labels' | 'map';
 
@@ -38,7 +39,7 @@ function parseTab(raw: string | null): InventoryTab {
   return 'rooms';
 }
 
-export function InventorySidebarPanel() {
+export function WarehouseSidebarPanel() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const tab = parseTab(searchParams.get('tab'));
@@ -55,7 +56,7 @@ export function InventorySidebarPanel() {
         params.delete('q');
         params.delete('room');
       }
-      router.replace(`/inventory?${params.toString()}`);
+      router.replace(`/warehouse?${params.toString()}`);
     },
     [router, searchParams],
   );
@@ -79,7 +80,7 @@ export function InventorySidebarPanel() {
             items={tabItems}
             value={tab}
             onChange={(id) => setTab(id as InventoryTab)}
-            aria-label="Inventory section"
+            aria-label="Warehouse section"
           />
           <SkuLocationFinder />
         </div>
@@ -145,7 +146,7 @@ function MapSidebarBody() {
     const params = new URLSearchParams(searchParams.toString());
     params.set('tab', 'map');
     params.set('view', next);
-    router.replace(`/inventory?${params.toString()}`);
+    router.replace(`/warehouse?${params.toString()}`);
   };
 
   return (

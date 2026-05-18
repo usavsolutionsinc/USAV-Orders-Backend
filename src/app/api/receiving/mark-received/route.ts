@@ -245,7 +245,7 @@ export const POST = withAuth(async (request, ctx) => {
     // last resort show "Staff #<id>" — that fallback should be rare now
     // since every paired session is tied to a real staff row.
     let staffName = String(body?.staff_name || '').trim();
-    if (!staffName && Number.isFinite(staffId) && staffId > 0) {
+    if (!staffName && staffId != null && Number.isFinite(staffId) && staffId > 0) {
       try {
         const staffLookup = await pool.query<{ name: string | null }>(
           `SELECT name FROM staff WHERE id = $1 LIMIT 1`,
@@ -255,7 +255,7 @@ export const POST = withAuth(async (request, ctx) => {
       } catch { /* silent — fall through to generic label */ }
     }
     if (!staffName) {
-      staffName = Number.isFinite(staffId) && staffId > 0 ? `Staff #${staffId}` : 'Unknown';
+      staffName = staffId != null && Number.isFinite(staffId) && staffId > 0 ? `Staff #${staffId}` : 'Unknown';
     }
 
     if (!Number.isFinite(receivingLineId) || receivingLineId <= 0) {
@@ -331,7 +331,7 @@ export const POST = withAuth(async (request, ctx) => {
           conditionGrade,
           dispositionCode,
           destinationBinId,
-          staffId,
+          staffId: staffId ?? 0,
           clientEventId,
           notes,
           nowPst: now,
@@ -348,7 +348,7 @@ export const POST = withAuth(async (request, ctx) => {
          VALUES ($1, UPPER(TRIM($1)), $2, $3, 'RECEIVED', 'receiving', $4, $5, $6, $7)
          ON CONFLICT (normalized_serial)
          DO UPDATE SET current_status = 'RECEIVED', received_at = $5, received_by = $6, condition_grade = $7`,
-        [serialNumber, line.sku, zohoItemId || null, receivingLineId, now, staffId > 0 ? staffId : null, conditionGrade],
+        [serialNumber, line.sku, zohoItemId || null, receivingLineId, now, staffId != null && staffId > 0 ? staffId : null, conditionGrade],
       );
     }
 

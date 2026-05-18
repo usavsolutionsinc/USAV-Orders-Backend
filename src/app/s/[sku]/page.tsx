@@ -1,9 +1,9 @@
 import { redirect } from 'next/navigation';
 
 /**
- * /s/[sku] — short-URL landing for a SKU. Always redirects to the existing
- * /sku-stock/{sku} page. The short form (/s/...) is encoded into printed
- * SKU labels so the QR is denser at the same scan reliability.
+ * /s/[sku] — short-URL landing for a SKU. Forwards to /inventory/sku/{sku}.
+ * The short form (/s/...) is encoded into printed SKU labels so the QR is
+ * denser at the same scan reliability.
  */
 export default async function SkuShortLandingPage({
   params,
@@ -12,6 +12,6 @@ export default async function SkuShortLandingPage({
 }) {
   const { sku } = await params;
   const cleaned = decodeURIComponent(sku || '').trim();
-  if (!cleaned) redirect('/sku-stock');
-  redirect(`/sku-stock/${encodeURIComponent(cleaned)}`);
+  if (!cleaned) redirect('/inventory');
+  redirect(`/inventory/sku/${encodeURIComponent(cleaned)}`);
 }

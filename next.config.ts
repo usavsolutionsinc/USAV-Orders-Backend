@@ -54,6 +54,16 @@ const nextConfig: NextConfig = {
         ],
     },
     productionBrowserSourceMaps: false,
+    // Phase C of the Products / Inventory / Warehouse rename. /sku-stock is
+    // the legacy path; the same content now lives at /inventory. Order matters:
+    // longer-prefix rules (e.g. /location) must precede the bare :sku catch.
+    async redirects() {
+        return [
+            { source: '/sku-stock', destination: '/inventory', permanent: true },
+            { source: '/sku-stock/location/:path*', destination: '/inventory/location/:path*', permanent: true },
+            { source: '/sku-stock/:sku', destination: '/inventory/sku/:sku', permanent: true },
+        ];
+    },
     serverExternalPackages: [
         '@googleapis/sheets',
         'google-auth-library',

@@ -6,7 +6,7 @@ import { Printer, Database, MapPin, RotateCcw } from '../Icons';
 import { successFeedback } from '@/lib/feedback/confirm';
 
 // 'bin-labels' was previously bundled here; bin/zone printing now lives at
-// /inventory (InventorySidebarPanel → Labels tab). Keep this union focused
+// /warehouse (WarehouseSidebarPanel → Labels tab). Keep this union focused
 // on per-SKU barcode workflows.
 export type BarcodeMode = 'print' | 'sn-to-sku' | 'change-location' | 'reprint';
 

@@ -3,7 +3,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { sectionLabel } from '@/design-system/tokens/typography/presets';
 import { LocationSelector } from './LocationSelector';
-import type { BarcodeDensity } from './SkuInput';
+import type { BarcodeDensity } from './BarcodePreview';
 
 interface SerialNumberInputProps {
     sku: string;
@@ -18,6 +18,7 @@ interface SerialNumberInputProps {
     isLoadingTitle: boolean;
     isActive: boolean;
     showChangeSku: boolean;
+    /** Visual density hint — accepted for parity with the horizontal layout. */
     density?: BarcodeDensity;
     /** Optional product thumbnail from `sku_catalog.image_url`. */
     imageUrl?: string;

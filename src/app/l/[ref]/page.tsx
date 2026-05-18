@@ -3,8 +3,8 @@ import { queryOne } from '@/lib/neon-client';
 
 /**
  * /l/[ref] — internal-URL landing for a bin/location. The ref segment may
- * be either a barcode or a location name; we accept both. Redirects to the
- * existing /sku-stock/location/{barcode} page when the location resolves.
+ * be either a barcode or a location name; we accept both. Redirects to
+ * /inventory/location/{barcode} when the location resolves.
  *
  * Part of Phase 1 of the inventory v2 plan (GS1 + internal short-URL scan
  * resolution). Phase 4+ will replace the redirect with a richer landing
@@ -17,7 +17,7 @@ export default async function LocationScanLandingPage({
 }) {
   const { ref } = await params;
   const cleaned = decodeURIComponent(ref || '').trim();
-  if (!cleaned) redirect('/sku-stock');
+  if (!cleaned) redirect('/inventory');
 
   try {
     const row = await queryOne<{ barcode: string | null }>`
@@ -27,10 +27,10 @@ export default async function LocationScanLandingPage({
     `;
     const barcode = row?.barcode?.trim();
     if (barcode) {
-      redirect(`/sku-stock/location/${encodeURIComponent(barcode)}`);
+      redirect(`/inventory/location/${encodeURIComponent(barcode)}`);
     }
   } catch {
     /* fall through */
   }
-  redirect('/sku-stock');
+  redirect('/inventory');
 }

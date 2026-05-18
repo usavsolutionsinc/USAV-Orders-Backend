@@ -18,7 +18,7 @@ import {
   verifyRegistration,
 } from '@/lib/auth/webauthn';
 import { audit } from '@/lib/auth/audit';
-import type { RegistrationResponseJSON } from '@simplewebauthn/server';
+import type { RegistrationResponseJSON } from '@simplewebauthn/types';
 
 export const runtime = 'nodejs';
 

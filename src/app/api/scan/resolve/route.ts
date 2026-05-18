@@ -106,7 +106,7 @@ async function enrichUrl(entity: ScannedUrlEntity): Promise<ResolveSuccess> {
           serialUnitId: unit?.id ?? null,
           sku: unit?.sku ?? null,
         },
-        redirectTo: unit ? `/sku-stock/${encodeURIComponent(unit.sku ?? '')}` : null,
+        redirectTo: unit ? `/inventory/sku/${encodeURIComponent(unit.sku ?? '')}` : null,
       };
     }
     case 'gs1_product': {
@@ -115,7 +115,7 @@ async function enrichUrl(entity: ScannedUrlEntity): Promise<ResolveSuccess> {
         ...base,
         kind: 'gs1_product',
         entity: { gtin: entity.gtin, sku },
-        redirectTo: sku ? `/sku-stock/${encodeURIComponent(sku)}` : '/sku-stock',
+        redirectTo: sku ? `/inventory/sku/${encodeURIComponent(sku)}` : '/inventory',
       };
     }
     case 'gs1_lot':
@@ -131,7 +131,7 @@ async function enrichUrl(entity: ScannedUrlEntity): Promise<ResolveSuccess> {
         ...base,
         kind: 'location',
         entity: { ref: entity.locationRef, locationId: loc?.id ?? null, barcode: loc?.barcode ?? null, name: loc?.name ?? null },
-        redirectTo: loc?.barcode ? `/sku-stock/location/${encodeURIComponent(loc.barcode)}` : null,
+        redirectTo: loc?.barcode ? `/inventory/location/${encodeURIComponent(loc.barcode)}` : null,
       };
     }
     case 'package':
@@ -153,7 +153,7 @@ async function enrichUrl(entity: ScannedUrlEntity): Promise<ResolveSuccess> {
         ...base,
         kind: 'stock',
         entity: { sku: entity.sku },
-        redirectTo: `/sku-stock/${encodeURIComponent(entity.sku)}`,
+        redirectTo: `/inventory/sku/${encodeURIComponent(entity.sku)}`,
       };
     case 'generic':
       return {

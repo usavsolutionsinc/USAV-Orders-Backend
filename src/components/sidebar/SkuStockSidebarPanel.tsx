@@ -35,11 +35,14 @@ export function SkuStockSidebarPanel({ hideSearch = false }: SkuStockSidebarPane
   const [searchInput, setSearchInput] = useState(currentSearch);
   const [activeFilledSku, setActiveFilledSku] = useState('');
   const { mode, setMode } = useBarcodeMode();
-  // When navigating to /sku-stock/location/{barcode} the URL has no
+  // When navigating to /sku-stock/location/{barcode} (legacy) or
+  // /inventory/location/{barcode} (Phase A renamed home), the URL has no
   // ?view param — force the dropdown to "Location" anyway so it doesn't
   // flicker back to SKU Stock while the route is bin-scoped.
   const onLocationRoute = Boolean(
-    pathname && pathname.startsWith('/sku-stock/location'),
+    pathname &&
+      (pathname.startsWith('/sku-stock/location') ||
+        pathname.startsWith('/inventory/location')),
   );
   const view: SkuView = onLocationRoute
     ? 'location'

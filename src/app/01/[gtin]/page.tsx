@@ -3,8 +3,8 @@ import pool from '@/lib/db';
 
 /**
  * /01/[gtin] — GS1 Digital Link landing for a product class (no serial).
- * Looks up the GTIN in sku_catalog, then forwards to /sku-stock/{sku}.
- * If the GTIN is unknown we land on the generic SKU stock browser.
+ * Looks up the GTIN in sku_catalog, then forwards to /inventory/sku/{sku}.
+ * If the GTIN is unknown we land on the generic inventory ledger.
  */
 export default async function GtinPage({
   params,
@@ -13,7 +13,7 @@ export default async function GtinPage({
 }) {
   const { gtin } = await params;
   const cleaned = decodeURIComponent(gtin || '').replace(/\D/g, '');
-  if (!cleaned) redirect('/sku-stock');
+  if (!cleaned) redirect('/inventory');
 
   try {
     const r = await pool.query<{ sku: string | null }>(
@@ -22,10 +22,10 @@ export default async function GtinPage({
     );
     const sku = r.rows[0]?.sku?.trim();
     if (sku) {
-      redirect(`/sku-stock/${encodeURIComponent(sku)}`);
+      redirect(`/inventory/sku/${encodeURIComponent(sku)}`);
     }
   } catch {
     /* fall through to the generic browser */
   }
-  redirect('/sku-stock');
+  redirect('/inventory');
 }

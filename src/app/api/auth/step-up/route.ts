@@ -19,7 +19,7 @@ import {
 } from '@/lib/auth/webauthn';
 import { grantStepUp } from '@/lib/auth/stepup';
 import { audit } from '@/lib/auth/audit';
-import type { AuthenticationResponseJSON } from '@simplewebauthn/server';
+import type { AuthenticationResponseJSON } from '@simplewebauthn/types';
 
 export const runtime = 'nodejs';
 

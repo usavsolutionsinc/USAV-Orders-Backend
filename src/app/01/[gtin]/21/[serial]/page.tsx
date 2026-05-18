@@ -13,7 +13,7 @@ export default async function GtinSerialPage({
 }) {
   const { serial } = await params;
   const cleaned = decodeURIComponent(serial || '').trim();
-  if (!cleaned) redirect('/sku-stock');
+  if (!cleaned) redirect('/inventory');
 
   // Best-effort: confirm the serial exists before redirecting, so unknown
   // serials still land somewhere sensible instead of a 404.

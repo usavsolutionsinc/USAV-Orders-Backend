@@ -63,3 +63,4 @@ export function inventoryV2FlagSnapshot(): Record<string, boolean> {
     INVENTORY_V2_RETURNS: isInventoryV2Returns(),
   };
 }
+

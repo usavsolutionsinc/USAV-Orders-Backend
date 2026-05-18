@@ -3,7 +3,10 @@
  *
  * Slim list for the sign-in screen — only staff with status='active', sorted
  * by name, with just enough fields to render the grid. Returns `hasPin` so
- * the UI can disable the PIN button for staff that haven't enrolled yet.
+ * the UI can disable the PIN button for staff that haven't enrolled yet, and
+ * `pinless` so the UI knows whether to skip the PIN pad entirely (controlled
+ * by the AUTH_PINLESS_SIGNIN env var for rollouts where staff haven't been
+ * issued PINs yet).
  *
  * Public: the picker has to render before sign-in. We expose only id/name/
  * role/hasPin — no email, employee_code, or sensitive columns.
@@ -22,6 +25,11 @@ interface Row {
   color_hex: string;
 }
 
+function isPinlessEnabled(): boolean {
+  const v = (process.env.AUTH_PINLESS_SIGNIN ?? '').toLowerCase().trim();
+  return v === 'true' || v === '1' || v === 'on' || v === 'yes';
+}
+
 export async function GET() {
   try {
     const r = await pool.query(
@@ -32,11 +40,11 @@ export async function GET() {
         ORDER BY name ASC`,
     );
     return NextResponse.json(
-      { staff: r.rows as Row[] },
+      { staff: r.rows as Row[], pinless: isPinlessEnabled() },
       { headers: { 'cache-control': 'no-store' } },
     );
   } catch (err) {
     console.error('[/api/auth/staff-picker] error:', err);
-    return NextResponse.json({ staff: [] }, { status: 200 });
+    return NextResponse.json({ staff: [], pinless: isPinlessEnabled() }, { status: 200 });
   }
 }
