@@ -462,6 +462,9 @@ export default async function InventoryV2AdminPage() {
           <Link href="/admin/inventory-v2/returns" className="rounded-md border border-gray-300 bg-white px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50">
             Returns intake →
           </Link>
+          <Link href="/admin/inventory-v2/throughput" className="rounded-md border border-gray-300 bg-white px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50">
+            Throughput →
+          </Link>
         </nav>
 
         {/* Open DRIFT alerts — surfaced by /api/qstash/inventory/drift-check */}
