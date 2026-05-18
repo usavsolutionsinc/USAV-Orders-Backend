@@ -3,6 +3,7 @@
 import React from 'react';
 import { sectionLabel } from '@/design-system/tokens/typography/presets';
 import { Check } from '../Icons';
+import type { BarcodeDensity } from './SkuInput';
 
 interface BarcodePreviewProps {
     mode: 'print' | 'sn-to-sku' | 'change-location' | 'reprint';
@@ -16,6 +17,7 @@ interface BarcodePreviewProps {
     barcodeCanvasRef?: React.RefObject<HTMLCanvasElement>;
     isPosting: boolean;
     isActive: boolean;
+    density?: BarcodeDensity;
     getSerialLast6: (serialNumbers: string[]) => string;
     onToggleNotes: () => void;
     onNotesChange: (value: string) => void;
@@ -34,6 +36,7 @@ export function BarcodePreview({
     barcodeCanvasRef,
     isPosting,
     isActive,
+    density = 'compact',
     getSerialLast6,
     onToggleNotes,
     onNotesChange,
@@ -41,6 +44,7 @@ export function BarcodePreview({
 }: BarcodePreviewProps) {
     const isPrintMode = mode === 'print' || mode === 'reprint';
     const isLocationMode = mode === 'change-location';
+    const comfy = density === 'comfortable';
 
     const accentClass = isLocationMode
         ? 'bg-orange-600 hover:bg-orange-700'
@@ -59,9 +63,9 @@ export function BarcodePreview({
     return (
         <div className={`transition-opacity duration-200 ${!isActive ? 'opacity-15 pointer-events-none' : ''}`}>
             {/* Step label */}
-            <div className="flex items-center gap-3 px-5 pt-5 pb-3">
-                <span className="text-[9px] font-black tabular-nums text-gray-500 tracking-widest">03</span>
-                <span className="text-[9px] font-black uppercase tracking-[0.18em] text-gray-600">
+            <div className={`flex items-center gap-3 ${comfy ? 'px-7 pt-7 pb-3' : 'px-5 pt-5 pb-3'}`}>
+                <span className={`font-black tabular-nums text-gray-500 tracking-widest ${comfy ? 'text-[10px]' : 'text-[9px]'}`}>03</span>
+                <span className={`font-black uppercase text-gray-600 ${comfy ? 'text-[11px] tracking-[0.16em]' : 'text-[9px] tracking-[0.18em]'}`}>
                     {isLocationMode ? 'Confirm' : `Review & ${mode === 'print' ? 'Print' : mode === 'reprint' ? 'Reprint' : 'Log'}`}
                 </span>
             </div>
@@ -69,23 +73,25 @@ export function BarcodePreview({
             {/* Preview area — edge-to-edge */}
             <div className="border-t border-gray-200">
                 {isPrintMode ? (
-                    <div className="px-5 py-6 flex flex-col items-center gap-4 bg-gray-50">
-                        {/* Barcode canvas */}
-                        <div className="bg-white border border-gray-200 px-4 py-3 w-full flex justify-center">
-                            <canvas ref={barcodeCanvasRef} className="max-w-full" />
-                        </div>
-                        {/* SKU + meta */}
-                        <div className="w-full space-y-1 text-center">
-                            <p className="font-mono text-base font-black tracking-tight text-gray-900">{uniqueSku}</p>
-                            <p className="text-[11px] text-gray-500 leading-relaxed">{title}</p>
+                    // QR-only label preview. Title + identifier column on
+                    // the left, QR canvas on the right — mirrors the
+                    // printed thermal-label layout. The QR encodes the GS1
+                    // Digital Link URL returned by /api/units/next-id.
+                    <div className={`flex items-center bg-gray-50 ${comfy ? 'px-7 py-7 gap-5' : 'px-5 py-5 gap-4'}`}>
+                        <div className="min-w-0 flex-1 space-y-1">
+                            <p className={`leading-snug text-gray-700 ${comfy ? 'text-xs' : 'text-[11px]'}`}>{title}</p>
+                            <p className={`font-mono font-black tracking-tight text-gray-900 break-all ${comfy ? 'text-base' : 'text-sm'}`}>{uniqueSku}</p>
                             {mode !== 'reprint' && serialNumbers.length > 0 && (
-                                <p className="text-[10px] text-gray-500 font-mono">
-                                    SN: {getSerialLast6(serialNumbers)}
+                                <p className={`text-gray-500 font-mono ${comfy ? 'text-[11px]' : 'text-[10px]'}`}>
+                                    SN · {getSerialLast6(serialNumbers)}
                                 </p>
                             )}
                             {location && (
-                                <p className="text-[10px] text-gray-500 font-mono">LOC: {location}</p>
+                                <p className={`text-gray-500 font-mono ${comfy ? 'text-[11px]' : 'text-[10px]'}`}>LOC · {location}</p>
                             )}
+                        </div>
+                        <div className={`shrink-0 bg-white border border-gray-200 flex items-center justify-center ${comfy ? 'h-32 w-32 p-2' : 'h-24 w-24 p-1.5'}`}>
+                            <canvas ref={barcodeCanvasRef} className="h-full w-full" />
                         </div>
                     </div>
                 ) : isLocationMode ? (
@@ -150,7 +156,7 @@ export function BarcodePreview({
             <button
                 onClick={onPrint}
                 disabled={isPosting}
-                className={`w-full py-4 ${accentClass} text-white ${sectionLabel} transition-colors disabled:opacity-40`}
+                className={`w-full ${comfy ? 'py-5' : 'py-4'} ${accentClass} text-white ${sectionLabel} transition-colors disabled:opacity-40`}
             >
                 {isPosting ? (
                     <span className="flex items-center justify-center gap-2">
@@ -158,9 +164,12 @@ export function BarcodePreview({
                         {isLocationMode ? 'Updating…' : mode === 'print' ? 'Saving & Printing…' : mode === 'reprint' ? 'Reprinting…' : 'Logging…'}
                     </span>
                 ) : (
-                    <span className="flex items-center justify-center gap-2">
-                        <Check className="h-4 w-4" />
+                    <span className="flex items-center justify-center gap-2.5">
+                        <Check className={comfy ? 'h-5 w-5' : 'h-4 w-4'} />
                         {ctaLabel}
+                        {comfy && (mode === 'print' || mode === 'reprint') && (
+                            <kbd className="rounded border border-white/30 bg-white/10 px-1.5 py-0.5 text-[9px] font-mono font-bold tracking-tighter">⌘P</kbd>
+                        )}
                     </span>
                 )}
             </button>

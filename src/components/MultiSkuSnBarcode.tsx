@@ -1,31 +1,52 @@
 'use client';
 
 import React, { useEffect, useRef, useState, useCallback } from "react";
+import { toast } from 'sonner';
 
 // Import refactored sub-components
 import { ModeSelector, BarcodeMode } from './barcode/ModeSelector';
 import { SkuInput } from './barcode/SkuInput';
 import { SerialNumberInput } from './barcode/SerialNumberInput';
 import { BarcodePreview } from './barcode/BarcodePreview';
+import { RecentsStrip } from './barcode/RecentsStrip';
 
 // Import utilities
 import { normalizeSku, getSerialLast6 } from '@/utils/sku';
-import { loadBarcodeLibrary, renderBarcode } from '@/utils/barcode';
+import { loadQrLibrary, renderQr } from '@/utils/barcode';
 import { printProductLabels } from '@/lib/print/printProductLabel';
+import { useLabelRecents } from '@/hooks/useLabelRecents';
+import { useBarcodeMode } from '@/hooks/useBarcodeMode';
+import { CONDITION_OPTIONS } from '@/components/receiving/zoho-po-types';
+import { ViewDropdown, type ViewDropdownOption } from '@/components/ui/ViewDropdown';
+import { Search, Clipboard, Check, Loader2, X, Printer, Plus } from './Icons';
 
-declare global {
-    interface Window {
-        JsBarcode: any;
-    }
+
+type ConditionGrade = (typeof CONDITION_OPTIONS)[number]['value'];
+
+interface MultiSkuSnBarcodeProps {
+    /**
+     * `vertical` — narrow-column wizard (sidebar / mobile). Steps reveal one at
+     * a time, inactive steps dim, parent auto-scrolls to the new step.
+     * `horizontal` — desktop workspace (right pane). Inputs and live preview
+     * sit side-by-side; all panels stay visible at full opacity.
+     */
+    layout?: 'vertical' | 'horizontal';
 }
 
-export default function MultiSkuSnBarcode() {
-    const [mode, setMode] = useState<BarcodeMode>('print');
+export default function MultiSkuSnBarcode({ layout = 'vertical' }: MultiSkuSnBarcodeProps = {}) {
+    const isHorizontal = layout === 'horizontal';
+    const urlMode = useBarcodeMode();
+    const [localMode, setLocalMode] = useState<BarcodeMode>('print');
+    const mode = isHorizontal ? urlMode.mode : localMode;
     const [step, setStep] = useState<1 | 2 | 3>(1);
     const [sku, setSku] = useState<string>("");
     const [snInput, setSnInput] = useState<string>("");
     const [serialNumbers, setSerialNumbers] = useState<string[]>([]);
     const [uniqueSku, setUniqueSku] = useState<string>("");
+    /** Internal pseudo-GTIN-14 for the current SKU. Populated by /api/units/next-id. */
+    const [gtin, setGtin] = useState<string>("");
+    /** GS1 Digital Link URL encoded in the printed QR. From /api/units/next-id. */
+    const [qrUrl, setQrUrl] = useState<string>("");
     const [title, setTitle] = useState<string>("");
     const [stock, setStock] = useState<string>("");
     const [isLibraryLoaded, setIsLibraryLoaded] = useState<boolean>(false);
@@ -37,6 +58,8 @@ export default function MultiSkuSnBarcode() {
     const [notes, setNotes] = useState<string>("");
     const [location, setLocation] = useState<string>("");
     const [currentLocation, setCurrentLocation] = useState<string>("");
+    const [imageUrl, setImageUrl] = useState<string>("");
+    const [condition, setCondition] = useState<ConditionGrade>('BRAND_NEW');
 
     const barcodeCanvasRef = useRef<HTMLCanvasElement>(null);
     const printRef = useRef<HTMLDivElement>(null);
@@ -44,40 +67,81 @@ export default function MultiSkuSnBarcode() {
     const snInputRef = useRef<HTMLInputElement>(null);
     const bottomAnchorRef = useRef<HTMLDivElement>(null);
 
+    const { recents, push: pushRecent, clear: clearRecents } = useLabelRecents();
+
     useEffect(() => {
-        loadBarcodeLibrary()
+        loadQrLibrary()
             .then(() => setIsLibraryLoaded(true))
-            .catch(err => console.error('Failed to load barcode library:', err));
+            .catch(err => console.error('Failed to load QR library:', err));
     }, []);
 
-    const renderBarcodeCanvas = useCallback((canvas: HTMLCanvasElement | null, value: string) => {
-        if (!canvas || !isLibraryLoaded || !window.JsBarcode || !value.trim()) return;
-        renderBarcode(canvas, value);
+    // Surface validation/fetch errors via the global toast system instead of
+    // the fixed-position pill. State stays as a one-shot trigger.
+    useEffect(() => {
+        if (!error) return;
+        toast.error(error);
+        setError("");
+    }, [error]);
+
+    // QR payload is the GS1 Digital Link URL from /api/units/next-id; fall
+    // back to the raw unit id when the URL isn't available yet so the
+    // canvas still renders something during the brief loading window.
+    const renderQrCanvas = useCallback(async (canvas: HTMLCanvasElement | null, payload: string) => {
+        if (!canvas || !isLibraryLoaded || !payload.trim()) return;
+        await renderQr(canvas, payload, { width: 200, margin: 2, errorCorrectionLevel: 'M' });
     }, [isLibraryLoaded]);
 
     useEffect(() => {
-        if (mode === 'print' && step === 3) {
-            renderBarcodeCanvas(barcodeCanvasRef.current, uniqueSku);
+        // In horizontal mode the preview is always mounted next to the inputs,
+        // so re-render as soon as we have a payload — not just at step 3.
+        if (mode === 'print' && (isHorizontal ? !!uniqueSku : step === 3)) {
+            void renderQrCanvas(barcodeCanvasRef.current, qrUrl || uniqueSku);
         }
-    }, [uniqueSku, step, mode, renderBarcodeCanvas]);
+    }, [uniqueSku, qrUrl, step, mode, renderQrCanvas, isHorizontal]);
 
     // Scroll the parent scroll container to reveal the newly added step.
     // scrollIntoView walks up to the nearest scroll ancestor, so this works
-    // whether the parent is SkuStockSidebarPanel, BarcodeSidebar, or any
-    // future host that wraps us in a scrollable container.
+    // for the narrow-column sidebar host. In horizontal mode everything is
+    // already visible side-by-side, so this is a no-op.
     useEffect(() => {
+        if (isHorizontal) return;
         if (step >= 2) {
             setTimeout(() => {
                 bottomAnchorRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
             }, 50);
         }
-    }, [step]);
+    }, [step, isHorizontal]);
 
     const handleSkuChange = (value: string) => {
         setSku(value);
         setUniqueSku("");
+        setGtin("");
+        setQrUrl("");
         setError("");
     };
+
+    /**
+     * Allocate the next unit-id for a SKU via /api/units/next-id and
+     * stash {uniqueSku, gtin, qrUrl} in component state. Each call
+     * atomically increments the per-SKU-per-year sequence — there is no
+     * pre-flight "peek". Replaces the legacy
+     * /api/sku-manager?action=current then ?action=increment dance.
+     */
+    const fetchNextUnitId = useCallback(async (skuValue: string) => {
+        const res = await fetch('/api/units/next-id', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ sku: normalizeSku(skuValue) }),
+        });
+        const data = await res.json();
+        if (!res.ok || !data?.ok) {
+            throw new Error(data?.error || 'next-id failed');
+        }
+        setUniqueSku(data.unitId);
+        setGtin(data.gtin ?? "");
+        setQrUrl(data.qrUrl ?? "");
+        return data as { unitId: string; gtin: string; qrUrl: string };
+    }, []);
 
     // Called when a SKU is injected from the right panel or clipboard paste
     const handleSkuFillAndSearch = useCallback(async (value: string) => {
@@ -90,6 +154,7 @@ export default function MultiSkuSnBarcode() {
         setStock("");
         setSnInput("");
         setSerialNumbers([]);
+        setImageUrl("");
         setStep(1);
         setError("");
 
@@ -106,6 +171,7 @@ export default function MultiSkuSnBarcode() {
             setStock(data.stock || "0");
             setCurrentLocation(data.location || "");
             setLocation(data.location || "");
+            setImageUrl(data.imageUrl || "");
         } catch {
             setTitle("Error loading info");
         } finally {
@@ -120,17 +186,15 @@ export default function MultiSkuSnBarcode() {
 
         if (mode === 'print') {
             try {
-                const res = await fetch(`/api/sku-manager?baseSku=${encodeURIComponent(normalizeSku(trimmed))}&action=current`);
-                const data = await res.json();
-                setUniqueSku(data.currentSku);
-            } catch {
-                console.error("Failed to pre-fetch SKU");
+                await fetchNextUnitId(trimmed);
+            } catch (err) {
+                console.error("Failed to allocate unit id:", err);
             }
         }
 
         setStep(2);
         setTimeout(() => snInputRef.current?.focus(), 100);
-    }, [mode]);
+    }, [mode, fetchNextUnitId]);
 
     // Listen for sku:fill events dispatched by the right-panel SKU table
     useEffect(() => {
@@ -151,6 +215,7 @@ export default function MultiSkuSnBarcode() {
             setTitle(data.title || "Not found");
             setStock(data.stock || "0");
             setCurrentLocation(data.location || "");
+            setImageUrl(data.imageUrl || "");
             if (!location) setLocation(data.location || "");
         } catch (e) {
             setTitle("Error loading info");
@@ -176,15 +241,10 @@ export default function MultiSkuSnBarcode() {
         if (mode === 'print' && !uniqueSku) {
             setIsGenerating(true);
             try {
-                const res = await fetch(`/api/sku-manager?baseSku=${encodeURIComponent(normalizeSku(sku))}&action=current`);
-                const data = await res.json();
-                setUniqueSku(data.currentSku);
-            } catch (e) {
-                console.error("Failed to pre-fetch SKU");
+                await fetchNextUnitId(sku);
+            } catch (err) {
+                console.error("Failed to allocate unit id:", err);
             } finally {
-                setIsGenerating(true); // Should be false, wait I see a bug in the original code? 
-                // Line 97 in original was setIsGenerating(false). 
-                // Ah, I see line 97 was false. I'll fix it to false.
                 setIsGenerating(false);
             }
         }
@@ -211,11 +271,10 @@ export default function MultiSkuSnBarcode() {
             if (!uniqueSku) {
                 setIsGenerating(true);
                 try {
-                    const res = await fetch(`/api/sku-manager?baseSku=${encodeURIComponent(normalizeSku(sku))}&action=current`);
-                    const data = await res.json();
-                    setUniqueSku(data.currentSku);
-                } catch (e) {
-                    setError("Failed to generate SKU");
+                    await fetchNextUnitId(sku);
+                } catch (err) {
+                    console.error('Failed to allocate unit id:', err);
+                    setError("Failed to generate unit id");
                     return;
                 } finally {
                     setIsGenerating(false);
@@ -234,10 +293,13 @@ export default function MultiSkuSnBarcode() {
     const handleChangeSku = () => {
         setSku("");
         setUniqueSku("");
+        setGtin("");
+        setQrUrl("");
         setTitle("");
         setStock("");
         setSnInput("");
         setSerialNumbers([]);
+        setImageUrl("");
         setStep(1);
         setError("");
         setTimeout(() => skuInputRef.current?.focus(), 100);
@@ -270,7 +332,8 @@ export default function MultiSkuSnBarcode() {
                     serialNumbers,
                     notes,
                     productTitle: title,
-                    location
+                    location,
+                    condition,
                 }),
             });
             const data = await res.json();
@@ -284,11 +347,16 @@ export default function MultiSkuSnBarcode() {
 
     const handleFinalAction = async () => {
         if (mode === 'reprint') {
-            // Just print, no DB/Sheet updates
+            // Just print, no DB/Sheet updates. Reprint uses the SKU itself
+            // as the unit ID (legacy behavior); no GTIN/QR override
+            // available because we don't know which unit it was.
             printProductLabels({ sku: uniqueSku, title, serialNumbers });
+            pushRecent({ sku: uniqueSku || sku, sn: serialNumbers[0], title });
             setStep(1);
             setSku("");
             setUniqueSku("");
+            setGtin("");
+            setQrUrl("");
             setSerialNumbers([]);
             setSnInput("");
             return;
@@ -323,28 +391,37 @@ export default function MultiSkuSnBarcode() {
         const success = await postToSheets();
         if (success) {
             if (mode === 'print') {
-                try {
-                    await fetch(`/api/sku-manager?baseSku=${encodeURIComponent(normalizeSku(sku))}&action=increment`);
-                } catch (e) {
-                    console.error("Failed to increment SKU in DB:", e);
-                }
-
-                printProductLabels({ sku: uniqueSku, title, serialNumbers });
+                // Print the current label. GTIN + qrUrl come from the
+                // /api/units/next-id response that produced this unit id;
+                // the print template encodes the GS1 Digital Link QR.
+                printProductLabels({
+                    sku: uniqueSku,
+                    title,
+                    serialNumbers,
+                    gtin: gtin || undefined,
+                    qrPayloads: qrUrl ? Array(serialNumbers.length).fill(qrUrl) : undefined,
+                });
             }
-            
+
+            // Push to the session recents strip so the user can one-tap re-fill
+            // this SKU. We persist both print + sn-to-sku flows since both
+            // produce a labeled artifact worth recalling.
+            pushRecent({ sku: uniqueSku || sku, sn: serialNumbers[0], title });
+
             setSnInput("");
             setSerialNumbers([]);
-            
+
             if (mode === 'print') {
+                // Allocate the NEXT unit id atomically so the operator can
+                // print again immediately. fn_next_unit_seq increments
+                // per-(sku, year), so each call returns a fresh value.
                 try {
-                    const res = await fetch(`/api/sku-manager?baseSku=${encodeURIComponent(normalizeSku(sku))}&action=current`);
-                    const data = await res.json();
-                    setUniqueSku(data.currentSku);
-                } catch (e) {
-                    console.error("Failed to fetch next SKU:", e);
+                    await fetchNextUnitId(sku);
+                } catch (err) {
+                    console.error("Failed to allocate next unit id:", err);
                 }
             }
-            
+
             setStep(2);
         } else {
             setError("Failed to save data");
@@ -352,9 +429,237 @@ export default function MultiSkuSnBarcode() {
     };
 
     const handleModeChange = (newMode: BarcodeMode) => {
-        setMode(newMode);
+        if (isHorizontal) urlMode.setMode(newMode);
+        else setLocalMode(newMode);
         setStep(1);
     };
+
+    // When the URL-driven mode changes externally (e.g. user clicks a mode
+    // pill in the sidebar), reset progression so each mode starts clean.
+    useEffect(() => {
+        if (!isHorizontal) return;
+        setStep(1);
+    }, [urlMode.mode, isHorizontal]);
+
+    const density = isHorizontal ? 'comfortable' : 'compact';
+    const previewIsReady = mode === 'reprint' ? !!sku.trim() : !!uniqueSku;
+
+    // Cmd/Ctrl+P inside the workspace prints the current label (when ready).
+    // We capture early to intercept before the browser opens its print dialog.
+    useEffect(() => {
+        if (!isHorizontal) return;
+        const handler = (e: KeyboardEvent) => {
+            if ((e.metaKey || e.ctrlKey) && (e.key === 'p' || e.key === 'P')) {
+                if (mode === 'change-location') return;
+                if (!previewIsReady) return;
+                e.preventDefault();
+                handleFinalAction();
+            }
+        };
+        window.addEventListener('keydown', handler, true);
+        return () => window.removeEventListener('keydown', handler, true);
+    }, [isHorizontal, mode, previewIsReady]);
+
+    const skuInputEl = (
+        <SkuInput
+            sku={sku}
+            uniqueSku={uniqueSku}
+            mode={mode}
+            skuInputRef={skuInputRef}
+            isActive={isHorizontal ? true : step >= 1}
+            density={density}
+            onChange={handleSkuChange}
+            onNext={handleNextStepSku}
+            onFillAndSearch={handleSkuFillAndSearch}
+        />
+    );
+
+    const showSerialPanel = mode !== 'reprint' && (isHorizontal ? !!sku.trim() : step >= 2);
+    const serialPanelEl = showSerialPanel ? (
+        <SerialNumberInput
+            sku={sku}
+            mode={mode}
+            title={title}
+            stock={stock}
+            snInput={snInput}
+            serialNumbers={serialNumbers}
+            location={location}
+            currentLocation={currentLocation}
+            snInputRef={snInputRef}
+            isLoadingTitle={isLoadingTitle}
+            isActive={isHorizontal ? true : step >= 2}
+            showChangeSku={mode === 'print' && (isHorizontal ? !!sku.trim() : step === 2)}
+            density={density}
+            imageUrl={imageUrl}
+            onSnInputChange={handleSnInputChange}
+            onSnAdd={handleSnAdd}
+            onLocationChange={setLocation}
+            onNext={handleNextStepSn}
+            onFinalAction={handleFinalAction}
+            isPosting={isPosting}
+            onChangeSku={handleChangeSku}
+        />
+    ) : null;
+
+    const showPreviewPanel = mode !== 'change-location' && (isHorizontal ? true : step >= 3);
+    const previewPanelEl = showPreviewPanel ? (
+        isHorizontal && !previewIsReady ? (
+            <div className="flex h-full min-h-[260px] flex-col items-center justify-center gap-2 border-t border-gray-200 bg-gray-50 px-6 py-10 text-center">
+                <span className="text-[10px] font-black uppercase tracking-[0.18em] text-gray-400">Live Preview</span>
+                <p className="text-[12px] font-semibold text-gray-400 max-w-[260px]">
+                    {mode === 'sn-to-sku'
+                        ? 'Scan a SKU and at least one serial to preview the log entry.'
+                        : 'Scan or type a SKU to preview the label.'}
+                </p>
+            </div>
+        ) : (
+            <BarcodePreview
+                mode={mode}
+                uniqueSku={uniqueSku}
+                sku={sku}
+                title={title}
+                serialNumbers={serialNumbers}
+                notes={notes}
+                location={location}
+                showNotes={showNotes}
+                barcodeCanvasRef={barcodeCanvasRef}
+                isPosting={isPosting}
+                isActive={isHorizontal ? previewIsReady : step >= 3}
+                density={density}
+                getSerialLast6={getSerialLast6}
+                onToggleNotes={() => setShowNotes(!showNotes)}
+                onNotesChange={setNotes}
+                onPrint={handleFinalAction}
+            />
+        )
+    ) : null;
+
+    if (isHorizontal) {
+        const accent = MODE_ACCENT_THEME[mode];
+        const showSnCard = !!sku.trim() && (mode === 'print' || mode === 'sn-to-sku');
+        const showPreviewCard = previewIsReady && mode !== 'change-location';
+
+        const removeSerial = (target: string) =>
+            setSerialNumbers((prev) => {
+                const next = prev.filter((s) => s !== target);
+                setSnInput(next.join(', '));
+                return next;
+            });
+
+        const primaryDisabled =
+            isPosting ||
+            (mode === 'change-location' ? !sku.trim() || !location : !previewIsReady);
+
+        const primaryLabel = isPosting
+            ? mode === 'change-location'
+                ? 'Updating…'
+                : mode === 'print'
+                  ? 'Saving & Printing…'
+                  : mode === 'reprint'
+                    ? 'Reprinting…'
+                    : 'Logging…'
+            : mode === 'change-location'
+              ? 'Update Location'
+              : mode === 'print'
+                ? 'Save & Print Label'
+                : mode === 'reprint'
+                  ? 'Reprint Label'
+                  : 'Log to Database';
+
+        const primaryAction = () => {
+            if (mode === 'change-location') return handleFinalAction();
+            if (previewIsReady) return handleFinalAction();
+            return handleNextStepSn();
+        };
+
+        return (
+            <div className="flex h-full min-h-0 min-w-0 flex-col bg-gray-50 text-gray-900">
+                {/* Scrollable hero column */}
+                <div className="min-h-0 flex-1 overflow-y-auto">
+                    <div className="mx-auto w-full max-w-3xl px-6 py-8 space-y-4 pb-32">
+                        <WorkspaceCard label="SKU" tone={accent.tone}>
+                            <ModernSkuField
+                                value={sku}
+                                inputRef={skuInputRef}
+                                accent={accent}
+                                onChange={handleSkuChange}
+                                onNext={handleNextStepSku}
+                                onFillAndSearch={handleSkuFillAndSearch}
+                            />
+                            {comfyHelperHint(mode)}
+                        </WorkspaceCard>
+
+                        {sku.trim() && (
+                            <ProductContextCard
+                                title={title}
+                                stock={stock}
+                                imageUrl={imageUrl}
+                                isLoading={isLoadingTitle}
+                            />
+                        )}
+
+                        {showSnCard && (
+                            <SerialScanCard
+                                snInputRef={snInputRef}
+                                serialNumbers={serialNumbers}
+                                accent={accent}
+                                condition={condition}
+                                onConditionChange={setCondition}
+                                onAdd={handleSnAdd}
+                                onRemove={removeSerial}
+                                onPasteList={(list) => {
+                                    list.forEach((s) => handleSnAdd(s));
+                                }}
+                            />
+                        )}
+
+                        {mode !== 'change-location' && !!sku.trim() && (
+                            <NotesCard
+                                notes={notes}
+                                showNotes={showNotes}
+                                accent={accent}
+                                onToggleNotes={() => setShowNotes(!showNotes)}
+                                onNotesChange={setNotes}
+                            />
+                        )}
+
+                        {showPreviewCard ? (
+                            <PreviewCardModern
+                                mode={mode}
+                                uniqueSku={uniqueSku || sku}
+                                title={title}
+                                serialNumbers={serialNumbers}
+                                location={location}
+                                accent={accent}
+                                barcodeCanvasRef={barcodeCanvasRef}
+                            />
+                        ) : (
+                            mode !== 'change-location' && (
+                                <PreviewPlaceholder mode={mode} sku={sku} />
+                            )
+                        )}
+                    </div>
+                </div>
+
+                {/* Sticky action bar */}
+                <StickyActionBar
+                    accent={accent}
+                    label={primaryLabel}
+                    disabled={primaryDisabled}
+                    isPosting={isPosting}
+                    onPrimary={primaryAction}
+                    mode={mode}
+                    previewReady={previewIsReady}
+                />
+
+                <RecentsStrip
+                    recents={recents}
+                    onPick={(s) => window.dispatchEvent(new CustomEvent('sku:fill', { detail: { sku: s } }))}
+                    onClear={clearRecents}
+                />
+            </div>
+        );
+    }
 
     return (
         <div className="flex min-w-0 flex-col bg-white text-gray-900">
@@ -362,81 +667,580 @@ export default function MultiSkuSnBarcode() {
             <ModeSelector mode={mode} onModeChange={handleModeChange} />
 
             {/*
-             * No internal scroll. Our parent (SkuStockSidebarPanel /
-             * BarcodeSidebar) already provides the scroll container; trying
-             * to nest a second one breaks because `h-full` resolves against
-             * the parent's content height, not a viewport height.
+             * Vertical: no internal scroll. The sidebar host owns the scroll
+             * container; nesting another would break because `h-full` resolves
+             * against the parent's content height, not the viewport.
              */}
             <div className="min-w-0">
-                {/* Step 1: SKU */}
-                <SkuInput
-                    sku={sku}
-                    uniqueSku={uniqueSku}
-                    mode={mode}
-                    skuInputRef={skuInputRef}
-                    isActive={step >= 1}
-                    onChange={handleSkuChange}
-                    onNext={handleNextStepSku}
-                    onFillAndSearch={handleSkuFillAndSearch}
-                />
-
-                {/* Step 2: Serial Numbers & Details */}
-                {mode !== 'reprint' && step >= 2 && (
-                    <SerialNumberInput
-                        sku={sku}
-                        mode={mode}
-                        title={title}
-                        stock={stock}
-                        snInput={snInput}
-                        serialNumbers={serialNumbers}
-                        location={location}
-                        currentLocation={currentLocation}
-                        snInputRef={snInputRef}
-                        isLoadingTitle={isLoadingTitle}
-                        isActive={step >= 2}
-                        showChangeSku={mode === 'print' && step === 2}
-                        onSnInputChange={handleSnInputChange}
-                        onSnAdd={handleSnAdd}
-                        onLocationChange={setLocation}
-                        onNext={handleNextStepSn}
-                        onFinalAction={handleFinalAction}
-                        isPosting={isPosting}
-                        onChangeSku={handleChangeSku}
-                    />
-                )}
-
-                {/* Step 3: Preview & Print */}
-                {mode !== 'change-location' && step >= 3 && (
-                    <BarcodePreview
-                        mode={mode}
-                        uniqueSku={uniqueSku}
-                        sku={sku}
-                        title={title}
-                        serialNumbers={serialNumbers}
-                        notes={notes}
-                        location={location}
-                        showNotes={showNotes}
-                        barcodeCanvasRef={barcodeCanvasRef}
-                        isPosting={isPosting}
-                        isActive={step >= 3}
-                        getSerialLast6={getSerialLast6}
-                        onToggleNotes={() => setShowNotes(!showNotes)}
-                        onNotesChange={setNotes}
-                        onPrint={handleFinalAction}
-                    />
-                )}
-
+                {skuInputEl}
+                {serialPanelEl}
+                {previewPanelEl}
                 <div ref={bottomAnchorRef} aria-hidden />
             </div>
+        </div>
+    );
+}
 
-            {error && (
-                <div
-                    className="fixed bottom-4 left-1/2 -translate-x-1/2 bg-red-600 text-white px-5 py-2.5 text-xs font-black uppercase tracking-widest shadow-lg"
-                    onClick={() => setError("")}
-                >
-                    {error}
+// ─── Modern workspace internals ─────────────────────────────────────────────
+
+interface ModeAccent {
+    tone: 'blue' | 'emerald' | 'orange' | 'violet';
+    tagline: string;
+    ctaBg: string;
+    ctaHover: string;
+    bannerFrom: string;
+    bannerTo: string;
+    bannerText: string;
+    bannerTag: string;
+    focusRing: string;
+    chip: string;
+}
+
+const MODE_ACCENT_THEME: Record<BarcodeMode, ModeAccent> = {
+    'print': {
+        tone: 'blue',
+        tagline: 'Create a new SKU label',
+        ctaBg: 'bg-blue-600',
+        ctaHover: 'hover:bg-blue-700',
+        bannerFrom: 'from-blue-50',
+        bannerTo: 'to-white',
+        bannerText: 'text-blue-900',
+        bannerTag: 'bg-blue-600 text-white',
+        focusRing: 'focus:ring-blue-500/30 focus:border-blue-500',
+        chip: 'bg-blue-50 text-blue-700',
+    },
+    'sn-to-sku': {
+        tone: 'emerald',
+        tagline: 'Log serials against an existing SKU',
+        ctaBg: 'bg-emerald-600',
+        ctaHover: 'hover:bg-emerald-700',
+        bannerFrom: 'from-emerald-50',
+        bannerTo: 'to-white',
+        bannerText: 'text-emerald-900',
+        bannerTag: 'bg-emerald-600 text-white',
+        focusRing: 'focus:ring-emerald-500/30 focus:border-emerald-500',
+        chip: 'bg-emerald-50 text-emerald-700',
+    },
+    'change-location': {
+        tone: 'orange',
+        tagline: 'Move a SKU to a new bin',
+        ctaBg: 'bg-orange-600',
+        ctaHover: 'hover:bg-orange-700',
+        bannerFrom: 'from-orange-50',
+        bannerTo: 'to-white',
+        bannerText: 'text-orange-900',
+        bannerTag: 'bg-orange-600 text-white',
+        focusRing: 'focus:ring-orange-500/30 focus:border-orange-500',
+        chip: 'bg-orange-50 text-orange-700',
+    },
+    'reprint': {
+        tone: 'violet',
+        tagline: 'Re-issue the same label',
+        ctaBg: 'bg-violet-700',
+        ctaHover: 'hover:bg-violet-800',
+        bannerFrom: 'from-violet-50',
+        bannerTo: 'to-white',
+        bannerText: 'text-violet-900',
+        bannerTag: 'bg-violet-700 text-white',
+        focusRing: 'focus:ring-violet-500/30 focus:border-violet-500',
+        chip: 'bg-violet-50 text-violet-700',
+    },
+};
+
+function modeLabel(mode: BarcodeMode): string {
+    if (mode === 'sn-to-sku') return 'Log Serials';
+    if (mode === 'change-location') return 'Move Location';
+    if (mode === 'reprint') return 'Reprint';
+    return 'Print Label';
+}
+
+function comfyHelperHint(mode: BarcodeMode) {
+    const text =
+        mode === 'reprint'
+            ? 'Scan or paste a SKU to bring up its last label.'
+            : mode === 'change-location'
+              ? 'Scan a SKU to see its current bin.'
+              : 'Scan or paste a SKU to load product info.';
+    return <p className="mt-2 text-xs text-gray-500">{text}</p>;
+}
+
+interface ModeBannerProps {
+    mode: BarcodeMode;
+    accent: ModeAccent;
+}
+
+function ModeBanner({ mode, accent }: ModeBannerProps) {
+    return (
+        <div
+            className={`flex items-center justify-between rounded-2xl bg-gradient-to-r ${accent.bannerFrom} ${accent.bannerTo} px-5 py-3 ring-1 ring-gray-200/60`}
+        >
+            <div className="flex items-center gap-3">
+                <span className={`rounded-lg px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.16em] ${accent.bannerTag}`}>
+                    {modeLabel(mode)}
+                </span>
+                <span className={`text-sm font-semibold ${accent.bannerText}`}>{accent.tagline}</span>
+            </div>
+        </div>
+    );
+}
+
+interface WorkspaceCardProps {
+    label?: string;
+    tone?: ModeAccent['tone'];
+    children: React.ReactNode;
+    actions?: React.ReactNode;
+}
+
+function WorkspaceCard({ label, children, actions }: WorkspaceCardProps) {
+    return (
+        <section className="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-gray-200/60">
+            {(label || actions) && (
+                <div className="mb-3 flex items-center justify-between">
+                    {label && (
+                        <h3 className="text-xs font-semibold uppercase tracking-[0.14em] text-gray-500">
+                            {label}
+                        </h3>
+                    )}
+                    {actions}
                 </div>
             )}
+            {children}
+        </section>
+    );
+}
+
+interface ModernSkuFieldProps {
+    value: string;
+    inputRef: React.RefObject<HTMLInputElement>;
+    accent: ModeAccent;
+    onChange: (v: string) => void;
+    onNext: () => void;
+    onFillAndSearch: (v: string) => void;
+}
+
+function ModernSkuField({ value, inputRef, accent, onChange, onNext, onFillAndSearch }: ModernSkuFieldProps) {
+    const handlePaste = async () => {
+        try {
+            const text = await navigator.clipboard.readText();
+            const trimmed = text.trim();
+            if (trimmed) onFillAndSearch(trimmed);
+        } catch {}
+    };
+
+    return (
+        <div className="flex items-stretch gap-2">
+            <div className="relative flex-1">
+                <input
+                    ref={inputRef}
+                    value={value}
+                    onChange={(e) => onChange(e.target.value)}
+                    onKeyDown={(e) => e.key === 'Enter' && onNext()}
+                    placeholder="Scan or type a SKU…"
+                    autoComplete="off"
+                    spellCheck={false}
+                    className={`block h-12 w-full rounded-xl border border-gray-200 bg-white px-4 font-mono text-base text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 ${accent.focusRing}`}
+                />
+            </div>
+            <button
+                type="button"
+                onClick={handlePaste}
+                title="Paste from clipboard and search"
+                className="inline-flex h-12 w-12 items-center justify-center rounded-xl border border-gray-200 bg-white text-gray-500 transition-colors hover:bg-gray-50 hover:text-gray-800"
+            >
+                <Clipboard className="h-4 w-4" />
+            </button>
+            <button
+                type="button"
+                onClick={onNext}
+                title="Search"
+                className={`inline-flex h-12 items-center justify-center gap-2 rounded-xl px-5 text-sm font-semibold text-white shadow-sm transition-colors ${accent.ctaBg} ${accent.ctaHover}`}
+            >
+                <Search className="h-4 w-4" />
+                <span>Search</span>
+            </button>
+        </div>
+    );
+}
+
+interface ProductContextCardProps {
+    title: string;
+    stock: string;
+    imageUrl?: string;
+    isLoading: boolean;
+}
+
+function ProductContextCard({
+    title,
+    stock,
+    imageUrl,
+    isLoading,
+}: ProductContextCardProps) {
+    const stockNum = parseInt(stock || '0', 10) || 0;
+    const stockClass =
+        stockNum <= 0
+            ? 'bg-red-50 text-red-700 ring-red-200'
+            : stockNum <= 5
+              ? 'bg-amber-50 text-amber-700 ring-amber-200'
+              : 'bg-emerald-50 text-emerald-700 ring-emerald-200';
+
+    return (
+        <section className="flex items-start gap-4 rounded-2xl bg-white p-5 shadow-sm ring-1 ring-gray-200/60">
+            <div className="flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-gray-50 ring-1 ring-gray-200">
+                {isLoading ? (
+                    <div className="h-full w-full animate-pulse bg-gray-200" />
+                ) : imageUrl ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                        src={imageUrl}
+                        alt=""
+                        className="h-full w-full object-cover"
+                        onError={(e) => {
+                            (e.currentTarget as HTMLImageElement).style.display = 'none';
+                        }}
+                    />
+                ) : (
+                    <Printer className="h-5 w-5 text-gray-300" />
+                )}
+            </div>
+
+            <div className="min-w-0 flex-1">
+                {isLoading ? (
+                    <div className="space-y-2">
+                        <div className="h-4 w-3/4 animate-pulse rounded bg-gray-200" />
+                        <div className="h-3 w-1/2 animate-pulse rounded bg-gray-100" />
+                    </div>
+                ) : (
+                    <p className="text-base font-semibold leading-snug text-gray-900">
+                        {title || <span className="italic text-gray-400">SKU not in catalog</span>}
+                    </p>
+                )}
+            </div>
+
+            <span className={`shrink-0 rounded-lg px-2.5 py-1 text-sm font-bold tabular-nums ring-1 ${stockClass}`}>
+                {stock || '0'} <span className="text-[10px] font-semibold uppercase tracking-wider">stock</span>
+            </span>
+        </section>
+    );
+}
+
+interface SerialScanCardProps {
+    snInputRef: React.RefObject<HTMLInputElement>;
+    serialNumbers: string[];
+    accent: ModeAccent;
+    condition: ConditionGrade;
+    onConditionChange: (next: ConditionGrade) => void;
+    onAdd: (sn: string) => void;
+    onRemove: (sn: string) => void;
+    onPasteList: (list: string[]) => void;
+}
+
+function SerialScanCard({
+    snInputRef,
+    serialNumbers,
+    accent,
+    condition,
+    onConditionChange,
+    onAdd,
+    onRemove,
+    onPasteList,
+}: SerialScanCardProps) {
+    const [scanValue, setScanValue] = useState('');
+
+    const submitScan = () => {
+        const trimmed = scanValue.trim();
+        if (!trimmed) return;
+        onAdd(trimmed);
+        setScanValue('');
+        snInputRef.current?.focus();
+    };
+
+    const conditionOptions: ViewDropdownOption<ConditionGrade>[] = CONDITION_OPTIONS.map((o) => ({
+        value: o.value,
+        label: o.label,
+    }));
+
+    return (
+        <section className="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-gray-200/60">
+            <div className="mb-3 flex items-center justify-between">
+                <h3 className="text-xs font-semibold uppercase tracking-[0.14em] text-gray-500">
+                    Serial numbers
+                </h3>
+                {serialNumbers.length > 0 && (
+                    <span className={`rounded-md px-2 py-0.5 text-[11px] font-bold tabular-nums ${accent.chip}`}>
+                        {serialNumbers.length} added
+                    </span>
+                )}
+            </div>
+
+            <div className="flex items-stretch gap-2">
+                <input
+                    ref={snInputRef}
+                    value={scanValue}
+                    onChange={(e) => {
+                        const v = e.target.value;
+                        if (v.includes(',')) {
+                            const parts = v.split(',').map((s) => s.trim()).filter(Boolean);
+                            onPasteList(parts);
+                            setScanValue('');
+                        } else {
+                            setScanValue(v);
+                        }
+                    }}
+                    onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                            e.preventDefault();
+                            submitScan();
+                        }
+                    }}
+                    placeholder="Scan or type a serial → ⏎"
+                    autoComplete="off"
+                    spellCheck={false}
+                    className={`block h-12 flex-1 rounded-xl border border-gray-200 bg-white px-4 font-mono text-base text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 ${accent.focusRing}`}
+                />
+                <button
+                    type="button"
+                    onClick={submitScan}
+                    disabled={!scanValue.trim()}
+                    title="Add another serial"
+                    className={`inline-flex h-12 items-center justify-center gap-1.5 rounded-xl px-4 text-sm font-semibold text-white shadow-sm transition-colors ${
+                        scanValue.trim() ? `${accent.ctaBg} ${accent.ctaHover}` : 'cursor-not-allowed bg-gray-300'
+                    }`}
+                >
+                    <Plus className="h-4 w-4" />
+                    <span>Add</span>
+                </button>
+            </div>
+
+            {serialNumbers.length > 0 && (
+                <div className="mt-3 flex flex-wrap gap-1.5">
+                    {serialNumbers.map((sn, idx) => (
+                        <span
+                            key={sn + idx}
+                            className="inline-flex items-center gap-1.5 rounded-lg bg-gray-100 px-2.5 py-1 font-mono text-[12px] font-semibold text-gray-700"
+                        >
+                            <span className="truncate max-w-[180px]">{sn}</span>
+                            <button
+                                type="button"
+                                onClick={() => onRemove(sn)}
+                                className="text-gray-400 hover:text-red-600"
+                                title="Remove"
+                            >
+                                <X className="h-3 w-3" />
+                            </button>
+                        </span>
+                    ))}
+                </div>
+            )}
+
+            <div className="mt-4 border-t border-gray-100 pt-4">
+                <label className="mb-2 block text-xs font-semibold uppercase tracking-[0.14em] text-gray-500">
+                    Condition
+                </label>
+                <ViewDropdown<ConditionGrade>
+                    options={conditionOptions}
+                    value={condition}
+                    onChange={onConditionChange}
+                    variant="boxy"
+                    buttonClassName="h-11 w-full rounded-xl border border-gray-200 bg-white px-4 pr-10 text-left text-sm font-semibold text-gray-900 outline-none transition-colors hover:bg-gray-50"
+                />
+            </div>
+        </section>
+    );
+}
+
+interface NotesCardProps {
+    notes: string;
+    showNotes: boolean;
+    accent: ModeAccent;
+    onToggleNotes: () => void;
+    onNotesChange: (v: string) => void;
+}
+
+function NotesCard({ notes, showNotes, accent, onToggleNotes, onNotesChange }: NotesCardProps) {
+    return (
+        <section className="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-gray-200/60">
+            <button
+                type="button"
+                onClick={onToggleNotes}
+                className="flex w-full items-center justify-between text-xs font-semibold uppercase tracking-[0.14em] text-gray-500 hover:text-gray-700"
+            >
+                <span>Notes {notes ? <span className="ml-1 text-gray-400 normal-case tracking-normal">(filled)</span> : <span className="ml-1 text-gray-400 normal-case tracking-normal">(optional)</span>}</span>
+                <span aria-hidden>{showNotes ? '−' : '+'}</span>
+            </button>
+            {showNotes && (
+                <textarea
+                    value={notes}
+                    onChange={(e) => onNotesChange(e.target.value)}
+                    placeholder="Anything worth recording with this unit…"
+                    rows={3}
+                    className={`mt-3 block w-full resize-none rounded-xl border border-gray-200 bg-white p-3 text-sm text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 ${accent.focusRing}`}
+                />
+            )}
+        </section>
+    );
+}
+
+interface PreviewCardModernProps {
+    mode: BarcodeMode;
+    uniqueSku: string;
+    title: string;
+    serialNumbers: string[];
+    location: string;
+    accent: ModeAccent;
+    barcodeCanvasRef: React.RefObject<HTMLCanvasElement>;
+}
+
+function PreviewCardModern({
+    mode,
+    uniqueSku,
+    title,
+    serialNumbers,
+    location,
+    accent,
+    barcodeCanvasRef,
+}: PreviewCardModernProps) {
+    const isPrintMode = mode === 'print' || mode === 'reprint';
+
+    return (
+        <section className="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-gray-200/60">
+            <div className="mb-3 flex items-center justify-between">
+                <h3 className="text-xs font-semibold uppercase tracking-[0.14em] text-gray-500">
+                    {mode === 'sn-to-sku' ? 'Review' : 'Live preview'}
+                </h3>
+                {!isPrintMode || mode === 'reprint' ? null : (
+                    <span className={`rounded-md px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider ${accent.chip}`}>
+                        Ready
+                    </span>
+                )}
+            </div>
+
+            {isPrintMode ? (
+                // QR-only label preview. Title + ids on the left, QR canvas
+                // on the right — mirrors the printed thermal-label layout
+                // (see context/inventory_system_upgrade_plan.md §7.5 and
+                // src/lib/print/zpl-templates.ts buildUnitZpl).
+                <div className="flex items-center gap-5 rounded-xl bg-gray-50 p-5 ring-1 ring-gray-200/50">
+                    <div className="min-w-0 flex-1 space-y-1.5">
+                        {title ? (
+                            <p className="line-clamp-2 text-sm font-bold leading-snug text-gray-900">{title}</p>
+                        ) : null}
+                        <p className="font-mono text-base font-black tracking-tight text-gray-900 break-all">{uniqueSku}</p>
+                        {mode !== 'reprint' && serialNumbers.length > 0 ? (
+                            <p className="font-mono text-[11px] text-gray-500">
+                                SN · {getSerialLast6(serialNumbers)}
+                            </p>
+                        ) : null}
+                        {location ? (
+                            <p className="font-mono text-[11px] text-gray-500">LOC · {location}</p>
+                        ) : null}
+                    </div>
+                    <div className="flex h-[160px] w-[160px] shrink-0 items-center justify-center rounded-lg bg-white p-2 ring-1 ring-gray-200">
+                        <canvas ref={barcodeCanvasRef} className="h-full w-full" />
+                    </div>
+                </div>
+            ) : (
+                <div className="space-y-2 rounded-xl bg-gray-50 p-5 ring-1 ring-gray-200/50">
+                    <div>
+                        <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-gray-500">SKU</p>
+                        <p className="font-mono text-base font-bold text-gray-900">{uniqueSku}</p>
+                    </div>
+                    <div>
+                        <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-gray-500">
+                            Serials ({serialNumbers.length})
+                        </p>
+                        <p className="break-all font-mono text-xs text-gray-700">
+                            {serialNumbers.join(', ') || '—'}
+                        </p>
+                    </div>
+                    {location && (
+                        <div>
+                            <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-gray-500">Location</p>
+                            <p className="font-mono text-xs text-gray-700">{location}</p>
+                        </div>
+                    )}
+                </div>
+            )}
+        </section>
+    );
+}
+
+interface PreviewPlaceholderProps {
+    mode: BarcodeMode;
+    sku: string;
+}
+
+function PreviewPlaceholder({ mode, sku }: PreviewPlaceholderProps) {
+    return (
+        <section className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-gray-300 bg-white/50 p-10 text-center">
+            <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-2xl bg-gray-100">
+                <Printer className="h-5 w-5 text-gray-400" />
+            </div>
+            <p className="text-sm font-semibold text-gray-700">
+                {mode === 'sn-to-sku' ? 'Review will appear once a serial is added' : 'Label preview will appear here'}
+            </p>
+            <p className="mt-1 max-w-[280px] text-xs text-gray-500">
+                {sku
+                    ? mode === 'sn-to-sku'
+                        ? 'Scan at least one serial number to enable the log action.'
+                        : 'Generating the next unique SKU for this product…'
+                    : 'Scan a SKU above to begin.'}
+            </p>
+        </section>
+    );
+}
+
+interface StickyActionBarProps {
+    accent: ModeAccent;
+    label: string;
+    disabled: boolean;
+    isPosting: boolean;
+    onPrimary: () => void;
+    mode: BarcodeMode;
+    previewReady: boolean;
+}
+
+function StickyActionBar({ accent, label, disabled, isPosting, onPrimary, mode, previewReady }: StickyActionBarProps) {
+    const showPrintKey = (mode === 'print' || mode === 'reprint') && previewReady;
+
+    return (
+        <div className="sticky bottom-0 z-10 border-t border-gray-200 bg-white/90 px-6 py-3 backdrop-blur">
+            <div className="mx-auto flex w-full max-w-3xl items-center justify-between gap-4">
+                <div className="hidden items-center gap-3 text-xs text-gray-500 sm:flex">
+                    <span className="inline-flex items-center gap-1.5">
+                        <kbd className="rounded-md border border-gray-200 bg-gray-50 px-1.5 py-0.5 font-mono text-[10px] font-bold text-gray-600">⏎</kbd>
+                        <span className="font-semibold uppercase tracking-[0.14em]">
+                            {mode === 'change-location' ? 'Update' : 'Continue'}
+                        </span>
+                    </span>
+                    {showPrintKey && (
+                        <span className="inline-flex items-center gap-1.5">
+                            <kbd className="rounded-md border border-gray-200 bg-gray-50 px-1.5 py-0.5 font-mono text-[10px] font-bold text-gray-600">⌘P</kbd>
+                            <span className="font-semibold uppercase tracking-[0.14em]">Print</span>
+                        </span>
+                    )}
+                </div>
+
+                <button
+                    type="button"
+                    onClick={onPrimary}
+                    disabled={disabled}
+                    className={`inline-flex h-12 flex-1 items-center justify-center gap-2.5 rounded-xl px-6 text-sm font-bold text-white shadow-sm transition-all sm:flex-initial sm:min-w-[260px] ${
+                        disabled ? 'cursor-not-allowed bg-gray-300' : `${accent.ctaBg} ${accent.ctaHover}`
+                    }`}
+                >
+                    {isPosting ? (
+                        <>
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                            <span>{label}</span>
+                        </>
+                    ) : (
+                        <>
+                            <Check className="h-4 w-4" />
+                            <span>{label}</span>
+                        </>
+                    )}
+                </button>
+            </div>
         </div>
     );
 }
