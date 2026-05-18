@@ -6,8 +6,105 @@ import { publishOrderTested, publishTechLogChanged } from '@/lib/realtime/publis
 import { createStationActivityLog } from '@/lib/station-activity';
 import { mergeSerialsFromTsnRows } from '@/lib/tech/serialFields';
 import { resolveTechSerialInsertContextFromSal } from '@/lib/tech/resolveTechSerialInsertContextFromSal';
+import { isInventoryV2TechLifecycle } from '@/lib/feature-flags';
 
 export type TechSerialInsertDb = Pick<Pool, 'query'>;
+
+/**
+ * Phase 3 helper: tie the just-inserted tech_serial_numbers row to a
+ * serial_units master record and emit an inventory_events row so the
+ * unit's lifecycle timeline reflects the tech scan.
+ *
+ * Reuses the same `db` connection passed to insertTechSerialForTracking
+ * (which may be a Pool or a PoolClient mid-transaction). Best-effort —
+ * any failure is logged and swallowed so the legacy write path remains
+ * authoritative for production behavior until the flag flips on.
+ */
+async function linkTechSerialToInventoryV2(
+  db: TechSerialInsertDb,
+  args: {
+    techSerialNumberId: number | null;
+    upperSerial: string;
+    sku: string | null;
+    staffId: number;
+    shipmentId: number | null;
+    ordersExceptionId: number | null;
+    fbaShipmentId: number | null;
+    fbaShipmentItemId: number | null;
+    serialType: string;
+  },
+): Promise<{ serialUnitId: number | null; inventoryEventId: number | null } | null> {
+  try {
+    // 1. Upsert serial_units by normalized_serial. Fill-in only: never
+    //    downgrade an existing unit's lifecycle state (a unit STOCKED
+    //    from receiving stays STOCKED when tech scans it; the dedicated
+    //    /api/tech/test-result endpoint is what moves IN_TEST/GRADED).
+    const upsert = await db.query(
+      `INSERT INTO serial_units (
+        serial_number, normalized_serial, sku,
+        current_status, origin_source, origin_tsn_id
+      )
+      VALUES ($1, UPPER(TRIM($1)), $2,
+              'UNKNOWN'::serial_status_enum, 'tech.add-serial', $3)
+      ON CONFLICT (normalized_serial) DO UPDATE SET
+        sku = COALESCE(serial_units.sku, EXCLUDED.sku),
+        origin_tsn_id = COALESCE(serial_units.origin_tsn_id, EXCLUDED.origin_tsn_id),
+        updated_at = NOW()
+      RETURNING id`,
+      [args.upperSerial, args.sku, args.techSerialNumberId],
+    );
+    const serialUnitId: number | null = upsert.rows[0]?.id
+      ? Number(upsert.rows[0].id)
+      : null;
+
+    // 2. Stamp the new FK on tech_serial_numbers so historical joins work.
+    if (serialUnitId != null && args.techSerialNumberId != null) {
+      await db.query(
+        `UPDATE tech_serial_numbers
+           SET serial_unit_id = $1
+         WHERE id = $2 AND serial_unit_id IS NULL`,
+        [serialUnitId, args.techSerialNumberId],
+      );
+    }
+
+    // 3. Emit an inventory_events row. 'NOTE' rather than TEST_START so
+    //    we don't imply a state change here — a tech-station add-serial
+    //    can happen for outbound order association without any testing
+    //    intent. Explicit test results go through /api/tech/test-result.
+    const eventInsert = await db.query(
+      `INSERT INTO inventory_events (
+        event_type, actor_staff_id, station,
+        serial_unit_id, sku, scan_token, notes, payload
+      )
+      VALUES ('NOTE', $1, 'TECH', $2, $3, $4, $5, $6::jsonb)
+      RETURNING id`,
+      [
+        args.staffId > 0 ? args.staffId : null,
+        serialUnitId,
+        args.sku,
+        args.upperSerial,
+        `tech.add-serial`,
+        JSON.stringify({
+          source: 'tech.add-serial',
+          serial_type: args.serialType,
+          tech_serial_number_id: args.techSerialNumberId,
+          shipment_id: args.shipmentId,
+          orders_exception_id: args.ordersExceptionId,
+          fba_shipment_id: args.fbaShipmentId,
+          fba_shipment_item_id: args.fbaShipmentItemId,
+        }),
+      ],
+    );
+    const inventoryEventId: number | null = eventInsert.rows[0]?.id
+      ? Number(eventInsert.rows[0].id)
+      : null;
+
+    return { serialUnitId, inventoryEventId };
+  } catch (err) {
+    console.warn('linkTechSerialToInventoryV2 failed (legacy path unaffected):', err);
+    return null;
+  }
+}
 
 export type InsertTechSerialOptions = {
   /** When true, skip invalidate + realtime (caller batches one flush after a transaction). */
@@ -177,6 +274,27 @@ export async function insertTechSerialForTracking(
   const targetTechSerialId: number | null = insertResult.rows[0]?.id
     ? Number(insertResult.rows[0].id)
     : null;
+
+  // Phase 3 (INVENTORY_V2_TECH_LIFECYCLE): link the just-inserted TSN row
+  // to its serial_units master and emit an inventory_events NOTE so the
+  // unit timeline reflects the tech scan. Best-effort — failures don't
+  // affect the legacy write path. Off-flag is a no-op.
+  if (isInventoryV2TechLifecycle()) {
+    // Note: orderResult doesn't select orders.sku to keep the legacy
+    // shape unchanged. The serial_units upsert COALESCEs sku so an
+    // already-known SKU on the master row is preserved.
+    await linkTechSerialToInventoryV2(db, {
+      techSerialNumberId: targetTechSerialId,
+      upperSerial,
+      sku: null,
+      staffId,
+      shipmentId: ctx.shipmentId ?? null,
+      ordersExceptionId: ctx.ordersExceptionId ?? null,
+      fbaShipmentId: ctx.matchedFnskuLog?.fba_shipment_id ?? null,
+      fbaShipmentItemId: ctx.matchedFnskuLog?.fba_shipment_item_id ?? null,
+      serialType,
+    });
+  }
 
   const updatedSerialList = [...allExistingSerials, upperSerial];
 
