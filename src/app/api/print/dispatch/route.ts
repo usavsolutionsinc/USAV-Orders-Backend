@@ -4,6 +4,7 @@ import {
   buildBinZpl,
   buildCartonZpl,
   buildProductZpl,
+  buildUnitZpl,
 } from '@/lib/print/zpl-templates';
 
 /**
@@ -13,6 +14,7 @@ import {
  *   { class: 'carton',  profileId?, payload: CartonLabelInput }
  *   { class: 'product', profileId?, payload: ProductLabelInput }
  *   { class: 'bin',     profileId?, payload: BinLabelInput }
+ *   { class: 'unit',    profileId?, payload: UnitLabelInput }  // Phase 1: Tier-3 GS1 unit labels
  *
  * Resolves a printer profile (explicit profileId → default-for-class →
  * any active profile of the vendor) and sends ZPL via the matching driver.
@@ -22,7 +24,7 @@ import {
  * caller can fall back to the existing browser popup printer.
  */
 
-type LabelClass = 'carton' | 'product' | 'bin';
+type LabelClass = 'carton' | 'product' | 'bin' | 'unit';
 
 interface ProfileRow {
   id: number;
@@ -99,9 +101,9 @@ export async function POST(request: NextRequest) {
   try {
     const body = await request.json().catch(() => ({}));
     const klass = String(body?.class || '').trim() as LabelClass;
-    if (klass !== 'carton' && klass !== 'product' && klass !== 'bin') {
+    if (klass !== 'carton' && klass !== 'product' && klass !== 'bin' && klass !== 'unit') {
       return NextResponse.json(
-        { error: 'class must be carton | product | bin' },
+        { error: 'class must be carton | product | bin | unit' },
         { status: 400 },
       );
     }
@@ -125,6 +127,10 @@ export async function POST(request: NextRequest) {
         case 'bin':
           zpl = buildBinZpl(body.payload);
           title = `Bin ${body.payload?.barcode ?? ''}`;
+          break;
+        case 'unit':
+          zpl = buildUnitZpl(body.payload);
+          title = `Unit ${body.payload?.unitSerial ?? ''}`;
           break;
       }
     } catch (err) {

@@ -126,6 +126,124 @@ export function classifyInput(raw: string): ClassifyResult {
   return { type: 'unknown', carrier: null, normalized: norm };
 }
 
+// ─── GS1 DIGITAL LINK + INTERNAL URL PARSER ──────────────────────────────────
+//
+// Recognizes scans that come in as URLs (printed QR codes on unit/bin/package
+// labels, customer-facing GS1 Digital Link tags, etc.) and resolves them to a
+// typed entity descriptor BEFORE the legacy `classifyInput` cascade.
+//
+// Patterns recognized:
+//   /01/{gtin}/21/{serial}         — GS1 Digital Link (unit-level)
+//   /01/{gtin}/10/{lot}            — GS1 lot (no serial)
+//   /01/{gtin}                     — GS1 product-level
+//   /l/{location_id_or_barcode}    — Internal bin/location
+//   /p/{tracking_number}           — Internal package (carrier tracking)
+//   /o/{order_id}                  — Internal order
+//   /s/{sku}                       — Internal SKU stock page
+//   /q/{anything}                  — Internal generic QR landing
+//
+// Returns null when the input is not a URL or the path prefix is unknown, so
+// callers can fall through to `classifyInput` without any branching cost.
+
+/**
+ * Result of parsing a scanned URL. Discriminated by `type`; never returned
+ * with `type: 'unknown'` — callers check for `null` and proceed to the legacy
+ * pattern classifier.
+ */
+export type ScannedUrlEntity =
+  | { type: 'unit'; gtin: string; unitSerial: string; url: string }
+  | { type: 'gs1_lot'; gtin: string; lot: string; url: string }
+  | { type: 'gs1_product'; gtin: string; url: string }
+  | { type: 'location'; locationRef: string; url: string }
+  | { type: 'package'; trackingNumber: string; url: string }
+  | { type: 'order'; orderId: string; url: string }
+  | { type: 'stock'; sku: string; url: string }
+  | { type: 'generic'; payload: string; url: string };
+
+/**
+ * Parse a scanned URL into a typed entity descriptor. Returns null for
+ * non-URL inputs or unrecognized path shapes — callers should then fall
+ * back to {@link classifyInput}.
+ *
+ * Tolerant of trailing slashes, query strings, and mixed-case schemes. Does
+ * NOT validate GTIN check digits or DB existence; callers do that after
+ * resolving to an entity.
+ */
+export function parseScannedUrl(raw: string): ScannedUrlEntity | null {
+  const trimmed = String(raw ?? '').trim();
+  if (!trimmed) return null;
+
+  // Quick reject for things that obviously aren't URLs. A printed QR may
+  // omit the scheme on some scanners ("inv.example.com/01/...") so accept
+  // either a scheme-prefixed URL or a path-only fragment that starts with
+  // a known prefix.
+  let url: URL;
+  try {
+    url = new URL(trimmed.includes('://') ? trimmed : `https://placeholder.invalid${trimmed.startsWith('/') ? '' : '/'}${trimmed}`);
+  } catch {
+    return null;
+  }
+
+  const segments = url.pathname.split('/').filter(Boolean);
+  if (segments.length === 0) return null;
+
+  // GS1 Digital Link: /01/{gtin}[/21/{serial} | /10/{lot}]
+  if (segments[0] === '01' && segments[1]) {
+    const gtin = segments[1];
+    // /01/{gtin}/21/{serial}
+    if (segments[2] === '21' && segments[3]) {
+      return { type: 'unit', gtin, unitSerial: decodeURIComponent(segments[3]), url: url.toString() };
+    }
+    // /01/{gtin}/10/{lot}
+    if (segments[2] === '10' && segments[3]) {
+      return { type: 'gs1_lot', gtin, lot: decodeURIComponent(segments[3]), url: url.toString() };
+    }
+    // /01/{gtin} — product-level only
+    return { type: 'gs1_product', gtin, url: url.toString() };
+  }
+
+  // Internal short prefixes — single-segment payload.
+  const payload = segments[1] ? decodeURIComponent(segments[1]) : '';
+  switch (segments[0]) {
+    case 'l':
+      return payload ? { type: 'location', locationRef: payload, url: url.toString() } : null;
+    case 'p':
+      return payload ? { type: 'package', trackingNumber: payload, url: url.toString() } : null;
+    case 'o':
+      return payload ? { type: 'order', orderId: payload, url: url.toString() } : null;
+    case 's':
+      return payload ? { type: 'stock', sku: payload, url: url.toString() } : null;
+    case 'q':
+      return payload ? { type: 'generic', payload, url: url.toString() } : null;
+    default:
+      return null;
+  }
+}
+
+/**
+ * Encode a GTIN + unit serial as a GS1 Digital Link URL. Pair with
+ * {@link parseScannedUrl} for roundtrip.
+ *
+ * Origin is the public-facing base URL (e.g. https://inv.example.com).
+ * Falls back to a relative path if origin is empty.
+ */
+export function buildGs1UnitUrl(origin: string, gtin: string, unitSerial: string): string {
+  const path = `/01/${encodeURIComponent(gtin)}/21/${encodeURIComponent(unitSerial)}`;
+  const base = (origin ?? '').trim().replace(/\/+$/, '');
+  return base ? `${base}${path}` : path;
+}
+
+export function buildInternalEntityUrl(
+  origin: string,
+  kind: 'location' | 'package' | 'order' | 'stock' | 'generic',
+  payload: string,
+): string {
+  const prefix = { location: 'l', package: 'p', order: 'o', stock: 's', generic: 'q' }[kind];
+  const path = `/${prefix}/${encodeURIComponent(payload)}`;
+  const base = (origin ?? '').trim().replace(/\/+$/, '');
+  return base ? `${base}${path}` : path;
+}
+
 // ─── SERIAL MATCHER ───────────────────────────────────────────────────────────
 
 /**

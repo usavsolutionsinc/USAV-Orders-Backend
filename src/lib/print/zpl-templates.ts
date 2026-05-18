@@ -73,6 +73,57 @@ export function buildProductZpl(input: ProductLabelInput): string {
     .join('\n');
 }
 
+/**
+ * Per-unit Tier-3 label. Used for serialized refurbished electronics where
+ * the QR encodes a GS1 Digital Link (/01/{gtin}/21/{unitSerial}) — see
+ * src/lib/scan-resolver.ts:buildGs1UnitUrl. Falls back to an internal /q/...
+ * URL when no GTIN is assigned to the SKU.
+ *
+ * Layout (2x1" / 406×203 dots, same stock as carton/product labels):
+ *   ┌─────────────────────────────────┐
+ *   │ {productTitle / sku}            │
+ *   │ Unit: {unitSerial}              │
+ *   │ {intakeDate} · {conditionShort?}│  ┌──────┐
+ *   │                                 │  │ QR   │
+ *   │ {sku barcode 1D}                │  └──────┘
+ *   └─────────────────────────────────┘
+ */
+export interface UnitLabelInput {
+  /** GS1 Digital Link URL (or fallback internal URL) encoded in the QR. */
+  qrPayload: string;
+  /** The human-readable unit serial. Appears under the title. */
+  unitSerial: string;
+  sku: string;
+  productTitle?: string | null;
+  intakeDate?: string | null;
+  /** Short condition label (e.g. "GRADE A", "LIKE NEW"). Optional. */
+  conditionShort?: string | null;
+}
+
+export function buildUnitZpl(input: UnitLabelInput): string {
+  const titleLine = input.productTitle ?? input.sku;
+  const metaParts = [input.intakeDate ?? null, input.conditionShort ?? null]
+    .filter(Boolean)
+    .join(' · ');
+  return [
+    '^XA',
+    '^PW406',
+    '^LL203',
+    '^LH0,0',
+    `^CF0,22^FO10,10^FB246,2,0,L,0^FD${esc(titleLine)}^FS`,
+    `^CF0,18^FO10,58^FDUnit: ${esc(input.unitSerial)}^FS`,
+    metaParts
+      ? `^CF0,14^FO10,84^FD${esc(metaParts)}^FS`
+      : '',
+    `^CF0,14^FO10,108^FDSKU: ${esc(input.sku)}^FS`,
+    `^FO10,130^BCN,55,N,N^FD${esc(input.sku)}^FS`,
+    `^FO260,30^BQN,2,5^FDLA,${esc(input.qrPayload)}^FS`,
+    '^XZ',
+  ]
+    .filter(Boolean)
+    .join('\n');
+}
+
 export interface BinLabelInput {
   qrPayload: string;
   barcode: string;

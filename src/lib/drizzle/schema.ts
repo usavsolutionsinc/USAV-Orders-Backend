@@ -1626,7 +1626,7 @@ export const printerProfiles = pgTable('printer_profiles', {
   name: text('name').notNull(),
   externalId: text('external_id').notNull(),
   vendor: text('vendor').notNull().default('printnode'),
-  /** carton | product | bin | null (generic) */
+  /** carton | product | bin | unit | null (generic). 'unit' added 2026-05-17 Phase 1 for Tier-3 GS1 unit labels. */
   defaultFor: text('default_for'),
   isActive: boolean('is_active').notNull().default(true),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
