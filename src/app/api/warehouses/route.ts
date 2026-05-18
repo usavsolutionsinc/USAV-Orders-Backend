@@ -1,7 +1,8 @@
 import { NextResponse } from 'next/server';
 import { listWarehouses } from '@/lib/warehouses';
+import { withAuth } from '@/lib/auth/withAuth';
 
-export async function GET() {
+export const GET = withAuth(async () => {
   try {
     const rows = await listWarehouses();
     return NextResponse.json({ success: true, warehouses: rows });
@@ -12,4 +13,4 @@ export async function GET() {
       { status: 500 },
     );
   }
-}
+}, { permission: 'sku_stock.view' });

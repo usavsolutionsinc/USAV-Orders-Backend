@@ -1,12 +1,15 @@
 import { NextResponse } from 'next/server';
 import { Pool } from 'pg';
+import { withAuth } from '@/lib/auth/withAuth';
 
 const pool = new Pool({
     connectionString: process.env.DATABASE_URL || 'postgres://localhost:5432/postgres',
     ssl: process.env.DATABASE_URL ? { rejectUnauthorized: false } : false,
 });
 
-export async function GET() {
+// Diagnostic — leaks row counts + sample data from internal tables.
+// Admin-gated (view-only).
+export const GET = withAuth(async () => {
     const client = await pool.connect();
     
     try {
@@ -112,4 +115,4 @@ export async function GET() {
     } finally {
         client.release();
     }
-}
+}, { permission: 'admin.view_logs' });

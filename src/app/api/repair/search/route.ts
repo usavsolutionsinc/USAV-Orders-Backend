@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { searchRepairs } from '@/lib/neon/repair-service-queries';
+import { withAuth } from '@/lib/auth/withAuth';
 
-export async function GET(req: NextRequest) {
+export const GET = withAuth(async (req: NextRequest) => {
     try {
         const { searchParams } = new URL(req.url);
         const query = searchParams.get('q');
@@ -19,9 +20,9 @@ export async function GET(req: NextRequest) {
 
     } catch (error: any) {
         console.error('Error searching repairs:', error);
-        return NextResponse.json({ 
+        return NextResponse.json({
             error: 'Failed to search repairs',
-            details: error.message 
+            details: error.message
         }, { status: 500 });
     }
-}
+}, { permission: 'repair.view' });

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { squareFetch, formatSquareErrors } from '@/lib/square/client';
 import { isAllowedAdminOrigin } from '@/lib/security/allowed-origin';
+import { withAuth } from '@/lib/auth/withAuth';
 
 const REPAIR_SERVICE_CATEGORY_NAME = 'Repair Service';
 
@@ -16,7 +17,7 @@ interface SquareCategory {
  * GET /api/walk-in/categories
  * Fetch Square catalog categories, excluding Repair Service.
  */
-export async function GET(req: NextRequest) {
+export const GET = withAuth(async (req: NextRequest) => {
   try {
     if (!isAllowedAdminOrigin(req)) {
       return NextResponse.json({ error: 'Origin not allowed' }, { status: 403 });
@@ -49,4 +50,4 @@ export async function GET(req: NextRequest) {
       { status: 500 },
     );
   }
-}
+}, { permission: 'walk_in.view' });

@@ -2,7 +2,7 @@
 
 import { Suspense, useCallback, useEffect, useMemo, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { usePersistedStaffId } from '@/hooks/usePersistedStaffId';
+import { useAuth } from '@/contexts/AuthContext';
 import { workflowStatusTableLabel } from '@/components/station/receiving-constants';
 
 // ─── Types ──────────────────────────────────────────────────────────────────
@@ -161,7 +161,9 @@ function CartonPageInner() {
   const router = useRouter();
   const params = useParams<{ id: string }>();
   const receivingId = Number(params?.id);
-  const [staffId] = usePersistedStaffId();
+  // Identity from the verified session cookie.
+  const { user } = useAuth();
+  const staffId = user?.staffId ?? 0;
 
   const [data, setData] = useState<FullCarton | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -319,7 +321,7 @@ function CartonPageInner() {
                   <button
                     key={line.id}
                     type="button"
-                    onClick={() => router.push(`/m/l/${line.id}?staffId=${staffId}`)}
+                    onClick={() => router.push(`/m/l/${line.id}`)}
                     className="block w-full text-left rounded-lg border border-slate-200 bg-white px-4 py-3 shadow-sm active:bg-slate-50"
                   >
                     <div className="flex items-start justify-between gap-3">

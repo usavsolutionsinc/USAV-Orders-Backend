@@ -1,14 +1,17 @@
 import { NextRequest, NextResponse } from 'next/server';
 import pool from '@/lib/db';
+import { requireRoutePerm } from '@/lib/auth/dynamic-route-guard';
 
 type Params = Promise<{ fnsku: string }>;
 
 // ── GET /api/admin/fba-fnskus/[fnsku] ────────────────────────────────────────
 // Returns a single FNSKU record.
 export async function GET(
-  _request: NextRequest,
+  request: NextRequest,
   { params }: { params: Params }
 ) {
+  const gate = await requireRoutePerm(request, 'fba.view');
+  if (gate.denied) return gate.denied;
   try {
     const { fnsku } = await params;
     const normalizedFnsku = String(fnsku || '').trim().toUpperCase();
@@ -44,6 +47,8 @@ export async function PATCH(
   request: NextRequest,
   { params }: { params: Params }
 ) {
+  const gate = await requireRoutePerm(request, 'fba.manage_fnskus');
+  if (gate.denied) return gate.denied;
   try {
     const { fnsku } = await params;
     const normalizedFnsku = String(fnsku || '').trim().toUpperCase();
@@ -101,9 +106,11 @@ export async function PATCH(
 // Hard delete is intentionally blocked because fba_shipment_items and
 // fba_fnsku_logs reference this table via FK.
 export async function DELETE(
-  _request: NextRequest,
+  request: NextRequest,
   { params }: { params: Params }
 ) {
+  const gate = await requireRoutePerm(request, 'fba.manage_fnskus');
+  if (gate.denied) return gate.denied;
   try {
     const { fnsku } = await params;
     const normalizedFnsku = String(fnsku || '').trim().toUpperCase();

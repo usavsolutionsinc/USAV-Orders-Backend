@@ -8,6 +8,7 @@ import { searchPurchaseOrdersByTracking, searchPurchaseReceivesByTracking } from
 import { importZohoPurchaseOrderToReceiving } from '@/lib/zoho-receiving-sync';
 import { getReceivingSchema } from '@/lib/receiving-schema-cache';
 import { registerShipmentPermissive } from '@/lib/shipping/sync-shipment';
+import { withAuth } from '@/lib/auth/withAuth';
 
 /**
  * Compute Mon–Fri week range (PST date strings) for a given PST timestamp string
@@ -30,7 +31,7 @@ function getPSTWeekRange(pstTimestamp: string): { startStr: string; endStr: stri
 }
 
 // POST - Add entry to receiving table
-export async function POST(request: NextRequest) {
+export const POST = withAuth(async (request: NextRequest) => {
     try {
         const body = await request.json();
         const { trackingNumber, carrier: providedCarrier } = body;
@@ -295,10 +296,10 @@ export async function POST(request: NextRequest) {
             details: error instanceof Error ? error.message : 'Unknown error'
         }, { status: 500 });
     }
-}
+}, { permission: 'receiving.scan_po' });
 
 // GET - Fetch all receiving logs
-export async function GET(req: NextRequest) {
+export const GET = withAuth(async (req: NextRequest) => {
     const { searchParams } = new URL(req.url);
     const limit = parseInt(searchParams.get('limit') || '50');
     const offset = parseInt(searchParams.get('offset') || '0');
@@ -330,9 +331,9 @@ export async function GET(req: NextRequest) {
         return NextResponse.json(result.rows, { headers: { 'x-cache': 'MISS' } });
     } catch (error) {
         console.error('Error fetching receiving logs:', error);
-        return NextResponse.json({ 
+        return NextResponse.json({
             error: 'Failed to fetch receiving logs',
             details: error instanceof Error ? error.message : 'Unknown error'
         }, { status: 500 });
     }
-}
+}, { permission: 'receiving.view' });

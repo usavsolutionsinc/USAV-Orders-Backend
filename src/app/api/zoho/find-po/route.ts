@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { searchPurchaseOrdersByTracking } from '@/lib/zoho';
+import { withAuth } from '@/lib/auth/withAuth';
 
 // Tracking-only PO lookup. Read-only: no local writes, no side effects.
 // PO#-based search is deferred to a future update.
@@ -10,7 +11,7 @@ import { searchPurchaseOrdersByTracking } from '@/lib/zoho';
 //
 // When multiple POs match the same reference/search, `purchase_order` is the
 // first hit and `candidates` carries the full list so the caller can disambiguate.
-export async function POST(request: NextRequest) {
+export const POST = withAuth(async (request: NextRequest) => {
   try {
     const body = await request.json().catch(() => ({}));
     const trackingNumber = String(body?.trackingNumber || body?.tracking_number || '').trim();
@@ -49,4 +50,4 @@ export async function POST(request: NextRequest) {
     console.error('zoho/find-po POST failed:', error);
     return NextResponse.json({ success: false, error: message }, { status: 500 });
   }
-}
+}, { permission: 'receiving.scan_po' });

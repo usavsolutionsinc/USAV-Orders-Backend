@@ -2,16 +2,19 @@ import { NextRequest, NextResponse } from 'next/server';
 import pool from '@/lib/db';
 import { publishFbaItemChanged } from '@/lib/realtime/publish';
 import { invalidateCacheTags } from '@/lib/cache/upstash-cache';
+import { requireRoutePerm, recordRouteAudit } from '@/lib/auth/dynamic-route-guard';
 
 type Params = Promise<{ id: string }>;
 
 // ── GET /api/fba/logs/[id] ────────────────────────────────────────────────────
 // Returns a single fba_fnsku_log row with joined metadata.
 export async function GET(
-  _request: NextRequest,
+  request: NextRequest,
   { params }: { params: Params }
 ) {
   try {
+    const gate = await requireRoutePerm(request, 'fba.view');
+    if (gate.denied) return gate.denied;
     const { id } = await params;
     const logId = Number(id);
     if (!Number.isFinite(logId) || logId < 1) {
@@ -70,6 +73,8 @@ export async function DELETE(
 ) {
   const client = await pool.connect();
   try {
+    const gate = await requireRoutePerm(request, 'fba.stage_shipments');
+    if (gate.denied) return gate.denied;
     const { id } = await params;
     const logId = Number(id);
     if (!Number.isFinite(logId) || logId < 1) {
@@ -77,7 +82,7 @@ export async function DELETE(
     }
 
     const { searchParams } = new URL(request.url);
-    const staffId = searchParams.get('staff_id') ? Number(searchParams.get('staff_id')) : null;
+    const staffId = gate.ctx.staffId;
     const reason = searchParams.get('reason') ? String(searchParams.get('reason')).trim() : null;
 
     if (!staffId || !Number.isFinite(staffId)) {
@@ -152,12 +157,20 @@ export async function DELETE(
     await invalidateCacheTags(['fba-logs']);
     await publishFbaItemChanged({ action: 'delete', shipmentId: 0, source: 'fba.logs.void' });
 
-    return NextResponse.json({
+    const response = NextResponse.json({
       success: true,
       message: `Log #${logId} has been voided`,
       void_log: voidRes.rows[0],
       voided_by: staffCheck.rows[0].name,
     });
+    await recordRouteAudit(request, gate.ctx, response, {
+      source: 'fba.logs.void',
+      action: 'fba.log.void',
+      entityType: 'fba_fnsku_log',
+      entityId: () => logId,
+      extra: () => ({ reason }),
+    });
+    return response;
   } catch (error: any) {
     await client.query('ROLLBACK');
     console.error('[DELETE /api/fba/logs/[id]]', error);

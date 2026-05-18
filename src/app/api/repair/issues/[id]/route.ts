@@ -1,11 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { updateIssueTemplate, deleteIssueTemplate } from '@/lib/neon/repair-issue-queries';
+import { requireRoutePerm } from '@/lib/auth/dynamic-route-guard';
 
 export async function PUT(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
   try {
+    const gate = await requireRoutePerm(req, 'repair.intake');
+    if (gate.denied) return gate.denied;
     const { id: rawId } = await params;
     const id = Number(rawId);
 
@@ -36,10 +39,12 @@ export async function PUT(
 }
 
 export async function DELETE(
-  _req: NextRequest,
+  req: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
   try {
+    const gate = await requireRoutePerm(req, 'repair.intake');
+    if (gate.denied) return gate.denied;
     const { id: rawId } = await params;
     const id = Number(rawId);
 

@@ -1,12 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server';
 import pool from '@/lib/db';
 import { invalidateCacheTags } from '@/lib/cache/upstash-cache';
+import { withAuth } from '@/lib/auth/withAuth';
 
 /**
  * POST /api/orders-exceptions/delete - Delete one or more exception rows
  * Body: { exceptionId?: number, exceptionIds?: number[] }
+ *
+ * Destructive — gated to orders.void + stepUp.
  */
-export async function POST(req: NextRequest) {
+export const POST = withAuth(async (req: NextRequest) => {
   try {
     const body = await req.json();
     const { exceptionId, exceptionIds } = body;
@@ -35,4 +38,4 @@ export async function POST(req: NextRequest) {
       { status: 500 }
     );
   }
-}
+}, { permission: 'orders.void' });

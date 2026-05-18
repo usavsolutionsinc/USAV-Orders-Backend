@@ -3,6 +3,8 @@ import pool from '@/lib/db';
 import { invalidateCacheTags } from '@/lib/cache/upstash-cache';
 import { publishReceivingLogChanged } from '@/lib/realtime/publish';
 import { syncTsnToSerialUnit } from '@/lib/neon/serial-units-queries';
+import { withAuth } from '@/lib/auth/withAuth';
+import { AUDIT_ACTION, AUDIT_ENTITY } from '@/lib/audit-logs';
 
 type SerialRow = {
   id: number;
@@ -32,7 +34,7 @@ function normalizeRow(row: SerialRow) {
   };
 }
 
-export async function GET(request: NextRequest) {
+export const GET = withAuth(async (request: NextRequest) => {
   try {
     const { searchParams } = new URL(request.url);
     const receivingLineId = Number(searchParams.get('receiving_line_id'));
@@ -64,16 +66,16 @@ export async function GET(request: NextRequest) {
     console.error('receiving/serials GET failed:', error);
     return NextResponse.json({ success: false, error: message }, { status: 500 });
   }
-}
+}, { permission: 'receiving.view' });
 
-export async function POST(request: NextRequest) {
+export const POST = withAuth(async (request: NextRequest, ctx) => {
   try {
     const body = await request.json();
     const receivingLineId = Number(body?.receiving_line_id);
     const serialNumber = normalizeSerial(body?.serial_number ?? body?.serial);
     const serialType = String(body?.serial_type || 'SERIAL').trim().toUpperCase() || 'SERIAL';
-    const testedByRaw = Number(body?.tested_by ?? body?.staff_id);
-    const testedBy = Number.isFinite(testedByRaw) && testedByRaw > 0 ? testedByRaw : null;
+    // Server-trusted actor from the verified session cookie.
+    const testedBy = ctx.staffId;
 
     if (!Number.isFinite(receivingLineId) || receivingLineId <= 0) {
       return NextResponse.json(
@@ -155,9 +157,20 @@ export async function POST(request: NextRequest) {
     console.error('receiving/serials POST failed:', error);
     return NextResponse.json({ success: false, error: message }, { status: 500 });
   }
-}
+}, {
+  permission: 'receiving.mark_received',
+  audit: {
+    source: 'receiving.serials.create',
+    action: AUDIT_ACTION.SERIAL_CREATE,
+    entityType: AUDIT_ENTITY.TECH_SERIAL,
+    entityId: ({ response }) => {
+      const r = response as { serial?: { id?: number | string } } | null;
+      return r?.serial?.id ?? null;
+    },
+  },
+});
 
-export async function DELETE(request: NextRequest) {
+export const DELETE = withAuth(async (request: NextRequest) => {
   try {
     const { searchParams } = new URL(request.url);
     const id = Number(searchParams.get('id'));
@@ -204,4 +217,12 @@ export async function DELETE(request: NextRequest) {
     console.error('receiving/serials DELETE failed:', error);
     return NextResponse.json({ success: false, error: message }, { status: 500 });
   }
-}
+}, {
+  permission: 'receiving.mark_received',
+  audit: {
+    source: 'receiving.serials.delete',
+    action: AUDIT_ACTION.SERIAL_DELETE,
+    entityType: AUDIT_ENTITY.TECH_SERIAL,
+    entityId: ({ response }) => (response as { id?: number | string } | null)?.id ?? null,
+  },
+});

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { classifyInput, parseScannedUrl } from '@/lib/scan-resolver';
 import type { ScannedUrlEntity } from '@/lib/scan-resolver';
 import { queryOne } from '@/lib/neon-client';
+import { withAuth } from '@/lib/auth/withAuth';
 
 /**
  * GET|POST /api/scan/resolve
@@ -189,15 +190,15 @@ async function resolve(input: string): Promise<ResolveSuccess> {
   };
 }
 
-export async function GET(request: NextRequest) {
+export const GET = withAuth(async (request: NextRequest) => {
   const input = request.nextUrl.searchParams.get('input') ?? '';
   const result = await resolve(input);
   return NextResponse.json(result);
-}
+}, { permission: 'sku_stock.view' });
 
-export async function POST(request: NextRequest) {
+export const POST = withAuth(async (request: NextRequest) => {
   const body = await request.json().catch(() => ({}));
   const input = typeof body?.input === 'string' ? body.input : '';
   const result = await resolve(input);
   return NextResponse.json(result);
-}
+}, { permission: 'sku_stock.view' });

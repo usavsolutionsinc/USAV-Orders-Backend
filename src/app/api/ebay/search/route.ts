@@ -1,5 +1,6 @@
 import { NextResponse, NextRequest } from 'next/server';
 import pool from '@/lib/db';
+import { withAuth } from '@/lib/auth/withAuth';
 
 /**
  * GET /api/ebay/search
@@ -11,7 +12,7 @@ import pool from '@/lib/db';
  * - limit: Max results to return (default 50)
  * - status: Filter by order status
  */
-export async function GET(req: NextRequest) {
+export const GET = withAuth(async (req: NextRequest) => {
   try {
     const { searchParams } = new URL(req.url);
     const query = searchParams.get('q') || '';
@@ -98,4 +99,4 @@ export async function GET(req: NextRequest) {
       { status: 500 }
     );
   }
-}
+}, { permission: 'orders.view' });

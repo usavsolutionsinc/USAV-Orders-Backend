@@ -5,6 +5,7 @@ export interface Staff {
   employee_id: string | null;
   active: boolean;
   color_hex: string;
+  default_home_path: string | null;
   created_at?: string | null;
 }
 

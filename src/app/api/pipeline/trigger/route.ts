@@ -11,10 +11,11 @@
 import { NextResponse } from 'next/server';
 import { discoverTasks } from '@/lib/pipeline/discover';
 import { REPO_PATH } from '@/lib/pipeline/config';
+import { withAuth } from '@/lib/auth/withAuth';
 
 export const runtime = 'nodejs';
 
-export async function POST() {
+export const POST = withAuth(async () => {
   try {
     const tasks = await discoverTasks(REPO_PATH);
 
@@ -34,4 +35,4 @@ export async function POST() {
     const message = error instanceof Error ? error.message : String(error);
     return NextResponse.json({ ok: false, error: message }, { status: 500 });
   }
-}
+}, { permission: 'admin.manage_features' });

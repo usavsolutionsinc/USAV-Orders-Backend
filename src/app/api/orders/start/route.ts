@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import pool from '@/lib/db';
+import { withAuth } from '@/lib/auth/withAuth';
 
 /**
  * POST /api/orders/start - DEPRECATED
@@ -10,13 +11,14 @@ import pool from '@/lib/db';
  * Techs are now implicitly assigned when they scan a tracking number.
  * Assignment is tracked in tech_serial_numbers.tester_id.
  */
-export async function POST(req: NextRequest) {
+export const POST = withAuth(async (req: NextRequest, ctx) => {
   try {
-    const { orderId, techId } = await req.json();
+    const { orderId } = await req.json();
+    const techId = ctx.staffId;
 
-    if (!orderId || !techId) {
+    if (!orderId) {
       return NextResponse.json(
-        { error: 'orderId and techId are required' },
+        { error: 'orderId is required' },
         { status: 400 }
       );
     }
@@ -35,4 +37,4 @@ export async function POST(req: NextRequest) {
       { status: 500 }
     );
   }
-}
+}, { permission: 'tech.scan_serial' });

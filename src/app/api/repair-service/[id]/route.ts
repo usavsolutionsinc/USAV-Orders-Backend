@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getRepairById } from '@/lib/neon/repair-service-queries';
+import { requireRoutePerm } from '@/lib/auth/dynamic-route-guard';
 
 /**
  * GET /api/rs/[id] - Fetch single repair by ID
@@ -9,6 +10,8 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const gate = await requireRoutePerm(req, 'repair.view');
+    if (gate.denied) return gate.denied;
     const { id } = await params;
     const repairId = parseInt(id);
 

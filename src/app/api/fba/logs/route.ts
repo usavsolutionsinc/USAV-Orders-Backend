@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import pool from '@/lib/db';
 import { publishFbaItemChanged } from '@/lib/realtime/publish';
 import { invalidateCacheTags } from '@/lib/cache/upstash-cache';
+import { withAuth } from '@/lib/auth/withAuth';
 
 const VALID_STAGES = ['TECH', 'PACK', 'SHIP', 'ADMIN'] as const;
 const VALID_EVENTS = ['SCANNED', 'READY', 'VERIFIED', 'BOXED', 'ASSIGNED', 'SHIPPED', 'UNASSIGNED', 'VOID'] as const;
@@ -13,7 +14,7 @@ type EventType = (typeof VALID_EVENTS)[number];
 // List fba_fnsku_logs with optional filters.
 // Query params: fnsku, source_stage, event_type, staff_id, fba_shipment_id,
 //               from (ISO date), to (ISO date), limit, offset
-export async function GET(request: NextRequest) {
+export const GET = withAuth(async (request: NextRequest) => {
   try {
     const { searchParams } = new URL(request.url);
 
@@ -106,15 +107,16 @@ export async function GET(request: NextRequest) {
       { status: 500 }
     );
   }
-}
+}, { permission: 'fba.view' });
 
 // ── POST /api/fba/logs ────────────────────────────────────────────────────────
 // Manually insert an fba_fnsku_log entry.
 // Useful for admin corrections, tech-station scans, and testing.
-// Body: { fnsku, source_stage, event_type, staff_id,
+// Body: { fnsku, source_stage, event_type,
 //         fba_shipment_id?, fba_shipment_item_id?, tech_serial_number_id?,
 //         quantity?, station?, notes?, metadata? }
-export async function POST(request: NextRequest) {
+// Actor is from the verified session.
+export const POST = withAuth(async (request: NextRequest, ctx) => {
   const client = await pool.connect();
   try {
     const body = await request.json();
@@ -122,7 +124,7 @@ export async function POST(request: NextRequest) {
     const fnsku = String(body?.fnsku || '').trim().toUpperCase();
     const sourceStage = String(body?.source_stage || '').trim().toUpperCase() as SourceStage;
     const eventType = String(body?.event_type || '').trim().toUpperCase() as EventType;
-    const staffId = body?.staff_id ? Number(body.staff_id) : null;
+    const staffId = ctx.staffId;
 
     if (!fnsku) {
       return NextResponse.json({ success: false, error: 'fnsku is required' }, { status: 400 });
@@ -138,9 +140,6 @@ export async function POST(request: NextRequest) {
         { success: false, error: `event_type must be one of: ${VALID_EVENTS.join(', ')}` },
         { status: 400 }
       );
-    }
-    if (!staffId || !Number.isFinite(staffId)) {
-      return NextResponse.json({ success: false, error: 'staff_id is required' }, { status: 400 });
     }
 
     await client.query('BEGIN');
@@ -218,4 +217,23 @@ export async function POST(request: NextRequest) {
   } finally {
     client.release();
   }
-}
+}, {
+  permission: 'fba.stage_shipments',
+  audit: {
+    source: 'fba.logs.create',
+    action: 'fba.log.create',
+    entityType: 'fba_fnsku_log',
+    entityId: ({ response }) => {
+      const r = response as { log?: { id?: number } } | null;
+      return r?.log?.id ?? null;
+    },
+    extra: ({ body }) => {
+      const b = body as { fnsku?: string; event_type?: string; source_stage?: string } | null;
+      return {
+        fnsku: b?.fnsku ?? null,
+        event_type: b?.event_type ?? null,
+        source_stage: b?.source_stage ?? null,
+      };
+    },
+  },
+});

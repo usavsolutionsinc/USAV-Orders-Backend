@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import pool from '@/lib/db';
+import { withAuth } from '@/lib/auth/withAuth';
 
 /**
  * POST /api/sku-catalog/pair
@@ -14,7 +15,7 @@ import pool from '@/lib/db';
  * Removes a platform pairing.
  * Body: { platformIdRowId }
  */
-export async function POST(req: NextRequest) {
+export const POST = withAuth(async (req: NextRequest) => {
   try {
     const body = await req.json();
     const skuCatalogId = Number(body.skuCatalogId);
@@ -88,9 +89,9 @@ export async function POST(req: NextRequest) {
       { status: 500 },
     );
   }
-}
+}, { permission: 'sku_stock.manage' });
 
-export async function DELETE(req: NextRequest) {
+export const DELETE = withAuth(async (req: NextRequest) => {
   try {
     const body = await req.json();
     const platformIdRowId = Number(body.platformIdRowId);
@@ -115,4 +116,4 @@ export async function DELETE(req: NextRequest) {
       { status: 500 },
     );
   }
-}
+}, { permission: 'sku_stock.manage' });

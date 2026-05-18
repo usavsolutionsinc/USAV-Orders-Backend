@@ -24,6 +24,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { syncZohoPurchaseOrdersToReceiving } from '@/lib/zoho-po-sync';
 import { enqueueQStashJson, getQStashResultIdentifier } from '@/lib/qstash';
+import { withAuth } from '@/lib/auth/withAuth';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 300;
@@ -57,7 +58,7 @@ async function runZohoPurchaseOrdersSync(body: Record<string, unknown> = {}) {
   };
 }
 
-export async function POST(request: NextRequest) {
+export const POST = withAuth(async (request: NextRequest) => {
   try {
     const body = (await request.json().catch(() => ({}))) as Record<string, unknown>;
     if (body?.enqueue === true) {
@@ -81,4 +82,4 @@ export async function POST(request: NextRequest) {
     console.error('[purchase-orders/sync] Error:', error);
     return NextResponse.json({ success: false, error: message }, { status: 500 });
   }
-}
+}, { permission: 'integrations.zoho' });

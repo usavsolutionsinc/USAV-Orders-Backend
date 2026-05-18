@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { put } from '@vercel/blob';
 import pool from '@/lib/db';
+import { requireRoutePerm } from '@/lib/auth/dynamic-route-guard';
 
 /**
  * GET  /api/sku/[id]/photos        — list integrity photos for a SKU record
@@ -8,9 +9,11 @@ import pool from '@/lib/db';
  */
 
 export async function GET(
-  _req: NextRequest,
+  request: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
+  const gate = await requireRoutePerm(request, 'sku_stock.view');
+  if (gate.denied) return gate.denied;
   const { id } = await params;
   const skuId = Number(id);
   if (!Number.isFinite(skuId) || skuId <= 0) {
@@ -46,6 +49,8 @@ export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
+  const gate = await requireRoutePerm(request, 'receiving.upload_photo');
+  if (gate.denied) return gate.denied;
   const { id } = await params;
   const skuId = Number(id);
   if (!Number.isFinite(skuId) || skuId <= 0) {
@@ -57,7 +62,8 @@ export async function POST(
     const photoBase64: string | undefined = body?.photoBase64;
     const photoUrl: string | undefined = body?.photoUrl;
     const photoType = String(body?.photoType || '').trim() || null;
-    const takenByStaffId = body?.takenByStaffId ? Number(body.takenByStaffId) : null;
+    // Server-trusted actor — body.takenByStaffId is ignored.
+    const takenByStaffId = gate.ctx.staffId;
 
     if (!photoBase64 && !photoUrl) {
       return NextResponse.json(

@@ -4,6 +4,7 @@ import { invalidateCacheTags } from '@/lib/cache/upstash-cache';
 import { isTransientDbError, queryWithRetry } from '@/lib/db-retry';
 import { publishStaffScheduleChanged } from '@/lib/realtime/publish';
 import { getStaffAvailabilityDecision, isMissingAvailabilityRulesTable } from '@/lib/staff-availability-rules';
+import { withAuth } from '@/lib/auth/withAuth';
 
 interface BulkUpdateItem {
   staffId: number;
@@ -39,7 +40,7 @@ function isValidIsoDate(value: string | null | undefined): value is string {
   return typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value);
 }
 
-export async function POST(request: NextRequest) {
+export const POST = withAuth(async (request: NextRequest) => {
   try {
     const body = await request.json();
     const updatesRaw = Array.isArray(body?.updates) ? body.updates : [];
@@ -171,4 +172,4 @@ export async function POST(request: NextRequest) {
       details: error instanceof Error ? error.message : 'Unknown error',
     }, { status: 500 });
   }
-}
+}, { permission: 'admin.manage_staff' });

@@ -5,6 +5,7 @@ import {
   PermissionDeniedError,
   permissionDeniedResponse,
 } from '@/lib/auth/permissions';
+import { withAuth } from '@/lib/auth/withAuth';
 
 /**
  * GET /api/cycle-counts/campaigns?status=open
@@ -18,7 +19,7 @@ import {
  *   scope.minAgeDays?: number    — only count rows not counted in N days
  */
 
-export async function GET(request: NextRequest) {
+export const GET = withAuth(async (request: NextRequest) => {
   try {
     const { searchParams } = new URL(request.url);
     const status = searchParams.get('status');
@@ -53,9 +54,9 @@ export async function GET(request: NextRequest) {
       { status: 500 },
     );
   }
-}
+}, { permission: 'cycle_count.view' });
 
-export async function POST(request: NextRequest) {
+export const POST = withAuth(async (request: NextRequest) => {
   try {
     const body = await request.json().catch(() => ({}));
     const name = String(body?.name || '').trim();
@@ -163,4 +164,4 @@ export async function POST(request: NextRequest) {
       { status: 500 },
     );
   }
-}
+}, { permission: 'cycle_count.view' });

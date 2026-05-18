@@ -95,14 +95,17 @@ export function useUpNextData({ techId, onAllCompleted }: UseUpNextDataOptions) 
 
   const fetchOrders = async () => {
     try {
+      // Server derives identity from the session cookie. parsedTechId guards
+      // the "no signed-in tech yet" case (initial render before AuthContext
+      // hydrates) so we don't pre-fetch.
       const repairRequest =
         parsedTechId === null
           ? Promise.resolve(null)
-          : fetch(`/api/repair-service/next?techId=${parsedTechId}`);
+          : fetch(`/api/repair-service/next`);
       const ordersRequest =
         parsedTechId === null
           ? Promise.resolve(null)
-          : fetch(`/api/orders/next?techId=${parsedTechId}&all=true&outOfStock=false`);
+          : fetch(`/api/orders/next?all=true&outOfStock=false`);
 
       const [ordersRes, repairRes] = await Promise.all([
         ordersRequest,

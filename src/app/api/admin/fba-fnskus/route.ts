@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import pool from '@/lib/db';
+import { withAuth } from '@/lib/auth/withAuth';
 
-export async function GET(req: NextRequest) {
+export const GET = withAuth(async (req: NextRequest) => {
   try {
     const { searchParams } = new URL(req.url);
     const q = String(searchParams.get('q') || '').trim();
@@ -54,9 +55,9 @@ export async function GET(req: NextRequest) {
     console.error('Failed to fetch fba_fnskus rows:', error);
     return NextResponse.json({ error: 'Failed to fetch fba_fnskus rows' }, { status: 500 });
   }
-}
+}, { permission: 'fba.view' });
 
-export async function POST(req: NextRequest) {
+export const POST = withAuth(async (req: NextRequest) => {
   try {
     const body = await req.json();
     const productTitle = String(body?.product_title || '').trim();
@@ -88,4 +89,4 @@ export async function POST(req: NextRequest) {
     console.error('Failed to create fba_fnskus row:', error);
     return NextResponse.json({ error: 'Failed to create fba_fnskus row' }, { status: 500 });
   }
-}
+}, { permission: 'fba.manage_fnskus' });

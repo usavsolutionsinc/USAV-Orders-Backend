@@ -19,7 +19,7 @@ export function TechPageContent({ techId }: TechPageContentProps) {
 
   return (
     <RouteShell
-      actions={<TechSidebarPanel techId={techId} contextNavTitle="Technicians" />}
+      actions={<TechSidebarPanel techId={techId} contextNavTitle="Testing" />}
       history={<TechDashboard techId={techId} />}
     />
   );

@@ -36,8 +36,9 @@ export async function GET(request: NextRequest) {
                 employee_id: string | null;
                 active: boolean;
                 color_hex: string;
+                default_home_path: string | null;
             }>(
-                `SELECT id, name, role, employee_id, active, color_hex
+                `SELECT id, name, role, employee_id, active, color_hex, default_home_path
                  FROM staff WHERE id = $1 LIMIT 1`,
                 [numId],
             );
@@ -132,7 +133,7 @@ export async function GET(request: NextRequest) {
         }
 
         const sql = `
-          SELECT s.id, s.name, s.role, s.employee_id, s.active, s.color_hex, s.created_at
+          SELECT s.id, s.name, s.role, s.employee_id, s.active, s.color_hex, s.default_home_path, s.created_at
           ${scheduledTodaySelect}
           FROM staff s
           ${scheduleJoin}
@@ -174,7 +175,7 @@ export async function GET(request: NextRequest) {
             }
 
             const fallbackSql = `
-              SELECT s.id, s.name, s.role, s.employee_id, s.active, s.color_hex, s.created_at
+              SELECT s.id, s.name, s.role, s.employee_id, s.active, s.color_hex, s.default_home_path, s.created_at
               FROM staff s
               ${fallbackConditions.length > 0 ? `WHERE ${fallbackConditions.join(' AND ')}` : ''}
               ORDER BY s.role ASC, s.name ASC
@@ -248,7 +249,7 @@ export async function POST(request: NextRequest) {
 export async function PUT(request: NextRequest) {
     try {
         const body = await request.json();
-        const { id, name, role, employee_id, active, color_hex } = body;
+        const { id, name, role, employee_id, active, color_hex, default_home_path } = body;
 
         if (!id) {
             return NextResponse.json({ error: 'id is required' }, { status: 400 });
@@ -269,6 +270,15 @@ export async function PUT(request: NextRequest) {
                 return NextResponse.json({ error: 'color_hex must be a #RRGGBB hex string' }, { status: 400 });
             }
             updateData.colorHex = color_hex.toLowerCase();
+        }
+        if (default_home_path !== undefined) {
+            if (default_home_path === null || default_home_path === '') {
+                updateData.defaultHomePath = null;
+            } else if (typeof default_home_path === 'string' && default_home_path.startsWith('/') && default_home_path.length < 200) {
+                updateData.defaultHomePath = default_home_path;
+            } else {
+                return NextResponse.json({ error: 'default_home_path must start with "/" or be null' }, { status: 400 });
+            }
         }
 
         const [result] = await db

@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { withAuth } from '@/lib/auth/withAuth';
 
 const ECWID_BASE_URL = 'https://app.ecwid.com/api/v3';
 const ECWID_PAGE_LIMIT = 100;
@@ -20,7 +21,7 @@ interface RepairCategoryNode {
   fullPath: string;
 }
 
-export async function GET(req: NextRequest) {
+export const GET = withAuth(async (req: NextRequest) => {
   try {
     const storeId = requiredEnvAny('ECWID_STORE_ID', ['ECWID_STOREID', 'ECWID_STORE', 'NEXT_PUBLIC_ECWID_STORE_ID']);
     const token = requiredEnvAny('ECWID_API_TOKEN', ['ECWID_TOKEN', 'ECWID_ACCESS_TOKEN', 'NEXT_PUBLIC_ECWID_API_TOKEN']);
@@ -84,7 +85,7 @@ export async function GET(req: NextRequest) {
     console.error('Ecwid repair categories error:', error);
     return NextResponse.json({ success: false, error: message }, { status: 500 });
   }
-}
+}, { permission: 'repair.intake' });
 
 function getLevelCategories(params: {
   currentParentId: string | null;

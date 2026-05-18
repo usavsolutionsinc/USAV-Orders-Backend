@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import pool from '@/lib/db';
+import { withAuth } from '@/lib/auth/withAuth';
 
-export async function GET(req: NextRequest) {
+export const GET = withAuth(async (req: NextRequest) => {
     const { searchParams } = new URL(req.url);
     const tracking = searchParams.get('tracking');
 
@@ -48,4 +49,4 @@ export async function GET(req: NextRequest) {
         console.error('Error searching tracking:', error);
         return NextResponse.json({ error: 'Failed to search tracking', details: error.message }, { status: 500 });
     }
-}
+}, { permission: 'tech.view' });

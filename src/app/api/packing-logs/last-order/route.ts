@@ -1,20 +1,17 @@
 import { NextRequest, NextResponse } from 'next/server';
 import pool from '@/lib/db';
-import { getCurrentUser } from '@/lib/auth/current-user';
+import { withAuth } from '@/lib/auth/withAuth';
 
 /**
  * GET /api/packing-logs/last-order
  *
  * Returns the most recently packed order for the signed-in staff member,
  * including order details and associated photos. Auth comes from the
- * `usav_sid` cookie.
+ * `usav_sid` cookie via withAuth.
  */
-export async function GET(_req: NextRequest) {
+export const GET = withAuth(async (_req: NextRequest, ctx) => {
   try {
-    const user = await getCurrentUser();
-    if (!user) {
-      return NextResponse.json({ lastOrder: null });
-    }
+    const user = ctx.user;
 
     const result = await pool.query(
       `SELECT
@@ -81,4 +78,4 @@ export async function GET(_req: NextRequest) {
       { status: 500 },
     );
   }
-}
+}, { permission: 'packing.view' });

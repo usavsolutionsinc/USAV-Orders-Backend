@@ -6,6 +6,7 @@ import { resolveStaffIdFromTechParam } from '@/lib/tech/resolveStaffIdFromTechPa
 import { appendRepairStatusHistory, getRepairById } from '@/lib/neon/repair-service-queries';
 import { invalidateCacheTags } from '@/lib/cache/upstash-cache';
 import { publishRepairChanged } from '@/lib/realtime/publish';
+import { withAuth } from '@/lib/auth/withAuth';
 
 const ROUTE = 'tech.scan-repair-station';
 const REPAIR_TAGS = ['repair-service'];
@@ -17,7 +18,7 @@ function parseRepairId(repairScan: string): number | null {
   return Number.isFinite(n) && n > 0 ? n : null;
 }
 
-export async function POST(req: NextRequest) {
+export const POST = withAuth(async (req: NextRequest, ctx) => {
   try {
     const body = await req.json();
     const idemKey = readIdempotencyKey(req, body?.idempotencyKey);
@@ -29,7 +30,6 @@ export async function POST(req: NextRequest) {
     }
 
     const repairScan = String(body?.repairScan || '').trim();
-    const techId = body?.techId;
     const userName = body?.userName != null ? String(body.userName) : null;
     const repairIdBody = body?.repairId != null ? Number(body.repairId) : null;
 
@@ -37,14 +37,10 @@ export async function POST(req: NextRequest) {
     if (!repairId) {
       return NextResponse.json({ success: false, error: 'Valid RS- id or repairId is required' }, { status: 400 });
     }
-    if (!techId) {
-      return NextResponse.json({ success: false, error: 'techId is required' }, { status: 400 });
-    }
 
-    const staffId = await resolveStaffIdFromTechParam(pool, techId);
-    if (!staffId) {
-      return NextResponse.json({ success: false, error: 'Staff not found' }, { status: 404 });
-    }
+    // Server-trusted actor. The legacy techId/employee alias resolver is
+    // bypassed — ctx.staffId is already the verified staff row id.
+    const staffId = ctx.staffId;
 
     const repair = await getRepairById(repairId);
     if (!repair) {
@@ -54,7 +50,7 @@ export async function POST(req: NextRequest) {
     await appendRepairStatusHistory(repairId, {
       status: 'station_testing_scan',
       source: 'station-testing.scan',
-      user_id: Number.isFinite(Number(techId)) ? Number(techId) : null,
+      user_id: staffId,
       user_name: userName,
       metadata: {
         scanned_input: repairScan.toUpperCase(),
@@ -99,4 +95,4 @@ export async function POST(req: NextRequest) {
       { status: 500 },
     );
   }
-}
+}, { permission: 'tech.scan_serial' });

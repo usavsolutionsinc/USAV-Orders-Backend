@@ -2,11 +2,13 @@ import { NextRequest, NextResponse } from 'next/server';
 import pool from '@/lib/db';
 import { publishFbaCatalogChanged } from '@/lib/realtime/publish';
 import { invalidateCacheTags } from '@/lib/cache/upstash-cache';
+import { withAuth } from '@/lib/auth/withAuth';
+import { AUDIT_ACTION, AUDIT_ENTITY } from '@/lib/audit-logs';
 
 // ── POST /api/fba/fnskus ──────────────────────────────────────────────────────
 // Add a new FNSKU to the fba_fnskus catalog.
 // Body: { fnsku, product_title?, asin?, sku? }
-export async function POST(request: NextRequest) {
+export const POST = withAuth(async (request: NextRequest) => {
   try {
     const body = await request.json();
     const fnsku = String(body?.fnsku || '').trim().toUpperCase();
@@ -44,4 +46,15 @@ export async function POST(request: NextRequest) {
       { status: 500 }
     );
   }
-}
+}, {
+  permission: 'fba.manage_fnskus',
+  audit: {
+    source: 'fba.fnskus.create',
+    action: 'fba.fnsku.create',
+    entityType: 'fba_fnsku',
+    entityId: ({ response }) => {
+      const r = response as { fnsku?: { fnsku?: string } } | null;
+      return r?.fnsku?.fnsku ?? null;
+    },
+  },
+});

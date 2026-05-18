@@ -3,6 +3,7 @@ import pool from '@/lib/db';
 import { buildFbaPlanRefFromIsoDate } from '@/lib/fba/plan-ref';
 import { publishFbaShipmentChanged } from '@/lib/realtime/publish';
 import { invalidateCacheTags } from '@/lib/cache/upstash-cache';
+import { withAuth } from '@/lib/auth/withAuth';
 
 /**
  * POST /api/fba/shipments/today/duplicate-yesterday
@@ -11,7 +12,7 @@ import { invalidateCacheTags } from '@/lib/cache/upstash-cache';
  * Creates today's plan if it doesn't exist.
  * Skips FNSKUs already in today's plan.
  */
-export async function POST() {
+export const POST = withAuth(async () => {
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
@@ -121,4 +122,15 @@ export async function POST() {
   } finally {
     client.release();
   }
-}
+}, {
+  permission: 'fba.stage_shipments',
+  audit: {
+    source: 'fba.shipments.duplicate-yesterday',
+    action: 'fba.shipment.duplicate_yesterday',
+    entityType: 'fba_shipment',
+    entityId: ({ response }) => {
+      const r = response as { shipment?: { id?: number } } | null;
+      return r?.shipment?.id ?? null;
+    },
+  },
+});

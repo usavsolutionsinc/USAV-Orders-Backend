@@ -3,6 +3,7 @@ import pool from '@/lib/db';
 import { invalidateCacheTags } from '@/lib/cache/upstash-cache';
 import { isTransientDbError, queryWithRetry } from '@/lib/db-retry';
 import type { StaffAvailabilityRuleType } from '@/lib/staff-availability-rules';
+import { withAuth } from '@/lib/auth/withAuth';
 
 const RULE_TYPES: StaffAvailabilityRuleType[] = ['weekday_allowed', 'date_block', 'date_allow'];
 
@@ -44,7 +45,7 @@ function isValidDayOfWeek(dayOfWeek: unknown): dayOfWeek is number {
   return Number.isInteger(dayOfWeek) && Number(dayOfWeek) >= 0 && Number(dayOfWeek) <= 6;
 }
 
-export async function GET(request: NextRequest) {
+export const GET = withAuth(async (request: NextRequest) => {
   try {
     const { searchParams } = new URL(request.url);
     const staffId = Number(searchParams.get('staffId'));
@@ -119,9 +120,9 @@ export async function GET(request: NextRequest) {
       details: error instanceof Error ? error.message : 'Unknown error',
     }, { status: 500 });
   }
-}
+}, { permission: 'admin.view' });
 
-export async function POST(request: NextRequest) {
+export const POST = withAuth(async (request: NextRequest) => {
   try {
     const body = await request.json();
     const staffId = Number(body?.staffId);
@@ -237,9 +238,9 @@ export async function POST(request: NextRequest) {
       details: error instanceof Error ? error.message : 'Unknown error',
     }, { status: 500 });
   }
-}
+}, { permission: 'admin.manage_staff' });
 
-export async function PUT(request: NextRequest) {
+export const PUT = withAuth(async (request: NextRequest) => {
   try {
     const body = await request.json();
     const id = Number(body?.id);
@@ -364,9 +365,9 @@ export async function PUT(request: NextRequest) {
       details: error instanceof Error ? error.message : 'Unknown error',
     }, { status: 500 });
   }
-}
+}, { permission: 'admin.manage_staff' });
 
-export async function DELETE(request: NextRequest) {
+export const DELETE = withAuth(async (request: NextRequest) => {
   try {
     const { searchParams } = new URL(request.url);
     const id = Number(searchParams.get('id'));
@@ -409,5 +410,5 @@ export async function DELETE(request: NextRequest) {
       details: error instanceof Error ? error.message : 'Unknown error',
     }, { status: 500 });
   }
-}
+}, { permission: 'admin.manage_staff' });
 

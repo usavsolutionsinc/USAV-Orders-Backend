@@ -4,19 +4,25 @@ import { createCacheLookupKey, getCachedJson, setCachedJson } from '@/lib/cache/
 import { parsePositiveInt } from '@/utils/number';
 import { TECH_EMPLOYEE_IDS } from '@/utils/staff';
 import { isTransientDbError, queryWithRetry } from '@/lib/db-retry';
+import { withAuth } from '@/lib/auth/withAuth';
 
 /**
- * GET /api/orders/next - Get next order(s) for a tech.
+ * GET /api/orders/next - Get next order(s) for the signed-in tech.
+ * Identity is server-derived from the session cookie. Admin.view_logs
+ * holders can override with ?techId=N to inspect another tech's queue.
+ *
  * Rules:
  *  - orders.shipment_id must be set (linked to shipping_tracking_numbers)
  *  - order must NOT be carrier-accepted/in-transit/delivered
  *  - order must be assigned to this tech (wa.assigned_tech_id) OR have no test assignment
  *    (unassigned orders are visible to all techs)
  */
-export async function GET(req: NextRequest) {
+export const GET = withAuth(async (req: NextRequest, ctx) => {
   try {
     const { searchParams } = new URL(req.url);
-    const techId     = searchParams.get('techId');
+    const techIdParam = searchParams.get('techId');
+    const isAdminFilter = !!techIdParam && ctx.permissions.has('admin.view_logs');
+    const techId     = isAdminFilter ? techIdParam : String(ctx.staffId);
     const getAll     = searchParams.get('all') === 'true';
     const outOfStock = searchParams.get('outOfStock');
 
@@ -232,4 +238,4 @@ export async function GET(req: NextRequest) {
       { status: 500 }
     );
   }
-}
+}, { permission: 'orders.view' });

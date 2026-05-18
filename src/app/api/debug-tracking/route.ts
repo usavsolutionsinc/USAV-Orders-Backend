@@ -1,11 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import pool from '@/lib/db';
+import { withAuth } from '@/lib/auth/withAuth';
 
 /**
  * DEBUG endpoint to check tracking number matching
  * GET /api/debug-tracking?tracking=XXXXX
  */
-export async function GET(req: NextRequest) {
+export const GET = withAuth(async (req: NextRequest) => {
   try {
     const { searchParams } = new URL(req.url);
     const tracking = searchParams.get('tracking');
@@ -84,4 +85,4 @@ export async function GET(req: NextRequest) {
       details: error.message
     }, { status: 500 });
   }
-}
+}, { permission: 'admin.view' });

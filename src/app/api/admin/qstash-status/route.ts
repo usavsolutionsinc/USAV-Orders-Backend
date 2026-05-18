@@ -1,9 +1,10 @@
 import { NextResponse } from 'next/server';
 import { getQStashClient } from '@/lib/qstash';
+import { withAuth } from '@/lib/auth/withAuth';
 
 export const dynamic = 'force-dynamic';
 
-export async function GET() {
+export const GET = withAuth(async () => {
   try {
     const client = getQStashClient();
 
@@ -38,4 +39,4 @@ export async function GET() {
       { status: 500 },
     );
   }
-}
+}, { permission: 'admin.view' });

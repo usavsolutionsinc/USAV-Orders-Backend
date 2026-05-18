@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getIssuesForFavorite, createIssueTemplate } from '@/lib/neon/repair-issue-queries';
+import { withAuth } from '@/lib/auth/withAuth';
 
-export async function GET(req: NextRequest) {
+export const GET = withAuth(async (req: NextRequest) => {
   try {
     const { searchParams } = new URL(req.url);
     const rawFavId = searchParams.get('favoriteSkuId');
@@ -20,9 +21,9 @@ export async function GET(req: NextRequest) {
       { status: 500 },
     );
   }
-}
+}, { permission: 'repair.view' });
 
-export async function POST(req: NextRequest) {
+export const POST = withAuth(async (req: NextRequest) => {
   try {
     const body = await req.json();
     const label = String(body?.label || '').trim();
@@ -51,4 +52,4 @@ export async function POST(req: NextRequest) {
       { status: 500 },
     );
   }
-}
+}, { permission: 'repair.intake' });

@@ -3,12 +3,13 @@ import pool from '@/lib/db';
 import { invalidateCacheTags } from '@/lib/cache/upstash-cache';
 import { publishOrderChanged } from '@/lib/realtime/publish';
 import { resolveOrCreateSkuCatalogId } from '@/lib/neon/sku-catalog-queries';
+import { withAuth } from '@/lib/auth/withAuth';
 
 /**
  * POST /api/orders/add - Add a new order to the system
  * Used by mobile verification screen to add missing orders
  */
-export async function POST(req: NextRequest) {
+export const POST = withAuth(async (req: NextRequest) => {
   try {
     const body = await req.json();
     const {
@@ -87,4 +88,4 @@ export async function POST(req: NextRequest) {
       { status: 500 }
     );
   }
-}
+}, { permission: 'orders.create' });

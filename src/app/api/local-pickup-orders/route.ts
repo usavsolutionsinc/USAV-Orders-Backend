@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import pool from '@/lib/db';
+import { withAuth } from '@/lib/auth/withAuth';
 
-export async function GET(req: NextRequest) {
+export const GET = withAuth(async (req: NextRequest) => {
   try {
     const { searchParams } = new URL(req.url);
     const status = searchParams.get('status') || '';
@@ -97,15 +98,15 @@ export async function GET(req: NextRequest) {
       { status: 500 },
     );
   }
-}
+}, { permission: 'walk_in.view' });
 
-export async function POST(req: NextRequest) {
+export const POST = withAuth(async (req: NextRequest, ctx) => {
   try {
     const body = (await req.json()) as Record<string, unknown>;
     const pickupDate = String(body.pickupDate || body.pickup_date || '').trim() || new Date().toISOString().slice(0, 10);
     const customerName = String(body.customerName || body.customer_name || '').trim() || null;
     const notes = String(body.notes || '').trim() || null;
-    const createdBy = Number(body.createdBy || body.created_by) || null;
+    const createdBy = ctx.staffId;
     const items = Array.isArray(body.items) ? body.items : [];
 
     const client = await pool.connect();
@@ -163,4 +164,4 @@ export async function POST(req: NextRequest) {
       { status: 500 },
     );
   }
-}
+}, { permission: 'walk_in.intake' });

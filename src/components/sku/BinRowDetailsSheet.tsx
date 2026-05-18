@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { Loader2, X } from '@/components/Icons';
-import { usePersistedStaffId } from '@/hooks/usePersistedStaffId';
+import { useAuth } from '@/contexts/AuthContext';
 import { errorFeedback, successFeedback } from '@/lib/feedback/confirm';
 import { useStaffRole } from '@/hooks/useStaffRole';
 
@@ -54,7 +54,8 @@ export function BinRowDetailsSheet({
   row,
   invalidateKey,
 }: BinRowDetailsSheetProps) {
-  const [staffId] = usePersistedStaffId();
+  const { user } = useAuth();
+  const staffId = user?.staffId ?? 0;
   const { isAdmin, role } = useStaffRole();
   const queryClient = useQueryClient();
 

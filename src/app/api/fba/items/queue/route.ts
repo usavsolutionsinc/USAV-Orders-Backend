@@ -1,12 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
 import pool from '@/lib/db';
 import { isTransientDbError, queryWithRetry } from '@/lib/db-retry';
+import { withAuth } from '@/lib/auth/withAuth';
 
 // ── GET /api/fba/items/queue ──────────────────────────────────────────────────
 // Returns individual FNSKU items from all active (non-SHIPPED) FBA shipments,
 // joined with their shipment context. Used by UpNextOrder FBA tab.
 // Query params: status (comma-sep, default PLANNED,READY_TO_GO,LABEL_ASSIGNED), limit
-export async function GET(request: NextRequest) {
+export const GET = withAuth(async (request: NextRequest) => {
   try {
     const { searchParams } = new URL(request.url);
     const statusParam = searchParams.get('status') || 'PLANNED,READY_TO_GO,LABEL_ASSIGNED';
@@ -75,4 +76,4 @@ export async function GET(request: NextRequest) {
       { status: 500 }
     );
   }
-}
+}, { permission: 'fba.view' });

@@ -10,13 +10,9 @@ import {
   readIdempotencyKey,
   saveApiIdempotencyResponse,
 } from '@/lib/api-idempotency';
-import {
-  assertPermission,
-  PermissionDeniedError,
-  permissionDeniedResponse,
-} from '@/lib/auth/permissions';
 import { TransfersBody } from '@/lib/schemas/locations';
 import { parseBody } from '@/lib/schemas/parse';
+import { withAuth } from '@/lib/auth/withAuth';
 
 const ROUTE_TRANSFERS = 'transfers.post';
 
@@ -33,7 +29,7 @@ const ROUTE_TRANSFERS = 'transfers.post';
  * Required permission: bin.adjust (everyone except readonly). Bin moves are
  * an everyday workflow, not a destructive admin action.
  */
-export async function POST(request: NextRequest) {
+export const POST = withAuth(async (request: NextRequest, ctx) => {
   try {
     const body = await request.json().catch(() => ({}));
 
@@ -50,10 +46,8 @@ export async function POST(request: NextRequest) {
         ? Math.floor(Number(body?.reasonCodeId))
         : null;
     const notes = String(body?.notes || '').trim() || null;
-    const staffId =
-      Number.isFinite(Number(body?.staffId)) && Number(body?.staffId) > 0
-        ? Math.floor(Number(body?.staffId))
-        : null;
+    // Server-trusted actor — body.staffId is ignored.
+    const staffId = ctx.staffId;
 
     // ─── Idempotency: replay cached response for the same key ──────────────
     const idempotencyKey = readIdempotencyKey(
@@ -81,15 +75,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(payload, { status });
     };
 
-    // ─── Permission gate ────────────────────────────────────────────────────
-    try {
-      await assertPermission(staffId, 'bin.adjust');
-    } catch (err) {
-      if (err instanceof PermissionDeniedError) {
-        return respond(permissionDeniedResponse(err), 403);
-      }
-      throw err;
-    }
+    // ─── Permission gate is handled by withAuth({ permission: 'bin.adjust' }) ─
 
     // ─── Validate ──────────────────────────────────────────────────────────
     if (!fromBarcode || !toBarcode) {
@@ -190,4 +176,4 @@ export async function POST(request: NextRequest) {
       { status: 500 },
     );
   }
-}
+}, { permission: 'bin.adjust' });

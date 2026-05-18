@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
+import { useAuth } from '@/contexts/AuthContext';
 import { fbaPaths } from '@/lib/fba/api-paths';
 import { FBA_BOARD_INJECT_ITEM, FBA_SELECTION_ADJUSTED, FBA_SCAN_STATUS } from '@/lib/fba/events';
 import { AlertCircle, Loader2, Minus, Package, Plus } from '@/components/Icons';
@@ -76,7 +77,10 @@ export default function StationFbaInput({
 }: StationFbaInputProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const staffIdRaw = String(searchParams.get('staffId') || '').trim();
+  // Theme color is keyed off the signed-in staff. Identity comes from the
+  // verified session cookie, not the URL.
+  const { user } = useAuth();
+  const staffIdRaw = user?.staffId != null ? String(user.staffId) : '';
   const stationTheme = useMemo((): StationTheme => {
     if (workspaceThemeProp) return workspaceThemeProp;
     return getStaffThemeById(staffIdRaw || null);

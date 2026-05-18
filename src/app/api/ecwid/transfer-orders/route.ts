@@ -4,10 +4,11 @@ import {
   runGoogleSheetsTransferOrders,
 } from '@/lib/jobs/google-sheets-transfer-orders';
 import { logRouteMetric } from '@/lib/route-metrics';
+import { withAuth } from '@/lib/auth/withAuth';
 
 export const dynamic = 'force-dynamic';
 
-export async function POST(req: NextRequest) {
+export const POST = withAuth(async (req: NextRequest) => {
   const startedAt = Date.now();
   let ok = false;
 
@@ -33,4 +34,4 @@ export async function POST(req: NextRequest) {
       details: {},
     });
   }
-}
+}, { permission: 'integrations.ecwid' });

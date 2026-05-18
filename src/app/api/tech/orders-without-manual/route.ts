@@ -1,12 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server';
 import pool from '@/lib/db';
 import { normalizePSTTimestamp } from '@/utils/date';
+import { withAuth } from '@/lib/auth/withAuth';
 
 /**
- * GET /api/tech/orders-without-manual?techId=3&days=365
+ * GET /api/tech/orders-without-manual?days=365
  *
- * Returns distinct orders processed by the given tech that do not yet have
- * an assigned manual record in product_manuals.
+ * Returns distinct orders processed by the signed-in tech that do not yet
+ * have an assigned manual record in product_manuals.
+ *
+ * Admin.view_logs holders can pass ?techId=N to view another tech's gaps.
  *
  * Query mirrors /api/tech-logs exactly (LEFT JOIN LATERAL for FBA + orders,
  * same field set) but:
@@ -15,10 +18,12 @@ import { normalizePSTTimestamp } from '@/utils/date';
  *  - Rolling days window (no Mon–Fri weekly slice)
  *  - Sorted ASC by created_at (oldest unresolved first)
  */
-export async function GET(req: NextRequest) {
+export const GET = withAuth(async (req: NextRequest, ctx) => {
   try {
     const { searchParams } = new URL(req.url);
-    const techId = parseInt(searchParams.get('techId') || '0', 10);
+    const techIdParam = parseInt(searchParams.get('techId') || '0', 10);
+    const isAdminFilter = techIdParam > 0 && ctx.permissions.has('admin.view_logs');
+    const techId = isAdminFilter ? techIdParam : ctx.staffId;
     const days = Math.min(
       Math.max(parseInt(searchParams.get('days') || '365', 10), 1),
       730
@@ -180,4 +185,4 @@ export async function GET(req: NextRequest) {
       { status: 500 }
     );
   }
-}
+}, { permission: 'tech.view' });

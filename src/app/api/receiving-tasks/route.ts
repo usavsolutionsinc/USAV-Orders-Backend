@@ -5,8 +5,9 @@ import { eq, and, desc } from 'drizzle-orm';
 import { ApiError, errorResponse } from '@/lib/api';
 import { publishReceivingLogChanged } from '@/lib/realtime/publish';
 import { invalidateCacheTags } from '@/lib/cache/upstash-cache';
+import { withAuth } from '@/lib/auth/withAuth';
 
-export async function GET(req: NextRequest) {
+export const GET = withAuth(async (req: NextRequest) => {
   try {
     const status = new URL(req.url).searchParams.get('status');
 
@@ -20,21 +21,22 @@ export async function GET(req: NextRequest) {
   } catch (error) {
     return errorResponse(error, 'GET /api/receiving-tasks');
   }
-}
+}, { permission: 'receiving.view' });
 
-export async function POST(req: NextRequest) {
+export const POST = withAuth(async (req: NextRequest, ctx) => {
   try {
     const body = await req.json().catch(() => null);
     if (!body) throw ApiError.badRequest('Invalid JSON body');
 
-    const { trackingNumber, orderNumber, notes, staffId } = body;
+    const { trackingNumber, orderNumber, notes } = body;
+    const staffId = ctx.staffId;
     if (!trackingNumber) throw ApiError.badRequest('trackingNumber is required');
 
     const [result] = await db.insert(receivingTasks).values({
       trackingNumber,
       orderNumber: orderNumber || null,
       notes: notes || null,
-      staffId: staffId || null,
+      staffId,
       status: 'pending',
     }).returning();
 
@@ -45,15 +47,17 @@ export async function POST(req: NextRequest) {
   } catch (error) {
     return errorResponse(error, 'POST /api/receiving-tasks');
   }
-}
+}, { permission: 'receiving.mark_received' });
 
-export async function PUT(req: NextRequest) {
+export const PUT = withAuth(async (req: NextRequest, ctx) => {
   try {
     const body = await req.json().catch(() => null);
     if (!body) throw ApiError.badRequest('Invalid JSON body');
 
-    const { id, status, notes, receivedDate, processedDate, staffId } = body;
+    const { id, status, notes, receivedDate, processedDate } = body;
     if (!id) throw ApiError.badRequest('id is required');
+    // Server-trusted actor for status changes (auto-stamp current operator).
+    const staffId = ctx.staffId;
 
     const updateData: any = {};
     if (status !== undefined) updateData.status = status;
@@ -77,9 +81,9 @@ export async function PUT(req: NextRequest) {
   } catch (error) {
     return errorResponse(error, 'PUT /api/receiving-tasks');
   }
-}
+}, { permission: 'receiving.mark_received' });
 
-export async function DELETE(req: NextRequest) {
+export const DELETE = withAuth(async (req: NextRequest) => {
   try {
     const id = new URL(req.url).searchParams.get('id');
     if (!id) throw ApiError.badRequest('id is required');
@@ -98,4 +102,4 @@ export async function DELETE(req: NextRequest) {
   } catch (error) {
     return errorResponse(error, 'DELETE /api/receiving-tasks');
   }
-}
+}, { permission: 'receiving.mark_received' });

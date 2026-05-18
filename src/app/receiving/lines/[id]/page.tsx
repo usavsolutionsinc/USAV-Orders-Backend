@@ -2,7 +2,7 @@
 
 import { Suspense, useCallback, useEffect, useMemo, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { usePersistedStaffId } from '@/hooks/usePersistedStaffId';
+import { useAuth } from '@/contexts/AuthContext';
 import { workflowStatusTableLabel } from '@/components/station/receiving-constants';
 
 // ─── Types ──────────────────────────────────────────────────────────────────
@@ -89,7 +89,10 @@ function LinePageInner() {
   const router = useRouter();
   const params = useParams<{ id: string }>();
   const lineId = Number(params?.id);
-  const [staffId] = usePersistedStaffId();
+  // Identity from the verified session cookie (proxy guarantees a user
+  // by the time this page renders).
+  const { user } = useAuth();
+  const staffId = user?.staffId ?? 0;
 
   const [line, setLine] = useState<LineDetail | null>(null);
   const [events, setEvents] = useState<TimelineEvent[]>([]);
@@ -256,9 +259,7 @@ function LinePageInner() {
   const received = line?.quantity_received ?? 0;
   const isComplete = expected != null && received >= expected;
 
-  const cartonHref = line?.receiving_id
-    ? `/m/r/${line.receiving_id}?staffId=${staffId}`
-    : null;
+  const cartonHref = line?.receiving_id ? `/m/r/${line.receiving_id}` : null;
 
   const serials = useMemo(() => line?.serials ?? [], [line]);
 

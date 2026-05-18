@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { normalizeEnvValue } from '@/lib/env-utils';
+import { withAuth } from '@/lib/auth/withAuth';
 
 export const dynamic = 'force-dynamic';
 
@@ -12,7 +13,7 @@ export const dynamic = 'force-dynamic';
  * Required env vars: ZOHO_CLIENT_ID, NEXT_PUBLIC_APP_URL
  * Optional: ZOHO_DOMAIN (defaults to accounts.zoho.com)
  */
-export async function GET(request: NextRequest) {
+export const GET = withAuth(async (request: NextRequest) => {
   const clientId = normalizeEnvValue(process.env.ZOHO_CLIENT_ID);
   const domain = normalizeEnvValue(process.env.ZOHO_DOMAIN) || 'accounts.zoho.com';
   const appUrl = normalizeEnvValue(process.env.NEXT_PUBLIC_APP_URL).replace(/\/$/, '');
@@ -53,4 +54,4 @@ export async function GET(request: NextRequest) {
   authUrl.searchParams.set('redirect_uri', redirectUri);
 
   return NextResponse.redirect(authUrl.toString());
-}
+}, { permission: 'integrations.zoho' });

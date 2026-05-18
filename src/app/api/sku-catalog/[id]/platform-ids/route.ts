@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { upsertSkuPlatformId, updateSkuPlatformId, deleteSkuPlatformId } from '@/lib/neon/sku-catalog-queries';
+import { requireRoutePerm } from '@/lib/auth/dynamic-route-guard';
 
 /**
  * POST /api/sku-catalog/[id]/platform-ids — Add a platform ID pairing.
@@ -9,6 +10,8 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> },
 ) {
   try {
+    const gate = await requireRoutePerm(req, 'sku_stock.manage');
+    if (gate.denied) return gate.denied;
     const { id: rawId } = await params;
     const skuCatalogId = Number(rawId);
     if (!Number.isFinite(skuCatalogId) || skuCatalogId <= 0) {
@@ -51,6 +54,8 @@ export async function PUT(
   { params }: { params: Promise<{ id: string }> },
 ) {
   try {
+    const gate = await requireRoutePerm(req, 'sku_stock.manage');
+    if (gate.denied) return gate.denied;
     await params;
     const body = await req.json();
     const { platformIdRowId, platform, platformSku, platformItemId, accountName } = body;
@@ -88,6 +93,8 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> },
 ) {
   try {
+    const gate = await requireRoutePerm(req, 'sku_stock.manage');
+    if (gate.denied) return gate.denied;
     await params;
     const body = await req.json();
     const { platformIdRowId } = body;

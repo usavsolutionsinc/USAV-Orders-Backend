@@ -5,6 +5,7 @@ import {
   recordInventoryEvent,
   type InventoryEventStation,
 } from '@/lib/inventory/events';
+import { requireRoutePerm } from '@/lib/auth/dynamic-route-guard';
 
 /**
  * Move units between bins. Differs from /putaway in that the prior bin is
@@ -18,6 +19,8 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> },
 ) {
   try {
+    const gate = await requireRoutePerm(request, 'receiving.bin_assign');
+    if (gate.denied) return gate.denied;
     const { id: idRaw } = await params;
     const lineId = Number(idRaw);
     if (!Number.isFinite(lineId) || lineId <= 0) {

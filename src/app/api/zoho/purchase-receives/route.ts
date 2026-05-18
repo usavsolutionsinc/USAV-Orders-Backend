@@ -1,9 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getPurchaseReceiveById, listPurchaseReceives, searchPurchaseReceivesByTracking } from '@/lib/zoho';
+import { withAuth } from '@/lib/auth/withAuth';
 
 export const dynamic = 'force-dynamic';
 
-export async function GET(request: NextRequest) {
+export const GET = withAuth(async (request: NextRequest) => {
   try {
     const { searchParams } = new URL(request.url);
     const purchaseReceiveId = String(searchParams.get('purchase_receive_id') || '').trim();
@@ -55,4 +56,4 @@ export async function GET(request: NextRequest) {
       { status: 500 }
     );
   }
-}
+}, { permission: 'receiving.scan_po' });

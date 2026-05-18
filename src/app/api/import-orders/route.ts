@@ -2,8 +2,9 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/drizzle/db';
 import { orders as ordersTable } from '@/lib/drizzle/schema';
 import pool from '@/lib/db';
+import { withAuth } from '@/lib/auth/withAuth';
 
-export async function POST(request: NextRequest) {
+export const POST = withAuth(async (request: NextRequest) => {
     try {
         const body = await request.json();
         const { data } = body;
@@ -46,9 +47,9 @@ export async function POST(request: NextRequest) {
         });
     } catch (error: any) {
         console.error('Import error:', error);
-        return NextResponse.json({ 
-            error: 'Internal Server Error', 
-            details: error.message 
+        return NextResponse.json({
+            error: 'Internal Server Error',
+            details: error.message
         }, { status: 500 });
     }
-}
+}, { permission: 'orders.create' });

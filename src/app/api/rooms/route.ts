@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createLocation, getRooms, setRoomZoneLetter } from '@/lib/neon/location-queries';
+import { withAuth } from '@/lib/auth/withAuth';
 
 /** GET /api/rooms — list active rooms (parent rows with no row/col). */
-export async function GET() {
+export const GET = withAuth(async () => {
   try {
     const rooms = await getRooms();
     return NextResponse.json({ rooms });
@@ -10,14 +11,14 @@ export async function GET() {
     console.error('[GET /api/rooms] error:', err);
     return NextResponse.json({ error: 'Failed', details: err?.message }, { status: 500 });
   }
-}
+}, { permission: 'sku_stock.view' });
 
 /**
  * POST /api/rooms
  * Body: { name: string, description?: string, sortOrder?: number }
  * Creates a room-level location entry (no row/col).
  */
-export async function POST(req: NextRequest) {
+export const POST = withAuth(async (req: NextRequest) => {
   try {
     const body = await req.json().catch(() => ({}));
     const name = String(body?.name ?? '').trim();
@@ -52,4 +53,4 @@ export async function POST(req: NextRequest) {
     console.error('[POST /api/rooms] error:', err);
     return NextResponse.json({ error: 'Failed', details: err?.message }, { status: 500 });
   }
-}
+}, { permission: 'sku_stock.manage' });

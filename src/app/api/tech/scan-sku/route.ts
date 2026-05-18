@@ -14,14 +14,17 @@ import {
 } from '@/lib/tech/insertTechSerialForSalContext';
 import { normalizeTrackingKey18 } from '@/lib/tracking-format';
 import { publishStockLedgerEvent } from '@/lib/realtime/publish';
+import { withAuth } from '@/lib/auth/withAuth';
 
 const ROUTE = 'tech.scan-sku';
 
-export async function POST(req: NextRequest) {
+export const POST = withAuth(async (req: NextRequest, ctx) => {
   const client = await pool.connect();
   try {
     const body = await req.json();
-    const { skuCode, tracking: rawTracking, techId, salId } = body;
+    const { skuCode, tracking: rawTracking, salId } = body;
+    // Server-trusted actor — body.techId is ignored.
+    const techId = ctx.staffId;
     // tracking is optional — server resolves from SAL when absent
     const tracking = rawTracking ? String(rawTracking).trim() : null;
     const scanSessionId = body?.scanSessionId != null ? String(body.scanSessionId).trim() : '';
@@ -34,10 +37,10 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    if (!skuCode || !techId) {
+    if (!skuCode) {
       return NextResponse.json({
         success: false,
-        error: 'skuCode and techId are required',
+        error: 'skuCode is required',
       });
     }
 
@@ -287,4 +290,4 @@ export async function POST(req: NextRequest) {
   } finally {
     client.release();
   }
-}
+}, { permission: 'tech.scan_serial' });

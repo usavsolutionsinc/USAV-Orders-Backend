@@ -1,7 +1,10 @@
 import { NextResponse } from 'next/server';
 import pool from '@/lib/db';
+import { withAuth } from '@/lib/auth/withAuth';
 
-export async function POST() {
+// Break-glass schema bootstrap — creates source-of-truth tables. Admin-only
+// + step-up required. Do not call from app code.
+export const POST = withAuth(async () => {
     const client = await pool.connect();
     
     try {
@@ -193,10 +196,10 @@ export async function POST() {
     } finally {
         client.release();
     }
-}
+}, { permission: 'admin.manage_features', stepUp: true });
 
-// GET endpoint to verify tables exist
-export async function GET() {
+// GET endpoint to verify tables exist — exposes schema metadata, so admin-gated.
+export const GET = withAuth(async () => {
     try {
         const tables = [
             'orders', 'tech_1', 'tech_2', 'tech_3', 'tech_4',
@@ -229,10 +232,10 @@ export async function GET() {
         });
     } catch (error) {
         console.error('Error checking tables:', error);
-        return NextResponse.json({ 
-            success: false, 
+        return NextResponse.json({
+            success: false,
             error: 'Failed to check tables',
             details: error instanceof Error ? error.message : 'Unknown error'
         }, { status: 500 });
     }
-}
+}, { permission: 'admin.view' });

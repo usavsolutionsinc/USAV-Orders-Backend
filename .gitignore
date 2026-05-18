@@ -13,6 +13,7 @@ node_modules/
 # production
 /build
 /desktop-dist
+/desktop-dist2
 
 # electron sidecar — uploaded files should not be committed
 /server/storage/

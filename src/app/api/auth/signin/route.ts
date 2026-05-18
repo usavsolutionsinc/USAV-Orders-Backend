@@ -16,6 +16,7 @@ import {
   type DeviceKind,
 } from '@/lib/auth/session';
 import { audit } from '@/lib/auth/audit';
+import { findActiveShift, clockIn } from '@/lib/auth/shift-clock';
 
 export const runtime = 'nodejs';
 
@@ -59,17 +60,36 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'ACCOUNT_NOT_ACTIVE', status: row.status }, { status: 403 });
     }
 
+    // Sign-in == clock-in (soft gate). Look up an active shift but do NOT
+    // reject when there isn't one — staff should always be able to clock in
+    // (covering a shift unannounced, working off-hours, etc.). When a shift
+    // exists the session expires at shift end; otherwise the device-kind
+    // absolute window applies as before.
+    const activeShift = await findActiveShift(staffId);
+
     const session = await createSession({
       staffId,
       deviceKind,
       deviceLabel,
       ip,
       userAgent: ua,
+      // Only bind expiry to shift end when a shift is actually present.
+      ...(activeShift ? { expiresAt: activeShift.ends_at } : {}),
     });
+
+    // Open the clock-in punch either tied to the shift or off-the-books.
+    // clockIn is idempotent (DB unique index + re-fetch on conflict).
+    const punch = await clockIn(staffId, activeShift?.id ?? null, 'pin');
 
     await audit({
       staffId, sid: session.sid, event: 'signin.pin', result: 'ok',
-      ip, userAgent: ua, detail: { deviceKind, deviceLabel },
+      ip, userAgent: ua,
+      detail: {
+        deviceKind, deviceLabel,
+        shiftId: activeShift?.id ?? null,
+        punchId: punch?.id ?? null,
+        unscheduled: !activeShift,
+      },
     });
 
     const res = NextResponse.json({
@@ -77,11 +97,16 @@ export async function POST(req: NextRequest) {
       staffId,
       role: row.role,
       name: row.name,
+      defaultHomePath: row.default_home_path,
       session: {
         sid: session.sid,
         deviceKind: session.deviceKind,
         expiresAt: session.expiresAt,
       },
+      shift: activeShift
+        ? { id: activeShift.id, startsAt: activeShift.starts_at, endsAt: activeShift.ends_at }
+        : null,
+      punchId: punch?.id ?? null,
     });
     res.cookies.set(SESSION_COOKIE_NAME, session.sid, {
       httpOnly: true,

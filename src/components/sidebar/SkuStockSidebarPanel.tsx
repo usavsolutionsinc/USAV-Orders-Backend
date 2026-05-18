@@ -7,8 +7,10 @@ import { HorizontalButtonSlider, type HorizontalSliderItem } from '@/components/
 import { History, Pencil } from '@/components/Icons';
 import { SearchBar } from '@/components/ui/SearchBar';
 import { FavoritesWorkspaceSection } from '@/components/sidebar/FavoritesWorkspaceSection';
-import MultiSkuSnBarcode from '@/components/MultiSkuSnBarcode';
+import { SkuStockSidebarList } from '@/components/sku/SkuStockSidebarList';
 import { parseSkuView, type SkuView } from '@/components/sku/SkuBrowser';
+import { ModeSelector } from '@/components/barcode/ModeSelector';
+import { useBarcodeMode } from '@/hooks/useBarcodeMode';
 import type { FavoriteSkuRecord } from '@/lib/favorites/sku-favorites';
 
 // Location view moved to /inventory (Map tab) — bin browsing happens
@@ -32,6 +34,7 @@ export function SkuStockSidebarPanel({ hideSearch = false }: SkuStockSidebarPane
   const currentSearch = searchParams.get('search') || '';
   const [searchInput, setSearchInput] = useState(currentSearch);
   const [activeFilledSku, setActiveFilledSku] = useState('');
+  const { mode, setMode } = useBarcodeMode();
   // When navigating to /sku-stock/location/{barcode} the URL has no
   // ?view param — force the dropdown to "Location" anyway so it doesn't
   // flicker back to SKU Stock while the route is bin-scoped.
@@ -150,9 +153,17 @@ export function SkuStockSidebarPanel({ hideSearch = false }: SkuStockSidebarPane
         </div>
       )}
 
-      {/* Scrollable content: favorites + barcode tool */}
+      {/* Scrollable content: mode picker → favorites → searchable SKU list.
+          The list feeds the right-pane workspace via `sku:fill`; the mode
+          picker writes `?mode=` which the workspace reads. */}
       <div className="min-h-0 min-w-0 flex-1 overflow-y-auto scrollbar-hide">
-        <div className="p-4">
+        <div className="px-4 pt-4 pb-3">
+          <p className="mb-2 text-[10px] font-semibold uppercase tracking-[0.18em] text-gray-500">
+            Workspace mode
+          </p>
+          <ModeSelector mode={mode} onModeChange={setMode} orientation="grid" />
+        </div>
+        <div className="px-4 pb-1">
           <FavoritesWorkspaceSection
             workspaceKey="sku-stock"
             accent="blue"
@@ -170,7 +181,7 @@ export function SkuStockSidebarPanel({ hideSearch = false }: SkuStockSidebarPane
             }
           />
         </div>
-        <MultiSkuSnBarcode />
+        <SkuStockSidebarList />
       </div>
 
       {/* Footer */}

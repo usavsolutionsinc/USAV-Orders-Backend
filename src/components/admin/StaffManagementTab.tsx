@@ -5,6 +5,7 @@ import { useSearchParams } from 'next/navigation';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { motion } from 'framer-motion';
 import { StaffColorWheel } from './StaffColorWheel';
+import { StaffScheduleBoard } from './StaffScheduleBoard';
 import { getStaffColorHex } from '@/utils/staff-colors';
 import type { Staff, StaffAvailabilityRule } from './types';
 import { toast } from '@/lib/toast';
@@ -48,6 +49,27 @@ function toNullableDateInput(value: string): string | null {
   return trimmed ? trimmed : null;
 }
 
+/**
+ * Curated list of paths the admin can pick as a per-staff default landing
+ * page. Keeping this in code (instead of free-text) prevents typos that
+ * would send staff to a 404 on every sign-in. Add a new entry when a new
+ * dashboard ships.
+ */
+const STAFF_HOME_OPTIONS: ReadonlyArray<{ value: string; label: string }> = [
+  { value: '/dashboard',   label: 'Orders / Shipping' },
+  { value: '/operations',  label: 'Operations' },
+  { value: '/receiving',   label: 'Receiving' },
+  { value: '/tech',        label: 'Testing' },
+  { value: '/packer',      label: 'Packing' },
+  { value: '/sku-stock',   label: 'SKU stock' },
+  { value: '/inventory',   label: 'Inventory' },
+  { value: '/walk-in',     label: 'Walk-in' },
+  { value: '/work-orders', label: 'Work orders' },
+  { value: '/fba',         label: 'Amazon FBA' },
+  { value: '/replenish',   label: 'Replenish' },
+  { value: '/admin',       label: 'Admin' },
+];
+
 export function StaffManagementTab() {
   const searchParams = useSearchParams();
   const queryClient = useQueryClient();
@@ -61,6 +83,7 @@ export function StaffManagementTab() {
   const [editEmployeeId, setEditEmployeeId] = useState('');
   const [editActive, setEditActive] = useState(true);
   const [editColorHex, setEditColorHex] = useState('#10b981');
+  const [editDefaultHomePath, setEditDefaultHomePath] = useState<string>('');  // '' = use role default
   const [savingScheduleKey, setSavingScheduleKey] = useState<string | null>(null);
   const [optimisticScheduleMap, setOptimisticScheduleMap] = useState<ScheduleMap>({});
   const [pendingScheduleMap, setPendingScheduleMap] = useState<PendingScheduleMap>({});
@@ -107,6 +130,7 @@ export function StaffManagementTab() {
       employee_id?: string;
       active?: boolean;
       color_hex?: string;
+      default_home_path?: string | null;
     }) => {
       const res = await fetch('/api/staff', {
         method: 'PUT',
@@ -298,6 +322,7 @@ export function StaffManagementTab() {
     setEditEmployeeId(member.employee_id || '');
     setEditActive(Boolean(member.active));
     setEditColorHex(getStaffColorHex(member));
+    setEditDefaultHomePath(member.default_home_path || '');
   };
 
   useEffect(() => {
@@ -768,6 +793,19 @@ export function StaffManagementTab() {
           <SummaryCell label="Scheduled Today" value={summary.presentToday} tone="emerald" />
         </div>
 
+        {/* Shared work calendar — day columns + colored avatar stacks.
+            Reads /api/shifts (real shift instances, lazy-materialized from
+            templates server-side). Sits above the row-per-staff editor
+            so the whole shop can see who's in this week without scrolling. */}
+        <div className="mb-6">
+          <StaffScheduleBoard
+            thisWeekDays={thisWeekDays}
+            nextBusinessDays={nextBusinessDays}
+            todayDateKey={todayDateKey}
+            timezoneLabel={timezoneLabel}
+          />
+        </div>
+
         <div ref={availabilitySectionRef} className="mb-6">
           <div className={`${sectionLabel} mb-2 flex items-center justify-between`}>
             <span>Availability Rules</span>
@@ -1018,91 +1056,169 @@ export function StaffManagementTab() {
 
             {filteredStaff.map((member) => {
               if (editingStaffId === member.id) {
+                const memberColor = getStaffColorHex(member);
                 return (
-                  <div key={member.id} className="border-b border-gray-100 px-4 py-4">
-                    <div className="grid gap-3 md:grid-cols-3">
-                      <input
-                        type="text"
-                        value={editName}
-                        onChange={(e) => setEditName(e.target.value)}
-                        className="h-9 border border-gray-200 bg-white px-3 text-sm font-bold text-gray-900 outline-none focus:border-gray-400"
-                        placeholder="Full Name"
-                      />
-                      <input
-                        type="text"
-                        value={editEmployeeId}
-                        onChange={(e) => setEditEmployeeId(e.target.value)}
-                        className="h-9 border border-gray-200 bg-white px-3 text-sm font-bold text-gray-900 outline-none focus:border-gray-400"
-                        placeholder="Enter employee ID"
-                      />
-                      <select
-                        value={editRole}
-                        onChange={(e) => setEditRole(e.target.value as StaffRole)}
-                        className="h-9 border border-gray-200 bg-white px-3 text-sm font-bold text-gray-900 outline-none focus:border-gray-400"
-                      >
-                        <option value="technician">Technician</option>
-                        <option value="packer">Packer</option>
-                      </select>
-                    </div>
+                  <div key={member.id} className="border-b border-gray-100 px-3 py-4">
+                    {/* Card shell: rounded, soft shadow, left accent border in
+                        the live editing color. Every interior radius is fully
+                        rounded — no square corners. */}
+                    <div
+                      className="rounded-3xl bg-gradient-to-br from-white via-white to-gray-50 px-6 py-5 shadow-md shadow-gray-200/40 ring-1 ring-gray-200"
+                      style={{ boxShadow: `inset 4px 0 0 0 ${editColorHex}, 0 4px 12px -4px rgb(0 0 0 / 0.08)` }}
+                    >
+                      {/* Identity header: large initials chip in the live edit
+                          color next to the name/role badge. */}
+                      <div className="mb-6 flex items-center gap-4">
+                        <div
+                          className="flex h-16 w-16 flex-shrink-0 items-center justify-center rounded-full text-xl font-bold text-white shadow-lg shadow-gray-900/15 ring-4 ring-white transition-colors"
+                          style={{ backgroundColor: editColorHex }}
+                        >
+                          {member.name.split(/\s+/).filter(Boolean).slice(0, 2).map((p) => p[0]?.toUpperCase() ?? '').join('')}
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <h3 className="truncate text-xl font-bold tracking-tight text-gray-900">{member.name}</h3>
+                          <div className="mt-1 flex flex-wrap items-center gap-1.5">
+                            <span className="inline-flex items-center rounded-full bg-gray-100 px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-gray-700">{member.role}</span>
+                            {member.employee_id ? (
+                              <span className="inline-flex items-center rounded-full bg-gray-100 px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-gray-700">ID {member.employee_id}</span>
+                            ) : null}
+                            <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-[0.14em] ${member.active ? 'bg-emerald-100 text-emerald-800' : 'bg-gray-200 text-gray-600'}`}>
+                              {member.active ? 'Active' : 'Inactive'}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
 
-                    <div className="mt-3 flex items-center gap-4">
-                      <span className={`${sectionLabel} text-gray-600`}>Color</span>
-                      <StaffColorWheel value={editColorHex} onChange={setEditColorHex} />
-                    </div>
+                      {/* Form grid — fully rounded pill inputs. */}
+                      <div className="grid gap-4 md:grid-cols-3">
+                        <FieldGroup label="Full Name">
+                          <input
+                            type="text"
+                            value={editName}
+                            onChange={(e) => setEditName(e.target.value)}
+                            className="h-11 w-full rounded-full border border-gray-200 bg-white px-4 text-sm font-semibold text-gray-900 outline-none transition focus:border-gray-900 focus:ring-2 focus:ring-gray-900/10"
+                            placeholder="Full name"
+                          />
+                        </FieldGroup>
+                        <FieldGroup label="Employee ID">
+                          <input
+                            type="text"
+                            value={editEmployeeId}
+                            onChange={(e) => setEditEmployeeId(e.target.value)}
+                            className="h-11 w-full rounded-full border border-gray-200 bg-white px-4 text-sm font-semibold text-gray-900 outline-none transition focus:border-gray-900 focus:ring-2 focus:ring-gray-900/10"
+                            placeholder="Employee ID"
+                          />
+                        </FieldGroup>
+                        <FieldGroup label="Role">
+                          <select
+                            value={editRole}
+                            onChange={(e) => setEditRole(e.target.value as StaffRole)}
+                            disabled={member.role !== 'technician' && member.role !== 'packer'}
+                            className="h-11 w-full rounded-full border border-gray-200 bg-white px-4 text-sm font-semibold text-gray-900 outline-none transition focus:border-gray-900 focus:ring-2 focus:ring-gray-900/10 disabled:cursor-not-allowed disabled:bg-gray-50 disabled:text-gray-500"
+                            title={member.role !== 'technician' && member.role !== 'packer' ? `Role "${member.role}" is managed in the Roles tab` : undefined}
+                          >
+                            <option value="technician">Technician</option>
+                            <option value="packer">Packer</option>
+                          </select>
+                        </FieldGroup>
+                      </div>
 
-                    <label className={`${sectionLabel} mt-3 inline-flex items-center gap-2 text-gray-600`}>
-                      <input
-                        type="checkbox"
-                        checked={editActive}
-                        onChange={(e) => setEditActive(e.target.checked)}
-                        className="h-4 w-4 border-gray-300 text-gray-900"
-                      />
-                      Active Staff Record
-                    </label>
+                      {/* Identity color card — fully rounded, wheel anchored
+                          right so the eye lands on it immediately. */}
+                      <div className="mt-5 flex items-center gap-4 rounded-3xl border border-gray-200 bg-white px-5 py-4">
+                        <div className="min-w-0 flex-1">
+                          <p className="text-[10.5px] font-semibold uppercase tracking-[0.16em] text-gray-500">Identity color</p>
+                          <p className="mt-1 text-[12px] text-gray-500">Tap the wheel — picks up on the sidebar, sign-in picker, and FAB.</p>
+                        </div>
+                        <StaffColorWheel value={editColorHex} onChange={setEditColorHex} />
+                      </div>
 
-                    <div className="mt-3 flex gap-2">
-                      <button
-                        type="button"
-                        onClick={() => {
-                          const payload: {
-                            id: number; name?: string; role?: StaffRole;
-                            employee_id?: string; active?: boolean; color_hex?: string;
-                          } = { id: member.id };
-                          if (editName.trim() !== member.name) payload.name = editName.trim();
-                          if (editEmployeeId.trim() !== (member.employee_id || '')) payload.employee_id = editEmployeeId.trim();
-                          if (editActive !== member.active) payload.active = editActive;
-                          if (editColorHex.toLowerCase() !== (member.color_hex || '').toLowerCase()) {
-                            payload.color_hex = editColorHex;
-                          }
-                          // Role select only offers technician/packer — only send it
-                          // if the staff is currently one of those AND the value changed.
-                          // Sending role='admin' (etc.) trips the API's tech/packer-only check.
-                          if (
-                            editRole !== member.role &&
-                            (member.role === 'technician' || member.role === 'packer')
-                          ) {
-                            payload.role = editRole;
-                          }
-                          updateStaffMutation.mutate(payload);
-                        }}
-                        className={`${sectionLabel} h-9 border border-gray-900 bg-gray-900 px-4 text-white`}
-                      >
-                        Save
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setEditingStaffId(null)}
-                        className={`${sectionLabel} h-9 border border-gray-300 px-4 text-gray-700 hover:bg-gray-50`}
-                      >
-                        Cancel
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => deleteStaffMutation.mutate(member.id)}
-                        className={`${sectionLabel} h-9 border border-red-300 px-4 text-red-700 hover:bg-red-50`}
-                      >
-                        Deactivate Staff
-                      </button>
+                      {/* Default home page — per-staff override of ROLE_HOME.
+                          Empty value = fall back to role default. The select
+                          is sourced from STAFF_HOME_OPTIONS so admins can't
+                          typo a 404 path. */}
+                      <div className="mt-4 flex items-center gap-4 rounded-3xl border border-gray-200 bg-white px-5 py-4">
+                        <div className="min-w-0 flex-1">
+                          <p className="text-[10.5px] font-semibold uppercase tracking-[0.16em] text-gray-500">Default home page</p>
+                          <p className="mt-1 text-[12px] text-gray-500">
+                            Where this staffer lands after sign-in. Use role default keeps the current behavior.
+                          </p>
+                        </div>
+                        <select
+                          value={editDefaultHomePath}
+                          onChange={(e) => setEditDefaultHomePath(e.target.value)}
+                          className="h-11 min-w-[14rem] rounded-full border border-gray-200 bg-white px-4 text-sm font-semibold text-gray-900 outline-none transition focus:border-gray-900 focus:ring-2 focus:ring-gray-900/10"
+                        >
+                          <option value="">Use role default</option>
+                          {STAFF_HOME_OPTIONS.map((opt) => (
+                            <option key={opt.value} value={opt.value}>{opt.label}</option>
+                          ))}
+                        </select>
+                      </div>
+
+                      <label className="mt-5 inline-flex cursor-pointer items-center gap-2.5 rounded-full bg-white px-3.5 py-2 text-[11px] font-semibold uppercase tracking-[0.16em] text-gray-600 ring-1 ring-gray-200 transition hover:bg-gray-50">
+                        <input
+                          type="checkbox"
+                          checked={editActive}
+                          onChange={(e) => setEditActive(e.target.checked)}
+                          className="h-4 w-4 rounded-full border-gray-300 text-gray-900"
+                        />
+                        Active staff record
+                      </label>
+
+                      {/* Action bar: pill buttons. Primary dark, secondary
+                          outline, destructive right-aligned. */}
+                      <div className="mt-6 flex flex-wrap items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const payload: {
+                              id: number; name?: string; role?: StaffRole;
+                              employee_id?: string; active?: boolean; color_hex?: string;
+                              default_home_path?: string | null;
+                            } = { id: member.id };
+                            if (editName.trim() !== member.name) payload.name = editName.trim();
+                            if (editEmployeeId.trim() !== (member.employee_id || '')) payload.employee_id = editEmployeeId.trim();
+                            if (editActive !== member.active) payload.active = editActive;
+                            if (editColorHex.toLowerCase() !== memberColor.toLowerCase()) {
+                              payload.color_hex = editColorHex;
+                            }
+                            // Empty string in the form = "use role default" = NULL in DB.
+                            const nextHome = editDefaultHomePath || null;
+                            if (nextHome !== (member.default_home_path || null)) {
+                              payload.default_home_path = nextHome;
+                            }
+                            // Role select only supports technician/packer —
+                            // only send it if the staff is currently one of
+                            // those AND the value changed. Sending role='admin'
+                            // (etc.) trips the API's tech/packer-only check.
+                            if (
+                              editRole !== member.role &&
+                              (member.role === 'technician' || member.role === 'packer')
+                            ) {
+                              payload.role = editRole;
+                            }
+                            updateStaffMutation.mutate(payload);
+                          }}
+                          className="inline-flex h-11 items-center justify-center rounded-full bg-gray-900 px-6 text-[12px] font-semibold uppercase tracking-wider text-white shadow-md shadow-gray-900/20 transition hover:bg-gray-800 hover:shadow-lg"
+                        >
+                          Save
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setEditingStaffId(null)}
+                          className="inline-flex h-11 items-center justify-center rounded-full border border-gray-200 bg-white px-5 text-[12px] font-semibold uppercase tracking-wider text-gray-700 transition hover:bg-gray-50"
+                        >
+                          Cancel
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => deleteStaffMutation.mutate(member.id)}
+                          className="ml-auto inline-flex h-11 items-center justify-center rounded-full border border-red-200 bg-white px-5 text-[12px] font-semibold uppercase tracking-wider text-red-700 transition hover:bg-red-50"
+                        >
+                          Deactivate
+                        </button>
+                      </div>
                     </div>
                   </div>
                 );
@@ -1324,5 +1440,14 @@ function SummaryCell({ label, value, tone = 'gray' }: { label: string; value: nu
       <p className={sectionLabel}>{label}</p>
       <p className={`mt-1 text-xl font-black tracking-tight ${valueClass}`}>{value}</p>
     </div>
+  );
+}
+
+function FieldGroup({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <label className="block space-y-1.5">
+      <span className="block text-[10.5px] font-semibold uppercase tracking-[0.16em] text-gray-500">{label}</span>
+      {children}
+    </label>
   );
 }

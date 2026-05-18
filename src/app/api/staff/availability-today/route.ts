@@ -5,6 +5,7 @@ import { getCurrentStaffDayOfWeek } from '@/lib/staff-schedule';
 import { getWeekStartDateKeyForDateKey } from '@/lib/staff-availability';
 import { toAvailabilityResponse, type RawStaffScheduleRow } from '@/lib/staff-availability';
 import { getCurrentPSTDateKey } from '@/utils/date';
+import { withAuth } from '@/lib/auth/withAuth';
 
 function isDatabaseUnavailable(error: unknown) {
   return isTransientDbError(error);
@@ -21,7 +22,7 @@ function parseRoleFilter(input: string | null): Set<string> | null {
   return new Set(values);
 }
 
-export async function GET(request: NextRequest) {
+export const GET = withAuth(async (request: NextRequest) => {
   try {
     const { searchParams } = new URL(request.url);
     const roleFilter = parseRoleFilter(searchParams.get('roles'));
@@ -149,4 +150,4 @@ export async function GET(request: NextRequest) {
       details: error instanceof Error ? error.message : 'Unknown error',
     }, { status: 500 });
   }
-}
+}, { permission: 'admin.view' });

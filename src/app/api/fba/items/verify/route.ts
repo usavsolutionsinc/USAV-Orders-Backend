@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import pool from '@/lib/db';
 import { publishFbaItemChanged } from '@/lib/realtime/publish';
 import { invalidateCacheTags } from '@/lib/cache/upstash-cache';
+import { withAuth } from '@/lib/auth/withAuth';
 
 // ── POST /api/fba/items/verify ────────────────────────────────────────────────
 // Packer confirms a READY_TO_GO item is physically present (PACKER_VERIFIED).
@@ -9,16 +10,17 @@ import { invalidateCacheTags } from '@/lib/cache/upstash-cache';
 // (status transitions to LABEL_ASSIGNED only when a label is bound).
 // Writes to fba_fnsku_logs in the same transaction.
 //
-// Body: { shipment_id, fnsku, staff_id, station? }
-export async function POST(request: NextRequest) {
+// Body: { shipment_id, fnsku, station? } — actor is from the verified session.
+export const POST = withAuth(async (request: NextRequest, ctx) => {
   const client = await pool.connect();
   try {
     const body = await request.json();
-    const { shipment_id, fnsku, staff_id, station } = body;
+    const { shipment_id, fnsku, station } = body;
+    const staff_id = ctx.staffId;
 
-    if (!shipment_id || !fnsku?.trim() || !staff_id) {
+    if (!shipment_id || !fnsku?.trim()) {
       return NextResponse.json(
-        { success: false, error: 'shipment_id, fnsku, and staff_id are required' },
+        { success: false, error: 'shipment_id and fnsku are required' },
         { status: 400 }
       );
     }
@@ -116,4 +118,19 @@ export async function POST(request: NextRequest) {
   } finally {
     client.release();
   }
-}
+}, {
+  permission: 'fba.stage_shipments',
+  audit: {
+    source: 'fba.items.verify',
+    action: 'fba.fnsku.verify',
+    entityType: 'fba_shipment_item',
+    entityId: ({ body }) => {
+      const b = body as { shipment_id?: number; fnsku?: string } | null;
+      return b?.shipment_id ?? null;
+    },
+    extra: ({ body }) => {
+      const b = body as { fnsku?: string } | null;
+      return { fnsku: b?.fnsku ?? null };
+    },
+  },
+});

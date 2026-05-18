@@ -12,6 +12,7 @@ import { queryNemoClawRag } from '@/lib/ai/nemoclaw-rag';
 import { checkRateLimit } from '@/lib/api-guard';
 import { persistChatMessage } from '@/lib/ai/chat-persistence';
 import type { AiChatRouteResponse, AiStructuredAnswer } from '@/lib/ai/types';
+import { withAuth } from '@/lib/auth/withAuth';
 
 export const runtime = 'nodejs';
 
@@ -25,7 +26,7 @@ type OpenClawChatBody = {
 const HERMES_API_URL = process.env.HERMES_API_URL || 'http://127.0.0.1:8642/v1';
 const HERMES_API_KEY = process.env.HERMES_API_KEY || '';
 
-export async function POST(req: NextRequest) {
+export const POST = withAuth(async (req: NextRequest) => {
   const rate = checkRateLimit({
     headers: req.headers,
     routeKey: 'ai-chat',
@@ -227,4 +228,4 @@ export async function POST(req: NextRequest) {
       { status: 503 },
     );
   }
-}
+}, { permission: 'dashboard.view' });

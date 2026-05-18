@@ -13,6 +13,7 @@ import { createStationActivityLog } from '@/lib/station-activity';
 import { looksLikeFnsku } from '@/lib/scan-resolver';
 import { mergeSerialsFromTsnRows } from '@/lib/tech/serialFields';
 import { createFbaLog } from '@/lib/fba/createFbaLog';
+import { withAuth } from '@/lib/auth/withAuth';
 
 const ROUTE = 'tech.scan';
 type ScanSourceStation = 'TECH' | 'FBA';
@@ -215,7 +216,7 @@ function buildOrderPayload(row: any, overrides: Record<string, unknown> = {}) {
 
 // ── Main handler ─────────────────────────────────────────────────────────────
 
-export async function POST(req: NextRequest) {
+export const POST = withAuth(async (req: NextRequest, ctx) => {
   const rate = checkRateLimit({ headers: req.headers, routeKey: 'tech-scan', limit: 120, windowMs: 60_000 });
   if (!rate.ok) {
     return NextResponse.json({ success: false, found: false, error: 'Rate limit exceeded' }, { status: 429 });
@@ -225,13 +226,13 @@ export async function POST(req: NextRequest) {
   if (!body) return NextResponse.json({ success: false, found: false, error: 'Invalid JSON' }, { status: 400 });
 
   const value = String(body.value || body.tracking || '').trim();
-  const techId = Number(body.techId);
+  // Server-trusted actor — body.techId is ignored for attribution.
+  const techId = ctx.staffId;
   const sourceStation = resolveScanSourceStation(body.sourceStation);
   const stationSource = sourceStation === 'FBA' ? 'fba.scan' : ROUTE;
   const salStation = sourceStation;
   const isFbaSource = sourceStation === 'FBA';
   if (!value) return NextResponse.json({ success: false, found: false, error: 'Scan value is required' }, { status: 400 });
-  if (!techId) return NextResponse.json({ success: false, found: false, error: 'Tech ID is required' }, { status: 400 });
 
   // Explicit type override or auto-detect
   const explicitType = String(body.type || '').toUpperCase();
@@ -483,4 +484,4 @@ export async function POST(req: NextRequest) {
     console.error('Error in tech scan:', error);
     return NextResponse.json({ success: false, found: false, error: 'Scan failed', details: error.message }, { status: 500 });
   }
-}
+}, { permission: 'tech.scan_serial' });

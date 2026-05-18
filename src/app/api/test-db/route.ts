@@ -1,7 +1,8 @@
 import { NextResponse } from 'next/server';
 import pool from '@/lib/db';
+import { withAuth } from '@/lib/auth/withAuth';
 
-export async function GET() {
+export const GET = withAuth(async () => {
     try {
         // Test existing pg pool connection
         const result = await pool.query('SELECT NOW()');
@@ -24,5 +25,5 @@ export async function GET() {
             }
         }, { status: 500 });
     }
-}
+}, { permission: 'admin.view' });
 

@@ -1,16 +1,21 @@
 import { NextRequest, NextResponse, after } from 'next/server';
 import pool from '@/lib/db';
 import { createCacheLookupKey, getCachedJson, setCachedJson } from '@/lib/cache/upstash-cache';
+import { withAuth } from '@/lib/auth/withAuth';
 
 /**
  * Simplified tech-logs query.
  * SAL is SoT: one query, no UNION ALL, no regex matching.
  *
- * GET /api/tech/logs?techId=1&weekStart=2026-03-24&weekEnd=2026-03-28
+ * GET /api/tech/logs?weekStart=2026-03-24&weekEnd=2026-03-28
+ *   — defaults to the signed-in staff's logs.
+ *   — admin.view_logs holders can pass ?techId=N to view another tech.
  */
-export async function GET(req: NextRequest) {
+export const GET = withAuth(async (req: NextRequest, ctx) => {
   const { searchParams } = new URL(req.url);
-  const techId = Number(searchParams.get('techId'));
+  const techIdParam = Number(searchParams.get('techId'));
+  const isAdminFilter = Number.isFinite(techIdParam) && techIdParam > 0 && ctx.permissions.has('admin.view_logs');
+  const techId = isAdminFilter ? techIdParam : ctx.staffId;
   const weekStart = searchParams.get('weekStart') || '';
   const weekEnd = searchParams.get('weekEnd') || '';
   const limit = Math.min(Number(searchParams.get('limit')) || 500, 2000);
@@ -212,4 +217,4 @@ export async function GET(req: NextRequest) {
     console.error('Error fetching tech logs:', error);
     return NextResponse.json({ error: 'Failed to fetch tech logs', details: error.message }, { status: 500 });
   }
-}
+}, { permission: 'tech.view' });

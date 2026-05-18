@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/drizzle/db';
 import { aiChatSessions, aiChatMessages } from '@/lib/drizzle/schema';
 import { desc, eq, sql, count } from 'drizzle-orm';
+import { withAuth } from '@/lib/auth/withAuth';
 
 export const runtime = 'nodejs';
 
@@ -9,7 +10,7 @@ export const runtime = 'nodejs';
  * GET /api/ai/chat-sessions — list recent sessions (sidebar)
  * Returns the 30 most recent sessions with message count and preview.
  */
-export async function GET() {
+export const GET = withAuth(async () => {
   try {
     const sessions = await db
       .select({
@@ -30,12 +31,12 @@ export async function GET() {
     console.error('[chat-sessions] list error:', err?.message);
     return NextResponse.json({ error: 'Failed to load sessions' }, { status: 500 });
   }
-}
+}, { permission: 'dashboard.view' });
 
 /**
  * DELETE /api/ai/chat-sessions?id=<sessionId> — delete a session
  */
-export async function DELETE(req: NextRequest) {
+export const DELETE = withAuth(async (req: NextRequest) => {
   try {
     const sessionId = req.nextUrl.searchParams.get('id');
     if (!sessionId) {
@@ -47,4 +48,4 @@ export async function DELETE(req: NextRequest) {
     console.error('[chat-sessions] delete error:', err?.message);
     return NextResponse.json({ error: 'Failed to delete session' }, { status: 500 });
   }
-}
+}, { permission: 'dashboard.view' });

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/drizzle/db';
 import { aiChatMessages, aiChatSessions } from '@/lib/drizzle/schema';
 import { eq, asc } from 'drizzle-orm';
+import { requireRoutePerm } from '@/lib/auth/dynamic-route-guard';
 
 export const runtime = 'nodejs';
 
@@ -9,9 +10,11 @@ export const runtime = 'nodejs';
  * GET /api/ai/chat-sessions/[sessionId]/messages — load all messages for a session
  */
 export async function GET(
-  _req: NextRequest,
+  req: NextRequest,
   { params }: { params: Promise<{ sessionId: string }> },
 ) {
+  const gate = await requireRoutePerm(req, 'dashboard.view');
+  if (gate.denied) return gate.denied;
   try {
     const { sessionId } = await params;
     const messages = await db

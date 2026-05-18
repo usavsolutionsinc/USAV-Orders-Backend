@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { put, del } from '@vercel/blob';
 import pool from '@/lib/db';
 import { ApiError, errorResponse } from '@/lib/api';
+import { withAuth } from '@/lib/auth/withAuth';
 
 export const dynamic = 'force-dynamic';
 
@@ -28,7 +29,7 @@ function mapRow(row: any): PhotoRow {
 const SELECT_COLUMNS = `id, entity_id AS receiving_id, url AS photo_url,
   photo_type AS caption, taken_by_staff_id AS uploaded_by, created_at`;
 
-export async function GET(req: NextRequest) {
+export const GET = withAuth(async (req: NextRequest) => {
   try {
     const receivingId = Number(new URL(req.url).searchParams.get('receivingId'));
     if (!Number.isFinite(receivingId) || receivingId <= 0) {
@@ -47,9 +48,9 @@ export async function GET(req: NextRequest) {
   } catch (error) {
     return errorResponse(error, 'GET /api/receiving-photos');
   }
-}
+}, { permission: 'receiving.view' });
 
-export async function POST(req: NextRequest) {
+export const POST = withAuth(async (req: NextRequest, ctx) => {
   try {
     const body = await req.json().catch(() => null);
     if (!body) throw ApiError.badRequest('Invalid JSON body');
@@ -58,7 +59,8 @@ export async function POST(req: NextRequest) {
     const photoBase64: string | undefined = body?.photoBase64;
     const photoUrl: string | undefined = body?.photoUrl;
     const caption = String(body?.caption || '').trim() || null;
-    const uploadedBy = body?.uploadedBy ? Number(body.uploadedBy) : null;
+    // Server-trusted actor — body.uploadedBy is ignored.
+    const uploadedBy = ctx.staffId;
 
     if (!Number.isFinite(receivingId) || receivingId <= 0) {
       throw ApiError.badRequest('Valid receivingId is required');
@@ -90,9 +92,9 @@ export async function POST(req: NextRequest) {
   } catch (error) {
     return errorResponse(error, 'POST /api/receiving-photos');
   }
-}
+}, { permission: 'receiving.upload_photo' });
 
-export async function DELETE(req: NextRequest) {
+export const DELETE = withAuth(async (req: NextRequest) => {
   try {
     const id = Number(new URL(req.url).searchParams.get('id'));
     if (!Number.isFinite(id) || id <= 0) {
@@ -116,4 +118,4 @@ export async function DELETE(req: NextRequest) {
   } catch (error) {
     return errorResponse(error, 'DELETE /api/receiving-photos');
   }
-}
+}, { permission: 'receiving.upload_photo' });

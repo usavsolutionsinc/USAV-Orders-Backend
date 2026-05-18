@@ -4,6 +4,7 @@ import { publishReceivingLogChanged } from '@/lib/realtime/publish';
 import { invalidateCacheTags } from '@/lib/cache/upstash-cache';
 import type { SerialUnitRow } from '@/lib/neon/serial-units-queries';
 import { registerShipmentPermissive } from '@/lib/shipping/sync-shipment';
+import { withAuth } from '@/lib/auth/withAuth';
 
 type LineSerial = {
   id: number;
@@ -63,7 +64,7 @@ function parsePositiveTechId(value: unknown): number | null {
 // ?id=<n>              → single row
 // ?receiving_id=<n>    → all lines for a package
 // ?limit&offset&search → paginated list (omit receiving_id to get all)
-export async function GET(request: NextRequest) {
+export const GET = withAuth(async (request: NextRequest) => {
   try {
     const { searchParams } = new URL(request.url);
     const id          = Number(searchParams.get('id'));
@@ -335,10 +336,10 @@ export async function GET(request: NextRequest) {
     console.error('receiving-lines GET failed:', error);
     return NextResponse.json({ success: false, error: msg }, { status: 500 });
   }
-}
+}, { permission: 'receiving.view' });
 
 // ─── POST ─────────────────────────────────────────────────────────────────────
-export async function POST(request: NextRequest) {
+export const POST = withAuth(async (request: NextRequest) => {
   try {
     const body = await request.json();
 
@@ -412,10 +413,10 @@ export async function POST(request: NextRequest) {
     console.error('receiving-lines POST failed:', error);
     return NextResponse.json({ success: false, error: msg }, { status: 500 });
   }
-}
+}, { permission: 'receiving.mark_received' });
 
 // ─── PATCH ────────────────────────────────────────────────────────────────────
-export async function PATCH(request: NextRequest) {
+export const PATCH = withAuth(async (request: NextRequest) => {
   try {
     const body = await request.json();
     const id   = Number(body?.id);
@@ -616,10 +617,10 @@ export async function PATCH(request: NextRequest) {
     console.error('receiving-lines PATCH failed:', error);
     return NextResponse.json({ success: false, error: msg }, { status: 500 });
   }
-}
+}, { permission: 'receiving.mark_received' });
 
 // ─── DELETE ───────────────────────────────────────────────────────────────────
-export async function DELETE(request: NextRequest) {
+export const DELETE = withAuth(async (request: NextRequest) => {
   try {
     const { searchParams } = new URL(request.url);
     const id = Number(searchParams.get('id'));
@@ -641,7 +642,7 @@ export async function DELETE(request: NextRequest) {
     console.error('receiving-lines DELETE failed:', error);
     return NextResponse.json({ success: false, error: msg }, { status: 500 });
   }
-}
+}, { permission: 'receiving.mark_received' });
 
 // ─── Normalize ────────────────────────────────────────────────────────────────
 function normalizeRow(row: Record<string, unknown>) {

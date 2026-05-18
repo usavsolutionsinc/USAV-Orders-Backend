@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import pool from '@/lib/db';
 import { normalizeIdentifier } from '@/lib/product-manuals';
 import { resolveSkuCatalogId } from '@/lib/neon/sku-catalog-queries';
+import { withAuth } from '@/lib/auth/withAuth';
 
 function buildDocUrls(googleFileId: string) {
   return {
@@ -11,7 +12,7 @@ function buildDocUrls(googleFileId: string) {
   };
 }
 
-export async function GET(req: NextRequest) {
+export const GET = withAuth(async (req: NextRequest) => {
   try {
     const { searchParams } = new URL(req.url);
     const itemNumber = String(searchParams.get('itemNumber') || '');
@@ -111,4 +112,4 @@ export async function GET(req: NextRequest) {
       { status: 500 }
     );
   }
-}
+}, { permission: 'sku_stock.view' });

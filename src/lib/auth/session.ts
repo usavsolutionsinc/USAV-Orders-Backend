@@ -56,6 +56,12 @@ export interface CreateSessionOpts {
   deviceLabel?: string | null;
   ip?: string | null;
   userAgent?: string | null;
+  /**
+   * Optional hard expiry. When set, overrides the device-kind absolute
+   * window — used to tie session lifetime to the end of the staff's shift
+   * so they get auto-signed-out when their shift ends.
+   */
+  expiresAt?: Date;
 }
 
 interface SessionDbRow {
@@ -67,7 +73,12 @@ interface SessionDbRow {
 export async function createSession(opts: CreateSessionOpts): Promise<SessionRow> {
   const sid = newSid();
   const window = IDLE_WINDOWS[opts.deviceKind];
-  const expiresAt = new Date(Date.now() + window.absoluteMs);
+  const defaultExpiresAt = new Date(Date.now() + window.absoluteMs);
+  // Shift-bound expiry wins (if it's sooner). Falls back to the device's
+  // absolute window when no shift is provided.
+  const expiresAt = opts.expiresAt && opts.expiresAt.getTime() > Date.now()
+    ? new Date(Math.min(opts.expiresAt.getTime(), defaultExpiresAt.getTime()))
+    : defaultExpiresAt;
 
   const r = await pool.query(
     `INSERT INTO staff_sessions (sid, staff_id, device_kind, device_label, ip, user_agent, expires_at)

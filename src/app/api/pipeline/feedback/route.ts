@@ -11,10 +11,12 @@ import { db } from '@/lib/drizzle/db';
 import { trainingSamples } from '@/lib/drizzle/schema';
 import { eq } from 'drizzle-orm';
 import { NextResponse } from 'next/server';
+import { withAuth } from '@/lib/auth/withAuth';
+import type { NextRequest } from 'next/server';
 
 export const runtime = 'nodejs';
 
-export async function POST(request: Request) {
+export const POST = withAuth(async (request: NextRequest) => {
   try {
     const body = await request.json() as { sampleId?: number; rating?: number };
 
@@ -55,4 +57,4 @@ export async function POST(request: Request) {
     const message = error instanceof Error ? error.message : String(error);
     return NextResponse.json({ ok: false, error: message }, { status: 500 });
   }
-}
+}, { permission: 'admin.manage_features' });

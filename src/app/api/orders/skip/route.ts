@@ -1,16 +1,18 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { withAuth } from '@/lib/auth/withAuth';
 
 /**
  * POST /api/orders/skip - Skip an order for a technician
  * NOTE: skipped_by column was removed from DB, so this is currently a no-op
  */
-export async function POST(req: NextRequest) {
+export const POST = withAuth(async (req: NextRequest, ctx) => {
   try {
-    const { orderId, techId } = await req.json();
+    const { orderId } = await req.json();
+    const techId = ctx.staffId;
 
-    if (!orderId || !techId) {
+    if (!orderId) {
       return NextResponse.json(
-        { error: 'orderId and techId are required' },
+        { error: 'orderId is required' },
         { status: 400 }
       );
     }
@@ -24,4 +26,4 @@ export async function POST(req: NextRequest) {
       { status: 500 }
     );
   }
-}
+}, { permission: 'tech.scan_serial' });

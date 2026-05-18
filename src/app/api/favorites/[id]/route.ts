@@ -5,6 +5,7 @@ import {
   updateFavoriteSku,
   type FavoriteWorkspaceKey,
 } from '@/lib/favorites/sku-favorites';
+import { requireRoutePerm } from '@/lib/auth/dynamic-route-guard';
 
 function parseWorkspaceKey(value: string | null): FavoriteWorkspaceKey | null {
   if (!value) return null;
@@ -17,6 +18,8 @@ export async function PATCH(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
+  const gate = await requireRoutePerm(req, 'sku_stock.manage');
+  if (gate.denied) return gate.denied;
   try {
     const { id: rawId } = await params;
     const id = Number(rawId);
@@ -42,7 +45,7 @@ export async function PATCH(
       notes: body?.notes,
       sortOrder: body?.sortOrder,
       isActive: body?.isActive,
-      staffId: body?.staffId,
+      staffId: gate.ctx.staffId,
     });
 
     if (!favorite) {
@@ -63,6 +66,8 @@ export async function DELETE(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
+  const gate = await requireRoutePerm(req, 'sku_stock.manage');
+  if (gate.denied) return gate.denied;
   try {
     const { id: rawId } = await params;
     const id = Number(rawId);

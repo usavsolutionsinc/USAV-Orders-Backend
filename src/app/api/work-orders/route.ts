@@ -10,6 +10,7 @@ import {
   getOrderAssignmentSnapshotsByOrderIds,
   getStaffNameMap,
 } from '@/lib/work-assignments/order-assignment-snapshot';
+import { withAuth } from '@/lib/auth/withAuth';
 
 type QueueKey =
   | 'all'
@@ -708,7 +709,7 @@ async function safeFetch<T>(label: string, fn: () => Promise<T[]>): Promise<T[]>
   }
 }
 
-export async function GET(request: NextRequest) {
+export const GET = withAuth(async (request: NextRequest) => {
   try {
     const { searchParams } = new URL(request.url);
     const queue = normalizeQueue(searchParams.get('queue'));
@@ -748,9 +749,9 @@ export async function GET(request: NextRequest) {
       { status: 500 }
     );
   }
-}
+}, { permission: 'work_orders.view' });
 
-export async function PATCH(request: NextRequest) {
+export const PATCH = withAuth(async (request: NextRequest) => {
   try {
     const body = await request.json();
     const entityType = String(body?.entityType || '').trim().toUpperCase() as EntityType;
@@ -890,4 +891,4 @@ export async function PATCH(request: NextRequest) {
       { status: 500 }
     );
   }
-}
+}, { permission: 'work_orders.claim' });

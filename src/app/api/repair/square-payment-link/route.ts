@@ -2,6 +2,7 @@ import { randomUUID } from 'crypto';
 import { NextRequest, NextResponse } from 'next/server';
 import { getRepairById } from '@/lib/neon/repair-service-queries';
 import { isAllowedAdminOrigin } from '@/lib/security/allowed-origin';
+import { withAuth } from '@/lib/auth/withAuth';
 import { formatPSTTimestamp } from '@/utils/date';
 import { formatSku } from '@/utils/sku';
 
@@ -223,7 +224,7 @@ async function getSquareVariationIdBySku(
   return refreshed.get(normalizedSku) || null;
 }
 
-export async function POST(req: NextRequest) {
+export const POST = withAuth(async (req: NextRequest) => {
   try {
     if (!isAllowedAdminOrigin(req)) {
       return NextResponse.json(
@@ -377,4 +378,4 @@ export async function POST(req: NextRequest) {
     console.error('Repair Square payment link error:', error);
     return NextResponse.json({ success: false, error: message }, { status: 500 });
   }
-}
+}, { permission: 'repair.mark_repaired' });

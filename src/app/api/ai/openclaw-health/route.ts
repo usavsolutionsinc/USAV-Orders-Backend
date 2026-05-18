@@ -4,12 +4,13 @@
  */
 import { NextResponse } from 'next/server';
 import { formatPSTTimestamp } from '@/utils/date';
+import { withAuth } from '@/lib/auth/withAuth';
 
 export const runtime = 'nodejs';
 
 const HERMES_API_URL = process.env.HERMES_API_URL || 'http://127.0.0.1:8642/v1';
 
-export async function GET() {
+export const GET = withAuth(async () => {
   const timestamp = formatPSTTimestamp();
 
   try {
@@ -44,4 +45,4 @@ export async function GET() {
       { status: 503 },
     );
   }
-}
+}, { permission: 'dashboard.view' });

@@ -157,11 +157,9 @@ export const POST = withAuth(async (request, ctx) => {
     const serialNumber = String(body?.serial_number || '').trim() || null;
     const zendeskTicket = String(body?.zendesk_ticket || '').trim() || null;
     const notes = String(body?.notes || '').trim() || null;
-    const bodyStaffIdRaw = Number(body?.staff_id);
-    const bodyStaffId =
-      Number.isFinite(bodyStaffIdRaw) && bodyStaffIdRaw > 0 ? Math.floor(bodyStaffIdRaw) : null;
-    // Server-trusted actor when AUTH_V2 is active; fall back to body for legacy callers.
-    const staffId = ctx.staffId ?? bodyStaffId;
+    // Server-trusted actor from the verified session cookie. The wrapper
+    // guarantees ctx.staffId is set on this permission-gated route.
+    const staffId = ctx.staffId;
     const clientEventId = String(body?.client_event_id ?? '').trim() || null;
     const stationRaw = String(body?.station ?? '').trim().toUpperCase();
     const station =
@@ -779,7 +777,6 @@ export const POST = withAuth(async (request, ctx) => {
         },
         scanRef: localTracking,
         method: station === 'MOBILE' ? 'scan' : 'manual',
-        actorStaffIdOverride: bodyStaffId,
         extra: {
           receiving_id: receivingId,
           zoho_purchaseorder_id: l.zoho_purchaseorder_id,
@@ -841,4 +838,4 @@ export const POST = withAuth(async (request, ctx) => {
     console.error('receiving/mark-received-po POST failed:', error);
     return NextResponse.json({ success: false, error: message }, { status: 500 });
   }
-}, { allowAnonymous: true });
+}, { permission: 'receiving.mark_received' });

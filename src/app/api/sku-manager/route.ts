@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import pool from '@/lib/db';
+import { withAuth } from '@/lib/auth/withAuth';
 
 function incrementSkuCounting(currentCounting: string) {
     const firstChar = currentCounting.charAt(0);
@@ -52,7 +53,10 @@ function incrementSkuCounting(currentCounting: string) {
     }
 }
 
-export async function GET(request: NextRequest) {
+// GET with action=increment mutates DB (allocates next SKU counter), so
+// gated to sku_stock.manage. action=current is read-only but kept under
+// the same gate for simplicity — both flows are inventory-team scoped.
+export const GET = withAuth(async (request: NextRequest) => {
     try {
         const { searchParams } = new URL(request.url);
         const baseSku = searchParams.get('baseSku');
@@ -99,5 +103,5 @@ export async function GET(request: NextRequest) {
         console.error('SKU Manager error:', error);
         return NextResponse.json({ error: 'Internal Server Error', details: error.message }, { status: 500 });
     }
-}
+}, { permission: 'sku_stock.manage' });
 

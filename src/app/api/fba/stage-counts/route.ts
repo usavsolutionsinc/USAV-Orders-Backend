@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import pool from '@/lib/db';
+import { withAuth } from '@/lib/auth/withAuth';
 
 /**
  * GET /api/fba/stage-counts
@@ -18,7 +19,7 @@ import pool from '@/lib/db';
  *   }
  * }
  */
-export async function GET() {
+export const GET = withAuth(async () => {
   try {
     const result = await pool.query(`
       SELECT status, COUNT(*) AS cnt
@@ -46,4 +47,4 @@ export async function GET() {
       { status: 500 }
     );
   }
-}
+}, { permission: 'fba.view' });

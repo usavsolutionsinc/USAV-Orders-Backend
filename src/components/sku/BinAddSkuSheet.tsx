@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { Loader2, Search, X } from '@/components/Icons';
-import { usePersistedStaffId } from '@/hooks/usePersistedStaffId';
+import { useAuth } from '@/contexts/AuthContext';
 import { errorFeedback, successFeedback } from '@/lib/feedback/confirm';
 
 function randomId(): string {
@@ -56,7 +56,8 @@ export function BinAddSkuSheet({
   binBarcode,
   invalidateKey,
 }: BinAddSkuSheetProps) {
-  const [staffId] = usePersistedStaffId();
+  const { user } = useAuth();
+  const staffId = user?.staffId ?? 0;
   const queryClient = useQueryClient();
   const [query, setQuery] = useState('');
   const debounced = useDebounced(query, 250);

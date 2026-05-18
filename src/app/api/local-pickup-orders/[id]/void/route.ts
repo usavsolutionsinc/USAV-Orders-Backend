@@ -1,7 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import pool from '@/lib/db';
+import { requireRoutePerm } from '@/lib/auth/dynamic-route-guard';
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const gate = await requireRoutePerm(req, 'orders.void');
+  if (gate.denied) return gate.denied;
   try {
     const { id } = await params;
     const orderId = Number(id);
@@ -9,8 +12,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       return NextResponse.json({ success: false, error: 'Invalid order ID' }, { status: 400 });
     }
 
-    const body = (await req.json()) as Record<string, unknown>;
-    const voidedBy = Number(body.voidedBy || body.voided_by) || null;
+    const voidedBy = gate.ctx.staffId;
 
     const result = await pool.query(
       `UPDATE local_pickup_orders

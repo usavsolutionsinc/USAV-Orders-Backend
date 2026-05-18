@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { withAuth } from '@/lib/auth/withAuth';
 import pool from '@/lib/db';
 
 /**
@@ -7,7 +8,7 @@ import pool from '@/lib/db';
  * Lists alerts produced by /api/cron/stock-alerts. Powers the future
  * /sku-stock?view=alerts surface and any digest emails.
  */
-export async function GET(req: NextRequest) {
+export const GET = withAuth(async (req: NextRequest) => {
   try {
     const { searchParams } = new URL(req.url);
     const status = searchParams.get('status') || 'open';
@@ -58,4 +59,4 @@ export async function GET(req: NextRequest) {
       { status: 500 },
     );
   }
-}
+}, { permission: 'sku_stock.view' });

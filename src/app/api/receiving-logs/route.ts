@@ -5,6 +5,7 @@ import { createCacheLookupKey, getCachedJson, invalidateCacheTags, setCachedJson
 import { upsertReceivingAssignment } from '@/lib/receiving/assignment-upsert';
 import { getCurrentPSTDateKey } from '@/utils/date';
 import { publishReceivingLogChanged } from '@/lib/realtime/publish';
+import { withAuth } from '@/lib/auth/withAuth';
 
 // Module-level singleton — the `receiving` table is never dropped at runtime,
 // so we only need to check once per Fluid instance lifetime.
@@ -33,7 +34,7 @@ async function checkReceivingScansTableExists(): Promise<boolean> {
     return exists;
 }
 
-export async function GET(request: NextRequest) {
+export const GET = withAuth(async (request: NextRequest) => {
     try {
         const { searchParams } = new URL(request.url);
         const limit = parseInt(searchParams.get('limit') || '50');
@@ -190,9 +191,9 @@ export async function GET(request: NextRequest) {
             { status: 500 }
         );
     }
-}
+}, { permission: 'receiving.view' });
 
-export async function DELETE(request: NextRequest) {
+export const DELETE = withAuth(async (request: NextRequest) => {
     try {
         const { searchParams } = new URL(request.url);
         const idRaw = searchParams.get('id');
@@ -227,9 +228,9 @@ export async function DELETE(request: NextRequest) {
             { status: 500 }
         );
     }
-}
+}, { permission: 'receiving.mark_received' });
 
-export async function PATCH(request: NextRequest) {
+export const PATCH = withAuth(async (request: NextRequest) => {
     try {
         const body = await request.json();
         const id = Number(body?.id);
@@ -434,4 +435,4 @@ export async function PATCH(request: NextRequest) {
             { status: 500 }
         );
     }
-}
+}, { permission: 'receiving.mark_received' });

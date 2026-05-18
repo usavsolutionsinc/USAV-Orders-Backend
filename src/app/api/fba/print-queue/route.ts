@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import pool from '@/lib/db';
+import { withAuth } from '@/lib/auth/withAuth';
 
 const ALLOWED_STATUSES = ['READY_TO_GO', 'OUT_OF_STOCK', 'PACKING', 'PLANNED', 'LABEL_ASSIGNED'] as const;
 type AllowedStatus = typeof ALLOWED_STATUSES[number];
@@ -16,7 +17,7 @@ const DEFAULT_PRINT_STATUSES: AllowedStatus[] = ['READY_TO_GO', 'OUT_OF_STOCK', 
  *   status — comma-separated statuses (each must be allowed), or single status
  *   date   — optional ISO date YYYY-MM-DD; filters rows to shipments with that due_date (calendar day, UTC)
  */
-export async function GET(request: NextRequest) {
+export const GET = withAuth(async (request: NextRequest) => {
   try {
     const { searchParams } = new URL(request.url);
     const rawStatus = searchParams.get('status');
@@ -117,4 +118,4 @@ export async function GET(request: NextRequest) {
       { status: 500 }
     );
   }
-}
+}, { permission: 'fba.view' });

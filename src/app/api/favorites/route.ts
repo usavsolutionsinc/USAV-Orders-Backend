@@ -5,6 +5,7 @@ import {
   listFavoriteSkus,
   type FavoriteWorkspaceKey,
 } from '@/lib/favorites/sku-favorites';
+import { withAuth } from '@/lib/auth/withAuth';
 
 function parseWorkspaceKey(value: string | null): FavoriteWorkspaceKey | null {
   if (!value) return null;
@@ -13,7 +14,7 @@ function parseWorkspaceKey(value: string | null): FavoriteWorkspaceKey | null {
     : null;
 }
 
-export async function GET(req: NextRequest) {
+export const GET = withAuth(async (req: NextRequest) => {
   try {
     const { searchParams } = new URL(req.url);
     const workspaceKey = parseWorkspaceKey(searchParams.get('workspace'));
@@ -31,9 +32,9 @@ export async function GET(req: NextRequest) {
       { status: 500 },
     );
   }
-}
+}, { permission: 'sku_stock.view' });
 
-export async function POST(req: NextRequest) {
+export const POST = withAuth(async (req: NextRequest, ctx) => {
   try {
     const body = await req.json();
     const workspaceKey = parseWorkspaceKey(body?.workspaceKey ?? null);
@@ -53,7 +54,7 @@ export async function POST(req: NextRequest) {
       notes: body?.notes,
       sortOrder: body?.sortOrder,
       isActive: body?.isActive,
-      staffId: body?.staffId,
+      staffId: ctx.staffId,
     });
 
     return NextResponse.json({ success: true, favorite });
@@ -64,4 +65,4 @@ export async function POST(req: NextRequest) {
       { status: 500 },
     );
   }
-}
+}, { permission: 'sku_stock.manage' });

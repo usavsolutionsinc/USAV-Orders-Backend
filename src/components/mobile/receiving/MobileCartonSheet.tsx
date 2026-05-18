@@ -31,9 +31,7 @@ export function MobileCartonSheet({ row, staffId, open, onClose }: MobileCartonS
   const workflowLabel = workflowStatusTableLabel(row.workflow_status || 'EXPECTED');
   const conditionLabel = conditionGradeTableLabel(row.condition_grade);
 
-  const photosHref = receivingId
-    ? `/m/r/${receivingId}/photos${staffId > 0 ? `?staffId=${staffId}` : ''}`
-    : null;
+  const photosHref = receivingId ? `/m/r/${receivingId}/photos` : null;
 
   return (
     <BottomSheet open={open} onClose={onClose} maxWidth="32rem">

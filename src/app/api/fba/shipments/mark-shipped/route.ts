@@ -3,6 +3,8 @@ import pool from '@/lib/db';
 import { detectCarrier } from '@/lib/tracking-format';
 import { publishFbaShipmentChanged } from '@/lib/realtime/publish';
 import { invalidateCacheTags } from '@/lib/cache/upstash-cache';
+import { withAuth } from '@/lib/auth/withAuth';
+import { AUDIT_ENTITY } from '@/lib/audit-logs';
 
 /**
  * POST /api/fba/shipments/mark-shipped
@@ -23,7 +25,7 @@ import { invalidateCacheTags } from '@/lib/cache/upstash-cache';
  *  - If ALL items in a shipment are SHIPPED and actual_qty >= expected_qty,
  *    the shipment is DELETED (fully fulfilled).
  */
-export async function POST(request: NextRequest) {
+export const POST = withAuth(async (request: NextRequest) => {
   const client = await pool.connect();
   try {
     const body = await request.json();
@@ -155,5 +157,27 @@ export async function POST(request: NextRequest) {
   } finally {
     client.release();
   }
-}
+}, {
+  permission: 'shipping.mark_shipped',
+  audit: {
+    source: 'fba.shipments.mark-shipped',
+    action: 'fba.shipment.mark_shipped',
+    entityType: AUDIT_ENTITY.SHIPMENT,
+    entityId: ({ body }) => {
+      const b = body as { item_ids?: number[] } | null;
+      return Array.isArray(b?.item_ids) && b.item_ids.length > 0 ? b.item_ids[0] : null;
+    },
+    extra: ({ body, response }) => {
+      const b = body as { item_ids?: number[]; tracking_number?: string; carrier?: string } | null;
+      const r = response as { affected_shipments?: number[]; deleted_shipments?: number[] } | null;
+      return {
+        item_count: Array.isArray(b?.item_ids) ? b.item_ids.length : 0,
+        tracking_number: b?.tracking_number ?? null,
+        carrier: b?.carrier ?? null,
+        affected_shipments: r?.affected_shipments ?? [],
+        deleted_shipments: r?.deleted_shipments ?? [],
+      };
+    },
+  },
+});
 

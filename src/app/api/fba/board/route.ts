@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import pool from '@/lib/db';
+import { withAuth } from '@/lib/auth/withAuth';
 
 /**
  * GET /api/fba/board
@@ -11,7 +12,7 @@ import pool from '@/lib/db';
  * Legacy keys (`awaiting`, `packed`, `paired`) are still returned as empty arrays
  * so older clients do not crash during rollout.
  */
-export async function GET(_request: NextRequest) {
+export const GET = withAuth(async (_request: NextRequest) => {
   try {
     const result = await pool.query(
       `WITH pending_rows AS (
@@ -140,4 +141,4 @@ export async function GET(_request: NextRequest) {
       { status: 500 }
     );
   }
-}
+}, { permission: 'fba.view' });

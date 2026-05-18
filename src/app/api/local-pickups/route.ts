@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import pool from '@/lib/db';
+import { withAuth } from '@/lib/auth/withAuth';
 
 type LocalPickupRow = {
   receiving_id: number;
@@ -255,7 +256,7 @@ async function upsertPickupDetail(body: Record<string, unknown>) {
   return rows.find((row) => row.receiving_id === Number(result.rows[0]?.receiving_id)) ?? null;
 }
 
-export async function GET(request: NextRequest) {
+export const GET = withAuth(async (request: NextRequest) => {
   try {
     const { searchParams } = new URL(request.url);
     const search = String(searchParams.get('q') || '').trim();
@@ -284,9 +285,9 @@ export async function GET(request: NextRequest) {
       { status: 500 }
     );
   }
-}
+}, { permission: 'walk_in.view' });
 
-export async function POST(request: NextRequest) {
+export const POST = withAuth(async (request: NextRequest) => {
   try {
     const body = (await request.json()) as Record<string, unknown>;
     const row = await upsertPickupDetail(body);
@@ -298,9 +299,9 @@ export async function POST(request: NextRequest) {
       { status: 500 }
     );
   }
-}
+}, { permission: 'walk_in.intake' });
 
-export async function PATCH(request: NextRequest) {
+export const PATCH = withAuth(async (request: NextRequest) => {
   try {
     const body = (await request.json()) as Record<string, unknown>;
     const row = await upsertPickupDetail(body);
@@ -312,4 +313,4 @@ export async function PATCH(request: NextRequest) {
       { status: 500 }
     );
   }
-}
+}, { permission: 'walk_in.intake' });

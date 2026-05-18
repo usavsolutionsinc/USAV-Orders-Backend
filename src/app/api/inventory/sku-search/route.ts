@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import pool from '@/lib/db';
+import { withAuth } from '@/lib/auth/withAuth';
 
 export const dynamic = 'force-dynamic';
 
@@ -15,7 +16,7 @@ export const dynamic = 'force-dynamic';
  * source of truth for the per-SKU bin breakdown — this endpoint just helps
  * the user pick the right SKU.
  */
-export async function GET(req: NextRequest) {
+export const GET = withAuth(async (req: NextRequest) => {
   const q = (req.nextUrl.searchParams.get('q') ?? '').trim();
   if (!q) {
     return NextResponse.json({ success: true, results: [] });
@@ -48,4 +49,4 @@ export async function GET(req: NextRequest) {
       { status: 500 },
     );
   }
-}
+}, { permission: 'sku_stock.view' });

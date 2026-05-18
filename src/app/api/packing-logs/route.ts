@@ -12,6 +12,7 @@ import { createStationActivityLog } from '@/lib/station-activity';
 import { createAuditLog } from '@/lib/audit-logs';
 import { publishActivityLogged, publishOrderChanged, publishPackerLogChanged, publishPackerScanReady } from '@/lib/realtime/publish';
 import { ensureReplenishmentForOrder } from '@/lib/replenishment';
+import { withAuth } from '@/lib/auth/withAuth';
 
 const LEGACY_PACKER_ALIAS_TO_STAFF_ID: Record<string, number> = {
     '1': 4,
@@ -71,9 +72,13 @@ async function prependToPackerLogsCache(staffId: number, newRecord: Record<strin
     }
 }
 
-export async function GET(req: NextRequest) {
+export const GET = withAuth(async (req: NextRequest, ctx) => {
     const { searchParams } = new URL(req.url);
-    const packerId = searchParams.get('packerId') || '1';
+    // Admin-style filter `?packerId=` can still pin to a specific packer
+    // (requires admin.view_logs); otherwise default to the signed-in staff.
+    const packerIdParam = searchParams.get('packerId');
+    const isAdminFilter = packerIdParam && ctx.permissions.has('admin.view_logs');
+    const packerId = (isAdminFilter && packerIdParam) || String(ctx.staffId);
     const staffId = resolvePackerStaffId(packerId);
     const limit = parseInt(searchParams.get('limit') || '50');
     const offset = parseInt(searchParams.get('offset') || '0');
@@ -121,12 +126,14 @@ export async function GET(req: NextRequest) {
         console.error('Error fetching packing logs:', error);
         return NextResponse.json({ error: 'Failed to fetch logs', details: error.message }, { status: 500 });
     }
-}
+}, { permission: 'packing.view' });
 
-export async function POST(req: NextRequest) {
+export const POST = withAuth(async (req: NextRequest, ctx) => {
     try {
         const body = await req.json();
-        const { trackingNumber, photos, packerId, createdAt, timestamp, packerName } = body;
+        const { trackingNumber, photos, createdAt, timestamp, packerName } = body;
+        // Server-trusted actor — body.packerId is ignored.
+        const packerId = ctx.staffId;
         const scanInput = String(trackingNumber || '').trim();
         if (!scanInput) {
             return NextResponse.json({ error: 'trackingNumber is required' }, { status: 400 });
@@ -792,12 +799,12 @@ export async function POST(req: NextRequest) {
         });
     } catch (error: any) {
         console.error('Error updating order:', error);
-        return NextResponse.json({ 
-            error: 'Failed to update order', 
-            details: error.message 
+        return NextResponse.json({
+            error: 'Failed to update order',
+            details: error.message
         }, { status: 500 });
     }
-}
+}, { permission: 'packing.complete_order' });
 
 function normalizeScanTimestamp(input: any): string | null {
     if (!input) return null;

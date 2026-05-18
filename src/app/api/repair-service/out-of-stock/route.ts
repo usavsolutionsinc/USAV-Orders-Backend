@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import pool from '@/lib/db';
+import { withAuth } from '@/lib/auth/withAuth';
 
 /**
  * POST /api/repair-service/out-of-stock
@@ -9,7 +10,7 @@ import pool from '@/lib/db';
  *
  * Body: { repairId: number, assignmentId?: number | null, part: string }
  */
-export async function POST(req: NextRequest) {
+export const POST = withAuth(async (req: NextRequest) => {
   try {
     const { repairId, assignmentId, part } = await req.json();
 
@@ -53,4 +54,4 @@ export async function POST(req: NextRequest) {
       { status: 500 },
     );
   }
-}
+}, { permission: 'repair.mark_repaired' });

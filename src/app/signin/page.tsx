@@ -87,14 +87,26 @@ export default function SignInPage() {
 
   useEffect(() => { setRecent(readRecent()); }, []);
 
-  const finish = useCallback(async (staffId: number, role: string | null | undefined) => {
+  /**
+   * Resolves the landing route. Four-step chain (first match wins):
+   *   1. ?next= query param (came from a deep link — keep them there)
+   *   2. defaultHomePath returned by the API (per-staff override)
+   *   3. ROLE_HOME[role] (per-role default)
+   *   4. /dashboard (final fallback)
+   */
+  const finish = useCallback(async (
+    staffId: number,
+    role: string | null | undefined,
+    defaultHomePath: string | null | undefined,
+  ) => {
     writeRecent(staffId);
     // Hydrate AuthContext with the new session BEFORE navigating. Without this,
     // the still-null user state in AuthContext sees the next non-public route
     // and immediately bounces us back to /signin (the "second sign-in loop").
     await refreshAuth();
-    const home = role ? ROLE_HOME[role.toLowerCase()] : '/dashboard';
-    router.replace(next || home || '/dashboard');
+    const roleHome = role ? ROLE_HOME[role.toLowerCase()] : null;
+    const target = next || defaultHomePath || roleHome || '/dashboard';
+    router.replace(target);
   }, [router, next, refreshAuth]);
 
   const submitPin = useCallback(async (pin: string) => {
@@ -113,7 +125,8 @@ export default function SignInPage() {
       const data = await r.json().catch(() => ({}));
       return { ok: false as const, error: humanError((data as { error?: string }).error) };
     }
-    await finish(picked.id, picked.role);
+    const data = await r.json().catch(() => ({}));
+    await finish(picked.id, picked.role, (data as { defaultHomePath?: string | null }).defaultHomePath);
     return { ok: true as const };
   }, [picked, finish, rememberMe]);
 
@@ -133,7 +146,8 @@ export default function SignInPage() {
       const data = await r.json().catch(() => ({}));
       return { ok: false as const, error: humanError((data as { error?: string }).error) };
     }
-    await finish(picked.id, picked.role);
+    const data = await r.json().catch(() => ({}));
+    await finish(picked.id, picked.role, (data as { defaultHomePath?: string | null }).defaultHomePath);
     return { ok: true as const };
   }, [picked, finish, rememberMe]);
 
@@ -156,7 +170,8 @@ export default function SignInPage() {
       const data = await finishRes.json().catch(() => ({}));
       throw new Error(humanError((data as { error?: string }).error));
     }
-    await finish(picked.id, picked.role);
+    const data = await finishRes.json().catch(() => ({}));
+    await finish(picked.id, picked.role, (data as { defaultHomePath?: string | null }).defaultHomePath);
   }, [picked, finish]);
 
   return (

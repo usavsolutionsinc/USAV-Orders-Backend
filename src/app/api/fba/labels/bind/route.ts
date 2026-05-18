@@ -2,22 +2,24 @@ import { NextRequest, NextResponse } from 'next/server';
 import pool from '@/lib/db';
 import { publishFbaItemChanged } from '@/lib/realtime/publish';
 import { invalidateCacheTags } from '@/lib/cache/upstash-cache';
+import { withAuth } from '@/lib/auth/withAuth';
 
 // ── POST /api/fba/labels/bind ─────────────────────────────────────────────────
 // Packer scans a shipping label barcode, then binds one or more FNSKUs to it.
 // Transitions bound items from READY_TO_GO → LABEL_ASSIGNED and records
 // immutable events in fba_fnsku_logs. All operations run in one transaction.
 //
-// Body: { shipment_id, label_barcode, fnskus: string[], staff_id, station? }
-export async function POST(request: NextRequest) {
+// Body: { shipment_id, label_barcode, fnskus: string[], station? } — actor from session.
+export const POST = withAuth(async (request: NextRequest, ctx) => {
   const client = await pool.connect();
   try {
     const body = await request.json();
-    const { shipment_id, label_barcode, fnskus = [], staff_id, station } = body;
+    const { shipment_id, label_barcode, fnskus = [], station } = body;
+    const staff_id = ctx.staffId;
 
-    if (!shipment_id || !label_barcode?.trim() || !staff_id) {
+    if (!shipment_id || !label_barcode?.trim()) {
       return NextResponse.json(
-        { success: false, error: 'shipment_id, label_barcode, and staff_id are required' },
+        { success: false, error: 'shipment_id and label_barcode are required' },
         { status: 400 }
       );
     }
@@ -161,4 +163,22 @@ export async function POST(request: NextRequest) {
   } finally {
     client.release();
   }
-}
+}, {
+  permission: 'fba.stage_shipments',
+  audit: {
+    source: 'fba.labels.bind',
+    action: 'fba.label.bind',
+    entityType: 'fba_shipment',
+    entityId: ({ body }) => {
+      const b = body as { shipment_id?: number } | null;
+      return b?.shipment_id ?? null;
+    },
+    extra: ({ body }) => {
+      const b = body as { label_barcode?: string; fnskus?: string[] } | null;
+      return {
+        label_barcode: b?.label_barcode ?? null,
+        fnsku_count: Array.isArray(b?.fnskus) ? b?.fnskus.length : 0,
+      };
+    },
+  },
+});

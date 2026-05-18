@@ -7,6 +7,7 @@ import { formatPSTTimestamp, normalizePSTTimestamp } from '@/utils/date';
 import { createStationActivityLog } from '@/lib/station-activity';
 import { createAuditLog } from '@/lib/audit-logs';
 import { publishStockLedgerEvent } from '@/lib/realtime/publish';
+import { withAuth } from '@/lib/auth/withAuth';
 
 const LEGACY_PACKER_ALIAS_TO_STAFF_ID: Record<string, number> = {
   '1': 4,
@@ -28,17 +29,18 @@ function resolvePackerStaffId(rawId: string | number | null | undefined): number
  * Update packer_logs table (mobile app after photos are uploaded).
  * Shipped state is now derived from shipping_tracking_numbers, not stored on orders.
  */
-export async function POST(req: NextRequest) {
+export const POST = withAuth(async (req: NextRequest, ctx) => {
   try {
     const body = await req.json();
     const {
       shippingTrackingNumber,
       trackingType,
       packDateTime,
-      packedBy,
       packerPhotosUrl,
       orderId
     } = body;
+    // Server-trusted actor.
+    const packedBy = ctx.staffId;
 
     console.log('=== PACKER_LOGS UPDATE REQUEST ===');
     console.log('Shipping Tracking Number:', shippingTrackingNumber);
@@ -54,9 +56,6 @@ export async function POST(req: NextRequest) {
     }
     if (!trackingType) {
       return NextResponse.json({ error: 'trackingType is required' }, { status: 400 });
-    }
-    if (!packedBy) {
-      return NextResponse.json({ error: 'packedBy is required' }, { status: 400 });
     }
     if (!Array.isArray(packerPhotosUrl) || packerPhotosUrl.length === 0) {
       return NextResponse.json({ error: 'packerPhotosUrl must be a non-empty array' }, { status: 400 });
@@ -309,4 +308,4 @@ export async function POST(req: NextRequest) {
       details: error.message
     }, { status: 500 });
   }
-}
+}, { permission: 'packing.complete_order' });

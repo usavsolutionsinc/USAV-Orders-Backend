@@ -14,6 +14,8 @@ import { UpNextFilterBar } from './station/upnext/UpNextFilterBar';
 import { HorizontalButtonSlider, SLIDER_PRESETS, type HorizontalSliderItem } from './ui/HorizontalButtonSlider';
 import { QUICK_FILTER_ITEMS, SORT_FILTER_IDS, type UpNextTabId } from '@/utils/upnext-shared';
 import { useUpNextController } from '@/hooks/station/useUpNextController';
+import type { UpNextPreviewPayload } from '@/utils/events';
+import type { ActiveStationOrder } from '@/hooks/useStationTestingController';
 
 /** Tab → icon mapping for the Up Next slider (nav variant). Keeps the bar
  *  visually consistent with the global sidebar's view switcher. */
@@ -25,6 +27,25 @@ const UP_NEXT_TAB_ICONS: Record<UpNextTabId, (props: { className?: string }) => 
   stock: AlertCircle,
   receiving: ClipboardList,
 };
+
+/**
+ * Two separate hide-sets for two different concerns. Keeping rendering logic
+ * intact means flipping a single entry brings a feature back.
+ *
+ * `HIDDEN_PILL_IDS` — pills hidden from the slider only.
+ *   - `fba` + `repair`: queued for a redesign, out of view for now.
+ *   - `all` + `orders`: with FBA + Repair hidden these two pills show the
+ *     same content (orders), so the second pill is redundant. The "all"
+ *     view still renders below; we just don't draw the duplicate pills.
+ *
+ * `HIDDEN_SECTION_IDS` — sections hidden from the "all"-view section list.
+ *   Only the categories whose CONTENT we don't want to render belong here
+ *   (FBA + Repair). `orders` must NOT be hidden as a section, otherwise the
+ *   "all" view ends up empty even though `filteredOrders` is populated —
+ *   that was the bug behind "9 late but no cards".
+ */
+const HIDDEN_PILL_IDS = new Set<UpNextTabId>(['fba', 'repair', 'all', 'orders']);
+const HIDDEN_SECTION_IDS = new Set<UpNextTabId>(['fba', 'repair']);
 
 type TabId = UpNextTabId;
 
@@ -39,6 +60,29 @@ interface UpNextOrderProps {
 
 export default function UpNextOrder({ techId, onStart, onMissingParts, onAllCompleted, filterBarPortalRef }: UpNextOrderProps) {
   const hasCelebratedRef = useRef(false);
+
+  // ── Selected order — mirrors what's showing in the right pane workspace.
+  // Set on preview-click, cleared when a scan resolves into an active order
+  // (the active order itself is no longer in the Up Next list, so there's
+  // nothing left to highlight in this surface).
+  const [selectedOrderId, setSelectedOrderId] = useState<number | null>(null);
+  useEffect(() => {
+    const handlePreview = (e: Event) => {
+      const detail = (e as CustomEvent<UpNextPreviewPayload>).detail;
+      setSelectedOrderId(detail && detail.kind === 'order' ? detail.order.id : null);
+    };
+    const handleActive = (e: Event) => {
+      const detail = (e as CustomEvent<{ activeOrder: ActiveStationOrder } | null>).detail;
+      // Any active order takes priority; clear preview selection.
+      if (detail) setSelectedOrderId(null);
+    };
+    window.addEventListener('tech-upnext-preview', handlePreview);
+    window.addEventListener('tech-active-order-changed', handleActive);
+    return () => {
+      window.removeEventListener('tech-upnext-preview', handlePreview);
+      window.removeEventListener('tech-active-order-changed', handleActive);
+    };
+  }, []);
 
   const ctrl = useUpNextController({ techId, onAllCompleted });
 
@@ -60,14 +104,17 @@ export default function UpNextOrder({ techId, onStart, onMissingParts, onAllComp
 
   // Map controller-supplied tabs to HorizontalButtonSlider's `nav` shape:
   // icons + counts; uniform blue active state matches the global sidebar.
+  // Pills hidden per HIDDEN_PILL_IDS (does NOT affect "all"-view content).
   const sliderItems: HorizontalSliderItem[] = useMemo(
     () =>
-      visibleTabs.map((tab) => ({
-        id: tab.id,
-        label: tab.label,
-        count: tab.count,
-        icon: UP_NEXT_TAB_ICONS[tab.id as UpNextTabId],
-      })),
+      visibleTabs
+        .filter((tab) => !HIDDEN_PILL_IDS.has(tab.id as UpNextTabId))
+        .map((tab) => ({
+          id: tab.id,
+          label: tab.label,
+          count: tab.count,
+          icon: UP_NEXT_TAB_ICONS[tab.id as UpNextTabId],
+        })),
     [visibleTabs],
   );
 
@@ -142,6 +189,7 @@ export default function UpNextOrder({ techId, onStart, onMissingParts, onAllComp
       onMissingPartsCancel={() => setShowMissingPartsInput(null)}
       isExpanded={expandedItemKey === (key || `order-${order.id}`)}
       onToggleExpand={() => handleToggleExpand(key || `order-${order.id}`)}
+      isSelected={selectedOrderId === order.id}
     />
   );
 
@@ -231,7 +279,7 @@ export default function UpNextOrder({ techId, onStart, onMissingParts, onAllComp
         </>
       ),
     },
-  ].filter((section) => section.count > 0);
+  ].filter((section) => section.count > 0 && !HIDDEN_SECTION_IDS.has(section.id as UpNextTabId));
 
   if (loading) {
     return (
@@ -250,15 +298,19 @@ export default function UpNextOrder({ techId, onStart, onMissingParts, onAllComp
     <div className="relative flex flex-col">
         {/* ── Sticky tab bar — pinned above scrolling card list. Uses the
               shared HorizontalButtonSlider (nav variant) so /tech's Up Next
-              switcher matches the global sidebar's view switcher. ── */}
+              switcher matches the global sidebar's view switcher.
+              Suppressed entirely when no tabs survive HIDDEN_UP_NEXT_TAB_IDS
+              filtering (e.g., when only orders are present). ── */}
         <div className="sticky top-0 z-10 bg-white pb-1.5">
-          <HorizontalButtonSlider
-            items={sliderItems}
-            value={effectiveTab}
-            onChange={(id) => selectTab(id as TabId)}
-            variant="nav"
-            aria-label="Up Next tabs"
-          />
+          {sliderItems.length > 0 ? (
+            <HorizontalButtonSlider
+              items={sliderItems}
+              value={effectiveTab}
+              onChange={(id) => selectTab(id as TabId)}
+              variant="nav"
+              aria-label="Up Next tabs"
+            />
+          ) : null}
 
           {/* ── Urgency summary bar ── */}
           <AnimatePresence initial={false}>

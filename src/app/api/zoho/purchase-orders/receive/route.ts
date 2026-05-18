@@ -10,6 +10,7 @@ import {
   type ZohoPurchaseReceiveLine,
 } from '@/lib/zoho';
 import { formatPSTTimestamp, getCurrentPSTDateKey, normalizePSTTimestamp } from '@/utils/date';
+import { withAuth } from '@/lib/auth/withAuth';
 
 export const dynamic = 'force-dynamic';
 
@@ -46,7 +47,7 @@ export const dynamic = 'force-dynamic';
 
 const VALID_CONDITIONS = new Set(['BRAND_NEW', 'USED_A', 'USED_B', 'USED_C', 'PARTS']);
 
-export async function POST(request: NextRequest) {
+export const POST = withAuth(async (request: NextRequest) => {
   const client = await pool.connect();
   try {
     const body = await request.json();
@@ -254,4 +255,4 @@ export async function POST(request: NextRequest) {
   } finally {
     client.release();
   }
-}
+}, { permission: 'receiving.mark_received' });

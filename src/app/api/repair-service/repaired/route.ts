@@ -3,6 +3,7 @@ import pool from '@/lib/db';
 import { formatPSTTimestamp } from '@/utils/date';
 import { publishRepairChanged } from '@/lib/realtime/publish';
 import { invalidateCacheTags } from '@/lib/cache/upstash-cache';
+import { withAuth } from '@/lib/auth/withAuth';
 
 /**
  * POST /api/repair-service/repaired
@@ -19,11 +20,13 @@ import { invalidateCacheTags } from '@/lib/cache/upstash-cache';
  *   assignedTechId?: number | null
  * }
  */
-export async function POST(req: NextRequest) {
+export const POST = withAuth(async (req: NextRequest, ctx) => {
   const client = await pool.connect();
 
   try {
-    const { repairId, assignmentId, repairedPart, completedByTechId, assignedTechId } = await req.json();
+    const { repairId, assignmentId, repairedPart, assignedTechId } = await req.json();
+    // Server-trusted completedByTechId — body.completedByTechId is ignored.
+    const completedByTechId = ctx.staffId;
 
     if (!repairId) {
       return NextResponse.json({ error: 'repairId is required' }, { status: 400 });
@@ -115,4 +118,4 @@ export async function POST(req: NextRequest) {
   } finally {
     client.release();
   }
-}
+}, { permission: 'repair.mark_repaired' });

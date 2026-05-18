@@ -63,7 +63,9 @@ export default function UpdateManualsView({ techId, days = 365 }: UpdateManualsV
     setLoading(true);
     setError(null);
     try {
-      const url = `/api/tech/orders-without-manual?techId=${encodeURIComponent(techId)}&days=${days}`;
+      // Server derives identity from the session cookie. techId param is
+      // honored only for admin.view_logs holders viewing another tech's gap.
+      const url = `/api/tech/orders-without-manual?days=${days}`;
       const res  = await fetch(url);
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data  = await res.json();

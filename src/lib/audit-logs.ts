@@ -1,5 +1,5 @@
 import type { NextRequest } from 'next/server';
-import type { AuthContext } from '@/lib/auth/withAuth';
+import type { AnonymousAuthContext, AuthContext } from '@/lib/auth/withAuth';
 
 type Queryable = {
   query: (text: string, params?: any[]) => Promise<{ rows: any[] }>;
@@ -76,6 +76,7 @@ export const AUDIT_ENTITY = {
   RECEIVING: 'receiving',
   RECEIVING_LINE: 'receiving_line',
   SERIAL_UNIT: 'serial_unit',
+  TECH_SERIAL: 'tech_serial_number',
   SKU: 'sku',
   SKU_STOCK: 'sku_stock',
   BIN: 'bin',
@@ -99,6 +100,13 @@ export const AUDIT_ACTION = {
   BIN_MOVE:   'bin.move',
   BIN_SWAP:   'bin.swap',
   BIN_DELETE: 'bin.delete',
+  // Serial unit (scanner verbs)
+  SERIAL_SCAN:   'serial.scan',
+  SERIAL_CREATE: 'serial.create',
+  SERIAL_DELETE: 'serial.delete',
+  // Receiving (scanner-driven matching)
+  PO_LOOKUP:        'po.lookup',
+  RECEIVING_MATCH:  'receiving.match',
   // SKU stock
   SKU_STOCK_ADJUST:       'sku_stock.adjust',
   SKU_STOCK_BIN_ASSIGN:   'sku_stock.bin.assign',
@@ -152,7 +160,7 @@ export interface RecordAuditArgs {
 
 export async function recordAudit(
   db: Queryable,
-  ctx: AuthContext | null,
+  ctx: AuthContext | AnonymousAuthContext | null,
   req: Pick<NextRequest, 'headers'> | null,
   args: RecordAuditArgs,
 ): Promise<number | null> {

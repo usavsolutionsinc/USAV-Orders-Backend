@@ -4,16 +4,20 @@ import { getInvalidFbaPlanIdMessage, parseFbaPlanId } from '@/lib/fba/plan-id';
 import { formatPSTTimestamp } from '@/utils/date';
 import { publishFbaShipmentChanged } from '@/lib/realtime/publish';
 import { invalidateCacheTags } from '@/lib/cache/upstash-cache';
+import { requireRoutePerm, recordRouteAudit } from '@/lib/auth/dynamic-route-guard';
+import { AUDIT_ENTITY } from '@/lib/audit-logs';
 
 type Params = Promise<{ id: string }>;
 
 // ── GET /api/fba/shipments/[id] ───────────────────────────────────────────────
 // Returns a single FBA shipment with staff names and item count aggregates.
 export async function GET(
-  _request: NextRequest,
+  request: NextRequest,
   { params }: { params: Params }
 ) {
   try {
+    const gate = await requireRoutePerm(request, 'fba.view');
+    if (gate.denied) return gate.denied;
     const { id } = await params;
     const planId = parseFbaPlanId(id);
     if (planId == null) {
@@ -97,11 +101,22 @@ export async function PATCH(
   { params }: { params: Params }
 ) {
   try {
+    const gate = await requireRoutePerm(request, 'fba.stage_shipments');
+    if (gate.denied) return gate.denied;
     const { id } = await params;
     const planId = parseFbaPlanId(id);
     if (planId == null) {
       return NextResponse.json({ success: false, error: getInvalidFbaPlanIdMessage(id) }, { status: 400 });
     }
+
+    // Snapshot the row before update for audit diff.
+    const beforeRow = await pool.query(
+      `SELECT id, shipment_ref, amazon_shipment_id, destination_fc, due_date,
+              status, notes, assigned_tech_id, assigned_packer_id
+       FROM fba_shipments WHERE id = $1 LIMIT 1`,
+      [planId],
+    );
+    const before = beforeRow.rows[0] ?? null;
 
     const body = await request.json();
 
@@ -163,7 +178,15 @@ export async function PATCH(
     await invalidateCacheTags(['fba-board', 'fba-shipments']);
     await publishFbaShipmentChanged({ action: 'updated', shipmentId: Number(id), source: 'fba.shipments.update' });
 
-    return NextResponse.json({ success: true, shipment: result.rows[0] });
+    const response = NextResponse.json({ success: true, shipment: result.rows[0] });
+    await recordRouteAudit(request, gate.ctx, response, {
+      source: 'fba.shipments.update',
+      action: 'fba.shipment.update',
+      entityType: AUDIT_ENTITY.SHIPMENT,
+      entityId: () => planId,
+      extra: () => ({ before, after: result.rows[0] }),
+    });
+    return response;
   } catch (error: any) {
     console.error('[PATCH /api/fba/shipments/[id]]', error);
     return NextResponse.json(
@@ -176,19 +199,26 @@ export async function PATCH(
 // ── DELETE /api/fba/shipments/[id] ────────────────────────────────────────────
 // Hard-delete a shipment. Only allowed when status = 'PLANNED'.
 // CASCADE removes all fba_shipment_items for this shipment.
+// Destructive — requires step-up auth and writes a rich audit row.
 export async function DELETE(
-  _request: NextRequest,
+  request: NextRequest,
   { params }: { params: Params }
 ) {
   try {
+    // shipping.void_order is on STEP_UP_PERMISSIONS, so the gate also
+    // verifies a fresh step-up grant in addition to permission.
+    const gate = await requireRoutePerm(request, 'shipping.void_order');
+    if (gate.denied) return gate.denied;
     const { id } = await params;
     const planId = parseFbaPlanId(id);
     if (planId == null) {
       return NextResponse.json({ success: false, error: getInvalidFbaPlanIdMessage(id) }, { status: 400 });
     }
 
+    // Snapshot for audit before destructive op.
     const check = await pool.query(
-      `SELECT id, status FROM fba_shipments WHERE id = $1`,
+      `SELECT id, shipment_ref, status, amazon_shipment_id, destination_fc, due_date, notes
+       FROM fba_shipments WHERE id = $1`,
       [planId]
     );
     if (!check.rows[0]) {
@@ -200,13 +230,29 @@ export async function DELETE(
         { status: 409 }
       );
     }
+    const before = check.rows[0];
+
+    // Count items for the audit extra payload.
+    const itemCountRow = await pool.query(
+      `SELECT COUNT(*)::int AS n FROM fba_shipment_items WHERE shipment_id = $1`,
+      [planId],
+    );
+    const itemCount = Number(itemCountRow.rows[0]?.n ?? 0);
 
     await pool.query(`DELETE FROM fba_shipments WHERE id = $1`, [planId]);
 
     await invalidateCacheTags(['fba-board', 'fba-shipments', 'fba-stage-counts']);
     await publishFbaShipmentChanged({ action: 'deleted', shipmentId: Number(id), source: 'fba.shipments.delete' });
 
-    return NextResponse.json({ success: true, deleted_id: planId });
+    const response = NextResponse.json({ success: true, deleted_id: planId });
+    await recordRouteAudit(request, gate.ctx, response, {
+      source: 'fba.shipments.delete',
+      action: 'fba.shipment.delete',
+      entityType: AUDIT_ENTITY.SHIPMENT,
+      entityId: () => planId,
+      extra: () => ({ before, item_count: itemCount }),
+    });
+    return response;
   } catch (error: any) {
     console.error('[DELETE /api/fba/shipments/[id]]', error);
     return NextResponse.json(

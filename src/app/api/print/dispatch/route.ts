@@ -6,6 +6,7 @@ import {
   buildProductZpl,
   buildUnitZpl,
 } from '@/lib/print/zpl-templates';
+import { withAuth } from '@/lib/auth/withAuth';
 
 /**
  * POST /api/print/dispatch
@@ -97,7 +98,7 @@ async function dispatchPrintNode(
   }
 }
 
-export async function POST(request: NextRequest) {
+export const POST = withAuth(async (request: NextRequest) => {
   try {
     const body = await request.json().catch(() => ({}));
     const klass = String(body?.class || '').trim() as LabelClass;
@@ -191,4 +192,4 @@ export async function POST(request: NextRequest) {
       { status: 500 },
     );
   }
-}
+}, { permission: 'print.label' });

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSkuAuditHistory } from '@/lib/audit-log/entity-history';
+import { requireRoutePerm } from '@/lib/auth/dynamic-route-guard';
 
 export const dynamic = 'force-dynamic';
 
@@ -14,6 +15,8 @@ export async function GET(
   { params }: { params: Promise<{ sku: string }> },
 ) {
   try {
+    const gate = await requireRoutePerm(req, 'admin.view_logs');
+    if (gate.denied) return gate.denied;
     const { sku } = await params;
     const skuValue = decodeURIComponent(sku || '').trim();
     if (!skuValue) {

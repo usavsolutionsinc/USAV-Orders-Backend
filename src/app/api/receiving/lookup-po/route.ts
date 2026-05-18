@@ -12,6 +12,8 @@ import {
   upsertOpenTrackingException,
   resolveReceivingExceptionsByReceivingId,
 } from '@/lib/tracking-exceptions';
+import { withAuth } from '@/lib/auth/withAuth';
+import { AUDIT_ACTION, AUDIT_ENTITY } from '@/lib/audit-logs';
 
 async function parallelLimit<T, R>(
   items: T[],
@@ -233,13 +235,13 @@ async function recordScan(
   return Number(result.rows[0].id);
 }
 
-export async function POST(request: NextRequest) {
+export const POST = withAuth(async (request: NextRequest, ctx) => {
   try {
     const body = await request.json();
     const trackingNumber = String(body?.trackingNumber || '').trim();
     const providedCarrier = String(body?.carrier || '').trim();
-    const staffIdRaw = Number(body?.staffId ?? body?.staff_id);
-    const staffId = Number.isFinite(staffIdRaw) && staffIdRaw > 0 ? Math.floor(staffIdRaw) : null;
+    // Server-trusted actor from the verified session cookie.
+    const staffId = ctx.staffId;
 
     if (!trackingNumber) {
       return NextResponse.json(
@@ -578,4 +580,24 @@ export async function POST(request: NextRequest) {
     console.error('receiving/lookup-po POST failed:', error);
     return NextResponse.json({ success: false, error: message }, { status: 500 });
   }
-}
+}, {
+  permission: 'receiving.scan_po',
+  audit: {
+    source: 'receiving.lookup-po',
+    action: AUDIT_ACTION.PO_LOOKUP,
+    entityType: AUDIT_ENTITY.RECEIVING,
+    entityId: ({ response }) => {
+      const r = response as { receiving_id?: number | string } | null;
+      return r?.receiving_id ?? null;
+    },
+    extra: ({ response, body }) => {
+      const r = response as { po_matched?: boolean; deduped?: boolean } | null;
+      const b = body as { trackingNumber?: string } | null;
+      return {
+        tracking_number: b?.trackingNumber ?? null,
+        po_matched: r?.po_matched ?? null,
+        deduped: r?.deduped ?? null,
+      };
+    },
+  },
+});

@@ -1,11 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSquareConfig, squareFetch, formatSquareErrors } from '@/lib/square/client';
+import { withAuth } from '@/lib/auth/withAuth';
 
 /**
  * GET /api/walk-in/status
  * Ping Square API to verify connectivity, return location info, catalog count, and terminal devices.
  */
-export async function GET(req: NextRequest) {
+export const GET = withAuth(async (req: NextRequest) => {
   const results: Record<string, unknown> = {
     timestamp: new Date().toISOString(),
     square_environment: process.env.SQUARE_ENVIRONMENT || 'PRODUCTION',
@@ -112,4 +113,4 @@ export async function GET(req: NextRequest) {
   );
 
   return NextResponse.json({ ...results, all_ok: allOk }, { status: allOk ? 200 : 207 });
-}
+}, { permission: 'walk_in.view' });

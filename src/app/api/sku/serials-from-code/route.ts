@@ -2,11 +2,12 @@ import { NextRequest, NextResponse } from 'next/server';
 import pool from '@/lib/db';
 import { normalizeSku } from '@/utils/sku';
 import { parseSerialCsvField } from '@/lib/tech/serialFields';
+import { withAuth } from '@/lib/auth/withAuth';
 
 /**
  * GET ?code=STATICSKU:tag or SKUx2:tag — returns serials from sku row (same matching rules as tech scan-sku).
  */
-export async function GET(req: NextRequest) {
+export const GET = withAuth(async (req: NextRequest) => {
   try {
     const code = String(new URL(req.url).searchParams.get('code') || '').trim();
     if (!code || !code.includes(':')) {
@@ -67,4 +68,4 @@ export async function GET(req: NextRequest) {
       { status: 500 },
     );
   }
-}
+}, { permission: 'sku_stock.view' });

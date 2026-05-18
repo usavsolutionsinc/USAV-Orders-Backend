@@ -21,6 +21,7 @@ import {
 } from '@/lib/auth/session';
 import { audit } from '@/lib/auth/audit';
 import { getStaffRole } from '@/lib/auth/permissions';
+import { findActiveShift, clockIn } from '@/lib/auth/shift-clock';
 import pool from '@/lib/db';
 import type { AuthenticationResponseJSON } from '@simplewebauthn/server';
 
@@ -76,10 +77,10 @@ export async function POST(req: NextRequest) {
 
     // Make sure the row is still active before issuing a session.
     const s = await pool.query(
-      `SELECT id, name, role, status FROM staff WHERE id = $1 LIMIT 1`,
+      `SELECT id, name, role, status, default_home_path FROM staff WHERE id = $1 LIMIT 1`,
       [result.passkey.staff_id],
     );
-    const staffRow = s.rows[0] as { id: number; name: string; role: string; status: string } | undefined;
+    const staffRow = s.rows[0] as { id: number; name: string; role: string; status: string; default_home_path: string | null } | undefined;
     if (!staffRow || (staffRow.status && staffRow.status !== 'active')) {
       await audit({
         staffId: result.passkey.staff_id, event: 'signin.passkey', result: 'denied',
@@ -88,19 +89,34 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'ACCOUNT_NOT_ACTIVE' }, { status: 403 });
     }
 
+    // Sign-in == clock-in (soft gate — never blocks). When a shift is
+    // active, session expires at shift end and the punch is tied to it.
+    // Otherwise the punch is off-the-books and the session uses the
+    // device-kind default window.
+    const activeShift = await findActiveShift(staffRow.id);
+
     const session = await createSession({
       staffId: staffRow.id,
       deviceKind,
       deviceLabel,
       ip,
       userAgent: ua,
+      ...(activeShift ? { expiresAt: activeShift.ends_at } : {}),
     });
+
+    const punch = await clockIn(staffRow.id, activeShift?.id ?? null, 'passkey');
 
     await audit({
       staffId: staffRow.id, sid: session.sid,
       event: 'signin.passkey', result: 'ok',
       ip, userAgent: ua,
-      detail: { deviceKind, passkeyId: result.passkey.id },
+      detail: {
+        deviceKind,
+        passkeyId: result.passkey.id,
+        shiftId: activeShift?.id ?? null,
+        punchId: punch?.id ?? null,
+        unscheduled: !activeShift,
+      },
     });
 
     const role = await getStaffRole(staffRow.id);
@@ -109,6 +125,7 @@ export async function POST(req: NextRequest) {
       staffId: staffRow.id,
       role,
       name: staffRow.name,
+      defaultHomePath: staffRow.default_home_path,
       session: { sid: session.sid, deviceKind, expiresAt: session.expiresAt },
     });
     res.cookies.set(SESSION_COOKIE_NAME, session.sid, {

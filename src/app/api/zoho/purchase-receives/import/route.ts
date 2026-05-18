@@ -1,9 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { importZohoPurchaseReceiveToReceiving } from '@/lib/zoho-receiving-sync';
+import { withAuth } from '@/lib/auth/withAuth';
 
 export const dynamic = 'force-dynamic';
 
-export async function POST(request: NextRequest) {
+export const POST = withAuth(async (request: NextRequest) => {
   try {
     const body = await request.json();
     const purchaseReceiveId = String(body?.purchase_receive_id || '').trim();
@@ -40,4 +41,4 @@ export async function POST(request: NextRequest) {
       { status: 500 }
     );
   }
-}
+}, { permission: 'receiving.mark_received' });

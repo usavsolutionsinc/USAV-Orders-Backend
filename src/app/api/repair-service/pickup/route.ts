@@ -3,6 +3,7 @@ import pool from '@/lib/db';
 import { formatPSTTimestamp } from '@/utils/date';
 import { invalidateCacheTags } from '@/lib/cache/upstash-cache';
 import { publishRepairChanged } from '@/lib/realtime/publish';
+import { withAuth } from '@/lib/auth/withAuth';
 
 interface RepairLookupRow {
   id: number;
@@ -58,7 +59,7 @@ function parseScanInput(rawValue: unknown) {
  * 2. Appends a status_history entry when status changed
  * 3. Marks REPAIR work assignment status as DONE for work-orders queue parity
  */
-export async function POST(req: NextRequest) {
+export const POST = withAuth(async (req: NextRequest) => {
   const client = await pool.connect();
 
   try {
@@ -230,4 +231,4 @@ export async function POST(req: NextRequest) {
   } finally {
     client.release();
   }
-}
+}, { permission: 'repair.mark_repaired' });

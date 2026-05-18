@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import pool from '@/lib/db';
 import { getBinLocationsBySku } from '@/lib/neon/location-queries';
+import { requireRoutePerm } from '@/lib/auth/dynamic-route-guard';
 
 /**
  * GET /api/sku-stock/:sku/bins
@@ -10,10 +11,12 @@ import { getBinLocationsBySku } from '@/lib/neon/location-queries';
  * location section.
  */
 export async function GET(
-  _request: NextRequest,
+  request: NextRequest,
   { params }: { params: Promise<{ sku: string }> },
 ) {
   try {
+    const gate = await requireRoutePerm(request, 'sku_stock.view');
+    if (gate.denied) return gate.denied;
     const { sku: rawSku } = await params;
     const sku = decodeURIComponent(rawSku || '').trim();
     if (!sku) {

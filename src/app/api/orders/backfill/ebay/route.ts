@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import pool from '@/lib/db';
 import { EbayClient } from '@/lib/ebay/client';
+import { withAuth } from '@/lib/auth/withAuth';
 
 export const maxDuration = 60;
 
@@ -25,7 +26,7 @@ function extractTrackingFromOrder(ebayOrder: any): string {
  *     call getOrderDetails(order_id) to retrieve the live eBay data.
  *  3. Fill in ONLY columns that are currently blank — never overwrite existing data.
  */
-export async function POST(req: NextRequest) {
+export const POST = withAuth(async (req: NextRequest) => {
   try {
     const body = await req.json().catch(() => ({}));
     const limit = Math.max(1, Math.min(1000, Number(body.limit || 500)));
@@ -232,4 +233,4 @@ export async function POST(req: NextRequest) {
       { status: 500 }
     );
   }
-}
+}, { permission: 'admin.manage_features' });

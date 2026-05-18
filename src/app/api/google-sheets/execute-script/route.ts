@@ -16,11 +16,12 @@ import {
     parseSheetDateTime,
     upsertOpenOrdersException,
 } from '@/lib/sync/sheet-sync-common';
+import { withAuth } from '@/lib/auth/withAuth';
 
 const DEFAULT_SPREADSHEET_ID = '1fM9t4iw_6UeGfNbKZaKA7puEFfWqOiNtITGDVSgApCE';
 const FBA_LIKE_RE = /^(X00|X0|B0|FBA)/i;
 
-export async function POST(req: NextRequest) {
+export const POST = withAuth(async (req: NextRequest) => {
     try {
         const { scriptName } = await req.json();
 
@@ -43,7 +44,7 @@ export async function POST(req: NextRequest) {
         console.error('Script execution error:', error);
         return NextResponse.json({ success: false, error: error.message || 'Internal Server Error' }, { status: 500 });
     }
-}
+}, { permission: 'admin.manage_features' });
 
 async function executeCheckShippedOrders() {
     // Find orders where a packer log exists via the shipment_id FK

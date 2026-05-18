@@ -1,10 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 import pool from '@/lib/db';
+import { withAuth } from '@/lib/auth/withAuth';
 
 /**
  * POST /api/admin/fix-status - One-time fix for 'uassigned' typo in orders table
  */
-export async function POST(req: NextRequest) {
+export const POST = withAuth(async (req: NextRequest) => {
   try {
     const result = await pool.query(`
       UPDATE orders 
@@ -25,4 +26,4 @@ export async function POST(req: NextRequest) {
       { status: 500 }
     );
   }
-}
+}, { permission: 'admin.manage_features' });

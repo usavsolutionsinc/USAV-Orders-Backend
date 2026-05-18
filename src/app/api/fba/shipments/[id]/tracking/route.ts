@@ -5,16 +5,19 @@ import { detectCarrier } from '@/lib/tracking-format';
 import { publishFbaShipmentChanged } from '@/lib/realtime/publish';
 import { invalidateCacheTags } from '@/lib/cache/upstash-cache';
 import { normalizeAllocations, replaceTrackingAllocations } from '@/lib/fba/replace-tracking-allocations';
+import { requireRoutePerm, recordRouteAudit } from '@/lib/auth/dynamic-route-guard';
 
 type Params = Promise<{ id: string }>;
 
 // ── GET /api/fba/shipments/[id]/tracking ─────────────────────────────────────
 // Returns all tracking numbers linked to this shipment via fba_shipment_tracking.
 export async function GET(
-  _req: NextRequest,
+  req: NextRequest,
   { params }: { params: Params }
 ) {
   try {
+    const gate = await requireRoutePerm(req, 'fba.view');
+    if (gate.denied) return gate.denied;
     const { id } = await params;
     const planId = parseFbaPlanId(id);
     if (planId == null) {
@@ -95,6 +98,8 @@ export async function POST(
 ) {
   const client = await pool.connect();
   try {
+    const gate = await requireRoutePerm(request, 'fba.stage_shipments');
+    if (gate.denied) return gate.denied;
     const { id } = await params;
     const planId = parseFbaPlanId(id);
     if (planId == null) {
@@ -197,6 +202,8 @@ export async function PATCH(
 ) {
   const client = await pool.connect();
   try {
+    const gate = await requireRoutePerm(request, 'fba.stage_shipments');
+    if (gate.denied) return gate.denied;
     const { id } = await params;
     const planId = parseFbaPlanId(id);
     if (planId == null) {
@@ -329,6 +336,8 @@ export async function DELETE(
   { params }: { params: Params }
 ) {
   try {
+    const gate = await requireRoutePerm(request, 'fba.stage_shipments');
+    if (gate.denied) return gate.denied;
     const { id } = await params;
     const planId = parseFbaPlanId(id);
     const { searchParams } = new URL(request.url);

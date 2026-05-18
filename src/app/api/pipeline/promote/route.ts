@@ -16,10 +16,11 @@ import { db } from '@/lib/drizzle/db';
 import { trainingRuns, modelVersions } from '@/lib/drizzle/schema';
 import { eq, desc } from 'drizzle-orm';
 import { NextResponse } from 'next/server';
+import { withAuth } from '@/lib/auth/withAuth';
 
 export const runtime = 'nodejs';
 
-export async function POST() {
+export const POST = withAuth(async () => {
   try {
     // Get latest completed training run
     const latestRun = await db
@@ -127,4 +128,4 @@ export async function POST() {
     const message = error instanceof Error ? error.message : String(error);
     return NextResponse.json({ ok: false, error: message }, { status: 500 });
   }
-}
+}, { permission: 'admin.manage_features' });

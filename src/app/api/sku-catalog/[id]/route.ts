@@ -1,14 +1,17 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSkuCatalogDetail, upsertSkuCatalog } from '@/lib/neon/sku-catalog-queries';
+import { requireRoutePerm } from '@/lib/auth/dynamic-route-guard';
 
 /**
  * GET /api/sku-catalog/[id] — Full detail for a single SKU catalog entry.
  */
 export async function GET(
-  _req: NextRequest,
+  req: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
   try {
+    const gate = await requireRoutePerm(req, 'sku_stock.view');
+    if (gate.denied) return gate.denied;
     const { id: rawId } = await params;
     const id = Number(rawId);
     if (!Number.isFinite(id) || id <= 0) {
@@ -38,6 +41,8 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> },
 ) {
   try {
+    const gate = await requireRoutePerm(req, 'sku_stock.manage');
+    if (gate.denied) return gate.denied;
     const { id: rawId } = await params;
     const id = Number(rawId);
     if (!Number.isFinite(id) || id <= 0) {

@@ -2,13 +2,14 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/drizzle/db';
 import { photos } from '@/lib/drizzle/schema';
 import { and, eq, asc } from 'drizzle-orm';
+import { withAuth } from '@/lib/auth/withAuth';
 
 /**
  * GET /api/packing-logs/photos?packerLogId=X
  *
  * Returns all photos associated with a packer_logs row.
  */
-export async function GET(req: NextRequest) {
+export const GET = withAuth(async (req: NextRequest) => {
   try {
     const { searchParams } = new URL(req.url);
     const packerLogId = searchParams.get('packerLogId');
@@ -36,4 +37,4 @@ export async function GET(req: NextRequest) {
       { status: 500 }
     );
   }
-}
+}, { permission: 'packing.view' });

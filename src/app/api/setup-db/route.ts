@@ -2,8 +2,11 @@ import { NextResponse } from 'next/server';
 import pool from '@/lib/db';
 import fs from 'fs';
 import path from 'path';
+import { withAuth } from '@/lib/auth/withAuth';
 
-export async function POST() {
+// Break-glass schema bootstrap. Admin-only + step-up required because this
+// recreates tables and seeds sample staff rows. Do not call from app code.
+export const POST = withAuth(async () => {
     const client = await pool.connect();
     
     try {
@@ -257,5 +260,5 @@ export async function POST() {
     } finally {
         client.release();
     }
-}
+}, { permission: 'admin.manage_features', stepUp: true });
 

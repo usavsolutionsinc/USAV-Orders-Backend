@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import pool from '@/lib/db';
+import { withAuth } from '@/lib/auth/withAuth';
 
 export const dynamic = 'force-dynamic';
 
@@ -35,7 +36,7 @@ function pushParam(params: any[], value: any): string {
   return `$${params.length}`;
 }
 
-export async function GET(req: NextRequest) {
+export const GET = withAuth(async (req: NextRequest) => {
   try {
     const { searchParams } = new URL(req.url);
     const limit = Math.min(parsePositiveInt(searchParams.get('limit'), 100), 200);
@@ -253,4 +254,4 @@ export async function GET(req: NextRequest) {
       { status: 500 },
     );
   }
-}
+}, { permission: 'admin.view_logs' });

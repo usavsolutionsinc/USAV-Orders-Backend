@@ -15,10 +15,11 @@ import {
 } from '@/lib/drizzle/schema';
 import { desc, eq, sql, count } from 'drizzle-orm';
 import { NextResponse } from 'next/server';
+import { withAuth } from '@/lib/auth/withAuth';
 
 export const runtime = 'nodejs';
 
-export async function GET() {
+export const GET = withAuth(async () => {
   try {
     // Recent cycles (last 10)
     const recentCycles = await db
@@ -87,4 +88,4 @@ export async function GET() {
     const message = error instanceof Error ? error.message : String(error);
     return NextResponse.json({ ok: false, error: message }, { status: 500 });
   }
-}
+}, { permission: 'admin.view' });

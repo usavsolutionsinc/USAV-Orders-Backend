@@ -1,4 +1,6 @@
 import type { ShippedOrder } from '@/lib/neon/orders-queries';
+import type { Order } from '@/components/station/upnext/upnext-types';
+import type { ReceivingLineRow } from '@/components/station/ReceivingLinesTable';
 
 export function dispatchDashboardAndStationRefresh(): void {
   if (typeof window === 'undefined') return;
@@ -69,6 +71,90 @@ export const SKU_STOCK_DESKTOP_SCAN_EVENT = 'sku-stock:open-desktop-scanner';
 export function dispatchSkuStockDesktopScanner(): void {
   if (typeof window === 'undefined') return;
   window.dispatchEvent(new CustomEvent(SKU_STOCK_DESKTOP_SCAN_EVENT));
+}
+
+// ── Tech Up Next preview (right-pane workspace) ─────────────────────────────
+
+/**
+ * Selected Up Next item to preview in the `/tech` right pane. `null` clears
+ * the preview and returns the pane to the global history (or the active-order
+ * workspace, if one is in progress).
+ */
+export type UpNextPreviewPayload =
+  | { kind: 'order'; order: Order }
+  | null;
+
+export function dispatchUpNextPreview(payload: UpNextPreviewPayload): void {
+  if (typeof window === 'undefined') return;
+  window.dispatchEvent(new CustomEvent('tech-upnext-preview', { detail: payload }));
+}
+
+// ── Receiving right-pane workspace ──────────────────────────────────────────
+
+/**
+ * Payload for `receiving-workspace-open`. The sidebar dispatches this whenever
+ * a line is selected (via row click, scan resolution, or sidebar prev/next nav)
+ * so the right pane can swap from history table → focused workspace.
+ *
+ * - `accordionBootstrap: 'all'` opens every FlowSection on mount (used after a
+ *   table row click where the operator is inspecting the full record).
+ * - `scanDriven: true` puts LineEditPanel in its compact density mode (matches
+ *   today's sidebar behavior for scan-resolved lines).
+ */
+export interface ReceivingWorkspaceOpenPayload {
+  row: ReceivingLineRow;
+  accordionBootstrap: 'default' | 'all';
+  scanDriven: boolean;
+}
+
+export function dispatchReceivingWorkspaceOpen(
+  payload: ReceivingWorkspaceOpenPayload,
+): void {
+  if (typeof window === 'undefined') return;
+  window.dispatchEvent(
+    new CustomEvent('receiving-workspace-open', { detail: payload }),
+  );
+}
+
+export function dispatchReceivingWorkspaceClose(): void {
+  if (typeof window === 'undefined') return;
+  window.dispatchEvent(new CustomEvent('receiving-workspace-close'));
+}
+
+/**
+ * Nav state mirror — sidebar dispatches this whenever `scanMatchedRows` or the
+ * current line index changes so the workspace header can render Prev/Next
+ * chevrons + Line N of M without lifting the scanMatchedRows array up. The
+ * actual prev/next handlers still live in the sidebar (they trigger
+ * `receiving-select-line` via `dispatchSelectLine`).
+ */
+export interface ReceivingWorkspaceNavStatePayload {
+  currentIndex: number;
+  total: number;
+  canPrev: boolean;
+  canNext: boolean;
+}
+
+export function dispatchReceivingWorkspaceNavState(
+  payload: ReceivingWorkspaceNavStatePayload,
+): void {
+  if (typeof window === 'undefined') return;
+  window.dispatchEvent(
+    new CustomEvent('receiving-workspace-nav-state', { detail: payload }),
+  );
+}
+
+/**
+ * Surface the existing `ReceivingDetailsStack` overlay on-demand. The
+ * workspace's `i` info button dispatches this; ReceivingDashboard listens and
+ * mounts the overlay with the matching log.
+ */
+export function dispatchReceivingDetailsOverlay(receivingId: number): void {
+  if (typeof window === 'undefined') return;
+  if (!Number.isFinite(receivingId) || receivingId <= 0) return;
+  window.dispatchEvent(
+    new CustomEvent('receiving-open-details-overlay', { detail: { receivingId } }),
+  );
 }
 
 // ── Dashboard shipped search ─────────────────────────────────────────────────

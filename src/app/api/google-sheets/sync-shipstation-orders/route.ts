@@ -3,6 +3,7 @@ import pool from '@/lib/db';
 import { normalizeTrackingKey18 } from '@/lib/tracking-format';
 import { toPSTDateKey } from '@/utils/date';
 import { resolveOrCreateSkuCatalogId } from '@/lib/neon/sku-catalog-queries';
+import { withAuth } from '@/lib/auth/withAuth';
 
 function normalizeHeader(value: unknown) {
   return String(value || '')
@@ -95,7 +96,7 @@ function parseCsv(content: string): string[][] {
   return lines.map(parseCsvLine);
 }
 
-export async function POST(req: NextRequest) {
+export const POST = withAuth(async (req: NextRequest) => {
   try {
     const formData = await req.formData();
     const file = formData.get('file');
@@ -331,4 +332,4 @@ export async function POST(req: NextRequest) {
       { status: 500 }
     );
   }
-}
+}, { permission: 'admin.manage_features' });

@@ -7,6 +7,7 @@ import {
   type InventoryEventType,
   type InventoryEventStation,
 } from '@/lib/inventory/events';
+import { requireRoutePerm } from '@/lib/auth/dynamic-route-guard';
 
 const ALLOWED_EVENT_TYPES: ReadonlySet<InventoryEventType> = new Set([
   'TEST_START',
@@ -42,6 +43,8 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> },
 ) {
   try {
+    const gate = await requireRoutePerm(request, 'receiving.mark_received');
+    if (gate.denied) return gate.denied;
     const { id: idRaw } = await params;
     const lineId = Number(idRaw);
     if (!Number.isFinite(lineId) || lineId <= 0) {

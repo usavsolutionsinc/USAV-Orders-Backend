@@ -1,18 +1,19 @@
 import { NextRequest, NextResponse } from 'next/server';
 import pool from '@/lib/db';
 import { POST as unifiedSerial } from '@/app/api/tech/serial/route';
+import { withAuth } from '@/lib/auth/withAuth';
 
 /**
  * Legacy POST /api/tech/add-serial-to-last — thin wrapper around POST /api/tech/serial.
+ * Actor is server-derived from the verified session.
  */
-export async function POST(req: NextRequest) {
+export const POST = withAuth(async (req: NextRequest, ctx) => {
   const body = await req.json().catch(() => null);
   if (!body) return NextResponse.json({ success: false, error: 'Invalid JSON' }, { status: 400 });
 
-  const techId = body.techId ? Number(body.techId) : null;
+  const techId = ctx.staffId;
   const serial = String(body.serial || body.serialNumber || '').trim();
 
-  if (!techId) return NextResponse.json({ success: false, error: 'techId is required' }, { status: 400 });
   if (!serial) return NextResponse.json({ success: false, error: 'serial is required' }, { status: 400 });
 
   const r = await pool.query(
@@ -29,11 +30,13 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ success: false, error: 'No active scan session found' }, { status: 404 });
   }
 
+  const headers = new Headers(req.headers);
+  headers.set('Content-Type', 'application/json');
   const syntheticReq = new NextRequest(req.url, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers,
     body: JSON.stringify({ action: 'add', salId, serial, techId }),
   });
 
-  return unifiedSerial(syntheticReq);
-}
+  return unifiedSerial(syntheticReq, { params: Promise.resolve({}) });
+}, { permission: 'tech.scan_serial' });

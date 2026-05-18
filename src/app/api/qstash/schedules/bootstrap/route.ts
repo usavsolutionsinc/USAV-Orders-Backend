@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { isAllowedAdminOrigin } from '@/lib/security/allowed-origin';
 import qstashSchedules from '@/config/qstash-schedules.json';
 import { getQStashClient, upsertQStashSchedule } from '@/lib/qstash';
+import { withAuth } from '@/lib/auth/withAuth';
 
 export const dynamic = 'force-dynamic';
 
@@ -20,7 +21,7 @@ const HEAVY_JOB_SCHEDULES = qstashSchedules as Array<{
   headers?: Record<string, string>;
 }>;
 
-export async function POST(req: NextRequest) {
+export const POST = withAuth(async (req: NextRequest) => {
   if (!isAuthorized(req)) {
     return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
   }
@@ -59,8 +60,8 @@ export async function POST(req: NextRequest) {
       { status: 500 }
     );
   }
-}
+}, { permission: 'admin.manage_features' });
 
-export async function GET(req: NextRequest) {
-  return POST(req);
-}
+export const GET = withAuth(async (req: NextRequest) => {
+  return POST(req, { params: Promise.resolve({}) });
+}, { permission: 'admin.manage_features' });

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import pool from '@/lib/db';
+import { withAuth } from '@/lib/auth/withAuth';
 
 const ECWID_BASE_URL = 'https://app.ecwid.com/api/v3';
 
@@ -19,7 +20,7 @@ function requiredEnvAny(primaryName: string, aliases: string[] = []): string {
  * Stores Ecwid product name in display_name and thumbnail in image_url.
  * Does NOT auto-pair to Zoho — all pairing is manual via SKU Pairing tab.
  */
-export async function POST(_req: NextRequest) {
+export const POST = withAuth(async (_req: NextRequest) => {
   try {
     const storeId = requiredEnvAny('ECWID_STORE_ID', ['ECWID_STOREID', 'ECWID_STORE', 'NEXT_PUBLIC_ECWID_STORE_ID']);
     const token = requiredEnvAny('ECWID_API_TOKEN', ['ECWID_TOKEN', 'ECWID_ACCESS_TOKEN', 'NEXT_PUBLIC_ECWID_API_TOKEN']);
@@ -117,4 +118,4 @@ export async function POST(_req: NextRequest) {
       { status: 500 },
     );
   }
-}
+}, { permission: 'admin.manage_features' });

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getAccessToken } from '@/lib/zoho';
+import { withAuth } from '@/lib/auth/withAuth';
 
 export const dynamic = 'force-dynamic';
 
@@ -10,10 +11,10 @@ export const dynamic = 'force-dynamic';
  * on an authorization_code grant with offline access, not on a refresh grant.
  * The callback route persists the returned refresh_token to the database.
  */
-export async function GET(request: NextRequest) {
+export const GET = withAuth(async (request: NextRequest) => {
   const authorizeUrl = new URL('/api/zoho/oauth/authorize', request.url);
   return NextResponse.redirect(authorizeUrl);
-}
+}, { permission: 'integrations.zoho' });
 
 /**
  * POST /api/zoho/refresh-token
@@ -22,7 +23,7 @@ export async function GET(request: NextRequest) {
  * This endpoint does not mint a new refresh_token; use GET on this route
  * to start a new consent flow when you need one stored in the DB.
  */
-export async function POST(request: NextRequest) {
+export const POST = withAuth(async (request: NextRequest) => {
   try {
     const token = await getAccessToken();
     return NextResponse.json({
@@ -37,4 +38,4 @@ export async function POST(request: NextRequest) {
     const message = error instanceof Error ? error.message : 'Failed to refresh Zoho token';
     return NextResponse.json({ success: false, error: message }, { status: 500 });
   }
-}
+}, { permission: 'integrations.zoho' });

@@ -338,19 +338,15 @@ export default function ReceivingLinesTable() {
 
   // On first visit to Receiving (no row selected yet), auto-select the latest
   // line from the API list (ORDER BY last scan / received_at / created_at DESC).
+  // Auto-select-on-first-visit was disabled: the new UX model is that the
+  // Receiving tab shows a "scan to start" empty state when nothing's active,
+  // and the History tab is a deliberate read-only browse — both rule out
+  // silently jumping into the latest row. Deep links via `?recvId=` still
+  // work because that runs in a separate effect above.
   useEffect(() => {
     if (initialAutoSelectRef.current) return;
-    if (isLoading || localRows.length === 0) return;
-    if (selectedIdRef.current != null) return;
-    const recvIdParam = searchParams.get('recvId');
-    if (recvIdParam && /^\d+$/.test(recvIdParam)) return;
-
     initialAutoSelectRef.current = true;
-    const latest = localRows[0];
-    setSelectedId(latest.id);
-    dispatchSelectLine(latest);
-    window.dispatchEvent(new CustomEvent('receiving-highlight-line', { detail: latest.id }));
-  }, [isLoading, localRows, searchParams]);
+  }, []);
 
   const handleSelectRow = useCallback((row: ReceivingLineRow) => {
     const next = selectedIdRef.current === row.id ? null : row.id;

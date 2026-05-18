@@ -5,6 +5,7 @@ import {
   mergeCatalogItemIdsFromPurchaseOrder,
   type ZohoPurchaseReceiveLine,
 } from '@/lib/zoho';
+import { withAuth } from '@/lib/auth/withAuth';
 
 export const dynamic = 'force-dynamic';
 
@@ -22,7 +23,7 @@ export const dynamic = 'force-dynamic';
  *   (createPurchaseReceive maps counts to Zoho's `quantity` field on the wire.)
  * }
  */
-export async function POST(request: NextRequest) {
+export const POST = withAuth(async (request: NextRequest) => {
   try {
     const body = await request.json();
     const purchaseOrderId = String(body?.purchaseorder_id || '').trim();
@@ -109,4 +110,4 @@ export async function POST(request: NextRequest) {
       { status: 500 },
     );
   }
-}
+}, { permission: 'integrations.zoho' });

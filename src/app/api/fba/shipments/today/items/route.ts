@@ -4,6 +4,7 @@ import { buildFbaPlanRefFromIsoDate } from '@/lib/fba/plan-ref';
 import { upsertFnskuCatalogRow } from '@/lib/fba/upsert-fnsku-catalog';
 import { publishFbaShipmentChanged } from '@/lib/realtime/publish';
 import { invalidateCacheTags } from '@/lib/cache/upstash-cache';
+import { withAuth } from '@/lib/auth/withAuth';
 
 /**
  * POST /api/fba/shipments/today/items
@@ -20,7 +21,7 @@ import { invalidateCacheTags } from '@/lib/cache/upstash-cache';
  *
  * Response: { added, merged, moved, skipped: [] } — same row shape for merged/moved.
  */
-export async function POST(request: NextRequest) {
+export const POST = withAuth(async (request: NextRequest) => {
   const client = await pool.connect();
   try {
     const body = await request.json();
@@ -271,4 +272,19 @@ export async function POST(request: NextRequest) {
   } finally {
     client.release();
   }
-}
+}, {
+  permission: 'fba.stage_shipments',
+  audit: {
+    source: 'fba.shipments.today.items',
+    action: 'fba.shipment.items.upsert',
+    entityType: 'fba_shipment_item',
+    entityId: ({ response }) => {
+      const r = response as { shipment_id?: number; added?: unknown[] } | null;
+      return r?.shipment_id ?? null;
+    },
+    extra: ({ body }) => {
+      const b = body as { items?: unknown[] } | null;
+      return { item_count: Array.isArray(b?.items) ? b?.items.length : 0 };
+    },
+  },
+});

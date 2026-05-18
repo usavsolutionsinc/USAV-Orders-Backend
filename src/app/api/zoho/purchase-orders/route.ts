@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { listPurchaseOrders, getPurchaseOrderById } from '@/lib/zoho';
+import { withAuth } from '@/lib/auth/withAuth';
 
 export const dynamic = 'force-dynamic';
 
@@ -110,7 +111,7 @@ function normalizePurchaseOrder(raw: unknown) {
  *  ?page=&per_page=    → pagination (max 200)
  *  ?last_modified_time= → ISO date filter for incremental sync
  */
-export async function GET(request: NextRequest) {
+export const GET = withAuth(async (request: NextRequest) => {
   try {
     const { searchParams } = request.nextUrl;
     const purchaseOrderId = (searchParams.get('purchaseorder_id') ?? '').trim();
@@ -162,4 +163,4 @@ export async function GET(request: NextRequest) {
     console.error('Zoho purchase orders API failed:', error);
     return NextResponse.json({ success: false, error: msg }, { status: 500 });
   }
-}
+}, { permission: 'receiving.scan_po' });

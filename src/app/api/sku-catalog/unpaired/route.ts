@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import pool from '@/lib/db';
+import { withAuth } from '@/lib/auth/withAuth';
 
 /**
  * GET /api/sku-catalog/unpaired
@@ -12,7 +13,7 @@ import pool from '@/lib/db';
  *   offset (default 0)
  *   q      (optional search filter on item_number or product_title)
  */
-export async function GET(req: NextRequest) {
+export const GET = withAuth(async (req: NextRequest) => {
   try {
     const { searchParams } = new URL(req.url);
     const limit = Math.min(Math.max(Number(searchParams.get('limit') || 100), 1), 500);
@@ -69,4 +70,4 @@ export async function GET(req: NextRequest) {
       { status: 500 },
     );
   }
-}
+}, { permission: 'sku_stock.view' });

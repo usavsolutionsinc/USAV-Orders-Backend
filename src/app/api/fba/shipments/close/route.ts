@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import pool from '@/lib/db';
 import { publishFbaShipmentChanged } from '@/lib/realtime/publish';
 import { invalidateCacheTags } from '@/lib/cache/upstash-cache';
+import { withAuth } from '@/lib/auth/withAuth';
+import { AUDIT_ENTITY } from '@/lib/audit-logs';
 
 // ── POST /api/fba/shipments/close ─────────────────────────────────────────────
 // Ship Close: transitions all LABEL_ASSIGNED items (and any remaining
@@ -9,16 +11,21 @@ import { invalidateCacheTags } from '@/lib/cache/upstash-cache';
 // Requires all items to be at least READY_TO_GO (admin can force-close).
 // Writes a SHIP/SHIPPED event to fba_fnsku_logs for each shipped item.
 //
-// Body: { shipment_id, staff_id, force?: boolean, station? }
-export async function POST(request: NextRequest) {
+// Destructive — requires step-up auth (via shipping.void_order, which is on
+// STEP_UP_PERMISSIONS). Closing a shipment can't be undone — all items go
+// SHIPPED and inventory is decremented.
+//
+// Body: { shipment_id, force?: boolean, station? } — actor is from session.
+export const POST = withAuth(async (request: NextRequest, ctx) => {
   const client = await pool.connect();
   try {
     const body = await request.json();
-    const { shipment_id, staff_id, force = false, station } = body;
+    const { shipment_id, force = false, station } = body;
+    const staff_id = ctx.staffId;
 
-    if (!shipment_id || !staff_id) {
+    if (!shipment_id) {
       return NextResponse.json(
-        { success: false, error: 'shipment_id and staff_id are required' },
+        { success: false, error: 'shipment_id is required' },
         { status: 400 }
       );
     }
@@ -131,4 +138,23 @@ export async function POST(request: NextRequest) {
   } finally {
     client.release();
   }
-}
+}, {
+  permission: 'shipping.void_order',
+  audit: {
+    source: 'fba.shipments.close',
+    action: 'fba.shipment.close',
+    entityType: AUDIT_ENTITY.SHIPMENT,
+    entityId: ({ body }) => {
+      const b = body as { shipment_id?: number } | null;
+      return b?.shipment_id ?? null;
+    },
+    extra: ({ body, response }) => {
+      const b = body as { force?: boolean } | null;
+      const r = response as { items_shipped?: number } | null;
+      return {
+        force: b?.force ?? false,
+        items_shipped: r?.items_shipped ?? null,
+      };
+    },
+  },
+});

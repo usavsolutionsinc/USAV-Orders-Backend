@@ -4,6 +4,7 @@ import { getGoogleAuth } from '@/lib/google-auth';
 import pool from '@/lib/db';
 import { resolveShipmentId } from '@/lib/shipping/resolve';
 import { formatPSTTimestamp } from '@/utils/date';
+import { withAuth } from '@/lib/auth/withAuth';
 
 export const maxDuration = 60;
 
@@ -13,7 +14,7 @@ const DEFAULT_SPREADSHEET_ID = '1fM9t4iw_6UeGfNbKZaKA7puEFfWqOiNtITGDVSgApCE';
  * Sync tech sheet data (test_date_time and tested_by) to tech_serial_numbers table
  * This replaces the old sync logic that updated orders.test_date_time and orders.tested_by
  */
-export async function POST(req: NextRequest) {
+export const POST = withAuth(async (req: NextRequest) => {
     try {
         const body = await req.json().catch(() => ({}));
         const targetSpreadsheetId = body.spreadsheetId || process.env.SPREADSHEET_ID || DEFAULT_SPREADSHEET_ID;
@@ -171,4 +172,4 @@ export async function POST(req: NextRequest) {
             details: error.message
         }, { status: 500 });
     }
-}
+}, { permission: 'admin.manage_features' });

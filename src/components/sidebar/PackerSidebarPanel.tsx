@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import StationPacking from '@/components/station/StationPacking';
 import { getCurrentPSTDateKey, toPSTDateKey } from '@/utils/date';
 import { getStaffGoalById } from '@/lib/staffGoalsCache';
-import { usePersistedStaffId } from '@/hooks/usePersistedStaffId';
+import { useAuth } from '@/contexts/AuthContext';
 import { useActiveStaffDirectory } from './hooks';
 
 export function PackerSidebarPanel() {
@@ -13,7 +13,8 @@ export function PackerSidebarPanel() {
   const [history, setHistory] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [dailyGoal, setDailyGoal] = useState(50);
-  const [staffIdNum] = usePersistedStaffId({ storageKey: 'packer-staff-id' });
+  const { user } = useAuth();
+  const staffIdNum = user?.staffId ?? 0;
   const packerId = String(staffIdNum);
   const staffDirectory = useActiveStaffDirectory();
 
@@ -23,7 +24,7 @@ export function PackerSidebarPanel() {
     const fetchHistory = async () => {
       setLoading(true);
       try {
-        const res = await fetch(`/api/packerlogs?packerId=${packerId}&limit=500`);
+        const res = await fetch(`/api/packerlogs?limit=500`);
         if (!res.ok) return;
         const data = await res.json();
         if (Array.isArray(data)) setHistory(data);

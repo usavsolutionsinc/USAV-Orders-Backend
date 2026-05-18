@@ -2,7 +2,7 @@
 
 import { Suspense, useCallback, useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { usePersistedStaffId } from '@/hooks/usePersistedStaffId';
+import { useAuth } from '@/contexts/AuthContext';
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -84,7 +84,8 @@ function UnitPageInner() {
   const router = useRouter();
   const params = useParams<{ id: string }>();
   const unitParam = String(params?.id ?? '');
-  const [staffId] = usePersistedStaffId();
+  const { user } = useAuth();
+  const staffId = user?.staffId ?? 0;
 
   const [unit, setUnit] = useState<SerialUnit | null>(null);
   const [events, setEvents] = useState<TimelineEvent[]>([]);
@@ -199,7 +200,7 @@ function UnitPageInner() {
   }, [binInput, busy, unit, staffId, noteInput, load]);
 
   const lineHref = unit?.origin_receiving_line_id
-    ? `/m/l/${unit.origin_receiving_line_id}?staffId=${staffId}`
+    ? `/m/l/${unit.origin_receiving_line_id}`
     : null;
 
   return (

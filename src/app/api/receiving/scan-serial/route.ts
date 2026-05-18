@@ -4,6 +4,8 @@ import { invalidateCacheTags } from '@/lib/cache/upstash-cache';
 import { publishReceivingLogChanged } from '@/lib/realtime/publish';
 import { enrichSerialUnitCatalog } from '@/lib/neon/serial-units-queries';
 import { receiveLineUnits } from '@/lib/receiving/receive-line';
+import { withAuth } from '@/lib/auth/withAuth';
+import { AUDIT_ACTION, AUDIT_ENTITY } from '@/lib/audit-logs';
 
 interface ReceivingLineCandidate {
   id: number;
@@ -38,14 +40,13 @@ function pickAutoLine(
   return 'ambiguous';
 }
 
-export async function POST(request: NextRequest) {
+export const POST = withAuth(async (request: NextRequest, ctx) => {
   try {
     const body = await request.json();
 
     const serialNumber = String(body?.serial_number ?? body?.serialNumber ?? '').trim();
     const receivingIdRaw = Number(body?.receiving_id);
     const receivingLineIdRaw = Number(body?.receiving_line_id);
-    const staffIdRaw = Number(body?.staff_id ?? body?.staffId);
     const conditionGrade =
       String(body?.condition_grade ?? body?.conditionGrade ?? '').trim() || null;
     const clientEventId = String(body?.client_event_id ?? '').trim() || null;
@@ -54,8 +55,8 @@ export async function POST(request: NextRequest) {
     const station =
       stationRaw === 'MOBILE' || stationRaw === 'TECH' ? stationRaw : 'RECEIVING';
 
-    const staffId =
-      Number.isFinite(staffIdRaw) && staffIdRaw > 0 ? Math.floor(staffIdRaw) : null;
+    // Server-trusted actor from the verified session cookie.
+    const staffId = ctx.staffId;
     const receivingId =
       Number.isFinite(receivingIdRaw) && receivingIdRaw > 0
         ? Math.floor(receivingIdRaw)
@@ -194,4 +195,23 @@ export async function POST(request: NextRequest) {
     console.error('receiving/scan-serial POST failed:', error);
     return NextResponse.json({ success: false, error: message }, { status: 500 });
   }
-}
+}, {
+  permission: 'receiving.mark_received',
+  audit: {
+    source: 'receiving.scan-serial',
+    action: AUDIT_ACTION.SERIAL_SCAN,
+    entityType: AUDIT_ENTITY.SERIAL_UNIT,
+    entityId: ({ response }) => {
+      const r = response as { serial_unit?: { id?: number | string } } | null;
+      return r?.serial_unit?.id ?? null;
+    },
+    extra: ({ response }) => {
+      const r = response as { line_state?: { id?: number }; is_new?: boolean; is_return?: boolean } | null;
+      return {
+        receiving_line_id: r?.line_state?.id ?? null,
+        is_new: r?.is_new ?? null,
+        is_return: r?.is_return ?? null,
+      };
+    },
+  },
+});

@@ -22,18 +22,26 @@ import {
 import { LocationsPatchBody } from '@/lib/schemas/locations';
 import { parseBody } from '@/lib/schemas/parse';
 import { recordAudit, AUDIT_ACTION, AUDIT_ENTITY } from '@/lib/audit-logs';
-import type { AuthContext } from '@/lib/auth/withAuth';
+import type { AnonymousAuthContext } from '@/lib/auth/withAuth';
 import { getCurrentUserBySid } from '@/lib/auth/current-user';
 import { SESSION_COOKIE_NAME } from '@/lib/auth/session';
 
 const ROUTE_LOCATION_PATCH = 'locations.barcode.patch';
 
-async function resolveCtx(req: NextRequest): Promise<AuthContext> {
+// This route uses Next's typed `{ params }` second arg, which conflicts with
+// the `withAuth` wrapper. We resolve the session manually and treat the ctx
+// as anonymous-style so the legacy callers (which still send body.staffId)
+// keep working until the route is migrated to a withAuth-friendly shape.
+async function resolveCtx(req: NextRequest): Promise<AnonymousAuthContext> {
   const sid = req.cookies.get(SESSION_COOKIE_NAME)?.value ?? null;
   const user = await getCurrentUserBySid(sid);
+  // markAuditWritten is a no-op here — this route doesn't use the withAuth
+  // wrapper so there's no audit floor to opt out of. The shape matches
+  // AnonymousAuthContext for callsites that pass ctx into recordAudit().
+  const noopMark = () => {};
   return user
-    ? { user, session: user.session, staffId: user.staffId, role: user.role, permissions: user.permissions }
-    : { user: null, session: null, staffId: null, role: null, permissions: new Set() };
+    ? { user, session: user.session, staffId: user.staffId, role: user.role, permissions: user.permissions, markAuditWritten: noopMark }
+    : { user: null, session: null, staffId: null, role: null, permissions: new Set(), markAuditWritten: noopMark };
 }
 
 /**

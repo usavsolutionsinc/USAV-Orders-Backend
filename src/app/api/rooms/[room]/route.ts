@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { renameRoom, setRoomZoneLetter, softDeleteRoom } from '@/lib/neon/location-queries';
+import { requireRoutePerm } from '@/lib/auth/dynamic-route-guard';
 
 /**
  * PATCH /api/rooms/[room]
@@ -9,6 +10,8 @@ export async function PATCH(
   req: NextRequest,
   { params }: { params: Promise<{ room: string }> },
 ) {
+  const gate = await requireRoutePerm(req, 'sku_stock.manage');
+  if (gate.denied) return gate.denied;
   const { room } = await params;
   const oldName = decodeURIComponent(room).trim();
   if (!oldName) {
@@ -74,9 +77,11 @@ export async function PATCH(
 
 /** DELETE /api/rooms/[room] — soft-delete the room + all its bins. */
 export async function DELETE(
-  _req: NextRequest,
+  req: NextRequest,
   { params }: { params: Promise<{ room: string }> },
 ) {
+  const gate = await requireRoutePerm(req, 'bin.remove');
+  if (gate.denied) return gate.denied;
   const { room } = await params;
   const name = decodeURIComponent(room).trim();
   if (!name) {

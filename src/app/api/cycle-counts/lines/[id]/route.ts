@@ -12,6 +12,7 @@ import {
   readIdempotencyKey,
   saveApiIdempotencyResponse,
 } from '@/lib/api-idempotency';
+import { requireRoutePerm } from '@/lib/auth/dynamic-route-guard';
 
 const ROUTE_CC_LINE = 'cycle-counts.line.patch';
 
@@ -95,6 +96,8 @@ export async function PATCH(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
+  const gate = await requireRoutePerm(request, 'cycle_count.view');
+  if (gate.denied) return gate.denied;
   const { id: idRaw } = await params;
   const lineId = Number(idRaw);
   if (!Number.isFinite(lineId) || lineId <= 0) {

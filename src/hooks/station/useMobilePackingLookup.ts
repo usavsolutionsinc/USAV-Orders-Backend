@@ -31,7 +31,8 @@ export function useMobilePackingLookup({
         const res = await fetch('/api/fba/items/scan', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ fnsku: scanValue, staff_id: Number(userId), station: 'PACK_STATION' }),
+          // staff_id is server-derived from the session cookie now.
+          body: JSON.stringify({ fnsku: scanValue, station: 'PACK_STATION' }),
         });
         const data = await res.json();
 

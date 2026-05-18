@@ -2,6 +2,7 @@ import { randomUUID } from 'crypto';
 import { NextRequest, NextResponse } from 'next/server';
 import { getSquareConfig, squareFetch, formatSquareErrors } from '@/lib/square/client';
 import { isAllowedAdminOrigin } from '@/lib/security/allowed-origin';
+import { withAuth } from '@/lib/auth/withAuth';
 
 interface LineItemInput {
   catalog_object_id: string;
@@ -17,7 +18,7 @@ interface CreateOrderBody {
  * POST /api/walk-in/orders
  * Create a Square order for walk-in sale.
  */
-export async function POST(req: NextRequest) {
+export const POST = withAuth(async (req: NextRequest) => {
   try {
     if (!isAllowedAdminOrigin(req)) {
       return NextResponse.json({ error: 'Origin not allowed' }, { status: 403 });
@@ -63,4 +64,4 @@ export async function POST(req: NextRequest) {
       { status: 500 },
     );
   }
-}
+}, { permission: 'walk_in.intake' });

@@ -1,12 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
 import pool from '@/lib/db';
+import { withAuth } from '@/lib/auth/withAuth';
 
 /**
  * GET /api/orders/verify - Verify if an order exists in the system
  * Used by label printer verification screen - checks if order exists regardless of pack status.
  * Looks up by tracking number via shipping_tracking_numbers join (shipment_id FK).
  */
-export async function GET(req: NextRequest) {
+export const GET = withAuth(async (req: NextRequest) => {
   try {
     const { searchParams } = new URL(req.url);
     const tracking = searchParams.get('tracking');
@@ -66,4 +67,4 @@ export async function GET(req: NextRequest) {
       details: error.message
     }, { status: 500 });
   }
-}
+}, { permission: 'orders.view' });

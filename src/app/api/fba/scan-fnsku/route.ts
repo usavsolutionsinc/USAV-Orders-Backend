@@ -1,28 +1,32 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { POST as unifiedScan } from '@/app/api/tech/scan/route';
+import { withAuth } from '@/lib/auth/withAuth';
 
 /**
  * GET /api/fba/scan-fnsku — FBA workspace wrapper around the unified scan route.
  * Keeps FBA-origin FNSKU scans classified as FBA instead of TECH.
+ *
+ * Identity is server-derived from the session cookie. Legacy `?staffId=` /
+ * `?techId=` query params are ignored.
  */
-export async function GET(req: NextRequest) {
+export const GET = withAuth(async (req: NextRequest, ctx) => {
   const { searchParams } = new URL(req.url);
   const fnsku = searchParams.get('fnsku');
-  const staffId = searchParams.get('staffId') || searchParams.get('techId');
 
   if (!fnsku) return NextResponse.json({ error: 'FNSKU is required' }, { status: 400 });
-  if (!staffId) return NextResponse.json({ error: 'Staff ID is required' }, { status: 400 });
 
+  const headers = new Headers(req.headers);
+  headers.set('Content-Type', 'application/json');
   const syntheticReq = new NextRequest(req.url, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers,
     body: JSON.stringify({
       type: 'FNSKU',
       value: fnsku.trim(),
-      techId: Number(staffId),
+      techId: ctx.staffId,
       sourceStation: 'FBA',
     }),
   });
 
-  return unifiedScan(syntheticReq);
-}
+  return unifiedScan(syntheticReq, { params: Promise.resolve({}) });
+}, { permission: 'fba.stage_shipments' });

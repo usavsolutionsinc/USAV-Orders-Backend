@@ -113,6 +113,7 @@ interface StaffPinRow {
   pin_hash: string | null;
   pin_failed_count: number;
   pin_locked_until: Date | null;
+  default_home_path: string | null;
 }
 
 /**
@@ -122,7 +123,7 @@ interface StaffPinRow {
 export async function verifyStaffPin(staffId: number, pin: string): Promise<StaffPinRow> {
   assertPinShape(pin);
   const result = await pool.query(
-    `SELECT id, name, role, status, pin_hash, pin_failed_count, pin_locked_until
+    `SELECT id, name, role, status, pin_hash, pin_failed_count, pin_locked_until, default_home_path
        FROM staff
       WHERE id = $1
       LIMIT 1`,

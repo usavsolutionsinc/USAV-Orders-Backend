@@ -1,20 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server';
 import pool from '@/lib/db';
-import { getCurrentUser } from '@/lib/auth/current-user';
+import { withAuth } from '@/lib/auth/withAuth';
 
 /**
  * GET /api/packing-logs/history?limit=10
  *
  * Returns the signed-in staff's most recent packed orders for the phone
- * history popover. Auth comes from the `usav_sid` cookie — there is no
- * `staffId` query param.
+ * history popover. Auth comes from the `usav_sid` cookie via withAuth.
  */
-export async function GET(req: NextRequest) {
+export const GET = withAuth(async (req: NextRequest, ctx) => {
   try {
-    const user = await getCurrentUser();
-    if (!user) {
-      return NextResponse.json({ entries: [] });
-    }
+    const user = ctx.user;
 
     const { searchParams } = new URL(req.url);
     const rawLimit = Number(searchParams.get('limit') ?? '10');
@@ -94,4 +90,4 @@ export async function GET(req: NextRequest) {
       { status: 500 },
     );
   }
-}
+}, { permission: 'packing.view' });

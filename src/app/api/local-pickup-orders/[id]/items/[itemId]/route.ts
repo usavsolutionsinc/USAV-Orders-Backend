@@ -1,9 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import pool from '@/lib/db';
+import { requireRoutePerm } from '@/lib/auth/dynamic-route-guard';
 
 type Params = { params: Promise<{ id: string; itemId: string }> };
 
 export async function PATCH(req: NextRequest, { params }: Params) {
+  const gate = await requireRoutePerm(req, 'walk_in.intake');
+  if (gate.denied) return gate.denied;
   try {
     const { id, itemId } = await params;
     const orderId = Number(id);
@@ -95,6 +98,8 @@ export async function PATCH(req: NextRequest, { params }: Params) {
 }
 
 export async function DELETE(req: NextRequest, { params }: Params) {
+  const gate = await requireRoutePerm(req, 'walk_in.intake');
+  if (gate.denied) return gate.denied;
   try {
     const { id, itemId } = await params;
     const orderId = Number(id);

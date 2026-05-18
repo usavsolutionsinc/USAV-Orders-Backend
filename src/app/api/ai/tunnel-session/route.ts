@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { randomUUID } from 'crypto';
+import { withAuth } from '@/lib/auth/withAuth';
 
 export const runtime = 'nodejs';
 
@@ -9,6 +10,6 @@ export const runtime = 'nodejs';
  * Hermes gateway as `X-Hermes-Session-Id` so Hermes can persist the
  * conversation in ~/.hermes-usav/state.db for follow-up turn memory.
  */
-export async function POST() {
+export const POST = withAuth(async () => {
   return NextResponse.json({ session_id: randomUUID() });
-}
+}, { permission: 'dashboard.view' });

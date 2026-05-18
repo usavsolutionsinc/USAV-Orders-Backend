@@ -70,7 +70,6 @@ export const STEP_UP_PERMISSIONS: ReadonlySet<PermissionString> = new Set<Permis
   'shipping.void_order', 'orders.void',
   'bin.remove', 'bin.swap',
   'cycle_count.approve', 'replenish.approve_po',
-  'admin.manage_staff', 'admin.manage_roles', 'admin.manage_features',
 ]);
 
 type CanonicalRole = Exclude<StaffRole, 'unknown' | 'receiving' | 'readonly'>;

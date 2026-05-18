@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import pool from '@/lib/db';
+import { withAuth } from '@/lib/auth/withAuth';
 
 /**
  * GET /api/db/ping
@@ -10,7 +11,7 @@ import pool from '@/lib/db';
  *
  * Useful for smoke-testing the DATABASE_URL from localhost:3000.
  */
-export async function GET() {
+export const GET = withAuth(async () => {
   const startedAt = Date.now();
   try {
     const result = await pool.query<{ ok: number; db_time: string }>(
@@ -35,4 +36,4 @@ export async function GET() {
       { status: 503 },
     );
   }
-}
+}, { permission: 'admin.view' });

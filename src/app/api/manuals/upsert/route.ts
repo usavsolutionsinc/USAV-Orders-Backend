@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import pool from '@/lib/db';
 import { normalizeIdentifier } from '@/lib/product-manuals';
+import { withAuth } from '@/lib/auth/withAuth';
 
 function extractGoogleFileId(input: string): string {
   const raw = String(input || '').trim();
@@ -16,7 +17,7 @@ function extractGoogleFileId(input: string): string {
   return '';
 }
 
-export async function POST(req: NextRequest) {
+export const POST = withAuth(async (req: NextRequest) => {
   try {
     const body = await req.json();
     const itemNumber = normalizeIdentifier(String(body?.itemNumber || ''));
@@ -63,4 +64,4 @@ export async function POST(req: NextRequest) {
     console.error('Error upserting product manual:', error);
     return NextResponse.json({ success: false, error: 'Failed to save manual', details: error?.message }, { status: 500 });
   }
-}
+}, { permission: 'sku_stock.manage' });

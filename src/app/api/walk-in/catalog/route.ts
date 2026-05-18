@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { squareFetch, formatSquareErrors } from '@/lib/square/client';
 import { isAllowedAdminOrigin } from '@/lib/security/allowed-origin';
 import { isRepairSku } from '@/utils/sku';
+import { withAuth } from '@/lib/auth/withAuth';
 
 interface CatalogItem {
   id: string;
@@ -32,7 +33,7 @@ interface CatalogSearchResponse {
  * Fetch Square catalog items for sales (excludes -RS repair SKUs).
  * Includes category IDs on each item. Optionally filter by category.
  */
-export async function GET(req: NextRequest) {
+export const GET = withAuth(async (req: NextRequest) => {
   try {
     if (!isAllowedAdminOrigin(req)) {
       return NextResponse.json({ error: 'Origin not allowed' }, { status: 403 });
@@ -88,4 +89,4 @@ export async function GET(req: NextRequest) {
       { status: 500 },
     );
   }
-}
+}, { permission: 'walk_in.view' });

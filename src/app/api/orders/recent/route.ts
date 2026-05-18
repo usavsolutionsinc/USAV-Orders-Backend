@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import pool from '@/lib/db';
 import { getCurrentPSTDateKey, normalizePSTTimestamp, toPSTDateKey } from '@/utils/date';
 import { logRouteMetric } from '@/lib/route-metrics';
+import { withAuth } from '@/lib/auth/withAuth';
 
 interface RecentOrder {
   id: number;
@@ -30,7 +31,7 @@ interface DateGroup {
  * Returns all orders (shipped + unshipped) from the last N days,
  * grouped by creation date descending. Used by ManualAssignmentSidebarPanel.
  */
-export async function GET(req: NextRequest) {
+export const GET = withAuth(async (req: NextRequest) => {
   const startedAt = Date.now();
   let ok = false;
   try {
@@ -137,4 +138,4 @@ export async function GET(req: NextRequest) {
       ok,
     });
   }
-}
+}, { permission: 'orders.view' });

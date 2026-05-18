@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import pool from '@/lib/db';
 import { publishFbaCatalogChanged } from '@/lib/realtime/publish';
 import { invalidateCacheTags } from '@/lib/cache/upstash-cache';
+import { requireRoutePerm, recordRouteAudit } from '@/lib/auth/dynamic-route-guard';
 
 // ── PATCH /api/fba/fnskus/[fnsku] ────────────────────────────────────────────
 // Update catalog fields for an existing FNSKU.
@@ -11,6 +12,8 @@ export async function PATCH(
   { params }: { params: Promise<{ fnsku: string }> },
 ) {
   try {
+    const gate = await requireRoutePerm(request, 'fba.manage_fnskus');
+    if (gate.denied) return gate.denied;
     const { fnsku: rawFnsku } = await params;
     const fnsku = decodeURIComponent(rawFnsku).trim().toUpperCase();
     if (!fnsku) {
@@ -58,7 +61,14 @@ export async function PATCH(
     await invalidateCacheTags(['fba-fnskus']);
     await publishFbaCatalogChanged({ action: 'updated', fnsku: fnsku || '', source: 'fba.fnskus.update' });
 
-    return NextResponse.json({ success: true, fnsku: result.rows[0] });
+    const response = NextResponse.json({ success: true, fnsku: result.rows[0] });
+    await recordRouteAudit(request, gate.ctx, response, {
+      source: 'fba.fnskus.update',
+      action: 'fba.fnsku.update',
+      entityType: 'fba_fnsku',
+      entityId: () => fnsku,
+    });
+    return response;
   } catch (error: any) {
     console.error('[PATCH /api/fba/fnskus/[fnsku]]', error);
     return NextResponse.json(
@@ -71,10 +81,12 @@ export async function PATCH(
 // ── GET /api/fba/fnskus/[fnsku] ──────────────────────────────────────────────
 // Fetch a single FNSKU record.
 export async function GET(
-  _request: NextRequest,
+  request: NextRequest,
   { params }: { params: Promise<{ fnsku: string }> },
 ) {
   try {
+    const gate = await requireRoutePerm(request, 'fba.view');
+    if (gate.denied) return gate.denied;
     const { fnsku: rawFnsku } = await params;
     const fnsku = decodeURIComponent(rawFnsku).trim().toUpperCase();
     if (!fnsku) {

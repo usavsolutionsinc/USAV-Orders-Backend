@@ -22,6 +22,12 @@ export type HorizontalSliderItem = {
    * sections). Currently honored by the `nav` variant.
    */
   disabled?: boolean;
+  /**
+   * Status badge overlay — `'dot'` paints a small emerald dot at the top-right
+   * of the pill to signal "there's something on this tab" without affecting
+   * the click target. Honored by the `nav` variant.
+   */
+  badge?: 'dot' | null;
 };
 
 const FBA_TONE: Record<
@@ -160,6 +166,14 @@ export function HorizontalButtonSlider({
                   </span>
                   {item.count != null && item.count > 0 ? (
                     <span className={`ml-1.5 shrink-0 tabular-nums ${isActive ? 'opacity-90' : 'opacity-70'}`}>{item.count}</span>
+                  ) : null}
+                  {item.badge === 'dot' ? (
+                    <span
+                      className={`absolute -top-0.5 -right-0.5 h-2 w-2 rounded-full ring-2 ${
+                        isActive ? 'bg-white ring-blue-600' : 'bg-emerald-500 ring-white'
+                      }`}
+                      aria-hidden
+                    />
                   ) : null}
                 </motion.button>
               );

@@ -3,6 +3,7 @@ import { getAllShippedOrders, updateShippedOrderField, searchShippedOrders, type
 import { createCacheLookupKey, getCachedJson, invalidateCacheTags, setCachedJson } from '@/lib/cache/upstash-cache';
 import { logRouteMetric } from '@/lib/route-metrics';
 import { normalizeShippedSearchField } from '@/lib/shipped-search';
+import { withAuth } from '@/lib/auth/withAuth';
 
 const CACHE_HEADERS = {
   'Cache-Control': 'private, max-age=300, stale-while-revalidate=60',
@@ -15,7 +16,7 @@ const CACHE_HEADERS = {
  * missingTrackingOnly filters. Filters are pushed down to SQL so pagination
  * remains lightweight for dashboard views.
  */
-export async function GET(req: NextRequest) {
+export const GET = withAuth(async (req: NextRequest) => {
   const startedAt = Date.now();
   let ok = false;
   let cache = 'BYPASS';
@@ -162,12 +163,12 @@ export async function GET(req: NextRequest) {
       details: { cache },
     });
   }
-}
+}, { permission: 'shipping.view' });
 
 /**
  * PATCH /api/shipped - Update status or fields
  */
-export async function PATCH(req: NextRequest) {
+export const PATCH = withAuth(async (req: NextRequest) => {
   const startedAt = Date.now();
   let ok = false;
   try {
@@ -203,4 +204,4 @@ export async function PATCH(req: NextRequest) {
       ok,
     });
   }
-}
+}, { permission: 'shipping.mark_shipped' });

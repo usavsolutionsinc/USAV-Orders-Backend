@@ -1,12 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
 import pool from '@/lib/db';
+import { withAuth } from '@/lib/auth/withAuth';
 
 /**
  * Returns SKU-level shipped aggregation for FIFO replenishment view.
  * Shows which SKUs are depleting fastest based on recent shipments,
  * cross-referenced with existing replenishment requests and Zoho stock.
  */
-export async function GET(req: NextRequest) {
+export const GET = withAuth(async (req: NextRequest) => {
   try {
     const { searchParams } = new URL(req.url);
     const days = Math.min(Number(searchParams.get('days') || '30'), 90);
@@ -81,4 +82,4 @@ export async function GET(req: NextRequest) {
       { status: 500 }
     );
   }
-}
+}, { permission: 'replenish.view' });

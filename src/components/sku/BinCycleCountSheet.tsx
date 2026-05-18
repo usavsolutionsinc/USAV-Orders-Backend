@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { Check, Loader2 } from '@/components/Icons';
-import { usePersistedStaffId } from '@/hooks/usePersistedStaffId';
+import { useAuth } from '@/contexts/AuthContext';
 import { errorFeedback, successFeedback } from '@/lib/feedback/confirm';
 
 function randomId(): string {
@@ -45,7 +45,8 @@ export function BinCycleCountSheet({
   campaignName,
   invalidateKey,
 }: BinCycleCountSheetProps) {
-  const [staffId] = usePersistedStaffId();
+  const { user } = useAuth();
+  const staffId = user?.staffId ?? 0;
   const queryClient = useQueryClient();
   const [lines, setLines] = useState<CountLine[]>([]);
   const [drafts, setDrafts] = useState<Record<number, string>>({});

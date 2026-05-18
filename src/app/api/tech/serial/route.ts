@@ -8,16 +8,18 @@ import {
   normalizeTechSerial,
   resolveTechSerialSalContext,
 } from '@/lib/tech/insertTechSerialForSalContext';
+import { withAuth } from '@/lib/auth/withAuth';
 
 type Action = 'add' | 'remove' | 'update' | 'undo';
 
-export async function POST(req: NextRequest) {
+export const POST = withAuth(async (req: NextRequest, ctx) => {
   const body = await req.json().catch(() => null);
   if (!body) return NextResponse.json({ success: false, error: 'Invalid JSON' }, { status: 400 });
 
   const action = String(body.action || '').toLowerCase() as Action;
   const salId = Number(body.salId);
-  const techId = Number(body.techId);
+  // Server-trusted actor — body.techId is ignored.
+  const techId = ctx.staffId;
 
   if (!['add', 'remove', 'update', 'undo'].includes(action)) {
     return NextResponse.json({ success: false, error: 'action must be add|remove|update|undo' }, { status: 400 });
@@ -25,17 +27,9 @@ export async function POST(req: NextRequest) {
   if (!Number.isFinite(salId) || salId <= 0) {
     return NextResponse.json({ success: false, error: 'salId is required' }, { status: 400 });
   }
-  if (!Number.isFinite(techId) || techId <= 0) {
-    return NextResponse.json({ success: false, error: 'techId is required' }, { status: 400 });
-  }
 
   try {
-    // Resolve staff
-    const staffResult = await pool.query(`SELECT id FROM staff WHERE id = $1 LIMIT 1`, [techId]);
-    if (staffResult.rows.length === 0) {
-      return NextResponse.json({ success: false, error: 'Staff not found' }, { status: 404 });
-    }
-    const staffId = staffResult.rows[0].id;
+    const staffId = techId;
 
     const client = await pool.connect();
     try {
@@ -177,4 +171,4 @@ export async function POST(req: NextRequest) {
     console.error('Error in tech serial:', error);
     return NextResponse.json({ success: false, error: 'Failed', details: error.message }, { status: 500 });
   }
-}
+}, { permission: 'tech.scan_serial' });

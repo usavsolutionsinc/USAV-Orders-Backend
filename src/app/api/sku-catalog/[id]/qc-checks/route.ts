@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createQcCheck, updateQcCheck, deleteQcCheck } from '@/lib/neon/sku-catalog-queries';
+import { requireRoutePerm } from '@/lib/auth/dynamic-route-guard';
 
 /**
  * POST /api/sku-catalog/[id]/qc-checks — Create a QC check step.
@@ -9,6 +10,8 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> },
 ) {
   try {
+    const gate = await requireRoutePerm(req, 'sku_stock.manage');
+    if (gate.denied) return gate.denied;
     const { id: rawId } = await params;
     const skuCatalogId = Number(rawId);
     if (!Number.isFinite(skuCatalogId) || skuCatalogId <= 0) {
@@ -47,6 +50,8 @@ export async function PUT(
   { params }: { params: Promise<{ id: string }> },
 ) {
   try {
+    const gate = await requireRoutePerm(req, 'sku_stock.manage');
+    if (gate.denied) return gate.denied;
     await params;
     const body = await req.json();
     const { checkId, stepLabel, stepType, sortOrder } = body;
@@ -78,6 +83,8 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> },
 ) {
   try {
+    const gate = await requireRoutePerm(req, 'sku_stock.manage');
+    if (gate.denied) return gate.denied;
     await params;
     const body = await req.json();
     const { checkId } = body;

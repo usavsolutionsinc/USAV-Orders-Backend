@@ -10,6 +10,7 @@ import {
   getStaffChannelName,
   getStationChannelName,
 } from '@/lib/realtime/channels';
+import { withAuth } from '@/lib/auth/withAuth';
 
 export const runtime = 'nodejs';
 
@@ -77,7 +78,7 @@ async function createTokenRequest(req: NextRequest) {
   return NextResponse.json(tokenRequest);
 }
 
-export async function GET(req: NextRequest) {
+export const GET = withAuth(async (req: NextRequest) => {
   try {
     return await createTokenRequest(req);
   } catch (error: any) {
@@ -86,9 +87,9 @@ export async function GET(req: NextRequest) {
       { status: 500 }
     );
   }
-}
+}, { permission: 'dashboard.view' });
 
-export async function POST(req: NextRequest) {
+export const POST = withAuth(async (req: NextRequest) => {
   try {
     return await createTokenRequest(req);
   } catch (error: any) {
@@ -97,4 +98,4 @@ export async function POST(req: NextRequest) {
       { status: 500 }
     );
   }
-}
+}, { permission: 'dashboard.view' });

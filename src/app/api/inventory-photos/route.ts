@@ -3,6 +3,7 @@ import { put } from '@vercel/blob';
 import { db } from '@/lib/drizzle/db';
 import { photos } from '@/lib/drizzle/schema';
 import pool from '@/lib/db';
+import { withAuth } from '@/lib/auth/withAuth';
 
 /**
  * POST /api/inventory-photos
@@ -20,7 +21,7 @@ import pool from '@/lib/db';
  * entity_type='BIN_ADJUSTMENT' and entity_id = ledgerId (when supplied).
  */
 
-export async function POST(req: NextRequest) {
+export const POST = withAuth(async (req: NextRequest, ctx) => {
   try {
     const body = await req.json().catch(() => null);
     if (!body) {
@@ -40,10 +41,8 @@ export async function POST(req: NextRequest) {
       Number.isFinite(Number(body?.binId)) && Number(body?.binId) > 0
         ? Math.floor(Number(body?.binId))
         : null;
-    const staffId =
-      Number.isFinite(Number(body?.staffId)) && Number(body?.staffId) > 0
-        ? Math.floor(Number(body?.staffId))
-        : null;
+    // Server-trusted actor — body.staffId is ignored.
+    const staffId = ctx.staffId;
     const photoType = String(body?.photoType || 'bin_adjustment').trim() || 'bin_adjustment';
 
     if (!photoBase64) {
@@ -107,4 +106,4 @@ export async function POST(req: NextRequest) {
       { status: 500 },
     );
   }
-}
+}, { permission: 'bin.adjust' });

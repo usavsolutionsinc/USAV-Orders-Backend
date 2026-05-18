@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import pool from '@/lib/db';
 import { publishFbaCatalogChanged } from '@/lib/realtime/publish';
 import { invalidateCacheTags } from '@/lib/cache/upstash-cache';
+import { withAuth } from '@/lib/auth/withAuth';
 
 type Row = {
   fnsku: string;
@@ -28,7 +29,7 @@ function splitCsvLine(line: string): string[] {
   return line.split(',').map((cell) => cell.trim());
 }
 
-export async function POST(request: NextRequest) {
+export const POST = withAuth(async (request: NextRequest) => {
   try {
     const form = await request.formData();
     const file = form.get('file');
@@ -125,4 +126,4 @@ export async function POST(request: NextRequest) {
       { status: 500 }
     );
   }
-}
+}, { permission: 'fba.manage_fnskus' });

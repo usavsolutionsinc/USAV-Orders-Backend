@@ -11,6 +11,7 @@ import { AdminJobsTab } from '@/components/admin/AdminJobsTab';
 import AiChatTab from '@/components/admin/AiChatTab';
 import { ArchitectureTab } from '@/components/admin/ArchitectureTab';
 import { ADMIN_SECTION_OPTIONS, type AdminSection } from '@/components/admin/admin-sections';
+import { requirePermission } from '@/lib/auth/page-guard';
 
 interface AdminPageProps {
   searchParams: Promise<{
@@ -23,6 +24,12 @@ interface AdminPageProps {
 }
 
 export default async function AdminPage({ searchParams }: AdminPageProps) {
+  // Server-side gate. The proxy already requires a session cookie; this
+  // additionally requires the admin.view role permission so the admin UI
+  // isn't reachable by non-admin signed-in users (defense in depth — the
+  // API routes behind these tabs are gated individually too).
+  await requirePermission('admin.view', { enforce: true });
+
   const params = await searchParams;
   const requestedSection = (params.section as AdminSection) || 'goals';
   const activeTab = ADMIN_SECTION_OPTIONS.some((item) => item.value === requestedSection)

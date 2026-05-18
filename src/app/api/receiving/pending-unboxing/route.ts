@@ -45,8 +45,9 @@ import { NextRequest, NextResponse, after } from 'next/server';
 import pool from '@/lib/db';
 import { getReceivingSchema, getReceivingLineColumns } from '@/lib/receiving-schema-cache';
 import { createCacheLookupKey, getCachedJson, setCachedJson } from '@/lib/cache/upstash-cache';
+import { withAuth } from '@/lib/auth/withAuth';
 
-export async function GET(request: NextRequest) {
+export const GET = withAuth(async (request: NextRequest) => {
   try {
     const { searchParams } = new URL(request.url);
     const limitRaw = Number(searchParams.get('limit') || 100);
@@ -270,4 +271,4 @@ export async function GET(request: NextRequest) {
     console.error('pending-unboxing GET failed:', error);
     return NextResponse.json({ error: msg }, { status: 500 });
   }
-}
+}, { permission: 'receiving.view' });

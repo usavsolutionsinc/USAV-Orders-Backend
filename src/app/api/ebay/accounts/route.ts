@@ -1,11 +1,12 @@
 import { NextResponse } from 'next/server';
 import pool from '@/lib/db';
+import { withAuth } from '@/lib/auth/withAuth';
 
 /**
  * GET /api/ebay/accounts
  * Get all eBay accounts with their status
  */
-export async function GET() {
+export const GET = withAuth(async () => {
   try {
     const result = await pool.query(
       `SELECT 
@@ -34,13 +35,13 @@ export async function GET() {
       { status: 500 }
     );
   }
-}
+}, { permission: 'integrations.ebay' });
 
 /**
  * PUT /api/ebay/accounts
  * Update an eBay account (e.g., toggle active status)
  */
-export async function PUT(req: Request) {
+export const PUT = withAuth(async (req: Request) => {
   try {
     const body = await req.json();
     const { id, is_active } = body;
@@ -68,4 +69,4 @@ export async function PUT(req: Request) {
       { status: 500 }
     );
   }
-}
+}, { permission: 'integrations.ebay' });

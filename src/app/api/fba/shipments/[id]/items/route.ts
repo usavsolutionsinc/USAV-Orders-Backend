@@ -3,14 +3,17 @@ import pool from '@/lib/db';
 import { getInvalidFbaPlanIdMessage, parseFbaPlanId } from '@/lib/fba/plan-id';
 import { addFnskuToPlan } from '@/domain/fba/condense-fnsku';
 import { publishFbaItemChanged, publishFbaShipmentChanged } from '@/lib/realtime/publish';
+import { requireRoutePerm, recordRouteAudit } from '@/lib/auth/dynamic-route-guard';
 
 // â”€â”€ GET /api/fba/shipments/[id]/items â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 // Returns all items for a specific FBA shipment with staff names joined.
 export async function GET(
-  _request: NextRequest,
+  request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const gate = await requireRoutePerm(request, 'fba.view');
+    if (gate.denied) return gate.denied;
     const { id } = await params;
     const shipmentId = parseFbaPlanId(id);
     if (shipmentId == null) {
@@ -74,6 +77,8 @@ export async function POST(
 ) {
   const client = await pool.connect();
   try {
+    const gate = await requireRoutePerm(request, 'fba.stage_shipments');
+    if (gate.denied) return gate.denied;
     const { id } = await params;
     const planId = parseFbaPlanId(id);
     if (planId == null) {
@@ -87,7 +92,7 @@ export async function POST(
     }
 
     const expectedQty = Math.max(1, Number(body?.expected_qty) || 1);
-    const staffId = body?.staff_id ? Number(body.staff_id) : null;
+    const staffId = gate.ctx.staffId;
 
     await client.query('BEGIN');
 
@@ -137,13 +142,21 @@ export async function POST(
       }).catch(() => {});
     }
 
-    return NextResponse.json({
+    const response = NextResponse.json({
       success: true,
       item_id: result.itemId,
       action: result.action,
       new_qty: result.newQty,
       from_plan_id: result.fromPlanId ?? null,
     }, { status: 201 });
+    await recordRouteAudit(request, gate.ctx, response, {
+      source: 'fba.shipments.items.add',
+      action: 'fba.shipment.item.add',
+      entityType: 'fba_shipment_item',
+      entityId: () => planId,
+      extra: () => ({ fnsku, expected_qty: expectedQty, condense_action: result.action }),
+    });
+    return response;
   } catch (error: any) {
     await client.query('ROLLBACK');
     console.error('[POST /api/fba/shipments/[id]/items]', error);

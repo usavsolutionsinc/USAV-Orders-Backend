@@ -8,8 +8,9 @@ import { formatPSTTimestamp } from '@/utils/date';
 import { findOrCreateRepairCustomer, linkCustomerToRepair } from '@/lib/neon/customer-queries';
 import { put } from '@vercel/blob';
 import pool from '@/lib/db';
+import { withAuth } from '@/lib/auth/withAuth';
 
-export async function POST(req: NextRequest) {
+export const POST = withAuth(async (req: NextRequest) => {
     try {
         const body = await req.json();
         const { customer, product, repairReasons, repairNotes, serialNumber, price, notes, assignedTechId, signatureDataUrl, signatureStrokes } = body;
@@ -210,4 +211,4 @@ export async function POST(req: NextRequest) {
             details: error.message
         }, { status: 500 });
     }
-}
+}, { permission: 'repair.intake' });

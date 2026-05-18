@@ -3,6 +3,7 @@ import pool from '@/lib/db';
 import { formatPSTTimestamp } from '@/utils/date';
 import { invalidateCacheTags } from '@/lib/cache/upstash-cache';
 import { resolveOrCreateSkuCatalogId } from '@/lib/neon/sku-catalog-queries';
+import { withAuth } from '@/lib/auth/withAuth';
 
 export interface ShippedFormData {
   order_id: string;
@@ -17,7 +18,7 @@ export interface ShippedFormData {
  * Create a new shipped entry with combined product_title - reason.
  * Tracking is linked separately via shipment_id once the packer scans.
  */
-export async function POST(req: NextRequest) {
+export const POST = withAuth(async (req: NextRequest) => {
   try {
     const body: ShippedFormData = await req.json();
 
@@ -79,4 +80,4 @@ export async function POST(req: NextRequest) {
       { status: 500 }
     );
   }
-}
+}, { permission: 'shipping.mark_shipped' });

@@ -39,9 +39,12 @@ export function useStationHistory({
     const fetchHistory = useCallback(async () => {
         setIsLoading(true);
         try {
-            const endpoint = stationType === 'packing' 
-                ? `/api/packing-logs?packerId=${stationId}`
-                : `/api/tech-logs?techId=${stationId}`;
+            // Server derives identity from the session cookie. The stationId
+            // param is only used here for the admin-filter case, otherwise
+            // the route returns the signed-in staff's logs.
+            const endpoint = stationType === 'packing'
+                ? `/api/packing-logs`
+                : `/api/tech-logs`;
 
             const res = await fetch(endpoint);
             if (!res.ok) throw new Error('Failed to fetch history');

@@ -44,6 +44,7 @@ export const staff = pgTable('staff', {
   permissionsRemoved: text('permissions_removed').array().notNull().default([]),
   sortOrder: integer('sort_order').notNull().default(0),
   colorHex: varchar('color_hex', { length: 7 }).notNull().default('#10b981'),
+  defaultHomePath: text('default_home_path'),
 });
 
 // Editable roles taxonomy. is_system rows are seeded built-ins and cannot

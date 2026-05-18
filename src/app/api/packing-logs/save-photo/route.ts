@@ -2,13 +2,16 @@ import { NextRequest, NextResponse } from 'next/server';
 import { put } from '@vercel/blob';
 import { db } from '@/lib/drizzle/db';
 import { photos } from '@/lib/drizzle/schema';
+import { withAuth } from '@/lib/auth/withAuth';
 
-export async function POST(req: NextRequest) {
+export const POST = withAuth(async (req: NextRequest, ctx) => {
     try {
         const body = await req.json();
-        const { photo, orderId, packerId, photoIndex, packerLogId, photoType } = body;
+        const { photo, orderId, photoIndex, packerLogId, photoType } = body;
+        // Server-trusted actor.
+        const packerId = ctx.staffId;
 
-        if (!photo || !orderId || !packerId || photoIndex === undefined) {
+        if (!photo || !orderId || photoIndex === undefined) {
             return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
         }
 
@@ -56,4 +59,4 @@ export async function POST(req: NextRequest) {
             details: error.message
         }, { status: 500 });
     }
-}
+}, { permission: 'packing.complete_order' });

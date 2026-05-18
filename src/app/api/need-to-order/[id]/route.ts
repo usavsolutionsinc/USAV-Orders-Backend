@@ -1,11 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { cancelNeedToOrderRequest, updateNeedToOrderRequest } from '@/lib/replenishment';
+import { requireRoutePerm } from '@/lib/auth/dynamic-route-guard';
 
 export async function PATCH(
   req: NextRequest,
   context: { params: Promise<{ id: string }> }
 ) {
   try {
+    const gate = await requireRoutePerm(req, 'replenish.create_po');
+    if (gate.denied) return gate.denied;
     const { id } = await context.params;
     const body = await req.json();
 
@@ -33,10 +36,12 @@ export async function PATCH(
 }
 
 export async function DELETE(
-  _req: NextRequest,
+  req: NextRequest,
   context: { params: Promise<{ id: string }> }
 ) {
   try {
+    const gate = await requireRoutePerm(req, 'replenish.create_po');
+    if (gate.denied) return gate.denied;
     const { id } = await context.params;
     await cancelNeedToOrderRequest(id, 'staff');
     return NextResponse.json({ success: true });

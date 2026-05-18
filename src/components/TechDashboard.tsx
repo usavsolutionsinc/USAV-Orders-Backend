@@ -19,11 +19,40 @@ import { Search } from '@/components/Icons';
 import { resolveOrderSearchView } from '@/lib/order-search-resolver';
 import type { RSRecord } from '@/lib/neon/repair-service-queries';
 import type { ActiveStationOrder, ResolvedProductManual } from '@/hooks/useStationTestingController';
+import type { Order } from '@/components/station/upnext/upnext-types';
+import type { UpNextPreviewPayload } from '@/utils/events';
 
 interface OpenRepairDetail {
   repairId:       number;
   assignmentId:   number | null;
   assignedTechId: number | null;
+}
+
+/**
+ * Build the synthetic `ActiveStationOrder` shape consumed by the workspace
+ * card from an Up Next `Order`. Used for the right-pane preview when a tech
+ * clicks a card before scanning (no serials, no test data yet).
+ */
+function previewOrderToActiveShape(order: Order): ActiveStationOrder {
+  const qty = Math.max(1, parseInt(String(order.quantity || '1'), 10) || 1);
+  return {
+    id: order.id,
+    orderId: order.order_id,
+    productTitle: order.product_title || '',
+    itemNumber: order.item_number,
+    sku: order.sku || '',
+    condition: order.condition || '',
+    notes: '',
+    tracking: order.shipping_tracking_number || '',
+    serialNumbers: [],
+    testDateTime: null,
+    testedBy: null,
+    quantity: qty,
+    shipByDate: order.ship_by_date,
+    createdAt: order.created_at,
+    orderFound: true,
+    sourceType: 'order',
+  };
 }
 
 interface TechDashboardProps {
@@ -69,6 +98,10 @@ export default function TechDashboard({ techId }: TechDashboardProps) {
         manuals: ResolvedProductManual[];
         isManualLoading: boolean;
     } | null>(null);
+    // Up Next preview state — populated by `tech-upnext-preview` (dispatched
+    // when a tech clicks an Up Next card). Lower priority than the active
+    // order: if both are set, active wins.
+    const [previewOrder, setPreviewOrder] = useState<Order | null>(null);
 
     useEffect(() => {
         setSearchInput(currentSearch);
@@ -129,6 +162,7 @@ export default function TechDashboard({ techId }: TechDashboardProps) {
 
     // Listen for active-order changes from useStationTestingController (sidebar).
     // Payload is null when the active order clears — that returns the pane to history.
+    // When a scan resolves into an active order, also clear any standing preview.
     useEffect(() => {
         const handler = (e: Event) => {
             const detail = (e as CustomEvent<{
@@ -137,9 +171,24 @@ export default function TechDashboard({ techId }: TechDashboardProps) {
                 isManualLoading: boolean;
             } | null>).detail;
             setActiveOrderPane(detail || null);
+            if (detail) setPreviewOrder(null);
         };
         window.addEventListener('tech-active-order-changed', handler);
         return () => window.removeEventListener('tech-active-order-changed', handler);
+    }, []);
+
+    // Listen for Up Next card clicks — preview an order in the right pane.
+    useEffect(() => {
+        const handler = (e: Event) => {
+            const detail = (e as CustomEvent<UpNextPreviewPayload>).detail;
+            if (detail && detail.kind === 'order') {
+                setPreviewOrder(detail.order);
+            } else {
+                setPreviewOrder(null);
+            }
+        };
+        window.addEventListener('tech-upnext-preview', handler);
+        return () => window.removeEventListener('tech-upnext-preview', handler);
     }, []);
 
     const showPendingSearch = (rightViewMode === 'pending' || rightViewMode === 'shipped') && (searchOpen || Boolean(currentSearch));
@@ -257,13 +306,14 @@ export default function TechDashboard({ techId }: TechDashboardProps) {
                     <ReceivingInboundFeed onSelectLog={setSelectedLog} />
                 ) : (
                     // History view: crossfades to the active-order workspace when
-                    // a scan resolves, and back to the global history when nothing
-                    // is active. The scan input stays mounted in the sidebar — no
-                    // route change, no focus loss.
+                    // a scan resolves, falls back to the Up Next preview when a
+                    // tech clicks a card, and back to the global history when
+                    // nothing is selected. Scan input stays mounted in the
+                    // sidebar — no route change, no focus loss.
                     <AnimatePresence initial={false} mode="wait">
                         {activeOrderPane ? (
                             <ActiveOrderWorkspace
-                                key={`workspace-${activeOrderPane.activeOrder.tracking || activeOrderPane.activeOrder.orderId}`}
+                                key={`workspace-active-${activeOrderPane.activeOrder.tracking || activeOrderPane.activeOrder.orderId}`}
                                 activeOrder={activeOrderPane.activeOrder}
                                 manuals={activeOrderPane.manuals}
                                 isManualLoading={activeOrderPane.isManualLoading}
@@ -275,6 +325,16 @@ export default function TechDashboard({ techId }: TechDashboardProps) {
                                     nextParams.set('view', 'manual');
                                     router.replace(`/tech?${nextParams.toString()}`);
                                 }}
+                            />
+                        ) : previewOrder ? (
+                            <ActiveOrderWorkspace
+                                key={`workspace-preview-${previewOrder.id}`}
+                                activeOrder={previewOrderToActiveShape(previewOrder)}
+                                manuals={[]}
+                                isManualLoading={false}
+                                techId={techId}
+                                mode="preview"
+                                onClose={() => setPreviewOrder(null)}
                             />
                         ) : (
                             <motion.div

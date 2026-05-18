@@ -19,18 +19,19 @@ import {
 import { LocationsSwapBody } from '@/lib/schemas/locations';
 import { parseBody } from '@/lib/schemas/parse';
 import { recordAudit, AUDIT_ACTION, AUDIT_ENTITY } from '@/lib/audit-logs';
-import type { AuthContext } from '@/lib/auth/withAuth';
+import type { AnonymousAuthContext } from '@/lib/auth/withAuth';
 import { getCurrentUserBySid } from '@/lib/auth/current-user';
 import { SESSION_COOKIE_NAME } from '@/lib/auth/session';
 
 const ROUTE_LOCATION_SWAP = 'locations.barcode.swap';
 
-async function resolveCtx(req: NextRequest): Promise<AuthContext> {
+async function resolveCtx(req: NextRequest): Promise<AnonymousAuthContext> {
   const sid = req.cookies.get(SESSION_COOKIE_NAME)?.value ?? null;
   const user = await getCurrentUserBySid(sid);
+  const noopMark = () => {};
   return user
-    ? { user, session: user.session, staffId: user.staffId, role: user.role, permissions: user.permissions }
-    : { user: null, session: null, staffId: null, role: null, permissions: new Set() };
+    ? { user, session: user.session, staffId: user.staffId, role: user.role, permissions: user.permissions, markAuditWritten: noopMark }
+    : { user: null, session: null, staffId: null, role: null, permissions: new Set(), markAuditWritten: noopMark };
 }
 
 /**

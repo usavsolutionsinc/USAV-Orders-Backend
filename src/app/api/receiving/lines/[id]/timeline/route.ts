@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import pool from '@/lib/db';
 import { readTimeline } from '@/lib/inventory/events';
+import { requireRoutePerm } from '@/lib/auth/dynamic-route-guard';
 
 /**
  * GET /api/receiving/lines/:id/timeline?limit=&since=
@@ -12,6 +13,8 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> },
 ) {
   try {
+    const gate = await requireRoutePerm(request, 'receiving.view');
+    if (gate.denied) return gate.denied;
     const { id: idRaw } = await params;
     const lineId = Number(idRaw);
     if (!Number.isFinite(lineId) || lineId <= 0) {

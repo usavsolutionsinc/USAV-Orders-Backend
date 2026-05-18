@@ -68,14 +68,14 @@ const MOBILE_RESTRICTED_SIDEBAR_IDS = new Set<SidebarRouteKey>([
 
 export const APP_SIDEBAR_NAV: SidebarNavItem[] = [
   { id: 'operations',        label: 'Operations',  href: '/operations',         icon: Monitor,         kind: 'main',    requires: 'operations.view' },
-  { id: 'dashboard',         label: 'Dashboard',   href: '/dashboard',          icon: LayoutDashboard, kind: 'main',    requires: 'dashboard.view' },
-  { id: 'fba',               label: 'FBA',         href: '/fba',                icon: Package,         kind: 'main',    requires: 'fba.view' },
+  { id: 'dashboard',         label: 'Orders / Shipping', href: '/dashboard',    icon: LayoutDashboard, kind: 'main',    requires: 'dashboard.view' },
+  { id: 'fba',               label: 'Amazon FBA',  href: '/fba',                icon: Package,         kind: 'main',    requires: 'fba.view' },
   { id: 'walk-in',           label: 'Walk-In',     href: '/walk-in',            icon: ShoppingCart,    kind: 'main',    requires: 'walk_in.view' },
   { id: 'work-orders',       label: 'Work Orders', href: '/work-orders',        icon: PackageCheck,    kind: 'main',    requires: 'work_orders.view' },
   { id: 'replenish',         label: 'Replenish',   href: '/replenish',          icon: RefreshCw,       kind: 'main',    requires: 'replenish.view' },
   { id: 'receiving',         label: 'Receiving',   href: '/receiving',          icon: ClipboardList,   kind: 'station', requires: 'receiving.view' },
-  { id: 'tech',              label: 'Technicians', href: '/tech',               icon: Wrench,          kind: 'station', requires: 'tech.view' },
-  { id: 'packer',            label: 'Packers',     href: '/packer',             icon: User,            kind: 'station', requires: 'packing.view' },
+  { id: 'tech',              label: 'Testing',     href: '/tech',               icon: Wrench,          kind: 'station', requires: 'tech.view' },
+  { id: 'packer',            label: 'Packing',     href: '/packer',             icon: User,            kind: 'station', requires: 'packing.view' },
   { id: 'sku-stock',         label: 'Sku Stock',   href: '/sku-stock',          icon: Box,             kind: 'station', requires: 'sku_stock.view' },
   { id: 'inventory',         label: 'Inventory',   href: '/inventory',          icon: Package,         kind: 'station', requires: 'sku_stock.view' },
   { id: 'ai',                label: 'AI Chat',     href: '/ai',                 icon: Zap,             kind: 'bottom' },

@@ -2,7 +2,7 @@
 
 import { Suspense, useCallback, useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { usePersistedStaffId } from '@/hooks/usePersistedStaffId';
+import { useAuth } from '@/contexts/AuthContext';
 import { AuditTimeline } from '@/components/audit/AuditTimeline';
 
 // ─── Types ──────────────────────────────────────────────────────────────────
@@ -39,7 +39,8 @@ function BinPageInner() {
   const router = useRouter();
   const params = useParams<{ barcode: string }>();
   const barcode = decodeURIComponent(params?.barcode || '').trim();
-  const [staffId] = usePersistedStaffId();
+  const { user } = useAuth();
+  const staffId = user?.staffId ?? 0;
 
   const [bin, setBin] = useState<BinPayload | null>(null);
   const [loading, setLoading] = useState(true);

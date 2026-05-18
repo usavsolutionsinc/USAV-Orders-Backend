@@ -17,16 +17,19 @@ interface StaffColorWheelProps {
   value: string;
   onChange: (hex: string) => void;
   disabled?: boolean;
-  /** Outer wheel diameter in px. Defaults to 56. */
+  /** Outer wheel diameter in px. Defaults to 72. */
   size?: number;
 }
 
+// Full hue ring (red → orange → yellow → green → emerald → cyan → blue →
+// indigo → purple → pink → red) so the conic gradient reads as a real
+// color wheel.
 const HUE_CONIC = [
-  '#ef4444', '#f59e0b', '#22c55e', '#10b981', '#06b6d4',
-  '#3b82f6', '#a855f7', '#ec4899', '#ef4444',
+  '#ef4444', '#f59e0b', '#eab308', '#22c55e', '#10b981',
+  '#06b6d4', '#3b82f6', '#6366f1', '#a855f7', '#ec4899', '#ef4444',
 ].join(', ');
 
-export function StaffColorWheel({ value, onChange, disabled, size = 56 }: StaffColorWheelProps) {
+export function StaffColorWheel({ value, onChange, disabled, size = 72 }: StaffColorWheelProps) {
   const inputRef = useRef<HTMLInputElement | null>(null);
 
   return (
@@ -37,7 +40,7 @@ export function StaffColorWheel({ value, onChange, disabled, size = 56 }: StaffC
         onClick={() => inputRef.current?.click()}
         aria-label={`Pick staff color (current ${value})`}
         title="Click to open color wheel"
-        className="relative flex items-center justify-center rounded-full p-[3px] shadow-sm transition focus:outline-none focus:ring-2 focus:ring-gray-900/40 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+        className="group relative flex flex-shrink-0 items-center justify-center rounded-full p-[6px] shadow-md shadow-gray-900/15 transition hover:scale-105 hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-gray-900/40 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
         style={{
           width: size,
           height: size,
@@ -59,7 +62,7 @@ export function StaffColorWheel({ value, onChange, disabled, size = 56 }: StaffC
           aria-hidden
         />
       </button>
-      <code className="rounded-md bg-gray-100 px-2 py-1 text-[11px] font-mono uppercase tracking-wide text-gray-700">
+      <code className="rounded-full bg-gray-100 px-3 py-1.5 text-[11px] font-mono uppercase tracking-wide text-gray-700">
         {value}
       </code>
     </div>

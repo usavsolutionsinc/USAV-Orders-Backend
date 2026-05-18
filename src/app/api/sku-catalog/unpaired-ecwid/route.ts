@@ -1,11 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getUnpairedEcwidProducts } from '@/lib/neon/sku-catalog-queries';
+import { withAuth } from '@/lib/auth/withAuth';
 
 /**
  * GET /api/sku-catalog/unpaired-ecwid
  * Returns Ecwid products not yet paired to a Zoho SKU, ordered by most ordered.
  */
-export async function GET(req: NextRequest) {
+export const GET = withAuth(async (req: NextRequest) => {
   try {
     const { searchParams } = new URL(req.url);
     const q = searchParams.get('q') || '';
@@ -22,4 +23,4 @@ export async function GET(req: NextRequest) {
       { status: 500 },
     );
   }
-}
+}, { permission: 'sku_stock.view' });

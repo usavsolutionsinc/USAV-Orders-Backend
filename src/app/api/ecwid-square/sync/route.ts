@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { syncEcwidToSquare } from '@/lib/ecwid-square/sync';
 import { isAllowedAdminOrigin } from '@/lib/security/allowed-origin';
 import { formatPSTTimestamp } from '@/utils/date';
+import { withAuth } from '@/lib/auth/withAuth';
 
 /**
  * POST /api/ecwid-square/sync
@@ -13,7 +14,7 @@ import { formatPSTTimestamp } from '@/utils/date';
  *   "batchSize": 199
  * }
  */
-export async function POST(req: Request) {
+export const POST = withAuth(async (req: Request) => {
   try {
     if (!isAllowedAdminOrigin(req)) {
       return NextResponse.json(
@@ -54,4 +55,4 @@ export async function POST(req: Request) {
       { status: 500 }
     );
   }
-}
+}, { permission: 'integrations.ecwid' });

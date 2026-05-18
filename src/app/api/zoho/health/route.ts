@@ -1,9 +1,10 @@
 import { NextResponse } from 'next/server';
 import { getZohoHttpClientStatus } from '@/lib/zoho/httpClient';
+import { withAuth } from '@/lib/auth/withAuth';
 
 export const dynamic = 'force-dynamic';
 
-export async function GET() {
+export const GET = withAuth(async () => {
   try {
     const status = getZohoHttpClientStatus();
     return NextResponse.json({
@@ -22,4 +23,4 @@ export async function GET() {
     const message = error instanceof Error ? error.message : 'Failed to load Zoho health status';
     return NextResponse.json({ success: false, error: message }, { status: 500 });
   }
-}
+}, { permission: 'integrations.zoho' });

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import pool from '@/lib/db';
 import { invalidateCacheTags } from '@/lib/cache/upstash-cache';
+import { requireRoutePerm } from '@/lib/auth/dynamic-route-guard';
 
 const ALLOWED_STATUSES = new Set(['open', 'resolved', 'discarded']);
 
@@ -8,9 +9,11 @@ const ALLOWED_STATUSES = new Set(['open', 'resolved', 'discarded']);
  * GET /api/tracking-exceptions/[id] — fetch a single row.
  */
 export async function GET(
-  _request: NextRequest,
+  request: NextRequest,
   context: { params: Promise<{ id: string }> },
 ) {
+  const gate = await requireRoutePerm(request, 'receiving.view');
+  if (gate.denied) return gate.denied;
   try {
     const { id: idParam } = await context.params;
     const id = Number.parseInt(idParam, 10);
@@ -54,6 +57,8 @@ export async function PATCH(
   request: NextRequest,
   context: { params: Promise<{ id: string }> },
 ) {
+  const gate = await requireRoutePerm(request, 'receiving.mark_received');
+  if (gate.denied) return gate.denied;
   try {
     const { id: idParam } = await context.params;
     const id = Number.parseInt(idParam, 10);
@@ -144,9 +149,11 @@ export async function PATCH(
  * triage UI's edit dialog (intentional friction vs a one-click row action).
  */
 export async function DELETE(
-  _request: NextRequest,
+  request: NextRequest,
   context: { params: Promise<{ id: string }> },
 ) {
+  const gate = await requireRoutePerm(request, 'admin.manage_features');
+  if (gate.denied) return gate.denied;
   try {
     const { id: idParam } = await context.params;
     const id = Number.parseInt(idParam, 10);

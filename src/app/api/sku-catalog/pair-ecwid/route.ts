@@ -1,12 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { pairEcwidToZoho } from '@/lib/neon/sku-catalog-queries';
+import { withAuth } from '@/lib/auth/withAuth';
 
 /**
  * POST /api/sku-catalog/pair-ecwid
  * Pair an Ecwid product to a Zoho SKU.
  * Body: { ecwidPlatformRowId: number, skuCatalogId: number }
  */
-export async function POST(req: NextRequest) {
+export const POST = withAuth(async (req: NextRequest) => {
   try {
     const body = await req.json();
     const { ecwidPlatformRowId, skuCatalogId } = body;
@@ -39,4 +40,4 @@ export async function POST(req: NextRequest) {
       { status: 500 },
     );
   }
-}
+}, { permission: 'sku_stock.manage' });

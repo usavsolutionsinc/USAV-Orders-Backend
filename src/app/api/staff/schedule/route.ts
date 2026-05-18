@@ -5,6 +5,7 @@ import { isTransientDbError, queryWithRetry } from '@/lib/db-retry';
 import { STAFF_SCHEDULE_TIMEZONE, getCurrentStaffDayOfWeek } from '@/lib/staff-schedule';
 import { publishStaffScheduleChanged } from '@/lib/realtime/publish';
 import { getStaffAvailabilityDecision, isMissingAvailabilityRulesTable } from '@/lib/staff-availability-rules';
+import { withAuth } from '@/lib/auth/withAuth';
 
 interface ScheduleRow {
   staff_id: number;
@@ -36,7 +37,7 @@ function isValidIsoDate(value: string | null | undefined): value is string {
   return typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value);
 }
 
-export async function GET(request: NextRequest) {
+export const GET = withAuth(async (request: NextRequest) => {
   try {
     const { searchParams } = new URL(request.url);
     const includeInactive = searchParams.get('includeInactive') !== 'false';
@@ -254,9 +255,9 @@ export async function GET(request: NextRequest) {
       details: error instanceof Error ? error.message : 'Unknown error',
     }, { status: 500 });
   }
-}
+}, { permission: 'admin.view' });
 
-export async function PUT(request: NextRequest) {
+export const PUT = withAuth(async (request: NextRequest) => {
   try {
     const body = await request.json();
     const staffId = Number(body?.staffId);
@@ -361,4 +362,4 @@ export async function PUT(request: NextRequest) {
       details: error instanceof Error ? error.message : 'Unknown error',
     }, { status: 500 });
   }
-}
+}, { permission: 'admin.manage_staff' });

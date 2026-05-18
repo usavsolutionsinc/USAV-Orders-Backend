@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import pool from '@/lib/db';
 import { readTimeline } from '@/lib/inventory/events';
+import { requireRoutePerm } from '@/lib/auth/dynamic-route-guard';
 
 /**
  * GET /api/serial-units/:id
@@ -11,9 +12,11 @@ import { readTimeline } from '@/lib/inventory/events';
  * URL segment; the route resolves the numeric id when given a string.
  */
 export async function GET(
-  _request: NextRequest,
+  request: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
+  const gate = await requireRoutePerm(request, 'sku_stock.view');
+  if (gate.denied) return gate.denied;
   try {
     const { id: idRaw } = await params;
     const raw = decodeURIComponent(idRaw || '').trim();

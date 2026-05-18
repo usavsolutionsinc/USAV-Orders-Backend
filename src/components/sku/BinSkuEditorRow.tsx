@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { Loader2 } from '@/components/Icons';
-import { usePersistedStaffId } from '@/hooks/usePersistedStaffId';
+import { useAuth } from '@/contexts/AuthContext';
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -59,7 +59,8 @@ export function BinSkuEditorRow({
   invalidateKey,
   onOpenSku,
 }: BinSkuEditorRowProps) {
-  const [staffId] = usePersistedStaffId();
+  const { user } = useAuth();
+  const staffId = user?.staffId ?? 0;
   const queryClient = useQueryClient();
 
   const [open, setOpen] = useState(false);

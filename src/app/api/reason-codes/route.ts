@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import pool from '@/lib/db';
+import { withAuth } from '@/lib/auth/withAuth';
 
 export interface ReasonCodeRow {
   id: number;
@@ -17,7 +18,7 @@ export interface ReasonCodeRow {
  * Returns active reason codes, optionally filtered. Used by ReasonCodePicker
  * in the mobile bin editor (and any future write surface).
  */
-export async function GET(request: NextRequest) {
+export const GET = withAuth(async (request: NextRequest) => {
   try {
     const { searchParams } = new URL(request.url);
     const direction = searchParams.get('direction'); // in | out | either
@@ -55,4 +56,4 @@ export async function GET(request: NextRequest) {
       { status: 500 },
     );
   }
-}
+}, { permission: 'sku_stock.view' });

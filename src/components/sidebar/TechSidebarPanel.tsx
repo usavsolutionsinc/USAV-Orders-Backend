@@ -73,11 +73,11 @@ interface TechSidebarPanelProps {
   techId: string;
   /** Opens the main app page list in the sidebar (Main / Stations / More) — same as the desktop sidebar chevron, not a route to `/dashboard`. */
   onBackToAppNav?: () => void;
-  /** Label next to the chevron (e.g. “Technicians”). */
+  /** Label next to the chevron (e.g. "Testing"). */
   contextNavTitle?: string;
 }
 
-export function TechSidebarPanel({ techId, onBackToAppNav, contextNavTitle = 'Technicians' }: TechSidebarPanelProps) {
+export function TechSidebarPanel({ techId, onBackToAppNav, contextNavTitle = 'Testing' }: TechSidebarPanelProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const queryClient = useQueryClient();

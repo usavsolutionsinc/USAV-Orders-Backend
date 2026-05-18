@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import pool from '@/lib/db';
 import { readTimeline } from '@/lib/inventory/events';
+import { withAuth } from '@/lib/auth/withAuth';
 
 /**
  * GET /api/inventory-events
@@ -9,7 +10,7 @@ import { readTimeline } from '@/lib/inventory/events';
  *
  * Used by the bin page, the SKU detail timeline, and the future /audit page.
  */
-export async function GET(request: NextRequest) {
+export const GET = withAuth(async (request: NextRequest) => {
   try {
     const { searchParams } = new URL(request.url);
 
@@ -107,4 +108,4 @@ export async function GET(request: NextRequest) {
     console.error('inventory-events GET failed:', error);
     return NextResponse.json({ success: false, error: message }, { status: 500 });
   }
-}
+}, { permission: 'sku_stock.view' });

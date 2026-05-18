@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import pool from '@/lib/db';
 import { normalizeSku } from '@/utils/sku';
+import { withAuth } from '@/lib/auth/withAuth';
 
 /**
  * GET /api/sku/lookup?id=123
@@ -9,7 +10,7 @@ import { normalizeSku } from '@/utils/sku';
  * Returns `serial_number`, `static_sku`, and row `id` from the `sku` table for dashboards
  * and tooling that need a direct read without joining packer/tech queries.
  */
-export async function GET(req: NextRequest) {
+export const GET = withAuth(async (req: NextRequest) => {
   try {
     const { searchParams } = new URL(req.url);
     const idRaw = searchParams.get('id');
@@ -73,4 +74,4 @@ export async function GET(req: NextRequest) {
     const message = e instanceof Error ? e.message : 'Lookup failed';
     return NextResponse.json({ error: message }, { status: 500 });
   }
-}
+}, { permission: 'sku_stock.view' });

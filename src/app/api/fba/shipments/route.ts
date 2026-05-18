@@ -4,6 +4,8 @@ import { buildFbaPlanRefFromIsoDate } from '@/lib/fba/plan-ref';
 import { upsertFnskuCatalogRow } from '@/lib/fba/upsert-fnsku-catalog';
 import { publishFbaShipmentChanged } from '@/lib/realtime/publish';
 import { invalidateCacheTags } from '@/lib/cache/upstash-cache';
+import { withAuth } from '@/lib/auth/withAuth';
+import { AUDIT_ENTITY } from '@/lib/audit-logs';
 
 function parseOptionalStaffId(value: unknown): number | null {
   const parsed = Number(value);
@@ -37,7 +39,7 @@ function autoPlanRefForDueDate(isoYmd: string): string {
 // ── GET /api/fba/shipments ────────────────────────────────────────────────────
 // Returns shipments with aggregated item counts and staff names.
 // Query params: status (comma-separated), limit, q (search shipment_ref / notes)
-export async function GET(request: NextRequest) {
+export const GET = withAuth(async (request: NextRequest) => {
   try {
     const { searchParams } = new URL(request.url);
     const q = String(searchParams.get('q') || '').trim();
@@ -159,7 +161,7 @@ export async function GET(request: NextRequest) {
       { status: 500 }
     );
   }
-}
+}, { permission: 'fba.view' });
 
 // ── POST /api/fba/shipments ───────────────────────────────────────────────────
 // Creates a shipment header + optional initial items in a single transaction.
@@ -169,7 +171,7 @@ export async function GET(request: NextRequest) {
 // Body: { shipment_ref?, destination_fc?, due_date?, notes?,
 //         created_by_staff_id?, assigned_tech_id?, assigned_packer_id?,
 //         items: [{ fnsku, expected_qty, product_title?, asin?, sku? }] }
-export async function POST(request: NextRequest) {
+export const POST = withAuth(async (request: NextRequest, ctx) => {
   const client = await pool.connect();
   try {
     const body = await request.json();
@@ -178,11 +180,12 @@ export async function POST(request: NextRequest) {
       destination_fc,
       due_date,
       notes,
-      created_by_staff_id,
       assigned_tech_id: rawAssignedTechId,
       assigned_packer_id: rawAssignedPackerId,
       items = [],
     } = body;
+    // Creator is always the verified session staff — ignore body.created_by_staff_id.
+    const created_by_staff_id = ctx.staffId;
     const normalizedDueDate = normalizeDueDate(due_date);
     const normalizedShipmentRef =
       typeof shipment_ref === 'string' && shipment_ref.trim()
@@ -302,4 +305,25 @@ export async function POST(request: NextRequest) {
   } finally {
     client.release();
   }
-}
+}, {
+  permission: 'fba.stage_shipments',
+  audit: {
+    source: 'fba.shipments.create',
+    action: 'fba.shipment.create',
+    entityType: AUDIT_ENTITY.SHIPMENT,
+    entityId: ({ response }) => {
+      const r = response as { shipment?: { id?: number } } | null;
+      return r?.shipment?.id ?? null;
+    },
+    extra: ({ response, body }) => {
+      const r = response as { shipment?: { shipment_ref?: string } } | null;
+      const b = body as { destination_fc?: string; due_date?: string; items?: unknown[] } | null;
+      return {
+        shipment_ref: r?.shipment?.shipment_ref ?? null,
+        destination_fc: b?.destination_fc ?? null,
+        due_date: b?.due_date ?? null,
+        item_count: Array.isArray(b?.items) ? b?.items.length : 0,
+      };
+    },
+  },
+});

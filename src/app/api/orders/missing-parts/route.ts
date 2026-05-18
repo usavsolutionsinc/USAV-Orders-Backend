@@ -3,11 +3,12 @@ import pool from '@/lib/db';
 import { invalidateCacheTags } from '@/lib/cache/upstash-cache';
 import { publishOrderChanged } from '@/lib/realtime/publish';
 import { clearReplenishmentForOrder, ensureReplenishmentForOrder } from '@/lib/replenishment';
+import { withAuth } from '@/lib/auth/withAuth';
 
 /**
  * POST /api/orders/missing-parts - Move order to missing parts status
  */
-export async function POST(req: NextRequest) {
+export const POST = withAuth(async (req: NextRequest) => {
   try {
     const body = await req.json();
     const { orderId, reason } = body;
@@ -49,4 +50,4 @@ export async function POST(req: NextRequest) {
       { status: 500 }
     );
   }
-}
+}, { permission: 'orders.create' });

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { runEbayRefreshTokensJob } from '@/lib/jobs/ebay-refresh-tokens';
 import { logRouteMetric } from '@/lib/route-metrics';
+import { withAuth } from '@/lib/auth/withAuth';
 
 /**
  * POST /api/ebay/refresh-tokens
@@ -11,7 +12,7 @@ export const dynamic = 'force-dynamic';
 
 export const maxDuration = 60;
 
-export async function POST(req: NextRequest) {
+export const POST = withAuth(async (req: NextRequest) => {
   const startedAt = Date.now();
   let ok = false;
   try {
@@ -32,11 +33,11 @@ export async function POST(req: NextRequest) {
       ok,
     });
   }
-}
+}, { permission: 'integrations.ebay' });
 
-export async function GET() {
+export const GET = withAuth(async () => {
   return NextResponse.json(
     { success: false, error: 'Method not allowed. Use POST via the QStash worker route.' },
     { status: 405 }
   );
-}
+}, { permission: 'integrations.ebay' });

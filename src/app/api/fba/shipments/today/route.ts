@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import pool from '@/lib/db';
+import { withAuth } from '@/lib/auth/withAuth';
 
 /**
  * GET /api/fba/shipments/today
@@ -13,7 +14,7 @@ import pool from '@/lib/db';
  *   shipment: { id, shipment_ref, due_date, items: [{ id, fnsku, expected_qty, status }] } | null
  * }
  */
-export async function GET() {
+export const GET = withAuth(async () => {
   try {
     const shipRes = await pool.query(`
       SELECT id, shipment_ref, due_date, status, amazon_shipment_id
@@ -91,4 +92,4 @@ export async function GET() {
       { status: 500 }
     );
   }
-}
+}, { permission: 'fba.view' });

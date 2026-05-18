@@ -12,6 +12,7 @@ import {
   type WorkType,
   type AssignmentStatus,
 } from '@/lib/neon/assignments-queries';
+import { withAuth } from '@/lib/auth/withAuth';
 
 const ENTITY_TYPES = new Set<EntityType>(['ORDER', 'REPAIR', 'FBA_SHIPMENT', 'RECEIVING', 'SKU_STOCK']);
 const WORK_TYPES = new Set<WorkType>(['TEST', 'PACK', 'REPAIR', 'QA', 'RECEIVE', 'STOCK_REPLENISH']);
@@ -22,7 +23,7 @@ function parseEnum<T extends string>(value: string | null, allowed: Set<T>): T |
   return allowed.has(upper) ? upper : null;
 }
 
-export async function GET(req: NextRequest) {
+export const GET = withAuth(async (req: NextRequest) => {
   try {
     const { searchParams } = new URL(req.url);
     const assignedTechIdParam = searchParams.get('assigned_tech_id');
@@ -66,9 +67,9 @@ export async function GET(req: NextRequest) {
     }
     return errorResponse(error, 'GET /api/assignments');
   }
-}
+}, { permission: 'work_orders.view' });
 
-export async function POST(req: NextRequest) {
+export const POST = withAuth(async (req: NextRequest) => {
   try {
     const body = await req.json().catch(() => null);
     if (!body) throw ApiError.badRequest('Invalid JSON body');
@@ -116,9 +117,9 @@ export async function POST(req: NextRequest) {
   } catch (error) {
     return errorResponse(error, 'POST /api/assignments');
   }
-}
+}, { permission: 'work_orders.claim' });
 
-export async function PATCH(req: NextRequest) {
+export const PATCH = withAuth(async (req: NextRequest) => {
   try {
     const body = await req.json().catch(() => null);
     if (!body) throw ApiError.badRequest('Invalid JSON body');
@@ -152,9 +153,9 @@ export async function PATCH(req: NextRequest) {
   } catch (error) {
     return errorResponse(error, 'PATCH /api/assignments');
   }
-}
+}, { permission: 'work_orders.claim' });
 
-export async function DELETE(req: NextRequest) {
+export const DELETE = withAuth(async (req: NextRequest) => {
   try {
     const { searchParams } = new URL(req.url);
     const id = parsePositiveInt(searchParams.get('id'));
@@ -167,4 +168,4 @@ export async function DELETE(req: NextRequest) {
   } catch (error) {
     return errorResponse(error, 'DELETE /api/assignments');
   }
-}
+}, { permission: 'work_orders.claim' });

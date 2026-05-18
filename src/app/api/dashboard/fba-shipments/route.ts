@@ -1,11 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import pool from '@/lib/db';
+import { withAuth } from '@/lib/auth/withAuth';
 
 // ── GET /api/dashboard/fba-shipments ─────────────────────────────────────────
 // Returns FBA shipments from fba_shipments (new lifecycle tables) with
 // aggregated item readiness counts and staff names for the dashboard board.
 // Falls back gracefully if the tables don't exist yet (pre-migration).
-export async function GET(request: NextRequest) {
+export const GET = withAuth(async (request: NextRequest) => {
   try {
     const { searchParams } = new URL(request.url);
     const q = String(searchParams.get('q') || '').trim();
@@ -127,4 +128,4 @@ export async function GET(request: NextRequest) {
       { status: 500 }
     );
   }
-}
+}, { permission: 'fba.view' });

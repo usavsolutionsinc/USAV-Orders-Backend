@@ -3,22 +3,24 @@ import pool from '@/lib/db';
 import { createStationActivityLog } from '@/lib/station-activity';
 import { publishFbaItemChanged } from '@/lib/realtime/publish';
 import { invalidateCacheTags } from '@/lib/cache/upstash-cache';
+import { withAuth } from '@/lib/auth/withAuth';
 
 // ── POST /api/fba/items/ready ─────────────────────────────────────────────────
 // Tech marks an FNSKU item as READY_TO_GO after testing/validation.
 // Increments actual_qty and transitions status PLANNED → READY_TO_GO.
 // Writes to fba_fnsku_logs in the same transaction.
 //
-// Body: { shipment_id, fnsku, staff_id, station? }
-export async function POST(request: NextRequest) {
+// Body: { shipment_id, fnsku, station? } — actor is from the verified session.
+export const POST = withAuth(async (request: NextRequest, ctx) => {
   const client = await pool.connect();
   try {
     const body = await request.json();
-    const { shipment_id, fnsku, staff_id, station } = body;
+    const { shipment_id, fnsku, station } = body;
+    const staff_id = ctx.staffId;
 
-    if (!shipment_id || !fnsku?.trim() || !staff_id) {
+    if (!shipment_id || !fnsku?.trim()) {
       return NextResponse.json(
-        { success: false, error: 'shipment_id, fnsku, and staff_id are required' },
+        { success: false, error: 'shipment_id and fnsku are required' },
         { status: 400 }
       );
     }
@@ -141,4 +143,19 @@ export async function POST(request: NextRequest) {
   } finally {
     client.release();
   }
-}
+}, {
+  permission: 'fba.stage_shipments',
+  audit: {
+    source: 'fba.items.ready',
+    action: 'fba.item.ready',
+    entityType: 'fba_shipment_item',
+    entityId: ({ body }) => {
+      const b = body as { shipment_id?: number } | null;
+      return b?.shipment_id ?? null;
+    },
+    extra: ({ body }) => {
+      const b = body as { fnsku?: string } | null;
+      return { fnsku: b?.fnsku ?? null };
+    },
+  },
+});

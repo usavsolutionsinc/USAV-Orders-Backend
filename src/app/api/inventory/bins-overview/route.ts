@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getBinsOverview } from '@/lib/neon/location-queries';
+import { withAuth } from '@/lib/auth/withAuth';
 
 export const dynamic = 'force-dynamic';
 
@@ -10,7 +11,7 @@ export const dynamic = 'force-dynamic';
  * fill / stale / low / over-capacity flags pre-computed, plus the global
  * count buckets for the filter chips.
  */
-export async function GET(req: NextRequest) {
+export const GET = withAuth(async (req: NextRequest) => {
   try {
     const room = req.nextUrl.searchParams.get('room');
     const q = req.nextUrl.searchParams.get('q');
@@ -23,4 +24,4 @@ export async function GET(req: NextRequest) {
       { status: 500 },
     );
   }
-}
+}, { permission: 'sku_stock.view' });

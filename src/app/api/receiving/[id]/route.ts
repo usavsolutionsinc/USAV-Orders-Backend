@@ -4,6 +4,8 @@ import { invalidateCacheTags } from '@/lib/cache/upstash-cache';
 import { publishReceivingLogChanged } from '@/lib/realtime/publish';
 import { registerShipmentPermissive } from '@/lib/shipping/sync-shipment';
 import { readTimeline } from '@/lib/inventory/events';
+import { requireRoutePerm } from '@/lib/auth/dynamic-route-guard';
+import { recordAudit, AUDIT_ACTION, AUDIT_ENTITY } from '@/lib/audit-logs';
 
 const SOURCE_PLATFORMS = new Set([
   'zoho',
@@ -25,10 +27,12 @@ const SOURCE_PLATFORMS = new Set([
  *   - last 30 inventory_events on this carton
  */
 export async function GET(
-  _request: NextRequest,
+  request: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
   try {
+    const gate = await requireRoutePerm(request, 'receiving.view');
+    if (gate.denied) return gate.denied;
     const { id: idRaw } = await params;
     const id = Number(idRaw);
     if (!Number.isFinite(id) || id <= 0) {
@@ -264,11 +268,23 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> },
 ) {
   try {
+    const gate = await requireRoutePerm(request, 'receiving.mark_received');
+    if (gate.denied) return gate.denied;
+    const ctx = gate.ctx;
     const { id: idRaw } = await params;
     const id = Number(idRaw);
     if (!Number.isFinite(id) || id <= 0) {
       return NextResponse.json({ success: false, error: 'Valid id is required' }, { status: 400 });
     }
+
+    // Snapshot the row before the update so the audit row carries a real diff.
+    const beforeRow = await pool.query(
+      `SELECT id, source_platform, zoho_purchaseorder_id, zoho_purchaseorder_number,
+              shipment_id, support_notes, source, receiving_tracking_number
+       FROM receiving WHERE id = $1 LIMIT 1`,
+      [id],
+    );
+    const before = beforeRow.rows[0] ?? null;
 
     const body = await request.json().catch(() => ({}));
 
@@ -369,6 +385,16 @@ export async function PATCH(
       action: 'update',
       rowId: String(id),
       source: 'receiving.patch',
+    });
+
+    await recordAudit(pool, ctx, request, {
+      source: 'receiving.id.patch',
+      action: AUDIT_ACTION.RECEIVING_HEADER_UPDATE,
+      entityType: AUDIT_ENTITY.RECEIVING,
+      entityId: id,
+      before,
+      after: result.rows[0],
+      method: 'manual',
     });
 
     return NextResponse.json({ success: true, receiving: result.rows[0] });

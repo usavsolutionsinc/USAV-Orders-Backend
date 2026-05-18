@@ -6,6 +6,7 @@ import UpNextOrder from '../UpNextOrder';
 import { Barcode, Loader2, Package, MapPin, Settings } from '../Icons';
 import StationGoalBar from './StationGoalBar';
 import { StationScanBar } from './StationScanBar';
+import { ActiveOrderScanFeedback } from './ActiveOrderScanFeedback';
 import { getStationInputMode, type StationInputMode, useStationTestingController } from '@/hooks/useStationTestingController';
 import { looksLikeFnsku } from '@/lib/scan-resolver';
 import { useStationTheme } from '@/hooks/useStationTheme';
@@ -350,6 +351,15 @@ export default function StationTesting({
 
           {/* Desktop: scan bar at top */}
           {!isMobile && scanBarBlock}
+
+          {/* Sidebar feedback strip — visible only during an active order.
+              The rich workspace lives in the right pane; this is the
+              0.5s-after-scan affordance so the tech can confirm without
+              looking away from the scan input. Hidden on mobile (scan bar
+              is bottom-docked there; the strip renders just above it below). */}
+          {!isMobile && (
+            <ActiveOrderScanFeedback activeOrder={activeOrder} />
+          )}
         </div>
 
         {/* ── Scrollable content — Up Next queue. Active-order details now live
@@ -379,9 +389,12 @@ export default function StationTesting({
         {/* Portal target for UpNextOrder filter bar */}
         <div ref={filterBarPortalRef} className="flex-shrink-0" />
 
-        {/* Mobile: scan bar docked at bottom, above safe area */}
+        {/* Mobile: scan bar docked at bottom, above safe area. Feedback
+            strip sits just above the scan bar so it remains in the tech's
+            line of sight after a scan. */}
         {isMobile && (
-          <div className="flex-shrink-0 border-t border-gray-100 bg-white px-4 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
+          <div className="flex-shrink-0 border-t border-gray-100 bg-white px-4 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] space-y-2">
+            <ActiveOrderScanFeedback activeOrder={activeOrder} />
             {scanBarBlock}
           </div>
         )}

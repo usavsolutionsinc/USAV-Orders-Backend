@@ -2,7 +2,7 @@
 
 import { Suspense, useCallback, useEffect, useState } from 'react';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
-import { usePersistedStaffId } from '@/hooks/usePersistedStaffId';
+import { useAuth } from '@/contexts/AuthContext';
 import { useAblyClient } from '@/contexts/AblyContext';
 import {
   MobilePackerSpamCamera,
@@ -46,7 +46,9 @@ function PhotoPageInner() {
   const params = useParams<{ id: string }>();
   const searchParams = useSearchParams();
   const receivingId = Number(params?.id);
-  const [staffId] = usePersistedStaffId();
+  // Identity from the verified session cookie.
+  const { user } = useAuth();
+  const staffId = user?.staffId ?? 0;
   const requestId = searchParams.get('requestId');
   const { getClient } = useAblyClient();
 
@@ -278,7 +280,7 @@ function PhotoPageInner() {
             </button>
             <button
               type="button"
-              onClick={() => router.replace(`/m/r/${receivingId}?staffId=${staffId}`)}
+              onClick={() => router.replace(`/m/r/${receivingId}`)}
               className="rounded-md bg-slate-900 px-4 py-3 text-sm font-bold text-white active:bg-slate-800"
             >
               Done

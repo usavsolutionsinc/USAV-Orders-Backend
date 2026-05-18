@@ -2,12 +2,17 @@ import { NextRequest, NextResponse } from 'next/server';
 import pool from '@/lib/db';
 import { invalidateCacheTags } from '@/lib/cache/upstash-cache';
 import { publishOrderChanged } from '@/lib/realtime/publish';
+import { withAuth } from '@/lib/auth/withAuth';
+import { recordAudit, AUDIT_ACTION, AUDIT_ENTITY } from '@/lib/audit-logs';
 
 /**
  * POST /api/orders/delete - Delete one or more orders
  * Body: { orderId?: number, orderIds?: number[] }
+ *
+ * Destructive — requires step-up auth (via orders.void on STEP_UP_PERMISSIONS).
+ * Writes a rich audit row per deleted order with full before-state.
  */
-export async function POST(req: NextRequest) {
+export const POST = withAuth(async (req: NextRequest, ctx) => {
   try {
     const body = await req.json();
     const { orderId, orderIds } = body;
@@ -21,6 +26,13 @@ export async function POST(req: NextRequest) {
 
     const idsToDelete: number[] = orderId ? [orderId] : orderIds;
     const placeholders = idsToDelete.map((_, idx) => `$${idx + 1}`).join(', ');
+
+    // Snapshot rows before delete for the audit trail.
+    const beforeRows = await pool.query(
+      `SELECT id, order_id, product_title, sku, condition, status, shipment_id, created_at
+       FROM orders WHERE id IN (${placeholders})`,
+      idsToDelete,
+    );
 
     const result = await pool.query(
       `DELETE FROM orders WHERE id IN (${placeholders})`,
@@ -37,6 +49,20 @@ export async function POST(req: NextRequest) {
     // not only /api/shipped, so delete must invalidate both domains.
     await invalidateCacheTags(['orders', 'shipped', 'packing-logs']);
     await publishOrderChanged({ orderIds: idsToDelete, source: 'orders.delete' });
+
+    // One audit row per deleted order, with full before snapshot.
+    for (const row of beforeRows.rows) {
+      await recordAudit(pool, ctx, req, {
+        source: 'orders.delete',
+        action: 'orders.delete',
+        entityType: AUDIT_ENTITY.ORDER,
+        entityId: Number(row.id),
+        before: row,
+        after: null,
+        method: 'manual',
+      });
+    }
+
     return NextResponse.json({ success: true, deleted: result.rowCount || 0 });
   } catch (error: any) {
     console.error('Error deleting order(s):', error);
@@ -45,4 +71,4 @@ export async function POST(req: NextRequest) {
       { status: 500 }
     );
   }
-}
+}, { permission: 'orders.void' });

@@ -4,6 +4,7 @@ import { createCacheLookupKey, getCachedJson, setCachedJson } from '@/lib/cache/
 import { normalizeTrackingKey18 } from '@/lib/tracking-format';
 import { logRouteMetric } from '@/lib/route-metrics';
 import { SHIPPED_BY_CARRIER_SQL } from '@/lib/sql-fragments';
+import { withAuth } from '@/lib/auth/withAuth';
 
 let replenishmentSchemaCheck:
   | { value: boolean; checkedAt: number }
@@ -49,7 +50,7 @@ async function hasReplenishmentSchema(): Promise<boolean> {
  * GET /api/orders - Fetch all pending orders with optional filters.
  * Assignment info (tester_id / packer_id) is sourced from work_assignments.
  */
-export async function GET(req: NextRequest) {
+export const GET = withAuth(async (req: NextRequest) => {
   const startedAt = Date.now();
   let ok = false;
   let cache = 'BYPASS';
@@ -623,4 +624,4 @@ export async function GET(req: NextRequest) {
       details: { cache },
     });
   }
-}
+}, { permission: 'orders.view' });

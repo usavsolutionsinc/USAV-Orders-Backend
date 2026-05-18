@@ -1,12 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSquareTransactions } from '@/lib/neon/square-transaction-queries';
 import { isAllowedAdminOrigin } from '@/lib/security/allowed-origin';
+import { withAuth } from '@/lib/auth/withAuth';
 
 /**
  * GET /api/walk-in/sales?q=&status=&weekStart=&weekEnd=&orderSource=&limit=
  * Query local square_transactions table. Defaults to walk_in_sale orders only.
  */
-export async function GET(req: NextRequest) {
+export const GET = withAuth(async (req: NextRequest) => {
   try {
     if (!isAllowedAdminOrigin(req)) {
       return NextResponse.json({ error: 'Origin not allowed' }, { status: 403 });
@@ -33,4 +34,4 @@ export async function GET(req: NextRequest) {
       { status: 500 },
     );
   }
-}
+}, { permission: 'walk_in.view' });

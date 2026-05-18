@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { fetchProductsByEcwidCategory, normalizeIdentifier } from '@/lib/product-manuals';
 import pool from '@/lib/db';
 import { getCachedJson, setCachedJson } from '@/lib/cache/upstash-cache';
+import { withAuth } from '@/lib/auth/withAuth';
 
 // Cache TTLs
 const ECWID_PRODUCTS_TTL = 30 * 60;   // 30 min — Ecwid product list changes infrequently
@@ -41,7 +42,7 @@ async function getCachedEcwidProducts(categoryId: string) {
   return rows;
 }
 
-export async function GET(request: NextRequest) {
+export const GET = withAuth(async (request: NextRequest) => {
   try {
     const { searchParams } = new URL(request.url);
     const category = String(searchParams.get('category') || '').trim();
@@ -113,4 +114,4 @@ export async function GET(request: NextRequest) {
       { status: 500 }
     );
   }
-}
+}, { permission: 'sku_stock.view' });

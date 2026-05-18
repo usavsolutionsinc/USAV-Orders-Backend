@@ -2,12 +2,13 @@ import { NextRequest, NextResponse } from 'next/server';
 import pool from '@/lib/db';
 import { formatPSTTimestamp } from '@/utils/date';
 import { getSkuCatalogBySku } from '@/lib/neon/sku-catalog-queries';
+import { withAuth } from '@/lib/auth/withAuth';
 
-export async function POST(request: NextRequest) {
+export const POST = withAuth(async (request: NextRequest) => {
     const client = await pool.connect();
     try {
         const body = await request.json();
-        const { sku, serialNumbers, notes, productTitle: _productTitle, location, shippingTrackingNumber } = body;
+        const { sku, serialNumbers, notes, productTitle: _productTitle, location, shippingTrackingNumber, condition } = body;
 
         if (!sku || !serialNumbers || !Array.isArray(serialNumbers) || serialNumbers.length === 0) {
             return NextResponse.json({ error: 'Missing required fields: sku and serialNumbers[]' }, { status: 400 });
@@ -19,6 +20,13 @@ export async function POST(request: NextRequest) {
         const trackingStr = shippingTrackingNumber ? String(shippingTrackingNumber).trim() : null;
         const notesStr = notes ? String(notes) : null;
         const locationStr = location ? String(location).trim() : null;
+
+        const VALID_CONDITIONS = ['BRAND_NEW', 'USED_A', 'USED_B', 'USED_C', 'PARTS'] as const;
+        type ConditionGrade = (typeof VALID_CONDITIONS)[number];
+        const conditionStr: ConditionGrade =
+            typeof condition === 'string' && (VALID_CONDITIONS as readonly string[]).includes(condition)
+                ? (condition as ConditionGrade)
+                : 'BRAND_NEW';
 
         const catalog = await getSkuCatalogBySku(baseSku) ?? await getSkuCatalogBySku(skuStr);
         const catalogId = catalog?.id ?? null;
@@ -34,21 +42,22 @@ export async function POST(request: NextRequest) {
             const result = await client.query<{ id: number }>(
                 `INSERT INTO serial_units (
                     serial_number, normalized_serial, sku, sku_catalog_id,
-                    current_status, current_location,
+                    current_status, current_location, condition_grade,
                     origin_source, shipping_tracking_number,
                     legacy_notes, legacy_date_time
                  )
-                 VALUES ($1, $2, $3, $4, 'UNKNOWN'::serial_status_enum, $5, 'sku', $6, $7, $8)
+                 VALUES ($1, $2, $3, $4, 'UNKNOWN'::serial_status_enum, $5, $9::condition_grade_enum, 'sku', $6, $7, $8)
                  ON CONFLICT (normalized_serial) DO UPDATE SET
                     sku                      = COALESCE(serial_units.sku, EXCLUDED.sku),
                     sku_catalog_id           = COALESCE(serial_units.sku_catalog_id, EXCLUDED.sku_catalog_id),
                     current_location         = COALESCE(EXCLUDED.current_location, serial_units.current_location),
+                    condition_grade          = EXCLUDED.condition_grade,
                     shipping_tracking_number = COALESCE(EXCLUDED.shipping_tracking_number, serial_units.shipping_tracking_number),
                     legacy_notes             = COALESCE(EXCLUDED.legacy_notes, serial_units.legacy_notes),
                     legacy_date_time         = COALESCE(serial_units.legacy_date_time, EXCLUDED.legacy_date_time),
                     updated_at               = NOW()
                  RETURNING id`,
-                [serial, normalized, skuStr, catalogId, locationStr, trackingStr, notesStr, timestamp],
+                [serial, normalized, skuStr, catalogId, locationStr, trackingStr, notesStr, timestamp, conditionStr],
             );
             if (result.rows[0]?.id) insertedIds.push(result.rows[0].id);
         }
@@ -70,4 +79,4 @@ export async function POST(request: NextRequest) {
     } finally {
         client.release();
     }
-}
+}, { permission: 'tech.scan_serial' });

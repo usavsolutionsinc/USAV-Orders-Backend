@@ -2,8 +2,9 @@ import { NextRequest, NextResponse } from 'next/server';
 import { searchShippedOrders } from '@/lib/neon/orders-queries';
 import { logRouteMetric } from '@/lib/route-metrics';
 import { normalizeShippedSearchField } from '@/lib/shipped-search';
+import { withAuth } from '@/lib/auth/withAuth';
 
-export async function GET(req: NextRequest) {
+export const GET = withAuth(async (req: NextRequest) => {
     const startedAt = Date.now();
     let ok = false;
     try {
@@ -45,10 +46,10 @@ export async function GET(req: NextRequest) {
             ok,
         });
     }
-}
+}, { permission: 'shipping.view' });
 
 // POST endpoint to save search history
-export async function POST(req: NextRequest) {
+export const POST = withAuth(async (req: NextRequest) => {
     const startedAt = Date.now();
     let ok = false;
     try {
@@ -73,4 +74,4 @@ export async function POST(req: NextRequest) {
             ok,
         });
     }
-}
+}, { permission: 'shipping.view' });

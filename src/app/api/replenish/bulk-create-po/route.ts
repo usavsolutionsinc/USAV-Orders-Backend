@@ -1,7 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createDraftPurchaseOrders } from '@/lib/replenishment';
+import { withAuth } from '@/lib/auth/withAuth';
 
-export async function POST(req: NextRequest) {
+// Creates draft Zoho POs from staged replenishment requests. Approval-level
+// action — wired to replenish.approve_po which is in STEP_UP_PERMISSIONS so
+// the wrapper also requires a fresh step-up grant.
+export const POST = withAuth(async (req: NextRequest) => {
   try {
     const body = await req.json();
     const ids = body.replenishment_request_ids;
@@ -33,4 +37,4 @@ export async function POST(req: NextRequest) {
       { status: 500 }
     );
   }
-}
+}, { permission: 'replenish.approve_po' });

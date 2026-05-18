@@ -43,6 +43,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import pool from '@/lib/db';
 import { invalidateCacheTags } from '@/lib/cache/upstash-cache';
 import { publishReceivingLogChanged } from '@/lib/realtime/publish';
+import { withAuth } from '@/lib/auth/withAuth';
+import { AUDIT_ACTION, AUDIT_ENTITY } from '@/lib/audit-logs';
 
 const WORKFLOW_STATUS_PRIORITY = [
   'DONE',
@@ -70,7 +72,7 @@ function deriveWorkflowStatus(rows: Array<{ workflow_status?: string | null }>):
   return statuses[0] ?? null;
 }
 
-export async function POST(request: NextRequest) {
+export const POST = withAuth(async (request: NextRequest, ctx) => {
   const client = await pool.connect();
   try {
     const body = await request.json();
@@ -88,8 +90,8 @@ export async function POST(request: NextRequest) {
     const sku                   = String(body?.sku                     || '').trim() || null;
     const lineIdsRaw            = Array.isArray(body?.line_ids) ? body.line_ids : null;
     const unboxed               = !!body?.unboxed;
-    const unboxedBy             = Number.isFinite(Number(body?.unboxed_by)) && Number(body?.unboxed_by) > 0
-      ? Number(body.unboxed_by) : null;
+    // Server-trusted actor — body.unboxed_by is ignored.
+    const unboxedBy             = ctx.staffId;
 
     // Verify the receiving row exists
     const receivingRow = await client.query<{ id: number }>(
@@ -255,14 +257,33 @@ export async function POST(request: NextRequest) {
   } finally {
     client.release();
   }
-}
+}, {
+  permission: 'receiving.mark_received',
+  audit: {
+    source: 'receiving.match',
+    action: AUDIT_ACTION.RECEIVING_MATCH,
+    entityType: AUDIT_ENTITY.RECEIVING,
+    entityId: ({ body }) => {
+      const b = body as { receiving_id?: number | string } | null;
+      return b?.receiving_id ?? null;
+    },
+    extra: ({ response }) => {
+      const r = response as { matched_line_ids?: number[]; match_strategy?: string; assignments_created?: number } | null;
+      return {
+        matched_line_ids: r?.matched_line_ids ?? null,
+        match_strategy: r?.match_strategy ?? null,
+        assignments_created: r?.assignments_created ?? null,
+      };
+    },
+  },
+});
 
 /**
  * GET /api/receiving/match?receiving_id=N
  *
  * Returns currently matched lines for a receiving row plus unmatched candidates.
  */
-export async function GET(request: NextRequest) {
+export const GET = withAuth(async (request: NextRequest) => {
   try {
     const { searchParams } = new URL(request.url);
     const receivingId = Number(searchParams.get('receiving_id'));
@@ -315,4 +336,4 @@ export async function GET(request: NextRequest) {
     console.error('receiving/match GET failed:', error);
     return NextResponse.json({ success: false, error: msg }, { status: 500 });
   }
-}
+}, { permission: 'receiving.view' });

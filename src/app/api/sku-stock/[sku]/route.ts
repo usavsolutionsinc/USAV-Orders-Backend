@@ -15,7 +15,7 @@ import {
 import { SkuStockPatchBody } from '@/lib/schemas/locations';
 import { parseBody } from '@/lib/schemas/parse';
 import { recordAudit, AUDIT_ACTION, AUDIT_ENTITY } from '@/lib/audit-logs';
-import type { AuthContext } from '@/lib/auth/withAuth';
+import type { AnonymousAuthContext } from '@/lib/auth/withAuth';
 import { getCurrentUserBySid } from '@/lib/auth/current-user';
 import { SESSION_COOKIE_NAME } from '@/lib/auth/session';
 
@@ -24,13 +24,18 @@ import { SESSION_COOKIE_NAME } from '@/lib/auth/session';
  * through withAuth() — this route uses Next's typed second arg `{ params }`
  * for the dynamic `[sku]` segment, which conflicts with withAuth's wrapper
  * signature. We still want server-trusted actor + ip/ua on audit rows.
+ *
+ * Returns the anonymous-style context because the underlying call site can
+ * predate sign-in (legacy QR scans). The PATCH handler enforces a permission
+ * check against `ctx.permissions` instead.
  */
-async function resolveCtx(req: NextRequest): Promise<AuthContext> {
+async function resolveCtx(req: NextRequest): Promise<AnonymousAuthContext> {
   const sid = req.cookies.get(SESSION_COOKIE_NAME)?.value ?? null;
   const user = await getCurrentUserBySid(sid);
+  const noopMark = () => {};
   return user
-    ? { user, session: user.session, staffId: user.staffId, role: user.role, permissions: user.permissions }
-    : { user: null, session: null, staffId: null, role: null, permissions: new Set() };
+    ? { user, session: user.session, staffId: user.staffId, role: user.role, permissions: user.permissions, markAuditWritten: noopMark }
+    : { user: null, session: null, staffId: null, role: null, permissions: new Set(), markAuditWritten: noopMark };
 }
 
 const ROUTE_SKU_STOCK_PATCH = 'sku-stock.sku.patch';
@@ -283,6 +288,25 @@ export async function PATCH(
 
     const ctx = await resolveCtx(request);
     const effectiveStaffId = ctx.staffId ?? (staffId && staffId > 0 ? staffId : null);
+
+    // Per-action permission gate against the session's verified permission set.
+    // The legacy `rename` branch below also calls `assertPermission(..., 'bin.rename')`
+    // which goes through the narrower DB-role lookup; keeping both lines means a
+    // role-removed-but-still-cached session is caught by the in-session check
+    // here while role changes also propagate via the DB path on next request.
+    const PERM_BY_ACTION = {
+      adjust:   'sku_stock.adjust',
+      set:      'sku_stock.adjust',
+      location: 'bin.set',
+      rename:   'bin.rename',
+    } as const;
+    const requiredPerm = PERM_BY_ACTION[action];
+    if (requiredPerm && !ctx.permissions.has(requiredPerm)) {
+      return respond(
+        { error: 'FORBIDDEN', permission: requiredPerm, role: ctx.role },
+        403,
+      );
+    }
 
     if (action === 'adjust' && typeof delta === 'number') {
       // Capture before-state for the audit diff.

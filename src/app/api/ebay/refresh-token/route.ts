@@ -2,12 +2,13 @@ import { NextResponse } from 'next/server';
 import pool from '@/lib/db';
 import { refreshEbayAccessToken } from '@/lib/ebay/token-refresh';
 import { formatPSTTimestamp } from '@/utils/date';
+import { withAuth } from '@/lib/auth/withAuth';
 
 /**
  * POST /api/ebay/refresh-token
  * Manually refresh access token for a specific account
  */
-export async function POST(req: Request) {
+export const POST = withAuth(async (req: Request) => {
   try {
     const { accountName } = await req.json();
     
@@ -67,4 +68,4 @@ export async function POST(req: Request) {
       { status: 500 }
     );
   }
-}
+}, { permission: 'integrations.ebay' });

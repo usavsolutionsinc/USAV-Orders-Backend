@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import pool from '@/lib/db';
 import { resolveShipmentId } from '@/lib/shipping/resolve';
+import { withAuth } from '@/lib/auth/withAuth';
 
 /**
  * GET /api/sku/by-tracking?tracking=xxx
@@ -9,7 +10,7 @@ import { resolveShipmentId } from '@/lib/shipping/resolve';
  * all associated integrity photos from the unified photos table
  * (entity_type = 'SKU', entity_id = sku.id).
  */
-export async function GET(req: NextRequest) {
+export const GET = withAuth(async (req: NextRequest) => {
   const { searchParams } = new URL(req.url);
   const tracking = searchParams.get('tracking')?.trim();
 
@@ -97,4 +98,4 @@ export async function GET(req: NextRequest) {
       { status: 500 },
     );
   }
-}
+}, { permission: 'sku_stock.view' });

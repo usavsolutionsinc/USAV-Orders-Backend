@@ -100,10 +100,8 @@ export function MobileReceivingList() {
 
   const buildPhotosHref = useCallback(
     (row: ReceivingLineRow) =>
-      row.receiving_id
-        ? `/m/r/${row.receiving_id}/photos${staffId > 0 ? `?staffId=${staffId}` : ''}`
-        : '#',
-    [staffId],
+      row.receiving_id ? `/m/r/${row.receiving_id}/photos` : '#',
+    [],
   );
 
   if (isLoading && reversedRows.length === 0) {

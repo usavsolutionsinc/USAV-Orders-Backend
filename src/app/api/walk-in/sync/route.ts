@@ -3,12 +3,13 @@ import { getSquareConfig, squareFetch, formatSquareErrors } from '@/lib/square/c
 import { insertSquareTransaction } from '@/lib/neon/square-transaction-queries';
 import { isAllowedAdminOrigin } from '@/lib/security/allowed-origin';
 import { isRepairSku } from '@/utils/sku';
+import { withAuth } from '@/lib/auth/withAuth';
 
 /**
  * POST /api/walk-in/sync
  * Backfill completed Square orders into square_transactions table.
  */
-export async function POST(req: NextRequest) {
+export const POST = withAuth(async (req: NextRequest) => {
   try {
     if (!isAllowedAdminOrigin(req)) {
       return NextResponse.json({ error: 'Origin not allowed' }, { status: 403 });
@@ -113,4 +114,4 @@ export async function POST(req: NextRequest) {
       { status: 500 },
     );
   }
-}
+}, { permission: 'admin.manage_features' });

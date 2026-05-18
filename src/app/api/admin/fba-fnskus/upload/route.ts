@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import pool from '@/lib/db';
+import { withAuth } from '@/lib/auth/withAuth';
 
 type CsvRow = string[];
 
@@ -65,7 +66,7 @@ function getIndex(headers: string[], keys: string[]): number {
   return -1;
 }
 
-export async function POST(req: NextRequest) {
+export const POST = withAuth(async (req: NextRequest) => {
   try {
     const form = await req.formData();
     const file = form.get('file');
@@ -147,4 +148,4 @@ export async function POST(req: NextRequest) {
     console.error('Failed to upload fba_fnskus CSV:', error);
     return NextResponse.json({ error: 'Failed to upload CSV' }, { status: 500 });
   }
-}
+}, { permission: 'fba.manage_fnskus' });

@@ -10,7 +10,6 @@ import {
   fieldLabel,
   dataValue,
   CardShell,
-  ChevronToggle,
   DetailGrid,
   DetailCell,
   CopyIconButton,
@@ -18,6 +17,7 @@ import {
   SkeletonOrderCard,
 } from '@/design-system';
 import { Play, Settings } from '@/components/Icons';
+import { dispatchUpNextPreview } from '@/utils/events';
 import { ShipByDate } from '@/components/ui/ShipByDate';
 import { OutOfStockEditorBlock } from '@/components/ui/OutOfStockEditorBlock';
 import { OutOfStockField } from '@/components/ui/OutOfStockField';
@@ -37,6 +37,14 @@ import type { Order } from './upnext-types';
 import { UpNextActionButton } from './UpNextActionButton';
 import { UpNextHeaderExternalLinkChip } from './UpNextHeaderExternalLinkChip';
 
+/**
+ * Detail expansion moved to the right-pane workspace (see ActiveOrderWorkspace
+ * + dispatchUpNextPreview). The inline expand block below stays gated on this
+ * flag so the layout/styling is recoverable if we ever want the in-card panel
+ * back — flip to `true` to re-enable.
+ */
+const SHOW_INLINE_EXPAND = false;
+
 interface OrderCardProps {
   order: Order;
   effectiveTab: string;
@@ -50,6 +58,11 @@ interface OrderCardProps {
   onMissingPartsCancel: () => void;
   isExpanded: boolean;
   onToggleExpand: () => void;
+  /**
+   * True when this card's order is the current right-pane preview/active
+   * target. Surfaces as a tinted card + accent strip via CardShell.
+   */
+  isSelected?: boolean;
 }
 
 export function OrderCard({
@@ -65,6 +78,7 @@ export function OrderCard({
   onMissingPartsCancel,
   isExpanded,
   onToggleExpand,
+  isSelected = false,
 }: OrderCardProps) {
   const card = useUpNextCard({
     order,
@@ -78,8 +92,16 @@ export function OrderCard({
     <>
       <CardShell
         isExpanded={isExpanded}
+        isSelected={isSelected}
         isStock={card.isStockTab}
-        onClick={onToggleExpand}
+        onClick={() => {
+          // Card body click now selects the order for the right-pane preview
+          // (matches active-order behavior) instead of expanding inline.
+          // `isExpanded` is kept as the "selected" highlight on the card.
+          const nextSelected = !isExpanded;
+          onToggleExpand();
+          dispatchUpNextPreview(nextSelected ? { kind: 'order', order } : null);
+        }}
       >
         {/* ── Header ── */}
         <div className="flex items-center justify-between mb-4 px-3">
@@ -101,7 +123,8 @@ export function OrderCard({
               onOpen={() => card.openExternalByItemNumber(card.itemNumberValue)}
               ariaLabel="Open order in external page"
             />
-            <ChevronToggle isExpanded={isExpanded} />
+            {/* Chevron toggle removed: card click opens the right-pane preview,
+                not an inline expand, so the affordance was misleading. */}
           </div>
         </div>
 
@@ -173,9 +196,9 @@ export function OrderCard({
           </div>
         )}
 
-        {/* ── Expanded details ── */}
+        {/* ── Expanded details — gated; lives in the right pane now ── */}
         <AnimatePresence initial={false}>
-          {isExpanded && (
+          {SHOW_INLINE_EXPAND && isExpanded && (
             <motion.div
               key="expanded-order"
               initial={framerPresence.collapseHeight.initial}

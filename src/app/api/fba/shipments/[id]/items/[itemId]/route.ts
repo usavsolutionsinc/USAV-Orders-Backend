@@ -4,6 +4,7 @@ import { getInvalidFbaPlanIdMessage, parseFbaPlanId } from '@/lib/fba/plan-id';
 import { formatPSTTimestamp } from '@/utils/date';
 import { publishFbaItemChanged } from '@/lib/realtime/publish';
 import { invalidateCacheTags } from '@/lib/cache/upstash-cache';
+import { requireRoutePerm, recordRouteAudit } from '@/lib/auth/dynamic-route-guard';
 
 type Params = Promise<{ id: string; itemId: string }>;
 
@@ -19,10 +20,12 @@ const STATUS_ORDER: Record<string, number> = {
 // â”€â”€ GET /api/fba/shipments/[id]/items/[itemId] â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 // Returns a single shipment item with staff name joins.
 export async function GET(
-  _request: NextRequest,
+  request: NextRequest,
   { params }: { params: Params }
 ) {
   try {
+    const gate = await requireRoutePerm(request, 'fba.view');
+    if (gate.denied) return gate.denied;
     const { id, itemId } = await params;
     const shipmentId = parseFbaPlanId(id);
     const itemIdNum = Number(itemId);
@@ -90,6 +93,8 @@ export async function PATCH(
 ) {
   const client = await pool.connect();
   try {
+    const gate = await requireRoutePerm(request, 'fba.stage_shipments');
+    if (gate.denied) return gate.denied;
     const { id, itemId } = await params;
     const shipmentId = parseFbaPlanId(id);
     const itemIdNum = Number(itemId);
@@ -258,11 +263,13 @@ export async function PATCH(
 // Tracking allocations referencing this item are cleaned up automatically
 // (FK cascade), and a VOID log is recorded for audit.
 export async function DELETE(
-  _request: NextRequest,
+  request: NextRequest,
   { params }: { params: Params }
 ) {
   const client = await pool.connect();
   try {
+    const gate = await requireRoutePerm(request, 'fba.stage_shipments');
+    if (gate.denied) return gate.denied;
     const { id, itemId } = await params;
     const shipmentId = parseFbaPlanId(id);
     const itemIdNum = Number(itemId);

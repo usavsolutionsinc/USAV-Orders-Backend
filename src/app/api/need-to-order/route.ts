@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { listNeedToOrder } from '@/lib/replenishment';
+import { withAuth } from '@/lib/auth/withAuth';
 
-export async function GET(req: NextRequest) {
+export const GET = withAuth(async (req: NextRequest) => {
   try {
     const { searchParams } = new URL(req.url);
     const statuses = (searchParams.get('status') || '')
@@ -21,4 +22,4 @@ export async function GET(req: NextRequest) {
       { status: 500 }
     );
   }
-}
+}, { permission: 'replenish.view' });

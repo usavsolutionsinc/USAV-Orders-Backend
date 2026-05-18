@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import pool from '@/lib/db';
+import { withAuth } from '@/lib/auth/withAuth';
 
 const ECWID_BASE_URL = 'https://app.ecwid.com/api/v3';
 const DEFAULT_LIMIT = 100;
@@ -62,7 +63,7 @@ async function fetchEcwidOrders(storeId: string, token: string, maxPages: number
   return items;
 }
 
-export async function POST(req: NextRequest) {
+export const POST = withAuth(async (req: NextRequest) => {
   try {
     const body = await req.json().catch(() => ({}));
     const maxPages = Math.max(1, Math.min(50, Number(body.maxPages || 10)));
@@ -208,4 +209,4 @@ export async function POST(req: NextRequest) {
       { status: 500 }
     );
   }
-}
+}, { permission: 'admin.manage_features' });

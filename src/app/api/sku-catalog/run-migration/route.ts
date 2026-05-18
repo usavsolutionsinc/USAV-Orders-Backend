@@ -1,7 +1,9 @@
 import { NextResponse } from 'next/server';
 import pool from '@/lib/db';
+import { withAuth } from '@/lib/auth/withAuth';
 
-export async function POST() {
+// Break-glass DB migration — admin-only + step-up via admin.manage_features.
+export const POST = withAuth(async () => {
   try {
     // Remove all platform='zoho' entries from sku_platform_ids.
     // Zoho SKUs already live in sku_catalog.sku (source of truth).
@@ -18,4 +20,4 @@ export async function POST() {
     console.error('Migration error:', error);
     return NextResponse.json({ success: false, error: error.message }, { status: 500 });
   }
-}
+}, { permission: 'admin.manage_features', stepUp: true });

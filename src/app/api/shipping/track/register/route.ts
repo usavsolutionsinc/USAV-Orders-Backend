@@ -2,8 +2,9 @@ import { NextRequest, NextResponse } from 'next/server';
 import { checkRateLimit } from '@/lib/api-guard';
 import { registerAndSyncShipment } from '@/lib/shipping/sync-shipment';
 import type { CarrierCode } from '@/lib/shipping/types';
+import { withAuth } from '@/lib/auth/withAuth';
 
-export async function POST(req: NextRequest) {
+export const POST = withAuth(async (req: NextRequest) => {
   const rate = checkRateLimit({
     headers: req.headers,
     routeKey: 'shipping-register',
@@ -51,4 +52,4 @@ export async function POST(req: NextRequest) {
     console.error('[shipping/register]', err);
     return NextResponse.json({ error: message }, { status: 500 });
   }
-}
+}, { permission: 'shipping.mark_shipped' });

@@ -5,18 +5,20 @@ import { publishFbaItemChanged, publishFbaShipmentChanged } from '@/lib/realtime
 import { invalidateCacheTags } from '@/lib/cache/upstash-cache';
 import { buildFbaPlanRefFromIsoDate } from '@/lib/fba/plan-ref';
 import { upsertFnskuCatalogRow } from '@/lib/fba/upsert-fnsku-catalog';
+import { withAuth } from '@/lib/auth/withAuth';
 
 // Pack-station FNSKU scan.
 // Writes into the shared fba_fnsku_logs ledger and, when an open shipment item
 // exists, increments the shipment item's actual_qty and advances it to READY_TO_GO.
-export async function POST(request: NextRequest) {
+export const POST = withAuth(async (request: NextRequest, ctx) => {
   const client = await pool.connect();
   try {
     const body = await request.json();
-    const { fnsku, staff_id, station } = body;
+    const { fnsku, station } = body;
+    const staff_id = ctx.staffId;
 
-    if (!fnsku?.trim() || !staff_id) {
-      return NextResponse.json({ success: false, error: 'fnsku and staff_id are required' }, { status: 400 });
+    if (!fnsku?.trim()) {
+      return NextResponse.json({ success: false, error: 'fnsku is required' }, { status: 400 });
     }
 
     const normalizedFnsku = String(fnsku).trim().toUpperCase();
@@ -274,4 +276,15 @@ export async function POST(request: NextRequest) {
   } finally {
     client.release();
   }
-}
+}, {
+  permission: 'fba.stage_shipments',
+  audit: {
+    source: 'fba.items.scan',
+    action: 'fba.fnsku.scan',
+    entityType: 'fba_fnsku',
+    entityId: ({ body }) => {
+      const b = body as { fnsku?: string } | null;
+      return b?.fnsku ?? null;
+    },
+  },
+});

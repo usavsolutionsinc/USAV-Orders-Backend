@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { zohoPost } from '@/lib/zoho/httpClient';
+import { withAuth } from '@/lib/auth/withAuth';
 
 export const dynamic = 'force-dynamic';
 
@@ -15,7 +16,7 @@ export const dynamic = 'force-dynamic';
  *   serial_number?: string
  * }
  */
-export async function POST(request: NextRequest) {
+export const POST = withAuth(async (request: NextRequest) => {
   const body = await request.json();
   const purchaseorder_id = String(body?.purchaseorder_id || '').trim();
   const line_item_id = String(body?.line_item_id || '').trim();
@@ -123,4 +124,4 @@ export async function POST(request: NextRequest) {
   }
 
   return NextResponse.json({ ok: results.some((r) => r.ok), results });
-}
+}, { permission: 'integrations.zoho' });

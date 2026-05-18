@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import pool from '@/lib/db';
+import { withAuth } from '@/lib/auth/withAuth';
 
 /**
  * GET /api/sku-catalog/pair-suggestions?ecwidId=N&limit=5
@@ -8,7 +9,7 @@ import pool from '@/lib/db';
  * Ecwid row's display_name. Used by the pairing UI to offer click-to-pair
  * suggestions without typing a search.
  */
-export async function GET(req: NextRequest) {
+export const GET = withAuth(async (req: NextRequest) => {
   try {
     const { searchParams } = new URL(req.url);
     const ecwidId = Number(searchParams.get('ecwidId'));
@@ -55,4 +56,4 @@ export async function GET(req: NextRequest) {
       { status: 500 },
     );
   }
-}
+}, { permission: 'sku_stock.view' });

@@ -3,6 +3,7 @@ import pool from '@/lib/db';
 import { parseFbaPlanId } from '@/lib/fba/plan-id';
 import { publishFbaItemChanged } from '@/lib/realtime/publish';
 import { invalidateCacheTags } from '@/lib/cache/upstash-cache';
+import { requireRoutePerm, recordRouteAudit } from '@/lib/auth/dynamic-route-guard';
 
 type Params = Promise<{ id: string; itemId: string }>;
 
@@ -18,6 +19,8 @@ export async function PATCH(
 ) {
   const client = await pool.connect();
   try {
+    const gate = await requireRoutePerm(request, 'fba.stage_shipments');
+    if (gate.denied) return gate.denied;
     const { id, itemId } = await params;
     const sourceShipmentId = parseFbaPlanId(id);
     const itemIdNum = Number(itemId);

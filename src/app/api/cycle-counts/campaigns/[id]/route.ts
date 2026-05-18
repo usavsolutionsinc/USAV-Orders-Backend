@@ -5,6 +5,7 @@ import {
   PermissionDeniedError,
   permissionDeniedResponse,
 } from '@/lib/auth/permissions';
+import { requireRoutePerm } from '@/lib/auth/dynamic-route-guard';
 
 /**
  * GET /api/cycle-counts/campaigns/[id]?bin_id=
@@ -20,6 +21,8 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> },
 ) {
   try {
+    const gate = await requireRoutePerm(request, 'cycle_count.view');
+    if (gate.denied) return gate.denied;
     const { id: idRaw } = await params;
     const campaignId = Number(idRaw);
     if (!Number.isFinite(campaignId) || campaignId <= 0) {
@@ -82,6 +85,10 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> },
 ) {
   try {
+    // cycle_count.approve is on STEP_UP_PERMISSIONS — closing/approving a
+    // campaign requires a fresh step-up grant via requireRoutePerm.
+    const gate = await requireRoutePerm(request, 'cycle_count.approve');
+    if (gate.denied) return gate.denied;
     const { id: idRaw } = await params;
     const campaignId = Number(idRaw);
     const body = await request.json().catch(() => ({}));

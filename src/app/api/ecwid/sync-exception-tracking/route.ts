@@ -6,6 +6,7 @@ import { invalidateCacheTags } from '@/lib/cache/upstash-cache';
 import { publishRepairChanged } from '@/lib/realtime/publish';
 import { upsertEcwidIncomingRepair } from '@/lib/neon/repair-service-queries';
 import { resolveOrCreateSkuCatalogId } from '@/lib/neon/sku-catalog-queries';
+import { withAuth } from '@/lib/auth/withAuth';
 
 const ECWID_BASE_URL = 'https://app.ecwid.com/api/v3';
 const DEFAULT_LIMIT = 100;
@@ -231,7 +232,7 @@ function extractEcwidContactInfo(order: any): string {
   return parts.join(', ');
 }
 
-export async function POST(req: NextRequest) {
+export const POST = withAuth(async (req: NextRequest) => {
   try {
     const body = await req.json().catch(() => ({}));
     const maxPages = Math.max(1, Math.min(50, Number(body.maxPages || 10)));
@@ -340,4 +341,4 @@ export async function POST(req: NextRequest) {
       { status: 500 }
     );
   }
-}
+}, { permission: 'integrations.ecwid' });

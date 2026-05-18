@@ -2,12 +2,13 @@ import { NextRequest, NextResponse } from 'next/server';
 import pool from '@/lib/db';
 import { invalidateCacheTags } from '@/lib/cache/upstash-cache';
 import { publishTechLogChanged } from '@/lib/realtime/publish';
+import { withAuth } from '@/lib/auth/withAuth';
 
 /**
  * Simplified delete: SAL is SoT, cascade to TSN + fba_fnsku_logs.
  * Body: { salId: number }
  */
-export async function POST(req: NextRequest) {
+export const POST = withAuth(async (req: NextRequest) => {
   const body = await req.json().catch(() => null);
   if (!body) return NextResponse.json({ success: false, error: 'Invalid JSON' }, { status: 400 });
 
@@ -79,4 +80,4 @@ export async function POST(req: NextRequest) {
     console.error('Error in tech delete:', error);
     return NextResponse.json({ success: false, error: 'Delete failed', details: error.message }, { status: 500 });
   }
-}
+}, { permission: 'tech.scan_serial' });

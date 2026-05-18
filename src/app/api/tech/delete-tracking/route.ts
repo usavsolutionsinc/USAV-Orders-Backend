@@ -1,12 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
 import pool from '@/lib/db';
 import { POST as unifiedDelete } from '@/app/api/tech/delete/route';
+import { withAuth } from '@/lib/auth/withAuth';
 
 /**
  * Legacy POST /api/tech/delete-tracking — thin wrapper around POST /api/tech/delete.
  * Resolves SAL id from { sourceRowId, sourceKind } or { rowId }, then delegates.
  */
-export async function POST(req: NextRequest) {
+export const POST = withAuth(async (req: NextRequest) => {
   const body = await req.json().catch(() => null);
   if (!body) return NextResponse.json({ success: false, error: 'Invalid JSON' }, { status: 400 });
 
@@ -52,11 +53,13 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ success: false, error: 'Could not resolve scan session for deletion' }, { status: 404 });
   }
 
+  const headers = new Headers(req.headers);
+  headers.set('Content-Type', 'application/json');
   const syntheticReq = new NextRequest(req.url, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers,
     body: JSON.stringify({ salId }),
   });
 
-  return unifiedDelete(syntheticReq);
-}
+  return unifiedDelete(syntheticReq, { params: Promise.resolve({}) });
+}, { permission: 'tech.scan_serial' });

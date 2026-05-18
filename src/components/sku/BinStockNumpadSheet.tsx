@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { Check, Loader2, X } from '@/components/Icons';
-import { usePersistedStaffId } from '@/hooks/usePersistedStaffId';
+import { useAuth } from '@/contexts/AuthContext';
 import { errorFeedback, successFeedback } from '@/lib/feedback/confirm';
 import { ReasonCodePicker, type ReasonCode } from '@/components/sku/ReasonCodePicker';
 import { queueOrFetch } from '@/lib/offline/write-queue';
@@ -75,7 +75,8 @@ export function BinStockNumpadSheet({
   invalidateKey,
   onOpenDetails,
 }: BinStockNumpadSheetProps) {
-  const [staffId] = usePersistedStaffId();
+  const { user } = useAuth();
+  const staffId = user?.staffId ?? 0;
   const queryClient = useQueryClient();
   const [mode, setMode] = useState<Mode>('minus');
   const [draft, setDraft] = useState('');

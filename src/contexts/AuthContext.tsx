@@ -120,22 +120,6 @@ export function AuthProvider({ initial = null, children }: ProviderProps) {
     router.replace(`/signin?next=${encodeURIComponent(target)}`);
   }, [mustRedirect, pathname, router]);
 
-  // Phase F: one-shot wipe of legacy localStorage keys that used to store
-  // per-page staff identity. Cookie is the source of truth now. Safe to
-  // remove this block once the rollout has soaked and most clients have
-  // hydrated at least once.
-  useEffect(() => {
-    if (typeof window === 'undefined') return;
-    const legacyKeys = [
-      'last-tech-station-href',
-      'last-packer-station-href',
-      'fba-staff-id',
-    ];
-    for (const key of legacyKeys) {
-      try { window.localStorage.removeItem(key); } catch { /* ignore */ }
-    }
-  }, []);
-
   const value = useMemo<AuthContextValue>(() => {
     const perms = new Set(user?.permissions ?? []);
     return {

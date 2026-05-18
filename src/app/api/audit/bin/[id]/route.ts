@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getBinAuditHistory } from '@/lib/audit-log/entity-history';
+import { requireRoutePerm } from '@/lib/auth/dynamic-route-guard';
 
 export const dynamic = 'force-dynamic';
 
@@ -14,6 +15,8 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> },
 ) {
   try {
+    const gate = await requireRoutePerm(req, 'admin.view_logs');
+    if (gate.denied) return gate.denied;
     const { id } = await params;
     const binId = Number(id);
     if (!Number.isFinite(binId) || binId <= 0) {

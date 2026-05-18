@@ -6,10 +6,11 @@ import {
     runGoogleSheetsTransferOrders,
 } from '@/lib/jobs/google-sheets-transfer-orders';
 import { logRouteMetric } from '@/lib/route-metrics';
+import { withAuth } from '@/lib/auth/withAuth';
 
 export const dynamic = 'force-dynamic';
 
-export async function POST(req: NextRequest) {
+export const POST = withAuth(async (req: NextRequest) => {
     const startedAt = Date.now();
     let ok = false;
     let queued = false;
@@ -56,9 +57,9 @@ export async function POST(req: NextRequest) {
             },
         });
     }
-}
+}, { permission: 'admin.manage_features' });
 
-export async function GET(req: NextRequest) {
+export const GET = withAuth(async (req: NextRequest) => {
     const startedAt = Date.now();
     if (!isAllowedAdminOrigin(req)) {
         logRouteMetric({
@@ -90,4 +91,4 @@ export async function GET(req: NextRequest) {
         details: { queued: true },
     });
     return response;
-}
+}, { permission: 'admin.manage_features' });

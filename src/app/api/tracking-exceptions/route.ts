@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import pool from '@/lib/db';
 import { normalizeTrackingKey18 } from '@/lib/tracking-format';
+import { withAuth } from '@/lib/auth/withAuth';
 
 /**
  * GET /api/tracking-exceptions
@@ -12,7 +13,7 @@ import { normalizeTrackingKey18 } from '@/lib/tracking-format';
  *   ?limit=<n> (default 100, max 500)
  *   ?offset=<n> (default 0)
  */
-export async function GET(request: NextRequest) {
+export const GET = withAuth(async (request: NextRequest) => {
   try {
     const { searchParams } = new URL(request.url);
     const domain = (searchParams.get('domain') || 'receiving').toLowerCase();
@@ -91,4 +92,4 @@ export async function GET(request: NextRequest) {
     console.error('GET /api/tracking-exceptions failed:', error);
     return NextResponse.json({ success: false, error: message }, { status: 500 });
   }
-}
+}, { permission: 'receiving.view' });

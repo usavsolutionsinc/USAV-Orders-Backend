@@ -16,7 +16,7 @@ import type { FbaPlanQueueItem } from '@/components/station/upnext/upnext-types'
 import { FbaWorkspaceScanField } from '@/components/fba/sidebar/FbaWorkspaceScanField';
 import { useActiveStaffDirectory } from '@/components/sidebar/hooks';
 import { useStationTheme } from '@/hooks/useStationTheme';
-import { usePersistedStaffId } from '@/hooks/usePersistedStaffId';
+import { useAuth } from '@/contexts/AuthContext';
 import { FbaPairedReviewPanel } from '@/components/fba/sidebar/FbaPairedReviewPanel';
 import { FbaShippedTable } from '@/components/fba/FbaShippedTable';
 import { FbaActiveShipments } from '@/components/fba/sidebar/FbaActiveShipments';
@@ -264,7 +264,8 @@ function FbaWorkspaceSidebarInner() {
     return () => window.removeEventListener(FBA_PAIRED_REVIEW_TOGGLE, handler);
   }, []);
 
-  const [staffIdNum] = usePersistedStaffId();
+  const { user } = useAuth();
+  const staffIdNum = user?.staffId ?? 0;
   const selectedStaffMember = staffDirectory.find((m) => m.id === staffIdNum);
   const staffName = selectedStaffMember?.name || (staffDirectory.length === 0 ? '…' : `Staff ${staffIdNum}`);
   const { theme: stationTheme } = useStationTheme({ staffId: staffIdNum });

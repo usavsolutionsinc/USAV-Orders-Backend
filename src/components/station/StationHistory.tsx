@@ -90,7 +90,8 @@ export default function StationHistory({
         setIsLoadingMore(true);
         try {
             const nextOffset = offset + limit;
-            const res = await fetch(`/api/tech-logs?techId=${techId}&limit=${limit}&offset=${nextOffset}`);
+            // Server derives identity from session. techId only needed for admin views.
+            const res = await fetch(`/api/tech-logs?limit=${limit}&offset=${nextOffset}`);
             if (!res.ok) throw new Error('Failed to fetch');
             const data = await res.json();
             

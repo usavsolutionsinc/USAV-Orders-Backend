@@ -6,6 +6,7 @@ import {
   upsertProductManual,
 } from '@/lib/neon/product-manuals-queries';
 import { invalidateCacheTags } from '@/lib/cache/upstash-cache';
+import { withAuth } from '@/lib/auth/withAuth';
 
 function deriveDisplayName(fileName: string) {
   return String(fileName || '')
@@ -15,7 +16,7 @@ function deriveDisplayName(fileName: string) {
     .trim();
 }
 
-export async function POST(req: NextRequest) {
+export const POST = withAuth(async (req: NextRequest) => {
   try {
     const body = await req.json().catch(() => ({}));
     const relativePath = String(body?.relativePath || '').trim();
@@ -77,4 +78,4 @@ export async function POST(req: NextRequest) {
       { status: 500 },
     );
   }
-}
+}, { permission: 'sku_stock.manage' });

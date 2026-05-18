@@ -51,7 +51,7 @@ const CHIPS: CommonChip[] = [
   },
   {
     id: 'fba',
-    label: 'FBA',
+    label: 'Amazon FBA',
     icon: <Package className={ICON_CLS} />,
     onClick: (router) => router.push('/fba'),
   },

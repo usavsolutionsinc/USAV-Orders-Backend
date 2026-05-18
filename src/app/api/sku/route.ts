@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import pool from '@/lib/db';
 import { normalizeSku } from '@/utils/sku';
+import { withAuth } from '@/lib/auth/withAuth';
 
 function getBaseSku(value: string) {
   const raw = String(value || '').trim();
@@ -10,7 +11,7 @@ function getBaseSku(value: string) {
   return normalizeSku(withoutQty);
 }
 
-export async function GET(req: NextRequest) {
+export const GET = withAuth(async (req: NextRequest) => {
   try {
     const { searchParams } = new URL(req.url);
     const query = String(searchParams.get('q') || '').trim();
@@ -120,4 +121,4 @@ export async function GET(req: NextRequest) {
       { status: 500 }
     );
   }
-}
+}, { permission: 'sku_stock.view' });

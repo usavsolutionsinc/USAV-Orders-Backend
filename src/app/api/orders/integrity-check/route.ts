@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import pool from '@/lib/db';
 import { normalizeTrackingNumber } from '@/lib/shipping/normalize';
+import { withAuth } from '@/lib/auth/withAuth';
 
 export const dynamic = 'force-dynamic';
 
@@ -26,7 +27,8 @@ function isBlank(value: unknown): boolean {
  * same normalized tracking number. Different order_id values on the same
  * tracking number are not touched. Blank/no-tracking rows are not touched.
  */
-export async function POST(req: NextRequest) {
+// Destructive when dryRun=false (deletes duplicate orders). Admin-only.
+export const POST = withAuth(async (req: NextRequest) => {
   try {
     const body = await req.json().catch(() => ({}));
     const dryRun = body?.dryRun === true;
@@ -129,4 +131,4 @@ export async function POST(req: NextRequest) {
       { status: 500 }
     );
   }
-}
+}, { permission: 'admin.manage_features' });

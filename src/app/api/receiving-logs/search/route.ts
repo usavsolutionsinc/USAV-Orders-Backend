@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import pool from '@/lib/db';
 import { resolveReceivingSchema } from '@/utils/receiving-schema';
+import { withAuth } from '@/lib/auth/withAuth';
 
-export async function GET(req: NextRequest) {
+export const GET = withAuth(async (req: NextRequest) => {
     try {
         const { searchParams } = new URL(req.url);
         const query = searchParams.get('q');
@@ -51,9 +52,9 @@ export async function GET(req: NextRequest) {
         });
     } catch (error: any) {
         console.error('Error searching receiving logs:', error);
-        return NextResponse.json({ 
-            error: 'Failed to search', 
-            details: error.message 
+        return NextResponse.json({
+            error: 'Failed to search',
+            details: error.message
         }, { status: 500 });
     }
-}
+}, { permission: 'receiving.view' });

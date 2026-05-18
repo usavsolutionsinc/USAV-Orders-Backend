@@ -9,8 +9,9 @@ import { getCurrentPSTDateKey } from '@/utils/date';
 import { createStationActivityLog } from '@/lib/station-activity';
 import { createAuditLog } from '@/lib/audit-logs';
 import { isTransientDbError, queryWithRetry } from '@/lib/db-retry';
+import { withAuth } from '@/lib/auth/withAuth';
 
-export async function GET(req: NextRequest) {
+export const GET = withAuth(async (req: NextRequest, ctx) => {
     const { searchParams } = new URL(req.url);
     const packerId = searchParams.get('packerId') || searchParams.get('packedBy');
     const testedBy = searchParams.get('testedBy');
@@ -470,25 +471,27 @@ export async function GET(req: NextRequest) {
         console.error('Error fetching packer logs:', error);
         return NextResponse.json({ error: 'Failed to fetch logs', details: error.message }, { status: 500 });
     }
-}
+}, { permission: 'packing.view' });
 
-export async function POST(req: NextRequest) {
+export const POST = withAuth(async (req: NextRequest, ctx) => {
     try {
         const body = await req.json();
+        // Server-trusted actor — body.packedBy is ignored.
+        const packedBy = ctx.staffId;
 
         const { shipmentId, scanRef } = await resolveShipmentId(body.shippingTrackingNumber || '');
         const newLog = await db.insert(packerLogs).values({
             shipmentId: shipmentId ?? undefined,
             scanRef: scanRef ?? undefined,
             trackingType: body.trackingType || 'ORDERS',
-            packedBy: body.packedBy,
+            packedBy,
         }).returning();
 
         const packerLogId = newLog[0]?.id;
         const salId = await createStationActivityLog(pool, {
             station: 'PACK',
             activityType: body.trackingType === 'ORDERS' ? 'PACK_COMPLETED' : 'PACK_SCAN',
-            staffId: body.packedBy ?? null,
+            staffId: packedBy,
             shipmentId: shipmentId ?? null,
             scanRef: scanRef ?? body.shippingTrackingNumber ?? null,
             packerLogId,
@@ -499,7 +502,7 @@ export async function POST(req: NextRequest) {
         });
         if ((body.trackingType || 'ORDERS') === 'ORDERS') {
             await createAuditLog(pool, {
-                actorStaffId: body.packedBy ?? null,
+                actorStaffId: packedBy,
                 source: 'api.packerlogs.post',
                 action: 'PACK_COMPLETED',
                 entityType: shipmentId ? 'SHIPMENT' : 'PACKER_LOG',
@@ -517,7 +520,7 @@ export async function POST(req: NextRequest) {
                         `INSERT INTO photos (entity_type, entity_id, url, taken_by_staff_id, photo_type)
                          VALUES ('PACKER_LOG', $1, $2, $3, 'box_label')
                          ON CONFLICT (entity_type, entity_id, url) DO NOTHING`,
-                        [packerLogId, url, body.packedBy || null]
+                        [packerLogId, url, packedBy]
                     );
                 }
             }
@@ -531,9 +534,9 @@ export async function POST(req: NextRequest) {
         console.error('Error creating packer log:', error);
         return NextResponse.json({ error: 'Failed to create log', details: error.message }, { status: 500 });
     }
-}
+}, { permission: 'packing.complete_order' });
 
-export async function PUT(req: NextRequest) {
+export const PUT = withAuth(async (req: NextRequest) => {
     try {
         const body = await req.json();
         const { id, ...updateData } = body;
@@ -558,9 +561,9 @@ export async function PUT(req: NextRequest) {
         console.error('Error updating packer log:', error);
         return NextResponse.json({ error: 'Failed to update log', details: error.message }, { status: 500 });
     }
-}
+}, { permission: 'packing.complete_order' });
 
-export async function DELETE(req: NextRequest) {
+export const DELETE = withAuth(async (req: NextRequest) => {
     const { searchParams } = new URL(req.url);
     const id = searchParams.get('id');
     const activityLogId = searchParams.get('activityLogId');
@@ -626,4 +629,4 @@ export async function DELETE(req: NextRequest) {
     } finally {
         client.release();
     }
-}
+}, { permission: 'packing.complete_order' });

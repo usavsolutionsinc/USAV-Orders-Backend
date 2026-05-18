@@ -1,11 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { runShippingSyncDueJob, type ShippingSyncDuePayload } from '@/lib/jobs/shipping-sync-due';
 import { logRouteMetric } from '@/lib/route-metrics';
+import { withAuth } from '@/lib/auth/withAuth';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 120;
 
-export async function POST(req: NextRequest) {
+// Manual trigger of the sync-due job. The QStash-scheduled version lives
+// at /api/qstash/shipping/sync-due and uses isQStashOrigin for HMAC.
+// This entry point is admin-only so a wandering user can't pin the queue.
+export const POST = withAuth(async (req: NextRequest) => {
   const startedAt = Date.now();
   let ok = false;
   try {
@@ -24,7 +28,7 @@ export async function POST(req: NextRequest) {
       ok,
     });
   }
-}
+}, { permission: 'admin.manage_features' });
 
 export async function GET() {
   return NextResponse.json(

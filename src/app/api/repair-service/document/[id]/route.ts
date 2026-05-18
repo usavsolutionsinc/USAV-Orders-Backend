@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import pool from '@/lib/db';
+import { requireRoutePerm } from '@/lib/auth/dynamic-route-guard';
 
 /**
  * GET /api/repair-service/document/[id] — Retrieve signed document for a repair
@@ -10,6 +11,8 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const gate = await requireRoutePerm(req, 'repair.view');
+    if (gate.denied) return gate.denied;
     const { id } = await params;
     const repairId = parseInt(id);
 

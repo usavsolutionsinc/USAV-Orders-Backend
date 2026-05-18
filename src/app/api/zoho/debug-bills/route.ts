@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { listBillsForPurchaseOrder, getPurchaseOrderById } from '@/lib/zoho';
+import { withAuth } from '@/lib/auth/withAuth';
 
 export const dynamic = 'force-dynamic';
 
@@ -10,7 +11,7 @@ export const dynamic = 'force-dynamic';
  *
  * GET /api/zoho/debug-bills?purchaseorder_id=...
  */
-export async function GET(request: NextRequest) {
+export const GET = withAuth(async (request: NextRequest) => {
   const purchaseorderId = (request.nextUrl.searchParams.get('purchaseorder_id') || '').trim();
   if (!purchaseorderId) {
     return NextResponse.json({ ok: false, error: 'purchaseorder_id required' }, { status: 400 });
@@ -41,4 +42,4 @@ export async function GET(request: NextRequest) {
           }
         : null,
   });
-}
+}, { permission: 'integrations.zoho' });

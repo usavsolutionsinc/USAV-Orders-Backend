@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import pool from '@/lib/db';
 import { upsertStaffGoalWithHistory } from '@/lib/neon/staff-goals-queries';
+import { withAuth } from '@/lib/auth/withAuth';
 
-export async function GET(req: NextRequest) {
+export const GET = withAuth(async (req: NextRequest) => {
   try {
     const { searchParams } = new URL(req.url);
     const staffIdParam = searchParams.get('staffId');
@@ -94,9 +95,9 @@ export async function GET(req: NextRequest) {
     console.error('Error fetching staff goals:', error);
     return NextResponse.json({ error: 'Failed to fetch staff goals', details: error.message }, { status: 500 });
   }
-}
+}, { permission: 'operations.view' });
 
-export async function PUT(req: NextRequest) {
+export const PUT = withAuth(async (req: NextRequest) => {
   try {
     const body = await req.json();
     const staffId = parseInt(String(body?.staffId || ''), 10);
@@ -119,4 +120,4 @@ export async function PUT(req: NextRequest) {
     console.error('Error updating staff goal:', error);
     return NextResponse.json({ error: 'Failed to update staff goal', details: error.message }, { status: 500 });
   }
-}
+}, { permission: 'admin.manage_staff' });

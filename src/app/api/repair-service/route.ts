@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { createCrudHandler, ApiError } from '@/lib/api';
+import { withAuth } from '@/lib/auth/withAuth';
 import {
   appendRepairStatusHistory,
   getAllRepairs,
@@ -97,4 +98,5 @@ handler.PATCH = async function PATCH(req) {
   return response;
 };
 
-export const { GET, PATCH } = handler;
+export const GET = withAuth(handler.GET as any, { permission: 'repair.view' });
+export const PATCH = withAuth(handler.PATCH as any, { permission: 'repair.mark_repaired' });

@@ -13,7 +13,7 @@ import { FbaBoardDetailPanel } from '@/components/fba/FbaBoardDetailPanel';
 import StationFba from '@/components/station/StationFba';
 import { stationThemeColors } from '@/utils/staff-colors';
 import { useStationTheme } from '@/hooks/useStationTheme';
-import { usePersistedStaffId } from '@/hooks/usePersistedStaffId';
+import { useAuth } from '@/contexts/AuthContext';
 import { useFbaRealtimeInvalidation } from '@/hooks/useFbaRealtimeInvalidation';
 import { getCurrentPSTDateKey, toPSTDateKey } from '@/utils/date';
 import { USAV_REFRESH_DATA, FBA_PRINT_SHIPPED, FBA_BOARD_INJECT_ITEM, FBA_BOARD_REMOVE_ITEMS } from '@/lib/fba/events';
@@ -64,7 +64,8 @@ function FbaPageContent() {
   const refreshTrigger = Number(searchParams.get('r') || 0);
   const activeTab = resolveActiveTab(searchParams.get('tab'));
 
-  const [staffId] = usePersistedStaffId();
+  const { user } = useAuth();
+  const staffId = user?.staffId ?? 0;
   const { theme: stationTheme } = useStationTheme({ staffId });
 
   // ── Combine data ─────────────────────────────────────────────────────

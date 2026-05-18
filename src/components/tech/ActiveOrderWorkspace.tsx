@@ -3,12 +3,16 @@
 import { motion } from 'framer-motion';
 import { framerPresence, framerTransition } from '@/design-system/foundations/motion-framer';
 import ActiveStationOrderCard from '@/components/station/ActiveStationOrderCard';
-import { Barcode, MapPin, Package, Settings, X } from '@/components/Icons';
+import EmbeddedBrowser from '@/components/EmbeddedBrowser';
+import { Barcode, ExternalLink, MapPin, Package, Settings, X } from '@/components/Icons';
 import type {
   ActiveStationOrder,
   ResolvedProductManual,
 } from '@/hooks/useStationTestingController';
 import { stationThemeColors, getStaffThemeById } from '@/utils/staff-colors';
+import { getExternalUrlByItemNumber } from '@/hooks/useExternalItemUrl';
+import { isElectron } from '@/utils/isElectron';
+import { looksLikeFnsku } from '@/lib/scan-resolver';
 
 interface ActiveOrderWorkspaceProps {
   activeOrder: ActiveStationOrder;
@@ -18,6 +22,13 @@ interface ActiveOrderWorkspaceProps {
   onClose: () => void;
   onViewManual?: () => void;
   onRemoveSerial?: (serial: string, index: number) => Promise<void> | void;
+  /**
+   * `active` — order has been scanned and is in progress (default).
+   * `preview` — user clicked an Up Next card to inspect it; nothing has been
+   *  scanned yet. Header changes to "Preview" and the hint strip prompts the
+   *  tech to scan to start.
+   */
+  mode?: 'active' | 'preview';
 }
 
 function getVariantIcon(activeOrder: ActiveStationOrder) {
@@ -28,6 +39,28 @@ function getVariantIcon(activeOrder: ActiveStationOrder) {
     return { Icon: Settings, tint: 'text-amber-600', label: 'Repair' };
   }
   return { Icon: MapPin, tint: 'text-blue-600', label: 'Order' };
+}
+
+/**
+ * Mirrors `externalListingUrl` from {@link ActiveStationOrderCard}: FBA → Amazon
+ * keyword search, Repair → external URL by SKU, otherwise → external URL by
+ * item number.
+ */
+function getListingUrl(activeOrder: ActiveStationOrder): string | null {
+  const source = activeOrder.sourceType;
+  if (
+    source === 'fba' ||
+    String(activeOrder.orderId || '').toUpperCase() === 'FNSKU' ||
+    looksLikeFnsku(String(activeOrder.fnsku || ''))
+  ) {
+    const fnsku = String(activeOrder.fnsku || '').trim();
+    if (fnsku) return `https://www.amazon.com/s?k=${encodeURIComponent(fnsku)}`;
+    return null;
+  }
+  if (source === 'repair' || /^RS-/i.test(String(activeOrder.orderId || ''))) {
+    return getExternalUrlByItemNumber(activeOrder.sku);
+  }
+  return getExternalUrlByItemNumber(activeOrder.itemNumber);
 }
 
 /**
@@ -46,11 +79,18 @@ export function ActiveOrderWorkspace({
   onClose,
   onViewManual,
   onRemoveSerial,
+  mode = 'active',
 }: ActiveOrderWorkspaceProps) {
   const { Icon, tint, label } = getVariantIcon(activeOrder);
   const activeColorText = stationThemeColors[getStaffThemeById(parseInt(techId, 10))].text;
   const trackingDisplay = (activeOrder.tracking || '').trim() || '—';
   const orderIdDisplay = (activeOrder.orderId || '').trim() || trackingDisplay;
+  const isPreview = mode === 'preview';
+  const stateLabel = isPreview ? 'Preview' : 'Active';
+  const listingUrl = getListingUrl(activeOrder);
+  // <webview> only works in Electron; for the browser build we degrade to a
+  // "open externally" affordance so the section still has value.
+  const canEmbedListing = listingUrl != null && isElectron();
 
   return (
     <motion.div
@@ -69,7 +109,7 @@ export function ActiveOrderWorkspace({
           </span>
           <div className="flex min-w-0 flex-col leading-tight">
             <span className="text-[9px] font-black uppercase tracking-widest text-gray-400">
-              {label} · Active
+              {label} · {stateLabel}
             </span>
             <span className="truncate text-[13px] font-black tracking-tight text-gray-900" title={orderIdDisplay}>
               {orderIdDisplay}
@@ -94,9 +134,11 @@ export function ActiveOrderWorkspace({
         </div>
       </div>
 
-      {/* ── Scrollable workspace body ── */}
-      <div className="min-h-0 flex-1 overflow-y-auto">
-        <div className="mx-auto w-full max-w-2xl space-y-3 px-4 py-4">
+      {/* ── Workspace body — card column on top, embedded listing fills the
+            remaining vertical space below. On Electron the listing is a live
+            <webview>; on web we fall back to an external-open card. ── */}
+      <div className="flex min-h-0 flex-1 flex-col">
+        <div className="mx-auto w-full max-w-2xl space-y-3 px-4 pt-4 pb-3">
           <ActiveStationOrderCard
             activeOrder={activeOrder}
             activeColorTextClass={activeColorText}
@@ -106,17 +148,57 @@ export function ActiveOrderWorkspace({
             onRemoveSerial={onRemoveSerial}
           />
 
-          {/* ── Hint strip — keyboard / scanner guidance ── */}
+          {/* ── Hint strip — different ask depending on workspace state ── */}
           <div className="rounded-2xl border border-dashed border-gray-200 bg-white/60 p-3">
             <p className="text-[10px] font-black uppercase tracking-widest text-gray-400">
               Next step
             </p>
             <p className="mt-1 text-[12px] font-semibold text-gray-600 leading-snug">
-              Scan a serial number from the sidebar. Each scan lands here as it&rsquo;s
-              recorded — the workspace closes automatically once the order is complete.
+              {isPreview
+                ? 'Scan the tracking label or click Start on the sidebar card to begin testing this order.'
+                : 'Scan a serial number from the sidebar. Each scan lands here as it’s recorded — the workspace closes automatically once the order is complete.'}
             </p>
           </div>
         </div>
+
+        {/* ── Embedded listing — fills the remaining height. The tech can
+              browse the marketplace page inline without leaving the workspace. ── */}
+        {listingUrl ? (
+          <div className="flex min-h-0 flex-1 flex-col border-t border-gray-200 bg-white">
+            <div className="flex items-center justify-between gap-2 border-b border-gray-100 px-4 py-2">
+              <div className="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-gray-500">
+                <ExternalLink className="h-3.5 w-3.5 text-blue-500" />
+                Listing
+              </div>
+              <button
+                type="button"
+                onClick={() => window.open(listingUrl, '_blank', 'noopener,noreferrer')}
+                className="text-[10px] font-black uppercase tracking-widest text-blue-600 hover:text-blue-800"
+              >
+                Open externally
+              </button>
+            </div>
+            {canEmbedListing ? (
+              <div className="min-h-0 flex-1">
+                <EmbeddedBrowser url={listingUrl} />
+              </div>
+            ) : (
+              <div className="flex flex-1 items-center justify-center px-6 py-10 text-center">
+                <p className="text-[12px] font-semibold text-gray-500">
+                  Listing preview is only available in the desktop app. Use{' '}
+                  <button
+                    type="button"
+                    onClick={() => window.open(listingUrl, '_blank', 'noopener,noreferrer')}
+                    className="text-blue-600 underline-offset-2 hover:underline"
+                  >
+                    Open externally
+                  </button>{' '}
+                  to view the page in a browser tab.
+                </p>
+              </div>
+            )}
+          </div>
+        ) : null}
       </div>
     </motion.div>
   );

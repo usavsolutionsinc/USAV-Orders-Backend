@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import pool from '@/lib/db';
+import { requireRoutePerm } from '@/lib/auth/dynamic-route-guard';
 
 /**
  * GET /api/fba/board/:fnsku/entries
@@ -9,9 +10,11 @@ import pool from '@/lib/db';
  * this FNSKU was planned, its qty, and when it was added.
  */
 export async function GET(
-  _request: NextRequest,
+  request: NextRequest,
   { params }: { params: Promise<{ fnsku: string }> },
 ) {
+  const gate = await requireRoutePerm(request, 'fba.view');
+  if (gate.denied) return gate.denied;
   const { fnsku } = await params;
   const normalized = fnsku.trim().toUpperCase();
 

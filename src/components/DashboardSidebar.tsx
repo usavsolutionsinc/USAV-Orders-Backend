@@ -10,7 +10,6 @@ import { HorizontalButtonSlider, type HorizontalSliderItem } from '@/components/
 import { sectionLabel } from '@/design-system/tokens/typography/presets';
 import { AdminSidebar } from '@/components/admin/AdminSidebar';
 import { ADMIN_SECTION_OPTIONS, type AdminSection } from '@/components/admin/admin-sections';
-import BarcodeSidebar from '@/components/BarcodeSidebar';
 import { SkuStockSidebarPanel } from '@/components/sidebar/SkuStockSidebarPanel';
 import { InventorySidebarPanel } from '@/components/sidebar/InventorySidebarPanel';
 import { QuarterSidebar } from '@/components/QuarterSelector';
@@ -32,6 +31,7 @@ import { ReplenishSidebarPanel } from '@/components/sidebar/ReplenishSidebarPane
 import { AuditLogSidebarPanel } from '@/components/sidebar/AuditLogSidebarPanel';
 import { useUIMode } from '@/design-system/providers/UIModeProvider';
 import { useAuth } from '@/contexts/AuthContext';
+import { getStaffColorHex } from '@/utils/staff-colors';
 import {
   getSidebarRouteKey,
   getSidebarNavItems,
@@ -56,14 +56,17 @@ const DASHBOARD_VIEW_ITEMS: HorizontalSliderItem[] = [
 function SignedInChip({ user }: { user: NonNullable<ReturnType<typeof useAuth>['user']> }) {
   const { signOut } = useAuth();
   const [staffName, setStaffName] = useState<string>('You');
+  const [staffColorHex, setStaffColorHex] = useState<string | null>(null);
   const role = (user.role || '').replace(/_/g, ' ');
 
   useEffect(() => {
     let cancelled = false;
     fetch(`/api/staff?id=${user.staffId}`, { cache: 'no-store' })
       .then((r) => (r.ok ? r.json() : null))
-      .then((data: { staff?: { name?: string } } | null) => {
-        if (!cancelled && data?.staff?.name) setStaffName(data.staff.name);
+      .then((data: { staff?: { name?: string; color_hex?: string | null } } | null) => {
+        if (cancelled || !data?.staff) return;
+        if (data.staff.name) setStaffName(data.staff.name);
+        if (data.staff.color_hex) setStaffColorHex(data.staff.color_hex);
       })
       .catch(() => { /* fall back to "You" */ });
     return () => { cancelled = true; };
@@ -73,9 +76,14 @@ function SignedInChip({ user }: { user: NonNullable<ReturnType<typeof useAuth>['
     .split(/\s+/).filter(Boolean).slice(0, 2)
     .map((p) => p[0]?.toUpperCase() ?? '').join('');
 
+  const avatarBg = getStaffColorHex({ id: user.staffId, color_hex: staffColorHex });
+
   return (
     <div className="flex items-center gap-2 rounded-xl border border-gray-200 bg-gray-50 px-2.5 py-2">
-      <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-gray-900 text-[11px] font-bold text-white">
+      <div
+        className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full text-[11px] font-bold text-white"
+        style={{ backgroundColor: avatarBg }}
+      >
         {initials || '?'}
       </div>
       <div className="min-w-0 flex-1">
@@ -94,20 +102,13 @@ function SignedInChip({ user }: { user: NonNullable<ReturnType<typeof useAuth>['
   );
 }
 
-function getPathStaffId(pathname: string | null, segment: 'tech' | 'packer'): string | null {
-  if (!pathname) return null;
-  const parts = pathname.split('/').filter(Boolean);
-  if (parts[0] !== segment) return null;
-  const value = String(parts[1] || '').trim();
-  return /^\d+$/.test(value) ? value : null;
-}
 
 function getSidebarTitle(pathname: string | null) {
   const routeKey = getSidebarRouteKey(pathname);
   const titles: Record<string, string> = {
-    dashboard: 'Dashboard',
+    dashboard: 'Orders / Shipping',
     operations: 'Operations',
-    fba: 'FBA',
+    fba: 'Amazon FBA',
     receiving: 'Receiving',
     repair: 'Repair',
     'walk-in': 'Walk-In',
@@ -115,8 +116,8 @@ function getSidebarTitle(pathname: string | null) {
     replenish: 'Replenish',
     'sku-stock': 'Sku Stock',
     inventory: 'Inventory',
-    tech: 'Technicians',
-    packer: 'Packers',
+    tech: 'Testing',
+    packer: 'Packing',
     support: 'Support',
     'previous-quarters': 'Quarters',
     admin: 'Admin',
@@ -234,6 +235,7 @@ function SidebarContextPanel({ onBackToAppNav }: { onBackToAppNav?: () => void }
   const pathname = usePathname();
   const router = useRouter();
   const searchParams = useSearchParams();
+  const { user } = useAuth();
   const routeKey = getSidebarRouteKey(pathname);
   const dashboardSearch = useDashboardSearchController();
 
@@ -390,7 +392,8 @@ function SidebarContextPanel({ onBackToAppNav }: { onBackToAppNav?: () => void }
   if (routeKey === 'manuals') return <SkuCatalogSidebar />;
 
   if (routeKey === 'tech') {
-    const techId = searchParams.get('staffId') || getPathStaffId(pathname, 'tech') || '1';
+    // Identity from the verified session cookie. Proxy guarantees user.
+    const techId = String(user?.staffId ?? 0);
     return (
       <TechSidebarPanel
         techId={techId}

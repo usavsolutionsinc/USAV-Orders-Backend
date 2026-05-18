@@ -1,11 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
 import pool from '@/lib/db';
+import { withAuth } from '@/lib/auth/withAuth';
 
 /**
  * Migration endpoint to change parts_needed to process column
  * Run once: POST /api/migrate-process
+ * Break-glass — admin-only + step-up.
  */
-export async function POST(req: NextRequest) {
+export const POST = withAuth(async (_req: NextRequest) => {
   try {
     console.log('Starting migration: parts_needed -> process');
 
@@ -86,4 +88,4 @@ export async function POST(req: NextRequest) {
       details: error.message,
     }, { status: 500 });
   }
-}
+}, { permission: 'admin.manage_features', stepUp: true });

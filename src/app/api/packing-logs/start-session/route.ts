@@ -3,10 +3,10 @@ import pool from '@/lib/db';
 import { db } from '@/lib/drizzle/db';
 import { packerLogs } from '@/lib/drizzle/schema';
 import { normalizeTrackingCanonical, normalizeTrackingKey18 } from '@/lib/tracking-format';
+import { withAuth } from '@/lib/auth/withAuth';
 
 type StartSessionRequest = {
   trackingNumber: string;
-  packedBy: number;
   trackingType?: 'ORDERS' | 'SKU' | 'FBA' | 'FNSKU';
   scanRef?: string;
 };
@@ -17,14 +17,16 @@ type StartSessionRequest = {
  * Looks up the shipment_id from a tracking number, inserts a packer_logs row,
  * and returns the packerLogId so the mobile app can associate photos with it.
  */
-export async function POST(req: NextRequest) {
+export const POST = withAuth(async (req: NextRequest, ctx) => {
   try {
     const body: StartSessionRequest = await req.json();
-    const { trackingNumber, packedBy, trackingType = 'ORDERS', scanRef } = body;
+    const { trackingNumber, trackingType = 'ORDERS', scanRef } = body;
+    // Server-trusted actor.
+    const packedBy = ctx.staffId;
 
-    if (!trackingNumber || !packedBy) {
+    if (!trackingNumber) {
       return NextResponse.json(
-        { success: false, error: 'trackingNumber and packedBy are required' },
+        { success: false, error: 'trackingNumber is required' },
         { status: 400 }
       );
     }
@@ -84,4 +86,4 @@ export async function POST(req: NextRequest) {
       { status: 500 }
     );
   }
-}
+}, { permission: 'packing.start_session' });

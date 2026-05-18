@@ -1,11 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import pool from '@/lib/db';
+import { withAuth } from '@/lib/auth/withAuth';
 
 /**
  * GET /api/fba/fnskus/search?q=<query>&limit=20
  * Search the fba_fnskus catalog by fnsku, asin, sku, or product_title.
  */
-export async function GET(request: NextRequest) {
+export const GET = withAuth(async (request: NextRequest) => {
   const { searchParams } = request.nextUrl;
   const q = String(searchParams.get('q') || '').trim();
   const limit = Math.min(40, Math.max(1, Number(searchParams.get('limit') || 20)));
@@ -31,4 +32,4 @@ export async function GET(request: NextRequest) {
     console.error('[GET /api/fba/fnskus/search]', error);
     return NextResponse.json({ success: false, error: error?.message }, { status: 500 });
   }
-}
+}, { permission: 'fba.view' });

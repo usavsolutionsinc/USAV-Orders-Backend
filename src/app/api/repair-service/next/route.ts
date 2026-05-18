@@ -3,6 +3,7 @@ import pool from '@/lib/db';
 import { normalizePSTTimestamp } from '@/utils/date';
 import { parsePositiveInt } from '@/utils/number';
 import { isTransientDbError, queryWithRetry } from '@/lib/db-retry';
+import { withAuth } from '@/lib/auth/withAuth';
 
 export interface RepairQueueItem {
   kind: 'REPAIR';
@@ -38,10 +39,12 @@ const REPAIR_OUTCOME_SELECT = `wa.repair_outcome AS "repairOutcome"`;
  * assigned_tech_id IS NULL).  Uses LEFT JOIN so repairs without any
  * work_assignment row are included.
  */
-export async function GET(req: NextRequest) {
+export const GET = withAuth(async (req: NextRequest, ctx) => {
   try {
     const techIdParam = req.nextUrl.searchParams.get('techId');
-    const techId = techIdParam ? parsePositiveInt(techIdParam) : null;
+    // Self-lookup defaults to ctx.staffId; admin can override via ?techId=
+    const isAdminOverride = techIdParam && ctx.permissions.has('admin.view_logs');
+    const techId = isAdminOverride && techIdParam ? parsePositiveInt(techIdParam) : ctx.staffId;
 
     if (techIdParam && techId === null) {
       console.warn('[repair-service/next] invalid techId param, ignoring:', techIdParam);
@@ -195,4 +198,4 @@ export async function GET(req: NextRequest) {
     console.error('GET /api/repair-service/next error:', error);
     return NextResponse.json({ error: message }, { status: 500 });
   }
-}
+}, { permission: 'repair.view' });

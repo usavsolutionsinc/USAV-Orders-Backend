@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import pool from '@/lib/db';
+import { withAuth } from '@/lib/auth/withAuth';
 
 /**
  * GET /api/fba/shipments/active-with-details
@@ -15,7 +16,7 @@ import pool from '@/lib/db';
  *
  * Now returns everything in a single round-trip.
  */
-export async function GET(request: NextRequest) {
+export const GET = withAuth(async (request: NextRequest) => {
   try {
     const { searchParams } = new URL(request.url);
     const shippedLimit = Math.min(Math.max(Number(searchParams.get('shippedLimit')) || 10, 1), 50);
@@ -181,4 +182,4 @@ export async function GET(request: NextRequest) {
       { status: 500 }
     );
   }
-}
+}, { permission: 'fba.view' });

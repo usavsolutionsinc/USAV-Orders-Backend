@@ -1,11 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import pool from '@/lib/db';
+import { withAuth } from '@/lib/auth/withAuth';
 
 // ── GET /api/fba/fnskus/validate?fnskus=X00XXXXXXX,X00YYYYYYY ─────────────────
 // Validates a comma-separated list of FNSKUs against the fba_fnskus table.
 // Optional: `persist_missing=1` upserts stub catalog rows for unknown FNSKUs so
 // metadata can be filled in later, while still returning them as not ready.
-export async function GET(request: NextRequest) {
+export const GET = withAuth(async (request: NextRequest) => {
   try {
     const { searchParams } = new URL(request.url);
     const raw = String(searchParams.get('fnskus') || '').trim();
@@ -103,4 +104,4 @@ export async function GET(request: NextRequest) {
       { status: 500 }
     );
   }
-}
+}, { permission: 'fba.view' });

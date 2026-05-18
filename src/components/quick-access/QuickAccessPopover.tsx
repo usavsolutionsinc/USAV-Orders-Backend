@@ -1,8 +1,9 @@
 'use client';
 
 import Link from 'next/link';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Search, X } from '@/components/Icons';
 import { ActionsSection } from './ActionsSection';
 import { CommonPagesBar } from './CommonPagesBar';
@@ -13,7 +14,8 @@ import { useQuickAccess } from '@/lib/quick-access/use-quick-access';
 import { useAuth } from '@/contexts/AuthContext';
 import { useStaffSwitcher } from '@/contexts/StaffSwitcherContext';
 import { useUIMode } from '@/design-system/providers/UIModeProvider';
-import { getStaffThemeById, stationThemeColors } from '@/utils/staff-colors';
+import { getStaffColorHex } from '@/utils/staff-colors';
+import { useStaffColorVersion } from '@/contexts/StaffColorsProvider';
 
 function initials(name: string): string {
   return name.split(/\s+/).filter(Boolean).slice(0, 2).map((p) => p[0]?.toUpperCase() ?? '').join('');
@@ -39,6 +41,11 @@ export function QuickAccessPopover({ onClose, onOpenHistoryPopover }: QuickAcces
   const { isMobile } = useUIMode();
   const showSwitchStaff = settings.actions.switchStaff !== false; // default true
 
+  const queryClient = useQueryClient();
+  // Subscribes to the module-level color cache. When self or admin updates
+  // a color, this hook bumps and the avatar + wheel re-render with the new hex.
+  useStaffColorVersion();
+
   const [staffName, setStaffName] = useState<string>('');
   useEffect(() => {
     if (!user) { setStaffName(''); return; }
@@ -52,8 +59,27 @@ export function QuickAccessPopover({ onClose, onOpenHistoryPopover }: QuickAcces
     return () => { cancelled = true; };
   }, [user]);
 
-  const theme = user ? getStaffThemeById(user.staffId) : null;
-  const sc = theme ? stationThemeColors[theme] : null;
+  const staffColorHex = user ? getStaffColorHex({ id: user.staffId }) : '#10b981';
+
+  // Self-serve color update — staff can change their own identity color from
+  // the FAB without admin access. PUT /api/staff with own id + new hex;
+  // invalidate ['staff'] so StaffColorsProvider refreshes the cache → every
+  // staff-colored surface in the app re-renders.
+  const updateColorMutation = useMutation({
+    mutationFn: async (hex: string) => {
+      if (!user) return null;
+      const r = await fetch('/api/staff', {
+        method: 'PUT',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ id: user.staffId, color_hex: hex }),
+      });
+      if (!r.ok) throw new Error('Failed to update color');
+      return r.json();
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['staff'] });
+    },
+  });
 
   const handleOpenCommandBar = () => {
     onClose();
@@ -115,11 +141,14 @@ export function QuickAccessPopover({ onClose, onOpenHistoryPopover }: QuickAcces
       )}
 
       {/* Staff sign-in section — moved to the bottom, just above the footer. */}
-      {user && sc ? (
+      {user ? (
         <div className="flex shrink-0 items-center gap-3 border-t border-gray-100 bg-gray-50/60 px-4 py-3">
-          <div className={`flex h-10 w-10 items-center justify-center rounded-full ${sc.bg} text-[12px] font-bold text-white ring-4 ring-white`}>
-            {staffName ? initials(staffName) : '·'}
-          </div>
+          <SelfColorWheel
+            value={staffColorHex}
+            initials={staffName ? initials(staffName) : '·'}
+            disabled={updateColorMutation.isPending}
+            onChange={(hex) => updateColorMutation.mutate(hex)}
+          />
           <div className="min-w-0 flex-1">
             <div className="truncate text-[13px] font-semibold text-gray-900">{staffName || `Staff #${user.staffId}`}</div>
             <div className="truncate text-[10px] font-medium uppercase tracking-[0.14em] text-gray-500">{user.role.replace(/_/g, ' ')}</div>
@@ -172,3 +201,64 @@ export function QuickAccessPopover({ onClose, onOpenHistoryPopover }: QuickAcces
 }
 
 export default QuickAccessPopover;
+
+/**
+ * Avatar circle that doubles as a color-wheel trigger for the signed-in
+ * staff. Tapping anywhere on the avatar opens the native OS color picker
+ * (which presents a wheel/spectrum) — on change the parent mutation persists
+ * to /api/staff so all surfaces (sidebar, picker, FAB) snap to the new hue.
+ *
+ * A conic-gradient hue ring around the avatar hints that it's interactive,
+ * without dominating the chrome.
+ */
+function SelfColorWheel({
+  value, initials, disabled, onChange,
+}: {
+  value: string;
+  initials: string;
+  disabled?: boolean;
+  onChange: (hex: string) => void;
+}) {
+  const inputRef = useRef<HTMLInputElement | null>(null);
+  return (
+    <button
+      type="button"
+      disabled={disabled}
+      onClick={() => inputRef.current?.click()}
+      aria-label={`Change my color (current ${value})`}
+      title="Tap to change your color"
+      className="group relative flex h-14 w-14 flex-shrink-0 items-center justify-center rounded-full p-[5px] shadow-lg shadow-gray-900/15 transition hover:scale-105 hover:shadow-xl focus:outline-none focus:ring-2 focus:ring-gray-900/40 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60"
+      style={{
+        background:
+          'conic-gradient(from 90deg, #ef4444, #f59e0b, #eab308, #22c55e, #10b981, #06b6d4, #3b82f6, #6366f1, #a855f7, #ec4899, #ef4444)',
+      }}
+    >
+      {/* Inner avatar — white ring separates it from the conic hue ring */}
+      <span
+        className="relative flex h-full w-full items-center justify-center rounded-full text-[14px] font-bold text-white ring-2 ring-white"
+        style={{ backgroundColor: value }}
+      >
+        {initials}
+        {/* Tiny pencil hint in the corner — appears on hover, hints "editable" */}
+        <span
+          className="absolute -right-0.5 -bottom-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-white text-gray-700 shadow ring-1 ring-gray-200 transition group-hover:scale-110"
+          aria-hidden
+        >
+          <svg className="h-2.5 w-2.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M12 20h9" />
+            <path d="M16.5 3.5a2.121 2.121 0 1 1 3 3L7 19l-4 1 1-4 12.5-12.5z" />
+          </svg>
+        </span>
+      </span>
+      <input
+        ref={inputRef}
+        type="color"
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        disabled={disabled}
+        className="absolute inset-0 cursor-pointer opacity-0"
+        aria-hidden
+      />
+    </button>
+  );
+}

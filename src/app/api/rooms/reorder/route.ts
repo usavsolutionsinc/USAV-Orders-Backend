@@ -1,11 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { reorderRooms } from '@/lib/neon/location-queries';
+import { withAuth } from '@/lib/auth/withAuth';
 
 /**
  * POST /api/rooms/reorder
  * Body: { order: string[] }   — room names, in the new display order.
  */
-export async function POST(req: NextRequest) {
+export const POST = withAuth(async (req: NextRequest) => {
   try {
     const body = await req.json().catch(() => ({}));
     const order = Array.isArray(body?.order) ? body.order.map(String) : null;
@@ -21,4 +22,4 @@ export async function POST(req: NextRequest) {
     console.error('[POST /api/rooms/reorder] error:', err);
     return NextResponse.json({ error: 'Failed', details: err?.message }, { status: 500 });
   }
-}
+}, { permission: 'sku_stock.manage' });

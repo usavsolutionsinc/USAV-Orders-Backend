@@ -2,11 +2,12 @@ import { NextRequest, NextResponse } from 'next/server';
 import { isAllowedAdminOrigin } from '@/lib/security/allowed-origin';
 import { enqueueQStashJson, getQStashResultIdentifier } from '@/lib/qstash';
 import { orderSyncService, type ChannelOrder } from '@/services/OrderSyncService';
+import { withAuth } from '@/lib/auth/withAuth';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 300;
 
-export async function POST(request: NextRequest) {
+export const POST = withAuth(async (request: NextRequest) => {
   if (!isAllowedAdminOrigin(request)) {
     return NextResponse.json({ success: false, error: 'Origin not allowed' }, { status: 403 });
   }
@@ -40,4 +41,4 @@ export async function POST(request: NextRequest) {
       { status: 500 }
     );
   }
-}
+}, { permission: 'integrations.zoho' });

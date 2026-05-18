@@ -3,17 +3,16 @@ import pool from '@/lib/db';
 import { normalizeTrackingCanonical, normalizeTrackingKey18 } from '@/lib/tracking-format';
 import { upsertOpenOrderException, type ExceptionSourceStation } from '@/lib/orders-exceptions';
 import { checkRateLimit } from '@/lib/api-guard';
+import { withAuth } from '@/lib/auth/withAuth';
 
 type ScanTrackingRequest = {
   tracking?: string;
   sourceStation?: ExceptionSourceStation;
-  staffId?: number | null;
-  staffName?: string | null;
   exceptionReason?: string;
   notes?: string | null;
 };
 
-export async function POST(req: NextRequest) {
+export const POST = withAuth(async (req: NextRequest, ctx) => {
   try {
     const rate = checkRateLimit({
       headers: req.headers,
@@ -42,8 +41,8 @@ export async function POST(req: NextRequest) {
 
     const rawTracking = String(body.tracking || '').trim();
     const sourceStation = body.sourceStation || 'mobile';
-    const staffId = body.staffId ?? null;
-    const staffName = body.staffName ?? null;
+    const staffId = ctx.staffId;
+    const staffName = null;
     const exceptionReason = String(body.exceptionReason || 'not_found').trim() || 'not_found';
     const notes = body.notes ?? null;
 
@@ -165,4 +164,4 @@ export async function POST(req: NextRequest) {
       { status: 500 }
     );
   }
-}
+}, { permission: 'orders.view' });

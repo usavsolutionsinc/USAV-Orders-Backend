@@ -1,7 +1,7 @@
 'use client';
 
 import { Suspense } from 'react';
-import SkuBrowser from '@/components/sku/SkuBrowser';
+import { SkuStockWorkspace } from '@/components/sku/SkuStockWorkspace';
 import { SkuStockSidebarPanel } from '@/components/sidebar/SkuStockSidebarPanel';
 import { RouteShell } from '@/design-system/components/RouteShell';
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
@@ -10,7 +10,7 @@ function SkuStockPageContent() {
     return (
         <RouteShell
             actions={<SkuStockSidebarPanel />}
-            history={<SkuBrowser />}
+            history={<SkuStockWorkspace />}
         />
     );
 }

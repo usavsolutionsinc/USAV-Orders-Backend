@@ -1,8 +1,11 @@
 import { NextResponse } from 'next/server';
 import pool from '@/lib/db';
 import { formatPSTTimestamp } from '@/utils/date';
+import { withAuth } from '@/lib/auth/withAuth';
 
-export async function POST() {
+// Break-glass schema bootstrap via the Drizzle-aware path. Admin-only +
+// step-up required.
+export const POST = withAuth(async () => {
     const client = await pool.connect();
     
     try {
@@ -389,10 +392,10 @@ export async function POST() {
     } finally {
         client.release();
     }
-}
+}, { permission: 'admin.manage_features', stepUp: true });
 
-// GET endpoint to verify schema
-export async function GET() {
+// GET endpoint to verify schema — exposes schema metadata, so admin-gated.
+export const GET = withAuth(async () => {
     try {
         const result = await pool.query(`
             SELECT table_name 
@@ -429,4 +432,4 @@ export async function GET() {
             database_url_configured: !!process.env.DATABASE_URL,
         }, { status: 500 });
     }
-}
+}, { permission: 'admin.view' });

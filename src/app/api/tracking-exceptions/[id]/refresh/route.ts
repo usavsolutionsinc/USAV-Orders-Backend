@@ -9,6 +9,7 @@ import { importZohoPurchaseOrderToReceiving } from '@/lib/zoho-receiving-sync';
 import { invalidateCacheTags } from '@/lib/cache/upstash-cache';
 import { publishReceivingLogChanged } from '@/lib/realtime/publish';
 import { resolveTrackingException } from '@/lib/tracking-exceptions';
+import { requireRoutePerm } from '@/lib/auth/dynamic-route-guard';
 
 interface ExceptionRow {
   id: number;
@@ -32,9 +33,11 @@ interface ExceptionRow {
  * handled by syncOrderExceptionsToOrders in src/lib/orders-exceptions.ts.
  */
 export async function POST(
-  _request: NextRequest,
+  request: NextRequest,
   context: { params: Promise<{ id: string }> },
 ) {
+  const gate = await requireRoutePerm(request, 'receiving.mark_received');
+  if (gate.denied) return gate.denied;
   const { id: idParam } = await context.params;
   const id = Number.parseInt(idParam, 10);
   if (!Number.isFinite(id) || id <= 0) {

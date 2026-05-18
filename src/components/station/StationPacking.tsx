@@ -75,7 +75,8 @@ export default function StationPacking({
         const res = await fetch('/api/fba/items/scan', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ fnsku: scan, staff_id: Number(userId), station: 'PACK_STATION' }),
+          // staff_id is server-derived from the session cookie now.
+          body: JSON.stringify({ fnsku: scan, station: 'PACK_STATION' }),
         });
         const data = await res.json();
 

@@ -10,6 +10,7 @@ import {
 } from '@/lib/work-assignments/order-assignment-snapshot';
 import { clearReplenishmentForOrder, ensureReplenishmentForOrder } from '@/lib/replenishment';
 import { detectCarrier, normalizeTrackingNumber } from '@/lib/shipping/normalize';
+import { withAuth } from '@/lib/auth/withAuth';
 
 type QueryClient = {
   query: PoolClient['query'];
@@ -645,7 +646,7 @@ async function deleteShipmentTrackingLink(
  * Assigns tech and/or packer to one or more orders via work_assignments.
  * Also handles non-assignment order field updates (ship_by_date, notes, etc.).
  */
-export async function POST(req: NextRequest) {
+export const POST = withAuth(async (req: NextRequest) => {
   try {
     const body = await req.json();
     const {
@@ -949,4 +950,4 @@ export async function POST(req: NextRequest) {
       { status }
     );
   }
-}
+}, { permission: 'orders.create' });

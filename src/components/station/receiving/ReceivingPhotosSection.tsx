@@ -27,19 +27,31 @@ export function ReceivingPhotosSection({
   sectionTitle = 'Receiving photos',
   launcherTitle = 'View Receiving Photos',
 }: ReceivingPhotosSectionProps) {
-  const { data: photos = [], isFetching } = useQuery<ReceivingPhoto[]>({
+  const { data: photos, isFetching } = useQuery<ReceivingPhoto[]>({
     queryKey: ['receiving-photos', receivingId],
     queryFn: async () => {
       const res = await fetch(`/api/receiving-photos?receivingId=${receivingId}`);
       if (!res.ok) return [];
-      const data = await res.json();
-      return Array.isArray(data.photos) ? data.photos : [];
+      const data = await res.json().catch(() => null);
+      // Some routes return the array directly, others wrap it as `{ photos }`,
+      // and stale cached entries may have been a different shape. Normalize
+      // here so the consumer never has to type-check `photos.map`.
+      if (Array.isArray(data)) return data as ReceivingPhoto[];
+      if (data && Array.isArray((data as { photos?: unknown }).photos)) {
+        return (data as { photos: ReceivingPhoto[] }).photos;
+      }
+      return [];
     },
     refetchInterval: 15_000,
     staleTime: 10_000,
   });
 
-  const urls = photos.map((p) => p.photoUrl).filter(Boolean);
+  // Defensive — `photos` should always be an array per the queryFn, but a
+  // stale React Query cache entry from an older shape could be non-array
+  // here. Guard against the crash; the queryFn will replace the cache on
+  // its next run.
+  const photosArr: ReceivingPhoto[] = Array.isArray(photos) ? photos : [];
+  const urls = photosArr.map((p) => p.photoUrl).filter(Boolean);
   const loadingEmpty = isFetching && urls.length === 0;
 
   return (

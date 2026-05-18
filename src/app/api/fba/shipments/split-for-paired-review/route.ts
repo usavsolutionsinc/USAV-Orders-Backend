@@ -3,6 +3,7 @@ import pool from '@/lib/db';
 import { invalidateCacheTags } from '@/lib/cache/upstash-cache';
 import { publishFbaShipmentChanged } from '@/lib/realtime/publish';
 import { detectCarrier } from '@/lib/tracking-format';
+import { withAuth } from '@/lib/auth/withAuth';
 import {
   normalizeAllocations,
   refreshShipmentAggregateCounts,
@@ -29,7 +30,7 @@ type LinePayload = { shipment_item_id: number; quantity?: number };
  *   lines: [{ shipment_item_id, quantity? }]
  * }
  */
-export async function POST(request: NextRequest) {
+export const POST = withAuth(async (request: NextRequest, ctx) => {
   const client = await pool.connect();
   try {
     const body = await request.json();
@@ -38,7 +39,7 @@ export async function POST(request: NextRequest) {
     const raw = String(body?.tracking_number || '').trim().toUpperCase();
     const carrier = String(body?.carrier || detectCarrier(raw)).toUpperCase();
     const label = body?.label != null ? String(body.label || '').trim() || null : 'UPS';
-    const staffId = Number.isFinite(Number(body?.staff_id)) ? Number(body.staff_id) : null;
+    const staffId = ctx.staffId;
     const station = body?.station ? String(body.station).trim() : null;
     const linesRaw = Array.isArray(body?.lines) ? body.lines : [];
 
@@ -216,4 +217,22 @@ export async function POST(request: NextRequest) {
   } finally {
     client.release();
   }
-}
+}, {
+  permission: 'fba.stage_shipments',
+  audit: {
+    source: 'fba.shipments.split',
+    action: 'fba.shipment.split',
+    entityType: 'fba_shipment',
+    entityId: ({ body }) => {
+      const b = body as { source_shipment_id?: number } | null;
+      return b?.source_shipment_id ?? null;
+    },
+    extra: ({ response }) => {
+      const r = response as { new_shipment?: { id?: number; shipment_ref?: string } } | null;
+      return {
+        new_shipment_id: r?.new_shipment?.id ?? null,
+        new_shipment_ref: r?.new_shipment?.shipment_ref ?? null,
+      };
+    },
+  },
+});

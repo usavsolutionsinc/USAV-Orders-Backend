@@ -51,12 +51,20 @@ function isPublic(pathname: string): boolean {
 }
 
 /**
- * Auth enforcement is ON by default. The site must never serve a page or API
+ * Auth enforcement is unconditional. The proxy never serves a page or API
  * route to an unauthenticated client outside the PUBLIC_PATHS allowlist
  * (/signin, /not-authorized, /m/enroll/*, /api/auth/*, static assets).
  *
- * Emergency escape hatch: set AUTH_V2_ENABLED=false (or "shadow"/"0") to
- * disable enforcement temporarily. Anything else — including unset — enforces.
+ * 🚨 BREAK-GLASS ESCAPE HATCH (operator-only, not for normal rollout):
+ *   AUTH_V2_ENABLED=false (or "0", "shadow", "off")
+ *     → proxy stops redirecting/401-ing unauthenticated requests
+ *     → `withAuth` and `requirePermission` STILL enforce per-route/per-page
+ *     → so disabling this only removes the edge redirect, not the actual auth
+ *
+ * The downstream wrappers no longer honour this flag (Phase 1, 2026-05-17) —
+ * they always enforce. The flag survives at proxy level only as a knob for
+ * the rare case where the edge-runtime cookie check itself misfires and ops
+ * needs to fall back to wrapper-level enforcement.
  */
 function isAuthV2Enabled(): boolean {
   const v = (process.env.AUTH_V2_ENABLED ?? '').toLowerCase().trim();
@@ -70,6 +78,47 @@ function resolveRewrite(pathname: string): string | null {
     }
   }
   return null;
+}
+
+/**
+ * Security response headers. Attached to every response we hand back from
+ * the proxy (rewrite, next, redirect, 401). Conservative defaults that
+ * preserve the app's existing functionality:
+ *
+ *  - Camera is allowed on same-origin only (mobile receiving photo capture).
+ *  - Mic / geolocation / payment / usb / fullscreen all disabled by default.
+ *  - frame-ancestors 'self' (CSP) + X-Frame-Options DENY — defense in depth.
+ *  - HSTS with 1y max-age + subdomains. Don't preload yet (irreversible).
+ *  - Referrer policy trims cross-origin leak surface.
+ *  - nosniff blocks MIME confusion attacks.
+ */
+const PERMISSIONS_POLICY = [
+  'camera=(self)',
+  'microphone=()',
+  'geolocation=()',
+  'payment=()',
+  'usb=()',
+  'fullscreen=(self)',
+  'interest-cohort=()',
+].join(', ');
+
+function applySecurityHeaders(res: NextResponse): NextResponse {
+  res.headers.set('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
+  res.headers.set('X-Content-Type-Options', 'nosniff');
+  res.headers.set('Referrer-Policy', 'strict-origin-when-cross-origin');
+  res.headers.set('Permissions-Policy', PERMISSIONS_POLICY);
+  // Block embedding in iframes from foreign origins. X-Frame-Options is the
+  // legacy header; CSP frame-ancestors covers modern browsers.
+  res.headers.set('X-Frame-Options', 'SAMEORIGIN');
+  // We intentionally only set frame-ancestors here, not a full CSP — a full
+  // CSP needs hashes/nonces for inline scripts the framework emits, which
+  // is a separate effort. frame-ancestors is safe to set alone.
+  const existingCsp = res.headers.get('Content-Security-Policy');
+  res.headers.set(
+    'Content-Security-Policy',
+    existingCsp ? `${existingCsp}; frame-ancestors 'self'` : `frame-ancestors 'self'`,
+  );
+  return res;
 }
 
 export function proxy(req: NextRequest): NextResponse {
@@ -86,25 +135,25 @@ export function proxy(req: NextRequest): NextResponse {
     if (rewriteTarget) {
       const url = req.nextUrl.clone();
       url.pathname = rewriteTarget;
-      return NextResponse.rewrite(url, { request: { headers: requestHeaders } });
+      return applySecurityHeaders(NextResponse.rewrite(url, { request: { headers: requestHeaders } }));
     }
-    return NextResponse.next({ request: { headers: requestHeaders } });
+    return applySecurityHeaders(NextResponse.next({ request: { headers: requestHeaders } }));
   };
 
   if (isPublic(pathname)) {
     return applyRewriteOrNext();
   }
 
-  // Shadow mode: never block. Enforce mode: redirect HTML routes / 401 JSON.
+  // Break-glass off: never block. Default: redirect HTML routes / 401 JSON.
   if (!hasCookie && isAuthV2Enabled()) {
     const isApi = pathname.startsWith('/api/');
     if (isApi) {
-      return NextResponse.json({ error: 'UNAUTHENTICATED' }, { status: 401 });
+      return applySecurityHeaders(NextResponse.json({ error: 'UNAUTHENTICATED' }, { status: 401 }));
     }
     const url = req.nextUrl.clone();
     url.pathname = '/signin';
     url.searchParams.set('next', pathname);
-    return NextResponse.redirect(url);
+    return applySecurityHeaders(NextResponse.redirect(url));
   }
 
   return applyRewriteOrNext();

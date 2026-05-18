@@ -3,8 +3,9 @@ import { getSyncStatus } from '@/lib/ebay/sync';
 import { runEbaySync } from '@/lib/jobs/ebay-sync';
 import { isAllowedAdminOrigin } from '@/lib/security/allowed-origin';
 import { enqueueQStashJson, getQStashResultIdentifier } from '@/lib/qstash';
+import { withAuth } from '@/lib/auth/withAuth';
 
-export async function POST(req: Request) {
+export const POST = withAuth(async (req: Request) => {
   const origin = req.headers.get('origin');
   if (!isAllowedAdminOrigin(req)) {
     return NextResponse.json(
@@ -44,13 +45,13 @@ export async function POST(req: Request) {
       { status: 500 }
     );
   }
-}
+}, { permission: 'integrations.ebay' });
 
 /**
  * GET /api/ebay/sync
  * Get sync status for all accounts
  */
-export async function GET() {
+export const GET = withAuth(async () => {
   try {
     const status = await getSyncStatus();
     
@@ -61,11 +62,11 @@ export async function GET() {
   } catch (error: any) {
     console.error('Error fetching sync status:', error);
     return NextResponse.json(
-      { 
-        success: false, 
-        error: error.message 
+      {
+        success: false,
+        error: error.message
       },
       { status: 500 }
     );
   }
-}
+}, { permission: 'integrations.ebay' });
