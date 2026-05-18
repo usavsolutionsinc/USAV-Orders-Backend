@@ -583,8 +583,14 @@ export default async function InventoryV2AdminPage() {
 
         {/* Allocations summary */}
         <section className="rounded-lg border border-gray-200 bg-white shadow-sm">
-          <header className="border-b border-gray-100 px-6 py-4">
+          <header className="flex items-center justify-between border-b border-gray-100 px-6 py-4">
             <h2 className="text-lg font-medium text-gray-900">Order unit allocations</h2>
+            <Link
+              href="/admin/inventory-v2/bulk-allocate"
+              className="rounded-md border border-gray-300 bg-white px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50"
+            >
+              Bulk allocate →
+            </Link>
           </header>
           {allocations.length === 0 ? (
             <p className="px-6 py-4 text-sm text-gray-600">
