@@ -95,5 +95,14 @@
     "retries": 3,
     "timeout": 120,
     "label": "refresh-reports"
+  },
+  {
+    "scheduleId": "inventory-drift-check-daily-1100-utc",
+    "cron": "0 11 * * *",
+    "path": "/api/qstash/inventory/drift-check",
+    "body": {},
+    "retries": 3,
+    "timeout": 60,
+    "label": "inventory-drift-check"
   }
 ]
