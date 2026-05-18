@@ -51,7 +51,7 @@ function pathToRoute(path: string, value: string): ScanRoute | null {
   const binMatch = SKU_STOCK_LOCATION_RE.exec(path);
   if (binMatch) {
     const barcode = decodeURIComponent(binMatch[1]);
-    return { type: 'bin', value, redirect: `/sku-stock/location/${barcode}` };
+    return { type: 'bin', value, redirect: `/inventory?bin=${barcode}` };
   }
   // GS1 Digital Link form. Page-side resolvers translate gtin → sku and
   // serial → unit at runtime, so we just dispatch to the catch-all paths.
@@ -125,9 +125,9 @@ export const QR_BASE_URL =
  * {@link QR_BASE_URL} so printed labels work regardless of which environment
  * they were printed from.
  *
- * Bin labels (kind='b') route into the SKU Stock area's Location view so the
- * bin editor lives next to the rest of the SKU tooling. Other kinds stay on
- * their dedicated /m/* pages for the receiving / unit flows.
+ * Bin labels (kind='b') route into the Inventory page's bin view (`?bin=`)
+ * so the bin editor lives next to the rest of the inventory tooling.
+ * Other kinds stay on their dedicated /m/* pages for the receiving / unit flows.
  */
 export function mobileQrUrl(
   kind: 'r' | 'l' | 'u' | 'b' | 'k',
@@ -136,7 +136,7 @@ export function mobileQrUrl(
   const encoded = encodeURIComponent(String(id));
   const path =
     kind === 'b'
-      ? `/sku-stock/location/${encoded}`
+      ? `/inventory?bin=${encoded}`
       : `/m/${kind}/${encoded}`;
   try {
     return new URL(path, QR_BASE_URL).toString();

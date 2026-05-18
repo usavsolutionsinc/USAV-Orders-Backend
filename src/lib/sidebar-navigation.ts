@@ -27,7 +27,6 @@ export type SidebarRouteKey =
   | 'repair'
   | 'work-orders'
   | 'replenish'
-  | 'sku-stock'
   | 'inventory'
   | 'products'
   | 'warehouse'
@@ -129,7 +128,6 @@ export function getSidebarRouteKey(pathname: string | null): SidebarRouteKey {
   if (pathname === '/replenish' || pathname.startsWith('/replenish/')) return 'replenish';
   if (pathname === '/products' || pathname.startsWith('/products/')) return 'products';
   if (pathname === '/warehouse' || pathname.startsWith('/warehouse/')) return 'warehouse';
-  if (pathname === '/sku-stock' || pathname.startsWith('/sku-stock/')) return 'sku-stock';
   if (pathname === '/inventory' || pathname.startsWith('/inventory/')) return 'inventory';
   if (pathname === '/support' || pathname.startsWith('/support/')) return 'support';
   if (pathname === '/previous-quarters' || pathname.startsWith('/previous-quarters/')) return 'previous-quarters';
@@ -185,7 +183,6 @@ export const ROUTE_PERMISSIONS: ReadonlyArray<{ prefix: string; permission: stri
   { prefix: '/packers',            permission: 'packing.view' },
   { prefix: '/products',           permission: 'sku_stock.view' },
   { prefix: '/warehouse',          permission: 'sku_stock.view' },
-  { prefix: '/sku-stock',          permission: 'sku_stock.view' },
   { prefix: '/inventory',          permission: 'sku_stock.view' },
   { prefix: '/previous-quarters',  permission: 'reports.view' },
   // /settings is intentionally NOT gated — every signed-in user can manage

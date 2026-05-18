@@ -140,7 +140,7 @@ function BinPageInner() {
                       <button
                         type="button"
                         onClick={() =>
-                          router.push(`/sku-stock/${encodeURIComponent(row.sku)}`)
+                          router.push(`/inventory?sku=${encodeURIComponent(row.sku)}`)
                         }
                         className="block w-full text-left rounded-lg border border-slate-200 bg-white px-4 py-3 shadow-sm active:bg-slate-50"
                       >

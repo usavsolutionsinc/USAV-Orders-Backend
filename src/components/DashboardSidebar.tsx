@@ -10,7 +10,6 @@ import { HorizontalButtonSlider, type HorizontalSliderItem } from '@/components/
 import { sectionLabel } from '@/design-system/tokens/typography/presets';
 import { AdminSidebar } from '@/components/admin/AdminSidebar';
 import { ADMIN_SECTION_OPTIONS, type AdminSection } from '@/components/admin/admin-sections';
-import { SkuStockSidebarPanel } from '@/components/sidebar/SkuStockSidebarPanel';
 import { WarehouseSidebarPanel } from '@/components/sidebar/WarehouseSidebarPanel';
 import { QuarterSidebar } from '@/components/QuarterSelector';
 import { DashboardManagementPanel } from '@/components/sidebar/DashboardManagementPanel';
@@ -114,7 +113,6 @@ function getSidebarTitle(pathname: string | null) {
     'walk-in': 'Walk-In',
     'work-orders': 'Work Orders',
     replenish: 'Replenish',
-    'sku-stock': 'Sku Stock',
     inventory: 'Inventory',
     products: 'Products',
     warehouse: 'Warehouse',
@@ -386,7 +384,6 @@ function SidebarContextPanel({ onBackToAppNav }: { onBackToAppNav?: () => void }
   if (routeKey === 'fba') return <FbaSidebarPanel />;
   if (routeKey === 'work-orders') return <WorkOrdersSidebarPanel />;
   if (routeKey === 'replenish') return <ReplenishSidebarPanel />;
-  if (routeKey === 'sku-stock') return <SkuStockSidebarPanel />;
   // /inventory owns its own header search + filter chips inside
   // <InventoryV2Shell>, so the desktop sidebar slot stays empty here.
   // /products is the same shape (its toolbar lives in <ProductsShell>) —

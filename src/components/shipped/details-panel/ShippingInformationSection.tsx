@@ -717,7 +717,7 @@ export interface PrepackedSkuInfo {
 
 function PrepackedSkuRow({ sku }: { sku: PrepackedSkuInfo }) {
   const hasPhotos = Array.isArray(sku.photos) && sku.photos.length > 0;
-  const skuBrowserUrl = `/sku-stock?view=sku_history&search=${encodeURIComponent(sku.staticSku)}`;
+  const skuBrowserUrl = `/inventory?sku=${encodeURIComponent(sku.staticSku)}`;
 
   return (
     <DetailsPanelRow

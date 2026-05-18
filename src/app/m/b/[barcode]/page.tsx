@@ -5,7 +5,7 @@ import { useParams, useRouter, useSearchParams } from 'next/navigation';
 
 /**
  * Legacy bin-label landing page. Older QR labels still point at /m/b/{barcode};
- * the new ones target /sku-stock/location/{barcode}. This page exists solely
+ * the new ones land on /inventory?bin={barcode}. This page exists solely
  * to redirect so any sticker already in the wild keeps working.
  */
 function BinRedirectInner() {
@@ -16,12 +16,12 @@ function BinRedirectInner() {
 
   useEffect(() => {
     if (!barcode) {
-      router.replace('/sku-stock?view=location');
+      router.replace('/inventory');
       return;
     }
     const qs = searchParams.toString();
-    const target = `/sku-stock/location/${encodeURIComponent(barcode)}${qs ? `?${qs}` : ''}`;
-    router.replace(target);
+    const base = `/inventory?bin=${encodeURIComponent(barcode)}`;
+    router.replace(qs ? `${base}&${qs}` : base);
   }, [barcode, router, searchParams]);
 
   return (

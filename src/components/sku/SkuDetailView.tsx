@@ -225,7 +225,7 @@ export default function SkuDetailView({ sku, variant = 'page', onClose }: SkuDet
 
   const handleClose = () => {
     if (onClose) onClose();
-    else router.push('/sku-stock');
+    else router.push('/inventory');
   };
 
   const wrapPanel = (content: React.ReactNode) => {

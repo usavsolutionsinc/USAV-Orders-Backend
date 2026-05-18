@@ -34,7 +34,7 @@ export async function POST(req: NextRequest) {
       ip: clientIp(req), userAgent: req.headers.get('user-agent'),
       detail: punchSummary
         ? { punchId: punchSummary.id, breakMinutes: punchSummary.breakMinutes }
-        : null,
+        : undefined,
     });
   }
   const res = NextResponse.json({ ok: true, punch: punchSummary });

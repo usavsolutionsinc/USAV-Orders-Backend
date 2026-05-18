@@ -6,10 +6,10 @@ import { Barcode } from '@/components/Icons';
 import { MobileReceivingScanSheet } from './MobileReceivingScanSheet';
 import { useAuth } from '@/contexts/AuthContext';
 
-// Routes that own a specific scan flow (tech / packer / sku-stock).
+// Routes that own a specific scan flow (tech / packer / inventory).
 // On these routes the FAB dispatches `mobile-scan-fab-open` and the page
 // opens its own sheet. Elsewhere we open the generic PO scan sheet.
-const ROUTE_SPECIFIC_PREFIXES = ['/tech', '/packer', '/sku-stock'];
+const ROUTE_SPECIFIC_PREFIXES = ['/tech', '/packer', '/inventory'];
 
 // /m/* are the phone-native flows served outside the mobile shell. Don't
 // double-mount the FAB there.

@@ -143,7 +143,7 @@ export function BinDetailFlyout({ row, onClose }: Props) {
                     <li key={c.id} className="px-3 py-2">
                       <div className="flex items-baseline justify-between gap-2">
                         <Link
-                          href={`/sku-stock/${encodeURIComponent(c.sku)}`}
+                          href={`/inventory?sku=${encodeURIComponent(c.sku)}`}
                           className="font-mono text-xs text-blue-700 hover:underline"
                         >
                           {c.sku}

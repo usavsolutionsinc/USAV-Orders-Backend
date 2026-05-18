@@ -155,7 +155,7 @@ export function LocationDetailView({ barcode }: LocationDetailViewProps) {
     (sku: string) => {
       const next = sku.trim();
       if (!next) return;
-      router.push(`/sku-stock?sku=${encodeURIComponent(next)}`);
+      router.push(`/inventory?sku=${encodeURIComponent(next)}`);
     },
     [router],
   );
@@ -209,7 +209,7 @@ export function LocationDetailView({ barcode }: LocationDetailViewProps) {
         </p>
         <button
           type="button"
-          onClick={() => router.push('/sku-stock?view=location')}
+          onClick={() => router.push('/inventory')}
           className="rounded-md border border-slate-300 bg-white px-3 py-1.5 text-xs font-bold text-slate-700"
         >
           ← Back to scan

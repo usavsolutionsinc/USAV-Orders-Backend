@@ -7,7 +7,7 @@ import { SKU_STOCK_DESKTOP_SCAN_EVENT } from '@/utils/events';
 
 /**
  * Desktop-only full-screen SKU camera scanner invoked from Quick tools FAB.
- * Open from any route; merges `sku=` into `/sku-stock` URLs when already there.
+ * Open from any route; merges `sku=` into `/inventory` URLs when already there.
  */
 export function GlobalDesktopSkuScanner() {
   const router = useRouter();
@@ -28,12 +28,12 @@ export function GlobalDesktopSkuScanner() {
     (raw: string) => {
       const s = raw.trim();
       if (!s) return;
-      if (pathname === '/sku-stock' || pathname?.startsWith('/sku-stock/')) {
+      if (pathname === '/inventory' || pathname?.startsWith('/inventory/')) {
         const next = new URLSearchParams(searchParams.toString());
         next.set('sku', s);
-        router.replace(`/sku-stock?${next.toString()}`);
+        router.replace(`/inventory?${next.toString()}`);
       } else {
-        router.push(`/sku-stock?sku=${encodeURIComponent(s)}`);
+        router.push(`/inventory?sku=${encodeURIComponent(s)}`);
       }
     },
     [pathname, router, searchParams],

@@ -121,7 +121,7 @@ export function SkuLocationFinder() {
               {hits.map((h) => (
                 <li key={h.sku}>
                   <Link
-                    href={`/sku-stock/${encodeURIComponent(h.sku)}`}
+                    href={`/inventory?sku=${encodeURIComponent(h.sku)}`}
                     onClick={() => setOpen(false)}
                     className="flex items-baseline justify-between gap-2 px-3 py-2 transition-colors hover:bg-gray-50"
                   >
