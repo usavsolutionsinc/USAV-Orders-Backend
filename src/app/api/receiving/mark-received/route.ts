@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse, after } from 'next/server';
 import pool from '@/lib/db';
+import { transaction } from '@/lib/neon-client';
 import { formatPSTTimestamp } from '@/utils/date';
 import { invalidateCacheTags } from '@/lib/cache/upstash-cache';
 import { publishReceivingLogChanged } from '@/lib/realtime/publish';
@@ -15,6 +16,200 @@ import {
 } from '@/lib/zoho';
 import { withAuth } from '@/lib/auth/withAuth';
 import { recordAudit, AUDIT_ACTION, AUDIT_ENTITY } from '@/lib/audit-logs';
+import { isInventoryV2ReceivingPutaway } from '@/lib/feature-flags';
+
+/**
+ * Phase 2 helper: emit inventory_events + sku_stock_ledger for the receive
+ * event. Replaces the standalone serial_units upsert in the flagged path
+ * so that a single transaction holds the full set of writes.
+ *
+ * Inputs already validated by the caller (qtyReceived > 0, receivingLineId
+ * exists, dispositionCode in the enum). Returns the inserted event/ledger
+ * ids for the response payload.
+ */
+async function applyInventoryV2Effects(input: {
+  receivingId: number | null;
+  receivingLineId: number;
+  sku: string | null;
+  qtyReceived: number;
+  serialNumber: string | null;
+  zohoItemId: string | null;
+  conditionGrade: string;
+  dispositionCode: string;
+  destinationBinId: number | null;
+  staffId: number;
+  clientEventId: string | null;
+  notes: string | null;
+  nowPst: string;
+}): Promise<{ ledgerId: number | null; receivedEventId: number; putawayEventId: number | null; serialUnitId: number | null }> {
+  return transaction(async (client) => {
+    // 1. Serial_units upsert (Tier 3). Mirrors the off-flag SQL but
+    //    additionally updates current_location when a destination bin
+    //    is provided.
+    let serialUnitId: number | null = null;
+    if (input.serialNumber) {
+      const upsert = await client.query<{ id: number }>(
+        `INSERT INTO serial_units (
+          serial_number, normalized_serial, sku, zoho_item_id,
+          current_status, current_location, origin_source,
+          origin_receiving_line_id, received_at, received_by, condition_grade
+        )
+        VALUES ($1, UPPER(TRIM($1)), $2, $3, 'RECEIVED'::serial_status_enum,
+                $8, 'receiving', $4, $5, $6, $7::condition_grade_enum)
+        ON CONFLICT (normalized_serial) DO UPDATE SET
+          current_status = 'RECEIVED'::serial_status_enum,
+          current_location = COALESCE(EXCLUDED.current_location, serial_units.current_location),
+          received_at = EXCLUDED.received_at,
+          received_by = EXCLUDED.received_by,
+          condition_grade = EXCLUDED.condition_grade,
+          sku = COALESCE(serial_units.sku, EXCLUDED.sku),
+          updated_at = NOW()
+        RETURNING id`,
+        [
+          input.serialNumber,
+          input.sku,
+          input.zohoItemId,
+          input.receivingLineId,
+          input.nowPst,
+          input.staffId > 0 ? input.staffId : null,
+          input.conditionGrade,
+          input.destinationBinId != null ? String(input.destinationBinId) : null,
+        ],
+      );
+      serialUnitId = upsert.rows[0]?.id ?? null;
+    }
+
+    // 2. sku_stock_ledger row — only for ACCEPT disposition with qty.
+    //    The trg_sku_stock_from_ledger trigger will project the new
+    //    on-hand count back onto sku_stock.stock automatically.
+    let ledgerId: number | null = null;
+    if (
+      input.sku &&
+      input.qtyReceived > 0 &&
+      input.dispositionCode === 'ACCEPT'
+    ) {
+      const ledger = await client.query<{ id: number }>(
+        `INSERT INTO sku_stock_ledger (
+          sku, delta, reason, dimension, staff_id,
+          ref_serial_unit_id, ref_receiving_line_id, notes
+        )
+        VALUES ($1, $2, 'RECEIVED', 'WAREHOUSE', $3, $4, $5, $6)
+        RETURNING id`,
+        [
+          input.sku,
+          input.qtyReceived,
+          input.staffId > 0 ? input.staffId : null,
+          serialUnitId,
+          input.receivingLineId,
+          input.notes,
+        ],
+      );
+      ledgerId = ledger.rows[0]?.id ?? null;
+    }
+
+    // 3. inventory_events RECEIVED — always emitted on the flagged path
+    //    so the lifecycle timeline reflects every intake even when
+    //    qty=0 or disposition=SCRAP/RTV.
+    const receivedClientEventId = input.clientEventId
+      ? `${input.clientEventId}:RECEIVED`
+      : null;
+    const receivedEvent = await client.query<{ id: number }>(
+      `INSERT INTO inventory_events (
+        event_type, actor_staff_id, station,
+        receiving_id, receiving_line_id, serial_unit_id, sku,
+        bin_id, prev_status, next_status, stock_ledger_id,
+        client_event_id, notes, payload
+      )
+      VALUES ('RECEIVED', $1, 'RECEIVING',
+              $2, $3, $4, $5,
+              $6, NULL, 'RECEIVED', $7,
+              $8, $9, $10::jsonb)
+      ON CONFLICT (client_event_id) DO NOTHING
+      RETURNING id`,
+      [
+        input.staffId > 0 ? input.staffId : null,
+        input.receivingId,
+        input.receivingLineId,
+        serialUnitId,
+        input.sku,
+        input.destinationBinId,
+        ledgerId,
+        receivedClientEventId,
+        input.notes,
+        JSON.stringify({
+          condition_grade: input.conditionGrade,
+          disposition_code: input.dispositionCode,
+          qty_received: input.qtyReceived,
+        }),
+      ],
+    );
+    // If conflict swallowed the insert, look up the existing row.
+    let receivedEventId = receivedEvent.rows[0]?.id;
+    if (receivedEventId == null && receivedClientEventId) {
+      const existing = await client.query<{ id: number }>(
+        `SELECT id FROM inventory_events WHERE client_event_id = $1 LIMIT 1`,
+        [receivedClientEventId],
+      );
+      receivedEventId = existing.rows[0]?.id;
+    }
+    if (receivedEventId == null) {
+      throw new Error('applyInventoryV2Effects: failed to insert or resolve RECEIVED event');
+    }
+
+    // 4. inventory_events PUTAWAY — only when a destination bin is
+    //    provided AND the unit is accepted. Skipped for SCRAP/RTV so
+    //    those events don't imply the unit reached stock.
+    let putawayEventId: number | null = null;
+    if (input.destinationBinId != null && input.dispositionCode === 'ACCEPT') {
+      const putawayClientEventId = input.clientEventId
+        ? `${input.clientEventId}:PUTAWAY`
+        : null;
+      const putawayEvent = await client.query<{ id: number }>(
+        `INSERT INTO inventory_events (
+          event_type, actor_staff_id, station,
+          receiving_id, receiving_line_id, serial_unit_id, sku,
+          bin_id, prev_status, next_status, stock_ledger_id,
+          client_event_id, payload
+        )
+        VALUES ('PUTAWAY', $1, 'RECEIVING',
+                $2, $3, $4, $5,
+                $6, 'RECEIVED', 'STOCKED', $7,
+                $8, $9::jsonb)
+        ON CONFLICT (client_event_id) DO NOTHING
+        RETURNING id`,
+        [
+          input.staffId > 0 ? input.staffId : null,
+          input.receivingId,
+          input.receivingLineId,
+          serialUnitId,
+          input.sku,
+          input.destinationBinId,
+          ledgerId,
+          putawayClientEventId,
+          JSON.stringify({
+            qty: input.qtyReceived,
+            condition_grade: input.conditionGrade,
+          }),
+        ],
+      );
+      putawayEventId = putawayEvent.rows[0]?.id ?? null;
+
+      // Also transition the serial unit to STOCKED if we have one.
+      if (serialUnitId) {
+        await client.query(
+          `UPDATE serial_units
+              SET current_status = 'STOCKED'::serial_status_enum,
+                  current_location = $1,
+                  updated_at = NOW()
+            WHERE id = $2`,
+          [String(input.destinationBinId), serialUnitId],
+        );
+      }
+    }
+
+    return { ledgerId, receivedEventId, putawayEventId, serialUnitId };
+  });
+}
 
 export const POST = withAuth(async (request, ctx) => {
   try {
@@ -30,11 +225,20 @@ export const POST = withAuth(async (request, ctx) => {
     const serialNumber = String(body?.serial_number || '').trim() || null;
     const zendeskTicket = String(body?.zendesk_ticket || '').trim() || null;
     const notes = String(body?.notes || '').trim() || null;
-    const bodyStaffIdRaw = Number(body?.staff_id);
-    const bodyStaffId =
-      Number.isFinite(bodyStaffIdRaw) && bodyStaffIdRaw > 0 ? Math.floor(bodyStaffIdRaw) : null;
-    // Server-trusted actor when AUTH_V2 is active; fall back to body for legacy callers.
-    const staffId = ctx.staffId ?? bodyStaffId ?? 0;
+    // Phase 2 (INVENTORY_V2_RECEIVING_PUTAWAY): optional destination bin
+    // scanned at the same time as the receive action. Triggers a PUTAWAY
+    // event + serial_units.current_location update inside the same txn.
+    const destinationBinIdRaw = body?.destination_bin_id;
+    const destinationBinId =
+      Number.isFinite(Number(destinationBinIdRaw)) && Number(destinationBinIdRaw) > 0
+        ? Math.floor(Number(destinationBinIdRaw))
+        : null;
+    // Idempotency token from the client (mobile scanner generates a UUID
+    // per scan). Optional; unique within inventory_events.
+    const clientEventId = String(body?.client_event_id || '').trim() || null;
+    // Server-trusted actor from the verified session cookie. The wrapper
+    // guarantees ctx.staffId is set on this permission-gated route.
+    const staffId = ctx.staffId;
 
     // Resolve a human-readable staff name for Zoho payloads. Prefer the
     // value the client sent, then fall back to a DB lookup, and only as a
@@ -108,8 +312,37 @@ export const POST = withAuth(async (request, ctx) => {
     let zohoReceiveOk = !hasZohoReceive;
     let zohoReceiveError: string | null = null;
 
-    // 2. If serial number provided, upsert serial_units with RECEIVED status
-    if (serialNumber) {
+    // 2. Serial/stock/event writes.
+    //
+    // OFF-FLAG (legacy path): upsert serial_units only, exactly as before.
+    // ON-FLAG (Phase 2):     emit RECEIVED + optional PUTAWAY inventory_events
+    //                        and append a sku_stock_ledger row in one txn.
+    //                        See applyInventoryV2Effects() above for details.
+    let v2Effects: Awaited<ReturnType<typeof applyInventoryV2Effects>> | null = null;
+    if (isInventoryV2ReceivingPutaway()) {
+      try {
+        v2Effects = await applyInventoryV2Effects({
+          receivingId,
+          receivingLineId,
+          sku: line.sku ?? null,
+          qtyReceived,
+          serialNumber,
+          zohoItemId: zohoItemId || null,
+          conditionGrade,
+          dispositionCode,
+          destinationBinId,
+          staffId,
+          clientEventId,
+          notes,
+          nowPst: now,
+        });
+      } catch (err) {
+        // Phase 2 is best-effort overlay. If the events txn fails the line
+        // update has already committed, so we log and continue rather than
+        // crashing the receive. An admin can replay via /api/inventory-events.
+        console.warn('mark-received: applyInventoryV2Effects failed', err);
+      }
+    } else if (serialNumber) {
       await pool.query(
         `INSERT INTO serial_units (serial_number, normalized_serial, sku, zoho_item_id, current_status, origin_source, origin_receiving_line_id, received_at, received_by, condition_grade)
          VALUES ($1, UPPER(TRIM($1)), $2, $3, 'RECEIVED', 'receiving', $4, $5, $6, $7)
@@ -292,7 +525,6 @@ export const POST = withAuth(async (request, ctx) => {
         condition_grade: line.condition_grade,
       },
       method: serialNumber ? 'scan' : 'manual',
-      actorStaffIdOverride: bodyStaffId,
       extra: {
         receiving_id: receivingId,
         zoho_purchaseorder_id: zohoPoId || null,
@@ -311,10 +543,20 @@ export const POST = withAuth(async (request, ctx) => {
       zoho_synced: zohoReceiveOk,
       ...(zohoReceiveError ? { zoho_error: zohoReceiveError } : {}),
       receiving_line: line,
+      ...(v2Effects
+        ? {
+            inventory_v2: {
+              received_event_id: v2Effects.receivedEventId,
+              putaway_event_id: v2Effects.putawayEventId,
+              stock_ledger_id: v2Effects.ledgerId,
+              serial_unit_id: v2Effects.serialUnitId,
+            },
+          }
+        : {}),
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Failed to mark as received';
     console.error('receiving/mark-received POST failed:', error);
     return NextResponse.json({ success: false, error: message }, { status: 500 });
   }
-}, { allowAnonymous: true });
+}, { permission: 'receiving.mark_received' });
