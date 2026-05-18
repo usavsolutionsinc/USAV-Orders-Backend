@@ -99,3 +99,92 @@ export function generateBarcodeDataUrl(
     const success = renderBarcode(canvas, value, options);
     return success ? canvas.toDataURL('image/png') : null;
 }
+
+// ─── QR CODE (GS1 Digital Link) ─────────────────────────────────────────────
+//
+// Used by the unit-label flow (MultiSkuSnBarcode, BarcodePreview,
+// printProductLabel). 1D barcode helpers above remain in service for
+// receiving labels, walk-in receipts, and ProductLabelPreview.
+//
+// The `qrcode` npm package is dynamically imported so its ~30KB doesn't
+// land in the initial JS bundle for pages that don't print labels.
+
+export interface QrOptions {
+    /** Pixel width of the rendered QR. Library auto-scales modules to fit. */
+    width?: number;
+    /** Error correction level. 'M' is the default; bump to 'H' if labels
+     *  will be physically damaged in use. */
+    errorCorrectionLevel?: 'L' | 'M' | 'Q' | 'H';
+    /** Quiet-zone width in modules. GS1 minimum is 4. */
+    margin?: number;
+    /** Foreground / background color. */
+    color?: { dark?: string; light?: string };
+}
+
+export const DEFAULT_QR_OPTIONS: QrOptions = {
+    width: 200,
+    errorCorrectionLevel: 'M',
+    margin: 4,
+    color: { dark: '#000000', light: '#ffffff' },
+};
+
+let cachedQrLib: typeof import('qrcode') | null = null;
+
+/**
+ * Dynamically import the qrcode library. Cached after first call.
+ */
+export async function loadQrLibrary(): Promise<typeof import('qrcode')> {
+    if (cachedQrLib) return cachedQrLib;
+    const mod = await import('qrcode');
+    cachedQrLib = mod;
+    return mod;
+}
+
+/**
+ * Render a QR onto a canvas. Returns true on success.
+ */
+export async function renderQr(
+    canvas: HTMLCanvasElement | null,
+    payload: string,
+    options: QrOptions = {},
+): Promise<boolean> {
+    if (!canvas || !payload || !payload.trim()) return false;
+    try {
+        const QR = await loadQrLibrary();
+        const config = { ...DEFAULT_QR_OPTIONS, ...options };
+        await QR.toCanvas(canvas, payload, {
+            width: config.width,
+            margin: config.margin,
+            errorCorrectionLevel: config.errorCorrectionLevel,
+            color: config.color,
+        });
+        return true;
+    } catch (err) {
+        console.warn('QR rendering failed:', err);
+        return false;
+    }
+}
+
+/**
+ * Generate a QR as a PNG data URL. Useful for print templates and
+ * server-side rendering.
+ */
+export async function generateQrDataUrl(
+    payload: string,
+    options: QrOptions = {},
+): Promise<string | null> {
+    if (!payload || !payload.trim()) return null;
+    try {
+        const QR = await loadQrLibrary();
+        const config = { ...DEFAULT_QR_OPTIONS, ...options };
+        return await QR.toDataURL(payload, {
+            width: config.width,
+            margin: config.margin,
+            errorCorrectionLevel: config.errorCorrectionLevel,
+            color: config.color,
+        });
+    } catch (err) {
+        console.warn('QR data-URL generation failed:', err);
+        return null;
+    }
+}
