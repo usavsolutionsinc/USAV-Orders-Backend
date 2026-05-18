@@ -1,8 +1,17 @@
 import { requirePermission } from '@/lib/auth/page-guard';
 import { queryRaw } from '@/lib/neon-client';
 import { inventoryV2FlagSnapshot } from '@/lib/feature-flags';
+import { redirect } from 'next/navigation';
 
 export const dynamic = 'force-dynamic';
+
+/** Server action: redirect to the per-unit timeline page on form submit. */
+async function lookupUnit(formData: FormData): Promise<void> {
+  'use server';
+  const ref = String(formData.get('ref') ?? '').trim();
+  if (ref) redirect(`/admin/inventory-v2/units/${encodeURIComponent(ref)}`);
+  redirect('/admin/inventory-v2');
+}
 
 /**
  * /admin/inventory-v2 — Operations dashboard for the inventory v2 rollout.
@@ -218,6 +227,26 @@ export default async function InventoryV2AdminPage() {
             See <code className="rounded bg-gray-100 px-1.5 py-0.5 text-xs">context/inventory_system_upgrade_plan.md</code> for the full plan.
           </p>
         </header>
+
+        {/* Unit lookup */}
+        <form action={lookupUnit} className="flex items-center gap-3 rounded-lg border border-gray-200 bg-white px-4 py-3 shadow-sm">
+          <label htmlFor="ref" className="text-sm font-medium text-gray-700 whitespace-nowrap">
+            Look up unit
+          </label>
+          <input
+            id="ref"
+            name="ref"
+            type="text"
+            placeholder="serial number or serial_units.id"
+            className="flex-1 rounded-md border border-gray-300 px-3 py-1.5 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+          />
+          <button
+            type="submit"
+            className="rounded-md bg-blue-600 px-4 py-1.5 text-sm font-medium text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-1"
+          >
+            Open timeline
+          </button>
+        </form>
 
         {/* Feature flag snapshot */}
         <section className="rounded-lg border border-gray-200 bg-white shadow-sm">
