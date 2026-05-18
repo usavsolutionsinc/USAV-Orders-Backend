@@ -70,6 +70,15 @@
     "label": "shipping-sync-all-carriers-eod"
   },
   {
+    "scheduleId": "replenishment-sync-daily-6am-pacific",
+    "cron": "CRON_TZ=America/Los_Angeles 0 6 * * *",
+    "path": "/api/qstash/replenishment/sync",
+    "body": {},
+    "retries": 3,
+    "timeout": 120,
+    "label": "replenishment-sync"
+  },
+  {
     "scheduleId": "stock-alerts-daily-1400-utc",
     "cron": "0 14 * * *",
     "path": "/api/cron/stock-alerts",
