@@ -193,6 +193,49 @@ async function loadAllocations(): Promise<AllocationRow[]> {
   }
 }
 
+interface GtinCoverageRow {
+  total: number;
+  with_gtin: number;
+  without_gtin: number;
+}
+
+async function loadGtinCoverage(): Promise<GtinCoverageRow | null> {
+  try {
+    const r = await queryRaw<GtinCoverageRow>(
+      `SELECT COUNT(*)::int                                                AS total,
+              COUNT(*) FILTER (WHERE gtin IS NOT NULL AND BTRIM(gtin) <> '')::int AS with_gtin,
+              COUNT(*) FILTER (WHERE gtin IS NULL OR BTRIM(gtin) = '')::int      AS without_gtin
+         FROM sku_catalog`,
+    );
+    return r[0] ?? null;
+  } catch {
+    return null;
+  }
+}
+
+interface DriftAlertRow {
+  id: number;
+  sku: string;
+  qty_at_trigger: number | null;
+  triggered_at: Date;
+  notes: string | null;
+}
+
+async function loadOpenDriftAlerts(): Promise<DriftAlertRow[]> {
+  try {
+    return await queryRaw<DriftAlertRow>(
+      `SELECT id, sku, qty_at_trigger, triggered_at, notes
+         FROM stock_alerts
+        WHERE alert_type = 'DRIFT'
+          AND resolved_at IS NULL
+        ORDER BY triggered_at DESC, id DESC
+        LIMIT 25`,
+    );
+  } catch {
+    return [];
+  }
+}
+
 async function loadRecentEvents(): Promise<RecentEventRow[]> {
   try {
     return await queryRaw<RecentEventRow>(
@@ -213,18 +256,65 @@ async function loadRecentEvents(): Promise<RecentEventRow[]> {
 export default async function InventoryV2AdminPage() {
   await requirePermission('admin.view', { enforce: true });
 
-  const [flags, schema, backfill, drift, allocations, events] = await Promise.all([
+  const [flags, schema, backfill, drift, allocations, events, gtinCoverage, openDriftAlerts] = await Promise.all([
     loadFlags(),
     loadSchema(),
     loadBackfill(),
     loadDrift(),
     loadAllocations(),
     loadRecentEvents(),
+    loadGtinCoverage(),
+    loadOpenDriftAlerts(),
   ]);
 
   const allFlagsOff = flags.every((f) => !f.on);
   const schemaAllOk = schema.every((s) => s.exists);
   const driftClean = drift.length === 0;
+
+  // Preflight: the gating conditions that should be green before flipping
+  // ANY phase flag. Per-phase data preconditions (e.g. Phase 5 needs Phase 4
+  // allocations) are noted in the row body rather than baked into the
+  // status colour, since they require live operational data to validate.
+  type CheckStatus = 'pass' | 'warn' | 'fail';
+  const tsnBackfillOk = (backfill?.unlinked_eligible ?? 1) === 0;
+  const gtinBackfillOk = (gtinCoverage?.without_gtin ?? 1) === 0;
+  const openDriftCount = openDriftAlerts.length;
+
+  const preflight: Array<{ label: string; status: CheckStatus; detail: string }> = [
+    {
+      label: 'Schema artifacts',
+      status: schemaAllOk ? 'pass' : 'fail',
+      detail: schemaAllOk
+        ? 'All Phase 0/1 tables, enum values, and fn_next_unit_seq present.'
+        : `${schema.filter((s) => !s.exists).length} artifact(s) missing — run migrations.`,
+    },
+    {
+      label: 'tech_serial_numbers backfill',
+      status: tsnBackfillOk ? 'pass' : 'warn',
+      detail: tsnBackfillOk
+        ? `${backfill?.linked_tsn ?? 0} of ${backfill?.total_tsn ?? 0} linked; 0 eligible remaining.`
+        : `${backfill?.unlinked_eligible ?? '?'} eligible row(s) still NULL — run scripts/backfill-tech-serial-unit-id.mjs.`,
+    },
+    {
+      label: 'sku_catalog GTIN coverage',
+      status: gtinBackfillOk ? 'pass' : 'warn',
+      detail: gtinCoverage
+        ? gtinBackfillOk
+          ? `${gtinCoverage.with_gtin} of ${gtinCoverage.total} SKUs stamped.`
+          : `${gtinCoverage.without_gtin} SKU(s) without a GTIN — run scripts/backfill-internal-gtins.mjs.`
+        : 'unable to query sku_catalog.',
+    },
+    {
+      label: 'sku_stock ↔ ledger drift',
+      status: driftClean && openDriftCount === 0 ? 'pass' : driftClean ? 'warn' : 'fail',
+      detail: driftClean
+        ? openDriftCount === 0
+          ? 'v_sku_stock_drift is empty; no open DRIFT alerts.'
+          : `v_sku_stock_drift is empty but ${openDriftCount} open DRIFT alert(s) — next drift-check run will resolve.`
+        : `${drift.length} SKU(s) currently drifting — fix before flipping any inventory v2 flag.`,
+    },
+  ];
+  const preflightAllOk = preflight.every((p) => p.status === 'pass');
 
   return (
     <div className="min-h-screen w-full bg-gray-50 p-8">
@@ -309,6 +399,90 @@ export default async function InventoryV2AdminPage() {
             </tbody>
           </table>
         </section>
+
+        {/* Preflight — gating checks for flipping any phase flag */}
+        <section className="rounded-lg border border-gray-200 bg-white shadow-sm">
+          <header className="flex items-center justify-between border-b border-gray-100 px-6 py-4">
+            <h2 className="text-lg font-medium text-gray-900">Preflight</h2>
+            <span className={`rounded-full px-3 py-1 text-xs font-medium ${preflightAllOk ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700'}`}>
+              {preflightAllOk ? 'all green — safe to flip flags' : 'attention required'}
+            </span>
+          </header>
+          <ul className="divide-y divide-gray-100">
+            {preflight.map((c) => {
+              const dot =
+                c.status === 'pass' ? 'bg-green-500' :
+                c.status === 'warn' ? 'bg-amber-500' :
+                'bg-red-500';
+              const label =
+                c.status === 'pass' ? 'PASS' :
+                c.status === 'warn' ? 'WARN' :
+                'FAIL';
+              return (
+                <li key={c.label} className="flex items-start gap-3 px-6 py-3">
+                  <span className={`mt-1 inline-block h-2.5 w-2.5 shrink-0 rounded-full ${dot}`} />
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-baseline gap-3">
+                      <span className="text-sm font-medium text-gray-900">{c.label}</span>
+                      <span className={`text-[10px] font-bold uppercase tracking-wider ${
+                        c.status === 'pass' ? 'text-green-700' :
+                        c.status === 'warn' ? 'text-amber-700' :
+                        'text-red-700'
+                      }`}>
+                        {label}
+                      </span>
+                    </div>
+                    <p className="mt-0.5 text-xs text-gray-600">{c.detail}</p>
+                  </div>
+                </li>
+              );
+            })}
+          </ul>
+          <footer className="border-t border-gray-100 bg-gray-50 px-6 py-3 text-xs text-gray-600">
+            Phase-specific data preconditions:
+            <span className="ml-1">
+              Phase 5 (PACKING) requires Phase 4 (ALLOCATION) flipped first so
+              <code className="mx-1 rounded bg-gray-100 px-1 py-0.5">order_unit_allocations</code>
+              rows exist for /api/pack/ship to accept.
+            </span>
+          </footer>
+        </section>
+
+        {/* Open DRIFT alerts — surfaced by /api/qstash/inventory/drift-check */}
+        {openDriftAlerts.length > 0 ? (
+          <section className="rounded-lg border border-red-200 bg-red-50 shadow-sm">
+            <header className="flex items-center justify-between border-b border-red-100 px-6 py-4">
+              <h2 className="text-lg font-medium text-red-900">Open DRIFT alerts</h2>
+              <span className="rounded-full bg-red-200 px-3 py-1 text-xs font-medium text-red-800">
+                {openDriftAlerts.length} open
+              </span>
+            </header>
+            <table className="min-w-full divide-y divide-red-100 text-sm">
+              <thead className="bg-red-100/50 text-xs uppercase tracking-wide text-red-700">
+                <tr>
+                  <th className="px-6 py-2 text-left font-medium">SKU</th>
+                  <th className="px-6 py-2 text-right font-medium">Worst |Δ|</th>
+                  <th className="px-6 py-2 text-left font-medium">Triggered</th>
+                  <th className="px-6 py-2 text-left font-medium">Detail</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-red-100">
+                {openDriftAlerts.map((a) => (
+                  <tr key={a.id}>
+                    <td className="px-6 py-2 font-mono text-xs">
+                      <a href={`/admin/inventory-v2/sku/${encodeURIComponent(a.sku)}`} className="text-red-700 hover:underline">
+                        {a.sku}
+                      </a>
+                    </td>
+                    <td className="px-6 py-2 text-right font-semibold text-red-700">{a.qty_at_trigger ?? '—'}</td>
+                    <td className="px-6 py-2 text-xs text-red-700">{new Date(a.triggered_at).toLocaleString()}</td>
+                    <td className="px-6 py-2 font-mono text-[11px] text-gray-700">{a.notes ?? '—'}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </section>
+        ) : null}
 
         {/* Schema artifacts */}
         <section className="rounded-lg border border-gray-200 bg-white shadow-sm">
