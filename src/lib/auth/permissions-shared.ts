@@ -50,7 +50,7 @@ export type PermissionString =
   | 'packing.view' | 'packing.start_session' | 'packing.scan_order'
   | 'packing.print_label' | 'packing.complete_order'
   | 'tech.view' | 'tech.scan_serial' | 'tech.qc_pass' | 'tech.qc_fail' | 'tech.assign_bin'
-  | 'repair.view' | 'repair.intake' | 'repair.mark_repaired'
+  | 'repair.view' | 'repair.intake' | 'repair.mark_repaired' | 'repair.pickup_sign'
   | 'shipping.view' | 'shipping.mark_shipped' | 'shipping.void_order'
   | 'orders.view' | 'orders.create' | 'orders.void'
   | 'fba.view' | 'fba.manage_fnskus' | 'fba.stage_shipments'
@@ -91,7 +91,7 @@ const ROLE_PERMISSION_SETS: Record<Exclude<CanonicalRole, 'admin'>, ReadonlyArra
   ],
   technician: [
     'tech.view', 'tech.scan_serial', 'tech.qc_pass', 'tech.qc_fail', 'tech.assign_bin',
-    'repair.view', 'repair.intake', 'repair.mark_repaired',
+    'repair.view', 'repair.intake', 'repair.mark_repaired', 'repair.pickup_sign',
     'sku_stock.view', 'bin.adjust', 'bin.set', 'bin.add_sku',
     'print.label', 'work_orders.view', 'work_orders.claim', 'work_orders.complete',
   ],
@@ -268,7 +268,7 @@ export const PERMISSION_CATEGORIES: ReadonlyArray<{
   ] },
   { id: 'tech', label: 'Tech & Repair', permissions: [
     'tech.view', 'tech.scan_serial', 'tech.qc_pass', 'tech.qc_fail', 'tech.assign_bin',
-    'repair.view', 'repair.intake', 'repair.mark_repaired',
+    'repair.view', 'repair.intake', 'repair.mark_repaired', 'repair.pickup_sign',
   ] },
   { id: 'shipping', label: 'Shipping & Orders', permissions: [
     'shipping.view', 'shipping.mark_shipped', 'shipping.void_order',

@@ -27,3 +27,5 @@ export * from './desktop';
 export * from './mobile';
 export * from './PlatformBadge';
 export * from './StaffBadge';
+export * from './WorkspaceCard';
+export * from './StickyActionBar';

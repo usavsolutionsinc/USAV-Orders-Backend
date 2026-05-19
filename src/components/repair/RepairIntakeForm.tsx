@@ -702,9 +702,11 @@ export function RepairIntakeForm({ onClose, onSubmit, initialData, favoriteSkuId
                         </p>
                     </div>
 
-                    {/* Full-screen signature pad */}
-                    <div className="flex-1 min-h-0 p-6">
-                        <SignaturePad onSignatureChange={setSignatureData} fillHeight />
+                    {/* Signature pad — capped height so the customer signs near the visible baseline */}
+                    <div className="flex-1 min-h-0 flex items-start justify-center px-6 pt-4 pb-2">
+                        <div className="w-full max-w-3xl h-[260px]">
+                            <SignaturePad onSignatureChange={setSignatureData} fillHeight />
+                        </div>
                     </div>
 
                     <div className="shrink-0 border-t border-gray-100 px-6 py-3 text-center">

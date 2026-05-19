@@ -1,5 +1,6 @@
 'use client';
 
+import { useEffect, useRef } from 'react';
 import { Barcode, Search } from '@/components/Icons';
 import { SearchBar } from '@/components/ui/SearchBar';
 import {
@@ -39,8 +40,27 @@ export function ReceivingScanBar({
   isSearching,
   searchMode = false,
 }: Props) {
+  // External focus trigger — Quick Access chips (`Search Receiving`,
+  // `Receiving`) dispatch `receiving-focus-scan` after navigating so the
+  // input is hot even when the panel was already mounted (router.push
+  // without remount).
+  const inputRef = useRef<HTMLInputElement>(null);
+  useEffect(() => {
+    const handler = () => requestAnimationFrame(() => inputRef.current?.focus());
+    window.addEventListener('receiving-focus-scan', handler);
+    return () => window.removeEventListener('receiving-focus-scan', handler);
+  }, []);
+
+  // History mode adopts a distinct (purple) variant so the operator's eye
+  // registers "search-and-read" vs "scan-and-write" at a glance. The mode
+  // pills row above already has a gray bottom border — adding a top border
+  // here would stack on top of it and read as a doubled indigo+gray stripe.
   return (
-    <div className={`${sidebarHeaderBandClass} ${sidebarHeaderRowClass} flex items-center gap-2`}>
+    <div
+      className={`${sidebarHeaderBandClass} ${sidebarHeaderRowClass} flex items-center gap-2 transition-colors ${
+        searchMode ? 'bg-indigo-50/30' : ''
+      }`}
+    >
       <div className="flex-1 min-w-0">
         <SearchBar
           key={scanBarKey}
@@ -48,8 +68,9 @@ export function ReceivingScanBar({
           onChange={onChange}
           onSearch={onSubmit}
           onClear={() => onChange('')}
-          placeholder={searchMode ? 'Search trackings…' : 'Scan tracking…'}
-          variant="blue"
+          inputRef={inputRef}
+          placeholder={searchMode ? 'Search tracking or PO #…' : 'Scan tracking…'}
+          variant={searchMode ? 'purple' : 'blue'}
           size="compact"
           isSearching={isSearching}
           leadingIcon={

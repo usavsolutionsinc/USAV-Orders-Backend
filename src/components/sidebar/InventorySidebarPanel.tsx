@@ -5,15 +5,10 @@
  *
  * The dashboard chrome owns the "Inventory" title. This panel renders:
  *   - The SKU/bin finder (always visible)
- *   - Pills with counts: Rooms · Bins · Labels · Map
- *   - Tab-specific body:
- *       rooms  → RoomManager (CRUD)
- *       bins   → recent activity feed (filters now live in the main area)
- *       labels → BinLabelPrinter (the existing 5-step picker)
- *       map    → view-mode toggle + legend
- *
- * Everything else (bin tables, room board, warehouse grid) lives in the
- * main area via InventoryShell.
+ *   - Pills with counts: Labels · Rooms · Bins · Map
+ *   - Tab-specific body: a small contextual hint per tab. Every workspace
+ *     (rooms board, location label printer, bins table, warehouse map) lives in
+ *     the main area via InventoryShell so it can use the full content width.
  */
 
 import { useCallback, useMemo } from 'react';
@@ -25,17 +20,14 @@ import {
 } from '@/components/ui/HorizontalButtonSlider';
 import { LayoutDashboard, Box, Printer, MapPin } from '@/components/Icons';
 import { useLocations } from '@/hooks/useLocations';
-import { useBinsOverview } from '@/hooks/useBinsOverview';
-import { RoomManager } from '@/components/inventory/RoomManager';
-import { BinLabelPrinter } from '@/components/barcode/BinLabelPrinter';
 import { SkuLocationFinder } from '@/components/inventory/SkuLocationFinder';
 import { MapLegend, type MapViewMode } from '@/components/inventory/WarehouseMap';
 
 type InventoryTab = 'rooms' | 'bins' | 'labels' | 'map';
 
 function parseTab(raw: string | null): InventoryTab {
-  if (raw === 'bins' || raw === 'labels' || raw === 'map') return raw;
-  return 'rooms';
+  if (raw === 'rooms' || raw === 'bins' || raw === 'map') return raw;
+  return 'labels';
 }
 
 export function InventorySidebarPanel() {
@@ -62,9 +54,9 @@ export function InventorySidebarPanel() {
 
   const tabItems: HorizontalSliderItem[] = useMemo(
     () => [
+      { id: 'labels', label: 'Labels', icon: Printer },
       { id: 'rooms',  label: 'Rooms',  icon: LayoutDashboard, count: rooms.length },
       { id: 'bins',   label: 'Bins',   icon: Box,             count: bins.length },
-      { id: 'labels', label: 'Labels', icon: Printer },
       { id: 'map',    label: 'Map',    icon: MapPin },
     ],
     [rooms.length, bins.length],
@@ -86,15 +78,45 @@ export function InventorySidebarPanel() {
       </div>
 
       <div className="min-h-0 min-w-0 flex-1 overflow-y-auto scrollbar-hide">
-        {tab === 'rooms'  && <div className="p-4"><RoomManager /></div>}
+        {tab === 'rooms'  && <RoomsSidebarBody />}
         {tab === 'bins'   && <BinsSidebarBody />}
-        {tab === 'labels' && <BinLabelPrinter isActive />}
+        {tab === 'labels' && <LabelsSidebarBody />}
         {tab === 'map'    && <MapSidebarBody />}
       </div>
 
       <footer className="p-4 border-t border-gray-100 opacity-30 mt-auto text-center">
         <p className="text-[7px] font-mono uppercase tracking-[0.2em] text-gray-500">USAV INV</p>
       </footer>
+    </div>
+  );
+}
+
+// ── Rooms sidebar — context hint; CRUD lives in the main pane workspace ──
+
+function RoomsSidebarBody() {
+  return (
+    <div className="space-y-3 p-4">
+      <p className="text-[11px] text-gray-500">
+        Add, rename, reorder, and delete rooms in the main workspace. Tap the
+        pencil there to enter edit mode.
+      </p>
+    </div>
+  );
+}
+
+// ── Labels sidebar — context hint; the printer lives in the main pane ────
+
+function LabelsSidebarBody() {
+  return (
+    <div className="space-y-3 p-4">
+      <p className="text-[11px] text-gray-500">
+        Build a bin label in the main workspace — pick a room, then drill into
+        aisle, bay, level, and position. Live preview + QR render alongside the
+        picker.
+      </p>
+      <p className="text-[10px] text-gray-400">
+        Tip: ⌘P / Ctrl+P prints the current label once all steps are picked.
+      </p>
     </div>
   );
 }

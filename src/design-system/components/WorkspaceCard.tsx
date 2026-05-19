@@ -1,0 +1,73 @@
+'use client';
+
+import type { ReactNode } from 'react';
+
+export type WorkspaceCardTone = 'blue' | 'emerald' | 'orange' | 'violet' | 'red' | 'gray';
+
+interface WorkspaceCardProps {
+  /** Small uppercase tracking-wide label rendered in the card header. */
+  label?: ReactNode;
+  /** Optional trailing slot in the header row (e.g. badge, count chip). */
+  actions?: ReactNode;
+  /** Accent tone for the optional left rail; defaults to no rail. */
+  tone?: WorkspaceCardTone;
+  /** Extra class on the body wrapper (override padding, etc.). */
+  bodyClassName?: string;
+  /** Extra class on the outer section. */
+  className?: string;
+  children: ReactNode;
+}
+
+const TONE_RAIL: Record<WorkspaceCardTone, string> = {
+  blue: 'bg-blue-500',
+  emerald: 'bg-emerald-500',
+  orange: 'bg-orange-500',
+  violet: 'bg-violet-500',
+  red: 'bg-rose-500',
+  gray: 'bg-gray-300',
+};
+
+/**
+ * Floating white card surface used across the receiving workspace. Mirrors
+ * the local `WorkspaceCard` in `src/components/MultiSkuSnBarcode.tsx` so the
+ * two surfaces share a visual language; promoted here for reuse.
+ *
+ * The optional left rail picks up the receiving variant tone (PO → blue,
+ * RETURN → red, etc.) — useful for visually grouping cards by record kind.
+ */
+export function WorkspaceCard({
+  label,
+  actions,
+  tone,
+  bodyClassName,
+  className,
+  children,
+}: WorkspaceCardProps) {
+  return (
+    <section
+      className={`relative overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-gray-200/60 ${
+        className ?? ''
+      }`}
+    >
+      {tone ? (
+        <span
+          aria-hidden
+          className={`absolute inset-y-0 left-0 w-[3px] ${TONE_RAIL[tone]}`}
+        />
+      ) : null}
+      {(label || actions) && (
+        <header className="flex items-center justify-between px-5 pt-4">
+          {label ? (
+            <h3 className="text-[11px] font-bold uppercase tracking-[0.14em] text-gray-500">
+              {label}
+            </h3>
+          ) : (
+            <span aria-hidden />
+          )}
+          {actions ? <div className="flex items-center gap-1.5">{actions}</div> : null}
+        </header>
+      )}
+      <div className={bodyClassName ?? 'px-5 py-4'}>{children}</div>
+    </section>
+  );
+}

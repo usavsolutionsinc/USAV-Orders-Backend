@@ -32,12 +32,27 @@ const CHIPS: CommonChip[] = [
     onClick: (router) => router.push(dashboardShippedFocusSearchHref()),
   },
   {
-    id: 'receiving-search',
+    id: 'receiving-scan',
     label: 'Receiving',
     icon: <Barcode className={ICON_CLS} />,
     onClick: (router) => {
       router.push('/receiving');
       // Receiving's Mode1BulkScan listens for this and focuses its scan input.
+      window.setTimeout(() => {
+        window.dispatchEvent(new CustomEvent('receiving-focus-scan'));
+      }, 150);
+    },
+  },
+  {
+    // Distinct from the "Receiving" chip: this lands the operator in the
+    // History tab with the search bar focused (mirrors the Shipped search
+    // entry's behavior) so they can paste/scan a tracking and immediately
+    // see the audit-log-style ReceivingDetailsStack on the right.
+    id: 'receiving-search',
+    label: 'Search Receiving',
+    icon: <SearchIcon className={ICON_CLS} />,
+    onClick: (router) => {
+      router.push('/receiving?mode=history');
       window.setTimeout(() => {
         window.dispatchEvent(new CustomEvent('receiving-focus-scan'));
       }, 150);

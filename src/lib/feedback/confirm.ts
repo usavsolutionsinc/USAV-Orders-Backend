@@ -76,3 +76,15 @@ export function scanFeedback(): void {
   safeVibrate(20);
   tone({ freq: 1320, durationMs: 50, volume: 0.12 });
 }
+
+/**
+ * Fired when a new carton hand-off lands on the phone from a desktop scan —
+ * a two-note ascending chime with a double-pulse vibration so the tech feels
+ * (and hears) the arrival even if they aren't looking at the screen.
+ */
+export function arrivalFeedback(): void {
+  safeVibrate([45, 35, 70]);
+  tone({ freq: 660, durationMs: 70, volume: 0.16 });
+  // Second, brighter note offset slightly so the two beats are perceived as a chime.
+  setTimeout(() => tone({ freq: 990, durationMs: 90, volume: 0.18 }), 90);
+}

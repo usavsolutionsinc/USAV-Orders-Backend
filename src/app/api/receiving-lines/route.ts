@@ -201,8 +201,22 @@ export const GET = withAuth(async (request: NextRequest) => {
     let idx = 1;
 
     if (search) {
+      // History search bar lets operators type a tracking, PO #, SKU, or item
+      // name. Match against every visible identifier so a single field works
+      // for all of them. `r.zoho_purchaseorder_number` covers the human-
+      // readable "PO-1234" style; `rl.zoho_purchaseorder_id` covers the
+      // internal numeric Zoho id; `r.receiving_tracking_number` /
+      // `stn.tracking_number_raw` cover carrier trackings.
       conditions.push(
-        `(rl.item_name ILIKE $${idx} OR rl.sku ILIKE $${idx} OR rl.zoho_purchaseorder_id ILIKE $${idx} OR rl.zoho_item_id ILIKE $${idx})`,
+        `(rl.item_name ILIKE $${idx}
+          OR rl.sku ILIKE $${idx}
+          OR rl.zoho_purchaseorder_id ILIKE $${idx}
+          OR rl.zoho_purchaseorder_number ILIKE $${idx}
+          OR rl.zoho_item_id ILIKE $${idx}
+          OR r.zoho_purchaseorder_number ILIKE $${idx}
+          OR r.receiving_tracking_number ILIKE $${idx}
+          OR stn.tracking_number_raw ILIKE $${idx}
+          OR stn.tracking_number_normalized ILIKE $${idx})`,
       );
       values.push(`%${search}%`);
       idx++;
@@ -312,6 +326,7 @@ export const GET = withAuth(async (request: NextRequest) => {
                AND r.source = 'zoho_po'
                AND r.zoho_purchaseorder_id = rl.zoho_purchaseorder_id)
          )
+         LEFT JOIN shipping_tracking_numbers stn ON stn.id = r.shipment_id
          ${where}`,
         values.slice(0, -2),
       ),

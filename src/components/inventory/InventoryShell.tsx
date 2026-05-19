@@ -21,8 +21,8 @@ import { WarehouseMap, type MapViewMode } from './WarehouseMap';
 type InventoryTab = 'rooms' | 'bins' | 'labels' | 'map';
 
 function parseTab(raw: string | null): InventoryTab {
-  if (raw === 'bins' || raw === 'labels' || raw === 'map') return raw;
-  return 'rooms';
+  if (raw === 'rooms' || raw === 'bins' || raw === 'map') return raw;
+  return 'labels';
 }
 
 export function InventoryShell() {

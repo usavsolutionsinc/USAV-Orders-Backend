@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { formatDateTimePST } from '@/utils/date';
 import { getStaffName } from '@/utils/staff';
+import { StaffButtonGrid } from '@/components/shipping/StaffButtonGrid';
 
 function toLocalDateTimeInputValue(date: Date): string {
   const year  = date.getFullYear();
@@ -63,44 +64,29 @@ export function MarkAsShippedForm({
 
   return (
     <div className="rounded-xl border border-emerald-200 bg-emerald-50/60 p-3 space-y-2.5">
-      <div className="grid grid-cols-2 gap-2">
-        <div>
-          <span className="text-[9px] font-black uppercase tracking-[0.14em] text-emerald-800/80 block mb-1">Packer</span>
-          <select
-            value={selectedPackerId ?? ''}
-            onChange={(e) => setSelectedPackerId(Number(e.target.value) || null)}
-            className="w-full h-8 rounded-lg border border-emerald-200 bg-white px-2 text-[10px] font-bold text-gray-900 outline-none"
-          >
-            <option value="">Select</option>
-            {packerOptions.map((packer) => (
-              <option key={packer.id} value={packer.id}>{packer.name}</option>
-            ))}
-          </select>
-        </div>
-        <div>
-          <span className="text-[9px] font-black uppercase tracking-[0.14em] text-emerald-800/80 block mb-1">Date &amp; Time</span>
-          <input
-            type="datetime-local"
-            value={packedAt}
-            onChange={(e) => setPackedAt(e.target.value)}
-            className="w-full h-8 rounded-lg border border-emerald-200 bg-white px-2 text-[10px] font-bold text-gray-900 outline-none"
-          />
-        </div>
-      </div>
+      <StaffButtonGrid
+        label="Packer"
+        options={packerOptions}
+        selectedId={selectedPackerId}
+        onSelect={(id) => setSelectedPackerId(id)}
+        columns={Math.min(packerOptions.length, 4)}
+        emptyMessage="No packers available"
+      />
 
-      <div className="grid grid-cols-2 gap-2">
-        <div className="rounded-lg border border-emerald-200 bg-white px-2 py-1.5">
-          <span className="text-[8px] font-black uppercase tracking-wider text-gray-500 block">Packer</span>
-          <p className="text-[10px] font-bold text-gray-900 truncate">
-            {selectedPackerId ? getStaffName(selectedPackerId) : 'N/A'}
-          </p>
-        </div>
-        <div className="rounded-lg border border-emerald-200 bg-white px-2 py-1.5">
-          <span className="text-[8px] font-black uppercase tracking-wider text-gray-500 block">Time</span>
-          <p className="text-[10px] font-bold text-gray-900 truncate">
-            {packedAt ? formatDateTimePST(new Date(packedAt)) : 'N/A'}
-          </p>
-        </div>
+      <div>
+        <span className="text-[9px] font-black uppercase tracking-[0.14em] text-emerald-800/80 block mb-1">
+          Date &amp; Time
+        </span>
+        <input
+          type="datetime-local"
+          value={packedAt}
+          onChange={(e) => setPackedAt(e.target.value)}
+          className="w-full h-8 rounded-lg border border-emerald-200 bg-white px-2 text-[10px] font-bold text-gray-900 outline-none"
+        />
+        <p className="mt-1 text-[9px] font-bold text-gray-600">
+          {packedAt ? formatDateTimePST(new Date(packedAt)) : 'N/A'} ·{' '}
+          {selectedPackerId ? getStaffName(selectedPackerId) : 'No packer'}
+        </p>
       </div>
 
       <button

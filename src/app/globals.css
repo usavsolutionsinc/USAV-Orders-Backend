@@ -78,7 +78,7 @@ body {
 }
 
 /*
- * Print-only render zone used by the Bin Label Printer.
+ * Print-only render zone used by the Location Label Printer.
  * On screen the zone is hidden; on print, the entire document is masked
  * except the labels in `.label-print-zone`, giving a clean page.
  */
