@@ -104,5 +104,14 @@
     "retries": 3,
     "timeout": 60,
     "label": "inventory-drift-check"
+  },
+  {
+    "scheduleId": "google-photos-daily-0200-utc",
+    "cron": "0 2 * * *",
+    "path": "/api/qstash/google-photos/daily",
+    "body": {},
+    "retries": 3,
+    "timeout": 300,
+    "label": "google-photos-daily-backup"
   }
 ]

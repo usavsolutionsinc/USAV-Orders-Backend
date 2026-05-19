@@ -104,11 +104,10 @@ export function ActiveOrderWorkspace({
   // "open externally" affordance so the section still has value.
   const canEmbedListing = listingUrl != null && isElectron();
 
-  // Listing iframe is collapsed by default in preview — the tech is deciding
-  // whether to start the order, not inspecting the marketplace. Active mode
-  // keeps the iframe expanded so the marketplace page is at-a-glance during
-  // testing.
-  const [showListing, setShowListing] = useState(!isPreview);
+  // Listing iframe is expanded by default in both preview and active modes —
+  // the marketplace page is the primary context for the tech, so loading it
+  // up front beats hiding it behind an extra click.
+  const [showListing, setShowListing] = useState(true);
 
   return (
     <motion.div

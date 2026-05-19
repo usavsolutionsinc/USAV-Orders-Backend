@@ -737,9 +737,10 @@ export function ReceivingSidebarPanel() {
             toast.error('Tracking found but no lines yet');
             return;
           }
-          // Pin rows as a "Search results" group so they bypass the
-          // current-week filter, and surface the detail stack so the
-          // operator goes from "found it" → "read it" with no extra click.
+          // Prepend rows into the table (in-week matches surface there) and
+          // open the details overlay so the operator goes from "found it" →
+          // "read it" with no extra click. Past-week matches live in the
+          // sidebar's RecentSearchesRail rather than the right-pane table.
           window.dispatchEvent(
             new CustomEvent('receiving-lines-prepended', {
               detail: { rows, source: 'search' },
@@ -774,8 +775,9 @@ export function ReceivingSidebarPanel() {
           toast.error(`No matches for "${trimmed}"`);
           return;
         }
-        // Same prepend-and-pin path as the tracking branch so the operator
-        // always sees the matched lines at the top of the table.
+        // Same prepend path as the tracking branch — in-week matches show
+        // up at the top of the table; the sidebar's RecentSearchesRail is
+        // the canonical record of past searches.
         window.dispatchEvent(
           new CustomEvent('receiving-lines-prepended', {
             detail: { rows, source: 'search' },

@@ -31,6 +31,7 @@ const PUBLIC_PATHS: ReadonlyArray<RegExp> = [
   /^\/m\/enroll\//,
   /^\/api\/auth\//,
   /^\/api\/health(?:$|\/)/,
+  /^\/api\/qstash\//,
   /^\/_next\//,
   /^\/favicon\.ico$/,
   /^\/manifest\.(json|webmanifest)$/,

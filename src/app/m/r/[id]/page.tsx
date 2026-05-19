@@ -4,6 +4,7 @@ import { Suspense, useCallback, useEffect, useMemo, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
 import { workflowStatusTableLabel } from '@/components/station/receiving-constants';
+import { NetworkChip } from '@/components/mobile/NetworkChip';
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -218,6 +219,7 @@ function CartonPageInner() {
             ) : null}
           </div>
           <div className="flex flex-col items-end gap-1.5">
+            <NetworkChip compact />
             {carton ? (
               <span className="inline-flex items-center rounded-full bg-slate-900 px-2 py-0.5 text-xs font-bold uppercase tracking-wide text-white">
                 {platformLabel(carton)}

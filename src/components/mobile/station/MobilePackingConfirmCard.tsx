@@ -1,11 +1,12 @@
 'use client';
 
-import React from 'react';
+import React, { useState } from 'react';
 import { Package, AlertTriangle, Settings, ExternalLink } from '@/components/Icons';
 import { ShipByDate } from '@/components/ui/ShipByDate';
 import { InlineQtyPrefix } from '@/components/ui/QtyBadge';
 import { getDaysLateNumber, getDaysLateTone } from '@/utils/date';
 import { getLast4 } from '@/components/ui/CopyChip';
+import { ShortPickSheet, type ShortPickResult } from '@/components/mobile/picker/ShortPickSheet';
 import type { ActivePackingOrder, ActiveFbaScan } from './MobileStationPacking';
 
 // ─── Types ──────────────────────────────────────────────────────────────────
@@ -19,6 +20,13 @@ interface MobilePackingConfirmCardProps {
   scannedValue: string;
   onConfirm: () => void;
   onReject: () => void;
+  /**
+   * Optional handler for short-pack confirmations (FBA variant only, when
+   * `combinedPackScannedQty < plannedQty`). If omitted, the sheet still
+   * collects a reason then falls through to `onConfirm()` so the existing
+   * parent contract stays intact.
+   */
+  onShortPick?: (result: ShortPickResult) => void;
   /** Compact read-only mode for the review step (hides buttons) */
   compact?: boolean;
 }
@@ -92,9 +100,29 @@ export function MobilePackingConfirmCard({
   scannedValue,
   onConfirm,
   onReject,
+  onShortPick,
   compact = false,
 }: MobilePackingConfirmCardProps) {
   const config = getVariantConfig(variant);
+  const [shortSheetOpen, setShortSheetOpen] = useState(false);
+
+  const fbaIsShort = !!fba && fba.plannedQty > 0 && fba.combinedPackScannedQty < fba.plannedQty;
+  const handleFbaConfirmPress = () => {
+    if (fbaIsShort) {
+      setShortSheetOpen(true);
+      return;
+    }
+    onConfirm();
+  };
+  const handleShortPickConfirm = (result: ShortPickResult) => {
+    if (onShortPick) {
+      onShortPick(result);
+    } else {
+      // Parent has not opted into short-pick capture yet — preserve existing
+      // confirm-and-move-on behavior so we don't strand the worker on the sheet.
+      onConfirm();
+    }
+  };
 
   // ── FBA variant ──
   if (fba && (variant === 'fba')) {
@@ -146,18 +174,29 @@ export function MobilePackingConfirmCard({
           </div>
         </div>
 
+        {/* Short-pick warning banner — only when scanned < planned */}
+        {fbaIsShort && !compact && (
+          <div className="mx-4 mb-3 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2">
+            <p className="text-xs font-semibold text-amber-800">
+              Short — {fba.combinedPackScannedQty} of {fba.plannedQty} scanned. Confirming will ask for a reason.
+            </p>
+          </div>
+        )}
+
         {/* Action buttons */}
         {!compact && (
           <div className="px-4 pb-4 space-y-2">
             <button
               type="button"
-              onClick={onConfirm}
-              className={`w-full h-[52px] rounded-2xl text-white text-[12px] font-black uppercase tracking-wider flex items-center justify-center gap-2 transition-colors ${config.confirmBtn}`}
+              onClick={handleFbaConfirmPress}
+              className={`w-full h-[52px] rounded-2xl text-white text-[12px] font-black uppercase tracking-wider flex items-center justify-center gap-2 transition-colors ${
+                fbaIsShort ? 'bg-amber-600 active:bg-amber-700' : config.confirmBtn
+              }`}
             >
               <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
               </svg>
-              Yes, Looks Right
+              {fbaIsShort ? 'Confirm short pack…' : 'Yes, Looks Right'}
             </button>
             <button
               type="button"
@@ -168,6 +207,14 @@ export function MobilePackingConfirmCard({
             </button>
           </div>
         )}
+        <ShortPickSheet
+          open={shortSheetOpen}
+          onClose={() => setShortSheetOpen(false)}
+          pickedQty={fba.combinedPackScannedQty}
+          plannedQty={fba.plannedQty}
+          productLabel={`${fba.productTitle} · FNSKU ${getLast4(fba.fnsku)}`}
+          onConfirm={handleShortPickConfirm}
+        />
       </div>
     );
   }

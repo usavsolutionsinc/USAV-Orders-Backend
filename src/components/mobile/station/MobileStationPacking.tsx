@@ -34,6 +34,7 @@ import {
 } from '@/hooks/station/packingWizardReducer';
 import { useMobilePackingLookup } from '@/hooks/station/useMobilePackingLookup';
 import { useAblyClient } from '@/contexts/AblyContext';
+import { NetworkChip } from '@/components/mobile/NetworkChip';
 
 // Re-export types for consumers (e.g. MobilePackingConfirmCard)
 export type { ActivePackingOrder, ActiveFbaScan, CapturedPhoto } from '@/hooks/station/packingWizardReducer';
@@ -378,6 +379,7 @@ export function MobileStationPacking({
             ) : undefined,
             trailing: (
               <div className="flex items-center gap-2">
+                <NetworkChip compact />
                 <span className="text-[11px] font-black text-gray-500 tabular-nums">
                   {todayCount}/{goal}
                 </span>

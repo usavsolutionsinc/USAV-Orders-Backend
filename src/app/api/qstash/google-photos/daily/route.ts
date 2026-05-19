@@ -1,0 +1,146 @@
+import { NextRequest, NextResponse } from 'next/server';
+import { isQStashOrigin } from '@/lib/qstash';
+import pool from '@/lib/db';
+import type { AlbumResult } from '@/lib/google-photos/client';
+import {
+  processPhoto,
+  queryPendingPhotos,
+  yesterdayUtc,
+} from '@/lib/google-photos/backup';
+import { runBlobCleanup } from '@/lib/google-photos/blob-cleanup';
+import { recordAudit } from '@/lib/audit-logs';
+
+export const dynamic = 'force-dynamic';
+export const maxDuration = 300;
+
+interface CronResult {
+  date: string;
+  scanned: number;
+  uploaded: number;
+  failed: number;
+  blobScanned: number;
+  blobDeleted: number;
+  blobFailed: number;
+  errors: Array<{ photoId: number; message: string }>;
+}
+
+export async function POST(request: NextRequest) {
+  if (!isQStashOrigin(request.headers)) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
+  const startedAt = new Date();
+  const date = yesterdayUtc();
+  const result: CronResult = {
+    date,
+    scanned: 0,
+    uploaded: 0,
+    failed: 0,
+    blobScanned: 0,
+    blobDeleted: 0,
+    blobFailed: 0,
+    errors: [],
+  };
+
+  // Insert a run-history row up front so failures still leave a trace.
+  const runRow = await pool.query<{ id: number }>(
+    `INSERT INTO google_photos_backup_runs (source, date, started_at)
+     VALUES ('cron', $1, $2) RETURNING id`,
+    [date, startedAt.toISOString()],
+  );
+  const runId = runRow.rows[0].id;
+
+  try {
+    // ── 1. Back up yesterday's photos ──────────────────────────────────────
+    const photos = await queryPendingPhotos({ date, limit: 200 });
+    result.scanned = photos.length;
+    if (photos.length > 0) {
+      const albumCache = new Map<string, AlbumResult>();
+      for (const photo of photos) {
+        const r = await processPhoto(photo, date, albumCache);
+        if (r.ok) result.uploaded += 1;
+        else {
+          result.failed += 1;
+          result.errors.push({ photoId: r.photoId, message: r.error ?? 'unknown' });
+        }
+      }
+    }
+
+    // ── 2. Auto-delete blobs if enabled ────────────────────────────────────
+    const settings = await pool.query<{
+      auto_delete_enabled: boolean;
+      auto_delete_after_days: number;
+    }>(
+      `SELECT auto_delete_enabled, auto_delete_after_days
+       FROM google_photos_settings WHERE id = 1`,
+    );
+    const cfg = settings.rows[0];
+    if (cfg?.auto_delete_enabled) {
+      const cleanup = await runBlobCleanup({
+        afterDays: cfg.auto_delete_after_days,
+        limit: 200,
+      });
+      result.blobScanned = cleanup.scanned;
+      result.blobDeleted = cleanup.deleted;
+      result.blobFailed = cleanup.failed;
+      for (const e of cleanup.errors) result.errors.push(e);
+    }
+
+    // ── 3. Finalize the history row + settings.last_cron_run ───────────────
+    await pool.query(
+      `UPDATE google_photos_backup_runs
+         SET ended_at     = NOW(),
+             scanned      = $1,
+             uploaded     = $2,
+             failed       = $3,
+             blob_deleted = $4,
+             error_summary = $5
+       WHERE id = $6`,
+      [
+        result.scanned,
+        result.uploaded,
+        result.failed,
+        result.blobDeleted,
+        result.errors.length ? JSON.stringify(result.errors).slice(0, 4000) : null,
+        runId,
+      ],
+    );
+    await pool.query(
+      `UPDATE google_photos_settings
+         SET last_cron_run_at = NOW(),
+             last_cron_summary = $1
+       WHERE id = 1`,
+      [JSON.stringify(result)],
+    );
+
+    await recordAudit(pool, null, request, {
+      source: 'qstash.google_photos_daily',
+      action: 'google_photos.cron_run',
+      entityType: 'google_photos',
+      entityId: `run:${runId}`,
+      method: 'system',
+      extra: {
+        date,
+        uploaded: result.uploaded,
+        failed: result.failed,
+        blob_deleted: result.blobDeleted,
+      },
+    });
+
+    return NextResponse.json(result);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    await pool.query(
+      `UPDATE google_photos_backup_runs
+         SET ended_at = NOW(), error_summary = $1
+       WHERE id = $2`,
+      [message.slice(0, 4000), runId],
+    );
+    console.error('[qstash/google-photos/daily]', err);
+    return NextResponse.json({ success: false, error: message }, { status: 500 });
+  }
+}
+
+export async function GET() {
+  return NextResponse.json({ ok: true, queue: 'qstash', job: 'google-photos-daily' });
+}

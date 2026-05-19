@@ -5,6 +5,7 @@ import { useParams } from 'next/navigation';
 import type { RSRecord } from '@/lib/neon/repair-service-queries';
 import { RepairActionTimeline } from '@/components/repair/mobile/RepairActionTimeline';
 import { AddRepairActionSheet } from '@/components/repair/mobile/AddRepairActionSheet';
+import { NetworkChip } from '@/components/mobile/NetworkChip';
 
 const STATUS_OPTIONS = [
   'Awaiting Parts',
@@ -117,6 +118,7 @@ function RepairMobilePageInner() {
             )}
           </div>
           <div className="flex flex-col items-end gap-1.5 shrink-0">
+            <NetworkChip compact />
             {repair?.status && (
               <span
                 className={`inline-flex items-center rounded-full border px-2 py-0.5 text-xs font-bold uppercase tracking-wide ${

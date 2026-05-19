@@ -1,0 +1,95 @@
+import { NextResponse } from 'next/server';
+import { withAuth } from '@/lib/auth/withAuth';
+import { isInventoryV2Picking } from '@/lib/feature-flags';
+import { recordShortPick, type ShortPickReason } from '@/lib/picking/sessions';
+
+const VALID_REASONS: ReadonlySet<ShortPickReason> = new Set([
+  'NOT_FOUND_IN_BIN',
+  'DAMAGED',
+  'WRONG_CONDITION',
+  'MISLABELED',
+  'INSUFFICIENT_STOCK',
+  'OTHER',
+]);
+
+/**
+ * POST /api/picking/session/[id]/short-pick
+ *
+ * Records a short pick: releases the allocation back to STOCKED and writes
+ * the reason + note to inventory_events for the audit trail.
+ *
+ * Body: {
+ *   allocation_id: number,
+ *   picked_qty: number,
+ *   planned_qty: number,
+ *   reason: ShortPickReason,
+ *   note?: string,
+ *   client_event_id?: string,
+ * }
+ * Gated by INVENTORY_V2_PICKING.
+ */
+export const POST = withAuth(async (request, ctx) => {
+  if (!isInventoryV2Picking()) {
+    return NextResponse.json(
+      { ok: false, error: 'INVENTORY_V2_PICKING flag is OFF', flag: 'INVENTORY_V2_PICKING' },
+      { status: 503 },
+    );
+  }
+
+  const actorStaffId: number | null =
+    typeof ctx.staffId === 'number' && ctx.staffId > 0 ? ctx.staffId : null;
+  if (actorStaffId == null) {
+    return NextResponse.json({ ok: false, error: 'authenticated picker required' }, { status: 401 });
+  }
+
+  const segments = request.nextUrl.pathname.split('/').filter(Boolean);
+  const idStr = segments[segments.length - 2]; // …/session/<id>/short-pick
+  const sessionId = Number(idStr);
+  if (!Number.isFinite(sessionId) || sessionId <= 0) {
+    return NextResponse.json({ ok: false, error: 'invalid session id' }, { status: 400 });
+  }
+
+  const body = await request.json().catch(() => ({} as Record<string, unknown>));
+  const allocationId = Number(body?.allocation_id);
+  const pickedQty = Number(body?.picked_qty);
+  const plannedQty = Number(body?.planned_qty);
+  const reason = String(body?.reason || '') as ShortPickReason;
+  const note = typeof body?.note === 'string' ? body.note.trim() : '';
+  const clientEventId =
+    typeof body?.client_event_id === 'string' && body.client_event_id.trim() ? body.client_event_id.trim() : null;
+
+  if (!Number.isFinite(allocationId) || allocationId <= 0) {
+    return NextResponse.json({ ok: false, error: 'invalid allocation_id' }, { status: 400 });
+  }
+  if (!Number.isFinite(pickedQty) || pickedQty < 0) {
+    return NextResponse.json({ ok: false, error: 'invalid picked_qty' }, { status: 400 });
+  }
+  if (!Number.isFinite(plannedQty) || plannedQty <= 0 || pickedQty >= plannedQty) {
+    return NextResponse.json({ ok: false, error: 'picked_qty must be < planned_qty' }, { status: 400 });
+  }
+  if (!VALID_REASONS.has(reason)) {
+    return NextResponse.json({ ok: false, error: `invalid reason: ${reason}` }, { status: 400 });
+  }
+  if (reason === 'OTHER' && note.length === 0) {
+    return NextResponse.json({ ok: false, error: 'reason=OTHER requires a note' }, { status: 400 });
+  }
+
+  try {
+    const result = await recordShortPick({
+      sessionId,
+      allocationId,
+      pickedQty,
+      plannedQty,
+      reason,
+      note,
+      actorStaffId,
+      clientEventId,
+    });
+    if (!result.ok) return NextResponse.json(result, { status: result.status });
+    return NextResponse.json(result);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'short-pick failed';
+    console.error('[POST /api/picking/session/[id]/short-pick] error:', err);
+    return NextResponse.json({ ok: false, error: message }, { status: 500 });
+  }
+}, { permission: 'orders.view' });

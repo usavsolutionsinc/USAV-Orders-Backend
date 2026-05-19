@@ -6,7 +6,11 @@ const UPLOAD_URL = `${PHOTOS_API}/uploads`;
 const BATCH_CREATE_URL = `${PHOTOS_API}/mediaItems:batchCreate`;
 const ALBUMS_URL = `${PHOTOS_API}/albums`;
 
-export const GOOGLE_PHOTOS_SCOPE = 'https://www.googleapis.com/auth/photoslibrary.appendonly';
+export const GOOGLE_PHOTOS_SCOPE = [
+  'https://www.googleapis.com/auth/photoslibrary.appendonly',
+  'openid',
+  'email',
+].join(' ');
 
 export interface MediaItemResult {
   id: string;
@@ -42,6 +46,31 @@ async function loadActiveToken(): Promise<TokenRow> {
   return rows[0];
 }
 
+async function markNeedsReconnect(reason: string): Promise<void> {
+  try {
+    await pool.query(
+      `UPDATE google_photos_settings
+         SET needs_reconnect = TRUE, needs_reconnect_reason = $1
+       WHERE id = 1`,
+      [reason.slice(0, 500)],
+    );
+  } catch {
+    // settings table may not exist on older deploys; ignore.
+  }
+}
+
+async function clearNeedsReconnect(): Promise<void> {
+  try {
+    await pool.query(
+      `UPDATE google_photos_settings
+         SET needs_reconnect = FALSE, needs_reconnect_reason = NULL
+       WHERE id = 1 AND needs_reconnect = TRUE`,
+    );
+  } catch {
+    // ignore
+  }
+}
+
 async function refreshAccessToken(refreshToken: string): Promise<{ accessToken: string; expiresAt: Date }> {
   const clientId = process.env.GOOGLE_PHOTOS_CLIENT_ID;
   const clientSecret = process.env.GOOGLE_PHOTOS_CLIENT_SECRET;
@@ -63,9 +92,16 @@ async function refreshAccessToken(refreshToken: string): Promise<{ accessToken: 
   });
   if (!res.ok) {
     const text = await res.text();
+    // 400 / 401 from Google here means the refresh token was revoked or expired
+    // (testing-mode tokens hit this every 7 days). Flag the admin so the UI
+    // can prompt for reconnect.
+    if (res.status === 400 || res.status === 401) {
+      await markNeedsReconnect(`Token refresh rejected (${res.status}): ${text.slice(0, 200)}`);
+    }
     throw new Error(`Google OAuth token refresh failed (${res.status}): ${text}`);
   }
   const json = (await res.json()) as { access_token: string; expires_in: number };
+  await clearNeedsReconnect();
   return {
     accessToken: json.access_token,
     expiresAt: new Date(Date.now() + (json.expires_in - 60) * 1000),

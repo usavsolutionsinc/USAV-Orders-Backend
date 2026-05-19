@@ -24,7 +24,7 @@ export function PackerSidebarPanel() {
     const fetchHistory = async () => {
       setLoading(true);
       try {
-        const res = await fetch(`/api/packerlogs?limit=500`);
+        const res = await fetch(`/api/packerlogs?packerId=${packerId}&limit=500`);
         if (!res.ok) return;
         const data = await res.json();
         if (Array.isArray(data)) setHistory(data);

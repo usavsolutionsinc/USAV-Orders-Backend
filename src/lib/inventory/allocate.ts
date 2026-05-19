@@ -16,6 +16,10 @@
  */
 
 import { transaction } from '@/lib/neon-client';
+import {
+  pickableSerialUnitsLeftJoin,
+  pickableSerialUnitsWhereClause,
+} from '@/lib/inventory/pickability';
 
 const VALID_GRADES = ['BRAND_NEW', 'USED_A', 'USED_B', 'USED_C', 'PARTS'] as const;
 export type ConditionGrade = (typeof VALID_GRADES)[number];
@@ -80,23 +84,28 @@ export async function allocateOrder(input: AllocateOrderInput): Promise<Allocate
       ? Math.floor(input.quantity as number)
       : Math.max(1, Math.floor(Number(order.quantity ?? '1') || 1));
 
-    // 2. Select candidate units — STOCKED, matching SKU, oldest first.
-    //    FOR UPDATE SKIP LOCKED so concurrent allocators get disjoint
-    //    subsets under contention. The idx_oua_open_unit partial UNIQUE
-    //    is the final guarantee against double-allocation.
+    // 2. Select candidate units — pickable, matching SKU, oldest first.
+    //    The pickability predicate centralizes the exclusion rules
+    //    (status, bin role, cycle-count lock, expiry) — see
+    //    src/lib/inventory/pickability.ts. FOR UPDATE SKIP LOCKED so
+    //    concurrent allocators get disjoint subsets; idx_oua_open_unit
+    //    partial UNIQUE is the final guarantee against double-allocation.
+    const pickableWhere = pickableSerialUnitsWhereClause();
+    const pickableJoin = pickableSerialUnitsLeftJoin();
     const candidatesQ = await client.query<{
       id: number;
       current_location: string | null;
       condition_grade: string | null;
     }>(
-      `SELECT id, current_location, condition_grade::text AS condition_grade
-         FROM serial_units
-        WHERE current_status = 'STOCKED'::serial_status_enum
-          AND sku = $1
-          AND ($2::text IS NULL OR condition_grade::text = $2)
-        ORDER BY id ASC
+      `SELECT su.id, su.current_location, su.condition_grade::text AS condition_grade
+         FROM serial_units su
+         ${pickableJoin}
+        WHERE ${pickableWhere}
+          AND su.sku = $1
+          AND ($2::text IS NULL OR su.condition_grade::text = $2)
+        ORDER BY su.id ASC
         LIMIT $3
-        FOR UPDATE SKIP LOCKED`,
+        FOR UPDATE OF su SKIP LOCKED`,
       [order.sku.trim(), input.conditionGrade ?? null, targetQty],
     );
     const candidates = candidatesQ.rows;

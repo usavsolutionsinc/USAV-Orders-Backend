@@ -9,10 +9,10 @@ flowchart LR
   click design_system "src/design-system/index.ts" "Open src/design-system/index.ts"
   components_Icons_tsx["components/Icons.tsx"]
   click components_Icons_tsx "src/components/Icons.tsx" "Open src/components/Icons.tsx"
-  components_ui["components/ui"]
-  click components_ui "src/components/ui/DeleteButton.tsx" "Open src/components/ui/DeleteButton.tsx"
   components_sidebar["components/sidebar"]
   click components_sidebar "src/components/sidebar/DeviceModeToggle.tsx" "Open src/components/sidebar/DeviceModeToggle.tsx"
+  components_ui["components/ui"]
+  click components_ui "src/components/ui/DeleteButton.tsx" "Open src/components/ui/DeleteButton.tsx"
   components_layout["components/layout"]
   click components_layout "src/components/layout/OfflineBanner.tsx" "Open src/components/layout/OfflineBanner.tsx"
   components_shipped["components/shipped"]
@@ -69,6 +69,8 @@ flowchart LR
   click components_quick_access "src/components/quick-access/RecentSection.tsx" "Open src/components/quick-access/RecentSection.tsx"
   components_warehouse["components/warehouse"]
   click components_warehouse "src/components/warehouse/FillBar.tsx" "Open src/components/warehouse/FillBar.tsx"
+  components_barcode["components/barcode"]
+  click components_barcode "src/components/barcode/SkuInput.tsx" "Open src/components/barcode/SkuInput.tsx"
   lib_auth["lib/auth"]
   click lib_auth "src/lib/auth/dynamic-route-guard.ts" "Open src/lib/auth/dynamic-route-guard.ts"
   lib_ai["lib/ai"]
@@ -79,8 +81,6 @@ flowchart LR
   click components_PendingOrdersTable_tsx "src/components/PendingOrdersTable.tsx" "Open src/components/PendingOrdersTable.tsx"
   components_shipping["components/shipping"]
   click components_shipping "src/components/shipping/StaffButtonGrid.tsx" "Open src/components/shipping/StaffButtonGrid.tsx"
-  components_barcode["components/barcode"]
-  click components_barcode "src/components/barcode/SkuInput.tsx" "Open src/components/barcode/SkuInput.tsx"
   lib_dashboard_table_data_ts["lib/dashboard-table-data.ts"]
   click lib_dashboard_table_data_ts "src/lib/dashboard-table-data.ts" "Open src/lib/dashboard-table-data.ts"
   lib_shipping["lib/shipping"]
@@ -358,6 +358,7 @@ flowchart LR
   components_shipping --> lib_neon
   components_shipping --> utils
   components_sidebar --> components_Icons_tsx
+  components_sidebar --> components_barcode
   components_sidebar --> components_dashboard
   components_sidebar --> components_layout
   components_sidebar --> components_shipped

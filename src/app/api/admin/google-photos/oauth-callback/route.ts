@@ -99,6 +99,12 @@ export const GET = withAuth(async (req: NextRequest, ctx) => {
       [accountEmail, GOOGLE_PHOTOS_SCOPE, tokens.refresh_token, tokens.access_token, expiresAt, ctx.staffId],
     );
 
+    await pool.query(
+      `UPDATE google_photos_settings
+         SET needs_reconnect = FALSE, needs_reconnect_reason = NULL
+       WHERE id = 1`,
+    );
+
     const res = NextResponse.redirect(`${url.origin}/admin?section=photo_backup&gp_connected=1`);
     res.cookies.delete('gp_oauth_state');
     return res;

@@ -233,9 +233,30 @@ export function withAuth(
       markAuditWritten,
     };
 
-    const response = opts.allowAnonymous
-      ? await (handler as AnonymousApiHandler)(req, ctx)
-      : await (handler as ApiHandler)(req, ctx);
+    // Top-level error floor: an uncaught throw from a handler used to land as
+    // a bodyless 500 (Next.js dev default), which made constraint violations
+    // and similar runtime errors nearly impossible to diagnose from the
+    // client. Catch here, log, and return JSON. Stack is included only in
+    // non-production so prod responses don't leak internals.
+    let response: Response;
+    try {
+      response = opts.allowAnonymous
+        ? await (handler as AnonymousApiHandler)(req, ctx)
+        : await (handler as ApiHandler)(req, ctx);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      const stack = err instanceof Error ? err.stack : undefined;
+      // Postgres errors carry .code; surface it so callers can branch.
+      const pgCode = (err as { code?: string } | null)?.code;
+      console.error(
+        `[withAuth] ${req.method} ${req.nextUrl.pathname} threw:`,
+        err,
+      );
+      const payload: Record<string, unknown> = { error: 'INTERNAL', message };
+      if (pgCode) payload.code = pgCode;
+      if (process.env.NODE_ENV !== 'production' && stack) payload.stack = stack;
+      return NextResponse.json(payload, { status: 500 });
+    }
 
     // Audit floor: only on 2xx and when the handler didn't write its own
     // rich row. Fire-and-forget — the response is already prepared so audit

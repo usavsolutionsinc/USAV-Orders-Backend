@@ -52,6 +52,16 @@ export function isInventoryV2Returns(): boolean {
   return readBoolEnv('INVENTORY_V2_RETURNS');
 }
 
+/** Phase A2 — active picking states + picker session API (/m/pick). */
+export function isInventoryV2Picking(): boolean {
+  return readBoolEnv('INVENTORY_V2_PICKING');
+}
+
+/** Phase A3 — typed bin roles + cycle-count locking applied to pickability. */
+export function isInventoryV2BinRoles(): boolean {
+  return readBoolEnv('INVENTORY_V2_BIN_ROLES');
+}
+
 /** Snapshot of all inventory v2 flags. Useful for debug / admin pages. */
 export function inventoryV2FlagSnapshot(): Record<string, boolean> {
   return {
@@ -61,6 +71,8 @@ export function inventoryV2FlagSnapshot(): Record<string, boolean> {
     INVENTORY_V2_PACKING: isInventoryV2Packing(),
     INVENTORY_V2_FBA_SERIAL_LINK: isInventoryV2FbaSerialLink(),
     INVENTORY_V2_RETURNS: isInventoryV2Returns(),
+    INVENTORY_V2_PICKING: isInventoryV2Picking(),
+    INVENTORY_V2_BIN_ROLES: isInventoryV2BinRoles(),
   };
 }
 

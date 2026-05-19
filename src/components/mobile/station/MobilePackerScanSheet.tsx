@@ -8,6 +8,7 @@ import {
 } from '@/design-system/foundations/motion-framer';
 import { Loader2, Package, AlertTriangle } from '@/components/Icons';
 import { useBarcodeScanner } from '@/hooks/useBarcodeScanner';
+import { useFeedback } from '@/hooks/useFeedback';
 import { requestCameraPermission } from '@/hooks/useCamera';
 import { useLast8TrackingSearch } from '@/hooks/useLast8TrackingSearch';
 import { detectStationScanType } from '@/lib/station-scan-routing';
@@ -59,6 +60,16 @@ export function MobilePackerScanSheet({
 
   const scanner = useBarcodeScanner({ dedupMs: 2000 });
   const { normalizeTracking } = useLast8TrackingSearch();
+  const feedback = useFeedback();
+
+  // Phase + error transitions drive the haptic vocabulary. Centralizing here
+  // means each setPhase('found') / setLookupError() call site stays simple.
+  useEffect(() => {
+    if (phase === 'found') feedback('scanAccepted');
+  }, [phase, feedback]);
+  useEffect(() => {
+    if (lookupError) feedback('error');
+  }, [lookupError, feedback]);
 
   // ── Lookup logic (mirrors useMobilePackingLookup but returns result) ──
 
@@ -224,9 +235,10 @@ export function MobilePackerScanSheet({
 
   const handleConfirm = useCallback(() => {
     if (!lookupResult) return;
+    feedback('success');
     scanner.acceptScan();
     onConfirmed(lookupResult);
-  }, [lookupResult, scanner, onConfirmed]);
+  }, [lookupResult, scanner, onConfirmed, feedback]);
 
   const handleRescan = useCallback(() => {
     setPhase('scanning');

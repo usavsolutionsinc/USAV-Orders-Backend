@@ -4,6 +4,7 @@ import { type ReactNode } from 'react';
 import { cn } from '@/utils/_cn';
 import { MobileNavBar, type MobileNavItem } from './MobileNavBar';
 import { MobileToolbar } from './MobileToolbar';
+import { OfflineBanner } from '@/components/mobile/OfflineBanner';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -83,6 +84,9 @@ export function MobileShell({
         className,
       )}
     >
+      {/* ── Connection banner — overlays absolutely; appears only when offline / on reconnect. */}
+      <OfflineBanner />
+
       {/* ── Top toolbar ── */}
       {toolbar && (
         <MobileToolbar
