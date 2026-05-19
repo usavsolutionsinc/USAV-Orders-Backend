@@ -1,18 +1,22 @@
 'use client';
 
-import { motion } from 'framer-motion';
+import { useState } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
 import { framerPresence, framerTransition } from '@/design-system/foundations/motion-framer';
 import ActiveStationOrderCard from '@/components/station/ActiveStationOrderCard';
 import EmbeddedBrowser from '@/components/EmbeddedBrowser';
-import { Barcode, ExternalLink, MapPin, Package, Settings, X } from '@/components/Icons';
+import { Barcode, ChevronDown, ExternalLink, MapPin, Package, Settings, X } from '@/components/Icons';
 import type {
   ActiveStationOrder,
   ResolvedProductManual,
 } from '@/hooks/useStationTestingController';
+import type { Order } from '@/components/station/upnext/upnext-types';
 import { stationThemeColors, getStaffThemeById } from '@/utils/staff-colors';
 import { getExternalUrlByItemNumber } from '@/hooks/useExternalItemUrl';
 import { isElectron } from '@/utils/isElectron';
 import { looksLikeFnsku } from '@/lib/scan-resolver';
+import { UpNextActionDock } from './UpNextActionDock';
+import { OrderPreviewPanel } from './OrderPreviewPanel';
 
 interface ActiveOrderWorkspaceProps {
   activeOrder: ActiveStationOrder;
@@ -25,10 +29,17 @@ interface ActiveOrderWorkspaceProps {
   /**
    * `active` — order has been scanned and is in progress (default).
    * `preview` — user clicked an Up Next card to inspect it; nothing has been
-   *  scanned yet. Header changes to "Preview" and the hint strip prompts the
-   *  tech to scan to start.
+   *  scanned yet. Header changes to "Preview" and the action dock mounts at
+   *  the bottom so Start / Out of Stock are reachable here (they no longer
+   *  live on the sidebar card).
    */
   mode?: 'active' | 'preview';
+  /**
+   * Original `Order` row backing the preview. Required in preview mode so
+   * `UpNextActionDock` can dispatch action events with the right ids
+   * (`ActiveStationOrder` doesn't carry the numeric row id).
+   */
+  previewOrder?: Order;
 }
 
 function getVariantIcon(activeOrder: ActiveStationOrder) {
@@ -80,6 +91,7 @@ export function ActiveOrderWorkspace({
   onViewManual,
   onRemoveSerial,
   mode = 'active',
+  previewOrder,
 }: ActiveOrderWorkspaceProps) {
   const { Icon, tint, label } = getVariantIcon(activeOrder);
   const activeColorText = stationThemeColors[getStaffThemeById(parseInt(techId, 10))].text;
@@ -92,6 +104,12 @@ export function ActiveOrderWorkspace({
   // "open externally" affordance so the section still has value.
   const canEmbedListing = listingUrl != null && isElectron();
 
+  // Listing iframe is collapsed by default in preview — the tech is deciding
+  // whether to start the order, not inspecting the marketplace. Active mode
+  // keeps the iframe expanded so the marketplace page is at-a-glance during
+  // testing.
+  const [showListing, setShowListing] = useState(!isPreview);
+
   return (
     <motion.div
       key={activeOrder.tracking || activeOrder.orderId}
@@ -99,7 +117,7 @@ export function ActiveOrderWorkspace({
       animate={framerPresence.stationCard.animate}
       exit={framerPresence.stationCard.exit}
       transition={framerTransition.stationCardMount}
-      className="flex h-full w-full flex-col bg-gray-50"
+      className={`flex h-full w-full flex-col ${isPreview ? 'bg-emerald-50/30' : 'bg-gray-50'}`}
     >
       {/* ── Sticky header — identifies the order, gives a way back to history ── */}
       <div className="sticky top-0 z-10 flex items-center justify-between gap-3 border-b border-gray-200 bg-white px-4 py-2.5">
@@ -118,10 +136,14 @@ export function ActiveOrderWorkspace({
         </div>
 
         <div className="flex items-center gap-2">
-          <span className="hidden items-center gap-1.5 rounded-md bg-emerald-50 px-2 py-1 text-[9px] font-black uppercase tracking-widest text-emerald-600 ring-1 ring-inset ring-emerald-200 md:inline-flex">
-            <Barcode className="h-3 w-3" />
-            <span>Scan next</span>
-          </span>
+          {/* "Scan next" pill is misleading in preview (nothing has been
+              scanned yet) — only show during active testing. */}
+          {!isPreview && (
+            <span className="hidden items-center gap-1.5 rounded-md bg-emerald-50 px-2 py-1 text-[9px] font-black uppercase tracking-widest text-emerald-600 ring-1 ring-inset ring-emerald-200 md:inline-flex">
+              <Barcode className="h-3 w-3" />
+              <span>Scan next</span>
+            </span>
+          )}
           <button
             type="button"
             onClick={onClose}
@@ -134,72 +156,109 @@ export function ActiveOrderWorkspace({
         </div>
       </div>
 
-      {/* ── Workspace body — card column on top, embedded listing fills the
-            remaining vertical space below. On Electron the listing is a live
-            <webview>; on web we fall back to an external-open card. ── */}
-      <div className="flex min-h-0 flex-1 flex-col">
-        <div className="mx-auto w-full max-w-2xl space-y-3 px-4 pt-4 pb-3">
-          <ActiveStationOrderCard
-            activeOrder={activeOrder}
-            activeColorTextClass={activeColorText}
-            resolvedManuals={manuals}
-            isManualLoading={isManualLoading}
-            onViewManual={onViewManual}
-            onRemoveSerial={onRemoveSerial}
-          />
-
-          {/* ── Hint strip — different ask depending on workspace state ── */}
-          <div className="rounded-2xl border border-dashed border-gray-200 bg-white/60 p-3">
-            <p className="text-[10px] font-black uppercase tracking-widest text-gray-400">
-              Next step
-            </p>
-            <p className="mt-1 text-[12px] font-semibold text-gray-600 leading-snug">
-              {isPreview
-                ? 'Scan the tracking label or click Start on the sidebar card to begin testing this order.'
-                : 'Scan a serial number from the sidebar. Each scan lands here as it’s recorded — the workspace closes automatically once the order is complete.'}
-            </p>
-          </div>
+      {/* ── Workspace body — preview mode uses the new focused OrderPreviewPanel
+            (built for the "should I start this?" decision). Active mode keeps
+            the existing testing-flow card. ── */}
+      <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
+        <div className="mx-auto w-full max-w-2xl px-4 pt-5 pb-4">
+          {isPreview && previewOrder ? (
+            <OrderPreviewPanel order={previewOrder} />
+          ) : (
+            <ActiveStationOrderCard
+              activeOrder={activeOrder}
+              activeColorTextClass={activeColorText}
+              resolvedManuals={manuals}
+              isManualLoading={isManualLoading}
+              onViewManual={onViewManual}
+              onRemoveSerial={onRemoveSerial}
+            />
+          )}
         </div>
 
-        {/* ── Embedded listing — fills the remaining height. The tech can
-              browse the marketplace page inline without leaving the workspace. ── */}
+        {/* ── Embedded listing — collapsed by default in preview (toggle
+              below); expanded by default in active mode where the
+              marketplace page is part of the testing flow. ── */}
         {listingUrl ? (
-          <div className="flex min-h-0 flex-1 flex-col border-t border-gray-200 bg-white">
-            <div className="flex items-center justify-between gap-2 border-b border-gray-100 px-4 py-2">
+          <div className={`flex min-h-0 flex-col border-t border-gray-200 bg-white ${
+            showListing ? 'flex-1' : 'flex-none'
+          }`}>
+            <button
+              type="button"
+              onClick={() => setShowListing((v) => !v)}
+              aria-expanded={showListing}
+              className="flex items-center justify-between gap-2 border-b border-gray-100 px-4 py-2.5 text-left transition-colors hover:bg-gray-50"
+            >
               <div className="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-gray-500">
                 <ExternalLink className="h-3.5 w-3.5 text-blue-500" />
-                Listing
+                Listing preview
               </div>
-              <button
-                type="button"
-                onClick={() => window.open(listingUrl, '_blank', 'noopener,noreferrer')}
-                className="text-[10px] font-black uppercase tracking-widest text-blue-600 hover:text-blue-800"
-              >
-                Open externally
-              </button>
-            </div>
-            {canEmbedListing ? (
-              <div className="min-h-0 flex-1">
-                <EmbeddedBrowser url={listingUrl} />
+              <div className="flex items-center gap-3">
+                <span
+                  role="button"
+                  tabIndex={0}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    window.open(listingUrl, '_blank', 'noopener,noreferrer');
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      window.open(listingUrl, '_blank', 'noopener,noreferrer');
+                    }
+                  }}
+                  className="text-[10px] font-black uppercase tracking-widest text-blue-600 hover:text-blue-800"
+                >
+                  Open externally
+                </span>
+                <ChevronDown
+                  className={`h-4 w-4 text-gray-400 transition-transform ${showListing ? 'rotate-180' : ''}`}
+                />
               </div>
-            ) : (
-              <div className="flex flex-1 items-center justify-center px-6 py-10 text-center">
-                <p className="text-[12px] font-semibold text-gray-500">
-                  Listing preview is only available in the desktop app. Use{' '}
-                  <button
-                    type="button"
-                    onClick={() => window.open(listingUrl, '_blank', 'noopener,noreferrer')}
-                    className="text-blue-600 underline-offset-2 hover:underline"
-                  >
-                    Open externally
-                  </button>{' '}
-                  to view the page in a browser tab.
-                </p>
-              </div>
-            )}
+            </button>
+            <AnimatePresence initial={false}>
+              {showListing && (
+                <motion.div
+                  key="listing-body"
+                  initial={{ height: 0, opacity: 0 }}
+                  animate={{ height: 'auto', opacity: 1 }}
+                  exit={{ height: 0, opacity: 0 }}
+                  transition={{ duration: 0.18, ease: [0.22, 1, 0.36, 1] }}
+                  className="overflow-hidden"
+                >
+                  {canEmbedListing ? (
+                    <div className="h-[55vh] min-h-[320px]">
+                      <EmbeddedBrowser url={listingUrl} />
+                    </div>
+                  ) : (
+                    <div className="flex items-center justify-center px-6 py-10 text-center">
+                      <p className="text-[12px] font-semibold text-gray-500">
+                        Listing preview is only available in the desktop app. Use{' '}
+                        <button
+                          type="button"
+                          onClick={() => window.open(listingUrl, '_blank', 'noopener,noreferrer')}
+                          className="text-blue-600 underline-offset-2 hover:underline"
+                        >
+                          Open externally
+                        </button>{' '}
+                        to view the page in a browser tab.
+                      </p>
+                    </div>
+                  )}
+                </motion.div>
+              )}
+            </AnimatePresence>
           </div>
         ) : null}
       </div>
+
+      {/* ── Action dock — preview mode only. Hosts Start + Out of Stock so
+            the sidebar card stays calm. The dock dispatches events that
+            `UpNextOrder` routes to its existing handlers, preserving the
+            sidebar-Start side-effects (clear active order, scan resolver). ── */}
+      {isPreview && previewOrder ? (
+        <UpNextActionDock order={previewOrder} />
+      ) : null}
     </motion.div>
   );
 }

@@ -31,6 +31,11 @@ const MOBILE_PATH_RE = /\/m\/(r|l|u)\/([^/?#\s]+)/i;
 const SKU_STOCK_LOCATION_RE = /\/sku-stock\/location\/([^/?#\s]+)/i;
 // GS1 Digital Link — capture gtin and optional serial after /21/.
 const GS1_PATH_RE = /\/01\/(\d{8,14})(?:\/21\/([^/?#\s]+))?/i;
+// GS1 Digital Link for a warehouse location: /414/{gln}/254/{code}
+// where {code} is the flat location string (e.g. "A0101101"). Emitted by
+// the Location Label Printer via gs1LocationUrl(); printed bin labels
+// scan back to this path.
+const GS1_LOCATION_RE = /\/414\/(\d+)\/254\/([^/?#\s]+)/i;
 
 function pathToRoute(path: string, value: string): ScanRoute | null {
   const m = MOBILE_PATH_RE.exec(path);
@@ -52,6 +57,16 @@ function pathToRoute(path: string, value: string): ScanRoute | null {
   if (binMatch) {
     const barcode = decodeURIComponent(binMatch[1]);
     return { type: 'bin', value, redirect: `/inventory?bin=${barcode}` };
+  }
+  // GS1 location label printed by the Location Label Printer. The QR
+  // encodes the flat code in the 254 segment (locationCodeFlat()), which
+  // is what we persist as `locations.barcode` in registerPrintedLocations.
+  // Returning the code as `value` lets server-side lookups hit the row
+  // directly without re-parsing the URL.
+  const gs1Loc = GS1_LOCATION_RE.exec(path);
+  if (gs1Loc) {
+    const code = decodeURIComponent(gs1Loc[2]).toUpperCase();
+    return { type: 'bin', value: code, redirect: `/inventory?bin=${code}` };
   }
   // GS1 Digital Link form. Page-side resolvers translate gtin → sku and
   // serial → unit at runtime, so we just dispatch to the catch-all paths.

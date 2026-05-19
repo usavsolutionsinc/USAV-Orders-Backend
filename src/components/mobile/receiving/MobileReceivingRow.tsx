@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import { motion, useReducedMotion } from 'framer-motion';
 import { Camera, Check } from '@/components/Icons';
 import { conditionGradeTableLabel, workflowStatusTableLabel } from '@/components/station/receiving-constants';
 import type { ReceivingLineRow } from '@/components/station/ReceivingLinesTable';
@@ -8,6 +9,8 @@ import type { ReceivingLineRow } from '@/components/station/ReceivingLinesTable'
 interface MobileReceivingRowProps {
   row: ReceivingLineRow;
   variant: 'collapsed' | 'expanded';
+  /** True for the first ~2s after the row first appears — drives a one-time ring/glow pulse. */
+  fresh?: boolean;
   onTap: () => void;
   /** Path the camera FAB navigates to. Pre-built by parent so we can carry staffId, etc. */
   photosHref: string;
@@ -45,7 +48,8 @@ function PhotoChip({ count }: { count: number }) {
  * and the bottom-pinned "most recent" expanded card. Same data shape as the
  * desktop OrderRow but pared back to the fields a phone tech needs at a glance.
  */
-export function MobileReceivingRow({ row, variant, onTap, photosHref }: MobileReceivingRowProps) {
+export function MobileReceivingRow({ row, variant, fresh = false, onTap, photosHref }: MobileReceivingRowProps) {
+  const reduceMotion = useReducedMotion();
   const productTitle = row.item_name || row.zoho_item_id || 'Unnamed inbound line';
   const poValue = (row.zoho_purchaseorder_number || row.zoho_purchaseorder_id || '').trim();
   const trackingValue = (row.tracking_number || '').trim();
@@ -62,7 +66,9 @@ export function MobileReceivingRow({ row, variant, onTap, photosHref }: MobileRe
         type="button"
         onClick={onTap}
         data-line-row-id={row.id}
-        className="flex w-full items-center gap-2 border-b border-gray-100 bg-white px-3 py-2 text-left transition-colors active:bg-blue-50"
+        className={`flex w-full items-center gap-2 border-b border-gray-100 px-3 py-2 text-left transition-colors active:bg-blue-50 ${
+          fresh ? 'bg-blue-50/60' : 'bg-white'
+        }`}
       >
         <PhotoChip count={photoCount} />
         <span
@@ -96,6 +102,16 @@ export function MobileReceivingRow({ row, variant, onTap, photosHref }: MobileRe
       data-line-row-id={row.id}
       className="relative mx-3 mb-3 mt-2 rounded-2xl border border-blue-100 bg-white p-4 shadow-[0_8px_24px_-12px_rgba(15,23,42,0.18)]"
     >
+      {/* Fresh-arrival ring pulse — fades out on its own; no layout impact */}
+      {fresh && !reduceMotion && (
+        <motion.span
+          aria-hidden
+          initial={{ opacity: 0.55, scale: 1 }}
+          animate={{ opacity: 0, scale: 1.04 }}
+          transition={{ duration: 1.8, ease: [0.22, 1, 0.36, 1] }}
+          className="pointer-events-none absolute inset-0 rounded-2xl ring-2 ring-blue-400/70 shadow-[0_0_0_8px_rgba(96,165,250,0.18)]"
+        />
+      )}
       <button type="button" onClick={onTap} className="block w-full text-left">
         <div className="flex items-center gap-2">
           <span

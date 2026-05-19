@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { createPortal } from 'react-dom';
-import { Barcode, Check, Clock, Loader2, Plus, Tool } from '@/components/Icons';
+import { Check, Clock, Loader2, Plus, Tool } from '@/components/Icons';
 import { SearchBar } from '@/components/ui/SearchBar';
 import { HorizontalButtonSlider, type HorizontalSliderItem } from '@/components/ui/HorizontalButtonSlider';
 
@@ -19,7 +19,7 @@ import {
 import { FavoritesWorkspaceSection } from '@/components/sidebar/FavoritesWorkspaceSection';
 import type { FavoriteSkuRecord } from '@/lib/favorites/sku-favorites';
 import type { RepairTab } from '@/lib/neon/repair-service-queries';
-import { sectionLabel, cardTitle, microBadge } from '@/design-system/tokens/typography/presets';
+import { sectionLabel, cardTitle } from '@/design-system/tokens/typography/presets';
 
 interface RepairSidebarPanelProps {
   embedded?: boolean;
@@ -61,9 +61,6 @@ export function RepairSidebarPanel({ embedded = false, hideSectionHeader = false
   const [showIntakeForm, setShowIntakeForm] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isFetchingFavorite, setIsFetchingFavorite] = useState(false);
-  const [pickupScanValue, setPickupScanValue] = useState('');
-  const [pickupScanSubmitting, setPickupScanSubmitting] = useState(false);
-  const [pickupScanFeedback, setPickupScanFeedback] = useState<{ tone: 'success' | 'error'; message: string } | null>(null);
   const [isMounted, setIsMounted] = useState(false);
   const [searchValue, setSearchValue] = useState(searchParams.get('search') || '');
   const [intakeDraft, setIntakeDraft] = useState<Partial<RepairFormData> | undefined>(undefined);
@@ -186,50 +183,6 @@ export function RepairSidebarPanel({ embedded = false, hideSectionHeader = false
     setShowIntakeForm(true);
   };
 
-  const handlePickupScanSubmit = async () => {
-    const scan = pickupScanValue.trim();
-    if (!scan || pickupScanSubmitting) return;
-
-    setPickupScanSubmitting(true);
-    setPickupScanFeedback(null);
-
-    try {
-      const response = await fetch('/api/repair-service/pickup', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ scan }),
-      });
-
-      const result = await response.json().catch(() => ({}));
-      if (!response.ok) {
-        throw new Error(result?.details || result?.error || 'Failed to mark repair as picked up');
-      }
-
-      const fallbackId = Number.isFinite(Number(result?.repairId))
-        ? `RS-${Number(result.repairId)}`
-        : scan.toUpperCase();
-      const displayId = String(result?.ticketNumber || '').trim() || fallbackId;
-
-      setPickupScanValue('');
-      setPickupScanFeedback({
-        tone: 'success',
-        message: result?.alreadyDone
-          ? `${displayId} was already done.`
-          : `${displayId} marked as picked up.`,
-      });
-
-      window.dispatchEvent(new CustomEvent('usav-refresh-data'));
-      window.dispatchEvent(new CustomEvent('dashboard-refresh'));
-    } catch (error: any) {
-      setPickupScanFeedback({
-        tone: 'error',
-        message: error?.message || 'Pickup scan failed.',
-      });
-    } finally {
-      setPickupScanSubmitting(false);
-    }
-  };
-
   const content = (
     <div className="flex h-full flex-col overflow-hidden bg-white">
       <div className="shrink-0">
@@ -298,61 +251,6 @@ export function RepairSidebarPanel({ embedded = false, hideSectionHeader = false
             </div>
           </div>
         )}
-
-        <div className="mb-4 border-b border-emerald-100 pb-2">
-          <form
-            onSubmit={(event) => {
-              event.preventDefault();
-              void handlePickupScanSubmit();
-            }}
-          >
-            <div className="mb-1.5 flex items-center justify-between">
-              <div className="flex items-center gap-1.5">
-                <Barcode className="h-3.5 w-3.5 text-emerald-500" />
-                <span className={`${sectionLabel} text-emerald-600 leading-none`}>
-                  Scan RS-ID Pickup
-                </span>
-              </div>
-              <button
-                type="submit"
-                disabled={pickupScanSubmitting || !pickupScanValue.trim()}
-                className="flex h-5 w-5 items-center justify-center text-emerald-500 transition-colors hover:text-emerald-700 disabled:cursor-not-allowed disabled:text-gray-400"
-                aria-label="Mark repair picked up"
-                title="Mark repair picked up"
-              >
-                {pickupScanSubmitting ? (
-                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                ) : (
-                  <Check className="h-3.5 w-3.5" />
-                )}
-              </button>
-            </div>
-
-            <input
-              type="text"
-              value={pickupScanValue}
-              onChange={(event) => {
-                setPickupScanValue(event.target.value);
-                if (pickupScanFeedback) setPickupScanFeedback(null);
-              }}
-              placeholder="Scan RS-ID…"
-              autoComplete="off"
-              spellCheck={false}
-              disabled={pickupScanSubmitting}
-              className="w-full bg-transparent text-sm font-medium text-gray-900 outline-none placeholder:text-gray-400 disabled:cursor-not-allowed disabled:opacity-70"
-            />
-          </form>
-
-          {pickupScanFeedback && (
-            <p
-              className={`mt-1.5 ${microBadge} ${
-                pickupScanFeedback.tone === 'success' ? 'text-emerald-600' : 'text-red-500'
-              }`}
-            >
-              {pickupScanFeedback.message}
-            </p>
-          )}
-        </div>
 
         <FavoritesWorkspaceSection
           workspaceKey="repair"

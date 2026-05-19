@@ -6,7 +6,7 @@ import { useOrderAssignment } from '@/hooks';
 import { CopyableValueFieldBlock } from '@/components/shipped/details-panel/blocks/CopyableValueFieldBlock';
 import { ContextualManualLinkRow } from '@/components/shipped/details-panel/blocks/ContextualManualLinkRow';
 import { DetailsPanelRow } from '@/design-system/components/DetailsPanelRow';
-import { ViewDropdown } from '@/components/ui/ViewDropdown';
+import { HorizontalButtonSlider, type HorizontalSliderItem } from '@/components/ui/HorizontalButtonSlider';
 import { FnskuCatalogInfoPanel } from '@/components/fba/FnskuCatalogInfoPanel';
 import { getFnskuCatalogValue, isFnskuCatalogContext } from '@/utils/fnsku-catalog';
 
@@ -103,13 +103,16 @@ export function ProductDetailsSection({
             ) : null}
             className="last:border-b-0"
           >
-            <ViewDropdown
-              options={CONDITION_OPTIONS}
+            <HorizontalButtonSlider
+              aria-label="Condition"
+              variant="slate"
+              size="md"
               value={conditionValue}
-              onChange={handleConditionChange}
-              className="w-full"
-              buttonClassName="h-8 w-full border-0 bg-transparent px-0 pr-8 text-left text-sm font-bold uppercase tracking-wide text-gray-900 outline-none transition-colors hover:text-gray-700"
-              optionClassName="text-xs font-bold tracking-wide text-gray-800"
+              onChange={(next) => handleConditionChange(next as ConditionValue)}
+              items={CONDITION_OPTIONS.map<HorizontalSliderItem>((o) => ({
+                id: o.value,
+                label: o.label,
+              }))}
             />
           </DetailsPanelRow>
 

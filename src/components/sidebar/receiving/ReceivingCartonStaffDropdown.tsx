@@ -1,17 +1,10 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { ChevronDown } from '@/components/Icons';
 import { ReceivingPhotoStrip } from '@/components/sidebar/ReceivingPhotoStrip';
 import { formatDatePST, formatTime12hPST } from '@/utils/date';
 import { getStaffName } from '@/utils/staff';
 import { getStaffThemeById, stationThemeColors } from '@/utils/staff-colors';
-import {
-  FLOW_SECTION_BTN_CLASS,
-  FLOW_SECTION_TITLE_CLASS,
-  FLOW_SECTION_SUMMARY_CLASS,
-  RECEIVING_TRAIL_SLOT_CLASS,
-} from './receiving-sidebar-shared';
 
 type ReceivingCartonStaffApiRow = {
   received_by?: number | null;
@@ -23,21 +16,24 @@ type ReceivingCartonStaffApiRow = {
 interface Props {
   receivingId: number | null;
   staffId: string;
+  /** Opens the claim modal — surfaced as a row beneath the photo strip. */
+  onMakeClaim?: () => void;
 }
 
-/** Staff / received timestamps — black rail on the trigger only; expanded body is white. */
-export function ReceivingCartonStaffDropdown({ receivingId, staffId }: Props) {
-  const [open, setOpen] = useState(true);
+/**
+ * Staff / received / unboxed timestamps. Flat display — no collapsible
+ * chevron, no colored rail. Just the data, surfaced under the workspace
+ * header as the operator's "where am I" anchor.
+ *
+ * Photo strip moved out: dedicated `PhotosCard` now owns photo display.
+ */
+export function ReceivingCartonStaffDropdown({ receivingId, staffId, onMakeClaim }: Props) {
   const [state, setState] = useState<
     | { status: 'idle' }
     | { status: 'loading' }
     | { status: 'error'; message?: string }
     | { status: 'ok'; carton: ReceivingCartonStaffApiRow }
   >({ status: 'idle' });
-
-  useEffect(() => {
-    if (receivingId != null) setOpen(true);
-  }, [receivingId]);
 
   useEffect(() => {
     if (receivingId == null) {
@@ -79,27 +75,28 @@ export function ReceivingCartonStaffDropdown({ receivingId, staffId }: Props) {
   if (receivingId == null) return null;
 
   return (
-    <div className="bg-white">
-      <button
-        type="button"
-        onClick={() => setOpen((v) => !v)}
-        aria-expanded={open}
-        className={`${FLOW_SECTION_BTN_CLASS} relative bg-zinc-50 hover:bg-zinc-100/70`}
-      >
-        <span className="absolute inset-y-0 left-0 w-[3px] bg-black" aria-hidden />
-        <span className={`${FLOW_SECTION_TITLE_CLASS} text-zinc-900`}>Staff Scanned & Received</span>
-        <span className="min-w-0 flex-1 text-right">
-          <span className={FLOW_SECTION_SUMMARY_CLASS}>RCV-{receivingId}</span>
-        </span>
-        <span className={RECEIVING_TRAIL_SLOT_CLASS}>
-          <ChevronDown
-            className={`h-[14px] w-[14px] shrink-0 text-gray-400 transition-transform duration-200 ${open ? 'rotate-180' : ''}`}
-            aria-hidden
-          />
-        </span>
-      </button>
-      {open ? (
-        <div className="border-b border-slate-200 bg-white px-2 py-2.5 space-y-3">
+    <div className="bg-white px-4 py-3">
+      <div className="mb-2 flex items-center justify-between gap-2">
+        <div className="flex items-baseline gap-2">
+          <h3 className="text-[11px] font-bold uppercase tracking-[0.14em] text-gray-500">
+            Staff · Scanned · Received
+          </h3>
+          <span className="text-[10px] font-bold uppercase tracking-widest text-gray-400">
+            RCV-{receivingId}
+          </span>
+        </div>
+        {onMakeClaim ? (
+          <button
+            type="button"
+            onClick={onMakeClaim}
+            className="inline-flex h-7 shrink-0 items-center gap-1 rounded-lg bg-orange-500 px-2.5 text-[10px] font-black uppercase tracking-widest text-white shadow-sm transition-colors hover:bg-orange-600"
+            title="File a damage / wrong-item / missing claim for this carton"
+          >
+            Claim →
+          </button>
+        ) : null}
+      </div>
+      <div className="space-y-3">
           {state.status === 'loading' ? (
             <div
               className="space-y-2.5"
@@ -164,14 +161,15 @@ export function ReceivingCartonStaffDropdown({ receivingId, staffId }: Props) {
               </div>
             </div>
           ) : null}
-          <div className="border-t border-slate-100 pt-3">
-            <ReceivingPhotoStrip
-              receivingId={receivingId}
-              staffId={Number(staffId) || 0}
-            />
-          </div>
+
+        {/* Photos strip — claim CTA lives in the header corner above. */}
+        <div className="border-t border-slate-100 pt-3">
+          <ReceivingPhotoStrip
+            receivingId={receivingId}
+            staffId={Number(staffId) || 0}
+          />
         </div>
-      ) : null}
+      </div>
     </div>
   );
 }

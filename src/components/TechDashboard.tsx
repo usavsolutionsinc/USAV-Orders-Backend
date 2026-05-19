@@ -334,6 +334,7 @@ export default function TechDashboard({ techId }: TechDashboardProps) {
                                 isManualLoading={false}
                                 techId={techId}
                                 mode="preview"
+                                previewOrder={previewOrder}
                                 onClose={() => setPreviewOrder(null)}
                             />
                         ) : (

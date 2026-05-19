@@ -89,6 +89,37 @@ export function dispatchUpNextPreview(payload: UpNextPreviewPayload): void {
   window.dispatchEvent(new CustomEvent('tech-upnext-preview', { detail: payload }));
 }
 
+/**
+ * Right-pane "Start" action — fired from `UpNextActionDock` when the tech
+ * commits to working the previewed order. `UpNextOrder` listens and routes
+ * to its existing `handleStart` so the API call + parent side-effects
+ * (clear active order, kick off scan resolver) match a sidebar Start.
+ */
+export interface UpNextActionStartPayload {
+  orderId: number;
+  shipping_tracking_number: string;
+  order_id: string;
+}
+
+export function dispatchUpNextActionStart(payload: UpNextActionStartPayload): void {
+  if (typeof window === 'undefined') return;
+  window.dispatchEvent(new CustomEvent('tech-upnext-action-start', { detail: payload }));
+}
+
+/**
+ * Right-pane "Out of stock" submit — `UpNextOrder` routes this to
+ * `handleMissingParts`, which POSTs the reason and refreshes the queue.
+ */
+export interface UpNextActionOosPayload {
+  orderId: number;
+  reason: string;
+}
+
+export function dispatchUpNextActionOos(payload: UpNextActionOosPayload): void {
+  if (typeof window === 'undefined') return;
+  window.dispatchEvent(new CustomEvent('tech-upnext-action-oos-set', { detail: payload }));
+}
+
 // ── Receiving right-pane workspace ──────────────────────────────────────────
 
 /**

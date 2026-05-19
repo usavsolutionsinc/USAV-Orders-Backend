@@ -13,18 +13,29 @@ import {
 
 type CardTone = 'emerald' | 'red' | 'orange' | 'purple' | 'teal' | 'gray';
 
+/**
+ * Visual treatment when `isSelected` is true on desktop.
+ * - `stripe` (default, legacy): left 3px accent + bottom border, in-line with the row stack.
+ * - `framed`: full perimeter ring + rounded corners + soft lift. Card visually
+ *   detaches from the row stack on selection. Use for cards where actions
+ *   have moved off the card itself (e.g. `OrderCard` in /tech Up Next).
+ */
+type CardShellVariant = 'stripe' | 'framed';
+
 interface CardShellProps {
   children: ReactNode;
   isExpanded?: boolean;
   /**
    * The card is the right-pane workspace target. Stronger than `isExpanded`:
-   * adds a tinted background, the active border, and (desktop only) a
-   * left-edge accent stripe so the tech can find it at a glance.
+   * adds a tinted background and (in `stripe` variant) a left-edge accent
+   * stripe, or (in `framed` variant) a full perimeter ring + lift.
    */
   isSelected?: boolean;
   tone?: CardTone;
   /** Use stock-tab styling (red border variant). */
   isStock?: boolean;
+  /** Desktop selected-state treatment. Defaults to `stripe`. */
+  variant?: CardShellVariant;
   onClick?: () => void;
   className?: string;
 }
@@ -53,6 +64,7 @@ export function CardShell({
   isSelected = false,
   tone = 'emerald',
   isStock = false,
+  variant = 'stripe',
   onClick,
   className = '',
 }: CardShellProps) {
@@ -66,13 +78,24 @@ export function CardShell({
   const showActiveBorder = isExpanded || isSelected;
 
   // Desktop: flat row separator. Mobile: rounded card.
-  // The `before:` pseudo paints a 3px left accent strip only while selected —
-  // anchors the row visually without shifting layout.
-  const desktopClasses = `border-b-2 px-0 py-3 transition-colors relative cursor-pointer ${
+  // `stripe`: left 3px accent strip on selected, in-stack row.
+  // `framed`: full perimeter ring + rounded corners on selected, lifted out
+  //   of the row stack. Idle rows still get the bottom-border separator so
+  //   the unselected list reads as a continuous stack.
+  const desktopStripeClasses = `border-b-2 px-0 py-3 transition-colors relative cursor-pointer ${
     isSelected
       ? `${selected.bg} ${selected.accent} before:absolute before:inset-y-0 before:left-0 before:w-[3px]`
       : 'bg-white'
   } ${showActiveBorder ? border.active : `${border.idle} hover:${border.active}`}`;
+
+  const desktopFramedClasses = isSelected
+    // Selected: rounded ring, soft lift, tinted bg. Slight vertical margin so
+    // the ring doesn't get clipped by neighbouring rows' separators.
+    ? `relative cursor-pointer rounded-xl px-0 py-3 my-1 transition-all ${selected.bg} ring-2 ring-inset ${selected.ring} shadow-[0_1px_2px_rgba(16,185,129,0.10),0_4px_12px_-4px_rgba(16,185,129,0.15)]`
+    // Idle: continues to act as a row in the stack — bottom separator + hover.
+    : `relative cursor-pointer px-0 py-3 transition-colors bg-white border-b-2 ${border.idle} hover:${border.active}`;
+
+  const desktopClasses = variant === 'framed' ? desktopFramedClasses : desktopStripeClasses;
 
   const mobileClasses = `rounded-2xl border mb-2 px-0 py-3 transition-colors relative ${
     isSelected

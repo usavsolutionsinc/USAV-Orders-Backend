@@ -58,6 +58,12 @@ import { ReceivingPoLabelPreview } from './ReceivingPoLabelPreview';
 import { ReceivingProductLabelPreview } from './ReceivingProductLabelPreview';
 import { ReceiveResponsePanel } from './ReceiveResponsePanel';
 import { ReceivingAuditModal } from './ReceivingAuditModal';
+import { ReceivingContextCard } from './ReceivingContextCard';
+import { ConditionPills } from './ConditionPills';
+import { SerialCard } from './SerialCard';
+import { PoLinesAccordion } from './PoLinesAccordion';
+import { ReceivingClaimModal } from './ReceivingClaimModal';
+import { WorkspaceCard } from '@/design-system/components';
 import { printProductLabel } from '@/lib/print/printProductLabel';
 import { mobileQrUrl } from '@/lib/barcode-routing';
 import { loadBarcodeLibrary, renderBarcode } from '@/utils/barcode';
@@ -83,7 +89,6 @@ import {
   SOURCE_PLATFORM_LABELS,
   SOURCE_PLATFORM_OPTS,
   RECEIVING_TYPE_OPTS,
-  SELECT_CLASS,
   INPUT_CLASS,
   TYPE_PRODUCT_TITLE_CLASS,
   TYPE_PRODUCT_TITLE_COMPACT_CLASS,
@@ -179,6 +184,17 @@ export function LineEditPanel({
     item: true,
     support: true,
   }));
+  // Claim modal — opened from PhotosCard's "Make a claim" CTA. The modal
+  // creates a Zendesk ticket via /api/receiving/zendesk-claim and auto-pops
+  // the returned TK # back into the Support FlowSection's existing zendesk
+  // field via dispatchLineUpdated.
+  const [claimModalOpen, setClaimModalOpen] = useState(false);
+  // Support FlowSection is hidden by default — it surfaces only after a
+  // claim is filed (so the operator can review the auto-populated ZD ticket
+  // #) or when an existing zendesk_ticket/support note is already saved on
+  // the line. Keeps the default workspace lean: condition + serial + photos
+  // are what the operator sees first.
+  const [showSupportOverride, setShowSupportOverride] = useState(false);
   const [extraTrackings, setExtraTrackings] = useState<string[]>([]);
   const [extraSerials, setExtraSerials] = useState<string[]>([]);
   const [zohoSyncing, setZohoSyncing] = useState(false);
@@ -236,6 +252,9 @@ export function LineEditPanel({
     // Keep every section expanded across row changes — including Support —
     // so the user never has to re-open them after switching lines.
     setFlowOpen({ shipment: true, item: true, support: true });
+    // Reset Support visibility when the operator switches lines — the new
+    // line's own zendesk/notes will re-reveal it if needed.
+    setShowSupportOverride(false);
   }, [compact, row.id, accordionBootstrap]);
 
   useEffect(() => {
@@ -884,6 +903,14 @@ export function LineEditPanel({
       row.zoho_purchaseorder_id, row.zoho_purchaseorder_number, staffId,
       listingLink, zendesk]);
 
+  // Workspace header's Refresh button dispatches this so we don't need a
+  // prop-drilled ref or to lift syncWithZoho up to the workspace.
+  useEffect(() => {
+    const handler = () => { void syncWithZoho(); };
+    window.addEventListener('receiving-workspace-refresh-line', handler);
+    return () => window.removeEventListener('receiving-workspace-refresh-line', handler);
+  }, [syncWithZoho]);
+
   const handleShare = useCallback(async () => {
     if (!row.receiving_id) {
       toast.error('No receiving carton linked yet');
@@ -943,87 +970,112 @@ export function LineEditPanel({
 
   return (
     <>
-    <div className="border-b border-slate-200 bg-slate-50">
-      <div className="flex items-center gap-2 border-b border-slate-200 bg-white px-2 py-0.5">
-        <button
-          type="button"
-          onClick={syncWithZoho}
-          disabled={zohoSyncing}
-          aria-label="Sync with Zoho by tracking number"
-          title="Sync with Zoho by tracking number"
-          className="text-slate-400 transition-colors hover:text-slate-700 disabled:cursor-not-allowed disabled:opacity-50"
-        >
-          <RefreshCw className={`h-3.5 w-3.5 ${zohoSyncing ? 'animate-spin' : ''}`} />
-        </button>
-        <button
-          type="button"
-          onClick={() => void handleShare()}
-          disabled={cartonActionsDisabled}
-          aria-label="Share receiving link"
-          title="Copy link to open this carton on Receiving"
-          className="text-slate-400 transition-colors hover:text-slate-700 disabled:cursor-not-allowed disabled:opacity-40"
-        >
-          <Link2 className="h-3.5 w-3.5" />
-        </button>
-        <button
-          type="button"
-          onClick={() => setAuditOpen(true)}
-          disabled={cartonActionsDisabled}
-          aria-label="View audit log"
-          title="Audit log (inventory events)"
-          className="text-slate-400 transition-colors hover:text-slate-700 disabled:cursor-not-allowed disabled:opacity-40"
-        >
-          <Info className="h-3.5 w-3.5" />
-        </button>
-        <button
-          type="button"
-          onClick={() => void handleCopyAll()}
-          disabled={cartonActionsDisabled || copyingAll}
-          aria-label="Copy all receiving details"
-          title="Copy carton + PO details to clipboard"
-          className="text-slate-400 transition-colors hover:text-slate-700 disabled:cursor-not-allowed disabled:opacity-40"
-        >
-          <Copy className={`h-3.5 w-3.5 ${copyingAll ? 'animate-pulse' : ''}`} />
-        </button>
-        {(zohoSyncing || saving || platformSaving) && (
-          <span className="text-[9px] font-black uppercase tracking-[0.18em] text-blue-600" aria-live="polite">
-            {zohoSyncing ? 'Syncing' : 'Saving'}
-          </span>
-        )}
-        <div className="flex-1" />
-        <button
-          type="button"
-          onClick={() => window.dispatchEvent(new CustomEvent('receiving-navigate-table', { detail: 'prev' }))}
-          aria-label="Previous row in table"
-          title="Previous row"
-          className="text-slate-400 transition-colors hover:text-slate-700"
-        >
-          <ChevronUp className="h-4 w-4" />
-        </button>
-        <button
-          type="button"
-          onClick={() => window.dispatchEvent(new CustomEvent('receiving-navigate-table', { detail: 'next' }))}
-          aria-label="Next row in table"
-          title="Next row"
-          className="text-slate-400 transition-colors hover:text-slate-700"
-        >
-          <ChevronDown className="h-4 w-4" />
-        </button>
-      </div>
+    <div className="flex h-full min-h-0 flex-col bg-gray-50">
+      {/* Scroll surface — owns the centered hero column. Padding-bottom
+          clears the sticky action bar so the last card never hides under it. */}
+      <div className="min-h-0 flex-1 overflow-y-auto">
+        <div className="mx-auto w-full max-w-3xl space-y-4 px-4 py-5 pb-32 sm:px-6">
+          {/* Toolbar — refresh + share / audit / copy + prev/next. Single
+              consolidated utility bar above the Staff card; replaces the
+              old workspace-header buttons. */}
+          <div className="flex items-center gap-2 rounded-xl border border-gray-200/70 bg-white px-3 py-1.5 shadow-sm">
+            <button
+              type="button"
+              onClick={syncWithZoho}
+              disabled={zohoSyncing}
+              aria-label="Refresh line from Zoho"
+              title="Sync with Zoho by tracking number"
+              className="inline-flex h-7 items-center gap-1 rounded-md px-1.5 text-[10px] font-bold uppercase tracking-widest text-slate-500 transition-colors hover:bg-slate-50 hover:text-slate-800 disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              <RefreshCw className={`h-3.5 w-3.5 ${zohoSyncing ? 'animate-spin' : ''}`} />
+              Refresh
+            </button>
+            <button
+              type="button"
+              onClick={() => void handleShare()}
+              disabled={cartonActionsDisabled}
+              aria-label="Share receiving link"
+              title="Copy link to open this carton on Receiving"
+              className="inline-flex h-7 items-center gap-1 rounded-md px-1.5 text-[10px] font-bold uppercase tracking-widest text-slate-500 transition-colors hover:bg-slate-50 hover:text-slate-800 disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              <Link2 className="h-3.5 w-3.5" />
+              Share
+            </button>
+            <button
+              type="button"
+              onClick={() => setAuditOpen(true)}
+              disabled={cartonActionsDisabled}
+              aria-label="View audit log"
+              title="Audit log (inventory events)"
+              className="inline-flex h-7 items-center gap-1 rounded-md px-1.5 text-[10px] font-bold uppercase tracking-widest text-slate-500 transition-colors hover:bg-slate-50 hover:text-slate-800 disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              <Info className="h-3.5 w-3.5" />
+              Audit
+            </button>
+            <button
+              type="button"
+              onClick={() => void handleCopyAll()}
+              disabled={cartonActionsDisabled || copyingAll}
+              aria-label="Copy all receiving details"
+              title="Copy carton + PO details to clipboard"
+              className="inline-flex h-7 items-center gap-1 rounded-md px-1.5 text-[10px] font-bold uppercase tracking-widest text-slate-500 transition-colors hover:bg-slate-50 hover:text-slate-800 disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              <Copy className={`h-3.5 w-3.5 ${copyingAll ? 'animate-pulse' : ''}`} />
+              Copy
+            </button>
+            {(zohoSyncing || saving || platformSaving) && (
+              <span className="text-[9px] font-black uppercase tracking-[0.18em] text-blue-600" aria-live="polite">
+                {zohoSyncing ? 'Syncing' : 'Saving'}
+              </span>
+            )}
+            <div className="flex-1" />
+            {/* Prev/Next — wired to the recent rail / history table via
+                `receiving-navigate-table`. Lives in this bar (was workspace
+                header) so all utility actions are in one row. */}
+            <button
+              type="button"
+              onClick={() => window.dispatchEvent(new CustomEvent('receiving-navigate-table', { detail: 'prev' }))}
+              aria-label="Previous recent line"
+              title="Previous recent line"
+              className="inline-flex h-7 w-7 items-center justify-center rounded-md text-slate-500 transition-colors hover:bg-slate-50 hover:text-slate-800"
+            >
+              <ChevronUp className="h-4 w-4" />
+            </button>
+            <button
+              type="button"
+              onClick={() => window.dispatchEvent(new CustomEvent('receiving-navigate-table', { detail: 'next' }))}
+              aria-label="Next recent line"
+              title="Next recent line"
+              className="inline-flex h-7 w-7 items-center justify-center rounded-md text-slate-500 transition-colors hover:bg-slate-50 hover:text-slate-800"
+            >
+              <ChevronDown className="h-4 w-4" />
+            </button>
+          </div>
 
-      <div className="divide-y divide-slate-200 border-t border-slate-200">
-        <ReceivingCartonStaffDropdown receivingId={row.receiving_id} staffId={staffId} />
-        {/* ── SHIPMENT PO ── */}
-        <FlowSection
-          title="Shipment PO"
-          summary={inboundSummary}
-          open={flowOpen.shipment}
-          onToggle={() => toggleFlow('shipment')}
-          tone="shipment"
-        >
+          {/* Staff · Scanned · Received — sits below the toolbar so the
+              operator's first content read is "who did what, when" plus
+              the carton's photos + claim trigger. */}
+          <WorkspaceCard bodyClassName="px-0 py-0">
+            <ReceivingCartonStaffDropdown
+              receivingId={row.receiving_id}
+              staffId={staffId}
+              onMakeClaim={() => setClaimModalOpen(true)}
+            />
+          </WorkspaceCard>
+
+          {/* Shipment PO — flat WorkspaceCard (no accordion, no left rail).
+              Sits ABOVE the item title so tracking + platform + type are
+              the operator's first context check. */}
+          {/* Body padding bumped (py-4) so the selected pill's outline +
+              focus ring aren't clipped by a too-tight card body. */}
+          <WorkspaceCard label="Shipment PO" bodyClassName="px-4 py-4">
+
           <div className="space-y-2.5">
             <div className="flex min-w-0 flex-col gap-y-1">
-              <div className="flex min-w-0 items-end gap-2">
+              {/* Chip row uses items-center so listing URL chip, PO chip,
+                  and tracking chip share the same vertical baseline
+                  regardless of their internal height differences. */}
+              <div className="flex min-w-0 items-center gap-2">
                 <div className="flex min-w-0 flex-1 basis-0 items-center gap-1">
                   <ListingUrlChip
                     rawUrl={listingLink}
@@ -1047,7 +1099,17 @@ export function LineEditPanel({
                     <Pencil className="h-3 w-3" />
                   </button>
                 </div>
-                <div className="flex shrink-0 flex-col items-end gap-1">
+                {/* PO# copy chip — sits between the listing and the tracking
+                    so the operator can grab the PO number with one tap. */}
+                {(row.zoho_purchaseorder_number || row.zoho_purchaseorder_id) ? (
+                  <div className="flex shrink-0 items-center">
+                    <OrderIdChip
+                      value={String(row.zoho_purchaseorder_number || row.zoho_purchaseorder_id || '')}
+                      display={getLast4(String(row.zoho_purchaseorder_number || row.zoho_purchaseorder_id || ''))}
+                    />
+                  </div>
+                ) : null}
+                <div className="flex shrink-0 items-center gap-1">
                   <div className="flex items-center gap-1">
                     <div className="min-w-0 max-w-full [&_.relative]:max-w-full">
                       <TrackingChip
@@ -1185,218 +1247,157 @@ export function LineEditPanel({
               ) : null}
             </div>
 
-            <div className="grid grid-cols-2 gap-2">
-              <div>
+            {/* Platform (left, flexes) + Type (right). Inline pill row —
+                no HorizontalButtonSlider so there's no overflow-x-auto
+                clipping the active pill's outline at the top/bottom. */}
+            <div className="flex flex-wrap items-start gap-x-4 gap-y-3">
+              <div
+                aria-disabled={row.receiving_id == null || undefined}
+                className={`min-w-0 flex-1 ${row.receiving_id == null ? 'pointer-events-none opacity-50' : ''}`}
+              >
                 <span className={FLOW_SECTION_LABEL}>Platform</span>
-                <select
-                  value={sourcePlatform}
-                  onChange={(e) => {
-                    const next = e.target.value;
-                    setSourcePlatform(next);
-                    void savePlatform(next);
-                  }}
-                  disabled={row.receiving_id == null}
-                  className={`${SELECT_CLASS} mt-1`}
+                <div
+                  role="radiogroup"
+                  aria-label="Source platform"
+                  className="mt-1.5 flex flex-wrap items-center gap-1.5"
                 >
-                  {SOURCE_PLATFORM_OPTS.map((opt) => (
-                    <option key={opt.value || 'auto'} value={opt.value}>{opt.label}</option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <span className={FLOW_SECTION_LABEL}>Type</span>
-                <select
-                  value={receivingType}
-                  onChange={(e) => {
-                    setReceivingType(e.target.value);
-                    patch({ receiving_type: e.target.value });
-                  }}
-                  className={`${SELECT_CLASS} mt-1`}
-                >
-                  {RECEIVING_TYPE_OPTS.map((opt) => (
-                    <option key={opt.value} value={opt.value}>{opt.label}</option>
-                  ))}
-                </select>
-              </div>
-            </div>
-          </div>
-        </FlowSection>
-
-        {/* ── ITEM ── */}
-        <FlowSection
-          title="Item"
-          summary={itemCountSummary}
-          open={flowOpen.item}
-          onToggle={() => toggleFlow('item')}
-          tone="item"
-          bodyClassName="px-2 pt-2.5 pb-1"
-        >
-          <div className="space-y-2.5">
-            {/* Item position nav: only shown when multiple items */}
-            {hasItemNav && (itemTotal ?? 0) > 1 && (
-              <div className="flex items-center gap-1.5">
-                <span className="text-[10px] font-black tabular-nums tracking-wider text-slate-500">
-                  {(itemIndex ?? 0) + 1}/{itemTotal}
-                </span>
-                <div className="flex-1" />
-                <button
-                  type="button"
-                  onClick={onPrev}
-                  disabled={!onPrev || !canPrev}
-                  aria-label="Previous item in PO"
-                  title="Previous item"
-                  className="shrink-0 rounded p-0.5 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-700 disabled:cursor-not-allowed disabled:opacity-30"
-                >
-                  <ChevronUp className="h-4 w-4" />
-                </button>
-                <button
-                  type="button"
-                  onClick={onNext}
-                  disabled={!onNext || !canNext}
-                  aria-label="Next item in PO"
-                  title="Next item"
-                  className="shrink-0 rounded p-0.5 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-700 disabled:cursor-not-allowed disabled:opacity-30"
-                >
-                  <ChevronDown className="h-4 w-4" />
-                </button>
-              </div>
-            )}
-
-            {/* Product title — visual anchor of the Item lane.
-                Bigger + heavier than anything else so the operator's eye
-                lands here first when a line is selected. */}
-            <div>
-              <span className={FLOW_SECTION_LABEL}>Product title</span>
-              <p
-                className={`mt-1 ${compact ? TYPE_PRODUCT_TITLE_COMPACT_CLASS : TYPE_PRODUCT_TITLE_CLASS}`}
-              >
-                {row.item_name || row.sku || `Line #${row.id}`}
-              </p>
-            </div>
-
-            <div>
-              <label htmlFor={`cond-${row.id}`} className={FLOW_SECTION_LABEL}>
-                Condition
-              </label>
-              <select
-                id={`cond-${row.id}`}
-                value={cond}
-                onChange={(e) => {
-                  const v = e.target.value;
-                  setCond(v);
-                  void patch({ condition_grade: v });
-                }}
-                className={`${SELECT_CLASS} mt-1`}
-                aria-label="Condition grade for this line item"
-              >
-                {CONDITION_OPTS.map((opt) => (
-                  <option key={opt.value} value={opt.value}>{opt.label}</option>
-                ))}
-              </select>
-            </div>
-
-            <div>
-              <div className="flex items-center gap-2">
-                <span className={`${FLOW_SECTION_LABEL} mb-0 min-w-0 flex-1 leading-none`}>
-                  Serial numbers
-                </span>
-                <span className={RECEIVING_TRAIL_SLOT_CLASS}>
-                  <button
-                    type="button"
-                    onClick={() => setExtraSerials((xs) => [...xs, ''])}
-                    aria-label="Add serial number row"
-                    title="Add serial number"
-                    className={TRACKING_ADD_BTN_CLASS}
-                  >
-                    <Plus className="h-3 w-3" />
-                  </button>
-                </span>
-              </div>
-              <div className="group mt-1">
-                <SearchBar
-                  value={serialInput}
-                  onChange={setSerialInput}
-                  onSearch={(v) => submitSerial(v)}
-                  onClear={() => setSerialInput('')}
-                  inputRef={serialRef}
-                  placeholder="Serial"
-                  variant="blue"
-                  size="compact"
-                  hideUnderline
-                  isSearching={serialSubmitting}
-                  leadingIcon={<Barcode className="w-[14px] h-[14px]" />}
-                  className="w-full"
-                />
-                <div className={RECEIVING_SCAN_RULE_LINE_CLASS} aria-hidden />
-              </div>
-              {extraSerials.map((s, i) => (
-                <div key={i} className="group mt-1 w-full min-w-0">
-                  <div className="flex w-full min-w-0 items-center gap-2 pb-1">
-                    <span className={TRACKING_ROW_LEADING_ICON_CLASS} aria-hidden>
-                      <Barcode className="h-[14px] w-[14px]" />
-                    </span>
-                    <input
-                      type="text"
-                      value={s}
-                      onChange={(e) => {
-                        const v = e.target.value;
-                        setExtraSerials((xs) => xs.map((x, j) => (j === i ? v : x)));
-                      }}
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter') { e.preventDefault(); void submitExtraSerial(i); }
-                      }}
-                      placeholder="Serial"
-                      className="h-5 min-w-0 flex-1 border-0 bg-transparent px-0 text-[11px] font-bold text-gray-900 outline-none placeholder:font-medium placeholder:text-gray-400"
-                    />
-                    <span className={RECEIVING_TRAIL_SLOT_CLASS}>
-                      <button
-                        type="button"
-                        onClick={() => setExtraSerials((xs) => xs.filter((_, j) => j !== i))}
-                        aria-label="Remove this serial row"
-                        title="Remove"
-                        className={TRACKING_REMOVE_BTN_CLASS}
-                      >
-                        <X className="h-3 w-3" />
-                      </button>
-                    </span>
-                  </div>
-                  <div className={RECEIVING_SCAN_RULE_LINE_CLASS} aria-hidden />
+                  {(['ebay', 'goodwill', 'amazon', 'aliexpress', 'walmart'] as const)
+                    .map((id) => SOURCE_PLATFORM_OPTS.find((o) => o.value === id))
+                    .filter((o): o is (typeof SOURCE_PLATFORM_OPTS)[number] => !!o)
+                    .map((opt) => {
+                      const isActive = (sourcePlatform || '') === opt.value;
+                      return (
+                        <button
+                          key={opt.value}
+                          type="button"
+                          role="radio"
+                          aria-checked={isActive}
+                          onClick={() => {
+                            setSourcePlatform(opt.value);
+                            void savePlatform(opt.value);
+                          }}
+                          className={`inline-flex h-8 items-center whitespace-nowrap rounded-full border px-3 text-[10px] font-black uppercase tracking-wide transition-colors ${
+                            isActive
+                              ? 'border-gray-900 bg-gray-900 text-white'
+                              : 'border-gray-200 bg-white text-gray-600 hover:border-gray-300 hover:bg-gray-50'
+                          }`}
+                        >
+                          {opt.label}
+                        </button>
+                      );
+                    })}
                 </div>
-              ))}
-              <div className="mt-2">
-                <label htmlFor={`po-item-notes-${row.id}`} className={FLOW_SECTION_LABEL}>
-                  PO item notes
-                </label>
-                <textarea
-                  key={`po-item-notes-${row.id}`}
-                  id={`po-item-notes-${row.id}`}
-                  value={notes}
-                  onChange={(e) => setNotes(e.target.value)}
-                  onBlur={() => {
-                    if (notes !== (row.notes || '')) void patch({ notes });
-                  }}
-                  rows={2}
-                  placeholder="Notes for this PO line (saved to receiving line)"
-                  className="mt-1 w-full resize-none rounded-md border border-slate-200 bg-white px-2 py-1 text-[11px] font-medium leading-snug text-slate-900 placeholder:text-slate-400 focus:border-blue-300 focus:outline-none focus:ring-2 focus:ring-blue-500/10"
-                />
+              </div>
+              <span className="mt-5 h-6 w-px shrink-0 bg-slate-200" aria-hidden />
+              <div className="min-w-0 shrink-0 ml-auto text-right">
+                <span className={FLOW_SECTION_LABEL}>Type</span>
+                <div
+                  role="radiogroup"
+                  aria-label="Receiving type"
+                  className="mt-1.5 flex flex-wrap items-center justify-end gap-1.5"
+                >
+                  {RECEIVING_TYPE_OPTS
+                    .filter((opt) => opt.value !== 'PICKUP')
+                    .map((opt) => {
+                      const isActive = receivingType === opt.value;
+                      return (
+                        <button
+                          key={opt.value}
+                          type="button"
+                          role="radio"
+                          aria-checked={isActive}
+                          onClick={() => {
+                            setReceivingType(opt.value);
+                            patch({ receiving_type: opt.value });
+                          }}
+                          className={`inline-flex h-8 items-center whitespace-nowrap rounded-full border px-3 text-[10px] font-black uppercase tracking-wide transition-colors ${
+                            isActive
+                              ? 'border-gray-900 bg-gray-900 text-white'
+                              : 'border-gray-200 bg-white text-gray-600 hover:border-gray-300 hover:bg-gray-50'
+                          }`}
+                        >
+                          {opt.label}
+                        </button>
+                      );
+                    })}
+                </div>
               </div>
             </div>
           </div>
-        </FlowSection>
+          </WorkspaceCard>
 
-        <FlowSection
-          title="Support"
-          summary={
-            zendesk.trim()
-              ? 'Zendesk'
-              : supportNotes.trim()
-                ? 'Notes'
-                : undefined
-          }
-          open={flowOpen.support}
-          onToggle={() => toggleFlow('support')}
-          tone="support"
-        >
+          {/* PO Lines accordion — renders only for multi-line cartons
+              (component self-guards on rows.length <= 1). Sits ABOVE the
+              product title so the operator picks the right line first,
+              then sees its title + critical inputs below. */}
+          {row.receiving_id != null ? (
+            <PoLinesAccordion receivingId={row.receiving_id} activeLineId={row.id} />
+          ) : null}
+
+          {/* Product / item title — flat title-only card. Line N of M lives
+              in the PoLinesAccordion above; variant chip + SKU stripped. */}
+          <ReceivingContextCard
+            row={row}
+            lineIndex={itemIndex}
+            lineTotal={itemTotal}
+          />
+
+          {/* Condition pills — top-of-workspace critical input. Drives the
+              same `cond` state used by the (now-removed) Item FlowSection. */}
+          <ConditionPills
+            value={cond}
+            onChange={(next) => {
+              setCond(next);
+              void patch({ condition_grade: next });
+            }}
+          />
+
+          {/* Serial scan + notes — co-located so the operator can leave a
+              note without leaving the scan path. */}
+          <SerialCard
+            saved={row.serials ?? []}
+            expected={row.quantity_expected ?? null}
+            isSubmitting={serialSubmitting}
+            disabled={!row.receiving_id}
+            onAdd={(sn) => { void submitSerial(sn); }}
+            notes={notes}
+            onNotesChange={setNotes}
+            onNotesBlur={() => {
+              if (notes !== (row.notes || '')) void patch({ notes });
+            }}
+            notesId={`po-item-notes-${row.id}`}
+          />
+
+          {/* Photos + Make a Claim are co-located inside the Staff card
+              above — no standalone PhotosCard is needed in the column. */}
+
+          {/* Shipment PO moved above (under the ContextCard); Item removed
+              entirely as its fields are surfaced as top-of-workspace cards. */}
+
+          {/* ── SUPPORT ──
+              Hidden by default. Surfaces when:
+                • the operator opens a claim (showSupportOverride flips true), OR
+                • a Zendesk ticket / support notes were already saved (so the
+                  history of the carton is still reachable on re-open).
+              The "Make a claim" flow auto-populates `zendesk` on success, so
+              the operator sees the freshly-filed ticket # immediately. */}
+          {(showSupportOverride || zendesk.trim() || supportNotes.trim()) ? (
+          <WorkspaceCard tone="orange" bodyClassName="px-0 py-0" className="overflow-hidden">
+            <FlowSection
+              embedded
+              title="Support"
+              summary={
+                zendesk.trim()
+                  ? 'Zendesk'
+                  : supportNotes.trim()
+                    ? 'Notes'
+                    : undefined
+              }
+              open={flowOpen.support}
+              onToggle={() => toggleFlow('support')}
+              tone="support"
+              bodyClassName="px-3 py-3"
+            >
           <div className="space-y-2.5">
             <div>
               <span className={FLOW_SECTION_LABEL}>Zendesk</span>
@@ -1443,23 +1444,74 @@ export function LineEditPanel({
               />
             </div>
           </div>
-        </FlowSection>
+            </FlowSection>
+          </WorkspaceCard>
+          ) : null}
 
-        <div className="space-y-1.5 bg-white px-2 py-1.5">
-          <div className="relative z-20 flex w-full overflow-visible rounded border border-emerald-600 bg-emerald-600">
+          {scanValue || row.sku ? (
+            <WorkspaceCard label="Label preview">
+              {scanValue ? (
+                <ReceivingPoLabelPreview {...labelPayload} embedded />
+              ) : row.sku ? (
+                <ReceivingProductLabelPreview
+                  sku={row.sku}
+                  title={row.item_name ?? ''}
+                  serialNumber={serialInput.trim()}
+                  embedded
+                />
+              ) : null}
+            </WorkspaceCard>
+          ) : null}
+
+          {lastReceiveResponse ? (
+            <WorkspaceCard label="Last receive" bodyClassName="px-0 py-0">
+              <ReceiveResponsePanel
+                response={lastReceiveResponse}
+                expanded={responseExpanded}
+                onToggle={() => setResponseExpanded((v) => !v)}
+                onDismiss={() => {
+                  setLastReceiveResponse(null);
+                  setResponseExpanded(false);
+                }}
+              />
+            </WorkspaceCard>
+          ) : null}
+        </div>
+      </div>
+
+      {/* Sticky action bar — pinned to the bottom of the workspace. Hosts
+          the existing split-button menu intact (Print only / Mark scanned /
+          Receive) so all handlers + keyboard shortcuts continue to fire.
+          Color picks up the assigned tech's station theme (same palette
+          used elsewhere via `stationThemeColors`) so the operator's eye
+          recognizes "this carton belongs to me" at a glance. Falls back to
+          emerald when no tech is assigned. */}
+      {(() => {
+        const techTheme = row.assigned_tech_id != null
+          ? stationThemeColors[getStaffThemeById(row.assigned_tech_id)]
+          : null;
+        const ctaBg = techTheme?.bg ?? 'bg-emerald-600';
+        const ctaHover = techTheme?.hover ?? 'hover:bg-emerald-700';
+        // Derive a slightly lighter border-divider between the split menu
+        // chevron and the main CTA — same hue, lower opacity.
+        const ctaDivider = ctaBg.replace('bg-', 'border-').replace('-600', '-500/50').replace('-500', '-400/50').replace('-900', '-700/50');
+        return (
+      <div className="sticky bottom-0 z-10 border-t border-gray-200 bg-white/90 px-4 py-3 backdrop-blur sm:px-6">
+        <div className="mx-auto w-full max-w-3xl">
+          <div className={`relative z-20 flex w-full overflow-visible rounded-xl shadow-sm ${ctaBg}`}>
             <div className="group/split-menu relative flex shrink-0 self-stretch">
               <button
                 type="button"
                 aria-haspopup="menu"
                 aria-label={splitMenuAriaLabel}
                 title={splitMenuHoverTitle}
-                className="flex h-auto min-h-[28px] items-center justify-center border-r border-emerald-500/50 px-2 text-white outline-none transition-colors hover:bg-emerald-700 focus-visible:z-30 focus-visible:ring-2 focus-visible:ring-white/80 focus-visible:ring-offset-2 focus-visible:ring-offset-emerald-600"
+                className={`flex h-auto min-h-[44px] items-center justify-center rounded-l-xl border-r ${ctaDivider} px-3 text-white outline-none transition-colors ${ctaHover} focus-visible:z-30 focus-visible:ring-2 focus-visible:ring-white/80 focus-visible:ring-offset-2`}
               >
                 <ChevronDown className="h-4 w-4 opacity-95" aria-hidden />
               </button>
               <div
                 className="
-                    invisible absolute left-0 top-full z-50 pt-1.5 opacity-0
+                    invisible absolute left-0 bottom-full z-50 pb-1.5 opacity-0
                     transition-opacity duration-75
                     group-hover/split-menu:pointer-events-auto group-hover/split-menu:visible group-hover/split-menu:opacity-100
                     group-focus-within/split-menu:pointer-events-auto group-focus-within/split-menu:visible group-focus-within/split-menu:opacity-100
@@ -1469,7 +1521,7 @@ export function LineEditPanel({
                 <ul
                   role="menu"
                   aria-label="Single-action review controls"
-                  className="min-w-[11rem] rounded-lg border border-slate-200 bg-white py-1 shadow-xl ring-1 ring-slate-200/80"
+                  className="min-w-[12rem] rounded-lg border border-slate-200 bg-white py-1 shadow-xl ring-1 ring-slate-200/80"
                 >
                   <li role="none">
                     <button
@@ -1480,7 +1532,7 @@ export function LineEditPanel({
                         e.stopPropagation();
                         runPrintLabel();
                       }}
-                      className="flex w-full items-center gap-2 px-3 py-2 text-left text-[10px] font-black uppercase tracking-wider text-slate-800 transition-colors hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-35"
+                      className="flex w-full items-center gap-2 px-3 py-2 text-left text-[11px] font-black uppercase tracking-wider text-slate-800 transition-colors hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-35"
                     >
                       <Printer className="h-3.5 w-3.5 shrink-0" aria-hidden />
                       Print only
@@ -1496,7 +1548,7 @@ export function LineEditPanel({
                         e.stopPropagation();
                         void handleReceive('scan_only');
                       }}
-                      className="flex w-full items-center gap-2 px-3 py-2 text-left text-[10px] font-black uppercase tracking-wider text-slate-800 transition-colors hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-35"
+                      className="flex w-full items-center gap-2 px-3 py-2 text-left text-[11px] font-black uppercase tracking-wider text-slate-800 transition-colors hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-35"
                     >
                       <Clipboard className="h-3.5 w-3.5 shrink-0" aria-hidden />
                       Mark as scanned
@@ -1516,7 +1568,7 @@ export function LineEditPanel({
                         e.stopPropagation();
                         void handleReceive('zoho_receive');
                       }}
-                      className="flex w-full items-center gap-2 px-3 py-2 text-left text-[10px] font-black uppercase tracking-wider text-slate-800 transition-colors hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-35"
+                      className="flex w-full items-center gap-2 px-3 py-2 text-left text-[11px] font-black uppercase tracking-wider text-slate-800 transition-colors hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-35"
                     >
                       <PackageCheck className="h-3.5 w-3.5 shrink-0" aria-hidden />
                       {receiveMenuLabel}
@@ -1530,39 +1582,16 @@ export function LineEditPanel({
               onClick={() => void handlePrintAndReceive()}
               disabled={combinedReviewDisabled}
               title={printThenReceiveTitle}
-              className="inline-flex min-h-[28px] min-w-0 flex-1 items-center justify-center gap-2 px-2 py-1 text-[9px] font-black uppercase tracking-wider text-white outline-none transition-colors hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-60 focus-visible:z-30 focus-visible:ring-2 focus-visible:ring-white/70 focus-visible:ring-offset-2 focus-visible:ring-offset-emerald-600"
+              className={`inline-flex min-h-[44px] min-w-0 flex-1 items-center justify-center gap-2 rounded-r-xl px-4 py-2 text-[12px] font-black uppercase tracking-wider text-white outline-none transition-colors ${ctaHover} disabled:cursor-not-allowed disabled:opacity-60 focus-visible:z-30 focus-visible:ring-2 focus-visible:ring-white/70 focus-visible:ring-offset-2`}
             >
-              <Printer className="h-3.5 w-3.5 shrink-0" aria-hidden />
+              <Printer className="h-4 w-4 shrink-0" aria-hidden />
               {printReceivePrimaryLabel}
             </button>
           </div>
-          {scanValue || row.sku ? (
-            <div className="-mx-2 border-t border-slate-200 px-2 py-1.5">
-              {scanValue ? (
-                <ReceivingPoLabelPreview {...labelPayload} embedded />
-              ) : row.sku ? (
-                <ReceivingProductLabelPreview
-                  sku={row.sku}
-                  title={row.item_name ?? ''}
-                  serialNumber={serialInput.trim()}
-                  embedded
-                />
-              ) : null}
-            </div>
-          ) : null}
-          {lastReceiveResponse ? (
-            <ReceiveResponsePanel
-              response={lastReceiveResponse}
-              expanded={responseExpanded}
-              onToggle={() => setResponseExpanded((v) => !v)}
-              onDismiss={() => {
-                setLastReceiveResponse(null);
-                setResponseExpanded(false);
-              }}
-            />
-          ) : null}
         </div>
       </div>
+        );
+      })()}
     </div>
     {row.receiving_id != null ? (
       <ReceivingAuditModal
@@ -1571,6 +1600,23 @@ export function LineEditPanel({
         receivingId={row.receiving_id}
       />
     ) : null}
+    <ReceivingClaimModal
+      open={claimModalOpen}
+      row={row}
+      onClose={() => setClaimModalOpen(false)}
+      onTicketCreated={(tk) => {
+        // Auto-populate the Support ZD field — only if empty, so we don't
+        // stomp in-flight operator edits. The existing save flow persists it
+        // on the next Receive / patch event.
+        if (!zendesk.trim()) setZendesk(tk);
+        // Reveal the Support card so the operator can verify the
+        // freshly-filed ticket # without hunting for a toggle.
+        setShowSupportOverride(true);
+        // Broadcast so other surfaces (Recent rail, table) can refresh
+        // their cached row if they hold a zendesk_ticket field.
+        dispatchLineUpdated({ id: row.id, notes: row.notes });
+      }}
+    />
     </>
   );
 }

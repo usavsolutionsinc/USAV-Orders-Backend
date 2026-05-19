@@ -1,22 +1,35 @@
 'use client';
 
 import { useCallback, useRef } from 'react';
-import { usePathname, useRouter } from 'next/navigation';
+import { usePathname } from 'next/navigation';
 import { useAblyChannel } from '@/hooks/useAblyChannel';
 import { useAuth } from '@/contexts/AuthContext';
 
 /**
  * Phone-side bridge that listens for `receiving_photo_request` on
- * `station:{staffId}` and auto-navigates the phone to the photo capture page.
+ * `station:{staffId}` and announces the new carton to the rest of the app
+ * via a window-level CustomEvent. The arrival hero (mounted globally in
+ * ResponsiveLayout's mobile branch) listens, presents the carton intel, and
+ * is the surface that actually navigates to `/m/r/{id}/photos`.
  *
  * Keyed by the signed-in staff (`useAuth().user.staffId`). Desktop publishes
  * on `station:{currentStaffId}`; any phone signed in as the same staff picks
  * it up — no separate pair handshake.
  */
+
+export const RECEIVING_ARRIVAL_EVENT = 'receiving-photo-arrival';
+
+export interface ReceivingArrivalDetail {
+  receivingId: number;
+  tracking: string | null;
+  requestId: string | null;
+  /** ms epoch when the bridge observed the event — used to ignore stale fires. */
+  receivedAt: number;
+}
+
 export function usePhoneReceivingPhotoBridge(): void {
   const { user } = useAuth();
   const staffId = user?.staffId ?? 0;
-  const router = useRouter();
   const pathname = usePathname();
 
   // Dedup window — desktops can fire the same request twice on rapid scans.
@@ -42,16 +55,19 @@ export function usePhoneReceivingPhotoBridge(): void {
       if (reqId && last && last.id === reqId && now - last.at < 2000) return;
       if (reqId) lastRequestRef.current = { id: reqId, at: now };
 
-      // Don't redirect if the user is already on a photos page for this carton.
+      // Already capturing for this exact carton — don't interrupt.
       const target = `/m/r/${receivingId}/photos`;
       if (pathname && pathname.startsWith(target)) return;
 
-      const query = new URLSearchParams();
-      query.set('staffId', String(staffId));
-      if (reqId) query.set('requestId', reqId);
-      router.push(`${target}?${query.toString()}`);
+      const detail: ReceivingArrivalDetail = {
+        receivingId,
+        tracking: msg?.data?.tracking ? String(msg.data.tracking) : null,
+        requestId: reqId || null,
+        receivedAt: now,
+      };
+      window.dispatchEvent(new CustomEvent(RECEIVING_ARRIVAL_EVENT, { detail }));
     },
-    [pathname, router, staffId],
+    [pathname],
   );
 
   useAblyChannel(

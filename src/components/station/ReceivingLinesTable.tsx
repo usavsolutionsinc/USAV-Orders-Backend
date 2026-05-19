@@ -190,6 +190,11 @@ export default function ReceivingLinesTable() {
   const [weekOffset, setWeekOffset] = useState(0);
   const [stickyDate, setStickyDate] = useState<string>('');
   const [currentCount, setCurrentCount] = useState<number>(0);
+  // Ids prepended via a *search* (vs an active-flow scan). Search results
+  // can come from past weeks, so they'd otherwise be swallowed by the
+  // weekRange filter. Pinning them surfaces them in a dedicated group at
+  // the top of the table regardless of date.
+  const [pinnedRowIds, setPinnedRowIds] = useState<Set<number>>(() => new Set());
   const scrollRef = useRef<HTMLDivElement>(null);
   const LIMIT = 500;
 
@@ -262,18 +267,39 @@ export default function ReceivingLinesTable() {
     return () => window.removeEventListener('receiving-clear-line', handler);
   }, []);
 
-  // Tracking scan match → prepend every matched line to the top of the table.
-  // Dedupe by id so a re-scan moves the existing row up instead of duplicating.
-  // Also jumps to the current week and scrolls to top so the new rows are in view.
+  // Tracking scan/search match → prepend every matched line to the top of the
+  // table. Dedupe by id so a re-scan moves the existing row up instead of
+  // duplicating. Accepts two payload shapes:
+  //   • `ReceivingLineRow[]`                   — legacy / active scan flow
+  //   • `{ rows, source: 'search' | 'scan' }`  — explicit discriminator
+  // Rows from a `source: 'search'` event are *pinned* so they survive the
+  // current-week filter (search results frequently live in past weeks; the
+  // old behavior swallowed them silently).
   useEffect(() => {
     const handler = (event: Event) => {
-      const incoming = (event as CustomEvent<ReceivingLineRow[]>).detail;
-      if (!Array.isArray(incoming) || incoming.length === 0) return;
+      const raw = (event as CustomEvent<unknown>).detail;
+      let incoming: ReceivingLineRow[] = [];
+      let source: 'search' | 'scan' = 'scan';
+      if (Array.isArray(raw)) {
+        incoming = raw as ReceivingLineRow[];
+      } else if (raw && typeof raw === 'object' && Array.isArray((raw as { rows?: unknown }).rows)) {
+        const detail = raw as { rows: ReceivingLineRow[]; source?: 'search' | 'scan' };
+        incoming = detail.rows;
+        if (detail.source === 'search') source = 'search';
+      }
+      if (incoming.length === 0) return;
+      const incomingIds = new Set(incoming.map((r) => r.id));
       setLocalRows((rows) => {
-        const incomingIds = new Set(incoming.map((r) => r.id));
         const kept = rows.filter((r) => !incomingIds.has(r.id));
         return [...incoming, ...kept];
       });
+      if (source === 'search') {
+        setPinnedRowIds((prev) => {
+          const next = new Set(prev);
+          incomingIds.forEach((id) => next.add(id));
+          return next;
+        });
+      }
       setWeekOffset(0);
       requestAnimationFrame(() => {
         scrollRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
@@ -281,6 +307,16 @@ export default function ReceivingLinesTable() {
     };
     window.addEventListener('receiving-lines-prepended', handler);
     return () => window.removeEventListener('receiving-lines-prepended', handler);
+  }, []);
+
+  // Pinned rows are cleared whenever the operator signals they're "done with
+  // these search results": closing the active line, manually navigating to a
+  // different week, or explicit clear. Keeps the "Search results" group from
+  // accumulating stale entries across unrelated lookups.
+  useEffect(() => {
+    const handler = () => setPinnedRowIds(new Set());
+    window.addEventListener('receiving-clear-search-pins', handler);
+    return () => window.removeEventListener('receiving-clear-search-pins', handler);
   }, []);
 
   // External highlight — the sidebar's up/down arrows fire this event to
@@ -294,6 +330,22 @@ export default function ReceivingLinesTable() {
     };
     window.addEventListener('receiving-highlight-line', handler);
     return () => window.removeEventListener('receiving-highlight-line', handler);
+  }, []);
+
+  // Track whichever row is currently mounted in the workspace overlay, so
+  // the receiving-navigate-table prev/next handler below has a reference
+  // point. Without this, opening the workspace via dispatchReceivingWorkspaceOpen
+  // (Edit PO, etc.) leaves selectedIdRef null and prev/next no-ops.
+  useEffect(() => {
+    const handler = (event: Event) => {
+      const detail = (event as CustomEvent<{ row?: { id?: number } } | null>).detail;
+      const id = Number(detail?.row?.id);
+      if (Number.isFinite(id) && id > 0) {
+        setSelectedId(id);
+      }
+    };
+    window.addEventListener('receiving-workspace-open', handler);
+    return () => window.removeEventListener('receiving-workspace-open', handler);
   }, []);
 
   // Track selectedId in a ref so the click handler can read the current value
@@ -380,20 +432,39 @@ export default function ReceivingLinesTable() {
     [groupedRecords, weekRange.startStr, weekRange.endStr],
   );
 
-  /** Flat list in render order (newest day first, newest line first within day). */
-  const orderedVisibleRows = useMemo(
-    () =>
-      Object.entries(filteredGroupedRecords)
-        .sort((a, b) => b[0].localeCompare(a[0]))
-        .flatMap(([, dateRows]) =>
-          [...dateRows].sort((a, b) => {
+  /**
+   * Rows pinned from a search (source: 'search' on receiving-lines-prepended).
+   * Rendered in their own "Search results" group at the top of the table,
+   * sorted newest-first, capped to avoid runaway lists across many lookups.
+   */
+  const pinnedRows = useMemo(() => {
+    if (pinnedRowIds.size === 0) return [] as ReceivingLineRow[];
+    const matching = localRows.filter((r) => pinnedRowIds.has(r.id));
+    matching.sort((a, b) => {
+      const tA = new Date(a.created_at || 0).getTime();
+      const tB = new Date(b.created_at || 0).getTime();
+      return tB - tA;
+    });
+    return matching.slice(0, 50);
+  }, [localRows, pinnedRowIds]);
+
+  /** Flat list in render order — pinned first, then newest day → newest row. */
+  const orderedVisibleRows = useMemo(() => {
+    const pinned = pinnedRows;
+    const pinnedIds = new Set(pinned.map((r) => r.id));
+    const dated = Object.entries(filteredGroupedRecords)
+      .sort((a, b) => b[0].localeCompare(a[0]))
+      .flatMap(([, dateRows]) =>
+        [...dateRows]
+          .filter((r) => !pinnedIds.has(r.id))
+          .sort((a, b) => {
             const tA = new Date(a.created_at || 0).getTime();
             const tB = new Date(b.created_at || 0).getTime();
             return tB - tA;
           }),
-        ),
-    [filteredGroupedRecords],
-  );
+      );
+    return [...pinned, ...dated];
+  }, [filteredGroupedRecords, pinnedRows]);
 
   // Sidebar chevrons / arrow keys dispatch receiving-navigate-table.
   useEffect(() => {
@@ -470,20 +541,53 @@ export default function ReceivingLinesTable() {
           count={currentCount || getWeekCount()}
           weekRange={weekRange}
           weekOffset={weekOffset}
-          onPrevWeek={() => setWeekOffset(weekOffset + 1)}
-          onNextWeek={() => setWeekOffset(Math.max(0, weekOffset - 1))}
+          onPrevWeek={() => {
+            // Manual week navigation = "I'm browsing again", drop search pins.
+            setPinnedRowIds(new Set());
+            setWeekOffset(weekOffset + 1);
+          }}
+          onNextWeek={() => {
+            setPinnedRowIds(new Set());
+            setWeekOffset(Math.max(0, weekOffset - 1));
+          }}
         />
         <div ref={scrollRef} className="min-h-0 flex-1 overflow-auto">
           {isLoading && localRows.length === 0 ? (
             <div className="flex h-full items-center justify-center">
               <Loader2 className="h-8 w-8 animate-spin text-gray-500" />
             </div>
-          ) : Object.keys(filteredGroupedRecords).length === 0 ? (
+          ) : pinnedRows.length === 0 && Object.keys(filteredGroupedRecords).length === 0 ? (
             <div className="flex h-full flex-col items-center justify-center gap-3 px-6 text-center">
               <p className="text-[14px] font-semibold text-gray-500">{emptyMessage}</p>
             </div>
           ) : (
             <div className="flex w-full flex-col">
+              {pinnedRows.length > 0 ? (
+                <div className="flex flex-col border-b-2 border-indigo-100 bg-indigo-50/20">
+                  <div className="flex items-center justify-between border-b border-indigo-100 bg-indigo-50/60 px-3 py-1.5">
+                    <p className="text-[10px] font-black uppercase tracking-widest text-indigo-700">
+                      Search results · {pinnedRows.length}
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => setPinnedRowIds(new Set())}
+                      className="text-[9px] font-bold uppercase tracking-widest text-indigo-500 hover:text-indigo-700"
+                    >
+                      Clear
+                    </button>
+                  </div>
+                  {pinnedRows.map((row, index) => (
+                    <OrderRow
+                      key={`pinned-${row.id}`}
+                      row={row}
+                      index={index}
+                      isMobile={isMobile}
+                      isSelected={selectedId === row.id}
+                      onSelect={() => handleSelectRow(row)}
+                    />
+                  ))}
+                </div>
+              ) : null}
               {Object.entries(filteredGroupedRecords)
                 .sort((a, b) => b[0].localeCompare(a[0]))
                 .map(([date, dateRows]) => {

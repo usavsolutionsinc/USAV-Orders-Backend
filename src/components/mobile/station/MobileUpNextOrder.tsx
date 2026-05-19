@@ -4,10 +4,12 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
 import { framerPresence, framerTransition, tabPagerVariants } from '@/design-system';
 import confetti from 'canvas-confetti';
-import { Package } from '@/components/Icons';
-import { TabSwitch } from '@/components/ui/TabSwitch';
-import { getTechStationLightChromeOutlineClass } from '@/utils/staff-colors';
-import { SLIDER_PRESETS, type HorizontalSliderItem } from '@/components/ui/HorizontalButtonSlider';
+import { AlertCircle, ClipboardList, List, Package, ShoppingCart, Wrench } from '@/components/Icons';
+import {
+  HorizontalButtonSlider,
+  SLIDER_PRESETS,
+  type HorizontalSliderItem,
+} from '@/components/ui/HorizontalButtonSlider';
 import { useUpNextController } from '@/hooks/station/useUpNextController';
 
 // Mobile-optimized cards with 44px+ touch targets and rounded card styling
@@ -28,6 +30,19 @@ import {
 // ─── Types ───────────────────────────────────────────────────────────────────
 
 type TabId = UpNextTabId;
+
+const UP_NEXT_TAB_ICONS: Record<UpNextTabId, (props: { className?: string }) => JSX.Element> = {
+  all: List,
+  orders: ShoppingCart,
+  fba: Package,
+  repair: Wrench,
+  stock: AlertCircle,
+  receiving: ClipboardList,
+};
+
+// Mirrors the desktop UpNextOrder: hide the pills whose content is duplicated
+// by `all`/`orders` when FBA + Repair are out of view. Sections still render.
+const HIDDEN_PILL_IDS = new Set<UpNextTabId>(['fba', 'repair', 'all', 'orders']);
 
 interface MobileUpNextOrderProps {
   techId: string;
@@ -89,7 +104,19 @@ export function MobileUpNextOrder({
     lateCount, dueTodayCount, shouldShowStockSection, showNoCurrentOrdersBanner,
   } = ctrl;
   const tabCounts = rawTabCounts;
-  const stationTabChromeOutline = useMemo(() => getTechStationLightChromeOutlineClass(techId), [techId]);
+
+  const sliderItems: HorizontalSliderItem[] = useMemo(
+    () =>
+      visibleTabs
+        .filter((tab) => !HIDDEN_PILL_IDS.has(tab.id as UpNextTabId))
+        .map((tab) => ({
+          id: tab.id,
+          label: tab.label,
+          count: tab.count,
+          icon: UP_NEXT_TAB_ICONS[tab.id as UpNextTabId],
+        })),
+    [visibleTabs],
+  );
 
   const visibleTabBarIndex = useCallback(
     (id: TabId) => {
@@ -271,15 +298,16 @@ export function MobileUpNextOrder({
 
   return (
     <div className="relative flex flex-col space-y-1.5">
-      {/* ── Tab bar (scrollable, touch-friendly) ── */}
-      <TabSwitch
-        tabs={visibleTabs}
-        activeTab={effectiveTab}
-        onTabChange={(tab) => selectTab(tab as TabId)}
-        scrollable
-        variant="upNext"
-        stationChromeOutlineClassName={stationTabChromeOutline}
-      />
+      {/* ── Tab bar — same nav-variant pill row as desktop /tech. ── */}
+      {sliderItems.length > 0 ? (
+        <HorizontalButtonSlider
+          items={sliderItems}
+          value={effectiveTab}
+          onChange={(id) => selectTab(id as TabId)}
+          variant="nav"
+          aria-label="Up Next tabs"
+        />
+      ) : null}
 
       {/* ── Urgency summary bar ── */}
       <AnimatePresence initial={false}>

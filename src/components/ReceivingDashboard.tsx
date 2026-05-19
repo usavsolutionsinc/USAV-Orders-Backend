@@ -131,7 +131,9 @@ export default function ReceivingDashboard() {
   // tab flip; visibility is toggled via display:none):
   //   - Receiving + workspace → workspace overlay (over the hidden table)
   //   - Receiving + no work   → "Scan to start" prompt
-  //   - History               → table visible
+  //   - History               → recent-scans table visible; a tracking/PO
+  //                             match opens ReceivingDetailsStack as a
+  //                             right-side overlay (below).
   const showWorkspace = !!workspace && !isHistoryMode;
   const showReceivePrompt = !workspace && !isHistoryMode;
 
@@ -249,3 +251,4 @@ function ReceiveEmptyState() {
     </div>
   );
 }
+

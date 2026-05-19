@@ -6,6 +6,7 @@ import { useSearchParams } from 'next/navigation';
 import { Check, Loader2, Plus, RefreshCw, X } from '@/components/Icons';
 import { StatusBadge } from '@/design-system';
 import { formatMediumDateTime } from '@/utils/_date';
+import { HorizontalButtonSlider, type HorizontalSliderItem } from '@/components/ui/HorizontalButtonSlider';
 import { LocalPickupIntakeForm } from './LocalPickupIntakeForm';
 
 type LocalPickupRow = {
@@ -49,6 +50,16 @@ type EditablePickupRow = {
 };
 
 const GRADE_OPTIONS = ['A', 'B', 'C', 'D', 'PARTS_ONLY'];
+
+const PARTS_STATUS_ITEMS: HorizontalSliderItem[] = [
+  { id: 'COMPLETE', label: 'Complete' },
+  { id: 'MISSING_PARTS', label: 'Missing Parts' },
+];
+
+const GRADE_ITEMS: HorizontalSliderItem[] = [
+  { id: '', label: 'Unset' },
+  ...GRADE_OPTIONS.map<HorizontalSliderItem>((g) => ({ id: g, label: g })),
+];
 
 function toMoneyDisplay(value: string | null) {
   const num = Number(value || 0);
@@ -309,27 +320,31 @@ export function LocalPickupTable() {
                 </div>
 
                 <div>
-                  <select
+                  <HorizontalButtonSlider
+                    aria-label="Parts status"
+                    variant="slate"
+                    size="md"
+                    items={PARTS_STATUS_ITEMS}
                     value={draft.partsStatus}
-                    onChange={(e) => updateDraft(row.receiving_id, { partsStatus: e.target.value as EditablePickupRow['partsStatus'] })}
-                    className="w-full border-b border-[var(--color-neutral-200)] bg-transparent py-1 text-[12px] font-semibold text-[var(--color-neutral-900)] focus:outline-none"
-                  >
-                    <option value="COMPLETE">Complete</option>
-                    <option value="MISSING_PARTS">Missing Parts</option>
-                  </select>
+                    onChange={(next) =>
+                      updateDraft(row.receiving_id, {
+                        partsStatus: next as EditablePickupRow['partsStatus'],
+                      })
+                    }
+                  />
                 </div>
 
                 <div>
-                  <select
-                    value={draft.receivingGrade}
-                    onChange={(e) => updateDraft(row.receiving_id, { receivingGrade: e.target.value })}
-                    className="w-full border-b border-[var(--color-neutral-200)] bg-transparent py-1 text-[12px] font-semibold text-[var(--color-neutral-900)] focus:outline-none"
-                  >
-                    <option value="">Unset</option>
-                    {GRADE_OPTIONS.map((option) => (
-                      <option key={option} value={option}>{option}</option>
-                    ))}
-                  </select>
+                  <HorizontalButtonSlider
+                    aria-label="Receiving grade"
+                    variant="slate"
+                    size="md"
+                    items={GRADE_ITEMS}
+                    value={draft.receivingGrade ?? ''}
+                    onChange={(next) =>
+                      updateDraft(row.receiving_id, { receivingGrade: next })
+                    }
+                  />
                 </div>
 
                 <div>

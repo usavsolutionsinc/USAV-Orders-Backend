@@ -14,7 +14,11 @@ import { UpNextFilterBar } from './station/upnext/UpNextFilterBar';
 import { HorizontalButtonSlider, SLIDER_PRESETS, type HorizontalSliderItem } from './ui/HorizontalButtonSlider';
 import { QUICK_FILTER_ITEMS, SORT_FILTER_IDS, type UpNextTabId } from '@/utils/upnext-shared';
 import { useUpNextController } from '@/hooks/station/useUpNextController';
-import type { UpNextPreviewPayload } from '@/utils/events';
+import type {
+  UpNextPreviewPayload,
+  UpNextActionStartPayload,
+  UpNextActionOosPayload,
+} from '@/utils/events';
 import type { ActiveStationOrder } from '@/hooks/useStationTestingController';
 
 /** Tab → icon mapping for the Up Next slider (nav variant). Keeps the bar
@@ -95,8 +99,7 @@ export default function UpNextOrder({ techId, onStart, onMissingParts, onAllComp
     nonStockOrders, stockOrders,
     loading, allCompletedToday, fetchOrders,
     expandedItemKey, toggleExpandedItem,
-    showMissingPartsInput, setShowMissingPartsInput,
-    missingPartsReason, setMissingPartsReason,
+    setShowMissingPartsInput, setMissingPartsReason,
     lateCount, dueTodayCount, shouldShowStockSection, showNoCurrentOrdersBanner,
   } = ctrl;
   const tabCounts = rawTabCounts;
@@ -128,7 +131,7 @@ export default function UpNextOrder({ techId, onStart, onMissingParts, onAllComp
     if (!isCompletionView) hasCelebratedRef.current = false;
   }, [effectiveTab, showNoCurrentOrdersBanner]);
 
-  const handleStart = async (order: { id: number; shipping_tracking_number: string; order_id: string }) => {
+  const handleStart = useCallback(async (order: { id: number; shipping_tracking_number: string; order_id: string }) => {
     try {
       const res = await fetch('/api/orders/start', {
         method: 'POST',
@@ -142,18 +145,19 @@ export default function UpNextOrder({ techId, onStart, onMissingParts, onAllComp
     } catch (error) {
       console.error('Error starting order:', error);
     }
-  };
+  }, [techId, onStart, fetchOrders]);
 
-  const handleMissingParts = async (orderId: number) => {
-    if (!missingPartsReason.trim()) return;
+  const handleMissingParts = useCallback(async (orderId: number, reason: string) => {
+    const trimmed = reason.trim();
+    if (!trimmed) return;
     try {
       const res = await fetch('/api/orders/missing-parts', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ orderId, reason: missingPartsReason.trim() }),
+        body: JSON.stringify({ orderId, reason: trimmed }),
       });
       if (res.ok) {
-        onMissingParts(orderId, missingPartsReason.trim());
+        onMissingParts(orderId, trimmed);
         setShowMissingPartsInput(null);
         setMissingPartsReason('');
         fetchOrders();
@@ -161,15 +165,33 @@ export default function UpNextOrder({ techId, onStart, onMissingParts, onAllComp
     } catch (error) {
       console.error('Error marking missing parts:', error);
     }
-  };
+  }, [onMissingParts, setShowMissingPartsInput, setMissingPartsReason, fetchOrders]);
 
-  const handleToggleExpand = (key: string) => {
-    toggleExpandedItem(key);
-    if (showMissingPartsInput !== null) {
-      setShowMissingPartsInput(null);
-      setMissingPartsReason('');
-    }
-  };
+  // ── Listen for action dispatches from the right-pane `UpNextActionDock`.
+  // The dock is the only Start / OOS surface now (sidebar card is display-
+  // only), so these listeners are how the workspace acts on the queue.
+  useEffect(() => {
+    const handleStartEvent = (e: Event) => {
+      const detail = (e as CustomEvent<UpNextActionStartPayload>).detail;
+      if (!detail) return;
+      handleStart({
+        id: detail.orderId,
+        shipping_tracking_number: detail.shipping_tracking_number,
+        order_id: detail.order_id,
+      });
+    };
+    const handleOosEvent = (e: Event) => {
+      const detail = (e as CustomEvent<UpNextActionOosPayload>).detail;
+      if (!detail) return;
+      handleMissingParts(detail.orderId, detail.reason);
+    };
+    window.addEventListener('tech-upnext-action-start', handleStartEvent);
+    window.addEventListener('tech-upnext-action-oos-set', handleOosEvent);
+    return () => {
+      window.removeEventListener('tech-upnext-action-start', handleStartEvent);
+      window.removeEventListener('tech-upnext-action-oos-set', handleOosEvent);
+    };
+  }, [handleStart, handleMissingParts]);
 
   const renderOrderCard = (order: any, key?: string, effectiveOrderTab?: 'orders' | 'stock') => (
     <OrderCard
@@ -177,18 +199,6 @@ export default function UpNextOrder({ techId, onStart, onMissingParts, onAllComp
       order={order}
       effectiveTab={effectiveOrderTab || effectiveTab}
       techId={techId}
-      showMissingPartsInput={showMissingPartsInput}
-      missingPartsReason={missingPartsReason}
-      onStart={handleStart}
-      onMissingPartsToggle={(id) => {
-        if (expandedItemKey !== (key || `order-${order.id}`)) toggleExpandedItem(key || `order-${order.id}`);
-        setShowMissingPartsInput(showMissingPartsInput === id ? null : id);
-      }}
-      onMissingPartsReasonChange={setMissingPartsReason}
-      onMissingPartsSubmit={handleMissingParts}
-      onMissingPartsCancel={() => setShowMissingPartsInput(null)}
-      isExpanded={expandedItemKey === (key || `order-${order.id}`)}
-      onToggleExpand={() => handleToggleExpand(key || `order-${order.id}`)}
       isSelected={selectedOrderId === order.id}
     />
   );

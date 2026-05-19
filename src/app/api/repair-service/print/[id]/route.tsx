@@ -2,13 +2,12 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getRepairById } from '@/lib/neon/repair-service-queries';
 import { formatPhoneNumber } from '@/utils/phone';
 import pool from '@/lib/db';
-import { buildRepairDetailsDeepLink } from '@/lib/repair/repair-deep-link';
 
 /**
  * GET /api/repair-service/print/[id] - Render printable repair service form
  */
 export async function GET(
-  req: NextRequest,
+  _req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
@@ -58,6 +57,20 @@ export async function GET(
       });
     }
 
+    // Pickup date — today (printed at pickup); falls back to repair.updated_at
+    // when available so a late reprint still shows the original pickup day.
+    const pickupDateTime = (() => {
+      const fmt = (d: Date) =>
+        d.toLocaleString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' });
+      try {
+        if (repair.updated_at) {
+          const u = new Date(repair.updated_at);
+          if (!Number.isNaN(u.getTime())) return fmt(u);
+        }
+      } catch { /* ignore */ }
+      return fmt(new Date());
+    })();
+
     const repairServiceId = repair.id.toString();
     const repairServiceCode = `RS-${repairServiceId}`;
     const canonicalRsCode = `RS-${String(repair.id).padStart(4, '0')}`;
@@ -84,50 +97,152 @@ export async function GET(
     // Format contact as "Name, Phone, Email"
     const contactDisplay = [name, phoneNumber, email].filter(Boolean).join(', ');
 
-    // Resolve signature by RS code first (blob path + document_data ticketNumber),
-    // then fall back to direct repair entity linkage.
-    let signatureUrl = '';
-    try {
-      const signatureResult = await pool.query(
-        `SELECT d.signature_url
-         FROM documents d
-         WHERE d.entity_type = 'REPAIR'
-           AND d.signature_url IS NOT NULL
-           AND (
-             d.entity_id = $1
-             OR COALESCE(d.document_data->>'ticketNumber', '') = $2
-             OR d.signature_url ILIKE $3
-             OR d.signature_url ILIKE $4
-           )
-         ORDER BY
-           CASE
-             WHEN COALESCE(d.document_data->>'ticketNumber', '') = $2 THEN 0
-             WHEN d.signature_url ILIKE $3 THEN 1
-             WHEN d.signature_url ILIKE $4 THEN 2
-             WHEN d.entity_id = $1 THEN 3
-             ELSE 4
-           END,
-           d.created_at DESC
-         LIMIT 1`,
-        [
-          repair.id,
-          canonicalRsCode,
-          `%/${canonicalRsCode}_%`,
-          `%/${unpaddedRsCode}_%`,
-        ],
-      );
-      signatureUrl = String(signatureResult.rows[0]?.signature_url || '').trim();
-    } catch (signatureError) {
-      console.warn(`Failed to resolve repair signature for RS ${canonicalRsCode}:`, signatureError);
+    // Capture the DB id outside the closure — TS narrowing of `repair`
+    // doesn't carry into the nested async function.
+    const repairDbId = repair.id;
+
+    // Resolve drop-off (intake) and pickup signatures separately by document_type.
+    // The intake row uses blob path "{RS-####}_<ts>.png" while pickup uses
+    // "{RS-####}_pickup_<ts>.png" — older intake rows may pre-date document_type
+    // discrimination, so the intake query also accepts NULL document_type.
+    async function resolveSignatureUrl(
+      docTypeFilter: 'intake_agreement' | 'pickup_agreement',
+    ): Promise<string> {
+      const blobMarker =
+        docTypeFilter === 'pickup_agreement' ? '_pickup_' : '_';
+      try {
+        const result = await pool.query(
+          `SELECT d.signature_url
+           FROM documents d
+           WHERE d.entity_type = 'REPAIR'
+             AND d.signature_url IS NOT NULL
+             AND (
+               d.document_type = $5
+               OR (d.document_type IS NULL AND $5 = 'intake_agreement')
+             )
+             AND (
+               d.entity_id = $1
+               OR COALESCE(d.document_data->>'ticketNumber', '') = $2
+               OR d.signature_url ILIKE $3
+               OR d.signature_url ILIKE $4
+             )
+           ORDER BY
+             CASE
+               WHEN d.signature_url ILIKE '%' || $6 || '%' THEN 0
+               WHEN COALESCE(d.document_data->>'ticketNumber', '') = $2 THEN 1
+               WHEN d.signature_url ILIKE $3 THEN 2
+               WHEN d.signature_url ILIKE $4 THEN 3
+               WHEN d.entity_id = $1 THEN 4
+               ELSE 5
+             END,
+             d.created_at DESC
+           LIMIT 1`,
+          [
+            repairDbId,
+            canonicalRsCode,
+            `%/${canonicalRsCode}_%`,
+            `%/${unpaddedRsCode}_%`,
+            docTypeFilter,
+            blobMarker,
+          ],
+        );
+        return String(result.rows[0]?.signature_url || '').trim();
+      } catch (err) {
+        console.warn(
+          `Failed to resolve repair ${docTypeFilter} signature for RS ${canonicalRsCode}:`,
+          err,
+        );
+        return '';
+      }
     }
 
-    const repairManageUrl = buildRepairDetailsDeepLink(repair.id, req.nextUrl.origin);
-    const repairManageUrlJson = JSON.stringify(repairManageUrl);
+    const [dropoffSignatureUrl, pickupSignatureUrl] = await Promise.all([
+      resolveSignatureUrl('intake_agreement'),
+      resolveSignatureUrl('pickup_agreement'),
+    ]);
+
+    // Pull what was physically done on this repair (oldest-first so it reads
+    // top→bottom like the work was performed). Cap at 6 rows — the printed
+    // table has fixed height and more than 6 looks cramped.
+    interface ActionRow {
+      action_type: string;
+      part_name: string | null;
+      old_sku: string | null;
+      new_sku: string | null;
+      staff_name: string | null;
+      created_at: string;
+    }
+    let actions: ActionRow[] = [];
+    try {
+      const r = await pool.query<ActionRow>(
+        `SELECT a.action_type, a.part_name, a.old_sku, a.new_sku,
+                s.name AS staff_name, a.created_at
+           FROM repair_actions a
+           LEFT JOIN staff s ON s.id = a.staff_id
+          WHERE a.repair_id = $1
+            AND a.deleted_at IS NULL
+          ORDER BY a.created_at ASC, a.id ASC
+          LIMIT 6`,
+        [repair.id],
+      );
+      actions = r.rows;
+    } catch (err) {
+      console.warn(`Failed to load repair_actions for RS ${canonicalRsCode}:`, err);
+    }
+
+    const ACTION_LABEL: Record<string, string> = {
+      replaced:      'Replaced',
+      repaired:      'Repaired',
+      cleaned:       'Cleaned',
+      tested:        'Tested',
+      no_fix:        'No fix',
+      awaiting_part: 'Awaiting part',
+    };
+    function escapeHtml(s: string): string {
+      return s
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+    }
+    const actionRowsHtml = actions.length
+      ? actions
+          .map((a) => {
+            const what = a.part_name
+              ? `${ACTION_LABEL[a.action_type] || a.action_type}: ${a.part_name}`
+              : ACTION_LABEL[a.action_type] || a.action_type;
+            const detail =
+              a.action_type === 'replaced' && (a.old_sku || a.new_sku)
+                ? `${a.old_sku || '—'} → ${a.new_sku || '—'}`
+                : '';
+            const who = a.staff_name || '';
+            const when = a.created_at
+              ? new Date(a.created_at).toLocaleDateString('en-US', {
+                  month: '2-digit',
+                  day: '2-digit',
+                  year: '2-digit',
+                })
+              : '';
+            return `<div class="flex border-b border-r border-black">
+              <div class="flex-1 border-r border-black p-2">${escapeHtml(what)}</div>
+              <div class="flex-1 border-r border-black p-2">${escapeHtml(detail)}</div>
+              <div class="flex-1 border-r border-black p-2">${escapeHtml(who)}</div>
+              <div class="flex-1 border-r border-black p-2">${escapeHtml(when)}</div>
+            </div>`;
+          })
+          .join('')
+      : `<div class="flex border-b border-r border-black">
+          <div class="flex-1 border-r border-black p-2">&nbsp;</div>
+          <div class="flex-1 border-r border-black p-2">&nbsp;</div>
+          <div class="flex-1 border-r border-black p-2">&nbsp;</div>
+          <div class="flex-1 border-r border-black p-2">&nbsp;</div>
+        </div>`;
 
     // Generate HTML matching Repair Service Paper exactly
     const formHtml = `
       <div class="bg-white text-gray-900 font-sans p-8">
-        
+
         <!-- Header Section -->
         <div class="text-right mb-8">
           <h2 class="font-bold text-lg">USAV Solutions</h2>
@@ -137,17 +252,9 @@ export async function GET(
         </div>
 
         <!-- Title and Ticket Number -->
-        <div class="mb-6 flex items-start justify-between gap-6">
-          <div>
-            <h1 class="text-3xl font-bold mb-2">Repair Service</h1>
-            <p class="text-lg font-semibold">${repairServiceCode} - Repair Service Number</p>
-            ${externalTicketNumber ? `<p class="text-sm font-medium text-gray-600">Ticket #: ${externalTicketNumber}</p>` : ''}
-          </div>
-          <div class="flex flex-col items-end">
-            <canvas id="rs-qr" width="132" height="132"></canvas>
-            <p class="mt-1 text-center text-xs font-semibold tracking-[0.2em] text-gray-500">Scan to update</p>
-            <p class="mt-0.5 text-center text-[10px] font-bold text-gray-400">${repairServiceCode}</p>
-          </div>
+        <div class="mb-6">
+          <h1 class="text-3xl font-bold mb-2">Repair Service</h1>
+          ${externalTicketNumber ? `<p class="text-sm font-medium text-gray-600">Ticket #: ${externalTicketNumber}</p>` : ''}
         </div>
 
         <!-- Information Table -->
@@ -191,8 +298,8 @@ export async function GET(
         <div class="mb-10 mt-12">
           <div class="flex items-end gap-4 mb-2">
             <span class="font-bold whitespace-nowrap">Drop Off X</span>
-            <div class="flex-1 border-b border-black relative overflow-hidden" style="height: 56px;">
-              ${signatureUrl ? `<img src="${signatureUrl}" alt="Drop off signature for ${canonicalRsCode}" style="position:absolute;bottom:2px;left:0;max-height:50px;max-width:100%;width:auto;object-fit:contain;" />` : ''}
+            <div class="flex-1 border-b-2 border-black relative overflow-hidden" style="height: 96px;">
+              ${dropoffSignatureUrl ? `<img src="${dropoffSignatureUrl}" alt="Drop off signature for ${canonicalRsCode}" style="position:absolute;bottom:2px;left:0;height:90px;max-width:100%;width:auto;object-fit:contain;filter:contrast(2.2) brightness(0.55) saturate(0);" />` : ''}
             </div>
             <span class="font-bold whitespace-nowrap">Date: ${startDateTime}</span>
           </div>
@@ -202,19 +309,24 @@ export async function GET(
         </div>
 
         <!-- Internal Use Table -->
-        <div class="border-t border-l border-black mb-10 flex">
-          <div class="flex-1 border-r border-b border-black p-2 font-bold">Part Repaired:</div>
-          <div class="flex-1 border-r border-b border-black p-2"></div>
-          <div class="flex-1 border-r border-b border-black p-2 font-bold">Who:</div>
-          <div class="flex-1 border-r border-b border-black p-2 font-bold">Date:</div>
+        <div class="border-t border-l border-black mb-10">
+          <div class="flex border-b border-r border-black bg-gray-50">
+            <div class="flex-1 border-r border-black p-2 font-bold">Part Repaired</div>
+            <div class="flex-1 border-r border-black p-2 font-bold">Detail</div>
+            <div class="flex-1 border-r border-black p-2 font-bold">Who</div>
+            <div class="flex-1 border-r border-black p-2 font-bold">Date</div>
+          </div>
+          ${actionRowsHtml}
         </div>
 
         <!-- Pick Up Section -->
         <div class="mt-32">
           <div class="flex items-end gap-4 mb-4">
             <span class="font-bold whitespace-nowrap">Pick Up X</span>
-            <div class="flex-1 border-b border-black" style="height: 24px;"></div>
-            <span class="font-bold whitespace-nowrap">Date: ____ / ____ / ________</span>
+            <div class="flex-1 border-b-2 border-black relative overflow-hidden" style="height: 96px;">
+              ${pickupSignatureUrl ? `<img src="${pickupSignatureUrl}" alt="Pickup signature for ${canonicalRsCode}" style="position:absolute;bottom:2px;left:0;height:90px;max-width:100%;width:auto;object-fit:contain;filter:contrast(2.2) brightness(0.55) saturate(0);" />` : ''}
+            </div>
+            <span class="font-bold whitespace-nowrap">Date: ${pickupDateTime}</span>
           </div>
           <p class="text-center font-bold text-xl mt-8">Enjoy your repaired unit!</p>
         </div>
@@ -230,7 +342,6 @@ export async function GET(
   <meta charset="utf-8">
   <title>Repair Service - ${repairServiceCode}</title>
   <script src="https://cdn.tailwindcss.com"></script>
-  <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
   <style>
     * {
       margin: 0;
@@ -257,19 +368,7 @@ export async function GET(
     }
   </style>
   <script>
-    window.onload = function() {
-      var url = ${repairManageUrlJson};
-      var canvas = document.getElementById("rs-qr");
-      var startPrint = function() { window.print(); };
-      if (window.QRCode && canvas) {
-        window.QRCode.toCanvas(canvas, url, { margin: 2, width: 120, color: { dark: "#111827", light: "#ffffff" } }, function (err) {
-          if (err) console.warn("Repair QR render failed", err);
-          startPrint();
-        });
-      } else {
-        startPrint();
-      }
-    }
+    window.onload = function() { window.print(); };
   </script>
 </head>
 <body>

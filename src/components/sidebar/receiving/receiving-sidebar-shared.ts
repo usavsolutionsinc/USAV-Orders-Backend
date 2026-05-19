@@ -433,7 +433,7 @@ export const RECEIVING_CHIP_EDIT_BTN_CLASS =
  * row) — body + container stay neutral white so the dense fields read clean.
  */
 
-export type FlowSectionTone = 'shipment' | 'item' | 'support';
+export type FlowSectionTone = 'shipment' | 'item' | 'support' | 'staff';
 
 export const FLOW_SECTION_TONE_STYLES: Record<
   FlowSectionTone,
@@ -454,4 +454,118 @@ export const FLOW_SECTION_TONE_STYLES: Record<
     rail: 'bg-orange-500',
     title: 'text-orange-900',
   },
+  // Staff/Scanned/Received header — emerald rail signals an "actor + time"
+  // record (who scanned, when received) versus the read/edit data lanes.
+  staff: {
+    header: 'bg-emerald-50 hover:bg-emerald-100/70',
+    rail: 'bg-emerald-500',
+    title: 'text-emerald-900',
+  },
 };
+
+// ─── Receiving variant theme ─────────────────────────────────────────────────
+// Drives accent color across the workspace surface: context-card chip,
+// sticky-action-bar CTA tone, focus-ring tint on inputs. Sourced from
+// `row.receiving_type` via `receivingVariantFromType`.
+
+export type ReceivingVariant = 'PO' | 'RETURN' | 'TRADE_IN' | 'PICKUP' | 'OTHER';
+
+export interface ReceivingVariantStyle {
+  tone: 'blue' | 'red' | 'orange' | 'emerald' | 'gray';
+  label: string;
+  /** Chip pill — e.g. variant badge in the context card. */
+  chip: string;
+  /** Solid CTA background (with hover). */
+  cta: string;
+  /** Focus ring for inputs (cosmetic). */
+  focusRing: string;
+  /** Icon container background (header variant icon). */
+  iconBg: string;
+}
+
+export const RECEIVING_VARIANT_THEME: Record<ReceivingVariant, ReceivingVariantStyle> = {
+  PO: {
+    tone: 'blue',
+    label: 'PO',
+    chip: 'bg-blue-50 text-blue-700 ring-1 ring-inset ring-blue-200',
+    cta: 'bg-blue-600 hover:bg-blue-700',
+    focusRing: 'focus:ring-blue-500/30 focus:border-blue-500',
+    iconBg: 'bg-blue-600',
+  },
+  RETURN: {
+    tone: 'red',
+    label: 'Return',
+    chip: 'bg-rose-50 text-rose-700 ring-1 ring-inset ring-rose-200',
+    cta: 'bg-rose-600 hover:bg-rose-700',
+    focusRing: 'focus:ring-rose-500/30 focus:border-rose-500',
+    iconBg: 'bg-rose-600',
+  },
+  TRADE_IN: {
+    tone: 'orange',
+    label: 'Trade In',
+    chip: 'bg-amber-50 text-amber-800 ring-1 ring-inset ring-amber-200',
+    cta: 'bg-amber-600 hover:bg-amber-700',
+    focusRing: 'focus:ring-amber-500/30 focus:border-amber-500',
+    iconBg: 'bg-amber-600',
+  },
+  PICKUP: {
+    tone: 'emerald',
+    label: 'Pickup',
+    chip: 'bg-emerald-50 text-emerald-700 ring-1 ring-inset ring-emerald-200',
+    cta: 'bg-emerald-600 hover:bg-emerald-700',
+    focusRing: 'focus:ring-emerald-500/30 focus:border-emerald-500',
+    iconBg: 'bg-emerald-600',
+  },
+  OTHER: {
+    tone: 'gray',
+    label: 'Other',
+    chip: 'bg-gray-100 text-gray-700 ring-1 ring-inset ring-gray-200',
+    cta: 'bg-gray-700 hover:bg-gray-800',
+    focusRing: 'focus:ring-gray-400/30 focus:border-gray-400',
+    iconBg: 'bg-gray-700',
+  },
+};
+
+export function receivingVariantFromType(
+  receivingType: string | null | undefined,
+): ReceivingVariant {
+  const v = String(receivingType ?? '').trim().toUpperCase();
+  if (v === 'PO' || v === 'PURCHASE_ORDER' || v === 'PURCHASEORDER') return 'PO';
+  if (v === 'RETURN' || v === 'RETURNS') return 'RETURN';
+  if (v === 'TRADE_IN' || v === 'TRADEIN' || v === 'TRADE-IN') return 'TRADE_IN';
+  if (v === 'PICKUP' || v === 'LOCAL_PICKUP' || v === 'LOCALPICKUP') return 'PICKUP';
+  return 'OTHER';
+}
+
+// ─── Claim modal ────────────────────────────────────────────────────────────
+// Used by `ReceivingClaimModal` + `POST /api/receiving/zendesk-claim` to file
+// damage / missing-item / wrong-item / vendor-defect claims as Zendesk tickets
+// (via the existing GAS bridge in src/lib/zendesk.ts).
+
+export type ClaimType = 'damage' | 'missing' | 'wrong_item' | 'vendor_defect';
+export type ClaimSeverity = 'low' | 'medium' | 'high';
+
+export const CLAIM_TYPE_OPTIONS: ReadonlyArray<{
+  value: ClaimType;
+  label: string;
+  /** Pill background + text color when selected. */
+  active: string;
+  /** Inactive pill color. */
+  inactive: string;
+}> = [
+  { value: 'damage',        label: 'Damage',        active: 'bg-rose-600 text-white',    inactive: 'bg-rose-50 text-rose-700' },
+  { value: 'missing',       label: 'Missing',       active: 'bg-amber-600 text-white',   inactive: 'bg-amber-50 text-amber-700' },
+  { value: 'wrong_item',    label: 'Wrong item',    active: 'bg-violet-600 text-white',  inactive: 'bg-violet-50 text-violet-700' },
+  { value: 'vendor_defect', label: 'Vendor defect', active: 'bg-orange-600 text-white',  inactive: 'bg-orange-50 text-orange-700' },
+];
+
+export const CLAIM_SEVERITY_OPTIONS: ReadonlyArray<{
+  value: ClaimSeverity;
+  label: string;
+  active: string;
+  inactive: string;
+}> = [
+  { value: 'low',    label: 'Low',    active: 'bg-emerald-600 text-white', inactive: 'bg-emerald-50 text-emerald-700' },
+  { value: 'medium', label: 'Medium', active: 'bg-amber-600 text-white',   inactive: 'bg-amber-50 text-amber-700' },
+  { value: 'high',   label: 'High',   active: 'bg-rose-600 text-white',    inactive: 'bg-rose-50 text-rose-700' },
+];

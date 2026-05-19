@@ -3,7 +3,10 @@
 import { useCallback, useMemo, type ReactNode } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useUIModeOptional } from '@/design-system/providers/UIModeProvider';
-import { TabSwitch } from '@/components/ui/TabSwitch';
+import {
+  HorizontalButtonSlider,
+  type HorizontalSliderItem,
+} from '@/components/ui/HorizontalButtonSlider';
 import { cn } from '@/utils/_cn';
 
 export type RouteShellView = 'actions' | 'history';
@@ -59,10 +62,10 @@ export function RouteShell({
     [router, searchParams, defaultView],
   );
 
-  const tabs = useMemo(
+  const tabs = useMemo<HorizontalSliderItem[]>(
     () => [
-      { id: 'actions', label: actionsLabel, color: 'gray' as const },
-      { id: 'history', label: historyLabel, color: 'blue' as const },
+      { id: 'actions', label: actionsLabel },
+      { id: 'history', label: historyLabel },
     ],
     [actionsLabel, historyLabel],
   );
@@ -78,12 +81,14 @@ export function RouteShell({
 
   return (
     <div className={cn('flex min-h-0 w-full flex-1 flex-col overflow-hidden bg-white', className)}>
-      <div className="shrink-0 border-b border-gray-100 px-3 py-2">
-        <TabSwitch
-          tabs={tabs}
-          activeTab={activeView}
-          onTabChange={setView}
-          highContrast
+      <div className="shrink-0 border-b border-gray-100 px-2 py-1.5">
+        <HorizontalButtonSlider
+          items={tabs}
+          value={activeView}
+          onChange={setView}
+          variant="nav"
+          size="md"
+          aria-label="Page view"
         />
       </div>
 

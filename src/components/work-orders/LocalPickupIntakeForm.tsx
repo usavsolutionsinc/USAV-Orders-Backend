@@ -496,19 +496,19 @@ export function LocalPickupIntakeForm({
           <label className="block text-[9px] font-black uppercase tracking-wider text-gray-500 mb-1">
             Condition Received
           </label>
-          <select
+          <HorizontalButtonSlider
+            aria-label="Condition received"
+            variant="slate"
+            size="md"
             value={line.conditionGrade}
-            onChange={(e) =>
-              patchLine(line.key, { conditionGrade: e.target.value as ConditionGrade })
+            onChange={(next) =>
+              patchLine(line.key, { conditionGrade: next as ConditionGrade })
             }
-            className="h-7 w-full rounded-md border border-gray-200 bg-white px-2 text-[10px] font-bold text-gray-900 focus:outline-none focus:border-emerald-500"
-          >
-            {CONDITION_OPTIONS.map((o) => (
-              <option key={o.value} value={o.value}>
-                {o.label}
-              </option>
-            ))}
-          </select>
+            items={CONDITION_OPTIONS.map<HorizontalSliderItem>((o) => ({
+              id: o.value,
+              label: o.label,
+            }))}
+          />
         </div>
 
         {/* Parts status */}

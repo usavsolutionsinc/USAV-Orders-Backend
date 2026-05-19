@@ -1,4 +1,11 @@
 import pool from '../db';
+import {
+  locationCode,
+  locationCodeFlat,
+  noPad,
+  pad2,
+  type LocationSegments,
+} from '../barcode-routing';
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -92,6 +99,14 @@ export async function getBinsByRoom(room: string): Promise<Location[]> {
  * Upsert the zone-letter for a room. The partial unique index enforces no
  * two active rooms share a letter; we map the constraint violation to a
  * structured error so the API can return 409.
+ *
+ * Legacy data can have multiple parent rows (row_label/col_label NULL) that
+ * share the same `room` value — e.g. "Storage A" and "Storage B" both with
+ * room='Zone 2 -'. A naive UPDATE would set the letter on every matching
+ * row and trip the partial unique index. We resolve that ambiguity by:
+ *   1. clearing zone_letter on every parent row for this room, then
+ *   2. setting the letter on exactly one canonical parent (lowest
+ *      sort_order, then lowest id), all inside a single transaction.
  */
 export async function setRoomZoneLetter(
   roomName: string,
@@ -103,21 +118,58 @@ export async function setRoomZoneLetter(
   if (normalised !== null && !/^[A-Z]$/.test(normalised)) {
     return { ok: false, reason: 'duplicate' }; // bad letter; surface as 4xx
   }
+  const client = await pool.connect();
   try {
-    const result = await pool.query(
+    await client.query('BEGIN');
+
+    // Step 1 — clear letter on every parent row for this room so we never
+    // leave two active parents with the same letter (would violate the
+    // partial unique index).
+    await client.query(
       `UPDATE locations
-         SET zone_letter = $2, updated_at = NOW()
+         SET zone_letter = NULL, updated_at = NOW()
        WHERE row_label IS NULL
          AND col_label IS NULL
+         AND is_active = true
          AND (room = $1 OR name = $1)
-       RETURNING id`,
+         AND zone_letter IS NOT NULL`,
+      [name],
+    );
+
+    // Step 2 — when clearing (normalised == null) we're done; otherwise set
+    // the letter on exactly one canonical parent row.
+    if (normalised === null) {
+      await client.query('COMMIT');
+      return { ok: true };
+    }
+
+    const result = await client.query(
+      `UPDATE locations
+          SET zone_letter = $2, updated_at = NOW()
+        WHERE id = (
+          SELECT id FROM locations
+           WHERE row_label IS NULL
+             AND col_label IS NULL
+             AND is_active = true
+             AND (room = $1 OR name = $1)
+           ORDER BY sort_order, id
+           LIMIT 1
+        )
+        RETURNING id`,
       [name, normalised],
     );
-    if ((result.rowCount ?? 0) === 0) return { ok: false, reason: 'not_found' };
+    if ((result.rowCount ?? 0) === 0) {
+      await client.query('ROLLBACK');
+      return { ok: false, reason: 'not_found' };
+    }
+    await client.query('COMMIT');
     return { ok: true };
   } catch (err: any) {
+    await client.query('ROLLBACK');
     if (err?.code === '23505') return { ok: false, reason: 'duplicate' };
     throw err;
+  } finally {
+    client.release();
   }
 }
 
@@ -369,18 +421,52 @@ export async function renameRoom(
   try {
     await client.query('BEGIN');
 
-    // Parent room rows: force both name AND room to the new value. Match on
-    // either current `room` or current `name` so legacy rows where one drifted
-    // from the other still get fixed up.
-    const parentUpdate = await client.query(
-      `UPDATE locations
-         SET room = $2, name = $2, updated_at = NOW()
-       WHERE row_label IS NULL
-         AND col_label IS NULL
-         AND (room = $1 OR name = $1)
-       RETURNING id`,
-      [from, to],
-    );
+    // Find every parent row participating in this room — match on either
+    // `room` or legacy `name`. We need to know the count up front because
+    // the `locations.name` column has a UNIQUE index, so we can only rewrite
+    // `name` on ONE row per rename. Sort_order/id picks the canonical row;
+    // siblings keep their distinct names (e.g. "Storage A", "Storage B")
+    // and only get their `room` rewritten.
+    const parents = await client.query(
+      `SELECT id, name FROM locations
+        WHERE row_label IS NULL
+          AND col_label IS NULL
+          AND is_active = true
+          AND (room = $1 OR name = $1)
+        ORDER BY sort_order, id`,
+      [from],
+    ) as { rows: { id: number; name: string }[] };
+
+    let parentUpdates = 0;
+    if (parents.rows.length > 0) {
+      const canonicalId = parents.rows[0].id;
+      const siblingIds = parents.rows.slice(1).map((r) => r.id);
+
+      // Siblings: room-only rewrite. Keeps their distinct names so the
+      // UNIQUE(name) constraint doesn't fire when multiple parents share a
+      // room (legacy data shape).
+      if (siblingIds.length > 0) {
+        const sib = await client.query(
+          `UPDATE locations
+              SET room = $1, updated_at = NOW()
+            WHERE id = ANY($2::int[])
+          RETURNING id`,
+          [to, siblingIds],
+        );
+        parentUpdates += sib.rowCount ?? 0;
+      }
+
+      // Canonical parent: rewrite both name + room. Throws 23505 if some
+      // OTHER row already owns this name — caller maps that to a 409.
+      const can = await client.query(
+        `UPDATE locations
+            SET name = $1, room = $1, updated_at = NOW()
+          WHERE id = $2
+        RETURNING id`,
+        [to, canonicalId],
+      );
+      parentUpdates += can.rowCount ?? 0;
+    }
 
     // Bin rows: only `room` gets rewritten. `name` on bins is a free-form
     // label and should not be globally swapped by a room rename.
@@ -392,7 +478,7 @@ export async function renameRoom(
          AND room = $1
        RETURNING id, row_label, col_label, barcode`,
       [from, to],
-    );
+    ) as { rowCount: number; rows: { id: number; row_label: string; col_label: string; barcode: string | null }[] };
 
     // Re-key barcodes for renamed bins so the room prefix matches the new name.
     let barcodesRekeyed = 0;
@@ -410,7 +496,7 @@ export async function renameRoom(
       barcodesRekeyed += 1;
     }
 
-    const updated = (parentUpdate.rowCount ?? 0) + (binUpdate.rowCount ?? 0);
+    const updated = parentUpdates + (binUpdate.rowCount ?? 0);
 
     // If neither parent nor any bin matched, the room exists only in client
     // state (localStorage zoneMap from the legacy label printer). Materialise
@@ -548,6 +634,153 @@ export async function bulkCreateBinRange(data: {
     created += 1;
   }
   return { created, bins };
+}
+
+/**
+ * Upsert location rows for a batch of printer-format addresses
+ * ({zone, aisle, bay, level, position}). Called by the Location Label
+ * Printer before window.print() so every printed sticker has a backing row
+ * — scans of the QR resolve to a real bin, putaway audits work, and the
+ * bin appears in bins-overview.
+ *
+ * Idempotent on `barcode`: the flat code (e.g. "A0101101") is the natural
+ * key. Re-printing the same label is a no-op (existing row returned). Soft-
+ * deleted rows are reactivated so the print-then-delete-then-print cycle
+ * works.
+ *
+ * `name` is the dashed human-readable form ("A-01-01-1-01") and is the
+ * column the UNIQUE(name) index pins.
+ * `row_label` / `col_label` are populated so the bin shows up in
+ * bins-overview (the SQL there filters `row_label IS NOT NULL AND
+ * col_label IS NOT NULL`). We pack the 5-tier address into the 3-tier
+ * schema as `row_label = "{aisle}-{bay}"`, `col_label = "{level}-{position}"`.
+ * `parent_id` is set to the active parent room row when one exists.
+ */
+export async function registerPrintedLocations(input: {
+  room: string;
+  segments: LocationSegments[];
+  binType?: string | null;
+  capacity?: number | null;
+}): Promise<{ registered: number; bins: Location[] }> {
+  const room = input.room.trim();
+  if (!room) throw new Error('room is required');
+  if (!Array.isArray(input.segments) || input.segments.length === 0) {
+    return { registered: 0, bins: [] };
+  }
+
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+
+    // Active parent room row (best-effort; null is acceptable).
+    const parent = await client.query(
+      `SELECT id FROM locations
+        WHERE row_label IS NULL
+          AND col_label IS NULL
+          AND is_active = true
+          AND (room = $1 OR name = $1)
+        ORDER BY sort_order, id
+        LIMIT 1`,
+      [room],
+    ) as { rows: { id: number }[] };
+    const parentId = parent.rows[0]?.id ?? null;
+
+    const bins: Location[] = [];
+    let registered = 0;
+
+    for (const seg of input.segments) {
+      const barcode = locationCodeFlat(seg);
+      const dashedName = locationCode(seg);
+      const rowLabel = `${pad2(seg.aisle)}-${pad2(seg.bay)}`;
+      const colLabel = `${noPad(seg.level)}-${pad2(seg.position)}`;
+
+      // 1. Existing row by barcode? Reactivate if soft-deleted, else return.
+      const existing = await client.query(
+        `SELECT * FROM locations WHERE barcode = $1 LIMIT 1`,
+        [barcode],
+      ) as { rows: Location[] };
+      if (existing.rows[0]) {
+        if (existing.rows[0].is_active === false) {
+          const r = await client.query(
+            `UPDATE locations
+                SET is_active = true,
+                    room = $2,
+                    row_label = $3,
+                    col_label = $4,
+                    parent_id = COALESCE($5, parent_id),
+                    bin_type = COALESCE($6, bin_type),
+                    capacity = COALESCE($7, capacity),
+                    updated_at = NOW()
+              WHERE id = $1
+            RETURNING *`,
+            [
+              existing.rows[0].id,
+              room,
+              rowLabel,
+              colLabel,
+              parentId,
+              input.binType ?? null,
+              input.capacity ?? null,
+            ],
+          ) as { rows: Location[] };
+          bins.push(r.rows[0]);
+          registered += 1;
+        } else {
+          // Already live — keep row drift in sync (room rename safety).
+          if (existing.rows[0].room !== room || existing.rows[0].parent_id !== parentId) {
+            const r = await client.query(
+              `UPDATE locations
+                  SET room = $2, parent_id = COALESCE($3, parent_id), updated_at = NOW()
+                WHERE id = $1
+              RETURNING *`,
+              [existing.rows[0].id, room, parentId],
+            ) as { rows: Location[] };
+            bins.push(r.rows[0]);
+          } else {
+            bins.push(existing.rows[0]);
+          }
+        }
+        continue;
+      }
+
+      // 2. Insert a fresh row. UNIQUE(name) protects against manual dupes.
+      const insert = await client.query(
+        `INSERT INTO locations
+           (name, room, barcode, row_label, col_label, bin_type, capacity, parent_id, sort_order)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 0)
+         ON CONFLICT (barcode) DO UPDATE
+            SET room = EXCLUDED.room,
+                row_label = EXCLUDED.row_label,
+                col_label = EXCLUDED.col_label,
+                bin_type = COALESCE(EXCLUDED.bin_type, locations.bin_type),
+                capacity = COALESCE(EXCLUDED.capacity, locations.capacity),
+                parent_id = COALESCE(EXCLUDED.parent_id, locations.parent_id),
+                is_active = true,
+                updated_at = NOW()
+         RETURNING *`,
+        [
+          dashedName,
+          room,
+          barcode,
+          rowLabel,
+          colLabel,
+          input.binType ?? null,
+          input.capacity ?? null,
+          parentId,
+        ],
+      ) as { rows: Location[] };
+      bins.push(insert.rows[0]);
+      registered += 1;
+    }
+
+    await client.query('COMMIT');
+    return { registered, bins };
+  } catch (err) {
+    await client.query('ROLLBACK');
+    throw err;
+  } finally {
+    client.release();
+  }
 }
 
 // ─── Location Transfers ─────────────────────────────────────────────────────

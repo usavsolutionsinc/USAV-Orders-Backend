@@ -1,10 +1,15 @@
 'use client';
 
+import { useState } from 'react';
 import { motion } from 'framer-motion';
-import { Loader2, Package, Trash2, X } from '@/components/Icons';
+import { useRouter, useSearchParams } from 'next/navigation';
+import { Edit, Loader2, Package, Trash2, X } from '@/components/Icons';
 import { formatDateTimePST } from '@/utils/date';
 import { ViewDropdown } from '@/components/ui/ViewDropdown';
 import { getStaffThemeById, stationThemeColors } from '@/utils/staff-colors';
+import { toast } from '@/lib/toast';
+import { type ReceivingLineRow } from '@/components/station/ReceivingLinesTable';
+import { dispatchReceivingWorkspaceOpen } from '@/utils/events';
 import { PoLinesSection } from './receiving/PoLinesSection';
 import { ReceivingOverviewCard } from './receiving/ReceivingOverviewCard';
 import { useReceivingDetailForm, normalizeCarrier } from '@/hooks/useReceivingDetailForm';
@@ -81,6 +86,55 @@ interface ReceivingDetailsStackProps {
 
 export function ReceivingDetailsStack({ log, onClose, onUpdated, onDeleted }: ReceivingDetailsStackProps) {
   const form = useReceivingDetailForm({ log, onClose, onUpdated, onDeleted });
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const [isOpeningEditor, setIsOpeningEditor] = useState(false);
+
+  const handleEditPO = async () => {
+    if (isOpeningEditor || form.isSaving) return;
+    setIsOpeningEditor(true);
+    try {
+      // Commit any in-flight detail-stack edits so the workspace opens with
+      // the saved state — handleClose() would also save, but explicit save
+      // here gives us a deterministic order: save → fetch → dispatch → close.
+      await form.handleSave();
+      const receivingId = Number(log.id);
+      if (!Number.isFinite(receivingId) || receivingId <= 0) {
+        toast.error('Receiving id missing');
+        return;
+      }
+      const res = await fetch(`/api/receiving-lines?receiving_id=${receivingId}&include=serials`);
+      const data = await res.json().catch(() => null);
+      const rows = Array.isArray(data?.receiving_lines)
+        ? (data.receiving_lines as ReceivingLineRow[])
+        : [];
+      if (rows.length === 0) {
+        toast.error('No lines on this receiving yet');
+        return;
+      }
+      // Flip URL to `?mode=receive` so the receiving page renders the
+      // workspace surface (the dashboard hides the workspace when mode
+      // is `history`).
+      const params = new URLSearchParams(searchParams.toString());
+      params.set('mode', 'receive');
+      router.replace(`/receiving?${params.toString()}`);
+      onClose();
+      // Dispatch workspace-open DIRECTLY (bypassing the sidebar's
+      // receiving-select-line intercept that would otherwise re-route
+      // back into a details stack while the URL flip is still in flight).
+      // The dashboard listens for `receiving-workspace-open` and mounts
+      // the LineEditPanel overlay independently of sidebar state.
+      dispatchReceivingWorkspaceOpen({
+        row: rows[0],
+        accordionBootstrap: 'all',
+        scanDriven: false,
+      });
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to open PO editor');
+    } finally {
+      setIsOpeningEditor(false);
+    }
+  };
 
   return (
     <motion.div
@@ -90,25 +144,46 @@ export function ReceivingDetailsStack({ log, onClose, onUpdated, onDeleted }: Re
       transition={{ type: 'spring', damping: 25, stiffness: 350, mass: 0.5 }}
       className="fixed right-0 top-0 z-[100] h-screen w-[440px] overflow-y-auto border-l border-gray-200 bg-white shadow-[-20px_0_50px_rgba(0,0,0,0.05)]"
     >
-      {/* Header */}
-      <div className="sticky top-0 z-10 flex items-center justify-between border-b border-gray-100 bg-white/90 px-8 py-5 backdrop-blur-xl">
-        <div className="flex items-center gap-3">
-          <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-blue-600 shadow-lg shadow-blue-200">
-            <Package className="h-6 w-6 text-white" />
+      {/* Header (sticky — includes the Edit PO CTA so it stays pinned). */}
+      <div className="sticky top-0 z-10 border-b border-gray-100 bg-white/90 backdrop-blur-xl">
+        <div className="flex items-center justify-between px-8 py-5">
+          <div className="flex items-center gap-3">
+            <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-blue-600 shadow-lg shadow-blue-200">
+              <Package className="h-6 w-6 text-white" />
+            </div>
+            <div>
+              <p className="text-[20px] font-black leading-none tracking-tight text-gray-900">Receiving #{log.id}</p>
+              <p className="mt-1 text-[10px] font-bold uppercase tracking-widest text-gray-500">{formatDateTimePST(log.timestamp)}</p>
+            </div>
           </div>
-          <div>
-            <p className="text-[20px] font-black leading-none tracking-tight text-gray-900">Receiving #{log.id}</p>
-            <p className="mt-1 text-[10px] font-bold uppercase tracking-widest text-gray-500">{formatDateTimePST(log.timestamp)}</p>
-          </div>
+          <button
+            onClick={form.handleClose}
+            disabled={form.isSaving}
+            className="rounded-2xl border border-transparent p-3 transition-all hover:border-gray-100 hover:bg-gray-50 disabled:opacity-50"
+            aria-label="Save and close"
+          >
+            {form.isSaving ? <Loader2 className="h-6 w-6 animate-spin text-gray-400" /> : <X className="h-6 w-6 text-gray-400" />}
+          </button>
         </div>
-        <button
-          onClick={form.handleClose}
-          disabled={form.isSaving}
-          className="rounded-2xl border border-transparent p-3 transition-all hover:border-gray-100 hover:bg-gray-50 disabled:opacity-50"
-          aria-label="Save and close"
-        >
-          {form.isSaving ? <Loader2 className="h-6 w-6 animate-spin text-gray-400" /> : <X className="h-6 w-6 text-gray-400" />}
-        </button>
+        {/* Edit PO CTA — primary surface for switching from History (read) into
+            Receiving (write) for this PO. Wide, gradient, indigo→blue so it
+            reads as a navigational lever, not a destructive action. */}
+        <div className="border-t border-gray-100 px-8 py-3">
+          <button
+            type="button"
+            onClick={handleEditPO}
+            disabled={isOpeningEditor || form.isSaving}
+            className="group flex w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-indigo-600 to-blue-600 px-5 py-3 text-[13px] font-black uppercase tracking-wider text-white shadow-md shadow-indigo-200 transition-all hover:from-indigo-700 hover:to-blue-700 hover:shadow-lg disabled:opacity-50"
+          >
+            {isOpeningEditor ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <Edit className="h-4 w-4" />
+            )}
+            <span>{isOpeningEditor ? 'Opening editor…' : 'Edit PO'}</span>
+            <span className="text-white/70 transition-transform group-hover:translate-x-0.5">→</span>
+          </button>
+        </div>
       </div>
 
       <div className="min-h-[calc(100vh-96px)] px-8 py-6">

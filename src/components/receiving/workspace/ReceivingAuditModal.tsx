@@ -1,7 +1,6 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { createPortal } from 'react-dom';
 import { X } from '@/components/Icons';
 import { formatDateTimePST } from '@/utils/date';
 
@@ -38,15 +37,10 @@ interface Props {
 }
 
 export function ReceivingAuditModal({ open, onClose, receivingId }: Props) {
-  const [portalNode, setPortalNode] = useState<HTMLElement | null>(null);
   const [loading, setLoading] = useState(false);
   const [events, setEvents] = useState<ReceivingAuditEvent[]>([]);
   const [cartonLabel, setCartonLabel] = useState<string>('');
   const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    setPortalNode(document.body);
-  }, []);
 
   useEffect(() => {
     if (!open) return;
@@ -99,18 +93,27 @@ export function ReceivingAuditModal({ open, onClose, receivingId }: Props) {
     };
   }, [open, receivingId]);
 
-  if (!open || !portalNode) return null;
+  if (!open) return null;
 
-  return createPortal(
-    <div
-      className="fixed inset-0 z-[200] flex items-end justify-center bg-black/40 p-0 backdrop-blur-[1px] sm:items-center sm:p-4"
-      onClick={onClose}
-    >
+  return (
+    <>
+      {/* Full-viewport dim — covers the page sidebar too. */}
+      <div
+        className="fixed inset-0 z-[198] bg-black/40 backdrop-blur-[1px]"
+        onClick={onClose}
+      />
+      {/* Dialog layer — absolute inset-0 anchors to the workspace overlay
+          (which fills the right-pane), centering the dialog over the
+          receiving content. The flex container passes clicks through; the
+          dialog itself stops them so backdrop dismissal still works. */}
+      <div
+        className="pointer-events-none absolute inset-0 z-[200] flex items-end justify-center p-0 sm:items-center sm:p-4"
+      >
       <div
         role="dialog"
         aria-modal="true"
         aria-labelledby="receiving-audit-title"
-        className="flex max-h-[min(85vh,640px)] w-full max-w-lg flex-col rounded-t-xl border border-slate-200 bg-white shadow-xl sm:rounded-xl"
+        className="pointer-events-auto flex max-h-[min(85vh,640px)] w-full max-w-lg flex-col rounded-t-xl border border-slate-200 bg-white shadow-xl sm:rounded-xl"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between border-b border-slate-200 px-3 py-2">
@@ -177,7 +180,7 @@ export function ReceivingAuditModal({ open, onClose, receivingId }: Props) {
           )}
         </div>
       </div>
-    </div>,
-    portalNode,
+      </div>
+    </>
   );
 }

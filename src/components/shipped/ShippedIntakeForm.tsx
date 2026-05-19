@@ -3,15 +3,25 @@
 import React, { useCallback, useState } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import { Loader2, Lock, Check, AlertCircle } from '../Icons';
-import { TabSwitch } from '../ui/TabSwitch';
+import { HorizontalButtonSlider, type HorizontalSliderItem } from '@/components/ui/HorizontalButtonSlider';
+
+const INTAKE_MODE_ITEMS: HorizontalSliderItem[] = [
+  { id: 'replacement', label: 'Replacement' },
+  { id: 'add_order', label: 'Add Order' },
+];
 import {
   SidebarIntakeFormField,
   SidebarIntakeFormShell,
   SIDEBAR_INTAKE_INPUT_CLASS,
   SIDEBAR_INTAKE_INPUT_MONO_CLASS,
-  SIDEBAR_INTAKE_SELECT_CLASS,
   SIDEBAR_INTAKE_SUBMIT_BUTTON_CLASS,
 } from '@/design-system/components';
+
+const CONDITION_ITEMS: HorizontalSliderItem[] = [
+  { id: 'Used', label: 'Used' },
+  { id: 'New', label: 'New' },
+  { id: 'Parts', label: 'Parts' },
+];
 
 interface ShippedIntakeFormProps {
   onClose: () => void;
@@ -166,13 +176,12 @@ export function ShippedIntakeForm({ onClose, onSubmit }: ShippedIntakeFormProps)
       subtitleAccent="green"
       onClose={handleClose}
       bandBelowHeader={
-        <TabSwitch
-          tabs={[
-            { id: 'replacement', label: 'Replacement', color: 'blue' },
-            { id: 'add_order', label: 'Add Order', color: 'emerald' },
-          ]}
-          activeTab={activeTab}
-          onTabChange={(tab) => setActiveTab(tab as 'replacement' | 'add_order')}
+        <HorizontalButtonSlider
+          items={INTAKE_MODE_ITEMS}
+          value={activeTab}
+          onChange={(tab) => setActiveTab(tab as 'replacement' | 'add_order')}
+          variant="nav"
+          aria-label="Intake mode"
         />
       }
       footer={
@@ -300,15 +309,14 @@ export function ShippedIntakeForm({ onClose, onSubmit }: ShippedIntakeFormProps)
           </SidebarIntakeFormField>
 
           <SidebarIntakeFormField label="Condition" required>
-            <select
+            <HorizontalButtonSlider
+              aria-label="Condition"
+              variant="slate"
+              size="md"
+              items={CONDITION_ITEMS}
               value={replacementData.condition}
-              onChange={(e) => setReplacementData((prev) => ({ ...prev, condition: e.target.value }))}
-              className={SIDEBAR_INTAKE_SELECT_CLASS}
-            >
-              <option value="Used">Used</option>
-              <option value="New">New</option>
-              <option value="Parts">Parts</option>
-            </select>
+              onChange={(next) => setReplacementData((prev) => ({ ...prev, condition: next }))}
+            />
           </SidebarIntakeFormField>
 
           <SidebarIntakeFormField label="SKU" optionalHint="(Optional)">
@@ -356,15 +364,14 @@ export function ShippedIntakeForm({ onClose, onSubmit }: ShippedIntakeFormProps)
           </SidebarIntakeFormField>
 
           <SidebarIntakeFormField label="Condition" required>
-            <select
+            <HorizontalButtonSlider
+              aria-label="Condition"
+              variant="slate"
+              size="md"
+              items={CONDITION_ITEMS}
               value={addOrderData.condition}
-              onChange={(e) => setAddOrderData((prev) => ({ ...prev, condition: e.target.value }))}
-              className={SIDEBAR_INTAKE_SELECT_CLASS}
-            >
-              <option value="Used">Used</option>
-              <option value="New">New</option>
-              <option value="Parts">Parts</option>
-            </select>
+              onChange={(next) => setAddOrderData((prev) => ({ ...prev, condition: next }))}
+            />
           </SidebarIntakeFormField>
 
           <SidebarIntakeFormField label="SKU" optionalHint="(Optional)">

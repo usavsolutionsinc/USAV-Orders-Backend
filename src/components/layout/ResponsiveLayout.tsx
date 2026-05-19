@@ -16,6 +16,7 @@ import { usePhoneReceivingPhotoBridge } from '@/hooks/usePhoneReceivingPhotoBrid
 import { usePhoneScanBridge } from '@/hooks/usePhoneScanBridge';
 import { useGlobalWedgeScanner } from '@/hooks/useGlobalWedgeScanner';
 import { OfflineBanner } from '@/components/layout/OfflineBanner';
+import { MobileCartonArrivalHero } from '@/components/mobile/receiving/MobileCartonArrivalHero';
 
 /**
  * Mount-only component. Runs the phone-side Ably listener that auto-navigates
@@ -164,8 +165,13 @@ export function ResponsiveLayout({ children }: ResponsiveLayoutProps) {
   return (
     <div className="flex flex-col h-full w-full overflow-hidden">
       {/* Global mobile-side bridge: listens for receiving photo requests on
-          station:{staffId} and auto-navigates to the camera page. */}
+          station:{staffId} and dispatches an arrival event consumed by the
+          hero overlay below. */}
       <PhoneReceivingPhotoBridgeMount />
+
+      {/* Carton arrival hero — fires on the bridge's event with PO/item/qty
+          intel, depleting countdown, then hands off to /m/r/{id}/photos. */}
+      <MobileCartonArrivalHero />
 
       {/* Mirror of desktop: subscribe to phone:{staffId} so any device the
           user is signed in on can service the lookup. */}
