@@ -189,8 +189,8 @@ export function MobileLastOrderCard({ packerId, refreshKey = 0 }: MobileLastOrde
           {/* Summary */}
           <div className="flex-1 min-w-0 text-left">
             <div className="flex items-center gap-2">
-              <p className="text-[9px] font-black text-gray-400 uppercase tracking-wider">Last Packed</p>
-              <span className="text-[9px] font-bold text-gray-300 flex items-center gap-0.5">
+              <p className="text-xs font-black text-gray-400 uppercase tracking-wider">Last Packed</p>
+              <span className="text-xs font-bold text-gray-300 flex items-center gap-0.5">
                 <Clock className="w-2.5 h-2.5" />
                 {timeAgo(lastOrder.packedAt)}
               </span>
@@ -203,7 +203,7 @@ export function MobileLastOrderCard({ packerId, refreshKey = 0 }: MobileLastOrde
           {/* Photo count badge + chevron */}
           <div className="flex items-center gap-2 flex-shrink-0">
             {hasPhotos && (
-              <span className="inline-flex items-center gap-1 rounded-lg bg-gray-100 border border-gray-200 px-2 py-1 text-[10px] font-black text-gray-500 tabular-nums">
+              <span className="inline-flex items-center gap-1 rounded-lg bg-gray-100 border border-gray-200 px-2 py-1 text-xs font-black text-gray-500 tabular-nums">
                 <Image className="w-3 h-3" />
                 {photoCount}
               </span>
@@ -234,26 +234,26 @@ export function MobileLastOrderCard({ packerId, refreshKey = 0 }: MobileLastOrde
                 {/* ── Order detail chips ── */}
                 <div className="flex flex-wrap gap-2">
                   {lastOrder.orderId && (
-                    <span className="inline-flex items-center rounded-lg bg-gray-50 border border-gray-100 px-2.5 py-1.5 text-[10px] font-black text-gray-600">
+                    <span className="inline-flex items-center rounded-lg bg-gray-50 border border-gray-100 px-2.5 py-1.5 text-xs font-black text-gray-600">
                       #{getLast4(lastOrder.orderId)}
                     </span>
                   )}
                   {lastOrder.tracking && (
-                    <span className="inline-flex items-center rounded-lg bg-gray-50 border border-gray-100 px-2.5 py-1.5 text-[10px] font-mono font-bold text-gray-600">
+                    <span className="inline-flex items-center rounded-lg bg-gray-50 border border-gray-100 px-2.5 py-1.5 text-xs font-mono font-bold text-gray-600">
                       TRK {getLast4(lastOrder.tracking)}
                     </span>
                   )}
                   {lastOrder.carrier && (
-                    <span className={`inline-flex items-center rounded-lg border px-2.5 py-1.5 text-[10px] font-black uppercase tracking-wider ${carrierBadgeColor(lastOrder.carrier)}`}>
+                    <span className={`inline-flex items-center rounded-lg border px-2.5 py-1.5 text-xs font-black uppercase tracking-wider ${carrierBadgeColor(lastOrder.carrier)}`}>
                       {lastOrder.carrier}
                     </span>
                   )}
                   {lastOrder.condition && (
-                    <span className="inline-flex items-center rounded-lg bg-gray-50 border border-gray-100 px-2.5 py-1.5 text-[10px] font-bold text-gray-500">
+                    <span className="inline-flex items-center rounded-lg bg-gray-50 border border-gray-100 px-2.5 py-1.5 text-xs font-bold text-gray-500">
                       {lastOrder.condition}
                     </span>
                   )}
-                  <span className="inline-flex items-center rounded-lg bg-gray-50 border border-gray-100 px-2.5 py-1.5 text-[10px] font-black text-gray-500 tabular-nums">
+                  <span className="inline-flex items-center rounded-lg bg-gray-50 border border-gray-100 px-2.5 py-1.5 text-xs font-black text-gray-500 tabular-nums">
                     Qty {lastOrder.quantity}
                   </span>
                 </div>
@@ -261,13 +261,13 @@ export function MobileLastOrderCard({ packerId, refreshKey = 0 }: MobileLastOrde
                 {/* ── Photo thumbnails ── */}
                 <div>
                   <div className="flex items-center justify-between mb-2">
-                    <p className="text-[9px] font-black text-gray-400 uppercase tracking-wider">
+                    <p className="text-xs font-black text-gray-400 uppercase tracking-wider">
                       Photos ({photoCount})
                     </p>
                     <button
                       type="button"
                       onClick={() => setIsAddingPhoto(true)}
-                      className="flex items-center gap-1 text-[10px] font-black text-emerald-600 active:text-emerald-700 transition-colors"
+                      className="flex items-center gap-1 text-xs font-black text-emerald-600 active:text-emerald-700 transition-colors"
                     >
                       <Camera className="w-3 h-3" />
                       Add Photo
@@ -313,7 +313,7 @@ export function MobileLastOrderCard({ packerId, refreshKey = 0 }: MobileLastOrde
 
                 {/* Inline uploading hint after batch upload starts */}
                 {isUploading && (
-                  <p className="text-[10px] font-bold text-gray-500 animate-pulse">
+                  <p className="text-xs font-bold text-gray-500 animate-pulse">
                     Uploading photos…
                   </p>
                 )}
@@ -332,7 +332,7 @@ export function MobileLastOrderCard({ packerId, refreshKey = 0 }: MobileLastOrde
             maxPhotos={5}
             header={
               <div className="min-w-0">
-                <p className="text-[9px] font-black uppercase tracking-[0.2em] text-white/50">
+                <p className="text-xs font-black uppercase tracking-[0.2em] text-white/50">
                   Add photos · last packed
                 </p>
                 <p className="text-[13px] font-black text-white truncate">

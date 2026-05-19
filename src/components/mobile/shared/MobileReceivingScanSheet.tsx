@@ -200,12 +200,12 @@ export function MobileReceivingScanSheet({
           {/* Top bar */}
           <div className="flex-shrink-0 flex items-center justify-between px-4 pt-[max(0.75rem,env(safe-area-inset-top))] pb-2 bg-white border-b border-gray-200">
             <div className="flex-1 min-w-0">
-              <p className="text-[10px] font-black uppercase tracking-[0.2em] text-gray-500">
+              <p className="text-xs font-black uppercase tracking-[0.2em] text-gray-500">
                 Scan PO tracking
               </p>
               <div className="mt-1 flex items-center gap-2">
                 <span className="inline-block h-2 w-2 rounded-full bg-emerald-500" />
-                <p className="text-[10px] font-bold text-gray-700">
+                <p className="text-xs font-bold text-gray-700">
                   {staffName ? `Signed in · ${staffName}` : `Staff #${staffId}`}
                 </p>
               </div>
@@ -306,19 +306,19 @@ export function MobileReceivingScanSheet({
                   >
                     <div className="flex items-center justify-between gap-2">
                       <span className="font-mono font-black truncate">{s.tracking}</span>
-                      <span className="text-[9px] font-black uppercase tracking-widest opacity-80">
+                      <span className="text-xs font-black uppercase tracking-widest opacity-80">
                         {s.status === 'unmatched' && s.exception_id
                           ? `queued · #${s.exception_id}`
                           : s.status}
                       </span>
                     </div>
                     {s.po_ids.length > 0 && (
-                      <p className="text-[10px] mt-0.5 opacity-80">
+                      <p className="text-xs mt-0.5 opacity-80">
                         PO: <span className="font-mono">{s.po_ids.join(', ')}</span>
                       </p>
                     )}
                     {s.status === 'unmatched' && s.exception_reason && (
-                      <p className="text-[10px] mt-0.5 opacity-70">
+                      <p className="text-xs mt-0.5 opacity-70">
                         {s.exception_reason === 'zoho_unreachable'
                           ? 'Zoho unreachable — will retry'
                           : 'No PO yet — logged for review'}

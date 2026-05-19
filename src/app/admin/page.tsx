@@ -10,6 +10,7 @@ import { AdminLogsTab } from '@/components/admin/AdminLogsTab';
 import { AdminJobsTab } from '@/components/admin/AdminJobsTab';
 import AiChatTab from '@/components/admin/AiChatTab';
 import { ArchitectureTab } from '@/components/admin/ArchitectureTab';
+import { PhotoBackupTab } from '@/components/admin/PhotoBackupTab';
 import { ADMIN_SECTION_OPTIONS, type AdminSection } from '@/components/admin/admin-sections';
 import { requirePermission } from '@/lib/auth/page-guard';
 
@@ -71,6 +72,10 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
         ) : activeTab === 'architecture' ? (
           <div className="h-full min-h-0 w-full">
             <ArchitectureTab />
+          </div>
+        ) : activeTab === 'photo_backup' ? (
+          <div className="h-full min-h-0 w-full">
+            <PhotoBackupTab />
           </div>
         ) : activeTab === 'access' ? (
           <div className="h-full min-h-0 w-full">

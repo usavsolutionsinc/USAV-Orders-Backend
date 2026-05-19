@@ -162,7 +162,7 @@ export function MobilePackerSpamCamera({
       <div className="flex-shrink-0 flex items-center justify-between px-4 pt-[max(0.75rem,env(safe-area-inset-top))] pb-2">
         <div className="flex-1 min-w-0">
           {header ?? (
-            <p className="text-[10px] font-black uppercase tracking-[0.2em] text-white/60">
+            <p className="text-xs font-black uppercase tracking-[0.2em] text-white/60">
               Packer Photos · {shots.length}/{maxPhotos}
             </p>
           )}
@@ -204,7 +204,7 @@ export function MobilePackerSpamCamera({
 
             {/* Cap reached banner */}
             {atCap && (
-              <div className="absolute top-4 left-1/2 -translate-x-1/2 px-3 py-1.5 rounded-full bg-amber-500/95 text-[10px] font-black uppercase tracking-wider text-white">
+              <div className="absolute top-4 left-1/2 -translate-x-1/2 px-3 py-1.5 rounded-full bg-amber-500/95 text-xs font-black uppercase tracking-wider text-white">
                 Max {maxPhotos} photos
               </div>
             )}
@@ -253,7 +253,7 @@ export function MobilePackerSpamCamera({
                     alt={`Shot ${i + 1}`}
                     className="w-full h-full object-cover"
                   />
-                  <span className="absolute bottom-0.5 left-0.5 bg-black/60 text-white text-[9px] font-black px-1 py-0.5 rounded">
+                  <span className="absolute bottom-0.5 left-0.5 bg-black/60 text-white text-xs font-black px-1 py-0.5 rounded">
                     {i + 1}
                   </span>
                 </motion.button>

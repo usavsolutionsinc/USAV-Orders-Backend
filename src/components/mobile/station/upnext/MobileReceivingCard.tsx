@@ -116,7 +116,7 @@ export function MobileReceivingCard({ item }: MobileReceivingCardProps) {
             {workflowStatusTableLabel(item.workflow_status)}
           </div>
         </div>
-        <span className={`text-[10px] font-black uppercase tracking-widest border rounded-lg px-2 py-0.5 ${statusCls}`}>
+        <span className={`text-xs font-black uppercase tracking-widest border rounded-lg px-2 py-0.5 ${statusCls}`}>
           {workflowStatusTableLabel(item.workflow_status)}
         </span>
         <button

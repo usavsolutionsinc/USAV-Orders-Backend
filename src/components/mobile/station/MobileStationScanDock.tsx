@@ -78,7 +78,7 @@ export function MobileStationScanDock({
               type="button"
               onClick={() => onToggleMode(mode)}
               aria-pressed={isArmed}
-              className={`flex items-center gap-1.5 rounded-full px-3 py-2 text-[10px] font-black uppercase tracking-wider transition-all active:scale-95 min-h-[36px] ${
+              className={`flex items-center gap-1.5 rounded-full px-3 py-2 text-xs font-black uppercase tracking-wider transition-all active:scale-95 min-h-[36px] ${
                 isArmed
                   ? `${activeClass} ring-2 ring-offset-1 ring-${mode === 'tracking' ? 'blue' : mode === 'serial' ? 'emerald' : mode === 'fba' ? 'violet' : 'amber'}-400/50`
                   : isActive

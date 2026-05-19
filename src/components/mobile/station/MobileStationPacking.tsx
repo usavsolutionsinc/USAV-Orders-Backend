@@ -465,7 +465,7 @@ export function MobileStationPacking({
                 </div>
 
                 <div className="pt-4 border-t border-gray-50 text-center">
-                  <p className="text-[9px] font-black text-gray-300 uppercase tracking-[0.3em]">USAV PACK MOBILE v2.0</p>
+                  <p className="text-xs font-black text-gray-300 uppercase tracking-[0.3em]">USAV PACK MOBILE v2.0</p>
                 </div>
               </motion.div>
             )}

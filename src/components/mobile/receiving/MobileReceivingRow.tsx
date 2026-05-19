@@ -31,7 +31,7 @@ function PhotoChip({ count }: { count: number }) {
   const has = count > 0;
   return (
     <span
-      className={`inline-flex shrink-0 items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-black tabular-nums tracking-wide ${
+      className={`inline-flex shrink-0 items-center gap-1 rounded-full px-2 py-0.5 text-xs font-black tabular-nums tracking-wide ${
         has ? 'bg-emerald-50 text-emerald-700' : 'bg-gray-100 text-gray-400'
       }`}
       aria-label={has ? `${count} photos captured` : 'no photos yet'}
@@ -77,7 +77,7 @@ export function MobileReceivingRow({ row, variant, fresh = false, onTap, photosH
         />
         <div className="flex min-w-0 flex-1 flex-col">
           <span className="truncate text-[12px] font-bold text-gray-900">{productTitle}</span>
-          <span className="truncate text-[10px] font-black uppercase tracking-widest text-gray-500">
+          <span className="truncate text-xs font-black uppercase tracking-widest text-gray-500">
             {poValue ? `${poValue} · ` : ''}
             <span
               className={
@@ -118,7 +118,7 @@ export function MobileReceivingRow({ row, variant, fresh = false, onTap, photosH
             className={`h-2.5 w-2.5 shrink-0 rounded-full ${getStatusDotBg(row.workflow_status)}`}
             title={workflowLabel}
           />
-          <span className="text-[9px] font-black uppercase tracking-[0.22em] text-blue-600">
+          <span className="text-xs font-black uppercase tracking-[0.22em] text-blue-600">
             Most recent
           </span>
           <span className="ml-auto">
@@ -130,7 +130,7 @@ export function MobileReceivingRow({ row, variant, fresh = false, onTap, photosH
           {productTitle}
         </p>
 
-        <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 pr-12 text-[10px] font-black uppercase tracking-widest text-gray-500">
+        <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 pr-12 text-xs font-black uppercase tracking-widest text-gray-500">
           {poValue ? <span className="text-gray-700">PO {poValue}</span> : null}
           <span
             className={

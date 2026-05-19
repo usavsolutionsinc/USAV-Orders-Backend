@@ -193,7 +193,7 @@ function PhotoPageInner() {
         maxPhotos={10}
         header={
           <div className="min-w-0">
-            <p className="text-[9px] font-black uppercase tracking-[0.2em] text-white/60">
+            <p className="text-xs font-black uppercase tracking-[0.2em] text-white/60">
               Receiving photos
             </p>
             <p className="truncate text-[13px] font-black text-white">RCV-{receivingId}</p>
@@ -211,7 +211,7 @@ function PhotoPageInner() {
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col">
       <header className="sticky top-0 z-10 bg-white border-b border-slate-200 px-4 py-3">
-        <p className="text-[10px] font-black uppercase tracking-[0.16em] text-slate-500">
+        <p className="text-xs font-black uppercase tracking-[0.16em] text-slate-500">
           Receiving photos
         </p>
         <h1 className="text-lg font-black text-slate-900">RCV-{receivingId}</h1>

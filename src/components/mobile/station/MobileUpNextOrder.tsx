@@ -319,16 +319,16 @@ export function MobileUpNextOrder({
           >
             <div className="flex items-center gap-2 px-1 pt-0.5">
               {lateCount > 0 && (
-                <span className="flex items-center gap-1 text-[10px] font-black uppercase tracking-widest text-red-500">
+                <span className="flex items-center gap-1 text-xs font-black uppercase tracking-widest text-red-500">
                   <span className="inline-block w-2 h-2 rounded-full bg-red-500" />
                   {lateCount} late
                 </span>
               )}
               {lateCount > 0 && dueTodayCount > 0 && (
-                <span className="text-gray-500 text-[10px]">·</span>
+                <span className="text-gray-500 text-xs">·</span>
               )}
               {dueTodayCount > 0 && (
-                <span className="flex items-center gap-1 text-[10px] font-black uppercase tracking-widest text-amber-500">
+                <span className="flex items-center gap-1 text-xs font-black uppercase tracking-widest text-amber-500">
                   <span className="inline-block w-2 h-2 rounded-full bg-amber-400" />
                   {dueTodayCount} due today
                 </span>
@@ -470,7 +470,7 @@ export function MobileUpNextOrder({
         <div className="mt-3">
           <div className="flex items-center gap-2 px-1 py-1.5 mb-1">
             <div className="h-px flex-1 bg-orange-200" />
-            <span className="text-[10px] font-black uppercase tracking-widest text-orange-600">Out Of Stock</span>
+            <span className="text-xs font-black uppercase tracking-widest text-orange-600">Out Of Stock</span>
             <div className="h-px flex-1 bg-orange-200" />
           </div>
           <div className="flex flex-col">
@@ -509,7 +509,7 @@ function SectionHeader({ label, color = 'orange' }: { label: string; color?: 'or
   return (
     <div className="flex items-center gap-2 px-1 py-2 mb-1">
       <div className={`h-px flex-1 ${lineClass}`} />
-      <span className={`text-[10px] font-black uppercase tracking-widest ${textClass}`}>{label}</span>
+      <span className={`text-xs font-black uppercase tracking-widest ${textClass}`}>{label}</span>
       <div className={`h-px flex-1 ${lineClass}`} />
     </div>
   );

@@ -284,7 +284,7 @@ export function MobilePackerScanSheet({
         >
           {/* ── Top bar ── */}
           <div className="flex-shrink-0 flex items-center justify-between px-4 pt-[max(0.75rem,env(safe-area-inset-top))] pb-2">
-            <p className="text-[10px] font-black uppercase tracking-[0.2em] text-white/60">
+            <p className="text-xs font-black uppercase tracking-[0.2em] text-white/60">
               Scan to Pack
             </p>
             <button
@@ -408,8 +408,8 @@ export function MobilePackerScanSheet({
                             <AlertTriangle className="w-4 h-4 text-amber-600" />
                           </div>
                           <div>
-                            <p className="text-[9px] font-black uppercase tracking-wider text-amber-600">No Match Found</p>
-                            <p className="text-[10px] text-gray-400">Proceed with exception?</p>
+                            <p className="text-xs font-black uppercase tracking-wider text-amber-600">No Match Found</p>
+                            <p className="text-xs text-gray-400">Proceed with exception?</p>
                           </div>
                         </>
                       ) : isFba ? (
@@ -418,8 +418,8 @@ export function MobilePackerScanSheet({
                             <Package className="w-4 h-4 text-purple-600" />
                           </div>
                           <div>
-                            <p className="text-[9px] font-black uppercase tracking-wider text-purple-600">FBA Shipment</p>
-                            <p className="text-[10px] text-gray-400">Does this look right?</p>
+                            <p className="text-xs font-black uppercase tracking-wider text-purple-600">FBA Shipment</p>
+                            <p className="text-xs text-gray-400">Does this look right?</p>
                           </div>
                         </>
                       ) : (
@@ -428,8 +428,8 @@ export function MobilePackerScanSheet({
                             <Package className="w-4 h-4 text-emerald-600" />
                           </div>
                           <div>
-                            <p className="text-[9px] font-black uppercase tracking-wider text-emerald-600">Order Found</p>
-                            <p className="text-[10px] text-gray-400">Does this look right?</p>
+                            <p className="text-xs font-black uppercase tracking-wider text-emerald-600">Order Found</p>
+                            <p className="text-xs text-gray-400">Does this look right?</p>
                           </div>
                         </>
                       )}
@@ -443,20 +443,20 @@ export function MobilePackerScanSheet({
                     {/* Detail chips */}
                     <div className="flex flex-wrap gap-2 mb-5">
                       {displayTracking && (
-                        <span className="inline-flex items-center rounded-lg bg-gray-50 border border-gray-200 px-2.5 py-1.5 text-[10px] font-mono font-bold text-gray-600">
+                        <span className="inline-flex items-center rounded-lg bg-gray-50 border border-gray-200 px-2.5 py-1.5 text-xs font-mono font-bold text-gray-600">
                           TRK ...{getLast4(displayTracking)}
                         </span>
                       )}
-                      <span className="inline-flex items-center rounded-lg bg-gray-50 border border-gray-200 px-2.5 py-1.5 text-[10px] font-black text-gray-600 tabular-nums">
+                      <span className="inline-flex items-center rounded-lg bg-gray-50 border border-gray-200 px-2.5 py-1.5 text-xs font-black text-gray-600 tabular-nums">
                         Qty {displayQty}
                       </span>
                       {displayCondition && displayCondition !== 'N/A' && (
-                        <span className="inline-flex items-center rounded-lg bg-gray-50 border border-gray-200 px-2.5 py-1.5 text-[10px] font-bold text-gray-600">
+                        <span className="inline-flex items-center rounded-lg bg-gray-50 border border-gray-200 px-2.5 py-1.5 text-xs font-bold text-gray-600">
                           {displayCondition}
                         </span>
                       )}
                       {isFba && lookupResult.fba?.shipmentRef && (
-                        <span className="inline-flex items-center rounded-lg bg-purple-50 border border-purple-200 px-2.5 py-1.5 text-[10px] font-black text-purple-700">
+                        <span className="inline-flex items-center rounded-lg bg-purple-50 border border-purple-200 px-2.5 py-1.5 text-xs font-black text-purple-700">
                           {lookupResult.fba.shipmentRef}
                         </span>
                       )}
@@ -521,7 +521,7 @@ export function MobilePackerScanSheet({
                 <button
                   type="button"
                   onClick={handleOpenManual}
-                  className="w-full text-center text-[10px] font-bold text-white/50 uppercase tracking-wider active:text-white/70 transition-colors"
+                  className="w-full text-center text-xs font-bold text-white/50 uppercase tracking-wider active:text-white/70 transition-colors"
                 >
                   Type manually
                 </button>
@@ -536,7 +536,7 @@ export function MobilePackerScanSheet({
                 <button
                   type="button"
                   onClick={handleBackToScan}
-                  className="text-[10px] font-bold text-white/60 uppercase tracking-wider active:text-white/80 transition-colors"
+                  className="text-xs font-bold text-white/60 uppercase tracking-wider active:text-white/80 transition-colors"
                 >
                   &larr; Back to camera
                 </button>

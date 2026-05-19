@@ -1,4 +1,4 @@
-export type AdminSection = 'goals' | 'staff' | 'access' | 'roles' | 'connections' | 'fba' | 'manuals' | 'features' | 'logs' | 'jobs' | 'ai_chat' | 'architecture';
+export type AdminSection = 'goals' | 'staff' | 'access' | 'roles' | 'connections' | 'fba' | 'manuals' | 'features' | 'logs' | 'jobs' | 'ai_chat' | 'architecture' | 'photo_backup';
 
 export interface AdminSectionOption {
   value: AdminSection;
@@ -19,4 +19,5 @@ export const ADMIN_SECTION_OPTIONS: AdminSectionOption[] = [
   { value: 'jobs', label: 'Jobs', description: 'QStash scheduled jobs and execution logs' },
   { value: 'ai_chat', label: 'AI Chat', description: 'Ops assistant + Bose service manual lookup' },
   { value: 'architecture', label: 'Architecture', description: 'Live codebase diagrams — module deps, routes, recent commits' },
+  { value: 'photo_backup', label: 'Photo Backup', description: 'Mirror Vercel Blob photos into Google Photos albums' },
 ];

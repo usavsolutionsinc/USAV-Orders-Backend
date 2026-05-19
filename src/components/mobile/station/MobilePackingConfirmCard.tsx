@@ -104,41 +104,41 @@ export function MobilePackingConfirmCard({
         <div className={`px-4 py-3 ${config.headerBg} flex items-center justify-between`}>
           <div className="flex items-center gap-2">
             <Package className="w-4 h-4 text-purple-600" />
-            <span className={`text-[10px] font-black uppercase tracking-wider ${config.headerText}`}>
+            <span className={`text-xs font-black uppercase tracking-wider ${config.headerText}`}>
               {config.label}
             </span>
             {fba.isNew && (
-              <span className="text-[9px] font-black bg-blue-100 text-blue-700 border border-blue-200 rounded-lg px-1.5 py-0.5 uppercase tracking-wider">
+              <span className="text-xs font-black bg-blue-100 text-blue-700 border border-blue-200 rounded-lg px-1.5 py-0.5 uppercase tracking-wider">
                 Added to Today
               </span>
             )}
           </div>
           {fba.shipmentRef && (
-            <span className="text-[10px] font-mono font-black text-purple-700">{fba.shipmentRef}</span>
+            <span className="text-xs font-mono font-black text-purple-700">{fba.shipmentRef}</span>
           )}
         </div>
 
         {/* Body */}
         <div className="px-4 py-4 space-y-4">
           {!compact && (
-            <p className="text-[10px] font-black text-gray-400 uppercase tracking-wider">Ready to pack?</p>
+            <p className="text-xs font-black text-gray-400 uppercase tracking-wider">Ready to pack?</p>
           )}
           <h3 className="text-base font-black text-gray-900 leading-tight">{fba.productTitle}</h3>
 
           {/* Stats row */}
           <div className="flex items-stretch justify-between gap-3 rounded-xl border border-purple-100 bg-purple-50/40 px-3 py-3">
             <div className="min-w-0 flex-1" title={fba.fnsku}>
-              <p className="text-[9px] font-black text-purple-400 uppercase tracking-wider">FNSKU</p>
+              <p className="text-xs font-black text-purple-400 uppercase tracking-wider">FNSKU</p>
               <p className="text-sm font-mono font-black text-gray-900 tabular-nums">{getLast4(fba.fnsku)}</p>
             </div>
             <div className="flex-1 text-center border-x border-purple-100/80 px-2">
-              <p className="text-[9px] font-black text-gray-400 uppercase tracking-wider">Planned</p>
+              <p className="text-xs font-black text-gray-400 uppercase tracking-wider">Planned</p>
               <p className="text-sm font-black text-gray-900 tabular-nums">
                 {fba.plannedQty > 0 ? fba.plannedQty : '—'}
               </p>
             </div>
             <div className="min-w-0 flex-1 text-right">
-              <p className="text-[9px] font-black text-gray-400 uppercase tracking-wider">Scanned</p>
+              <p className="text-xs font-black text-gray-400 uppercase tracking-wider">Scanned</p>
               <p className="text-sm font-black text-gray-900 tabular-nums">
                 {fba.combinedPackScannedQty}
               </p>
@@ -191,7 +191,7 @@ export function MobilePackingConfirmCard({
           ) : (
             <Package className="w-4 h-4 text-emerald-600" />
           )}
-          <span className={`text-[10px] font-black uppercase tracking-wider ${config.headerText}`}>
+          <span className={`text-xs font-black uppercase tracking-wider ${config.headerText}`}>
             {config.label}
           </span>
         </div>
@@ -203,7 +203,7 @@ export function MobilePackingConfirmCard({
       {/* Body */}
       <div className="px-4 py-4 space-y-4">
         {!compact && (
-          <p className="text-[10px] font-black text-gray-400 uppercase tracking-wider">
+          <p className="text-xs font-black text-gray-400 uppercase tracking-wider">
             {variant === 'exception' ? 'No matching order — pack anyway?' : 'Ready to pack?'}
           </p>
         )}
@@ -228,15 +228,15 @@ export function MobilePackingConfirmCard({
         {/* Detail grid */}
         <div className="grid grid-cols-3 gap-2">
           <div className="bg-gray-50 rounded-xl px-3 py-2.5 border border-gray-100">
-            <p className="text-[9px] font-black text-gray-400 uppercase tracking-wider mb-1">Qty</p>
+            <p className="text-xs font-black text-gray-400 uppercase tracking-wider mb-1">Qty</p>
             <p className="text-sm font-bold text-gray-800">{quantity}</p>
           </div>
           <div className="bg-gray-50 rounded-xl px-3 py-2.5 border border-gray-100">
-            <p className="text-[9px] font-black text-gray-400 uppercase tracking-wider mb-1">Cond</p>
+            <p className="text-xs font-black text-gray-400 uppercase tracking-wider mb-1">Cond</p>
             <p className="text-sm font-bold text-gray-800">{order.condition || 'N/A'}</p>
           </div>
           <div className="bg-gray-50 rounded-xl px-3 py-2.5 border border-gray-100">
-            <p className="text-[9px] font-black text-gray-400 uppercase tracking-wider mb-1">TRK</p>
+            <p className="text-xs font-black text-gray-400 uppercase tracking-wider mb-1">TRK</p>
             <p className="text-sm font-mono font-bold text-gray-800">{getLast4(order.tracking) || '—'}</p>
           </div>
         </div>
@@ -246,13 +246,13 @@ export function MobilePackingConfirmCard({
           <div className="grid grid-cols-2 gap-2">
             {order.sku && (
               <div className="bg-gray-50 rounded-xl px-3 py-2.5 border border-gray-100">
-                <p className="text-[9px] font-black text-gray-400 uppercase tracking-wider mb-1">SKU</p>
+                <p className="text-xs font-black text-gray-400 uppercase tracking-wider mb-1">SKU</p>
                 <p className="text-[11px] font-mono font-bold text-gray-800 truncate">{getLast4(order.sku)}</p>
               </div>
             )}
             {order.itemNumber && (
               <div className="bg-gray-50 rounded-xl px-3 py-2.5 border border-gray-100">
-                <p className="text-[9px] font-black text-gray-400 uppercase tracking-wider mb-1">Item #</p>
+                <p className="text-xs font-black text-gray-400 uppercase tracking-wider mb-1">Item #</p>
                 <p className="text-[11px] font-bold text-gray-800 truncate">{getLast4(order.itemNumber)}</p>
               </div>
             )}

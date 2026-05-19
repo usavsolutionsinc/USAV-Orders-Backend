@@ -6,6 +6,7 @@ import {
   BarChart3,
   Box,
   Calendar,
+  Camera,
   Database,
   FileText,
   Layout,
@@ -31,6 +32,7 @@ const ADMIN_SECTION_ICONS: Record<AdminSection, (props: { className?: string }) 
   jobs:         Calendar,
   ai_chat:      Zap,
   architecture: Database,
+  photo_backup: Camera,
 };
 
 const ADMIN_SECTION_ITEMS: HorizontalSliderItem[] = ADMIN_SECTION_OPTIONS.map((o) => ({

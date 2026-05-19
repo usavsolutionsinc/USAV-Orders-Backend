@@ -39,14 +39,14 @@ export function MobileCartonSheet({ row, staffId, open, onClose }: MobileCartonS
         {/* Header */}
         <div>
           {poValue ? (
-            <p className="text-[9px] font-black uppercase tracking-[0.22em] text-gray-400">
+            <p className="text-xs font-black uppercase tracking-[0.22em] text-gray-400">
               PO {poValue}
             </p>
           ) : null}
           <p className="mt-0.5 line-clamp-2 text-[15px] font-black tracking-tight text-gray-900">
             {productTitle}
           </p>
-          <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-[10px] font-black uppercase tracking-widest text-gray-500">
+          <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs font-black uppercase tracking-widest text-gray-500">
             <span className="text-gray-700">{quantityText}</span>
             <span>{conditionLabel}</span>
             <span>{workflowLabel}</span>

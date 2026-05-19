@@ -241,17 +241,17 @@ export function MobilePackingReviewStep({
         <div className="px-4 py-3 border-b border-gray-100 flex items-center justify-between">
           <div className="flex items-center gap-2">
             <ImageIcon className="w-4 h-4 text-gray-400" />
-            <p className="text-[10px] font-black text-gray-500 uppercase tracking-wider">
+            <p className="text-xs font-black text-gray-500 uppercase tracking-wider">
               Photos ({photos.length})
             </p>
           </div>
           {photos.length > 0 && (
-            <span className="text-[10px] font-bold text-gray-500 tabular-nums">
+            <span className="text-xs font-bold text-gray-500 tabular-nums">
               {counts.uploaded}/{photos.length} uploaded
             </span>
           )}
           {photos.length === 0 && (
-            <span className="text-[10px] font-bold text-amber-600">No photos attached</span>
+            <span className="text-xs font-bold text-amber-600">No photos attached</span>
           )}
         </div>
 
@@ -275,7 +275,7 @@ export function MobilePackingReviewStep({
                       className="w-full h-full object-cover cursor-pointer"
                       onClick={() => setPreviewIndex(i)}
                     />
-                    <div className="absolute bottom-1 left-1 bg-black/60 text-white text-[9px] font-black px-1.5 py-0.5 rounded-md">
+                    <div className="absolute bottom-1 left-1 bg-black/60 text-white text-xs font-black px-1.5 py-0.5 rounded-md">
                       {i + 1}
                     </div>
                     {renderStatusBadge(photo.uploadStatus)}

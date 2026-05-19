@@ -64,11 +64,11 @@ export async function listPackingTrackings(opts: ListOpts): Promise<PackingTrack
 
   if (filters.range.start) {
     params.push(filters.range.start);
-    where.push(`pl.pack_date_time >= $${params.length}::timestamptz`);
+    where.push(`pl.created_at >= $${params.length}::timestamptz`);
   }
   if (filters.range.end) {
     params.push(filters.range.end);
-    where.push(`pl.pack_date_time <= $${params.length}::timestamptz`);
+    where.push(`pl.created_at <= $${params.length}::timestamptz`);
   }
   if (filters.staffId != null) {
     params.push(filters.staffId);
@@ -104,7 +104,7 @@ export async function listPackingTrackings(opts: ListOpts): Promise<PackingTrack
     SELECT
       stn.tracking_number_raw AS tracking,
       pl.id AS packer_log_id,
-      pl.pack_date_time,
+      pl.created_at AS pack_date_time,
       pl.packed_by AS packed_by_id,
       s.name AS packed_by_name,
       (
@@ -121,7 +121,7 @@ export async function listPackingTrackings(opts: ListOpts): Promise<PackingTrack
     LEFT JOIN shipping_tracking_numbers stn ON stn.id = pl.shipment_id
     LEFT JOIN staff s ON s.id = pl.packed_by
     WHERE ${where.join(' AND ')}
-    ORDER BY pl.pack_date_time DESC NULLS LAST, pl.id DESC
+    ORDER BY pl.created_at DESC NULLS LAST, pl.id DESC
     LIMIT ${limitParam} OFFSET ${offsetParam}
   `;
   const { rows } = await pool.query(sql, params);
@@ -157,7 +157,7 @@ export async function getPackingTrackingDetail(
 
   const packerLogsRes = await pool.query(
     `SELECT pl.id,
-            pl.pack_date_time,
+            pl.created_at AS pack_date_time,
             pl.packed_by AS packed_by_id,
             s.name AS packed_by_name,
             pl.tracking_type,
@@ -165,7 +165,7 @@ export async function getPackingTrackingDetail(
        FROM packer_logs pl
        LEFT JOIN staff s ON s.id = pl.packed_by
        WHERE pl.shipment_id = $1
-       ORDER BY pl.pack_date_time DESC NULLS LAST, pl.id DESC`,
+       ORDER BY pl.created_at DESC NULLS LAST, pl.id DESC`,
     [shipmentId],
   );
 

@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { getStaffThemeById, stationThemeColors } from '@/utils/staff-colors';
 import { useBarcodeScanner } from '@/hooks/useBarcodeScanner';
+import { useFeedback } from '@/hooks/useFeedback';
 import { useAblyClient } from '@/contexts/AblyContext';
 import { useAuth } from '@/contexts/AuthContext';
 
@@ -20,16 +21,6 @@ type PhoneScan = {
 };
 
 const DUP_WINDOW_MS = 2000;
-
-function vibrate(pattern: number | number[]): void {
-  try {
-    if (typeof navigator !== 'undefined' && 'vibrate' in navigator) {
-      navigator.vibrate(pattern);
-    }
-  } catch {
-    /* silent — some browsers block without user gesture */
-  }
-}
 
 function randomId(): string {
   if (typeof crypto !== 'undefined' && 'randomUUID' in crypto) return crypto.randomUUID();
@@ -52,6 +43,7 @@ export default function MobileScanPage() {
   const [autoSend, setAutoSend] = useState(true);
 
   const scanner = useBarcodeScanner({ dedupMs: DUP_WINDOW_MS });
+  const feedback = useFeedback();
 
   // 1. Bounce to signin if no session.
   useEffect(() => {
@@ -141,9 +133,9 @@ export default function MobileScanPage() {
           : s));
       });
 
-    vibrate(30);
+    feedback('confirm');
     setInput('');
-  }, []);
+  }, [feedback]);
 
   // 4. Start/stop camera with the signed-in session.
   useEffect(() => {
@@ -165,11 +157,11 @@ export default function MobileScanPage() {
       window.setTimeout(() => scanner.resetLastScan(), 600);
     } else {
       setInput(value);
-      vibrate(15);
+      feedback('scanAccepted');
       scanner.acceptScan();
       scanner.resetLastScan();
     }
-  }, [scanner.lastScannedValue, autoSend, sendScan, scanner]);
+  }, [scanner.lastScannedValue, autoSend, sendScan, scanner, feedback]);
 
   if (!isLoaded || !user) return null;
 
@@ -189,7 +181,7 @@ export default function MobileScanPage() {
         <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
           <div className={`h-56 w-56 rounded-2xl border-2 shadow-[0_0_0_9999px_rgba(0,0,0,0.35)] ${themeColors.border.replace('border-', 'border-')}`} style={{ borderColor: 'currentColor' }} />
         </div>
-        <div className="absolute top-3 left-3 right-3 flex items-center justify-between text-[10px] font-black uppercase tracking-widest">
+        <div className="absolute top-3 left-3 right-3 flex items-center justify-between text-xs font-black uppercase tracking-widest">
           <span className={`rounded-full px-2 py-1 text-white ${themeColors.bg}`}>
             {staffName || `Staff #${staffId}`}
           </span>
@@ -231,7 +223,7 @@ export default function MobileScanPage() {
 
       <div className="border-t border-gray-200 bg-white p-3 space-y-3">
         <div>
-          <label className="block text-[10px] font-black uppercase tracking-widest text-gray-500 mb-1">
+          <label className="block text-xs font-black uppercase tracking-widest text-gray-500 mb-1">
             Tracking
           </label>
           <div className="flex gap-2">
@@ -255,7 +247,7 @@ export default function MobileScanPage() {
               Send
             </button>
           </div>
-          <label className="mt-2 flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-gray-500">
+          <label className="mt-2 flex items-center gap-2 text-xs font-black uppercase tracking-widest text-gray-500">
             <input
               type="checkbox"
               checked={autoSend}
@@ -267,7 +259,7 @@ export default function MobileScanPage() {
         </div>
 
         <div>
-          <p className="text-[10px] font-black uppercase tracking-widest text-gray-500 mb-1">
+          <p className="text-xs font-black uppercase tracking-widest text-gray-500 mb-1">
             Scans · {scans.length}
           </p>
           <div className="flex flex-col gap-1 max-h-40 overflow-auto">
@@ -283,7 +275,7 @@ export default function MobileScanPage() {
                     <StatusDot status={s.status} />
                     <span className="truncate font-mono text-[12px] text-gray-800">{s.tracking}</span>
                   </div>
-                  <span className="shrink-0 text-[10px] text-gray-400 uppercase tracking-wider">
+                  <span className="shrink-0 text-xs text-gray-400 uppercase tracking-wider">
                     {statusLabel(s)}
                   </span>
                 </div>

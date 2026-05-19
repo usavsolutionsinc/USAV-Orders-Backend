@@ -60,7 +60,7 @@ export function MobilePackingPhotoStep({
 
   const headerNode = productTitle ? (
     <div className="min-w-0">
-      <p className="text-[9px] font-black uppercase tracking-[0.2em] text-white/50">
+      <p className="text-xs font-black uppercase tracking-[0.2em] text-white/50">
         Ready to pack
       </p>
       <p className="text-[13px] font-black text-white truncate">{productTitle}</p>

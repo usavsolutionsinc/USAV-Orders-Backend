@@ -120,7 +120,7 @@ export function MobileScanConfirmation({
       <div className="bg-white rounded-t-3xl shadow-2xl px-5 pt-5 pb-[max(1.25rem,env(safe-area-inset-bottom))]">
         {/* ── Header: "Detected as" + badge ── */}
         <div className="mb-4">
-          <p className="text-[9px] font-black uppercase tracking-[0.2em] text-gray-400 mb-2">
+          <p className="text-xs font-black uppercase tracking-[0.2em] text-gray-400 mb-2">
             Detected As
           </p>
           <div className="flex items-center gap-3">
@@ -129,7 +129,7 @@ export function MobileScanConfirmation({
               {config.label}
             </span>
             {carrier && (
-              <span className="text-[10px] font-black text-gray-500 uppercase tracking-wider">
+              <span className="text-xs font-black text-gray-500 uppercase tracking-wider">
                 {carrier.replace(/_/g, ' ')}
               </span>
             )}
@@ -138,7 +138,7 @@ export function MobileScanConfirmation({
 
         {/* ── Scanned value ── */}
         <div className="bg-gray-50 rounded-2xl border border-gray-200 px-4 py-3 mb-4">
-          <p className="text-[9px] font-black uppercase tracking-[0.15em] text-gray-400 mb-1">
+          <p className="text-xs font-black uppercase tracking-[0.15em] text-gray-400 mb-1">
             Scanned Value
           </p>
           <p className="text-base font-mono font-black text-gray-900 break-all leading-snug">
@@ -148,7 +148,7 @@ export function MobileScanConfirmation({
 
         {/* ── Override pills ── */}
         <div className="mb-5">
-          <p className="text-[9px] font-black uppercase tracking-[0.15em] text-gray-500 mb-2">
+          <p className="text-xs font-black uppercase tracking-[0.15em] text-gray-500 mb-2">
             Not right? It&apos;s a:
           </p>
           <div className="flex items-center gap-2 overflow-x-auto no-scrollbar">
@@ -161,7 +161,7 @@ export function MobileScanConfirmation({
                   key={type}
                   type="button"
                   onClick={() => setCurrentType(type)}
-                  className={`flex items-center gap-1.5 rounded-full border px-3.5 min-h-[44px] text-[10px] font-black uppercase tracking-wider transition-all active:scale-95 whitespace-nowrap ${
+                  className={`flex items-center gap-1.5 rounded-full border px-3.5 min-h-[44px] text-xs font-black uppercase tracking-wider transition-all active:scale-95 whitespace-nowrap ${
                     isActive ? pillConfig.badge : 'bg-gray-100 text-gray-500 border-gray-200'
                   }`}
                 >

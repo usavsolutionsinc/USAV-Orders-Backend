@@ -8,9 +8,16 @@
  * shared context is lazily created on first invocation. If permission is
  * denied (rare) the audio side silently no-ops; vibration is still attempted.
  *
+ * Every primitive here respects the shared user preferences in
+ * `./prefs` — toggling `haptic` or `sound` off mutes the corresponding
+ * channel across both these primitives and the `useFeedback()` hook.
+ *
  * Keep the surface small — these are called from inside button handlers
  * after a successful (or failed) network confirm.
  */
+
+import { getFeedbackPrefs } from './prefs';
+import type { ToneStep } from '@/design-system/tokens/sounds';
 
 let sharedCtx: AudioContext | null = null;
 
@@ -30,6 +37,7 @@ function getCtx(): AudioContext | null {
 }
 
 function safeVibrate(pattern: number | number[]): void {
+  if (!getFeedbackPrefs().haptic) return;
   try {
     if (typeof navigator !== 'undefined' && 'vibrate' in navigator) {
       navigator.vibrate(pattern);
@@ -40,6 +48,7 @@ function safeVibrate(pattern: number | number[]): void {
 }
 
 function tone(opts: { freq: number; durationMs: number; volume?: number }): void {
+  if (!getFeedbackPrefs().sound) return;
   const ctx = getCtx();
   if (!ctx) return;
   try {
@@ -87,4 +96,26 @@ export function arrivalFeedback(): void {
   tone({ freq: 660, durationMs: 70, volume: 0.16 });
   // Second, brighter note offset slightly so the two beats are perceived as a chime.
   setTimeout(() => tone({ freq: 990, durationMs: 90, volume: 0.18 }), 90);
+}
+
+// ─── Generic primitives (used by useFeedback hook) ───────────────────────────
+
+/** Play a tone sequence at the current time, respecting per-step delays. */
+export function playToneSequence(sequence: readonly ToneStep[]): void {
+  if (typeof window === 'undefined') return;
+  let offset = 0;
+  for (const step of sequence) {
+    const start = offset + (step.delayMs ?? 0);
+    if (start === 0) {
+      tone(step);
+    } else {
+      setTimeout(() => tone(step), start);
+    }
+    offset = start + step.durationMs;
+  }
+}
+
+/** Public vibrate primitive — same safety wrapper used internally. */
+export function vibrate(pattern: number | readonly number[]): void {
+  safeVibrate(pattern as number | number[]);
 }
