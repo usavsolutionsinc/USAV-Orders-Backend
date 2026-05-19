@@ -18,6 +18,7 @@ import { WalkInSidebarPanel } from '@/components/sidebar/WalkInSidebarPanel';
 import ShippedSidebar from '@/components/ShippedSidebar';
 import UnshippedSidebar from '@/components/unshipped/UnshippedSidebar';
 import { SkuCatalogSidebar } from '@/components/manuals/SkuCatalogSidebar';
+import { ManualsLibrarySidebar } from '@/components/manuals/ManualsLibrarySidebar';
 import { TechSidebarPanel } from '@/components/sidebar/TechSidebarPanel';
 import { PackerSidebarPanel } from '@/components/sidebar/PackerSidebarPanel';
 import { ReceivingSidebarPanel } from '@/components/sidebar/ReceivingSidebarPanel';
@@ -393,6 +394,7 @@ function SidebarContextPanel({ onBackToAppNav }: { onBackToAppNav?: () => void }
   if (routeKey === 'walk-in') return <WalkInSidebarPanel embedded hideSectionHeader />;
   if (routeKey === 'repair') return <WalkInSidebarPanel embedded hideSectionHeader />;
   if (routeKey === 'previous-quarters') return <QuarterSidebar hideSectionHeader />;
+  if (routeKey === 'manuals-library') return <ManualsLibrarySidebar />;
   if (routeKey === 'manuals') return <SkuCatalogSidebar />;
 
   if (routeKey === 'tech') {

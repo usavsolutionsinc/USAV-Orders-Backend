@@ -7,7 +7,7 @@ export async function GET(request: NextRequest) {
     const query = String(searchParams.get('q') || '').trim();
     const status = String(searchParams.get('status') || '').trim().toLowerCase();
     const limitRaw = Number(searchParams.get('limit') || 50);
-    const limit = Number.isFinite(limitRaw) ? Math.min(Math.max(limitRaw, 1), 200) : 50;
+    const limit = Number.isFinite(limitRaw) ? Math.min(Math.max(limitRaw, 1), 1000) : 50;
     const statusFilter = status === 'unassigned' || status === 'assigned' || status === 'archived' ? status : null;
 
     if (!query) {

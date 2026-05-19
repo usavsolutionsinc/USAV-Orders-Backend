@@ -8,9 +8,17 @@ import { microBadge } from '@/design-system/tokens/typography/presets';
 interface ManualRow {
   id: number;
   display_name: string | null;
-  google_file_id: string;
+  google_file_id: string | null;
+  source_url: string | null;
+  relative_path: string | null;
   type: string | null;
   updated_at: string | null;
+}
+
+function manualHref(manual: { source_url: string | null; google_file_id: string | null }): string | null {
+  if (manual.source_url) return manual.source_url;
+  if (manual.google_file_id) return `https://docs.google.com/document/d/${manual.google_file_id}`;
+  return null;
 }
 
 interface ManualsSectionProps {
@@ -51,7 +59,7 @@ export function ManualsSection({ catalogId, manuals, onRefresh }: ManualsSection
 
   const openEditForm = (manual: ManualRow) => {
     setEditingId(manual.id);
-    setGoogleFileId(manual.google_file_id);
+    setGoogleFileId(manual.google_file_id || '');
     setDisplayName(manual.display_name || '');
     setManualType(manual.type || 'manual');
     setShowAdd(true);
@@ -125,15 +133,17 @@ export function ManualsSection({ catalogId, manuals, onRefresh }: ManualsSection
                   </span>
                 )}
               </div>
-              <a
-                href={`https://docs.google.com/document/d/${manual.google_file_id}`}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="mt-0.5 inline-flex items-center gap-1 text-[9px] font-bold text-blue-600 hover:text-blue-800"
-                onClick={(e) => e.stopPropagation()}
-              >
-                <ExternalLink className="h-2.5 w-2.5" /> Open
-              </a>
+              {manualHref(manual) && (
+                <a
+                  href={manualHref(manual)!}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="mt-0.5 inline-flex items-center gap-1 text-[9px] font-bold text-blue-600 hover:text-blue-800"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <ExternalLink className="h-2.5 w-2.5" /> Open
+                </a>
+              )}
             </div>
             <button
               type="button"

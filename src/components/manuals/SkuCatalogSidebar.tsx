@@ -35,7 +35,9 @@ interface SkuCatalogDetail {
   manuals: Array<{
     id: number;
     display_name: string | null;
-    google_file_id: string;
+    google_file_id: string | null;
+    source_url: string | null;
+    relative_path: string | null;
     type: string | null;
     updated_at: string | null;
   }>;
@@ -75,6 +77,7 @@ const MODE_ITEMS: HorizontalSliderItem[] = [
   { id: 'pairing', label: 'SKU Pairing', tone: 'orange' },
   { id: 'manuals', label: 'Manuals', tone: 'emerald' },
   { id: 'qc', label: 'QC Checklist', tone: 'blue' },
+  { id: 'library', label: 'Library', tone: 'purple' },
 ];
 
 const SORT_ITEMS: HorizontalSliderItem[] = [
@@ -474,6 +477,11 @@ export function SkuCatalogSidebar() {
   };
 
   const handleModeChange = (id: string) => {
+    // Library lives on a sibling route (/manuals/library) with its own sidebar.
+    if (id === 'library') {
+      router.replace('/manuals/library');
+      return;
+    }
     updateParams({ mode: id === 'all' ? null : id, id: null, ecwid: null });
   };
 

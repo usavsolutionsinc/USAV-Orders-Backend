@@ -762,7 +762,9 @@ export interface SkuCatalogDetailResult {
     item_number: string | null;
     product_title: string | null;
     display_name: string | null;
-    google_file_id: string;
+    google_file_id: string | null;
+    source_url: string | null;
+    relative_path: string | null;
     type: string | null;
     is_active: boolean;
     updated_at: string | null;
@@ -780,7 +782,7 @@ export async function getSkuCatalogDetail(id: number): Promise<SkuCatalogDetailR
       [id],
     ),
     pool.query(
-      `SELECT id, sku, item_number, product_title, display_name, google_file_id, type, is_active, updated_at
+      `SELECT id, sku, item_number, product_title, display_name, google_file_id, source_url, relative_path, type, is_active, updated_at
        FROM product_manuals WHERE sku_catalog_id = $1 AND is_active = true ORDER BY updated_at DESC`,
       [id],
     ),

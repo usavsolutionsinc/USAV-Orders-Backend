@@ -37,6 +37,7 @@ export type SidebarRouteKey =
   | 'admin'
   | 'audit-log'
   | 'manuals'
+  | 'manuals-library'
   | 'ai'
   | 'settings'
   | 'unknown';
@@ -61,6 +62,7 @@ const MOBILE_RESTRICTED_SIDEBAR_IDS = new Set<SidebarRouteKey>([
   'operations',
   'work-orders',
   'manuals',
+  'manuals-library',
   'support',
   'previous-quarters',
   'admin',
@@ -135,6 +137,7 @@ export function getSidebarRouteKey(pathname: string | null): SidebarRouteKey {
   if (pathname === '/audit-log' || pathname.startsWith('/audit-log/')) return 'audit-log';
   if (pathname === '/tech' || pathname.startsWith('/tech/')) return 'tech';
   if (pathname === '/packer' || pathname.startsWith('/packer/')) return 'packer';
+  if (pathname === '/manuals/library' || pathname.startsWith('/manuals/library/')) return 'manuals-library';
   if (pathname === '/manuals' || pathname.startsWith('/manuals/')) return 'manuals';
   if (pathname === '/ai' || pathname.startsWith('/ai/')) return 'ai';
   if (pathname === '/settings' || pathname.startsWith('/settings/')) return 'settings';
