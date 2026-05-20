@@ -12,6 +12,7 @@
     "desktop:start": "electron .",
     "desktop:dist": "electron-builder",
     "desktop:dist:mac": "electron-builder --mac dmg",
+    "desktop:dist:mac-intel-legacy": "electron-builder --mac dmg --x64 --config electron-builder.mac-intel-legacy.yml",
     "desktop:dist:win": "electron-builder --win nsis",
     "desktop:upload": "node scripts/upload-desktop-installers.mjs",
     "manuals:convert-upload": "node scripts/convert-and-upload-manuals.mjs",

@@ -1,0 +1,64 @@
+appId: com.usav.orders.desktop
+productName: USAV Orders
+
+# Legacy Intel macOS build.
+#
+# Electron 22 is the last major line that runs on macOS 10.13 (High Sierra)
+# through 10.15 (Catalina). All other targets (Apple Silicon mac, Windows)
+# continue to ship the current Electron version from `electron-builder.yml`.
+#
+# Build with: npm run desktop:dist:mac-intel-legacy
+#
+# IMPORTANT: Electron 22 bundles Node.js 16. The local sidecar
+# (`server/index.js`) uses Express 5 which requires Node 18+; on this build
+# the sidecar may fail to start. The main window still loads from Vercel and
+# the app remains usable; only local-sidecar features (label upload/print via
+# the embedded Express server) are at risk.
+
+# Pin the Electron binary used at packaging time (independent of the version
+# installed in node_modules — electron-builder downloads this on demand).
+electronVersion: 22.3.27
+
+asar: true
+
+directories:
+  output: desktop-dist
+
+files:
+  - electron/**/*
+  - server/**/*
+  - node_modules/**/*
+  - package.json
+
+asarUnpack:
+  - "node_modules/multer/**/*"
+  - "node_modules/express/**/*"
+
+mac:
+  category: public.app-category.business
+  # minimumSystemVersion is written into Info.plist so the OS refuses to
+  # launch the app on anything older. 10.13 matches the Electron 22 floor.
+  minimumSystemVersion: '10.13.0'
+  target:
+    - target: dmg
+      arch:
+        - x64
+  # Pin filename so the install-page classifier still buckets this as macX64
+  # (anything without "arm64" in the name goes there). The "-legacy" suffix
+  # makes it easy to tell apart from a future modern Intel build.
+  artifactName: ${productName}-${version}-x64-legacy.${ext}
+
+dmg:
+  title: USAV Orders ${version} (Intel · legacy)
+  contents:
+    - x: 410
+      y: 150
+      type: link
+      path: /Applications
+    - x: 130
+      y: 150
+      type: file
+
+# Auto-update intentionally NOT published from this config.
+# `electron/main.js` disables electron-updater when running on Electron < 23
+# so this legacy build will not try to install an incompatible newer DMG.

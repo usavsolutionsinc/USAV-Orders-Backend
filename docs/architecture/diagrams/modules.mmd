@@ -1,36 +1,36 @@
 flowchart LR
+  app_api["app/api"]
+  click app_api "src/app/api/scan-tracking/route.ts" "Open src/app/api/scan-tracking/route.ts"
   hooks["hooks"]
   click hooks "src/hooks/useShippedTableData.ts" "Open src/hooks/useShippedTableData.ts"
   utils["utils"]
   click utils "src/utils/receiving-search-history.ts" "Open src/utils/receiving-search-history.ts"
-  app_api["app/api"]
-  click app_api "src/app/api/scan-tracking/route.ts" "Open src/app/api/scan-tracking/route.ts"
-  design_system["design-system"]
-  click design_system "src/design-system/index.ts" "Open src/design-system/index.ts"
   components_Icons_tsx["components/Icons.tsx"]
   click components_Icons_tsx "src/components/Icons.tsx" "Open src/components/Icons.tsx"
+  design_system["design-system"]
+  click design_system "src/design-system/index.ts" "Open src/design-system/index.ts"
   components_sidebar["components/sidebar"]
   click components_sidebar "src/components/sidebar/DeviceModeToggle.tsx" "Open src/components/sidebar/DeviceModeToggle.tsx"
   components_ui["components/ui"]
   click components_ui "src/components/ui/DeleteButton.tsx" "Open src/components/ui/DeleteButton.tsx"
+  lib_db_ts["lib/db.ts"]
+  click lib_db_ts "src/lib/db.ts" "Open src/lib/db.ts"
   components_layout["components/layout"]
   click components_layout "src/components/layout/OfflineBanner.tsx" "Open src/components/layout/OfflineBanner.tsx"
   components_shipped["components/shipped"]
   click components_shipped "src/components/shipped/DateGroupHeader.tsx" "Open src/components/shipped/DateGroupHeader.tsx"
-  components_station["components/station"]
-  click components_station "src/components/station/BarcodeScanner.tsx" "Open src/components/station/BarcodeScanner.tsx"
   lib_neon["lib/neon"]
   click lib_neon "src/lib/neon/serial-units-queries.ts" "Open src/lib/neon/serial-units-queries.ts"
-  lib_db_ts["lib/db.ts"]
-  click lib_db_ts "src/lib/db.ts" "Open src/lib/db.ts"
-  components_fba["components/fba"]
-  click components_fba "src/components/fba/FbaShippedTable.tsx" "Open src/components/fba/FbaShippedTable.tsx"
+  components_station["components/station"]
+  click components_station "src/components/station/BarcodeScanner.tsx" "Open src/components/station/BarcodeScanner.tsx"
   contexts["contexts"]
   click contexts "src/contexts/HeaderContext.tsx" "Open src/contexts/HeaderContext.tsx"
-  components_work_orders["components/work-orders"]
-  click components_work_orders "src/components/work-orders/WorkOrderInfoStrip.tsx" "Open src/components/work-orders/WorkOrderInfoStrip.tsx"
   components_admin["components/admin"]
   click components_admin "src/components/admin/AccessSidebarPanel.tsx" "Open src/components/admin/AccessSidebarPanel.tsx"
+  components_fba["components/fba"]
+  click components_fba "src/components/fba/FbaShippedTable.tsx" "Open src/components/fba/FbaShippedTable.tsx"
+  components_work_orders["components/work-orders"]
+  click components_work_orders "src/components/work-orders/WorkOrderInfoStrip.tsx" "Open src/components/work-orders/WorkOrderInfoStrip.tsx"
   components_mobile["components/mobile"]
   click components_mobile "src/components/mobile/ScanSurface.tsx" "Open src/components/mobile/ScanSurface.tsx"
   lib_realtime["lib/realtime"]
@@ -51,6 +51,8 @@ flowchart LR
   click components_TechDashboard_tsx "src/components/TechDashboard.tsx" "Open src/components/TechDashboard.tsx"
   components_unshipped["components/unshipped"]
   click components_unshipped "src/components/unshipped/UnshippedTable.tsx" "Open src/components/unshipped/UnshippedTable.tsx"
+  lib_auth["lib/auth"]
+  click lib_auth "src/lib/auth/permission-registry.ts" "Open src/lib/auth/permission-registry.ts"
   components_tech["components/tech"]
   click components_tech "src/components/tech/UpNextActionDock.tsx" "Open src/components/tech/UpNextActionDock.tsx"
   lib_jobs["lib/jobs"]
@@ -63,6 +65,8 @@ flowchart LR
   click lib_print "src/lib/print/printRepairLabel.ts" "Open src/lib/print/printRepairLabel.ts"
   app_fba["app/fba"]
   click app_fba "src/app/fba/page.tsx" "Open src/app/fba/page.tsx"
+  app_m["app/m"]
+  click app_m "src/app/m/enroll/[token]/page.tsx" "Open src/app/m/enroll/[token]/page.tsx"
   components_ShippedSidebar_tsx["components/ShippedSidebar.t…"]
   click components_ShippedSidebar_tsx "src/components/ShippedSidebar.tsx" "Open src/components/ShippedSidebar.tsx"
   components_quick_access["components/quick-access"]
@@ -71,8 +75,6 @@ flowchart LR
   click components_warehouse "src/components/warehouse/FillBar.tsx" "Open src/components/warehouse/FillBar.tsx"
   components_barcode["components/barcode"]
   click components_barcode "src/components/barcode/SkuInput.tsx" "Open src/components/barcode/SkuInput.tsx"
-  lib_auth["lib/auth"]
-  click lib_auth "src/lib/auth/dynamic-route-guard.ts" "Open src/lib/auth/dynamic-route-guard.ts"
   lib_ai["lib/ai"]
   click lib_ai "src/lib/ai/date-range.test.ts" "Open src/lib/ai/date-range.test.ts"
   lib_fba["lib/fba"]
@@ -89,8 +91,8 @@ flowchart LR
   click app_layout_tsx "src/app/layout.tsx" "Open src/app/layout.tsx"
   app_dashboard["app/dashboard"]
   click app_dashboard "src/app/dashboard/page.tsx" "Open src/app/dashboard/page.tsx"
-  app_m["app/m"]
-  click app_m "src/app/m/enroll/[token]/page.tsx" "Open src/app/m/enroll/[token]/page.tsx"
+  app_receiving["app/receiving"]
+  click app_receiving "src/app/receiving/page.tsx" "Open src/app/receiving/page.tsx"
   components_MultiSkuSnBarcode_tsx["components/MultiSkuSnBarcod…"]
   click components_MultiSkuSnBarcode_tsx "src/components/MultiSkuSnBarcode.tsx" "Open src/components/MultiSkuSnBarcode.tsx"
   components_UpNextOrder_tsx["components/UpNextOrder.tsx"]
@@ -115,24 +117,19 @@ flowchart LR
   click lib_ebay "src/lib/ebay/token-refresh.ts" "Open src/lib/ebay/token-refresh.ts"
   lib_feedback["lib/feedback"]
   click lib_feedback "src/lib/feedback/confirm.ts" "Open src/lib/feedback/confirm.ts"
-  lib_tech["lib/tech"]
-  click lib_tech "src/lib/tech/resolveStaffIdFromTechParam.ts" "Open src/lib/tech/resolveStaffIdFromTechParam.ts"
-  app_admin["app/admin"]
-  click app_admin "src/app/admin/page.tsx" "Open src/app/admin/page.tsx"
-  app_admin --> components_admin
-  app_admin --> lib_auth
-  app_admin --> lib_scan_resolver_ts
+  lib_inventory["lib/inventory"]
+  click lib_inventory "src/lib/inventory/internal-gtin.ts" "Open src/lib/inventory/internal-gtin.ts"
   app_api --> lib_ai
   app_api --> lib_auth
   app_api --> lib_db_ts
   app_api --> lib_ebay
   app_api --> lib_fba
+  app_api --> lib_inventory
   app_api --> lib_jobs
   app_api --> lib_neon
   app_api --> lib_realtime
   app_api --> lib_scan_resolver_ts
   app_api --> lib_shipping
-  app_api --> lib_tech
   app_api --> lib_tracking_format_ts
   app_api --> lib_zoho
   app_api --> utils
@@ -155,13 +152,22 @@ flowchart LR
   app_layout_tsx --> components_layout
   app_layout_tsx --> components_station
   app_layout_tsx --> contexts
+  app_m --> components_Icons_tsx
   app_m --> components_mobile
   app_m --> components_repair
+  app_m --> components_sidebar
   app_m --> components_station
   app_m --> contexts
   app_m --> hooks
   app_m --> lib_neon
   app_m --> utils
+  app_receiving --> components_Icons_tsx
+  app_receiving --> components_ReceivingDashboard_tsx
+  app_receiving --> components_mobile
+  app_receiving --> components_sidebar
+  app_receiving --> components_station
+  app_receiving --> contexts
+  app_receiving --> design_system
   components_DashboardSidebar_tsx --> components_Icons_tsx
   components_DashboardSidebar_tsx --> components_ShippedSidebar_tsx
   components_DashboardSidebar_tsx --> components_admin
@@ -237,6 +243,7 @@ flowchart LR
   components_admin --> components_shipped
   components_admin --> components_sidebar
   components_admin --> components_ui
+  components_admin --> contexts
   components_admin --> design_system
   components_admin --> hooks
   components_admin --> lib_ai
@@ -480,6 +487,7 @@ flowchart LR
   lib_ebay --> utils
   lib_fba --> lib_tracking_format_ts
   lib_feedback --> design_system
+  lib_inventory --> lib_db_ts
   lib_jobs --> lib_db_ts
   lib_jobs --> lib_ebay
   lib_jobs --> lib_neon
@@ -501,9 +509,6 @@ flowchart LR
   lib_shipping --> lib_realtime
   lib_shipping --> lib_scan_resolver_ts
   lib_staffCache_ts --> utils
-  lib_tech --> lib_realtime
-  lib_tech --> lib_tracking_format_ts
-  lib_tech --> utils
   lib_tracking_format_ts --> utils
   lib_zoho --> lib_db_ts
   lib_zoho --> utils
@@ -514,4 +519,4 @@ flowchart LR
   utils --> lib_neon
   utils --> lib_scan_resolver_ts
   utils --> lib_tracking_format_ts
-  %% truncated: 140 more groups not shown
+  %% truncated: 153 more groups not shown

@@ -24,16 +24,17 @@ asarUnpack:
   - "node_modules/express/**/*"
 
 # ---------------------------------------------------------------------------
-# macOS
+# macOS — Apple Silicon only.
+# The Intel (x64) DMG is built separately by `electron-builder.mac-intel-legacy.yml`
+# using Electron 22 so it runs on macOS 10.13–10.15 (Electron 41 requires 11+).
 # ---------------------------------------------------------------------------
 mac:
   category: public.app-category.business
   # icon: public/icon.icns   # TODO: add 512×512 .icns
-  # Build universal binary — works on both Intel and Apple Silicon
+  minimumSystemVersion: '11.0.0'
   target:
     - target: dmg
       arch:
-        - x64
         - arm64
 
 dmg:

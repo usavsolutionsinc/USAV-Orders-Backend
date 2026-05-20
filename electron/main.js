@@ -310,8 +310,15 @@ app.on('window-all-closed', () => {
 // ---------------------------------------------------------------------------
 // Auto-updater — checks GitHub Releases silently on launch.
 // Only runs in a packaged build (not dev mode) to avoid noisy errors.
+//
+// Skipped on legacy Electron builds (the macOS 10.x Intel installer ships on
+// Electron 22). The published auto-update target is built with current
+// Electron and won't launch on macOS 10.x, so pulling it would brick the app.
 // ---------------------------------------------------------------------------
-if (!isDev) {
+const electronMajor = parseInt((process.versions.electron || '0').split('.')[0], 10) || 0;
+const isLegacyElectron = electronMajor > 0 && electronMajor < 23;
+
+if (!isDev && !isLegacyElectron) {
   try {
     const { autoUpdater } = require('electron-updater');
 

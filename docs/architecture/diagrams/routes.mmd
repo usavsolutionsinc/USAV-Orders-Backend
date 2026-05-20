@@ -10,6 +10,15 @@ flowchart LR
   01__gtin__21__serial(["[serial]"])
   01__gtin__21 --> 01__gtin__21__serial
   click 01__gtin__21__serial "src/app/01/[gtin]/21/[serial]/page.tsx" "page: src/app/01/[gtin]/21/[serial]/page.tsx"
+  414["414"]
+  root --> 414
+  414__gln["[gln]"]
+  414 --> 414__gln
+  414__gln__254["254"]
+  414__gln --> 414__gln__254
+  414__gln__254__code(["[code]"])
+  414__gln__254 --> 414__gln__254__code
+  click 414__gln__254__code "src/app/414/[gln]/254/[code]/page.tsx" "page: src/app/414/[gln]/254/[code]/page.tsx"
   admin(["admin"])
   root --> admin
   click admin "src/app/admin/page.tsx" "page: src/app/admin/page.tsx"
@@ -112,9 +121,28 @@ flowchart LR
   api_admin_google_photos_status["status"]
   api_admin_google_photos --> api_admin_google_photos_status
   click api_admin_google_photos_status "src/app/api/admin/google-photos/status/route.ts" "route: src/app/api/admin/google-photos/status/route.ts"
+  api_admin_integrations["integrations"]
+  api_admin --> api_admin_integrations
+  api_admin_integrations_delete["delete"]
+  api_admin_integrations --> api_admin_integrations_delete
+  click api_admin_integrations_delete "src/app/api/admin/integrations/delete/route.ts" "route: src/app/api/admin/integrations/delete/route.ts"
+  api_admin_integrations_list["list"]
+  api_admin_integrations --> api_admin_integrations_list
+  click api_admin_integrations_list "src/app/api/admin/integrations/list/route.ts" "route: src/app/api/admin/integrations/list/route.ts"
+  api_admin_integrations_upsert["upsert"]
+  api_admin_integrations --> api_admin_integrations_upsert
+  click api_admin_integrations_upsert "src/app/api/admin/integrations/upsert/route.ts" "route: src/app/api/admin/integrations/upsert/route.ts"
   api_admin_logs["logs"]
   api_admin --> api_admin_logs
   click api_admin_logs "src/app/api/admin/logs/route.ts" "route: src/app/api/admin/logs/route.ts"
+  api_admin_org["org"]
+  api_admin --> api_admin_org
+  api_admin_org_delete["delete"]
+  api_admin_org --> api_admin_org_delete
+  click api_admin_org_delete "src/app/api/admin/org/delete/route.ts" "route: src/app/api/admin/org/delete/route.ts"
+  api_admin_org_export["export"]
+  api_admin_org --> api_admin_org_export
+  click api_admin_org_export "src/app/api/admin/org/export/route.ts" "route: src/app/api/admin/org/export/route.ts"
   api_admin_qstash_status["qstash-status"]
   api_admin --> api_admin_qstash_status
   click api_admin_qstash_status "src/app/api/admin/qstash-status/route.ts" "route: src/app/api/admin/qstash-status/route.ts"
@@ -169,34 +197,12 @@ flowchart LR
   api_admin_staff__id__set_pin["set-pin"]
   api_admin_staff__id --> api_admin_staff__id__set_pin
   click api_admin_staff__id__set_pin "src/app/api/admin/staff/[id]/set-pin/route.ts" "route: src/app/api/admin/staff/[id]/set-pin/route.ts"
-  api_admin_staff_reorder["reorder"]
-  api_admin_staff --> api_admin_staff_reorder
-  click api_admin_staff_reorder "src/app/api/admin/staff/reorder/route.ts" "route: src/app/api/admin/staff/reorder/route.ts"
-  api_ai["ai"]
-  api --> api_ai
-  api_ai_chat_sessions["chat-sessions"]
-  api_ai --> api_ai_chat_sessions
-  click api_ai_chat_sessions "src/app/api/ai/chat-sessions/route.ts" "route: src/app/api/ai/chat-sessions/route.ts"
-  api_ai_chat_sessions__sessionId["[sessionId]"]
-  api_ai_chat_sessions --> api_ai_chat_sessions__sessionId
-  api_ai_chat_sessions__sessionId__messages["messages"]
-  api_ai_chat_sessions__sessionId --> api_ai_chat_sessions__sessionId__messages
-  click api_ai_chat_sessions__sessionId__messages "src/app/api/ai/chat-sessions/[sessionId]/messages/route.ts" "route: src/app/api/ai/chat-sessions/[sessionId]/messages/route.ts"
-  api_ai_health["health"]
-  api_ai --> api_ai_health
-  click api_ai_health "src/app/api/ai/health/route.ts" "route: src/app/api/ai/health/route.ts"
-  api_ai_openclaw_chat["openclaw-chat"]
-  api_ai --> api_ai_openclaw_chat
-  click api_ai_openclaw_chat "src/app/api/ai/openclaw-chat/route.ts" "route: src/app/api/ai/openclaw-chat/route.ts"
-  api_ai_openclaw_health["openclaw-health"]
-  api_ai --> api_ai_openclaw_health
-  click api_ai_openclaw_health "src/app/api/ai/openclaw-health/route.ts" "route: src/app/api/ai/openclaw-health/route.ts"
-  api_ai_openclaw_session["openclaw-session"]
-  api_ai --> api_ai_openclaw_session
-  click api_ai_openclaw_session "src/app/api/ai/openclaw-session/route.ts" "route: src/app/api/ai/openclaw-session/route.ts"
-  api_ai_search["search"]
-  api_ai --> api_ai_search
-  click api_ai_search "src/app/api/ai/search/route.ts" "route: src/app/api/ai/search/route.ts"
-  api_ai_tunnel_session["tunnel-session"]
-  api_ai --> api_ai_tunnel_session
-  click api_ai_tunnel_session "src/app/api/ai/tunnel-session/route.ts" "route: src/app/api/ai/tunnel-session/route.ts"
+  api_admin_staff_deactivate["deactivate"]
+  api_admin_staff --> api_admin_staff_deactivate
+  click api_admin_staff_deactivate "src/app/api/admin/staff/deactivate/route.ts" "route: src/app/api/admin/staff/deactivate/route.ts"
+  api_admin_staff_invite["invite"]
+  api_admin_staff --> api_admin_staff_invite
+  click api_admin_staff_invite "src/app/api/admin/staff/invite/route.ts" "route: src/app/api/admin/staff/invite/route.ts"
+  api_admin_staff_list["list"]
+  api_admin_staff --> api_admin_staff_list
+  click api_admin_staff_list "src/app/api/admin/staff/list/route.ts" "route: src/app/api/admin/staff/list/route.ts"
