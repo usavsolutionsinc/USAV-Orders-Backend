@@ -156,6 +156,29 @@ export const SOURCE_PLATFORM_LABELS: Record<string, string> = {
   other: 'Other',
 };
 
+/**
+ * Detect a source_platform value from a listing URL's hostname.
+ * Returns null when the URL is empty/unparseable so callers can leave the
+ * user's prior selection in place. Returns 'other' for any valid URL whose
+ * host doesn't match a known marketplace.
+ */
+export function detectPlatformFromUrl(url: string | null | undefined): string | null {
+  const raw = String(url || '').trim();
+  if (!raw) return null;
+  let host: string;
+  try {
+    host = new URL(raw.includes('://') ? raw : `https://${raw}`).hostname.toLowerCase();
+  } catch {
+    return null;
+  }
+  if (/(^|\.)ebay\.[a-z.]+$/.test(host)) return 'ebay';
+  if (host.includes('shopgoodwill')) return 'goodwill';
+  if (/(^|\.)amazon\.[a-z.]+$/.test(host)) return 'amazon';
+  if (host.includes('aliexpress')) return 'aliexpress';
+  if (/(^|\.)walmart\.[a-z.]+$/.test(host)) return 'walmart';
+  return 'other';
+}
+
 // ── Carton helpers ──────────────────────────────────────────────────────────
 
 export function parseReceivingPackage(raw: unknown): ReceivingPackageMeta | null {

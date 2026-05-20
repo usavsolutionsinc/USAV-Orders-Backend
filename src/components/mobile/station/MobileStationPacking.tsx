@@ -35,6 +35,7 @@ import {
 import { useMobilePackingLookup } from '@/hooks/station/useMobilePackingLookup';
 import { useAblyClient } from '@/contexts/AblyContext';
 import { NetworkChip } from '@/components/mobile/NetworkChip';
+import { MobileSettingsButton } from '@/components/mobile/MobileSettingsButton';
 
 // Re-export types for consumers (e.g. MobilePackingConfirmCard)
 export type { ActivePackingOrder, ActiveFbaScan, CapturedPhoto } from '@/hooks/station/packingWizardReducer';
@@ -78,6 +79,12 @@ export function MobileStationPacking({
   shellClassName,
 }: MobileStationPackingProps) {
   const [state, dispatch] = useReducer(wizardReducer, initialWizardState);
+  // Snapshot of latest wizard state for use inside the Ably subscription
+  // callback, which would otherwise close over stale state.
+  const stateRef = useRef(state);
+  useEffect(() => { stateRef.current = state; }, [state]);
+  // Transient toast for mid-flow scan acknowledgments. `null` when idle.
+  const [scanToast, setScanToast] = useState<{ id: number; message: string } | null>(null);
   const knownPreviewUrlsRef = useRef<Set<string>>(new Set());
   const [inputValue, setInputValue] = useState('');
   const [scanSheetOpen, setScanSheetOpen] = useState(false);
@@ -222,6 +229,27 @@ export function MobileStationPacking({
         listener = (msg: any) => {
           const data = msg?.data || {};
           if (!data || data.type !== 'packer.scan_ready') return;
+
+          // Mid-flow: the packer is capturing/reviewing photos. We never
+          // eject them — the reducer would no-op anyway. If the new scan is
+          // for the SAME orderId, treat it as additive (photos stay grouped
+          // under that order — no UI change). Different orderId gets a
+          // non-blocking toast so the desktop scanner feels acknowledged.
+          const cur = stateRef.current;
+          const inFlow = cur.step === 'photos' || cur.step === 'review';
+          if (inFlow) {
+            const incomingOrderId = data.order?.orderId ?? null;
+            const currentOrderId = cur.resolvedOrder?.orderId ?? null;
+            const sameOrder = !!incomingOrderId && incomingOrderId === currentOrderId;
+            if (!sameOrder) {
+              setScanToast({
+                id: Date.now(),
+                message: 'New order scanned — finish this one first',
+              });
+            }
+            return;
+          }
+
           dispatch({
             type: 'REMOTE_SCAN_READY',
             order: data.order ?? null,
@@ -245,6 +273,13 @@ export function MobileStationPacking({
       } catch {}
     };
   }, [staffId, getAblyClient]);
+
+  // ── Auto-dismiss mid-flow scan toast after ~3.2s ──────────────────────────
+  useEffect(() => {
+    if (!scanToast) return;
+    const t = setTimeout(() => setScanToast(null), 3200);
+    return () => clearTimeout(t);
+  }, [scanToast]);
 
   // ── Revoke stale preview URLs ──────────────────────────────────────────────
   // After every render, any object URL that was known previously but is no
@@ -332,6 +367,32 @@ export function MobileStationPacking({
     }
   }, [state, userId, onComplete]);
 
+  // ── Auto-finalize once every photo is uploaded ────────────────────────────
+  // Lives at the parent (not Review) so the completion POST fires even if
+  // the packer back-nav's to the photo step before uploads finish. Keyed by
+  // packerLogId in a ref Set so it can only fire once per session — manual
+  // "Done" still works (server-side dedup at /api/packing-logs/update keeps
+  // duplicate inserts and inventory ledger writes from doubling up).
+  const finalizedSessionsRef = useRef<Set<number>>(new Set());
+  useEffect(() => {
+    const pid = state.packerLogId;
+    if (!pid) return;
+    if (state.isLoading) return;
+    if (state.step === 'success' || state.step === 'scan') return;
+    if (finalizedSessionsRef.current.has(pid)) return;
+    if (state.capturedPhotos.length === 0) return;
+    const allUploaded = state.capturedPhotos.every((p) => p.uploadStatus === 'uploaded');
+    if (!allUploaded) return;
+    finalizedSessionsRef.current.add(pid);
+    void handleComplete();
+  }, [
+    state.packerLogId,
+    state.capturedPhotos,
+    state.isLoading,
+    state.step,
+    handleComplete,
+  ]);
+
   // ── Success auto-reset ─────────────────────────────────────────────────────
 
   const handleSuccessFinished = useCallback(() => {
@@ -380,6 +441,7 @@ export function MobileStationPacking({
             trailing: (
               <div className="flex items-center gap-2">
                 <NetworkChip compact />
+                <MobileSettingsButton />
                 <span className="text-[11px] font-black text-gray-500 tabular-nums">
                   {todayCount}/{goal}
                 </span>
@@ -620,6 +682,35 @@ export function MobileStationPacking({
         userId={userId}
         userName={userName}
       />
+
+      {/* ── Mid-flow scan toast ── pinned just above safe-area-bottom so the
+          packer sees the desktop scanner was acknowledged without being
+          yanked out of the current order. */}
+      <AnimatePresence>
+        {scanToast && (
+          <motion.div
+            key={scanToast.id}
+            initial={{ opacity: 0, y: 24 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 16 }}
+            transition={mobileTween}
+            className="fixed inset-x-4 z-[150] flex items-center gap-2 rounded-2xl bg-gray-900 px-4 py-3 text-white shadow-xl"
+            style={{ bottom: 'calc(env(safe-area-inset-bottom, 0px) + 96px)' }}
+            role="status"
+          >
+            <Barcode className="h-4 w-4 flex-shrink-0 text-white/80" />
+            <p className="text-[12px] font-bold flex-1">{scanToast.message}</p>
+            <button
+              type="button"
+              onClick={() => setScanToast(null)}
+              className="text-[11px] font-black uppercase tracking-wider text-white/70 active:text-white"
+              aria-label="Dismiss"
+            >
+              Dismiss
+            </button>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </>
   );
 }

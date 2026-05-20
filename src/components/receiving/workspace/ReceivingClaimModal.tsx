@@ -61,8 +61,14 @@ export function ReceivingClaimModal({ open, row, onClose, onTicketCreated }: Pro
         toast.error(data?.error || 'Could not file the claim');
         return;
       }
-      toast.success(`Claim ${data.ticketNumber} created`);
-      onTicketCreated(String(data.ticketNumber));
+      // GAS bridge can't echo the ticket # back — treat null as a soft
+      // success and ask the operator to paste it back manually.
+      if (data.ticketNumber) {
+        toast.success(`Claim ${data.ticketNumber} created`);
+        onTicketCreated(String(data.ticketNumber));
+      } else {
+        toast.success('Claim email sent — paste the Zendesk # back when assigned');
+      }
       onClose();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Network error');

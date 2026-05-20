@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import pool from '@/lib/db';
+import { withAuth } from '@/lib/auth/withAuth';
 
 /**
  * GET /api/assignments/sku-search?q=<term>&staff_id=<id>&limit=50
@@ -16,7 +17,7 @@ import pool from '@/lib/db';
  * This intentionally never returns all unassigned rows without a query,
  * preventing the "ping all 500" problem.
  */
-export async function GET(req: NextRequest) {
+async function handleGet(req: NextRequest) {
   try {
     const { searchParams } = new URL(req.url);
     const q           = String(searchParams.get('q') || '').trim();
@@ -124,7 +125,7 @@ export async function GET(req: NextRequest) {
  *   notes        : string        (optional)
  *   deadline_at  : string        (optional ISO date)
  */
-export async function POST(req: NextRequest) {
+async function handlePost(req: NextRequest) {
   try {
     const body        = await req.json();
     const skuStockId  = Number(body?.sku_stock_id);
@@ -217,3 +218,8 @@ export async function POST(req: NextRequest) {
     );
   }
 }
+
+// Phase 2e: both GET and POST require work_orders.view — this is the SKU
+// search backing the work-assignment workflow.
+export const GET = withAuth(handleGet, { permission: 'work_orders.view' });
+export const POST = withAuth(handlePost, { permission: 'work_orders.view' });

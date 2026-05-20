@@ -1,5 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import pool from '@/lib/db';
+import { withAuth } from '@/lib/auth/withAuth';
+
+function idFromUrl(req: NextRequest): number | null {
+  const parts = req.nextUrl.pathname.split('/').filter(Boolean);
+  const n = Number(parts[parts.length - 1]);
+  return Number.isFinite(n) && n > 0 ? n : null;
+}
 
 const FEATURE_TYPES = ['feature', 'bug_fix'] as const;
 const FEATURE_STATUSES = ['backlog', 'in_progress', 'done'] as const;
@@ -40,15 +47,10 @@ function mapRow(row: any) {
   };
 }
 
-export async function GET(
-  _req: NextRequest,
-  { params }: { params: Promise<{ id: string }> },
-) {
+async function handleGet(req: NextRequest) {
   try {
-    const { id: rawId } = await params;
-    const id = Number(rawId);
-
-    if (!Number.isFinite(id) || id <= 0) {
+    const id = idFromUrl(req);
+    if (id == null) {
       return NextResponse.json({ error: 'Invalid feature id' }, { status: 400 });
     }
 
@@ -67,18 +69,13 @@ export async function GET(
   }
 }
 
-export async function PATCH(
-  req: NextRequest,
-  { params }: { params: Promise<{ id: string }> },
-) {
+async function handlePatch(req: NextRequest) {
   try {
-    const { id: rawId } = await params;
-    const id = Number(rawId);
-    const body = await req.json();
-
-    if (!Number.isFinite(id) || id <= 0) {
+    const id = idFromUrl(req);
+    if (id == null) {
       return NextResponse.json({ error: 'Invalid feature id' }, { status: 400 });
     }
+    const body = await req.json();
 
     const updateParts: string[] = [];
     const values: Array<string | number | boolean | null> = [];
@@ -194,15 +191,10 @@ export async function PATCH(
   }
 }
 
-export async function DELETE(
-  _req: NextRequest,
-  { params }: { params: Promise<{ id: string }> },
-) {
+async function handleDelete(req: NextRequest) {
   try {
-    const { id: rawId } = await params;
-    const id = Number(rawId);
-
-    if (!Number.isFinite(id) || id <= 0) {
+    const id = idFromUrl(req);
+    if (id == null) {
       return NextResponse.json({ error: 'Invalid feature id' }, { status: 400 });
     }
 
@@ -220,3 +212,8 @@ export async function DELETE(
     );
   }
 }
+
+// Phase 2d: feature board mutations require admin.manage_features.
+export const GET = withAuth(handleGet, { permission: 'admin.view' });
+export const PATCH = withAuth(handlePatch, { permission: 'admin.manage_features' });
+export const DELETE = withAuth(handleDelete, { permission: 'admin.manage_features' });

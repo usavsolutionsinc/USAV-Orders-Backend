@@ -25,6 +25,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useFeedback } from '@/hooks/useFeedback';
 import { useBarcodeScanner } from '@/hooks/useBarcodeScanner';
 import { NetworkChip } from '@/components/mobile/NetworkChip';
+import { MobileSettingsButton } from '@/components/mobile/MobileSettingsButton';
 import { ProgressDots } from '@/components/mobile/ProgressDots';
 import { ConfirmDock } from '@/components/mobile/ConfirmDock';
 import { ScanSurface } from '@/components/mobile/ScanSurface';
@@ -302,6 +303,7 @@ function PickerInner() {
           <div className="flex items-center gap-2 shrink-0">
             <ProgressDots done={doneCount} total={totalTasks} />
             <NetworkChip compact />
+            <MobileSettingsButton />
           </div>
         </div>
       </header>

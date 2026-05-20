@@ -18,7 +18,7 @@
 import { cookies } from 'next/headers';
 import pool from '@/lib/db';
 import { loadSession, SESSION_COOKIE_NAME, type SessionRow } from './session';
-import { ALL_PERMISSIONS, type PermissionString, type StaffRole } from './permissions-shared';
+import { computeEffectivePermissions, type PermissionString, type StaffRole } from './permissions-shared';
 import { loadRolesForStaff, type RoleRow } from './role-store';
 
 export interface CurrentUser {
@@ -70,23 +70,9 @@ function mergePermissions(
   added: ReadonlyArray<string>,
   removed: ReadonlyArray<string>,
 ): Set<PermissionString> {
-  // Admin role short-circuits — mirrors Discord's Administrator bit.
-  if (roles.some((r) => r.key === 'admin')) {
-    return new Set(ALL_PERMISSIONS);
-  }
-  const set = new Set<PermissionString>();
-  for (const r of roles) {
-    for (const p of r.permissions) {
-      if (ALL_PERMISSIONS.has(p as PermissionString)) set.add(p as PermissionString);
-    }
-  }
-  for (const p of added) {
-    if (ALL_PERMISSIONS.has(p as PermissionString)) set.add(p as PermissionString);
-  }
-  for (const p of removed) {
-    set.delete(p as PermissionString);
-  }
-  return set;
+  // Single pure resolver lives in permissions-shared.ts so the admin UI,
+  // server resolvers, and unit tests all agree on the merge order.
+  return computeEffectivePermissions(roles, added, removed);
 }
 
 async function buildCurrentUser(session: SessionRow | null): Promise<CurrentUser | null> {

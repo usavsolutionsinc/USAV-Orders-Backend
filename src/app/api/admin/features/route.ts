@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import pool from '@/lib/db';
+import { withAuth } from '@/lib/auth/withAuth';
 
 const FEATURE_TYPES = ['feature', 'bug_fix'] as const;
 const FEATURE_STATUSES = ['backlog', 'in_progress', 'done'] as const;
@@ -48,7 +49,7 @@ function mapRow(row: any) {
   };
 }
 
-export async function GET(req: NextRequest) {
+async function handleGet(req: NextRequest) {
   try {
     const { searchParams } = new URL(req.url);
     const q = String(searchParams.get('q') || '').trim();
@@ -127,7 +128,7 @@ export async function GET(req: NextRequest) {
   }
 }
 
-export async function POST(req: NextRequest) {
+async function handlePost(req: NextRequest) {
   try {
     const body = await req.json();
     const title = String(body?.title || '').trim();
@@ -203,3 +204,8 @@ export async function POST(req: NextRequest) {
     );
   }
 }
+
+// Phase 2d: GET requires admin.view (any admin can read the feature board);
+// POST requires admin.manage_features (only feature admins can create rows).
+export const GET = withAuth(handleGet, { permission: 'admin.view' });
+export const POST = withAuth(handlePost, { permission: 'admin.manage_features' });

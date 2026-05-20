@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { upsertProductManual } from '@/lib/product-manuals';
 import { invalidateCacheTags } from '@/lib/cache/upstash-cache';
+import { withAuth } from '@/lib/auth/withAuth';
 
-export async function POST(request: NextRequest) {
+async function handlePost(request: NextRequest) {
   try {
     const body = await request.json();
 
@@ -32,3 +33,5 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ success: false, error: message }, { status });
   }
 }
+
+export const POST = withAuth(handlePost, { permission: 'product_manuals.manage' });

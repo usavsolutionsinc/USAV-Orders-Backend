@@ -63,22 +63,29 @@ export const POST = withAuth(async (req: NextRequest) => {
     const lineId = body.lineId != null ? Number(body.lineId) : null;
     const reason = String(body.reason ?? '').trim();
 
-    // Load carton + (optional) line for ticket context.
+    // Load carton + (optional) line for ticket context. zoho_purchaseorder_id
+    // / _number live directly on receiving_lines (preferred — matches the
+    // specific line being claimed against) with a fallback to the carton-level
+    // value on `receiving` for carton-wide claims.
     const recvResult = await pool.query(
       `SELECT r.id,
-              COALESCE(s.tracking_number, r.tracking_number) AS tracking_number,
-              po.zoho_purchaseorder_number,
-              po.zoho_purchaseorder_id
+              r.source_platform,
+              s.tracking_number_raw AS tracking_number,
+              COALESCE(rl.zoho_purchaseorder_number, r.zoho_purchaseorder_number) AS zoho_purchaseorder_number,
+              COALESCE(rl.zoho_purchaseorder_id, r.zoho_purchaseorder_id) AS zoho_purchaseorder_id
        FROM receiving r
        LEFT JOIN shipping_tracking_numbers s ON s.id = r.shipment_id
-       LEFT JOIN receiving_lines rl ON rl.receiving_id = r.id
-       LEFT JOIN purchase_orders po ON po.zoho_purchaseorder_id = rl.zoho_purchaseorder_id
+       LEFT JOIN receiving_lines rl
+              ON rl.receiving_id = r.id
+             AND ($2::int IS NULL OR rl.id = $2)
        WHERE r.id = $1
+       ORDER BY rl.id NULLS LAST
        LIMIT 1`,
-      [receivingId],
+      [receivingId, lineId],
     );
     const carton = recvResult.rows[0] as {
       id: number;
+      source_platform: string | null;
       tracking_number: string | null;
       zoho_purchaseorder_number: string | null;
       zoho_purchaseorder_id: string | null;
@@ -122,7 +129,8 @@ export const POST = withAuth(async (req: NextRequest) => {
     const poRef = carton.zoho_purchaseorder_number || carton.zoho_purchaseorder_id || `#${receivingId}`;
     const trackingRef = carton.tracking_number || 'n/a';
 
-    const subject = `Receiving Claim — ${CLAIM_TYPE_LABEL[claimType]} — PO ${poRef}`;
+    const platformTag = (carton.source_platform || '').trim().toUpperCase() || 'USAV';
+    const subject = `[${platformTag}] Receiving Claim — ${CLAIM_TYPE_LABEL[claimType]} — PO ${poRef}`;
     const descriptionLines: string[] = [
       `Type: ${CLAIM_TYPE_LABEL[claimType]}`,
       `Severity: ${SEVERITY_LABEL[severity]}`,
@@ -132,7 +140,7 @@ export const POST = withAuth(async (req: NextRequest) => {
       '',
     ];
     if (reason) {
-      descriptionLines.push('Operator notes:', reason, '');
+      descriptionLines.push('Receiving Notes:', reason, '');
     }
     if (photoUrls.length > 0) {
       descriptionLines.push(`Photos attached (${photoUrls.length}):`);
@@ -186,16 +194,15 @@ export const POST = withAuth(async (req: NextRequest) => {
           draftBody: description,
         }, { status: 502 });
       }
+      // The GAS bridge cannot reliably return a Zendesk ticket number (the
+      // Apps Script side mails the ticket and exits without parsing Zendesk's
+      // response). Treat ok:true as success regardless — the operator can
+      // paste the ticket # back manually via the Support FlowSection.
       const raw =
         result.ticketNumber ?? result.ticket_number ?? result.ticketId ?? result.ticket_id ?? result.id;
-      if (raw == null) {
-        return NextResponse.json({
-          success: false,
-          error: 'Bridge returned no ticket number',
-          draftBody: description,
-        }, { status: 502 });
-      }
-      ticketNumber = String(raw).startsWith('#') ? String(raw) : `#${raw}`;
+      ticketNumber = raw == null
+        ? null
+        : (String(raw).startsWith('#') ? String(raw) : `#${raw}`);
     } catch (err: unknown) {
       return NextResponse.json({
         success: false,

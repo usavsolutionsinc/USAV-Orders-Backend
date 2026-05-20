@@ -3,6 +3,7 @@ import { sheets as googleSheets } from '@googleapis/sheets';
 import { getGoogleAuth } from '@/lib/google-auth';
 import pool from '@/lib/db';
 import { normalizeTrackingKey18 } from '@/lib/tracking-format';
+import { withAuth } from '@/lib/auth/withAuth';
 import { resolveShipmentId } from '@/lib/shipping/resolve';
 import { formatPSTTimestamp, normalizePSTTimestamp } from '@/utils/date';
 import {
@@ -34,7 +35,7 @@ type SyncResult = {
     error?: string;
 };
 
-export async function POST(req: NextRequest) {
+async function handlePost(req: NextRequest) {
     try {
         const body = await req.json();
         const { action, spreadsheetId } = body;
@@ -103,6 +104,8 @@ export async function POST(req: NextRequest) {
         }, { status: 500 });
     }
 }
+
+export const POST = withAuth(handlePost, { permission: 'integrations.sheets' });
 
 async function syncShippedSheet(params: {
     client: any;

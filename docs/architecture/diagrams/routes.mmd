@@ -85,6 +85,12 @@ flowchart LR
   api_admin_google_photos_backup["backup"]
   api_admin_google_photos --> api_admin_google_photos_backup
   click api_admin_google_photos_backup "src/app/api/admin/google-photos/backup/route.ts" "route: src/app/api/admin/google-photos/backup/route.ts"
+  api_admin_google_photos_backup_stream["backup-stream"]
+  api_admin_google_photos --> api_admin_google_photos_backup_stream
+  click api_admin_google_photos_backup_stream "src/app/api/admin/google-photos/backup-stream/route.ts" "route: src/app/api/admin/google-photos/backup-stream/route.ts"
+  api_admin_google_photos_cleanup["cleanup"]
+  api_admin_google_photos --> api_admin_google_photos_cleanup
+  click api_admin_google_photos_cleanup "src/app/api/admin/google-photos/cleanup/route.ts" "route: src/app/api/admin/google-photos/cleanup/route.ts"
   api_admin_google_photos_connect["connect"]
   api_admin_google_photos --> api_admin_google_photos_connect
   click api_admin_google_photos_connect "src/app/api/admin/google-photos/connect/route.ts" "route: src/app/api/admin/google-photos/connect/route.ts"
@@ -94,6 +100,15 @@ flowchart LR
   api_admin_google_photos_oauth_callback["oauth-callback"]
   api_admin_google_photos --> api_admin_google_photos_oauth_callback
   click api_admin_google_photos_oauth_callback "src/app/api/admin/google-photos/oauth-callback/route.ts" "route: src/app/api/admin/google-photos/oauth-callback/route.ts"
+  api_admin_google_photos_pending["pending"]
+  api_admin_google_photos --> api_admin_google_photos_pending
+  click api_admin_google_photos_pending "src/app/api/admin/google-photos/pending/route.ts" "route: src/app/api/admin/google-photos/pending/route.ts"
+  api_admin_google_photos_runs["runs"]
+  api_admin_google_photos --> api_admin_google_photos_runs
+  click api_admin_google_photos_runs "src/app/api/admin/google-photos/runs/route.ts" "route: src/app/api/admin/google-photos/runs/route.ts"
+  api_admin_google_photos_settings["settings"]
+  api_admin_google_photos --> api_admin_google_photos_settings
+  click api_admin_google_photos_settings "src/app/api/admin/google-photos/settings/route.ts" "route: src/app/api/admin/google-photos/settings/route.ts"
   api_admin_google_photos_status["status"]
   api_admin_google_photos --> api_admin_google_photos_status
   click api_admin_google_photos_status "src/app/api/admin/google-photos/status/route.ts" "route: src/app/api/admin/google-photos/status/route.ts"
@@ -185,20 +200,3 @@ flowchart LR
   api_ai_tunnel_session["tunnel-session"]
   api_ai --> api_ai_tunnel_session
   click api_ai_tunnel_session "src/app/api/ai/tunnel-session/route.ts" "route: src/app/api/ai/tunnel-session/route.ts"
-  api_architecture["architecture"]
-  api --> api_architecture
-  click api_architecture "src/app/api/architecture/route.ts" "route: src/app/api/architecture/route.ts"
-  api_assignments["assignments"]
-  api --> api_assignments
-  click api_assignments "src/app/api/assignments/route.ts" "route: src/app/api/assignments/route.ts"
-  api_assignments_next["next"]
-  api_assignments --> api_assignments_next
-  click api_assignments_next "src/app/api/assignments/next/route.ts" "route: src/app/api/assignments/next/route.ts"
-  api_assignments_sku_search["sku-search"]
-  api_assignments --> api_assignments_sku_search
-  click api_assignments_sku_search "src/app/api/assignments/sku-search/route.ts" "route: src/app/api/assignments/sku-search/route.ts"
-  api_audit_log["audit-log"]
-  api --> api_audit_log
-  api_audit_log_packing["packing"]
-  api_audit_log --> api_audit_log_packing
-  click api_audit_log_packing "src/app/api/audit-log/packing/route.ts" "route: src/app/api/audit-log/packing/route.ts"

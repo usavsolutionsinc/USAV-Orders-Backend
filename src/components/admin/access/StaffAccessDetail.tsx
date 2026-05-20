@@ -18,12 +18,34 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import QRCode from 'react-qr-code';
 import {
   ALL_ROLES,
-  canonicalRole,
-  permissionSource,
-  permissionsSetForRole,
+  isAdminRoleKey,
   type PermissionString,
   type StaffRole,
 } from '@/lib/auth/permissions-shared';
+
+/**
+ * Classify a permission for the admin badge column: where does the current
+ * effective state come from?
+ *   - 'role'        : granted by an assigned role
+ *   - 'revoked'     : granted by role but explicitly removed via override
+ *   - 'granted'     : not in any role; granted via override
+ *   - 'role-denies' : not in any role and no override (effective: off)
+ *
+ * Computed against the DB-sourced role permission set (passed in) — not the
+ * static seed matrix. This is the replacement for the old static-matrix
+ * `permissionSource()` helper.
+ */
+type PermissionSource = 'role' | 'granted' | 'revoked' | 'role-denies';
+function classifyPermissionSource(
+  inRole: boolean,
+  isAdded: boolean,
+  isRemoved: boolean,
+): PermissionSource {
+  if (inRole && isRemoved) return 'revoked';
+  if (inRole) return 'role';
+  if (isAdded) return 'granted';
+  return 'role-denies';
+}
 import { APP_SIDEBAR_NAV } from '@/lib/sidebar-navigation';
 import { getStaffThemeById, stationThemeColors } from '@/utils/staff-colors';
 import { PageAccessSwitch } from './PageAccessSwitch';
@@ -256,9 +278,19 @@ export function StaffAccessDetail({ staffId }: StaffAccessDetailProps) {
   const theme = getStaffThemeById(staff.id);
   const sc = stationThemeColors[theme];
   const role = staff.role as StaffRole;
-  const isAdmin = canonicalRole(role) === 'admin';
+  // Admin short-circuit covers both the legacy single-role column AND any
+  // assigned role with key='admin' (multi-role staff).
+  const isAdmin = isAdminRoleKey(role) || envelope.roles.some((r) => isAdminRoleKey(r.key));
   const added = staff.permissions_added ?? [];
   const removed = staff.permissions_removed ?? [];
+
+  // Union of every assigned role's DB permissions. This replaces the previous
+  // static-matrix `permissionsSetForRole(role)` lookup — the source of truth
+  // is the `roles.permissions` column, not the seed in code.
+  const roleDbPermissions = new Set<string>();
+  for (const r of envelope.roles) {
+    for (const p of r.permissions) roleDbPermissions.add(p);
+  }
 
   const pagePerms = APP_SIDEBAR_NAV.filter((item) => item.requires);
 
@@ -407,11 +439,11 @@ export function StaffAccessDetail({ staffId }: StaffAccessDetailProps) {
         <ul className="divide-y divide-gray-100">
           {pagePerms.map((item) => {
             const perm = item.requires as PermissionString;
-            const inRole = permissionsSetForRole(role).has(perm);
+            const inRole = roleDbPermissions.has(perm);
             const isAdded = added.includes(perm);
             const isRemoved = removed.includes(perm);
             const enabled = isAdmin || (inRole && !isRemoved) || isAdded;
-            const source = permissionSource(role, perm, added, removed);
+            const source = classifyPermissionSource(inRole, isAdded, isRemoved);
 
             const onToggle = () => {
               if (isAdmin) return;

@@ -272,8 +272,23 @@ export function MobilePackingConfirmCard({
           {' '}{stripConditionPrefix(order.productTitle, order.condition)}
         </h3>
 
-        {/* Detail grid */}
-        <div className="grid grid-cols-3 gap-2">
+        {/* Tracking — the headline identifier for this workflow. Last-8 in a
+            larger mono so the packer can compare to the shipping label at a
+            glance, with a quieter "Tracking" eyebrow above it. */}
+        {order.tracking && (
+          <div className="bg-gray-50 rounded-xl px-3 py-2.5 border border-gray-100">
+            <p className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mb-0.5">
+              Tracking
+            </p>
+            <p className="text-[15px] font-mono font-black text-gray-900 tabular-nums truncate">
+              {order.tracking}
+            </p>
+          </div>
+        )}
+
+        {/* Detail grid — qty and condition are the next two most useful
+            numbers; tracking is no longer crammed in here. */}
+        <div className="grid grid-cols-2 gap-2">
           <div className="bg-gray-50 rounded-xl px-3 py-2.5 border border-gray-100">
             <p className="text-xs font-black text-gray-400 uppercase tracking-wider mb-1">Qty</p>
             <p className="text-sm font-bold text-gray-800">{quantity}</p>
@@ -281,10 +296,6 @@ export function MobilePackingConfirmCard({
           <div className="bg-gray-50 rounded-xl px-3 py-2.5 border border-gray-100">
             <p className="text-xs font-black text-gray-400 uppercase tracking-wider mb-1">Cond</p>
             <p className="text-sm font-bold text-gray-800">{order.condition || 'N/A'}</p>
-          </div>
-          <div className="bg-gray-50 rounded-xl px-3 py-2.5 border border-gray-100">
-            <p className="text-xs font-black text-gray-400 uppercase tracking-wider mb-1">TRK</p>
-            <p className="text-sm font-mono font-bold text-gray-800">{getLast4(order.tracking) || '—'}</p>
           </div>
         </div>
 
@@ -318,7 +329,7 @@ export function MobilePackingConfirmCard({
             <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
             </svg>
-            {variant === 'exception' ? 'Proceed Anyway' : 'Yes, Looks Right'}
+            {variant === 'exception' ? 'Proceed Anyway' : 'Start Photos'}
           </button>
           <button
             type="button"

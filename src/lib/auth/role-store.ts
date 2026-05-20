@@ -14,7 +14,7 @@
  */
 
 import pool from '@/lib/db';
-import { ALL_PERMISSIONS, type PermissionString } from './permissions-shared';
+import { computeEffectivePermissions, type PermissionString } from './permissions-shared';
 
 export interface RoleRow {
   id: number;
@@ -167,22 +167,7 @@ export async function effectivePermissionsForStaff(
   overrides: { added?: ReadonlyArray<string>; removed?: ReadonlyArray<string> } = {},
 ): Promise<Set<PermissionString>> {
   const roles = await loadRolesForStaff(staffId);
-  const isAdmin = roles.some((r) => r.key === 'admin');
-  if (isAdmin) return new Set(ALL_PERMISSIONS);
-
-  const set = new Set<PermissionString>();
-  for (const r of roles) {
-    for (const p of r.permissions) {
-      if (ALL_PERMISSIONS.has(p as PermissionString)) set.add(p as PermissionString);
-    }
-  }
-  for (const p of overrides.added ?? []) {
-    if (ALL_PERMISSIONS.has(p as PermissionString)) set.add(p as PermissionString);
-  }
-  for (const p of overrides.removed ?? []) {
-    set.delete(p as PermissionString);
-  }
-  return set;
+  return computeEffectivePermissions(roles, overrides.added ?? [], overrides.removed ?? []);
 }
 
 /**

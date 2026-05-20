@@ -1,13 +1,12 @@
 'use client';
 
-import React, { useCallback, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   framerPresenceMobile,
   framerTransitionMobile,
 } from '@/design-system/foundations/motion-framer';
 import {
-  ChevronLeft,
   AlertCircle,
   Loader2,
   Image as ImageIcon,
@@ -15,6 +14,7 @@ import {
   X,
   Trash2,
 } from '@/components/Icons';
+import { cn } from '@/utils/_cn';
 import { MobilePackingConfirmCard } from './MobilePackingConfirmCard';
 import type {
   ActivePackingOrder,
@@ -78,7 +78,9 @@ export function MobilePackingReviewStep({
   onPhotoStatus,
   onPhotoRemoved,
   onComplete,
-  onBack,
+  // Back navigation is owned by the MobileShell toolbar chevron in the
+  // parent; the prop stays in the interface for API compatibility.
+  onBack: _onBack,
 }: MobilePackingReviewStepProps) {
   const [isUploading, setIsUploading] = useState(false);
   const [previewIndex, setPreviewIndex] = useState<number | null>(null);
@@ -98,7 +100,6 @@ export function MobilePackingReviewStep({
 
   const allUploaded = photos.length > 0 && counts.uploaded === photos.length;
   const hasFailed = counts.failed > 0;
-  const hasUnsent = counts.pending > 0 || counts.failed > 0;
 
   // ── Batch upload ────────────────────────────────────────────────────────
   const uploadPhotos = useCallback(
@@ -162,6 +163,26 @@ export function MobilePackingReviewStep({
     if (targets.length > 0) void uploadPhotos(targets);
   }, [photos, uploadPhotos]);
 
+  // ── Auto-upload on mount ────────────────────────────────────────────────
+  // The Review screen is the "safety net". As soon as it's reached we start
+  // uploading every pending photo so the packer can walk away without losing
+  // data. The ref guard keeps it from re-firing on re-renders; remounts (back
+  // → photos → review) intentionally get a fresh fire to upload any new shots.
+  const autoUploadedRef = useRef(false);
+  useEffect(() => {
+    if (autoUploadedRef.current) return;
+    if (photos.length === 0) return;
+    autoUploadedRef.current = true;
+    handleUploadAll();
+  }, [photos.length, handleUploadAll]);
+
+  // Auto-finalize lives in the parent (MobileStationPacking) so it survives
+  // Review unmount — e.g., if the packer back-nav's to the photo step before
+  // uploads finish, the completion POST still fires from the parent's
+  // useEffect once every photo is uploaded. "Done" below remains an
+  // acknowledgment button; server-side dedup on /api/packing-logs/update
+  // makes double-fire safe.
+
   // ── Per-photo status badge ──────────────────────────────────────────────
   const renderStatusBadge = (status: PhotoUploadStatus) => {
     if (status === 'uploaded') {
@@ -188,43 +209,45 @@ export function MobilePackingReviewStep({
     return null;
   };
 
-  // ── Primary action label/handler ────────────────────────────────────────
+  // ── Primary action ──────────────────────────────────────────────────────
+  // Photos auto-upload on mount; the log row auto-finalizes when all are up.
+  // "Done" is now a checkpoint that confirms and returns to scan idle. The
+  // only time it acts as a retry button is when uploads have failed.
   const primaryLabel = (() => {
-    if (isCompleting) return 'Completing…';
-    if (isUploading) return `Uploading ${counts.uploading}/${photos.length}…`;
-    if (allUploaded) return 'Complete Packing';
-    if (hasFailed && !hasUnsent) return 'Retry Failed';
-    return 'Upload All & Complete';
+    if (isCompleting) return 'Finishing…';
+    if (isUploading) return `Saving ${counts.uploaded + counts.uploading}/${photos.length}…`;
+    if (hasFailed) return `Retry ${counts.failed} Failed`;
+    if (allUploaded) return 'Done';
+    return 'Saving…';
   })();
 
   const primaryDisabled =
     isUploading || isCompleting || photos.length === 0;
 
   const handlePrimary = useCallback(() => {
-    if (allUploaded) {
-      onComplete();
-      return;
-    }
     if (hasFailed && !counts.pending) {
       handleRetryFailed();
       return;
     }
-    handleUploadAll();
-  }, [allUploaded, hasFailed, counts.pending, onComplete, handleRetryFailed, handleUploadAll]);
+    if (allUploaded) {
+      // Auto-finalize already fired; tapping Done is just acknowledgement.
+      // Calling onComplete again is a no-op once parent has flipped to
+      // success, but covers the rare case where auto-finalize errored.
+      onComplete();
+    }
+  }, [allUploaded, hasFailed, counts.pending, onComplete, handleRetryFailed]);
+
+  const statusText = (() => {
+    if (photos.length === 0) return null;
+    if (isCompleting) return 'Finishing packing log…';
+    if (isUploading) return `Saving ${counts.uploaded + counts.uploading} of ${photos.length} photos…`;
+    if (hasFailed) return `${counts.failed} photo${counts.failed === 1 ? '' : 's'} failed — tap retry`;
+    if (allUploaded) return 'All photos saved · safe to leave';
+    return null;
+  })();
 
   return (
     <div className="space-y-4">
-      {/* Back button */}
-      <button
-        type="button"
-        onClick={onBack}
-        disabled={isUploading || isCompleting}
-        className="flex items-center gap-1 text-[11px] font-bold text-gray-500 active:text-gray-700 transition-colors disabled:opacity-50"
-      >
-        <ChevronLeft className="w-4 h-4" />
-        Back to Photos
-      </button>
-
       {/* Compact order summary */}
       <MobilePackingConfirmCard
         order={order}
@@ -300,12 +323,39 @@ export function MobilePackingReviewStep({
         </div>
       )}
 
-      {/* Primary action */}
+      {/* Status line — lives between the photo grid and the Done button so
+          the packer can read what's happening at a glance. */}
+      {statusText && (
+        <div className="flex items-center justify-center gap-2 text-[11px] font-bold uppercase tracking-wider">
+          {isUploading || isCompleting ? (
+            <Loader2 className="w-3.5 h-3.5 animate-spin text-gray-500" />
+          ) : allUploaded ? (
+            <Check className="w-3.5 h-3.5 text-emerald-600" />
+          ) : hasFailed ? (
+            <AlertCircle className="w-3.5 h-3.5 text-red-600" />
+          ) : null}
+          <span className={cn(
+            allUploaded && 'text-emerald-700',
+            hasFailed && 'text-red-700',
+            !allUploaded && !hasFailed && 'text-gray-500',
+          )}>
+            {statusText}
+          </span>
+        </div>
+      )}
+
+      {/* Primary action — Done is now a checkpoint, not a data gate.
+          The data is already on the server by the time this becomes tappable. */}
       <button
         type="button"
         onClick={handlePrimary}
         disabled={primaryDisabled}
-        className="w-full h-[56px] rounded-2xl bg-emerald-600 text-white text-[13px] font-black uppercase tracking-wider flex items-center justify-center gap-2 transition-colors active:bg-emerald-700 disabled:opacity-50"
+        className={cn(
+          'w-full h-[56px] rounded-2xl text-white text-[13px] font-black uppercase tracking-wider flex items-center justify-center gap-2 transition-colors disabled:opacity-50',
+          hasFailed
+            ? 'bg-red-600 active:bg-red-700'
+            : 'bg-emerald-600 active:bg-emerald-700',
+        )}
       >
         {(isUploading || isCompleting) ? (
           <Loader2 className="w-5 h-5 animate-spin" />

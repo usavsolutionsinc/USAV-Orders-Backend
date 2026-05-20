@@ -1,45 +1,12 @@
 'use client';
 
+import { useMemo } from 'react';
 import { sidebarHeaderBandClass } from '@/components/layout/header-shell';
-import { HorizontalButtonSlider, type HorizontalSliderItem } from '@/components/ui/HorizontalButtonSlider';
-import {
-  BarChart3,
-  Box,
-  Calendar,
-  Camera,
-  Database,
-  FileText,
-  Layout,
-  Link2,
-  Lock,
-  Package,
-  ShieldCheck,
-  User,
-  Zap,
-} from '@/components/Icons';
+import { ChevronLeft } from '@/components/Icons';
+import { SidebarSectionList, type SidebarSection } from '@/components/sidebar/SidebarSectionList';
+import { useAuth } from '@/contexts/AuthContext';
 import { ADMIN_SECTION_OPTIONS, type AdminSection } from './admin-sections';
 
-const ADMIN_SECTION_ICONS: Record<AdminSection, (props: { className?: string }) => JSX.Element> = {
-  goals:        BarChart3,
-  staff:        User,
-  access:       Lock,
-  roles:        ShieldCheck,
-  connections:  Link2,
-  fba:          Package,
-  manuals:      FileText,
-  features:     Box,
-  logs:         FileText,
-  jobs:         Calendar,
-  ai_chat:      Zap,
-  architecture: Database,
-  photo_backup: Camera,
-};
-
-const ADMIN_SECTION_ITEMS: HorizontalSliderItem[] = ADMIN_SECTION_OPTIONS.map((o) => ({
-  id: o.value,
-  label: o.label,
-  icon: ADMIN_SECTION_ICONS[o.value] ?? Layout,
-}));
 import { ManualAssignmentSidebarPanel } from './ManualAssignmentSidebarPanel';
 import { AccessSidebarPanel } from './AccessSidebarPanel';
 import { RolesSidebarPanel } from './RolesSidebarPanel';
@@ -57,47 +24,85 @@ interface AdminSidebarProps {
   onSectionChange: (section: AdminSection) => void;
 }
 
-export function AdminSidebar({
-  activeSection,
-  onSectionChange,
-}: AdminSidebarProps) {
-  const activePanel =
-    activeSection === 'manuals' ? (
-      <ManualAssignmentSidebarPanel />
-    ) : activeSection === 'goals' ? (
-      <GoalsSidebarPanel />
-    ) : activeSection === 'staff' ? (
-      <StaffAdminSidebarPanel />
-    ) : activeSection === 'access' ? (
-      <AccessSidebarPanel />
-    ) : activeSection === 'roles' ? (
-      <RolesSidebarPanel />
-    ) : activeSection === 'fba' ? (
-      <FbaCatalogSidebarPanel />
-    ) : activeSection === 'features' ? (
-      <FeaturesSidebarPanel />
-    ) : activeSection === 'connections' ? (
-      <ConnectionsSidebarPanel />
-    ) : activeSection === 'architecture' ? (
-      <ArchitectureSidebarPanel />
-    ) : activeSection === 'jobs' ? (
-      <JobsSidebarPanel />
-    ) : activeSection === 'logs' ? (
-      <LogsSidebarPanel />
-    ) : null;
+const ICON_CLS = 'h-4 w-4 shrink-0';
+
+function panelFor(section: AdminSection): JSX.Element | null {
+  switch (section) {
+    case 'manuals':      return <ManualAssignmentSidebarPanel />;
+    case 'goals':        return <GoalsSidebarPanel />;
+    case 'staff':        return <StaffAdminSidebarPanel />;
+    case 'access':       return <AccessSidebarPanel />;
+    case 'roles':        return <RolesSidebarPanel />;
+    case 'fba':          return <FbaCatalogSidebarPanel />;
+    case 'features':     return <FeaturesSidebarPanel />;
+    case 'connections':  return <ConnectionsSidebarPanel />;
+    case 'architecture': return <ArchitectureSidebarPanel />;
+    case 'jobs':         return <JobsSidebarPanel />;
+    case 'logs':         return <LogsSidebarPanel />;
+    default:             return null;
+  }
+}
+
+export function AdminSidebar({ activeSection, onSectionChange }: AdminSidebarProps) {
+  const { has, isLoaded } = useAuth();
+
+  const visibleSections = useMemo<Array<SidebarSection<AdminSection>>>(() => {
+    return ADMIN_SECTION_OPTIONS
+      .filter((s) => {
+        if (!s.requires) return true;
+        if (!isLoaded) return false;
+        return has(s.requires);
+      })
+      .map((s) => {
+        const Icon = s.icon;
+        return {
+          id: s.value,
+          label: s.label,
+          description: s.description,
+          group: s.group,
+          requires: s.requires,
+          icon: <Icon className={ICON_CLS} />,
+        };
+      });
+  }, [has, isLoaded]);
+
+  const isOverview = activeSection === 'overview';
+  const sectionPanel = isOverview ? null : panelFor(activeSection);
+  const sectionLabel = ADMIN_SECTION_OPTIONS.find((s) => s.value === activeSection)?.label ?? '';
 
   return (
     <div className="h-full flex flex-col overflow-hidden bg-white">
-      <div className={`${sidebarHeaderBandClass} px-3`}>
-        <HorizontalButtonSlider
-          items={ADMIN_SECTION_ITEMS}
-          value={activeSection}
-          onChange={(next) => onSectionChange(next as AdminSection)}
-          variant="nav"
-          aria-label="Admin section"
-        />
-      </div>
-      <div className="min-h-0 flex-1 overflow-hidden">{activePanel}</div>
+      {isOverview ? (
+        <div className="min-h-0 flex-1 overflow-hidden">
+          <SidebarSectionList
+            sections={visibleSections}
+            active={activeSection}
+            onSelect={(next) => onSectionChange(next)}
+            ariaLabel="Admin sections"
+          />
+        </div>
+      ) : (
+        <>
+          <div className={`${sidebarHeaderBandClass} px-2 py-2`}>
+            <button
+              type="button"
+              onClick={() => onSectionChange('overview')}
+              className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm font-medium text-slate-700 hover:bg-slate-100"
+              aria-label="Back to admin overview"
+            >
+              <ChevronLeft className="h-4 w-4 text-slate-500" />
+              <span>Admin</span>
+              {sectionLabel && (
+                <>
+                  <span className="text-slate-400">·</span>
+                  <span className="text-slate-900">{sectionLabel}</span>
+                </>
+              )}
+            </button>
+          </div>
+          <div className="min-h-0 flex-1 overflow-hidden">{sectionPanel}</div>
+        </>
+      )}
     </div>
   );
 }

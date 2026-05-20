@@ -1,4 +1,5 @@
-import { NextResponse } from 'next/server';
+import { NextResponse, type NextRequest } from 'next/server';
+import { withAuth } from '@/lib/auth/withAuth';
 import {
   fetchManualServerAssignedItems,
   fetchManualServerUnassigned,
@@ -19,7 +20,7 @@ function deriveDisplayName(fileName: string) {
     .trim();
 }
 
-export async function POST() {
+async function handlePost(_req: NextRequest) {
   try {
     if (!isManualServerConfigured()) {
       return NextResponse.json(
@@ -97,3 +98,5 @@ export async function POST() {
     );
   }
 }
+
+export const POST = withAuth(handlePost, { permission: 'product_manuals.manage' });

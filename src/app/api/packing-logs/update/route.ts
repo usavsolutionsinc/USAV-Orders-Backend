@@ -86,6 +86,57 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
       // 1. Resolve shipment_id, then insert into packer_logs
       const { shipmentId: resolvedShipmentId, scanRef: resolvedScanRef } =
         await resolveShipmentId(shippingTrackingNumber);
+
+      // Idempotency: the mobile flow auto-finalizes when uploads complete AND
+      // tapping "Done" calls this endpoint. If both reach the server, the
+      // second call must NOT re-INSERT, re-write the sku_stock_ledger
+      // (duplicate PACKED rows would double-count inventory), or re-touch
+      // the orders row.
+      //
+      // Lookup rows and completion rows have an identical packer_logs shape
+      // after the 2026-03-12 timestamps migration (pack_date_time was
+      // dropped), so we can't dedup on a column. The structural signal that
+      // separates them is the photos table: only completion writes rows
+      // with entity_type='PACKER_LOG' pointing back at the packer_log. We
+      // use that EXISTS as the "this row is a completion" check, scoped to
+      // (scan_ref, packed_by, tracking_type) inside a 5-minute window.
+      const dupCheck = await client.query<{ id: number }>(
+        `SELECT pl.id
+           FROM packer_logs pl
+          WHERE pl.scan_ref = $1
+            AND pl.packed_by = $2
+            AND pl.tracking_type = $3
+            AND pl.created_at > NOW() - INTERVAL '5 minutes'
+            AND EXISTS (
+              SELECT 1
+                FROM photos p
+               WHERE p.entity_type = 'PACKER_LOG'
+                 AND p.entity_id = pl.id
+            )
+          ORDER BY pl.id DESC
+          LIMIT 1`,
+        [resolvedScanRef, staffId, trackingType],
+      );
+
+      if (dupCheck.rows.length > 0) {
+        await client.query('ROLLBACK');
+        const existingId = dupCheck.rows[0].id;
+        console.log(
+          '[packer_logs.update] duplicate finalize detected — returning existing id',
+          existingId,
+        );
+        return NextResponse.json({
+          success: true,
+          message: 'Packer log already finalized (idempotent)',
+          packerLogId: existingId,
+          ordersUpdated: 0,
+          trackingNumber: shippingTrackingNumber,
+          trackingType,
+          photosCount: photoUrlList.length,
+          deduplicated: true,
+        });
+      }
+
       const insertResult = await client.query(`
         INSERT INTO packer_logs (
           shipment_id,

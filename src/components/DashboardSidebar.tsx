@@ -363,16 +363,21 @@ function SidebarContextPanel({ onBackToAppNav }: { onBackToAppNav?: () => void }
   }
 
   if (routeKey === 'admin') {
-    const activeSection = (searchParams.get('section') as AdminSection) || 'goals';
-    const validSection = ADMIN_SECTION_OPTIONS.some((item) => item.value === activeSection) ? activeSection : 'goals';
+    const activeSection = (searchParams.get('section') as AdminSection) || 'overview';
+    const validSection = ADMIN_SECTION_OPTIONS.some((item) => item.value === activeSection) ? activeSection : 'overview';
 
     return (
       <div className="h-full overflow-hidden">
         <AdminSidebar
           activeSection={validSection}
-          onSectionChange={(nextSection) =>
-            updateSearch((params) => { params.set('section', nextSection); }, '/admin')
-          }
+          onSectionChange={(nextSection) => {
+            if (nextSection === 'overview') {
+              // Clear ?section so deep-links/back-button land cleanly on overview.
+              updateSearch((params) => { params.delete('section'); }, '/admin');
+            } else {
+              updateSearch((params) => { params.set('section', nextSection); }, '/admin');
+            }
+          }}
         />
       </div>
     );

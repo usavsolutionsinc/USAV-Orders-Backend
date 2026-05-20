@@ -1,8 +1,9 @@
 name: CI
 
-# First defense against silent regressions: every push and PR runs the
-# lint/typecheck/test trio. Keeps PRs from breaking sign-in or shipping
-# constraint violations. Add jobs here; don't add them ad-hoc.
+# First defense against silent regressions. Two jobs:
+#   1. ci — lint + typecheck + unit tests (no secrets, works for fork PRs).
+#   2. audit-permissions — permission drift check against staging DB
+#      (skipped on fork PRs where DATABASE_URL secret isn't available).
 
 on:
   push:
@@ -29,7 +30,7 @@ jobs:
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: '24'
           cache: npm
 
       - name: Install dependencies
@@ -44,9 +45,38 @@ jobs:
       # Typecheck without emit — catches the kind of constraint and type
       # mismatches that used to land as bodyless 500s in dev.
       - name: Typecheck
-        run: npx tsc --noEmit
+        run: npx tsc --noEmit -p tsconfig.json
 
-      # Existing + new unit tests. Discovered by glob; add new .test.ts
-      # files anywhere under src/ and they'll be picked up automatically.
+      # Glob-discovered unit tests. Drop any new *.test.ts under src/ and
+      # it runs automatically — no need to register it in package.json.
       - name: Unit tests
         run: node --test --import tsx --test-reporter spec 'src/**/*.test.ts'
+
+  audit-permissions:
+    name: Permission drift audit
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    # Skip for fork PRs where DATABASE_URL isn't available.
+    if: ${{ github.event.pull_request.head.repo.full_name == github.repository || github.event_name != 'pull_request' }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci --no-audit --no-fund
+
+      - name: Run permission audit
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: |
+          if [ -z "$DATABASE_URL" ]; then
+            echo "::warning::DATABASE_URL secret is not configured — skipping live drift audit."
+            exit 0
+          fi
+          npm run audit-permissions

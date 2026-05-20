@@ -8,13 +8,13 @@ import { isTransientDbError, queryWithRetry } from '@/lib/db-retry';
 import { getCurrentStaffDayOfWeek, isStaffBusinessDay } from '@/lib/staff-schedule';
 import { getWeekStartDateKeyForDateKey } from '@/lib/staff-availability';
 import { getCurrentPSTDateKey } from '@/utils/date';
-import { withAuth } from '@/lib/auth/withAuth';
+import { withAuth, type AuthContext } from '@/lib/auth/withAuth';
 
 function isDatabaseUnavailable(error: unknown) {
     return isTransientDbError(error);
 }
 
-export async function GET(request: NextRequest) {
+async function handleGet(request: NextRequest) {
     try {
         const { searchParams } = new URL(request.url);
 
@@ -208,7 +208,7 @@ export async function GET(request: NextRequest) {
 // Create a new staff member. Gated by admin.manage_staff and scoped to the
 // caller's tenant (was previously unprotected — any unauthenticated POST
 // could create rows in the global staff table).
-export const POST = withAuth(async (request, ctx) => {
+async function handlePost(request: NextRequest, ctx: AuthContext) {
     try {
         const body = await request.json();
         const { name, role, employee_id, active } = body;
@@ -249,9 +249,9 @@ export const POST = withAuth(async (request, ctx) => {
             details: error instanceof Error ? error.message : 'Unknown error'
         }, { status: 500 });
     }
-}, { permission: 'admin.manage_staff' });
+}
 
-export async function PUT(request: NextRequest) {
+async function handlePut(request: NextRequest) {
     try {
         const body = await request.json();
         const { id, name, role, employee_id, active, color_hex, default_home_path } = body;
@@ -307,7 +307,7 @@ export async function PUT(request: NextRequest) {
     }
 }
 
-export async function DELETE(request: NextRequest) {
+async function handleDelete(request: NextRequest) {
     try {
         const { searchParams } = new URL(request.url);
         const id = searchParams.get('id');
@@ -331,9 +331,22 @@ export async function DELETE(request: NextRequest) {
         return NextResponse.json({ success: true, staff: result });
     } catch (error) {
         console.error('Error deleting staff:', error);
-        return NextResponse.json({ 
+        return NextResponse.json({
             error: 'Failed to delete staff',
             details: error instanceof Error ? error.message : 'Unknown error'
         }, { status: 500 });
     }
 }
+
+// ─── Auth-gated exports ─────────────────────────────────────────────────────
+// Phase 2d: this route used to ship as plain exports — meaning any signed-in
+// user (a viewer, a packer) could POST/PUT/DELETE staff rows. Now:
+//   GET    — any authenticated user (staff list is widely used by UI code)
+//   POST   — requires admin.manage_staff
+//   PUT    — requires admin.manage_staff
+//   DELETE — requires admin.manage_staff
+
+export const GET = withAuth(handleGet);
+export const POST = withAuth(handlePost, { permission: 'admin.manage_staff' });
+export const PUT = withAuth(handlePut, { permission: 'admin.manage_staff' });
+export const DELETE = withAuth(handleDelete, { permission: 'admin.manage_staff' });

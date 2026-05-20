@@ -1,20 +1,27 @@
 /**
  * Server-side permission helpers — DB-backed pieces of the auth system.
  *
- * The pure types + role/permission matrix + `permissionsForRole` etc. live in
- * `./permissions-shared.ts` so client components can import them without
- * dragging `pg` into the browser bundle. This module re-exports everything
- * from there for backwards compatibility, then adds the DB-using functions.
+ * Pure types and runtime sets live in `./permissions-shared.ts` (client-safe;
+ * no `pg` import). This module re-exports everything from there and adds the
+ * DB-using helpers.
+ *
+ * Phase 2b: the static role-permission matrix was deleted. All permission
+ * resolution now reads `roles.permissions` from the DB via `role-store.ts`.
  */
 
 import pool from '@/lib/db';
+import { effectivePermissionsForStaff } from './role-store';
+import {
+  ALL_PERMISSIONS,
+  PermissionDeniedError,
+  type PermissionAction,
+  type PermissionString,
+  type StaffRole,
+} from './permissions-shared';
 
 export * from './permissions-shared';
 
-import type { PermissionAction, StaffRole } from './permissions-shared';
-import { canonicalRole, hasPermission, PermissionDeniedError } from './permissions-shared';
-
-// ─── Resolver cache (60s) ──────────────────────────────────────────────────
+// ─── Role resolver (60s in-process cache) ──────────────────────────────────
 
 interface CacheEntry {
   role: StaffRole;
@@ -50,17 +57,42 @@ export async function getStaffRole(staffId: number): Promise<StaffRole> {
 }
 
 /**
- * Server-side gate: throw a normalized error if the staff lacks permission.
- * Route handlers catch this and convert to 403.
+ * Server-side gate: throws PermissionDeniedError if the staff lacks the
+ * permission. Route handlers catch this and convert to 403 via
+ * `permissionDeniedResponse`.
+ *
+ * Reads the effective permission set from the DB (roles + per-staff overrides);
+ * matches what withAuth uses.
  */
 export async function assertPermission(
   staffId: number | null | undefined,
   action: PermissionAction,
 ): Promise<{ role: StaffRole }> {
   const id = Number(staffId);
-  const role = await getStaffRole(Number.isFinite(id) ? id : 0);
-  if (!hasPermission(role, action)) {
-    throw new PermissionDeniedError(action, role, Number.isFinite(id) ? id : null);
+  const validId = Number.isFinite(id) && id > 0 ? id : 0;
+  const role = await getStaffRole(validId);
+  if (validId === 0) {
+    throw new PermissionDeniedError(action, role, null);
+  }
+  // Look up staff overrides so the check matches the DB-backed effective set.
+  const overrides = await pool
+    .query<{ permissions_added: string[] | null; permissions_removed: string[] | null }>(
+      `SELECT permissions_added, permissions_removed FROM staff WHERE id = $1 LIMIT 1`,
+      [validId],
+    )
+    .then((r) => r.rows[0])
+    .catch(() => undefined);
+  const effective = await effectivePermissionsForStaff(validId, {
+    added: overrides?.permissions_added ?? [],
+    removed: overrides?.permissions_removed ?? [],
+  });
+  if (!effective.has(action as PermissionString)) {
+    throw new PermissionDeniedError(action, role, validId);
   }
   return { role };
+}
+
+/** Internal sanity check: verifies a PermissionString value is registered. */
+export function isKnownPermissionString(s: string): s is PermissionString {
+  return ALL_PERMISSIONS.has(s as PermissionString);
 }

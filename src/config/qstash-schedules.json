@@ -113,5 +113,14 @@
     "retries": 3,
     "timeout": 300,
     "label": "google-photos-daily-backup"
+  },
+  {
+    "scheduleId": "replenishment-detect-every-4h",
+    "cron": "0 */4 * * *",
+    "path": "/api/cron/replenishment-detect",
+    "body": {},
+    "retries": 3,
+    "timeout": 60,
+    "label": "replenishment-detect"
   }
 ]

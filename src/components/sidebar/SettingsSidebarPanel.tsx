@@ -3,6 +3,7 @@
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useCallback, type ReactNode } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
+import { SidebarSectionList, type SidebarSection } from './SidebarSectionList';
 
 export type SettingsSection =
   | 'hardware' | 'workstation' | 'quick-access' | 'appearance' | 'about'
@@ -10,16 +11,7 @@ export type SettingsSection =
 
 const ICON_CLS = 'h-4 w-4 shrink-0';
 
-interface SectionDef {
-  id: SettingsSection;
-  label: string;
-  description: string;
-  icon: ReactNode;
-  /** Permission required to see this section. Omitted = always visible. */
-  requires?: string;
-}
-
-const SECTIONS: SectionDef[] = [
+const SECTIONS: Array<SidebarSection<SettingsSection>> = [
   {
     id: 'hardware',
     label: 'Hardware',
@@ -148,7 +140,7 @@ export function getActiveSettingsSection(raw: string | null | undefined): Settin
   return SECTIONS.some((s) => s.id === v) ? (v as SettingsSection) : 'hardware';
 }
 
-export function SettingsSidebarPanel() {
+export function SettingsSidebarPanel(): ReactNode {
   const router = useRouter();
   const searchParams = useSearchParams();
   const active = getActiveSettingsSection(searchParams?.get('section'));
@@ -164,7 +156,6 @@ export function SettingsSidebarPanel() {
   );
 
   const visible = SECTIONS.filter((s) => {
-    // Hide security tab if no one is signed in (pre-rollout fallback).
     if (s.id === 'security' && (!isLoaded || !user)) return false;
     if (!s.requires) return true;
     if (!isLoaded) return false;
@@ -172,34 +163,12 @@ export function SettingsSidebarPanel() {
   });
 
   return (
-    <nav className="h-full overflow-y-auto">
-      {visible.map((s) => {
-        const isActive = active === s.id;
-        return (
-          <button
-            key={s.id}
-            type="button"
-            onClick={() => setSection(s.id)}
-            aria-current={isActive ? 'page' : undefined}
-            className={`flex w-full items-start gap-3 border-b border-gray-100 px-4 py-3 text-left transition ${
-              isActive
-                ? 'bg-blue-50 text-blue-700'
-                : 'text-gray-900 hover:bg-gray-50'
-            }`}
-          >
-            <span className={`mt-0.5 ${isActive ? 'text-blue-600' : 'text-gray-400'}`}>
-              {s.icon}
-            </span>
-            <span className="min-w-0 flex-1">
-              <span className="block text-sm font-semibold">{s.label}</span>
-              <span className="block truncate text-[11px] font-medium text-gray-500">
-                {s.description}
-              </span>
-            </span>
-          </button>
-        );
-      })}
-    </nav>
+    <SidebarSectionList
+      sections={visible}
+      active={active}
+      onSelect={setSection}
+      ariaLabel="Settings sections"
+    />
   );
 }
 

@@ -32,7 +32,7 @@ flowchart LR
   components_admin["components/admin"]
   click components_admin "src/components/admin/AccessSidebarPanel.tsx" "Open src/components/admin/AccessSidebarPanel.tsx"
   components_mobile["components/mobile"]
-  click components_mobile "src/components/mobile/MobileDateGroupHeader.tsx" "Open src/components/mobile/MobileDateGroupHeader.tsx"
+  click components_mobile "src/components/mobile/ScanSurface.tsx" "Open src/components/mobile/ScanSurface.tsx"
   lib_realtime["lib/realtime"]
   click lib_realtime "src/lib/realtime/db-events.ts" "Open src/lib/realtime/db-events.ts"
   components_receiving["components/receiving"]
@@ -89,6 +89,8 @@ flowchart LR
   click app_layout_tsx "src/app/layout.tsx" "Open src/app/layout.tsx"
   app_dashboard["app/dashboard"]
   click app_dashboard "src/app/dashboard/page.tsx" "Open src/app/dashboard/page.tsx"
+  app_m["app/m"]
+  click app_m "src/app/m/enroll/[token]/page.tsx" "Open src/app/m/enroll/[token]/page.tsx"
   components_MultiSkuSnBarcode_tsx["components/MultiSkuSnBarcod…"]
   click components_MultiSkuSnBarcode_tsx "src/components/MultiSkuSnBarcode.tsx" "Open src/components/MultiSkuSnBarcode.tsx"
   components_UpNextOrder_tsx["components/UpNextOrder.tsx"]
@@ -117,8 +119,6 @@ flowchart LR
   click lib_tech "src/lib/tech/resolveStaffIdFromTechParam.ts" "Open src/lib/tech/resolveStaffIdFromTechParam.ts"
   app_admin["app/admin"]
   click app_admin "src/app/admin/page.tsx" "Open src/app/admin/page.tsx"
-  app_walk_in["app/walk-in"]
-  click app_walk_in "src/app/walk-in/page.tsx" "Open src/app/walk-in/page.tsx"
   app_admin --> components_admin
   app_admin --> lib_auth
   app_admin --> lib_scan_resolver_ts
@@ -155,12 +155,13 @@ flowchart LR
   app_layout_tsx --> components_layout
   app_layout_tsx --> components_station
   app_layout_tsx --> contexts
-  app_walk_in --> components_repair
-  app_walk_in --> components_sidebar
-  app_walk_in --> components_ui
-  app_walk_in --> components_walk_in
-  app_walk_in --> design_system
-  app_walk_in --> hooks
+  app_m --> components_mobile
+  app_m --> components_repair
+  app_m --> components_station
+  app_m --> contexts
+  app_m --> hooks
+  app_m --> lib_neon
+  app_m --> utils
   components_DashboardSidebar_tsx --> components_Icons_tsx
   components_DashboardSidebar_tsx --> components_ShippedSidebar_tsx
   components_DashboardSidebar_tsx --> components_admin
@@ -513,4 +514,4 @@ flowchart LR
   utils --> lib_neon
   utils --> lib_scan_resolver_ts
   utils --> lib_tracking_format_ts
-  %% truncated: 139 more groups not shown
+  %% truncated: 140 more groups not shown

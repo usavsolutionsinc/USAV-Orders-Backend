@@ -134,6 +134,27 @@ export function isInventoryV2BinRoles(): boolean {
   return readBoolEnv('INVENTORY_V2_BIN_ROLES');
 }
 
+/** Phase A4 — pick-face replenishment task queue + detection cron. */
+export function isInventoryV2Replenishment(): boolean {
+  return readBoolEnv('INVENTORY_V2_REPLENISHMENT');
+}
+
+/** Phase A5 — first-class RMA authorizations + return dispositions. */
+export function isInventoryV2Rma(): boolean {
+  return readBoolEnv('INVENTORY_V2_RMA');
+}
+
+/**
+ * Mobile receiving pipeline rewrite (/m/receiving).
+ * PO-keyed list, per-Purchase-Order-Item detail, dedicated camera surfaces,
+ * and 720p client-side downscale before upload. Reads/writes against the
+ * same `receiving_lines` + `photos` tables as the legacy /m/r/[id] flow,
+ * with `photos.receiving_line_id` added for first-class item-scoped photos.
+ */
+export function isMobileReceivingPipelineV2(): boolean {
+  return readBoolEnv('MOBILE_RECEIVING_PIPELINE_V2');
+}
+
 /** Snapshot of all inventory v2 flags. Useful for debug / admin pages. */
 export function inventoryV2FlagSnapshot(): Record<string, boolean> {
   return {
@@ -145,6 +166,9 @@ export function inventoryV2FlagSnapshot(): Record<string, boolean> {
     INVENTORY_V2_RETURNS: isInventoryV2Returns(),
     INVENTORY_V2_PICKING: isInventoryV2Picking(),
     INVENTORY_V2_BIN_ROLES: isInventoryV2BinRoles(),
+    INVENTORY_V2_REPLENISHMENT: isInventoryV2Replenishment(),
+    INVENTORY_V2_RMA: isInventoryV2Rma(),
+    MOBILE_RECEIVING_PIPELINE_V2: isMobileReceivingPipelineV2(),
   };
 }
 

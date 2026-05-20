@@ -19,7 +19,7 @@ import {
   SESSION_COOKIE_NAME,
   touchSession,
 } from '@/lib/auth/session';
-import { getStaffRole, permissionsSetForRole } from '@/lib/auth/permissions';
+import { getCurrentUserBySid } from '@/lib/auth/current-user';
 
 export const runtime = 'nodejs';
 
@@ -53,9 +53,13 @@ export async function GET() {
     return res;
   }
 
-  // Have a session but we still need the staff role for the envelope.
-  const role = await getStaffRole(session.staffId);
-  if (role === 'unknown') {
+  // Resolve the full user envelope from the DB (roles + overrides). This
+  // path matches what withAuth uses for every authenticated request, so the
+  // client's `useAuth().has(perm)` and the server's permission gate now
+  // see the same set of permissions — no more drift between
+  // client-rendered UI and server-enforced API.
+  const user = await getCurrentUserBySid(session.sid);
+  if (!user || user.role === 'unknown') {
     console.warn(
       `[auth/session] user:null reason=no-staff-row staffId=${session.staffId} sid=${session.sid.slice(0, 8)}…`,
     );
@@ -72,9 +76,9 @@ export async function GET() {
   return NextResponse.json(
     {
       user: {
-        staffId: session.staffId,
-        role,
-        permissions: Array.from(permissionsSetForRole(role)),
+        staffId: user.staffId,
+        role: user.role,
+        permissions: Array.from(user.permissions),
         session: {
           sid: session.sid,
           deviceKind: session.deviceKind,

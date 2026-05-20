@@ -10,7 +10,7 @@ import pool from '@/lib/db';
 import { withAuth } from '@/lib/auth/withAuth';
 import { audit } from '@/lib/auth/audit';
 import { invalidateRoleCache, invalidateStaffRolesCache } from '@/lib/auth/role-store';
-import { ALL_PERMISSIONS } from '@/lib/auth/permissions-shared';
+import { ALL_PERMISSIONS, isAdminRoleKey } from '@/lib/auth/permissions-shared';
 
 export const runtime = 'nodejs';
 
@@ -89,8 +89,20 @@ export const PATCH = withAuth(async (req: NextRequest, ctx) => {
     params.push(Math.max(0, Math.floor(Number(body.position)))); sets.push(`position = $${params.length}`);
   }
   if (Array.isArray(body.permissions)) {
-    if (row.key === 'admin') {
+    if (isAdminRoleKey(row.key)) {
       return NextResponse.json({ error: 'ADMIN_ROLE_PERMISSIONS_IMMUTABLE', message: 'Admin role grants every permission; it cannot be customized.' }, { status: 409 });
+    }
+    // Phase 2a write-time validation: reject any submitted permission that
+    // isn't in the runtime registry. Without this, unknown strings would be
+    // silently dropped at request time and the admin would think they saved
+    // a grant that has no effect.
+    const submitted: string[] = (body.permissions as unknown[]).map(String);
+    const unknown = submitted.filter((p) => !ALL_PERMISSIONS.has(p as never));
+    if (unknown.length > 0) {
+      return NextResponse.json(
+        { error: 'UNKNOWN_PERMISSIONS', unknown, message: `Rejected: ${unknown.length} permission(s) not registered.` },
+        { status: 400 },
+      );
     }
     params.push(sanitizePermissions(body.permissions));
     sets.push(`permissions = $${params.length}::TEXT[]`);

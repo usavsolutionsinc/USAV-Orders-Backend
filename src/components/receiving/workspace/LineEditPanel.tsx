@@ -88,6 +88,7 @@ import {
   RETURN_PLATFORM_LABELS,
   SOURCE_PLATFORM_LABELS,
   SOURCE_PLATFORM_OPTS,
+  detectPlatformFromUrl,
   RECEIVING_TYPE_OPTS,
   INPUT_CLASS,
   TYPE_PRODUCT_TITLE_CLASS,
@@ -127,6 +128,35 @@ import {
   type PoContext,
   type FlowSectionTone,
 } from '@/components/sidebar/receiving/receiving-sidebar-shared';
+
+/**
+ * Sticky progress card shown in the bottom-right toast while the Receive →
+ * Zoho roundtrip is in flight. Renders an indeterminate bar (CSS keyframes
+ * live in globals.css under `.recv-indet-bar`) and an elapsed-seconds
+ * counter so the operator knows the request is still alive even when Zoho
+ * is slow.
+ */
+function ReceiveProgressToast({ startedAt, intent }: { startedAt: number; intent: 'zoho_receive' | 'scan_only' }) {
+  const [elapsed, setElapsed] = useState(0);
+  useEffect(() => {
+    const t = window.setInterval(() => {
+      setElapsed(Math.max(0, Math.floor((Date.now() - startedAt) / 1000)));
+    }, 250);
+    return () => window.clearInterval(t);
+  }, [startedAt]);
+  const label = intent === 'scan_only' ? 'Marking as scanned…' : 'Receiving in Zoho…';
+  return (
+    <div className="flex min-w-[260px] flex-col gap-2">
+      <div className="flex items-center justify-between text-[12px] font-semibold text-gray-900">
+        <span>{label}</span>
+        <span className="tabular-nums text-gray-500">{elapsed}s</span>
+      </div>
+      <div className="h-1.5 w-full overflow-hidden rounded-full bg-gray-200/70">
+        <div className="recv-indet-bar h-full w-1/3 rounded-full bg-blue-500" />
+      </div>
+    </div>
+  );
+}
 
 export function LineEditPanel({
   row,
@@ -172,7 +202,11 @@ export function LineEditPanel({
   const [listingLink, setListingLink] = useState('');
   const [saving, setSaving] = useState(false);
   const [serialSubmitting, setSerialSubmitting] = useState(false);
-  const [receiving, setReceiving] = useState(false);
+  // Receive runs as a fire-and-forget background task (Zoho roundtrip can
+  // take many seconds). The button does NOT visually lock — progress is
+  // surfaced in a sticky bottom-right toast. A ref guards against accidental
+  // double-clicks while a request for this line is still in flight.
+  const receiveInFlightRef = useRef(false);
   const [sourcePlatform, setSourcePlatform] = useState<string>('');
   const [platformSaving, setPlatformSaving] = useState(false);
   type FlowSecKey = 'shipment' | 'item' | 'support';
@@ -438,6 +472,22 @@ export function LineEditPanel({
     }
   }, [row.receiving_id]);
 
+  // Auto-detect platform from the listing URL when the operator hasn't set
+  // one yet. Only fires when sourcePlatform is empty so we never clobber a
+  // manual choice. Debounced lightly so paste-then-type doesn't thrash the
+  // PATCH endpoint.
+  useEffect(() => {
+    if (row.receiving_id == null) return;
+    if (sourcePlatform) return;
+    const detected = detectPlatformFromUrl(listingLink);
+    if (!detected) return;
+    const t = window.setTimeout(() => {
+      setSourcePlatform(detected);
+      void savePlatform(detected);
+    }, 350);
+    return () => window.clearTimeout(t);
+  }, [listingLink, sourcePlatform, row.receiving_id, savePlatform]);
+
   const saveSupportNotes = useCallback(async () => {
     if (row.receiving_id == null) return;
     const trimmed = supportNotes.trim();
@@ -561,8 +611,8 @@ export function LineEditPanel({
   }, [extraSerials, submitSerial]);
 
   const handleReceive = useCallback(
-    async (receiveIntent: 'zoho_receive' | 'scan_only' = 'zoho_receive') => {
-      if (receiving) return;
+    (receiveIntent: 'zoho_receive' | 'scan_only' = 'zoho_receive') => {
+      if (receiveInFlightRef.current) return;
       if (row.receiving_id == null) {
         toast.error('Cannot receive — link this item to a shipment first.', {
           description: 'Scan tracking or use lookup so this line has a receiving (carton) id.',
@@ -570,139 +620,162 @@ export function LineEditPanel({
         });
         return;
       }
-      setReceiving(true);
-    const startedAt = Date.now();
-    try {
-      const perLineNotes = notes.trim() || null;
+      receiveInFlightRef.current = true;
+      const startedAt = Date.now();
+      // Sticky progress toast (bottom-right via the global <Toaster>). Same
+      // id is reused on settle so success/error replaces the loading card
+      // in place instead of stacking another card on top.
+      const toastId = toast.loading(
+        <ReceiveProgressToast startedAt={startedAt} intent={receiveIntent} />,
+        { duration: Infinity, closeButton: false },
+      );
 
-      const markRes = await fetch('/api/receiving/mark-received-po', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          receiving_id: row.receiving_id,
-          receiving_line_id: row.id,
-          receive_intent: receiveIntent,
-          qa_status: qa,
-          disposition_code: disp,
-          condition_grade: cond,
-          serial_number: serialInput.trim() || undefined,
-          zendesk_ticket: zendesk.trim() || undefined,
-          listing_link: listingLink.trim() || undefined,
-          notes: perLineNotes || undefined,
-          staff_id: Number(staffId),
-        }),
-      });
-      const markData = await markRes.json().catch(() => null);
-
-      // Capture the raw API response so the UI panel below the print preview
-      // can show exactly what the server (and Zoho) returned. Auto-expand on
-      // anything that wasn't a clean Zoho success so the operator sees why.
-      const respRecord: ReceiveResponseRecord = {
-        at: Date.now(),
-        durationMs: Date.now() - startedAt,
-        httpStatus: markRes.status,
-        ok: markRes.ok && Boolean(markData?.success),
-        body: markData,
-      };
-      setLastReceiveResponse(respRecord);
-
-      if (markRes.ok) {
+      // Fire-and-forget — operator keeps working while Zoho responds. The
+      // print popup was opened synchronously by the caller (runPrintLabel)
+      // before we got here, so no await blocks it.
+      void (async () => {
         try {
-          const linesRes = await fetch(`/api/receiving-lines?receiving_id=${row.receiving_id}`);
-          const lineData = await linesRes.json();
-          const rows = Array.isArray(lineData?.receiving_lines) ? lineData.receiving_lines : [];
-          for (const r of rows) {
-            dispatchLineUpdated(r as ReceivingLineRow);
-          }
-        } catch { /* table may still reflect partial state */ }
-      }
+          const perLineNotes = notes.trim() || null;
 
-      if (!markRes.ok || !markData?.success) {
-        console.error('receiving/mark-received-po failed', { status: markRes.status, error: markData?.error });
-        toast.error(markData?.error || `Receive failed (HTTP ${markRes.status})`);
-        setResponseExpanded(true);
-      } else {
-        const zoho = markData?.zoho as
-          | {
-              attempted?: number;
-              ok?: boolean;
-              rate_limited?: boolean;
-              error?: string | null;
-              skip_reason?: string | null;
-              results?: Array<{ purchaseorder_id?: string; receive_id: string | null; error: string | null; error_kind?: string | null }>;
+          const markRes = await fetch('/api/receiving/mark-received-po', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              receiving_id: row.receiving_id,
+              receiving_line_id: row.id,
+              receive_intent: receiveIntent,
+              qa_status: qa,
+              disposition_code: disp,
+              condition_grade: cond,
+              serial_number: serialInput.trim() || undefined,
+              zendesk_ticket: zendesk.trim() || undefined,
+              listing_link: listingLink.trim() || undefined,
+              notes: perLineNotes || undefined,
+              staff_id: Number(staffId),
+            }),
+          });
+          const markData = await markRes.json().catch(() => null);
+
+          const respRecord: ReceiveResponseRecord = {
+            at: Date.now(),
+            durationMs: Date.now() - startedAt,
+            httpStatus: markRes.status,
+            ok: markRes.ok && Boolean(markData?.success),
+            body: markData,
+          };
+          setLastReceiveResponse(respRecord);
+
+          if (markRes.ok) {
+            try {
+              const linesRes = await fetch(`/api/receiving-lines?receiving_id=${row.receiving_id}`);
+              const lineData = await linesRes.json();
+              const rows = Array.isArray(lineData?.receiving_lines) ? lineData.receiving_lines : [];
+              for (const r of rows) {
+                dispatchLineUpdated(r as ReceivingLineRow);
+              }
+            } catch { /* table may still reflect partial state */ }
+          }
+
+          if (!markRes.ok || !markData?.success) {
+            console.error('receiving/mark-received-po failed', { status: markRes.status, error: markData?.error });
+            toast.error(markData?.error || `Receive failed (HTTP ${markRes.status})`, {
+              id: toastId,
+              duration: 6000,
+            });
+            setResponseExpanded(true);
+          } else {
+            const zoho = markData?.zoho as
+              | {
+                  attempted?: number;
+                  ok?: boolean;
+                  rate_limited?: boolean;
+                  error?: string | null;
+                  skip_reason?: string | null;
+                  results?: Array<{ purchaseorder_id?: string; receive_id: string | null; error: string | null; error_kind?: string | null }>;
+                }
+              | undefined;
+            if (zoho?.attempted) {
+              if (zoho.rate_limited) {
+                toast.error('Zoho daily API quota exhausted — PO was NOT marked received in Zoho. Lines stay in Scanned until Zoho succeeds.', {
+                  id: toastId,
+                  description: 'Wait for the daily reset or reduce other Zoho-touching workflows for now.',
+                  duration: 8000,
+                });
+                setResponseExpanded(true);
+              } else if (!zoho.ok) {
+                toast.error(`Zoho receive failed: ${zoho.error || 'unknown error'}`, {
+                  id: toastId,
+                  duration: 6000,
+                });
+                setResponseExpanded(true);
+              } else if (zoho.skip_reason === 'zoho_already_fully_received') {
+                toast.success('Zoho already shows this PO as fully received.', {
+                  id: toastId,
+                  description: 'Purchase receive was not needed; inventory matches the dashboard.',
+                  duration: 5000,
+                });
+                setResponseExpanded(false);
+              } else {
+                toast.success(
+                  <div className="flex flex-col gap-1 text-left">
+                    <span className="leading-snug">Successfully added SN# & notes to PO item</span>
+                    <span className="leading-snug">Successfully marked the PO as Received</span>
+                  </div>,
+                  { id: toastId, duration: 6000 },
+                );
+                setResponseExpanded(false);
+              }
+            } else {
+              const skipReason = zoho?.skip_reason;
+              if (skipReason === 'scan_only') {
+                toast.success('Marked as scanned locally (Zoho not updated). Run Receive when ready to sync inventory.', {
+                  id: toastId,
+                  duration: 6500,
+                });
+                setResponseExpanded(false);
+              } else if (skipReason === 'zoho_already_fully_received') {
+                toast.success('Zoho already shows this PO as fully received.', {
+                  id: toastId,
+                  description: 'Purchase receive was not needed; inventory matches the dashboard.',
+                  duration: 5000,
+                });
+                setResponseExpanded(false);
+              } else if (skipReason === 'no_receiving_lines') {
+                toast.message('No receiving lines on this shipment.', { id: toastId, duration: 5000 });
+                setResponseExpanded(true);
+              } else {
+                toast.error('Lines saved locally — Zoho was NOT updated (no PO link found).', {
+                  id: toastId,
+                  description: 'Sync with Zoho first (refresh icon) to link this carton to a PO.',
+                  duration: 7000,
+                });
+                setResponseExpanded(true);
+              }
             }
-          | undefined;
-        if (zoho?.attempted) {
-          if (zoho.rate_limited) {
-            toast.error('Zoho daily API quota exhausted — PO was NOT marked received in Zoho. Lines stay in Scanned until Zoho succeeds.', {
-              description: 'Wait for the daily reset or reduce other Zoho-touching workflows for now.',
-              duration: 8000,
-            });
-            setResponseExpanded(true);
-          } else if (!zoho.ok) {
-            toast.error(`Zoho receive failed: ${zoho.error || 'unknown error'}`, { duration: 6000 });
-            setResponseExpanded(true);
-          } else if (zoho.skip_reason === 'zoho_already_fully_received') {
-            toast.success('Zoho already shows this PO as fully received.', {
-              description: 'Purchase receive was not needed; inventory matches the dashboard.',
-              duration: 5000,
-            });
-            setResponseExpanded(false);
-          } else {
-            toast.success(
-              <div className="flex flex-col gap-1 text-left">
-                <span className="leading-snug">Successfully added SN# & notes to PO item</span>
-                <span className="leading-snug">Successfully marked the PO as Received</span>
-              </div>,
-              { duration: 6000 },
-            );
-            setResponseExpanded(false);
           }
-        } else {
-          const skipReason = zoho?.skip_reason;
-          if (skipReason === 'scan_only') {
-            toast.success('Marked as scanned locally (Zoho not updated). Run Receive when ready to sync inventory.', {
-              duration: 6500,
-            });
-            setResponseExpanded(false);
-          } else if (skipReason === 'zoho_already_fully_received') {
-            toast.success('Zoho already shows this PO as fully received.', {
-              description: 'Purchase receive was not needed; inventory matches the dashboard.',
-              duration: 5000,
-            });
-            setResponseExpanded(false);
-          } else if (skipReason === 'no_receiving_lines') {
-            toast.message('No receiving lines on this shipment.', { duration: 5000 });
-            setResponseExpanded(true);
-          } else {
-            toast.error('Lines saved locally — Zoho was NOT updated (no PO link found).', {
-              description: 'Sync with Zoho first (refresh icon) to link this carton to a PO.',
-              duration: 7000,
-            });
-            setResponseExpanded(true);
-          }
-        }
-      }
 
-      window.dispatchEvent(new CustomEvent('receiving-entry-added'));
-      window.dispatchEvent(new CustomEvent('usav-refresh-data'));
-    } catch (err) {
-      console.error('receiving/mark-received-po threw', err);
-      const message = err instanceof Error ? err.message : 'Receive failed';
-      toast.error(message);
-      setLastReceiveResponse({
-        at: Date.now(),
-        durationMs: Date.now() - startedAt,
-        httpStatus: 0,
-        ok: false,
-        body: null,
-        networkError: message,
-      });
-      setResponseExpanded(true);
-    } finally {
-      setReceiving(false);
-    }
-  }, [receiving, row.receiving_id, row.id, qa, disp, cond, notes, zendesk, listingLink, serialInput, staffId]);
+          window.dispatchEvent(new CustomEvent('receiving-entry-added'));
+          window.dispatchEvent(new CustomEvent('usav-refresh-data'));
+        } catch (err) {
+          console.error('receiving/mark-received-po threw', err);
+          const message = err instanceof Error ? err.message : 'Receive failed';
+          toast.error(message, { id: toastId, duration: 6000 });
+          setLastReceiveResponse({
+            at: Date.now(),
+            durationMs: Date.now() - startedAt,
+            httpStatus: 0,
+            ok: false,
+            body: null,
+            networkError: message,
+          });
+          setResponseExpanded(true);
+        } finally {
+          receiveInFlightRef.current = false;
+        }
+      })();
+    },
+    [row.receiving_id, row.id, qa, disp, cond, notes, zendesk, listingLink, serialInput, staffId],
+  );
 
   const poNumber = (row.zoho_purchaseorder_number || row.zoho_purchaseorder_id || '').trim();
   const scanValue = poNumber || (row.receiving_id != null ? `RCV-${row.receiving_id}` : '');
@@ -748,18 +821,20 @@ export function LineEditPanel({
     }
   }, [scanValue, labelPayload, row.sku, row.item_name, serialInput]);
 
-  const handlePrintAndReceive = useCallback(async () => {
+  // Print popup opens first (synchronous), then receive fires in the
+  // background — the button does NOT wait for Zoho to return.
+  const handlePrintAndReceive = useCallback(() => {
     runPrintLabel();
-    await handleReceive('zoho_receive');
+    handleReceive('zoho_receive');
   }, [runPrintLabel, handleReceive]);
 
   const canPrintReview = Boolean(scanValue.trim() || (row.sku || '').trim());
-  const canReceiveReview = row.receiving_id != null && !receiving;
+  const canReceiveReview = row.receiving_id != null;
   /** Print · receive must do both; previously SKU alone enabled the button while receive no-opped. */
-  const combinedReviewDisabled = receiving || !canReceiveReview || !canPrintReview;
+  const combinedReviewDisabled = !canReceiveReview || !canPrintReview;
   const isSinglePoItem = itemTotal === 1;
-  const receiveMenuLabel = receiving ? 'Receiving…' : isSinglePoItem ? 'Receive' : 'Receive all';
-  const printReceivePrimaryLabel = receiving ? 'Receiving…' : 'Print · receive';
+  const receiveMenuLabel = isSinglePoItem ? 'Receive' : 'Receive all';
+  const printReceivePrimaryLabel = 'Print · receive';
   const splitMenuAriaLabel = isSinglePoItem
     ? 'Print only, mark as scanned, or receive (no print)'
     : 'Print only, mark as scanned, or receive all (no print)';
@@ -1261,7 +1336,7 @@ export function LineEditPanel({
                   aria-label="Source platform"
                   className="mt-1.5 flex flex-wrap items-center gap-1.5"
                 >
-                  {(['ebay', 'goodwill', 'amazon', 'aliexpress', 'walmart'] as const)
+                  {(['ebay', 'goodwill', 'amazon', 'aliexpress', 'walmart', 'other'] as const)
                     .map((id) => SOURCE_PLATFORM_OPTS.find((o) => o.value === id))
                     .filter((o): o is (typeof SOURCE_PLATFORM_OPTS)[number] => !!o)
                     .map((opt) => {

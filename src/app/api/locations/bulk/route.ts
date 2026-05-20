@@ -1,12 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { bulkCreateBinRange } from '@/lib/neon/location-queries';
+import { withAuth } from '@/lib/auth/withAuth';
 
 /**
  * POST /api/locations/bulk
  * Body: { room, rowLabel, colStart, colEnd, binType?, capacity? }
  * Returns: { created, bins[] } — existing bins are reused, not duplicated.
  */
-export async function POST(req: NextRequest) {
+async function handlePost(req: NextRequest) {
   try {
     const body = await req.json().catch(() => ({}));
     const room = String(body?.room ?? '').trim();
@@ -47,3 +48,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Failed', details: err?.message }, { status: 500 });
   }
 }
+
+// Phase 2e: bulk bin creation is destructive infrastructure work — gate on
+// bin.set, which inventory managers / receivers / packers already have.
+export const POST = withAuth(handlePost, { permission: 'bin.set' });

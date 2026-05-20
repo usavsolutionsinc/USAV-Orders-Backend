@@ -11,7 +11,8 @@ import { AdminJobsTab } from '@/components/admin/AdminJobsTab';
 import AiChatTab from '@/components/admin/AiChatTab';
 import { ArchitectureTab } from '@/components/admin/ArchitectureTab';
 import { PhotoBackupTab } from '@/components/admin/PhotoBackupTab';
-import { ADMIN_SECTION_OPTIONS, type AdminSection } from '@/components/admin/admin-sections';
+import { AdminOverviewTab } from '@/components/admin/AdminOverviewTab';
+import { getAdminSection, type AdminSection } from '@/components/admin/admin-sections';
 import { requirePermission } from '@/lib/auth/page-guard';
 
 interface AdminPageProps {
@@ -24,84 +25,56 @@ interface AdminPageProps {
   }>;
 }
 
+function renderTab(
+  activeTab: AdminSection,
+  args: { searchValue: string; manualMode: 'category' | 'orders'; categoryId: string; orderId: string },
+) {
+  switch (activeTab) {
+    case 'overview':     return <AdminOverviewTab />;
+    case 'goals':        return <GoalsAnalyticsTab />;
+    case 'staff':        return <StaffManagementTab />;
+    case 'access':       return <StaffAccessMatrixTab />;
+    case 'roles':        return <RolesAdminTab />;
+    case 'connections':  return <ConnectionsManagementTab />;
+    case 'fba':          return <FBAManagementTab searchTerm={args.searchValue} />;
+    case 'features':     return <FeaturesManagementTab />;
+    case 'logs':         return <AdminLogsTab initialSearch={args.searchValue} />;
+    case 'jobs':         return <AdminJobsTab />;
+    case 'ai_chat':      return <AiChatTab />;
+    case 'architecture': return <ArchitectureTab />;
+    case 'photo_backup': return <PhotoBackupTab />;
+    case 'manuals':
+      return (
+        <ManualAssignmentTab
+          manualMode={args.manualMode}
+          categoryId={args.categoryId}
+          orderId={args.orderId}
+          searchValue={args.searchValue}
+        />
+      );
+  }
+}
+
 export default async function AdminPage({ searchParams }: AdminPageProps) {
-  // Server-side gate. The proxy already requires a session cookie; this
-  // additionally requires the admin.view role permission so the admin UI
-  // isn't reachable by non-admin signed-in users (defense in depth — the
-  // API routes behind these tabs are gated individually too).
   await requirePermission('admin.view', { enforce: true });
 
   const params = await searchParams;
-  const requestedSection = (params.section as AdminSection) || 'goals';
-  const activeTab = ADMIN_SECTION_OPTIONS.some((item) => item.value === requestedSection)
-    ? requestedSection
-    : 'goals';
+  const activeTab = getAdminSection(params.section);
   const sidebarSearch = (params.search || '').trim();
   const manualMode = params.manualMode === 'orders' ? 'orders' : 'category';
   const categoryId = (params.categoryId || '').trim();
   const orderId = (params.orderId || '').trim();
 
   const isManuals = activeTab === 'manuals';
+  const containerClass = `flex h-full w-full bg-gray-50 ${isManuals ? 'overflow-hidden' : ''}`;
+  const innerClass = `flex-1 min-w-0 ${isManuals ? 'overflow-hidden flex flex-col' : 'overflow-hidden'}`;
 
   return (
-    <div className={`flex h-full w-full bg-gray-50 ${isManuals ? 'overflow-hidden' : ''}`}>
-      <div className={`flex-1 min-w-0 ${isManuals ? 'overflow-hidden flex flex-col' : 'overflow-hidden'}`}>
-        {isManuals ? (
-          <ManualAssignmentTab
-            manualMode={manualMode}
-            categoryId={categoryId}
-            orderId={orderId}
-            searchValue={sidebarSearch}
-          />
-        ) : activeTab === 'features' ? (
-          <div className="h-full min-h-0 w-full">
-            <FeaturesManagementTab />
-          </div>
-        ) : activeTab === 'logs' ? (
-          <div className="h-full min-h-0 w-full">
-            <AdminLogsTab initialSearch={sidebarSearch} />
-          </div>
-        ) : activeTab === 'jobs' ? (
-          <div className="h-full min-h-0 w-full">
-            <AdminJobsTab />
-          </div>
-        ) : activeTab === 'ai_chat' ? (
-          <div className="h-full min-h-0 w-full">
-            <AiChatTab />
-          </div>
-        ) : activeTab === 'architecture' ? (
-          <div className="h-full min-h-0 w-full">
-            <ArchitectureTab />
-          </div>
-        ) : activeTab === 'photo_backup' ? (
-          <div className="h-full min-h-0 w-full">
-            <PhotoBackupTab />
-          </div>
-        ) : activeTab === 'access' ? (
-          <div className="h-full min-h-0 w-full">
-            <StaffAccessMatrixTab />
-          </div>
-        ) : activeTab === 'roles' ? (
-          <div className="h-full min-h-0 w-full">
-            <RolesAdminTab />
-          </div>
-        ) : activeTab === 'connections' || activeTab === 'goals' || activeTab === 'staff' || activeTab === 'fba' ? (
-          <div className="h-full min-h-0 w-full">
-            {activeTab === 'connections' ? (
-              <ConnectionsManagementTab />
-            ) : activeTab === 'goals' ? (
-              <GoalsAnalyticsTab />
-            ) : activeTab === 'staff' ? (
-              <StaffManagementTab />
-            ) : (
-              <FBAManagementTab searchTerm={sidebarSearch} />
-            )}
-          </div>
-        ) : (
-          <div className="h-full min-h-0 p-4">
-            <GoalsAnalyticsTab />
-          </div>
-        )}
+    <div className={containerClass}>
+      <div className={innerClass}>
+        <div className="h-full min-h-0 w-full">
+          {renderTab(activeTab, { searchValue: sidebarSearch, manualMode, categoryId, orderId })}
+        </div>
       </div>
     </div>
   );
