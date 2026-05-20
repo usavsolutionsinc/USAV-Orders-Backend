@@ -12,6 +12,7 @@
  */
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
+import { flushSync } from 'react-dom';
 import { usePathname, useRouter } from 'next/navigation';
 
 // Mirror of PUBLIC_PATHS in src/proxy.ts. Kept in sync by hand — small and
@@ -23,6 +24,12 @@ const CLIENT_PUBLIC_PATHS: ReadonlyArray<RegExp> = [
   /^\/not-authorized(?:$|\/)/,
   /^\/m\/enroll\//,
   /^\/offline(?:$|\/)/,
+  // GS1 Digital Link resolver — server-side redirects anon callers to
+  // the storefront before any client-side guard runs, but listing the
+  // patterns here keeps the contract symmetric with src/proxy.ts.
+  /^\/gs1\/resolve(?:$|\/)/,
+  /^\/01\/[0-9]+(?:$|\/)/,
+  /^\/414\/[0-9]+\/254\/[A-Za-z0-9]+(?:$|\/)/,
 ];
 
 function isClientPublicPath(pathname: string | null): boolean {
@@ -70,22 +77,32 @@ export function AuthProvider({ initial = null, children }: ProviderProps) {
   const pathname = usePathname();
 
   const refresh = useCallback(async () => {
+    // We have to compute the next state outside the React-render path so
+    // that flushSync below can commit it synchronously. The reason:
+    // callers do `await refreshAuth(); router.replace('/dashboard');` —
+    // a plain setUser() returns before React commits, so the next
+    // navigation reads the OLD provider value (`user: null`) and the
+    // post-render `mustRedirect` effect bounces back to /signin. This
+    // was the "second sign-in loop" the signin page comment warned about.
+    let nextUser: AuthSessionUser | null = null;
     try {
       const r = await fetch('/api/auth/session', {
         credentials: 'include',
         cache: 'no-store',
       });
-      if (!r.ok) {
-        setUser(null);
-      } else {
+      if (r.ok) {
         const data = (await r.json()) as { user: AuthSessionUser | null };
-        setUser(data.user ?? null);
+        nextUser = data.user ?? null;
       }
     } catch {
-      setUser(null);
-    } finally {
-      setIsLoaded(true);
+      nextUser = null;
     }
+    // flushSync forces React to commit BEFORE this function resolves, so
+    // `await refresh()` is genuinely "AuthContext is up to date now".
+    flushSync(() => {
+      setUser(nextUser);
+      setIsLoaded(true);
+    });
   }, []);
 
   const signOut = useCallback(async () => {

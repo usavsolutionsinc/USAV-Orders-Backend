@@ -1,12 +1,18 @@
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import pool from '@/lib/db';
 import fs from 'fs';
 import path from 'path';
 import { withAuth } from '@/lib/auth/withAuth';
+import { guardSetupRequest } from '@/lib/setup-guard';
 
-// Break-glass schema bootstrap. Admin-only + step-up required because this
-// recreates tables and seeds sample staff rows. Do not call from app code.
-export const POST = withAuth(async () => {
+// Break-glass schema bootstrap. Admin-only + step-up + SETUP_TOKEN required
+// because this recreates tables and seeds sample staff rows. Refuses in
+// production unless SETUP_ALLOW_PROD=1 is explicitly set. Do not call from
+// app code.
+export const POST = withAuth(async (req: NextRequest) => {
+    const blocked = guardSetupRequest(req);
+    if (blocked) return blocked;
+
     const client = await pool.connect();
     
     try {

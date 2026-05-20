@@ -34,8 +34,8 @@ async function resolveCtx(req: NextRequest): Promise<AnonymousAuthContext> {
   const user = await getCurrentUserBySid(sid);
   const noopMark = () => {};
   return user
-    ? { user, session: user.session, staffId: user.staffId, role: user.role, permissions: user.permissions, markAuditWritten: noopMark }
-    : { user: null, session: null, staffId: null, role: null, permissions: new Set(), markAuditWritten: noopMark };
+    ? { user, session: user.session, staffId: user.staffId, organizationId: user.organizationId, role: user.role, permissions: user.permissions, markAuditWritten: noopMark }
+    : { user: null, session: null, staffId: null, organizationId: null, role: null, permissions: new Set(), markAuditWritten: noopMark };
 }
 
 const ROUTE_SKU_STOCK_PATCH = 'sku-stock.sku.patch';

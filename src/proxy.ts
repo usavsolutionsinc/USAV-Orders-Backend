@@ -26,12 +26,22 @@ const SESSION_COOKIE_NAME = 'usav_sid';
 
 const PUBLIC_PATHS: ReadonlyArray<RegExp> = [
   /^\/signin(?:$|\/)/,
+  /^\/signup(?:$|\/)/,                  // public account creation
   /^\/m\/signin(?:$|\/)/,
   /^\/not-authorized(?:$|\/)/,
   /^\/m\/enroll\//,
   /^\/api\/auth\//,
   /^\/api\/health(?:$|\/)/,
+  /^\/api\/ready(?:$|\/)/,
   /^\/api\/qstash\//,
+  /^\/api\/webhooks\//,                 // carrier + Stripe + integration callbacks
+  /^\/api\/billing\/webhook(?:$|\/)/,   // Stripe webhook needs raw body, no cookie
+  // GS1 Digital Link resolver — same printed QR serves both audiences.
+  // The handler itself branches on session cookie: authed staff get
+  // contextual redirects, anon callers bounce to the public storefront.
+  /^\/gs1\/resolve(?:$|\/)/,
+  /^\/01\/[0-9]+(?:$|\/)/,
+  /^\/414\/[0-9]+\/254\/[A-Za-z0-9]+(?:$|\/)/,
   /^\/_next\//,
   /^\/favicon\.ico$/,
   /^\/manifest\.(json|webmanifest)$/,
@@ -40,6 +50,30 @@ const PUBLIC_PATHS: ReadonlyArray<RegExp> = [
   /^\/icons?\//,
   /^\/.well-known\//,
 ];
+
+// Hostnames that should NOT be treated as a tenant subdomain. Anything else
+// of the form `slug.<root>` is extracted as a tenant slug and stamped onto
+// the request headers so downstream handlers can resolve the org without a
+// per-request hit on the DB at the edge.
+const RESERVED_SUBDOMAINS = new Set<string>(['www', 'app', 'api', 'admin', 'docs', 'status', 'staging', 'preview']);
+
+function extractTenantSlug(host: string | null): string | null {
+  if (!host) return null;
+  // Strip port if present.
+  const cleaned = host.split(':')[0]!.toLowerCase();
+  // localhost and bare IPs never carry a subdomain.
+  if (cleaned === 'localhost' || /^\d+\.\d+\.\d+\.\d+$/.test(cleaned)) return null;
+  const parts = cleaned.split('.');
+  // Need at least subdomain.root.tld to claim a tenant slug.
+  if (parts.length < 3) return null;
+  const candidate = parts[0]!;
+  if (RESERVED_SUBDOMAINS.has(candidate)) return null;
+  // Vercel preview hostnames like usav-orders-git-foo-bar.vercel.app — the
+  // subdomain there is the project, not a tenant. Cheap heuristic: any host
+  // ending in .vercel.app skips slug extraction.
+  if (cleaned.endsWith('.vercel.app')) return null;
+  return candidate;
+}
 
 const REWRITES: ReadonlyArray<{ prefix: string; target: string }> = [
   { prefix: '/m/b/', target: '/bin/' },
@@ -131,6 +165,14 @@ export function proxy(req: NextRequest): NextResponse {
   // build a `?next=` query when it redirects to /signin.
   const requestHeaders = new Headers(req.headers);
   requestHeaders.set('x-pathname', rewriteTarget ?? pathname);
+
+  // Stamp the tenant slug (if any) so downstream handlers can resolve the
+  // org without re-parsing the host header. The slug is just a hint —
+  // the authoritative org id always comes from the session.
+  const tenantSlug = extractTenantSlug(req.headers.get('host'));
+  if (tenantSlug) {
+    requestHeaders.set('x-tenant-slug', tenantSlug);
+  }
 
   const applyRewriteOrNext = (): NextResponse => {
     if (rewriteTarget) {

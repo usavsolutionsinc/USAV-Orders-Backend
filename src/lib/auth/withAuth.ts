@@ -38,6 +38,8 @@ export interface AuthContext {
   user: CurrentUser;
   session: CurrentUser['session'];
   staffId: number;
+  /** Active tenant id — every business query should be scoped by this. */
+  organizationId: string;
   role: CurrentUser['role'];
   permissions: CurrentUser['permissions'];
   /**
@@ -52,6 +54,8 @@ export interface AnonymousAuthContext {
   user: CurrentUser | null;
   session: CurrentUser['session'] | null;
   staffId: number | null;
+  /** Null when truly anonymous; otherwise mirrors authenticated context. */
+  organizationId: string | null;
   role: CurrentUser['role'] | null;
   permissions: CurrentUser['permissions'];
   markAuditWritten: () => void;
@@ -189,6 +193,7 @@ export function withAuth(
         user: null,
         session: null,
         staffId: null,
+        organizationId: null,
         role: null,
         permissions: new Set(),
         markAuditWritten,
@@ -228,6 +233,7 @@ export function withAuth(
       user,
       session: user.session,
       staffId: user.staffId,
+      organizationId: user.organizationId,
       role: user.role,
       permissions: user.permissions,
       markAuditWritten,

@@ -96,6 +96,15 @@ export default function SignInPage() {
    *   2. defaultHomePath returned by the API (per-staff override)
    *   3. ROLE_HOME[role] (per-role default)
    *   4. /dashboard (final fallback)
+   *
+   * We use window.location.assign instead of router.replace as the final
+   * step. router.replace is an SPA navigation that re-uses the existing
+   * React tree, which means the AuthContext provider (and every cached
+   * RSC) carries forward. Even after `await refreshAuth()` committed the
+   * new session, sidebar permissions / dashboard data / cached chunks
+   * are stale. A hard navigation gives every consumer a fresh tree with
+   * the cookie in place — eliminates the entire class of "first click
+   * doesn't work, refresh-then-click does" bugs.
    */
   const finish = useCallback(async (
     staffId: number,
@@ -103,13 +112,17 @@ export default function SignInPage() {
     defaultHomePath: string | null | undefined,
   ) => {
     writeRecent(staffId);
-    // Hydrate AuthContext with the new session BEFORE navigating. Without this,
-    // the still-null user state in AuthContext sees the next non-public route
-    // and immediately bounces us back to /signin (the "second sign-in loop").
+    // Hydrate AuthContext synchronously (flushSync inside refresh) so any
+    // micro-task scheduled before the hard navigation sees the new user.
     await refreshAuth();
     const roleHome = role ? ROLE_HOME[role.toLowerCase()] : null;
     const target = next || defaultHomePath || roleHome || '/dashboard';
-    router.replace(target);
+    if (typeof window !== 'undefined') {
+      window.location.assign(target);
+    } else {
+      // SSR fallback (should never hit since this is a client callback).
+      router.replace(target);
+    }
   }, [router, next, refreshAuth]);
 
   const submitPin = useCallback(async (pin: string) => {

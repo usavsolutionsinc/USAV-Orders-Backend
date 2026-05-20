@@ -1,10 +1,16 @@
 # USAV Orders Backend
 
-Internal operations platform for USAV order workflow management.
+Multi-tenant operations platform for order, warehouse, and fulfilment
+workflows. Originally built for USAV Solutions Inc as a single-tenant
+internal tool; now also runs as a public SaaS where each customer is a
+tenant with isolated data, integrations, billing, and feature flags.
 
 This repository is a Next.js (App Router) application that combines:
 - Warehouse/station dashboards (tech, packer, receiving, support, admin)
-- PostgreSQL data storage (Neon/Postgres)
+- PostgreSQL data storage (Neon/Postgres) with multi-tenant scoping
+- Per-tenant integration credential vault (AES-256-GCM)
+- Stripe billing + entitlement gating
+- Self-service signup at `/signup` and per-staff PIN signin at `/signin`
 - Google Sheets sync pipelines
 - eBay, Ecwid/Square, Zendesk, and Zoho integrations
 
@@ -128,6 +134,24 @@ npm run dev
 ### Required
 
 - `DATABASE_URL`
+- `SETUP_TOKEN` — bearer header for the schema-bootstrap endpoints
+- `INTEGRATION_KMS_KEY` — base64-encoded 32-byte AES key for the
+  integration credential vault (generate via
+  `node -e "console.log(require('node:crypto').randomBytes(32).toString('base64'))"`)
+
+### Billing (Stripe)
+
+- `STRIPE_SECRET_KEY`
+- `STRIPE_PUBLISHABLE_KEY`
+- `STRIPE_WEBHOOK_SECRET`
+- `STRIPE_PRICE_STARTER`, `STRIPE_PRICE_GROWTH`, `STRIPE_PRICE_PRO`,
+  `STRIPE_PRICE_ENTERPRISE` — Stripe Price ids per plan tier
+
+### Email (optional, Resend)
+
+- `RESEND_API_KEY` — when unset, transactional emails log to the console
+  in dev and CI rather than going out
+- `EMAIL_FROM` — From: header for outbound mail
 
 ### Google Sheets Sync
 
@@ -255,7 +279,100 @@ Legacy and transitional setup endpoints exist:
 - `POST /api/setup-db`
 - `POST /api/drizzle-setup`
 
-Prefer using Drizzle migration workflow (`db:generate` + `db:push`) for schema evolution, and keep API setup endpoints for controlled/backward-compatible bootstrap scenarios.
+These are now **triple-gated**: admin.manage_features permission, step-up,
+and a `x-setup-token` header matching `SETUP_TOKEN`. In production they
+also require `SETUP_ALLOW_PROD=1` — without it they hard-refuse.
+
+For day-to-day migrations, run the SQL files in `src/lib/migrations/` via:
+
+```bash
+npm run db:migrate         # apply pending
+npm run db:migrate:dry     # list pending without applying
+```
+
+The runner (`scripts/run-pending-migrations.mjs`) tracks applied files in a
+`schema_migrations` table by sha256, so changing a previously-applied file
+hard-errors rather than silently re-running.
+
+## SaaS layer (multi-tenancy, billing, integrations)
+
+### Tenancy
+
+Every staff row belongs to an **organization** (`organizations` table,
+backfilled by `2026-05-22_organizations_tenancy.sql`). USAV is org #1 with
+a fixed UUID — see `src/lib/tenancy/constants.ts`. Routes that need a
+tenant-scoped DB client should use:
+
+```ts
+import { withTenantConnection, tenantQuery } from '@/lib/tenancy';
+
+await withTenantConnection(orgId, async (client) => { ... });
+const rows = await tenantQuery(orgId, 'SELECT ...', [...]);
+```
+
+Both helpers set the `app.current_org` Postgres GUC on the session so
+future RLS policies can backstop the application-layer scoping.
+
+`withAuth` exposes `ctx.organizationId` to every authenticated handler so
+new code never has to look it up.
+
+### Billing (Stripe)
+
+Plans + entitlements live in `src/lib/billing/plans.ts`. Stripe REST is
+called via the tiny client in `src/lib/billing/stripe.ts` (no SDK
+dependency). Endpoints:
+
+- `POST /api/billing/checkout` — start a subscription
+- `POST /api/billing/portal`   — Stripe-hosted billing portal
+- `POST /api/billing/webhook`  — Stripe event receiver, idempotent via
+  `stripe_events` table
+
+UI: `/settings/billing`.
+
+### Integration credentials (per-tenant vault)
+
+`organization_integrations` stores AES-256-GCM-encrypted payloads per
+(org, provider, scope). Read/write via:
+
+```ts
+import { getIntegrationCredentials, upsertIntegrationCredentials } from '@/lib/integrations/credentials';
+
+const creds = await getIntegrationCredentials<ZohoCredentials>(orgId, 'zoho');
+```
+
+USAV's existing env-var credentials are kept as a transitional fallback —
+they only resolve for the USAV org id. New tenants get nothing from env,
+so a missing per-tenant row means the integration is genuinely off.
+
+UI: `/settings/integrations`.
+
+### Feature flags
+
+Per-tenant overrides in `organization_feature_flags`; env vars are the
+system-wide default. `isInventoryV2X()` stays sync env-only;
+`isInventoryV2XForOrg(orgId)` reads the per-tenant override. Migrate
+callsites as they pick up an orgId from `withAuth`'s ctx.
+
+### Signup / GDPR
+
+- `POST /api/auth/signup` — creates an org + first admin staff + 14-day
+  trial in one transaction. UI: `/signup`.
+- `POST /api/admin/org/export` — returns all tenant-scoped data as JSON.
+- `POST /api/admin/org/delete` — soft-deletes the org, revokes all
+  sessions; purge runs out-of-band on a 30-day clock.
+
+### Observability
+
+- `/api/health` — always 200 with `version`
+- `/api/ready`  — 503 when DB or Redis ping fails
+- `/api/log-error` — client-side error sink → structured JSON log
+- `src/lib/observability/logger.ts` — pino-compatible logger; lines are
+  pretty-printed in dev, JSON in production. Pipe to your aggregator.
+
+### CI
+
+`.github/workflows/ci.yml` runs lint + `tsc --noEmit` + every
+`src/**/*.test.ts` on push and PR. Add new tests anywhere under `src/`.
 
 ## Project Structure
 

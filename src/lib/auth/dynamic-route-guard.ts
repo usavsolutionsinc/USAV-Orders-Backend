@@ -81,6 +81,7 @@ export async function requireRoutePerm(
       user,
       session: user.session,
       staffId: user.staffId,
+      organizationId: user.organizationId,
       role: user.role,
       permissions: user.permissions,
       // markAuditWritten is a no-op for dynamic-param routes — there's no

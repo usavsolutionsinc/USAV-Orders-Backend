@@ -21,6 +21,8 @@ export type DeviceKind = 'station' | 'personal' | 'phone';
 export interface SessionRow {
   sid: string;
   staffId: number;
+  /** Active tenant for this session — see migrations/2026-05-22_organizations_tenancy.sql. */
+  organizationId: string;
   deviceKind: DeviceKind;
   deviceLabel: string | null;
   ip: string | null;
@@ -65,7 +67,8 @@ export interface CreateSessionOpts {
 }
 
 interface SessionDbRow {
-  sid: string; staff_id: number; device_kind: DeviceKind; device_label: string | null;
+  sid: string; staff_id: number; organization_id: string;
+  device_kind: DeviceKind; device_label: string | null;
   ip: string | null; user_agent: string | null;
   created_at: Date; last_seen_at: Date; expires_at: Date; revoked_at: Date | null;
 }
@@ -80,17 +83,26 @@ export async function createSession(opts: CreateSessionOpts): Promise<SessionRow
     ? new Date(Math.min(opts.expiresAt.getTime(), defaultExpiresAt.getTime()))
     : defaultExpiresAt;
 
+  // staff_sessions.organization_id is derived from staff.organization_id at
+  // insert time so the session inherits the tenant the staff currently
+  // belongs to. When org-switching lands this will become a parameter.
   const r = await pool.query(
-    `INSERT INTO staff_sessions (sid, staff_id, device_kind, device_label, ip, user_agent, expires_at)
-     VALUES ($1, $2, $3, $4, $5::inet, $6, $7)
-     RETURNING sid, staff_id, device_kind, device_label, ip::text AS ip, user_agent,
+    `INSERT INTO staff_sessions (sid, staff_id, organization_id, device_kind, device_label, ip, user_agent, expires_at)
+     SELECT $1, $2, st.organization_id, $3, $4, $5::inet, $6, $7
+       FROM staff st
+      WHERE st.id = $2
+     RETURNING sid, staff_id, organization_id, device_kind, device_label, ip::text AS ip, user_agent,
                created_at, last_seen_at, expires_at, revoked_at`,
     [sid, opts.staffId, opts.deviceKind, opts.deviceLabel ?? null, opts.ip ?? null, opts.userAgent ?? null, expiresAt],
   );
-  const row = r.rows[0] as SessionDbRow;
+  const row = r.rows[0] as SessionDbRow | undefined;
+  if (!row) {
+    throw new Error(`createSession: staff ${opts.staffId} not found`);
+  }
   return {
     sid: row.sid,
     staffId: row.staff_id,
+    organizationId: row.organization_id,
     deviceKind: row.device_kind,
     deviceLabel: row.device_label,
     ip: row.ip,
@@ -112,7 +124,7 @@ export async function loadSession(sid: string | null | undefined): Promise<Sessi
   if (!sid || typeof sid !== 'string' || sid.length < 32) return null;
 
   const r = await pool.query(
-    `SELECT sid, staff_id, device_kind, device_label, ip::text AS ip, user_agent,
+    `SELECT sid, staff_id, organization_id, device_kind, device_label, ip::text AS ip, user_agent,
             created_at, last_seen_at, expires_at, revoked_at
        FROM staff_sessions
       WHERE sid = $1
@@ -135,6 +147,7 @@ export async function loadSession(sid: string | null | undefined): Promise<Sessi
   return {
     sid: row.sid,
     staffId: row.staff_id,
+    organizationId: row.organization_id,
     deviceKind: row.device_kind,
     deviceLabel: row.device_label,
     ip: row.ip,
@@ -174,7 +187,7 @@ export async function loadSessionWithReason(
   let r;
   try {
     r = await pool.query(
-      `SELECT sid, staff_id, device_kind, device_label, ip::text AS ip, user_agent,
+      `SELECT sid, staff_id, organization_id, device_kind, device_label, ip::text AS ip, user_agent,
               created_at, last_seen_at, expires_at, revoked_at
          FROM staff_sessions
         WHERE sid = $1
@@ -201,6 +214,7 @@ export async function loadSessionWithReason(
     session: {
       sid: row.sid,
       staffId: row.staff_id,
+      organizationId: row.organization_id,
       deviceKind: row.device_kind,
       deviceLabel: row.device_label,
       ip: row.ip,
@@ -240,7 +254,7 @@ export async function revokeAllSessionsForStaff(staffId: number): Promise<number
 
 export async function listActiveSessions(staffId: number): Promise<SessionRow[]> {
   const r = await pool.query(
-    `SELECT sid, staff_id, device_kind, device_label, ip::text AS ip, user_agent,
+    `SELECT sid, staff_id, organization_id, device_kind, device_label, ip::text AS ip, user_agent,
             created_at, last_seen_at, expires_at, revoked_at
        FROM staff_sessions
       WHERE staff_id = $1 AND revoked_at IS NULL AND expires_at > NOW()
@@ -250,6 +264,7 @@ export async function listActiveSessions(staffId: number): Promise<SessionRow[]>
   return (r.rows as SessionDbRow[]).map((row) => ({
     sid: row.sid,
     staffId: row.staff_id,
+    organizationId: row.organization_id,
     deviceKind: row.device_kind,
     deviceLabel: row.device_label,
     ip: row.ip,

@@ -8,6 +8,7 @@ import { isTransientDbError, queryWithRetry } from '@/lib/db-retry';
 import { getCurrentStaffDayOfWeek, isStaffBusinessDay } from '@/lib/staff-schedule';
 import { getWeekStartDateKeyForDateKey } from '@/lib/staff-availability';
 import { getCurrentPSTDateKey } from '@/utils/date';
+import { withAuth } from '@/lib/auth/withAuth';
 
 function isDatabaseUnavailable(error: unknown) {
     return isTransientDbError(error);
@@ -204,7 +205,10 @@ export async function GET(request: NextRequest) {
     }
 }
 
-export async function POST(request: NextRequest) {
+// Create a new staff member. Gated by admin.manage_staff and scoped to the
+// caller's tenant (was previously unprotected — any unauthenticated POST
+// could create rows in the global staff table).
+export const POST = withAuth(async (request, ctx) => {
     try {
         const body = await request.json();
         const { name, role, employee_id, active } = body;
@@ -220,6 +224,7 @@ export async function POST(request: NextRequest) {
         const [result] = await db.insert(staff).values({
             name,
             role,
+            organizationId: ctx.organizationId,
             employeeId: employee_id || null,
             active: typeof active === 'boolean' ? active : true,
         }).returning();
@@ -239,12 +244,12 @@ export async function POST(request: NextRequest) {
         return NextResponse.json(result, { status: 201 });
     } catch (error) {
         console.error('Error creating staff:', error);
-        return NextResponse.json({ 
+        return NextResponse.json({
             error: 'Failed to create staff',
             details: error instanceof Error ? error.message : 'Unknown error'
         }, { status: 500 });
     }
-}
+}, { permission: 'admin.manage_staff' });
 
 export async function PUT(request: NextRequest) {
     try {

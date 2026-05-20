@@ -24,6 +24,8 @@ import { loadRolesForStaff, type RoleRow } from './role-store';
 export interface CurrentUser {
   session: SessionRow;
   staffId: number;
+  /** Active tenant for this request — propagated from staff_sessions. */
+  organizationId: string;
   /** Primary role key (lowest-position assigned role, or the staff.role column if none). */
   role: StaffRole;
   /** Every role assigned to this staff, ordered by position ascending. */
@@ -104,6 +106,7 @@ async function buildCurrentUser(session: SessionRow | null): Promise<CurrentUser
   return {
     session,
     staffId: session.staffId,
+    organizationId: session.organizationId,
     role,
     roles,
     permissions: mergePermissions(roles, added, removed),

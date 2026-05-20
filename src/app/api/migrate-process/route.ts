@@ -1,13 +1,18 @@
 import { NextRequest, NextResponse } from 'next/server';
 import pool from '@/lib/db';
 import { withAuth } from '@/lib/auth/withAuth';
+import { guardSetupRequest } from '@/lib/setup-guard';
 
 /**
- * Migration endpoint to change parts_needed to process column
- * Run once: POST /api/migrate-process
- * Break-glass — admin-only + step-up.
+ * Migration endpoint to change parts_needed to process column.
+ * Run once: POST /api/migrate-process (with x-setup-token header).
+ * Break-glass — admin-only + step-up + SETUP_TOKEN, refuses in production
+ * unless SETUP_ALLOW_PROD=1.
  */
-export const POST = withAuth(async (_req: NextRequest) => {
+export const POST = withAuth(async (req: NextRequest) => {
+  const blocked = guardSetupRequest(req);
+  if (blocked) return blocked;
+
   try {
     console.log('Starting migration: parts_needed -> process');
 

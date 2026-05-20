@@ -1,32 +1,25 @@
 import { redirect } from 'next/navigation';
-import pool from '@/lib/db';
+import { cookies } from 'next/headers';
+import { getCurrentUserBySid } from '@/lib/auth/current-user';
+import { SESSION_COOKIE_NAME } from '@/lib/auth/session';
+import { resolveGs1 } from '@/lib/gs1/resolver';
 
 /**
- * /01/[gtin]/21/[serial] — GS1 Digital Link landing for a specific physical
- * unit. We trust the serial as canonical and forward directly to the
- * /m/u/{serial} mobile unit page; the gtin segment is informational only.
+ * /01/[gtin]/21/[serial] — GS1 Digital Link landing for a unique unit.
+ *
+ * Internal scans land on /serial/{serial} (the canonical unit page —
+ * proxy.ts also rewrites /m/u/* here). Public scans bounce to the
+ * storefront. The shared resolver handles both branches; this page
+ * just supplies the cookie-derived auth state.
  */
 export default async function GtinSerialPage({
   params,
 }: {
   params: Promise<{ gtin: string; serial: string }>;
 }) {
-  const { serial } = await params;
-  const cleaned = decodeURIComponent(serial || '').trim();
-  if (!cleaned) redirect('/inventory');
-
-  // Best-effort: confirm the serial exists before redirecting, so unknown
-  // serials still land somewhere sensible instead of a 404.
-  try {
-    const r = await pool.query<{ id: number }>(
-      `SELECT id FROM serial_units WHERE normalized_serial = UPPER(TRIM($1)) LIMIT 1`,
-      [cleaned],
-    );
-    if (r.rows[0]?.id) {
-      redirect(`/m/u/${encodeURIComponent(cleaned)}`);
-    }
-  } catch {
-    /* swallow */
-  }
-  redirect(`/m/u/${encodeURIComponent(cleaned)}`);
+  const { gtin, serial } = await params;
+  const sid = (await cookies()).get(SESSION_COOKIE_NAME)?.value ?? null;
+  const user = await getCurrentUserBySid(sid);
+  const result = await resolveGs1(`/01/${gtin}/21/${serial}`, { isInternal: user !== null });
+  redirect(result.redirect);
 }

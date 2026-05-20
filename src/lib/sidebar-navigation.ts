@@ -40,6 +40,9 @@ export type SidebarRouteKey =
   | 'manuals-library'
   | 'ai'
   | 'settings'
+  | 'billing'
+  | 'integrations'
+  | 'staff'
   | 'unknown';
 
 export type SidebarIconComponent = (props: { className?: string }) => JSX.Element;
@@ -86,7 +89,10 @@ export const APP_SIDEBAR_NAV: SidebarNavItem[] = [
   { id: 'manuals',           label: 'Manuals',     href: '/manuals',            icon: FileText,        kind: 'bottom' },
   { id: 'support',           label: 'Support',     href: '/support',            icon: AlertCircle,     kind: 'bottom' },
   { id: 'previous-quarters', label: 'Quarters',    href: '/previous-quarters',  icon: Calendar,        kind: 'bottom', requires: 'reports.view' },
-  { id: 'audit-log',         label: 'Audit Log',   href: '/audit-log/receiving', icon: FileText,       kind: 'bottom', requires: 'admin.view_logs' },
+  { id: 'audit-log',         label: 'Audit Log',   href: '/settings/audit',     icon: FileText,        kind: 'bottom', requires: 'admin.view_logs' },
+  { id: 'staff',             label: 'Team',         href: '/settings/staff',    icon: User,            kind: 'bottom', requires: 'admin.manage_staff' },
+  { id: 'billing',           label: 'Billing',      href: '/settings/billing',   icon: ShieldCheck,     kind: 'bottom', requires: 'admin.view' },
+  { id: 'integrations',      label: 'Integrations', href: '/settings/integrations', icon: Zap,         kind: 'bottom', requires: 'admin.view' },
   { id: 'admin',             label: 'Admin',       href: '/admin',              icon: ShieldCheck,     kind: 'bottom', requires: 'admin.view' },
   { id: 'settings',          label: 'Settings',    href: '/settings',           icon: Settings,        kind: 'bottom' },
 ];
@@ -135,11 +141,17 @@ export function getSidebarRouteKey(pathname: string | null): SidebarRouteKey {
   if (pathname === '/previous-quarters' || pathname.startsWith('/previous-quarters/')) return 'previous-quarters';
   if (pathname === '/admin' || pathname.startsWith('/admin/')) return 'admin';
   if (pathname === '/audit-log' || pathname.startsWith('/audit-log/')) return 'audit-log';
+  if (pathname === '/settings/audit' || pathname.startsWith('/settings/audit/')) return 'audit-log';
   if (pathname === '/tech' || pathname.startsWith('/tech/')) return 'tech';
   if (pathname === '/packer' || pathname.startsWith('/packer/')) return 'packer';
   if (pathname === '/manuals/library' || pathname.startsWith('/manuals/library/')) return 'manuals-library';
   if (pathname === '/manuals' || pathname.startsWith('/manuals/')) return 'manuals';
   if (pathname === '/ai' || pathname.startsWith('/ai/')) return 'ai';
+  // /settings/billing and /settings/integrations are leaf-routes under settings
+  // but should highlight their own sidebar entry, not the bare Settings link.
+  if (pathname === '/settings/billing' || pathname.startsWith('/settings/billing/')) return 'billing';
+  if (pathname === '/settings/integrations' || pathname.startsWith('/settings/integrations/')) return 'integrations';
+  if (pathname === '/settings/staff' || pathname.startsWith('/settings/staff/')) return 'staff';
   if (pathname === '/settings' || pathname.startsWith('/settings/')) return 'settings';
   return 'unknown';
 }

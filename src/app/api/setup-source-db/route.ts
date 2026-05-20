@@ -1,10 +1,15 @@
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import pool from '@/lib/db';
 import { withAuth } from '@/lib/auth/withAuth';
+import { guardSetupRequest } from '@/lib/setup-guard';
 
 // Break-glass schema bootstrap — creates source-of-truth tables. Admin-only
-// + step-up required. Do not call from app code.
-export const POST = withAuth(async () => {
+// + step-up + SETUP_TOKEN. Refuses in production unless SETUP_ALLOW_PROD=1.
+// Do not call from app code.
+export const POST = withAuth(async (req: NextRequest) => {
+    const blocked = guardSetupRequest(req);
+    if (blocked) return blocked;
+
     const client = await pool.connect();
     
     try {
@@ -238,4 +243,4 @@ export const GET = withAuth(async () => {
             details: error instanceof Error ? error.message : 'Unknown error'
         }, { status: 500 });
     }
-}, { permission: 'admin.view' });
+}, { permission: 'admin.manage_features', stepUp: true });

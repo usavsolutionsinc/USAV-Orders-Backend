@@ -1,0 +1,52 @@
+name: CI
+
+# First defense against silent regressions: every push and PR runs the
+# lint/typecheck/test trio. Keeps PRs from breaking sign-in or shipping
+# constraint violations. Add jobs here; don't add them ad-hoc.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+# Cancel superseded runs on the same ref — saves minutes and stops the queue
+# from filling up when someone force-pushes a branch.
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  ci:
+    name: lint • typecheck • test
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci --no-audit --no-fund
+
+      # Lint runs first — cheapest signal, surfaces unused imports and
+      # unsafe patterns before the heavier typecheck loads the world.
+      - name: Lint
+        run: npm run lint -- --max-warnings=0
+        continue-on-error: false
+
+      # Typecheck without emit — catches the kind of constraint and type
+      # mismatches that used to land as bodyless 500s in dev.
+      - name: Typecheck
+        run: npx tsc --noEmit
+
+      # Existing + new unit tests. Discovered by glob; add new .test.ts
+      # files anywhere under src/ and they'll be picked up automatically.
+      - name: Unit tests
+        run: node --test --import tsx --test-reporter spec 'src/**/*.test.ts'

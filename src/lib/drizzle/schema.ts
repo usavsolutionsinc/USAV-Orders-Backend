@@ -45,6 +45,9 @@ export const staff = pgTable('staff', {
   sortOrder: integer('sort_order').notNull().default(0),
   colorHex: varchar('color_hex', { length: 7 }).notNull().default('#10b981'),
   defaultHomePath: text('default_home_path'),
+  // Tenant attachment (2026-05-22_organizations_tenancy.sql). NOT NULL after
+  // backfill; USAV staff carry the well-known USAV org id.
+  organizationId: uuid('organization_id').notNull(),
 });
 
 // Editable roles taxonomy. is_system rows are seeded built-ins and cannot
@@ -92,6 +95,10 @@ export const staffPasskeys = pgTable('staff_passkeys', {
 export const staffSessions = pgTable('staff_sessions', {
   sid: text('sid').primaryKey(),
   staffId: integer('staff_id').notNull().references(() => staff.id, { onDelete: 'cascade' }),
+  // Active tenant for this session. Always equals the staff's org today;
+  // separating the column lets us add org-switching later without a
+  // schema change.
+  organizationId: uuid('organization_id').notNull(),
   deviceKind: text('device_kind').notNull(),
   deviceLabel: text('device_label'),
   ip: text('ip'),
@@ -389,6 +396,7 @@ export const inboundWorkflowStatusEnum = pgEnum('inbound_workflow_status_enum', 
 
 // NEW: Receiving tasks table
 export const receivingTasks = pgTable('receiving_tasks', {
+  organizationId: orgIdCol(),
   id: serial('id').primaryKey(),
   trackingNumber: varchar('tracking_number', { length: 100 }).notNull(),
   orderNumber: varchar('order_number', { length: 100 }),
@@ -422,6 +430,7 @@ const genericColumns = {
 // Customer records used to pair imported orders by order_id, then link orders.customer_id -> customers.id.
 // Preserves the existing integer PK while extending the table toward a Zoho-capable contact model.
 export const customers = pgTable('customers', {
+  organizationId: orgIdCol(),
   id: integer('id').primaryKey().generatedAlwaysAsIdentity(),
   orderId: text('order_id'),
   zohoContactId: text('zoho_contact_id'),
@@ -456,6 +465,7 @@ export const customers = pgTable('customers', {
 });
 
 export const items = pgTable('items', {
+  organizationId: orgIdCol(),
   id: uuid('id').primaryKey().defaultRandom(),
   zohoItemId: text('zoho_item_id').notNull().unique(),
   zohoItemGroupId: text('zoho_item_group_id'),
@@ -492,6 +502,7 @@ export const items = pgTable('items', {
 }));
 
 export const zohoLocations = pgTable('zoho_locations', {
+  organizationId: orgIdCol(),
   id: uuid('id').primaryKey().defaultRandom(),
   zohoLocationId: text('zoho_location_id').notNull().unique(),
   name: text('name').notNull(),
@@ -501,6 +512,7 @@ export const zohoLocations = pgTable('zoho_locations', {
 });
 
 export const itemLocationStock = pgTable('item_location_stock', {
+  organizationId: orgIdCol(),
   id: uuid('id').primaryKey().defaultRandom(),
   itemId: uuid('item_id').notNull().references(() => items.id, { onDelete: 'cascade' }),
   locationId: uuid('location_id').notNull().references(() => zohoLocations.id, { onDelete: 'cascade' }),
@@ -581,6 +593,7 @@ export const replenishmentStatusLog = pgTable('replenishment_status_log', {
 }));
 
 export const salesOrders = pgTable('sales_orders', {
+  organizationId: orgIdCol(),
   id: uuid('id').primaryKey().defaultRandom(),
   zohoSoId: text('zoho_so_id').unique(),
   salesorderNumber: text('salesorder_number'),
@@ -690,6 +703,7 @@ export const itemAdjustments = pgTable('item_adjustments', {
 });
 
 export const syncCursors = pgTable('sync_cursors', {
+  organizationId: orgIdCol(),
   resource: text('resource').primaryKey(),
   lastSyncedAt: timestamp('last_synced_at', { withTimezone: true }),
   fullSyncAt: timestamp('full_sync_at', { withTimezone: true }),
@@ -697,6 +711,7 @@ export const syncCursors = pgTable('sync_cursors', {
 });
 
 export const entityNotes = pgTable('entity_notes', {
+  organizationId: orgIdCol(),
   id: uuid('id').primaryKey().defaultRandom(),
   entityType: text('entity_type').notNull(),
   entityId: uuid('entity_id').notNull(),
@@ -713,6 +728,7 @@ export const entityNotes = pgTable('entity_notes', {
 // BEFORE DELETE trigger trg_cancel_wa_on_order_delete auto-cancels related work_assignments
 export const orders = pgTable('orders', {
   id: serial('id').primaryKey(),
+  organizationId: orgIdCol(),
   orderId: text('order_id'),
   itemNumber: text('item_number'),
   productTitle: text('product_title'),
@@ -755,6 +771,7 @@ export const orderShipmentLinks = pgTable('order_shipment_links', {
 // shipment_id links ORDERS-type scans to shipping_tracking_numbers (carrier tracking)
 // scan_ref stores non-carrier raw inputs (SKU, FNSKU, garbage scans)
 export const packerLogs = pgTable('packer_logs', {
+  organizationId: orgIdCol(),
   id: serial('id').primaryKey(),
   /** FK to shipping_tracking_numbers for carrier-tracking ORDERS scans */
   shipmentId: bigint('shipment_id', { mode: 'number' }),
@@ -1277,6 +1294,7 @@ export const trainingRunStatusEnum = pgEnum('training_run_status', [
 ]);
 
 export const trainingSamples = pgTable('training_samples', {
+  organizationId: orgIdCol(),
   id: serial('id').primaryKey(),
   instruction: text('instruction').notNull(),
   inputContext: text('input_context'),
@@ -1298,6 +1316,7 @@ export const trainingSamples = pgTable('training_samples', {
 }));
 
 export const trainingRuns = pgTable('training_runs', {
+  organizationId: orgIdCol(),
   id: serial('id').primaryKey(),
   baseModel: varchar('base_model', { length: 200 }).notNull(),
   adapterName: varchar('adapter_name', { length: 200 }),
@@ -1318,6 +1337,7 @@ export const trainingRuns = pgTable('training_runs', {
 });
 
 export const modelVersions = pgTable('model_versions', {
+  organizationId: orgIdCol(),
   id: serial('id').primaryKey(),
   runId: integer('run_id').references(() => trainingRuns.id),
   version: varchar('version', { length: 50 }).notNull(),
@@ -1330,6 +1350,7 @@ export const modelVersions = pgTable('model_versions', {
 });
 
 export const pipelineTasks = pgTable('pipeline_tasks', {
+  organizationId: orgIdCol(),
   id: serial('id').primaryKey(),
   taskHash: varchar('task_hash', { length: 16 }).notNull().unique(),
   title: varchar('title', { length: 300 }).notNull(),
@@ -1351,6 +1372,7 @@ export const pipelineTasks = pgTable('pipeline_tasks', {
 }));
 
 export const pipelineCycles = pgTable('pipeline_cycles', {
+  organizationId: orgIdCol(),
   id: serial('id').primaryKey(),
   tasksDiscovered: integer('tasks_discovered').default(0).notNull(),
   tasksAttempted: integer('tasks_attempted').default(0).notNull(),
@@ -1762,6 +1784,7 @@ export const unitIdSequences = pgTable('unit_id_sequences', {
 // ──────────────────────────────────────────────
 
 export const aiChatSessions = pgTable('ai_chat_sessions', {
+  organizationId: orgIdCol(),
   id: text('id').primaryKey(),                     // client-generated session ID (e.g. "oc-...")
   title: text('title'),                             // auto-generated from first message
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
@@ -1771,6 +1794,7 @@ export const aiChatSessions = pgTable('ai_chat_sessions', {
 }));
 
 export const aiChatMessages = pgTable('ai_chat_messages', {
+  organizationId: orgIdCol(),
   id: serial('id').primaryKey(),
   sessionId: text('session_id').notNull().references(() => aiChatSessions.id, { onDelete: 'cascade' }),
   role: text('role').notNull(),                     // 'user' | 'assistant'
@@ -1831,3 +1855,46 @@ export type FbaShipmentItemUnit = typeof fbaShipmentItemUnits.$inferSelect;
 export type NewFbaShipmentItemUnit = typeof fbaShipmentItemUnits.$inferInsert;
 export type UnitIdSequence = typeof unitIdSequences.$inferSelect;
 export type NewUnitIdSequence = typeof unitIdSequences.$inferInsert;
+
+// ─── Multi-tenancy (2026-05-22_organizations_tenancy.sql,
+//                    2026-05-23_org_id_on_business_tables.sql) ─────────────
+//
+// Every business table carries `organization_id`. The column has a Postgres
+// DEFAULT that reads from the `app.current_org` GUC, set by
+// withTenantConnection — so application inserts don't have to specify the
+// org explicitly, and queries that bypass the GUC fail loudly with a NOT
+// NULL violation.
+//
+// The Drizzle helper below mirrors that column shape so $inferInsert treats
+// `organizationId` as optional (the DB default fills it in).
+function orgIdCol() {
+  return uuid('organization_id')
+    .notNull()
+    .default(sql`NULLIF(current_setting('app.current_org', true), '')::uuid`);
+}
+
+// Tenant root. Every business table gets `organization_id` referencing this
+// in the next migration. USAV is org #1 with a fixed UUID
+// (see src/lib/tenancy/constants.ts).
+export const organizations = pgTable('organizations', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  slug: text('slug').notNull().unique(),
+  name: text('name').notNull(),
+  plan: text('plan').notNull().default('trial'),
+  status: text('status').notNull().default('active'),
+  stripeCustomerId: text('stripe_customer_id'),
+  stripeSubscriptionId: text('stripe_subscription_id'),
+  // Tenant-wide config bag (branding, timezone, currency, label format, etc.)
+  // Schema policed at the zod layer in src/lib/tenancy/settings.ts.
+  settings: jsonb('settings').notNull().default(sql`'{}'::jsonb`),
+  trialEndsAt: timestamp('trial_ends_at', { withTimezone: true }),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  deletedAt: timestamp('deleted_at', { withTimezone: true }),
+}, (table) => ({
+  planIdx: index('idx_organizations_plan').on(table.plan),
+  statusIdx: index('idx_organizations_status').on(table.status),
+}));
+
+export type Organization = typeof organizations.$inferSelect;
+export type NewOrganization = typeof organizations.$inferInsert;

@@ -40,8 +40,8 @@ async function resolveCtx(req: NextRequest): Promise<AnonymousAuthContext> {
   // AnonymousAuthContext for callsites that pass ctx into recordAudit().
   const noopMark = () => {};
   return user
-    ? { user, session: user.session, staffId: user.staffId, role: user.role, permissions: user.permissions, markAuditWritten: noopMark }
-    : { user: null, session: null, staffId: null, role: null, permissions: new Set(), markAuditWritten: noopMark };
+    ? { user, session: user.session, staffId: user.staffId, organizationId: user.organizationId, role: user.role, permissions: user.permissions, markAuditWritten: noopMark }
+    : { user: null, session: null, staffId: null, organizationId: null, role: null, permissions: new Set(), markAuditWritten: noopMark };
 }
 
 /**

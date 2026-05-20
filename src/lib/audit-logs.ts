@@ -107,6 +107,8 @@ export const AUDIT_ACTION = {
   // Receiving (scanner-driven matching)
   PO_LOOKUP:        'po.lookup',
   RECEIVING_MATCH:  'receiving.match',
+  // GS1 Digital Link resolver (single QR → contextual internal page)
+  GS1_RESOLVE:      'gs1.resolve',
   // SKU stock
   SKU_STOCK_ADJUST:       'sku_stock.adjust',
   SKU_STOCK_BIN_ASSIGN:   'sku_stock.bin.assign',

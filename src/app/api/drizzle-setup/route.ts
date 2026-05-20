@@ -1,11 +1,15 @@
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import pool from '@/lib/db';
 import { formatPSTTimestamp } from '@/utils/date';
 import { withAuth } from '@/lib/auth/withAuth';
+import { guardSetupRequest } from '@/lib/setup-guard';
 
 // Break-glass schema bootstrap via the Drizzle-aware path. Admin-only +
-// step-up required.
-export const POST = withAuth(async () => {
+// step-up + SETUP_TOKEN. Refuses in production unless SETUP_ALLOW_PROD=1.
+export const POST = withAuth(async (req: NextRequest) => {
+    const blocked = guardSetupRequest(req);
+    if (blocked) return blocked;
+
     const client = await pool.connect();
     
     try {
@@ -432,4 +436,4 @@ export const GET = withAuth(async () => {
             database_url_configured: !!process.env.DATABASE_URL,
         }, { status: 500 });
     }
-}, { permission: 'admin.view' });
+}, { permission: 'admin.manage_features', stepUp: true });

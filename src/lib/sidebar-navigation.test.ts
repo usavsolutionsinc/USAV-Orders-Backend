@@ -21,7 +21,9 @@ test('getSidebarNavItems omits mobile-restricted routes in mobile mode', () => {
   assert.equal(navIds.includes('admin'), false);
   assert.equal(navIds.includes('dashboard'), true);
   assert.equal(navIds.includes('fba'), true);
-  assert.equal(navIds.includes('repair'), true);
+  // /repair is routed onto the 'walk-in' nav entry — there's no standalone
+  // sidebar item for it.
+  assert.equal(navIds.includes('walk-in'), true);
 });
 
 test('isSidebarRouteMobileRestricted only flags mobile-blocked routes', () => {

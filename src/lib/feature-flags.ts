@@ -1,14 +1,28 @@
 /**
- * Feature flags — inventory v2 rollout
+ * Feature flags — sync env-only + async per-tenant variants.
  * ────────────────────────────────────────────────────────────────────
  * Each phase of the inventory rewrite (context/inventory_system_upgrade_plan.md)
  * lands behind one of these flags. Default OFF; flip on after the workflow
  * has been validated end-to-end against the new event/ledger pathway.
  *
- * All flags read from environment at request time so a redeploy can flip
- * them without code change. The truthy check accepts "true", "1", "on",
- * case-insensitive.
+ * Two function variants per flag:
+ *
+ *   isInventoryV2X(): boolean
+ *     Sync, env-var only. Kept for the existing single-tenant callsites
+ *     during the transition. Reads INVENTORY_V2_X from process.env.
+ *
+ *   isInventoryV2XForOrg(orgId): Promise<boolean>
+ *     Async, per-tenant. Reads organization_feature_flags first; falls back
+ *     to the env-var default if no row exists. Migrate callsites to this
+ *     form as they pick up an orgId from withAuth's ctx.
+ *
+ * Per-tenant reads are cached 30s in-process keyed by (orgId, flag).
+ * Cache invalidation is explicit via invalidateFeatureFlagCache() — the
+ * admin UI that flips a flag must call it.
  */
+
+import pool from '@/lib/db';
+import type { OrgId } from './tenancy/constants';
 
 function readBoolEnv(name: string): boolean {
   const raw = process.env[name];
@@ -16,6 +30,64 @@ function readBoolEnv(name: string): boolean {
   const normalized = raw.trim().toLowerCase();
   return normalized === 'true' || normalized === '1' || normalized === 'on' || normalized === 'yes';
 }
+
+// ─── Per-tenant override cache ─────────────────────────────────────────────
+interface CacheEntry {
+  enabled: boolean;
+  expiresAt: number;
+}
+
+const flagCache = new Map<string, CacheEntry>();
+const CACHE_TTL_MS = 30_000;
+
+function cacheKey(orgId: OrgId, flag: string): string {
+  return `${orgId}:${flag}`;
+}
+
+async function readOrgFlag(orgId: OrgId, flag: string): Promise<boolean | null> {
+  const key = cacheKey(orgId, flag);
+  const cached = flagCache.get(key);
+  if (cached && cached.expiresAt > Date.now()) return cached.enabled;
+
+  try {
+    const r = await pool.query<{ enabled: boolean }>(
+      `SELECT enabled FROM organization_feature_flags
+        WHERE organization_id = $1 AND flag = $2 LIMIT 1`,
+      [orgId, flag],
+    );
+    const row = r.rows[0];
+    if (!row) return null;
+    flagCache.set(key, { enabled: row.enabled, expiresAt: Date.now() + CACHE_TTL_MS });
+    return row.enabled;
+  } catch (err) {
+    // Don't fail-closed on a flag read — fall back to env so the request
+    // path stays alive. Log so the failure isn't silent.
+    console.warn(`[feature-flags] failed reading ${flag} for ${orgId}:`, err instanceof Error ? err.message : err);
+    return null;
+  }
+}
+
+async function resolveForOrg(orgId: OrgId, flag: string, envVar: string): Promise<boolean> {
+  const override = await readOrgFlag(orgId, flag);
+  if (override !== null) return override;
+  return readBoolEnv(envVar);
+}
+
+export function invalidateFeatureFlagCache(orgId?: OrgId, flag?: string): void {
+  if (!orgId) {
+    flagCache.clear();
+    return;
+  }
+  if (!flag) {
+    for (const key of flagCache.keys()) {
+      if (key.startsWith(`${orgId}:`)) flagCache.delete(key);
+    }
+    return;
+  }
+  flagCache.delete(cacheKey(orgId, flag));
+}
+
+// ─── Sync env-only variants (legacy callsites) ─────────────────────────────
 
 /**
  * Phase 2 — receiving putaway in one step.
@@ -76,3 +148,59 @@ export function inventoryV2FlagSnapshot(): Record<string, boolean> {
   };
 }
 
+// ─── Async per-tenant variants (new callsites) ─────────────────────────────
+
+export function isInventoryV2ReceivingPutawayForOrg(orgId: OrgId): Promise<boolean> {
+  return resolveForOrg(orgId, 'inventory_v2_receiving_putaway', 'INVENTORY_V2_RECEIVING_PUTAWAY');
+}
+
+export function isInventoryV2TechLifecycleForOrg(orgId: OrgId): Promise<boolean> {
+  return resolveForOrg(orgId, 'inventory_v2_tech_lifecycle', 'INVENTORY_V2_TECH_LIFECYCLE');
+}
+
+export function isInventoryV2AllocationForOrg(orgId: OrgId): Promise<boolean> {
+  return resolveForOrg(orgId, 'inventory_v2_allocation', 'INVENTORY_V2_ALLOCATION');
+}
+
+export function isInventoryV2PackingForOrg(orgId: OrgId): Promise<boolean> {
+  return resolveForOrg(orgId, 'inventory_v2_packing', 'INVENTORY_V2_PACKING');
+}
+
+export function isInventoryV2FbaSerialLinkForOrg(orgId: OrgId): Promise<boolean> {
+  return resolveForOrg(orgId, 'inventory_v2_fba_serial_link', 'INVENTORY_V2_FBA_SERIAL_LINK');
+}
+
+export function isInventoryV2ReturnsForOrg(orgId: OrgId): Promise<boolean> {
+  return resolveForOrg(orgId, 'inventory_v2_returns', 'INVENTORY_V2_RETURNS');
+}
+
+export function isInventoryV2PickingForOrg(orgId: OrgId): Promise<boolean> {
+  return resolveForOrg(orgId, 'inventory_v2_picking', 'INVENTORY_V2_PICKING');
+}
+
+export function isInventoryV2BinRolesForOrg(orgId: OrgId): Promise<boolean> {
+  return resolveForOrg(orgId, 'inventory_v2_bin_roles', 'INVENTORY_V2_BIN_ROLES');
+}
+
+export async function inventoryV2FlagSnapshotForOrg(orgId: OrgId): Promise<Record<string, boolean>> {
+  const [putaway, tech, alloc, pack, fba, ret, pick, bin] = await Promise.all([
+    isInventoryV2ReceivingPutawayForOrg(orgId),
+    isInventoryV2TechLifecycleForOrg(orgId),
+    isInventoryV2AllocationForOrg(orgId),
+    isInventoryV2PackingForOrg(orgId),
+    isInventoryV2FbaSerialLinkForOrg(orgId),
+    isInventoryV2ReturnsForOrg(orgId),
+    isInventoryV2PickingForOrg(orgId),
+    isInventoryV2BinRolesForOrg(orgId),
+  ]);
+  return {
+    INVENTORY_V2_RECEIVING_PUTAWAY: putaway,
+    INVENTORY_V2_TECH_LIFECYCLE: tech,
+    INVENTORY_V2_ALLOCATION: alloc,
+    INVENTORY_V2_PACKING: pack,
+    INVENTORY_V2_FBA_SERIAL_LINK: fba,
+    INVENTORY_V2_RETURNS: ret,
+    INVENTORY_V2_PICKING: pick,
+    INVENTORY_V2_BIN_ROLES: bin,
+  };
+}

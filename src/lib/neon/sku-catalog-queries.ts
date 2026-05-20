@@ -87,6 +87,22 @@ export async function getSkuCatalogById(id: number): Promise<SkuCatalogRow | nul
   return result.rows[0] ?? null;
 }
 
+/**
+ * Lookup by GTIN (GS1 Digital Link AI 01). Returns the row whose `gtin`
+ * column matches a digit-stripped form of the input — the column itself
+ * is stored as a digit string, but callers may pass URL-encoded or
+ * dash-formatted variants from a scanner.
+ */
+export async function getSkuCatalogByGtin(gtin: string): Promise<SkuCatalogRow | null> {
+  const cleaned = String(gtin || '').replace(/\D/g, '');
+  if (!cleaned) return null;
+  const result = await pool.query(
+    `SELECT * FROM sku_catalog WHERE gtin = $1 LIMIT 1`,
+    [cleaned],
+  );
+  return result.rows[0] ?? null;
+}
+
 export async function upsertSkuCatalog(params: {
   sku: string;
   productTitle: string;

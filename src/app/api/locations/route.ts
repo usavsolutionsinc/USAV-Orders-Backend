@@ -16,8 +16,8 @@ async function resolveCtx(req: NextRequest): Promise<AnonymousAuthContext> {
   const sid = req.cookies.get(SESSION_COOKIE_NAME)?.value ?? null;
   const user = await getCurrentUserBySid(sid);
   return user
-    ? { user, session: user.session, staffId: user.staffId, role: user.role, permissions: user.permissions, markAuditWritten: noopMark }
-    : { user: null, session: null, staffId: null, role: null, permissions: new Set(), markAuditWritten: noopMark };
+    ? { user, session: user.session, staffId: user.staffId, organizationId: user.organizationId, role: user.role, permissions: user.permissions, markAuditWritten: noopMark }
+    : { user: null, session: null, staffId: null, organizationId: null, role: null, permissions: new Set(), markAuditWritten: noopMark };
 }
 
 /** GET /api/locations — list active locations. ?type=zones for zone-only, ?type=low-stock for alerts */
