@@ -125,7 +125,7 @@ async function handleGet(req: NextRequest) {
  *   notes        : string        (optional)
  *   deadline_at  : string        (optional ISO date)
  */
-async function handlePost(req: NextRequest) {
+async function handlePost(req: NextRequest, ctx: { organizationId: string }) {
   try {
     const body        = await req.json();
     const skuStockId  = Number(body?.sku_stock_id);
@@ -185,13 +185,13 @@ async function handlePost(req: NextRequest) {
     } else {
       const r = await pool.query(
         `INSERT INTO work_assignments
-           (entity_type, entity_id, work_type, assigned_tech_id, assigned_packer_id,
+           (organization_id, entity_type, entity_id, work_type, assigned_tech_id, assigned_packer_id,
             status, priority, notes, deadline_at, assigned_at)
          VALUES
-           ('SKU_STOCK', $1, 'STOCK_REPLENISH', $2, $3, $4, $5, $6, $7,
-            CASE WHEN $2 IS NOT NULL OR $3 IS NOT NULL THEN NOW() ELSE NULL END)
+           ($1, 'SKU_STOCK', $2, 'STOCK_REPLENISH', $3, $4, $5, $6, $7, $8,
+            CASE WHEN $3 IS NOT NULL OR $4 IS NOT NULL THEN NOW() ELSE NULL END)
          RETURNING *`,
-        [skuStockId, techId, packerId, newStatus, priority, notes, deadlineAt]
+        [ctx.organizationId, skuStockId, techId, packerId, newStatus, priority, notes, deadlineAt]
       );
       wa = r.rows[0];
     }

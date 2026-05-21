@@ -132,14 +132,58 @@ export function ResponsiveLayout({ children }: ResponsiveLayoutProps) {
     return <div className="flex h-full w-full bg-white" aria-hidden="true" />;
   }
 
-  // ── Desktop layout (unchanged) ──
+  // Drawer overlay is rendered regardless of which branch is active so pages
+  // that ship their own mobile UI (e.g. /receiving uses `md:hidden`) can still
+  // open the side nav at narrow viewports — useUIMode can return `desktop`
+  // when device detection misses and we'd otherwise leave the drawer
+  // unmounted. CSS-hides on real desktop widths.
+  const drawerOverlay = (
+    <AnimatePresence>
+      {drawerOpen && (
+        <div className="md:hidden">
+          <motion.div
+            key="drawer-backdrop"
+            variants={backdropVariants}
+            initial="hidden"
+            animate="visible"
+            exit="hidden"
+            transition={{ duration: 0.2 }}
+            className="fixed inset-0 z-50 bg-black/40 backdrop-blur-[2px]"
+            onClick={closeDrawer}
+            aria-hidden
+          />
+          <motion.div
+            ref={drawerRef}
+            key="drawer-panel"
+            variants={drawerVariants}
+            initial="hidden"
+            animate="visible"
+            exit="hidden"
+            transition={drawerTransition}
+            className="fixed inset-y-0 left-0 z-50 w-full shadow-2xl"
+          >
+            <button
+              type="button"
+              onClick={closeDrawer}
+              aria-label="Close navigation"
+              className="absolute top-[max(0.5rem,env(safe-area-inset-top))] right-3 z-10 h-11 w-11 flex items-center justify-center rounded-xl bg-gray-100 text-gray-700 active:scale-95 active:bg-gray-200 transition-transform"
+            >
+              <X className="h-5 w-5" />
+            </button>
+            <Suspense fallback={null}>
+              <DashboardSidebar inDrawer onNavigate={closeDrawer} />
+            </Suspense>
+          </motion.div>
+        </div>
+      )}
+    </AnimatePresence>
+  );
+
+  // ── Desktop layout ──
   if (!isMobile) {
     return (
       <div className="flex h-full w-full overflow-hidden">
-        {/* Global wedge / Bluetooth ring-scanner listener — URL-shaped scans
-            navigate; bare codes fire a `wedge-scan` CustomEvent. */}
         <GlobalWedgeScannerMount />
-        {/* Listen for phone-originated scans on phone:{staffId}. */}
         <PhoneScanBridgeMount />
         <OfflineBanner />
         <Suspense fallback={null}>
@@ -154,7 +198,8 @@ export function ResponsiveLayout({ children }: ResponsiveLayoutProps) {
         <Suspense fallback={null}>
           <GlobalDesktopSkuScanner />
         </Suspense>
-        <QuickAccessFab />
+        {!isReceivingPage && <QuickAccessFab />}
+        {drawerOverlay}
       </div>
     );
   }
@@ -199,53 +244,7 @@ export function ResponsiveLayout({ children }: ResponsiveLayoutProps) {
       {/* Global FAB — hide on specific pages where it conflicts with custom UI */}
       {!isReceivingPage && <QuickAccessFab />}
 
-      {/* Drawer overlay + sidebar — same `DashboardSidebar inDrawer` as dashboard hamburger (also opened via `open-mobile-drawer` on tech/packer). */}
-      <AnimatePresence>
-        {drawerOpen && (
-          <>
-            {/* Backdrop */}
-            <motion.div
-              key="drawer-backdrop"
-              variants={backdropVariants}
-              initial="hidden"
-              animate="visible"
-              exit="hidden"
-              transition={{ duration: 0.2 }}
-              className="fixed inset-0 z-50 bg-black/40 backdrop-blur-[2px]"
-              onClick={closeDrawer}
-              aria-hidden
-            />
-
-            {/* Drawer panel */}
-            <motion.div
-              ref={drawerRef}
-              key="drawer-panel"
-              variants={drawerVariants}
-              initial="hidden"
-              animate="visible"
-              exit="hidden"
-              transition={drawerTransition}
-              className="fixed inset-y-0 left-0 z-50 w-full shadow-2xl"
-            >
-              {/* Close button — sits in the safe-area-inset-top zone */}
-              <button
-                type="button"
-                onClick={closeDrawer}
-                aria-label="Close navigation"
-                className="absolute top-[max(0.5rem,env(safe-area-inset-top))] right-3 z-10 h-11 w-11 flex items-center justify-center rounded-xl bg-gray-100 text-gray-700 active:scale-95 active:bg-gray-200 transition-transform"
-              >
-                <X className="h-5 w-5" />
-              </button>
-
-              <Suspense fallback={null}>
-                <DashboardSidebar inDrawer onNavigate={closeDrawer} />
-              </Suspense>
-            </motion.div>
-          </>
-        )}
-      </AnimatePresence>
-
-      {/* CommandBar is desktop-only — cmd+k search has no mobile equivalent */}
+      {drawerOverlay}
     </div>
   );
 }

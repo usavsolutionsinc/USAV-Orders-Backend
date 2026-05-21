@@ -12,7 +12,7 @@ import { withAuth } from '@/lib/auth/withAuth';
  * Creates today's plan if it doesn't exist.
  * Skips FNSKUs already in today's plan.
  */
-export const POST = withAuth(async () => {
+export const POST = withAuth(async (_req, ctx) => {
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
@@ -91,10 +91,10 @@ export const POST = withAuth(async () => {
 
       await client.query(
         `INSERT INTO work_assignments
-           (entity_type, entity_id, work_type, status, priority, deadline_at)
-         VALUES ('FBA_SHIPMENT', $1, 'PACK', 'OPEN', 1,
+           (organization_id, entity_type, entity_id, work_type, status, priority, deadline_at)
+         VALUES ($1, 'FBA_SHIPMENT', $2, 'PACK', 'OPEN', 1,
                  (CURRENT_DATE + INTERVAL '23 hours 59 minutes 59 seconds')::timestamptz)`,
-        [newItemId]
+        [ctx.organizationId, newItemId]
       );
 
       added.push(item.fnsku);

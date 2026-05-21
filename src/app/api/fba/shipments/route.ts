@@ -246,12 +246,12 @@ export const POST = withAuth(async (request: NextRequest, ctx) => {
     } else {
       await client.query(
         `INSERT INTO work_assignments
-           (entity_type, entity_id, work_type, assigned_tech_id, assigned_packer_id, status, priority, deadline_at, notes, assigned_at, created_at, updated_at)
+           (organization_id, entity_type, entity_id, work_type, assigned_tech_id, assigned_packer_id, status, priority, deadline_at, notes, assigned_at, created_at, updated_at)
          VALUES
-           ('FBA_SHIPMENT', $1, 'QA', $2, $3, 'OPEN', 1,
-            ($4::date + INTERVAL '23 hours 59 minutes 59 seconds')::timestamptz,
-            $5, NOW(), NOW(), NOW())`,
-        [shipment.id, assignedTechId, assignedPackerId, normalizedDueDate, shipmentNotes]
+           ($1, 'FBA_SHIPMENT', $2, 'QA', $3, $4, 'OPEN', 1,
+            ($5::date + INTERVAL '23 hours 59 minutes 59 seconds')::timestamptz,
+            $6, NOW(), NOW(), NOW())`,
+        [ctx.organizationId, shipment.id, assignedTechId, assignedPackerId, normalizedDueDate, shipmentNotes]
       );
     }
 

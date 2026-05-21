@@ -69,7 +69,7 @@ export const GET = withAuth(async (req: NextRequest) => {
   }
 }, { permission: 'work_orders.view' });
 
-export const POST = withAuth(async (req: NextRequest) => {
+export const POST = withAuth(async (req: NextRequest, ctx) => {
   try {
     const body = await req.json().catch(() => null);
     if (!body) throw ApiError.badRequest('Invalid JSON body');
@@ -103,6 +103,7 @@ export const POST = withAuth(async (req: NextRequest) => {
     }
 
     const assignment = await createAssignment({
+      organizationId: ctx.organizationId,
       entityType,
       entityId,
       workType,

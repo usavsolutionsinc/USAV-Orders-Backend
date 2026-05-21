@@ -103,6 +103,8 @@ export interface ActiveOrder {
 }
 
 export interface CreateOrderParams {
+  /** Phase 3b: tenant scope for both the orders and work_assignments inserts. */
+  organizationId: string;
   orderId: string;
   productTitle: string;
   sku?: string | null;
@@ -1273,11 +1275,12 @@ export async function createOrder(params: CreateOrderParams): Promise<ActiveOrde
 
     const result = await client.query(
       `INSERT INTO orders
-         (order_id, product_title, sku, account_source,
+         (organization_id, order_id, product_title, sku, account_source,
           condition, quantity, item_number, notes, sku_catalog_id)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
        RETURNING *`,
       [
+        params.organizationId,
         params.orderId,
         params.productTitle,
         params.sku ?? null,
@@ -1293,10 +1296,10 @@ export async function createOrder(params: CreateOrderParams): Promise<ActiveOrde
     const order = result.rows[0];
     await client.query(
       `INSERT INTO work_assignments
-         (entity_type, entity_id, work_type, assigned_tech_id, status, priority, deadline_at, notes, assigned_at, created_at, updated_at)
-       VALUES ('ORDER', $1, 'TEST', NULL, 'OPEN', 100, $2, 'Canonical deadline row from createOrder', NOW(), NOW(), NOW())
+         (organization_id, entity_type, entity_id, work_type, assigned_tech_id, status, priority, deadline_at, notes, assigned_at, created_at, updated_at)
+       VALUES ($1, 'ORDER', $2, 'TEST', NULL, 'OPEN', 100, $3, 'Canonical deadline row from createOrder', NOW(), NOW(), NOW())
        ON CONFLICT DO NOTHING`,
-      [order.id, params.shipByDate ?? null],
+      [params.organizationId, order.id, params.shipByDate ?? null],
     );
 
     await client.query('COMMIT');
@@ -1396,12 +1399,15 @@ export async function updateOrder(
     }
 
     if (deadlineAt !== undefined) {
+      // Inherit org from the order — updateOrder doesn't take a tenant arg
+      // because the row's existing organization_id IS the authoritative scope
+      // for any related work_assignment.
       await client.query(
         `INSERT INTO work_assignments
-           (entity_type, entity_id, work_type, assigned_tech_id, status, priority, deadline_at, notes, assigned_at, created_at, updated_at)
-         VALUES ('ORDER', $1, 'TEST', NULL, 'OPEN', 100, $2, 'Canonical deadline row from updateOrder', NOW(), NOW(), NOW())
+           (organization_id, entity_type, entity_id, work_type, assigned_tech_id, status, priority, deadline_at, notes, assigned_at, created_at, updated_at)
+         VALUES ($1, 'ORDER', $2, 'TEST', NULL, 'OPEN', 100, $3, 'Canonical deadline row from updateOrder', NOW(), NOW(), NOW())
          ON CONFLICT DO NOTHING`,
-        [id, deadlineAt ?? null],
+        [order.organization_id, id, deadlineAt ?? null],
       );
       await client.query(
         `UPDATE work_assignments

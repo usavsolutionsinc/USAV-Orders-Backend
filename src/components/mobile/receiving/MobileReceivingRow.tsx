@@ -2,7 +2,14 @@
 
 import { motion, useReducedMotion } from 'framer-motion';
 import Link from 'next/link';
-import { OrderIdChip, SkuScanRefChip, TrackingChip, getLast4 } from '@/components/ui/CopyChip';
+import {
+  OrderIdChip,
+  SkuScanRefChip,
+  TrackingChip,
+  SerialChip,
+  getLast4,
+  getLast6Serial,
+} from '@/components/ui/CopyChip';
 import { Camera, Check } from '@/components/Icons';
 import { conditionGradeTableLabel, workflowStatusTableLabel } from '@/components/station/receiving-constants';
 import type { ReceivingLineRow } from '@/components/station/ReceivingLinesTable';
@@ -32,14 +39,16 @@ function PhotoChip({ count, isAction = false }: { count: number; isAction?: bool
   const has = count > 0;
   return (
     <div
-      className={`inline-flex shrink-0 items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-black tabular-nums tracking-wide transition-transform ${
-        isAction 
-          ? 'bg-blue-600 text-white shadow-sm active:scale-95' 
+      className={`inline-flex w-[60px] shrink-0 items-center justify-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-black tabular-nums tracking-wide transition-transform ${
+        isAction
+          ? 'bg-blue-600 text-white shadow-sm active:scale-95'
           : has ? 'bg-emerald-50 text-emerald-700' : 'bg-gray-100 text-gray-400'
       }`}
     >
       <Camera className="h-3.5 w-3.5" />
-      {!isAction && has ? <Check className="h-2.5 w-2.5" /> : null}
+      {!isAction ? (
+        <Check className={`h-2.5 w-2.5 ${has ? '' : 'invisible'}`} />
+      ) : null}
       <span>{count}</span>
     </div>
   );
@@ -63,7 +72,19 @@ export function MobileReceivingRow({ row, variant, fresh = false, onTap, photosH
   const qtyReceived = row.quantity_received;
   const quantityText = `${qtyReceived}/${row.quantity_expected ?? '?'}`;
   const workflowLabel = workflowStatusTableLabel(row.workflow_status || 'EXPECTED');
+  const conditionLabel = conditionGradeTableLabel(row.condition_grade);
+  const condGrade = (row.condition_grade || '').toUpperCase();
+  const conditionColor =
+    condGrade === 'BRAND_NEW'
+      ? 'text-yellow-600'
+      : condGrade === 'PARTS'
+        ? 'text-amber-800'
+        : 'text-gray-500';
   const photoCount = row.photo_count ?? 0;
+  const serialsCsv = (row.serials ?? [])
+    .map((s) => (s.serial_number || '').trim())
+    .filter(Boolean)
+    .join(', ');
 
   const isExpanded = variant === 'expanded';
 
@@ -107,34 +128,37 @@ export function MobileReceivingRow({ row, variant, fresh = false, onTap, photosH
           </span>
         </div>
 
-        {/* Row 2: Qty + Chips + Photo Action */}
-        <div className="mt-3 flex items-center justify-between gap-2">
-          <div className="flex min-w-0 items-center gap-2">
-            <span className={`shrink-0 whitespace-nowrap font-black uppercase tracking-widest ${isExpanded ? 'text-[11px]' : 'text-[10px]'}`}>
-              <span
-                className={
-                  qtyExpected > 1 && qtyReceived < qtyExpected
-                    ? 'text-yellow-600'
-                    : row.quantity_expected && qtyReceived >= row.quantity_expected
-                      ? 'text-emerald-600'
-                      : 'text-gray-900'
-                }
-              >
-                {quantityText}
-              </span>
+        {/* Row 2: meta on the left, chips pushed right, photo icon pinned far right */}
+        <div className="mt-3 flex items-center gap-2">
+          <span className={`flex shrink-0 items-center gap-1 whitespace-nowrap font-black uppercase tracking-widest ${isExpanded ? 'text-[11px]' : 'text-[10px]'}`}>
+            <span
+              className={
+                qtyExpected > 1 && qtyReceived < qtyExpected
+                  ? 'text-yellow-600'
+                  : row.quantity_expected && qtyReceived >= row.quantity_expected
+                    ? 'text-emerald-600'
+                    : 'text-gray-900'
+              }
+            >
+              {quantityText}
             </span>
-            
-            <div className="flex min-w-0 items-center gap-2 pointer-events-auto">
-              {poValue && <OrderIdChip value={poValue} display={getLast4(poValue)} />}
-              {skuValue && <SkuScanRefChip value={skuValue} display={getLast4(skuValue)} />}
-              {trackingValue && <TrackingChip value={trackingValue} display={getLast4(trackingValue)} />}
-            </div>
+            <span className="text-gray-400">•</span>
+            <span className={conditionColor}>{conditionLabel}</span>
+            <span className="text-gray-400">•</span>
+            <span className="text-gray-500">{workflowLabel}</span>
+          </span>
+
+          <div className="ml-auto flex min-w-0 items-center gap-2 pointer-events-auto">
+            {poValue && <OrderIdChip value={poValue} display={getLast4(poValue)} />}
+            {skuValue && <SkuScanRefChip value={skuValue} display={getLast4(skuValue)} />}
+            {trackingValue && <TrackingChip value={trackingValue} display={getLast4(trackingValue)} />}
+            <SerialChip value={serialsCsv} display={getLast6Serial(serialsCsv)} />
           </div>
 
           <Link
             href={photosHref}
             prefetch={false}
-            className="pointer-events-auto ml-auto"
+            className="pointer-events-auto shrink-0"
             aria-label="Take photos"
           >
             <PhotoChip count={photoCount} isAction={isExpanded} />

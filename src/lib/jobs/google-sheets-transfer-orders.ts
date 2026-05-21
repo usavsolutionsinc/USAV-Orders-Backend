@@ -150,10 +150,10 @@ async function upsertOrderDeadline(orderId: number, deadlineAt: Date | null) {
 
   await pool.query(
     `INSERT INTO work_assignments
-       (entity_type, entity_id, work_type, assigned_tech_id, status, priority, deadline_at)
-     VALUES ('ORDER', $1, 'TEST', NULL, 'OPEN', 100, $2)
+       (organization_id, entity_type, entity_id, work_type, assigned_tech_id, status, priority, deadline_at)
+     VALUES ($1, 'ORDER', $2, 'TEST', NULL, 'OPEN', 100, $3)
      ON CONFLICT DO NOTHING`,
-    [orderId, deadlineAt]
+    [transitionalUsavOrgId(), orderId, deadlineAt]
   );
 }
 

@@ -26,6 +26,7 @@ function isMissingOrderShipmentLinksRelation(error: unknown): boolean {
  * For TEST assignments: promotes an OPEN canonical row to ASSIGNED rather than inserting a new row.
  */
 async function upsertOrderAssignment(
+  organizationId: string,
   orderId: number,
   workType: 'TEST' | 'PACK',
   staffId: number | null,
@@ -75,10 +76,10 @@ async function upsertOrderAssignment(
     );
   } else {
     await client.query(
-      `INSERT INTO work_assignments (entity_type, entity_id, work_type, ${col}, status, priority)
-       VALUES ('ORDER', $1, $2, $3, 'ASSIGNED', 100)
+      `INSERT INTO work_assignments (organization_id, entity_type, entity_id, work_type, ${col}, status, priority)
+       VALUES ($1, 'ORDER', $2, $3, $4, 'ASSIGNED', 100)
        ON CONFLICT DO NOTHING`,
-      [orderId, workType, staffId]
+      [organizationId, orderId, workType, staffId]
     );
   }
 }
@@ -88,6 +89,7 @@ async function upsertOrderAssignment(
  * Creates an OPEN row if no active TEST row exists.
  */
 async function upsertOrderDeadline(
+  organizationId: string,
   orderId: number,
   deadlineAt: string | null,
   client: QueryClient = pool
@@ -116,10 +118,10 @@ async function upsertOrderDeadline(
   } else {
     await client.query(
       `INSERT INTO work_assignments
-         (entity_type, entity_id, work_type, assigned_tech_id, status, priority, deadline_at)
-       VALUES ('ORDER', $1, 'TEST', NULL, 'OPEN', 100, $2)
+         (organization_id, entity_type, entity_id, work_type, assigned_tech_id, status, priority, deadline_at)
+       VALUES ($1, 'ORDER', $2, 'TEST', NULL, 'OPEN', 100, $3)
        ON CONFLICT DO NOTHING`,
-      [orderId, deadlineAt ?? null]
+      [organizationId, orderId, deadlineAt ?? null]
     );
   }
 }
@@ -646,7 +648,7 @@ async function deleteShipmentTrackingLink(
  * Assigns tech and/or packer to one or more orders via work_assignments.
  * Also handles non-assignment order field updates (ship_by_date, notes, etc.).
  */
-export const POST = withAuth(async (req: NextRequest) => {
+export const POST = withAuth(async (req: NextRequest, ctx) => {
   try {
     const body = await req.json();
     const {
@@ -696,18 +698,18 @@ export const POST = withAuth(async (req: NextRequest) => {
       // ── 1. Write work_assignments for tech / packer ────────────────────────
       if (testerId !== undefined) {
         const techId = testerId === 0 ? null : (testerId ? Number(testerId) : null);
-        await Promise.all(idsToUpdate.map((id) => upsertOrderAssignment(id, 'TEST', techId, client)));
+        await Promise.all(idsToUpdate.map((id) => upsertOrderAssignment(ctx.organizationId, id, 'TEST', techId, client)));
       }
 
       if (packerId !== undefined) {
         const pkId = packerId === 0 ? null : (packerId ? Number(packerId) : null);
-        await Promise.all(idsToUpdate.map((id) => upsertOrderAssignment(id, 'PACK', pkId, client)));
+        await Promise.all(idsToUpdate.map((id) => upsertOrderAssignment(ctx.organizationId, id, 'PACK', pkId, client)));
       }
 
       // ── 2a. Write deadline_at into the canonical ORDER/TEST row ───────────
       if (shipByDate !== undefined) {
         await Promise.all(
-          idsToUpdate.map((id) => upsertOrderDeadline(id, shipByDate || null, client))
+          idsToUpdate.map((id) => upsertOrderDeadline(ctx.organizationId, id, shipByDate || null, client))
         );
       }
 

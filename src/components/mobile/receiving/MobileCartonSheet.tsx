@@ -4,7 +4,15 @@ import Link from 'next/link';
 import { Camera } from '@/components/Icons';
 import { BottomSheet } from '@/components/ui/BottomSheet';
 import { ReceivingPhotoStrip } from '@/components/sidebar/ReceivingPhotoStrip';
-import { conditionGradeTableLabel, workflowStatusTableLabel } from '@/components/station/receiving-constants';
+import {
+  OrderIdChip,
+  SkuScanRefChip,
+  TrackingChip,
+  SerialChip,
+  getLast4,
+  getLast6Serial,
+} from '@/components/ui/CopyChip';
+import { workflowStatusTableLabel } from '@/components/station/receiving-constants';
 import type { ReceivingLineRow } from '@/components/station/ReceivingLinesTable';
 
 interface MobileCartonSheetProps {
@@ -14,11 +22,23 @@ interface MobileCartonSheetProps {
   onClose: () => void;
 }
 
+function getStatusDotBg(status: string | null | undefined) {
+  const value = String(status || '').trim().toUpperCase();
+  if (value === 'EXPECTED') return 'bg-amber-400';
+  if (value === 'ARRIVED' || value === 'MATCHED') return 'bg-blue-500';
+  if (value === 'UNBOXED') return 'bg-indigo-500';
+  if (value === 'AWAITING_TEST' || value === 'IN_TEST') return 'bg-violet-500';
+  if (value === 'PASSED' || value === 'DONE') return 'bg-emerald-500';
+  if (value.startsWith('FAILED') || value === 'SCRAP' || value === 'RTV') return 'bg-rose-500';
+  return 'bg-gray-400';
+}
+
 /**
  * Phone-tuned sheet for a single receiving line. Mobile is photo-only — no
- * editor fields, no form. Header summarizes the carton, ReceivingPhotoStrip
- * shows what's already captured, the CTA hands off to the dedicated camera
- * route at /m/r/{id}/photos.
+ * editor fields, no form. Header mirrors the desktop ReceivingLinesTable row:
+ * title + qty • condition • workflow on the left, copy chips stacked on the
+ * right. ReceivingPhotoStrip shows what's already captured, the CTA hands off
+ * to the dedicated camera route at /m/r/{id}/photos.
  */
 export function MobileCartonSheet({ row, staffId, open, onClose }: MobileCartonSheetProps) {
   if (!row) return null;
@@ -26,33 +46,57 @@ export function MobileCartonSheet({ row, staffId, open, onClose }: MobileCartonS
   const receivingId = row.receiving_id;
   const productTitle = row.item_name || row.zoho_item_id || 'Unnamed inbound line';
   const poValue = (row.zoho_purchaseorder_number || row.zoho_purchaseorder_id || '').trim();
+  const skuValue = (row.sku || '').trim();
   const trackingValue = (row.tracking_number || '').trim();
-  const quantityText = `${row.quantity_received}/${row.quantity_expected ?? '?'}`;
+  const qtyExpected = row.quantity_expected ?? 0;
+  const qtyReceived = row.quantity_received;
+  const quantityText = `${qtyReceived}/${row.quantity_expected ?? '?'}`;
   const workflowLabel = workflowStatusTableLabel(row.workflow_status || 'EXPECTED');
-  const conditionLabel = conditionGradeTableLabel(row.condition_grade);
+  const serialsCsv = (row.serials ?? [])
+    .map((s) => (s.serial_number || '').trim())
+    .filter(Boolean)
+    .join(', ');
 
   const photosHref = receivingId ? `/m/r/${receivingId}/photos` : null;
 
   return (
     <BottomSheet open={open} onClose={onClose} maxWidth="32rem">
       <div className="flex flex-col gap-4">
-        {/* Header */}
-        <div>
-          {poValue ? (
-            <p className="text-xs font-black uppercase tracking-[0.22em] text-gray-400">
-              PO {poValue}
-            </p>
-          ) : null}
-          <p className="mt-0.5 line-clamp-2 text-[15px] font-black tracking-tight text-gray-900">
-            {productTitle}
-          </p>
-          <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs font-black uppercase tracking-widest text-gray-500">
-            <span className="text-gray-700">{quantityText}</span>
-            <span>{conditionLabel}</span>
-            <span>{workflowLabel}</span>
-            {trackingValue ? (
-              <span className="text-gray-400">· {trackingValue.slice(-6).toUpperCase()}</span>
-            ) : null}
+        {/* Header — mirrors desktop ReceivingLinesTable OrderRow: title + meta
+            on the left, copy chips column on the right. */}
+        <div className="flex flex-col gap-2">
+          <div className="flex min-w-0 items-center gap-2">
+            <span
+              className={`h-2 w-2 shrink-0 rounded-full ${getStatusDotBg(row.workflow_status)}`}
+              title={workflowLabel}
+            />
+            <div className="line-clamp-2 text-[14px] font-bold text-gray-900">
+              {productTitle}
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2 pl-4">
+            <span className="shrink-0 text-[11px] font-black uppercase tracking-widest">
+              <span
+                className={
+                  qtyExpected > 1 && qtyReceived < qtyExpected
+                    ? 'text-yellow-600'
+                    : row.quantity_expected && qtyReceived >= row.quantity_expected
+                      ? 'text-emerald-600'
+                      : 'text-gray-700'
+                }
+              >
+                {quantityText}
+              </span>
+              {row.needs_test ? <span className="ml-2 text-orange-600">NEEDS TEST</span> : null}
+            </span>
+
+            <div className="ml-auto flex shrink-0 items-center gap-2">
+              <OrderIdChip value={poValue} display={getLast4(poValue)} />
+              <SkuScanRefChip value={skuValue} display={getLast4(skuValue)} />
+              <TrackingChip value={trackingValue} display={getLast4(trackingValue)} />
+              <SerialChip value={serialsCsv} display={getLast6Serial(serialsCsv)} />
+            </div>
           </div>
         </div>
 

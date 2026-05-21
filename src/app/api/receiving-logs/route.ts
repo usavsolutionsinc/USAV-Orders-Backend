@@ -230,7 +230,7 @@ export const DELETE = withAuth(async (request: NextRequest) => {
     }
 }, { permission: 'receiving.mark_received' });
 
-export const PATCH = withAuth(async (request: NextRequest) => {
+export const PATCH = withAuth(async (request: NextRequest, ctx) => {
     try {
         const body = await request.json();
         const id = Number(body?.id);
@@ -417,6 +417,7 @@ export const PATCH = withAuth(async (request: NextRequest) => {
                 const { needs_test, assigned_tech_id } = currentRow.rows[0];
                 await upsertReceivingAssignment({
                     db: pool,
+                    organizationId: ctx.organizationId,
                     receivingId: id,
                     needsTest: !!needs_test,
                     assignedTechId: assigned_tech_id ?? null,

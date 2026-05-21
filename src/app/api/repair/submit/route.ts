@@ -10,7 +10,7 @@ import { put } from '@vercel/blob';
 import pool from '@/lib/db';
 import { withAuth } from '@/lib/auth/withAuth';
 
-export const POST = withAuth(async (req: NextRequest) => {
+export const POST = withAuth(async (req: NextRequest, ctx) => {
     try {
         const body = await req.json();
         const { customer, product, repairReasons, repairNotes, serialNumber, price, notes, assignedTechId, signatureDataUrl, signatureStrokes } = body;
@@ -178,6 +178,7 @@ export const POST = withAuth(async (req: NextRequest) => {
         // Step 5: Insert work_assignment
         try {
             await createAssignment({
+                organizationId: ctx.organizationId,
                 entityType: 'REPAIR',
                 entityId: dbId,
                 workType: 'REPAIR',

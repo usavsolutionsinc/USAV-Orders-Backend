@@ -45,5 +45,4 @@ certificates
 /public/Manuals/
 /converted-manuals/
 
-.env
 docker-compose.db.yml

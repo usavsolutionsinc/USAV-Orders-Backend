@@ -35,7 +35,7 @@ type SyncResult = {
     error?: string;
 };
 
-async function handlePost(req: NextRequest) {
+async function handlePost(req: NextRequest, ctx: { organizationId: string }) {
     try {
         const body = await req.json();
         const { action, spreadsheetId } = body;
@@ -58,6 +58,7 @@ async function handlePost(req: NextRequest) {
 
         try {
             const shippedResult = await syncShippedSheet({
+                organizationId: ctx.organizationId,
                 client,
                 sheets,
                 spreadsheetId: targetSpreadsheetId,
@@ -108,12 +109,13 @@ async function handlePost(req: NextRequest) {
 export const POST = withAuth(handlePost, { permission: 'integrations.sheets' });
 
 async function syncShippedSheet(params: {
+    organizationId: string;
     client: any;
     sheets: any;
     spreadsheetId: string;
     existingSheetNames: string[];
 }): Promise<SyncResult> {
-    const { client, sheets, spreadsheetId, existingSheetNames } = params;
+    const { client, sheets, spreadsheetId, existingSheetNames, organizationId } = params;
     const sheetName = existingSheetNames.find(s => s.toLowerCase() === 'shipped');
 
     if (!sheetName) {
@@ -207,28 +209,28 @@ async function syncShippedSheet(params: {
                 if (testedById) {
                     await client.query(
                         `INSERT INTO work_assignments
-                             (entity_type, entity_id, work_type, assigned_tech_id, status, priority, deadline_at, notes, completed_at)
-                         VALUES ('ORDER', $1, 'TEST', $2, 'DONE', 100, $3, 'Imported from Google Sheets sync', NOW())
+                             (organization_id, entity_type, entity_id, work_type, assigned_tech_id, status, priority, deadline_at, notes, completed_at)
+                         VALUES ($1, 'ORDER', $2, 'TEST', $3, 'DONE', 100, $4, 'Imported from Google Sheets sync', NOW())
                          ON CONFLICT DO NOTHING`,
-                        [newOrderId, testedById, shipByDate]
+                        [organizationId, newOrderId, testedById, shipByDate]
                     );
                 } else {
                     // No tech assigned — create canonical OPEN deadline row so the deadline is preserved.
                     await client.query(
                         `INSERT INTO work_assignments
-                             (entity_type, entity_id, work_type, assigned_tech_id, status, priority, deadline_at, notes, assigned_at, created_at, updated_at)
-                         VALUES ('ORDER', $1, 'TEST', NULL, 'OPEN', 100, $2, 'Canonical deadline row from sync-sheets import', NOW(), NOW(), NOW())
+                             (organization_id, entity_type, entity_id, work_type, assigned_tech_id, status, priority, deadline_at, notes, assigned_at, created_at, updated_at)
+                         VALUES ($1, 'ORDER', $2, 'TEST', NULL, 'OPEN', 100, $3, 'Canonical deadline row from sync-sheets import', NOW(), NOW(), NOW())
                          ON CONFLICT DO NOTHING`,
-                        [newOrderId, shipByDate]
+                        [organizationId, newOrderId, shipByDate]
                     );
                 }
                 if (packedById) {
                     await client.query(
                         `INSERT INTO work_assignments
-                             (entity_type, entity_id, work_type, assigned_packer_id, status, priority, deadline_at, notes, completed_at)
-                         VALUES ('ORDER', $1, 'PACK', $2, 'DONE', 100, $3, 'Imported from Google Sheets sync', NOW())
+                             (organization_id, entity_type, entity_id, work_type, assigned_packer_id, status, priority, deadline_at, notes, completed_at)
+                         VALUES ($1, 'ORDER', $2, 'PACK', $3, 'DONE', 100, $4, 'Imported from Google Sheets sync', NOW())
                          ON CONFLICT DO NOTHING`,
-                        [newOrderId, packedById, shipByDate]
+                        [organizationId, newOrderId, packedById, shipByDate]
                     );
                 }
             }
