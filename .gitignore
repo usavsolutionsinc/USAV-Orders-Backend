@@ -44,3 +44,6 @@ certificates
 # these directories are intermediate output from scripts/convert-and-upload-manuals.mjs
 /public/Manuals/
 /converted-manuals/
+
+.env
+docker-compose.db.yml
