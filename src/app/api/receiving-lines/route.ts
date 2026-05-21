@@ -285,11 +285,16 @@ export const GET = withAuth(async (request: NextRequest) => {
 
     values.push(limit, offset);
 
+    const lastScanSelect = view === 'recent' || view === 'all'
+      ? `, rs_agg.last_scan::text AS last_scan_at`
+      : '';
+
     const [rowsRes, countRes] = await Promise.all([
       pool.query(
         `SELECT rl.*,
                 r.receiving_tracking_number,
                 r.carrier,
+                r.received_at::text          AS receiving_received_at,
                 r.source_platform            AS receiving_source_platform,
                 r.zoho_purchaseorder_number  AS receiving_zoho_purchaseorder_number,
                 r.support_notes              AS receiving_support_notes,
@@ -302,6 +307,7 @@ export const GET = withAuth(async (request: NextRequest) => {
                 (SELECT COUNT(*) FROM photos p
                   WHERE p.entity_type = 'RECEIVING'
                     AND p.entity_id = rl.receiving_id) AS photo_count
+                ${lastScanSelect}
          FROM receiving_lines rl
          -- Soft JOIN: direct FK when set, else PO#-based fallback (see note above).
          LEFT JOIN receiving r ON (
@@ -476,8 +482,48 @@ export const PATCH = withAuth(async (request: NextRequest) => {
 
     if (body?.quantity_received !== undefined || body?.quantity !== undefined) {
       const raw = Number(body?.quantity_received ?? body?.quantity ?? 0);
+      const nextReceived =
+        Number.isFinite(raw) && raw >= 0 ? Math.floor(raw) : 0;
+      // Reject over-receive PATCH unless explicitly overridden. Mirrors the
+      // OVER_RECEIVE guard in receiveLineUnits so manual qty edits can't
+      // bypass the cap. quantity_expected may be in the same PATCH or already
+      // on the row — fall back to the DB value when not provided.
+      const allowOverReceive = Boolean(
+        body?.allow_over_receive ?? body?.allowOverReceive,
+      );
+      if (!allowOverReceive) {
+        const expectedFromBody =
+          body?.quantity_expected !== undefined
+            ? (() => {
+                const n = Number(body.quantity_expected);
+                return Number.isFinite(n) && n > 0 ? Math.floor(n) : null;
+              })()
+            : undefined;
+        const expected = expectedFromBody !== undefined
+          ? expectedFromBody
+          : await pool
+              .query<{ quantity_expected: number | null }>(
+                `SELECT quantity_expected FROM receiving_lines WHERE id = $1 LIMIT 1`,
+                [id],
+              )
+              .then((r) => r.rows[0]?.quantity_expected ?? null)
+              .catch(() => null);
+        if (expected != null && nextReceived > expected) {
+          return NextResponse.json(
+            {
+              success: false,
+              error: 'OVER_RECEIVE',
+              receiving_line_id: id,
+              attempted_quantity_received: nextReceived,
+              quantity_expected: expected,
+              hint: 're-submit with allow_over_receive:true to force',
+            },
+            { status: 409 },
+          );
+        }
+      }
       updates.push(`quantity_received = $${idx++}`);
-      values.push(Number.isFinite(raw) && raw >= 0 ? Math.floor(raw) : 0);
+      values.push(nextReceived);
     }
 
     if (body?.quantity_expected !== undefined) {
@@ -721,6 +767,13 @@ function normalizeRow(row: Record<string, unknown>) {
     receiving_support_notes:  (row.receiving_support_notes as string | null) ?? null,
     receiving_type:            (row.receiving_type as string | null) ?? 'PO',
     created_at:               (row.created_at as string | null) ?? null,
+    // Most-recent activity timestamp matching the server's sort order for
+    // view=recent/all. Falls through to received_at / created_at so the
+    // rail can render a single "last touched" field regardless of view.
+    last_activity_at:         (row.last_scan_at as string | null)
+                              ?? (row.receiving_received_at as string | null)
+                              ?? (row.created_at as string | null)
+                              ?? null,
     image_url:                (row.image_url as string | null) ?? null,
     source_platform:          (row.receiving_source_platform as string | null) ?? null,
     photo_count:              row.photo_count != null ? Number(row.photo_count) : 0,

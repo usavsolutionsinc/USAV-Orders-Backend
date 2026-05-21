@@ -1,0 +1,16 @@
+import { readFileSync } from 'node:fs';
+import { neon } from '@neondatabase/serverless';
+const url = readFileSync('/Users/salessupport/Desktop/my-express-app/USAV-Orders-Backend/.env', 'utf8').match(/^DATABASE_URL_UNPOOLED=(.+)$/m)[1].trim();
+const sql = neon(url);
+const rows = await sql`SELECT id, sku, current_status::text AS s, current_location, received_at::text FROM serial_units WHERE current_status='RECEIVED' ORDER BY id DESC LIMIT 50`;
+console.log(`RECEIVED units: ${rows.length}`);
+const withLocation = rows.filter(r => r.current_location);
+const withoutLocation = rows.filter(r => !r.current_location);
+console.log(`  with current_location set: ${withLocation.length}`);
+console.log(`  without current_location:   ${withoutLocation.length}`);
+console.log('\nLocation values currently in use on RECEIVED units:');
+const locMap = {};
+for (const r of rows) locMap[r.current_location || '(null)'] = (locMap[r.current_location || '(null)'] || 0) + 1;
+for (const [loc, n] of Object.entries(locMap)) console.log(`  ${loc}: ${n}`);
+console.log('\nSample:');
+for (const r of rows.slice(0, 8)) console.log(`  #${r.id}  sku=${r.sku}  loc=${r.current_location || '(null)'}  received=${r.received_at}`);

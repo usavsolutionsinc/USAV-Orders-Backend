@@ -15,6 +15,8 @@ type DbClient = Pool | PoolClient;
 
 export interface UpsertReceivingAssignmentParams {
   db: DbClient;
+  /** Phase 3b: tenant scope for the INSERT branch. */
+  organizationId: string;
   receivingId: number;
   needsTest: boolean;
   assignedTechId: number | null;
@@ -23,6 +25,7 @@ export interface UpsertReceivingAssignmentParams {
 
 export async function upsertReceivingAssignment({
   db,
+  organizationId,
   receivingId,
   needsTest,
   assignedTechId,
@@ -70,9 +73,9 @@ export async function upsertReceivingAssignment({
   } else {
     await db.query(
       `INSERT INTO work_assignments
-         (entity_type, entity_id, work_type, assigned_tech_id, status, priority, notes)
-       VALUES ('RECEIVING', $1, 'TEST', $2, 'ASSIGNED', 100, $3)`,
-      [receivingId, assignedTechId, notes ?? null]
+         (organization_id, entity_type, entity_id, work_type, assigned_tech_id, status, priority, notes)
+       VALUES ($1, 'RECEIVING', $2, 'TEST', $3, 'ASSIGNED', 100, $4)`,
+      [organizationId, receivingId, assignedTechId, notes ?? null]
     );
   }
   return { action: 'upserted' };

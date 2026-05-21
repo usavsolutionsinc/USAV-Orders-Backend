@@ -652,16 +652,7 @@ export default function DashboardSidebar({ inDrawer = false, onNavigate }: { inD
         </button>
       )}
 
-      {canShowMobileSidebar && (
-        <button
-          type="button"
-          onClick={() => setIsMobileOpen(true)}
-          className="md:hidden fixed top-4 left-4 z-[90] h-11 w-11 rounded-2xl bg-white border border-gray-200 text-gray-700 shadow-lg shadow-gray-900/10 flex items-center justify-center"
-          aria-label="Open sidebar"
-        >
-          <Menu className="h-5 w-5" />
-        </button>
-      )}
+      {/* Floating mobile menu button removed — now handled by header nav buttons */}
 
       {canShowMobileSidebar && isMobileOpen && (
         <div className="md:hidden fixed inset-0 z-[100]">

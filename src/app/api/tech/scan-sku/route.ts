@@ -173,6 +173,7 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
       if (serialsFromSku.length > 0) {
         for (const rawSerial of serialsFromSku) {
           const ins = await insertTechSerialForSalContext(client, {
+            organizationId: ctx.organizationId,
             salContext: salCtx,
             staffId,
             serial: rawSerial,

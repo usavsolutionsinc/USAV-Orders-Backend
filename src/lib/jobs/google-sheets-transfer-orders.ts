@@ -2,6 +2,7 @@ import { sheets as googleSheets } from '@googleapis/sheets';
 import { db } from '@/lib/drizzle/db';
 import pool from '@/lib/db';
 import { customers as customersTable, orders as ordersTable } from '@/lib/drizzle/schema';
+import { transitionalUsavOrgId } from '@/lib/tenancy/db';
 import { getGoogleAuth } from '@/lib/google-auth';
 import { invalidateAllOrdersApiCaches, invalidateOrderViews } from '@/lib/orders/invalidation';
 import { publishOrderChanged } from '@/lib/realtime/publish';
@@ -666,6 +667,13 @@ export async function runGoogleSheetsTransferOrders(
           shipByDate: effectiveShipByDate,
           shipmentIds: shipmentIdList,
           values: {
+            // Tenant scope: this is a cron-triggered job with no user
+            // session, so we stamp the canonical USAV org explicitly. When
+            // this job becomes multi-tenant it'll receive the org as a
+            // parameter and pass it through to here. Without this stamp
+            // the row would fail the NOT NULL on orders.organization_id
+            // because Drizzle's neon-http client can't carry the GUC.
+            organizationId: transitionalUsavOrgId(),
             orderId,
             itemNumber: sheetItemNumber || '',
             productTitle: sheetProductTitle || '',

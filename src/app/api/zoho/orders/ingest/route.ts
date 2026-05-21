@@ -7,7 +7,7 @@ import { withAuth } from '@/lib/auth/withAuth';
 export const dynamic = 'force-dynamic';
 export const maxDuration = 300;
 
-export const POST = withAuth(async (request: NextRequest) => {
+export const POST = withAuth(async (request: NextRequest, ctx) => {
   if (!isAllowedAdminOrigin(request)) {
     return NextResponse.json({ success: false, error: 'Origin not allowed' }, { status: 403 });
   }
@@ -32,7 +32,7 @@ export const POST = withAuth(async (request: NextRequest) => {
       });
     }
 
-    const order = await orderSyncService.ingestExternalOrder(body as ChannelOrder);
+    const order = await orderSyncService.ingestExternalOrder(ctx.organizationId, body as ChannelOrder);
     return NextResponse.json({ success: true, order });
   } catch (error: any) {
     console.error('[zoho/orders/ingest]', error);

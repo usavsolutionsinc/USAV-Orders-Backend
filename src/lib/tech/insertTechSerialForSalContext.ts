@@ -119,6 +119,8 @@ export async function resolveTechSerialSalContext(
 export async function insertTechSerialForSalContext(
   db: Queryable,
   params: {
+    /** Phase 3a: tenant scope, required for both INSERTs in this function. */
+    organizationId: string;
     salContext: TechSerialSalContext;
     staffId: number;
     serial: string;
@@ -157,12 +159,13 @@ export async function insertTechSerialForSalContext(
 
   const insertResult = await db.query(
     `INSERT INTO tech_serial_numbers
-       (shipment_id, source_sku_id, orders_exception_id, scan_ref, serial_number, serial_type,
+       (organization_id, shipment_id, source_sku_id, orders_exception_id, scan_ref, serial_number, serial_type,
         tested_by, fnsku, fnsku_log_id, fba_shipment_id, fba_shipment_item_id,
         context_station_activity_log_id)
-     VALUES ($1, $2, $3, NULL, $4, $5, $6, $7, $8, $9, $10, $11)
+     VALUES ($1, $2, $3, $4, NULL, $5, $6, $7, $8, $9, $10, $11, $12)
      RETURNING id`,
     [
+      params.organizationId,
       params.salContext.shipmentId,
       params.sourceSkuId ?? null,
       params.salContext.ordersExceptionId,
@@ -183,6 +186,7 @@ export async function insertTechSerialForSalContext(
   }
 
   await createStationActivityLog(db, {
+    organizationId: params.organizationId,
     station: 'TECH',
     activityType: 'SERIAL_ADDED',
     staffId: params.staffId,

@@ -73,9 +73,10 @@ export function MobileReceivingList() {
 
   // Reverse so newest is at the bottom. API returns newest-first (by zoho
   // last-modified, falling back to created_at — see receiving-lines route).
+  // Limit to most recent 20 for mobile display.
   const reversedRows = useMemo(() => {
     const rows = data?.receiving_lines ?? [];
-    return [...rows].reverse();
+    return [...rows].slice(0, 20).reverse();
   }, [data]);
 
   const scrollRef = useRef<HTMLDivElement>(null);

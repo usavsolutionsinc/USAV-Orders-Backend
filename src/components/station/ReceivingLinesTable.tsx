@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useUIModeOptional } from '@/design-system/providers/UIModeProvider';
-import { Loader2 } from '@/components/Icons';
+import { SkeletonList } from '@/design-system/components/Skeletons';
 import { TrackingChip, OrderIdChip, SkuScanRefChip, SerialChip, getLast4, getLast6Serial } from '@/components/ui/CopyChip';
 import { conditionGradeTableLabel, workflowStatusTableLabel } from '@/components/station/receiving-constants';
 import WeekHeader from '@/components/ui/WeekHeader';
@@ -56,6 +56,8 @@ export interface ReceivingLineRow {
   /** Carton-level support notes from `receiving.support_notes` (same for all lines on the package). */
   receiving_support_notes?: string | null;
   created_at: string | null;
+  /** Most-recent scan/receive time. Server sorts view=recent/all by this. */
+  last_activity_at?: string | null;
   image_url: string | null;
   source_platform: string | null;
   serials?: Array<{ id: number; serial_number: string }> | null;
@@ -502,8 +504,8 @@ export default function ReceivingLinesTable() {
         />
         <div ref={scrollRef} className="min-h-0 flex-1 overflow-auto">
           {isLoading && localRows.length === 0 ? (
-            <div className="flex h-full items-center justify-center">
-              <Loader2 className="h-8 w-8 animate-spin text-gray-500" />
+            <div className="p-3">
+              <SkeletonList count={12} type="row" />
             </div>
           ) : Object.keys(filteredGroupedRecords).length === 0 ? (
             <div className="flex h-full flex-col items-center justify-center gap-3 px-6 text-center">

@@ -20,7 +20,7 @@ import { withAuth } from '@/lib/auth/withAuth';
 
 export const runtime = 'nodejs';
 
-export const POST = withAuth(async () => {
+export const POST = withAuth(async (_req, ctx) => {
   try {
     // Get latest completed training run
     const latestRun = await db
@@ -105,6 +105,7 @@ export const POST = withAuth(async () => {
     const version = `v${versionNum}`;
 
     await db.insert(modelVersions).values({
+      organizationId: ctx.organizationId,
       runId: run.id,
       version,
       baseModel: run.baseModel,

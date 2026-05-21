@@ -1069,14 +1069,9 @@ export function ReceivingSidebarPanel() {
     router.replace(`/receiving?${nextParams.toString()}`);
   };
 
-  // Mobile receiving is photo-only and rendered directly by the page
-  // (MobileReceivingList). The sidebar/form tree never mounts on phones, but
-  // the guard stays here as belt-and-suspenders since all hooks above run
-  // unconditionally — returning null short-circuits cheaply if a future
-  // caller mounts this panel on a phone-width viewport.
-  if (isMobile) {
-    return null;
-  }
+  // Mobile receiving used to be photo-only, but we now use RouteShell
+  // to surface this panel as the "Actions" tab.
+  const isMobileView = isMobile;
 
   return (
     <div className="h-full flex flex-col overflow-hidden">

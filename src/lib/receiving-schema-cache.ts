@@ -64,3 +64,26 @@ export async function getReceivingLineColumns(): Promise<Set<string>> {
 
   return _lineColumns;
 }
+
+// Bust both caches (used when callers detect a schema drift, e.g. a column
+// they depend on is missing). Next call re-probes information_schema.
+export function bustReceivingSchemaCache(reason: string): void {
+  console.warn('[receiving-schema-cache] bust', { reason });
+  _receivingColumns = null;
+  _receivingDateColumn = null;
+  _receivingHasQuantity = null;
+  _receivingExpiry = 0;
+  _lineColumns = null;
+  _lineExpiry = 0;
+}
+
+// One-shot per-process logger so we don't spam logs every request. Records
+// the missing column name + which side (receiving / receiving_lines) so ops
+// can spot schema drift in monitoring.
+const _missingColumnsLogged = new Set<string>();
+export function reportMissingReceivingColumn(table: 'receiving' | 'receiving_lines', column: string): void {
+  const key = `${table}:${column}`;
+  if (_missingColumnsLogged.has(key)) return;
+  _missingColumnsLogged.add(key);
+  console.warn('[receiving-schema-cache] expected column missing — query falling back', { table, column });
+}

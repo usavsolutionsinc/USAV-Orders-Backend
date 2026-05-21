@@ -152,6 +152,7 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
       console.log('Inserted into packer_logs, ID:', packerLogId);
 
       const salId = await createStationActivityLog(client, {
+        organizationId: ctx.organizationId,
         station: 'PACK',
         activityType: 'PACK_COMPLETED',
         staffId,

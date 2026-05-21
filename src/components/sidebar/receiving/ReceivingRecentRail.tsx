@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { motion, AnimatePresence } from 'framer-motion';
 import { getStaffName } from '@/utils/staff';
@@ -60,7 +60,7 @@ interface Props {
  * row, plus `usav-refresh-data` / `receiving-entry-added` for invalidation
  * so it acts as an ambient feed while the operator works.
  */
-export function ReceivingRecentRail({ selectedLineId, limit = 10 }: Props) {
+export function ReceivingRecentRail({ selectedLineId, limit = 20 }: Props) {
   const queryClient = useQueryClient();
   // Match `ReceivingLinesTable`'s queryKey + queryFn exactly so react-query
   // dedupes the fetch — the rail rides on the table's cache.
@@ -126,6 +126,59 @@ export function ReceivingRecentRail({ selectedLineId, limit = 10 }: Props) {
   const allRows = localRows ?? [];
   const rows = allRows.slice(0, limit);
 
+  // ── Keyboard navigation (roving tabindex) ──────────────────────────────────
+  // Buttons don't natively move focus on arrow keys; we wire ArrowUp/Down
+  // ourselves and dispatch select on focus so workspace mirrors the rail.
+  // Focus index resets when the visible-row set changes (e.g. new scan
+  // pushes the previously-focused row past the cap).
+  const listRef = useRef<HTMLUListElement | null>(null);
+  const [focusIndex, setFocusIndex] = useState<number>(-1);
+
+  useEffect(() => {
+    if (focusIndex >= rows.length) setFocusIndex(rows.length - 1);
+  }, [rows.length, focusIndex]);
+
+  const focusRow = useCallback((idx: number) => {
+    const ul = listRef.current;
+    if (!ul) return;
+    const btn = ul.querySelectorAll<HTMLButtonElement>('button[data-rail-row]')[idx];
+    if (btn) btn.focus();
+  }, []);
+
+  const handleKeyDown = useCallback((e: React.KeyboardEvent<HTMLUListElement>) => {
+    if (rows.length === 0) return;
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      const next = focusIndex < 0 ? 0 : Math.min(focusIndex + 1, rows.length - 1);
+      setFocusIndex(next);
+      focusRow(next);
+      dispatchSelectLine(rows[next]);
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      const next = focusIndex < 0 ? 0 : Math.max(focusIndex - 1, 0);
+      setFocusIndex(next);
+      focusRow(next);
+      dispatchSelectLine(rows[next]);
+    } else if (e.key === 'Home') {
+      e.preventDefault();
+      setFocusIndex(0);
+      focusRow(0);
+      dispatchSelectLine(rows[0]);
+    } else if (e.key === 'End') {
+      e.preventDefault();
+      const last = rows.length - 1;
+      setFocusIndex(last);
+      focusRow(last);
+      dispatchSelectLine(rows[last]);
+    } else if (e.key === 'Enter' || e.key === ' ') {
+      // Activation: same as click on the focused row.
+      if (focusIndex >= 0 && focusIndex < rows.length) {
+        e.preventDefault();
+        dispatchSelectLine(rows[focusIndex]);
+      }
+    }
+  }, [rows, focusIndex, focusRow]);
+
   return (
     <section className="border-t border-gray-100 bg-white">
       <div className="flex items-center justify-between px-3 pt-2 pb-1">
@@ -150,14 +203,25 @@ export function ReceivingRecentRail({ selectedLineId, limit = 10 }: Props) {
           No recent activity yet.
         </p>
       ) : (
-        <ul className="px-2 py-1">
+        <ul
+          ref={listRef}
+          className="px-2 py-1 outline-none"
+          role="listbox"
+          aria-label="Recent receiving lines"
+          tabIndex={0}
+          onKeyDown={handleKeyDown}
+        >
           <AnimatePresence initial={false}>
-            {rows.map((row) => (
+            {rows.map((row, idx) => (
               <RailRow
                 key={row.id}
                 row={row}
                 isSelected={row.id === selectedLineId}
-                onClick={() => dispatchSelectLine(row)}
+                isFocused={idx === focusIndex}
+                onClick={() => {
+                  setFocusIndex(idx);
+                  dispatchSelectLine(row);
+                }}
               />
             ))}
           </AnimatePresence>
@@ -170,10 +234,12 @@ export function ReceivingRecentRail({ selectedLineId, limit = 10 }: Props) {
 function RailRow({
   row,
   isSelected,
+  isFocused,
   onClick,
 }: {
   row: ReceivingLineRow;
   isSelected: boolean;
+  isFocused: boolean;
   onClick: () => void;
 }) {
   const title = row.item_name || row.sku || row.zoho_item_id || `Line #${row.id}`;
@@ -184,10 +250,15 @@ function RailRow({
   const techColor = techId
     ? stationThemeColors[getStaffThemeById(techId)].text
     : 'text-gray-400';
+  // Match the server's view=all sort: last scan → received_at → created_at.
+  // Keeps the displayed timestamp aligned with the row order.
+  const activityAt = row.last_activity_at ?? row.created_at;
 
   return (
     <motion.li
       layout
+      role="option"
+      aria-selected={isSelected}
       initial={{ opacity: 0, y: -2 }}
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0 }}
@@ -195,11 +266,15 @@ function RailRow({
     >
       <button
         type="button"
+        data-rail-row
+        tabIndex={-1}
         onClick={onClick}
         className={`relative flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left transition-colors ${
           isSelected
             ? 'bg-blue-50/80 ring-1 ring-inset ring-blue-200'
-            : 'hover:bg-gray-50'
+            : isFocused
+              ? 'bg-gray-50 ring-1 ring-inset ring-gray-200'
+              : 'hover:bg-gray-50'
         }`}
       >
         <span
@@ -223,7 +298,7 @@ function RailRow({
           </p>
         </div>
         <span className="shrink-0 tabular-nums text-[9px] font-bold text-gray-400">
-          {relativeTime(row.created_at)}
+          {relativeTime(activityAt)}
         </span>
       </button>
     </motion.li>

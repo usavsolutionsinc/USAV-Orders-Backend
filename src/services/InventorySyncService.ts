@@ -71,6 +71,9 @@ function extractLocationStock(item: ZohoItem) {
 }
 
 export class InventorySyncService {
+  /** Phase 3a: tenant scope is required so cursor upserts land on the right tenant. */
+  constructor(private readonly organizationId: string) {}
+
   async fullSync(): Promise<SyncResult> {
     const startTime = Date.now();
     let count = 0;
@@ -81,13 +84,13 @@ export class InventorySyncService {
     }
 
     await this.syncLocations();
-    await syncCursorRepository.upsert('items', { lastSyncedAt: new Date(), fullSyncAt: new Date() });
+    await syncCursorRepository.upsert(this.organizationId, 'items', { lastSyncedAt: new Date(), fullSyncAt: new Date() });
     console.info({ event: 'items.full_sync.complete', count, duration_ms: Date.now() - startTime });
     return { count };
   }
 
   async incrementalSync(): Promise<SyncResult> {
-    const cursor = await syncCursorRepository.get('items');
+    const cursor = await syncCursorRepository.get(this.organizationId, 'items');
     const since = cursor?.lastSyncedAt ?? new Date(0);
     let count = 0;
 
@@ -100,22 +103,23 @@ export class InventorySyncService {
     }
 
     await this.syncLocations();
-    await syncCursorRepository.upsert('items', { lastSyncedAt: new Date() });
+    await syncCursorRepository.upsert(this.organizationId, 'items', { lastSyncedAt: new Date() });
     return { count };
   }
 
   async updateZohoBackedItem(itemId: string, payload: Record<string, unknown>) {
     const updated = await zohoClient.updateItem(itemId, payload);
-    await itemRepository.upsertMany([mapZohoItemToLocal(updated)]);
+    await itemRepository.upsertMany([{ organizationId: this.organizationId, ...mapZohoItemToLocal(updated) }]);
     return updated;
   }
 
   private async upsertItems(rows: ZohoItem[]): Promise<void> {
     if (rows.length === 0) return;
-    await itemRepository.upsertMany(rows.map(mapZohoItemToLocal));
+    await itemRepository.upsertMany(rows.map((row) => ({ organizationId: this.organizationId, ...mapZohoItemToLocal(row) })));
 
     const locationInputs = rows.flatMap(extractLocationStock);
     await itemRepository.upsertLocations(locationInputs.map((row) => ({
+      organizationId: this.organizationId,
       zohoLocationId: row.zohoLocationId,
       name: row.name,
     })));
@@ -137,6 +141,7 @@ export class InventorySyncService {
             const locationId = locationIdByZohoId.get(stock.zohoLocationId);
             if (!itemId || !locationId) return null;
             return {
+              organizationId: this.organizationId,
               itemId,
               locationId,
               quantityAvailable: stock.quantityAvailable,
@@ -155,6 +160,7 @@ export class InventorySyncService {
       pages.push(...page);
     }
     await itemRepository.upsertLocations(pages.map((warehouse) => ({
+      organizationId: this.organizationId,
       zohoLocationId: warehouse.warehouse_id,
       name: warehouse.warehouse_name,
       isPrimary: !!warehouse.is_primary,

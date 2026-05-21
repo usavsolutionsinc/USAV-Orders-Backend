@@ -17,6 +17,34 @@ import {
 import { withAuth } from '@/lib/auth/withAuth';
 import { recordAudit, AUDIT_ACTION, AUDIT_ENTITY } from '@/lib/audit-logs';
 import { isInventoryV2ReceivingPutaway } from '@/lib/feature-flags';
+import { registerShipmentPermissive } from '@/lib/shipping/sync-shipment';
+
+// Default putaway bin (cached per Function instance). When the receive
+// caller doesn't supply destination_bin_id, mark-received falls back to
+// the UNSORTED bin so the unit still progresses RECEIVED → STOCKED. Without
+// this, units pile up at RECEIVED and the picker has nothing to allocate.
+// See migration 2026-05-21_inventory_v2_unsorted_default_bin.sql.
+let cachedDefaultPutawayBinId: number | null | undefined;
+async function resolveDefaultPutawayBinId(): Promise<number | null> {
+  if (cachedDefaultPutawayBinId !== undefined) return cachedDefaultPutawayBinId;
+  const barcode = (process.env.RECEIVING_DEFAULT_PUTAWAY_BIN_BARCODE || 'UNSORTED').trim();
+  try {
+    const r = await pool.query<{ id: number }>(
+      `SELECT id FROM locations
+        WHERE barcode = $1
+          AND is_active = true
+          AND bin_role = 'RESERVE'
+        ORDER BY id ASC
+        LIMIT 1`,
+      [barcode],
+    );
+    cachedDefaultPutawayBinId = r.rows[0]?.id ?? null;
+  } catch (err) {
+    console.warn(`[mark-received] default-putaway bin lookup failed for barcode=${barcode}:`, err);
+    cachedDefaultPutawayBinId = null;
+  }
+  return cachedDefaultPutawayBinId;
+}
 
 /**
  * Phase 2 helper: emit inventory_events + sku_stock_ledger for the receive
@@ -228,11 +256,20 @@ export const POST = withAuth(async (request, ctx) => {
     // Phase 2 (INVENTORY_V2_RECEIVING_PUTAWAY): optional destination bin
     // scanned at the same time as the receive action. Triggers a PUTAWAY
     // event + serial_units.current_location update inside the same txn.
+    // When the caller omits destination_bin_id on an ACCEPT receive, fall
+    // back to the UNSORTED default bin so the unit still reaches STOCKED.
     const destinationBinIdRaw = body?.destination_bin_id;
-    const destinationBinId =
+    let destinationBinId =
       Number.isFinite(Number(destinationBinIdRaw)) && Number(destinationBinIdRaw) > 0
         ? Math.floor(Number(destinationBinIdRaw))
         : null;
+    if (
+      destinationBinId == null &&
+      String(body?.disposition_code || 'ACCEPT').trim() === 'ACCEPT' &&
+      isInventoryV2ReceivingPutaway()
+    ) {
+      destinationBinId = await resolveDefaultPutawayBinId();
+    }
     // Idempotency token from the client (mobile scanner generates a UUID
     // per scan). Optional; unique within inventory_events.
     const clientEventId = String(body?.client_event_id || '').trim() || null;
@@ -260,6 +297,23 @@ export const POST = withAuth(async (request, ctx) => {
 
     if (!Number.isFinite(receivingLineId) || receivingLineId <= 0) {
       return NextResponse.json({ success: false, error: 'receiving_line_id is required' }, { status: 400 });
+    }
+
+    // Validate destination bin exists before we commit anything else. The
+    // previous behavior was to fail silently inside applyInventoryV2Effects,
+    // leaving the line received but the bin assignment skipped. Bin storage
+    // lives in `locations` (see inventory_events.bin_id FK).
+    if (destinationBinId != null) {
+      const binCheck = await pool.query<{ id: number }>(
+        `SELECT id FROM locations WHERE id = $1 LIMIT 1`,
+        [destinationBinId],
+      );
+      if (binCheck.rows.length === 0) {
+        return NextResponse.json(
+          { success: false, error: 'BIN_NOT_FOUND', destination_bin_id: destinationBinId },
+          { status: 404 },
+        );
+      }
     }
 
     const now = formatPSTTimestamp();
@@ -364,10 +418,15 @@ export const POST = withAuth(async (request, ctx) => {
     // shipping_tracking_numbers row via receiving.shipment_id; fall back to
     // receiving.receiving_tracking_number. Computed before the Zoho receive call.
     let localTracking: string | null = null;
+    let trackingShipmentId: number | null = null;
     if (receivingId) {
       try {
-        const trackingRes = await pool.query<{ tracking: string | null }>(
-          `SELECT COALESCE(stn.tracking_number_raw, r.receiving_tracking_number) AS tracking
+        const trackingRes = await pool.query<{
+          tracking: string | null;
+          shipment_id: number | null;
+        }>(
+          `SELECT COALESCE(stn.tracking_number_raw, r.receiving_tracking_number) AS tracking,
+                  r.shipment_id
              FROM receiving r
              LEFT JOIN shipping_tracking_numbers stn ON stn.id = r.shipment_id
             WHERE r.id = $1
@@ -375,7 +434,36 @@ export const POST = withAuth(async (request, ctx) => {
           [receivingId],
         );
         localTracking = (trackingRes.rows[0]?.tracking || '').trim() || null;
+        trackingShipmentId = trackingRes.rows[0]?.shipment_id ?? null;
       } catch { /* silent — Zoho push will just skip */ }
+    }
+
+    // Backfill shipment_id when this receiving row arrived via /lookup-po
+    // before the shipping_tracking_numbers row existed (or as a Zoho
+    // 'unmatched' carry-forward that never got linked). Without this, a
+    // second scan of the same tracking is forced to recreate state and the
+    // exception triage worker keeps re-finding the row as "orphaned."
+    if (receivingId && trackingShipmentId == null && localTracking) {
+      try {
+        const shipment = await registerShipmentPermissive({
+          trackingNumber: localTracking,
+          sourceSystem: 'receiving.mark-received',
+        });
+        if (shipment?.id) {
+          await pool.query(
+            `UPDATE receiving
+                SET shipment_id = $1, updated_at = NOW()
+              WHERE id = $2 AND shipment_id IS NULL`,
+            [shipment.id, receivingId],
+          );
+        }
+      } catch (err) {
+        console.warn('[mark-received] shipment_id backfill failed', {
+          receiving_id: receivingId,
+          tracking: localTracking,
+          message: err instanceof Error ? err.message : String(err),
+        });
+      }
     }
 
     // 4. Zoho purchase receive (await before responding). PO notes/serials only after receive succeeds.
@@ -479,9 +567,22 @@ export const POST = withAuth(async (request, ctx) => {
           console.warn('mark-received: updatePurchaseOrder sync failed', err);
         }
       } catch (err) {
+        // Inventory side already committed (line update + v2Effects). Zoho is
+        // now out of sync — the response carries `zoho_receive_ok:false` +
+        // error so the client can surface "Pending Zoho sync" and an admin
+        // can replay. Logged at ERROR level so monitoring picks it up;
+        // existing inventory_events are still authoritative on our side.
         zohoReceiveOk = false;
         zohoReceiveError = err instanceof Error ? err.message : String(err);
-        console.warn('mark-received: createPurchaseReceive failed', err);
+        console.error('[mark-received] createPurchaseReceive failed — inventory committed, Zoho pending', {
+          receiving_line_id: receivingLineId,
+          receiving_id: receivingId,
+          zoho_po_id: zohoPoId,
+          zoho_line_item_id: zohoLineItemId,
+          qty_received: qtyReceived,
+          serial_number: serialNumber ?? null,
+          message: zohoReceiveError,
+        });
       }
     }
 

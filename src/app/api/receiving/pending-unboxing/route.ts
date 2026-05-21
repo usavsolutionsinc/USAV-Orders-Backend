@@ -43,7 +43,11 @@
 
 import { NextRequest, NextResponse, after } from 'next/server';
 import pool from '@/lib/db';
-import { getReceivingSchema, getReceivingLineColumns } from '@/lib/receiving-schema-cache';
+import {
+  getReceivingSchema,
+  getReceivingLineColumns,
+  reportMissingReceivingColumn,
+} from '@/lib/receiving-schema-cache';
 import { createCacheLookupKey, getCachedJson, setCachedJson } from '@/lib/cache/upstash-cache';
 import { withAuth } from '@/lib/auth/withAuth';
 
@@ -75,8 +79,16 @@ export const GET = withAuth(async (request: NextRequest) => {
       getReceivingSchema(),
       getReceivingLineColumns(),
     ]);
-    const hasColumn = (name: string) => availableColumns.has(name);
-    const hasLineColumn = (name: string) => availableLineColumns.has(name);
+    const hasColumn = (name: string) => {
+      const present = availableColumns.has(name);
+      if (!present) reportMissingReceivingColumn('receiving', name);
+      return present;
+    };
+    const hasLineColumn = (name: string) => {
+      const present = availableLineColumns.has(name);
+      if (!present) reportMissingReceivingColumn('receiving_lines', name);
+      return present;
+    };
     const receivedAtSelect = hasColumn('received_at')
       ? "to_char(r.received_at::timestamp, 'YYYY-MM-DD HH24:MI:SS') AS received_at"
       : 'NULL::text AS received_at';

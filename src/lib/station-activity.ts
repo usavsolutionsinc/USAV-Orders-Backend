@@ -18,6 +18,13 @@ export type StationActivityType =
 export async function createStationActivityLog(
   db: Queryable,
   params: {
+    /**
+     * Phase 3a: tenant scope. Required because station_activity_logs has a
+     * NOT NULL organization_id column. Without this, every scan-time INSERT
+     * fails (manifested as the tech-station scan bar appearing to silently
+     * drop scans).
+     */
+    organizationId: string;
     station: StationName;
     activityType: StationActivityType;
     staffId: number | null;
@@ -36,13 +43,14 @@ export async function createStationActivityLog(
 ): Promise<number | null> {
   const result = await db.query(
     `INSERT INTO station_activity_logs (
-       station, activity_type, staff_id, shipment_id, scan_ref, fnsku,
+       organization_id, station, activity_type, staff_id, shipment_id, scan_ref, fnsku,
        orders_exception_id, fba_shipment_id, fba_shipment_item_id,
        tech_serial_number_id, packer_log_id, notes, metadata, created_at
      )
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13::jsonb, COALESCE($14::timestamptz, NOW()))
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14::jsonb, COALESCE($15::timestamptz, NOW()))
      RETURNING id`,
     [
+      params.organizationId,
       params.station,
       params.activityType,
       params.staffId,

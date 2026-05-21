@@ -83,10 +83,22 @@ async function syncLocalPickupOrder(
 ): Promise<SyncPOLinesResult> {
   const { normalizedPoId, poNumber, poReference, lineItems } = input;
 
+  // Serialize concurrent syncs of the same Zoho PO via a session-scoped
+  // advisory lock. Without it, two interleaved syncs could write a header
+  // from snapshot A while lines from snapshot B land — leaving the order
+  // half-stale. The lock key is derived from the PO id so different POs
+  // sync in parallel. Released automatically at txn end.
+  await client.query(
+    `SELECT pg_advisory_xact_lock(hashtext('local_pickup_orders.zoho_po_id'), hashtext($1))`,
+    [normalizedPoId],
+  );
+
   // Upsert the order header keyed on the Zoho PO id (partial-unique index
   // ux_local_pickup_orders_zoho_po). Existing rows are touched lightly so a
   // re-sync refreshes the displayed PO# and reference# without overwriting
-  // operator-curated fields like customer_name, status, or notes.
+  // operator-curated fields like customer_name, status, or notes. COALESCE
+  // protects against a partial Zoho fetch nulling fields that the previous
+  // sync populated.
   const orderRes = await client.query<{ id: number; xmax: string }>(
     `INSERT INTO local_pickup_orders (
        zoho_po_id, zoho_purchaseorder_number, zoho_reference_number, status
@@ -94,8 +106,8 @@ async function syncLocalPickupOrder(
      VALUES ($1, $2, $3, 'DRAFT')
      ON CONFLICT (zoho_po_id) WHERE zoho_po_id IS NOT NULL
      DO UPDATE SET
-       zoho_purchaseorder_number = EXCLUDED.zoho_purchaseorder_number,
-       zoho_reference_number     = EXCLUDED.zoho_reference_number,
+       zoho_purchaseorder_number = COALESCE(EXCLUDED.zoho_purchaseorder_number, local_pickup_orders.zoho_purchaseorder_number),
+       zoho_reference_number     = COALESCE(EXCLUDED.zoho_reference_number, local_pickup_orders.zoho_reference_number),
        updated_at                = NOW()
      RETURNING id, xmax::text`,
     [normalizedPoId, poNumber, poReference],
@@ -181,6 +193,14 @@ async function syncPurchaseOrderLines(
 ): Promise<SyncPOLinesResult> {
   const poId = asString(purchaseOrderId);
   if (!poId) throw new Error('purchaseorder_id is required');
+
+  // Serialize concurrent imports of the same Zoho PO (e.g. two scans of the
+  // same tracking landing in parallel). The advisory lock is keyed on the
+  // PO id, so unrelated POs still sync in parallel. Released on txn end.
+  await client.query(
+    `SELECT pg_advisory_xact_lock(hashtext('zoho_purchaseorder_sync'), hashtext($1))`,
+    [poId],
+  );
 
   const detail = await getPurchaseOrderById(poId);
   const po = asObject((detail as AnyRow)?.purchaseorder);

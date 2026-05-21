@@ -1,7 +1,8 @@
 'use client';
 
-import Link from 'next/link';
 import { motion, useReducedMotion } from 'framer-motion';
+import Link from 'next/link';
+import { OrderIdChip, SkuScanRefChip, TrackingChip, getLast4 } from '@/components/ui/CopyChip';
 import { Camera, Check } from '@/components/Icons';
 import { conditionGradeTableLabel, workflowStatusTableLabel } from '@/components/station/receiving-constants';
 import type { ReceivingLineRow } from '@/components/station/ReceivingLinesTable';
@@ -27,138 +28,119 @@ function getStatusDotBg(status: string | null | undefined) {
   return 'bg-gray-400';
 }
 
-function PhotoChip({ count }: { count: number }) {
+function PhotoChip({ count, isAction = false }: { count: number; isAction?: boolean }) {
   const has = count > 0;
   return (
-    <span
-      className={`inline-flex shrink-0 items-center gap-1 rounded-full px-2 py-0.5 text-xs font-black tabular-nums tracking-wide ${
-        has ? 'bg-emerald-50 text-emerald-700' : 'bg-gray-100 text-gray-400'
+    <div
+      className={`inline-flex shrink-0 items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-black tabular-nums tracking-wide transition-transform ${
+        isAction 
+          ? 'bg-blue-600 text-white shadow-sm active:scale-95' 
+          : has ? 'bg-emerald-50 text-emerald-700' : 'bg-gray-100 text-gray-400'
       }`}
-      aria-label={has ? `${count} photos captured` : 'no photos yet'}
     >
-      <Camera className="h-3 w-3" />
-      {has ? <Check className="h-3 w-3" /> : null}
+      <Camera className="h-3.5 w-3.5" />
+      {!isAction && has ? <Check className="h-2.5 w-2.5" /> : null}
       <span>{count}</span>
-    </span>
+    </div>
   );
 }
 
 /**
  * Mobile receiving row — single source for both the slim "older" row variant
- * and the bottom-pinned "most recent" expanded card. Same data shape as the
- * desktop OrderRow but pared back to the fields a phone tech needs at a glance.
+ * and the bottom-pinned "most recent" expanded card. 
+ * 
+ * Optimized for a strict two-row display matching the requested UI:
+ * Row 1: Status Dot + Product Title
+ * Row 2: [Qty 1/1] [PO Chip] [SKU Chip] [Tracking Chip] ... [Photo Action]
  */
 export function MobileReceivingRow({ row, variant, fresh = false, onTap, photosHref }: MobileReceivingRowProps) {
   const reduceMotion = useReducedMotion();
   const productTitle = row.item_name || row.zoho_item_id || 'Unnamed inbound line';
   const poValue = (row.zoho_purchaseorder_number || row.zoho_purchaseorder_id || '').trim();
+  const skuValue = (row.sku || '').trim();
   const trackingValue = (row.tracking_number || '').trim();
   const qtyExpected = row.quantity_expected ?? 0;
   const qtyReceived = row.quantity_received;
   const quantityText = `${qtyReceived}/${row.quantity_expected ?? '?'}`;
   const workflowLabel = workflowStatusTableLabel(row.workflow_status || 'EXPECTED');
-  const conditionLabel = conditionGradeTableLabel(row.condition_grade);
   const photoCount = row.photo_count ?? 0;
 
-  if (variant === 'collapsed') {
-    return (
-      <button
-        type="button"
-        onClick={onTap}
-        data-line-row-id={row.id}
-        className={`flex w-full items-center gap-2 border-b border-gray-100 px-3 py-2 text-left transition-colors active:bg-blue-50 ${
-          fresh ? 'bg-blue-50/60' : 'bg-white'
-        }`}
-      >
-        <PhotoChip count={photoCount} />
-        <span
-          className={`h-2 w-2 shrink-0 rounded-full ${getStatusDotBg(row.workflow_status)}`}
-          title={workflowLabel}
-        />
-        <div className="flex min-w-0 flex-1 flex-col">
-          <span className="truncate text-[12px] font-bold text-gray-900">{productTitle}</span>
-          <span className="truncate text-xs font-black uppercase tracking-widest text-gray-500">
-            {poValue ? `${poValue} · ` : ''}
-            <span
-              className={
-                qtyExpected > 1
-                  ? 'text-yellow-600'
-                  : row.quantity_expected && qtyReceived >= row.quantity_expected
-                    ? 'text-emerald-600'
-                    : 'text-gray-700'
-              }
-            >
-              {quantityText}
-            </span>
-          </span>
-        </div>
-      </button>
-    );
-  }
+  const isExpanded = variant === 'expanded';
 
-  // expanded
   return (
     <div
       data-line-row-id={row.id}
-      className="relative mx-3 mb-3 mt-2 rounded-2xl border border-blue-100 bg-white p-4 shadow-[0_8px_24px_-12px_rgba(15,23,42,0.18)]"
+      className={`relative transition-all ${
+        isExpanded 
+          ? 'mx-3 mb-3 mt-2 rounded-2xl border border-blue-100 bg-white p-4 shadow-[0_8px_24px_-12px_rgba(15,23,42,0.18)]' 
+          : 'flex w-full flex-col border-b border-gray-100 px-3 py-3 active:bg-blue-50 bg-white transition-colors'
+      }`}
     >
-      {/* Fresh-arrival ring pulse — fades out on its own; no layout impact */}
-      {fresh && !reduceMotion && (
+      {/* Tap area for the sheet overlay */}
+      <button 
+        type="button" 
+        onClick={onTap} 
+        className="absolute inset-0 z-0 h-full w-full active:bg-blue-50/30" 
+      />
+
+      {/* Fresh-arrival ring pulse (only for expanded) */}
+      {isExpanded && fresh && !reduceMotion && (
         <motion.span
           aria-hidden
           initial={{ opacity: 0.55, scale: 1 }}
           animate={{ opacity: 0, scale: 1.04 }}
           transition={{ duration: 1.8, ease: [0.22, 1, 0.36, 1] }}
-          className="pointer-events-none absolute inset-0 rounded-2xl ring-2 ring-blue-400/70 shadow-[0_0_0_8px_rgba(96,165,250,0.18)]"
+          className="pointer-events-none absolute inset-0 z-0 rounded-2xl ring-2 ring-blue-400/70"
         />
       )}
-      <button type="button" onClick={onTap} className="block w-full text-left">
-        <div className="flex items-center gap-2">
+
+      {/* Content Layer */}
+      <div className="relative z-10 pointer-events-none flex flex-col">
+        {/* Row 1: Status Dot + Product Title */}
+        <div className="flex items-center gap-3">
           <span
-            className={`h-2.5 w-2.5 shrink-0 rounded-full ${getStatusDotBg(row.workflow_status)}`}
+            className={`${isExpanded ? 'h-2.5 w-2.5' : 'h-2 w-2'} shrink-0 rounded-full ${getStatusDotBg(row.workflow_status)}`}
             title={workflowLabel}
           />
-          <span className="text-xs font-black uppercase tracking-[0.22em] text-blue-600">
-            Most recent
-          </span>
-          <span className="ml-auto">
-            <PhotoChip count={photoCount} />
+          <span className={`min-w-0 flex-1 truncate font-bold text-gray-900 ${isExpanded ? 'text-[15px] tracking-tight' : 'text-[13px]'}`}>
+            {productTitle}
           </span>
         </div>
 
-        <p className="mt-2 line-clamp-2 pr-12 text-[15px] font-black tracking-tight text-gray-900">
-          {productTitle}
-        </p>
+        {/* Row 2: Qty + Chips + Photo Action */}
+        <div className="mt-3 flex items-center justify-between gap-2">
+          <div className="flex min-w-0 items-center gap-2">
+            <span className={`shrink-0 whitespace-nowrap font-black uppercase tracking-widest ${isExpanded ? 'text-[11px]' : 'text-[10px]'}`}>
+              <span
+                className={
+                  qtyExpected > 1 && qtyReceived < qtyExpected
+                    ? 'text-yellow-600'
+                    : row.quantity_expected && qtyReceived >= row.quantity_expected
+                      ? 'text-emerald-600'
+                      : 'text-gray-900'
+                }
+              >
+                {quantityText}
+              </span>
+            </span>
+            
+            <div className="flex min-w-0 items-center gap-2 pointer-events-auto">
+              {poValue && <OrderIdChip value={poValue} display={getLast4(poValue)} />}
+              {skuValue && <SkuScanRefChip value={skuValue} display={getLast4(skuValue)} />}
+              {trackingValue && <TrackingChip value={trackingValue} display={getLast4(trackingValue)} />}
+            </div>
+          </div>
 
-        <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 pr-12 text-xs font-black uppercase tracking-widest text-gray-500">
-          {poValue ? <span className="text-gray-700">PO {poValue}</span> : null}
-          <span
-            className={
-              qtyExpected > 1
-                ? 'text-yellow-600'
-                : row.quantity_expected && qtyReceived >= row.quantity_expected
-                  ? 'text-emerald-600'
-                  : 'text-gray-700'
-            }
+          <Link
+            href={photosHref}
+            prefetch={false}
+            className="pointer-events-auto ml-auto"
+            aria-label="Take photos"
           >
-            {quantityText}
-          </span>
-          <span className="text-gray-500">{conditionLabel}</span>
-          <span className="text-gray-500">{workflowLabel}</span>
-          {trackingValue ? (
-            <span className="text-gray-400">· {trackingValue.slice(-6).toUpperCase()}</span>
-          ) : null}
+            <PhotoChip count={photoCount} isAction={isExpanded} />
+          </Link>
         </div>
-      </button>
-
-      <Link
-        href={photosHref}
-        prefetch={false}
-        aria-label="Take photos for this carton"
-        className="absolute bottom-3 right-3 flex h-12 w-12 items-center justify-center rounded-full bg-blue-600 text-white shadow-md transition-transform active:scale-95"
-      >
-        <Camera className="h-5 w-5" />
-      </Link>
+      </div>
     </div>
   );
 }

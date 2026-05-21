@@ -74,6 +74,8 @@ export async function findOrderByTrackingKey(
 }
 
 export async function upsertOpenOrderException(params: {
+  /** Phase 3a: tenant scope for the orders_exceptions insert. */
+  organizationId: string;
   shippingTrackingNumber: string;
   sourceStation: ExceptionSourceStation;
   staffId?: number | null;
@@ -145,6 +147,7 @@ export async function upsertOpenOrderException(params: {
 
   const inserted = await dbClient.query(
     `INSERT INTO orders_exceptions (
+      organization_id,
       shipping_tracking_number,
       source_station,
       staff_id,
@@ -154,9 +157,10 @@ export async function upsertOpenOrderException(params: {
       status,
       created_at,
       updated_at
-    ) VALUES ($1, $2, $3, $4, $5, $6, 'open', NOW(), NOW())
+    ) VALUES ($1, $2, $3, $4, $5, $6, $7, 'open', NOW(), NOW())
     RETURNING *`,
     [
+      params.organizationId,
       tracking,
       params.sourceStation,
       params.staffId ?? null,

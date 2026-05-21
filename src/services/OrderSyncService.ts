@@ -79,7 +79,16 @@ function normalizeAddress(address: Record<string, unknown> | null | undefined) {
 }
 
 export class OrderSyncService {
-  async ingestExternalOrder(rawOrder: ChannelOrder) {
+  /**
+   * Ingest an order received from an external channel (eBay, Ecwid, Square, …).
+   *
+   * Phase 3a: tenant scoping. The orgId must be supplied by the caller —
+   * either from the authenticated session (`ctx.organizationId`) for routes
+   * that receive webhooks under a tenant subdomain, or from
+   * `transitionalUsavOrgId()` for the QStash batch reconciliation job
+   * (which is single-tenant until tenant-aware cron lands).
+   */
+  async ingestExternalOrder(orgId: string, rawOrder: ChannelOrder) {
     const referenceNumber = String(rawOrder.channelOrderId || '').trim();
     if (!referenceNumber) {
       throw new Error('channelOrderId is required');
@@ -90,11 +99,14 @@ export class OrderSyncService {
 
     const existingZoho = await zohoClient.findSalesOrderByReference(referenceNumber);
     if (existingZoho) {
-      return salesOrderRepository.create(this.mapZohoSalesOrderToLocal(rawOrder, existingZoho, null));
+      return salesOrderRepository.create({
+        organizationId: orgId,
+        ...this.mapZohoSalesOrderToLocal(rawOrder, existingZoho, null),
+      });
     }
 
     try {
-      const contact = await this.findOrCreateContact(rawOrder);
+      const contact = await this.findOrCreateContact(orgId, rawOrder);
       const lineItems = await this.resolveLineItems(rawOrder.items);
 
       const zohoSO = await zohoClient.createSalesOrder({
@@ -114,6 +126,7 @@ export class OrderSyncService {
       await zohoClient.confirmSalesOrder(zohoSO.salesorder_id);
 
       return salesOrderRepository.create({
+        organizationId: orgId,
         zohoSoId: zohoSO.salesorder_id,
         salesorderNumber: zohoSO.salesorder_number ?? null,
         referenceNumber,
@@ -149,6 +162,7 @@ export class OrderSyncService {
       const current = await salesOrderRepository.findByReference(referenceNumber);
       if (!current) {
         await salesOrderRepository.create({
+          organizationId: orgId,
           referenceNumber,
           channel: rawOrder.channel,
           status: 'zoho_error',
@@ -167,7 +181,7 @@ export class OrderSyncService {
     }
   }
 
-  private async findOrCreateContact(rawOrder: ChannelOrder) {
+  private async findOrCreateContact(orgId: string, rawOrder: ChannelOrder) {
     const email = rawOrder.buyer.email?.trim().toLowerCase() || null;
     const existingLocal = email ? await customerRepository.findByEmail(email) : null;
     if (existingLocal?.zohoContactId) {
@@ -176,7 +190,10 @@ export class OrderSyncService {
 
     const existingZoho = email ? await zohoClient.findContactByEmail(email) : null;
     if (existingZoho) {
-      return customerRepository.upsert(this.mapZohoContactToCustomer(rawOrder, existingZoho));
+      return customerRepository.upsert({
+        organizationId: orgId,
+        ...this.mapZohoContactToCustomer(rawOrder, existingZoho),
+      });
     }
 
     const createdZoho = await zohoClient.createContact({
@@ -189,7 +206,10 @@ export class OrderSyncService {
       shipping_address: normalizeAddress(rawOrder.shippingAddress ?? rawOrder.buyer.shippingAddress),
     });
 
-    return customerRepository.upsert(this.mapZohoContactToCustomer(rawOrder, createdZoho));
+    return customerRepository.upsert({
+      organizationId: orgId,
+      ...this.mapZohoContactToCustomer(rawOrder, createdZoho),
+    });
   }
 
   private async resolveLineItems(items: ChannelOrderItem[]): Promise<ResolvedLineItem[]> {

@@ -26,7 +26,7 @@ type OpenClawChatBody = {
 const HERMES_API_URL = process.env.HERMES_API_URL || 'http://127.0.0.1:8642/v1';
 const HERMES_API_KEY = process.env.HERMES_API_KEY || '';
 
-export const POST = withAuth(async (req: NextRequest) => {
+export const POST = withAuth(async (req: NextRequest, ctx) => {
   const rate = checkRateLimit({
     headers: req.headers,
     routeKey: 'ai-chat',
@@ -58,7 +58,7 @@ export const POST = withAuth(async (req: NextRequest) => {
     const trimmedMessage = message.trim();
 
     // Persist user message (fire-and-forget)
-    void persistChatMessage({ sessionId, role: 'user', content: trimmedMessage });
+    void persistChatMessage({ organizationId: ctx.organizationId, sessionId, role: 'user', content: trimmedMessage });
 
     // 1. Try local ops resolution first (deterministic DB queries — no model needed)
     const localResolution = await resolveLocalAiAnswer(trimmedMessage);
@@ -76,7 +76,7 @@ export const POST = withAuth(async (req: NextRequest) => {
         mode: localResolution.mode,
         analysis: localResolution.analysis,
       };
-      void persistChatMessage({ sessionId, role: 'assistant', content: localResolution.reply, mode: localResolution.mode, analysis: localResolution.analysis });
+      void persistChatMessage({ organizationId: ctx.organizationId, sessionId, role: 'assistant', content: localResolution.reply, mode: localResolution.mode, analysis: localResolution.analysis });
       return NextResponse.json(localPayload);
     }
 
@@ -127,7 +127,7 @@ export const POST = withAuth(async (req: NextRequest) => {
             mode: 'rag',
             analysis,
           };
-          void persistChatMessage({ sessionId, role: 'assistant', content: ragResult.answer, mode: 'rag', analysis });
+          void persistChatMessage({ organizationId: ctx.organizationId, sessionId, role: 'assistant', content: ragResult.answer, mode: 'rag', analysis });
           return NextResponse.json(ragPayload);
         }
       } catch (ragErr: any) {
@@ -219,7 +219,7 @@ export const POST = withAuth(async (req: NextRequest) => {
       mode: finalMode,
       analysis: localResolution?.analysis ?? null,
     };
-    void persistChatMessage({ sessionId, role: 'assistant', content: String(reply).trim(), mode: finalMode, analysis: localResolution?.analysis });
+    void persistChatMessage({ organizationId: ctx.organizationId, sessionId, role: 'assistant', content: String(reply).trim(), mode: finalMode, analysis: localResolution?.analysis });
     return NextResponse.json(payload);
   } catch (err: any) {
     console.error('[openclaw-chat] Error:', err?.message);

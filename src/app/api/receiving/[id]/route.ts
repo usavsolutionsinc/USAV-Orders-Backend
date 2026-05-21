@@ -286,7 +286,36 @@ export async function PATCH(
     );
     const before = beforeRow.rows[0] ?? null;
 
-    const body = await request.json().catch(() => ({}));
+    // Body parse with explicit failure modes. Bad/missing JSON used to silently
+    // become {} → downstream "No valid fields to update" 400, which gave ops no
+    // way to tell malformed JSON from a legitimately empty payload.
+    const contentType = request.headers.get('content-type') || '';
+    if (!contentType.toLowerCase().includes('application/json')) {
+      return NextResponse.json(
+        { success: false, error: 'Content-Type must be application/json', received: contentType || null },
+        { status: 415 },
+      );
+    }
+    let body: Record<string, unknown>;
+    try {
+      const parsed = await request.json();
+      if (parsed === null || typeof parsed !== 'object' || Array.isArray(parsed)) {
+        return NextResponse.json(
+          { success: false, error: 'Body must be a JSON object' },
+          { status: 400 },
+        );
+      }
+      body = parsed as Record<string, unknown>;
+    } catch (err) {
+      console.warn('[receiving/:id PATCH] JSON parse failed', {
+        id,
+        message: err instanceof Error ? err.message : String(err),
+      });
+      return NextResponse.json(
+        { success: false, error: 'Invalid JSON body' },
+        { status: 400 },
+      );
+    }
 
     const updates: string[] = [];
     const values: unknown[] = [];

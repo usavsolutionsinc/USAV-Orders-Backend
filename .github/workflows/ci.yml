@@ -52,6 +52,13 @@ jobs:
       - name: Unit tests
         run: node --test --import tsx --test-reporter spec 'src/**/*.test.ts'
 
+      # Phase 2f: the committed route-permission manifest must match the
+      # live route source. If a PR changes a route's auth gate without
+      # regenerating the manifest, this fails with a human-readable diff.
+      # Fix: `npm run audit-route-auth:emit` and commit the result.
+      - name: Route-permission manifest drift
+        run: npm run audit-route-auth:check
+
   audit-permissions:
     name: Permission drift audit
     runs-on: ubuntu-latest

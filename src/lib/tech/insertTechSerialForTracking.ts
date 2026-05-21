@@ -135,6 +135,8 @@ export type InsertTechSerialResult = InsertTechSerialSuccess | InsertTechSerialF
 export async function insertTechSerialForTracking(
   db: TechSerialInsertDb,
   params: {
+    /** Phase 3a: tenant scope, required for both INSERTs in this function. */
+    organizationId: string;
     serial: string;
     techId: string | number;
     allowFbaDuplicates?: boolean;
@@ -252,12 +254,13 @@ export async function insertTechSerialForTracking(
 
   const insertResult = await db.query(
     `INSERT INTO tech_serial_numbers
-       (shipment_id, orders_exception_id, scan_ref, serial_number, serial_type,
+       (organization_id, shipment_id, orders_exception_id, scan_ref, serial_number, serial_type,
         tested_by, fnsku, fnsku_log_id, fba_shipment_id, fba_shipment_item_id,
         context_station_activity_log_id)
-       VALUES ($1, $2, NULL, $3, $4, $5, $6, $7, $8, $9, $10)
+       VALUES ($1, $2, $3, NULL, $4, $5, $6, $7, $8, $9, $10, $11)
        RETURNING id`,
     [
+      params.organizationId,
       ctx.shipmentId ?? null,
       ctx.ordersExceptionId ?? null,
       upperSerial,
@@ -299,6 +302,7 @@ export async function insertTechSerialForTracking(
   const updatedSerialList = [...allExistingSerials, upperSerial];
 
   await createStationActivityLog(db, {
+    organizationId: params.organizationId,
     station: 'TECH',
     activityType: 'SERIAL_ADDED',
     staffId,

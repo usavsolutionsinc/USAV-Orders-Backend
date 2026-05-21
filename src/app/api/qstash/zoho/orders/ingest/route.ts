@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { isQStashOrigin } from '@/lib/qstash';
 import { orderSyncService, type ChannelOrder } from '@/services/OrderSyncService';
+import { transitionalUsavOrgId } from '@/lib/tenancy/db';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 300;
@@ -12,7 +13,7 @@ export async function POST(request: NextRequest) {
 
   const body = (await request.json().catch(() => ({}))) as ChannelOrder;
   try {
-    const order = await orderSyncService.ingestExternalOrder(body);
+    const order = await orderSyncService.ingestExternalOrder(transitionalUsavOrgId(), body);
     return NextResponse.json({
       success: true,
       queue: 'qstash',

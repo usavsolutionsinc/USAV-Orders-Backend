@@ -96,6 +96,8 @@ export function ResponsiveLayout({ children }: ResponsiveLayoutProps) {
   const openDrawer = useCallback(() => setDrawerOpen(true), []);
   const closeDrawer = useCallback(() => setDrawerOpen(false), []);
 
+  const isReceivingPage = pathname === '/receiving';
+
   useEffect(() => {
     setMounted(true);
   }, []);
@@ -183,14 +185,19 @@ export function ResponsiveLayout({ children }: ResponsiveLayoutProps) {
       <OfflineBanner />
 
       {/* Mobile header: app nav + contextual section browse/detail rows */}
-      <Suspense fallback={<MobileAppHeaderFallback onOpenAppNav={openDrawer} />}>
-        <MobileAppHeader onOpenAppNav={openDrawer} />
-      </Suspense>
+      {!isReceivingPage && (
+        <Suspense fallback={<MobileAppHeaderFallback onOpenAppNav={openDrawer} />}>
+          <MobileAppHeader onOpenAppNav={openDrawer} />
+        </Suspense>
+      )}
 
       {/* Main content — full width */}
       <main className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
         {children}
       </main>
+
+      {/* Global FAB — hide on specific pages where it conflicts with custom UI */}
+      {!isReceivingPage && <QuickAccessFab />}
 
       {/* Drawer overlay + sidebar — same `DashboardSidebar inDrawer` as dashboard hamburger (also opened via `open-mobile-drawer` on tech/packer). */}
       <AnimatePresence>

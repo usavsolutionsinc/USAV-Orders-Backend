@@ -11,6 +11,7 @@ import {
   getStationChannelName,
 } from '@/lib/realtime/channels';
 import { createStationActivityLog } from '@/lib/station-activity';
+import { transitionalUsavOrgId } from '@/lib/tenancy/db';
 import { formatPSTTimestamp } from '@/utils/date';
 
 type OrderChangedPayload = {
@@ -146,6 +147,7 @@ async function logRealtimeEventToStationActivity(
       const orderId = parseFiniteNumber(payload.orderId);
       const staffId = parseFiniteNumber(payload.testedBy);
       const id = await createStationActivityLog(pool, {
+        organizationId: transitionalUsavOrgId(),
         station: 'TECH',
         activityType: 'WS_ORDER_TESTED',
         staffId,
@@ -170,6 +172,7 @@ async function logRealtimeEventToStationActivity(
         ? payload.repairIds.map((value) => parseFiniteNumber(value)).filter((value): value is number => value != null)
         : [];
       const id = await createStationActivityLog(pool, {
+        organizationId: transitionalUsavOrgId(),
         station: 'ADMIN',
         activityType: 'WS_REPAIR_CHANGED',
         staffId: null,
@@ -193,6 +196,7 @@ async function logRealtimeEventToStationActivity(
       const rowId = payload.rowId == null ? null : String(payload.rowId);
       const action = payload.action == null ? null : String(payload.action);
       const id = await createStationActivityLog(pool, {
+        organizationId: transitionalUsavOrgId(),
         station: 'RECEIVING',
         activityType: 'WS_RECEIVING_CHANGED',
         staffId: null,
@@ -217,6 +221,7 @@ async function logRealtimeEventToStationActivity(
       const itemId = parseFiniteNumber(payload.itemId);
       const fnsku = payload.fnsku == null ? null : String(payload.fnsku);
       const id = await createStationActivityLog(pool, {
+        organizationId: transitionalUsavOrgId(),
         station: 'ADMIN',
         activityType: 'WS_FBA_SCAN',
         staffId: null,

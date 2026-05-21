@@ -13,8 +13,8 @@ function getRequestedMode(request: NextRequest, body: Record<string, unknown>) {
   return raw === 'full' ? 'full' : 'incremental';
 }
 
-async function runItemSync(mode: 'full' | 'incremental') {
-  const service = new InventorySyncService();
+async function runItemSync(orgId: string, mode: 'full' | 'incremental') {
+  const service = new InventorySyncService(orgId);
   const result = mode === 'full' ? await service.fullSync() : await service.incrementalSync();
   return {
     success: true,
@@ -24,7 +24,7 @@ async function runItemSync(mode: 'full' | 'incremental') {
   };
 }
 
-export const POST = withAuth(async (request: NextRequest) => {
+export const POST = withAuth(async (request: NextRequest, ctx) => {
   if (!isAllowedAdminOrigin(request)) {
     return NextResponse.json({ success: false, error: 'Origin not allowed' }, { status: 403 });
   }
@@ -50,7 +50,7 @@ export const POST = withAuth(async (request: NextRequest) => {
       });
     }
 
-    return NextResponse.json(await runItemSync(mode));
+    return NextResponse.json(await runItemSync(ctx.organizationId, mode));
   } catch (error: any) {
     console.error('[zoho/items/sync]', error);
     return NextResponse.json(

@@ -48,6 +48,7 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
       if (action === 'add') {
         const serial = normalizeTechSerial(body.serial);
         const ins = await insertTechSerialForSalContext(client, {
+          organizationId: ctx.organizationId,
           salContext: salCtx,
           staffId,
           serial,
@@ -114,6 +115,7 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
         for (const serial of desired) {
           if (existingMap.has(serial)) continue;
           const ins = await insertTechSerialForSalContext(client, {
+            organizationId: ctx.organizationId,
             salContext: salCtx,
             staffId,
             serial,

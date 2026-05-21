@@ -1,0 +1,3897 @@
+{
+  "version": 1,
+  "generatedAt": "2026-05-20T23:18:44Z",
+  "totalRoutes": 417,
+  "summary": {
+    "permissionGated": 352,
+    "authenticatedNoPermission": 10,
+    "anonymousIntentional": 33,
+    "serviceToService": 3,
+    "ungatedRead": 19,
+    "ungatedWrite": 0
+  },
+  "routes": [
+    {
+      "path": "/api/activity/feed/route.ts",
+      "methods": [
+        "GET"
+      ],
+      "gate": "withAuth",
+      "permission": "operations.view",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/admin/audit/route.ts",
+      "methods": [
+        "GET"
+      ],
+      "gate": "withAuth",
+      "permission": "admin.view_logs",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/admin/fba-fnskus/[fnsku]/route.ts",
+      "methods": [
+        "DELETE",
+        "GET",
+        "PATCH"
+      ],
+      "gate": "requireRoutePerm",
+      "permission": "fba.view",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/admin/fba-fnskus/route.ts",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "gate": "withAuth",
+      "permission": "fba.view",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/admin/fba-fnskus/upload/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "gate": "withAuth",
+      "permission": "fba.manage_fnskus",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/admin/features/[id]/route.ts",
+      "methods": [
+        "DELETE",
+        "GET",
+        "PATCH"
+      ],
+      "gate": "withAuth",
+      "permission": "admin.view",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/admin/features/route.ts",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "gate": "withAuth",
+      "permission": "admin.view",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/admin/fix-status/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "gate": "withAuth",
+      "permission": "admin.manage_features",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/admin/google-photos/backup-stream/route.ts",
+      "methods": [
+        "GET"
+      ],
+      "gate": "withAuth",
+      "permission": "admin.view",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/admin/google-photos/backup/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "gate": "withAuth",
+      "permission": "admin.view",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/admin/google-photos/cleanup/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "gate": "withAuth",
+      "permission": "admin.view",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/admin/google-photos/connect/route.ts",
+      "methods": [
+        "GET"
+      ],
+      "gate": "withAuth",
+      "permission": "admin.view",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/admin/google-photos/disconnect/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "gate": "withAuth",
+      "permission": "admin.view",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/admin/google-photos/oauth-callback/route.ts",
+      "methods": [
+        "GET"
+      ],
+      "gate": "withAuth",
+      "permission": "admin.view",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/admin/google-photos/pending/route.ts",
+      "methods": [
+        "GET"
+      ],
+      "gate": "withAuth",
+      "permission": "admin.view",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/admin/google-photos/runs/route.ts",
+      "methods": [
+        "GET"
+      ],
+      "gate": "withAuth",
+      "permission": "admin.view",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/admin/google-photos/settings/route.ts",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "gate": "withAuth",
+      "permission": "admin.view",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/admin/google-photos/status/route.ts",
+      "methods": [
+        "GET"
+      ],
+      "gate": "withAuth",
+      "permission": "admin.view",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/admin/integrations/delete/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "gate": "withAuth",
+      "permission": "admin.manage_features",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/admin/integrations/list/route.ts",
+      "methods": [
+        "GET"
+      ],
+      "gate": "withAuth",
+      "permission": "admin.view",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/admin/integrations/upsert/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "gate": "withAuth",
+      "permission": "admin.manage_features",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/admin/logs/route.ts",
+      "methods": [
+        "GET"
+      ],
+      "gate": "withAuth",
+      "permission": "admin.view_logs",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/admin/org/delete/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "gate": "withAuth",
+      "permission": "admin.view",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/admin/org/export/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "gate": "withAuth",
+      "permission": "admin.view",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/admin/qstash-status/route.ts",
+      "methods": [
+        "GET"
+      ],
+      "gate": "withAuth",
+      "permission": "admin.view",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/admin/roles/[id]/duplicate/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "gate": "withAuth",
+      "permission": "admin.manage_roles",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/admin/roles/[id]/route.ts",
+      "methods": [
+        "DELETE",
+        "GET",
+        "PATCH"
+      ],
+      "gate": "withAuth",
+      "permission": "admin.manage_roles",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/admin/roles/reorder/route.ts",
+      "methods": [
+        "PATCH"
+      ],
+      "gate": "withAuth",
+      "permission": "admin.manage_roles",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/admin/roles/route.ts",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "gate": "withAuth",
+      "permission": "admin.manage_roles",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/admin/sessions/[sid]/route.ts",
+      "methods": [
+        "DELETE"
+      ],
+      "gate": "withAuth",
+      "permission": "admin.view_sessions",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/admin/sessions/route.ts",
+      "methods": [
+        "GET"
+      ],
+      "gate": "withAuth",
+      "permission": "admin.view_sessions",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/admin/staff/[id]/detail/route.ts",
+      "methods": [
+        "GET"
+      ],
+      "gate": "withAuth",
+      "permission": "admin.manage_staff",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/admin/staff/[id]/enroll-token/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "gate": "withAuth",
+      "permission": "admin.manage_staff",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/admin/staff/[id]/passkeys/[pid]/route.ts",
+      "methods": [
+        "DELETE"
+      ],
+      "gate": "withAuth",
+      "permission": "admin.manage_staff",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/admin/staff/[id]/passkeys/route.ts",
+      "methods": [
+        "GET"
+      ],
+      "gate": "withAuth",
+      "permission": "admin.manage_staff",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/admin/staff/[id]/permissions/route.ts",
+      "methods": [
+        "PATCH"
+      ],
+      "gate": "withAuth",
+      "permission": "admin.manage_staff",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/admin/staff/[id]/reset-pin/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "gate": "withAuth",
+      "permission": "admin.manage_staff",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/admin/staff/[id]/roles/route.ts",
+      "methods": [
+        "GET",
+        "PUT"
+      ],
+      "gate": "withAuth",
+      "permission": "admin.manage_staff",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/admin/staff/[id]/route.ts",
+      "methods": [
+        "DELETE",
+        "PATCH"
+      ],
+      "gate": "withAuth",
+      "permission": "admin.manage_staff",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/admin/staff/[id]/sessions/route.ts",
+      "methods": [
+        "DELETE",
+        "GET"
+      ],
+      "gate": "withAuth",
+      "permission": "admin.view_sessions",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/admin/staff/[id]/set-pin/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "gate": "withAuth",
+      "permission": "admin.manage_staff",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/admin/staff/deactivate/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "gate": "withAuth",
+      "permission": "admin.manage_staff",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/admin/staff/invite/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "gate": "withAuth",
+      "permission": "admin.manage_staff",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/admin/staff/list/route.ts",
+      "methods": [
+        "GET"
+      ],
+      "gate": "withAuth",
+      "permission": "admin.manage_staff",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/admin/staff/reorder/route.ts",
+      "methods": [
+        "PATCH"
+      ],
+      "gate": "withAuth",
+      "permission": "admin.manage_staff",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/admin/staff/route.ts",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "gate": "withAuth",
+      "permission": "admin.manage_staff",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/admin/staff/update/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "gate": "withAuth",
+      "permission": "admin.manage_staff",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/ai/chat-sessions/[sessionId]/messages/route.ts",
+      "methods": [
+        "GET"
+      ],
+      "gate": "requireRoutePerm",
+      "permission": "dashboard.view",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/ai/chat-sessions/route.ts",
+      "methods": [
+        "DELETE",
+        "GET"
+      ],
+      "gate": "withAuth",
+      "permission": "dashboard.view",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/ai/health/route.ts",
+      "methods": [
+        "GET"
+      ],
+      "gate": "withAuth",
+      "permission": "dashboard.view",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/ai/openclaw-chat/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "gate": "withAuth",
+      "permission": "dashboard.view",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/ai/openclaw-health/route.ts",
+      "methods": [
+        "GET"
+      ],
+      "gate": "withAuth",
+      "permission": "dashboard.view",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/ai/openclaw-session/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "gate": "withAuth",
+      "permission": "dashboard.view",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/ai/search/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "gate": "withAuth",
+      "permission": "dashboard.view",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/ai/tunnel-session/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "gate": "withAuth",
+      "permission": "dashboard.view",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/architecture/route.ts",
+      "methods": [
+        "GET"
+      ],
+      "gate": "NONE",
+      "permission": null,
+      "exemptReason": null
+    },
+    {
+      "path": "/api/assignments/next/route.ts",
+      "methods": [
+        "GET"
+      ],
+      "gate": "NONE",
+      "permission": null,
+      "exemptReason": null
+    },
+    {
+      "path": "/api/assignments/route.ts",
+      "methods": [
+        "DELETE",
+        "GET",
+        "PATCH",
+        "POST"
+      ],
+      "gate": "withAuth",
+      "permission": "work_orders.view",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/assignments/sku-search/route.ts",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "gate": "withAuth",
+      "permission": "work_orders.view",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/audit-log/packing/route.ts",
+      "methods": [
+        "GET"
+      ],
+      "gate": "withAuth",
+      "permission": "admin.view_logs",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/audit-log/receiving/route.ts",
+      "methods": [
+        "GET"
+      ],
+      "gate": "withAuth",
+      "permission": "admin.view_logs",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/audit-log/report/route.ts",
+      "methods": [
+        "GET"
+      ],
+      "gate": "withAuth",
+      "permission": "admin.view_logs",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/audit-log/sku/route.ts",
+      "methods": [
+        "GET"
+      ],
+      "gate": "withAuth",
+      "permission": "admin.view_logs",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/audit-log/staff-directory/route.ts",
+      "methods": [
+        "GET"
+      ],
+      "gate": "withAuth",
+      "permission": "admin.view_logs",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/audit-log/staff/route.ts",
+      "methods": [
+        "GET"
+      ],
+      "gate": "withAuth",
+      "permission": "admin.view_logs",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/audit-log/tech/route.ts",
+      "methods": [
+        "GET"
+      ],
+      "gate": "withAuth",
+      "permission": "admin.view_logs",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/audit/bin/[id]/route.ts",
+      "methods": [
+        "GET"
+      ],
+      "gate": "requireRoutePerm",
+      "permission": "admin.view_logs",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/audit/sku/[sku]/route.ts",
+      "methods": [
+        "GET"
+      ],
+      "gate": "requireRoutePerm",
+      "permission": "admin.view_logs",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/auth/enroll/[token]/route.ts",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "gate": "NONE",
+      "permission": null,
+      "exemptReason": "auth-flow (sign-in / passkey / pin)"
+    },
+    {
+      "path": "/api/auth/passkey/authenticate/begin/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "gate": "NONE",
+      "permission": null,
+      "exemptReason": "auth-flow (sign-in / passkey / pin)"
+    },
+    {
+      "path": "/api/auth/passkey/authenticate/finish/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "gate": "NONE",
+      "permission": null,
+      "exemptReason": "auth-flow (sign-in / passkey / pin)"
+    },
+    {
+      "path": "/api/auth/passkey/register/begin/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "gate": "getCurrentUser (ad-hoc)",
+      "permission": null,
+      "exemptReason": "auth-flow (sign-in / passkey / pin)"
+    },
+    {
+      "path": "/api/auth/passkey/register/finish/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "gate": "NONE",
+      "permission": null,
+      "exemptReason": "auth-flow (sign-in / passkey / pin)"
+    },
+    {
+      "path": "/api/auth/pin/create/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "gate": "NONE",
+      "permission": null,
+      "exemptReason": "auth-flow (sign-in / passkey / pin)"
+    },
+    {
+      "path": "/api/auth/pin/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "gate": "getCurrentUser (ad-hoc)",
+      "permission": null,
+      "exemptReason": "auth-flow (sign-in / passkey / pin)"
+    },
+    {
+      "path": "/api/auth/session/route.ts",
+      "methods": [
+        "GET"
+      ],
+      "gate": "withAuth (no permission)",
+      "permission": null,
+      "exemptReason": "auth-flow (sign-in / passkey / pin)"
+    },
+    {
+      "path": "/api/auth/signin/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "gate": "NONE",
+      "permission": null,
+      "exemptReason": "auth-flow (sign-in / passkey / pin)"
+    },
+    {
+      "path": "/api/auth/signout/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "gate": "NONE",
+      "permission": null,
+      "exemptReason": "auth-flow (sign-in / passkey / pin)"
+    },
+    {
+      "path": "/api/auth/signup/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "gate": "withAuth (no permission)",
+      "permission": null,
+      "exemptReason": "auth-flow (sign-in / passkey / pin)"
+    },
+    {
+      "path": "/api/auth/sso/callback/route.ts",
+      "methods": [
+        "GET"
+      ],
+      "gate": "withAuth (no permission)",
+      "permission": null,
+      "exemptReason": "auth-flow (sign-in / passkey / pin)"
+    },
+    {
+      "path": "/api/auth/sso/start/route.ts",
+      "methods": [
+        "GET"
+      ],
+      "gate": "withAuth (no permission)",
+      "permission": null,
+      "exemptReason": "auth-flow (sign-in / passkey / pin)"
+    },
+    {
+      "path": "/api/auth/staff-picker/route.ts",
+      "methods": [
+        "GET"
+      ],
+      "gate": "NONE",
+      "permission": null,
+      "exemptReason": "auth-flow (sign-in / passkey / pin)"
+    },
+    {
+      "path": "/api/auth/step-up/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "gate": "getCurrentUser (ad-hoc)",
+      "permission": null,
+      "exemptReason": "auth-flow (sign-in / passkey / pin)"
+    },
+    {
+      "path": "/api/auth/switch/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "gate": "NONE",
+      "permission": null,
+      "exemptReason": "auth-flow (sign-in / passkey / pin)"
+    },
+    {
+      "path": "/api/billing/checkout/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "gate": "withAuth",
+      "permission": "admin.view",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/billing/portal/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "gate": "withAuth",
+      "permission": "admin.view",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/billing/webhook/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "gate": "signature",
+      "permission": null,
+      "exemptReason": "webhook (gated by signature)"
+    },
+    {
+      "path": "/api/check-tracking/route.ts",
+      "methods": [
+        "GET"
+      ],
+      "gate": "NONE",
+      "permission": null,
+      "exemptReason": null
+    },
+    {
+      "path": "/api/cron/refresh-reports/route.ts",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "gate": "isQStashOrigin",
+      "permission": null,
+      "exemptReason": "cron endpoint"
+    },
+    {
+      "path": "/api/cron/replenishment-detect/route.ts",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "gate": "isQStashOrigin",
+      "permission": null,
+      "exemptReason": "cron endpoint"
+    },
+    {
+      "path": "/api/cron/stock-alerts/route.ts",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "gate": "isQStashOrigin",
+      "permission": null,
+      "exemptReason": "cron endpoint"
+    },
+    {
+      "path": "/api/cycle-counts/campaigns/[id]/route.ts",
+      "methods": [
+        "GET",
+        "PATCH"
+      ],
+      "gate": "requireRoutePerm",
+      "permission": "cycle_count.view",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/cycle-counts/campaigns/route.ts",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "gate": "withAuth",
+      "permission": "cycle_count.view",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/cycle-counts/lines/[id]/route.ts",
+      "methods": [
+        "PATCH"
+      ],
+      "gate": "requireRoutePerm",
+      "permission": "cycle_count.view",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/dashboard/fba-shipments/route.ts",
+      "methods": [
+        "GET"
+      ],
+      "gate": "withAuth",
+      "permission": "fba.view",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/dashboard/operations/route.ts",
+      "methods": [
+        "GET"
+      ],
+      "gate": "NONE",
+      "permission": null,
+      "exemptReason": null
+    },
+    {
+      "path": "/api/db/ping/route.ts",
+      "methods": [
+        "GET"
+      ],
+      "gate": "withAuth",
+      "permission": "admin.view",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/debug-tracking/route.ts",
+      "methods": [
+        "GET"
+      ],
+      "gate": "withAuth",
+      "permission": "admin.view",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/desktop-app/release/route.ts",
+      "methods": [
+        "GET"
+      ],
+      "gate": "NONE",
+      "permission": null,
+      "exemptReason": null
+    },
+    {
+      "path": "/api/diagnose-migration/route.ts",
+      "methods": [
+        "GET"
+      ],
+      "gate": "withAuth",
+      "permission": "admin.view_logs",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/drizzle-setup/route.ts",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "gate": "withAuth",
+      "permission": "admin.manage_features",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/ebay/accounts/route.ts",
+      "methods": [
+        "GET",
+        "PUT"
+      ],
+      "gate": "withAuth",
+      "permission": "integrations.ebay",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/ebay/refresh-token/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "gate": "withAuth",
+      "permission": "integrations.ebay",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/ebay/refresh-tokens/route.ts",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "gate": "withAuth",
+      "permission": "integrations.ebay",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/ebay/search/route.ts",
+      "methods": [
+        "GET"
+      ],
+      "gate": "withAuth",
+      "permission": "orders.view",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/ebay/sync/route.ts",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "gate": "withAuth",
+      "permission": "integrations.ebay",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/ecwid-square/sync/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "gate": "withAuth",
+      "permission": "integrations.ecwid",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/ecwid/products/search/route.ts",
+      "methods": [
+        "GET"
+      ],
+      "gate": "withAuth",
+      "permission": "sku_stock.view",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/ecwid/sync-exception-tracking/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "gate": "withAuth",
+      "permission": "integrations.ecwid",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/ecwid/transfer-orders/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "gate": "withAuth",
+      "permission": "integrations.ecwid",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/favorites/[id]/route.ts",
+      "methods": [
+        "DELETE",
+        "PATCH"
+      ],
+      "gate": "requireRoutePerm",
+      "permission": "sku_stock.manage",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/favorites/route.ts",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "gate": "withAuth",
+      "permission": "sku_stock.view",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/fba/board/[fnsku]/entries/route.ts",
+      "methods": [
+        "GET"
+      ],
+      "gate": "requireRoutePerm",
+      "permission": "fba.view",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/fba/board/route.ts",
+      "methods": [
+        "GET"
+      ],
+      "gate": "withAuth",
+      "permission": "fba.view",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/fba/fnskus/[fnsku]/route.ts",
+      "methods": [
+        "GET",
+        "PATCH"
+      ],
+      "gate": "requireRoutePerm",
+      "permission": "fba.manage_fnskus",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/fba/fnskus/bulk/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "gate": "withAuth",
+      "permission": "fba.manage_fnskus",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/fba/fnskus/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "gate": "withAuth",
+      "permission": "fba.manage_fnskus",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/fba/fnskus/search/route.ts",
+      "methods": [
+        "GET"
+      ],
+      "gate": "withAuth",
+      "permission": "fba.view",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/fba/fnskus/validate/route.ts",
+      "methods": [
+        "GET"
+      ],
+      "gate": "withAuth",
+      "permission": "fba.view",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/fba/items/[id]/link-unit/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "gate": "withAuth",
+      "permission": "fba.stage_shipments",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/fba/items/queue/route.ts",
+      "methods": [
+        "GET"
+      ],
+      "gate": "withAuth",
+      "permission": "fba.view",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/fba/items/ready/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "gate": "withAuth",
+      "permission": "fba.stage_shipments",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/fba/items/scan/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "gate": "withAuth",
+      "permission": "fba.stage_shipments",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/fba/items/verify/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "gate": "withAuth",
+      "permission": "fba.stage_shipments",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/fba/labels/bind/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "gate": "withAuth",
+      "permission": "fba.stage_shipments",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/fba/logs/[id]/route.ts",
+      "methods": [
+        "DELETE",
+        "GET"
+      ],
+      "gate": "requireRoutePerm",
+      "permission": "fba.view",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/fba/logs/route.ts",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "gate": "withAuth",
+      "permission": "fba.view",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/fba/logs/summary/route.ts",
+      "methods": [
+        "GET"
+      ],
+      "gate": "withAuth",
+      "permission": "fba.view",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/fba/print-queue/route.ts",
+      "methods": [
+        "GET"
+      ],
+      "gate": "withAuth",
+      "permission": "fba.view",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/fba/scan-fnsku/route.ts",
+      "methods": [
+        "GET"
+      ],
+      "gate": "withAuth",
+      "permission": "fba.stage_shipments",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/fba/shipments/[id]/items/[itemId]/reassign/route.ts",
+      "methods": [
+        "PATCH"
+      ],
+      "gate": "requireRoutePerm",
+      "permission": "fba.stage_shipments",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/fba/shipments/[id]/items/[itemId]/route.ts",
+      "methods": [
+        "DELETE",
+        "GET",
+        "PATCH"
+      ],
+      "gate": "requireRoutePerm",
+      "permission": "fba.view",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/fba/shipments/[id]/items/route.ts",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "gate": "requireRoutePerm",
+      "permission": "fba.view",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/fba/shipments/[id]/route.ts",
+      "methods": [
+        "DELETE",
+        "GET",
+        "PATCH"
+      ],
+      "gate": "requireRoutePerm",
+      "permission": "fba.view",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/fba/shipments/[id]/ship-units/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "gate": "withAuth",
+      "permission": "fba.stage_shipments",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/fba/shipments/[id]/tracking/route.ts",
+      "methods": [
+        "DELETE",
+        "GET",
+        "PATCH",
+        "POST"
+      ],
+      "gate": "requireRoutePerm",
+      "permission": "fba.view",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/fba/shipments/active-with-details/route.ts",
+      "methods": [
+        "GET"
+      ],
+      "gate": "withAuth",
+      "permission": "fba.view",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/fba/shipments/close/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "gate": "withAuth",
+      "permission": "shipping.void_order",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/fba/shipments/mark-shipped/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "gate": "withAuth",
+      "permission": "shipping.mark_shipped",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/fba/shipments/route.ts",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "gate": "withAuth",
+      "permission": "fba.view",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/fba/shipments/split-for-paired-review/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "gate": "withAuth",
+      "permission": "fba.stage_shipments",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/fba/shipments/today/duplicate-yesterday/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "gate": "withAuth",
+      "permission": "fba.stage_shipments",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/fba/shipments/today/items/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "gate": "withAuth",
+      "permission": "fba.stage_shipments",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/fba/shipments/today/route.ts",
+      "methods": [
+        "GET"
+      ],
+      "gate": "withAuth",
+      "permission": "fba.view",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/fba/stage-counts/route.ts",
+      "methods": [
+        "GET"
+      ],
+      "gate": "withAuth",
+      "permission": "fba.view",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/get-title-by-sku/route.ts",
+      "methods": [
+        "GET"
+      ],
+      "gate": "withAuth",
+      "permission": "sku_stock.view",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/google-sheets/append/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "gate": "withAuth",
+      "permission": "admin.manage_features",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/google-sheets/execute-script/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "gate": "withAuth",
+      "permission": "admin.manage_features",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/google-sheets/sync-shipstation-orders/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "gate": "withAuth",
+      "permission": "admin.manage_features",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/google-sheets/transfer-orders/route.ts",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "gate": "withAuth",
+      "permission": "admin.manage_features",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/health/route.ts",
+      "methods": [
+        "GET"
+      ],
+      "gate": "NONE",
+      "permission": null,
+      "exemptReason": "health probe"
+    },
+    {
+      "path": "/api/import-orders/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "gate": "withAuth",
+      "permission": "orders.create",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/inventory-events/route.ts",
+      "methods": [
+        "GET"
+      ],
+      "gate": "withAuth",
+      "permission": "sku_stock.view",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/inventory-photos/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "gate": "withAuth",
+      "permission": "bin.adjust",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/inventory/bins-overview/route.ts",
+      "methods": [
+        "GET"
+      ],
+      "gate": "withAuth",
+      "permission": "sku_stock.view",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/inventory/sku-search/route.ts",
+      "methods": [
+        "GET"
+      ],
+      "gate": "withAuth",
+      "permission": "sku_stock.view",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/inventory/units/route.ts",
+      "methods": [
+        "GET"
+      ],
+      "gate": "NONE",
+      "permission": null,
+      "exemptReason": null
+    },
+    {
+      "path": "/api/local-pickup-orders/[id]/complete/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "gate": "requireRoutePerm",
+      "permission": "walk_in.intake",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/local-pickup-orders/[id]/items/[itemId]/route.ts",
+      "methods": [
+        "DELETE",
+        "PATCH"
+      ],
+      "gate": "requireRoutePerm",
+      "permission": "walk_in.intake",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/local-pickup-orders/[id]/items/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "gate": "requireRoutePerm",
+      "permission": "walk_in.intake",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/local-pickup-orders/[id]/route.ts",
+      "methods": [
+        "DELETE",
+        "GET",
+        "PATCH"
+      ],
+      "gate": "requireRoutePerm",
+      "permission": "walk_in.view",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/local-pickup-orders/[id]/void/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "gate": "requireRoutePerm",
+      "permission": "orders.void",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/local-pickup-orders/route.ts",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "gate": "withAuth",
+      "permission": "walk_in.view",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/local-pickups/route.ts",
+      "methods": [
+        "GET",
+        "PATCH",
+        "POST"
+      ],
+      "gate": "withAuth",
+      "permission": "walk_in.view",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/locations/[barcode]/route.ts",
+      "methods": [
+        "GET",
+        "PATCH"
+      ],
+      "gate": "withAuth (no permission)",
+      "permission": null,
+      "exemptReason": null
+    },
+    {
+      "path": "/api/locations/[barcode]/swap/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "gate": "withAuth (no permission)",
+      "permission": null,
+      "exemptReason": null
+    },
+    {
+      "path": "/api/locations/bulk/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "gate": "withAuth",
+      "permission": "bin.set",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/locations/register/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "gate": "withAuth",
+      "permission": "print.label",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/locations/route.ts",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "gate": "withAuth (no permission)",
+      "permission": null,
+      "exemptReason": null
+    },
+    {
+      "path": "/api/log-error/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "gate": "withAuth (no permission)",
+      "permission": null,
+      "exemptReason": null
+    },
+    {
+      "path": "/api/manual-server/assign/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "gate": "withAuth",
+      "permission": "sku_stock.manage",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/manual-server/by-item/route.ts",
+      "methods": [
+        "GET"
+      ],
+      "gate": "withAuth",
+      "permission": "sku_stock.view",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/manual-server/unassigned/route.ts",
+      "methods": [
+        "GET"
+      ],
+      "gate": "withAuth",
+      "permission": "sku_stock.view",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/manuals/recent/route.ts",
+      "methods": [
+        "GET"
+      ],
+      "gate": "NONE",
+      "permission": null,
+      "exemptReason": null
+    },
+    {
+      "path": "/api/manuals/resolve/route.ts",
+      "methods": [
+        "GET"
+      ],
+      "gate": "withAuth",
+      "permission": "sku_stock.view",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/manuals/upsert/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "gate": "withAuth",
+      "permission": "sku_stock.manage",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/migrate-process/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "gate": "withAuth",
+      "permission": "admin.manage_features",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/need-to-order/[id]/route.ts",
+      "methods": [
+        "DELETE",
+        "PATCH"
+      ],
+      "gate": "requireRoutePerm",
+      "permission": "replenish.create_po",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/need-to-order/create-po/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "gate": "requireInternalToken (service-to-service)",
+      "permission": null,
+      "exemptReason": null
+    },
+    {
+      "path": "/api/need-to-order/recalculate/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "gate": "requireInternalToken (service-to-service)",
+      "permission": null,
+      "exemptReason": null
+    },
+    {
+      "path": "/api/need-to-order/route.ts",
+      "methods": [
+        "GET"
+      ],
+      "gate": "withAuth",
+      "permission": "replenish.view",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/operations/kpi-table/route.ts",
+      "methods": [
+        "GET"
+      ],
+      "gate": "NONE",
+      "permission": null,
+      "exemptReason": null
+    },
+    {
+      "path": "/api/orders-exceptions/delete/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "gate": "withAuth",
+      "permission": "orders.void",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/orders-exceptions/sync/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "gate": "isQStashOrigin",
+      "permission": null,
+      "exemptReason": null
+    },
+    {
+      "path": "/api/orders/[id]/allocate/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "gate": "withAuth",
+      "permission": "orders.view",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/orders/[id]/pick-tasks/route.ts",
+      "methods": [
+        "GET"
+      ],
+      "gate": "withAuth",
+      "permission": "orders.view",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/orders/[id]/release/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "gate": "withAuth",
+      "permission": "orders.view",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/orders/add/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "gate": "withAuth",
+      "permission": "orders.create",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/orders/assign/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "gate": "withAuth",
+      "permission": "orders.create",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/orders/backfill/ebay/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "gate": "withAuth",
+      "permission": "admin.manage_features",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/orders/backfill/ecwid/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "gate": "withAuth",
+      "permission": "admin.manage_features",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/orders/check-shipped/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "gate": "withAuth",
+      "permission": "shipping.mark_shipped",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/orders/delete/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "gate": "withAuth",
+      "permission": "orders.void",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/orders/integrity-check/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "gate": "withAuth",
+      "permission": "admin.manage_features",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/orders/missing-parts/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "gate": "withAuth",
+      "permission": "orders.create",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/orders/next/route.ts",
+      "methods": [
+        "GET"
+      ],
+      "gate": "withAuth",
+      "permission": "orders.view",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/orders/recent/route.ts",
+      "methods": [
+        "GET"
+      ],
+      "gate": "withAuth",
+      "permission": "orders.view",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/orders/route.ts",
+      "methods": [
+        "GET"
+      ],
+      "gate": "withAuth",
+      "permission": "orders.view",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/orders/set-item-number/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "gate": "withAuth",
+      "permission": "orders.create",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/orders/skip/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "gate": "withAuth",
+      "permission": "tech.scan_serial",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/orders/start/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "gate": "withAuth",
+      "permission": "tech.scan_serial",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/orders/verify/route.ts",
+      "methods": [
+        "GET"
+      ],
+      "gate": "withAuth",
+      "permission": "orders.view",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/pack/ship/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "gate": "withAuth",
+      "permission": "packing.complete_order",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/packerlogs/route.ts",
+      "methods": [
+        "DELETE",
+        "GET",
+        "POST",
+        "PUT"
+      ],
+      "gate": "withAuth",
+      "permission": "packing.view",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/packing-logs/details/route.ts",
+      "methods": [
+        "GET"
+      ],
+      "gate": "withAuth",
+      "permission": "packing.view",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/packing-logs/history/route.ts",
+      "methods": [
+        "GET"
+      ],
+      "gate": "withAuth",
+      "permission": "packing.view",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/packing-logs/last-order/route.ts",
+      "methods": [
+        "GET"
+      ],
+      "gate": "withAuth",
+      "permission": "packing.view",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/packing-logs/photos/route.ts",
+      "methods": [
+        "GET"
+      ],
+      "gate": "withAuth",
+      "permission": "packing.view",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/packing-logs/route.ts",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "gate": "withAuth",
+      "permission": "packing.view",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/packing-logs/save-photo/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "gate": "withAuth",
+      "permission": "packing.complete_order",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/packing-logs/start-session/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "gate": "withAuth",
+      "permission": "packing.start_session",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/packing-logs/update/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "gate": "withAuth",
+      "permission": "packing.complete_order",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/payroll/settings/route.ts",
+      "methods": [
+        "GET",
+        "PATCH"
+      ],
+      "gate": "withAuth",
+      "permission": "admin.manage_staff",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/pick/scan/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "gate": "withAuth",
+      "permission": "orders.view",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/picking/session/[id]/complete/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "gate": "withAuth",
+      "permission": "orders.view",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/picking/session/[id]/confirm-pick/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "gate": "withAuth",
+      "permission": "orders.view",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/picking/session/[id]/short-pick/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "gate": "withAuth",
+      "permission": "orders.view",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/picking/session/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "gate": "withAuth",
+      "permission": "orders.view",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/pipeline/feedback/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "gate": "withAuth",
+      "permission": "admin.manage_features",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/pipeline/promote/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "gate": "withAuth",
+      "permission": "admin.manage_features",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/pipeline/status/route.ts",
+      "methods": [
+        "GET"
+      ],
+      "gate": "withAuth",
+      "permission": "admin.view",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/pipeline/trigger/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "gate": "withAuth",
+      "permission": "admin.manage_features",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/post-multi-sn/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "gate": "withAuth",
+      "permission": "tech.scan_serial",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/print/dispatch/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "gate": "withAuth",
+      "permission": "print.label",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/product-manuals/assign/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "gate": "withAuth",
+      "permission": "product_manuals.manage",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/product-manuals/by-category/route.ts",
+      "methods": [
+        "GET"
+      ],
+      "gate": "withAuth",
+      "permission": "sku_stock.view",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/product-manuals/categories/route.ts",
+      "methods": [
+        "GET"
+      ],
+      "gate": "NONE",
+      "permission": null,
+      "exemptReason": null
+    },
+    {
+      "path": "/api/product-manuals/search/route.ts",
+      "methods": [
+        "GET"
+      ],
+      "gate": "NONE",
+      "permission": null,
+      "exemptReason": null
+    },
+    {
+      "path": "/api/product-manuals/sync/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "gate": "withAuth",
+      "permission": "product_manuals.manage",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/product-manuals/upsert/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "gate": "withAuth",
+      "permission": "product_manuals.manage",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/products/[sku]/route.ts",
+      "methods": [
+        "GET"
+      ],
+      "gate": "NONE",
+      "permission": null,
+      "exemptReason": null
+    },
+    {
+      "path": "/api/products/route.ts",
+      "methods": [
+        "GET"
+      ],
+      "gate": "NONE",
+      "permission": null,
+      "exemptReason": null
+    },
+    {
+      "path": "/api/qstash/cleanup/idempotency/route.ts",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "gate": "isQStashOrigin",
+      "permission": null,
+      "exemptReason": "qstash (gated by isQStashOrigin)"
+    },
+    {
+      "path": "/api/qstash/ebay/refresh-tokens/route.ts",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "gate": "isQStashOrigin",
+      "permission": null,
+      "exemptReason": "qstash (gated by isQStashOrigin)"
+    },
+    {
+      "path": "/api/qstash/ebay/sync/route.ts",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "gate": "NONE",
+      "permission": null,
+      "exemptReason": "qstash (gated by isQStashOrigin)"
+    },
+    {
+      "path": "/api/qstash/google-photos/daily/route.ts",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "gate": "isQStashOrigin",
+      "permission": null,
+      "exemptReason": "qstash (gated by isQStashOrigin)"
+    },
+    {
+      "path": "/api/qstash/google-sheets/transfer-orders/route.ts",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "gate": "isQStashOrigin",
+      "permission": null,
+      "exemptReason": "qstash (gated by isQStashOrigin)"
+    },
+    {
+      "path": "/api/qstash/inventory/drift-check/route.ts",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "gate": "isQStashOrigin",
+      "permission": null,
+      "exemptReason": "qstash (gated by isQStashOrigin)"
+    },
+    {
+      "path": "/api/qstash/replenishment/sync/route.ts",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "gate": "isQStashOrigin",
+      "permission": null,
+      "exemptReason": "qstash (gated by isQStashOrigin)"
+    },
+    {
+      "path": "/api/qstash/schedules/bootstrap/route.ts",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "gate": "withAuth",
+      "permission": "admin.manage_features",
+      "exemptReason": "qstash (gated by isQStashOrigin)"
+    },
+    {
+      "path": "/api/qstash/shipping/sync-due/route.ts",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "gate": "isQStashOrigin",
+      "permission": null,
+      "exemptReason": "qstash (gated by isQStashOrigin)"
+    },
+    {
+      "path": "/api/qstash/staff-goals/history/route.ts",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "gate": "isQStashOrigin",
+      "permission": null,
+      "exemptReason": "qstash (gated by isQStashOrigin)"
+    },
+    {
+      "path": "/api/qstash/zoho/items/sync/route.ts",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "gate": "NONE",
+      "permission": null,
+      "exemptReason": "qstash (gated by isQStashOrigin)"
+    },
+    {
+      "path": "/api/qstash/zoho/orders/ingest/route.ts",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "gate": "isQStashOrigin",
+      "permission": null,
+      "exemptReason": "qstash (gated by isQStashOrigin)"
+    },
+    {
+      "path": "/api/ready/route.ts",
+      "methods": [
+        "GET"
+      ],
+      "gate": "NONE",
+      "permission": null,
+      "exemptReason": "readiness probe"
+    },
+    {
+      "path": "/api/realtime/token/route.ts",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "gate": "withAuth",
+      "permission": "dashboard.view",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/reason-codes/route.ts",
+      "methods": [
+        "GET"
+      ],
+      "gate": "withAuth",
+      "permission": "sku_stock.view",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/receiving-entry/route.ts",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "gate": "withAuth",
+      "permission": "receiving.scan_po",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/receiving-lines/route.ts",
+      "methods": [
+        "DELETE",
+        "GET",
+        "PATCH",
+        "POST"
+      ],
+      "gate": "withAuth",
+      "permission": "receiving.view",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/receiving-logs/route.ts",
+      "methods": [
+        "DELETE",
+        "GET",
+        "PATCH"
+      ],
+      "gate": "withAuth",
+      "permission": "receiving.view",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/receiving-logs/search/route.ts",
+      "methods": [
+        "GET"
+      ],
+      "gate": "withAuth",
+      "permission": "receiving.view",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/receiving-photos/route.ts",
+      "methods": [
+        "DELETE",
+        "GET",
+        "POST"
+      ],
+      "gate": "withAuth",
+      "permission": "receiving.view",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/receiving-tasks/route.ts",
+      "methods": [
+        "DELETE",
+        "GET",
+        "POST",
+        "PUT"
+      ],
+      "gate": "withAuth",
+      "permission": "receiving.view",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/receiving/[id]/route.ts",
+      "methods": [
+        "GET",
+        "PATCH"
+      ],
+      "gate": "requireRoutePerm",
+      "permission": "receiving.view",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/receiving/lines/[id]/move/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "gate": "requireRoutePerm",
+      "permission": "receiving.bin_assign",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/receiving/lines/[id]/putaway/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "gate": "requireRoutePerm",
+      "permission": "receiving.bin_assign",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/receiving/lines/[id]/status/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "gate": "requireRoutePerm",
+      "permission": "receiving.mark_received",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/receiving/lines/[id]/timeline/route.ts",
+      "methods": [
+        "GET"
+      ],
+      "gate": "requireRoutePerm",
+      "permission": "receiving.view",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/receiving/lookup-po/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "gate": "withAuth",
+      "permission": "receiving.scan_po",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/receiving/mark-received-po/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "gate": "withAuth",
+      "permission": "receiving.mark_received",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/receiving/mark-received/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "gate": "withAuth",
+      "permission": "receiving.mark_received",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/receiving/match/route.ts",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "gate": "withAuth",
+      "permission": "receiving.mark_received",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/receiving/pending-unboxing/route.ts",
+      "methods": [
+        "GET"
+      ],
+      "gate": "withAuth",
+      "permission": "receiving.view",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/receiving/po/[poId]/route.ts",
+      "methods": [
+        "GET"
+      ],
+      "gate": "withAuth",
+      "permission": "receiving.view",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/receiving/po/list/route.ts",
+      "methods": [
+        "GET"
+      ],
+      "gate": "withAuth",
+      "permission": "receiving.view",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/receiving/scan-serial/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "gate": "withAuth",
+      "permission": "receiving.mark_received",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/receiving/serials/route.ts",
+      "methods": [
+        "DELETE",
+        "GET",
+        "POST"
+      ],
+      "gate": "withAuth",
+      "permission": "receiving.view",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/receiving/zendesk-claim/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "gate": "withAuth",
+      "permission": "receiving.mark_received",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/repair-service/[id]/route.ts",
+      "methods": [
+        "GET"
+      ],
+      "gate": "requireRoutePerm",
+      "permission": "repair.view",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/repair-service/document/[id]/route.ts",
+      "methods": [
+        "GET"
+      ],
+      "gate": "requireRoutePerm",
+      "permission": "repair.view",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/repair-service/next/route.ts",
+      "methods": [
+        "GET"
+      ],
+      "gate": "withAuth",
+      "permission": "repair.view",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/repair-service/out-of-stock/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "gate": "withAuth",
+      "permission": "repair.mark_repaired",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/repair-service/pickup/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "gate": "withAuth",
+      "permission": "repair.pickup_sign",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/repair-service/repaired/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "gate": "withAuth",
+      "permission": "repair.mark_repaired",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/repair-service/route.ts",
+      "methods": [
+        "GET",
+        "PATCH"
+      ],
+      "gate": "withAuth",
+      "permission": "repair.view",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/repair/actions/[id]/route.ts",
+      "methods": [
+        "DELETE",
+        "PATCH"
+      ],
+      "gate": "withAuth",
+      "permission": "repair.mark_repaired",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/repair/actions/route.ts",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "gate": "withAuth",
+      "permission": "repair.view",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/repair/customers/route.ts",
+      "methods": [
+        "GET"
+      ],
+      "gate": "withAuth",
+      "permission": "repair.view",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/repair/ecwid-categories/route.ts",
+      "methods": [
+        "GET"
+      ],
+      "gate": "withAuth",
+      "permission": "repair.intake",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/repair/ecwid-products/route.ts",
+      "methods": [
+        "GET"
+      ],
+      "gate": "withAuth",
+      "permission": "repair.intake",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/repair/issues/[id]/route.ts",
+      "methods": [
+        "DELETE",
+        "PUT"
+      ],
+      "gate": "requireRoutePerm",
+      "permission": "repair.intake",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/repair/issues/route.ts",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "gate": "withAuth",
+      "permission": "repair.view",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/repair/search/route.ts",
+      "methods": [
+        "GET"
+      ],
+      "gate": "withAuth",
+      "permission": "repair.view",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/repair/square-payment-link/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "gate": "withAuth",
+      "permission": "repair.mark_repaired",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/repair/submit/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "gate": "withAuth",
+      "permission": "repair.intake",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/replenish/bulk-create-po/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "gate": "withAuth",
+      "permission": "replenish.approve_po",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/replenish/receiving-lines/route.ts",
+      "methods": [
+        "GET"
+      ],
+      "gate": "withAuth",
+      "permission": "replenish.view",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/replenish/shipped-fifo/route.ts",
+      "methods": [
+        "GET"
+      ],
+      "gate": "withAuth",
+      "permission": "replenish.view",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/replenishment/tasks/[id]/cancel/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "gate": "withAuth",
+      "permission": "bin.adjust",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/replenishment/tasks/[id]/claim/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "gate": "withAuth",
+      "permission": "bin.adjust",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/replenishment/tasks/[id]/complete/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "gate": "withAuth",
+      "permission": "bin.adjust",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/replenishment/tasks/route.ts",
+      "methods": [
+        "GET"
+      ],
+      "gate": "withAuth",
+      "permission": "bin.adjust",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/reports/bin-utilization/route.ts",
+      "methods": [
+        "GET"
+      ],
+      "gate": "NONE",
+      "permission": null,
+      "exemptReason": null
+    },
+    {
+      "path": "/api/reports/dead-stock/route.ts",
+      "methods": [
+        "GET"
+      ],
+      "gate": "NONE",
+      "permission": null,
+      "exemptReason": null
+    },
+    {
+      "path": "/api/reports/velocity/route.ts",
+      "methods": [
+        "GET"
+      ],
+      "gate": "NONE",
+      "permission": null,
+      "exemptReason": null
+    },
+    {
+      "path": "/api/returns/intake/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "gate": "withAuth",
+      "permission": "receiving.mark_received",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/rma/[id]/close/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "gate": "withAuth",
+      "permission": "orders.view",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/rma/[id]/disposition/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "gate": "withAuth",
+      "permission": "orders.view",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/rma/[id]/mark-received/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "gate": "withAuth",
+      "permission": "orders.view",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/rma/by-number/[number]/route.ts",
+      "methods": [
+        "GET"
+      ],
+      "gate": "withAuth",
+      "permission": "orders.view",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/rma/route.ts",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "gate": "withAuth",
+      "permission": "orders.view",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/rooms/[room]/route.ts",
+      "methods": [
+        "DELETE",
+        "PATCH"
+      ],
+      "gate": "requireRoutePerm",
+      "permission": "sku_stock.manage",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/rooms/reorder/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "gate": "withAuth",
+      "permission": "sku_stock.manage",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/rooms/route.ts",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "gate": "withAuth",
+      "permission": "sku_stock.view",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/scan-tracking/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "gate": "withAuth",
+      "permission": "orders.view",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/scan/resolve/route.ts",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "gate": "withAuth",
+      "permission": "sku_stock.view",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/serial-units/[id]/hold/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "gate": "withAuth",
+      "permission": "sku_stock.adjust",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/serial-units/[id]/release/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "gate": "withAuth",
+      "permission": "sku_stock.adjust",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/serial-units/[id]/route.ts",
+      "methods": [
+        "GET"
+      ],
+      "gate": "requireRoutePerm",
+      "permission": "sku_stock.view",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/setup-db/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "gate": "withAuth",
+      "permission": "admin.manage_features",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/setup-source-db/route.ts",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "gate": "withAuth",
+      "permission": "admin.manage_features",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/shifts/[id]/cover/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "gate": "requireRoutePerm",
+      "permission": "admin.manage_staff",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/shifts/route.ts",
+      "methods": [
+        "GET"
+      ],
+      "gate": "withAuth",
+      "permission": "admin.view",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/shipped/[id]/route.ts",
+      "methods": [
+        "GET"
+      ],
+      "gate": "requireRoutePerm",
+      "permission": "shipping.view",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/shipped/debug/route.ts",
+      "methods": [
+        "GET"
+      ],
+      "gate": "withAuth",
+      "permission": "admin.view_logs",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/shipped/lookup-order/route.ts",
+      "methods": [
+        "GET"
+      ],
+      "gate": "NONE",
+      "permission": null,
+      "exemptReason": null
+    },
+    {
+      "path": "/api/shipped/route.ts",
+      "methods": [
+        "GET",
+        "PATCH"
+      ],
+      "gate": "withAuth",
+      "permission": "shipping.view",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/shipped/search/route.ts",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "gate": "withAuth",
+      "permission": "shipping.view",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/shipped/submit/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "gate": "withAuth",
+      "permission": "shipping.mark_shipped",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/shipping/track/[id]/route.ts",
+      "methods": [
+        "GET"
+      ],
+      "gate": "NONE",
+      "permission": null,
+      "exemptReason": null
+    },
+    {
+      "path": "/api/shipping/track/register/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "gate": "withAuth",
+      "permission": "shipping.mark_shipped",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/shipping/track/sync-due/route.ts",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "gate": "withAuth",
+      "permission": "admin.manage_features",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/shipping/track/sync-one/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "gate": "withAuth",
+      "permission": "shipping.mark_shipped",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/sku-catalog/[id]/manuals/route.ts",
+      "methods": [
+        "DELETE",
+        "POST",
+        "PUT"
+      ],
+      "gate": "requireRoutePerm",
+      "permission": "sku_stock.manage",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/sku-catalog/[id]/platform-ids/route.ts",
+      "methods": [
+        "DELETE",
+        "POST",
+        "PUT"
+      ],
+      "gate": "requireRoutePerm",
+      "permission": "sku_stock.manage",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/sku-catalog/[id]/qc-checks/route.ts",
+      "methods": [
+        "DELETE",
+        "POST",
+        "PUT"
+      ],
+      "gate": "requireRoutePerm",
+      "permission": "sku_stock.manage",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/sku-catalog/[id]/route.ts",
+      "methods": [
+        "GET",
+        "PATCH"
+      ],
+      "gate": "requireRoutePerm",
+      "permission": "sku_stock.view",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/sku-catalog/pair-ecwid/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "gate": "withAuth",
+      "permission": "sku_stock.manage",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/sku-catalog/pair-suggestions/route.ts",
+      "methods": [
+        "GET"
+      ],
+      "gate": "withAuth",
+      "permission": "sku_stock.view",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/sku-catalog/pair/route.ts",
+      "methods": [
+        "DELETE",
+        "POST"
+      ],
+      "gate": "withAuth",
+      "permission": "sku_stock.manage",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/sku-catalog/route.ts",
+      "methods": [
+        "GET"
+      ],
+      "gate": "withAuth",
+      "permission": "sku_stock.view",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/sku-catalog/run-migration/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "gate": "withAuth",
+      "permission": "admin.manage_features",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/sku-catalog/search/route.ts",
+      "methods": [
+        "GET"
+      ],
+      "gate": "withAuth",
+      "permission": "sku_stock.view",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/sku-catalog/sync-ecwid-products/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "gate": "withAuth",
+      "permission": "admin.manage_features",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/sku-catalog/sync-ecwid-titles/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "gate": "withAuth",
+      "permission": "admin.manage_features",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/sku-catalog/unpaired-ecwid/route.ts",
+      "methods": [
+        "GET"
+      ],
+      "gate": "withAuth",
+      "permission": "sku_stock.view",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/sku-catalog/unpaired/route.ts",
+      "methods": [
+        "GET"
+      ],
+      "gate": "withAuth",
+      "permission": "sku_stock.view",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/sku-manager/route.ts",
+      "methods": [
+        "GET"
+      ],
+      "gate": "withAuth",
+      "permission": "sku_stock.manage",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/sku-stock/[sku]/bins/route.ts",
+      "methods": [
+        "GET"
+      ],
+      "gate": "requireRoutePerm",
+      "permission": "sku_stock.view",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/sku-stock/[sku]/route.ts",
+      "methods": [
+        "GET",
+        "PATCH"
+      ],
+      "gate": "withAuth (no permission)",
+      "permission": null,
+      "exemptReason": null
+    },
+    {
+      "path": "/api/sku-stock/route.ts",
+      "methods": [
+        "GET"
+      ],
+      "gate": "withAuth",
+      "permission": "sku_stock.view",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/sku/[id]/photos/route.ts",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "gate": "requireRoutePerm",
+      "permission": "sku_stock.view",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/sku/by-tracking/route.ts",
+      "methods": [
+        "GET"
+      ],
+      "gate": "withAuth",
+      "permission": "sku_stock.view",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/sku/lookup/route.ts",
+      "methods": [
+        "GET"
+      ],
+      "gate": "withAuth",
+      "permission": "sku_stock.view",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/sku/route.ts",
+      "methods": [
+        "GET"
+      ],
+      "gate": "withAuth",
+      "permission": "sku_stock.view",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/sku/serials-from-code/route.ts",
+      "methods": [
+        "GET"
+      ],
+      "gate": "withAuth",
+      "permission": "sku_stock.view",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/staff-goals/history/route.ts",
+      "methods": [
+        "GET"
+      ],
+      "gate": "withAuth",
+      "permission": "reports.view",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/staff-goals/route.ts",
+      "methods": [
+        "GET",
+        "PUT"
+      ],
+      "gate": "withAuth",
+      "permission": "operations.view",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/staff/availability-rules/route.ts",
+      "methods": [
+        "DELETE",
+        "GET",
+        "POST",
+        "PUT"
+      ],
+      "gate": "withAuth",
+      "permission": "admin.view",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/staff/availability-today/route.ts",
+      "methods": [
+        "GET"
+      ],
+      "gate": "withAuth",
+      "permission": "admin.view",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/staff/route.ts",
+      "methods": [
+        "DELETE",
+        "GET",
+        "POST",
+        "PUT"
+      ],
+      "gate": "withAuth",
+      "permission": "admin.manage_staff",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/staff/schedule/bulk/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "gate": "withAuth",
+      "permission": "admin.manage_staff",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/staff/schedule/route.ts",
+      "methods": [
+        "GET",
+        "PUT"
+      ],
+      "gate": "withAuth",
+      "permission": "admin.view",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/staff/schedule/week/copy/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "gate": "withAuth",
+      "permission": "admin.manage_staff",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/staff/schedule/week/route.ts",
+      "methods": [
+        "GET",
+        "PUT"
+      ],
+      "gate": "withAuth",
+      "permission": "admin.view",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/stock-alerts/route.ts",
+      "methods": [
+        "GET"
+      ],
+      "gate": "withAuth",
+      "permission": "sku_stock.view",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/support/overview/route.ts",
+      "methods": [
+        "GET"
+      ],
+      "gate": "NONE",
+      "permission": null,
+      "exemptReason": null
+    },
+    {
+      "path": "/api/sync-sheets-to-tech-serials/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "gate": "withAuth",
+      "permission": "admin.manage_features",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/sync-sheets/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "gate": "withAuth",
+      "permission": "integrations.sheets",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/tech-logs/route.ts",
+      "methods": [
+        "GET"
+      ],
+      "gate": "withAuth (no permission)",
+      "permission": null,
+      "exemptReason": null
+    },
+    {
+      "path": "/api/tech-logs/search/route.ts",
+      "methods": [
+        "GET"
+      ],
+      "gate": "withAuth",
+      "permission": "tech.view",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/tech-logs/update/route.ts",
+      "methods": [
+        "PATCH"
+      ],
+      "gate": "withAuth",
+      "permission": "tech.view",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/tech/add-serial-to-last/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "gate": "withAuth",
+      "permission": "tech.scan_serial",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/tech/add-serial/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "gate": "withAuth",
+      "permission": "tech.scan_serial",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/tech/delete-tracking/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "gate": "withAuth",
+      "permission": "tech.scan_serial",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/tech/delete/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "gate": "withAuth",
+      "permission": "tech.scan_serial",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/tech/logs/route.ts",
+      "methods": [
+        "GET"
+      ],
+      "gate": "withAuth",
+      "permission": "tech.view",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/tech/orders-without-manual/route.ts",
+      "methods": [
+        "GET"
+      ],
+      "gate": "withAuth",
+      "permission": "tech.view",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/tech/scan-fnsku/route.ts",
+      "methods": [
+        "GET"
+      ],
+      "gate": "withAuth",
+      "permission": "tech.scan_serial",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/tech/scan-repair-station/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "gate": "withAuth",
+      "permission": "tech.scan_serial",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/tech/scan-sku/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "gate": "withAuth",
+      "permission": "tech.scan_serial",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/tech/scan-tracking/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "gate": "withAuth",
+      "permission": "tech.scan_serial",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/tech/scan/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "gate": "withAuth",
+      "permission": "tech.scan_serial",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/tech/serial/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "gate": "withAuth",
+      "permission": "tech.scan_serial",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/tech/test-result/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "gate": "withAuth",
+      "permission": "tech.scan_serial",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/tech/undo-last/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "gate": "withAuth",
+      "permission": "tech.scan_serial",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/tech/update-serials/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "gate": "withAuth",
+      "permission": "tech.scan_serial",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/test-db/route.ts",
+      "methods": [
+        "GET"
+      ],
+      "gate": "withAuth",
+      "permission": "admin.view",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/tracking-exceptions/[id]/refresh/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "gate": "requireRoutePerm",
+      "permission": "receiving.mark_received",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/tracking-exceptions/[id]/route.ts",
+      "methods": [
+        "DELETE",
+        "GET",
+        "PATCH"
+      ],
+      "gate": "requireRoutePerm",
+      "permission": "receiving.view",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/tracking-exceptions/route.ts",
+      "methods": [
+        "GET"
+      ],
+      "gate": "withAuth",
+      "permission": "receiving.view",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/transfers/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "gate": "withAuth",
+      "permission": "bin.adjust",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/units/next-id/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "gate": "withAuth",
+      "permission": "print.label",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/update-sku-location/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "gate": "withAuth",
+      "permission": "bin.set",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/walk-in/catalog/route.ts",
+      "methods": [
+        "GET"
+      ],
+      "gate": "withAuth",
+      "permission": "walk_in.view",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/walk-in/categories/route.ts",
+      "methods": [
+        "GET"
+      ],
+      "gate": "withAuth",
+      "permission": "walk_in.view",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/walk-in/customers/route.ts",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "gate": "withAuth",
+      "permission": "walk_in.view",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/walk-in/orders/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "gate": "withAuth",
+      "permission": "walk_in.intake",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/walk-in/sales/route.ts",
+      "methods": [
+        "GET"
+      ],
+      "gate": "withAuth",
+      "permission": "walk_in.view",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/walk-in/status/route.ts",
+      "methods": [
+        "GET"
+      ],
+      "gate": "withAuth",
+      "permission": "walk_in.view",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/walk-in/sync/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "gate": "withAuth",
+      "permission": "admin.manage_features",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/walk-in/terminal/checkout/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "gate": "withAuth",
+      "permission": "walk_in.intake",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/walk-in/terminal/devices/route.ts",
+      "methods": [
+        "GET"
+      ],
+      "gate": "withAuth",
+      "permission": "walk_in.view",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/warehouses/route.ts",
+      "methods": [
+        "GET"
+      ],
+      "gate": "withAuth",
+      "permission": "sku_stock.view",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/webhooks/realtime-db/route.ts",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "gate": "NONE",
+      "permission": null,
+      "exemptReason": "webhook (gated by signature)"
+    },
+    {
+      "path": "/api/webhooks/square/route.ts",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "gate": "signature",
+      "permission": null,
+      "exemptReason": "webhook (gated by signature)"
+    },
+    {
+      "path": "/api/webhooks/ups/route.ts",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "gate": "NONE",
+      "permission": null,
+      "exemptReason": "webhook (gated by signature)"
+    },
+    {
+      "path": "/api/webhooks/zoho/orders/route.ts",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "gate": "NONE",
+      "permission": null,
+      "exemptReason": "webhook (gated by signature)"
+    },
+    {
+      "path": "/api/work-orders/route.ts",
+      "methods": [
+        "GET",
+        "PATCH"
+      ],
+      "gate": "withAuth",
+      "permission": "work_orders.view",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/zoho/debug-bills/route.ts",
+      "methods": [
+        "GET"
+      ],
+      "gate": "withAuth",
+      "permission": "integrations.zoho",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/zoho/debug-pr-shapes/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "gate": "withAuth",
+      "permission": "integrations.zoho",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/zoho/debug-receive/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "gate": "withAuth",
+      "permission": "integrations.zoho",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/zoho/find-po/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "gate": "withAuth",
+      "permission": "receiving.scan_po",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/zoho/health/route.ts",
+      "methods": [
+        "GET"
+      ],
+      "gate": "withAuth",
+      "permission": "integrations.zoho",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/zoho/items/sync/route.ts",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "gate": "withAuth",
+      "permission": "integrations.zoho",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/zoho/oauth/authorize/route.ts",
+      "methods": [
+        "GET"
+      ],
+      "gate": "withAuth",
+      "permission": "integrations.zoho",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/zoho/oauth/callback/route.ts",
+      "methods": [
+        "GET"
+      ],
+      "gate": "NONE",
+      "permission": null,
+      "exemptReason": null
+    },
+    {
+      "path": "/api/zoho/orders/ingest/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "gate": "withAuth",
+      "permission": "integrations.zoho",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/zoho/purchase-orders/receive/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "gate": "withAuth",
+      "permission": "receiving.mark_received",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/zoho/purchase-orders/route.ts",
+      "methods": [
+        "GET"
+      ],
+      "gate": "withAuth",
+      "permission": "receiving.scan_po",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/zoho/purchase-orders/sync/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "gate": "withAuth",
+      "permission": "integrations.zoho",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/zoho/purchase-receives/import/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "gate": "withAuth",
+      "permission": "receiving.mark_received",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/zoho/purchase-receives/route.ts",
+      "methods": [
+        "GET"
+      ],
+      "gate": "withAuth",
+      "permission": "receiving.scan_po",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/zoho/purchase-receives/sync/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "gate": "withAuth",
+      "permission": "integrations.zoho",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/zoho/refresh-token/route.ts",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "gate": "withAuth",
+      "permission": "integrations.zoho",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/zoho/warehouses/route.ts",
+      "methods": [
+        "GET"
+      ],
+      "gate": "withAuth",
+      "permission": "integrations.zoho",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/zoho/webhooks/route.ts",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "gate": "signature",
+      "permission": null,
+      "exemptReason": null
+    }
+  ]
+}

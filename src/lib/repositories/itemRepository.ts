@@ -16,6 +16,7 @@ export interface PaginatedResult<T> {
 }
 
 export interface InsertItem {
+  organizationId: string;
   zohoItemId: string;
   zohoItemGroupId?: string | null;
   name: string;
@@ -44,6 +45,7 @@ export interface InsertItem {
 }
 
 export interface UpsertLocationInput {
+  organizationId: string;
   zohoLocationId: string;
   name: string;
   isPrimary?: boolean;
@@ -51,6 +53,7 @@ export interface UpsertLocationInput {
 }
 
 export interface UpsertItemLocationStockInput {
+  organizationId: string;
   itemId: string;
   locationId: string;
   quantityAvailable?: string | null;
@@ -153,6 +156,7 @@ export class DrizzleItemRepository implements ItemRepository {
   async upsertLocations(rows: UpsertLocationInput[]): Promise<void> {
     if (rows.length === 0) return;
     await db.insert(zohoLocations).values(rows.map((row) => ({
+      organizationId: row.organizationId,
       zohoLocationId: row.zohoLocationId,
       name: row.name,
       isPrimary: row.isPrimary ?? false,
@@ -177,6 +181,7 @@ export class DrizzleItemRepository implements ItemRepository {
   async upsertItemLocationStock(rows: UpsertItemLocationStockInput[]): Promise<void> {
     if (rows.length === 0) return;
     await db.insert(itemLocationStock).values(rows.map((row) => ({
+      organizationId: row.organizationId,
       itemId: row.itemId,
       locationId: row.locationId,
       quantityAvailable: row.quantityAvailable ?? '0',

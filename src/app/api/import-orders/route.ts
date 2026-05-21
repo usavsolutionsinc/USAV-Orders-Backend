@@ -4,7 +4,7 @@ import { orders as ordersTable } from '@/lib/drizzle/schema';
 import pool from '@/lib/db';
 import { withAuth } from '@/lib/auth/withAuth';
 
-export const POST = withAuth(async (request: NextRequest) => {
+export const POST = withAuth(async (request: NextRequest, ctx) => {
     try {
         const body = await request.json();
         const { data } = body;
@@ -15,6 +15,7 @@ export const POST = withAuth(async (request: NextRequest) => {
 
         const insertedOrders = await db.insert(ordersTable).values(
             data.map((item: any) => ({
+                organizationId: ctx.organizationId,
                 orderId: item.orderNumber || '',
                 productTitle: item.itemTitle || '',
                 sku: item.usavSku || '',

@@ -7,6 +7,7 @@ import { eq } from 'drizzle-orm';
  * Runs fire-and-forget from the chat route — errors are logged, never thrown.
  */
 export async function persistChatMessage(opts: {
+  organizationId: string;
   sessionId: string;
   role: 'user' | 'assistant';
   content: string;
@@ -30,6 +31,7 @@ export async function persistChatMessage(opts: {
           : 'New Chat';
 
       await db.insert(aiChatSessions).values({
+        organizationId: opts.organizationId,
         id: opts.sessionId,
         title,
       });
@@ -42,6 +44,7 @@ export async function persistChatMessage(opts: {
 
     // Insert message
     await db.insert(aiChatMessages).values({
+      organizationId: opts.organizationId,
       sessionId: opts.sessionId,
       role: opts.role,
       content: opts.content,

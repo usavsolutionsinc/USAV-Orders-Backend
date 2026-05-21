@@ -3,7 +3,7 @@ import pool from '@/lib/db';
 import { invalidateCacheTags } from '@/lib/cache/upstash-cache';
 import { publishReceivingLogChanged } from '@/lib/realtime/publish';
 import { enrichSerialUnitCatalog } from '@/lib/neon/serial-units-queries';
-import { receiveLineUnits } from '@/lib/receiving/receive-line';
+import { receiveLineUnits, OverReceiveError } from '@/lib/receiving/receive-line';
 import { withAuth } from '@/lib/auth/withAuth';
 import { AUDIT_ACTION, AUDIT_ENTITY } from '@/lib/audit-logs';
 
@@ -126,17 +126,43 @@ export const POST = withAuth(async (request: NextRequest, ctx) => {
       );
     }
 
+    // Optional admin override — UI re-submits with this flag after the
+    // operator confirms they really want to receive past the expected qty.
+    const allowOverReceive = Boolean(
+      body?.allow_over_receive ?? body?.allowOverReceive,
+    );
+
     // ─── Single writer ──────────────────────────────────────────────────────
-    const result = await receiveLineUnits({
-      receiving_line_id: receivingLineId,
-      units: 1,
-      serials: [serialNumber],
-      condition_grade: conditionGrade,
-      staff_id: staffId,
-      station,
-      client_event_id: clientEventId,
-      scan_token: scanToken,
-    });
+    let result: Awaited<ReturnType<typeof receiveLineUnits>>;
+    try {
+      result = await receiveLineUnits({
+        receiving_line_id: receivingLineId,
+        units: 1,
+        serials: [serialNumber],
+        condition_grade: conditionGrade,
+        staff_id: staffId,
+        station,
+        client_event_id: clientEventId,
+        scan_token: scanToken,
+        allow_over_receive: allowOverReceive,
+      });
+    } catch (err) {
+      if (err instanceof OverReceiveError) {
+        return NextResponse.json(
+          {
+            success: false,
+            error: 'OVER_RECEIVE',
+            receiving_line_id: err.receiving_line_id,
+            prior_received: err.prior_received,
+            attempted_units: err.attempted_units,
+            quantity_expected: err.quantity_expected,
+            hint: 're-submit with allow_over_receive:true to force',
+          },
+          { status: 409 },
+        );
+      }
+      throw err;
+    }
 
     const serialResult = result.serials_recorded[0];
     if (!serialResult) {

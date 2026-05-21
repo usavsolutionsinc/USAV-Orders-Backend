@@ -19,6 +19,8 @@ export interface WorkAssignment {
 }
 
 export interface CreateAssignmentParams {
+  /** Phase 3b: tenant scope required for the INSERT. */
+  organizationId: string;
   entityType: EntityType;
   entityId: number;
   workType: WorkType;
@@ -181,10 +183,11 @@ export async function getNextUnassignedEntityId(
 export async function createAssignment(params: CreateAssignmentParams): Promise<WorkAssignment> {
   const result = await pool.query(
     `INSERT INTO work_assignments
-       (entity_type, entity_id, work_type, assigned_tech_id, assigned_packer_id, status, notes, deadline_at)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+       (organization_id, entity_type, entity_id, work_type, assigned_tech_id, assigned_packer_id, status, notes, deadline_at)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
      RETURNING *`,
     [
+      params.organizationId,
       params.entityType,
       params.entityId,
       params.workType,
@@ -204,8 +207,8 @@ export async function createAssignment(params: CreateAssignmentParams): Promise<
 export async function upsertAssignment(params: CreateAssignmentParams): Promise<WorkAssignment> {
   const result = await pool.query(
     `INSERT INTO work_assignments
-       (entity_type, entity_id, work_type, assigned_tech_id, assigned_packer_id, status, notes, deadline_at)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+       (organization_id, entity_type, entity_id, work_type, assigned_tech_id, assigned_packer_id, status, notes, deadline_at)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
      ON CONFLICT (entity_type, entity_id, work_type)
      DO UPDATE SET
        assigned_tech_id   = EXCLUDED.assigned_tech_id,
@@ -216,6 +219,7 @@ export async function upsertAssignment(params: CreateAssignmentParams): Promise<
        updated_at         = NOW()
      RETURNING *`,
     [
+      params.organizationId,
       params.entityType,
       params.entityId,
       params.workType,

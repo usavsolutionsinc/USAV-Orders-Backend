@@ -481,6 +481,7 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
 
         const { shipmentId, scanRef } = await resolveShipmentId(body.shippingTrackingNumber || '');
         const newLog = await db.insert(packerLogs).values({
+            organizationId: ctx.organizationId,
             shipmentId: shipmentId ?? undefined,
             scanRef: scanRef ?? undefined,
             trackingType: body.trackingType || 'ORDERS',
@@ -489,6 +490,7 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
 
         const packerLogId = newLog[0]?.id;
         const salId = await createStationActivityLog(pool, {
+            organizationId: ctx.organizationId,
             station: 'PACK',
             activityType: body.trackingType === 'ORDERS' ? 'PACK_COMPLETED' : 'PACK_SCAN',
             staffId: packedBy,

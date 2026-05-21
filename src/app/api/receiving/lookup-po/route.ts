@@ -15,6 +15,33 @@ import {
 import { withAuth } from '@/lib/auth/withAuth';
 import { AUDIT_ACTION, AUDIT_ENTITY } from '@/lib/audit-logs';
 
+// ── Zoho error classification ────────────────────────────────────────────────
+// Distinguishes "Zoho replied, no match" from "Zoho is unreachable." The former
+// is normal traffic; the latter is an outage we want to alert on.
+function zohoErrStatus(err: unknown): number | null {
+  const status = (err as { status?: number; statusCode?: number; response?: { status?: number } } | null)
+    ?.status
+    ?? (err as { statusCode?: number } | null)?.statusCode
+    ?? (err as { response?: { status?: number } } | null)?.response?.status
+    ?? null;
+  return typeof status === 'number' ? status : null;
+}
+function zohoErrCode(err: unknown): string | null {
+  const code = (err as { code?: string } | null)?.code ?? null;
+  return typeof code === 'string' ? code : null;
+}
+function errMessage(err: unknown): string {
+  return err instanceof Error ? err.message : String(err);
+}
+function isZohoNoMatch(err: unknown): boolean {
+  const status = zohoErrStatus(err);
+  // 4xx (except 401/403/429) generally means Zoho parsed the request and
+  // returned a non-fatal "nothing here." Auth + rate-limit = outage-like.
+  if (status == null) return false;
+  if (status === 401 || status === 403 || status === 429) return false;
+  return status >= 400 && status < 500;
+}
+
 async function parallelLimit<T, R>(
   items: T[],
   limit: number,
@@ -315,8 +342,22 @@ export const POST = withAuth(async (request: NextRequest, ctx) => {
     if (last8) {
       try {
         const receives = await searchPurchaseReceivesByTracking(last8).catch((err) => {
-          zohoReachable = false;
-          console.warn(`lookup-po: searchPurchaseReceivesByTracking(${last8}) failed`, err);
+          // Reachability heuristic: HTTP 4xx with a JSON body = Zoho is up and
+          // says "no match"; anything else (network, 5xx, timeout) = unreachable.
+          // The distinction matters for alerting and for the exception_reason
+          // we write below ('not_found' vs 'zoho_unreachable').
+          if (!isZohoNoMatch(err)) {
+            zohoReachable = false;
+            console.error(
+              '[lookup-po.zoho] searchPurchaseReceivesByTracking outage',
+              { last8, status: zohoErrStatus(err), code: zohoErrCode(err), message: errMessage(err) },
+            );
+          } else {
+            console.warn(
+              '[lookup-po.zoho] searchPurchaseReceivesByTracking no-match',
+              { last8, status: zohoErrStatus(err) },
+            );
+          }
           return [];
         });
         for (const r of receives) {
@@ -325,8 +366,18 @@ export const POST = withAuth(async (request: NextRequest, ctx) => {
         }
         if (zohoPoIds.size === 0 && zohoReachable) {
           const pos = await searchPurchaseOrdersByTracking(last8).catch((err) => {
-            zohoReachable = false;
-            console.warn(`lookup-po: searchPurchaseOrdersByTracking(${last8}) failed`, err);
+            if (!isZohoNoMatch(err)) {
+              zohoReachable = false;
+              console.error(
+                '[lookup-po.zoho] searchPurchaseOrdersByTracking outage',
+                { last8, status: zohoErrStatus(err), code: zohoErrCode(err), message: errMessage(err) },
+              );
+            } else {
+              console.warn(
+                '[lookup-po.zoho] searchPurchaseOrdersByTracking no-match',
+                { last8, status: zohoErrStatus(err) },
+              );
+            }
             return [];
           });
           for (const po of pos) {
@@ -335,7 +386,10 @@ export const POST = withAuth(async (request: NextRequest, ctx) => {
         }
       } catch (err) {
         zohoReachable = false;
-        console.warn(`lookup-po: Zoho lookup failed for last8 ${last8}`, err);
+        console.error(
+          '[lookup-po.zoho] unexpected throw outside .catch',
+          { last8, message: errMessage(err) },
+        );
       }
     }
 
@@ -389,13 +443,24 @@ export const POST = withAuth(async (request: NextRequest, ctx) => {
         'zoho_po',
       );
       // If the scan was attached to a different receiving row (rare race
-      // between promote and upsert fallback), re-parent it now.
+      // between promote and upsert fallback), re-parent it now. Failure here
+      // leaves an orphan scan pointing at the stale receiving row — log it
+      // so a cleanup job can find it. Don't fail the request: the primary
+      // receiving row is correct, only the scan linkage is stale.
       if (preassignedScanId && preassignedReceivingId !== primaryReceivingId) {
         await pool.query(
           `UPDATE receiving_scans SET receiving_id = $1, source = 'zoho_po'
             WHERE id = $2`,
           [primaryReceivingId, preassignedScanId],
-        ).catch(() => {});
+        ).catch((err) => {
+          console.error('[lookup-po] scan re-parent failed — orphaned scan', {
+            scan_id: preassignedScanId,
+            from_receiving_id: preassignedReceivingId,
+            to_receiving_id: primaryReceivingId,
+            primary_po_id: primaryPoId,
+            message: err instanceof Error ? err.message : String(err),
+          });
+        });
       }
 
       await importZohoPurchaseOrderToReceiving(primaryPoId, {
@@ -407,6 +472,10 @@ export const POST = withAuth(async (request: NextRequest, ctx) => {
 
       // Rare multi-PO tracking: each secondary PO gets its own receiving
       // row to respect the partial unique (zoho_purchaseorder_id) index.
+      // We collect the secondary receiving ids so the client can show a
+      // "multiple POs matched" prompt and route the operator to triage.
+      const secondaryPoIds: string[] = [];
+      const secondaryReceivingIds: number[] = [];
       for (const poId of poIds.slice(1)) {
         try {
           const { receivingId: extraReceivingId } = await upsertMatchedReceiving(
@@ -419,6 +488,8 @@ export const POST = withAuth(async (request: NextRequest, ctx) => {
             receivingId: extraReceivingId,
             workflowStatus: 'MATCHED',
           });
+          secondaryPoIds.push(poId);
+          secondaryReceivingIds.push(extraReceivingId);
         } catch (err) {
           console.warn(`lookup-po: secondary PO import failed for ${poId}`, err);
         }
@@ -452,7 +523,12 @@ export const POST = withAuth(async (request: NextRequest, ctx) => {
             },
           );
         } catch (err) {
-          console.warn('lookup-po: sku_catalog warmup failed', err);
+          // Warmup is best-effort: a future page load will re-fetch from
+          // sku_catalog. WARN is appropriate.
+          console.warn('[lookup-po.after] sku_catalog warmup failed', {
+            receiving_id: primaryReceivingId,
+            message: errMessage(err),
+          });
         }
         try {
           await invalidateCacheTags([
@@ -462,20 +538,40 @@ export const POST = withAuth(async (request: NextRequest, ctx) => {
             'sku-catalog',
             'tracking-exceptions',
           ]);
+        } catch (err) {
+          // Cache invalidation failure → stale UI until TTL expires (60s).
+          // Visible but recoverable; WARN.
+          console.warn('[lookup-po.after] cache invalidation failed', {
+            receiving_id: primaryReceivingId,
+            tags: ['receiving-logs', 'receiving-lines', 'pending-unboxing', 'sku-catalog', 'tracking-exceptions'],
+            message: errMessage(err),
+          });
+        }
+        try {
           await publishReceivingLogChanged({
             action: preexisting ? 'update' : 'insert',
             rowId: String(primaryReceivingId),
             source: 'receiving.lookup-po',
           });
         } catch (err) {
-          console.warn('lookup-po: cache/realtime update failed', err);
+          // Realtime failure → connected clients won't refresh until they
+          // poll or reload. Higher severity than cache because polling can
+          // be slow; ERROR so it surfaces in alerting.
+          console.error('[lookup-po.after] realtime publish failed', {
+            receiving_id: primaryReceivingId,
+            action: preexisting ? 'update' : 'insert',
+            message: errMessage(err),
+          });
         }
         try {
           // If this tracking had previously landed as 'unmatched' and logged
           // a receiving exception, the Zoho hit now retroactively resolves it.
           await resolveReceivingExceptionsByReceivingId(primaryReceivingId);
         } catch (err) {
-          console.warn('lookup-po: resolveReceivingExceptionsByReceivingId failed', err);
+          console.warn('[lookup-po.after] resolveReceivingExceptionsByReceivingId failed', {
+            receiving_id: primaryReceivingId,
+            message: errMessage(err),
+          });
         }
       });
 
@@ -488,6 +584,12 @@ export const POST = withAuth(async (request: NextRequest, ctx) => {
         matched: true,
         po_matched: true,
         po_ids: poIds,
+        // Secondary POs each get their own receiving row but lines from them
+        // aren't part of the primary carton view. Surface them so the client
+        // can prompt the operator to triage rather than silently miss them.
+        secondary_po_ids: secondaryPoIds,
+        secondary_receiving_ids: secondaryReceivingIds,
+        multi_po_warning: secondaryPoIds.length > 0,
         zoho_reachable: true,
         receiving_package: receiving_package_matched,
         lines: lines.map((l) => ({
@@ -548,13 +650,23 @@ export const POST = withAuth(async (request: NextRequest, ctx) => {
           'pending-unboxing',
           'tracking-exceptions',
         ]);
+      } catch (err) {
+        console.warn('[lookup-po.after.unmatched] cache invalidation failed', {
+          receiving_id: unmatchedReceivingId,
+          message: errMessage(err),
+        });
+      }
+      try {
         await publishReceivingLogChanged({
           action: 'insert',
           rowId: String(unmatchedReceivingId),
           source: 'receiving.lookup-po',
         });
       } catch (err) {
-        console.warn('lookup-po: unmatched cache/realtime update failed', err);
+        console.error('[lookup-po.after.unmatched] realtime publish failed', {
+          receiving_id: unmatchedReceivingId,
+          message: errMessage(err),
+        });
       }
     });
 

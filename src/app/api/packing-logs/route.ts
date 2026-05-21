@@ -269,6 +269,7 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
                     const fbaCreatedAt = fbaPackerInsert.rows[0]?.created_at ?? packDateTime;
 
                     await createStationActivityLog(pool, {
+                        organizationId: ctx.organizationId,
                         station: 'PACK',
                         activityType: 'PACK_COMPLETED',
                         staffId,
@@ -353,6 +354,7 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
 
             if (orderLookup.rows.length === 0) {
                 const upsertResult = await upsertOpenOrderException({
+                    organizationId: ctx.organizationId,
                     shippingTrackingNumber: scanInput,
                     sourceStation: 'packer',
                     staffId,
@@ -422,6 +424,7 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
                 };
 
                 const nfSalId = await createStationActivityLog(pool, {
+                    organizationId: ctx.organizationId,
                     station: 'PACK',
                     activityType: 'PACK_COMPLETED',
                     staffId,
@@ -572,6 +575,7 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
             };
 
             const foundSalId = await createStationActivityLog(pool, {
+                organizationId: ctx.organizationId,
                 station: 'PACK',
                 activityType: 'PACK_COMPLETED',
                 staffId,
@@ -767,6 +771,7 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
         };
 
         const nonOrderSalId = await createStationActivityLog(pool, {
+            organizationId: ctx.organizationId,
             station: 'PACK',
             activityType: 'PACK_SCAN',
             staffId,

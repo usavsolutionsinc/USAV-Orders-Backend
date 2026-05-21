@@ -89,6 +89,7 @@ export const POST = withAuth(async (request: NextRequest, ctx) => {
     );
 
     await createStationActivityLog(client, {
+      organizationId: ctx.organizationId,
       station: 'PACK',
       activityType: 'FBA_READY',
       staffId: Number(staff_id),

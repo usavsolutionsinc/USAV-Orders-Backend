@@ -59,7 +59,12 @@ export type TechFnskuScanApiPayload = {
  */
 export async function performTechFnskuScan(
   client: Queryable,
-  params: { fnsku: string; testedBy: number },
+  params: {
+    /** Phase 3a: tenant scope for the SAL row this scan emits. */
+    organizationId: string;
+    fnsku: string;
+    testedBy: number;
+  },
 ): Promise<TechFnskuScanApiPayload> {
   const fnsku = String(params.fnsku || '')
     .trim()
@@ -153,6 +158,7 @@ export async function performTechFnskuScan(
   const logCreatedAt = fnskuLogResult.rows[0].created_at as string;
 
   const fnskuSalId = await createStationActivityLog(client, {
+    organizationId: params.organizationId,
     station: 'TECH',
     activityType: 'FNSKU_SCANNED',
     staffId: testedBy,

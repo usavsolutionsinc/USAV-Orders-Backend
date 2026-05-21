@@ -1,58 +1,57 @@
 'use client';
 
-import Link from 'next/link';
-import { Suspense } from 'react';
+import { Suspense, useCallback } from 'react';
 import ReceivingDashboard from '@/components/ReceivingDashboard';
 import { ReceivingSidebarPanel } from '@/components/sidebar/ReceivingSidebarPanel';
 import { RouteShell } from '@/design-system/components/RouteShell';
 import { MobileReceivingList } from '@/components/mobile/receiving/MobileReceivingList';
-import { useUIModeOptional } from '@/design-system/providers/UIModeProvider';
-import { ChevronRight } from '@/components/Icons';
+import { Menu } from '@/components/Icons';
+import { QuickAccessButton } from '@/components/layout/QuickAccessButton';
 
+// Mobile vs desktop selection is done with CSS visibility, not a JS branch.
+// That way old browsers that can't hydrate the app (iOS ≤13, older Android)
+// still render the correct view from the SSR HTML. Both subtrees mount; the
+// inactive one is display:none and its data-fetching components still run,
+// which is the accepted tradeoff for hydration-independent layout.
 function ReceivingPageInner() {
-  const { isMobile } = useUIModeOptional();
+  const openDrawer = useCallback(() => {
+    window.dispatchEvent(new CustomEvent('open-mobile-drawer'));
+  }, []);
 
-  // Mobile is photo-only — single reversed list of receiving lines, most
-  // recent pinned at the bottom in an expanded card with a camera FAB.
-  // RouteShell + sidebar form flows are desktop only.
-  if (isMobile) {
-    return (
-      <div className="flex h-full w-full flex-col overflow-hidden bg-white">
-        {/* Opt-in entry to the new PO-grouped pipeline. The route is additive
-            and stable; flipping MOBILE_RECEIVING_PIPELINE_V2 server-side later
-            can promote this from "Try" to default. */}
-        <Link
-          href="/m/receiving"
-          prefetch={false}
-          className="flex items-center gap-3 border-b border-gray-100 bg-gradient-to-r from-blue-50 to-white px-4 py-2.5 active:bg-blue-100"
-        >
-          <span className="grid h-7 w-7 place-items-center rounded-full bg-blue-600 text-[10px] font-black uppercase tracking-widest text-white">
-            New
-          </span>
-          <span className="min-w-0 flex-1">
-            <span className="block truncate text-[12px] font-black tracking-tight text-gray-900">
-              Try the PO pipeline view
-            </span>
-            <span className="block truncate text-[10px] font-bold uppercase tracking-wider text-gray-500">
-              Group by purchase order · photo per item
-            </span>
-          </span>
-          <ChevronRight className="h-4 w-4 text-gray-400" />
-        </Link>
+  return (
+    <>
+      {/* Mobile (<768px) — photo-only feed with camera FAB. */}
+      <div className="flex h-full w-full flex-col overflow-hidden bg-white md:hidden">
+        <header className="sticky top-0 z-40 flex h-14 items-center gap-3 border-b border-gray-100 bg-white px-3">
+          <button
+            type="button"
+            onClick={openDrawer}
+            aria-label="Open navigation"
+            className="flex h-11 w-11 items-center justify-center rounded-xl text-gray-700 active:bg-gray-100 transition-colors outline-none"
+          >
+            <Menu className="h-6 w-6" />
+          </button>
+          
+          <h1 className="flex-1 text-[17px] font-black tracking-tight text-gray-900">
+            Receiving
+          </h1>
+
+          <QuickAccessButton className="h-10 w-10" />
+        </header>
+
         <div className="min-h-0 flex-1">
           <MobileReceivingList />
         </div>
       </div>
-    );
-  }
 
-  return (
-    <div className="flex h-full w-full overflow-hidden bg-[linear-gradient(180deg,#f5fbfa_0%,#ffffff_22%)]">
-      <RouteShell
-        actions={<ReceivingSidebarPanel />}
-        history={<ReceivingDashboard />}
-      />
-    </div>
+      {/* Desktop (≥768px) — sidebar + form flows. */}
+      <div className="hidden h-full w-full overflow-hidden bg-[linear-gradient(180deg,#f5fbfa_0%,#ffffff_22%)] md:flex">
+        <RouteShell
+          actions={<ReceivingSidebarPanel />}
+          history={<ReceivingDashboard />}
+        />
+      </div>
+    </>
   );
 }
 

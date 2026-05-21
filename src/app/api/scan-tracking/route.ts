@@ -103,6 +103,7 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
       }
 
       const upsertResult = await upsertOpenOrderException({
+        organizationId: ctx.organizationId,
         shippingTrackingNumber: rawTracking,
         sourceStation,
         staffId,

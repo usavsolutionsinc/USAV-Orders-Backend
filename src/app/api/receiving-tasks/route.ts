@@ -33,6 +33,7 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
     if (!trackingNumber) throw ApiError.badRequest('trackingNumber is required');
 
     const [result] = await db.insert(receivingTasks).values({
+      organizationId: ctx.organizationId,
       trackingNumber,
       orderNumber: orderNumber || null,
       notes: notes || null,

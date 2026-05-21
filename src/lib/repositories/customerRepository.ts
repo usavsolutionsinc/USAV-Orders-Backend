@@ -3,6 +3,7 @@ import { customers } from '@/lib/drizzle/schema';
 import { eq } from 'drizzle-orm';
 
 export interface UpsertCustomerInput {
+  organizationId: string;
   zohoContactId?: string | null;
   orderId?: string | null;
   contactType?: string | null;
@@ -56,6 +57,7 @@ export class DrizzleCustomerRepository implements CustomerRepository {
 
     const existing = match[0] ?? null;
     const values = {
+      organizationId: input.organizationId,
       zohoContactId: input.zohoContactId ?? null,
       orderId: input.orderId ?? null,
       contactType: input.contactType ?? 'customer',

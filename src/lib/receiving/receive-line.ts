@@ -52,6 +52,41 @@ export interface ReceiveLineUnitsInput {
 
   // Optional raw scan token for audit (e.g. the URL the tech scanned).
   scan_token?: string | null;
+
+  /**
+   * Permit `quantity_received + units > quantity_expected`. Default false:
+   * callers must opt in to over-receive (e.g. an admin override path). The
+   * UI prompts the operator on OVER_RECEIVE and re-submits with this flag
+   * set when they confirm.
+   */
+  allow_over_receive?: boolean;
+}
+
+/**
+ * Sentinel error thrown when an incoming receive would push quantity_received
+ * past quantity_expected. Carries enough context for the API layer to return
+ * a structured 409 the UI can react to.
+ */
+export class OverReceiveError extends Error {
+  readonly code = 'OVER_RECEIVE' as const;
+  readonly receiving_line_id: number;
+  readonly prior_received: number;
+  readonly attempted_units: number;
+  readonly quantity_expected: number;
+  constructor(args: {
+    receiving_line_id: number;
+    prior_received: number;
+    attempted_units: number;
+    quantity_expected: number;
+  }) {
+    super(
+      `OVER_RECEIVE: line ${args.receiving_line_id} already has ${args.prior_received} of ${args.quantity_expected}; refusing +${args.attempted_units}.`,
+    );
+    this.receiving_line_id = args.receiving_line_id;
+    this.prior_received = args.prior_received;
+    this.attempted_units = args.attempted_units;
+    this.quantity_expected = args.quantity_expected;
+  }
 }
 
 export interface ReceivedSerialResult {
@@ -154,6 +189,27 @@ export async function receiveLineUnits(
     throw new Error(
       `receiveLineUnits: serials (${serials.length}) > units (${units})`,
     );
+  }
+
+  // Guard against over-receive: incoming units would push the line past its
+  // expected quantity. Only enforced when quantity_expected is set (unmatched
+  // / catalog-only lines legitimately have NULL). Callers can override with
+  // `allow_over_receive: true` (e.g. admin "force" path).
+  const priorReceivedForGuard = Number(line.quantity_received ?? 0);
+  const expectedForGuard =
+    line.quantity_expected != null ? Number(line.quantity_expected) : null;
+  if (
+    !input.allow_over_receive &&
+    units > 0 &&
+    expectedForGuard != null &&
+    priorReceivedForGuard + units > expectedForGuard
+  ) {
+    throw new OverReceiveError({
+      receiving_line_id: line.id,
+      prior_received: priorReceivedForGuard,
+      attempted_units: units,
+      quantity_expected: expectedForGuard,
+    });
   }
 
   const station: InventoryEventStation = input.station ?? 'RECEIVING';

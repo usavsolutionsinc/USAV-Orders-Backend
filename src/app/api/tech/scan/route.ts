@@ -264,6 +264,7 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
 
         // 1. SAL row (SoT)
         const salId = await createStationActivityLog(client, {
+          organizationId: ctx.organizationId,
           station: salStation,
           activityType: 'FNSKU_SCANNED',
           staffId: testedBy,
@@ -361,6 +362,7 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
         // No order found — create exception + SAL
         let ordersExceptionId: number | null = null;
         const upsertResult = await upsertOpenOrderException({
+          organizationId: ctx.organizationId,
           shippingTrackingNumber: value,
           sourceStation: isFbaSource ? 'fba' : 'tech',
           staffId: testedBy,
@@ -372,6 +374,7 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
 
         const testDateTime = formatPSTTimestamp();
         const salId = await createStationActivityLog(client, {
+          organizationId: ctx.organizationId,
           station: salStation,
           activityType: 'TRACKING_SCANNED',
           staffId: testedBy,
@@ -423,6 +426,7 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
       const testDateTime = formatPSTTimestamp();
 
       const salId = await createStationActivityLog(client, {
+        organizationId: ctx.organizationId,
         station: salStation,
         activityType: 'TRACKING_SCANNED',
         staffId: testedBy,

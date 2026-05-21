@@ -208,8 +208,16 @@ export function useMediaQuery(query: string): boolean {
     const handler = (e: MediaQueryListEvent) => setMatches(e.matches);
 
     sync();
-    mql.addEventListener('change', handler);
-    return () => mql.removeEventListener('change', handler);
+    // MediaQueryList.addEventListener landed in Safari 14 / iOS 14. On older
+    // engines (iOS ≤13.3, old Edge) it's undefined and calling it throws,
+    // aborting the effect and freezing the value at its SSR default. Fall
+    // back to the legacy MediaQueryList.addListener API for those clients.
+    if (typeof mql.addEventListener === 'function') {
+      mql.addEventListener('change', handler);
+      return () => mql.removeEventListener('change', handler);
+    }
+    mql.addListener(handler);
+    return () => mql.removeListener(handler);
   }, [query]);
 
   return matches;

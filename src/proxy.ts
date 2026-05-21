@@ -81,6 +81,24 @@ const REWRITES: ReadonlyArray<{ prefix: string; target: string }> = [
   { prefix: '/m/u/', target: '/serial/' },
 ];
 
+// Dual-route pages that have a dedicated mobile counterpart. When the request
+// comes from a phone-class device we rewrite at the edge before any JS runs,
+// so old browsers that can't hydrate the React tree still get the right view.
+// Exact path match only — sub-pages (e.g. /receiving/lines/[id]) are not
+// rewritten because they have no /m/ counterpart.
+const MOBILE_UA_REWRITES: ReadonlyMap<string, string> = new Map([
+  ['/receiving', '/m/receiving'],
+  ['/receiving/', '/m/receiving'],
+  ['/signin', '/m/signin'],
+  ['/signin/', '/m/signin'],
+]);
+
+// Phones only — exclude iPad/Android tablets so they keep the desktop view.
+// Android phone UA always contains "Mobile"; tablets omit it. iPadOS reports
+// a macOS UA (no "iPad" token) so it falls through here as desktop, which is
+// the desired behavior. Old iOS and old Android phones do match this pattern.
+const MOBILE_UA_RE = /iPhone|iPod|Android.+Mobile|webOS|BlackBerry|IEMobile|Opera Mini/i;
+
 function isPublic(pathname: string): boolean {
   return PUBLIC_PATHS.some((re) => re.test(pathname));
 }
@@ -113,6 +131,13 @@ function resolveRewrite(pathname: string): string | null {
     }
   }
   return null;
+}
+
+function resolveMobileUaRewrite(pathname: string, ua: string | null): string | null {
+  if (!ua || !MOBILE_UA_RE.test(ua)) return null;
+  // Don't double-rewrite if the client already navigated to /m/*.
+  if (pathname.startsWith('/m/')) return null;
+  return MOBILE_UA_REWRITES.get(pathname) ?? null;
 }
 
 /**
@@ -159,7 +184,10 @@ function applySecurityHeaders(res: NextResponse): NextResponse {
 export function proxy(req: NextRequest): NextResponse {
   const { pathname } = req.nextUrl;
   const hasCookie = Boolean(req.cookies.get(SESSION_COOKIE_NAME)?.value);
-  const rewriteTarget = resolveRewrite(pathname);
+  // Path-prefix rewrites take precedence; UA-based rewrites are a fallback
+  // for exact paths with a /m/* counterpart (see MOBILE_UA_REWRITES).
+  const rewriteTarget =
+    resolveRewrite(pathname) ?? resolveMobileUaRewrite(pathname, req.headers.get('user-agent'));
 
   // Pass the resolved pathname to RSC pages — used by requirePermission to
   // build a `?next=` query when it redirects to /signin.

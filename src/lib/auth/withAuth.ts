@@ -130,16 +130,20 @@ async function tryReadJson(input: Request | Response | null): Promise<unknown> {
  */
 async function writeAuditFloor(
   req: NextRequest,
+  reqClone: Request | null,
   responseClone: Response,
   ctx: AuthContext | AnonymousAuthContext,
   audit: WithAuthAuditOpts,
 ): Promise<void> {
   try {
     // The wrapper holds clones of both streams so the handler's reads aren't
-    // disturbed. Either parse may legitimately fail (e.g. empty 204, or a
-    // non-JSON body) — entityId() should tolerate null/undefined inputs.
+    // disturbed. The request must be cloned BEFORE the handler runs — once
+    // the handler calls `req.json()`, the body is locked and any subsequent
+    // `req.clone()` throws TypeError('unusable'). Either parse may
+    // legitimately fail (e.g. empty 204, or a non-JSON body) — entityId()
+    // should tolerate null/undefined inputs.
     const [body, response] = await Promise.all([
-      tryReadJson(req.clone()),
+      tryReadJson(reqClone),
       tryReadJson(responseClone),
     ]);
 
@@ -239,6 +243,11 @@ export function withAuth(
       markAuditWritten,
     };
 
+    // Clone the request body up front so the audit floor can replay it after
+    // the handler has consumed `req.json()`. Done lazily — only routes that
+    // configured `audit:` pay the buffering cost.
+    const reqClone = opts.audit ? req.clone() : null;
+
     // Top-level error floor: an uncaught throw from a handler used to land as
     // a bodyless 500 (Next.js dev default), which made constraint violations
     // and similar runtime errors nearly impossible to diagnose from the
@@ -274,7 +283,7 @@ export function withAuth(
       response.status < 300
     ) {
       const responseClone = response.clone();
-      void writeAuditFloor(req, responseClone, ctx, opts.audit);
+      void writeAuditFloor(req, reqClone, responseClone, ctx, opts.audit);
     }
 
     return response;

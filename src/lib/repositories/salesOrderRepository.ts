@@ -3,6 +3,7 @@ import { entityNotes, salesOrders } from '@/lib/drizzle/schema';
 import { eq } from 'drizzle-orm';
 
 export interface InsertSalesOrder {
+  organizationId: string;
   zohoSoId?: string | null;
   salesorderNumber?: string | null;
   referenceNumber: string;
@@ -41,6 +42,7 @@ export class DrizzleSalesOrderRepository implements SalesOrderRepository {
 
   async create(input: InsertSalesOrder) {
     const rows = await db.insert(salesOrders).values({
+      organizationId: input.organizationId,
       zohoSoId: input.zohoSoId ?? null,
       salesorderNumber: input.salesorderNumber ?? null,
       referenceNumber: input.referenceNumber,
@@ -76,6 +78,10 @@ export class DrizzleSalesOrderRepository implements SalesOrderRepository {
       .where(eq(salesOrders.id, existing.id));
 
     await db.insert(entityNotes).values({
+      // Inherit org from the sales order the note is attached to —
+      // markZohoError is called by the Zoho sync flow, the existing row's
+      // organization_id is the authoritative tenant for any audit note.
+      organizationId: existing.organizationId,
       entityType: 'sales_order',
       entityId: existing.id,
       body: errorMessage,
