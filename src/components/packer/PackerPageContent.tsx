@@ -1,59 +1,64 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback } from 'react';
 import PackerDashboard from '@/components/PackerDashboard';
-import { MobileStationPacking } from '@/components/mobile/station/MobileStationPacking';
-import { RouteShell } from '@/design-system/components/RouteShell';
-import { useActiveStaffDirectory } from '@/components/sidebar/hooks';
-import { getStaffGoalById } from '@/lib/staffGoalsCache';
+import { MobilePackingList } from '@/components/mobile/packer/MobilePackingList';
+import { Menu } from '@/components/Icons';
+import { QuickAccessButton } from '@/components/layout/QuickAccessButton';
 import { useRealtimeToasts } from '@/hooks/useRealtimeToasts';
-import { useQueryClient } from '@tanstack/react-query';
 
 interface PackerPageContentProps {
   packerId: string;
 }
 
 /**
- * Single responsive tree. Desktop renders the PackerDashboard (table + details).
- * Mobile flips Actions ↔ History: Actions = packing station flow, History = dashboard.
- * The mobile packing station/scan/camera flow is preserved as-is per scope.
+ * Responsive packer tree.
+ *
+ * Desktop (≥768px): full PackerDashboard (table + details + scan + camera flow).
+ * Mobile (<768px):  history-only feed mirroring /receiving's mobile UX —
+ *                   tap a row to open the bottom sheet, photo CTA hands off
+ *                   to /m/p/{packerLogId}/photos for fresh captures.
+ *
+ * Both subtrees mount (CSS visibility, not a JS branch) so legacy mobile
+ * browsers that can't hydrate still see the correct view from the SSR HTML.
  */
 export function PackerPageContent({ packerId }: PackerPageContentProps) {
   useRealtimeToasts('packer');
-  const queryClient = useQueryClient();
-  const staffDirectory = useActiveStaffDirectory();
-  const [dailyGoal, setDailyGoal] = useState(50);
 
-  useEffect(() => {
-    getStaffGoalById(packerId).then(setDailyGoal).catch(() => {});
-  }, [packerId]);
-
-  const packerName = useMemo(
-    () => staffDirectory.find((m) => String(m.id) === String(packerId))?.name || 'Packer',
-    [staffDirectory, packerId],
-  );
-
-  const refreshHistory = () => {
-    queryClient.invalidateQueries({ queryKey: ['packer-logs'] });
-  };
+  const openDrawer = useCallback(() => {
+    window.dispatchEvent(new CustomEvent('open-mobile-drawer'));
+  }, []);
 
   return (
-    <RouteShell
-      defaultView="actions"
-      actionsLabel="Station"
-      actions={
-        <MobileStationPacking
-          userId={packerId}
-          userName={packerName}
-          staffId={packerId}
-          todayCount={0}
-          goal={dailyGoal}
-          onComplete={refreshHistory}
-          suppressShellToolbar
-          suppressBottomActionBar
-        />
-      }
-      history={<PackerDashboard packerId={packerId} />}
-    />
+    <>
+      {/* Mobile (<768px) — recent-packs feed with sheet + photos CTA. */}
+      <div className="flex h-full w-full flex-col overflow-hidden bg-white md:hidden">
+        <header className="sticky top-0 z-40 flex h-14 items-center gap-3 border-b border-gray-100 bg-white px-3">
+          <button
+            type="button"
+            onClick={openDrawer}
+            aria-label="Open navigation"
+            className="flex h-11 w-11 items-center justify-center rounded-xl text-gray-700 active:bg-gray-100 transition-colors outline-none"
+          >
+            <Menu className="h-6 w-6" />
+          </button>
+
+          <h1 className="flex-1 text-[17px] font-black tracking-tight text-gray-900">
+            Packing
+          </h1>
+
+          <QuickAccessButton className="h-10 w-10" />
+        </header>
+
+        <div className="min-h-0 flex-1">
+          <MobilePackingList packerId={packerId} />
+        </div>
+      </div>
+
+      {/* Desktop (≥768px) — table + details + scan flow. */}
+      <div className="hidden h-full w-full md:flex">
+        <PackerDashboard packerId={packerId} />
+      </div>
+    </>
   );
 }

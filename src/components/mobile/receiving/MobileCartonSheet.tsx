@@ -1,18 +1,17 @@
 'use client';
 
 import Link from 'next/link';
-import { Camera } from '@/components/Icons';
+import { Camera, Package, PackageCheck, Box, AlertCircle, Loader2 } from '@/components/Icons';
 import { BottomSheet } from '@/components/ui/BottomSheet';
 import { ReceivingPhotoStrip } from '@/components/sidebar/ReceivingPhotoStrip';
 import {
   OrderIdChip,
-  SkuScanRefChip,
   TrackingChip,
   SerialChip,
   getLast4,
   getLast6Serial,
 } from '@/components/ui/CopyChip';
-import { workflowStatusTableLabel } from '@/components/station/receiving-constants';
+import { conditionGradeTableLabel, workflowStatusTableLabel } from '@/components/station/receiving-constants';
 import type { ReceivingLineRow } from '@/components/station/ReceivingLinesTable';
 
 interface MobileCartonSheetProps {
@@ -33,6 +32,17 @@ function getStatusDotBg(status: string | null | undefined) {
   return 'bg-gray-400';
 }
 
+function getStatusIcon(status: string | null | undefined, className: string) {
+  const value = String(status || '').trim().toUpperCase();
+  if (value === 'EXPECTED') return <Box className={`${className} text-amber-500`} />;
+  if (value === 'ARRIVED' || value === 'MATCHED') return <Package className={`${className} text-blue-500`} />;
+  if (value === 'UNBOXED') return <Box className={`${className} text-indigo-500`} />;
+  if (value === 'AWAITING_TEST' || value === 'IN_TEST') return <Loader2 className={`${className} text-violet-500`} />;
+  if (value === 'PASSED' || value === 'DONE' || value === 'RECEIVED') return <PackageCheck className={`${className} text-emerald-500`} />;
+  if (value.startsWith('FAILED') || value === 'SCRAP' || value === 'RTV') return <AlertCircle className={`${className} text-rose-500`} />;
+  return <Package className={`${className} text-gray-400`} />;
+}
+
 /**
  * Phone-tuned sheet for a single receiving line. Mobile is photo-only — no
  * editor fields, no form. Header mirrors the desktop ReceivingLinesTable row:
@@ -46,12 +56,19 @@ export function MobileCartonSheet({ row, staffId, open, onClose }: MobileCartonS
   const receivingId = row.receiving_id;
   const productTitle = row.item_name || row.zoho_item_id || 'Unnamed inbound line';
   const poValue = (row.zoho_purchaseorder_number || row.zoho_purchaseorder_id || '').trim();
-  const skuValue = (row.sku || '').trim();
   const trackingValue = (row.tracking_number || '').trim();
   const qtyExpected = row.quantity_expected ?? 0;
   const qtyReceived = row.quantity_received;
   const quantityText = `${qtyReceived}/${row.quantity_expected ?? '?'}`;
   const workflowLabel = workflowStatusTableLabel(row.workflow_status || 'EXPECTED');
+  const conditionLabel = conditionGradeTableLabel(row.condition_grade);
+  const condGrade = (row.condition_grade || '').toUpperCase();
+  const conditionColor =
+    condGrade === 'BRAND_NEW'
+      ? 'text-yellow-600'
+      : condGrade === 'PARTS'
+        ? 'text-amber-800'
+        : 'text-gray-500';
   const serialsCsv = (row.serials ?? [])
     .map((s) => (s.serial_number || '').trim())
     .filter(Boolean)
@@ -76,7 +93,7 @@ export function MobileCartonSheet({ row, staffId, open, onClose }: MobileCartonS
           </div>
 
           <div className="flex items-center gap-2 pl-4">
-            <span className="shrink-0 text-[11px] font-black uppercase tracking-widest">
+            <span className="flex shrink-0 items-center gap-1 text-[11px] font-black uppercase tracking-widest">
               <span
                 className={
                   qtyExpected > 1 && qtyReceived < qtyExpected
@@ -88,12 +105,17 @@ export function MobileCartonSheet({ row, staffId, open, onClose }: MobileCartonS
               >
                 {quantityText}
               </span>
+              <span className="text-gray-400">•</span>
+              <span className={conditionColor}>{conditionLabel}</span>
+              <span className="text-gray-400">•</span>
+              <span title={workflowLabel} className="inline-flex items-center">
+                {getStatusIcon(row.workflow_status, 'h-3.5 w-3.5')}
+              </span>
               {row.needs_test ? <span className="ml-2 text-orange-600">NEEDS TEST</span> : null}
             </span>
 
             <div className="ml-auto flex shrink-0 items-center gap-2">
               <OrderIdChip value={poValue} display={getLast4(poValue)} />
-              <SkuScanRefChip value={skuValue} display={getLast4(skuValue)} />
               <TrackingChip value={trackingValue} display={getLast4(trackingValue)} />
               <SerialChip value={serialsCsv} display={getLast6Serial(serialsCsv)} />
             </div>

@@ -12,20 +12,9 @@ import { getSidebarRouteKey, isSidebarRouteMobileRestricted } from '@/lib/sideba
 import { MobileAppHeader, MobileAppHeaderFallback } from '@/components/layout/MobileAppHeader';
 import { QuickAccessFab } from '@/components/layout/QuickAccessFab';
 import { GlobalDesktopSkuScanner } from '@/components/layout/GlobalDesktopSkuScanner';
-import { usePhoneReceivingPhotoBridge } from '@/hooks/usePhoneReceivingPhotoBridge';
 import { usePhoneScanBridge } from '@/hooks/usePhoneScanBridge';
 import { useGlobalWedgeScanner } from '@/hooks/useGlobalWedgeScanner';
 import { OfflineBanner } from '@/components/layout/OfflineBanner';
-import { MobileCartonArrivalHero } from '@/components/mobile/receiving/MobileCartonArrivalHero';
-
-/**
- * Mount-only component. Runs the phone-side Ably listener that auto-navigates
- * to the receiving photo page when the desktop publishes a request.
- */
-function PhoneReceivingPhotoBridgeMount() {
-  usePhoneReceivingPhotoBridge();
-  return null;
-}
 
 /**
  * Mount-only component. Subscribes to phone-originated scans on
@@ -97,6 +86,8 @@ export function ResponsiveLayout({ children }: ResponsiveLayoutProps) {
   const closeDrawer = useCallback(() => setDrawerOpen(false), []);
 
   const isReceivingPage = pathname === '/receiving';
+  const isPackerPage = pathname === '/packer';
+  const hideFabPage = isReceivingPage || isPackerPage;
 
   useEffect(() => {
     setMounted(true);
@@ -198,7 +189,7 @@ export function ResponsiveLayout({ children }: ResponsiveLayoutProps) {
         <Suspense fallback={null}>
           <GlobalDesktopSkuScanner />
         </Suspense>
-        {!isReceivingPage && <QuickAccessFab />}
+        {!hideFabPage && <QuickAccessFab />}
         {drawerOverlay}
       </div>
     );
@@ -211,15 +202,6 @@ export function ResponsiveLayout({ children }: ResponsiveLayoutProps) {
   // ── Mobile layout: global top app bar + drawer sidebar ──
   return (
     <div className="flex flex-col h-full w-full overflow-hidden">
-      {/* Global mobile-side bridge: listens for receiving photo requests on
-          station:{staffId} and dispatches an arrival event consumed by the
-          hero overlay below. */}
-      <PhoneReceivingPhotoBridgeMount />
-
-      {/* Carton arrival hero — fires on the bridge's event with PO/item/qty
-          intel, depleting countdown, then hands off to /m/r/{id}/photos. */}
-      <MobileCartonArrivalHero />
-
       {/* Mirror of desktop: subscribe to phone:{staffId} so any device the
           user is signed in on can service the lookup. */}
       <PhoneScanBridgeMount />
@@ -229,8 +211,9 @@ export function ResponsiveLayout({ children }: ResponsiveLayoutProps) {
       <GlobalWedgeScannerMount />
       <OfflineBanner />
 
-      {/* Mobile header: app nav + contextual section browse/detail rows */}
-      {!isReceivingPage && (
+      {/* Mobile header: app nav + contextual section browse/detail rows.
+          Receiving and packer ship their own headers via the page tree. */}
+      {!hideFabPage && (
         <Suspense fallback={<MobileAppHeaderFallback onOpenAppNav={openDrawer} />}>
           <MobileAppHeader onOpenAppNav={openDrawer} />
         </Suspense>
@@ -242,7 +225,7 @@ export function ResponsiveLayout({ children }: ResponsiveLayoutProps) {
       </main>
 
       {/* Global FAB — hide on specific pages where it conflicts with custom UI */}
-      {!isReceivingPage && <QuickAccessFab />}
+      {!hideFabPage && <QuickAccessFab />}
 
       {drawerOverlay}
     </div>

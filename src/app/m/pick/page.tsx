@@ -1,499 +1,332 @@
 'use client';
 
 /**
- * Mobile picker — `/m/pick`
+ * Mobile picker queue — `/m/pick`
  *
- * Phase B2.1 + picking API integration. Loads tasks from
- * `/api/orders/:id/pick-tasks`, opens a session via `/api/picking/session`,
- * and drives each action through the typed picking endpoints.
+ * Landing page for the picker workflow. Lists every order with at least
+ * one open allocation (state ALLOCATED or PICKING) sorted by ship deadline.
  *
- * Query params:
- *   ?order=<id>    order to pick (required)
+ * Tapping a card navigates to `/m/pick/[orderId]` which runs the
+ * order-specific picker.
  *
- * Design principles (see plan B0):
- *   - One thumb, one goal — primary action in the bottom dock.
- *   - Status before form — top strip shows order + progress + connection.
- *   - Multi-modal feedback — every confirm fires haptic + sound + visual.
- *   - Optimistic + reconciling — UI advances on tap; failures roll back with error feedback.
+ * Legacy redirect: `/m/pick?order=N` (old query-param form) → `/m/pick/N`.
+ *
+ * Data source: GET /api/pick/queue (gated by INVENTORY_V2_PICKING).
  */
 
-import { Suspense, useCallback, useEffect, useMemo, useState } from 'react';
+import { Suspense, useCallback, useEffect, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { motion, AnimatePresence } from 'framer-motion';
 
 import { useAuth } from '@/contexts/AuthContext';
 import { useFeedback } from '@/hooks/useFeedback';
-import { useBarcodeScanner } from '@/hooks/useBarcodeScanner';
 import { NetworkChip } from '@/components/mobile/NetworkChip';
 import { MobileSettingsButton } from '@/components/mobile/MobileSettingsButton';
-import { ProgressDots } from '@/components/mobile/ProgressDots';
-import { ConfirmDock } from '@/components/mobile/ConfirmDock';
-import { ScanSurface } from '@/components/mobile/ScanSurface';
-import {
-  ShortPickSheet,
-  type ShortPickResult,
-} from '@/components/mobile/picker/ShortPickSheet';
-import {
-  framerPresenceMobile,
-  framerTransitionMobile,
-} from '@/design-system/foundations/motion-framer';
 
-// ─── Types (mirror the picking API response) ─────────────────────────────────
-
-interface PickTask {
-  allocationId: number;
-  serialUnitId: number;
-  lineId: number;
-  sku: string;
-  productTitle: string | null;
-  bin: string | null;
-  conditionGrade: string | null;
-  plannedQty: number;
-  currentState: string;
-}
-
-interface PickOrder {
+interface QueueRow {
   orderId: number;
   orderLabel: string;
   customerInitials: string;
+  customerName: string | null;
+  accountSource: string | null;
   shipByDate: string | null;
-  tasks: PickTask[];
+  pendingCount: number;
+  inProgressCount: number;
+  totalCount: number;
+  activePickerId: number | null;
 }
 
-const CONDITION_TONE: Record<string, { label: string; chip: string }> = {
-  BRAND_NEW: { label: 'New',    chip: 'bg-yellow-100  text-yellow-800  border-yellow-200' },
-  USED_A:    { label: 'Used A', chip: 'bg-emerald-100 text-emerald-800 border-emerald-200' },
-  USED_B:    { label: 'Used B', chip: 'bg-blue-100    text-blue-800    border-blue-200' },
-  USED_C:    { label: 'Used C', chip: 'bg-slate-100   text-slate-800   border-slate-200' },
-  PARTS:     { label: 'Parts',  chip: 'bg-amber-100   text-amber-800   border-amber-200' },
-};
+const REFRESH_INTERVAL_MS = 30_000;
 
-// ─── Page ────────────────────────────────────────────────────────────────────
-
-export default function MobilePickerPage() {
+export default function MobilePickQueuePage() {
   return (
-    <Suspense fallback={<LoadingShell label="Loading picker…" />}>
-      <PickerInner />
+    <Suspense fallback={<LoadingShell />}>
+      <QueueInner />
     </Suspense>
   );
 }
 
-function PickerInner() {
+function QueueInner() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const orderIdParam = searchParams?.get('order');
-  const orderId = Number(orderIdParam);
+  const legacyOrder = searchParams?.get('order');
   const { user, isLoaded } = useAuth();
+  const staffId = user?.staffId ?? null;
   const feedback = useFeedback();
-  const scanner = useBarcodeScanner();
 
-  const [order, setOrder] = useState<PickOrder | null>(null);
-  const [sessionId, setSessionId] = useState<number | null>(null);
+  const [queue, setQueue] = useState<QueueRow[] | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
-  const [currentIndex, setCurrentIndex] = useState(0);
-  const [pickedAllocations, setPickedAllocations] = useState<Set<number>>(() => new Set());
-  const [shortSheetOpen, setShortSheetOpen] = useState(false);
-  const [confirming, setConfirming] = useState(false);
-  const [detailsExpanded, setDetailsExpanded] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
+
+  // ── Legacy redirect: /m/pick?order=N → /m/pick/N
+  useEffect(() => {
+    if (legacyOrder && /^\d+$/.test(legacyOrder)) {
+      router.replace(`/m/pick/${legacyOrder}`);
+    }
+  }, [legacyOrder, router]);
 
   // ── Bounce to signin
   useEffect(() => {
     if (isLoaded && !user) {
-      router.replace(`/signin?next=/m/pick${orderIdParam ? `?order=${orderIdParam}` : ''}`);
+      router.replace('/signin?next=/m/pick');
     }
-  }, [isLoaded, user, router, orderIdParam]);
+  }, [isLoaded, user, router]);
 
-  // ── Camera lifecycle
-  useEffect(() => {
-    if (!user) return;
-    void scanner.startScanning();
-    return () => {
-      void scanner.stopScanning();
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user]);
-
-  // ── Bootstrap: fetch tasks + open session
-  useEffect(() => {
-    if (!user) return;
-    if (!Number.isFinite(orderId) || orderId <= 0) {
-      setLoadError('No order specified. Add ?order=<id> to the URL.');
-      return;
-    }
-    let cancelled = false;
-    (async () => {
-      try {
-        const [tasksRes, sessionRes] = await Promise.all([
-          fetch(`/api/orders/${orderId}/pick-tasks`, { cache: 'no-store' }),
-          fetch('/api/picking/session', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ order_id: orderId }),
-          }),
-        ]);
-        if (!tasksRes.ok) throw new Error(`pick-tasks ${tasksRes.status}`);
-        if (!sessionRes.ok) throw new Error(`session ${sessionRes.status}`);
-        const tasks = await tasksRes.json();
-        const session = await sessionRes.json();
-        if (cancelled) return;
-        if (!tasks.ok) throw new Error(tasks.error || 'pick-tasks failed');
-        if (!session.ok) throw new Error(session.error || 'session start failed');
-        setOrder({
-          orderId: tasks.orderId,
-          orderLabel: tasks.orderLabel,
-          customerInitials: tasks.customerInitials,
-          shipByDate: tasks.shipByDate,
-          tasks: tasks.tasks,
-        });
-        setSessionId(session.sessionId);
-        // Skip already-PICKED rows when reopening a session.
-        const firstOpen = tasks.tasks.findIndex(
-          (t: PickTask) => t.currentState !== 'PICKED' && t.currentState !== 'PACKED' && t.currentState !== 'SHIPPED',
-        );
-        setCurrentIndex(firstOpen >= 0 ? firstOpen : tasks.tasks.length);
-      } catch (err) {
-        if (cancelled) return;
-        const message = err instanceof Error ? err.message : 'load failed';
-        setLoadError(message);
-        feedback('error');
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [user, orderId, feedback]);
-
-  const currentTask = order?.tasks[currentIndex];
-  const totalTasks = order?.tasks.length ?? 0;
-  const doneCount = pickedAllocations.size;
-  const allDone = totalTasks > 0 && doneCount >= totalTasks;
-
-  const advance = useCallback(() => {
-    if (!order) return;
-    const next = order.tasks.findIndex(
-      (t, i) => i > currentIndex && !pickedAllocations.has(t.allocationId),
-    );
-    setCurrentIndex(next >= 0 ? next : order.tasks.length);
-    setDetailsExpanded(false);
-  }, [order, currentIndex, pickedAllocations]);
-
-  // ── Confirm pick (POST /api/picking/session/:id/confirm-pick)
-  const handleConfirmPick = useCallback(async () => {
-    if (!currentTask || sessionId == null) return;
-    setConfirming(true);
-    // Optimistic — mark done, advance, reconcile on rejection.
-    const allocationId = currentTask.allocationId;
-    setPickedAllocations((prev) => {
-      const next = new Set(prev);
-      next.add(allocationId);
-      return next;
-    });
+  const loadQueue = useCallback(async () => {
+    setRefreshing(true);
     try {
-      const res = await fetch(`/api/picking/session/${sessionId}/confirm-pick`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          allocation_id: allocationId,
-          client_event_id: `pick:${sessionId}:${allocationId}`,
-        }),
-      });
+      const res = await fetch('/api/pick/queue', { cache: 'no-store' });
       const data = await res.json().catch(() => ({}));
-      if (!res.ok || !data.ok) {
-        throw new Error(data.error || `confirm-pick ${res.status}`);
-      }
-      feedback('success');
-      // If this was the last open task, complete the session.
-      const wasLast = currentIndex >= totalTasks - 1;
-      if (wasLast) {
-        await fetch(`/api/picking/session/${sessionId}/complete`, { method: 'POST' });
-      } else {
-        advance();
-      }
+      if (!res.ok || !data.ok) throw new Error(data.error || `queue ${res.status}`);
+      setQueue(data.queue as QueueRow[]);
+      setLoadError(null);
     } catch (err) {
-      // Roll back the optimistic mark.
-      setPickedAllocations((prev) => {
-        const next = new Set(prev);
-        next.delete(allocationId);
-        return next;
-      });
+      const message = err instanceof Error ? err.message : 'queue load failed';
+      setLoadError(message);
       feedback('error');
-      console.error('[m/pick] confirm-pick failed:', err);
     } finally {
-      setConfirming(false);
+      setRefreshing(false);
     }
-  }, [currentTask, sessionId, currentIndex, totalTasks, advance, feedback]);
+  }, [feedback]);
 
-  // ── Record short pick (POST /api/picking/session/:id/short-pick)
-  const handleShortPick = useCallback(
-    async (result: ShortPickResult) => {
-      if (!currentTask || sessionId == null) return;
-      const allocationId = currentTask.allocationId;
-      // Optimistic mark.
-      setPickedAllocations((prev) => {
-        const next = new Set(prev);
-        next.add(allocationId);
-        return next;
-      });
-      try {
-        const res = await fetch(`/api/picking/session/${sessionId}/short-pick`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            allocation_id: allocationId,
-            picked_qty: result.pickedQty,
-            planned_qty: result.plannedQty,
-            reason: result.reason,
-            note: result.note,
-            client_event_id: `short:${sessionId}:${allocationId}`,
-          }),
-        });
-        const data = await res.json().catch(() => ({}));
-        if (!res.ok || !data.ok) throw new Error(data.error || `short-pick ${res.status}`);
-        feedback('warning');
-        advance();
-      } catch (err) {
-        setPickedAllocations((prev) => {
-          const next = new Set(prev);
-          next.delete(allocationId);
-          return next;
-        });
-        feedback('error');
-        console.error('[m/pick] short-pick failed:', err);
-      }
+  // ── Initial load + polling
+  useEffect(() => {
+    if (!user) return;
+    void loadQueue();
+    const iv = setInterval(() => void loadQueue(), REFRESH_INTERVAL_MS);
+    return () => clearInterval(iv);
+  }, [user, loadQueue]);
+
+  const handleOpen = useCallback(
+    (orderId: number) => {
+      feedback('selection');
+      router.push(`/m/pick/${orderId}`);
     },
-    [currentTask, sessionId, advance, feedback],
+    [router, feedback],
   );
 
-  // ── Wire scanner decode → confirm.
-  // Real-world implementation should verify the scanned value matches the
-  // expected SKU/serial before calling confirm. For this scaffold any decode
-  // advances the current task.
-  const handleScanDecode = useCallback(
-    (_value: string) => {
-      if (!currentTask || confirming) return;
-      void handleConfirmPick();
-    },
-    [currentTask, confirming, handleConfirmPick],
-  );
-
-  // ── Render gates
   if (!isLoaded || !user) return null;
-  if (loadError) return <ErrorShell error={loadError} onBack={() => router.push('/packer')} />;
-  if (!order) return <LoadingShell label="Loading tasks…" />;
-  if (totalTasks === 0) return <EmptyShell onBack={() => router.push('/packer')} />;
 
-  // ── Render
   return (
     <div className="flex min-h-[100dvh] flex-col bg-slate-50">
-      {/* ─── Status strip ──────────────────────────────────────────────── */}
+      {/* ─── Header ─────────────────────────────────────────────────────── */}
       <header
         className="sticky top-0 z-10 border-b border-slate-200 bg-white/95 backdrop-blur"
         style={{ paddingTop: 'env(safe-area-inset-top, 0px)' }}
       >
         <div className="flex items-center justify-between gap-3 px-4 py-3">
-          <div className="flex items-center gap-3 min-w-0">
-            <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-blue-100 text-sm font-bold text-blue-800">
-              {order.customerInitials}
-            </span>
-            <div className="min-w-0">
-              <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">Order</p>
-              <p className="truncate text-base font-bold text-slate-900">{order.orderLabel}</p>
-            </div>
+          <div className="min-w-0">
+            <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">Picker</p>
+            <p className="text-base font-bold text-slate-900">Pick queue</p>
           </div>
           <div className="flex items-center gap-2 shrink-0">
-            <ProgressDots done={doneCount} total={totalTasks} />
+            <button
+              type="button"
+              onClick={() => void loadQueue()}
+              disabled={refreshing}
+              className="grid h-9 w-9 place-items-center rounded-full bg-slate-100 text-slate-700 active:bg-slate-200 disabled:opacity-50"
+              aria-label="Refresh queue"
+            >
+              <svg
+                viewBox="0 0 24 24"
+                className={`h-5 w-5 ${refreshing ? 'animate-spin' : ''}`}
+                fill="none"
+                stroke="currentColor"
+                strokeWidth={2}
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  d="M4 4v6h6M20 20v-6h-6M5.07 9A8 8 0 0 1 18.36 6.64L20 8M3.64 16l1.64-1.36A8 8 0 0 0 18.93 15"
+                />
+              </svg>
+            </button>
             <NetworkChip compact />
             <MobileSettingsButton />
           </div>
         </div>
       </header>
 
-      {/* ─── Task content ──────────────────────────────────────────────── */}
-      <main className="flex-1 overflow-y-auto px-4 pt-4 pb-2">
-        {allDone || !currentTask ? (
-          <CompleteCard onBack={() => router.push('/packer')} />
+      {/* ─── Body ───────────────────────────────────────────────────────── */}
+      <main className="flex-1 overflow-y-auto px-4 pt-4 pb-8">
+        {loadError && !queue ? (
+          <ErrorCard error={loadError} onRetry={() => void loadQueue()} />
+        ) : queue === null ? (
+          <QueueSkeleton />
+        ) : queue.length === 0 ? (
+          <EmptyCard />
         ) : (
-          <AnimatePresence mode="wait">
-            <motion.section
-              key={currentTask.allocationId}
-              initial={framerPresenceMobile.mobileCard.initial}
-              animate={framerPresenceMobile.mobileCard.animate}
-              exit={framerPresenceMobile.mobileCard.exit}
-              transition={framerTransitionMobile.mobileCardMount}
-              className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm"
-            >
-              {/* Bin chip — the thing the worker looks for. */}
-              <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">Pick from bin</p>
-              <p className="mt-1 font-mono text-3xl font-extrabold tabular-nums tracking-tight text-blue-700">
-                {currentTask.bin ?? '—'}
-              </p>
-
-              {/* Product title + qty + condition */}
-              <div className="mt-4">
-                <h2 className="text-base font-semibold leading-snug text-slate-900">
-                  {currentTask.productTitle ?? currentTask.sku}
-                </h2>
-                <div className="mt-2 flex flex-wrap items-center gap-2">
-                  <span className="inline-flex items-center rounded-xl border border-slate-200 bg-slate-50 px-3 py-1 text-sm font-bold tabular-nums text-slate-800">
-                    Qty {currentTask.plannedQty}
-                  </span>
-                  {currentTask.conditionGrade && CONDITION_TONE[currentTask.conditionGrade] && (
-                    <span
-                      className={`inline-flex items-center rounded-xl border px-3 py-1 text-xs font-semibold uppercase tracking-wide ${
-                        CONDITION_TONE[currentTask.conditionGrade].chip
-                      }`}
-                    >
-                      {CONDITION_TONE[currentTask.conditionGrade].label}
-                    </span>
-                  )}
-                </div>
-              </div>
-
-              {/* Progressive disclosure */}
-              <button
-                type="button"
-                onClick={() => {
-                  feedback('selection');
-                  setDetailsExpanded((v) => !v);
-                }}
-                className="mt-4 flex items-center gap-1 text-xs font-semibold text-slate-500 active:text-slate-700"
-              >
-                <span>{detailsExpanded ? 'Hide details' : 'Show details'}</span>
-                <span aria-hidden="true">{detailsExpanded ? '▴' : '▾'}</span>
-              </button>
-              <AnimatePresence initial={false}>
-                {detailsExpanded && (
-                  <motion.dl
-                    initial={{ height: 0, opacity: 0 }}
-                    animate={{ height: 'auto', opacity: 1 }}
-                    exit={{ height: 0, opacity: 0 }}
-                    transition={{ duration: 0.18 }}
-                    className="mt-2 grid grid-cols-2 gap-2 overflow-hidden text-xs"
-                  >
-                    <div className="rounded-xl bg-slate-50 px-3 py-2">
-                      <dt className="font-semibold uppercase tracking-wider text-slate-500">SKU</dt>
-                      <dd className="mt-0.5 font-mono font-bold text-slate-900">{currentTask.sku}</dd>
-                    </div>
-                    <div className="rounded-xl bg-slate-50 px-3 py-2">
-                      <dt className="font-semibold uppercase tracking-wider text-slate-500">Allocation</dt>
-                      <dd className="mt-0.5 font-mono font-bold text-slate-900">#{currentTask.allocationId}</dd>
-                    </div>
-                  </motion.dl>
-                )}
-              </AnimatePresence>
-
-              {/* Scanner */}
-              <div className="mt-5">
-                <ScanSurface
-                  scanner={scanner}
-                  onDecode={handleScanDecode}
-                  manualPlaceholder="Type serial or SKU…"
+          <ul className="space-y-3">
+            {queue.map((row) => (
+              <li key={row.orderId}>
+                <QueueCard
+                  row={row}
+                  claimedByMe={row.activePickerId != null && row.activePickerId === staffId}
+                  onOpen={() => handleOpen(row.orderId)}
                 />
-              </div>
-            </motion.section>
-          </AnimatePresence>
+              </li>
+            ))}
+          </ul>
         )}
       </main>
-
-      {/* ─── Bottom dock ───────────────────────────────────────────────── */}
-      {!allDone && currentTask && (
-        <ConfirmDock
-          label={
-            currentIndex >= totalTasks - 1
-              ? `Confirm pick · ${doneCount + 1}/${totalTasks}`
-              : 'Confirm pick'
-          }
-          onConfirm={() => void handleConfirmPick()}
-          loading={confirming}
-          tone={currentIndex >= totalTasks - 1 ? 'success' : 'primary'}
-          secondary={{
-            label: 'Short pick…',
-            onPress: () => setShortSheetOpen(true),
-          }}
-        />
-      )}
-
-      {/* ─── Short pick sheet ─────────────────────────────────────────── */}
-      {currentTask && (
-        <ShortPickSheet
-          open={shortSheetOpen}
-          onClose={() => setShortSheetOpen(false)}
-          pickedQty={0}
-          plannedQty={currentTask.plannedQty}
-          productLabel={`${currentTask.productTitle ?? currentTask.sku} · ${currentTask.sku}`}
-          onConfirm={(r) => void handleShortPick(r)}
-        />
-      )}
     </div>
   );
 }
 
-// ─── Helper shells ───────────────────────────────────────────────────────────
+// ─── Cards ───────────────────────────────────────────────────────────────────
 
-function LoadingShell({ label }: { label: string }) {
+function QueueCard({
+  row,
+  claimedByMe,
+  onOpen,
+}: {
+  row: QueueRow;
+  claimedByMe: boolean;
+  onOpen: () => void;
+}) {
+  const claimedByOther = row.activePickerId != null && !claimedByMe;
+  const deadline = formatDeadline(row.shipByDate);
+
+  return (
+    <button
+      type="button"
+      onClick={onOpen}
+      className="block w-full rounded-2xl border border-slate-200 bg-white p-4 text-left shadow-sm transition active:scale-[0.99] active:bg-slate-50"
+    >
+      <div className="flex items-center gap-3">
+        <span className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-blue-100 text-base font-bold text-blue-800">
+          {row.customerInitials}
+        </span>
+        <div className="min-w-0 flex-1">
+          <div className="flex items-baseline gap-2">
+            <p className="truncate text-base font-bold text-slate-900">{row.orderLabel}</p>
+            {row.accountSource && (
+              <span className="shrink-0 rounded-md bg-slate-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-slate-600">
+                {row.accountSource}
+              </span>
+            )}
+          </div>
+          {row.customerName && (
+            <p className="truncate text-sm text-slate-500">{row.customerName}</p>
+          )}
+        </div>
+        <svg viewBox="0 0 24 24" className="h-5 w-5 shrink-0 text-slate-400" fill="none" stroke="currentColor" strokeWidth={2}>
+          <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+        </svg>
+      </div>
+
+      <div className="mt-3 flex flex-wrap items-center gap-2">
+        <span className="inline-flex items-center rounded-xl border border-slate-200 bg-slate-50 px-2.5 py-1 text-xs font-bold tabular-nums text-slate-800">
+          {row.totalCount} {row.totalCount === 1 ? 'unit' : 'units'}
+        </span>
+        {row.inProgressCount > 0 && (
+          <span className="inline-flex items-center rounded-xl border border-amber-200 bg-amber-50 px-2.5 py-1 text-xs font-semibold text-amber-800">
+            {row.inProgressCount} in progress
+          </span>
+        )}
+        {deadline && (
+          <span
+            className={`inline-flex items-center rounded-xl border px-2.5 py-1 text-xs font-semibold ${
+              deadline.overdue
+                ? 'border-red-200 bg-red-50 text-red-700'
+                : deadline.soon
+                ? 'border-amber-200 bg-amber-50 text-amber-800'
+                : 'border-slate-200 bg-slate-50 text-slate-700'
+            }`}
+          >
+            {deadline.label}
+          </span>
+        )}
+        {claimedByMe && (
+          <span className="inline-flex items-center rounded-xl border border-blue-200 bg-blue-50 px-2.5 py-1 text-xs font-semibold text-blue-800">
+            You · resume
+          </span>
+        )}
+        {claimedByOther && (
+          <span className="inline-flex items-center rounded-xl border border-slate-300 bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-600">
+            In use by #{row.activePickerId}
+          </span>
+        )}
+      </div>
+    </button>
+  );
+}
+
+function QueueSkeleton() {
+  return (
+    <ul className="space-y-3">
+      {[0, 1, 2, 3].map((i) => (
+        <li
+          key={i}
+          className="h-24 animate-pulse rounded-2xl border border-slate-200 bg-white"
+          style={{ animationDelay: `${i * 80}ms` }}
+        />
+      ))}
+    </ul>
+  );
+}
+
+function EmptyCard() {
+  return (
+    <div className="grid place-items-center rounded-3xl border border-slate-200 bg-white px-6 py-14 text-center">
+      <div className="grid h-14 w-14 place-items-center rounded-full bg-slate-100 text-slate-500">
+        <svg viewBox="0 0 24 24" className="h-7 w-7" fill="none" stroke="currentColor" strokeWidth={2}>
+          <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+        </svg>
+      </div>
+      <p className="mt-3 text-base font-bold text-slate-700">Queue is empty</p>
+      <p className="mt-1 text-sm text-slate-500">No orders are waiting to be picked right now.</p>
+    </div>
+  );
+}
+
+function ErrorCard({ error, onRetry }: { error: string; onRetry: () => void }) {
+  return (
+    <div className="grid place-items-center rounded-3xl border border-red-200 bg-red-50 px-6 py-12 text-center">
+      <p className="text-base font-bold text-red-800">Could not load queue</p>
+      <p className="mt-2 text-sm text-red-700">{error}</p>
+      <button
+        type="button"
+        onClick={onRetry}
+        className="mt-5 rounded-2xl bg-red-700 px-5 py-2.5 text-sm font-semibold text-white active:bg-red-800"
+      >
+        Retry
+      </button>
+    </div>
+  );
+}
+
+function LoadingShell() {
   return (
     <div className="grid min-h-[100dvh] place-items-center bg-slate-50 px-6 text-center">
       <div>
         <span className="inline-block h-8 w-8 animate-spin rounded-full border-2 border-blue-200 border-t-blue-600" />
-        <p className="mt-3 text-sm font-semibold text-slate-600">{label}</p>
+        <p className="mt-3 text-sm font-semibold text-slate-600">Loading…</p>
       </div>
     </div>
   );
 }
 
-function ErrorShell({ error, onBack }: { error: string; onBack: () => void }) {
-  return (
-    <div className="grid min-h-[100dvh] place-items-center bg-slate-50 px-6 text-center">
-      <div>
-        <p className="text-base font-bold text-red-700">Could not load picker</p>
-        <p className="mt-2 text-sm text-slate-600">{error}</p>
-        <button
-          type="button"
-          onClick={onBack}
-          className="mt-5 rounded-2xl bg-slate-900 px-5 py-2.5 text-sm font-semibold text-white active:bg-slate-800"
-        >
-          Back
-        </button>
-      </div>
-    </div>
-  );
-}
+// ─── Helpers ─────────────────────────────────────────────────────────────────
 
-function EmptyShell({ onBack }: { onBack: () => void }) {
-  return (
-    <div className="grid min-h-[100dvh] place-items-center bg-slate-50 px-6 text-center">
-      <div>
-        <p className="text-base font-bold text-slate-700">Nothing to pick</p>
-        <p className="mt-2 text-sm text-slate-500">All allocations for this order are already picked or shipped.</p>
-        <button
-          type="button"
-          onClick={onBack}
-          className="mt-5 rounded-2xl bg-slate-900 px-5 py-2.5 text-sm font-semibold text-white active:bg-slate-800"
-        >
-          Back to packer
-        </button>
-      </div>
-    </div>
-  );
-}
-
-function CompleteCard({ onBack }: { onBack: () => void }) {
-  return (
-    <div className="grid place-items-center rounded-3xl border border-emerald-200 bg-emerald-50 px-6 py-12 text-center">
-      <div className="grid h-14 w-14 place-items-center rounded-full bg-emerald-600 text-white">
-        <svg viewBox="0 0 24 24" className="h-7 w-7" fill="none" stroke="currentColor" strokeWidth={3}>
-          <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-        </svg>
-      </div>
-      <p className="mt-3 text-base font-bold text-emerald-900">Pick complete</p>
-      <p className="mt-1 text-sm text-emerald-800/80">Cart is ready to hand off to the pack station.</p>
-      <button
-        type="button"
-        onClick={onBack}
-        className="mt-5 rounded-2xl bg-emerald-700 px-5 py-2.5 text-sm font-semibold text-white active:bg-emerald-800"
-      >
-        Back to packer
-      </button>
-    </div>
-  );
+function formatDeadline(iso: string | null): { label: string; soon: boolean; overdue: boolean } | null {
+  if (!iso) return null;
+  const t = Date.parse(iso);
+  if (!Number.isFinite(t)) return null;
+  const now = Date.now();
+  const diffMs = t - now;
+  const diffHrs = diffMs / (1000 * 60 * 60);
+  const overdue = diffMs < 0;
+  const soon = !overdue && diffHrs < 12;
+  let label: string;
+  if (overdue) {
+    const ago = Math.abs(diffHrs);
+    label = ago < 24 ? `Overdue · ${Math.round(ago)}h` : `Overdue · ${Math.round(ago / 24)}d`;
+  } else if (diffHrs < 1) {
+    label = 'Due <1h';
+  } else if (diffHrs < 24) {
+    label = `Due ${Math.round(diffHrs)}h`;
+  } else {
+    label = `Due ${Math.round(diffHrs / 24)}d`;
+  }
+  return { label, soon, overdue };
 }

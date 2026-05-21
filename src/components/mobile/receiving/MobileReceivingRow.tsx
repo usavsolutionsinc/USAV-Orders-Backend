@@ -4,13 +4,12 @@ import { motion, useReducedMotion } from 'framer-motion';
 import Link from 'next/link';
 import {
   OrderIdChip,
-  SkuScanRefChip,
   TrackingChip,
   SerialChip,
   getLast4,
   getLast6Serial,
 } from '@/components/ui/CopyChip';
-import { Camera, Check } from '@/components/Icons';
+import { Camera, Check, Package, PackageCheck, Box, AlertCircle, Loader2 } from '@/components/Icons';
 import { conditionGradeTableLabel, workflowStatusTableLabel } from '@/components/station/receiving-constants';
 import type { ReceivingLineRow } from '@/components/station/ReceivingLinesTable';
 
@@ -22,6 +21,17 @@ interface MobileReceivingRowProps {
   onTap: () => void;
   /** Path the camera FAB navigates to. Pre-built by parent so we can carry staffId, etc. */
   photosHref: string;
+}
+
+function getStatusIcon(status: string | null | undefined, className: string) {
+  const value = String(status || '').trim().toUpperCase();
+  if (value === 'EXPECTED') return <Box className={`${className} text-amber-500`} />;
+  if (value === 'ARRIVED' || value === 'MATCHED') return <Package className={`${className} text-blue-500`} />;
+  if (value === 'UNBOXED') return <Box className={`${className} text-indigo-500`} />;
+  if (value === 'AWAITING_TEST' || value === 'IN_TEST') return <Loader2 className={`${className} text-violet-500`} />;
+  if (value === 'PASSED' || value === 'DONE' || value === 'RECEIVED') return <PackageCheck className={`${className} text-emerald-500`} />;
+  if (value.startsWith('FAILED') || value === 'SCRAP' || value === 'RTV') return <AlertCircle className={`${className} text-rose-500`} />;
+  return <Package className={`${className} text-gray-400`} />;
 }
 
 function getStatusDotBg(status: string | null | undefined) {
@@ -66,7 +76,6 @@ export function MobileReceivingRow({ row, variant, fresh = false, onTap, photosH
   const reduceMotion = useReducedMotion();
   const productTitle = row.item_name || row.zoho_item_id || 'Unnamed inbound line';
   const poValue = (row.zoho_purchaseorder_number || row.zoho_purchaseorder_id || '').trim();
-  const skuValue = (row.sku || '').trim();
   const trackingValue = (row.tracking_number || '').trim();
   const qtyExpected = row.quantity_expected ?? 0;
   const qtyReceived = row.quantity_received;
@@ -145,12 +154,13 @@ export function MobileReceivingRow({ row, variant, fresh = false, onTap, photosH
             <span className="text-gray-400">•</span>
             <span className={conditionColor}>{conditionLabel}</span>
             <span className="text-gray-400">•</span>
-            <span className="text-gray-500">{workflowLabel}</span>
+            <span title={workflowLabel} className="inline-flex items-center">
+              {getStatusIcon(row.workflow_status, 'h-3.5 w-3.5')}
+            </span>
           </span>
 
           <div className="ml-auto flex min-w-0 items-center gap-2 pointer-events-auto">
             {poValue && <OrderIdChip value={poValue} display={getLast4(poValue)} />}
-            {skuValue && <SkuScanRefChip value={skuValue} display={getLast4(skuValue)} />}
             {trackingValue && <TrackingChip value={trackingValue} display={getLast4(trackingValue)} />}
             <SerialChip value={serialsCsv} display={getLast6Serial(serialsCsv)} />
           </div>
