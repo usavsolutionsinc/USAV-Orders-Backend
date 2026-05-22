@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { motion } from 'framer-motion';
-import { AlertCircle, ChevronLeft, Clock, Menu, Package, PackageCheck, X, Zap } from '@/components/Icons';
+import { AlertCircle, ChevronLeft, Clock, LayoutDashboard, Menu, Package, PackageCheck, X, Zap } from '@/components/Icons';
 import { sidebarHeaderBandClass } from '@/components/layout/header-shell';
 import { HorizontalButtonSlider, type HorizontalSliderItem } from '@/components/ui/HorizontalButtonSlider';
 import { sectionLabel } from '@/design-system/tokens/typography/presets';
@@ -545,11 +545,31 @@ export default function DashboardSidebar({ inDrawer = false, onNavigate }: { inD
     permissions: authPermissions,
   });
 
-  const groupedNav = {
-    main: visibleNavItems.filter((item) => item.kind === 'main'),
-    station: visibleNavItems.filter((item) => item.kind === 'station'),
-    bottom: visibleNavItems.filter((item) => item.kind === 'bottom'),
-  };
+  // On mobile inside receiving/packing, collapse the nav to just Home (/m/home)
+  // plus the current station — the rest is noise while you're heads-down at a
+  // workstation, and the cockpit lives at /m/home anyway.
+  const isMobileStationLockdown =
+    isMobile && (routeKey === 'receiving' || routeKey === 'packer');
+
+  const groupedNav = isMobileStationLockdown
+    ? {
+        main: [
+          {
+            id: 'home',
+            label: 'Home',
+            href: '/m/home',
+            icon: LayoutDashboard,
+            kind: 'main' as const,
+          } satisfies SidebarNavItem,
+        ],
+        station: visibleNavItems.filter((item) => item.id === routeKey),
+        bottom: [] as SidebarNavItem[],
+      }
+    : {
+        main: visibleNavItems.filter((item) => item.kind === 'main'),
+        station: visibleNavItems.filter((item) => item.kind === 'station'),
+        bottom: visibleNavItems.filter((item) => item.kind === 'bottom'),
+      };
 
   const containerVariants = {
     hidden: { opacity: 0 },
@@ -572,18 +592,24 @@ export default function DashboardSidebar({ inDrawer = false, onNavigate }: { inD
                   : 'pt-3'
               } pb-3`}
             >
-              <motion.div variants={itemVariants}>
-                <p className="px-1 pb-2 text-[9px] font-black uppercase tracking-[0.25em] text-blue-600">Main</p>
-                <NavSection items={groupedNav.main} pathname={pathname} resolveHref={resolveHref} onNavigate={() => { setShowHomeNavigation(false); onNavigate?.(); }} />
-              </motion.div>
-              <motion.div variants={itemVariants}>
-                <p className="px-1 pb-2 text-[9px] font-black uppercase tracking-[0.25em] text-gray-500">Stations</p>
-                <NavSection items={groupedNav.station} pathname={pathname} resolveHref={resolveHref} onNavigate={() => { setShowHomeNavigation(false); onNavigate?.(); }} />
-              </motion.div>
-              <motion.div variants={itemVariants}>
-                <p className="px-1 pb-2 text-[9px] font-black uppercase tracking-[0.25em] text-gray-500">More</p>
-                <NavSection items={groupedNav.bottom} pathname={pathname} resolveHref={resolveHref} onNavigate={() => { setShowHomeNavigation(false); onNavigate?.(); }} />
-              </motion.div>
+              {groupedNav.main.length > 0 && (
+                <motion.div variants={itemVariants}>
+                  <p className="px-1 pb-2 text-[9px] font-black uppercase tracking-[0.25em] text-blue-600">Main</p>
+                  <NavSection items={groupedNav.main} pathname={pathname} resolveHref={resolveHref} onNavigate={() => { setShowHomeNavigation(false); onNavigate?.(); }} />
+                </motion.div>
+              )}
+              {groupedNav.station.length > 0 && (
+                <motion.div variants={itemVariants}>
+                  <p className="px-1 pb-2 text-[9px] font-black uppercase tracking-[0.25em] text-gray-500">Stations</p>
+                  <NavSection items={groupedNav.station} pathname={pathname} resolveHref={resolveHref} onNavigate={() => { setShowHomeNavigation(false); onNavigate?.(); }} />
+                </motion.div>
+              )}
+              {groupedNav.bottom.length > 0 && (
+                <motion.div variants={itemVariants}>
+                  <p className="px-1 pb-2 text-[9px] font-black uppercase tracking-[0.25em] text-gray-500">More</p>
+                  <NavSection items={groupedNav.bottom} pathname={pathname} resolveHref={resolveHref} onNavigate={() => { setShowHomeNavigation(false); onNavigate?.(); }} />
+                </motion.div>
+              )}
             </div>
             {authUser && (
               <motion.div

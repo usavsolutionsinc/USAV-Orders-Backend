@@ -285,8 +285,12 @@ function PickerInner() {
   if (totalTasks === 0) return <EmptyShell onBack={() => router.push('/m/pick')} />;
 
   // ── Render
+  // The session page hides the bottom nav (HIDDEN_PREFIXES match in
+  // MobileBottomNav), so the layout's scroll container is full viewport.
+  // h-full fills it exactly — single scroll context lives inside <main>,
+  // and the ConfirmDock anchors to the viewport bottom as a flex sibling.
   return (
-    <div className="flex min-h-[100dvh] flex-col bg-slate-50">
+    <div className="flex h-full flex-col bg-slate-50">
       {/* ─── Status strip ──────────────────────────────────────────────── */}
       <header
         className="sticky top-0 z-10 border-b border-slate-200 bg-white/95 backdrop-blur"
@@ -446,7 +450,7 @@ function PickerInner() {
 
 function LoadingShell({ label }: { label: string }) {
   return (
-    <div className="grid min-h-[100dvh] place-items-center bg-slate-50 px-6 text-center">
+    <div className="grid min-h-full place-items-center bg-slate-50 px-6 py-10 text-center">
       <div>
         <span className="inline-block h-8 w-8 animate-spin rounded-full border-2 border-blue-200 border-t-blue-600" />
         <p className="mt-3 text-sm font-semibold text-slate-600">{label}</p>
@@ -457,7 +461,7 @@ function LoadingShell({ label }: { label: string }) {
 
 function ErrorShell({ error, onBack }: { error: string; onBack: () => void }) {
   return (
-    <div className="grid min-h-[100dvh] place-items-center bg-slate-50 px-6 text-center">
+    <div className="grid min-h-full place-items-center bg-slate-50 px-6 py-10 text-center">
       <div>
         <p className="text-base font-bold text-red-700">Could not load picker</p>
         <p className="mt-2 text-sm text-slate-600">{error}</p>
@@ -475,7 +479,7 @@ function ErrorShell({ error, onBack }: { error: string; onBack: () => void }) {
 
 function EmptyShell({ onBack }: { onBack: () => void }) {
   return (
-    <div className="grid min-h-[100dvh] place-items-center bg-slate-50 px-6 text-center">
+    <div className="grid min-h-full place-items-center bg-slate-50 px-6 py-10 text-center">
       <div>
         <p className="text-base font-bold text-slate-700">Nothing to pick</p>
         <p className="mt-2 text-sm text-slate-500">All allocations for this order are already picked or shipped.</p>

@@ -107,7 +107,10 @@ function QueueInner() {
   if (!isLoaded || !user) return null;
 
   return (
-    <div className="flex min-h-[100dvh] flex-col bg-slate-50">
+    // min-h-full so this page fits inside the /m layout's scroll container
+    // (which is already 100dvh minus the bottom nav). Avoids the
+    // double-100dvh nested-scroll problem.
+    <div className="flex min-h-full flex-col bg-slate-50">
       {/* ─── Header ─────────────────────────────────────────────────────── */}
       <header
         className="sticky top-0 z-10 border-b border-slate-200 bg-white/95 backdrop-blur"
@@ -147,7 +150,10 @@ function QueueInner() {
       </header>
 
       {/* ─── Body ───────────────────────────────────────────────────────── */}
-      <main className="flex-1 overflow-y-auto px-4 pt-4 pb-8">
+      {/* Scrolling is owned by the parent /m layout container, so no
+          overflow-y-auto here — having two nested scroll contexts breaks
+          sticky positioning and momentum scroll on iOS. */}
+      <main className="flex-1 px-4 pt-4 pb-8">
         {loadError && !queue ? (
           <ErrorCard error={loadError} onRetry={() => void loadQueue()} />
         ) : queue === null ? (
@@ -297,7 +303,7 @@ function ErrorCard({ error, onRetry }: { error: string; onRetry: () => void }) {
 
 function LoadingShell() {
   return (
-    <div className="grid min-h-[100dvh] place-items-center bg-slate-50 px-6 text-center">
+    <div className="grid min-h-full place-items-center bg-slate-50 px-6 py-10 text-center">
       <div>
         <span className="inline-block h-8 w-8 animate-spin rounded-full border-2 border-blue-200 border-t-blue-600" />
         <p className="mt-3 text-sm font-semibold text-slate-600">Loading…</p>

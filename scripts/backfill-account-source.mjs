@@ -80,16 +80,58 @@ if (DRY) {
   process.exit(0);
 }
 
-// 2. Apply.
+// 2. Apply. Two collision risks to avoid:
+//   (a) sibling row already holds the derived source → NOT EXISTS predicate
+//   (b) multiple NULL-source rows for the same order_id derive to the same
+//       value → ROW_NUMBER picks one
+const DERIVED_O = DERIVE_SQL.replace(/order_id/g, 'o.order_id');
 const result = await sql.query(`
-  UPDATE orders
-     SET account_source = ${DERIVE_SQL}
-   WHERE account_source IS NULL
-     ${scopeClause}
-     AND (${DERIVE_SQL}) IS NOT NULL
-   RETURNING id
+  WITH targets AS (
+    SELECT id, derived FROM (
+      SELECT
+        o.id,
+        (${DERIVED_O}) AS derived,
+        ROW_NUMBER() OVER (PARTITION BY o.order_id, (${DERIVED_O}) ORDER BY o.id) AS rn
+        FROM orders o
+       WHERE o.account_source IS NULL
+         ${scopeClause.replace(/status/g, 'o.status')}
+         AND (${DERIVED_O}) IS NOT NULL
+         AND NOT EXISTS (
+           SELECT 1 FROM orders sibling
+            WHERE sibling.order_id = o.order_id
+              AND sibling.account_source = (${DERIVED_O})
+         )
+    ) ranked
+    WHERE rn = 1
+  )
+  UPDATE orders SET account_source = t.derived
+    FROM targets t
+   WHERE orders.id = t.id
+  RETURNING orders.id
 `);
 console.log(`\nUpdated: ${result.length} rows.`);
+
+// Report the skipped conflicts so they're visible.
+const skipped = await sql.query(`
+  SELECT o.id, o.order_id, (${DERIVE_SQL.replace(/order_id/g, 'o.order_id')}) AS would_be
+    FROM orders o
+   WHERE o.account_source IS NULL
+     ${scopeClause.replace(/status/g, 'o.status')}
+     AND (${DERIVE_SQL.replace(/order_id/g, 'o.order_id')}) IS NOT NULL
+     AND EXISTS (
+       SELECT 1 FROM orders sibling
+        WHERE sibling.order_id = o.order_id
+          AND sibling.account_source = (${DERIVE_SQL.replace(/order_id/g, 'o.order_id')})
+     )
+   ORDER BY o.id
+`);
+if (skipped.length > 0) {
+  console.log(`\nSkipped ${skipped.length} row(s) — sibling row already holds the derived source (data-quality follow-up):`);
+  for (const r of skipped.slice(0, 15)) {
+    console.log(`  order id=${r.id} order_id=${r.order_id} would_be=${r.would_be}`);
+  }
+  if (skipped.length > 15) console.log(`  ... and ${skipped.length - 15} more`);
+}
 
 // 3. Post-snapshot.
 const after = await sql`

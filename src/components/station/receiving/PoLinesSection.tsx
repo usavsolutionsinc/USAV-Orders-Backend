@@ -203,11 +203,7 @@ export function PoLinesSection({ receivingId, trackingNumber }: PoLinesSectionPr
       ) : (
         <div className="overflow-hidden rounded-xl border border-gray-200 bg-white">
           {lines.map((line) => (
-            <PoLineRow
-              key={line.id}
-              line={line}
-              trackingNumber={trackingNumber}
-            />
+            <PoLineRow key={line.id} line={line} />
           ))}
         </div>
       )}

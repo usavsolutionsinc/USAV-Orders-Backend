@@ -139,7 +139,10 @@ export async function loadPickTasks(orderId: number): Promise<PickOrderTasks | n
             oua.serial_unit_id,
             su.sku,
             sc.product_title,
-            su.current_location AS bin,
+            -- Prefer the human-readable barcode (e.g. 'UNSORTED', 'A-12');
+            -- fall back to the raw current_location string when no
+            -- locations row matches (orphan / legacy data).
+            COALESCE(l.barcode, l.name, su.current_location) AS bin,
             su.condition_grade::text AS condition_grade,
             su.current_status::text  AS current_status,
             COALESCE(
@@ -158,6 +161,7 @@ export async function loadPickTasks(orderId: number): Promise<PickOrderTasks | n
        FROM order_unit_allocations oua
        JOIN serial_units su  ON su.id = oua.serial_unit_id
   LEFT JOIN sku_catalog  sc  ON sc.sku = su.sku
+  LEFT JOIN locations    l   ON l.id::text = su.current_location
       WHERE oua.order_id = $1
         AND oua.state IN ('ALLOCATED', 'PICKING')
       ORDER BY oua.id ASC`,
