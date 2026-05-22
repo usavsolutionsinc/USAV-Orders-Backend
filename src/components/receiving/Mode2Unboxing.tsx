@@ -11,6 +11,7 @@ import { ExpandableSection } from '@/design-system/primitives';
 import { sectionLabel, fieldLabel, cardTitle, chipText, monoValue, microBadge } from '@/design-system/tokens/typography/presets';
 import { framerTransition, framerPresence } from '@/design-system/foundations/motion-framer';
 import { PrintLabelButton } from '@/components/labels/PrintLabelButton';
+import { ConditionPills } from '@/components/receiving/workspace/ConditionPills';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -662,25 +663,13 @@ export default function Mode2Unboxing({ staffId }: Mode2UnboxingProps) {
                                     </div>
                                 </ExpandableSection>
 
-                                {/* Condition */}
-                                <FormField label="Condition">
-                                    <div className="flex flex-wrap gap-1.5">
-                                        {CONDITION_OPTIONS.map((opt) => (
-                                            <button
-                                                key={opt.value}
-                                                type="button"
-                                                onClick={() => setConditionGrade(opt.value)}
-                                                className={`rounded-xl px-3 py-1.5 text-[10px] font-black uppercase tracking-wider transition-all ${
-                                                    conditionGrade === opt.value
-                                                        ? 'bg-gray-900 text-white'
-                                                        : 'border border-gray-200 bg-white text-gray-600 hover:border-gray-300'
-                                                }`}
-                                            >
-                                                {opt.label}
-                                            </button>
-                                        ))}
-                                    </div>
-                                </FormField>
+                                {/* Condition — uses the shared ConditionPills
+                                    so this picker matches the LineEditPanel
+                                    workspace and the label-printer flow. */}
+                                <ConditionPills
+                                    value={conditionGrade}
+                                    onChange={setConditionGrade}
+                                />
 
                                 {/* QA Status */}
                                 <FormField label="QA Status">

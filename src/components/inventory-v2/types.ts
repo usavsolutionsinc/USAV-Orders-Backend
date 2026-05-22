@@ -104,6 +104,65 @@ export interface SerialUnitDetailPayload {
         updated_at: string;
         product_title: string | null;
         received_by_name: string | null;
+        origin_tsn_id?: number | null;
+        shipping_tracking_number?: string | null;
+        shipment_id?: number | null;
+        notes?: string | null;
     };
     events: PulseEventRow[];
+    /** Present when fetched with `?include=full`. Mirrors the legacy admin timeline. */
+    events_full?: TimelineEventRow[];
+    conditions?: ConditionHistoryRow[];
+    allocations?: AllocationRow[];
+    tsn_links?: TsnLinkRow[];
+}
+
+export interface TimelineEventRow {
+    id: number;
+    occurred_at: string;
+    event_type: string;
+    station: string | null;
+    prev_status: string | null;
+    next_status: string | null;
+    bin_id: number | null;
+    bin_name: string | null;
+    stock_ledger_id: number | null;
+    actor_staff_id: number | null;
+    actor_name: string | null;
+    scan_token: string | null;
+    client_event_id: string | null;
+    notes: string | null;
+    payload: Record<string, unknown> | null;
+}
+
+export interface ConditionHistoryRow {
+    id: number;
+    assessed_at: string;
+    assessed_by_staff_id: number | null;
+    assessed_by_name: string | null;
+    prev_grade: string | null;
+    new_grade: string;
+    cosmetic_notes: string | null;
+    functional_notes: string | null;
+    inventory_event_id: number | null;
+}
+
+export interface AllocationRow {
+    id: number;
+    order_id: number;
+    allocated_at: string;
+    state: string;
+    released_at: string | null;
+    released_reason: string | null;
+    allocated_by_name: string | null;
+}
+
+export interface TsnLinkRow {
+    id: number;
+    station_source: string | null;
+    shipment_id: number | null;
+    serial_type: string;
+    fnsku: string | null;
+    tested_by_name: string | null;
+    created_at: string;
 }

@@ -165,8 +165,8 @@ export function CopyChip({
         title={!tooltipCtx && canCopy ? normalizedValue : undefined}
         className={
           fitDisplayWidth
-            ? 'inline-flex w-auto max-w-full items-center justify-start gap-0.5 py-0 bg-white text-left text-black transition-all active:scale-95 disabled:opacity-30'
-            : 'inline-flex w-full max-w-full items-center justify-start gap-0.5 py-0 bg-white text-left text-black transition-all active:scale-95 disabled:opacity-30'
+            ? 'inline-flex w-auto max-w-full items-center justify-start gap-0.5 py-0 bg-transparent text-left text-black transition-all active:scale-95 disabled:opacity-30'
+            : 'inline-flex w-full max-w-full items-center justify-start gap-0.5 py-0 bg-transparent text-left text-black transition-all active:scale-95 disabled:opacity-30'
         }
       >
         {icon ? <span className={`shrink-0 ${iconClass ?? ''}`}>{icon}</span> : null}
@@ -472,7 +472,7 @@ export const PlatformChip = ({
           e.stopPropagation();
           onClick(e);
         }}
-        className="inline-flex w-fit max-w-full items-center justify-start gap-0.5 py-0 bg-white text-left text-black transition-all active:scale-95"
+        className="inline-flex w-fit max-w-full items-center justify-start gap-0.5 py-0 bg-transparent text-left text-black transition-all active:scale-95"
       >
         <span className={`inline-flex shrink-0 items-center ${iconClass}`}>
           <ExternalLink className="h-4 w-4 shrink-0" />

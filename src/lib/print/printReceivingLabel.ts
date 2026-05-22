@@ -1,8 +1,6 @@
-import React from 'react';
-import { renderToStaticMarkup } from 'react-dom/server';
-import QRCode from 'react-qr-code';
 import { getLast4 } from '@/components/ui/CopyChip';
-import { mobileQrUrl } from '@/lib/barcode-routing';
+import { receivingHandle } from '@/lib/barcode-routing';
+import { renderDataMatrixSvg } from '@/lib/barcode/dataMatrixSvg';
 import { printHtmlSilent } from '@/lib/print/silentPrint';
 
 // 2in × 1in label in microns — used so Electron's silent-print picks the
@@ -71,15 +69,19 @@ function conditionShort(code: string | null | undefined): string {
 }
 
 /**
- * The string actually encoded in the QR. Prefers an explicit qrValue,
- * then derives the absolute production URL via {@link mobileQrUrl}, then
- * falls back to the human-readable scanValue for back-compat. Always anchors
- * to the production domain so labels printed from any environment work.
+ * The string actually encoded in the carton DataMatrix. Prefers an
+ * explicit qrValue override (legacy callsites still pass a full URL),
+ * then derives the bare handle `R-{id}` via {@link receivingHandle},
+ * then falls back to the human-readable scanValue for back-compat.
+ *
+ * Industry-standard for internal warehouse handles: no URL, no host. The
+ * internal scanner recognises the `R-{id}` prefix in `routeScan()` and
+ * navigates to `/m/r/{id}`. Consumer phone cameras see opaque text.
  */
 export function resolveReceivingQrValue(payload: ReceivingLabelPayload): string {
   if (payload.qrValue && payload.qrValue.trim()) return payload.qrValue.trim();
   if (payload.receivingId != null && Number.isFinite(payload.receivingId)) {
-    return mobileQrUrl('r', payload.receivingId);
+    return receivingHandle(payload.receivingId);
   }
   return payload.scanValue.trim();
 }
@@ -94,15 +96,9 @@ export function printReceivingLabel(payload: ReceivingLabelPayload): void {
   const qrPayload = resolveReceivingQrValue(payload);
   if (!qrPayload) return;
 
-  const qrSvg = renderToStaticMarkup(
-    React.createElement(QRCode, {
-      value: qrPayload,
-      size: 80,
-      level: 'M',
-      fgColor: '#000000',
-      bgColor: '#ffffff',
-    }),
-  );
+  // Plain DataMatrix carrying the `R-{id}` handle — `routeScan()` parses
+  // the prefix and navigates to /m/r/{id}. No URL on the wire.
+  const qrSvg = renderDataMatrixSvg({ value: qrPayload, symbology: 'datamatrix', scale: 4 });
 
   const condHtml = escapeHtml(conditionShort(payload.conditionCode));
 

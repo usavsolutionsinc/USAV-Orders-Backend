@@ -45,7 +45,7 @@ export const GET = withAuth(async () => {
            COUNT(*) FILTER (WHERE status='pending')::text  AS pending,
            COUNT(*) FILTER (WHERE status='ignored')::text  AS ignored,
            COUNT(*) FILTER (WHERE status='resolved')::text AS resolved
-         FROM email_missing_orders`,
+         FROM email_missing_purchase_orders`,
       ),
     ]);
 

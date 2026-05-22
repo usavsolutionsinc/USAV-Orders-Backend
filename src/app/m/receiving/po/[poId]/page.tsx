@@ -95,7 +95,7 @@ export default function MobilePoDetailPage(props: { params: Promise<{ poId: stri
       <MobileTopBar
         title={header?.po_number ? `PO ${header.po_number}` : 'Purchase Order'}
         subtitle={header ? `${header.item_count} items · ${header.qty_received}/${header.qty_expected || '?'} received` : 'Loading…'}
-        backHref="/m/receiving"
+        backHref="/m/receiving/history"
       />
 
       {/* Identity / summary block */}

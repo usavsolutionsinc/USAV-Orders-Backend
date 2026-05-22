@@ -3,6 +3,7 @@
 import React, { useRef, useState, useCallback, useEffect } from 'react';
 import { Camera, RefreshCw, Check, X } from 'lucide-react';
 import { cn } from '@/utils/_cn';
+import { compressPhotoForUpload } from '@/lib/image/compress-for-upload';
 
 interface PhotoCaptureProps {
   onCapture: (blob: Blob, previewUrl: string) => void;
@@ -41,13 +42,14 @@ export function PhotoCapture({ onCapture, disabled = false, className }: PhotoCa
   // ── Mobile: native file input ──────────────────────────────────────────────
   // Stay in 'idle' on mobile so the user can immediately tap "Take Photo" again
   // and snap back-to-back shots. The parent owns the captured-photo strip.
-  const handleMobileCapture = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleMobileCapture = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    const url = URL.createObjectURL(file);
-    onCapture(file, url);
-    // Reset so the same file can be re-captured
+    // Reset early so the same file can be re-captured even if compression throws.
     e.target.value = '';
+    const compressed = await compressPhotoForUpload(file, { source: 'station-mobile' });
+    const url = URL.createObjectURL(compressed.blob);
+    onCapture(compressed.blob, url);
   }, [onCapture]);
 
   // ── Desktop: getUserMedia webcam ───────────────────────────────────────────
@@ -100,14 +102,15 @@ export function PhotoCapture({ onCapture, disabled = false, className }: PhotoCa
     canvas.height = video.videoHeight;
     canvas.getContext('2d')?.drawImage(video, 0, 0);
 
-    canvas.toBlob(blob => {
-      if (!blob) return;
-      const url = canvas.toDataURL('image/jpeg', 0.92);
+    canvas.toBlob(async (rawBlob) => {
+      if (!rawBlob) return;
+      const compressed = await compressPhotoForUpload(rawBlob, { source: 'station-webcam' });
+      const url = URL.createObjectURL(compressed.blob);
       setPreview(url);
       setMode('preview');
       stream?.getTracks().forEach(t => t.stop());
       setStream(null);
-      onCapture(blob, url);
+      onCapture(compressed.blob, url);
     }, 'image/jpeg', 0.92);
   }, [stream, onCapture]);
 

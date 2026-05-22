@@ -66,8 +66,11 @@ export function PhotosCard({ receivingId, staffId, onMakeClaim }: Props) {
   );
   useAblyChannel(phoneChannel, 'receiving_photo_uploaded', handlePhoneMessage, staffId > 0);
 
-  const urls = useMemo(
-    () => (data?.photos ?? []).map((p) => p.photoUrl).filter((u): u is string => !!u?.trim()),
+  const galleryPhotos = useMemo(
+    () =>
+      (data?.photos ?? [])
+        .filter((p) => !!p.photoUrl?.trim())
+        .map((p) => ({ id: p.id, url: p.photoUrl })),
     [data],
   );
 
@@ -82,7 +85,7 @@ export function PhotosCard({ receivingId, staffId, onMakeClaim }: Props) {
     );
   }, [enabled, receivingId]);
 
-  const count = urls.length;
+  const count = galleryPhotos.length;
   const countClass =
     count === 0
       ? 'bg-gray-50 text-gray-500 ring-gray-200'
@@ -106,26 +109,27 @@ export function PhotosCard({ receivingId, staffId, onMakeClaim }: Props) {
         <p className="text-[11px] font-semibold text-gray-400">
           Scan a tracking number to receive photos.
         </p>
-      ) : isLoading && urls.length === 0 ? (
+      ) : isLoading && galleryPhotos.length === 0 ? (
         <div className="grid grid-cols-4 gap-1.5">
           {[0, 1, 2, 3].map((i) => (
             <div key={i} className="aspect-square w-full animate-pulse rounded-lg bg-gray-100" />
           ))}
         </div>
-      ) : urls.length === 0 ? (
+      ) : galleryPhotos.length === 0 ? (
         <div className="rounded-xl border border-dashed border-gray-200 bg-gray-50/60 px-4 py-5 text-center">
           <p className="text-[11px] font-bold uppercase tracking-widest text-gray-400">
             No photos yet
           </p>
           <p className="mt-1 text-[10px] font-semibold leading-snug text-gray-500">
-            The phone will auto-capture as the carton is unboxed.
+            The phone will auto-capture as the package is unboxed.
           </p>
         </div>
       ) : (
         <PhotoGallery
-          photos={urls}
+          photos={galleryPhotos}
           orderId={`RCV-${receivingId}`}
           launcherLayout="toolbar"
+          onPhotoDeleted={() => queryClient.invalidateQueries({ queryKey })}
         />
       )}
 

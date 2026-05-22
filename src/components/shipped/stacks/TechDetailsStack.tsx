@@ -7,7 +7,6 @@ import { ShippedDetailsPanelContent } from '../ShippedDetailsPanelContent';
 import { dispatchCloseShippedDetails, dispatchDashboardAndStationRefresh } from '@/utils/events';
 import { toPSTDateKey } from '@/utils/date';
 import { useOrderFieldSave } from '@/hooks/useOrderFieldSave';
-import { PanelActionBar } from '@/components/shipped/details-panel/PanelActionBar';
 
 export function TechDetailsStack({
   shipped,
@@ -15,7 +14,8 @@ export function TechDetailsStack({
   copiedAll,
   onCopyAll,
   onUpdate,
-  actionBar,
+  actionBar: _actionBar,
+  activeSection,
 }: DetailsStackProps) {
   const [isDeleting, setIsDeleting] = useState(false);
   const [isDeleteArmed, setIsDeleteArmed] = useState(false);
@@ -159,8 +159,6 @@ export function TechDetailsStack({
 
   return (
     <div className="pb-8 pt-4 space-y-4">
-      {actionBar ? <PanelActionBar {...actionBar} /> : null}
-
       <ShippedDetailsPanelContent
         shipped={{
           ...shipped,
@@ -189,6 +187,7 @@ export function TechDetailsStack({
         showPackingPhotos={false}
         showPackingInformation={false}
         showTestingInformation={false}
+        activeSection={activeSection}
       />
 
       <section className="mx-8 pt-2">

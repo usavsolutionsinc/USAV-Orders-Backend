@@ -8,8 +8,6 @@ import PendingOrdersTable from '@/components/PendingOrdersTable';
 import { UnshippedDetailsPanel } from '@/components/unshipped/UnshippedDetailsPanel';
 import { UnshippedTable } from '@/components/unshipped/UnshippedTable';
 import FBAShipmentsTable from '@/components/dashboard/FBAShipmentsTable';
-import { ShippingEditCard } from '@/components/shipping/ShippingEditCard';
-import { useShippingEditCard } from '@/hooks/useShippingEditCard';
 import { Loader2 } from '@/components/Icons';
 import { useRealtimeInvalidation } from '@/hooks/useRealtimeInvalidation';
 import { useFbaRealtimeInvalidation } from '@/hooks/useFbaRealtimeInvalidation';
@@ -35,7 +33,6 @@ function DashboardPageContent() {
         selectedContext,
         requestCloseSelectedOrder,
     } = useDashboardSelectedOrder(detailsEnabled);
-    const shippingCard = useShippingEditCard();
     useRealtimeInvalidation({ dashboard: true });
     useFbaRealtimeInvalidation();
     useRealtimeToasts('admin');
@@ -144,18 +141,6 @@ function DashboardPageContent() {
                     )
                 )}
             </AnimatePresence>
-
-            {shippingCard.isOpen && (
-                <ShippingEditCard
-                    orders={shippingCard.orders}
-                    startIndex={shippingCard.startIndex}
-                    onClose={shippingCard.close}
-                    onUpdate={() => {
-                        window.dispatchEvent(new CustomEvent('dashboard-refresh'));
-                    }}
-                    storageKey="dashboard"
-                />
-            )}
         </div>
     );
 }

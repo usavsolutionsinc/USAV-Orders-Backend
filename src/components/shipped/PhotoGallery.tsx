@@ -15,10 +15,22 @@ import {
   AlertCircle,
   Copy,
   Check,
+  Trash2,
+  Link2 as LinkIcon,
 } from '../Icons';
 
+/**
+ * Photo input shapes accepted by the gallery. Pass `{id, url}` to enable the
+ * delete affordance — the gallery hits `DELETE /api/photos/[id]` directly.
+ * Bare strings or the legacy `{url, index, uploadedAt}` shape still render
+ * read-only (no delete button).
+ */
+export type PhotoGalleryInput =
+  | string
+  | { id?: number; url: string; index?: number; uploadedAt?: string };
+
 interface PhotoGalleryProps {
-  photos: Array<string | { url: string; index: number; uploadedAt: string }>;
+  photos: PhotoGalleryInput[];
   orderId?: string;
   className?: string;
   compact?: boolean;
@@ -28,9 +40,16 @@ interface PhotoGalleryProps {
    * `toolbar` — slim row with download-all, copy links, and fullscreen (shipped UX uses `default`).
    */
   launcherLayout?: 'default' | 'toolbar';
+  /**
+   * Called after a successful DELETE /api/photos/[id]. Parents typically use
+   * this to invalidate their react-query cache so a refetch picks up the
+   * server truth.
+   */
+  onPhotoDeleted?: (photoId: number) => void;
 }
 
 interface PhotoItem {
+  id: number | null;
   url: string;
   status: 'loading' | 'loaded' | 'error';
   index: number;
@@ -43,6 +62,7 @@ export function PhotoGallery({
   compact: _compact = false,
   launcherTitle = 'View Packing Photos',
   launcherLayout = 'default',
+  onPhotoDeleted,
 }: PhotoGalleryProps) {
   const [photoItems, setPhotoItems] = useState<PhotoItem[]>([]);
   const [viewerOpen, setViewerOpen] = useState(false);
@@ -54,6 +74,9 @@ export function PhotoGallery({
   const [mounted, setMounted] = useState(false);
   const [downloadingAll, setDownloadingAll] = useState(false);
   const [linksCopied, setLinksCopied] = useState(false);
+  const [deleteArmed, setDeleteArmed] = useState(false);
+  const [deletingPhoto, setDeletingPhoto] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
   const photosFingerprintRef = useRef<string | null>(null);
 
   useEffect(() => {
@@ -67,17 +90,26 @@ export function PhotoGallery({
 
   // Parse and initialize photo items — skip resets when URL list is unchanged (avoids reload flicker when parents re-render with a new array reference).
   useEffect(() => {
-    const urls = photos
-      .map((photo) => (typeof photo === 'string' ? photo : photo.url))
-      .filter((url): url is string => !!url?.trim());
+    const parsed = photos
+      .map((photo) => {
+        if (typeof photo === 'string') {
+          return photo.trim() ? { id: null as number | null, url: photo } : null;
+        }
+        if (!photo?.url?.trim()) return null;
+        const idNum =
+          typeof photo.id === 'number' && Number.isFinite(photo.id) ? photo.id : null;
+        return { id: idNum, url: photo.url };
+      })
+      .filter((p): p is { id: number | null; url: string } => p !== null);
 
-    const fingerprint = urls.join('\u0000');
+    const fingerprint = parsed.map((p) => `${p.id ?? ''}|${p.url}`).join('\u0000');
     if (photosFingerprintRef.current === fingerprint) return;
     photosFingerprintRef.current = fingerprint;
 
     setPhotoItems(
-      urls.map((url, index) => ({
-        url,
+      parsed.map((p, index) => ({
+        id: p.id,
+        url: p.url,
         status: 'loading',
         index,
       })),
@@ -111,16 +143,22 @@ export function PhotoGallery({
   const handleNext = useCallback(() => {
     setCurrentIndex((prev) => (prev + 1) % photoItems.length);
     resetZoom();
+    setDeleteArmed(false);
+    setDeleteError(null);
   }, [photoItems.length]);
 
   const handlePrevious = useCallback(() => {
     setCurrentIndex((prev) => (prev - 1 + photoItems.length) % photoItems.length);
     resetZoom();
+    setDeleteArmed(false);
+    setDeleteError(null);
   }, [photoItems.length]);
 
   const closeViewer = useCallback(() => {
     setViewerOpen(false);
     resetZoom();
+    setDeleteArmed(false);
+    setDeleteError(null);
     document.body.style.overflow = '';
   }, []);
 
@@ -128,6 +166,8 @@ export function PhotoGallery({
     setCurrentIndex(index);
     setViewerOpen(true);
     resetZoom();
+    setDeleteArmed(false);
+    setDeleteError(null);
     document.body.style.overflow = 'hidden';
   }, []);
 
@@ -199,7 +239,52 @@ export function PhotoGallery({
     }
   };
 
-  const handleDownload = () => downloadPhotoAtIndex(currentIndex);
+  const currentPhoto = photoItems[currentIndex];
+  const canDeleteCurrent =
+    typeof currentPhoto?.id === 'number' && Number.isFinite(currentPhoto.id);
+
+  const performDelete = async () => {
+    const photo = photoItems[currentIndex];
+    const photoId = photo?.id;
+    if (typeof photoId !== 'number' || !Number.isFinite(photoId)) return;
+    setDeletingPhoto(true);
+    setDeleteError(null);
+    try {
+      const res = await fetch(`/api/photos/${photoId}`, { method: 'DELETE' });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body?.error || `HTTP ${res.status}`);
+      }
+      const remaining = photoItems.filter((_, i) => i !== currentIndex);
+      photosFingerprintRef.current = null;
+      setPhotoItems(remaining);
+      setDeleteArmed(false);
+      onPhotoDeleted?.(photoId);
+      if (remaining.length === 0) {
+        closeViewer();
+      } else {
+        setCurrentIndex((prev) => Math.min(prev, remaining.length - 1));
+        resetZoom();
+      }
+    } catch (err) {
+      console.error('Failed to delete photo:', err);
+      setDeleteError(err instanceof Error ? err.message : 'Delete failed');
+    } finally {
+      setDeletingPhoto(false);
+    }
+  };
+
+  const handleDeleteClick = () => {
+    if (!canDeleteCurrent || deletingPhoto) return;
+    if (!deleteArmed) {
+      setDeleteArmed(true);
+      window.setTimeout(() => {
+        setDeleteArmed((armed) => (armed ? false : armed));
+      }, 4000);
+      return;
+    }
+    void performDelete();
+  };
 
   const handleDownloadAll = async () => {
     if (downloadingAll || photoItems.length === 0) return;
@@ -301,18 +386,62 @@ export function PhotoGallery({
         </div>
 
         <div className="flex items-center gap-2">
-          {/* Download Button */}
+          {/* Download All Button — replaces the per-photo download. */}
           <button
             onClick={(e) => {
               e.stopPropagation();
-              handleDownload();
+              void handleDownloadAll();
             }}
-            className="p-3 bg-white/10 hover:bg-white/20 rounded-full transition-all text-white backdrop-blur-md border border-white/20 hover:border-white/30 hover:scale-110"
-            aria-label="Download photo"
-            title="Download photo"
+            disabled={downloadingAll || photoItems.every((p) => p.status === 'error')}
+            className="p-3 bg-white/10 hover:bg-white/20 rounded-full transition-all text-white backdrop-blur-md border border-white/20 hover:border-white/30 hover:scale-110 disabled:opacity-50 disabled:hover:scale-100"
+            aria-label={`Download all ${photoItems.length} photos`}
+            title={downloadingAll ? 'Downloading…' : `Download all ${photoItems.length} photos`}
           >
             <Download className="h-5 w-5" />
           </button>
+
+          {/* Copy-Links Button — copies every photo URL to the clipboard. */}
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              void copyAllPhotoUrls();
+            }}
+            disabled={photoItems.length === 0}
+            className="p-3 bg-white/10 hover:bg-white/20 rounded-full transition-all text-white backdrop-blur-md border border-white/20 hover:border-white/30 hover:scale-110 disabled:opacity-50 disabled:hover:scale-100"
+            aria-label={linksCopied ? 'Links copied' : 'Copy all photo links'}
+            title={linksCopied ? 'Copied' : 'Copy all photo links'}
+          >
+            {linksCopied ? (
+              <Check className="h-5 w-5 text-emerald-300" />
+            ) : (
+              <LinkIcon className="h-5 w-5" />
+            )}
+          </button>
+
+          {/* Delete Button — only rendered when this photo has a DB id. */}
+          {canDeleteCurrent && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                handleDeleteClick();
+              }}
+              disabled={deletingPhoto}
+              className={
+                deleteArmed
+                  ? 'flex items-center gap-2 px-4 py-3 rounded-full transition-all text-white backdrop-blur-md border bg-red-500/80 border-red-300 hover:bg-red-500 disabled:opacity-60'
+                  : 'p-3 rounded-full transition-all text-white backdrop-blur-md border bg-white/10 hover:bg-red-500/30 border-white/20 hover:border-red-300 hover:scale-110 disabled:opacity-60'
+              }
+              aria-label={deleteArmed ? 'Confirm delete photo' : 'Delete photo'}
+              title={deleteArmed ? 'Click again to confirm' : 'Delete photo'}
+            >
+              <Trash2 className="h-5 w-5" />
+              {deleteArmed && (
+                <span className="text-xs font-bold uppercase tracking-wider">
+                  {deletingPhoto ? 'Deleting…' : 'Confirm'}
+                </span>
+              )}
+            </button>
+          )}
 
           {/* Close Button */}
           <button
@@ -328,6 +457,15 @@ export function PhotoGallery({
           </button>
         </div>
       </div>
+
+      {deleteError && (
+        <div
+          className="absolute top-24 left-1/2 -translate-x-1/2 z-20 px-4 py-2 rounded-full bg-red-600/90 border border-red-300 text-white text-xs font-bold backdrop-blur-md shadow-lg"
+          role="alert"
+        >
+          {deleteError}
+        </div>
+      )}
 
       {/* Main Photo */}
       <motion.div
@@ -372,8 +510,12 @@ export function PhotoGallery({
         )}
       </motion.div>
 
-      {/* Zoom Controls */}
-      <div className="absolute bottom-36 left-1/2 -translate-x-1/2 flex items-center gap-2 bg-black/50 backdrop-blur-md rounded-full p-2 border border-white/20 z-10">
+      {/* Zoom Controls — drops to the screen edge when there's no thumbnail strip below it. */}
+      <div
+        className={`absolute left-1/2 -translate-x-1/2 flex items-center gap-2 bg-black/50 backdrop-blur-md rounded-full p-2 border border-white/20 z-10 ${
+          photoItems.length > 1 ? 'bottom-32' : 'bottom-8'
+        }`}
+      >
         <button
           onClick={(e) => {
             e.stopPropagation();

@@ -1,8 +1,8 @@
 'use client'
 
-import React, { useEffect, useMemo, useState } from 'react'
-import QRCode from 'react-qr-code'
-import { buildRepairDetailsDeepLink } from '@/lib/repair/repair-deep-link'
+import React, { useMemo } from 'react'
+import { Gs1DataMatrix } from '@/components/barcode/Gs1DataMatrix'
+import { repairHandle } from '@/lib/barcode-routing'
 
 type RepairServiceFormProps = {
   repairServiceId: string | number
@@ -32,15 +32,12 @@ const RepairServiceForm: React.FC<RepairServiceFormProps> = ({
     ? `RS-${repairNumericId}`
     : `RS-${String(repairServiceId || '').trim()}`
 
-  const [origin, setOrigin] = useState('')
-  useEffect(() => {
-    setOrigin(window.location.origin)
-  }, [])
-
-  const manageUrl = useMemo(() => {
-    if (!origin || !Number.isFinite(repairNumericId) || repairNumericId <= 0) return ''
-    return buildRepairDetailsDeepLink(repairNumericId, origin)
-  }, [origin, repairNumericId])
+  // Bare handle (REP-{id}) — internal scanner routes to /repair/{id}. No
+  // URL on the printed sheet; "Scan to update" is a staff action.
+  const repairCodeValue = useMemo(() => {
+    if (!Number.isFinite(repairNumericId) || repairNumericId <= 0) return ''
+    return repairHandle(repairNumericId)
+  }, [repairNumericId])
 
   // Format contact display as "Name, Phone, Email"
   const contactDisplay = [name, contact].filter(Boolean).join(', ')
@@ -68,12 +65,12 @@ const RepairServiceForm: React.FC<RepairServiceFormProps> = ({
         </div>
         <div className="flex flex-col items-end">
           <div className="rounded-lg border border-gray-200 bg-white p-1.5 shadow-sm">
-            {manageUrl ? (
-              <QRCode
-                value={manageUrl}
+            {repairCodeValue ? (
+              <Gs1DataMatrix
+                value={repairCodeValue}
                 size={112}
-                level="M"
-                aria-label={`QR link to manage repair ${repairServiceCode}`}
+                symbology="datamatrix"
+                ariaLabel={`DataMatrix link to manage repair ${repairServiceCode}`}
               />
             ) : (
               <div className="h-28 w-28 bg-gray-50" aria-hidden />

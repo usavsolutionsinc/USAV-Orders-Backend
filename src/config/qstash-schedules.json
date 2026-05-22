@@ -122,5 +122,14 @@
     "retries": 3,
     "timeout": 60,
     "label": "replenishment-detect"
+  },
+  {
+    "scheduleId": "sku-pairing-refresh-suggestions-nightly-pacific",
+    "cron": "CRON_TZ=America/Los_Angeles 15 3 * * *",
+    "path": "/api/cron/sku-catalog/refresh-suggestions",
+    "body": {},
+    "retries": 2,
+    "timeout": 300,
+    "label": "sku-pairing-refresh-suggestions"
   }
 ]

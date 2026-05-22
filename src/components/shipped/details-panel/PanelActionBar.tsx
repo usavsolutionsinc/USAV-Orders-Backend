@@ -1,11 +1,15 @@
 'use client';
 
-import type { ReactNode } from 'react';
-import { ChevronRight, ChevronUp, Settings } from '@/components/Icons';
+import { Settings } from '@/components/Icons';
 import type { PanelAction } from '@/hooks/usePanelActions';
+import {
+  PaneHeaderActionBar,
+  type PaneHeaderActionBarAction,
+} from '@/components/ui/pane-header';
 
 interface PanelActionBarProps {
-  onClose: () => void;
+  /** Retained for back-compat; close lives in the panel header X now, so this isn't rendered. */
+  onClose?: () => void;
   onMoveUp: () => void;
   onMoveDown: () => void;
   onAssign?: () => void;
@@ -17,33 +21,16 @@ interface PanelActionBarProps {
 
 export type PanelActionBarConfig = PanelActionBarProps;
 
-function ActionButton({
-  onClick,
-  label,
-  disabled = false,
-  children,
-}: {
-  onClick: () => void;
-  label: string;
-  disabled?: boolean;
-  children: ReactNode;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      disabled={disabled}
-      aria-label={label}
-      title={label}
-      className="inline-flex h-6 min-w-6 items-center justify-center px-0.5 text-gray-400 transition-colors hover:text-gray-900 disabled:cursor-not-allowed disabled:opacity-30"
-    >
-      {children}
-    </button>
-  );
-}
-
+/**
+ * Thin adapter over {@link PaneHeaderActionBar}. Maps the existing
+ * `onMoveUp` / `onMoveDown` / `onAssign` + `actions[]` props onto the
+ * generic action-bar shape so the four shipped/work-order stacks
+ * inherit the modernized visual (Refresh-style icon+label buttons +
+ * prev/next chevrons) without changing their call sites.
+ *
+ * `onClose` is intentionally ignored — the panel header X owns closing.
+ */
 export function PanelActionBar({
-  onClose,
   onMoveUp,
   onMoveDown,
   onAssign,
@@ -52,46 +39,37 @@ export function PanelActionBar({
   disableAssign = false,
   actions = [],
 }: PanelActionBarProps) {
+  const mapped: PaneHeaderActionBarAction[] = [
+    ...(onAssign
+      ? [{
+          key: 'assign',
+          label: 'Assign',
+          icon: <Settings className="h-3.5 w-3.5" />,
+          onClick: onAssign,
+          disabled: disableAssign,
+          title: 'Open assignment',
+        }]
+      : []),
+    ...actions.map((a) => ({
+      key: a.key,
+      label: a.label,
+      icon: <span className={a.toneClassName}>{a.icon}</span>,
+      onClick: a.onAction,
+    })),
+  ];
+
   return (
-    <div className="px-6 pt-1 pb-0">
-      <div className="flex items-center justify-between gap-3">
-        <div className="flex items-center gap-1.5">
-          <ActionButton onClick={onClose} label="Close panel">
-            <span className="flex items-center">
-              <ChevronRight className="h-3.5 w-3.5" />
-              <ChevronRight className="-ml-1 h-3.5 w-3.5" />
-            </span>
-          </ActionButton>
-
-          <ActionButton onClick={onMoveUp} label="Move up a row" disabled={disableMoveUp}>
-            <ChevronUp className="h-3.5 w-3.5" />
-          </ActionButton>
-
-          <ActionButton onClick={onMoveDown} label="Move down a row" disabled={disableMoveDown}>
-            <ChevronUp className="h-3.5 w-3.5 rotate-180" />
-          </ActionButton>
-
-        </div>
-
-        {(onAssign || actions.length > 0) && (
-          <div className="flex items-center gap-2">
-            {onAssign ? (
-              <ActionButton onClick={onAssign} label="Open assignment" disabled={disableAssign}>
-                <Settings className="h-3.5 w-3.5" />
-              </ActionButton>
-            ) : null}
-            {actions.map((action) => (
-              <ActionButton
-                key={action.key}
-                onClick={action.onAction}
-                label={action.label}
-              >
-                <span className={action.toneClassName}>{action.icon}</span>
-              </ActionButton>
-            ))}
-          </div>
-        )}
-      </div>
+    <div className="px-6 pt-1">
+      <PaneHeaderActionBar
+        iconOnly
+        actions={mapped}
+        onPrev={onMoveUp}
+        onNext={onMoveDown}
+        prevDisabled={disableMoveUp}
+        nextDisabled={disableMoveDown}
+        prevTitle="Move up a row"
+        nextTitle="Move down a row"
+      />
     </div>
   );
 }

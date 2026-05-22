@@ -1,8 +1,5 @@
-import React from 'react';
-import { renderToStaticMarkup } from 'react-dom/server';
-import QRCode from 'react-qr-code';
-import { QR_BASE_URL, PUBLIC_UNIT_QR_BASE_URL, mobileQrUrl } from '@/lib/barcode-routing';
-import { buildGs1UnitUrl } from '@/lib/scan-resolver';
+import { gs1UnitAi, serialUnitHandle } from '@/lib/barcode-routing';
+import { renderDataMatrixSvg } from '@/lib/barcode/dataMatrixSvg';
 import { printHtmlSilent } from '@/lib/print/silentPrint';
 
 // Same 2in × 1in stock as the receiving label.
@@ -18,39 +15,44 @@ function escapeHtml(str: string): string {
 }
 
 /**
- * Build the URL embedded in a printed unit-label QR.
+ * Build the DataMatrix payload embedded in a printed unit label.
  *
  * Resolution order:
- *   1. Caller-provided `qrPayload` (highest priority — e.g. the value
+ *   1. Caller-provided `qrPayload` (highest priority — e.g. a payload
  *      already returned by /api/units/next-id).
- *   2. GS1 Digital Link form when both `gtin` and `serialNumber` are
- *      present. Format: {origin}/01/{gtin}/21/{serialNumber}.
- *   3. Legacy /m/u/{serial} for serialized labels without a GTIN.
- *   4. /inventory/sku/{sku} for labels without a serial.
+ *   2. GS1 AI form `(01){gtin}(21){serial}` when both are present —
+ *      encoded as `gs1datamatrix`.
+ *   3. Bare handle `U-{serial}` for serialized labels without a GTIN —
+ *      encoded as plain `datamatrix`. The internal scanner routes it.
+ *   4. Bare SKU for labels without a serial — encoded as plain
+ *      `datamatrix`. `routeScan()` falls through to the SKU branch.
  *
- * Anchored to QR_BASE_URL (production domain) so localhost prints still
- * scan correctly out in the warehouse.
+ * No URL, no host, no protocol on the wire. Consumer phone cameras see
+ * opaque text; the internal app's scanner decodes via `routeScan()`.
  */
-function buildUnitQrValue(args: {
+function buildUnitPayload(args: {
   sku: string;
   serialNumber: string | null;
   qrPayload?: string | null;
   gtin?: string | null;
-}): string {
-  if (args.qrPayload && args.qrPayload.trim()) return args.qrPayload.trim();
+}): { value: string; symbology: 'gs1datamatrix' | 'datamatrix' } {
+  if (args.qrPayload && args.qrPayload.trim()) {
+    const v = args.qrPayload.trim();
+    // If the caller supplied a GS1 AI parens-form payload, use the
+    // gs1datamatrix symbology. Otherwise treat as opaque text.
+    const looksLikeAi = /\((?:01|21|10|17|414|254)\)/.test(v);
+    return { value: v, symbology: looksLikeAi ? 'gs1datamatrix' : 'datamatrix' };
+  }
   if (args.gtin && args.serialNumber) {
-    // Anchor unit QR to the public storefront so external phone-camera scans
-    // land there. The in-app scanner is host-agnostic and parses the GS1
-    // path regardless of origin.
-    return buildGs1UnitUrl(PUBLIC_UNIT_QR_BASE_URL, args.gtin, args.serialNumber);
+    return {
+      value: gs1UnitAi({ gtin: args.gtin, serial: args.serialNumber }),
+      symbology: 'gs1datamatrix',
+    };
   }
-  if (args.serialNumber) return mobileQrUrl('u', args.serialNumber);
-  const path = `/inventory/sku/${encodeURIComponent(args.sku)}`;
-  try {
-    return new URL(path, QR_BASE_URL).toString();
-  } catch {
-    return `${QR_BASE_URL.replace(/\/$/, '')}${path}`;
+  if (args.serialNumber) {
+    return { value: serialUnitHandle(args.serialNumber), symbology: 'datamatrix' };
   }
+  return { value: args.sku, symbology: 'datamatrix' };
 }
 
 /**
@@ -67,27 +69,19 @@ function buildLabelHtml(args: {
 }): string {
   const safeSku = escapeHtml(args.sku);
   const safeTitle = escapeHtml(args.title);
-  const safeSerial = escapeHtml(args.serialNumber);
-  const qrPayload = buildUnitQrValue({
+  const { value, symbology } = buildUnitPayload({
     sku: args.sku,
     serialNumber: args.serialNumber || null,
     qrPayload: args.qrPayload,
     gtin: args.gtin,
   });
 
-  // Pre-render the QR as inline SVG so the popup window doesn't need to
-  // wait on a remote script before printing.
-  const qrSvg = renderToStaticMarkup(
-    React.createElement(QRCode, {
-      value: qrPayload,
-      size: 160,
-      // ECC 'Q' (25%) survives smudging/abrasion typical in warehouse use —
-      // GS1 best practice for serialized industrial labels.
-      level: 'Q',
-      fgColor: '#000000',
-      bgColor: '#ffffff',
-    }),
-  );
+  // GS1 DataMatrix replaces the old QR Digital Link form — denser (~40%
+  // smaller mark), better ECC, FNC1-native AI parsing on industrial
+  // scanners, and no consumer-readable URL on the sticker. bwip-js
+  // renders it as inline SVG so the popup window doesn't need any
+  // remote script before printing.
+  const qrSvg = renderDataMatrixSvg({ value, symbology, scale: 6 });
 
   return `<!doctype html>
 <html>
@@ -99,9 +93,8 @@ function buildLabelHtml(args: {
       body { font-family: Arial, sans-serif; padding: 0; margin: 0; }
       .wrap { display:flex; align-items:stretch; gap:8px; padding:6px 8px; height:1in; }
       .info { flex:1 1 auto; min-width:0; display:flex; flex-direction:column; justify-content:center; gap:3px; }
-      .title { font-size: 12px; font-weight: 700; line-height:1.15; margin:0; overflow:hidden; text-overflow:ellipsis; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; }
-      .sku { font-size: 11px; color: #444; margin:0; font-family: monospace; }
-      .sn { font-size: 14px; color: #111; margin:0; font-family: monospace; font-weight: 700; word-break: break-all; }
+      .title { font-size: 11px; font-weight: 700; line-height:1.15; margin:0; overflow:hidden; text-overflow:ellipsis; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; }
+      .sku { font-size: 14px; color: #111; margin:0; font-family: monospace; font-weight: 700; word-break: break-all; }
       .qr { flex:0 0 auto; width:0.88in; height:0.88in; display:flex; align-items:center; justify-content:center; align-self:center; }
       .qr svg { width:100%; height:100%; display:block; }
     </style>
@@ -110,7 +103,6 @@ function buildLabelHtml(args: {
     <div class="wrap">
       <div class="info">
         ${safeTitle ? `<div class="title">${safeTitle}</div>` : ''}
-        ${safeSerial ? `<div class="sn">${safeSerial}</div>` : ''}
         <div class="sku">${safeSku}</div>
       </div>
       <div class="qr">${qrSvg}</div>

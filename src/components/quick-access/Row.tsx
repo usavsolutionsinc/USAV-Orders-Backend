@@ -19,11 +19,18 @@ interface RowProps {
  */
 export function Row({ icon, iconBg = 'bg-gray-900', label, subLabel, trailing, onClick, active, ariaCurrent }: RowProps) {
   return (
-    <button
-      type="button"
+    <div
+      role="button"
+      tabIndex={0}
       onClick={onClick}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          onClick?.();
+        }
+      }}
       aria-current={ariaCurrent ? 'page' : undefined}
-      className={`group flex w-full items-center gap-3 rounded-lg px-2.5 py-2 text-left transition-colors ${
+      className={`group flex w-full cursor-pointer items-center gap-3 rounded-lg px-2.5 py-2 text-left transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${
         active ? 'bg-blue-50' : 'hover:bg-gray-50 active:bg-gray-100'
       }`}
     >
@@ -39,7 +46,7 @@ export function Row({ icon, iconBg = 'bg-gray-900', label, subLabel, trailing, o
         )}
       </span>
       {trailing && <span className="ml-2 flex-shrink-0">{trailing}</span>}
-    </button>
+    </div>
   );
 }
 

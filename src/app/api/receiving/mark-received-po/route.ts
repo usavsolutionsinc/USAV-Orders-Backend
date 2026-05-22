@@ -104,7 +104,7 @@ async function lineItemsPendingZohoReceive(
   }
   if (unmatched.size > 0) {
     throw new Error(
-      `Zoho PO is missing line_item_id(s) from this shipment: ${[...unmatched].join(', ')}. Re-sync the carton with Zoho.`,
+      `Zoho PO is missing line_item_id(s) from this shipment: ${[...unmatched].join(', ')}. Re-sync the package with Zoho.`,
     );
   }
   return out;

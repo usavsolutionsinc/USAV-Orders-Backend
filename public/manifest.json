@@ -7,7 +7,7 @@
   "display": "minimal-ui",
   "orientation": "portrait",
   "scope": "/",
-  "start_url": "/stations",
+  "start_url": "/signin",
   "categories": ["business", "productivity"],
   "icons": [
     {

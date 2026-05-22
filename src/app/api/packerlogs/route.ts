@@ -449,7 +449,7 @@ export const GET = withAuth(async (req: NextRequest, ctx) => {
         let photosMap: Record<number, any[]> = {};
         if (packerLogIds.length > 0) {
             const photosResult = await pool.query(
-                `SELECT entity_id, json_agg(json_build_object('url', url, 'uploadedAt', created_at) ORDER BY created_at) AS photos
+                `SELECT entity_id, json_agg(json_build_object('id', id, 'url', url, 'uploadedAt', created_at) ORDER BY created_at) AS photos
                  FROM photos
                  WHERE entity_type = 'PACKER_LOG' AND entity_id = ANY($1)
                  GROUP BY entity_id`,

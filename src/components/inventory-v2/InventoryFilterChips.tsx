@@ -1,6 +1,7 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { X } from '@/components/Icons';
 import {
     SERIAL_STATUS_VALUES,
@@ -153,9 +154,32 @@ interface FilterDropdownProps {
 }
 
 function FilterDropdown({ label, count, open, onToggle, onClose, children }: FilterDropdownProps) {
+    const triggerRef = useRef<HTMLButtonElement>(null);
+    const [coords, setCoords] = useState<{ top: number; left: number } | null>(null);
+    const [mounted, setMounted] = useState(false);
+
+    useEffect(() => { setMounted(true); }, []);
+
+    useLayoutEffect(() => {
+        if (!open) return;
+        const update = () => {
+            const rect = triggerRef.current?.getBoundingClientRect();
+            if (!rect) return;
+            setCoords({ top: rect.bottom + 4, left: rect.left });
+        };
+        update();
+        window.addEventListener('resize', update);
+        window.addEventListener('scroll', update, true);
+        return () => {
+            window.removeEventListener('resize', update);
+            window.removeEventListener('scroll', update, true);
+        };
+    }, [open]);
+
     return (
         <div className="relative">
             <button
+                ref={triggerRef}
                 type="button"
                 onClick={onToggle}
                 className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-medium transition-colors ${
@@ -185,14 +209,24 @@ function FilterDropdown({ label, count, open, onToggle, onClose, children }: Fil
                 </svg>
             </button>
 
-            {open ? (
-                <>
-                    <div className="fixed inset-0 z-10" onClick={onClose} aria-hidden />
-                    <div className="absolute left-0 z-20 mt-1 w-[min(28rem,calc(100vw-2rem))] rounded-md border border-gray-200 bg-white p-2 shadow-lg">
-                        {children}
-                    </div>
-                </>
-            ) : null}
+            {open && mounted && coords
+                ? createPortal(
+                    <>
+                        <div
+                            className="fixed inset-0 z-[120]"
+                            onClick={onClose}
+                            aria-hidden
+                        />
+                        <div
+                            className="fixed z-[121] w-[min(28rem,calc(100vw-2rem))] rounded-md border border-gray-200 bg-white p-2 shadow-lg"
+                            style={{ top: coords.top, left: coords.left }}
+                        >
+                            {children}
+                        </div>
+                    </>,
+                    document.body,
+                  )
+                : null}
         </div>
     );
 }

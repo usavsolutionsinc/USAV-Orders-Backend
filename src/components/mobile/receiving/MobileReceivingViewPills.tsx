@@ -14,14 +14,15 @@ const ITEMS: HorizontalSliderItem[] = [
 ];
 
 const ROUTES: Record<MobileReceivingViewPillsProps['active'], string> = {
-  lines: '/receiving',
-  pos: '/m/receiving',
+  lines: '/m/receiving',
+  pos: '/m/receiving/history',
 };
 
 /**
- * Pill switcher between the live receiving line feed (/receiving) and the
- * search/scan surface (/m/receiving). Uses the same nav-variant pill shape
- * as the in-app filter sliders for consistency.
+ * Pill switcher between the live receiving line feed (/m/receiving) and the
+ * search/scan history surface (/m/receiving/history). Both routes stay under
+ * `/m/` so the edge proxy's `/receiving → /m/receiving` rewrite for phone UAs
+ * doesn't bounce the user off the active pill.
  */
 export function MobileReceivingViewPills({ active }: MobileReceivingViewPillsProps) {
   const router = useRouter();

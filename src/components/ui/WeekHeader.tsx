@@ -1,13 +1,18 @@
 'use client';
 
 import { ReactNode } from 'react';
-import { ChevronLeft, ChevronRight } from '../Icons';
-import { mainStickyHeaderClass } from '@/components/layout/header-shell';
+import {
+  PaneHeader,
+  PaneHeaderTitle,
+  PaneHeaderCount,
+  PaneHeaderWeekNav,
+  paneHeaderRowClass,
+  paneHeaderHighContrastTitleClass,
+} from './pane-header';
 import { formatDateWithOrdinal, formatWeekRangeCompact, getCurrentPSTDateKey } from '@/utils/date';
 
-/** Inner row for the week strip — use for sticky day/group rows so they align with WeekHeader. */
-export const weekHeaderInnerRowClass =
-  'flex min-h-[44px] items-center justify-between gap-4 px-3 py-1.5';
+/** Inner row for the week strip — re-exported from the generalized PaneHeader so legacy callers keep working. */
+export const weekHeaderInnerRowClass = paneHeaderRowClass;
 
 /**
  * Per-day band in scroll content — same look as the old sticky day row, but **not** sticky.
@@ -24,9 +29,8 @@ export const weekDayGroupDateClass =
 export const weekDayGroupCountClass =
   'text-[11px] font-black tabular-nums text-gray-900';
 
-/** Desktop high-contrast date label for bright dashboard headers and matching day-group rows. */
-export const weekHeaderHighContrastDateClass =
-  'text-sm font-black uppercase tracking-widest text-gray-900';
+/** Desktop high-contrast date label — alias of the generalized PaneHeader title class. */
+export const weekHeaderHighContrastDateClass = paneHeaderHighContrastTitleClass;
 
 interface WeekRange {
   startStr: string;
@@ -79,43 +83,27 @@ export default function WeekHeader({
   const stickyDateLabel =
     formattedTodayPST && dateLineDisplay === formattedTodayPST ? 'Today' : dateLineDisplay;
 
+  const resolvedRightSlot =
+    rightSlot ??
+    (weekRange && onPrevWeek && onNextWeek ? (
+      <PaneHeaderWeekNav
+        rangeLabel={formatWeekRangeCompact(weekRange.startStr, weekRange.endStr)}
+        onPrev={onPrevWeek}
+        onNext={onNextWeek}
+        weekOffset={weekOffset}
+      />
+    ) : null);
+
   return (
-    <div className={mainStickyHeaderClass}>
-      <div className={weekHeaderInnerRowClass}>
-        <div className="flex min-w-0 flex-1 items-center gap-2">
+    <PaneHeader
+      leftSlot={
+        <>
           {leftSlot ? <div className="shrink-0">{leftSlot}</div> : null}
-          <p className={`min-w-0 truncate ${weekHeaderHighContrastDateClass}`}>{stickyDateLabel}</p>
-          <p className="shrink-0 font-dm-sans text-sm font-semibold tabular-nums text-blue-700">{count}</p>
-        </div>
-        <div className="flex shrink-0 items-center gap-2">
-          {rightSlot ? (
-            rightSlot
-          ) : weekRange && onPrevWeek && onNextWeek ? (
-            <div className="flex items-center gap-1.5">
-              <span className="text-[11px] font-black uppercase tracking-widest text-neutral-900">
-                {formatWeekRangeCompact(weekRange.startStr, weekRange.endStr)}
-              </span>
-              <button
-                onClick={onPrevWeek}
-                type="button"
-                className="rounded-lg bg-neutral-300 p-1.5 text-neutral-900 transition-colors hover:bg-neutral-400 active:bg-neutral-500"
-                title="Previous week"
-              >
-                <ChevronLeft className="h-5 w-5" />
-              </button>
-              <button
-                onClick={onNextWeek}
-                type="button"
-                disabled={weekOffset === 0}
-                className="rounded-lg bg-neutral-300 p-1.5 text-neutral-900 transition-colors hover:bg-neutral-400 active:bg-neutral-500 disabled:cursor-not-allowed disabled:bg-neutral-200 disabled:text-neutral-500 disabled:opacity-100"
-                title="Next week"
-              >
-                <ChevronRight className="h-5 w-5" />
-              </button>
-            </div>
-          ) : null}
-        </div>
-      </div>
-    </div>
+          <PaneHeaderTitle>{stickyDateLabel}</PaneHeaderTitle>
+          <PaneHeaderCount count={count} />
+        </>
+      }
+      rightSlot={resolvedRightSlot}
+    />
   );
 }

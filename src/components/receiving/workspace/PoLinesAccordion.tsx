@@ -2,7 +2,9 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { motion, LayoutGroup } from 'framer-motion';
 import { ChevronDown } from '@/components/Icons';
+import { SerialChip, SkuScanRefChip, getLast4 } from '@/components/ui/CopyChip';
 import { conditionGradeTableLabel } from '@/components/station/receiving-constants';
 import {
   dispatchSelectLine,
@@ -17,6 +19,13 @@ interface ApiResponse {
 interface Props {
   receivingId: number;
   activeLineId: number;
+  /**
+   * Optional condition-pills slot — rendered inside the active row's bubble
+   * so the pill selector reads as part of the selected PO item rather than
+   * as a separate "CONDITION" card. The parent owns the cond state +
+   * change handler.
+   */
+  activeRowSlot?: React.ReactNode;
 }
 
 /**
@@ -28,7 +37,7 @@ interface Props {
  *
  * Single-line cartons should not mount this component (the parent guards).
  */
-export function PoLinesAccordion({ receivingId, activeLineId }: Props) {
+export function PoLinesAccordion({ receivingId, activeLineId, activeRowSlot }: Props) {
   const queryClient = useQueryClient();
   const queryKey = useMemo(
     () => ['receiving-siblings', receivingId] as const,
@@ -74,34 +83,66 @@ export function PoLinesAccordion({ receivingId, activeLineId }: Props) {
     return () => window.removeEventListener('usav-refresh-data', handler);
   }, [queryClient, queryKey]);
 
-  const rows = localRows;
-  if (rows.length <= 1) return null;
+  // Sort: non-active rows first, active row last. Sibling switching becomes
+  // a "row trades places with the bottom" interaction — the bottom slot is
+  // always the operator's current selection, sitting adjacent to the
+  // workspace body below.
+  const rows = useMemo(() => {
+    const nonActive = localRows.filter((r) => r.id !== activeLineId);
+    const active = localRows.filter((r) => r.id === activeLineId);
+    return [...nonActive, ...active];
+  }, [localRows, activeLineId]);
+  // Always render — even for single-line POs the row layout (title, qty,
+  // condition, sku, serial chip) is the canonical context display the
+  // workspace expects above the body.
+  if (rows.length === 0) return null;
 
   return (
     <section className="rounded-2xl bg-white p-4 shadow-sm ring-1 ring-gray-200/60">
       <div className="mb-2 flex items-center justify-between">
         <h3 className="text-[11px] font-bold uppercase tracking-[0.14em] text-gray-500">
-          PO lines · {rows.length}
+          PO items · {rows.length}
         </h3>
-        <span className="text-[10px] font-bold uppercase tracking-widest text-gray-400">
-          Click to switch
-        </span>
+        {rows.length > 1 ? (
+          <span className="text-[10px] font-bold uppercase tracking-widest text-gray-400">
+            Click to switch
+          </span>
+        ) : null}
       </div>
-      <ul className="space-y-1">
+      <LayoutGroup id={`po-lines-${receivingId}`}>
+      <ul className="flex flex-col gap-1">
         {rows.map((line) => {
           const isActive = line.id === activeLineId;
           return (
-            <li key={line.id}>
-              <button
-                type="button"
+            <motion.li
+              key={line.id}
+              layout="position"
+              transition={{ type: 'spring', stiffness: 380, damping: 32, mass: 0.7 }}
+              aria-current={isActive ? 'true' : undefined}
+              className={`relative rounded-xl border transition-colors ${
+                isActive
+                  ? 'border-blue-300 bg-blue-50/60'
+                  : 'border-gray-200 bg-white hover:bg-gray-50'
+              }`}
+            >
+              {/* Click area = title + meta. Kept as a <div role="button"> so
+                  interactive children (condition pills) can render inside
+                  the bubble without producing nested <button> markup. */}
+              <div
+                role={isActive ? undefined : 'button'}
+                tabIndex={isActive ? -1 : 0}
                 onClick={() => {
                   if (!isActive) dispatchSelectLine(line);
                 }}
-                aria-current={isActive ? 'true' : undefined}
-                className={`group relative flex w-full items-center gap-2 rounded-xl border px-3 py-2 text-left transition-colors ${
-                  isActive
-                    ? 'border-blue-300 bg-blue-50/60'
-                    : 'border-gray-200 bg-white hover:bg-gray-50'
+                onKeyDown={(e) => {
+                  if (isActive) return;
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    dispatchSelectLine(line);
+                  }
+                }}
+                className={`flex w-full items-center gap-2 px-3 py-2 text-left ${
+                  isActive ? '' : 'cursor-pointer'
                 }`}
               >
                 <ChevronDown
@@ -117,28 +158,52 @@ export function PoLinesAccordion({ receivingId, activeLineId }: Props) {
                   >
                     {line.item_name || line.sku || `Line #${line.id}`}
                   </p>
-                  <p className="mt-0.5 truncate text-[10px] font-semibold uppercase tracking-widest text-gray-500">
+                  <p className="mt-0.5 flex flex-wrap items-center gap-x-1.5 gap-y-1 truncate text-[10px] font-semibold uppercase tracking-widest text-gray-500">
                     <ProgressBadge
                       received={line.quantity_received}
                       expected={line.quantity_expected}
                     />
-                    {' · '}
+                    <span aria-hidden>·</span>
                     <ConditionBadge grade={line.condition_grade} />
+                    {(line.sku || '').trim() ? (
+                      <>
+                        <span aria-hidden>·</span>
+                        <SkuScanRefChip
+                          value={line.sku as string}
+                          display={getLast4(line.sku)}
+                        />
+                      </>
+                    ) : null}
                     {Array.isArray(line.serials) && line.serials.length > 0 ? (
-                      <span className="ml-1 text-blue-600">· {line.serials.length} SN</span>
+                      <>
+                        <span aria-hidden>·</span>
+                        {line.serials
+                          .map((s) => (s.serial_number || '').trim())
+                          .filter(Boolean)
+                          .map((sn, i) => (
+                            <SerialChip
+                              key={`${sn}-${i}`}
+                              value={sn}
+                              display={sn.length > 4 ? sn.slice(-4) : sn}
+                              width="w-fit max-w-full"
+                            />
+                          ))}
+                      </>
                     ) : null}
                   </p>
                 </div>
-                {isActive ? (
-                  <span className="shrink-0 rounded-md bg-blue-600 px-2 py-0.5 text-[9px] font-black uppercase tracking-widest text-white">
-                    Current
-                  </span>
-                ) : null}
-              </button>
-            </li>
+              </div>
+              {/* Active row only — slot for condition pills, etc. */}
+              {isActive && activeRowSlot ? (
+                <div className="border-t border-blue-200/60 px-3 py-3">
+                  {activeRowSlot}
+                </div>
+              ) : null}
+            </motion.li>
           );
         })}
       </ul>
+      </LayoutGroup>
     </section>
   );
 }
@@ -171,3 +236,4 @@ function ConditionBadge({ grade }: { grade: string | null | undefined }) {
           : 'text-gray-500';
   return <span className={tone}>{label}</span>;
 }
+

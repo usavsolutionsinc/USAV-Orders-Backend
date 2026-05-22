@@ -17,12 +17,55 @@ export interface SkuCatalogRow {
 
 export interface SkuPlatformIdRow {
   id: number;
-  sku_catalog_id: number;
+  sku_catalog_id: number | null;
   platform: string;
   platform_sku: string | null;
   platform_item_id: string | null;
   account_name: string | null;
   is_active: boolean;
+  created_at: string;
+  // 2026-05-25 pairing hub additions
+  listing_title: string | null;
+  listing_url: string | null;
+  listing_status: string | null;
+  confidence: number | null;
+  paired_by: number | null;
+  paired_at: string | null;
+  do_not_suggest_until: string | null;
+  // Ecwid-era columns retained for sync compatibility
+  display_name?: string | null;
+  image_url?: string | null;
+}
+
+// ─── Pairing hub interfaces (2026-05-25) ────────────────────────────────────
+
+export interface SkuPairingSuggestionRow {
+  sku_catalog_id: number;
+  platform_id_row_id: number;
+  confidence: number;
+  reason: string;
+  refreshed_at: string;
+}
+
+export type PairingAuditAction =
+  | 'accept'
+  | 'reject'
+  | 'unpair'
+  | 'create_platform_row';
+
+export type PairingAuditActorKind = 'user' | 'system';
+
+export interface SkuPairingAuditRow {
+  id: number;
+  sku_catalog_id: number;
+  platform_id_row_id: number | null;
+  action: PairingAuditAction;
+  confidence: number | null;
+  reason: string | null;
+  actor_id: number | null;
+  actor_kind: PairingAuditActorKind;
+  before_state: unknown;
+  after_state: unknown;
   created_at: string;
 }
 

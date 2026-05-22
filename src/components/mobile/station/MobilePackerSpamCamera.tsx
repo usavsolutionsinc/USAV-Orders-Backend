@@ -8,6 +8,7 @@ import {
 } from '@/design-system/foundations/motion-framer';
 import { Camera, X, Check, Trash2 } from '@/components/Icons';
 import { useCamera } from '@/hooks/useCamera';
+import { compressPhotoForUpload } from '@/lib/image/compress-for-upload';
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -37,8 +38,11 @@ export interface MobilePackerSpamCameraProps {
  *
  * Behaviour:
  *  • Reuses `useCamera()` (which owns getUserMedia + stop lifecycle).
- *  • Auto-resolution chain: 1920×1080 → 1280×720 → any. Keeps older iPhones happy.
- *  • Each shutter tap canvases the current video frame and `toBlob`s it as JPEG.
+ *  • Capture constraint: 1280×720 → any. Higher resolutions are wasted because
+ *    every shot is downscaled to 720p (longest edge 1280px) before upload.
+ *  • Each shutter tap canvases the current video frame, `toBlob`s it as JPEG,
+ *    then routes through `compressPhotoForUpload` so the stored blob matches
+ *    what the server will receive.
  *  • Photos accumulate locally in a thumbnail strip — NO network calls.
  *  • On Done, ownership of the blobs transfers to the parent (object URLs are
  *    NOT revoked, parent is responsible for cleanup once they're rendered in
@@ -68,7 +72,6 @@ export function MobilePackerSpamCamera({
   const attemptStart = useCallback(async () => {
     setStartError(false);
     const chain: Array<{ width?: { ideal: number }; height?: { ideal: number } }> = [
-      { width: { ideal: 1920 }, height: { ideal: 1080 } },
       { width: { ideal: 1280 }, height: { ideal: 720 } },
       {},
     ];
@@ -109,11 +112,13 @@ export function MobilePackerSpamCamera({
     if (!ctx) return;
     ctx.drawImage(video, 0, 0);
 
-    const blob = await new Promise<Blob | null>((res) =>
+    const rawBlob = await new Promise<Blob | null>((res) =>
       canvas.toBlob((b) => res(b), 'image/jpeg', jpegQuality),
     );
-    if (!blob) return;
+    if (!rawBlob) return;
 
+    const compressed = await compressPhotoForUpload(rawBlob, { source: 'packer-spam' });
+    const blob = compressed.blob;
     const previewUrl = URL.createObjectURL(blob);
     const id =
       typeof crypto !== 'undefined' && 'randomUUID' in crypto
@@ -146,6 +151,45 @@ export function MobilePackerSpamCamera({
     // shots will be revoked by unmount effect (handedOffRef stays false)
     onCancel();
   }, [onCancel]);
+
+  // Dev-only escape hatch: localhost Safari blocks getUserMedia, so there's
+  // no way to exercise the post-capture upload flow. Synthesizes a 1280x720
+  // placeholder JPEG and hands it to the parent as if it were a real shot.
+  const handleUseTestPhoto = useCallback(async () => {
+    const canvas = document.createElement('canvas');
+    canvas.width = 1280;
+    canvas.height = 720;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+    ctx.fillStyle = '#1f2937';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.fillStyle = '#ffffff';
+    ctx.font = 'bold 48px system-ui, -apple-system, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('TEST PHOTO', canvas.width / 2, canvas.height / 2 - 24);
+    ctx.font = '24px system-ui, -apple-system, sans-serif';
+    ctx.fillText(new Date().toLocaleString(), canvas.width / 2, canvas.height / 2 + 32);
+
+    const blob = await new Promise<Blob | null>((res) =>
+      canvas.toBlob((b) => res(b), 'image/jpeg', jpegQuality),
+    );
+    if (!blob) return;
+
+    const previewUrl = URL.createObjectURL(blob);
+    const id =
+      typeof crypto !== 'undefined' && 'randomUUID' in crypto
+        ? crypto.randomUUID()
+        : `shot-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+
+    handedOffRef.current = true;
+    onDone([{ id, blob, previewUrl }]);
+  }, [jpegQuality, onDone]);
+
+  // Only surface the test-photo escape hatch in dev builds so it never reaches
+  // production. `NODE_ENV` is statically replaced at build time, so the button
+  // (and its handler) tree-shake out of the prod bundle.
+  const showTestPhotoButton = process.env.NODE_ENV !== 'production';
 
   const remaining = maxPhotos - shots.length;
   const atCap = remaining <= 0;
@@ -227,6 +271,16 @@ export function MobilePackerSpamCamera({
             >
               Try Again
             </button>
+
+            {showTestPhotoButton && (
+              <button
+                type="button"
+                onClick={handleUseTestPhoto}
+                className="mt-3 h-11 px-5 rounded-xl bg-amber-500 text-black text-[11px] font-black uppercase tracking-wider active:bg-amber-600 transition-colors"
+              >
+                Use Test Photo · Dev
+              </button>
+            )}
           </div>
         )}
       </div>

@@ -1,8 +1,7 @@
 'use client';
 
-import { renderToStaticMarkup } from 'react-dom/server';
-import QRCode from 'react-qr-code';
-import { mobileQrUrl } from '@/lib/barcode-routing';
+import { receivingHandle } from '@/lib/barcode-routing';
+import { renderDataMatrixSvg } from '@/lib/barcode/dataMatrixSvg';
 import { receivingLabelPoCornerDisplay } from '@/lib/print/printReceivingLabel';
 import {
   conditionShort,
@@ -23,14 +22,15 @@ export type ReceivingLabelPayload = {
 };
 
 /**
- * The string actually encoded into the printed QR. When we know the receiving
- * id we encode the full mobile URL so a phone scanning the label opens the
- * carton page natively. Falls back to the human-readable scanValue for legacy
- * callers (no receivingId provided).
+ * The string actually encoded into the printed DataMatrix. When we know
+ * the receiving id we encode the bare handle `R-{id}` (no URL, no host)
+ * via {@link receivingHandle}; the internal scanner recognises the prefix
+ * and routes to /m/r/{id}. Falls back to the human-readable scanValue
+ * for legacy callers without a receivingId.
  */
 export function resolveReceivingLabelQrValue(payload: ReceivingLabelPayload): string {
   if (payload.receivingId != null && Number.isFinite(payload.receivingId)) {
-    return mobileQrUrl('r', payload.receivingId);
+    return receivingHandle(payload.receivingId);
   }
   return payload.scanValue.trim();
 }
@@ -50,15 +50,8 @@ export function printReceivingLabel(payload: ReceivingLabelPayload) {
   const qrPayload = resolveReceivingLabelQrValue(payload);
   if (!qrPayload) return;
 
-  const qrSvg = renderToStaticMarkup(
-    <QRCode
-      value={qrPayload}
-      size={80}
-      level="M"
-      fgColor="#000000"
-      bgColor="#ffffff"
-    />,
-  );
+  // Bare handle (R-{id}) — `routeScan()` routes to /m/r/{id}. No URL.
+  const qrSvg = renderDataMatrixSvg({ value: qrPayload, symbology: 'datamatrix', scale: 4 });
 
   const condShort = conditionShort(payload.conditionCode);
   const condHtml = escapeHtml(condShort);

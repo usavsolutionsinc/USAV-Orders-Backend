@@ -254,7 +254,7 @@ const ORDER_SERIALS_CTE = `
         pl.created_at AS packed_at,
         pl.tracking_type,
         COALESCE((
-          SELECT jsonb_agg(p.url ORDER BY p.created_at ASC)
+          SELECT jsonb_agg(jsonb_build_object('id', p.id, 'url', p.url) ORDER BY p.created_at ASC)
           FROM photos p
           WHERE p.entity_type = 'PACKER_LOG'
             AND p.entity_id = pl.id
@@ -604,7 +604,7 @@ export async function getShippedOrderById(id: number): Promise<ShippedOrder | nu
             pl.created_at AS packed_at,
             pl.tracking_type,
             COALESCE((
-              SELECT jsonb_agg(p.url ORDER BY p.created_at ASC)
+              SELECT jsonb_agg(jsonb_build_object('id', p.id, 'url', p.url) ORDER BY p.created_at ASC)
               FROM photos p
               WHERE p.entity_type = 'PACKER_LOG'
                 AND p.entity_id = pl.id

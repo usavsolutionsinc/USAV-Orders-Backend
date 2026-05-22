@@ -25,6 +25,8 @@ function formatElapsedDuration(startAt: string | null | undefined, endAt: string
   return `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
 }
 
+export type ShippedActiveSection = 'return' | 'shipping' | 'product';
+
 interface ShippedDetailsPanelContentProps {
   shipped: ShippedOrder;
   durationData: DurationData;
@@ -39,6 +41,8 @@ interface ShippedDetailsPanelContentProps {
   productDetailsFirst?: boolean;
   editableShippingFields?: EditableShippingFields;
   showReturnInformation?: boolean;
+  /** When set, gates section rendering to just the active tab. Undefined = render all (legacy single-scroll view). */
+  activeSection?: ShippedActiveSection;
 }
 
 export function ShippedDetailsPanelContent({
@@ -55,7 +59,16 @@ export function ShippedDetailsPanelContent({
   productDetailsFirst = false,
   editableShippingFields,
   showReturnInformation = true,
+  activeSection,
 }: ShippedDetailsPanelContentProps) {
+  // Tab-gated rendering: when activeSection is set, only the matching section
+  // shows. When undefined (legacy callers), everything renders in one scroll.
+  const showReturn = activeSection ? activeSection === 'return' : true;
+  const showShipping = activeSection ? activeSection === 'shipping' : true;
+  const showProduct = activeSection ? activeSection === 'product' : true;
+  // Photos belong to the shipping context (SKU integrity / packing); hide them
+  // on the Return and Product tabs.
+  const photosVisible = activeSection ? activeSection === 'shipping' : true;
   const [prepackedSku, setPrepackedSku] = useState<PrepackedSkuInfo | null>(null);
 
   useEffect(() => {
@@ -78,7 +91,9 @@ export function ShippedDetailsPanelContent({
     return () => { cancelled = true; };
   }, [shipped.shipping_tracking_number]);
 
-  const productDetailsSection = <ProductDetailsSection shipped={shipped} />;
+  const productDetailsSection = (
+    <ProductDetailsSection shipped={shipped} editableShippingFields={editableShippingFields} />
+  );
   const packedById = shipped.packed_by ?? null;
   const testedById = shipped.tested_by ?? null;
   const derivedPackingDuration = String(shipped.pack_duration || '').trim()
@@ -101,8 +116,8 @@ export function ShippedDetailsPanelContent({
   const testedByName = testedById ? getStaffName(testedById) : '';
 
   return (
-    <div className="px-8 pb-8 pt-0.5 space-y-10">
-      {showPackingPhotos && (
+    <div className="px-8 pb-8 pt-0 space-y-6">
+      {showPackingPhotos && photosVisible && (
         <>
           {prepackedSku && Array.isArray(prepackedSku.photos) && prepackedSku.photos.length > 0 && (
             <section>
@@ -119,7 +134,20 @@ export function ShippedDetailsPanelContent({
                   </div>
                 </div>
               </div>
-              <PhotoGallery photos={prepackedSku.photos} orderId={prepackedSku.staticSku} />
+              <PhotoGallery
+                photos={prepackedSku.photos}
+                orderId={prepackedSku.staticSku}
+                onPhotoDeleted={(photoId) =>
+                  setPrepackedSku((prev) =>
+                    prev
+                      ? {
+                          ...prev,
+                          photos: (prev.photos ?? []).filter((p) => p.id !== photoId),
+                        }
+                      : prev,
+                  )
+                }
+              />
             </section>
           )}
 
@@ -134,36 +162,46 @@ export function ShippedDetailsPanelContent({
                 <h3 className="text-xs font-black uppercase tracking-[0.2em] text-gray-900">Packing Photos</h3>
               </div>
             </div>
-            <PhotoGallery photos={shipped.packer_photos_url || []} orderId={shipped.order_id} />
+            <PhotoGallery
+              photos={shipped.packer_photos_url || []}
+              orderId={shipped.order_id}
+              onPhotoDeleted={() => {
+                // Parent owns shipped via a higher-level fetcher; ask it to refresh.
+                onUpdate?.();
+              }}
+            />
           </section>
         </>
       )}
 
-      {productDetailsFirst && productDetailsSection}
+      {productDetailsFirst && showProduct && productDetailsSection}
 
-      <ShippingInformationSection
-        shipped={shipped}
-        copiedAll={copiedAll}
-        onCopyAll={onCopyAll}
-        onUpdate={onUpdate}
-        showShippingTimestamp={showShippingTimestamp}
-        showSerialNumber={showSerialNumber}
-        showReturnInformation={showReturnInformation}
-        editableShippingFields={editableShippingFields}
-        prepackedSku={prepackedSku}
-        metaFields={
-          packedByName || testedByName
-            ? {
-                packedByName,
-                packingDuration: packingMetaValue,
-                testedByName,
-                testingDuration: testingMetaValue,
-              }
-            : undefined
-        }
-      />
+      {(showReturn || showShipping) && (
+        <ShippingInformationSection
+          shipped={shipped}
+          copiedAll={copiedAll}
+          onCopyAll={onCopyAll}
+          onUpdate={onUpdate}
+          showShippingTimestamp={showShippingTimestamp}
+          showSerialNumber={showSerialNumber}
+          showReturnInformation={showReturnInformation && showReturn}
+          showShippingInformation={showShipping}
+          editableShippingFields={editableShippingFields}
+          prepackedSku={prepackedSku}
+          metaFields={
+            packedByName || testedByName
+              ? {
+                  packedByName,
+                  packingDuration: packingMetaValue,
+                  testedByName,
+                  testingDuration: testingMetaValue,
+                }
+              : undefined
+          }
+        />
+      )}
 
-      {!productDetailsFirst && productDetailsSection}
+      {!productDetailsFirst && showProduct && productDetailsSection}
     </div>
   );
 }

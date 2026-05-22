@@ -156,7 +156,7 @@ export function MobileReceivingList() {
     return (
       <div className="flex h-full flex-col items-center justify-center gap-2 bg-white px-6 text-center">
         <p className="text-[13px] font-black uppercase tracking-[0.18em] text-gray-700">
-          No cartons yet
+          No packages yet
         </p>
         <p className="max-w-[260px] text-[11px] font-semibold text-gray-500">
           Scan a tracking number on the desktop to drop one in here.

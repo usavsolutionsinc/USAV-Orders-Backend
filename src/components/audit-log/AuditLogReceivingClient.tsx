@@ -137,9 +137,9 @@ function relTime(iso: string | null | undefined): string {
 }
 
 const KIND_META: Record<string, { label: string; tone: string; icon: 'box' | 'check' | 'photo' | 'user' | 'warn' | 'tag' | 'sync' }> = {
-  CARTON_CREATED:      { label: 'Carton created',     tone: 'bg-slate-100 text-slate-700 ring-slate-200',   icon: 'box' },
-  CARTON_RECEIVED:     { label: 'Carton received',    tone: 'bg-emerald-50 text-emerald-700 ring-emerald-200', icon: 'check' },
-  CARTON_UNBOXED:      { label: 'Carton unboxed',     tone: 'bg-sky-50 text-sky-700 ring-sky-200',          icon: 'box' },
+  CARTON_CREATED:      { label: 'Package created',     tone: 'bg-slate-100 text-slate-700 ring-slate-200',   icon: 'box' },
+  CARTON_RECEIVED:     { label: 'Package received',    tone: 'bg-emerald-50 text-emerald-700 ring-emerald-200', icon: 'check' },
+  CARTON_UNBOXED:      { label: 'Package unboxed',     tone: 'bg-sky-50 text-sky-700 ring-sky-200',          icon: 'box' },
   LINE_CREATED:        { label: 'Line synced',        tone: 'bg-slate-100 text-slate-700 ring-slate-200',   icon: 'sync' },
   RECEIVED:            { label: 'Line received',      tone: 'bg-emerald-50 text-emerald-700 ring-emerald-200', icon: 'check' },
   TEST_START:          { label: 'Test started',       tone: 'bg-amber-50 text-amber-700 ring-amber-200',    icon: 'warn' },
@@ -254,7 +254,7 @@ function EmptyState() {
       </div>
       <p className="mt-1 max-w-sm text-sm text-slate-500">
         Select a PO from the list to see every event captured for it — when each
-        carton arrived, when each line item was unboxed, tested, dispositioned,
+        package arrived, when each line item was unboxed, tested, dispositioned,
         and put away.
       </p>
     </div>
@@ -294,7 +294,7 @@ function PODetailView({ detail }: { detail: PODetail }) {
           </div>
         </div>
         <div className="grid grid-cols-3 gap-3 text-right">
-          <Stat label="Cartons" value={cartons.length} />
+          <Stat label="Packages" value={cartons.length} />
           <Stat label="Lines" value={lines.length} />
           <Stat label="Received / Expected" value={`${totals.received} / ${totals.expected}`} />
         </div>
@@ -319,7 +319,7 @@ function PODetailView({ detail }: { detail: PODetail }) {
       <nav className="mt-5 flex gap-1 border-b border-slate-200">
         {([
           ['timeline', `Timeline (${events.length})`],
-          ['cartons',  `Cartons (${cartons.length})`],
+          ['cartons',  `Packages (${cartons.length})`],
           ['lines',    `Lines (${lines.length})`],
         ] as const).map(([key, label]) => (
           <button
@@ -416,7 +416,7 @@ function EventCard({ event: ev }: { event: AuditEvent }) {
               {ev.receiving_id != null && (
                 <>
                   <span>·</span>
-                  <span>carton #{ev.receiving_id}</span>
+                  <span>package #{ev.receiving_id}</span>
                 </>
               )}
             </div>
@@ -537,7 +537,7 @@ function DiffBox({
 
 function CartonsList({ cartons }: { cartons: Carton[] }) {
   if (cartons.length === 0) {
-    return <div className="py-8 text-center text-sm text-slate-400">No cartons matched yet.</div>;
+    return <div className="py-8 text-center text-sm text-slate-400">No packages matched yet.</div>;
   }
   return (
     <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
@@ -546,7 +546,7 @@ function CartonsList({ cartons }: { cartons: Carton[] }) {
           <header className="flex items-start justify-between gap-2">
             <div>
               <div className="text-[11px] uppercase tracking-wider text-slate-400">
-                Carton #{c.id}
+                Package #{c.id}
               </div>
               <div className="mt-0.5 truncate font-mono text-sm font-medium text-slate-900">
                 {c.tracking_number ?? '—'}
@@ -706,7 +706,7 @@ function LineCard({ line: l, events }: { line: Line; events: AuditEvent[] }) {
             <KV label="Needs test"     value={l.needs_test ? 'Yes' : 'No'} />
             <KV label="Final dispo"    value={l.disposition_final ?? '—'} />
             <KV label="Zoho item id"   value={l.zoho_item_id} />
-            {l.receiving_id != null && <KV label="Carton" value={`#${l.receiving_id}`} />}
+            {l.receiving_id != null && <KV label="Package" value={`#${l.receiving_id}`} />}
             {l.notes && <KV label="Notes" value={l.notes} span2 />}
           </dl>
 

@@ -129,7 +129,7 @@ export function MobileCartonSheet({ row, staffId, open, onClose }: MobileCartonS
           </div>
         ) : (
           <p className="rounded-2xl bg-amber-50 px-4 py-3 text-center text-[11px] font-semibold text-amber-700">
-            No carton id yet — scan tracking from desktop first.
+            No package id yet — scan tracking from desktop first.
           </p>
         )}
 

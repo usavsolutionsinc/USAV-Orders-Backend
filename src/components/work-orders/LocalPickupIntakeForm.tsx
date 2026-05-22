@@ -8,6 +8,7 @@ import {
   getSidebarIntakeSubmitButtonClass,
 } from '@/design-system/components';
 import { HorizontalButtonSlider, type HorizontalSliderItem } from '@/components/ui/HorizontalButtonSlider';
+import { ConditionPills } from '@/components/receiving/workspace/ConditionPills';
 import { useSkuCatalogSearch, type SearchField, type SkuCatalogItem } from '@/hooks/useSkuCatalogSearch';
 import { invalidateReceivingCache } from '@/lib/receivingCache';
 
@@ -491,23 +492,16 @@ export function LocalPickupIntakeForm({
           )}
         </div>
 
-        {/* Condition Received — full width */}
+        {/* Condition Received — full width. Reuses ConditionPills so every
+            condition picker in the app shares the receiving workspace's
+            colored ring-pill UX. */}
         <div>
           <label className="block text-[9px] font-black uppercase tracking-wider text-gray-500 mb-1">
             Condition Received
           </label>
-          <HorizontalButtonSlider
-            aria-label="Condition received"
-            variant="slate"
-            size="md"
+          <ConditionPills
             value={line.conditionGrade}
-            onChange={(next) =>
-              patchLine(line.key, { conditionGrade: next as ConditionGrade })
-            }
-            items={CONDITION_OPTIONS.map<HorizontalSliderItem>((o) => ({
-              id: o.value,
-              label: o.label,
-            }))}
+            onChange={(next) => patchLine(line.key, { conditionGrade: next as ConditionGrade })}
           />
         </div>
 

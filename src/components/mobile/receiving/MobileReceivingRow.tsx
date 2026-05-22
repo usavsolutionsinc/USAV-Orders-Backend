@@ -165,15 +165,30 @@ export function MobileReceivingRow({ row, variant, fresh = false, onTap, photosH
             <SerialChip value={serialsCsv} display={getLast6Serial(serialsCsv)} />
           </div>
 
+          {!isExpanded && (
+            <Link
+              href={photosHref}
+              prefetch={false}
+              className="pointer-events-auto shrink-0"
+              aria-label="Take photos"
+            >
+              <PhotoChip count={photoCount} isAction={false} />
+            </Link>
+          )}
+        </div>
+
+        {isExpanded && (
           <Link
             href={photosHref}
             prefetch={false}
-            className="pointer-events-auto shrink-0"
             aria-label="Take photos"
+            className="pointer-events-auto mt-3 inline-flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-blue-600 text-white text-[12px] font-black uppercase tracking-[0.18em] shadow-[0_6px_14px_-6px_rgba(37,99,235,0.55)] active:scale-[0.98] active:bg-blue-700 transition-transform"
           >
-            <PhotoChip count={photoCount} isAction={isExpanded} />
+            <Camera className="h-4 w-4" />
+            <span>Take Photos</span>
+            <span className="ml-1 text-white tabular-nums">x{photoCount}</span>
           </Link>
-        </div>
+        )}
       </div>
     </div>
   );

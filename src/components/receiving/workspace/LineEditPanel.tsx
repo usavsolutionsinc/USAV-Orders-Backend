@@ -23,7 +23,6 @@ import {
 } from 'react';
 import { createPortal } from 'react-dom';
 import { renderToStaticMarkup } from 'react-dom/server';
-import QRCode from 'react-qr-code';
 import {
   Barcode,
   ChevronDown,
@@ -58,12 +57,12 @@ import { ReceivingPoLabelPreview } from './ReceivingPoLabelPreview';
 import { ReceivingProductLabelPreview } from './ReceivingProductLabelPreview';
 import { ReceiveResponsePanel } from './ReceiveResponsePanel';
 import { ReceivingAuditModal } from './ReceivingAuditModal';
-import { ReceivingContextCard } from './ReceivingContextCard';
 import { ConditionPills } from './ConditionPills';
 import { SerialCard } from './SerialCard';
 import { PoLinesAccordion } from './PoLinesAccordion';
 import { ReceivingClaimModal } from './ReceivingClaimModal';
 import { WorkspaceCard } from '@/design-system/components';
+import { PaneHeaderActionBar, type PaneHeaderActionBarAction } from '@/components/ui/pane-header';
 import { printProductLabel } from '@/lib/print/printProductLabel';
 import { mobileQrUrl } from '@/lib/barcode-routing';
 import { loadBarcodeLibrary, renderBarcode } from '@/utils/barcode';
@@ -561,23 +560,57 @@ export function LineEditPanel({
     }
   }, [row.id]);
 
+  // Parent list (table / sibling accordion) may have stale `row.serials` —
+  // it's fetched on a different cadence than the per-line workspace. Pull
+  // fresh serials whenever the active line changes so SerialCard's chips +
+  // "X/Y SCANNED" tally always agree with what the DB has for this line.
+  useEffect(() => {
+    void refreshLineWithSerials();
+  }, [refreshLineWithSerials]);
+
   const submitSerial = useCallback(async (raw?: string) => {
     const serial = (raw ?? serialInput).trim();
     if (!serial || !row.receiving_id || serialSubmitting) return;
     setSerialSubmitting(true);
     try {
-      const res = await fetch('/api/receiving/scan-serial', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          receiving_id: row.receiving_id,
-          receiving_line_id: row.id,
-          serial_number: serial,
-          staff_id: Number(staffId),
-        }),
-      });
-      const data = await res.json();
-      if (data?.success && data.line_state && typeof data.line_state.id === 'number') {
+      const postScan = async (allowOverReceive: boolean) => {
+        const res = await fetch('/api/receiving/scan-serial', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            receiving_id: row.receiving_id,
+            receiving_line_id: row.id,
+            serial_number: serial,
+            staff_id: Number(staffId),
+            ...(allowOverReceive ? { allow_over_receive: true } : {}),
+          }),
+        });
+        const json = await res.json().catch(() => null);
+        return { res, data: json };
+      };
+
+      let { res, data } = await postScan(false);
+
+      // Server refuses to over-receive by default — prompt for confirm and
+      // retry with the override flag. Operators are responsible for tracking
+      // the surplus reason (extra unit, manual sample, mis-counted PO).
+      if (res.status === 409 && data?.error === 'OVER_RECEIVE') {
+        const expected = data.quantity_expected ?? row.quantity_expected ?? '?';
+        const prior = data.prior_received ?? row.quantity_received ?? 0;
+        const confirmMsg = `Line is at ${prior}/${expected}. Scan ${serial} anyway and over-receive?`;
+        if (window.confirm(confirmMsg)) {
+          ({ res, data } = await postScan(true));
+        } else {
+          toast.info('Scan cancelled — line at capacity');
+          return;
+        }
+      }
+
+      if (!res.ok || !data?.success) {
+        toast.error(data?.error || `Scan failed (${res.status})`);
+        return;
+      }
+      if (data.line_state && typeof data.line_state.id === 'number') {
         setSerialInput('');
         const ls = data.line_state;
         dispatchLineUpdated({
@@ -598,7 +631,9 @@ export function LineEditPanel({
         setTimeout(() => serialRef.current?.focus(), 40);
         void refreshLineWithSerials();
       }
-    } catch { /* silent */ } finally {
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Network error scanning serial');
+    } finally {
       setSerialSubmitting(false);
     }
   }, [serialInput, row.receiving_id, row.id, staffId, serialSubmitting, refreshLineWithSerials]);
@@ -615,7 +650,7 @@ export function LineEditPanel({
       if (receiveInFlightRef.current) return;
       if (row.receiving_id == null) {
         toast.error('Cannot receive — link this item to a shipment first.', {
-          description: 'Scan tracking or use lookup so this line has a receiving (carton) id.',
+          description: 'Scan tracking or use lookup so this line has a receiving (package) id.',
           duration: 6000,
         });
         return;
@@ -746,7 +781,7 @@ export function LineEditPanel({
               } else {
                 toast.error('Lines saved locally — Zoho was NOT updated (no PO link found).', {
                   id: toastId,
-                  description: 'Sync with Zoho first (refresh icon) to link this carton to a PO.',
+                  description: 'Sync with Zoho first (refresh icon) to link this package to a PO.',
                   duration: 7000,
                 });
                 setResponseExpanded(true);
@@ -807,19 +842,38 @@ export function LineEditPanel({
   );
 
   const runPrintLabel = useCallback(() => {
+    let didPrint = false;
     if (scanValue.trim()) {
       printReceivingLabel(labelPayload);
-      return;
+      didPrint = true;
+    } else {
+      const skuTrim = (row.sku || '').trim();
+      if (skuTrim) {
+        printProductLabel({
+          sku: skuTrim,
+          title: row.item_name ?? undefined,
+          serialNumber: serialInput.trim() || undefined,
+        });
+        didPrint = true;
+      }
     }
-    const skuTrim = (row.sku || '').trim();
-    if (skuTrim) {
-      printProductLabel({
-        sku: skuTrim,
-        title: row.item_name ?? undefined,
-        serialNumber: serialInput.trim() || undefined,
-      });
+    if (didPrint) {
+      // Flip the print step (#5) on the workspace stepper. Persist so the
+      // dot stays filled across re-mounts; the workspace re-reads the flag
+      // on mount and listens for this event during the current session.
+      try {
+        window.localStorage.setItem(
+          `receiving-label-printed:${row.id}`,
+          String(Date.now()),
+        );
+      } catch {
+        /* private-mode / quota — non-fatal */
+      }
+      window.dispatchEvent(
+        new CustomEvent('receiving-label-printed', { detail: { line_id: row.id } }),
+      );
     }
-  }, [scanValue, labelPayload, row.sku, row.item_name, serialInput]);
+  }, [scanValue, labelPayload, row.sku, row.item_name, row.id, serialInput]);
 
   // Print popup opens first (synchronous), then receive fires in the
   // background — the button does NOT wait for Zoho to return.
@@ -988,11 +1042,11 @@ export function LineEditPanel({
 
   const handleShare = useCallback(async () => {
     if (!row.receiving_id) {
-      toast.error('No receiving carton linked yet');
+      toast.error('No receiving package linked yet');
       return;
     }
     const url = receivingShareUrl(row.receiving_id, row.id);
-    const poLabel = row.zoho_purchaseorder_number || `Carton #${row.receiving_id}`;
+    const poLabel = row.zoho_purchaseorder_number || `Package #${row.receiving_id}`;
     const title = `Receiving — ${poLabel}`;
     try {
       if (typeof navigator !== 'undefined' && typeof navigator.share === 'function') {
@@ -1009,7 +1063,7 @@ export function LineEditPanel({
 
   const handleCopyAll = useCallback(async () => {
     if (!row.receiving_id) {
-      toast.error('No receiving carton linked yet');
+      toast.error('No receiving package linked yet');
       return;
     }
     setCopyingAll(true);
@@ -1050,82 +1104,61 @@ export function LineEditPanel({
           clears the sticky action bar so the last card never hides under it. */}
       <div className="min-h-0 flex-1 overflow-y-auto">
         <div className="mx-auto w-full max-w-3xl space-y-4 px-4 py-5 pb-32 sm:px-6">
-          {/* Toolbar — refresh + share / audit / copy + prev/next. Single
-              consolidated utility bar above the Staff card; replaces the
-              old workspace-header buttons. */}
-          <div className="flex items-center gap-2 rounded-xl border border-gray-200/70 bg-white px-3 py-1.5 shadow-sm">
-            <button
-              type="button"
-              onClick={syncWithZoho}
-              disabled={zohoSyncing}
-              aria-label="Refresh line from Zoho"
-              title="Sync with Zoho by tracking number"
-              className="inline-flex h-7 items-center gap-1 rounded-md px-1.5 text-[10px] font-bold uppercase tracking-widest text-slate-500 transition-colors hover:bg-slate-50 hover:text-slate-800 disabled:cursor-not-allowed disabled:opacity-40"
-            >
-              <RefreshCw className={`h-3.5 w-3.5 ${zohoSyncing ? 'animate-spin' : ''}`} />
-              Refresh
-            </button>
-            <button
-              type="button"
-              onClick={() => void handleShare()}
-              disabled={cartonActionsDisabled}
-              aria-label="Share receiving link"
-              title="Copy link to open this carton on Receiving"
-              className="inline-flex h-7 items-center gap-1 rounded-md px-1.5 text-[10px] font-bold uppercase tracking-widest text-slate-500 transition-colors hover:bg-slate-50 hover:text-slate-800 disabled:cursor-not-allowed disabled:opacity-40"
-            >
-              <Link2 className="h-3.5 w-3.5" />
-              Share
-            </button>
-            <button
-              type="button"
-              onClick={() => setAuditOpen(true)}
-              disabled={cartonActionsDisabled}
-              aria-label="View audit log"
-              title="Audit log (inventory events)"
-              className="inline-flex h-7 items-center gap-1 rounded-md px-1.5 text-[10px] font-bold uppercase tracking-widest text-slate-500 transition-colors hover:bg-slate-50 hover:text-slate-800 disabled:cursor-not-allowed disabled:opacity-40"
-            >
-              <Info className="h-3.5 w-3.5" />
-              Audit
-            </button>
-            <button
-              type="button"
-              onClick={() => void handleCopyAll()}
-              disabled={cartonActionsDisabled || copyingAll}
-              aria-label="Copy all receiving details"
-              title="Copy carton + PO details to clipboard"
-              className="inline-flex h-7 items-center gap-1 rounded-md px-1.5 text-[10px] font-bold uppercase tracking-widest text-slate-500 transition-colors hover:bg-slate-50 hover:text-slate-800 disabled:cursor-not-allowed disabled:opacity-40"
-            >
-              <Copy className={`h-3.5 w-3.5 ${copyingAll ? 'animate-pulse' : ''}`} />
-              Copy
-            </button>
-            {(zohoSyncing || saving || platformSaving) && (
-              <span className="text-[9px] font-black uppercase tracking-[0.18em] text-blue-600" aria-live="polite">
-                {zohoSyncing ? 'Syncing' : 'Saving'}
-              </span>
-            )}
-            <div className="flex-1" />
-            {/* Prev/Next — wired to the recent rail / history table via
-                `receiving-navigate-table`. Lives in this bar (was workspace
-                header) so all utility actions are in one row. */}
-            <button
-              type="button"
-              onClick={() => window.dispatchEvent(new CustomEvent('receiving-navigate-table', { detail: 'prev' }))}
-              aria-label="Previous recent line"
-              title="Previous recent line"
-              className="inline-flex h-7 w-7 items-center justify-center rounded-md text-slate-500 transition-colors hover:bg-slate-50 hover:text-slate-800"
-            >
-              <ChevronUp className="h-4 w-4" />
-            </button>
-            <button
-              type="button"
-              onClick={() => window.dispatchEvent(new CustomEvent('receiving-navigate-table', { detail: 'next' }))}
-              aria-label="Next recent line"
-              title="Next recent line"
-              className="inline-flex h-7 w-7 items-center justify-center rounded-md text-slate-500 transition-colors hover:bg-slate-50 hover:text-slate-800"
-            >
-              <ChevronDown className="h-4 w-4" />
-            </button>
-          </div>
+          {/* Utility toolbar — refresh + share / audit / copy + prev/next.
+              Single consolidated row above the Staff card; backed by the
+              shared PaneHeaderActionBar so this shape stays consistent with
+              the rest of the detail-pane surfaces. */}
+          <PaneHeaderActionBar
+            actions={[
+              {
+                key: 'refresh',
+                label: 'Refresh',
+                icon: <RefreshCw className={`h-3.5 w-3.5 ${zohoSyncing ? 'animate-spin' : ''}`} />,
+                onClick: syncWithZoho,
+                disabled: zohoSyncing,
+                title: 'Sync with Zoho by tracking number',
+                ariaLabel: 'Refresh line from Zoho',
+              },
+              {
+                key: 'share',
+                label: 'Share',
+                icon: <Link2 className="h-3.5 w-3.5" />,
+                onClick: () => void handleShare(),
+                disabled: cartonActionsDisabled,
+                title: 'Copy link to open this package on Receiving',
+                ariaLabel: 'Share receiving link',
+              },
+              {
+                key: 'audit',
+                label: 'Audit',
+                icon: <Info className="h-3.5 w-3.5" />,
+                onClick: () => setAuditOpen(true),
+                disabled: cartonActionsDisabled,
+                title: 'Audit log (inventory events)',
+                ariaLabel: 'View audit log',
+              },
+              {
+                key: 'copy',
+                label: 'Copy',
+                icon: <Copy className={`h-3.5 w-3.5 ${copyingAll ? 'animate-pulse' : ''}`} />,
+                onClick: () => void handleCopyAll(),
+                disabled: cartonActionsDisabled || copyingAll,
+                title: 'Copy package + PO details to clipboard',
+                ariaLabel: 'Copy all receiving details',
+              },
+            ] satisfies PaneHeaderActionBarAction[]}
+            status={
+              zohoSyncing
+                ? 'Syncing'
+                : (saving || platformSaving)
+                ? 'Saving'
+                : undefined
+            }
+            onPrev={() => window.dispatchEvent(new CustomEvent('receiving-navigate-table', { detail: 'prev' }))}
+            onNext={() => window.dispatchEvent(new CustomEvent('receiving-navigate-table', { detail: 'next' }))}
+            prevTitle="Previous recent line"
+            nextTitle="Next recent line"
+          />
 
           {/* Staff · Scanned · Received — sits below the toolbar so the
               operator's first content read is "who did what, when" plus
@@ -1143,8 +1176,7 @@ export function LineEditPanel({
               the operator's first context check. */}
           {/* Body padding bumped (py-4) so the selected pill's outline +
               focus ring aren't clipped by a too-tight card body. */}
-          <WorkspaceCard label="Shipment PO" bodyClassName="px-4 py-4">
-
+          <WorkspaceCard bodyClassName="px-4 pt-3 pb-4">
           <div className="space-y-2.5">
             <div className="flex min-w-0 flex-col gap-y-1">
               {/* Chip row uses items-center so listing URL chip, PO chip,
@@ -1330,11 +1362,10 @@ export function LineEditPanel({
                 aria-disabled={row.receiving_id == null || undefined}
                 className={`min-w-0 flex-1 ${row.receiving_id == null ? 'pointer-events-none opacity-50' : ''}`}
               >
-                <span className={FLOW_SECTION_LABEL}>Platform</span>
                 <div
                   role="radiogroup"
                   aria-label="Source platform"
-                  className="mt-1.5 flex flex-wrap items-center gap-1.5"
+                  className="flex flex-wrap items-center gap-1.5"
                 >
                   {(['ebay', 'goodwill', 'amazon', 'aliexpress', 'walmart', 'other'] as const)
                     .map((id) => SOURCE_PLATFORM_OPTS.find((o) => o.value === id))
@@ -1353,7 +1384,7 @@ export function LineEditPanel({
                           }}
                           className={`inline-flex h-8 items-center whitespace-nowrap rounded-full border px-3 text-[10px] font-black uppercase tracking-wide transition-colors ${
                             isActive
-                              ? 'border-gray-900 bg-gray-900 text-white'
+                              ? 'border-blue-600 bg-blue-600 text-white'
                               : 'border-gray-200 bg-white text-gray-600 hover:border-gray-300 hover:bg-gray-50'
                           }`}
                         >
@@ -1363,13 +1394,12 @@ export function LineEditPanel({
                     })}
                 </div>
               </div>
-              <span className="mt-5 h-6 w-px shrink-0 bg-slate-200" aria-hidden />
+              <span className="h-6 w-px shrink-0 self-center bg-slate-200" aria-hidden />
               <div className="min-w-0 shrink-0 ml-auto text-right">
-                <span className={FLOW_SECTION_LABEL}>Type</span>
                 <div
                   role="radiogroup"
                   aria-label="Receiving type"
-                  className="mt-1.5 flex flex-wrap items-center justify-end gap-1.5"
+                  className="flex flex-wrap items-center justify-end gap-1.5"
                 >
                   {RECEIVING_TYPE_OPTS
                     .filter((opt) => opt.value !== 'PICKUP')
@@ -1387,7 +1417,7 @@ export function LineEditPanel({
                           }}
                           className={`inline-flex h-8 items-center whitespace-nowrap rounded-full border px-3 text-[10px] font-black uppercase tracking-wide transition-colors ${
                             isActive
-                              ? 'border-gray-900 bg-gray-900 text-white'
+                              ? 'border-blue-600 bg-blue-600 text-white'
                               : 'border-gray-200 bg-white text-gray-600 hover:border-gray-300 hover:bg-gray-50'
                           }`}
                         >
@@ -1401,31 +1431,26 @@ export function LineEditPanel({
           </div>
           </WorkspaceCard>
 
-          {/* PO Lines accordion — renders only for multi-line cartons
-              (component self-guards on rows.length <= 1). Sits ABOVE the
-              product title so the operator picks the right line first,
-              then sees its title + critical inputs below. */}
+          {/* PO Items card — title + qty + sku + serial chips per row, with
+              the active row's bubble carrying an integrated condition-pill
+              row. The standalone ContextCard and Condition section that used
+              to live outside this card are gone — both signals now live
+              inside the active PO item. */}
           {row.receiving_id != null ? (
-            <PoLinesAccordion receivingId={row.receiving_id} activeLineId={row.id} />
+            <PoLinesAccordion
+              receivingId={row.receiving_id}
+              activeLineId={row.id}
+              activeRowSlot={
+                <ConditionPills
+                  value={cond}
+                  onChange={(next) => {
+                    setCond(next);
+                    void patch({ condition_grade: next });
+                  }}
+                />
+              }
+            />
           ) : null}
-
-          {/* Product / item title — flat title-only card. Line N of M lives
-              in the PoLinesAccordion above; variant chip + SKU stripped. */}
-          <ReceivingContextCard
-            row={row}
-            lineIndex={itemIndex}
-            lineTotal={itemTotal}
-          />
-
-          {/* Condition pills — top-of-workspace critical input. Drives the
-              same `cond` state used by the (now-removed) Item FlowSection. */}
-          <ConditionPills
-            value={cond}
-            onChange={(next) => {
-              setCond(next);
-              void patch({ condition_grade: next });
-            }}
-          />
 
           {/* Serial scan + notes — co-located so the operator can leave a
               note without leaving the scan path. */}
@@ -1434,7 +1459,53 @@ export function LineEditPanel({
             expected={row.quantity_expected ?? null}
             isSubmitting={serialSubmitting}
             disabled={!row.receiving_id}
-            onAdd={(sn) => { void submitSerial(sn); }}
+            onAdd={(sn) => submitSerial(sn)}
+            onReplaceSerial={(original, nextSerial) => {
+              void (async () => {
+                const res = await fetch('/api/receiving/scan-serial', {
+                  method: 'DELETE',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({
+                    serial_unit_id: original.id,
+                    receiving_line_id: row.id,
+                  }),
+                });
+                const data = await res.json().catch(() => null);
+                if (!res.ok || !data?.success) {
+                  toast.error(data?.error || 'Could not replace serial');
+                  return;
+                }
+                await submitSerial(nextSerial);
+              })();
+            }}
+            onDeleteSerial={(s) => {
+              if (!window.confirm(`Remove serial ${s.serial_number}?`)) return;
+              void (async () => {
+                const res = await fetch('/api/receiving/scan-serial', {
+                  method: 'DELETE',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({
+                    serial_unit_id: s.id,
+                    receiving_line_id: row.id,
+                  }),
+                });
+                const data = await res.json().catch(() => null);
+                if (!res.ok || !data?.success) {
+                  toast.error(data?.error || 'Could not remove serial');
+                  return;
+                }
+                toast.success('Serial removed');
+                if (data.line_state?.id != null) {
+                  dispatchLineUpdated({
+                    id: data.line_state.id,
+                    quantity_received: data.line_state.quantity_received,
+                    quantity_expected: data.line_state.quantity_expected,
+                    workflow_status: data.line_state.workflow_status ?? undefined,
+                  });
+                }
+                await refreshLineWithSerials();
+              })();
+            }}
             notes={notes}
             onNotesChange={setNotes}
             onNotesBlur={() => {
@@ -1571,7 +1642,7 @@ export function LineEditPanel({
         // chevron and the main CTA — same hue, lower opacity.
         const ctaDivider = ctaBg.replace('bg-', 'border-').replace('-600', '-500/50').replace('-500', '-400/50').replace('-900', '-700/50');
         return (
-      <div className="sticky bottom-0 z-10 border-t border-gray-200 bg-white/90 px-4 py-3 backdrop-blur sm:px-6">
+      <div className="sticky bottom-0 z-10 border-t border-gray-200 bg-white/90 px-6 py-3 backdrop-blur sm:px-10">
         <div className="mx-auto w-full max-w-3xl">
           <div className={`relative z-20 flex w-full overflow-visible rounded-xl shadow-sm ${ctaBg}`}>
             <div className="group/split-menu relative flex shrink-0 self-stretch">

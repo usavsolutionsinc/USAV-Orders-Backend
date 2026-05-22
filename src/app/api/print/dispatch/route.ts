@@ -119,7 +119,7 @@ export const POST = withAuth(async (request: NextRequest) => {
       switch (klass) {
         case 'carton':
           zpl = buildCartonZpl(body.payload);
-          title = `Carton ${body.payload?.poTail ?? ''}`;
+          title = `Package ${body.payload?.poTail ?? ''}`;
           break;
         case 'product':
           zpl = buildProductZpl(body.payload);

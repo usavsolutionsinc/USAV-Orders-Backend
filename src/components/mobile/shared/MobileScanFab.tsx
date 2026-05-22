@@ -11,12 +11,14 @@ import { useAuth } from '@/contexts/AuthContext';
 // opens its own sheet. Elsewhere we open the generic PO scan sheet.
 const ROUTE_SPECIFIC_PREFIXES = ['/tech', '/packer', '/inventory'];
 
-// /m/* are the phone-native flows served outside the mobile shell. Don't
-// double-mount the FAB there.
-const HIDDEN_PREFIXES = ['/m/'];
+// Routes that already own scan affordances (or are camera-first flows
+// where a floating button would compete with photo capture). /m/* has
+// its own bottom-nav with a centre scan button. /packer and /receiving
+// are single-purpose camera flows.
+const HIDDEN_PREFIXES = ['/m/', '/m'];
 
-/** Packer page provides its own layout; suppress the global scan FAB there. */
-const SUPPRESS_GLOBAL_SCAN_FAB_PREFIXES = ['/packer'];
+/** Suppress the global scan FAB on camera-first surfaces. */
+const SUPPRESS_GLOBAL_SCAN_FAB_PREFIXES = ['/packer', '/receiving'];
 
 function matchesPrefix(pathname: string | null, prefixes: string[]): boolean {
   if (!pathname) return false;

@@ -1,5 +1,6 @@
 'use client';
 
+import { useCallback, useRef, type WheelEvent } from 'react';
 import { CONDITION_OPTS } from '@/components/station/receiving-constants';
 
 interface Props {
@@ -9,8 +10,7 @@ interface Props {
 
 // Per-grade visual tone — selected = filled, unselected = soft outline.
 // Yellow for new (factory-fresh), green for top used, blue for solid used,
-// gray for cosmetic-only, amber for parts-only — same semantics as the
-// existing CONDITION_OPTS but with deliberate hierarchy by tone.
+// slate for cosmetic-only, amber for parts-only — deliberate hierarchy by tone.
 const TONE: Record<string, { active: string; inactive: string }> = {
   BRAND_NEW: {
     active: 'bg-yellow-500 text-white shadow-sm shadow-yellow-200 ring-yellow-600',
@@ -35,46 +35,56 @@ const TONE: Record<string, { active: string; inactive: string }> = {
 };
 
 /**
- * Big-tap condition picker: all 5 grades visible as ring-bordered pills, one
- * tap to set. Replaces the dropdown UX that was buried inside the Item
- * FlowSection — promotes condition to a top-of-workspace critical input.
+ * Bare, mobile-first condition picker. Renders the 5 grades as a single
+ * horizontally-scrolling row of ring-bordered pills. No card wrapper, no
+ * internal header — callers own the label and surrounding layout.
+ *
+ * Used by every interactive condition picker in the app so the colour
+ * vocabulary (yellow=new, green=A, blue=B, slate=C, amber=parts) stays
+ * consistent across the receiving workspace, label printer, shipped
+ * details panel, and intake forms.
  */
 export function ConditionPills({ value, onChange }: Props) {
   const selected = String(value || '').trim().toUpperCase();
-  const hasSelection = selected !== '' && selected !== 'PENDING';
+  const scrollerRef = useRef<HTMLDivElement | null>(null);
+
+  // Translate vertical wheel input to horizontal scroll while the pointer
+  // is over the row — mouse users on desktop have no other way to reach
+  // overflowed pills without a visible scrollbar.
+  const onWheel = useCallback((e: WheelEvent<HTMLDivElement>) => {
+    const el = scrollerRef.current;
+    if (!el) return;
+    if (Math.abs(e.deltaY) <= Math.abs(e.deltaX)) return;
+    el.scrollLeft += e.deltaY;
+    e.preventDefault();
+  }, []);
 
   return (
-    <section className="rounded-2xl bg-white p-4 shadow-sm ring-1 ring-gray-200/60">
-      <div className="mb-2 flex items-center justify-between">
-        <h3 className="text-[11px] font-bold uppercase tracking-[0.14em] text-gray-500">
-          Condition
-        </h3>
-        {!hasSelection ? (
-          <span className="text-[10px] font-bold uppercase tracking-widest text-gray-400">
-            Select a grade
-          </span>
-        ) : null}
-      </div>
-      <div role="radiogroup" aria-label="Condition grade" className="flex flex-wrap gap-2">
-        {CONDITION_OPTS.map((opt) => {
-          const isActive = selected === opt.value;
-          const tone = TONE[opt.value] ?? TONE.USED_C;
-          return (
-            <button
-              key={opt.value}
-              type="button"
-              role="radio"
-              aria-checked={isActive}
-              onClick={() => onChange(opt.value)}
-              className={`inline-flex h-11 flex-1 min-w-[88px] items-center justify-center rounded-xl px-4 text-[12px] font-black uppercase tracking-[0.1em] ring-1 ring-inset transition-all active:scale-[0.98] ${
-                isActive ? tone.active : tone.inactive
-              }`}
-            >
-              {opt.label}
-            </button>
-          );
-        })}
-      </div>
-    </section>
+    <div
+      ref={scrollerRef}
+      onWheel={onWheel}
+      role="radiogroup"
+      aria-label="Condition grade"
+      className="-mx-1 flex gap-1.5 overflow-x-auto overscroll-x-contain px-1 py-1 [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden"
+    >
+      {CONDITION_OPTS.map((opt) => {
+        const isActive = selected === opt.value;
+        const tone = TONE[opt.value] ?? TONE.USED_C;
+        return (
+          <button
+            key={opt.value}
+            type="button"
+            role="radio"
+            aria-checked={isActive}
+            onClick={() => onChange(opt.value)}
+            className={`inline-flex h-9 shrink-0 snap-start items-center whitespace-nowrap rounded-full px-4 text-[11px] font-black uppercase tracking-[0.1em] ring-1 ring-inset transition-all active:scale-[0.98] ${
+              isActive ? tone.active : tone.inactive
+            }`}
+          >
+            {opt.label}
+          </button>
+        );
+      })}
+    </div>
   );
 }

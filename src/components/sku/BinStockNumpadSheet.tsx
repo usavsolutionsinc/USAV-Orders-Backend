@@ -11,6 +11,7 @@ import {
   MobilePackerSpamCamera,
   type CapturedShot,
 } from '@/components/mobile/station/MobilePackerSpamCamera';
+import { compressPhotoForUpload } from '@/lib/image/compress-for-upload';
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -42,15 +43,6 @@ function randomId(): string {
     return crypto.randomUUID();
   }
   return `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
-}
-
-function blobToBase64(blob: Blob): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onloadend = () => resolve(String(reader.result || ''));
-    reader.onerror = () => reject(new Error('Failed to read photo blob'));
-    reader.readAsDataURL(blob);
-  });
 }
 
 const KEYS: ReadonlyArray<string | number> = [
@@ -204,7 +196,8 @@ export function BinStockNumpadSheet({
         const binId = Number(data?.binId);
         for (const shot of pendingShots) {
           try {
-            const base64 = await blobToBase64(shot.blob);
+            const compressed = await compressPhotoForUpload(shot.blob, { source: 'bin-stock' });
+            const base64 = compressed.base64;
             await fetch('/api/inventory-photos', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },

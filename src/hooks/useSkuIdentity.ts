@@ -45,7 +45,14 @@ async function fetchResolution(sku: string, platform: string | null | undefined)
           canonicalSku: data.canonicalSku ?? null,
           productTitle: data.productTitle ?? null,
           catalogId: data.catalogId ?? null,
-          platforms: Array.isArray(data.platforms) ? data.platforms : [],
+          platforms: Array.isArray(data.platforms)
+            ? data.platforms.map((p: any) => ({
+                platform: p.platform,
+                platformSku: p.platformSku ?? null,
+                platformItemId: p.platformItemId ?? null,
+                accountName: p.accountName ?? null,
+              }))
+            : [],
         }
       : {
           resolved: false,

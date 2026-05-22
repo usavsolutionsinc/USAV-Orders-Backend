@@ -23,7 +23,7 @@ function ReceivingPageInner() {
     <>
       {/* Mobile (<768px) — photo-only feed with camera FAB. */}
       <div className="flex h-full w-full flex-col overflow-hidden bg-white md:hidden">
-        <header className="sticky top-0 z-40 flex h-14 items-center gap-3 border-b border-gray-100 bg-white px-3">
+        <header className="sticky top-0 z-40 flex min-h-14 items-center gap-3 border-b border-gray-100 bg-white px-3 pt-[env(safe-area-inset-top)]">
           <button
             type="button"
             onClick={openDrawer}

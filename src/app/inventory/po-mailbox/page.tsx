@@ -1,28 +1,28 @@
 /**
- * /inventory/po-mailbox — scan the dedicated PO mailbox from the inventory area.
+ * /inventory/po-mailbox — main content area for the PO mailbox triage flow.
  *
- * Reuses the same preview panel mounted on /admin?section=po_mailbox. Eventually
- * this same route will host the "Missing from Zoho" panel; for now it's the
- * dry-run extractor so we can validate against real vendor emails.
+ * The sidebar (InventorySidebarPanel) renders the four-pile worklist.
+ * Clicking a pile row sets ?msg=<row.id> on this URL, and we render the
+ * checklist + email body here. With no msg, we show an empty-state
+ * pointing users at the sidebar.
  */
 
+import { Suspense } from 'react';
 import { requirePermission } from '@/lib/auth/page-guard';
+import { PoTriageDetailView } from '@/components/po-triage/PoTriageDetailView';
 
-export default async function InventoryPoMailboxPage() {
+interface PageProps {
+  searchParams: Promise<{ msg?: string }>;
+}
+
+export default async function InventoryPoMailboxPage({ searchParams }: PageProps) {
   await requirePermission('admin.view', { enforce: true });
+  const { msg } = await searchParams;
+  const id = typeof msg === 'string' && msg.trim() ? msg.trim() : null;
 
   return (
-    <div className="flex h-full items-center justify-center bg-gray-50">
-      <div className="max-w-md text-center">
-        <h1 className="text-lg font-semibold text-gray-700">PO Mailbox</h1>
-        <p className="mt-2 text-[13px] text-gray-500">
-          Scan, reconcile, and triage purchase-order emails from the sidebar →
-        </p>
-        <p className="mt-3 text-[12px] text-gray-400">
-          The Missing-from-Zoho worklist, scan controls, and mirror status all live in the
-          left panel. Future feature: clicking a row will open the email body here.
-        </p>
-      </div>
-    </div>
+    <Suspense fallback={null}>
+      <PoTriageDetailView id={id} />
+    </Suspense>
   );
 }

@@ -111,7 +111,7 @@ function FeedbackBody({ poContext, selectedLine, lastSerialFlash }: Props) {
         <div className="flex min-w-0 items-center gap-1.5">
           <Icon className={`h-3.5 w-3.5 shrink-0 ${tint}`} />
           <span className="text-[9px] font-black uppercase tracking-widest text-gray-400">
-            CARTON · {label}
+            PACKAGE · {label}
           </span>
           <span className="truncate text-[11px] font-black tracking-tight text-gray-900">
             #{cartonId}

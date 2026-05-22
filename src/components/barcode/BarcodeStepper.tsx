@@ -11,12 +11,6 @@ interface StepDef {
 }
 
 function stepsForMode(mode: BarcodeMode): StepDef[] {
-  if (mode === 'change-location') {
-    return [
-      { id: 1, label: 'SKU' },
-      { id: 2, label: 'Update' },
-    ];
-  }
   if (mode === 'reprint') {
     return [
       { id: 1, label: 'SKU' },

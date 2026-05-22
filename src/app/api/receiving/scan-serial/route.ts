@@ -241,3 +241,184 @@ export const POST = withAuth(async (request: NextRequest, ctx) => {
     },
   },
 });
+
+/**
+ * DELETE /api/receiving/scan-serial
+ * Body: { serial_unit_id: number, receiving_line_id: number }
+ *   — OR — { serial_number: string, receiving_line_id: number }
+ *
+ * Removes a previously-scanned serial from a receiving line:
+ *   - Deletes the matching `serial_units` row (only if it still points at the
+ *     given receiving_line_id, so we never clobber a unit that's already moved
+ *     beyond receiving).
+ *   - Decrements `receiving_lines.quantity_received` by 1 (floored at 0).
+ *   - Inserts a reversing `sku_stock_ledger` row (-1, dimension WAREHOUSE)
+ *     when the original receive wrote one.
+ *
+ * Wrapped in a single transaction so partial failures don't leave the line
+ * and the unit out of sync.
+ */
+export const DELETE = withAuth(async (request: NextRequest, ctx) => {
+  const client = await pool.connect();
+  try {
+    const body = await request.json().catch(() => ({}));
+    const serialUnitIdRaw = Number(body?.serial_unit_id ?? body?.serialUnitId);
+    const serialNumberRaw = String(body?.serial_number ?? body?.serialNumber ?? '').trim();
+    const receivingLineIdRaw = Number(body?.receiving_line_id ?? body?.receivingLineId);
+
+    const serialUnitId =
+      Number.isFinite(serialUnitIdRaw) && serialUnitIdRaw > 0
+        ? Math.floor(serialUnitIdRaw)
+        : null;
+    const receivingLineId =
+      Number.isFinite(receivingLineIdRaw) && receivingLineIdRaw > 0
+        ? Math.floor(receivingLineIdRaw)
+        : null;
+
+    if (!receivingLineId) {
+      return NextResponse.json(
+        { success: false, error: 'receiving_line_id is required' },
+        { status: 400 },
+      );
+    }
+    if (!serialUnitId && !serialNumberRaw) {
+      return NextResponse.json(
+        { success: false, error: 'serial_unit_id or serial_number is required' },
+        { status: 400 },
+      );
+    }
+
+    await client.query('BEGIN');
+
+    // Resolve the serial_units row — scoped to the line so we can't delete a
+    // serial that's already moved on (origin_receiving_line_id is set to NULL
+    // on FK delete-cascade, so this guard also catches "already detached").
+    const lookup = await client.query<{
+      id: number;
+      sku: string | null;
+      serial_number: string;
+      origin_receiving_line_id: number | null;
+    }>(
+      serialUnitId
+        ? `SELECT id, sku, serial_number, origin_receiving_line_id
+             FROM serial_units
+            WHERE id = $1 AND origin_receiving_line_id = $2
+            LIMIT 1`
+        : `SELECT id, sku, serial_number, origin_receiving_line_id
+             FROM serial_units
+            WHERE normalized_serial = upper(trim($1))
+              AND origin_receiving_line_id = $2
+            LIMIT 1`,
+      serialUnitId ? [serialUnitId, receivingLineId] : [serialNumberRaw, receivingLineId],
+    );
+
+    const unit = lookup.rows[0];
+    if (!unit) {
+      await client.query('ROLLBACK');
+      return NextResponse.json(
+        { success: false, error: 'serial not found on this line' },
+        { status: 404 },
+      );
+    }
+
+    // Delete the serial_units row. tech_serial_numbers + sku_stock_ledger
+    // references are FK ON DELETE SET NULL (per 2026-04-11 migration) so the
+    // audit lineage is preserved.
+    await client.query(`DELETE FROM serial_units WHERE id = $1`, [unit.id]);
+
+    // Decrement quantity_received on the line. Clamped at 0 so a manual
+    // backfill that double-deletes can't drive the count negative.
+    const lineUpdate = await client.query<{
+      id: number;
+      sku: string | null;
+      quantity_received: number;
+      quantity_expected: number | null;
+      workflow_status: string | null;
+    }>(
+      `UPDATE receiving_lines
+          SET quantity_received = GREATEST(0, COALESCE(quantity_received, 0) - 1)
+        WHERE id = $1
+        RETURNING id, sku, quantity_received, quantity_expected, workflow_status::text AS workflow_status`,
+      [receivingLineId],
+    );
+    const line = lineUpdate.rows[0];
+
+    // Reversing ledger row — keep the audit chain intact. Original receive
+    // path only writes a delta when the serial was newly created on receiving,
+    // so we mirror that: write -1 only if the line has a sku.
+    if (line?.sku) {
+      try {
+        await client.query(
+          `INSERT INTO sku_stock_ledger
+             (sku, delta, reason, dimension, staff_id, ref_serial_unit_id)
+           VALUES ($1, -1, 'RECEIVING_UNDO', 'WAREHOUSE', $2, NULL)`,
+          [line.sku, ctx.staffId ?? null],
+        );
+      } catch (err) {
+        // Non-fatal — receive path also tolerates ledger insert failure.
+        console.warn('scan-serial DELETE: ledger insert failed (non-fatal)', err);
+      }
+    }
+
+    await client.query('COMMIT');
+
+    // Background: same cache + realtime fanout the POST path uses so the
+    // sidebar/accordion refetch and the UI reflects the new quantity.
+    after(async () => {
+      try {
+        await invalidateCacheTags([
+          'receiving-lines',
+          'receiving-logs',
+          'pending-unboxing',
+        ]);
+        await publishReceivingLogChanged({
+          action: 'update',
+          rowId: String(receivingLineId),
+          source: 'receiving.scan-serial.delete',
+        });
+      } catch (err) {
+        console.warn('scan-serial DELETE: cache/realtime update failed', err);
+      }
+    });
+
+    return NextResponse.json({
+      success: true,
+      removed_serial_unit_id: unit.id,
+      removed_serial_number: unit.serial_number,
+      line_state: line ?? null,
+    });
+  } catch (error) {
+    try {
+      await client.query('ROLLBACK');
+    } catch {
+      /* ignore */
+    }
+    const message = error instanceof Error ? error.message : 'Failed to remove serial';
+    console.error('receiving/scan-serial DELETE failed:', error);
+    return NextResponse.json({ success: false, error: message }, { status: 500 });
+  } finally {
+    client.release();
+  }
+}, {
+  permission: 'receiving.mark_received',
+  audit: {
+    source: 'receiving.scan-serial.delete',
+    action: AUDIT_ACTION.SERIAL_DELETE,
+    entityType: AUDIT_ENTITY.SERIAL_UNIT,
+    entityId: ({ response }) => {
+      const r = response as { removed_serial_unit_id?: number } | null;
+      return r?.removed_serial_unit_id ?? null;
+    },
+    extra: ({ response }) => {
+      const r = response as {
+        removed_serial_number?: string;
+        line_state?: { id?: number; quantity_received?: number };
+      } | null;
+      return {
+        serial_number: r?.removed_serial_number ?? null,
+        receiving_line_id: r?.line_state?.id ?? null,
+        quantity_received: r?.line_state?.quantity_received ?? null,
+      };
+    },
+  },
+});

@@ -44,7 +44,7 @@ export function ReceivingContextCard({ row, lineIndex, lineTotal }: Props) {
 
       <span
         className={`shrink-0 rounded-lg px-2.5 py-1 text-sm font-bold tabular-nums ring-1 ${qtyClass}`}
-        title={isComplete ? 'Carton complete' : 'Received / Expected'}
+        title={isComplete ? 'Package complete' : 'Received / Expected'}
       >
         {qtyText}
       </span>

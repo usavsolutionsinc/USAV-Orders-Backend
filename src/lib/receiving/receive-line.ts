@@ -128,13 +128,23 @@ interface LineTarget {
 
 // ── Internals ──────────────────────────────────────────────────────────────
 
-async function loadLine(lineId: number): Promise<LineTarget | null> {
-  const r = await pool.query<LineTarget>(
+/**
+ * Load the line under a row-level lock inside the provided transaction. Used
+ * by receiveLineUnits to serialize concurrent scans — without this, two
+ * scan-serial requests can both pass the OverReceive guard on a stale read of
+ * quantity_received and end up over-receiving by one. The lock is released on
+ * COMMIT/ROLLBACK.
+ */
+async function loadLineForUpdate(
+  client: import('pg').PoolClient,
+  lineId: number,
+): Promise<LineTarget | null> {
+  const r = await client.query<LineTarget>(
     `SELECT id, receiving_id, sku, item_name, zoho_item_id, zoho_purchaseorder_id,
             quantity_expected, quantity_received, workflow_status
      FROM receiving_lines
      WHERE id = $1
-     LIMIT 1`,
+     FOR UPDATE`,
     [lineId],
   );
   return r.rows[0] ?? null;
@@ -178,41 +188,53 @@ function dedupeSerials(input: ReceiveLineUnitsInput): string[] {
 export async function receiveLineUnits(
   input: ReceiveLineUnitsInput,
 ): Promise<ReceiveLineUnitsResult> {
-  const line = await loadLine(input.receiving_line_id);
-  if (!line) {
-    throw new Error(`receiving_line ${input.receiving_line_id} not found`);
-  }
+  // Acquire a dedicated connection + open a transaction so the SELECT ... FOR
+  // UPDATE on receiving_lines holds for the lifetime of this call. Concurrent
+  // scan-serial requests on the same line will block on this lock, then re-read
+  // the post-commit quantity_received — eliminating the snapshot-isolation
+  // race that previously let two scans both pass the OverReceive guard.
+  const client = await pool.connect();
+  let committed = false;
+  try {
+    await client.query('BEGIN');
 
-  const units = Math.max(0, Math.floor(input.units));
-  const serials = dedupeSerials(input);
-  if (serials.length > units) {
-    throw new Error(
-      `receiveLineUnits: serials (${serials.length}) > units (${units})`,
-    );
-  }
+    const line = await loadLineForUpdate(client, input.receiving_line_id);
+    if (!line) {
+      await client.query('ROLLBACK');
+      throw new Error(`receiving_line ${input.receiving_line_id} not found`);
+    }
 
-  // Guard against over-receive: incoming units would push the line past its
-  // expected quantity. Only enforced when quantity_expected is set (unmatched
-  // / catalog-only lines legitimately have NULL). Callers can override with
-  // `allow_over_receive: true` (e.g. admin "force" path).
-  const priorReceivedForGuard = Number(line.quantity_received ?? 0);
-  const expectedForGuard =
-    line.quantity_expected != null ? Number(line.quantity_expected) : null;
-  if (
-    !input.allow_over_receive &&
-    units > 0 &&
-    expectedForGuard != null &&
-    priorReceivedForGuard + units > expectedForGuard
-  ) {
-    throw new OverReceiveError({
-      receiving_line_id: line.id,
-      prior_received: priorReceivedForGuard,
-      attempted_units: units,
-      quantity_expected: expectedForGuard,
-    });
-  }
+    const units = Math.max(0, Math.floor(input.units));
+    const serials = dedupeSerials(input);
+    if (serials.length > units) {
+      await client.query('ROLLBACK');
+      throw new Error(
+        `receiveLineUnits: serials (${serials.length}) > units (${units})`,
+      );
+    }
 
-  const station: InventoryEventStation = input.station ?? 'RECEIVING';
+    // Guard against over-receive: read is now under the row lock so it sees
+    // committed state, not a stale snapshot. Override path still available via
+    // allow_over_receive for admin flows.
+    const priorReceivedForGuard = Number(line.quantity_received ?? 0);
+    const expectedForGuard =
+      line.quantity_expected != null ? Number(line.quantity_expected) : null;
+    if (
+      !input.allow_over_receive &&
+      units > 0 &&
+      expectedForGuard != null &&
+      priorReceivedForGuard + units > expectedForGuard
+    ) {
+      await client.query('ROLLBACK');
+      throw new OverReceiveError({
+        receiving_line_id: line.id,
+        prior_received: priorReceivedForGuard,
+        attempted_units: units,
+        quantity_expected: expectedForGuard,
+      });
+    }
+
+    const station: InventoryEventStation = input.station ?? 'RECEIVING';
   const catalog = line.sku ? await getSkuCatalogBySku(line.sku) : null;
 
   const serialsRecorded: ReceivedSerialResult[] = [];
@@ -414,10 +436,11 @@ export async function receiveLineUnits(
     }
   }
 
-  // 3. Update the line in one shot. quantity_received += units; flip workflow
-  //    based on caller intent + computed completeness.
+  // 3. Update the line in one shot — runs on the SAME client as the SELECT
+  //    FOR UPDATE so it inherits the row lock. quantity_received += units;
+  //    flip workflow based on caller intent + computed completeness.
   const explicitWorkflow = input.set_workflow_status ?? null;
-  const update = await pool.query<{
+  const update = await client.query<{
     id: number;
     sku: string | null;
     item_name: string | null;
@@ -467,23 +490,38 @@ export async function receiveLineUnits(
     workflow_status: line.workflow_status,
   };
 
-  return {
-    line_id: line.id,
-    units_added: units,
-    serials_recorded: serialsRecorded,
-    ledger_event_ids: ledgerEventIds,
-    inventory_event_ids: inventoryEventIds,
-    line_state: {
-      id: Number(updated.id),
-      sku: updated.sku,
-      item_name: updated.item_name,
-      quantity_received: Number(updated.quantity_received),
-      quantity_expected:
-        updated.quantity_expected != null ? Number(updated.quantity_expected) : null,
-      workflow_status: updated.workflow_status,
-      is_complete:
-        updated.quantity_expected != null &&
-        Number(updated.quantity_received) >= Number(updated.quantity_expected),
-    },
-  };
+    await client.query('COMMIT');
+    committed = true;
+
+    return {
+      line_id: line.id,
+      units_added: units,
+      serials_recorded: serialsRecorded,
+      ledger_event_ids: ledgerEventIds,
+      inventory_event_ids: inventoryEventIds,
+      line_state: {
+        id: Number(updated.id),
+        sku: updated.sku,
+        item_name: updated.item_name,
+        quantity_received: Number(updated.quantity_received),
+        quantity_expected:
+          updated.quantity_expected != null ? Number(updated.quantity_expected) : null,
+        workflow_status: updated.workflow_status,
+        is_complete:
+          updated.quantity_expected != null &&
+          Number(updated.quantity_received) >= Number(updated.quantity_expected),
+      },
+    };
+  } catch (err) {
+    if (!committed) {
+      try {
+        await client.query('ROLLBACK');
+      } catch {
+        /* connection may already be in error state */
+      }
+    }
+    throw err;
+  } finally {
+    client.release();
+  }
 }

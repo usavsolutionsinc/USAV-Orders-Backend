@@ -7,7 +7,7 @@ export interface PackerLogRow {
   packed_by: number | null;
   packed_by_name: string | null;
   tracking_type: string | null;
-  packer_photos_url: string[] | null;
+  packer_photos_url: Array<{ id: number; url: string; uploadedAt: string }> | null;
   order_row_id: number | null;
   shipment_id: number | null;
   order_id: string | null;

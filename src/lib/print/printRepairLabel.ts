@@ -1,8 +1,5 @@
-import React from 'react';
-import { renderToStaticMarkup } from 'react-dom/server';
-import QRCode from 'react-qr-code';
-import { QR_BASE_URL } from '@/lib/barcode-routing';
-import { buildRepairDetailsDeepLink } from '@/lib/repair/repair-deep-link';
+import { repairHandle } from '@/lib/barcode-routing';
+import { renderDataMatrixSvg } from '@/lib/barcode/dataMatrixSvg';
 import { printHtmlSilent } from '@/lib/print/silentPrint';
 
 // 2in × 1in label in microns — mirrors RECEIVING_PAGE_SIZE so Electron's
@@ -36,13 +33,13 @@ function escapeHtml(s: string): string {
 }
 
 /**
- * The string actually encoded in the QR. Always anchors to the production
- * QR_BASE_URL so labels printed from any environment still resolve when
- * scanned — same approach the receiving label uses via mobileQrUrl().
+ * The string actually encoded in the printed DataMatrix. Bare handle
+ * `REP-{id}` — `routeScan()` parses the prefix and navigates to
+ * /repair/{id}. No URL on the wire.
  */
 export function resolveRepairQrValue(payload: RepairLabelPayload): string {
   if (payload.qrValue && payload.qrValue.trim()) return payload.qrValue.trim();
-  return buildRepairDetailsDeepLink(payload.repairId, QR_BASE_URL);
+  return repairHandle(payload.repairId);
 }
 
 /** Bottom-right corner: prefer a Zendesk ticket, otherwise repeat the RS code. */
@@ -62,15 +59,8 @@ export function printRepairLabel(payload: RepairLabelPayload): void {
   const qrPayload = resolveRepairQrValue(payload);
   if (!qrPayload) return;
 
-  const qrSvg = renderToStaticMarkup(
-    React.createElement(QRCode, {
-      value: qrPayload,
-      size: 80,
-      level: 'M',
-      fgColor: '#000000',
-      bgColor: '#ffffff',
-    }),
-  );
+  // DataMatrix (`REP-{id}` handle) — routeScan() routes to /repair/{id}.
+  const qrSvg = renderDataMatrixSvg({ value: qrPayload, symbology: 'datamatrix', scale: 4 });
 
   const html = `<!doctype html><html><head><meta charset="utf-8"/><title>Label</title>
 <style>

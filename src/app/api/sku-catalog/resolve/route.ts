@@ -70,20 +70,27 @@ export const GET = withAuth(async (request) => {
       return NextResponse.json({ ok: true, resolved: false, rawSku });
     }
 
+    // Include both fully-paired rows (sku_catalog_id matches) AND legacy /
+    // sync-time rows where only `platform_sku` matches the canonical SKU.
+    // The /api/sku-catalog/search route uses the same OR-join so the two
+    // endpoints agree on what counts as a linked platform mapping.
     const platforms = await pool.query<{
       platform: string;
       platformSku: string | null;
       platformItemId: string | null;
+      accountName: string | null;
     }>(
-      `SELECT platform,
-              platform_sku    AS "platformSku",
-              platform_item_id AS "platformItemId"
+      `SELECT DISTINCT ON (LOWER(platform), COALESCE(platform_sku, ''), COALESCE(platform_item_id, ''))
+              platform,
+              platform_sku     AS "platformSku",
+              platform_item_id AS "platformItemId",
+              account_name     AS "accountName"
          FROM sku_platform_ids
-        WHERE sku_catalog_id = $1
+        WHERE (sku_catalog_id = $1 OR platform_sku = $2)
           AND is_active = true
           AND (platform_sku IS NOT NULL OR platform_item_id IS NOT NULL)
-        ORDER BY platform ASC`,
-      [catalogRow.id],
+        ORDER BY LOWER(platform), COALESCE(platform_sku, ''), COALESCE(platform_item_id, ''), platform ASC`,
+      [catalogRow.id, catalogRow.sku],
     );
 
     return NextResponse.json({

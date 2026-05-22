@@ -17,6 +17,7 @@ import { printProductLabels } from '@/lib/print/printProductLabel';
 import { useLabelRecents } from '@/hooks/useLabelRecents';
 import { useBarcodeMode } from '@/hooks/useBarcodeMode';
 import { CONDITION_OPTIONS } from '@/components/receiving/zoho-po-types';
+import { ConditionPills } from '@/components/receiving/workspace/ConditionPills';
 import { Search, Clipboard, Check, Loader2, X, Printer, Plus } from './Icons';
 
 
@@ -196,12 +197,16 @@ export default function MultiSkuSnBarcode({ layout = 'vertical' }: MultiSkuSnBar
         }
 
         if (mode === 'print') {
+            // Eager pre-allocation so the preview QR appears immediately.
+            // Failure here is *not* user-visible: the workspace still shows
+            // the product details, and the real print click (handleNextStepSn
+            // → fetchNextUnitId) will retry and surface a proper toast then.
+            // Suppressing here avoids spurious "can't print label" toasts on
+            // every sidebar pick of an Ecwid SKU not linked to a sku_catalog row.
             try {
                 await fetchNextUnitId(trimmed, catalogIdHint);
             } catch (err) {
-                console.error("Failed to allocate unit id:", err);
-                const msg = err instanceof Error ? err.message : 'Failed to allocate unit id';
-                toast.error(`Can't print label: ${msg}`);
+                console.warn('Pre-allocation skipped:', err);
             }
         }
 
@@ -275,7 +280,7 @@ export default function MultiSkuSnBarcode({ layout = 'vertical' }: MultiSkuSnBar
     const handleNextStepSn = async (pendingSn?: string) => {
         const allSns = pendingSn ? [...serialNumbers, pendingSn] : serialNumbers;
 
-        if (mode !== 'change-location' && allSns.length === 0) {
+        if (allSns.length === 0) {
             setError("Serial numbers required");
             return;
         }
@@ -384,32 +389,6 @@ export default function MultiSkuSnBarcode({ layout = 'vertical' }: MultiSkuSnBar
             return;
         }
 
-        if (mode === 'change-location') {
-            setIsPosting(true);
-            try {
-                const res = await fetch('/api/update-sku-location', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ sku, location }),
-                });
-                const data = await res.json();
-                if (data.success) {
-                    setCurrentLocation(location);
-                    setStep(1);
-                    setSku("");
-                    setLocation("");
-                    setError("");
-                } else {
-                    setError(data.error || "Failed to update location");
-                }
-            } catch (e) {
-                setError("Failed to update location");
-            } finally {
-                setIsPosting(false);
-            }
-            return;
-        }
-
         const success = await postToSheets();
         if (success) {
             if (mode === 'print') {
@@ -474,7 +453,6 @@ export default function MultiSkuSnBarcode({ layout = 'vertical' }: MultiSkuSnBar
         if (!isHorizontal) return;
         const handler = (e: KeyboardEvent) => {
             if ((e.metaKey || e.ctrlKey) && (e.key === 'p' || e.key === 'P')) {
-                if (mode === 'change-location') return;
                 if (!previewIsReady) return;
                 e.preventDefault();
                 handleFinalAction();
@@ -519,13 +497,12 @@ export default function MultiSkuSnBarcode({ layout = 'vertical' }: MultiSkuSnBar
             onSnAdd={handleSnAdd}
             onLocationChange={setLocation}
             onNext={handleNextStepSn}
-            onFinalAction={handleFinalAction}
             isPosting={isPosting}
             onChangeSku={handleChangeSku}
         />
     ) : null;
 
-    const showPreviewPanel = mode !== 'change-location' && (isHorizontal ? true : step >= 3);
+    const showPreviewPanel = isHorizontal ? true : step >= 3;
     const previewPanelEl = showPreviewPanel ? (
         isHorizontal && !previewIsReady ? (
             <div className="flex h-full min-h-[260px] flex-col items-center justify-center gap-2 border-t border-gray-200 bg-gray-50 px-6 py-10 text-center">
@@ -561,7 +538,7 @@ export default function MultiSkuSnBarcode({ layout = 'vertical' }: MultiSkuSnBar
     if (isHorizontal) {
         const accent = MODE_ACCENT_THEME[mode];
         const showSnCard = !!sku.trim() && (mode === 'print' || mode === 'sn-to-sku');
-        const showPreviewCard = previewIsReady && mode !== 'change-location';
+        const showPreviewCard = previewIsReady;
 
         const removeSerial = (target: string) =>
             setSerialNumbers((prev) => {
@@ -570,28 +547,21 @@ export default function MultiSkuSnBarcode({ layout = 'vertical' }: MultiSkuSnBar
                 return next;
             });
 
-        const primaryDisabled =
-            isPosting ||
-            (mode === 'change-location' ? !sku.trim() || !location : !previewIsReady);
+        const primaryDisabled = isPosting || !previewIsReady;
 
         const primaryLabel = isPosting
-            ? mode === 'change-location'
-                ? 'Updating…'
-                : mode === 'print'
-                  ? 'Saving & Printing…'
-                  : mode === 'reprint'
-                    ? 'Reprinting…'
-                    : 'Logging…'
-            : mode === 'change-location'
-              ? 'Update Location'
-              : mode === 'print'
-                ? 'Save & Print Label'
+            ? mode === 'print'
+                ? 'Saving & Printing…'
                 : mode === 'reprint'
-                  ? 'Reprint Label'
-                  : 'Log to Database';
+                  ? 'Reprinting…'
+                  : 'Logging…'
+            : mode === 'print'
+              ? 'Save & Print Label'
+              : mode === 'reprint'
+                ? 'Reprint Label'
+                : 'Log to Database';
 
         const primaryAction = () => {
-            if (mode === 'change-location') return handleFinalAction();
             if (previewIsReady) return handleFinalAction();
             return handleNextStepSn();
         };
@@ -627,8 +597,6 @@ export default function MultiSkuSnBarcode({ layout = 'vertical' }: MultiSkuSnBar
                                 snInputRef={snInputRef}
                                 serialNumbers={serialNumbers}
                                 accent={accent}
-                                condition={condition}
-                                onConditionChange={setCondition}
                                 onAdd={handleSnAdd}
                                 onRemove={removeSerial}
                                 onPasteList={(list) => {
@@ -637,7 +605,19 @@ export default function MultiSkuSnBarcode({ layout = 'vertical' }: MultiSkuSnBar
                             />
                         )}
 
-                        {mode !== 'change-location' && !!sku.trim() && (
+                        {showSnCard && (
+                            <section className="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-gray-200/60">
+                                <h3 className="mb-3 text-xs font-semibold uppercase tracking-[0.14em] text-gray-500">
+                                    Condition
+                                </h3>
+                                <ConditionPills
+                                    value={condition}
+                                    onChange={(next) => setCondition(next as ConditionGrade)}
+                                />
+                            </section>
+                        )}
+
+                        {!!sku.trim() && (
                             <NotesCard
                                 notes={notes}
                                 showNotes={showNotes}
@@ -658,9 +638,7 @@ export default function MultiSkuSnBarcode({ layout = 'vertical' }: MultiSkuSnBar
                                 barcodeCanvasRef={barcodeCanvasRef}
                             />
                         ) : (
-                            mode !== 'change-location' && (
-                                <PreviewPlaceholder mode={mode} sku={sku} />
-                            )
+                            <PreviewPlaceholder mode={mode} sku={sku} />
                         )}
                     </div>
                 </div>
@@ -745,18 +723,6 @@ const MODE_ACCENT_THEME: Record<BarcodeMode, ModeAccent> = {
         focusRing: 'focus:ring-emerald-500/30 focus:border-emerald-500',
         chip: 'bg-emerald-50 text-emerald-700',
     },
-    'change-location': {
-        tone: 'orange',
-        tagline: 'Move a SKU to a new bin',
-        ctaBg: 'bg-orange-600',
-        ctaHover: 'hover:bg-orange-700',
-        bannerFrom: 'from-orange-50',
-        bannerTo: 'to-white',
-        bannerText: 'text-orange-900',
-        bannerTag: 'bg-orange-600 text-white',
-        focusRing: 'focus:ring-orange-500/30 focus:border-orange-500',
-        chip: 'bg-orange-50 text-orange-700',
-    },
     'reprint': {
         tone: 'violet',
         tagline: 'Re-issue the same label',
@@ -773,7 +739,6 @@ const MODE_ACCENT_THEME: Record<BarcodeMode, ModeAccent> = {
 
 function modeLabel(mode: BarcodeMode): string {
     if (mode === 'sn-to-sku') return 'Log Serials';
-    if (mode === 'change-location') return 'Move Location';
     if (mode === 'reprint') return 'Reprint';
     return 'Print Label';
 }
@@ -782,9 +747,7 @@ function comfyHelperHint(mode: BarcodeMode) {
     const text =
         mode === 'reprint'
             ? 'Scan or paste a SKU to bring up its last label.'
-            : mode === 'change-location'
-              ? 'Scan a SKU to see its current bin.'
-              : 'Scan or paste a SKU to load product info.';
+            : 'Scan or paste a SKU to load product info.';
     return <p className="mt-2 text-xs text-gray-500">{text}</p>;
 }
 
@@ -951,8 +914,6 @@ interface SerialScanCardProps {
     snInputRef: React.RefObject<HTMLInputElement>;
     serialNumbers: string[];
     accent: ModeAccent;
-    condition: ConditionGrade;
-    onConditionChange: (next: ConditionGrade) => void;
     onAdd: (sn: string) => void;
     onRemove: (sn: string) => void;
     onPasteList: (list: string[]) => void;
@@ -962,8 +923,6 @@ function SerialScanCard({
     snInputRef,
     serialNumbers,
     accent,
-    condition,
-    onConditionChange,
     onAdd,
     onRemove,
     onPasteList,
@@ -1050,28 +1009,6 @@ function SerialScanCard({
                     ))}
                 </div>
             )}
-
-            <div className="mt-4 border-t border-gray-100 pt-4">
-                <label className="mb-2 block text-xs font-semibold uppercase tracking-[0.14em] text-gray-500">
-                    Condition
-                </label>
-                <div className="flex flex-wrap gap-1.5">
-                    {CONDITION_OPTIONS.map((opt) => (
-                        <button
-                            key={opt.value}
-                            type="button"
-                            onClick={() => onConditionChange(opt.value)}
-                            className={`rounded-xl px-3 py-1.5 text-[10px] font-black uppercase tracking-wider transition-all ${
-                                condition === opt.value
-                                    ? 'bg-gray-900 text-white'
-                                    : 'border border-gray-200 bg-white text-gray-600 hover:border-gray-300'
-                            }`}
-                        >
-                            {opt.label}
-                        </button>
-                    ))}
-                </div>
-            </div>
         </section>
     );
 }
@@ -1147,22 +1084,14 @@ function PreviewCardModern({
                 // on the right — mirrors the printed thermal-label layout
                 // (see context/inventory_system_upgrade_plan.md §7.5 and
                 // src/lib/print/zpl-templates.ts buildUnitZpl).
-                <div className="flex items-center gap-5 rounded-xl bg-gray-50 p-5 ring-1 ring-gray-200/50">
-                    <div className="min-w-0 flex-1 space-y-1.5">
+                <div className="mx-auto flex aspect-[2/1] w-full max-w-[420px] items-start gap-3 rounded-xl bg-white p-3 ring-1 ring-gray-200/50">
+                    <div className="flex min-w-0 flex-1 flex-col justify-start gap-1">
                         {title ? (
-                            <p className="line-clamp-2 text-sm font-bold leading-snug text-gray-900">{title}</p>
+                            <p className="line-clamp-2 text-[11px] font-bold leading-tight text-gray-900">{title}</p>
                         ) : null}
-                        <p className="font-mono text-base font-black tracking-tight text-gray-900 break-all">{uniqueSku}</p>
-                        {mode !== 'reprint' && serialNumbers.length > 0 ? (
-                            <p className="font-mono text-[11px] text-gray-500">
-                                SN · {getSerialLast6(serialNumbers)}
-                            </p>
-                        ) : null}
-                        {location ? (
-                            <p className="font-mono text-[11px] text-gray-500">LOC · {location}</p>
-                        ) : null}
+                        <p className="font-mono text-sm font-bold tracking-tight text-gray-900 break-all">{uniqueSku}</p>
                     </div>
-                    <div className="flex h-[160px] w-[160px] shrink-0 items-center justify-center rounded-lg bg-white p-2 ring-1 ring-gray-200">
+                    <div className="flex aspect-square h-full shrink-0 items-center justify-center self-stretch">
                         <canvas
                             ref={barcodeCanvasRef}
                             width={200}
@@ -1241,9 +1170,7 @@ function StickyActionBar({ accent, label, disabled, isPosting, onPrimary, mode, 
                 <div className="hidden items-center gap-3 text-xs text-gray-500 sm:flex">
                     <span className="inline-flex items-center gap-1.5">
                         <kbd className="rounded-md border border-gray-200 bg-gray-50 px-1.5 py-0.5 font-mono text-[10px] font-bold text-gray-600">⏎</kbd>
-                        <span className="font-semibold uppercase tracking-[0.14em]">
-                            {mode === 'change-location' ? 'Update' : 'Continue'}
-                        </span>
+                        <span className="font-semibold uppercase tracking-[0.14em]">Continue</span>
                     </span>
                     {showPrintKey && (
                         <span className="inline-flex items-center gap-1.5">

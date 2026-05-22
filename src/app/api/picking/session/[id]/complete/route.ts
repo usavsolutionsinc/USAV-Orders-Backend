@@ -1,6 +1,5 @@
 import { NextResponse } from 'next/server';
 import { withAuth } from '@/lib/auth/withAuth';
-import { isInventoryV2Picking } from '@/lib/feature-flags';
 import { completeSession } from '@/lib/picking/sessions';
 
 /**
@@ -8,17 +7,8 @@ import { completeSession } from '@/lib/picking/sessions';
  *
  * Closes an open picking session. Idempotent — a 404 is returned if the
  * session is already closed or does not exist.
- *
- * Gated by INVENTORY_V2_PICKING.
  */
 export const POST = withAuth(async (request, ctx) => {
-  if (!isInventoryV2Picking()) {
-    return NextResponse.json(
-      { ok: false, error: 'INVENTORY_V2_PICKING flag is OFF', flag: 'INVENTORY_V2_PICKING' },
-      { status: 503 },
-    );
-  }
-
   const actorStaffId: number | null =
     typeof ctx.staffId === 'number' && ctx.staffId > 0 ? ctx.staffId : null;
   if (actorStaffId == null) {

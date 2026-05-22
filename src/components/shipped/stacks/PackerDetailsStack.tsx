@@ -5,7 +5,6 @@ import { Trash2 } from '@/components/Icons';
 import { ShippedDetailsPanelContent } from '../ShippedDetailsPanelContent';
 import { DetailsStackProps } from './types';
 import { dispatchCloseShippedDetails, dispatchDashboardAndStationRefresh } from '@/utils/events';
-import { PanelActionBar } from '@/components/shipped/details-panel/PanelActionBar';
 
 export function PackerDetailsStack({
   shipped,
@@ -13,7 +12,8 @@ export function PackerDetailsStack({
   copiedAll,
   onCopyAll,
   onUpdate,
-  actionBar,
+  actionBar: _actionBar,
+  activeSection,
 }: DetailsStackProps) {
   const [isDeleting, setIsDeleting] = useState(false);
   const [isDeleteArmed, setIsDeleteArmed] = useState(false);
@@ -81,8 +81,6 @@ export function PackerDetailsStack({
 
   return (
     <div className="pb-8 pt-4 space-y-4">
-      {actionBar ? <PanelActionBar {...actionBar} /> : null}
-
       <ShippedDetailsPanelContent
         shipped={shipped}
         durationData={durationData}
@@ -90,6 +88,7 @@ export function PackerDetailsStack({
         onCopyAll={onCopyAll}
         onUpdate={onUpdate}
         showTestingInformation={false}
+        activeSection={activeSection}
       />
 
       <section className="mx-8 pt-2">

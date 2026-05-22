@@ -19,15 +19,20 @@ import {
   HorizontalButtonSlider,
   type HorizontalSliderItem,
 } from '@/components/ui/HorizontalButtonSlider';
-import { LayoutDashboard, Box, Printer, MapPin } from '@/components/Icons';
+import { LayoutDashboard, Box, Printer, MapPin, Layers } from '@/components/Icons';
 import { useLocations } from '@/hooks/useLocations';
 import { SkuLocationFinder } from '@/components/warehouse/SkuLocationFinder';
 import { MapLegend, type MapViewMode } from '@/components/warehouse/WarehouseMap';
+import { RoomsSidebarList } from '@/components/warehouse/RoomsSidebarList';
+import { BinLabelPrinter } from '@/components/barcode/BinLabelPrinter';
+import { RackLabelPrinter } from '@/components/barcode/RackLabelPrinter';
+import { RoomFinderProvider, useRoomFinder } from '@/components/warehouse/roomFinderContext';
+import { SearchBar } from '@/components/ui/SearchBar';
 
-type InventoryTab = 'rooms' | 'bins' | 'labels' | 'map';
+type InventoryTab = 'rooms' | 'bins' | 'labels' | 'racks' | 'map';
 
 function parseTab(raw: string | null): InventoryTab {
-  if (raw === 'rooms' || raw === 'bins' || raw === 'map') return raw;
+  if (raw === 'rooms' || raw === 'bins' || raw === 'racks' || raw === 'map') return raw;
   return 'labels';
 }
 
@@ -48,6 +53,9 @@ export function WarehouseSidebarPanel() {
         params.delete('q');
         params.delete('room');
       }
+      if (next !== 'racks') {
+        params.delete('code');
+      }
       router.replace(`/warehouse?${params.toString()}`);
     },
     [router, searchParams],
@@ -56,6 +64,7 @@ export function WarehouseSidebarPanel() {
   const tabItems: HorizontalSliderItem[] = useMemo(
     () => [
       { id: 'labels', label: 'Labels', icon: Printer },
+      { id: 'racks',  label: 'Racks',  icon: Layers },
       { id: 'rooms',  label: 'Rooms',  icon: LayoutDashboard, count: rooms.length },
       { id: 'bins',   label: 'Bins',   icon: Box,             count: bins.length },
       { id: 'map',    label: 'Map',    icon: MapPin },
@@ -63,62 +72,128 @@ export function WarehouseSidebarPanel() {
     [rooms.length, bins.length],
   );
 
+  // Tabs that display a list of rooms in the sidebar (and therefore want
+  // the top search bar to filter rooms instead of running a global SKU/bin
+  // lookup). Keeping one bar per surface — driven by a shared context —
+  // beats two stacked search inputs both visually and for keyboard /
+  // screen-reader navigation.
+  const isRoomFinderTab = tab === 'rooms' || tab === 'labels' || tab === 'racks';
+
   return (
-    <div className="h-full flex flex-col overflow-hidden bg-white">
-      <div className={sidebarHeaderBandClass}>
-        <div className="space-y-2 px-3 py-2">
-          <HorizontalButtonSlider
-            variant="nav"
-            items={tabItems}
-            value={tab}
-            onChange={(id) => setTab(id as InventoryTab)}
-            aria-label="Warehouse section"
-          />
-          <SkuLocationFinder />
+    <RoomFinderProvider>
+      <div className="h-full flex flex-col overflow-hidden bg-white">
+        <div className={sidebarHeaderBandClass}>
+          <div className="space-y-2 px-3 py-2">
+            <HorizontalButtonSlider
+              variant="nav"
+              items={tabItems}
+              value={tab}
+              onChange={(id) => setTab(id as InventoryTab)}
+              aria-label="Warehouse section"
+            />
+            {isRoomFinderTab ? (
+              <RoomFinderSearchBar tab={tab} />
+            ) : (
+              <SkuLocationFinder />
+            )}
+          </div>
         </div>
-      </div>
 
-      <div className="min-h-0 min-w-0 flex-1 overflow-y-auto scrollbar-hide">
-        {tab === 'rooms'  && <RoomsSidebarBody />}
-        {tab === 'bins'   && <BinsSidebarBody />}
-        {tab === 'labels' && <LabelsSidebarBody />}
-        {tab === 'map'    && <MapSidebarBody />}
-      </div>
+        {tab === 'rooms' ? (
+          <div className="min-h-0 min-w-0 flex-1 overflow-hidden">
+            <RoomsSidebarList />
+          </div>
+        ) : (
+          <div className="min-h-0 min-w-0 flex-1 overflow-y-auto scrollbar-hide">
+            {tab === 'bins'   && <BinsSidebarBody />}
+            {tab === 'labels' && <LabelsSidebarBody />}
+            {tab === 'racks'  && <RacksSidebarBody />}
+            {tab === 'map'    && <MapSidebarBody />}
+          </div>
+        )}
 
-      <footer className="p-4 border-t border-gray-100 opacity-30 mt-auto text-center">
-        <p className="text-[7px] font-mono uppercase tracking-[0.2em] text-gray-500">USAV INV</p>
-      </footer>
-    </div>
+        <footer className="p-4 border-t border-gray-100 opacity-30 mt-auto text-center">
+          <p className="text-[7px] font-mono uppercase tracking-[0.2em] text-gray-500">USAV INV</p>
+        </footer>
+      </div>
+    </RoomFinderProvider>
   );
 }
 
-// ── Rooms sidebar — context hint; CRUD lives in the main pane workspace ──
+// ── Room finder — shared search bar for Rooms / Labels / Racks tabs ─────
+//
+// Lives in the header band so each tab gets exactly one search affordance.
+// Writes into RoomFinderContext; the list body for the active tab reads
+// from the same context and filters locally.
 
-function RoomsSidebarBody() {
+function RoomFinderSearchBar({ tab }: { tab: InventoryTab }) {
+  const { query, setQuery } = useRoomFinder();
+  const placeholder =
+    tab === 'labels'
+      ? 'Search rooms to label by name or zone…'
+      : tab === 'racks'
+        ? 'Search rooms to print racks for…'
+        : 'Search rooms by name or zone…';
   return (
-    <div className="space-y-3 p-4">
-      <p className="text-[11px] text-gray-500">
-        Add, rename, reorder, and delete rooms in the main workspace. Tap the
-        pencil there to enter edit mode.
-      </p>
-    </div>
+    <SearchBar
+      value={query}
+      onChange={setQuery}
+      onClear={() => setQuery('')}
+      placeholder={placeholder}
+      variant="blue"
+      size="compact"
+      hideUnderline
+    />
   );
 }
 
-// ── Labels sidebar — context hint; the printer lives in the main pane ────
+// ── Labels sidebar — full picker on desktop; hint on mobile ──────────────
+// On lg+ the BinLabelPrinter renders its compact `sidebar` variant here so
+// the form sits next to the giant preview in the main pane. On smaller
+// viewports the drawer is cramped, so we fall back to a hint and let
+// users build the label in the main pane (which renders the full picker
+// on <lg).
 
 function LabelsSidebarBody() {
   return (
-    <div className="space-y-3 p-4">
-      <p className="text-[11px] text-gray-500">
-        Build a bin label in the main workspace — pick a room, then drill into
-        aisle, bay, level, and position. Live preview + QR render alongside the
-        picker.
-      </p>
-      <p className="text-[10px] text-gray-400">
-        Tip: ⌘P / Ctrl+P prints the current label once all steps are picked.
-      </p>
-    </div>
+    <>
+      <div className="hidden lg:block">
+        <BinLabelPrinter variant="sidebar" />
+      </div>
+      <div className="space-y-3 p-4 lg:hidden">
+        <p className="text-[11px] text-gray-500">
+          Build a bin label in the main workspace — pick a room, then drill into
+          aisle, bay, level, and position. Live preview + QR render alongside the
+          picker.
+        </p>
+        <p className="text-[10px] text-gray-400">
+          Tip: ⌘P / Ctrl+P prints the current label once all steps are picked.
+        </p>
+      </div>
+    </>
+  );
+}
+
+// ── Racks sidebar — full picker on desktop; hint on mobile ───────────────
+
+function RacksSidebarBody() {
+  return (
+    <>
+      <div className="hidden lg:block">
+        <RackLabelPrinter variant="sidebar" />
+      </div>
+      <div className="space-y-3 p-4 lg:hidden">
+        <p className="text-[11px] text-gray-500">
+          Print a rack-level label in the main workspace — pick a room, then
+          aisle, bay, and level. No position needed; one label covers the whole
+          rack column on that level.
+        </p>
+        <p className="text-[10px] text-gray-400">
+          Scanning a rack label opens the rack view so pickers and putaway can
+          see everything on it at once.
+        </p>
+      </div>
+    </>
   );
 }
 

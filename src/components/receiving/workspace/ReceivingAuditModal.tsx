@@ -73,8 +73,8 @@ export function ReceivingAuditModal({ open, onClose, receivingId }: Props) {
         const tracking = (receiving?.tracking || '').trim();
         setCartonLabel(
           tracking
-            ? `Carton #${receivingId} · ${tracking}`
-            : `Carton #${receivingId}`,
+            ? `Package #${receivingId} · ${tracking}`
+            : `Package #${receivingId}`,
         );
         setEvents(
           Array.isArray(data.events) ? (data.events as ReceivingAuditEvent[]) : [],

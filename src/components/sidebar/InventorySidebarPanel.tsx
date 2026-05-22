@@ -6,7 +6,8 @@ import { sidebarHeaderBandClass } from '@/components/layout/header-shell';
 import { HorizontalButtonSlider, type HorizontalSliderItem } from '@/components/ui/HorizontalButtonSlider';
 import { AlertTriangle, Check, LayoutDashboard, Mail, RefreshCw } from '@/components/Icons';
 import { useStaffRole } from '@/hooks/useStaffRole';
-import { PoMailboxPreviewPanel } from '@/components/po-gmail/PoMailboxPreviewPanel';
+import { PoTriagePanel } from '@/components/po-triage/PoTriagePanel';
+import { InventoryControlsPanel } from '@/components/inventory-v2/InventoryControlsPanel';
 
 /**
  * Sidebar panel for the inventory area — matches ReceivingSidebarPanel's
@@ -41,31 +42,35 @@ export function InventorySidebarPanel() {
   const items = NAV_ITEMS.filter((i) => !i.requiresAdmin || isAdmin);
   const value = activeId(pathname);
 
-  if (items.length < 2) return <div className="h-full bg-white" />;
+  // Even without the PO Mailbox pill (non-admins), we still want the
+  // inventory search/filters in the sidebar.
+  const showPills = items.length >= 2;
 
   return (
     <div className="flex h-full flex-col overflow-hidden bg-white">
-      <div className={`${sidebarHeaderBandClass} px-3`}>
-        <HorizontalButtonSlider
-          items={items}
-          value={value}
-          onChange={(id) => {
-            const target = NAV_ITEMS.find((i) => i.id === id);
-            if (target && target.href !== pathname) router.push(target.href);
-          }}
-          variant="nav"
-          aria-label="Inventory section"
-        />
-      </div>
+      {showPills ? (
+        <div className={`${sidebarHeaderBandClass} px-3`}>
+          <HorizontalButtonSlider
+            items={items}
+            value={value}
+            onChange={(id) => {
+              const target = NAV_ITEMS.find((i) => i.id === id);
+              if (target && target.href !== pathname) router.push(target.href);
+            }}
+            variant="nav"
+            aria-label="Inventory section"
+          />
+        </div>
+      ) : null}
 
       <div className="min-h-0 flex-1 overflow-y-auto px-3 py-3">
         {value === 'po-mailbox' ? (
           <div className="space-y-3">
             <MirrorHealthBadge />
-            <PoMailboxPreviewPanel embedded />
+            <PoTriagePanel />
           </div>
         ) : (
-          <MirrorHealthBadge />
+          <InventoryControlsPanel />
         )}
       </div>
     </div>

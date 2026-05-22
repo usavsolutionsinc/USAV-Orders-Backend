@@ -4,6 +4,7 @@ import { useCallback, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Loader2, Plus } from '@/components/Icons';
+import { PaneHeader, PaneHeaderStatusPill } from '@/components/ui/pane-header';
 import { BinAddSkuSheet } from '@/components/sku/BinAddSkuSheet';
 import { BinStockNumpadSheet } from '@/components/sku/BinStockNumpadSheet';
 import { BinRowDetailsSheet } from '@/components/sku/BinRowDetailsSheet';
@@ -227,19 +228,15 @@ export function LocationDetailView({ barcode }: LocationDetailViewProps) {
 
   return (
     <div className="flex h-full min-h-0 w-full flex-col bg-white">
-      <header className="sticky top-0 z-10 border-b border-slate-200 bg-white px-4 py-3">
-        <div className="flex items-start justify-between gap-3">
+      <PaneHeader
+        className="border-slate-200 bg-white"
+        rowClassName="items-start px-4 py-3"
+        leftSlot={
           <div className="min-w-0">
-            <p className="text-[10px] font-black uppercase tracking-[0.16em] text-slate-500">
-              Bin
-            </p>
-            <h1 className="truncate text-lg font-black text-slate-900">
-              {location.name}
-            </h1>
+            <p className="text-[10px] font-black uppercase tracking-[0.16em] text-slate-500">Bin</p>
+            <h1 className="truncate text-lg font-black text-slate-900">{location.name}</h1>
             {subtitle && (
-              <p className="mt-0.5 truncate text-[11px] font-semibold text-slate-600">
-                {subtitle}
-              </p>
+              <p className="mt-0.5 truncate text-[11px] font-semibold text-slate-600">{subtitle}</p>
             )}
             {location.barcode && (
               <p className="mt-0.5 truncate font-mono text-[11px] font-bold text-slate-500">
@@ -247,15 +244,13 @@ export function LocationDetailView({ barcode }: LocationDetailViewProps) {
               </p>
             )}
           </div>
+        }
+        rightSlot={
           <div className="flex flex-col items-end gap-1.5">
             {location.capacity != null && (
-              <span className="inline-flex items-center rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-bold text-slate-700">
-                Cap {location.capacity}
-              </span>
+              <PaneHeaderStatusPill tone="neutral">Cap {location.capacity}</PaneHeaderStatusPill>
             )}
-            <span className="inline-flex items-center rounded-full bg-blue-100 px-2 py-0.5 text-[10px] font-bold text-blue-700">
-              {totalQty} on hand
-            </span>
+            <PaneHeaderStatusPill tone="blue">{totalQty} on hand</PaneHeaderStatusPill>
             <button
               type="button"
               onClick={() => refetch()}
@@ -264,8 +259,8 @@ export function LocationDetailView({ barcode }: LocationDetailViewProps) {
               Refresh
             </button>
           </div>
-        </div>
-      </header>
+        }
+      />
 
       <main className="min-h-0 flex-1 overflow-auto px-4 py-3 pb-24">
         {activeCampaign.data && (

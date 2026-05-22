@@ -8,7 +8,7 @@ import type { BarcodeDensity } from './BarcodePreview';
 interface SkuInputProps {
     sku: string;
     uniqueSku: string;
-    mode: 'print' | 'sn-to-sku' | 'change-location' | 'reprint';
+    mode: 'print' | 'sn-to-sku' | 'reprint';
     skuInputRef: React.RefObject<HTMLInputElement>;
     isActive: boolean;
     /** Visual density hint — accepted for parity with the horizontal layout. */

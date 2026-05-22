@@ -273,7 +273,7 @@ function LinePageInner() {
               onClick={() => router.push(cartonHref)}
               className="text-xs font-bold text-blue-600"
             >
-              ← Carton
+              ← Package
             </button>
           ) : (
             <span />

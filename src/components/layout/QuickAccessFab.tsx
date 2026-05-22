@@ -22,7 +22,10 @@ export function QuickAccessFab() {
 
   return (
     <div className="fixed bottom-4 right-4 z-40">
-      <QuickAccessButton className="h-11 w-11 !rounded-full shadow-lg ring-2 ring-white" />
+      <QuickAccessButton
+        placement="up"
+        buttonClassName="!h-12 !w-12 !rounded-full shadow-lg ring-2 ring-white"
+      />
     </div>
   );
 }

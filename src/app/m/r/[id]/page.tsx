@@ -172,7 +172,7 @@ function CartonPageInner() {
 
   const load = useCallback(async () => {
     if (!Number.isFinite(receivingId) || receivingId <= 0) {
-      setError('Invalid carton id');
+      setError('Invalid package id');
       setLoading(false);
       return;
     }
@@ -184,7 +184,7 @@ function CartonPageInner() {
       setData(body as FullCarton);
       setError(null);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load carton');
+      setError(err instanceof Error ? err.message : 'Failed to load package');
     } finally {
       setLoading(false);
     }
@@ -204,7 +204,7 @@ function CartonPageInner() {
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
             <p className="text-xs font-black uppercase tracking-[0.16em] text-slate-500">
-              Carton
+              Package
             </p>
             <h1 className="truncate text-lg font-black text-slate-900">
               RCV-{receivingId}
@@ -379,7 +379,7 @@ function CartonPageInner() {
 
         {!loading && lines.length === 0 && (
           <p className="text-center text-sm font-semibold text-slate-500 py-10">
-            No lines on this carton yet.
+            No lines on this package yet.
           </p>
         )}
 

@@ -9,8 +9,7 @@ import { DashboardDetailsStack } from './stacks/DashboardDetailsStack';
 import { TechDetailsStack } from './stacks/TechDetailsStack';
 import { PackerDetailsStack } from './stacks/PackerDetailsStack';
 import { DetailsStackDurationData } from './stacks/types';
-import { ShippedDetailsPanelContent } from './ShippedDetailsPanelContent';
-import { PanelActionBar } from './details-panel/PanelActionBar';
+import { ShippedDetailsPanelContent, type ShippedActiveSection } from './ShippedDetailsPanelContent';
 import { QtyBadge } from '@/components/ui/QtyBadge';
 import { useDeleteOrderRow } from '@/hooks';
 import { dispatchNavigateShippedDetails } from '@/utils/events';
@@ -21,8 +20,17 @@ import { getPresentStaffForToday, type StaffMember } from '@/lib/staffCache';
 import { WorkOrderAssignmentCard, type AssignmentConfirmPayload } from '@/components/work-orders/WorkOrderAssignmentCard';
 import type { WorkOrderRow } from '@/components/work-orders/types';
 import { sectionLabel, microBadge } from '@/design-system/tokens/typography/presets';
-import { SkuIdentity } from '@/components/inventory/SkuIdentity';
-import { useSkuIdentity } from '@/hooks/useSkuIdentity';
+import {
+  PaneHeader,
+  PaneHeaderStatusPill,
+  PaneHeaderTabs,
+  PaneHeaderActionBar,
+  type PaneHeaderActionBarAction,
+} from '@/components/ui/pane-header';
+import { Settings } from '@/components/Icons';
+import { usePanelActions } from '@/hooks/usePanelActions';
+
+export type ShippedActiveInput = 'none' | 'out_of_stock' | 'notes';
 
 interface ShippedDetailsPanelProps {
   shipped: ShippedOrder;
@@ -72,6 +80,21 @@ export function ShippedDetailsPanel({
 }: ShippedDetailsPanelProps) {
   const [shipped, setShipped] = useState<ShippedOrder>(initialShipped);
   const [durationData] = useState<DetailsStackDurationData>({});
+  // Tab state — Return is the default when the order is packed (it leads with
+  // the operator-relevant "who packed / tested / with what serials" info);
+  // otherwise default to Shipping.
+  const hasReturnContent =
+    !!initialShipped.packed_at &&
+    initialShipped.packed_at !== '1' &&
+    context !== 'queue';
+  const [activeSection, setActiveSection] = useState<ShippedActiveSection>(
+    hasReturnContent ? 'return' : 'shipping',
+  );
+  // Reset to a sensible default when the underlying order changes (e.g. user
+  // navigates to a different order via the panel's up/down arrows).
+  useEffect(() => {
+    setActiveSection(hasReturnContent ? 'return' : 'shipping');
+  }, [initialShipped.id, hasReturnContent]);
   const [copiedAll, setCopiedAll] = useState(false);
   const [copiedOrderId, setCopiedOrderId] = useState(false);
   const [isDeleteArmed, setIsDeleteArmed] = useState(false);
@@ -81,6 +104,14 @@ export function ShippedDetailsPanel({
   const [shippingTrackingNumber, setShippingTrackingNumber] = useState(initialShipped.shipping_tracking_number || '');
   const [staff, setStaff] = useState<StaffMember[]>([]);
   const [showAssignmentCard, setShowAssignmentCard] = useState(false);
+  // Lifted from the stacks so the action bar can live in PaneHeader.belowSlot
+  // ABOVE the tabs. Inline editors inside the stacks consume these via props.
+  const [activeInput, setActiveInput] = useState<ShippedActiveInput>('none');
+  const [isMarkAsShippedOpen, setIsMarkAsShippedOpen] = useState(false);
+  useEffect(() => {
+    setActiveInput('none');
+    setIsMarkAsShippedOpen(false);
+  }, [initialShipped.id]);
   const deleteOrderMutation = useDeleteOrderRow();
   const isDeletingOrder = deleteOrderMutation.isPending;
   const outOfStockValue = String((shipped as any).out_of_stock || '').trim();
@@ -88,22 +119,16 @@ export function ShippedDetailsPanel({
   const testedById = shipped.tested_by ?? null;
   const canEditAssignment = Number(shipped.id) > 0 && (shipped as any).row_source !== 'exception';
   const hasTechScan = Boolean((shipped as any).has_tech_scan);
-  const statusToneClass = hasTechScan
-    ? 'bg-emerald-50 text-emerald-700'
+  const statusTone: 'emerald' | 'red' | 'yellow' = hasTechScan
+    ? 'emerald'
     : hasOutOfStock
-      ? 'bg-red-50 text-red-700'
-      : 'bg-yellow-50 text-yellow-700';
+      ? 'red'
+      : 'yellow';
   const statusLabel = hasTechScan
     ? `Tested by ${getStaffName(testedById)}`
     : hasOutOfStock
       ? outOfStockValue
       : 'Pending';
-  const statusDotClass = hasTechScan
-    ? 'bg-emerald-500'
-    : hasOutOfStock
-      ? 'bg-red-500'
-      : 'bg-yellow-400';
-  const skuIdentity = useSkuIdentity(shipped.sku, shipped.account_source);
   const fieldSave = useOrderFieldSave({
     orderId: shipped.id,
     initialOrderNumber: initialShipped.order_id || '',
@@ -217,8 +242,53 @@ export function ShippedDetailsPanel({
     onAssign: canEditAssignment ? openAssignmentCard : undefined,
   };
 
+  // Build the goals / status / out-of-stock / notes actions once, here, since
+  // the action bar now renders in this component's PaneHeader instead of
+  // inside each stack. Other contexts (station/packer/shipped) get a bare bar.
+  const panelActions = usePanelActions(
+    { entityType: 'order', entityId: shipped.id, orderId: shipped.order_id },
+    {
+      status: () => setIsMarkAsShippedOpen((prev) => !prev),
+      out_of_stock: () => setActiveInput((prev) => prev === 'out_of_stock' ? 'none' : 'out_of_stock'),
+      notes: () => setActiveInput((prev) => prev === 'notes' ? 'none' : 'notes'),
+    },
+  );
+  const showPanelActions = context === 'dashboard' || context === 'queue';
+
+  // Compose the action list directly (assign + entity actions) so the bar can
+  // render in PaneHeader.belowSlot with flat full-width styling. We bypass
+  // the PanelActionBar adapter here because that adapter wraps the bar in a
+  // rounded-card variant + nested padding — not what this panel needs.
+  const headerBarActions: PaneHeaderActionBarAction[] = [
+    ...(canEditAssignment
+      ? [{
+          key: 'assign',
+          label: 'Assign',
+          icon: <Settings className="h-3.5 w-3.5" />,
+          onClick: openAssignmentCard,
+          title: 'Open assignment',
+        }]
+      : []),
+    ...(showPanelActions
+      ? panelActions.map((a) => ({
+          key: a.key,
+          label: a.label,
+          icon: <span className={a.toneClassName}>{a.icon}</span>,
+          onClick: a.onAction,
+        }))
+      : []),
+  ];
+
+  // Display value for the order-id header. When no canonical `order_id` is
+  // present (exceptions-table rows, partial intake, etc.), fall back to the
+  // raw table id rendered as an EXCEPTIONS reference so the header is never
+  // empty AND the eyebrow accurately reflects the source.
+  const orderIdTrimmed = String(shipped.order_id || '').trim();
+  const showExceptionsFallback = !orderIdTrimmed;
+  const orderIdDisplay = orderIdTrimmed || String(Math.abs(Number(shipped.id)));
+
   const handleCopyOrderId = () => {
-    const value = String(shipped.order_id || '').trim();
+    const value = orderIdDisplay.trim();
     if (!value) return;
     navigator.clipboard.writeText(value);
     setCopiedOrderId(true);
@@ -280,61 +350,86 @@ export function ShippedDetailsPanel({
       transition={{ type: 'spring', damping: 25, stiffness: 350, mass: 0.5 }}
       className="fixed right-0 top-0 z-[100] flex h-screen w-[420px] flex-col overflow-hidden border-l border-gray-200 bg-white shadow-[-20px_0_50px_rgba(0,0,0,0.05)]"
     >
-      <div className="shrink-0 border-b border-gray-100 bg-white/90 px-8 py-5 backdrop-blur-xl">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-4">
-            <div className="flex items-center gap-3">
-              <div className="w-12 h-12 bg-blue-600 rounded-2xl flex items-center justify-center shadow-lg shadow-blue-200">
-                <Package className="w-6 h-6 text-white" />
-              </div>
-              <div className="min-w-0">
-                <button
-                  type="button"
-                  onClick={handleCopyOrderId}
-                  className="truncate text-[20px] font-black leading-none tracking-tight text-gray-900 transition-colors hover:text-blue-700"
-                  title="Click to copy order ID"
-                  aria-label={`Copy order ID ${shipped.order_id}`}
-                >
-                  {shipped.order_id}
-                </button>
-                {copiedOrderId && (
-                  <p className={`${microBadge} tracking-wider text-emerald-600 mt-0.5`}>Copied</p>
-                )}
-                <div className="mt-2 flex flex-wrap items-center gap-2">
-                  <QtyBadge quantity={(shipped as any).quantity} />
-                  <span className={`inline-flex items-center gap-1.5 rounded-full px-2 py-1 ${microBadge} tracking-[0.04em] ${statusToneClass}`}>
-                    <span className={`h-2 w-2 rounded-full ${statusDotClass}`} />
-                    {statusLabel}
-                  </span>
-                </div>
+      <PaneHeader
+        className="shrink-0 border-b-0 bg-white/90 backdrop-blur-xl"
+        rowClassName="px-8 py-5"
+        leftSlot={
+          <div className="flex items-center gap-3">
+            <div className="w-12 h-12 bg-blue-600 rounded-2xl flex items-center justify-center shadow-lg shadow-blue-200">
+              <Package className="w-6 h-6 text-white" />
+            </div>
+            <div className="min-w-0">
+              <p className="text-[10px] font-black uppercase tracking-[0.2em] text-gray-500">
+                {showExceptionsFallback ? 'Exceptions' : 'Order #'}
+              </p>
+              <button
+                type="button"
+                onClick={handleCopyOrderId}
+                className="mt-0.5 truncate text-[20px] font-black leading-none tracking-tight text-gray-900 transition-colors hover:text-blue-700"
+                title="Click to copy"
+                aria-label={`Copy ${orderIdDisplay}`}
+              >
+                {orderIdDisplay}
+              </button>
+              {copiedOrderId && (
+                <p className={`${microBadge} tracking-wider text-emerald-600 mt-0.5`}>Copied</p>
+              )}
+              <div className="mt-2 flex flex-wrap items-center gap-2">
+                <QtyBadge quantity={(shipped as any).quantity} />
+                <PaneHeaderStatusPill tone={statusTone} pulse>
+                  {statusLabel}
+                </PaneHeaderStatusPill>
               </div>
             </div>
           </div>
+        }
+        rightSlot={
           <button
             onClick={onClose}
-            className="p-3 hover:bg-gray-50 rounded-2xl transition-all border border-transparent hover:border-gray-100"
+            className="inline-flex h-9 w-9 items-center justify-center rounded-xl text-gray-500 transition-all hover:bg-gray-100 hover:text-gray-900 active:scale-95"
             aria-label="Close details"
           >
-            <X className="w-6 h-6 text-gray-500" />
+            <X className="h-5 w-5" />
           </button>
-        </div>
-      </div>
+        }
+        belowSlot={
+          <>
+            {/* Action bar — full width, flat (no card chrome), same `px-8`
+                gutter as the identity row so icons align with the rest of
+                the panel chrome. Sits directly under the identity row and
+                above the tabs (the dual-sticky top-actions header). */}
+            <div className="px-8 py-2">
+              <PaneHeaderActionBar
+                iconOnly
+                variant="card"
+                actions={headerBarActions}
+                onPrev={stackActionBar.onMoveUp}
+                onNext={stackActionBar.onMoveDown}
+                prevTitle="Move up a row"
+                nextTitle="Move down a row"
+              />
+            </div>
+            <PaneHeaderTabs<ShippedActiveSection>
+              tabs={[
+                // Hide Return until the order is actually packed — otherwise
+                // the tab would lead to an empty section (pending orders
+                // have no return info to show yet).
+                ...(hasReturnContent
+                  ? [{ value: 'return' as const, label: 'Return' }]
+                  : []),
+                { value: 'shipping' as const, label: 'Shipping' },
+                { value: 'product' as const, label: 'Product' },
+              ]}
+              value={activeSection}
+              onChange={setActiveSection}
+              className="px-8"
+            />
+          </>
+        }
+      />
 
       <div className="flex-1 overflow-y-auto no-scrollbar">
         <div className="pb-8 pt-4 space-y-4">
-          {shipped.sku && (
-            <section className="mx-8 rounded-2xl border border-gray-200 bg-white px-4 py-3">
-              {skuIdentity.loading ? (
-                <div className="h-16 animate-pulse rounded-lg bg-slate-100" />
-              ) : (
-                <SkuIdentity
-                  canonicalSku={skuIdentity.canonicalSku || shipped.sku}
-                  productTitle={skuIdentity.productTitle || shipped.product_title}
-                  platforms={skuIdentity.platforms}
-                />
-              )}
-            </section>
-          )}
           {context === 'dashboard' || context === 'queue' ? (
             <DashboardDetailsStack
               shipped={shipped}
@@ -344,7 +439,11 @@ export function ShippedDetailsPanel({
               onUpdate={_onUpdate}
               showShippingTimestamp={false}
               showReturnInformation={context !== 'queue'}
-              actionBar={stackActionBar}
+              activeSection={activeSection}
+              activeInput={activeInput}
+              setActiveInput={setActiveInput}
+              isMarkAsShippedOpen={isMarkAsShippedOpen}
+              setIsMarkAsShippedOpen={setIsMarkAsShippedOpen}
             />
           ) : context === 'station' ? (
             <TechDetailsStack
@@ -355,6 +454,7 @@ export function ShippedDetailsPanel({
               onUpdate={_onUpdate}
               showShippingTimestamp={false}
               actionBar={stackActionBar}
+              activeSection={activeSection}
             />
           ) : context === 'packer' ? (
             <PackerDetailsStack
@@ -365,11 +465,12 @@ export function ShippedDetailsPanel({
               onUpdate={_onUpdate}
               showShippingTimestamp={false}
               actionBar={stackActionBar}
+              activeSection={activeSection}
             />
           ) : (
             <>
-              <PanelActionBar {...stackActionBar} />
               <ShippedDetailsPanelContent
+                activeSection={activeSection}
                 shipped={{
                   ...shipped,
                   order_id: orderNumber,

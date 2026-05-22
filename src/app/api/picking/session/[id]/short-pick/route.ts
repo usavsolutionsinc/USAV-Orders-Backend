@@ -1,6 +1,5 @@
 import { NextResponse } from 'next/server';
 import { withAuth } from '@/lib/auth/withAuth';
-import { isInventoryV2Picking } from '@/lib/feature-flags';
 import { recordShortPick, type ShortPickReason } from '@/lib/picking/sessions';
 
 const VALID_REASONS: ReadonlySet<ShortPickReason> = new Set([
@@ -26,16 +25,8 @@ const VALID_REASONS: ReadonlySet<ShortPickReason> = new Set([
  *   note?: string,
  *   client_event_id?: string,
  * }
- * Gated by INVENTORY_V2_PICKING.
  */
 export const POST = withAuth(async (request, ctx) => {
-  if (!isInventoryV2Picking()) {
-    return NextResponse.json(
-      { ok: false, error: 'INVENTORY_V2_PICKING flag is OFF', flag: 'INVENTORY_V2_PICKING' },
-      { status: 503 },
-    );
-  }
-
   const actorStaffId: number | null =
     typeof ctx.staffId === 'number' && ctx.staffId > 0 ? ctx.staffId : null;
   if (actorStaffId == null) {

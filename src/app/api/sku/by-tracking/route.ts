@@ -31,7 +31,7 @@ export const GET = withAuth(async (req: NextRequest) => {
       created_at: string | null;
       updated_at: string | null;
       product_title: string | null;
-      photos: string[];
+      photos: Array<{ id: number; url: string }>;
     }>(
       `SELECT
          s.id,
@@ -45,9 +45,11 @@ export const GET = withAuth(async (req: NextRequest) => {
          s.updated_at,
          ss.product_title,
          COALESCE(
-           ARRAY_AGG(p.url ORDER BY p.created_at ASC)
-             FILTER (WHERE p.url IS NOT NULL),
-           ARRAY[]::text[]
+           JSONB_AGG(
+             JSONB_BUILD_OBJECT('id', p.id, 'url', p.url)
+             ORDER BY p.created_at ASC
+           ) FILTER (WHERE p.url IS NOT NULL),
+           '[]'::jsonb
          ) AS photos
        FROM v_sku s
        LEFT JOIN sku_stock ss
@@ -88,7 +90,13 @@ export const GET = withAuth(async (req: NextRequest) => {
         created_at: row.created_at,
         updated_at: row.updated_at,
         product_title: row.product_title,
-        photos: Array.isArray(row.photos) ? row.photos : [],
+        photos: Array.isArray(row.photos)
+          ? row.photos
+              .filter((p): p is { id: number; url: string } =>
+                !!p && typeof p.url === 'string' && p.url.length > 0,
+              )
+              .map((p) => ({ id: Number(p.id), url: p.url }))
+          : [],
       },
     });
   } catch (err: any) {

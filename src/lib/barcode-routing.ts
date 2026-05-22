@@ -36,8 +36,27 @@ export const GS1_PATH_RE = /\/01\/(\d{8,14})(?:\/21\/([^/?#\s]+))?/i;
 // GS1 Digital Link for a warehouse location: /414/{gln}/254/{code}
 // where {code} is the flat location string (e.g. "A0101101"). Emitted by
 // the Location Label Printer via gs1LocationUrl(); printed bin labels
-// scan back to this path.
+// scan back to this path. Retained for back-compat with any pre-DataMatrix
+// labels still in the wild.
 export const GS1_LOCATION_RE = /\/414\/(\d+)\/254\/([^/?#\s]+)/i;
+
+// Raw GS1 AI string emitted by industrial DataMatrix scanners. Two forms
+// are common:
+//   • FNC1-delimited:  "414{13-digit gln}\x1D254{code}"   (Zebra, Honeywell)
+//   • Parens form:     "(414){gln}(254){code}"            (some Datalogics
+//                                                          + paste-input)
+// The {code} segment is variable-length AI 254, so an FNC1 (ASCII 0x1D /
+// GS) terminator is what disambiguates the boundary — we accept either
+// end-of-string or an explicit GS as the delimiter.
+const GS1_AI_LOCATION_FNC1_RE = /414(\d{13})(?:\x1D|)?254([^\x1D]+)/i;
+const GS1_AI_LOCATION_PARENS_RE = /\(414\)(\d{13})\(254\)([^()]+)/i;
+
+// Unit/serial product label — `(01)gtin(21)serial[(10)batch]`. AI 01 is
+// fixed 14 digits per GS1 so FNC1 isn't required between 01 and 21, but
+// scanners typically emit it before the variable-length AI 21. Accept
+// either form.
+const GS1_AI_UNIT_FNC1_RE = /01(\d{14})(?:\x1D)?21([^\x1D]+?)(?:\x1D10([^\x1D]+))?$/i;
+const GS1_AI_UNIT_PARENS_RE = /\(01\)(\d{14})\(21\)([^()]+)(?:\(10\)([^()]+))?/i;
 
 function pathToRoute(path: string, value: string): ScanRoute | null {
   const m = MOBILE_PATH_RE.exec(path);
@@ -68,6 +87,11 @@ function pathToRoute(path: string, value: string): ScanRoute | null {
   const gs1Loc = GS1_LOCATION_RE.exec(path);
   if (gs1Loc) {
     const code = decodeURIComponent(gs1Loc[2]).toUpperCase();
+    // position=00 means this label identifies a whole rack (zone/aisle/
+    // bay/level), not a single bin slot. Route to the rack-detail view.
+    if (isRackCode(code)) {
+      return { type: 'bin', value: code, redirect: `/warehouse?tab=racks&code=${code}` };
+    }
     return { type: 'bin', value: code, redirect: `/inventory?bin=${code}` };
   }
   // GS1 Digital Link form. Page-side resolvers translate gtin → sku and
@@ -81,6 +105,17 @@ function pathToRoute(path: string, value: string): ScanRoute | null {
     return { type: 'sku', value, redirect: `/01/${gtin}` };
   }
   return null;
+}
+
+/** Route a raw GS1 location code (the flat A0101101 form) to the right view. */
+function routeLocationCode(value: string, code: string): ScanRoute {
+  const normalized = code.toUpperCase();
+  // position=00 means this label identifies a whole rack (zone/aisle/bay/
+  // level), not a single bin slot. Route to the rack-detail view.
+  if (isRackCode(normalized)) {
+    return { type: 'bin', value: normalized, redirect: `/warehouse?tab=racks&code=${normalized}` };
+  }
+  return { type: 'bin', value: normalized, redirect: `/inventory?bin=${normalized}` };
 }
 
 /**
@@ -105,19 +140,65 @@ export function routeScan(raw: string): ScanRoute | null {
     if (matched) return matched;
   }
 
-  // 2. Legacy RCV-{id} carton string.
+  // 2. Raw GS1 AI string from a DataMatrix scan — parens or FNC1 form.
+  //    Industrial scanners emit one of these for our location labels.
+  const aiParens = GS1_AI_LOCATION_PARENS_RE.exec(value);
+  if (aiParens) return routeLocationCode(value, aiParens[2]);
+  const aiFnc1 = GS1_AI_LOCATION_FNC1_RE.exec(value);
+  if (aiFnc1) return routeLocationCode(value, aiFnc1[2]);
+
+  // 2b. Unit/serial product label — `(01)gtin(21)serial[(10)batch]`.
+  //     Routes to the unit detail page; the resolver translates gtin →
+  //     sku and serial → unit at runtime.
+  const unitParens = GS1_AI_UNIT_PARENS_RE.exec(value);
+  if (unitParens) {
+    const [, gtin, serial] = unitParens;
+    return { type: 'serial-unit', value, redirect: `/01/${gtin}/21/${encodeURIComponent(serial)}` };
+  }
+  const unitFnc1 = GS1_AI_UNIT_FNC1_RE.exec(value);
+  if (unitFnc1) {
+    const [, gtin, serial] = unitFnc1;
+    return { type: 'serial-unit', value, redirect: `/01/${gtin}/21/${encodeURIComponent(serial)}` };
+  }
+
+  // 3. Bare-handle DataMatrix payloads — these are what receiving carton,
+  //    receiving line, serial-unit, and repair labels carry now that
+  //    they're DataMatrix instead of URL QR. No URL, no host, just the
+  //    prefixed handle.
+  const rcvShort = /^R-(\d+)$/i.exec(value);
+  if (rcvShort) return { type: 'receiving',      value, redirect: `/m/r/${rcvShort[1]}` };
+  const lineShort = /^L-(\d+)$/i.exec(value);
+  if (lineShort) return { type: 'receiving-line', value, redirect: `/m/l/${lineShort[1]}` };
+  const unitShort = /^U-(\d+)$/i.exec(value);
+  if (unitShort) return { type: 'serial-unit',   value, redirect: `/m/u/${unitShort[1]}` };
+  const repairShort = /^REP-(\d+)$/i.exec(value);
+  if (repairShort) {
+    return { type: 'receiving', value, redirect: `/repair/${repairShort[1]}` };
+  }
+  // Legacy RCV-{id} carton string — kept for back-compat with any
+  // pre-DataMatrix labels still in the wild.
   const rcv = /^RCV-(\d+)$/i.exec(value);
   if (rcv) {
     return { type: 'receiving', value, redirect: `/m/r/${rcv[1]}` };
   }
 
-  // 3. Static SKU: digit prefix + contains ":".
+  // 4. Static SKU: digit prefix + contains ":".
   if (/^\d/.test(value) && value.includes(':')) return { type: 'sku', value };
 
-  // 4. Bin: starts with a letter.
+  // 5. Bin / rack: dashed code like A-01-01-1 or A-01-01-1-01. Letter
+  //    prefix followed by hyphenated digit segments. Matches the human-
+  //    readable code printed alongside the DataMatrix; some operators
+  //    type these in or paste them from a phone photo.
+  const dashed = /^([A-Z])-(\d{2})-(\d{2})-(\d{1,2})(?:-(\d{2}))?$/i.exec(value);
+  if (dashed) {
+    const flat = dashed.slice(1, 6).filter(Boolean).join('').toUpperCase();
+    return routeLocationCode(value, flat);
+  }
+
+  // 6. Bin (legacy fallback): starts with a letter.
   if (/^[A-Za-z]/.test(value)) return { type: 'bin', value };
 
-  // 5. Default fallback → SKU.
+  // 7. Default fallback → SKU.
   return { type: 'sku', value };
 }
 
@@ -129,21 +210,39 @@ export function detectScanType(raw: string): ScanType {
 // ─── Print-side helpers ─────────────────────────────────────────────────────
 
 /**
- * Base URL embedded in every printed QR. Hard-coded to the production deploy
- * so labels printed from a localhost dev session still open the right page
- * when scanned with a phone (a localhost URL on a printed sticker is useless).
- * Override via NEXT_PUBLIC_APP_URL for staging or alt-domain printing.
+ * Public-facing base URL embedded in every printed QR — internal handles
+ * (receiving carton, receiving line, repair label, sign-in / staff invite)
+ * and consumer unit/serial labels alike all anchor here.
+ *
+ * One canonical brand domain serves both customers and staff so:
+ *   • The Vercel deploy hostname never appears on a printed sticker.
+ *   • Phone cameras see a clean `usavshop.com` URL with no IaaS leak.
+ *   • Industrial scanners and the internal app ignore the host and parse
+ *     the path locally via `routeScan()` — works the same regardless of
+ *     which brand domain prints it.
+ *
+ * Edge expectation: the usavshop.com Vercel/CDN tier *rewrites* (not
+ * redirects) the relevant paths (/m/*, /repair/*, /warehouse, /inventory,
+ * /01/*, /414/*) to the staff backend. See docs/edge-rewrites.md for the
+ * vercel.json snippet that wires that up. A 302 redirect would still
+ * leak the backend host in the browser bar — rewrites keep the browser
+ * on usavshop.com.
+ *
+ * Override via NEXT_PUBLIC_APP_URL for staging environments (e.g. point
+ * to a preview deployment or staging brand domain).
  */
-export const QR_BASE_URL =
-  process.env.NEXT_PUBLIC_APP_URL ?? 'https://usav-orders-backend.vercel.app';
+export const QR_BASE_URL = (
+  process.env.NEXT_PUBLIC_APP_URL ?? 'https://usavshop.com'
+).replace(/\/$/, '');
 
 /**
  * Public domain encoded in the *unit-level* GS1 Digital Link QR (the QR on a
- * serialized product label). A normal phone-camera scan opens
- * `https://usavshop.com/01/{gtin}/21/{unitSerial}`, which the storefront is
- * responsible for resolving / redirecting. The in-app scanner ignores host
- * and parses the GS1 path locally (see {@link parseScannedUrl}), so this URL
- * works for both flows. Override with NEXT_PUBLIC_LABEL_QR_BASE_URL.
+ * serialized product label). Defaults to the same canonical brand domain
+ * as {@link QR_BASE_URL} so the storefront serves both consumer and staff
+ * QR landings from one host. Kept as a separate constant for the rare
+ * case where a buyer wants unit labels routed to an alternate consumer
+ * URL (e.g. a marketplace listing). Override with
+ * NEXT_PUBLIC_LABEL_QR_BASE_URL.
  */
 export const PUBLIC_UNIT_QR_BASE_URL = (
   process.env.NEXT_PUBLIC_LABEL_QR_BASE_URL ?? 'https://usavshop.com'
@@ -255,6 +354,66 @@ export function locationCodeFlat(s: LocationSegments): string {
 }
 
 /**
+ * Rack-level segments — identifies a whole rack column on a single level
+ * (no individual position slot). Stored as a `LocationSegments` with
+ * `position: 0` so the rest of the pipeline (barcode formatting, DB
+ * registration, scan routing) stays uniform.
+ */
+export type RackSegments = Omit<LocationSegments, 'position'>;
+
+/** Convert rack segments to the position=0 LocationSegments form. */
+export function rackToLocation(r: RackSegments): LocationSegments {
+  return { zone: r.zone, aisle: r.aisle, bay: r.bay, level: r.level, position: 0 };
+}
+
+/**
+ * 4-segment dashed rack code — `A-01-01-1`. Drops the position segment
+ * for display; the underlying QR / DB row still uses the position=0
+ * sentinel (see {@link locationCodeFlat}, which would emit `A0101100`).
+ */
+export function rackCode(r: RackSegments): string {
+  return `${zoneLetter(r.zone)}-${pad2(r.aisle)}-${pad2(r.bay)}-${noPad(r.level)}`;
+}
+
+/**
+ * A printed location code (flat form) identifies a rack — not an
+ * individual bin — when the position segment is 00. Scan handlers use
+ * this to route rack QR scans to the rack-detail view instead of the
+ * single-bin inventory page.
+ */
+export function isRackCode(flat: string): boolean {
+  const m = /^([A-Z])(\d{2})(\d{2})(\d{1,2})(\d{2})$/i.exec(flat.trim());
+  if (!m) return false;
+  return parseInt(m[5], 10) === 0;
+}
+
+/**
+ * Parse a flat location code (`A0101100` / `A010111`) back into
+ * segments. Returns null when the input doesn't match the expected
+ * shape. Used by the rack detail view to resolve a scanned `?code=…`
+ * URL parameter into the zone/aisle/bay/level it represents.
+ *
+ * Level is variable-width (1..99) but position is fixed 2 digits and
+ * always comes last, so we anchor on the position tail and split the
+ * remainder into the other segments.
+ */
+export function parseLocationCodeFlat(flat: string): LocationSegments | null {
+  const v = flat.trim().toUpperCase();
+  // Z + AA + BB + L(1-2) + PP — 8 or 9 chars total.
+  const m = /^([A-Z])(\d{2})(\d{2})(\d{1,2})(\d{2})$/i.exec(v);
+  if (!m) return null;
+  const zone = m[1];
+  const aisle = parseInt(m[2], 10);
+  const bay = parseInt(m[3], 10);
+  const level = parseInt(m[4], 10);
+  const position = parseInt(m[5], 10);
+  if (!/^[A-Z]$/.test(zone)) return null;
+  if (![aisle, bay, level].every((n) => Number.isFinite(n) && n >= 1 && n <= 99)) return null;
+  if (!Number.isFinite(position) || position < 0 || position > 99) return null;
+  return { zone, aisle, bay, level, position };
+}
+
+/**
  * Bays alternate sides of the aisle: odd → Left, even → Right.
  * Used as a guide label on printed stickers so staff know which way to face.
  */
@@ -269,6 +428,10 @@ export function bayHand(bay: number | string): 'Left' | 'Right' {
  *
  * AI 414 = Identification of a physical location (GLN).
  * AI 254 = GLN extension component (our Z/A/B/L/P breakdown).
+ *
+ * @deprecated for new prints — location labels emit a GS1 DataMatrix with
+ * the raw AI string instead (see {@link gs1LocationAi}). Kept exported so
+ * the scan router can still parse any pre-DataMatrix labels in the wild.
  */
 export function gs1LocationUrl(
   s: LocationSegments,
@@ -283,4 +446,67 @@ export function gs1LocationUrl(
   } catch {
     return `${baseUrl}${path}`;
   }
+}
+
+/**
+ * Raw GS1 AI string in human-readable parens form — `(414)gln(254)code`.
+ *
+ * Industry-standard payload for an internal warehouse-location label.
+ * Encoded into a GS1 DataMatrix (symbology `gs1datamatrix`) which
+ * automatically inserts the FNC1 control character on the wire; bwip-js
+ * does this transparently when fed the parens form. A consumer phone
+ * camera reads opaque text (no clickable URL), while industrial scanners
+ * decode it into the FNC1-delimited form which {@link routeScan}
+ * recognises and routes the same as the legacy URL labels.
+ */
+export function gs1LocationAi(
+  s: LocationSegments,
+  opts?: { gln?: string },
+): string {
+  const gln = (opts?.gln || DEFAULT_GLN).trim();
+  const code = locationCodeFlat(s);
+  return `(414)${gln}(254)${code}`;
+}
+
+// ─── Unit / serial product label ──────────────────────────────────────────
+
+/**
+ * GS1 AI string for a unit/serial product label — `(01)gtin(21)serial`,
+ * optionally with `(10)batch`. Encoded into a `gs1datamatrix` symbology
+ * so phone cameras see opaque text and only the internal app's scanner
+ * decodes it.
+ *
+ * Replaces the consumer-facing Digital Link URL form (`gs1DigitalLinkUrl`)
+ * for unit labels — kept exported there for any pre-DataMatrix stickers
+ * still in the wild.
+ */
+export function gs1UnitAi(opts: {
+  gtin: string;
+  serial?: string | null;
+  batch?: string | null;
+}): string {
+  const gtin = String(opts.gtin || '').trim();
+  if (!gtin) return '';
+  let payload = `(01)${gtin}`;
+  if (opts.serial && opts.serial.trim()) payload += `(21)${opts.serial.trim()}`;
+  if (opts.batch && opts.batch.trim()) payload += `(10)${opts.batch.trim()}`;
+  return payload;
+}
+
+// ─── Internal handles ─────────────────────────────────────────────────────
+// Plain `datamatrix` payloads — no GS1 AIs, just the prefixed handle the
+// internal app already recognises. Mirror of the URL form
+// `mobileQrUrl(kind, id)`, but no host / protocol / path on the wire.
+
+export function receivingHandle(id: string | number): string {
+  return `R-${id}`;
+}
+export function receivingLineHandle(id: string | number): string {
+  return `L-${id}`;
+}
+export function serialUnitHandle(id: string | number): string {
+  return `U-${id}`;
+}
+export function repairHandle(id: string | number): string {
+  return `REP-${id}`;
 }

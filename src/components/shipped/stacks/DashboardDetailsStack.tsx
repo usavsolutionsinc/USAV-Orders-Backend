@@ -7,14 +7,12 @@ import { ShippedDetailsPanelContent } from '../ShippedDetailsPanelContent';
 import { toPSTDateKey } from '@/utils/date';
 import { OutOfStockField } from '@/components/ui/OutOfStockField';
 import { OutOfStockEditorBlock } from '@/components/ui/OutOfStockEditorBlock';
-import { dispatchCloseShippedDetails, dispatchOpenShippingEditCard } from '@/utils/events';
+import { dispatchCloseShippedDetails } from '@/utils/events';
 import { getActiveStaff } from '@/lib/staffCache';
 import { PACKER_IDS } from '@/utils/staff';
 import { MarkAsShippedForm } from './MarkAsShippedForm';
 import { DeleteOrderControl } from './DeleteOrderControl';
 import { useOrderFieldSave } from '@/hooks/useOrderFieldSave';
-import { PanelActionBar } from '@/components/shipped/details-panel/PanelActionBar';
-import { usePanelActions } from '@/hooks/usePanelActions';
 
 export function DashboardDetailsStack({
   shipped,
@@ -23,8 +21,13 @@ export function DashboardDetailsStack({
   onCopyAll,
   onUpdate,
   mode = 'dashboard',
-  actionBar,
+  actionBar: _actionBar,
   showReturnInformation = true,
+  activeSection,
+  activeInput = 'none',
+  setActiveInput,
+  isMarkAsShippedOpen = false,
+  setIsMarkAsShippedOpen,
 }: DetailsStackProps) {
   const [staffOptions, setStaffOptions] = useState<Array<{ id: number; name: string; role: string }>>([]);
   const [outOfStock, setOutOfStock] = useState((shipped as any).out_of_stock || '');
@@ -34,8 +37,6 @@ export function DashboardDetailsStack({
   const [itemNumber, setItemNumber] = useState(shipped.item_number || '');
   const [shippingTrackingNumber, setShippingTrackingNumber] = useState(shipped.shipping_tracking_number || '');
   const [isUndoing, setIsUndoing] = useState(false);
-  const [isMarkAsShippedOpen, setIsMarkAsShippedOpen] = useState(false);
-  const [activeInput, setActiveInput] = useState<'none' | 'out_of_stock' | 'notes'>('none');
   const hasOutOfStockValue = outOfStock.trim().length > 0;
   const packerIdOrder = PACKER_IDS;
 
@@ -77,8 +78,6 @@ export function DashboardDetailsStack({
     setOrderNumber(shipped.order_id || '');
     setItemNumber(shipped.item_number || '');
     setShippingTrackingNumber(shipped.shipping_tracking_number || '');
-    setActiveInput('none');
-    setIsMarkAsShippedOpen(false);
     fieldSave.resetRefs(shipped.order_id || '', shipped.item_number || '', shipped.shipping_tracking_number || '');
   }, [
     shipped.id,
@@ -96,15 +95,6 @@ export function DashboardDetailsStack({
       .catch((error) => console.error('Failed to load staff options:', error));
     return () => { active = false; };
   }, []);
-
-  const panelActions = usePanelActions(
-    { entityType: 'order', entityId: shipped.id, orderId: shipped.order_id },
-    {
-      status: () => setIsMarkAsShippedOpen((prev) => !prev),
-      out_of_stock: () => setActiveInput((prev) => prev === 'out_of_stock' ? 'none' : 'out_of_stock'),
-      notes: () => setActiveInput((prev) => prev === 'notes' ? 'none' : 'notes'),
-    },
-  );
 
   const saveInlineFields = useCallback(async () => {
     await fieldSave.saveInlineFields(orderNumber, itemNumber, shippingTrackingNumber);
@@ -163,9 +153,7 @@ export function DashboardDetailsStack({
   };
 
   return (
-    <div className="pb-8 pt-4 space-y-4">
-      {actionBar ? <PanelActionBar {...actionBar} actions={panelActions} /> : null}
-
+    <div className="pb-8 pt-0 space-y-4">
       <section className="mx-8 space-y-2">
         {mode === 'tech' ? (
           <div className="flex items-center gap-2 rounded-xl border border-gray-200 bg-white p-2">
@@ -185,7 +173,7 @@ export function DashboardDetailsStack({
           <MarkAsShippedForm
             shippingTrackingNumber={shippingTrackingNumber || shipped.shipping_tracking_number || ''}
             packerOptions={packerOptions}
-            onSuccess={() => { setIsMarkAsShippedOpen(false); onUpdate?.(); }}
+            onSuccess={() => { setIsMarkAsShippedOpen?.(false); onUpdate?.(); }}
           />
         )}
 
@@ -196,7 +184,7 @@ export function DashboardDetailsStack({
               onChange={setOutOfStock}
               onCancel={() => {
                 setOutOfStock((shipped as any).out_of_stock || '');
-                setActiveInput('none');
+                setActiveInput?.('none');
               }}
               onSubmit={() => void fieldSave.saveOutOfStock(outOfStock)}
               autoSaveOnChange={false}
@@ -221,7 +209,7 @@ export function DashboardDetailsStack({
             <div className="grid grid-cols-2 gap-2">
               <button
                 type="button"
-                onClick={() => setActiveInput('none')}
+                onClick={() => setActiveInput?.('none')}
                 className="h-8 rounded-lg bg-white border border-gray-200 text-gray-700 text-[9px] font-black uppercase tracking-wider"
               >
                 Cancel
@@ -270,17 +258,11 @@ export function DashboardDetailsStack({
           showPackingInformation={false}
           showTestingInformation={false}
           showReturnInformation={showReturnInformation}
+          activeSection={activeSection}
         />
       </div>
 
       <section className="mx-8 pt-2 space-y-2">
-        <button
-          type="button"
-          onClick={() => dispatchOpenShippingEditCard([shipped], 0)}
-          className="w-full h-8 rounded-lg border border-blue-200 bg-blue-50 text-[9px] font-black uppercase tracking-[0.18em] text-blue-700 transition-colors hover:border-blue-300 hover:bg-blue-100"
-        >
-          Edit in Card
-        </button>
         <DeleteOrderControl
           orderId={shipped.id}
           packerLogId={(shipped as any).packer_log_id ?? null}

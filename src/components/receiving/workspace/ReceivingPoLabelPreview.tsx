@@ -1,6 +1,6 @@
 'use client';
 
-import QRCode from 'react-qr-code';
+import { Gs1DataMatrix } from '@/components/barcode/Gs1DataMatrix';
 import { receivingLabelPoCornerDisplay } from '@/lib/print/printReceivingLabel';
 import {
   ConditionHeaderDisplay,
@@ -66,7 +66,7 @@ export function ReceivingPoLabelPreview({
           </div>
         </div>
         <div className="flex shrink-0 items-center [&_svg]:block">
-          <QRCode value={qrPayload} size={96} level="M" fgColor="#000000" bgColor="#ffffff" />
+          <Gs1DataMatrix value={qrPayload} size={96} symbology="datamatrix" />
         </div>
       </div>
     </div>

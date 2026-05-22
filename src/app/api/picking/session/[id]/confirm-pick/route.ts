@@ -1,6 +1,5 @@
 import { NextResponse } from 'next/server';
 import { withAuth } from '@/lib/auth/withAuth';
-import { isInventoryV2Picking } from '@/lib/feature-flags';
 import { confirmPick } from '@/lib/picking/sessions';
 
 /**
@@ -11,16 +10,8 @@ import { confirmPick } from '@/lib/picking/sessions';
  * column in one transaction.
  *
  * Body: { allocation_id: number, client_event_id?: string }
- * Gated by INVENTORY_V2_PICKING.
  */
 export const POST = withAuth(async (request, ctx) => {
-  if (!isInventoryV2Picking()) {
-    return NextResponse.json(
-      { ok: false, error: 'INVENTORY_V2_PICKING flag is OFF', flag: 'INVENTORY_V2_PICKING' },
-      { status: 503 },
-    );
-  }
-
   const actorStaffId: number | null =
     typeof ctx.staffId === 'number' && ctx.staffId > 0 ? ctx.staffId : null;
   if (actorStaffId == null) {

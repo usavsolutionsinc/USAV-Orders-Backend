@@ -1,7 +1,7 @@
 'use client';
 
 import { Loader2 } from '@/components/Icons';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { PhotoGallery } from '@/components/shipped/PhotoGallery';
 
 interface ReceivingPhoto {
@@ -27,8 +27,10 @@ export function ReceivingPhotosSection({
   sectionTitle = 'Receiving photos',
   launcherTitle = 'View Receiving Photos',
 }: ReceivingPhotosSectionProps) {
+  const queryClient = useQueryClient();
+  const queryKey = ['receiving-photos', receivingId] as const;
   const { data: photos, isFetching } = useQuery<ReceivingPhoto[]>({
-    queryKey: ['receiving-photos', receivingId],
+    queryKey,
     queryFn: async () => {
       const res = await fetch(`/api/receiving-photos?receivingId=${receivingId}`);
       if (!res.ok) return [];
@@ -51,8 +53,10 @@ export function ReceivingPhotosSection({
   // here. Guard against the crash; the queryFn will replace the cache on
   // its next run.
   const photosArr: ReceivingPhoto[] = Array.isArray(photos) ? photos : [];
-  const urls = photosArr.map((p) => p.photoUrl).filter(Boolean);
-  const loadingEmpty = isFetching && urls.length === 0;
+  const galleryPhotos = photosArr
+    .filter((p) => !!p.photoUrl)
+    .map((p) => ({ id: p.id, url: p.photoUrl }));
+  const loadingEmpty = isFetching && galleryPhotos.length === 0;
 
   return (
     <div className="space-y-3">
@@ -79,7 +83,7 @@ export function ReceivingPhotosSection({
         <div className="flex h-24 items-center justify-center rounded-xl border border-gray-100 bg-gray-50">
           <Loader2 className="h-6 w-6 animate-spin text-gray-400" aria-label="Loading photos" />
         </div>
-      ) : urls.length === 0 ? (
+      ) : galleryPhotos.length === 0 ? (
         <div className="flex min-h-[5.5rem] items-center justify-center rounded-xl border-2 border-dashed border-gray-100 bg-gray-50 px-4">
           <div className="text-center">
             <p className="text-[9px] font-black uppercase tracking-widest text-gray-400">No photos yet</p>
@@ -89,7 +93,12 @@ export function ReceivingPhotosSection({
           </div>
         </div>
       ) : (
-        <PhotoGallery photos={urls} orderId={downloadLabel ?? `recv-${receivingId}`} launcherTitle={launcherTitle} />
+        <PhotoGallery
+          photos={galleryPhotos}
+          orderId={downloadLabel ?? `recv-${receivingId}`}
+          launcherTitle={launcherTitle}
+          onPhotoDeleted={() => queryClient.invalidateQueries({ queryKey })}
+        />
       )}
     </div>
   );

@@ -124,6 +124,11 @@ function PasteableDraftInput({
   ariaLabel: string;
   title: string;
 }) {
+  // `onPaste`, `ariaLabel`, `title` are kept on the prop type for callers but
+  // the Clipboard quick-paste affordance was removed at the user's request.
+  void onPaste;
+  void ariaLabel;
+  void title;
   return (
     <div className="relative rounded-xl border border-gray-200 bg-white transition-colors focus-within:border-blue-400">
       <input
@@ -131,23 +136,14 @@ function PasteableDraftInput({
         value={value}
         onChange={(e) => onChange(e.target.value)}
         placeholder={placeholder}
-        className={`h-10 w-full border-0 bg-transparent px-3 pr-10 text-sm font-bold text-gray-900 outline-none ${inputClassName}`}
+        className={`h-10 w-full border-0 bg-transparent px-3 text-sm font-bold text-gray-900 outline-none ${inputClassName}`}
       />
-      <button
-        type="button"
-        onClick={() => { void onPaste(); }}
-        className="absolute right-0 top-0 flex h-10 w-10 items-center justify-center text-gray-400 transition-all duration-100 ease-out hover:text-blue-600 active:scale-95"
-        aria-label={ariaLabel}
-        title={title}
-      >
-        <Clipboard className="h-4 w-4" />
-      </button>
     </div>
   );
 }
 
 
-function ShippingEditableRow({
+export function ShippingEditableRow({
   label,
   value,
   placeholder,
@@ -712,7 +708,7 @@ function ShippingSerialNumberRow({
 export interface PrepackedSkuInfo {
   staticSku: string;
   productTitle?: string | null;
-  photos?: string[];
+  photos?: Array<{ id: number; url: string }>;
 }
 
 function PrepackedSkuRow({ sku }: { sku: PrepackedSkuInfo }) {
@@ -760,6 +756,8 @@ interface ShippingInformationSectionProps {
   onUpdate?: () => void;
   showSerialNumber?: boolean;
   showReturnInformation?: boolean;
+  /** Toggle the Shipping Information block (header + rows). Default true. Used by ShippedDetailsPanel's tabs to render Return + Shipping independently. */
+  showShippingInformation?: boolean;
   showShippingTimestamp?: boolean;
   editableShippingFields?: EditableShippingFields;
   metaFields?: ShippingMetaFields;
@@ -857,23 +855,6 @@ function ShippingInfoEditModal({
                     onChange={(e) => setDraft((current) => ({ ...current, orderNumber: e.target.value }))}
                     placeholder="Enter order ID"
                     className="h-10 w-full rounded-xl border border-gray-200 bg-white px-3 text-sm font-bold text-gray-900 outline-none transition-colors focus:border-blue-400"
-                  />
-                </label>
-                <label className="block">
-                  <span className="mb-1.5 block text-[10px] font-black uppercase tracking-[0.18em] text-gray-500">Item Number</span>
-                  <PasteableDraftInput
-                    value={draft.itemNumber}
-                    onChange={(value) => setDraft((current) => ({ ...current, itemNumber: value }))}
-                    onPaste={async () => {
-                      try {
-                        const text = await navigator.clipboard.readText();
-                        if (!text.trim()) return;
-                        setDraft((current) => ({ ...current, itemNumber: text.trim().toUpperCase() }));
-                      } catch {}
-                    }}
-                    placeholder="Enter item number"
-                    ariaLabel="Paste item number"
-                    title="Paste item number"
                   />
                 </label>
               </div>
@@ -1062,6 +1043,7 @@ export function ShippingInformationSection({
   onUpdate,
   showSerialNumber = true,
   showReturnInformation = true,
+  showShippingInformation = true,
   showShippingTimestamp = false,
   editableShippingFields,
   metaFields,
@@ -1148,6 +1130,9 @@ export function ShippingInformationSection({
     shipped.packed_at && shipped.packed_at !== '1'
       ? formatDateTimePST(shipped.packed_at)
       : 'N/A';
+  const testedAtDateTimeDisplay = shipped.test_date_time
+    ? formatDateTimePST(shipped.test_date_time)
+    : 'N/A';
   // Packer from actual SAL/packer_logs scan data only — not from work_assignment packer_id
   const packerNameDisplay = String(
     (shipped as any).packed_by_name
@@ -1556,18 +1541,17 @@ export function ShippingInformationSection({
       />
       {showReturnInformation && shipped.packed_at && shipped.packed_at !== '1' ? (
         <div className="space-y-3">
-          <h3 className="text-xs font-black uppercase tracking-[0.2em] text-gray-900">Return Information</h3>
           <div className="space-y-0">
             <DetailsPanelRow label="Packed">
               <div className="flex items-center justify-between gap-3">
-                <p className="truncate text-sm font-bold text-gray-900">{shippedAtDisplay}</p>
-                <p className="shrink-0 text-sm font-bold text-gray-900">{packerNameDisplay}</p>
+                <p className="truncate text-sm font-bold text-gray-900">{packerNameDisplay}</p>
+                <p className="shrink-0 text-sm font-bold text-gray-900">{shippedAtDisplay}</p>
               </div>
             </DetailsPanelRow>
             <DetailsPanelRow label="Tested By">
               <div className="flex items-center justify-between gap-3">
                 <p className="truncate text-sm font-bold text-gray-900">{techNameDisplay}</p>
-                <p className="shrink-0 font-mono text-sm font-bold text-gray-900">{testedByTimeRight}</p>
+                <p className="shrink-0 text-sm font-bold text-gray-900">{testedAtDateTimeDisplay}</p>
               </div>
             </DetailsPanelRow>
             <DetailsPanelRow label="Serial Numbers" className="last:border-b-0">
@@ -1585,9 +1569,10 @@ export function ShippingInformationSection({
         </div>
       ) : null}
 
+      {showShippingInformation ? (
       <div className="space-y-3">
         <div className="flex items-center justify-between">
-          <h3 className="text-xs font-black uppercase tracking-[0.2em] text-gray-900">Shipping Information</h3>
+          <h3 className="text-xs font-black uppercase tracking-[0.2em] text-gray-900">Edit Details</h3>
           <button
             type="button"
             onClick={openEditModal}
@@ -1679,17 +1664,8 @@ export function ShippingInformationSection({
             headerAccessoryClassName="text-[10px] font-black tracking-wide text-blue-600"
             allowEdit={false}
           />
-          <ShippingEditableRow
-            label="Item Number"
-            value={ef.itemNumber}
-            placeholder="Enter item number"
-            onChange={ef.onItemNumberChange}
-            onBlur={ef.onBlur}
-            externalUrl={getExternalUrlByItemNumber(ef.itemNumber)}
-            dividerClassName="border-b-0"
-            className={hasRowsAfterItemNumber ? '!border-b-0' : '!border-b-0 pb-0'}
-            allowEdit={false}
-          />
+          {/* Item Number moved to ProductDetailsSection — it's a product
+              attribute, not a shipping field. */}
 
           {prepackedSku ? <PrepackedSkuRow sku={prepackedSku} /> : null}
 
@@ -1699,7 +1675,7 @@ export function ShippingInformationSection({
                 <DetailsPanelRow label="Packed By">
                   <div className="flex items-center justify-between gap-3">
                     <p className="truncate text-sm font-bold text-gray-900">{metaFields.packedByName}</p>
-                    <p className="shrink-0 font-mono text-sm font-bold text-gray-900">{packedByTimeRight}</p>
+                    <p className="shrink-0 text-sm font-bold text-gray-900">{shippedAtDisplay}</p>
                   </div>
                 </DetailsPanelRow>
               ) : null}
@@ -1707,7 +1683,7 @@ export function ShippingInformationSection({
                 <DetailsPanelRow label="Tested By">
                   <div className="flex items-center justify-between gap-3">
                     <p className="truncate text-sm font-bold text-gray-900">{metaFields.testedByName}</p>
-                    <p className="shrink-0 font-mono text-sm font-bold text-gray-900">{testedByTimeRight}</p>
+                    <p className="shrink-0 text-sm font-bold text-gray-900">{testedAtDateTimeDisplay}</p>
                   </div>
                 </DetailsPanelRow>
               ) : null}
@@ -1735,6 +1711,7 @@ export function ShippingInformationSection({
           ) : null}
         </div>
       </div>
+      ) : null}
     </section>
   );
 }

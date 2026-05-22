@@ -14,11 +14,16 @@ export function ProductsTableRow({ row }: ProductsTableRowProps) {
     const adminHref = `/admin/inventory-v2/sku/${encodeURIComponent(row.sku)}`;
 
     return (
-        <Link
-            href={skuHref}
-            className="group flex items-center gap-3 border-b border-gray-100 px-4 py-2.5 hover:bg-blue-50/40 sm:px-6"
-        >
-            <div className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-md border border-gray-100 bg-gray-50">
+        <div className="group relative flex items-center gap-3 border-b border-gray-100 px-4 py-2.5 hover:bg-blue-50/40 sm:px-6">
+            <Link
+                href={skuHref}
+                aria-label={row.product_title || row.sku}
+                className="absolute inset-0 z-0 rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+            >
+                <span className="sr-only">{row.product_title || row.sku}</span>
+            </Link>
+
+            <div className="pointer-events-none relative z-[1] flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-md border border-gray-100 bg-gray-50">
                 {row.image_url ? (
                     // eslint-disable-next-line @next/next/no-img-element
                     <img
@@ -34,7 +39,7 @@ export function ProductsTableRow({ row }: ProductsTableRowProps) {
                 )}
             </div>
 
-            <div className="min-w-0 flex-1">
+            <div className="pointer-events-none relative z-[1] min-w-0 flex-1">
                 <div className="flex items-baseline gap-2">
                     <span className="truncate font-mono text-xs text-gray-500">{row.sku}</span>
                     {!row.is_active ? (
@@ -48,11 +53,11 @@ export function ProductsTableRow({ row }: ProductsTableRowProps) {
                 </div>
             </div>
 
-            <div className="hidden shrink-0 text-xs text-gray-500 sm:block">
+            <div className="pointer-events-none relative z-[1] hidden shrink-0 text-xs text-gray-500 sm:block">
                 {row.category || '—'}
             </div>
 
-            <div className="hidden shrink-0 sm:block">
+            <div className="pointer-events-none relative z-[1] hidden shrink-0 sm:block">
                 {row.gtin ? (
                     <span className="font-mono text-[11px] text-gray-500">{row.gtin}</span>
                 ) : (
@@ -60,7 +65,7 @@ export function ProductsTableRow({ row }: ProductsTableRowProps) {
                 )}
             </div>
 
-            <div className="hidden shrink-0 sm:block">
+            <div className="pointer-events-none relative z-[1] hidden shrink-0 sm:block">
                 {row.has_ecwid_link ? (
                     <span className="rounded bg-emerald-50 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-emerald-700">
                         Ecwid
@@ -70,13 +75,13 @@ export function ProductsTableRow({ row }: ProductsTableRowProps) {
                 )}
             </div>
 
-            <div className="flex shrink-0 items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100">
+            <div className="relative z-[1] flex shrink-0 items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100">
                 <RowAction href={inventoryHref} label="Inventory" />
                 <RowAction href={adminHref} label="Admin" external />
             </div>
 
-            <ChevronRight className="h-4 w-4 shrink-0 text-gray-300 group-hover:text-gray-500" />
-        </Link>
+            <ChevronRight className="pointer-events-none relative z-[1] h-4 w-4 shrink-0 text-gray-300 group-hover:text-gray-500" />
+        </div>
     );
 }
 

@@ -5,7 +5,13 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { framerPresence, framerTransition } from '@/design-system/foundations/motion-framer';
 import ActiveStationOrderCard from '@/components/station/ActiveStationOrderCard';
 import EmbeddedBrowser from '@/components/EmbeddedBrowser';
-import { Barcode, ChevronDown, ExternalLink, MapPin, Package, Settings, X } from '@/components/Icons';
+import { Barcode, ChevronDown, ExternalLink, MapPin, Package, Settings } from '@/components/Icons';
+import {
+  PaneHeader,
+  PaneHeaderIconBadge,
+  PaneHeaderLabel,
+  PaneHeaderCloseButton,
+} from '@/components/ui/pane-header';
 import type {
   ActiveStationOrder,
   ResolvedProductManual,
@@ -118,42 +124,39 @@ export function ActiveOrderWorkspace({
       transition={framerTransition.stationCardMount}
       className={`flex h-full w-full flex-col ${isPreview ? 'bg-emerald-50/30' : 'bg-gray-50'}`}
     >
-      {/* ── Sticky header — identifies the order, gives a way back to history ── */}
-      <div className="sticky top-0 z-10 flex items-center justify-between gap-3 border-b border-gray-200 bg-white px-4 py-2.5">
-        <div className="flex min-w-0 items-center gap-2">
-          <span className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-gray-50 ${tint}`}>
-            <Icon className="h-4 w-4" />
-          </span>
-          <div className="flex min-w-0 flex-col leading-tight">
-            <span className="text-[9px] font-black uppercase tracking-widest text-gray-400">
-              {label} · {stateLabel}
-            </span>
-            <span className="truncate text-[13px] font-black tracking-tight text-gray-900" title={orderIdDisplay}>
-              {orderIdDisplay}
-            </span>
-          </div>
-        </div>
-
-        <div className="flex items-center gap-2">
-          {/* "Scan next" pill is misleading in preview (nothing has been
-              scanned yet) — only show during active testing. */}
-          {!isPreview && (
-            <span className="hidden items-center gap-1.5 rounded-md bg-emerald-50 px-2 py-1 text-[9px] font-black uppercase tracking-widest text-emerald-600 ring-1 ring-inset ring-emerald-200 md:inline-flex">
-              <Barcode className="h-3 w-3" />
-              <span>Scan next</span>
-            </span>
-          )}
-          <button
-            type="button"
-            onClick={onClose}
-            aria-label="Return to history"
-            title="Return to history"
-            className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-900 active:scale-95"
-          >
-            <X className="h-4 w-4" />
-          </button>
-        </div>
-      </div>
+      {/* Sticky header — identifies the order, gives a way back to history. */}
+      <PaneHeader
+        className="border-gray-200 bg-white"
+        rowClassName="px-4 py-2.5"
+        leftSlot={
+          <>
+            <PaneHeaderIconBadge Icon={Icon} bg="bg-gray-50" tint={tint} size="sm" rounded="lg" />
+            <PaneHeaderLabel
+              eyebrow={`${label} · ${stateLabel}`}
+              value={orderIdDisplay}
+              valueTitle={orderIdDisplay}
+              valueClassName="truncate text-[13px] font-black tracking-tight text-gray-900"
+            />
+          </>
+        }
+        rightSlot={
+          <>
+            {/* "Scan next" pill is misleading in preview (nothing has been
+                scanned yet) — only show during active testing. */}
+            {!isPreview && (
+              <span className="hidden items-center gap-1.5 rounded-md bg-emerald-50 px-2 py-1 text-[9px] font-black uppercase tracking-widest text-emerald-600 ring-1 ring-inset ring-emerald-200 md:inline-flex">
+                <Barcode className="h-3 w-3" />
+                <span>Scan next</span>
+              </span>
+            )}
+            <PaneHeaderCloseButton
+              onClick={onClose}
+              ariaLabel="Return to history"
+              title="Return to history"
+            />
+          </>
+        }
+      />
 
       {/* ── Workspace body — preview mode uses the new focused OrderPreviewPanel
             (built for the "should I start this?" decision). Active mode keeps

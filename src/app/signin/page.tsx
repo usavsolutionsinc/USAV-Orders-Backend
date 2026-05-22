@@ -54,6 +54,27 @@ const ROLE_HOME: Record<string, string> = {
   readonly: '/dashboard',
 };
 
+/**
+ * Mobile-device equivalent of ROLE_HOME. Used when signin completes on a
+ * phone/tablet — receivers and packers land in their single-purpose
+ * camera flows, everyone else lands on the mobile homepage hub. The
+ * desktop ROLE_HOME map is unchanged.
+ */
+const MOBILE_ROLE_HOME: Record<string, string> = {
+  receiver: '/m/receiving',
+  receiving: '/m/receiving',
+  packer: '/m/pick',
+  // All other roles fall through to /m/home (the catch-all below).
+};
+
+/** UA / Client Hints check matching {@link detectMobileDevice} in _ui.ts. */
+function isMobileDevice(): boolean {
+  if (typeof window === 'undefined' || typeof navigator === 'undefined') return false;
+  const uaData = (navigator as unknown as { userAgentData?: { mobile?: boolean } }).userAgentData;
+  if (uaData && typeof uaData.mobile === 'boolean') return uaData.mobile;
+  return /Android|iPhone|iPad|iPod|webOS|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+}
+
 function humanError(code: string | undefined): string {
   switch (code) {
     case 'WRONG':              return 'PIN incorrect. Try again.';
@@ -115,8 +136,20 @@ export default function SignInPage() {
     // Hydrate AuthContext synchronously (flushSync inside refresh) so any
     // micro-task scheduled before the hard navigation sees the new user.
     await refreshAuth();
-    const roleHome = role ? ROLE_HOME[role.toLowerCase()] : null;
-    const target = next || defaultHomePath || roleHome || '/dashboard';
+    // Mobile vs. desktop landing: on mobile, receivers/packers go to their
+    // /m/* single-purpose flow; everyone else lands on the /m/home hub.
+    // On desktop, the existing ROLE_HOME map drives the destination. The
+    // per-staff defaultHomePath and the ?next= deep link still override
+    // both — same precedence as before.
+    const onMobile = isMobileDevice();
+    const normalizedRole = role ? role.toLowerCase() : '';
+    const roleHome = normalizedRole
+      ? onMobile
+        ? MOBILE_ROLE_HOME[normalizedRole] ?? '/m/home'
+        : ROLE_HOME[normalizedRole]
+      : null;
+    const fallback = onMobile ? '/m/home' : '/dashboard';
+    const target = next || defaultHomePath || roleHome || fallback;
     if (typeof window !== 'undefined') {
       window.location.assign(target);
     } else {

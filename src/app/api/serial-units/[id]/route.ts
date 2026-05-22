@@ -90,10 +90,91 @@ export async function GET(
       receivedByName = r.rows[0]?.name ?? null;
     }
 
+    // Optional rich detail — events timeline (full, oldest-first), condition
+    // history, allocations, and tsn cross-refs. Mirrors the legacy
+    // /admin/inventory-v2/units/[ref] page so the inventory shell can render
+    // the same view without bouncing through admin SSR.
+    const includeFull = request.nextUrl.searchParams.get('include') === 'full';
+    let fullDetail: {
+      events_full: unknown[];
+      conditions: unknown[];
+      allocations: unknown[];
+      tsn_links: unknown[];
+    } | null = null;
+
+    if (includeFull) {
+      const unitId = Number(unit.id);
+      const [eventsFull, conditions, allocations, tsnLinks] = await Promise.all([
+        pool
+          .query(
+            `SELECT ie.id, ie.occurred_at, ie.event_type, ie.station,
+                    ie.prev_status, ie.next_status,
+                    ie.bin_id, l.name AS bin_name,
+                    ie.stock_ledger_id,
+                    ie.actor_staff_id, s.name AS actor_name,
+                    ie.scan_token, ie.client_event_id,
+                    ie.notes, ie.payload
+               FROM inventory_events ie
+               LEFT JOIN staff s ON s.id = ie.actor_staff_id
+               LEFT JOIN locations l ON l.id = ie.bin_id
+              WHERE ie.serial_unit_id = $1
+              ORDER BY ie.occurred_at ASC, ie.id ASC`,
+            [unitId],
+          )
+          .then((r) => r.rows)
+          .catch(() => [] as unknown[]),
+        pool
+          .query(
+            `SELECT h.id, h.assessed_at,
+                    h.assessed_by_staff_id, s.name AS assessed_by_name,
+                    h.prev_grade::text AS prev_grade,
+                    h.new_grade::text AS new_grade,
+                    h.cosmetic_notes, h.functional_notes,
+                    h.inventory_event_id
+               FROM serial_unit_condition_history h
+               LEFT JOIN staff s ON s.id = h.assessed_by_staff_id
+              WHERE h.serial_unit_id = $1
+              ORDER BY h.assessed_at ASC, h.id ASC`,
+            [unitId],
+          )
+          .then((r) => r.rows)
+          .catch(() => [] as unknown[]),
+        pool
+          .query(
+            `SELECT a.id, a.order_id, a.allocated_at,
+                    a.state::text AS state,
+                    a.released_at, a.released_reason,
+                    s.name AS allocated_by_name
+               FROM order_unit_allocations a
+               LEFT JOIN staff s ON s.id = a.allocated_by_staff_id
+              WHERE a.serial_unit_id = $1
+              ORDER BY a.allocated_at DESC, a.id DESC`,
+            [unitId],
+          )
+          .then((r) => r.rows)
+          .catch(() => [] as unknown[]),
+        pool
+          .query(
+            `SELECT tsn.id, tsn.station_source, tsn.shipment_id,
+                    tsn.serial_type, tsn.fnsku,
+                    s.name AS tested_by_name, tsn.created_at
+               FROM tech_serial_numbers tsn
+               LEFT JOIN staff s ON s.id = tsn.tested_by
+              WHERE tsn.serial_unit_id = $1
+              ORDER BY tsn.created_at ASC, tsn.id ASC`,
+            [unitId],
+          )
+          .then((r) => r.rows)
+          .catch(() => [] as unknown[]),
+      ]);
+      fullDetail = { events_full: eventsFull, conditions, allocations, tsn_links: tsnLinks };
+    }
+
     return NextResponse.json({
       success: true,
       serial_unit: { ...unit, product_title: productTitle, received_by_name: receivedByName },
       events,
+      ...(fullDetail ?? {}),
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Failed to load serial unit';

@@ -9,6 +9,8 @@ interface Props {
   serialCount: number;
   /** Workflow status considered "fully done" (e.g. 'DONE', 'PASSED'). */
   isComplete: boolean;
+  /** Receiving label has been printed for this line (client-tracked). */
+  labelPrinted?: boolean;
 }
 
 type StepKey = 'scan' | 'photos' | 'condition' | 'serial' | 'print';
@@ -30,7 +32,7 @@ const STEPS: ReadonlyArray<{ key: StepKey; label: string }> = [
  * current source of truth. The "active" dot is the next pending step; earlier
  * steps render as done, later steps render as pending.
  */
-export function ReceivingProgressStepper({ row, photoCount, serialCount, isComplete }: Props) {
+export function ReceivingProgressStepper({ row, photoCount, serialCount, isComplete, labelPrinted = false }: Props) {
   // Derive each step's done-ness from row + counts. The first not-done step
   // becomes the "active" prompt; all subsequent steps render as pending.
   const isCondDone = (() => {
@@ -46,7 +48,7 @@ export function ReceivingProgressStepper({ row, photoCount, serialCount, isCompl
     photos: isPhotosDone,
     condition: isCondDone,
     serial: isSerialDone,
-    print: isComplete,
+    print: labelPrinted || isComplete,
   };
 
   // Compute states: walk left-to-right, first non-done step is "active".

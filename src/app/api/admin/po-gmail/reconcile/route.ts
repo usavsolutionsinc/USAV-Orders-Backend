@@ -4,7 +4,7 @@
  * Fetches unread (or query-matched) Gmail messages from the PO mailbox,
  * extracts order-number candidates, diffs them against receiving_lines
  * (which is our Zoho mirror), and writes any *missing* matches into the
- * email_missing_orders worklist.
+ * email_missing_purchase_orders worklist.
  *
  * Also auto-resolves any previously-missing rows whose PO has since
  * shown up in receiving_lines (covers the "vendor finally created the
@@ -128,7 +128,7 @@ export const GET = withAuth(async (req: NextRequest) => {
         for (const item of items) {
           if (item.status === 'missing') {
             const { rowCount } = await client.query(
-              `INSERT INTO email_missing_orders
+              `INSERT INTO email_missing_purchase_orders
                  (gmail_msg_id, gmail_thread_id, po_numbers, po_numbers_norm,
                   email_subject, email_from, email_received, scanned_at, status)
                VALUES ($1, $2, $3, $4, $5, $6, $7, NOW(), 'pending')
@@ -140,7 +140,7 @@ export const GET = withAuth(async (req: NextRequest) => {
                      email_received  = EXCLUDED.email_received,
                      scanned_at      = NOW(),
                      status          = CASE
-                                         WHEN email_missing_orders.status = 'ignored' THEN 'ignored'
+                                         WHEN email_missing_purchase_orders.status = 'ignored' THEN 'ignored'
                                          ELSE 'pending'
                                        END,
                      resolved_at     = NULL`,
@@ -159,7 +159,7 @@ export const GET = withAuth(async (req: NextRequest) => {
             // If this gmail_msg_id was previously logged as missing, mark
             // it resolved (the PO has since appeared in receiving_lines).
             const { rowCount } = await client.query(
-              `UPDATE email_missing_orders
+              `UPDATE email_missing_purchase_orders
                   SET status      = 'resolved',
                       resolved_at = NOW()
                 WHERE gmail_msg_id = $1
@@ -174,7 +174,7 @@ export const GET = withAuth(async (req: NextRequest) => {
         // worklist whose POs now exist in receiving_lines (regardless of
         // whether we scanned them again) should clear.
         const ar = await client.query(
-          `UPDATE email_missing_orders e
+          `UPDATE email_missing_purchase_orders e
               SET status = 'resolved', resolved_at = NOW()
             WHERE e.status = 'pending'
               AND EXISTS (

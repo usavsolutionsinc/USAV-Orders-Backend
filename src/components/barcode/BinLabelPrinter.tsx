@@ -15,7 +15,7 @@
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
-import QRCode from 'react-qr-code';
+import { LocationDataMatrix } from './LocationDataMatrix';
 import { toast } from 'sonner';
 import { BottomSheet } from '@/components/ui/BottomSheet';
 import { SkeletonCardGrid } from '@/components/ui/SkeletonCard';
@@ -23,12 +23,18 @@ import { Check, ChevronDown, ChevronLeft, ChevronUp, Printer, Settings } from '@
 import { successFeedback, errorFeedback, scanFeedback } from '@/lib/feedback/confirm';
 import { useLocations } from '@/hooks/useLocations';
 import { useHorizontalWheelScroll } from '@/hooks/useHorizontalWheelScroll';
+import { LabelRoomSidebar } from './LabelRoomSidebar';
+import {
+  useLabelPrinterStore,
+  patchLabelPrinterState,
+  resetLabelPrinterState,
+} from '@/hooks/useLabelPrinterStore';
 import { WorkspaceCard, StickyActionBar } from '@/design-system/components';
 import {
   DEFAULT_GLN,
   QR_BASE_URL,
   bayHand,
-  gs1LocationUrl,
+  gs1LocationAi,
   locationCode,
   noPad,
   pad2,
@@ -54,7 +60,6 @@ const DEFAULT_CONFIG: PrinterConfig = {
 };
 
 const CONFIG_KEY = 'binPrinter.config.v4';
-const STATE_KEY = 'binPrinter.state.v4';
 
 type Step = 'zone' | 'aisle' | 'bay' | 'level' | 'position';
 const STEPS: { id: Step; label: string }[] = [
@@ -96,42 +101,38 @@ function clampMax(v: unknown, fallback: number): number {
   return Math.min(99, Math.max(1, Math.floor(n)));
 }
 
-interface SavedState {
-  room?: string;
-  aisle?: number;
-  bay?: number;
-  level?: number;
-  position?: number;
-}
-
-function loadState(): SavedState {
-  if (typeof window === 'undefined') return {};
-  try {
-    const raw = window.localStorage.getItem(STATE_KEY);
-    return raw ? (JSON.parse(raw) as SavedState) : {};
-  } catch { return {}; }
-}
-
-function saveState(s: SavedState): void {
-  if (typeof window === 'undefined') return;
-  try { window.localStorage.setItem(STATE_KEY, JSON.stringify(s)); } catch { /* ignore */ }
-}
-
 // ─── Component ────────────────────────────────────────────────────────────
 
-export function BinLabelPrinter() {
+/**
+ * Where the printer is being rendered. Drives the responsive split:
+ *   - `main`    — full-width main pane. On mobile shows the full
+ *                 picker + preview; on lg+ collapses to a giant preview
+ *                 panel because the picker has been promoted to the
+ *                 sidebar.
+ *   - `sidebar` — narrow sidebar rail (desktop only via `hidden lg:block`
+ *                 from the caller). Picker only — preview lives in the
+ *                 main pane so we don't render it twice.
+ */
+export type LabelPrinterVariant = 'main' | 'sidebar';
+
+interface BinLabelPrinterProps {
+  variant?: LabelPrinterVariant;
+}
+
+export function BinLabelPrinter({ variant = 'main' }: BinLabelPrinterProps) {
   const { rooms, roomNames, loading } = useLocations();
 
   const [config, setConfig] = useState<PrinterConfig>(DEFAULT_CONFIG);
-  const [hydrated, setHydrated] = useState(false);
   const [configOpen, setConfigOpen] = useState(false);
 
-  // Selection state
-  const [selectedRoom, setSelectedRoom] = useState<string | undefined>();
-  const [aisle, setAisle] = useState<number | undefined>();
-  const [bay, setBay] = useState<number | undefined>();
-  const [level, setLevel] = useState<number | undefined>();
-  const [position, setPosition] = useState<number | undefined>();
+  // Selection state — backed by the shared cross-surface store so the
+  // main-pane preview stays in lock-step with the sidebar picker.
+  const stored = useLabelPrinterStore();
+  const selectedRoom = stored.room;
+  const aisle = stored.aisle;
+  const bay = stored.bay;
+  const level = stored.level;
+  const position = stored.position;
 
   // Print state
   const [bulkLabels, setBulkLabels] = useState<LocationSegments[] | null>(null);
@@ -142,19 +143,7 @@ export function BinLabelPrinter() {
 
   useEffect(() => {
     setConfig(loadConfig());
-    const s = loadState();
-    if (s.room) setSelectedRoom(s.room);
-    if (s.aisle) setAisle(s.aisle);
-    if (s.bay) setBay(s.bay);
-    if (s.level) setLevel(s.level);
-    if (s.position) setPosition(s.position);
-    setHydrated(true);
   }, []);
-
-  useEffect(() => {
-    if (!hydrated) return;
-    saveState({ room: selectedRoom, aisle, bay, level, position });
-  }, [selectedRoom, aisle, bay, level, position, hydrated]);
 
   // ─── Server-of-record zone-letter map ───────────────────────────────────
   const zoneMap = useMemo(() => {
@@ -195,56 +184,52 @@ export function BinLabelPrinter() {
   const pickRoom = useCallback((name: string) => {
     successFeedback();
     if (selectedRoom !== name) {
-      setAisle(undefined);
-      setBay(undefined);
-      setLevel(undefined);
-      setPosition(1);
+      patchLabelPrinterState({ room: name, aisle: undefined, bay: undefined, level: undefined, position: 1 });
+    } else {
+      patchLabelPrinterState({ room: name });
     }
-    setSelectedRoom(name);
     setOverrideStep(null);
   }, [selectedRoom]);
 
   const pickAisle = useCallback((n: number) => {
     scanFeedback();
     if (aisle !== n) {
-      setBay(undefined);
-      setLevel(undefined);
-      setPosition(1);
+      patchLabelPrinterState({ aisle: n, bay: undefined, level: undefined, position: 1 });
+    } else {
+      patchLabelPrinterState({ aisle: n });
     }
-    setAisle(n);
     setOverrideStep(null);
   }, [aisle]);
 
   const pickBay = useCallback((n: number) => {
     scanFeedback();
     if (bay !== n) {
-      setLevel(undefined);
-      setPosition(1);
+      patchLabelPrinterState({ bay: n, level: undefined, position: 1 });
+    } else {
+      patchLabelPrinterState({ bay: n });
     }
-    setBay(n);
     setOverrideStep(null);
   }, [bay]);
 
   const pickLevel = useCallback((n: number) => {
     scanFeedback();
-    if (level !== n) setPosition(1);
-    setLevel(n);
+    if (level !== n) {
+      patchLabelPrinterState({ level: n, position: 1 });
+    } else {
+      patchLabelPrinterState({ level: n });
+    }
     setOverrideStep(null);
   }, [level]);
 
   const pickPosition = useCallback((n: number) => {
     scanFeedback();
-    setPosition(n);
+    patchLabelPrinterState({ position: n });
     setOverrideStep(null);
   }, []);
 
   const resetAll = useCallback(() => {
     scanFeedback();
-    setSelectedRoom(undefined);
-    setAisle(undefined);
-    setBay(undefined);
-    setLevel(undefined);
-    setPosition(undefined);
+    resetLabelPrinterState();
     setOverrideStep(null);
   }, []);
 
@@ -359,31 +344,42 @@ export function BinLabelPrinter() {
     return () => window.removeEventListener('keydown', handler, true);
   }, [currentSegments, handlePrintOne]);
 
-  return (
-    <div className="flex flex-col gap-4 pb-32">
+  // Picker block — header + pills + selected room card + active step body.
+  // Rendered in the sidebar (desktop) and in the main pane (mobile, via
+  // `lg:hidden` on the wrapper) so picker UI only shows on one surface
+  // at any breakpoint.
+  const picker = (
+    <div className="flex flex-col gap-4">
       <header className="flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <h1 className="text-2xl font-bold tracking-tight text-gray-900">Location Label Printer</h1>
-          <p className="mt-1 text-[13px] text-gray-500">
-            Pick a room, then drill down to the bin. Prints a QR-only GS1 Digital Link label.
-          </p>
+          <h1 className={variant === 'sidebar'
+            ? 'text-base font-bold tracking-tight text-gray-900'
+            : 'text-2xl font-bold tracking-tight text-gray-900'}
+          >
+            {variant === 'sidebar' ? 'Build a bin label' : 'Location Label Printer'}
+          </h1>
+          {variant === 'main' && (
+            <p className="mt-1 text-[13px] text-gray-500">
+              Pick a room, then drill down to the bin. Prints a QR-only GS1 Digital Link label.
+            </p>
+          )}
         </div>
         <div className="flex items-center gap-2">
           {(selectedRoom || aisle != null) && (
             <button
               type="button"
               onClick={resetAll}
-              className="flex h-11 items-center gap-1.5 rounded-full border border-gray-200 bg-white px-4 text-[12.5px] font-semibold text-gray-700 transition-colors hover:bg-gray-50 active:scale-[0.97]"
+              className="flex h-9 items-center gap-1.5 rounded-full border border-gray-200 bg-white px-3 text-[11.5px] font-semibold text-gray-700 transition-colors hover:bg-gray-50 active:scale-[0.97]"
             >
               <ChevronLeft className="h-3.5 w-3.5" />
-              Start over
+              Reset
             </button>
           )}
           <button
             type="button"
             onClick={() => setConfigOpen(true)}
             aria-label="Configure label printer"
-            className="flex h-11 w-11 items-center justify-center rounded-full border border-gray-200 bg-white text-gray-600 transition-colors hover:bg-gray-50 active:scale-95"
+            className="flex h-9 w-9 items-center justify-center rounded-full border border-gray-200 bg-white text-gray-600 transition-colors hover:bg-gray-50 active:scale-95"
           >
             <Settings className="h-4 w-4" />
           </button>
@@ -434,7 +430,6 @@ export function BinLabelPrinter() {
         </div>
       )}
 
-      {/* Active-step body */}
       <WorkspaceCard label={STEPS.find((s) => s.id === activeStep)?.label} tone={activeStep === 'zone' ? undefined : 'blue'}>
         {activeStep === 'zone' && (
           <RoomPicker
@@ -494,9 +489,202 @@ export function BinLabelPrinter() {
         )}
       </WorkspaceCard>
 
-      {/* Live preview — appears once first selection is made */}
+      <ConfigSheet
+        open={configOpen}
+        onClose={() => setConfigOpen(false)}
+        config={config}
+        onSave={handleConfigSave}
+      />
+    </div>
+  );
+
+  // ── Sidebar variant — rooms list only ───────────────────────────────
+  // Mirrors the rooms-tab pattern: the *list* of zones/rooms lives in the
+  // sidebar; every other step (aisle/bay/level/position, the preview, and
+  // print actions) renders in the main pane. WMS industry-standard split —
+  // pickers stay glanceable, the build surface dominates the workspace.
+  if (variant === 'sidebar') {
+    return (
+      <>
+        <LabelRoomSidebar
+          rooms={allRoomNames}
+          zoneMap={zoneMap}
+          loading={loading}
+          selectedRoom={selectedRoom}
+          zoneLetter={zoneLetter}
+          onSelect={pickRoom}
+          emptySubtitle="Then build the bin code on the right."
+        />
+        <ConfigSheet
+          open={configOpen}
+          onClose={() => setConfigOpen(false)}
+          config={config}
+          onSave={handleConfigSave}
+        />
+      </>
+    );
+  }
+
+  // ── Main-pane variant ─────────────────────────────────────────────────
+  // Mobile: full picker + small preview + sticky action bar.
+  // Desktop (lg+): step pills + selected room card + active non-zone step
+  // body + GiantPreviewPanel. The room list lives in the sidebar.
+  const desktopBuilder = (
+    <div className="flex flex-col gap-4">
+      <header className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-blue-600">
+            Location Label Printer
+          </p>
+          <h1 className="mt-0.5 truncate text-[22px] font-bold tracking-tight text-gray-900">
+            {selectedRoom ?? 'Pick a room to start'}
+          </h1>
+          <p className="mt-1 max-w-[60ch] text-[12.5px] leading-snug text-gray-500">
+            {selectedRoom
+              ? 'Drill down to a specific bin. Prints a QR-only GS1 Digital Link label.'
+              : 'Choose a room in the sidebar — the remaining steps unlock here.'}
+          </p>
+        </div>
+        <div className="flex items-center gap-2">
+          {(selectedRoom || aisle != null) && (
+            <button
+              type="button"
+              onClick={resetAll}
+              className="flex h-10 items-center gap-1.5 rounded-full border border-gray-200 bg-white px-3 text-[12px] font-semibold text-gray-700 transition-colors hover:bg-gray-50 active:scale-[0.97]"
+            >
+              <ChevronLeft className="h-3.5 w-3.5" />
+              Reset
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={() => setConfigOpen(true)}
+            aria-label="Configure label printer"
+            className="flex h-10 w-10 items-center justify-center rounded-full border border-gray-200 bg-white text-gray-600 transition-colors hover:bg-gray-50 active:scale-95"
+          >
+            <Settings className="h-4 w-4" />
+          </button>
+        </div>
+      </header>
+
+      <StepPills
+        activeStep={activeStep}
+        zoneLetter={zoneLetter}
+        roomName={selectedRoom}
+        aisle={aisle}
+        bay={bay}
+        level={level}
+        position={position}
+        onPillClick={handlePillClick}
+      />
+
+      {missingLetter && (
+        <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-[12.5px] text-amber-800">
+          <p className="font-semibold">No zone letter assigned to this room.</p>
+          <p className="mt-0.5 text-amber-700">
+            Open the <span className="font-semibold">Rooms</span> tab, tap this room, and pick a
+            letter (A–Z). The letter prints on every label and inside the QR.
+          </p>
+        </div>
+      )}
+
+      {activeStep === 'zone' ? (
+        <WorkspaceCard label="Zone">
+          <div className="flex flex-col items-center gap-3 py-8 text-center">
+            <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-blue-50 to-blue-100 ring-1 ring-blue-200">
+              <ChevronLeft className="h-5 w-5 text-blue-500" />
+            </div>
+            <p className="text-[13px] font-semibold text-gray-800">
+              Pick a room in the sidebar
+            </p>
+            <p className="max-w-[40ch] text-[11.5px] text-gray-500">
+              Tap any zone on the left. Aisle, bay, level, and position unlock
+              here as soon as a room is chosen.
+            </p>
+          </div>
+        </WorkspaceCard>
+      ) : (
+        <WorkspaceCard label={STEPS.find((s) => s.id === activeStep)?.label} tone="blue">
+          {activeStep === 'aisle' && (
+            <NumericStep
+              key="aisle"
+              title="Pick an aisle"
+              prefix=""
+              count={config.maxAisles}
+              selected={aisle}
+              onPick={pickAisle}
+              customLabel="Custom aisle #"
+            />
+          )}
+          {activeStep === 'bay' && (
+            <NumericStep
+              key="bay"
+              title="Pick a bay"
+              prefix=""
+              count={config.maxBays}
+              selected={bay}
+              onPick={pickBay}
+              hint="Parallel rack setup — odd numbers on the left, even on the right."
+              customLabel="Custom bay #"
+            />
+          )}
+          {activeStep === 'level' && (
+            <NumericStep
+              key="level"
+              title="Pick a level"
+              prefix=""
+              count={config.maxLevels}
+              selected={level}
+              onPick={pickLevel}
+              customLabel="Custom level #"
+              unpadded
+            />
+          )}
+          {activeStep === 'position' && (
+            <NumericStep
+              key="position"
+              title="Pick a position"
+              prefix=""
+              count={config.maxPositions}
+              selected={position}
+              onPick={pickPosition}
+              customLabel="Custom position #"
+            />
+          )}
+        </WorkspaceCard>
+      )}
+
+      <GiantPreviewPanel
+        zoneLetter={zoneLetter}
+        roomName={selectedRoom}
+        aisle={aisle}
+        bay={bay}
+        level={level}
+        position={position}
+        gln={config.gln}
+        allSelected={allSelected}
+        missingLetter={missingLetter}
+        isPrinting={isPrinting}
+        maxPositions={config.maxPositions}
+        onPrintOne={handlePrintOne}
+        onPrintBulk={handlePrintBulk}
+      />
+
+      <ConfigSheet
+        open={configOpen}
+        onClose={() => setConfigOpen(false)}
+        config={config}
+        onSave={handleConfigSave}
+      />
+    </div>
+  );
+
+  return (
+    <div className="flex flex-col gap-4 pb-32">
+      <div className="lg:hidden">{picker}</div>
+
       {(selectedRoom || aisle != null) && (
-        <WorkspaceCard label="Live preview">
+        <WorkspaceCard label="Live preview" className="lg:hidden">
           <LivePreviewBody
             zoneLetter={zoneLetter}
             roomName={selectedRoom}
@@ -508,6 +696,8 @@ export function BinLabelPrinter() {
           />
         </WorkspaceCard>
       )}
+
+      <div className="hidden lg:block">{desktopBuilder}</div>
 
       <StickyActionBar
         primary={{
@@ -535,13 +725,7 @@ export function BinLabelPrinter() {
             : undefined
         }
         hints={allSelected ? [{ key: '⌘P', label: 'Print' }] : []}
-      />
-
-      <ConfigSheet
-        open={configOpen}
-        onClose={() => setConfigOpen(false)}
-        config={config}
-        onSave={handleConfigSave}
+        className="lg:hidden"
       />
 
       {/* Print zone — hidden on screen, fills page on print */}
@@ -585,7 +769,7 @@ function RoomPicker({ rooms, zoneMap, loading, selectedRoom, onSelect }: RoomPic
     );
   }
   return (
-    <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+    <div className="flex flex-col gap-2">
       {rooms.map((room) => {
         const letter = zoneMap[room];
         const isSelected = selectedRoom === room;
@@ -602,7 +786,7 @@ function RoomPicker({ rooms, zoneMap, loading, selectedRoom, onSelect }: RoomPic
           >
             <ZoneLetterTile letter={letter} />
             <div className="min-w-0 flex-1">
-              <p className="truncate text-[14px] font-semibold text-gray-900">{room}</p>
+              <p className="text-[14px] font-semibold leading-snug text-gray-900 break-words">{room}</p>
               <p className="mt-0.5 text-[11px] text-gray-500">
                 {letter ? `Zone ${letter}` : 'No zone letter'}
               </p>
@@ -741,12 +925,10 @@ function LivePreviewBody({ zoneLetter, roomName, aisle, bay, level, position, gl
       </div>
       <div className="flex h-[160px] w-[160px] shrink-0 items-center justify-center rounded-lg bg-white p-2 ring-1 ring-gray-200">
         {segments ? (
-          <QRCode
-            value={gs1LocationUrl(segments, { gln })}
+          <LocationDataMatrix
+            value={gs1LocationAi(segments, { gln })}
             size={144}
-            level="M"
             fgColor="#0F172A"
-            bgColor="#FFFFFF"
           />
         ) : (
           <div className="flex h-full w-full flex-col items-center justify-center gap-1 text-center">
@@ -762,18 +944,24 @@ function LivePreviewBody({ zoneLetter, roomName, aisle, bay, level, position, gl
 }
 
 function partialCode(s: { zone?: string; aisle?: number; bay?: number; level?: number; position?: number }): string {
+  // WMS convention: placeholder hyphens match the *width* of the segment
+  // they replace (two for pad2, one for noPad) so the unfilled label code
+  // visually aligns with its filled counterpart — `A-01-01-1-01` ↔
+  // `?---------` rather than the previous mix of `-` + em-dash that
+  // rendered as inconsistent dash widths.
   const parts: string[] = [];
   parts.push(s.zone ?? '?');
-  parts.push(s.aisle != null ? pad2(s.aisle) : '—');
-  parts.push(s.bay != null ? pad2(s.bay) : '—');
-  parts.push(s.level != null ? noPad(s.level) : '—');
-  parts.push(s.position != null ? pad2(s.position) : '—');
+  parts.push(s.aisle != null ? pad2(s.aisle) : '--');
+  parts.push(s.bay != null ? pad2(s.bay) : '--');
+  parts.push(s.level != null ? noPad(s.level) : '-');
+  parts.push(s.position != null ? pad2(s.position) : '--');
   return parts.join('-');
 }
 
 function humanReadable(s: { zone?: string; aisle?: number; bay?: number; level?: number; position?: number }): string {
+  // Zone letter is omitted intentionally — it already appears in the big
+  // code and the zone/room line above this breadcrumb.
   const out: string[] = [];
-  if (s.zone) out.push(s.zone);
   if (s.aisle != null) out.push(`Aisle ${pad2(s.aisle)}`);
   if (s.bay != null) out.push(`Bay ${pad2(s.bay)} (${bayHand(s.bay)})`);
   if (s.level != null) out.push(`Level ${noPad(s.level)}`);
@@ -1047,54 +1235,175 @@ function NumField({ label, value, onChange }: { label: string; value: number; on
   );
 }
 
+// ─── Giant preview panel (desktop main-pane) ─────────────────────────────
+// When the picker has been promoted to the sidebar, the main pane is freed
+// up to render the label at near-actual size — closer to "what you'll get"
+// than the small mobile preview. Owns the primary print actions inline
+// (no sticky bar on desktop since the panel itself dominates the workspace).
+
+interface GiantPreviewPanelProps {
+  zoneLetter?: string;
+  roomName?: string;
+  aisle?: number;
+  bay?: number;
+  level?: number;
+  position?: number;
+  gln: string;
+  allSelected: boolean;
+  missingLetter: boolean;
+  isPrinting: boolean;
+  maxPositions: number;
+  onPrintOne: () => void;
+  onPrintBulk: () => void;
+}
+
+function GiantPreviewPanel({
+  zoneLetter, roomName, aisle, bay, level, position, gln,
+  allSelected, missingLetter, isPrinting, maxPositions,
+  onPrintOne, onPrintBulk,
+}: GiantPreviewPanelProps) {
+  const segments: LocationSegments | null = zoneLetter && aisle != null && bay != null && level != null && position != null
+    ? { zone: zoneLetter, aisle, bay, level, position }
+    : null;
+  const code = segments
+    ? locationCode(segments)
+    : partialCode({ zone: zoneLetter, aisle, bay, level, position });
+  const ai = segments ? gs1LocationAi(segments, { gln }) : null;
+
+  return (
+    <div className="rounded-3xl border border-gray-200 bg-white p-8 shadow-sm">
+      <div className="mx-auto max-w-3xl">
+        <div className="text-center">
+          <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-gray-400">
+            Live preview · prints at 3″ × 2″
+          </p>
+        </div>
+
+        <div className="mt-5 flex items-center justify-center">
+          <div className="flex items-start gap-8 rounded-2xl border-2 border-dashed border-gray-200 bg-gradient-to-br from-white to-gray-50/50 p-8 shadow-inner">
+            <div className="min-w-0 flex-1">
+              <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-gray-500">
+                USAV Warehouse Location
+              </p>
+              <p className="mt-2 whitespace-nowrap font-mono text-[30px] font-black leading-none tracking-tight text-gray-900">
+                {code}
+              </p>
+              {roomName && (
+                <p className="mt-3 text-[15px] font-bold text-gray-800">
+                  {roomName}
+                </p>
+              )}
+              <p className="mt-2 text-[12px] font-semibold leading-snug text-gray-600">
+                {humanReadable({ zone: zoneLetter, aisle, bay, level, position })}
+              </p>
+            </div>
+            <div className="flex h-[220px] w-[220px] shrink-0 items-center justify-center rounded-xl bg-white p-3 ring-1 ring-gray-200">
+              {ai ? (
+                <LocationDataMatrix value={ai} size={196} fgColor="#0F172A" />
+              ) : (
+                <div className="flex h-full w-full flex-col items-center justify-center gap-2 text-center">
+                  <Printer className="h-7 w-7 text-gray-300" />
+                  <p className="px-4 text-[11px] font-semibold text-gray-400">
+                    Barcode appears when every step is picked in the sidebar
+                  </p>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+
+        <div className="mt-6 flex flex-col items-stretch gap-2 sm:flex-row sm:items-center sm:justify-center">
+          <button
+            type="button"
+            onClick={onPrintOne}
+            disabled={!allSelected || isPrinting || missingLetter}
+            className="flex h-14 items-center justify-center gap-2 rounded-2xl bg-gradient-to-br from-blue-500 to-blue-700 px-8 text-[14px] font-bold tracking-wide text-white shadow-md shadow-blue-600/30 transition-all active:scale-[0.98] disabled:cursor-not-allowed disabled:bg-gray-200 disabled:bg-none disabled:text-gray-400 disabled:shadow-none sm:flex-1"
+          >
+            <Printer className="h-4 w-4" />
+            {isPrinting
+              ? 'Printing…'
+              : missingLetter
+                ? 'Assign a zone letter first'
+                : !allSelected
+                  ? 'Complete the steps in the sidebar'
+                  : 'Print bin label'}
+          </button>
+          {allSelected && (
+            <button
+              type="button"
+              onClick={onPrintBulk}
+              disabled={isPrinting || missingLetter}
+              className="flex h-14 items-center justify-center gap-2 rounded-2xl border border-gray-200 bg-white px-6 text-[13px] font-semibold text-gray-700 transition-colors hover:bg-gray-50 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50 sm:flex-none"
+            >
+              <Printer className="h-4 w-4" />
+              Print level (×{maxPositions})
+            </button>
+          )}
+        </div>
+
+        {allSelected && (
+          <p className="mt-3 text-center text-[10.5px] text-gray-400">
+            Tip: <kbd className="rounded bg-gray-100 px-1 py-0.5 font-mono text-[10px] text-gray-600">⌘P</kbd> prints the current label.
+          </p>
+        )}
+      </div>
+    </div>
+  );
+}
+
 // ─── Print label ──────────────────────────────────────────────────────────
 
 function PrintLabel({ segments, roomName, gln }: { segments: LocationSegments; roomName: string; gln: string }) {
   const code = locationCode(segments);
-  const uri = gs1LocationUrl(segments, { gln });
+  const ai = gs1LocationAi(segments, { gln });
   return (
     <div className="label-print-card" style={labelCardStyle}>
       <div style={labelLeftStyle}>
         <div style={labelEyebrowStyle}>USAV Warehouse Location</div>
         <div style={labelCodeStyle}>{code}</div>
-        {roomName && <div style={labelRoomStyle}>{segments.zone} {roomName}</div>}
+        {roomName && <div style={labelRoomStyle}>{roomName}</div>}
         <div style={labelHumanStyle}>
           Aisle {pad2(segments.aisle)} · Bay {pad2(segments.bay)} ({bayHand(segments.bay)})<br />
           Level {noPad(segments.level)} · Position {pad2(segments.position)}
         </div>
       </div>
       <div style={labelQrStyle}>
-        <QRCode value={uri} size={140} level="M" fgColor="#000000" bgColor="#FFFFFF" />
+        <LocationDataMatrix value={ai} size={110} />
       </div>
     </div>
   );
 }
 
+// 3in × 2in label stock — sized to fill the @page declared in globals.css.
 const labelCardStyle: React.CSSProperties = {
-  width: '4.25in',
-  margin: '0.1in',
-  padding: '0.2in',
+  width: '3in',
+  height: '2in',
+  margin: 0,
+  padding: '0.12in',
   display: 'inline-flex',
-  alignItems: 'center',
-  gap: '0.18in',
+  alignItems: 'flex-start',
+  gap: '0.1in',
   verticalAlign: 'top',
   fontFamily: '"Inter", "Arial", sans-serif',
   color: '#000',
   background: '#fff',
+  boxSizing: 'border-box',
+  overflow: 'hidden',
 };
 const labelLeftStyle: React.CSSProperties = { flex: '1 1 auto', minWidth: 0 };
 const labelEyebrowStyle: React.CSSProperties = {
-  fontSize: '8px', fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: '#666',
+  fontSize: '7px', fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: '#666',
 };
 const labelCodeStyle: React.CSSProperties = {
-  fontSize: '26px', fontWeight: 800, fontFamily: '"JetBrains Mono", monospace',
-  letterSpacing: '0.02em', marginTop: '6px', color: '#000',
+  fontSize: '15px', fontWeight: 800, fontFamily: '"JetBrains Mono", monospace',
+  letterSpacing: '-0.02em', marginTop: '4px', color: '#000', lineHeight: 1,
+  whiteSpace: 'nowrap',
 };
 const labelRoomStyle: React.CSSProperties = {
-  fontSize: '11px', fontWeight: 700, marginTop: '6px', color: '#0F172A',
+  fontSize: '9px', fontWeight: 700, marginTop: '4px', color: '#0F172A',
 };
 const labelHumanStyle: React.CSSProperties = {
-  fontSize: '9px', fontWeight: 600, marginTop: '4px', lineHeight: '1.4', color: '#333',
+  fontSize: '7.5px', fontWeight: 600, marginTop: '3px', lineHeight: '1.35', color: '#333',
 };
 const labelQrStyle: React.CSSProperties = {
   flex: '0 0 auto',

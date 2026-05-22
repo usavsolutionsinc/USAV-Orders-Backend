@@ -100,7 +100,7 @@ export async function buildReceivingClaimTemplate(
   const trackingRef = carton.tracking_number || 'n/a';
   const platformTag = (carton.source_platform || '').trim().toUpperCase() || 'USAV';
 
-  const subject = `[${platformTag}] Receiving Claim — ${CLAIM_TYPE_LABEL[claimType]} — PO ${poRef}`;
+  const subject = `${platformTag} Receiving Claim — ${CLAIM_TYPE_LABEL[claimType]} — PO ${poRef}`;
 
   const trimmedReason = String(reason ?? '').trim();
   const descriptionLines: string[] = [
@@ -108,7 +108,7 @@ export async function buildReceivingClaimTemplate(
     `Severity: ${CLAIM_SEVERITY_LABEL[severity]}`,
     `PO: ${poRef}`,
     `Tracking: ${trackingRef}`,
-    lineSummary ? lineSummary : `Carton-wide claim (no specific line)`,
+    lineSummary ? lineSummary : `Package-wide claim (no specific line)`,
     '',
   ];
   if (trimmedReason) {

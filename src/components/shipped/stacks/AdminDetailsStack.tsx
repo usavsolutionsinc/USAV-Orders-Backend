@@ -6,6 +6,7 @@ import { Check, Package, X } from '@/components/Icons';
 import { DashboardDetailsStack } from './DashboardDetailsStack';
 import { buildShippedCopyInfo } from '@/utils/copyallshipped';
 import { getStaffThemeById, stationThemeClasses } from '@/utils/staff-colors';
+import { PaneHeader, PaneHeaderStatusPill } from '@/components/ui/pane-header';
 
 interface StaffOption {
   id: number;
@@ -75,26 +76,32 @@ export function AdminDetailsStack({
       transition={{ type: 'spring', damping: 25, stiffness: 350, mass: 0.5 }}
       className="fixed right-0 top-0 h-screen w-[420px] bg-white border-l border-gray-200 shadow-[-20px_0_50px_rgba(0,0,0,0.05)] z-[120] overflow-y-auto no-scrollbar"
     >
-      <div className="sticky top-0 bg-white/90 backdrop-blur-xl border-b border-gray-100 px-8 py-5 flex items-center justify-between z-10">
-        <div className="flex items-center gap-4">
+      <PaneHeader
+        className="border-gray-100 bg-white/90 backdrop-blur-xl"
+        rowClassName="px-8 py-5"
+        leftSlot={
           <div className="flex items-center gap-3">
             <div className="w-12 h-12 bg-blue-600 rounded-2xl flex items-center justify-center shadow-lg shadow-blue-200">
               <Package className="w-6 h-6 text-white" />
             </div>
-            <div>
-              <p className="text-[20px] font-black text-gray-900 tracking-tight leading-none">Admin Details</p>
-              <p className="mt-1 text-[10px] font-black uppercase tracking-widest text-gray-500">{selectedCount} selected</p>
-            </div>
+            <p className="text-[20px] font-black text-gray-900 tracking-tight leading-none">Admin Details</p>
           </div>
-        </div>
-        <button
-          onClick={onClose}
-          className="p-3 hover:bg-gray-50 rounded-2xl transition-all border border-transparent hover:border-gray-100"
-          aria-label="Close panel"
-        >
-          <X className="w-6 h-6 text-gray-400" />
-        </button>
-      </div>
+        }
+        rightSlot={
+          <>
+            <PaneHeaderStatusPill tone="blue">
+              {selectedCount} selected
+            </PaneHeaderStatusPill>
+            <button
+              onClick={onClose}
+              className="inline-flex h-9 w-9 items-center justify-center rounded-xl text-gray-500 transition-all hover:bg-gray-100 hover:text-gray-900 active:scale-95"
+              aria-label="Close panel"
+            >
+              <X className="h-5 w-5" />
+            </button>
+          </>
+        }
+      />
 
       <div className="px-6 py-5 space-y-4">
         <div className="space-y-3">

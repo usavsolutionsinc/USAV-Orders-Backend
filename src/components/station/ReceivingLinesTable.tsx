@@ -92,7 +92,7 @@ function getStatusDotBg(status: string | null | undefined) {
   return 'bg-gray-400';
 }
 
-function OrderRow({
+export function ReceivingLineOrderRow({
   row,
   isSelected,
   onSelect,
@@ -443,6 +443,44 @@ export default function ReceivingLinesTable() {
     return () => window.removeEventListener('receiving-navigate-table', handler);
   }, [handleSelectRow, orderedVisibleRows]);
 
+  // Detail-overlay prev/next: dispatched from `ReceivingDetailsStack` to step
+  // through unique `receiving_id`s in the currently-visible history list.
+  // Unlike `receiving-navigate-table` (which moves the LINE selection), this
+  // navigates by the parent RECEIVING LOG — derives the next unique
+  // `receiving_id` in `orderedVisibleRows` and re-opens the overlay for it.
+  useEffect(() => {
+    const handler = (event: Event) => {
+      const detail = (event as CustomEvent<{ direction: 'prev' | 'next'; currentReceivingId: number }>).detail;
+      if (!detail || (detail.direction !== 'prev' && detail.direction !== 'next')) return;
+      if (orderedVisibleRows.length === 0) return;
+
+      const uniqueReceivingIds: number[] = [];
+      const seen = new Set<number>();
+      for (const row of orderedVisibleRows) {
+        const rid = Number(row.receiving_id);
+        if (Number.isFinite(rid) && rid > 0 && !seen.has(rid)) {
+          seen.add(rid);
+          uniqueReceivingIds.push(rid);
+        }
+      }
+      if (uniqueReceivingIds.length === 0) return;
+
+      const step = detail.direction === 'prev' ? -1 : 1;
+      const currentIndex = uniqueReceivingIds.indexOf(Number(detail.currentReceivingId));
+      const nextIndex = currentIndex < 0 ? 0 : currentIndex + step;
+      const nextReceivingId = uniqueReceivingIds[nextIndex];
+      if (nextReceivingId == null) return;
+
+      window.dispatchEvent(
+        new CustomEvent('receiving-open-details-overlay', {
+          detail: { receivingId: nextReceivingId },
+        }),
+      );
+    };
+    window.addEventListener('receiving-navigate-detail-overlay', handler);
+    return () => window.removeEventListener('receiving-navigate-detail-overlay', handler);
+  }, [orderedVisibleRows]);
+
   // Keep the active row in view when selection changes from sidebar nav.
   useEffect(() => {
     if (!selectedId || !scrollRef.current) return;
@@ -525,7 +563,7 @@ export default function ReceivingLinesTable() {
                     <div key={date} className="flex flex-col">
                       <DesktopDateGroupHeader date={date} total={dateRows.length} />
                       {sortedRows.map((row, index) => (
-                        <OrderRow
+                        <ReceivingLineOrderRow
                           key={row.id}
                           row={row}
                           index={index}

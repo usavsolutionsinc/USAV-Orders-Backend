@@ -18,24 +18,19 @@ export type ScanStatusChipProps = {
 };
 
 const LABELS: Record<ScanStatus, string> = {
-  checking: 'Checking Zoho…',
-  matched: 'PO loaded',
-  unmatched: 'No PO · logged',
-  error: 'Retry?',
+  checking: 'Checking',
+  matched: 'PO Loaded',
+  unmatched: 'No PO',
+  error: 'Retry',
 };
 
-const DOT_CLASS: Record<ScanStatus, string> = {
-  checking: 'bg-blue-400 animate-pulse',
-  matched: 'bg-emerald-500',
-  unmatched: 'bg-amber-400',
-  error: 'bg-red-500',
-};
-
-const LABEL_CLASS: Record<ScanStatus, string> = {
-  checking: 'text-blue-600',
-  matched: 'text-emerald-700',
-  unmatched: 'text-amber-700',
-  error: 'text-red-600',
+// Filled pill tones in the same family as WORKFLOW_BADGE / condition pills so
+// scan status reads as part of the same visual language.
+const PILL_TONE: Record<ScanStatus, string> = {
+  checking: 'bg-blue-100 text-blue-700 animate-pulse',
+  matched: 'bg-emerald-100 text-emerald-700',
+  unmatched: 'bg-amber-100 text-amber-700',
+  error: 'bg-red-100 text-red-700',
 };
 
 export function ScanStatusChip({
@@ -49,7 +44,7 @@ export function ScanStatusChip({
   onDismiss,
 }: ScanStatusChipProps) {
   const [refetching, setRefetching] = useState(false);
-  const label = status === 'error' && errorMessage ? errorMessage : LABELS[status];
+  const label = LABELS[status];
 
   // Show the refetch button on terminal non-error states — scans that landed
   // "unmatched" can be re-pinged once Zoho has the PO, and scans that matched
@@ -64,21 +59,29 @@ export function ScanStatusChip({
 
   return (
     <div className="flex items-center justify-between gap-2 px-3 py-1.5 border-b border-gray-50 hover:bg-gray-50/50 transition-colors">
-      <div className="flex items-center gap-2 min-w-0">
-        <span className={`h-2 w-2 shrink-0 rounded-full ${DOT_CLASS[status]}`} />
-        <TrackingChip value={tracking} display={getLast4(tracking)} />
+      <div className="flex items-center gap-1.5 min-w-0">
         <span
-          className={`text-[9px] font-black uppercase tracking-widest truncate ${LABEL_CLASS[status]}`}
+          className={`shrink-0 rounded px-1.5 py-0.5 text-[9px] font-black uppercase tracking-widest ${PILL_TONE[status]}`}
+          title={status === 'unmatched' ? 'Tracking logged — no matching Zoho PO yet' : undefined}
         >
           {label}
         </span>
+        <TrackingChip value={tracking} display={getLast4(tracking)} />
+        {status === 'error' && errorMessage ? (
+          <span
+            className="truncate text-[9px] font-semibold text-red-600"
+            title={errorMessage}
+          >
+            {errorMessage}
+          </span>
+        ) : null}
         {status === 'unmatched' && exceptionId ? (
           <a
             href={`/tracking-exceptions?q=${encodeURIComponent(tracking)}`}
             target="_blank"
             rel="noreferrer"
             title={exceptionReason ? `Queued #${exceptionId} · ${exceptionReason}` : `Queued #${exceptionId}`}
-            className="shrink-0 rounded-full bg-amber-100 px-1.5 py-0.5 text-[8px] font-black uppercase tracking-widest text-amber-700 ring-1 ring-amber-200 hover:bg-amber-200"
+            className="shrink-0 rounded bg-gray-100 px-1.5 py-0.5 text-[9px] font-black uppercase tracking-widest text-gray-600 hover:bg-gray-200 hover:text-gray-900"
           >
             #{exceptionId}
           </a>

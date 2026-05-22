@@ -64,15 +64,31 @@ export async function GET(req: NextRequest) {
   }
 
   // Auto-resolve worklist rows whose PO has since landed in the mirror.
+  // Two match paths:
+  //   1. Any extracted PO# from the email appears in the mirror — covers
+  //      the "vendor finally created the Zoho PO" case.
+  //   2. The human typed a Zoho PO# into the triage checklist
+  //      (zoho_uploaded_po_number) and that number now exists in the
+  //      mirror — covers the "human uploaded to Zoho, waiting for sync"
+  //      case where the email's extracted PO# may not match what the
+  //      human actually entered (typos, prefix changes, etc).
+  //
+  // Rows in piles `inbox` and `upload` are eligible; `ignore` and `done`
+  // are terminal. Writing `pile='done'` lets the trigger derive
+  // status='resolved' and stamp resolved_at.
   const resolved = await pool.query(
-    `UPDATE email_missing_orders e
-        SET status      = 'resolved',
-            resolved_at = NOW()
-      WHERE e.status = 'pending'
+    `UPDATE email_missing_purchase_orders e
+        SET pile = 'done'
+      WHERE e.pile IN ('inbox', 'upload')
         AND EXISTS (
           SELECT 1
             FROM zoho_po_mirror m
            WHERE m.zoho_purchaseorder_number_norm = ANY(e.po_numbers_norm)
+              OR (
+                e.zoho_uploaded_po_number IS NOT NULL
+                AND m.zoho_purchaseorder_number_norm =
+                  NULLIF(upper(regexp_replace(e.zoho_uploaded_po_number, '[^A-Za-z0-9]', '', 'g')), '')
+              )
         )`,
   );
 

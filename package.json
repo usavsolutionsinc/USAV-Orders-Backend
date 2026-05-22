@@ -85,6 +85,7 @@
     "@zxing/browser": "^0.1.5",
     "@zxing/library": "^0.21.3",
     "ably": "^2.19.0",
+    "bwip-js": "^4.10.1",
     "canvas-confetti": "^1.9.4",
     "clsx": "^2.1.1",
     "cmdk": "^1.1.1",

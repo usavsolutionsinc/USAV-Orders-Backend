@@ -8,10 +8,11 @@ import DashboardSidebar from '@/components/DashboardSidebar';
 import { CommandBar } from '@/components/CommandBar';
 import { useUIMode } from '@/design-system/providers/UIModeProvider';
 import { X } from '@/components/Icons';
-import { getSidebarRouteKey, isSidebarRouteMobileRestricted } from '@/lib/sidebar-navigation';
+import { getSidebarRouteKey, isMobileAllowedPath } from '@/lib/sidebar-navigation';
 import { MobileAppHeader, MobileAppHeaderFallback } from '@/components/layout/MobileAppHeader';
 import { QuickAccessFab } from '@/components/layout/QuickAccessFab';
 import { GlobalDesktopSkuScanner } from '@/components/layout/GlobalDesktopSkuScanner';
+import { MobileScanFab } from '@/components/mobile/shared/MobileScanFab';
 import { usePhoneScanBridge } from '@/hooks/usePhoneScanBridge';
 import { useGlobalWedgeScanner } from '@/hooks/useGlobalWedgeScanner';
 import { OfflineBanner } from '@/components/layout/OfflineBanner';
@@ -80,15 +81,29 @@ export function ResponsiveLayout({ children }: ResponsiveLayoutProps) {
   const drawerRef = useRef<HTMLDivElement>(null);
   // Global floating hamburger removed — each page provides its own back arrow via `open-mobile-drawer` event.
   const routeKey = getSidebarRouteKey(pathname);
-  const mobileRouteRestricted = isMobile && isSidebarRouteMobileRestricted(routeKey);
+  // Mobile devices may only reach a narrow allowlist of routes (see
+  // isMobileAllowedPath() in sidebar-navigation.ts). Any other path on a
+  // phone bounces to /m/home — the scan-first cockpit — so the device
+  // stays focused on the warehouse-floor jobs it was issued for.
+  const mobileRouteRestricted = isMobile && !isMobileAllowedPath(pathname);
 
   const openDrawer = useCallback(() => setDrawerOpen(true), []);
   const closeDrawer = useCallback(() => setDrawerOpen(false), []);
 
-  const isReceivingPage = pathname === '/receiving';
-  const isMobileReceivingPage = pathname?.startsWith('/m/receiving') ?? false;
-  const isPackerPage = pathname === '/packer';
-  const hideFabPage = isReceivingPage || isPackerPage || isMobileReceivingPage;
+  // Pages that ship their own mobile header + quick-access trigger. We must
+  // suppress the global `MobileAppHeader` and `QuickAccessFab` on these so the
+  // operator doesn't see two stacked top bars and two FABs.
+  //
+  // Note: phone UAs that hit `/receiving` get edge-rewritten to `/m/receiving`,
+  // but the browser URL stays `/receiving` — so `usePathname()` reports
+  // `/receiving` on first land. The `isMobile`-gated arms below catch those
+  // pre-rewrite URLs.
+  const isMobileReceivingPage =
+    (pathname?.startsWith('/m/receiving') ?? false) ||
+    (isMobile && (pathname === '/receiving' || pathname === '/receiving/'));
+  const isMobilePackerPage =
+    isMobile && (pathname === '/packer' || pathname === '/packer/');
+  const hideFabPage = isMobileReceivingPage || isMobilePackerPage;
 
   useEffect(() => {
     setMounted(true);
@@ -109,7 +124,7 @@ export function ResponsiveLayout({ children }: ResponsiveLayoutProps) {
 
   useEffect(() => {
     if (!mobileRouteRestricted) return;
-    router.replace('/dashboard');
+    router.replace('/m/home');
   }, [mobileRouteRestricted, router]);
 
   // Lock body scroll when drawer is open
@@ -227,6 +242,11 @@ export function ResponsiveLayout({ children }: ResponsiveLayoutProps) {
 
       {/* Global FAB — hide on specific pages where it conflicts with custom UI */}
       {!hideFabPage && <QuickAccessFab />}
+
+      {/* Scan FAB — mobile entry into the scanner from any non-/m/* surface.
+          Self-hides on /m/* (own nav bar with raised scan button) and on
+          /packer / /receiving (single-purpose camera flows). */}
+      {!hideFabPage && <MobileScanFab />}
 
       {drawerOverlay}
     </div>

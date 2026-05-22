@@ -8,6 +8,8 @@ import {
   MobilePackerSpamCamera,
   type CapturedShot,
 } from '@/components/mobile/station/MobilePackerSpamCamera';
+import { PhotoCaptureSurface } from '@/components/mobile/receiving/PhotoCaptureSurface';
+import { compressPhotoForUpload } from '@/lib/image/compress-for-upload';
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -24,15 +26,6 @@ interface UploadEntry {
 }
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
-
-async function blobToBase64(blob: Blob): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onloadend = () => resolve(String(reader.result || ''));
-    reader.onerror = () => reject(new Error('Failed to read blob'));
-    reader.readAsDataURL(blob);
-  });
-}
 
 function randomId(): string {
   if (typeof crypto !== 'undefined' && 'randomUUID' in crypto) return crypto.randomUUID();
@@ -89,7 +82,11 @@ function PhotoPageInner() {
         prev.map((e) => (e.id === entry.id ? { ...e, state: 'uploading', error: null } : e)),
       );
       try {
-        const base64 = await blobToBase64(entry.blob);
+        // Defense-in-depth: shots from MobilePackerSpamCamera are already
+        // compressed, but if this page is ever entered with a raw blob the
+        // helper short-circuits via its passthrough for already-small files.
+        const compressed = await compressPhotoForUpload(entry.blob, { source: 'm-receiving' });
+        const base64 = compressed.base64;
         const res = await fetch('/api/receiving-photos', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -181,6 +178,22 @@ function PhotoPageInner() {
       <div className="min-h-screen bg-slate-50 flex items-center justify-center px-6 text-center">
         <p className="text-sm font-bold text-slate-700">Invalid receiving id</p>
       </div>
+    );
+  }
+
+  // Pipeline flow (Take Photos CTA from /m/receiving): no requestId, no need
+  // for the per-upload Ably publish that the desktop QR-scan flow relies on.
+  // Hand off to PhotoCaptureSurface so capture queues into the shared
+  // background upload pipe and we return to the recent list immediately —
+  // consistent with /m/receiving/po/[poId]/photos.
+  if (!requestId) {
+    return (
+      <PhotoCaptureSurface
+        receivingId={receivingId}
+        headerLabel={`RCV-${receivingId}`}
+        returnHref="/m/receiving"
+        maxPhotos={10}
+      />
     );
   }
 

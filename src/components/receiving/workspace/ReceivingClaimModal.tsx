@@ -204,7 +204,7 @@ export function ReceivingClaimModal({ open, row, onClose, onTicketCreated }: Pro
                   items={claimTypeItems}
                   value={claimType}
                   onChange={(id) => setClaimType(id as ClaimType)}
-                  variant="slate"
+                  variant="nav"
                   size="md"
                   aria-label="Claim type"
                 />
@@ -218,7 +218,7 @@ export function ReceivingClaimModal({ open, row, onClose, onTicketCreated }: Pro
                   items={severityItems}
                   value={severity}
                   onChange={(id) => setSeverity(id as ClaimSeverity)}
-                  variant="slate"
+                  variant="nav"
                   size="md"
                   aria-label="Severity"
                 />
@@ -240,7 +240,7 @@ export function ReceivingClaimModal({ open, row, onClose, onTicketCreated }: Pro
                     claimType === 'damage'
                       ? 'Crushed packaging, dent on side panel…'
                       : claimType === 'missing'
-                        ? '2 of 3 units missing from carton…'
+                        ? '2 of 3 units missing from package…'
                         : claimType === 'wrong_item'
                           ? 'Received model XL2 instead of MX5…'
                           : 'Inconsistent QA, multiple units DOA…'

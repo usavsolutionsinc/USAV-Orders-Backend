@@ -7,7 +7,7 @@ import type { BarcodeDensity } from './BarcodePreview';
 
 interface SerialNumberInputProps {
     sku: string;
-    mode: 'print' | 'sn-to-sku' | 'change-location' | 'reprint';
+    mode: 'print' | 'sn-to-sku' | 'reprint';
     title: string;
     stock: string;
     snInput: string;
@@ -26,7 +26,6 @@ interface SerialNumberInputProps {
     onSnAdd: (sn: string) => void;
     onLocationChange: (value: string) => void;
     onNext: (pendingSn?: string) => void;
-    onFinalAction?: () => void;
     isPosting?: boolean;
     onChangeSku?: () => void;
 }
@@ -50,11 +49,9 @@ export function SerialNumberInput({
     onSnAdd,
     onLocationChange,
     onNext,
-    onFinalAction,
     isPosting,
     onChangeSku,
 }: SerialNumberInputProps) {
-    const isLocationMode = mode === 'change-location';
     const comfy = density === 'comfortable';
 
     // Local state for the current scan field — cleared after each Enter scan
@@ -95,7 +92,7 @@ export function SerialNumberInput({
             <div className={`flex items-center gap-3 ${comfy ? 'px-7 pt-7 pb-3' : 'px-5 pt-5 pb-3'}`}>
                 <span className={`font-black tabular-nums text-gray-500 tracking-widest ${comfy ? 'text-[10px]' : 'text-[9px]'}`}>02</span>
                 <span className={`font-black uppercase text-gray-600 ${comfy ? 'text-[11px] tracking-[0.16em]' : 'text-[9px] tracking-[0.18em]'}`}>
-                    {isLocationMode ? 'Update Location' : 'Details & Serial Numbers'}
+                    Details & Serial Numbers
                 </span>
                 {showChangeSku && onChangeSku && (
                     <button
@@ -138,105 +135,88 @@ export function SerialNumberInput({
                                 {title || <span className="text-gray-500 italic font-normal">—</span>}
                             </p>
                         )}
-                        {comfy && currentLocation && !isLocationMode && (
+                        {comfy && currentLocation && (
                             <p className="mt-2 text-[11px] font-mono text-gray-500">
                                 <span className="text-gray-400">LAST LOC </span>
                                 <span className="font-bold text-orange-600">{currentLocation}</span>
                             </p>
                         )}
                     </div>
-                    {!isLocationMode && (
-                        <div className="text-right flex-shrink-0">
-                            <p className={`font-black uppercase tracking-widest text-gray-500 ${comfy ? 'text-[10px] mb-1.5' : 'text-[9px] mb-1'}`}>Stock</p>
-                            <span className={`font-black ${
-                                comfy ? 'text-base px-2.5 py-1' : 'text-xs px-2 py-0.5'
-                            } ${
-                                parseInt(stock) > 0
-                                    ? 'text-blue-700 bg-blue-50'
-                                    : 'text-red-700 bg-red-50'
-                            }`}>
-                                {stock || '0'}
+                    <div className="text-right flex-shrink-0">
+                        <p className={`font-black uppercase tracking-widest text-gray-500 ${comfy ? 'text-[10px] mb-1.5' : 'text-[9px] mb-1'}`}>Stock</p>
+                        <span className={`font-black ${
+                            comfy ? 'text-base px-2.5 py-1' : 'text-xs px-2 py-0.5'
+                        } ${
+                            parseInt(stock) > 0
+                                ? 'text-blue-700 bg-blue-50'
+                                : 'text-red-700 bg-red-50'
+                        }`}>
+                            {stock || '0'}
+                        </span>
+                    </div>
+                </div>
+            </div>
+
+            {/* Inputs */}
+            <div className="border-t border-gray-200">
+                {/* Scan field — Enter adds to list */}
+                <div className="flex border-b border-gray-200">
+                    <input
+                        ref={snInputRef}
+                        value={scanValue}
+                        onChange={handleScanChange}
+                        onKeyDown={handleScanKeyDown}
+                        className={`flex-1 bg-white focus:outline-none font-mono placeholder:text-gray-500 text-gray-900 ${comfy ? 'px-7 py-5 text-base' : 'px-5 py-4 text-sm'}`}
+                        placeholder="Scan SN → Enter to add…"
+                        autoComplete="off"
+                        spellCheck={false}
+                    />
+                    {/* SN count badge */}
+                    {serialNumbers.length > 0 && (
+                        <div className={`flex items-center bg-blue-50 border-l border-gray-200 ${comfy ? 'px-5' : 'px-4'}`}>
+                            <span className={`font-black text-blue-700 tabular-nums ${comfy ? 'text-xs' : 'text-[11px]'}`}>
+                                {serialNumbers.length} SN{serialNumbers.length !== 1 ? 's' : ''}
                             </span>
                         </div>
                     )}
                 </div>
 
-                {isLocationMode && currentLocation && (
-                    <div className={`mt-3 pt-3 border-t border-gray-200`}>
-                        <p className={`font-black uppercase tracking-widest text-gray-500 ${comfy ? 'text-[10px] mb-1.5' : 'text-[9px] mb-1'}`}>Current Location</p>
-                        <span className={`font-black font-mono text-orange-600 ${comfy ? 'text-sm' : 'text-xs'}`}>{currentLocation}</span>
+                {/* Accumulated SN list */}
+                {serialNumbers.length > 0 && (
+                    <div className={`bg-gray-50 border-b border-gray-200 ${comfy ? 'px-7 py-3' : 'px-5 py-2.5'}`}>
+                        <p className={`font-mono text-gray-600 break-all leading-relaxed ${comfy ? 'text-[11px]' : 'text-[10px]'}`}>
+                            {serialNumbers.join(', ')}
+                        </p>
                     </div>
-                )}
-            </div>
-
-            {/* Inputs */}
-            <div className="border-t border-gray-200">
-                {!isLocationMode && (
-                    <>
-                        {/* Scan field — Enter adds to list */}
-                        <div className="flex border-b border-gray-200">
-                            <input
-                                ref={snInputRef}
-                                value={scanValue}
-                                onChange={handleScanChange}
-                                onKeyDown={handleScanKeyDown}
-                                className={`flex-1 bg-white focus:outline-none font-mono placeholder:text-gray-500 text-gray-900 ${comfy ? 'px-7 py-5 text-base' : 'px-5 py-4 text-sm'}`}
-                                placeholder="Scan SN → Enter to add…"
-                                autoComplete="off"
-                                spellCheck={false}
-                            />
-                            {/* SN count badge */}
-                            {serialNumbers.length > 0 && (
-                                <div className={`flex items-center bg-blue-50 border-l border-gray-200 ${comfy ? 'px-5' : 'px-4'}`}>
-                                    <span className={`font-black text-blue-700 tabular-nums ${comfy ? 'text-xs' : 'text-[11px]'}`}>
-                                        {serialNumbers.length} SN{serialNumbers.length !== 1 ? 's' : ''}
-                                    </span>
-                                </div>
-                            )}
-                        </div>
-
-                        {/* Accumulated SN list */}
-                        {serialNumbers.length > 0 && (
-                            <div className={`bg-gray-50 border-b border-gray-200 ${comfy ? 'px-7 py-3' : 'px-5 py-2.5'}`}>
-                                <p className={`font-mono text-gray-600 break-all leading-relaxed ${comfy ? 'text-[11px]' : 'text-[10px]'}`}>
-                                    {serialNumbers.join(', ')}
-                                </p>
-                            </div>
-                        )}
-                    </>
                 )}
 
                 <LocationSelector
                     value={location}
                     currentLocation={currentLocation}
                     onChange={onLocationChange}
-                    compact={!isLocationMode}
+                    compact
                 />
             </div>
 
             {/* CTA */}
             <button
-                onClick={isLocationMode ? onFinalAction : () => {
+                onClick={() => {
                     const pending = scanValue.trim() || undefined;
                     if (pending) setScanValue('');
                     onNext(pending);
                 }}
                 disabled={isPosting}
-                className={`w-full ${comfy ? 'py-5' : 'py-4'} ${
-                    isLocationMode
-                        ? 'bg-orange-600 hover:bg-orange-700'
-                        : 'bg-blue-600 hover:bg-blue-700'
-                } text-white ${sectionLabel} transition-colors disabled:opacity-40`}
+                className={`w-full ${comfy ? 'py-5' : 'py-4'} bg-blue-600 hover:bg-blue-700 text-white ${sectionLabel} transition-colors disabled:opacity-40`}
             >
                 {isPosting ? (
                     <span className="flex items-center justify-center gap-2">
                         <span className="h-3 w-3 border-2 border-white/30 border-t-white rounded-full animate-spin inline-block" />
-                        {isLocationMode ? 'Updating…' : 'Processing…'}
+                        Processing…
                     </span>
                 ) : (
                     <span className="flex items-center justify-center gap-2.5">
-                        {isLocationMode ? 'Update Location' : 'Continue →'}
-                        {comfy && !isLocationMode && (
+                        Continue →
+                        {comfy && (
                             <kbd className="rounded border border-white/30 bg-white/10 px-1.5 py-0.5 text-[9px] font-mono font-bold tracking-tighter">⏎</kbd>
                         )}
                     </span>

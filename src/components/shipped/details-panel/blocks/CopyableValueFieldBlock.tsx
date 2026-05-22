@@ -10,6 +10,7 @@ interface CopyableValueFieldBlockProps {
   externalUrl?: string | null;
   externalLabel?: string;
   twoLineValue?: boolean;
+  noTruncate?: boolean;
   headerAccessory?: ReactNode;
   trailingActions?: ReactNode;
   variant?: 'card' | 'flat';
@@ -23,6 +24,7 @@ export function CopyableValueFieldBlock({
   externalUrl,
   externalLabel,
   twoLineValue = false,
+  noTruncate = false,
   headerAccessory,
   trailingActions,
   variant = 'card',
@@ -107,9 +109,9 @@ export function CopyableValueFieldBlock({
           className={`group/field flex items-center justify-between gap-3 px-0 py-0 transition-all ${!isEmpty ? 'cursor-pointer hover:text-gray-700' : 'cursor-default'}`}
         >
           <p
-            className={`flex-1 text-sm font-bold text-gray-900 ${twoLineValue ? 'break-all leading-4' : 'truncate'} ${valueClassName || 'font-mono'}`}
+            className={`flex-1 text-sm font-bold text-gray-900 ${noTruncate ? 'whitespace-normal break-words leading-snug' : twoLineValue ? 'break-all leading-4' : 'truncate'} ${valueClassName || 'font-mono'}`}
             style={
-              twoLineValue
+              !noTruncate && twoLineValue
                 ? {
                     display: '-webkit-box',
                     WebkitLineClamp: 2,

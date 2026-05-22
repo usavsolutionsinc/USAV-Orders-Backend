@@ -59,12 +59,15 @@ export const ReceivingPhotoStrip = memo(function ReceivingPhotoStrip({
   );
   useAblyChannel(phoneChannel, 'receiving_photo_uploaded', handlePhoneMessage, staffId > 0);
 
-  const urls = useMemo(
-    () => (data?.photos ?? []).map((p) => p.photoUrl).filter((u): u is string => !!u?.trim()),
+  const galleryPhotos = useMemo(
+    () =>
+      (data?.photos ?? [])
+        .filter((p) => !!p.photoUrl?.trim())
+        .map((p) => ({ id: p.id, url: p.photoUrl })),
     [data],
   );
 
-  if (isLoading && urls.length === 0) {
+  if (isLoading && galleryPhotos.length === 0) {
     return (
       <div className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">
         Loading photos…
@@ -81,9 +84,10 @@ export const ReceivingPhotoStrip = memo(function ReceivingPhotoStrip({
 
   return (
     <PhotoGallery
-      photos={urls}
+      photos={galleryPhotos}
       orderId={`RCV-${receivingId}`}
       launcherLayout="toolbar"
+      onPhotoDeleted={() => queryClient.invalidateQueries({ queryKey })}
     />
   );
 });

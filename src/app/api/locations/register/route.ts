@@ -55,9 +55,17 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
           { status: 400 },
         );
       }
-      if (![aisle, bay, level, position].every((n) => Number.isFinite(n) && n >= 1 && n <= 99)) {
+      if (![aisle, bay, level].every((n) => Number.isFinite(n) && n >= 1 && n <= 99)) {
         return NextResponse.json(
-          { error: 'aisle/bay/level/position must each be a number in 1..99' },
+          { error: 'aisle/bay/level must each be a number in 1..99' },
+          { status: 400 },
+        );
+      }
+      // position=0 is the rack-label sentinel (whole-rack label printed
+      // by the Rack Label Printer). Bin labels use 1..99.
+      if (!Number.isFinite(position) || position < 0 || position > 99) {
+        return NextResponse.json(
+          { error: 'position must be 0 (rack label) or 1..99 (bin label)' },
           { status: 400 },
         );
       }

@@ -14,23 +14,29 @@ import { BinsTable } from './BinsTable';
 import { BinsFilterBar, useBinsFilterParams, filterRowsByStatus } from './BinsFilterBar';
 import { BinsBulkActionBar } from './BinsBulkActionBar';
 import { BinDetailFlyout } from './BinDetailFlyout';
-import { RoomsBoard } from './RoomsBoard';
+import { RoomDetailForm } from './RoomDetailForm';
 import { LabelPrintWorkspace } from './LabelPrintWorkspace';
+import { RackLabelWorkspace } from './RackLabelWorkspace';
+import { RackDetailView } from './RackDetailView';
 import { WarehouseMap, type MapViewMode } from './WarehouseMap';
 
-type InventoryTab = 'rooms' | 'bins' | 'labels' | 'map';
+type InventoryTab = 'rooms' | 'bins' | 'labels' | 'racks' | 'map';
 
 function parseTab(raw: string | null): InventoryTab {
-  if (raw === 'rooms' || raw === 'bins' || raw === 'map') return raw;
+  if (raw === 'rooms' || raw === 'bins' || raw === 'racks' || raw === 'map') return raw;
   return 'labels';
 }
 
 export function WarehouseShell() {
   const searchParams = useSearchParams();
   const tab = parseTab(searchParams.get('tab'));
+  const rackCodeParam = searchParams.get('code');
 
-  if (tab === 'rooms')  return <RoomsBoard />;
+  if (tab === 'rooms')  return <RoomDetailForm />;
   if (tab === 'labels') return <LabelPrintWorkspace />;
+  if (tab === 'racks') {
+    return rackCodeParam ? <RackDetailView code={rackCodeParam} /> : <RackLabelWorkspace />;
+  }
   if (tab === 'map')    return <MapTabBody />;
   return <BinsTabBody />;
 }

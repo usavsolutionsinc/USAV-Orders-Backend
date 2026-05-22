@@ -66,10 +66,26 @@ export async function GET(
          r.received_by,
          to_char(r.unboxed_at::timestamp, 'YYYY-MM-DD HH24:MI:SS')   AS unboxed_at,
          r.unboxed_by,
+         -- Tracking-scan provenance. Prefer the earliest receiving_scans row
+         -- (per-scan audit log) so we surface the literal tracking-scan event;
+         -- fall back to receiving.received_at / received_by for rows that
+         -- pre-date the scans-log or were created via other paths.
+         to_char(
+           COALESCE(rs_first.scanned_at, r.received_at)::timestamp,
+           'YYYY-MM-DD HH24:MI:SS'
+         ) AS tracking_scanned_at,
+         COALESCE(rs_first.scanned_by, r.received_by) AS tracking_scanned_by,
          to_char(r.created_at::timestamp, 'YYYY-MM-DD HH24:MI:SS')   AS created_at,
          to_char(r.updated_at::timestamp, 'YYYY-MM-DD HH24:MI:SS')   AS updated_at
        FROM receiving r
        LEFT JOIN shipping_tracking_numbers stn ON stn.id = r.shipment_id
+       LEFT JOIN LATERAL (
+         SELECT rs.scanned_at, rs.scanned_by
+         FROM receiving_scans rs
+         WHERE rs.receiving_id = r.id
+         ORDER BY rs.scanned_at ASC, rs.id ASC
+         LIMIT 1
+       ) rs_first ON TRUE
        WHERE r.id = $1
        LIMIT 1`,
       [id],
@@ -77,7 +93,7 @@ export async function GET(
     const carton = cartonRes.rows[0];
     if (!carton) {
       return NextResponse.json(
-        { success: false, error: 'Carton not found' },
+        { success: false, error: 'Package not found' },
         { status: 404 },
       );
     }
@@ -257,7 +273,7 @@ export async function GET(
       events,
     });
   } catch (error) {
-    const message = error instanceof Error ? error.message : 'Failed to load carton';
+    const message = error instanceof Error ? error.message : 'Failed to load package';
     console.error('receiving/[id] GET failed:', error);
     return NextResponse.json({ success: false, error: message }, { status: 500 });
   }

@@ -6,7 +6,7 @@ import { HorizontalButtonSlider, type HorizontalSliderItem } from '@/components/
 import { sidebarHeaderBandClass, sidebarHeaderRowClass } from '@/components/layout/header-shell';
 import { SearchBar } from '@/components/ui/SearchBar';
 import { ManualsSidebar } from '@/components/manuals/ManualsSidebar';
-import { SkuPairingPanel } from '@/components/manuals/SkuPairingPanel';
+import { SkuPairingMovedCard } from '@/components/manuals/SkuPairingMovedCard';
 
 const VIEW_SLIDER_ITEMS: HorizontalSliderItem[] = [
   { id: 'manuals', label: 'Manuals', tone: 'blue' },
@@ -56,7 +56,7 @@ export function ManualsCombinedSidebar() {
       {/* Content */}
       <div className="flex-1 overflow-hidden">
         {viewMode === 'sku-pairing' ? (
-          <SkuPairingPanel embedded />
+          <SkuPairingMovedCard />
         ) : (
           <ManualsSidebar embedded />
         )}

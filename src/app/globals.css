@@ -109,9 +109,17 @@ body {
   .label-print-card {
     page-break-inside: avoid;
     break-inside: avoid;
+    page-break-after: always;
+    break-after: page;
   }
   @page {
-    margin: 0.25in;
+    /* 3in × 2in thermal label stock — bin + rack labels share the same
+     * media so a single label printer can drive both flows. Margin is
+     * zero because the print card itself reserves padding inside the
+     * 3in × 2in box (see labelCardStyle in BinLabelPrinter /
+     * RackLabelPrinter). */
+    size: 3in 2in;
+    margin: 0;
   }
 }
 

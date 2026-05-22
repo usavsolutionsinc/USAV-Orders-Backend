@@ -134,7 +134,7 @@ function classifyReceiveResponse(r: ReceiveResponsePanelProps['response']): {
       verdict: 'skipped',
       headline: 'No lines on this shipment',
       tone: 'amber',
-      detail: 'There are no receiving_lines rows for this carton yet.',
+      detail: 'There are no receiving_lines rows for this package yet.',
     };
   }
   if (zoho.skip_reason === 'no_zoho_link') {
@@ -143,7 +143,7 @@ function classifyReceiveResponse(r: ReceiveResponsePanelProps['response']): {
       headline: 'Zoho NOT updated — no PO link',
       tone: 'amber',
       detail:
-        'No Zoho purchaseorder_id / line_item_id is attached to this carton. Click the refresh icon to sync with Zoho first, then try again.',
+        'No Zoho purchaseorder_id / line_item_id is attached to this package. Click the refresh icon to sync with Zoho first, then try again.',
     };
   }
   if (zoho.skip_reason === 'scan_only') {
@@ -160,7 +160,7 @@ function classifyReceiveResponse(r: ReceiveResponsePanelProps['response']): {
       headline: 'Zoho NOT updated — no PO link',
       tone: 'amber',
       detail:
-        'Lines were saved locally but no Zoho purchaseorder_id / line_item_id is attached to this carton. Click the refresh icon to sync with Zoho first, then try again.',
+        'Lines were saved locally but no Zoho purchaseorder_id / line_item_id is attached to this package. Click the refresh icon to sync with Zoho first, then try again.',
     };
   }
   if (zoho.rate_limited) {

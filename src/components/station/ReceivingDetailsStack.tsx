@@ -3,9 +3,12 @@
 import { useState } from 'react';
 import { motion } from 'framer-motion';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { Edit, Loader2, Package, Trash2, X } from '@/components/Icons';
+import { Copy, Edit, Loader2, Package, RefreshCw, Trash2, X } from '@/components/Icons';
+import { copyToClipboard } from '@/utils/_dom';
 import { formatDateTimePST } from '@/utils/date';
 import { ViewDropdown } from '@/components/ui/ViewDropdown';
+import { HorizontalButtonSlider, type HorizontalSliderItem } from '@/components/ui/HorizontalButtonSlider';
+import { OrderIdChip, TrackingChip, getLast4 } from '@/components/ui/CopyChip';
 import { getStaffThemeById, stationThemeColors } from '@/utils/staff-colors';
 import { toast } from '@/lib/toast';
 import { type ReceivingLineRow } from '@/components/station/ReceivingLinesTable';
@@ -13,6 +16,15 @@ import { dispatchReceivingWorkspaceOpen } from '@/utils/events';
 import { PoLinesSection } from './receiving/PoLinesSection';
 import { ReceivingOverviewCard } from './receiving/ReceivingOverviewCard';
 import { useReceivingDetailForm, normalizeCarrier } from '@/hooks/useReceivingDetailForm';
+import {
+  PaneHeader,
+  PaneHeaderLabel,
+  PaneHeaderTabs,
+  PaneHeaderActionBar,
+  type PaneHeaderActionBarAction,
+} from '@/components/ui/pane-header';
+
+type ReceivingTab = 'overview' | 'lines' | 'details';
 
 export interface ReceivingDetailsLog {
   id: string;
@@ -89,6 +101,34 @@ export function ReceivingDetailsStack({ log, onClose, onUpdated, onDeleted }: Re
   const router = useRouter();
   const searchParams = useSearchParams();
   const [isOpeningEditor, setIsOpeningEditor] = useState(false);
+  const [activeTab, setActiveTab] = useState<ReceivingTab>('overview');
+  const [isCopying, setIsCopying] = useState(false);
+
+  const handleRefresh = () => {
+    onUpdated();
+    toast.success('Refreshed');
+  };
+
+  const handleCopyAll = async () => {
+    if (isCopying) return;
+    setIsCopying(true);
+    try {
+      const lines = [
+        `Receiving #${log.id}`,
+        log.tracking ? `Tracking: ${log.tracking}` : null,
+        `Received: ${log.received_at ? formatDateTimePST(log.received_at) : '-'}`,
+        log.zoho_purchase_receive_id ? `Zoho Receive: ${log.zoho_purchase_receive_id}` : null,
+        log.qa_status ? `QA: ${log.qa_status}` : null,
+        log.disposition_code ? `Disposition: ${log.disposition_code}` : null,
+        log.condition_grade ? `Condition: ${log.condition_grade}` : null,
+      ].filter(Boolean).join('\n');
+      const ok = await copyToClipboard(lines);
+      if (ok) toast.success('Copied receiving details');
+      else toast.error('Could not copy to clipboard');
+    } finally {
+      window.setTimeout(() => setIsCopying(false), 800);
+    }
+  };
 
   const handleEditPO = async () => {
     if (isOpeningEditor || form.isSaving) return;
@@ -144,87 +184,167 @@ export function ReceivingDetailsStack({ log, onClose, onUpdated, onDeleted }: Re
       transition={{ type: 'spring', damping: 25, stiffness: 350, mass: 0.5 }}
       className="fixed right-0 top-0 z-[100] h-screen w-[440px] overflow-y-auto border-l border-gray-200 bg-white shadow-[-20px_0_50px_rgba(0,0,0,0.05)]"
     >
-      {/* Header (sticky — includes the Edit PO CTA so it stays pinned). */}
-      <div className="sticky top-0 z-10 border-b border-gray-100 bg-white/90 backdrop-blur-xl">
-        <div className="flex items-center justify-between px-8 py-5">
+      {/* Header — eyebrow + value identity, primary "Edit PO" action in the
+          right slot, and segmented tabs in the dual-sticky belowSlot. Matches
+          the 2026 ops convention (Vercel/Front/Stripe pattern). */}
+      <PaneHeader
+        className="border-gray-100 bg-white/90 backdrop-blur-xl"
+        rowClassName="px-6 py-4"
+        leftSlot={
           <div className="flex items-center gap-3">
-            <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-blue-600 shadow-lg shadow-blue-200">
-              <Package className="h-6 w-6 text-white" />
+            <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-blue-600 shadow-md shadow-blue-200">
+              <Package className="h-5 w-5 text-white" />
             </div>
-            <div>
-              <p className="text-[20px] font-black leading-none tracking-tight text-gray-900">Receiving #{log.id}</p>
-              <p className="mt-1 text-[10px] font-bold uppercase tracking-widest text-gray-500">{formatDateTimePST(log.timestamp)}</p>
-            </div>
+            <PaneHeaderLabel
+              eyebrow={
+                <>
+                  RECEIVING <span className="text-gray-500"> · {formatDateTimePST(log.timestamp)}</span>
+                </>
+              }
+              eyebrowClassName="text-[10px] font-black uppercase tracking-[0.2em] text-gray-600"
+              value={`#${log.id}`}
+              valueClassName="truncate text-[18px] font-black tracking-tight text-gray-900 leading-tight"
+              valueTitle={`Receiving #${log.id}`}
+            />
           </div>
-          <button
-            onClick={form.handleClose}
-            disabled={form.isSaving}
-            className="rounded-2xl border border-transparent p-3 transition-all hover:border-gray-100 hover:bg-gray-50 disabled:opacity-50"
-            aria-label="Save and close"
-          >
-            {form.isSaving ? <Loader2 className="h-6 w-6 animate-spin text-gray-400" /> : <X className="h-6 w-6 text-gray-400" />}
-          </button>
-        </div>
-        {/* Edit PO CTA — primary surface for switching from History (read) into
-            Receiving (write) for this PO. Wide, gradient, indigo→blue so it
-            reads as a navigational lever, not a destructive action. */}
-        <div className="border-t border-gray-100 px-8 py-3">
-          <button
-            type="button"
-            onClick={handleEditPO}
-            disabled={isOpeningEditor || form.isSaving}
-            className="group flex w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-indigo-600 to-blue-600 px-5 py-3 text-[13px] font-black uppercase tracking-wider text-white shadow-md shadow-indigo-200 transition-all hover:from-indigo-700 hover:to-blue-700 hover:shadow-lg disabled:opacity-50"
-          >
-            {isOpeningEditor ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
-            ) : (
-              <Edit className="h-4 w-4" />
-            )}
-            <span>{isOpeningEditor ? 'Opening editor…' : 'Edit PO'}</span>
-            <span className="text-white/70 transition-transform group-hover:translate-x-0.5">→</span>
-          </button>
-        </div>
-      </div>
+        }
+        rightSlot={
+          <>
+            <button
+              type="button"
+              onClick={handleEditPO}
+              disabled={isOpeningEditor || form.isSaving}
+              className="group inline-flex items-center gap-1.5 rounded-xl bg-blue-600 px-3.5 py-2 text-[11px] font-black uppercase tracking-wider text-white transition-colors hover:bg-blue-700 disabled:opacity-50"
+            >
+              {isOpeningEditor ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <Edit className="h-3.5 w-3.5" />
+              )}
+              <span>{isOpeningEditor ? 'Opening…' : 'Edit PO'}</span>
+              <span aria-hidden className="text-white/70 transition-transform group-hover:translate-x-0.5">→</span>
+            </button>
+            <button
+              onClick={form.handleClose}
+              disabled={form.isSaving}
+              className="inline-flex h-9 w-9 items-center justify-center rounded-xl text-gray-500 transition-all hover:bg-gray-100 hover:text-gray-900 active:scale-95 disabled:opacity-50"
+              aria-label="Save and close"
+            >
+              {form.isSaving ? <Loader2 className="h-5 w-5 animate-spin" /> : <X className="h-5 w-5" />}
+            </button>
+          </>
+        }
+        belowSlot={
+          <>
+            {/* Utility toolbar — same shape as the LineEditPanel toolbar, so
+                detail panes have one consistent action surface. Sits ABOVE
+                the tabs per the dual-sticky preview. */}
+            <div className="px-6 pb-2">
+              <PaneHeaderActionBar
+                iconOnly
+                actions={[
+                  {
+                    key: 'refresh',
+                    label: 'Refresh',
+                    icon: <RefreshCw className="h-3.5 w-3.5" />,
+                    onClick: handleRefresh,
+                    disabled: form.isSaving,
+                    title: 'Refetch this receiving log',
+                  },
+                  {
+                    key: 'copy',
+                    label: 'Copy',
+                    icon: <Copy className={`h-3.5 w-3.5 ${isCopying ? 'animate-pulse' : ''}`} />,
+                    onClick: () => void handleCopyAll(),
+                    disabled: isCopying,
+                    title: 'Copy receiving details to clipboard',
+                  },
+                ] satisfies PaneHeaderActionBarAction[]}
+                status={form.isSaving ? 'Saving' : undefined}
+                onPrev={() =>
+                  window.dispatchEvent(
+                    new CustomEvent('receiving-navigate-detail-overlay', {
+                      detail: { direction: 'prev', currentReceivingId: Number(log.id) },
+                    }),
+                  )
+                }
+                onNext={() =>
+                  window.dispatchEvent(
+                    new CustomEvent('receiving-navigate-detail-overlay', {
+                      detail: { direction: 'next', currentReceivingId: Number(log.id) },
+                    }),
+                  )
+                }
+                prevTitle="Previous receiving"
+                nextTitle="Next receiving"
+              />
+            </div>
+            <PaneHeaderTabs<ReceivingTab>
+              tabs={[
+                { value: 'overview', label: 'Overview' },
+                { value: 'lines', label: 'Lines', count: typeof log.count === 'number' ? log.count : undefined },
+                { value: 'details', label: 'Details' },
+              ]}
+              value={activeTab}
+              onChange={setActiveTab}
+              className="px-6"
+            />
+          </>
+        }
+      />
 
-      <div className="min-h-[calc(100vh-96px)] px-8 py-6">
+      <div className="min-h-[calc(100vh-100px)] px-6 py-5">
         <div className="space-y-4">
-          <ReceivingOverviewCard log={log} />
+          {activeTab === 'overview' && (
+            <ReceivingOverviewCard log={log} />
+          )}
 
-          <PoLinesSection receivingId={log.id} trackingNumber={log.tracking} />
+          {activeTab === 'lines' && (
+            <PoLinesSection receivingId={log.id} trackingNumber={log.tracking} />
+          )}
 
-          {/* Tracking */}
-          <div className="space-y-1.5">
-            <label className="text-[9px] font-black uppercase tracking-widest text-gray-500">Tracking Number</label>
+          {activeTab === 'details' && (
+            <>
+          {/* Tracking number row — no header, no rounded container. The
+              editable input flows full width; tracking + PO copy chips dock
+              to the far right so the operator can grab either with one tap. */}
+          <div className="flex items-center gap-3">
             <input
               type="text"
               value={form.tracking}
               onChange={(e) => form.setTracking(e.target.value)}
-              className="w-full rounded-2xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm font-mono font-bold text-gray-900 outline-none focus:border-blue-500"
+              aria-label="Tracking number"
+              placeholder="Tracking number"
+              className="min-w-0 flex-1 bg-transparent text-sm font-mono font-bold text-gray-900 outline-none placeholder:text-gray-400"
             />
-          </div>
-
-          {/* Channel slider */}
-          <div
-            ref={form.channelScrollRef}
-            onWheel={form.handleChannelWheel}
-            className="overflow-x-auto w-full"
-            style={{ scrollbarWidth: 'thin', scrollbarColor: '#9ca3af #ffffff' }}
-          >
-            <div className="flex gap-1.5 w-max pb-1">
-              {CHANNEL_OPTS.map((ch) => (
-                <button
-                  key={ch.value}
-                  type="button"
-                  onClick={() => form.setTargetChannel(ch.value)}
-                  className={`rounded-xl px-4 py-2 text-[11px] font-black uppercase tracking-wider whitespace-nowrap transition-all ${
-                    form.targetChannel === ch.value ? ch.active : ch.inactive
-                  }`}
-                >
-                  {ch.label}
-                </button>
-              ))}
+            <div className="flex shrink-0 items-center gap-1">
+              <TrackingChip
+                value={(form.tracking || '').trim()}
+                display={getLast4(form.tracking)}
+                disableCopy={!form.tracking?.trim()}
+              />
+              {log.zoho_purchase_receive_id ? (
+                <OrderIdChip
+                  value={log.zoho_purchase_receive_id}
+                  display={getLast4(log.zoho_purchase_receive_id)}
+                />
+              ) : null}
             </div>
           </div>
+
+          {/* Channel slider — `nav` variant lights the active pill blue to
+              match the global sidebar nav, replacing the prior black/slate
+              active state. */}
+          <HorizontalButtonSlider
+            aria-label="Target channel"
+            variant="nav"
+            value={form.targetChannel}
+            onChange={(id) => form.setTargetChannel(id)}
+            items={CHANNEL_OPTS.map<HorizontalSliderItem>((ch) => ({
+              id: ch.value,
+              label: ch.label,
+            }))}
+          />
 
           {/* Return details */}
           {form.isReturn && (
@@ -310,13 +430,11 @@ export function ReceivingDetailsStack({ log, onClose, onUpdated, onDeleted }: Re
               <ViewDropdown options={QA_OPTS} value={form.qaStatus} onChange={form.setQaStatus} borderRadius="12px" backgroundColor="#f9fafb" fontSize="11px" />
             </div>
           </div>
+            </>
+          )}
 
-          {/* Metadata */}
-          <div className="rounded-2xl border border-gray-100 bg-gray-50 p-3 text-[10px] font-bold uppercase tracking-widest text-gray-500">
-            <p>Received At: {log.received_at ? formatDateTimePST(log.received_at) : '-'}</p>
-            <p className="mt-1">Zoho Receive: {log.zoho_purchase_receive_id || '-'}</p>
-          </div>
-
+          {activeTab === 'overview' && (
+            <>
           {/* Delete */}
           <div className="space-y-2 pb-4">
             {form.saveState === 'error' && (
@@ -332,6 +450,8 @@ export function ReceivingDetailsStack({ log, onClose, onUpdated, onDeleted }: Re
               {form.isDeleting ? 'Deleting...' : 'Delete Row'}
             </button>
           </div>
+            </>
+          )}
 
         </div>
       </div>

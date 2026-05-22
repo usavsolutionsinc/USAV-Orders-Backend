@@ -14,13 +14,15 @@ import { cn } from '@/utils/_cn';
 
 interface QuickAccessButtonProps {
   className?: string;
+  buttonClassName?: string;
+  placement?: 'down' | 'up';
 }
 
 /**
  * Reusable Quick Access button. Can be mounted in a header or as a FAB.
  * Handles its own popover state and hotkeys.
  */
-export function QuickAccessButton({ className }: QuickAccessButtonProps) {
+export function QuickAccessButton({ className, buttonClassName, placement = 'down' }: QuickAccessButtonProps) {
   const pathname = usePathname();
   const { settings, recordVisit } = useQuickAccess();
   const { user: authUser } = useAuth();
@@ -85,10 +87,14 @@ export function QuickAccessButton({ className }: QuickAccessButtonProps) {
   if (!settings.enabled) return null;
   if (!authUser) return null;
 
+  const popoverPosition = placement === 'up'
+    ? 'absolute right-0 bottom-full mb-2 z-50'
+    : 'absolute right-0 top-full mt-2 z-50';
+
   return (
     <div ref={wrapperRef} className={cn("relative", className)}>
       {menuOpen && (
-        <div className="absolute right-0 top-full mt-2 z-50">
+        <div className={popoverPosition}>
           <QuickAccessPopover
             onClose={() => setMenuOpen(false)}
             onOpenHistoryPopover={handleOpenHistory}
@@ -97,7 +103,7 @@ export function QuickAccessButton({ className }: QuickAccessButtonProps) {
       )}
 
       {historyOpen && (
-        <div className="absolute right-0 top-full mt-2 z-50">
+        <div className={popoverPosition}>
           <PhoneHistoryPopover onClose={() => setHistoryOpen(false)} />
         </div>
       )}
@@ -120,7 +126,8 @@ export function QuickAccessButton({ className }: QuickAccessButtonProps) {
             ? 'bg-gray-700 hover:bg-gray-600'
             : staffChipActive && staffColorHex
               ? 'hover:brightness-110'
-              : 'bg-gray-900 hover:bg-gray-800'
+              : 'bg-gray-900 hover:bg-gray-800',
+          buttonClassName,
         )}
         style={
           !menuOpen && staffChipActive && staffColorHex

@@ -89,7 +89,7 @@ export function buildReceivingCopyInfo(opts: {
   const itemCount = itemLines.length;
 
   const header = [
-    '=== Receiving carton ===',
+    '=== Receiving package ===',
     shareUrl ? `Link: ${shareUrl}` : null,
     carton?.id != null
       ? `Receiving ID: ${carton.id}`

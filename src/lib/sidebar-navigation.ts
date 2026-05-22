@@ -61,6 +61,11 @@ export interface SidebarNavItem {
   requires?: string;
 }
 
+/**
+ * Sidebar items that should never appear in the mobile drawer. Used for
+ * filtering the visible nav — actual route gating happens via the
+ * pathname allowlist in {@link isMobileAllowedPath}.
+ */
 const MOBILE_RESTRICTED_SIDEBAR_IDS = new Set<SidebarRouteKey>([
   'operations',
   'work-orders',
@@ -70,7 +75,52 @@ const MOBILE_RESTRICTED_SIDEBAR_IDS = new Set<SidebarRouteKey>([
   'previous-quarters',
   'admin',
   'audit-log',
+  'dashboard',
+  'fba',
+  'walk-in',
+  'replenish',
+  'products',
+  'inventory',
+  'warehouse',
+  'ai',
+  'billing',
+  'integrations',
+  'staff',
+  'settings',
 ]);
+
+/**
+ * Mobile-allowed route prefixes. Mobile devices can only land on these —
+ * everything else gets redirected to /m/home (the scan-first homepage)
+ * by ResponsiveLayout. Intentionally narrow: a warehouse phone is a
+ * dedicated scanning device, not a portal into the full back-office app.
+ *
+ * Allowlist (prefixes; trailing-slash and full-match both accepted):
+ *   • `/m`            — mobile root + every /m/* page (home, scan, history, single-record detail)
+ *   • `/signin`       — sign-in
+ *   • `/receiving`    — receiving station (camera-first photo flow)
+ *   • `/packer`       — packing station (camera-first photo flow)
+ *   • `/tech`         — testing / technician station
+ *   • `/01`, `/414`   — GS1 Digital Link landing pages (deep links from scans)
+ *
+ * To add a new mobile-allowed surface, extend MOBILE_ALLOWED_PREFIXES.
+ */
+const MOBILE_ALLOWED_PREFIXES: ReadonlyArray<string> = [
+  '/m',
+  '/signin',
+  '/receiving',
+  '/packer',
+  '/tech',
+  '/01',
+  '/414',
+];
+
+export function isMobileAllowedPath(pathname: string | null | undefined): boolean {
+  if (!pathname) return false;
+  return MOBILE_ALLOWED_PREFIXES.some(
+    (p) => pathname === p || pathname.startsWith(`${p}/`),
+  );
+}
 
 export const APP_SIDEBAR_NAV: SidebarNavItem[] = [
   { id: 'operations',        label: 'Operations',  href: '/operations',         icon: Monitor,         kind: 'main',    requires: 'operations.view' },
