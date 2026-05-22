@@ -13,6 +13,7 @@ import { designTokenStyleText } from '@/styles/tokens';
 import { OfflineBanner } from "../components/station/OfflineBanner";
 import { InstallPrompt } from "../components/station/InstallPrompt";
 import { AppearanceApplier } from "../components/settings/AppearanceApplier";
+import { ElectronDragStrip } from "../components/electron/ElectronDragStrip";
 
 export default function RootLayout({
     children,
@@ -40,6 +41,7 @@ export default function RootLayout({
                 <style id="app-design-tokens">{designTokenStyleText}</style>
             </head>
             <body className="antialiased" style={{ margin: 0, padding: 0, overflow: 'hidden', height: '100vh' }}>
+                <ElectronDragStrip />
                 <OfflineBanner />
                 <Providers>
                     <AuthProvider>

@@ -167,7 +167,51 @@ function getAllowedOrigins(startUrl) {
 // Menu
 // ---------------------------------------------------------------------------
 function createMenu(win) {
+  const isMac = process.platform === 'darwin';
   const template = [
+    // macOS expects the app menu as the first item; without it, the standard
+    // Cmd+Q / Hide / About items are missing.
+    ...(isMac
+      ? [
+          {
+            label: app.name,
+            submenu: [
+              { role: 'about' },
+              { type: 'separator' },
+              { role: 'services' },
+              { type: 'separator' },
+              { role: 'hide' },
+              { role: 'hideOthers' },
+              { role: 'unhide' },
+              { type: 'separator' },
+              { role: 'quit' },
+            ],
+          },
+        ]
+      : []),
+    // Edit submenu — role-based items use Electron's built-in clipboard
+    // routing, which forwards Cmd/Ctrl+C/V/X to the *focused element* even
+    // when that element lives inside a <webview> (e.g. the Zoho login form
+    // pasted into the embedded browser pane). Without this menu, accelerators
+    // never reach the guest page on macOS.
+    {
+      label: 'Edit',
+      submenu: [
+        { role: 'undo' },
+        { role: 'redo' },
+        { type: 'separator' },
+        { role: 'cut' },
+        { role: 'copy' },
+        { role: 'paste' },
+        ...(isMac
+          ? [
+              { role: 'pasteAndMatchStyle' },
+              { role: 'delete' },
+              { role: 'selectAll' },
+            ]
+          : [{ role: 'delete' }, { type: 'separator' }, { role: 'selectAll' }]),
+      ],
+    },
     {
       label: 'View',
       submenu: [
