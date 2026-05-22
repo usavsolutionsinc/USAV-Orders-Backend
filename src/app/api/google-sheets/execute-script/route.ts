@@ -17,6 +17,7 @@ import {
     upsertOpenOrdersException,
 } from '@/lib/sync/sheet-sync-common';
 import { withAuth } from '@/lib/auth/withAuth';
+import { mirrorLegacyPackToAllocations } from '@/lib/inventory/sync-legacy-pack';
 
 const DEFAULT_SPREADSHEET_ID = '1fM9t4iw_6UeGfNbKZaKA7puEFfWqOiNtITGDVSgApCE';
 const FBA_LIKE_RE = /^(X00|X0|B0|FBA)/i;
@@ -322,16 +323,26 @@ async function executeSyncPackerLogs() {
                     continue;
                 }
 
-                await client.query(
+                const insertedPl = await client.query(
                     `INSERT INTO packer_logs (
                         shipment_id,
                         scan_ref,
                         tracking_type,
                         created_at,
                         packed_by
-                    ) VALUES ($1, $2, $3, $4, $5)`,
+                    ) VALUES ($1, $2, $3, $4, $5)
+                    RETURNING id`,
                     [plShipmentId, plScanRef, 'ORDERS', normalizePSTTimestamp(packDateTime) ?? null, packerSheet.packedBy]
                 );
+
+                const insertedPlId = (insertedPl.rows[0]?.id as number | undefined) ?? null;
+                if (insertedPlId) {
+                    await mirrorLegacyPackToAllocations({
+                        packerLogId: insertedPlId,
+                        shipmentId: plShipmentId ?? null,
+                        actorStaffId: packerSheet.packedBy ?? null,
+                    });
+                }
 
                 insertedForSheet++;
             }

@@ -109,26 +109,28 @@ flowchart LR
   click components_replenish "src/components/replenish/ReplenishmentReceivingTab.tsx" "Open src/components/replenish/ReplenishmentReceivingTab.tsx"
   components_sku["components/sku"]
   click components_sku "src/components/sku/BinRowDetailsSheet.tsx" "Open src/components/sku/BinRowDetailsSheet.tsx"
-  components_packer["components/packer"]
-  click components_packer "src/components/packer/PackerPageContent.tsx" "Open src/components/packer/PackerPageContent.tsx"
   lib_staffCache_ts["lib/staffCache.ts"]
   click lib_staffCache_ts "src/lib/staffCache.ts" "Open src/lib/staffCache.ts"
   lib_zoho["lib/zoho"]
   click lib_zoho "src/lib/zoho/mock.ts" "Open src/lib/zoho/mock.ts"
   lib_ebay["lib/ebay"]
   click lib_ebay "src/lib/ebay/token-refresh.ts" "Open src/lib/ebay/token-refresh.ts"
-  lib_feedback["lib/feedback"]
-  click lib_feedback "src/lib/feedback/confirm.ts" "Open src/lib/feedback/confirm.ts"
+  lib_inventory["lib/inventory"]
+  click lib_inventory "src/lib/inventory/internal-gtin.ts" "Open src/lib/inventory/internal-gtin.ts"
+  lib_tech["lib/tech"]
+  click lib_tech "src/lib/tech/resolveStaffIdFromTechParam.ts" "Open src/lib/tech/resolveStaffIdFromTechParam.ts"
   app_api --> lib_ai
   app_api --> lib_auth
   app_api --> lib_db_ts
   app_api --> lib_ebay
   app_api --> lib_fba
+  app_api --> lib_inventory
   app_api --> lib_jobs
   app_api --> lib_neon
   app_api --> lib_realtime
   app_api --> lib_scan_resolver_ts
   app_api --> lib_shipping
+  app_api --> lib_tech
   app_api --> lib_tenancy
   app_api --> lib_tracking_format_ts
   app_api --> lib_zoho
@@ -256,7 +258,6 @@ flowchart LR
   components_barcode --> components_ui
   components_barcode --> design_system
   components_barcode --> hooks
-  components_barcode --> lib_feedback
   components_dashboard --> components_Icons_tsx
   components_dashboard --> components_fba
   components_dashboard --> components_layout
@@ -283,7 +284,6 @@ flowchart LR
   components_fba --> utils
   components_layout --> components_DashboardSidebar_tsx
   components_layout --> components_Icons_tsx
-  components_layout --> components_mobile
   components_layout --> components_quick_access
   components_layout --> components_ui
   components_layout --> contexts
@@ -299,6 +299,7 @@ flowchart LR
   components_manuals --> utils
   components_mobile --> components_Icons_tsx
   components_mobile --> components_layout
+  components_mobile --> components_shipped
   components_mobile --> components_sidebar
   components_mobile --> components_station
   components_mobile --> components_ui
@@ -306,13 +307,8 @@ flowchart LR
   components_mobile --> contexts
   components_mobile --> design_system
   components_mobile --> hooks
-  components_mobile --> lib_feedback
   components_mobile --> lib_scan_resolver_ts
   components_mobile --> utils
-  components_packer --> components_mobile
-  components_packer --> components_sidebar
-  components_packer --> design_system
-  components_packer --> hooks
   components_quick_access --> components_Icons_tsx
   components_quick_access --> components_ui
   components_quick_access --> contexts
@@ -387,7 +383,6 @@ flowchart LR
   components_sku --> components_Icons_tsx
   components_sku --> contexts
   components_sku --> hooks
-  components_sku --> lib_feedback
   components_sku --> lib_realtime
   components_station --> components_Icons_tsx
   components_station --> components_UpNextOrder_tsx
@@ -440,7 +435,6 @@ flowchart LR
   components_warehouse --> components_ui
   components_warehouse --> design_system
   components_warehouse --> hooks
-  components_warehouse --> lib_feedback
   components_work_orders --> components_Icons_tsx
   components_work_orders --> components_layout
   components_work_orders --> components_shipped
@@ -467,7 +461,6 @@ flowchart LR
   hooks --> design_system
   hooks --> lib_dashboard_table_data_ts
   hooks --> lib_fba
-  hooks --> lib_feedback
   hooks --> lib_neon
   hooks --> lib_realtime
   hooks --> lib_scan_resolver_ts
@@ -487,7 +480,7 @@ flowchart LR
   lib_ebay --> lib_tracking_format_ts
   lib_ebay --> utils
   lib_fba --> lib_tracking_format_ts
-  lib_feedback --> design_system
+  lib_inventory --> lib_db_ts
   lib_jobs --> lib_db_ts
   lib_jobs --> lib_ebay
   lib_jobs --> lib_neon
@@ -511,6 +504,9 @@ flowchart LR
   lib_shipping --> lib_realtime
   lib_shipping --> lib_scan_resolver_ts
   lib_staffCache_ts --> utils
+  lib_tech --> lib_realtime
+  lib_tech --> lib_tracking_format_ts
+  lib_tech --> utils
   lib_tenancy --> lib_db_ts
   lib_tracking_format_ts --> utils
   lib_zoho --> lib_db_ts

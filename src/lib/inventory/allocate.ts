@@ -66,16 +66,35 @@ export function isValidConditionGrade(value: string): value is ConditionGrade {
  */
 export async function allocateOrder(input: AllocateOrderInput): Promise<AllocateOrderResult> {
   return transaction<AllocateOrderResult>(async (client) => {
-    // 1. Load the order line.
+    // 1. Load the order line. Resolve the canonical SKU via sku_catalog_id
+    //    when the order has been paired; otherwise fall back to the raw
+    //    order.sku string (which usually holds the marketplace platform_sku).
+    //
+    //    Why: serial_units.sku stores the internal catalog SKU ('00001-BK'),
+    //    but orders.sku stores whatever the marketplace sent ('01279-B').
+    //    Matching verbatim never hits — sku_platform_ids + the manual
+    //    pairing flow at /api/sku-catalog/pair exist precisely to bridge
+    //    that gap, and orders.sku_catalog_id is the resolved link.
     const orderQ = await client.query<{
       id: number;
       sku: string | null;
       quantity: string | null;
       condition: string | null;
-    }>(`SELECT id, sku, quantity, condition FROM orders WHERE id = $1 LIMIT 1`, [input.orderId]);
+      sku_catalog_id: number | null;
+      canonical_sku: string | null;
+    }>(
+      `SELECT o.id, o.sku, o.quantity, o.condition, o.sku_catalog_id, sc.sku AS canonical_sku
+         FROM orders o
+    LEFT JOIN sku_catalog sc ON sc.id = o.sku_catalog_id
+        WHERE o.id = $1
+        LIMIT 1`,
+      [input.orderId],
+    );
     const order = orderQ.rows[0];
     if (!order) return { ok: false, status: 404, error: 'order not found' };
-    if (!order.sku || !order.sku.trim()) {
+
+    const matchSku = (order.canonical_sku?.trim() || order.sku?.trim() || '').trim();
+    if (!matchSku) {
       return { ok: false, status: 400, error: 'order has no sku — cannot allocate' };
     }
 
@@ -106,7 +125,7 @@ export async function allocateOrder(input: AllocateOrderInput): Promise<Allocate
         ORDER BY su.id ASC
         LIMIT $3
         FOR UPDATE OF su SKIP LOCKED`,
-      [order.sku.trim(), input.conditionGrade ?? null, targetQty],
+      [matchSku, input.conditionGrade ?? null, targetQty],
     );
     const candidates = candidatesQ.rows;
     if (candidates.length === 0) {
@@ -162,13 +181,15 @@ export async function allocateOrder(input: AllocateOrderInput): Promise<Allocate
         [
           input.actorStaffId,
           unit.id,
-          order.sku,
+          matchSku,
           perUnitClientEventId,
           JSON.stringify({
             source: 'orders.allocate',
             order_id: input.orderId,
             allocation_id: allocationId,
             ordinal: i + 1,
+            platform_sku: order.sku,
+            sku_catalog_id: order.sku_catalog_id,
           }),
         ],
       );
@@ -178,7 +199,7 @@ export async function allocateOrder(input: AllocateOrderInput): Promise<Allocate
     return {
       ok: true,
       orderId: input.orderId,
-      sku: order.sku,
+      sku: matchSku,
       requested: targetQty,
       allocated: allocated.length,
       partial: allocated.length < targetQty,

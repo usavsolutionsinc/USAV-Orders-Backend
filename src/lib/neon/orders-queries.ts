@@ -150,6 +150,7 @@ const ORDER_SERIALS_CTE = `
   order_serials AS (
     SELECT
       o.id,
+      o.organization_id,
       o.shipment_id,
       to_char(wa_deadline.deadline_at, 'YYYY-MM-DD HH24:MI:SS') AS ship_by_date,
       o.order_id,
@@ -288,7 +289,7 @@ const ORDER_SERIALS_CTE = `
     LEFT JOIN tech_serial_numbers tsn ON tsn.shipment_id = o.shipment_id AND o.shipment_id IS NOT NULL
     WHERE COALESCE(stn.is_carrier_accepted OR stn.is_in_transit
             OR stn.is_out_for_delivery OR stn.is_delivered, false)
-    GROUP BY o.id, o.shipment_id, wa_deadline.deadline_at, o.order_id, o.product_title, o.quantity,
+    GROUP BY o.id, o.organization_id, o.shipment_id, wa_deadline.deadline_at, o.order_id, o.product_title, o.quantity,
              o.condition, o.item_number, stn.tracking_number_raw, order_trackings.tracking_numbers, order_trackings.tracking_number_rows, o.sku,
              o.account_source, o.notes, o.status_history::jsonb,
              stn.is_carrier_accepted, stn.is_in_transit, stn.is_out_for_delivery, stn.is_delivered,
@@ -684,7 +685,12 @@ export interface ShippedSearchResult {
  */
 export async function searchShippedOrders(
   query: string,
-  options?: { shippedFilter?: ShippedFilterMode; searchField?: ShippedSearchField; limit?: number },
+  options?: {
+    shippedFilter?: ShippedFilterMode;
+    searchField?: ShippedSearchField;
+    limit?: number;
+    organizationId: string;
+  },
 ): Promise<ShippedSearchResult> {
   try {
     const trimmedQuery = String(query || '').trim();
@@ -693,6 +699,10 @@ export async function searchShippedOrders(
     const key18 = normalizeTrackingKey18(trimmedQuery);
     const searchField = options?.searchField ?? 'all';
     const resultLimit = Math.min(500, Math.max(25, Number(options?.limit) || 200));
+    const organizationId = options?.organizationId;
+    if (!organizationId) {
+      throw new Error('searchShippedOrders: organizationId is required');
+    }
 
     // Build an optional AND clause for the type filter
     let typeFilterClause = '';
@@ -873,6 +883,7 @@ export async function searchShippedOrders(
 
       const { whereClause, rankClause } = buildRankedSearchSql(variants);
 
+      const orgParam = pushParam(organizationId);
       const limitParam = pushParam(resultLimit);
 
       const queryResult = await pool.query(
@@ -887,9 +898,10 @@ export async function searchShippedOrders(
          LEFT JOIN staff s1 ON os.tested_by = s1.id
          LEFT JOIN staff s2 ON os.packed_by = s2.id
          LEFT JOIN staff s3 ON os.tester_id = s3.id
-         WHERE (
-           ${whereClause}
-         )${typeFilterClause}
+         WHERE os.organization_id = ${orgParam}
+           AND (
+             ${whereClause}
+           )${typeFilterClause}
          ORDER BY
            search_rank DESC,
            COALESCE(os.packed_at, os.created_at)::timestamp DESC NULLS LAST,
@@ -944,6 +956,8 @@ export async function searchShippedOrders(
 
       const { whereClause, rankClause } = buildRankedSearchSql(variants);
 
+      const orgParam = pushParam(organizationId);
+
       const result = await pool.query(
         `SELECT
            oe.id,
@@ -992,7 +1006,8 @@ export async function searchShippedOrders(
            NULL::text AS tester_name,
            ${rankClause} AS search_rank
          FROM orders_exceptions oe
-         WHERE oe.status = 'open'
+         WHERE oe.organization_id = ${orgParam}
+           AND oe.status = 'open'
            AND (${whereClause})
          ORDER BY search_rank DESC, oe.updated_at DESC, oe.id DESC
          LIMIT 25`,

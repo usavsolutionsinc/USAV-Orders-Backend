@@ -5,6 +5,7 @@ import ReceivingDashboard from '@/components/ReceivingDashboard';
 import { ReceivingSidebarPanel } from '@/components/sidebar/ReceivingSidebarPanel';
 import { RouteShell } from '@/design-system/components/RouteShell';
 import { MobileReceivingList } from '@/components/mobile/receiving/MobileReceivingList';
+import { MobileReceivingViewPills } from '@/components/mobile/receiving/MobileReceivingViewPills';
 import { Menu } from '@/components/Icons';
 import { QuickAccessButton } from '@/components/layout/QuickAccessButton';
 
@@ -39,7 +40,14 @@ function ReceivingPageInner() {
           <QuickAccessButton className="h-10 w-10" />
         </header>
 
-        <div className="min-h-0 flex-1">
+        <div className="relative min-h-0 flex-1">
+          {/* Floating overlay above the list — pills sit on top, list scrolls behind. */}
+          <div className="pointer-events-none absolute top-0 left-0 right-0 z-30 px-3 pt-2 pb-3">
+            <div className="pointer-events-auto">
+              <MobileReceivingViewPills active="lines" />
+            </div>
+          </div>
+
           <MobileReceivingList />
         </div>
       </div>

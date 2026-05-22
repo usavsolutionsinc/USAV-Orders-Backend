@@ -138,6 +138,18 @@ export const QR_BASE_URL =
   process.env.NEXT_PUBLIC_APP_URL ?? 'https://usav-orders-backend.vercel.app';
 
 /**
+ * Public domain encoded in the *unit-level* GS1 Digital Link QR (the QR on a
+ * serialized product label). A normal phone-camera scan opens
+ * `https://usavshop.com/01/{gtin}/21/{unitSerial}`, which the storefront is
+ * responsible for resolving / redirecting. The in-app scanner ignores host
+ * and parses the GS1 path locally (see {@link parseScannedUrl}), so this URL
+ * works for both flows. Override with NEXT_PUBLIC_LABEL_QR_BASE_URL.
+ */
+export const PUBLIC_UNIT_QR_BASE_URL = (
+  process.env.NEXT_PUBLIC_LABEL_QR_BASE_URL ?? 'https://usavshop.com'
+).replace(/\/$/, '');
+
+/**
  * Build the absolute URL embedded in a printed QR. Always anchors to
  * {@link QR_BASE_URL} so printed labels work regardless of which environment
  * they were printed from.

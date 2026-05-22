@@ -16,7 +16,7 @@ const CACHE_HEADERS = {
  * missingTrackingOnly filters. Filters are pushed down to SQL so pagination
  * remains lightweight for dashboard views.
  */
-export const GET = withAuth(async (req: NextRequest) => {
+export const GET = withAuth(async (req: NextRequest, ctx) => {
   const startedAt = Date.now();
   let ok = false;
   let cache = 'BYPASS';
@@ -41,6 +41,7 @@ export const GET = withAuth(async (req: NextRequest) => {
     // and a demoted numeric-pk score. Serving v1 entries would mask the fix.
     const CACHE_NS = 'api:shipped:v2';
     const cacheLookup = createCacheLookupKey({
+      organizationId: ctx.organizationId,
       query: query || '',
       searchField,
       page,
@@ -77,7 +78,11 @@ export const GET = withAuth(async (req: NextRequest) => {
         return filtered;
       };
 
-      const searchResult = await searchShippedOrders(query, { shippedFilter, searchField });
+      const searchResult = await searchShippedOrders(query, {
+        shippedFilter,
+        searchField,
+        organizationId: ctx.organizationId,
+      });
       let results = applyScopeFilters(searchResult.rows);
 
       // Out-of-scope hint: if the current tab (shippedFilter) has no matches but
@@ -86,7 +91,11 @@ export const GET = withAuth(async (req: NextRequest) => {
       let outOfScope = false;
       let outOfScopeSuggestion: { filter: string; count: number } | null = null;
       if (results.length === 0 && shippedFilter !== 'all') {
-        const broad = await searchShippedOrders(query, { shippedFilter: 'all', searchField });
+        const broad = await searchShippedOrders(query, {
+          shippedFilter: 'all',
+          searchField,
+          organizationId: ctx.organizationId,
+        });
         const broadFiltered = applyScopeFilters(broad.rows);
         if (broadFiltered.length > 0) {
           outOfScope = true;

@@ -17,7 +17,6 @@ import { printProductLabels } from '@/lib/print/printProductLabel';
 import { useLabelRecents } from '@/hooks/useLabelRecents';
 import { useBarcodeMode } from '@/hooks/useBarcodeMode';
 import { CONDITION_OPTIONS } from '@/components/receiving/zoho-po-types';
-import { ViewDropdown, type ViewDropdownOption } from '@/components/ui/ViewDropdown';
 import { Search, Clipboard, Check, Loader2, X, Printer, Plus } from './Icons';
 
 
@@ -59,6 +58,7 @@ export default function MultiSkuSnBarcode({ layout = 'vertical' }: MultiSkuSnBar
     const [location, setLocation] = useState<string>("");
     const [currentLocation, setCurrentLocation] = useState<string>("");
     const [imageUrl, setImageUrl] = useState<string>("");
+    const [skuCatalogId, setSkuCatalogId] = useState<number | null>(null);
     const [condition, setCondition] = useState<ConditionGrade>('BRAND_NEW');
 
     const barcodeCanvasRef = useRef<HTMLCanvasElement>(null);
@@ -88,16 +88,19 @@ export default function MultiSkuSnBarcode({ layout = 'vertical' }: MultiSkuSnBar
     // canvas still renders something during the brief loading window.
     const renderQrCanvas = useCallback(async (canvas: HTMLCanvasElement | null, payload: string) => {
         if (!canvas || !isLibraryLoaded || !payload.trim()) return;
-        await renderQr(canvas, payload, { width: 200, margin: 2, errorCorrectionLevel: 'M' });
+        // GS1 production guidance: error correction Q (25%) survives warehouse
+        // damage; quiet zone ≥4 modules is the GS1 minimum.
+        await renderQr(canvas, payload, { width: 200, margin: 4, errorCorrectionLevel: 'Q' });
     }, [isLibraryLoaded]);
 
     useEffect(() => {
         // In horizontal mode the preview is always mounted next to the inputs,
         // so re-render as soon as we have a payload — not just at step 3.
-        if (mode === 'print' && (isHorizontal ? !!uniqueSku : step === 3)) {
+        const isPrintLike = mode === 'print' || mode === 'reprint';
+        if (isPrintLike && (isHorizontal ? !!uniqueSku : step === 3)) {
             void renderQrCanvas(barcodeCanvasRef.current, qrUrl || uniqueSku);
         }
-    }, [uniqueSku, qrUrl, step, mode, renderQrCanvas, isHorizontal]);
+    }, [uniqueSku, qrUrl, step, mode, renderQrCanvas, isHorizontal, isLibraryLoaded]);
 
     // Scroll the parent scroll container to reveal the newly added step.
     // scrollIntoView walks up to the nearest scroll ancestor, so this works
@@ -127,11 +130,15 @@ export default function MultiSkuSnBarcode({ layout = 'vertical' }: MultiSkuSnBar
      * pre-flight "peek". Replaces the legacy
      * /api/sku-manager?action=current then ?action=increment dance.
      */
-    const fetchNextUnitId = useCallback(async (skuValue: string) => {
+    const fetchNextUnitId = useCallback(async (skuValue: string, catalogIdHint?: number | null) => {
+        const body: Record<string, unknown> = { sku: normalizeSku(skuValue) };
+        if (catalogIdHint && Number.isFinite(catalogIdHint)) {
+            body.sku_catalog_id = catalogIdHint;
+        }
         const res = await fetch('/api/units/next-id', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ sku: normalizeSku(skuValue) }),
+            body: JSON.stringify(body),
         });
         const data = await res.json();
         if (!res.ok || !data?.ok) {
@@ -155,6 +162,7 @@ export default function MultiSkuSnBarcode({ layout = 'vertical' }: MultiSkuSnBar
         setSnInput("");
         setSerialNumbers([]);
         setImageUrl("");
+        setSkuCatalogId(null);
         setStep(1);
         setError("");
 
@@ -162,6 +170,7 @@ export default function MultiSkuSnBarcode({ layout = 'vertical' }: MultiSkuSnBar
         await new Promise(r => setTimeout(r, 0));
 
         // Inline the same logic as handleNextStepSku but with the fresh value
+        let catalogIdHint: number | null = null;
         setIsLoadingTitle(true);
         try {
             const baseSku = trimmed.includes(':') ? trimmed.split(':')[0] : trimmed;
@@ -172,6 +181,8 @@ export default function MultiSkuSnBarcode({ layout = 'vertical' }: MultiSkuSnBar
             setCurrentLocation(data.location || "");
             setLocation(data.location || "");
             setImageUrl(data.imageUrl || "");
+            catalogIdHint = typeof data.skuCatalogId === 'number' ? data.skuCatalogId : null;
+            setSkuCatalogId(catalogIdHint);
         } catch {
             setTitle("Error loading info");
         } finally {
@@ -186,9 +197,11 @@ export default function MultiSkuSnBarcode({ layout = 'vertical' }: MultiSkuSnBar
 
         if (mode === 'print') {
             try {
-                await fetchNextUnitId(trimmed);
+                await fetchNextUnitId(trimmed, catalogIdHint);
             } catch (err) {
                 console.error("Failed to allocate unit id:", err);
+                const msg = err instanceof Error ? err.message : 'Failed to allocate unit id';
+                toast.error(`Can't print label: ${msg}`);
             }
         }
 
@@ -206,7 +219,7 @@ export default function MultiSkuSnBarcode({ layout = 'vertical' }: MultiSkuSnBar
         return () => window.removeEventListener('sku:fill', handler);
     }, [handleSkuFillAndSearch]);
 
-    const fetchProductInfo = async (skuValue: string) => {
+    const fetchProductInfo = async (skuValue: string): Promise<number | null> => {
         setIsLoadingTitle(true);
         try {
             const baseSku = skuValue.includes(':') ? skuValue.split(':')[0] : skuValue;
@@ -217,8 +230,12 @@ export default function MultiSkuSnBarcode({ layout = 'vertical' }: MultiSkuSnBar
             setCurrentLocation(data.location || "");
             setImageUrl(data.imageUrl || "");
             if (!location) setLocation(data.location || "");
+            const hint = typeof data.skuCatalogId === 'number' ? data.skuCatalogId : null;
+            setSkuCatalogId(hint);
+            return hint;
         } catch (e) {
             setTitle("Error loading info");
+            return null;
         } finally {
             setIsLoadingTitle(false);
         }
@@ -229,7 +246,7 @@ export default function MultiSkuSnBarcode({ layout = 'vertical' }: MultiSkuSnBar
             setError("SKU required");
             return;
         }
-        await fetchProductInfo(sku);
+        const catalogIdHint = await fetchProductInfo(sku);
 
         if (mode === 'reprint') {
             // Reprint exact same label value; no increment/current backend calls.
@@ -241,9 +258,11 @@ export default function MultiSkuSnBarcode({ layout = 'vertical' }: MultiSkuSnBar
         if (mode === 'print' && !uniqueSku) {
             setIsGenerating(true);
             try {
-                await fetchNextUnitId(sku);
+                await fetchNextUnitId(sku, catalogIdHint);
             } catch (err) {
                 console.error("Failed to allocate unit id:", err);
+                const msg = err instanceof Error ? err.message : 'Failed to allocate unit id';
+                toast.error(`Can't print label: ${msg}`);
             } finally {
                 setIsGenerating(false);
             }
@@ -271,9 +290,11 @@ export default function MultiSkuSnBarcode({ layout = 'vertical' }: MultiSkuSnBar
             if (!uniqueSku) {
                 setIsGenerating(true);
                 try {
-                    await fetchNextUnitId(sku);
+                    await fetchNextUnitId(sku, skuCatalogId);
                 } catch (err) {
                     console.error('Failed to allocate unit id:', err);
+                    const msg = err instanceof Error ? err.message : 'Failed to generate unit id';
+                    toast.error(`Can't print label: ${msg}`);
                     setError("Failed to generate unit id");
                     return;
                 } finally {
@@ -300,6 +321,7 @@ export default function MultiSkuSnBarcode({ layout = 'vertical' }: MultiSkuSnBar
         setSnInput("");
         setSerialNumbers([]);
         setImageUrl("");
+        setSkuCatalogId(null);
         setStep(1);
         setError("");
         setTimeout(() => skuInputRef.current?.focus(), 100);
@@ -416,9 +438,11 @@ export default function MultiSkuSnBarcode({ layout = 'vertical' }: MultiSkuSnBar
                 // print again immediately. fn_next_unit_seq increments
                 // per-(sku, year), so each call returns a fresh value.
                 try {
-                    await fetchNextUnitId(sku);
+                    await fetchNextUnitId(sku, skuCatalogId);
                 } catch (err) {
                     console.error("Failed to allocate next unit id:", err);
+                    const msg = err instanceof Error ? err.message : 'Failed to allocate next unit id';
+                    toast.error(`Couldn't queue next label: ${msg}`);
                 }
             }
 
@@ -954,11 +978,6 @@ function SerialScanCard({
         snInputRef.current?.focus();
     };
 
-    const conditionOptions: ViewDropdownOption<ConditionGrade>[] = CONDITION_OPTIONS.map((o) => ({
-        value: o.value,
-        label: o.label,
-    }));
-
     return (
         <section className="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-gray-200/60">
             <div className="mb-3 flex items-center justify-between">
@@ -1036,13 +1055,22 @@ function SerialScanCard({
                 <label className="mb-2 block text-xs font-semibold uppercase tracking-[0.14em] text-gray-500">
                     Condition
                 </label>
-                <ViewDropdown<ConditionGrade>
-                    options={conditionOptions}
-                    value={condition}
-                    onChange={onConditionChange}
-                    variant="boxy"
-                    buttonClassName="h-11 w-full rounded-xl border border-gray-200 bg-white px-4 pr-10 text-left text-sm font-semibold text-gray-900 outline-none transition-colors hover:bg-gray-50"
-                />
+                <div className="flex flex-wrap gap-1.5">
+                    {CONDITION_OPTIONS.map((opt) => (
+                        <button
+                            key={opt.value}
+                            type="button"
+                            onClick={() => onConditionChange(opt.value)}
+                            className={`rounded-xl px-3 py-1.5 text-[10px] font-black uppercase tracking-wider transition-all ${
+                                condition === opt.value
+                                    ? 'bg-gray-900 text-white'
+                                    : 'border border-gray-200 bg-white text-gray-600 hover:border-gray-300'
+                            }`}
+                        >
+                            {opt.label}
+                        </button>
+                    ))}
+                </div>
             </div>
         </section>
     );
@@ -1135,7 +1163,12 @@ function PreviewCardModern({
                         ) : null}
                     </div>
                     <div className="flex h-[160px] w-[160px] shrink-0 items-center justify-center rounded-lg bg-white p-2 ring-1 ring-gray-200">
-                        <canvas ref={barcodeCanvasRef} className="h-full w-full" />
+                        <canvas
+                            ref={barcodeCanvasRef}
+                            width={200}
+                            height={200}
+                            className="h-full w-full"
+                        />
                     </div>
                 </div>
             ) : (

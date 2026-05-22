@@ -1,0 +1,92 @@
+/**
+ * GET /api/cron/zoho/po-sync?mode=delta|full
+ *
+ * Vercel-cron-triggered sync of Zoho purchase orders into the
+ * zoho_po_mirror table. This mirror exists purely so the PO email
+ * reconciler can answer "does Zoho know about this PO?". It does NOT
+ * write to receiving_lines or any operator-facing table — the receiving
+ * workflow is owned by webhooks + manual scans, not by this cron.
+ *
+ * Modes:
+ *   - delta: passes last_modified_time so Zoho returns only changed POs
+ *   - full:  no filter; brings everything (nightly safety net)
+ *
+ * Auth: requires Authorization: Bearer ${CRON_SECRET}. Vercel injects
+ * this header automatically when CRON_SECRET env var is set in the
+ * project. We hard-require the secret in every environment.
+ */
+
+import { NextRequest, NextResponse } from 'next/server';
+import pool from '@/lib/db';
+import { syncZohoPoMirror } from '@/lib/zoho/po-mirror-sync';
+import { getSyncCursor, updateSyncCursor } from '@/lib/sync-cursors';
+import { formatApiOffsetTimestamp } from '@/utils/date';
+
+export const dynamic = 'force-dynamic';
+export const maxDuration = 300;
+
+const CURSOR_KEY = 'zoho_po_mirror';
+
+function isAuthorized(req: NextRequest): boolean {
+  const secret = process.env.CRON_SECRET;
+  if (!secret) return false;
+  return req.headers.get('authorization') === `Bearer ${secret}`;
+}
+
+export async function GET(req: NextRequest) {
+  if (!isAuthorized(req)) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
+  const startedAt = Date.now();
+  const url = new URL(req.url);
+  const mode = url.searchParams.get('mode') === 'full' ? 'full' : 'delta';
+
+  // Delta cursor — last successful sync time. First run bootstraps from
+  // 7 days back to keep the initial pull bounded.
+  let lastModified: string | undefined = undefined;
+  if (mode === 'delta') {
+    const cursor = await getSyncCursor(CURSOR_KEY);
+    const start = cursor ?? new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+    lastModified = formatApiOffsetTimestamp(start);
+  }
+
+  const report = await syncZohoPoMirror({
+    mode,
+    lastModifiedTime: lastModified,
+    maxPages: 200,
+    maxItems: 20000,
+  });
+
+  // Advance cursor on a successful run, even if zero changes.
+  if (report.errors.length === 0) {
+    await updateSyncCursor(CURSOR_KEY, new Date());
+  }
+
+  // Auto-resolve worklist rows whose PO has since landed in the mirror.
+  const resolved = await pool.query(
+    `UPDATE email_missing_orders e
+        SET status      = 'resolved',
+            resolved_at = NOW()
+      WHERE e.status = 'pending'
+        AND EXISTS (
+          SELECT 1
+            FROM zoho_po_mirror m
+           WHERE m.zoho_purchaseorder_number_norm = ANY(e.po_numbers_norm)
+        )`,
+  );
+
+  return NextResponse.json({
+    ok: report.errors.length === 0,
+    mode,
+    cursor: { resource: CURSOR_KEY, last_modified_time: lastModified ?? null },
+    totals: {
+      pages: report.pages,
+      fetched: report.fetched,
+      upserted: report.upserted,
+    },
+    autoResolved: resolved.rowCount ?? 0,
+    errors: report.errors.slice(0, 25),
+    elapsedMs: Date.now() - startedAt,
+  });
+}

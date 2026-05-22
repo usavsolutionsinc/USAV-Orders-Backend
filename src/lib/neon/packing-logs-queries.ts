@@ -1,5 +1,6 @@
 import pool from '../db';
 import { resolveShipmentId } from '../shipping/resolve';
+import { mirrorLegacyPackToAllocations } from '@/lib/inventory/sync-legacy-pack';
 
 export interface PackingLog {
   id: number;
@@ -119,7 +120,15 @@ export async function createPackingLog(params: CreatePackingLogParams): Promise<
       params.notes ?? null,
     ],
   );
-  return result.rows[0];
+  const created = result.rows[0];
+  if (created?.id) {
+    await mirrorLegacyPackToAllocations({
+      packerLogId: created.id,
+      shipmentId: created.shipment_id ?? shipmentId,
+      actorStaffId: params.packedBy ?? null,
+    });
+  }
+  return created;
 }
 
 /**

@@ -12,8 +12,8 @@ import { useLabelRecents } from '@/hooks/useLabelRecents';
 import { sectionLabel } from '@/design-system/tokens/typography/presets';
 
 const VIEW_ITEMS: HorizontalSliderItem[] = [
-  { id: 'catalog', label: 'Catalog', tone: 'zinc' },
-  { id: 'labels',  label: 'Label Printer', tone: 'blue' },
+  { id: 'catalog', label: 'Catalog' },
+  { id: 'labels',  label: 'Label Printer' },
 ];
 
 type View = 'catalog' | 'labels';
@@ -87,7 +87,19 @@ export function ProductsSidebarPanel() {
 
   return (
     <div className="flex h-full flex-col overflow-hidden bg-white">
-      <div className={`${sidebarHeaderBandClass} ${sidebarHeaderRowClass}`}>
+      {/* View toggle — Catalog vs Label Printer. Matches the global sidebar
+          pill language used by ReceivingSidebarPanel (variant="nav"). */}
+      <div className={`${sidebarHeaderBandClass} px-3`}>
+        <HorizontalButtonSlider
+          items={VIEW_ITEMS}
+          value={view}
+          onChange={handleViewChange}
+          variant="nav"
+          aria-label="Products view"
+        />
+      </div>
+
+      <div className={sidebarHeaderRowClass}>
         <SearchBar
           value={searchInput}
           onChange={handleSearchChange}
@@ -95,18 +107,6 @@ export function ProductsSidebarPanel() {
           placeholder={isLabels ? 'Scan a SKU…' : 'Search products…'}
           variant={isLabels ? 'blue' : 'gray'}
           size="compact"
-        />
-      </div>
-
-      {/* View toggle — Catalog vs Label Printer */}
-      <div className="shrink-0 border-b border-gray-200 bg-white px-3 py-1.5">
-        <HorizontalButtonSlider
-          items={VIEW_ITEMS}
-          value={view}
-          onChange={handleViewChange}
-          variant="fba"
-          size="md"
-          aria-label="Products view"
         />
       </div>
 

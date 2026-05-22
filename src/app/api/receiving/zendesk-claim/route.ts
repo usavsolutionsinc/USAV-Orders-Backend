@@ -1,25 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server';
-import pool from '@/lib/db';
 import { ApiError, errorResponse } from '@/lib/api';
 import { withAuth } from '@/lib/auth/withAuth';
+import {
+  buildReceivingClaimTemplate,
+  CLAIM_SEVERITY_LABEL,
+  CLAIM_TYPE_LABEL,
+  type ClaimSeverity,
+  type ClaimType,
+} from '@/lib/zendesk-claim-template';
 
 export const dynamic = 'force-dynamic';
-
-type ClaimType = 'damage' | 'missing' | 'wrong_item' | 'vendor_defect';
-type ClaimSeverity = 'low' | 'medium' | 'high';
-
-const CLAIM_TYPE_LABEL: Record<ClaimType, string> = {
-  damage: 'Damage',
-  missing: 'Missing item',
-  wrong_item: 'Wrong item',
-  vendor_defect: 'Vendor defect',
-};
-
-const SEVERITY_LABEL: Record<ClaimSeverity, string> = {
-  low: 'Low',
-  medium: 'Medium',
-  high: 'High',
-};
 
 interface ClaimRequest {
   receivingId: number;
@@ -27,6 +17,10 @@ interface ClaimRequest {
   claimType: ClaimType;
   severity: ClaimSeverity;
   reason?: string;
+  /** Operator-edited subject. When omitted, the server builds from template. */
+  subject?: string;
+  /** Operator-edited body. When omitted, the server builds from template. */
+  description?: string;
 }
 
 /**
@@ -35,12 +29,9 @@ interface ClaimRequest {
  * powering `createZendeskTicket` in src/lib/zendesk.ts) so we share the
  * same email-relay infrastructure as the repair flow.
  *
- * Photo URLs are inlined into the description body as links (the GAS
- * bridge does not currently parse attachments; a future iteration can
- * extend it to inline images via MIME).
- *
- * On success, returns the ticket number which the client uses to auto-fill
- * the existing `zendesk_ticket` field on the receiving line.
+ * If the operator edited the subject/body in the modal, those values are
+ * sent verbatim. Otherwise the template builder fills them from PO/tracking/
+ * photos/line context.
  */
 export const POST = withAuth(async (req: NextRequest) => {
   try {
@@ -57,104 +48,33 @@ export const POST = withAuth(async (req: NextRequest) => {
       throw ApiError.badRequest('Invalid claimType');
     }
     const severity = body.severity ?? 'medium';
-    if (!(severity in SEVERITY_LABEL)) {
+    if (!(severity in CLAIM_SEVERITY_LABEL)) {
       throw ApiError.badRequest('Invalid severity');
     }
     const lineId = body.lineId != null ? Number(body.lineId) : null;
-    const reason = String(body.reason ?? '').trim();
 
-    // Load carton + (optional) line for ticket context. zoho_purchaseorder_id
-    // / _number live directly on receiving_lines (preferred — matches the
-    // specific line being claimed against) with a fallback to the carton-level
-    // value on `receiving` for carton-wide claims.
-    const recvResult = await pool.query(
-      `SELECT r.id,
-              r.source_platform,
-              s.tracking_number_raw AS tracking_number,
-              COALESCE(rl.zoho_purchaseorder_number, r.zoho_purchaseorder_number) AS zoho_purchaseorder_number,
-              COALESCE(rl.zoho_purchaseorder_id, r.zoho_purchaseorder_id) AS zoho_purchaseorder_id
-       FROM receiving r
-       LEFT JOIN shipping_tracking_numbers s ON s.id = r.shipment_id
-       LEFT JOIN receiving_lines rl
-              ON rl.receiving_id = r.id
-             AND ($2::int IS NULL OR rl.id = $2)
-       WHERE r.id = $1
-       ORDER BY rl.id NULLS LAST
-       LIMIT 1`,
-      [receivingId, lineId],
-    );
-    const carton = recvResult.rows[0] as {
-      id: number;
-      source_platform: string | null;
-      tracking_number: string | null;
-      zoho_purchaseorder_number: string | null;
-      zoho_purchaseorder_id: string | null;
-    } | undefined;
-    if (!carton) throw ApiError.notFound('Receiving not found');
+    const editedSubject = typeof body.subject === 'string' ? body.subject.trim() : '';
+    const editedDescription = typeof body.description === 'string' ? body.description.trim() : '';
 
-    let lineSummary = '';
-    if (lineId) {
-      const lineResult = await pool.query(
-        `SELECT item_name, sku, quantity_received, quantity_expected, condition_grade
-         FROM receiving_lines WHERE id = $1 LIMIT 1`,
-        [lineId],
-      );
-      const line = lineResult.rows[0] as {
-        item_name: string | null;
-        sku: string | null;
-        quantity_received: number;
-        quantity_expected: number | null;
-        condition_grade: string | null;
-      } | undefined;
-      if (line) {
-        const title = line.item_name || line.sku || `Line #${lineId}`;
-        const qty = line.quantity_expected != null
-          ? `${line.quantity_received}/${line.quantity_expected}`
-          : `${line.quantity_received}`;
-        lineSummary = `Item: ${title} · qty ${qty} · condition ${line.condition_grade || 'PENDING'}`;
-      }
-    }
-
-    // Photo URLs — included in the body as links (no attachment yet).
-    const photoResult = await pool.query(
-      `SELECT url FROM photos
-       WHERE entity_type = 'RECEIVING' AND entity_id = $1
-       ORDER BY created_at ASC`,
-      [receivingId],
-    );
-    const photoUrls = (photoResult.rows as Array<{ url: string | null }>)
-      .map((p) => String(p.url || ''))
-      .filter((u) => !!u.trim());
-
-    const poRef = carton.zoho_purchaseorder_number || carton.zoho_purchaseorder_id || `#${receivingId}`;
-    const trackingRef = carton.tracking_number || 'n/a';
-
-    const platformTag = (carton.source_platform || '').trim().toUpperCase() || 'USAV';
-    const subject = `[${platformTag}] Receiving Claim — ${CLAIM_TYPE_LABEL[claimType]} — PO ${poRef}`;
-    const descriptionLines: string[] = [
-      `Type: ${CLAIM_TYPE_LABEL[claimType]}`,
-      `Severity: ${SEVERITY_LABEL[severity]}`,
-      `PO: ${poRef}`,
-      `Tracking: ${trackingRef}`,
-      lineSummary ? lineSummary : `Carton-wide claim (no specific line)`,
-      '',
-    ];
-    if (reason) {
-      descriptionLines.push('Receiving Notes:', reason, '');
-    }
-    if (photoUrls.length > 0) {
-      descriptionLines.push(`Photos attached (${photoUrls.length}):`);
-      photoUrls.forEach((url) => descriptionLines.push(`- ${url}`));
+    let subject: string;
+    let description: string;
+    if (editedSubject && editedDescription) {
+      subject = editedSubject;
+      description = editedDescription;
     } else {
-      descriptionLines.push('Photos: (none uploaded yet)');
+      const template = await buildReceivingClaimTemplate({
+        receivingId,
+        lineId,
+        claimType,
+        severity,
+        reason: body.reason,
+      });
+      subject = editedSubject || template.subject;
+      description = editedDescription || template.description;
     }
 
-    const description = descriptionLines.join('\n');
-
-    // Submit to the GAS bridge (same Web App used by createZendeskTicket).
     const gasUrl = process.env.ZendeskTicketMailer_GAS_WebappURL;
     if (!gasUrl) {
-      // No bridge configured — return draft body so client can copy-paste.
       return NextResponse.json({
         success: false,
         error: 'Zendesk bridge not configured',
@@ -165,9 +85,6 @@ export const POST = withAuth(async (req: NextRequest) => {
     const payload = {
       subject,
       description,
-      // GAS expects customerName/customerEmail; for receiving claims there's
-      // no end-customer — populate with a sentinel so the email is filed
-      // under the receiving operator's name.
       customerName: 'USAV Receiving',
       customerEmail: '',
     };
@@ -194,10 +111,6 @@ export const POST = withAuth(async (req: NextRequest) => {
           draftBody: description,
         }, { status: 502 });
       }
-      // The GAS bridge cannot reliably return a Zendesk ticket number (the
-      // Apps Script side mails the ticket and exits without parsing Zendesk's
-      // response). Treat ok:true as success regardless — the operator can
-      // paste the ticket # back manually via the Support FlowSection.
       const raw =
         result.ticketNumber ?? result.ticket_number ?? result.ticketId ?? result.ticket_id ?? result.id;
       ticketNumber = raw == null

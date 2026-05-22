@@ -23,6 +23,7 @@ import { ProductsSidebarPanel } from '@/components/sidebar/ProductsSidebarPanel'
 import { TechSidebarPanel } from '@/components/sidebar/TechSidebarPanel';
 import { PackerSidebarPanel } from '@/components/sidebar/PackerSidebarPanel';
 import { ReceivingSidebarPanel } from '@/components/sidebar/ReceivingSidebarPanel';
+import { InventorySidebarPanel } from '@/components/sidebar/InventorySidebarPanel';
 import { FbaSidebarPanel } from '@/components/fba/sidebar';
 import { SupportSidebarPanel } from '@/components/sidebar/SupportSidebarPanel';
 import { SettingsSidebarPanel } from '@/components/sidebar/SettingsSidebarPanel';
@@ -391,11 +392,12 @@ function SidebarContextPanel({ onBackToAppNav }: { onBackToAppNav?: () => void }
   if (routeKey === 'fba') return <FbaSidebarPanel />;
   if (routeKey === 'work-orders') return <WorkOrdersSidebarPanel />;
   if (routeKey === 'replenish') return <ReplenishSidebarPanel />;
-  // /inventory owns its own header search + filter chips inside
-  // <InventoryV2Shell>, so the desktop sidebar slot stays empty here.
-  // /products is the same shape (its toolbar lives in <ProductsShell>) —
-  // no branch needed; the function falls through to `return null` below.
-  if (routeKey === 'inventory') return null;
+  // /inventory's main shell owns its own header search + filter chips, but
+  // we still mount a small sidebar panel here so the section nav pills
+  // (Inventory ↔ PO Mailbox) live in the standard sidebar slot like every
+  // other section. /products falls through to `return null` below since
+  // its toolbar lives entirely in <ProductsShell>.
+  if (routeKey === 'inventory') return <InventorySidebarPanel />;
   if (routeKey === 'products') return <ProductsSidebarPanel />;
   if (routeKey === 'warehouse') return <WarehouseSidebarPanel />;
   if (routeKey === 'walk-in') return <WalkInSidebarPanel embedded hideSectionHeader />;

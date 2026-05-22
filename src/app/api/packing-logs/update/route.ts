@@ -8,6 +8,7 @@ import { createStationActivityLog } from '@/lib/station-activity';
 import { createAuditLog } from '@/lib/audit-logs';
 import { publishStockLedgerEvent } from '@/lib/realtime/publish';
 import { withAuth } from '@/lib/auth/withAuth';
+import { mirrorLegacyPackToAllocations } from '@/lib/inventory/sync-legacy-pack';
 
 const LEGACY_PACKER_ALIAS_TO_STAFF_ID: Record<string, number> = {
   '1': 4,
@@ -150,6 +151,14 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
 
       const packerLogId = insertResult.rows[0]?.id;
       console.log('Inserted into packer_logs, ID:', packerLogId);
+
+      if (packerLogId) {
+        await mirrorLegacyPackToAllocations({
+          packerLogId,
+          shipmentId: resolvedShipmentId ?? null,
+          actorStaffId: staffId,
+        });
+      }
 
       const salId = await createStationActivityLog(client, {
         organizationId: ctx.organizationId,

@@ -4,7 +4,7 @@ import { logRouteMetric } from '@/lib/route-metrics';
 import { normalizeShippedSearchField } from '@/lib/shipped-search';
 import { withAuth } from '@/lib/auth/withAuth';
 
-export const GET = withAuth(async (req: NextRequest) => {
+export const GET = withAuth(async (req: NextRequest, ctx) => {
     const startedAt = Date.now();
     let ok = false;
     try {
@@ -16,7 +16,10 @@ export const GET = withAuth(async (req: NextRequest) => {
             return NextResponse.json({ error: 'Search query is required' }, { status: 400 });
         }
 
-        const { rows: results, debug } = await searchShippedOrders(query, { searchField });
+        const { rows: results, debug } = await searchShippedOrders(query, {
+            searchField,
+            organizationId: ctx.organizationId,
+        });
         ok = true;
 
         return NextResponse.json(
@@ -49,7 +52,7 @@ export const GET = withAuth(async (req: NextRequest) => {
 }, { permission: 'shipping.view' });
 
 // POST endpoint to save search history
-export const POST = withAuth(async (req: NextRequest) => {
+export const POST = withAuth(async (req: NextRequest, ctx) => {
     const startedAt = Date.now();
     let ok = false;
     try {

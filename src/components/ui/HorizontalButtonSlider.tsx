@@ -78,13 +78,15 @@ export type HorizontalButtonSliderProps = {
   onChange: (id: string) => void;
   /**
    * Active-state visual language:
-   *   - `fba`   — ring pills with per-item tone (FBA filter rows).
-   *   - `slate` — dark pill when active (work-order status).
-   *   - `nav`   — filled blue active state matching the global sidebar nav
-   *               (sub-view switchers inside sidebar panels). Adds a subtle
-   *               scale-up on the active pill so the eye locks onto it.
+   *   - `fba`      — ring pills with per-item tone (FBA filter rows).
+   *   - `slate`    — dark pill when active (work-order status).
+   *   - `nav`      — filled blue active state matching the global sidebar nav
+   *                  (sub-view switchers inside sidebar panels). Adds a subtle
+   *                  scale-up on the active pill so the eye locks onto it.
+   *   - `floating` — borderless white pills with drop shadows that look like
+   *                  Google Maps filter chips floating over content.
    */
-  variant?: 'fba' | 'slate' | 'nav';
+  variant?: 'fba' | 'slate' | 'nav' | 'floating';
   size?: 'md' | 'lg';
   className?: string;
   legend?: string;
@@ -109,12 +111,18 @@ export function HorizontalButtonSlider({
       ? 'min-h-10 px-3.5 py-2 text-[10px] tracking-wide'
       : 'h-8 px-3 text-[9px] tracking-wide';
 
-  // The `nav` variant uses a noticeable scale-up + shadow on the active pill;
-  // both of those would be clipped by `overflow-x-auto` (browsers treat any
-  // horizontal-scroll container as clipping the Y axis too, regardless of
-  // overflow-y). So we give the scroller vertical breathing room — pills sit
-  // INSIDE the scrollbox so their full render fits.
+  // The `nav` variant uses scale-up + shadow on the active pill; the
+  // overflow-x-auto would clip those on the Y axis too (browser quirk),
+  // so we give the scroller vertical breathing room.
   const scrollerPadY = variant === 'nav' ? 'py-2' : 'pb-0.5';
+
+  // `floating` pills always fit on a phone — skip the scroller entirely so
+  // the pill drop shadows aren't clipped by overflow-x-auto's implicit
+  // y-clip. Gives shadows a visible vertical bleed area instead.
+  const useScroller = variant !== 'floating';
+  const containerClass = useScroller
+    ? `-mx-1 overflow-x-auto overscroll-x-contain ${scrollerPadY} [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden`
+    : 'overflow-visible py-2';
 
   return (
     <div className={className}>
@@ -127,10 +135,16 @@ export function HorizontalButtonSlider({
         ref={scrollerRef}
         role="tablist"
         aria-label={ariaLabel || legend || 'Filter'}
-        onWheel={onWheel}
-        className={`-mx-1 overflow-x-auto overscroll-x-contain ${scrollerPadY} [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden`}
+        onWheel={useScroller ? onWheel : undefined}
+        className={containerClass}
       >
-        <div className="flex min-w-max snap-x snap-mandatory gap-2 px-1">
+        <div
+          className={
+            useScroller
+              ? 'flex min-w-max snap-x snap-mandatory gap-2 px-1'
+              : 'flex flex-wrap gap-2'
+          }
+        >
           {items.map((item) => {
             const isActive = value === item.id;
             if (variant === 'nav') {
@@ -174,6 +188,35 @@ export function HorizontalButtonSlider({
                       }`}
                       aria-hidden
                     />
+                  ) : null}
+                </motion.button>
+              );
+            }
+
+            if (variant === 'floating') {
+              const Icon = item.icon;
+              const stateClass = isActive
+                ? 'bg-blue-600 text-white shadow-[0_2px_8px_rgba(37,99,235,0.35)]'
+                : 'bg-white text-gray-700 shadow-[0_1px_4px_rgba(15,23,42,0.14)] hover:bg-gray-50';
+              return (
+                <motion.button
+                  key={item.id}
+                  type="button"
+                  role="tab"
+                  aria-selected={isActive}
+                  aria-label={item.label}
+                  animate={{ scale: isActive ? 1.04 : 1 }}
+                  transition={{ type: 'spring', stiffness: 380, damping: 28, mass: 0.6 }}
+                  whileTap={{ scale: 0.96 }}
+                  onClick={() => onChange(item.id)}
+                  className={`group relative inline-flex snap-start items-center whitespace-nowrap rounded-full font-black uppercase transition-colors ${sizeCls} ${stateClass}`}
+                >
+                  {Icon ? <Icon className="h-3.5 w-3.5 shrink-0" /> : null}
+                  <span className={`inline-block whitespace-nowrap ${Icon ? 'ml-1.5' : ''} max-w-[160px]`}>
+                    {item.label}
+                  </span>
+                  {item.count != null && item.count > 0 ? (
+                    <span className={`ml-1.5 shrink-0 tabular-nums ${isActive ? 'opacity-90' : 'opacity-70'}`}>{item.count}</span>
                   ) : null}
                 </motion.button>
               );

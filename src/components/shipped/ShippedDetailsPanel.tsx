@@ -21,6 +21,8 @@ import { getPresentStaffForToday, type StaffMember } from '@/lib/staffCache';
 import { WorkOrderAssignmentCard, type AssignmentConfirmPayload } from '@/components/work-orders/WorkOrderAssignmentCard';
 import type { WorkOrderRow } from '@/components/work-orders/types';
 import { sectionLabel, microBadge } from '@/design-system/tokens/typography/presets';
+import { SkuIdentity } from '@/components/inventory/SkuIdentity';
+import { useSkuIdentity } from '@/hooks/useSkuIdentity';
 
 interface ShippedDetailsPanelProps {
   shipped: ShippedOrder;
@@ -101,6 +103,7 @@ export function ShippedDetailsPanel({
     : hasOutOfStock
       ? 'bg-red-500'
       : 'bg-yellow-400';
+  const skuIdentity = useSkuIdentity(shipped.sku, shipped.account_source);
   const fieldSave = useOrderFieldSave({
     orderId: shipped.id,
     initialOrderNumber: initialShipped.order_id || '',
@@ -319,6 +322,19 @@ export function ShippedDetailsPanel({
 
       <div className="flex-1 overflow-y-auto no-scrollbar">
         <div className="pb-8 pt-4 space-y-4">
+          {shipped.sku && (
+            <section className="mx-8 rounded-2xl border border-gray-200 bg-white px-4 py-3">
+              {skuIdentity.loading ? (
+                <div className="h-16 animate-pulse rounded-lg bg-slate-100" />
+              ) : (
+                <SkuIdentity
+                  canonicalSku={skuIdentity.canonicalSku || shipped.sku}
+                  productTitle={skuIdentity.productTitle || shipped.product_title}
+                  platforms={skuIdentity.platforms}
+                />
+              )}
+            </section>
+          )}
           {context === 'dashboard' || context === 'queue' ? (
             <DashboardDetailsStack
               shipped={shipped}

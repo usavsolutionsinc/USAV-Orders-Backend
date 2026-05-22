@@ -1,7 +1,7 @@
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import QRCode from 'react-qr-code';
-import { QR_BASE_URL, mobileQrUrl } from '@/lib/barcode-routing';
+import { QR_BASE_URL, PUBLIC_UNIT_QR_BASE_URL, mobileQrUrl } from '@/lib/barcode-routing';
 import { buildGs1UnitUrl } from '@/lib/scan-resolver';
 import { printHtmlSilent } from '@/lib/print/silentPrint';
 
@@ -39,7 +39,10 @@ function buildUnitQrValue(args: {
 }): string {
   if (args.qrPayload && args.qrPayload.trim()) return args.qrPayload.trim();
   if (args.gtin && args.serialNumber) {
-    return buildGs1UnitUrl(QR_BASE_URL, args.gtin, args.serialNumber);
+    // Anchor unit QR to the public storefront so external phone-camera scans
+    // land there. The in-app scanner is host-agnostic and parses the GS1
+    // path regardless of origin.
+    return buildGs1UnitUrl(PUBLIC_UNIT_QR_BASE_URL, args.gtin, args.serialNumber);
   }
   if (args.serialNumber) return mobileQrUrl('u', args.serialNumber);
   const path = `/inventory/sku/${encodeURIComponent(args.sku)}`;
@@ -78,7 +81,9 @@ function buildLabelHtml(args: {
     React.createElement(QRCode, {
       value: qrPayload,
       size: 160,
-      level: 'M',
+      // ECC 'Q' (25%) survives smudging/abrasion typical in warehouse use —
+      // GS1 best practice for serialized industrial labels.
+      level: 'Q',
       fgColor: '#000000',
       bgColor: '#ffffff',
     }),

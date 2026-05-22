@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from '@/lib/toast';
 import { Loader2, X } from '@/components/Icons';
@@ -10,6 +10,7 @@ import {
   type ClaimType,
   type ClaimSeverity,
 } from '@/components/sidebar/receiving/receiving-sidebar-shared';
+import { HorizontalButtonSlider, type HorizontalSliderItem } from '@/components/ui/HorizontalButtonSlider';
 import type { ReceivingLineRow } from '@/components/station/ReceivingLinesTable';
 
 interface Props {
@@ -37,6 +38,79 @@ export function ReceivingClaimModal({ open, row, onClose, onTicketCreated }: Pro
   const [submitting, setSubmitting] = useState(false);
   const [draftBody, setDraftBody] = useState<string | null>(null);
 
+  // Editable ticket template — populated from the server preview endpoint so
+  // it reflects exactly what the GAS bridge will receive (PO #, tracking,
+  // photo URLs, line summary). The operator can edit either field before
+  // posting; once they touch it we stop overwriting from the preview.
+  const [subject, setSubject] = useState('');
+  const [description, setDescription] = useState('');
+  const [previewLoading, setPreviewLoading] = useState(false);
+  const subjectTouched = useRef(false);
+  const descriptionTouched = useRef(false);
+
+  // Reset transient state each time the modal opens so reopening on a
+  // different row doesn't show stale template text.
+  useEffect(() => {
+    if (!open) return;
+    setReason('');
+    setDraftBody(null);
+    setSubject('');
+    setDescription('');
+    subjectTouched.current = false;
+    descriptionTouched.current = false;
+  }, [open, row.receiving_id, row.id]);
+
+  // Fetch the server-rendered template whenever inputs change. Debounced so
+  // typing in "reason" doesn't hammer the endpoint.
+  useEffect(() => {
+    if (!open || !row.receiving_id) return;
+    const ctrl = new AbortController();
+    const handle = window.setTimeout(() => {
+      setPreviewLoading(true);
+      fetch('/api/receiving/zendesk-claim/preview', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          receivingId: row.receiving_id,
+          lineId: row.id,
+          claimType,
+          severity,
+          reason: reason.trim(),
+        }),
+        signal: ctrl.signal,
+      })
+        .then((r) => r.json().catch(() => null))
+        .then((data) => {
+          if (!data?.success) return;
+          if (!subjectTouched.current && typeof data.subject === 'string') {
+            setSubject(data.subject);
+          }
+          if (!descriptionTouched.current && typeof data.description === 'string') {
+            setDescription(data.description);
+          }
+        })
+        .catch((err) => {
+          if ((err as Error)?.name !== 'AbortError') {
+            // Preview is best-effort — operator can still type their own.
+          }
+        })
+        .finally(() => setPreviewLoading(false));
+    }, 250);
+    return () => {
+      ctrl.abort();
+      window.clearTimeout(handle);
+    };
+  }, [open, row.receiving_id, row.id, claimType, severity, reason]);
+
+  const claimTypeItems = useMemo<HorizontalSliderItem[]>(
+    () => CLAIM_TYPE_OPTIONS.map((opt) => ({ id: opt.value, label: opt.label })),
+    [],
+  );
+  const severityItems = useMemo<HorizontalSliderItem[]>(
+    () => CLAIM_SEVERITY_OPTIONS.map((opt) => ({ id: opt.value, label: opt.label })),
+    [],
+  );
+
   const submit = async () => {
     if (submitting || !row.receiving_id) return;
     setSubmitting(true);
@@ -51,18 +125,16 @@ export function ReceivingClaimModal({ open, row, onClose, onTicketCreated }: Pro
           claimType,
           severity,
           reason: reason.trim(),
+          subject: subject.trim(),
+          description: description.trim(),
         }),
       });
       const data = await res.json().catch(() => null);
       if (!res.ok || !data?.success) {
-        // Surface the fallback body so the operator can copy + paste into
-        // Zendesk manually, then paste the # back via the Support field.
         setDraftBody(data?.draftBody ?? null);
         toast.error(data?.error || 'Could not file the claim');
         return;
       }
-      // GAS bridge can't echo the ticket # back — treat null as a soft
-      // success and ask the operator to paste it back manually.
       if (data.ticketNumber) {
         toast.success(`Claim ${data.ticketNumber} created`);
         onTicketCreated(String(data.ticketNumber));
@@ -81,7 +153,6 @@ export function ReceivingClaimModal({ open, row, onClose, onTicketCreated }: Pro
     <AnimatePresence>
       {open ? (
         <>
-          {/* Full-viewport dim — covers the page sidebar too. */}
           <motion.div
             key="claim-backdrop"
             initial={{ opacity: 0 }}
@@ -90,10 +161,6 @@ export function ReceivingClaimModal({ open, row, onClose, onTicketCreated }: Pro
             className="fixed inset-0 z-[118] bg-gray-900/50 backdrop-blur-sm"
             onClick={onClose}
           />
-          {/* Dialog layer — absolute inset-0 anchors to the workspace
-              overlay (which fills the right-pane), so the dialog centers
-              over the receiving content, not the viewport. The container
-              passes clicks through; the dialog itself stops them. */}
           <motion.div
             key="claim-dialog"
             initial={{ opacity: 0, y: 8 }}
@@ -104,10 +171,10 @@ export function ReceivingClaimModal({ open, row, onClose, onTicketCreated }: Pro
           >
           <div
             onClick={(e) => e.stopPropagation()}
-            className="pointer-events-auto w-full max-w-md overflow-hidden rounded-2xl bg-white shadow-2xl ring-1 ring-gray-200"
+            className="pointer-events-auto flex max-h-[90vh] w-full max-w-2xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl ring-1 ring-gray-200"
           >
             {/* Header */}
-            <div className="flex items-center justify-between border-b border-gray-100 bg-gradient-to-r from-rose-50 to-amber-50 px-5 py-4">
+            <div className="flex shrink-0 items-center justify-between border-b border-gray-100 bg-gradient-to-r from-rose-50 to-amber-50 px-5 py-4">
               <div>
                 <p className="text-[10px] font-black uppercase tracking-[0.14em] text-rose-700">
                   File a claim
@@ -128,55 +195,33 @@ export function ReceivingClaimModal({ open, row, onClose, onTicketCreated }: Pro
             </div>
 
             {/* Body */}
-            <div className="space-y-4 px-5 py-4">
+            <div className="space-y-4 overflow-y-auto px-5 py-4">
               <div>
                 <p className="mb-1.5 text-[10px] font-black uppercase tracking-[0.14em] text-gray-500">
                   Claim type
                 </p>
-                <div role="radiogroup" aria-label="Claim type" className="flex flex-wrap gap-1.5">
-                  {CLAIM_TYPE_OPTIONS.map((opt) => {
-                    const isActive = claimType === opt.value;
-                    return (
-                      <button
-                        key={opt.value}
-                        type="button"
-                        role="radio"
-                        aria-checked={isActive}
-                        onClick={() => setClaimType(opt.value)}
-                        className={`inline-flex h-9 items-center rounded-lg px-3 text-[11px] font-black uppercase tracking-wider transition-all ${
-                          isActive ? opt.active : `${opt.inactive} hover:opacity-80`
-                        }`}
-                      >
-                        {opt.label}
-                      </button>
-                    );
-                  })}
-                </div>
+                <HorizontalButtonSlider
+                  items={claimTypeItems}
+                  value={claimType}
+                  onChange={(id) => setClaimType(id as ClaimType)}
+                  variant="slate"
+                  size="md"
+                  aria-label="Claim type"
+                />
               </div>
 
               <div>
                 <p className="mb-1.5 text-[10px] font-black uppercase tracking-[0.14em] text-gray-500">
                   Severity
                 </p>
-                <div role="radiogroup" aria-label="Severity" className="flex gap-1.5">
-                  {CLAIM_SEVERITY_OPTIONS.map((opt) => {
-                    const isActive = severity === opt.value;
-                    return (
-                      <button
-                        key={opt.value}
-                        type="button"
-                        role="radio"
-                        aria-checked={isActive}
-                        onClick={() => setSeverity(opt.value)}
-                        className={`inline-flex h-9 flex-1 items-center justify-center rounded-lg text-[11px] font-black uppercase tracking-wider transition-all ${
-                          isActive ? opt.active : `${opt.inactive} hover:opacity-80`
-                        }`}
-                      >
-                        {opt.label}
-                      </button>
-                    );
-                  })}
-                </div>
+                <HorizontalButtonSlider
+                  items={severityItems}
+                  value={severity}
+                  onChange={(id) => setSeverity(id as ClaimSeverity)}
+                  variant="slate"
+                  size="md"
+                  aria-label="Severity"
+                />
               </div>
 
               <div>
@@ -204,9 +249,68 @@ export function ReceivingClaimModal({ open, row, onClose, onTicketCreated }: Pro
                 />
               </div>
 
+              <div className="rounded-xl border border-gray-200 bg-gray-50/60 p-3">
+                <div className="mb-2 flex items-center justify-between">
+                  <p className="text-[10px] font-black uppercase tracking-[0.14em] text-gray-500">
+                    Ticket preview {previewLoading ? '(updating…)' : '(editable)'}
+                  </p>
+                  {(subjectTouched.current || descriptionTouched.current) ? (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        subjectTouched.current = false;
+                        descriptionTouched.current = false;
+                        // Nudge the preview effect to re-run with current inputs.
+                        setReason((r) => r);
+                      }}
+                      className="text-[10px] font-bold uppercase tracking-wider text-gray-500 hover:text-gray-900"
+                    >
+                      Reset to template
+                    </button>
+                  ) : null}
+                </div>
+
+                <label
+                  htmlFor="claim-subject"
+                  className="mb-1 block text-[9px] font-black uppercase tracking-[0.14em] text-gray-400"
+                >
+                  Subject
+                </label>
+                <input
+                  id="claim-subject"
+                  type="text"
+                  value={subject}
+                  onChange={(e) => {
+                    subjectTouched.current = true;
+                    setSubject(e.target.value);
+                  }}
+                  placeholder={previewLoading ? 'Generating…' : 'Subject'}
+                  className="mb-3 block w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-[12px] font-semibold text-gray-900 outline-none focus:border-rose-500 focus:ring-2 focus:ring-rose-500/20"
+                />
+
+                <label
+                  htmlFor="claim-body"
+                  className="mb-1 block text-[9px] font-black uppercase tracking-[0.14em] text-gray-400"
+                >
+                  Body
+                </label>
+                <textarea
+                  id="claim-body"
+                  value={description}
+                  onChange={(e) => {
+                    descriptionTouched.current = true;
+                    setDescription(e.target.value);
+                  }}
+                  rows={10}
+                  placeholder={previewLoading ? 'Generating…' : 'Ticket body'}
+                  className="block w-full resize-y rounded-lg border border-gray-200 bg-white px-3 py-2 font-mono text-[11px] leading-snug text-gray-900 outline-none focus:border-rose-500 focus:ring-2 focus:ring-rose-500/20"
+                />
+              </div>
+
               <p className="text-[10px] font-semibold leading-snug text-gray-500">
-                Photos already uploaded to this carton will be linked in the ticket body.
-                A ticket # will be filed back into the Support section automatically.
+                The template auto-fills from PO, tracking, photos, and the active line. Edit either
+                field above before posting. A ticket # will be filed back into the Support section
+                automatically.
               </p>
 
               {draftBody ? (
@@ -237,7 +341,7 @@ export function ReceivingClaimModal({ open, row, onClose, onTicketCreated }: Pro
             </div>
 
             {/* Footer */}
-            <div className="flex items-center justify-end gap-2 border-t border-gray-100 bg-gray-50 px-5 py-3">
+            <div className="flex shrink-0 items-center justify-end gap-2 border-t border-gray-100 bg-gray-50 px-5 py-3">
               <button
                 type="button"
                 onClick={onClose}
@@ -249,7 +353,7 @@ export function ReceivingClaimModal({ open, row, onClose, onTicketCreated }: Pro
               <button
                 type="button"
                 onClick={submit}
-                disabled={submitting || !row.receiving_id}
+                disabled={submitting || !row.receiving_id || !subject.trim() || !description.trim()}
                 className="inline-flex h-10 items-center gap-1.5 rounded-xl bg-rose-600 px-4 text-[11px] font-black uppercase tracking-widest text-white shadow-sm transition-colors hover:bg-rose-700 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : null}

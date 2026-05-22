@@ -33,6 +33,7 @@ import {
   ShortPickSheet,
   type ShortPickResult,
 } from '@/components/mobile/picker/ShortPickSheet';
+import { SkuIdentity, type SkuPlatformMapping } from '@/components/inventory/SkuIdentity';
 import {
   framerPresenceMobile,
   framerTransitionMobile,
@@ -50,6 +51,7 @@ interface PickTask {
   conditionGrade: string | null;
   plannedQty: number;
   currentState: string;
+  platforms: SkuPlatformMapping[];
 }
 
 interface PickOrder {
@@ -338,12 +340,14 @@ function PickerInner() {
                 {currentTask.bin ?? '—'}
               </p>
 
-              {/* Product title + qty + condition */}
+              {/* Product identity — canonical SKU primary, platform mappings beneath */}
               <div className="mt-4">
-                <h2 className="text-base font-semibold leading-snug text-slate-900">
-                  {currentTask.productTitle ?? currentTask.sku}
-                </h2>
-                <div className="mt-2 flex flex-wrap items-center gap-2">
+                <SkuIdentity
+                  canonicalSku={currentTask.sku}
+                  productTitle={currentTask.productTitle}
+                  platforms={currentTask.platforms}
+                />
+                <div className="mt-3 flex flex-wrap items-center gap-2">
                   <span className="inline-flex items-center rounded-xl border border-slate-200 bg-slate-50 px-3 py-1 text-sm font-bold tabular-nums text-slate-800">
                     Qty {currentTask.plannedQty}
                   </span>
@@ -381,8 +385,8 @@ function PickerInner() {
                     className="mt-2 grid grid-cols-2 gap-2 overflow-hidden text-xs"
                   >
                     <div className="rounded-xl bg-slate-50 px-3 py-2">
-                      <dt className="font-semibold uppercase tracking-wider text-slate-500">SKU</dt>
-                      <dd className="mt-0.5 font-mono font-bold text-slate-900">{currentTask.sku}</dd>
+                      <dt className="font-semibold uppercase tracking-wider text-slate-500">Serial unit</dt>
+                      <dd className="mt-0.5 font-mono font-bold text-slate-900">#{currentTask.serialUnitId}</dd>
                     </div>
                     <div className="rounded-xl bg-slate-50 px-3 py-2">
                       <dt className="font-semibold uppercase tracking-wider text-slate-500">Allocation</dt>

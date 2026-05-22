@@ -9,6 +9,7 @@ import {
   LayoutDashboard,
   Link2,
   Lock,
+  Mail,
   Package,
   ShieldCheck,
   User,
@@ -19,7 +20,7 @@ export type AdminSection =
   | 'overview'
   | 'goals' | 'staff' | 'access' | 'roles' | 'connections' | 'fba'
   | 'manuals' | 'features' | 'logs' | 'jobs' | 'ai_chat' | 'architecture'
-  | 'photo_backup';
+  | 'photo_backup' | 'po_mailbox';
 
 export type AdminGroup = 'Performance' | 'People' | 'Data sources' | 'System';
 
@@ -49,6 +50,7 @@ export const ADMIN_SECTION_OPTIONS: AdminSectionOption[] = [
   { value: 'manuals',      label: 'Manuals',      description: 'Link product manuals to item numbers',                         group: 'Data sources', icon: FileText },
 
   { value: 'photo_backup', label: 'Photo Backup', description: 'Mirror Vercel Blob photos into Google Photos albums',          group: 'System',      icon: Camera },
+  { value: 'po_mailbox',   label: 'PO Mailbox',   description: 'Dedicated Gmail account scanned for purchase-order emails',   group: 'System',      icon: Mail },
   { value: 'jobs',         label: 'Jobs',         description: 'QStash scheduled jobs and execution logs',                     group: 'System',      icon: Calendar },
   { value: 'logs',         label: 'Logs',         description: 'Unified audit + station activity logs',                        group: 'System',      icon: FileText,     requires: 'admin.view_logs' },
   { value: 'ai_chat',      label: 'AI Chat',      description: 'Ops assistant + Bose service manual lookup',                   group: 'System',      icon: Zap },

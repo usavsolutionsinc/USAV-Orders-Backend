@@ -6,6 +6,18 @@ import { getOrCreateInternalGtin } from '@/lib/inventory/internal-gtin';
 import { buildGs1UnitUrl } from '@/lib/scan-resolver';
 import { getAppBaseUrl } from '@/lib/qstash';
 
+/**
+ * Public GS1 Digital Link host that the printed unit QR encodes.
+ * A normal phone-camera scan opens https://usavshop.com/01/{gtin}/21/{unit},
+ * which the shop is responsible for redirecting/landing. Override with
+ * LABEL_QR_BASE_URL for staging/dev.
+ */
+const PUBLIC_QR_BASE_URL = (
+  process.env.LABEL_QR_BASE_URL ||
+  process.env.NEXT_PUBLIC_LABEL_QR_BASE_URL ||
+  'https://usavshop.com'
+).trim().replace(/\/+$/, '');
+
 export const dynamic = 'force-dynamic';
 
 /**
@@ -51,15 +63,36 @@ export const POST = withAuth(async (request) => {
   }
 
   try {
-    // 1. Resolve sku_catalog row.
+    // 1. Resolve sku_catalog row. Match strategy mirrors get-title-by-sku:
+    //    exact (case/trim) → leading-zero-stripped → platform_sku crosswalk.
+    //    Without this, an input like "1103" misses a catalog row stored as
+    //    "01103" and the print flow silently 404s.
     const row = explicitId
       ? await queryOne<{ id: number; sku: string; product_title: string; gtin: string | null }>`
           SELECT id, sku, product_title, gtin FROM sku_catalog WHERE id = ${explicitId} LIMIT 1`
       : await queryOne<{ id: number; sku: string; product_title: string; gtin: string | null }>`
           SELECT id, sku, product_title, gtin FROM sku_catalog
            WHERE UPPER(TRIM(sku)) = UPPER(TRIM(${skuInput}))
+              OR regexp_replace(UPPER(TRIM(sku)), '^0+', '') = regexp_replace(UPPER(TRIM(${skuInput})), '^0+', '')
+           ORDER BY (UPPER(TRIM(sku)) = UPPER(TRIM(${skuInput}))) DESC
            LIMIT 1`;
-    if (!row) {
+
+    // Platform-sku crosswalk fallback (e.g. user scanned an Ecwid SKU that
+    // maps to a different canonical sku_catalog.sku).
+    const resolved = row
+      ? row
+      : await queryOne<{ id: number; sku: string; product_title: string; gtin: string | null }>`
+          SELECT sc.id, sc.sku, sc.product_title, sc.gtin
+            FROM sku_platform_ids sp
+            JOIN sku_catalog sc ON sc.id = sp.sku_catalog_id
+           WHERE sp.is_active = true
+             AND (
+               UPPER(TRIM(sp.platform_sku)) = UPPER(TRIM(${skuInput}))
+               OR regexp_replace(UPPER(TRIM(COALESCE(sp.platform_sku,''))), '^0+', '') = regexp_replace(UPPER(TRIM(${skuInput})), '^0+', '')
+             )
+           LIMIT 1`;
+
+    if (!resolved) {
       return NextResponse.json(
         { ok: false, error: `sku_catalog row not found for "${skuInput || explicitId}"` },
         { status: 404 },
@@ -67,16 +100,19 @@ export const POST = withAuth(async (request) => {
     }
 
     // 2. Ensure GTIN exists.
-    const gtin = row.gtin && row.gtin.trim() ? row.gtin.trim() : await getOrCreateInternalGtin(row.id);
+    const gtin = resolved.gtin && resolved.gtin.trim() ? resolved.gtin.trim() : await getOrCreateInternalGtin(resolved.id);
 
     // 3. Allocate the next unit serial.
-    const allocated = await allocateNextUnitId(row.id, row.sku);
+    const allocated = await allocateNextUnitId(resolved.id, resolved.sku);
 
-    // 4. Build the QR payload URL. Tolerate missing APP_URL in dev by
-    //    falling back to a relative path — scan-resolver handles both.
+    // 4. Build the QR payload URL. The printed QR is a GS1 Digital Link
+    //    pointing to usavshop.com so a normal phone-camera scan resolves
+    //    to the public storefront. Falls back to internal app origin (or
+    //    a relative path) only if the public host is unset.
     let qrUrl: string;
     try {
-      qrUrl = buildGs1UnitUrl(getAppBaseUrl(), gtin, allocated.unitId);
+      const origin = PUBLIC_QR_BASE_URL || getAppBaseUrl();
+      qrUrl = buildGs1UnitUrl(origin, gtin, allocated.unitId);
     } catch {
       qrUrl = buildGs1UnitUrl('', gtin, allocated.unitId);
     }
@@ -86,9 +122,9 @@ export const POST = withAuth(async (request) => {
       unitId: allocated.unitId,
       gtin,
       qrUrl,
-      skuCatalogId: row.id,
-      sku: row.sku,
-      productTitle: row.product_title,
+      skuCatalogId: resolved.id,
+      sku: resolved.sku,
+      productTitle: resolved.product_title,
       year: allocated.year,
       seq: allocated.seq,
       skuShort: allocated.skuShort,

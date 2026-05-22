@@ -34,6 +34,7 @@ const PUBLIC_PATHS: ReadonlyArray<RegExp> = [
   /^\/api\/health(?:$|\/)/,
   /^\/api\/ready(?:$|\/)/,
   /^\/api\/qstash\//,
+  /^\/api\/cron\//,                     // Vercel-cron-fired routes (auth via CRON_SECRET inside handler)
   /^\/api\/webhooks\//,                 // carrier + Stripe + integration callbacks
   /^\/api\/billing\/webhook(?:$|\/)/,   // Stripe webhook needs raw body, no cookie
   // GS1 Digital Link resolver — same printed QR serves both audiences.

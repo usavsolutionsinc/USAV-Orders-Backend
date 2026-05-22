@@ -2,6 +2,22 @@ import { NextRequest, NextResponse } from 'next/server';
 import pool from '@/lib/db';
 import { withAuth } from '@/lib/auth/withAuth';
 
+/**
+ * GET /api/get-title-by-sku?sku=<value>
+ *
+ * Resolves a SKU to {title, stock, location, imageUrl, skuCatalogId, gtin}
+ * by probing three tables and merging in priority order:
+ *
+ *   sku_platform_ids   — Ecwid platform mappings (often the source of truth
+ *                        for display_name + image_url). May be unlinked
+ *                        (sku_catalog_id NULL), so we never skip this even
+ *                        when sku_catalog also matches.
+ *   sku_catalog        — canonical SKU + GTIN + sometimes image_url.
+ *   sku_stock          — stock & location.
+ *
+ * All matches are case-insensitive, whitespace-trimmed, and leading-zero
+ * tolerant in both directions (e.g. '1103' ↔ '01103').
+ */
 export const GET = withAuth(async (request: NextRequest) => {
     try {
         const { searchParams } = new URL(request.url);
@@ -12,81 +28,89 @@ export const GET = withAuth(async (request: NextRequest) => {
         }
 
         const trimmedSku = String(sku).trim();
-
-        // Tolerant match on leading zeros. `sku_stock.sku` is stored with
-        // any leading zeros intact (e.g. '01103'), while `sku_management.base_sku`
-        // strips them ('1103'). Callers historically run input through
-        // `normalizeSku` before hitting this endpoint, so we get '1103' here
-        // and need to find '01103'. Prefer an exact match, then fall back to
-        // the leading-zero-stripped form.
-        const result = await pool.query(
-            `SELECT
-               ss.stock,
-               ss.sku,
-               ss.location,
-               sc.id           AS sku_catalog_id,
-               sc.image_url,
-               sc.gtin,
-               COALESCE(sp.display_name, sc.product_title, ss.product_title) AS product_title
-             FROM sku_stock ss
-             LEFT JOIN sku_catalog sc ON sc.sku = ss.sku
-             LEFT JOIN sku_platform_ids sp
-               ON sp.sku_catalog_id = sc.id
-               AND sp.platform = 'ecwid'
-               AND sp.is_active = true
-               AND sp.display_name IS NOT NULL
-             WHERE ss.sku = $1
-                OR regexp_replace(ss.sku, '^0+', '') = $1
-             ORDER BY (ss.sku = $1) DESC
-             LIMIT 1`,
-            [trimmedSku],
-        );
-
-        if (result.rows.length > 0) {
-            const row = result.rows[0];
-            return NextResponse.json({
-                sku: trimmedSku,
-                title: row.product_title || '',
-                stock: row.stock != null ? String(row.stock) : '0',
-                location: row.location || '',
-                imageUrl: row.image_url || '',
-                skuCatalogId: row.sku_catalog_id ?? null,
-                gtin: row.gtin || null,
-            });
+        if (!trimmedSku) {
+            return NextResponse.json({ error: 'Empty sku' }, { status: 400 });
         }
 
-        // Fallback: search sku_platform_ids directly by platform_sku, with
-        // the same leading-zero tolerance.
-        const platformResult = await pool.query(
-            `SELECT sp.display_name, ss.stock, ss.location,
-                    sc.id AS sku_catalog_id, sc.image_url, sc.gtin
-             FROM sku_platform_ids sp
-             LEFT JOIN sku_catalog sc ON sc.id = sp.sku_catalog_id
-             LEFT JOIN sku_stock ss ON ss.sku = sc.sku
-             WHERE sp.platform = 'ecwid'
-               AND sp.is_active = true
-               AND (sp.platform_sku = $1 OR regexp_replace(sp.platform_sku, '^0+', '') = $1)
-             ORDER BY (sp.platform_sku = $1) DESC
-             LIMIT 1`,
-            [trimmedSku],
-        );
+        // Three independent lookups, all tolerant of case/whitespace/leading
+        // zeros. Run in parallel for one round-trip.
+        const [ecwid, catalogDirect, stock] = await Promise.all([
+            pool.query(
+                `SELECT id, sku_catalog_id, platform_sku, display_name, image_url
+                   FROM sku_platform_ids
+                  WHERE platform = 'ecwid'
+                    AND is_active = true
+                    AND (
+                      UPPER(TRIM(platform_sku)) = UPPER(TRIM($1))
+                      OR regexp_replace(UPPER(TRIM(COALESCE(platform_sku,''))), '^0+', '')
+                         = regexp_replace(UPPER(TRIM($1)), '^0+', '')
+                    )
+                  ORDER BY (UPPER(TRIM(platform_sku)) = UPPER(TRIM($1))) DESC,
+                           (image_url IS NOT NULL AND image_url <> '') DESC,
+                           (display_name IS NOT NULL AND display_name <> '') DESC,
+                           id DESC
+                  LIMIT 1`,
+                [trimmedSku],
+            ),
+            pool.query(
+                `SELECT id, sku, product_title, image_url, gtin
+                   FROM sku_catalog
+                  WHERE UPPER(TRIM(sku)) = UPPER(TRIM($1))
+                     OR regexp_replace(UPPER(TRIM(sku)), '^0+', '')
+                        = regexp_replace(UPPER(TRIM($1)), '^0+', '')
+                  ORDER BY (UPPER(TRIM(sku)) = UPPER(TRIM($1))) DESC
+                  LIMIT 1`,
+                [trimmedSku],
+            ),
+            pool.query(
+                `SELECT sku, stock, location, product_title
+                   FROM sku_stock
+                  WHERE UPPER(TRIM(sku)) = UPPER(TRIM($1))
+                     OR regexp_replace(UPPER(TRIM(sku)), '^0+', '')
+                        = regexp_replace(UPPER(TRIM($1)), '^0+', '')
+                  ORDER BY (UPPER(TRIM(sku)) = UPPER(TRIM($1))) DESC
+                  LIMIT 1`,
+                [trimmedSku],
+            ),
+        ]);
 
-        if (platformResult.rows.length > 0) {
-            const row = platformResult.rows[0];
+        const ecwidRow = ecwid.rows[0] ?? null;
+        let catalogRow = catalogDirect.rows[0] ?? null;
+        const stockRow = stock.rows[0] ?? null;
+
+        // If the Ecwid row links to a catalog row we missed by SKU text
+        // (because the catalog SKU isn't the Ecwid platform_sku), fetch it.
+        if (!catalogRow && ecwidRow?.sku_catalog_id) {
+            const linked = await pool.query(
+                `SELECT id, sku, product_title, image_url, gtin
+                   FROM sku_catalog WHERE id = $1 LIMIT 1`,
+                [ecwidRow.sku_catalog_id],
+            );
+            catalogRow = linked.rows[0] ?? null;
+        }
+
+        if (!ecwidRow && !catalogRow && !stockRow) {
             return NextResponse.json({
-                sku: trimmedSku,
-                title: row.display_name || '',
-                stock: row.stock != null ? String(row.stock) : '0',
-                location: row.location || '',
-                imageUrl: row.image_url || '',
-                skuCatalogId: row.sku_catalog_id ?? null,
-                gtin: row.gtin || null,
+                sku: trimmedSku, title: '', stock: '0', location: '',
+                imageUrl: '', skuCatalogId: null, gtin: null,
             });
         }
 
         return NextResponse.json({
-            sku: trimmedSku, title: '', stock: '0', location: '', imageUrl: '',
-            skuCatalogId: null, gtin: null,
+            sku: trimmedSku,
+            title:
+                (ecwidRow?.display_name && String(ecwidRow.display_name).trim()) ||
+                catalogRow?.product_title ||
+                stockRow?.product_title ||
+                '',
+            stock: stockRow?.stock != null ? String(stockRow.stock) : '0',
+            location: stockRow?.location || '',
+            imageUrl:
+                (ecwidRow?.image_url && String(ecwidRow.image_url).trim()) ||
+                catalogRow?.image_url ||
+                '',
+            skuCatalogId: catalogRow?.id ?? ecwidRow?.sku_catalog_id ?? null,
+            gtin: catalogRow?.gtin || null,
         });
     } catch (error: any) {
         console.error('API error', error);

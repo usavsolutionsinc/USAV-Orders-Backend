@@ -50,7 +50,7 @@ async function hasReplenishmentSchema(): Promise<boolean> {
  * GET /api/orders - Fetch all pending orders with optional filters.
  * Assignment info (tester_id / packer_id) is sourced from work_assignments.
  */
-export const GET = withAuth(async (req: NextRequest) => {
+export const GET = withAuth(async (req: NextRequest, ctx) => {
   const startedAt = Date.now();
   let ok = false;
   let cache = 'BYPASS';
@@ -83,6 +83,7 @@ export const GET = withAuth(async (req: NextRequest) => {
     const shippedByCarrierOrLatestStatusSql = SHIPPED_BY_CARRIER_SQL;
 
     const cacheLookup = createCacheLookupKey({
+      organizationId:     ctx.organizationId,
       status:             status || '',
       assignedTo:         assignedTo || '',
       query,
@@ -450,6 +451,9 @@ export const GET = withAuth(async (req: NextRequest) => {
     `;
     const params: any[] = [];
     let paramCount = 1;
+
+    sql += ` AND o.organization_id = $${paramCount++}`;
+    params.push(ctx.organizationId);
 
     if (shippedOnly) {
       sql += ` AND ${shippedByCarrierOrLatestStatusSql}`;

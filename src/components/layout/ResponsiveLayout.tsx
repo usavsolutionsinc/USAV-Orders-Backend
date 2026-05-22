@@ -86,8 +86,9 @@ export function ResponsiveLayout({ children }: ResponsiveLayoutProps) {
   const closeDrawer = useCallback(() => setDrawerOpen(false), []);
 
   const isReceivingPage = pathname === '/receiving';
+  const isMobileReceivingPage = pathname?.startsWith('/m/receiving') ?? false;
   const isPackerPage = pathname === '/packer';
-  const hideFabPage = isReceivingPage || isPackerPage;
+  const hideFabPage = isReceivingPage || isPackerPage || isMobileReceivingPage;
 
   useEffect(() => {
     setMounted(true);

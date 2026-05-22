@@ -145,6 +145,19 @@ export function isInventoryV2Rma(): boolean {
 }
 
 /**
+ * Phase 3 cutover — when ON, legacy packer_logs INSERT sites also
+ * mirror the SHIPPED state into the v2 system (order_unit_allocations
+ * + serial_units + inventory_events) for any order whose units have
+ * open allocations. No-op when the order has no allocations.
+ *
+ * Off by default. Flip after the picker flag flips and reconciliation
+ * shows zero unexpected drift.
+ */
+export function isInventoryV2LegacyPackMirror(): boolean {
+  return readBoolEnv('INVENTORY_V2_LEGACY_PACK_MIRROR');
+}
+
+/**
  * Mobile receiving pipeline rewrite (/m/receiving).
  * PO-keyed list, per-Purchase-Order-Item detail, dedicated camera surfaces,
  * and 720p client-side downscale before upload. Reads/writes against the
@@ -168,6 +181,7 @@ export function inventoryV2FlagSnapshot(): Record<string, boolean> {
     INVENTORY_V2_BIN_ROLES: isInventoryV2BinRoles(),
     INVENTORY_V2_REPLENISHMENT: isInventoryV2Replenishment(),
     INVENTORY_V2_RMA: isInventoryV2Rma(),
+    INVENTORY_V2_LEGACY_PACK_MIRROR: isInventoryV2LegacyPackMirror(),
     MOBILE_RECEIVING_PIPELINE_V2: isMobileReceivingPipelineV2(),
   };
 }

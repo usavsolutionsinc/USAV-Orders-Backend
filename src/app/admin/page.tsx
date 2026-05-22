@@ -11,6 +11,7 @@ import { AdminJobsTab } from '@/components/admin/AdminJobsTab';
 import AiChatTab from '@/components/admin/AiChatTab';
 import { ArchitectureTab } from '@/components/admin/ArchitectureTab';
 import { PhotoBackupTab } from '@/components/admin/PhotoBackupTab';
+import { PoMailboxTab } from '@/components/admin/PoMailboxTab';
 import { AdminOverviewTab } from '@/components/admin/AdminOverviewTab';
 import { getAdminSection, type AdminSection } from '@/components/admin/admin-sections';
 import { requirePermission } from '@/lib/auth/page-guard';
@@ -43,6 +44,7 @@ function renderTab(
     case 'ai_chat':      return <AiChatTab />;
     case 'architecture': return <ArchitectureTab />;
     case 'photo_backup': return <PhotoBackupTab />;
+    case 'po_mailbox':   return <PoMailboxTab />;
     case 'manuals':
       return (
         <ManualAssignmentTab

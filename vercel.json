@@ -1,4 +1,13 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
-  "crons": []
+  "crons": [
+    {
+      "path": "/api/cron/zoho/po-sync?mode=delta",
+      "schedule": "17 * * * *"
+    },
+    {
+      "path": "/api/cron/zoho/po-sync?mode=full",
+      "schedule": "30 10 * * *"
+    }
+  ]
 }

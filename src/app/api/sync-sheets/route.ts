@@ -15,6 +15,8 @@ import {
     upsertOpenOrdersException,
 } from '@/lib/sync/sheet-sync-common';
 import { resolveOrCreateSkuCatalogId } from '@/lib/neon/sku-catalog-queries';
+import { mirrorLegacyPackToAllocations } from '@/lib/inventory/sync-legacy-pack';
+import { getOrderPlatformLabel } from '@/utils/order-platform';
 
 export const maxDuration = 60;
 
@@ -191,16 +193,21 @@ async function syncShippedSheet(params: {
                 orderId,
             });
 
+            // Derive account_source from order_id pattern so Amazon / eBay / Walmart /
+            // Ecwid / FBA orders pick up their channel tag at ingest time instead of
+            // landing with NULL. Falls back to NULL when the order_id matches no pattern.
+            const derivedSource = getOrderPlatformLabel(orderId, null) || null;
+
             // packer_id and tester_id were removed from orders; assignments go to work_assignments.
             const insertedOrder = await client.query(
                 `INSERT INTO orders (
                     order_id, product_title, quantity, condition,
-                    sku, notes, status, sku_catalog_id
-                ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+                    sku, notes, status, sku_catalog_id, account_source
+                ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
                 RETURNING id`,
                 [
                     orderId, productTitle, quantity, condition,
-                    sku, notes, 'shipped', skuCatalogId,
+                    sku, notes, 'shipped', skuCatalogId, derivedSource,
                 ]
             );
 
@@ -516,16 +523,26 @@ async function syncPackerSheets(params: {
                     continue;
                 }
 
-                await client.query(
+                const insertedPl = await client.query(
                     `INSERT INTO packer_logs (
                         shipment_id,
                         scan_ref,
                         tracking_type,
                         created_at,
                         packed_by
-                    ) VALUES ($1, $2, $3, $4, $5)`,
+                    ) VALUES ($1, $2, $3, $4, $5)
+                    RETURNING id`,
                     [plShipmentId, plScanRef, trackingType, normalizePSTTimestamp(packDateTime) ?? null, packedBy]
                 );
+
+                const insertedPlId = (insertedPl.rows[0]?.id as number | undefined) ?? null;
+                if (insertedPlId) {
+                    await mirrorLegacyPackToAllocations({
+                        packerLogId: insertedPlId,
+                        shipmentId: plShipmentId ?? null,
+                        actorStaffId: packedBy ?? null,
+                    });
+                }
 
                 inserted++;
                 if (trackingType === 'ORDERS') {

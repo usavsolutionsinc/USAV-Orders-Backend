@@ -13,6 +13,7 @@ import { createAuditLog } from '@/lib/audit-logs';
 import { publishActivityLogged, publishOrderChanged, publishPackerLogChanged, publishPackerScanReady } from '@/lib/realtime/publish';
 import { ensureReplenishmentForOrder } from '@/lib/replenishment';
 import { withAuth } from '@/lib/auth/withAuth';
+import { mirrorLegacyPackToAllocations } from '@/lib/inventory/sync-legacy-pack';
 
 const LEGACY_PACKER_ALIAS_TO_STAFF_ID: Record<string, number> = {
     '1': 4,
@@ -268,6 +269,14 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
                     const fbaPackerLogId = fbaPackerInsert.rows[0]?.id ?? null;
                     const fbaCreatedAt = fbaPackerInsert.rows[0]?.created_at ?? packDateTime;
 
+                    if (fbaPackerLogId) {
+                        await mirrorLegacyPackToAllocations({
+                            packerLogId: fbaPackerLogId,
+                            shipmentId: fbaShipId ?? null,
+                            actorStaffId: staffId,
+                        });
+                    }
+
                     await createStationActivityLog(pool, {
                         organizationId: ctx.organizationId,
                         station: 'PACK',
@@ -398,6 +407,14 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
                     `, [nfShipmentId, nfScanRef, classification.trackingType, packDateTime, staffId]);
                     notFoundPackerLogId = notFoundInsert.rows[0]?.id ?? null;
                     notFoundCreatedAt = notFoundInsert.rows[0]?.created_at ?? packDateTime;
+                }
+
+                if (notFoundPackerLogId) {
+                    await mirrorLegacyPackToAllocations({
+                        packerLogId: notFoundPackerLogId,
+                        shipmentId: nfShipmentId ?? null,
+                        actorStaffId: staffId,
+                    });
                 }
 
                 if (notFoundPackerLogId && photoUrls.length > 0) {
@@ -549,6 +566,14 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
                 `, [orderShipmentId, classification.trackingType, packDateTime, staffId]);
                 foundPackerLogId = foundInsert.rows[0]?.id ?? null;
                 foundCreatedAt = foundInsert.rows[0]?.created_at ?? packDateTime;
+            }
+
+            if (foundPackerLogId) {
+                await mirrorLegacyPackToAllocations({
+                    packerLogId: foundPackerLogId,
+                    shipmentId: orderShipmentId ?? null,
+                    actorStaffId: staffId,
+                });
             }
 
             if (foundPackerLogId && photoUrls.length > 0) {
@@ -747,6 +772,14 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
         `, [classification.normalizedInput, classification.trackingType, packDateTime, staffId]);
 
         const nonOrderPackerLogId = nonOrderInsert.rows[0]?.id ?? null;
+        if (nonOrderPackerLogId) {
+            // shipment_id is null for non-order scans; mirror still safe (no-op).
+            await mirrorLegacyPackToAllocations({
+                packerLogId: nonOrderPackerLogId,
+                shipmentId: null,
+                actorStaffId: staffId,
+            });
+        }
         if (nonOrderPackerLogId && photoUrls.length > 0) {
             for (const url of photoUrls) {
                     await pool.query(

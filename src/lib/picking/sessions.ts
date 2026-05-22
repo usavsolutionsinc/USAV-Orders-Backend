@@ -20,6 +20,12 @@ import { recordInventoryEvent } from '@/lib/inventory/events';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
+export interface PickTaskPlatform {
+  platform: string;
+  platformSku: string | null;
+  platformItemId: string | null;
+}
+
 export interface PickTaskRow {
   allocationId: number;
   serialUnitId: number;
@@ -30,6 +36,9 @@ export interface PickTaskRow {
   conditionGrade: string | null;
   plannedQty: number;
   currentState: string;
+  /** Marketplace mappings for this canonical SKU. Used by SkuIdentity to
+   *  show e.g. "Ecwid 01279-B · Amazon ZB-AFHB-Y58D" beside the internal SKU. */
+  platforms: PickTaskPlatform[];
 }
 
 export interface PickOrderTasks {
@@ -124,6 +133,7 @@ export async function loadPickTasks(orderId: number): Promise<PickOrderTasks | n
     bin: string | null;
     condition_grade: string | null;
     current_status: string;
+    platforms: PickTaskPlatform[] | null;
   }>(
     `SELECT oua.id            AS allocation_id,
             oua.serial_unit_id,
@@ -131,7 +141,20 @@ export async function loadPickTasks(orderId: number): Promise<PickOrderTasks | n
             sc.product_title,
             su.current_location AS bin,
             su.condition_grade::text AS condition_grade,
-            su.current_status::text  AS current_status
+            su.current_status::text  AS current_status,
+            COALESCE(
+              (SELECT json_agg(json_build_object(
+                 'platform',         spi.platform,
+                 'platformSku',      spi.platform_sku,
+                 'platformItemId',   spi.platform_item_id
+               ) ORDER BY spi.platform)
+                 FROM sku_platform_ids spi
+                WHERE spi.sku_catalog_id = sc.id
+                  AND spi.is_active = true
+                  AND (spi.platform_sku IS NOT NULL OR spi.platform_item_id IS NOT NULL)
+              ),
+              '[]'::json
+            )                  AS platforms
        FROM order_unit_allocations oua
        JOIN serial_units su  ON su.id = oua.serial_unit_id
   LEFT JOIN sku_catalog  sc  ON sc.sku = su.sku
@@ -158,6 +181,7 @@ export async function loadPickTasks(orderId: number): Promise<PickOrderTasks | n
       conditionGrade: r.condition_grade,
       plannedQty: 1, // one allocation row = one unit; aggregate elsewhere if needed
       currentState: r.current_status,
+      platforms: r.platforms ?? [],
     })),
   };
 }
