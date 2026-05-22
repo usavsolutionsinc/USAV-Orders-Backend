@@ -1,5 +1,6 @@
 import pool from '@/lib/db';
 import {
+  normalizeSerial,
   upsertSerialUnit,
   type SerialUnitRow,
 } from '@/lib/neon/serial-units-queries';
@@ -103,6 +104,12 @@ export interface ReceiveLineUnitsResult {
   serials_recorded: ReceivedSerialResult[];
   ledger_event_ids: number[];
   inventory_event_ids: number[];
+  /**
+   * True when the incoming scan was a no-op — the same serial is already
+   * recorded against this line. Caller should treat the response as success
+   * and surface an "already received" message rather than an error.
+   */
+  already_received?: boolean;
   line_state: {
     id: number;
     sku: string | null;
@@ -219,6 +226,52 @@ export async function receiveLineUnits(
     const priorReceivedForGuard = Number(line.quantity_received ?? 0);
     const expectedForGuard =
       line.quantity_expected != null ? Number(line.quantity_expected) : null;
+
+    // Idempotent re-scan: if the caller is sending exactly one serial and that
+    // serial is already recorded against this line, treat it as a no-op success
+    // instead of bubbling OVER_RECEIVE. Operator scanning the same barcode twice
+    // (or a flaky-network retry) should see "already received," not an error.
+    // Only triggers when the line is already at/over capacity — otherwise the
+    // serial would normally upsert and bump the counter.
+    if (
+      units === 1 &&
+      serials.length === 1 &&
+      expectedForGuard != null &&
+      priorReceivedForGuard + units > expectedForGuard
+    ) {
+      const normalized = normalizeSerial(serials[0]);
+      if (normalized) {
+        const existing = await client.query<{ id: number }>(
+          `SELECT id FROM serial_units
+            WHERE normalized_serial = $1
+              AND origin_receiving_line_id = $2
+            LIMIT 1`,
+          [normalized, line.id],
+        );
+        if (existing.rows[0]) {
+          await client.query('COMMIT');
+          committed = true;
+          return {
+            line_id: line.id,
+            units_added: 0,
+            serials_recorded: [],
+            ledger_event_ids: [],
+            inventory_event_ids: [],
+            already_received: true,
+            line_state: {
+              id: line.id,
+              sku: line.sku,
+              item_name: line.item_name,
+              quantity_received: priorReceivedForGuard,
+              quantity_expected: expectedForGuard,
+              workflow_status: line.workflow_status,
+              is_complete: priorReceivedForGuard >= expectedForGuard,
+            },
+          };
+        }
+      }
+    }
+
     if (
       !input.allow_over_receive &&
       units > 0 &&
@@ -273,8 +326,12 @@ export async function receiveLineUnits(
 
     // Audit row (lineage). Idempotent via ON CONFLICT DO NOTHING; the
     // existing migrations cover the unique key on this insert pattern.
+    // Uses the transaction client so it (a) shares the row lock + rollback
+    // semantics and (b) doesn't compete for a fresh connection out of the pool
+    // (poolMax=3 in prod — pool.query here under concurrent load was the source
+    // of "Query read timeout" errors on mark-received-po).
     try {
-      await pool.query(
+      await client.query(
         `INSERT INTO tech_serial_numbers
            (serial_number, serial_type, tested_by, station_source,
             receiving_line_id, shipment_id, scan_ref, serial_unit_id)
@@ -294,7 +351,7 @@ export async function receiveLineUnits(
     // Ledger delta — only on truly new serials. Re-scans of an already-known
     // serial don't double-count.
     if (upserted.is_new && line.sku) {
-      const ledger = await pool.query<{ id: number }>(
+      const ledger = await client.query<{ id: number }>(
         `INSERT INTO sku_stock_ledger
            (sku, delta, reason, dimension, staff_id,
             ref_serial_unit_id, ref_receiving_line_id, notes)
@@ -325,7 +382,10 @@ export async function receiveLineUnits(
         });
       }
 
-      // Lifecycle event row, linked to the ledger row.
+      // Lifecycle event row, linked to the ledger row. Passes `client` so the
+      // insert shares the transaction (atomic with the line update) and doesn't
+      // grab a second pool connection — see comment above the tech_serial
+      // insert.
       const event = await recordInventoryEvent({
         event_type: 'RECEIVED',
         actor_staff_id: input.staff_id ?? null,
@@ -346,7 +406,7 @@ export async function receiveLineUnits(
           is_return: upserted.is_return,
           warnings: upserted.warnings,
         },
-      });
+      }, client);
       inventoryEventIds.push(event.id);
     } else if (line.sku) {
       // Already known serial (re-scan). Still emit an event so the timeline
@@ -371,7 +431,7 @@ export async function receiveLineUnits(
           rescan: true,
           is_return: upserted.is_return,
         },
-      });
+      }, client);
       inventoryEventIds.push(event.id);
     }
   }
@@ -383,7 +443,7 @@ export async function receiveLineUnits(
     for (let j = 0; j < remainderQty; j++) {
       const ordinal = priorReceived + serials.length + j + 1;
 
-      const ledger = await pool.query<{ id: number }>(
+      const ledger = await client.query<{ id: number }>(
         `INSERT INTO sku_stock_ledger
            (sku, delta, reason, dimension, staff_id,
             ref_receiving_line_id, notes)
@@ -431,7 +491,7 @@ export async function receiveLineUnits(
           unit_ordinal: ordinal,
           serialized: false,
         },
-      });
+      }, client);
       inventoryEventIds.push(event.id);
     }
   }

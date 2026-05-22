@@ -42,7 +42,19 @@ function relativeTime(iso: string | null | undefined): string {
   return `${Math.floor(d / 7)}w`;
 }
 
-function getStatusDot(status: string | null | undefined): string {
+function getStatusDot(
+  status: string | null | undefined,
+  qtyReceived?: number,
+  qtyExpected?: number | null,
+): string {
+  if (
+    qtyExpected != null &&
+    qtyExpected > 0 &&
+    qtyReceived != null &&
+    qtyReceived >= qtyExpected
+  ) {
+    return 'bg-emerald-500';
+  }
   const v = String(status || '').trim().toUpperCase();
   if (v === 'EXPECTED') return 'bg-amber-400';
   if (v === 'ARRIVED' || v === 'MATCHED') return 'bg-blue-500';
@@ -462,7 +474,7 @@ function RailRow({
         }`}
       >
         <span
-          className={`h-2 w-2 shrink-0 rounded-full ${getStatusDot(row.workflow_status)}`}
+          className={`h-2 w-2 shrink-0 rounded-full ${getStatusDot(row.workflow_status, row.quantity_received, row.quantity_expected)}`}
           aria-hidden
           title={row.workflow_status || undefined}
         />

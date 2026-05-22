@@ -81,7 +81,19 @@ export function dispatchLineUpdated(row: Partial<ReceivingLineRow> & { id: numbe
   window.dispatchEvent(new CustomEvent('receiving-line-updated', { detail: row }));
 }
 
-function getStatusDotBg(status: string | null | undefined) {
+function getStatusDotBg(
+  status: string | null | undefined,
+  qtyReceived?: number,
+  qtyExpected?: number | null,
+) {
+  if (
+    qtyExpected != null &&
+    qtyExpected > 0 &&
+    qtyReceived != null &&
+    qtyReceived >= qtyExpected
+  ) {
+    return 'bg-emerald-500';
+  }
   const value = String(status || '').trim().toUpperCase();
   if (value === 'EXPECTED') return 'bg-amber-400';
   if (value === 'ARRIVED' || value === 'MATCHED') return 'bg-blue-500';
@@ -150,7 +162,7 @@ export function ReceivingLineOrderRow({
       <div className="flex min-w-0 flex-col">
         <div className="flex min-w-0 items-center gap-2">
           <span
-            className={`h-2 w-2 shrink-0 rounded-full ${getStatusDotBg(row.workflow_status)}`}
+            className={`h-2 w-2 shrink-0 rounded-full ${getStatusDotBg(row.workflow_status, row.quantity_received, row.quantity_expected)}`}
             title={workflowLabel}
           />
           <div className="truncate text-[13px] font-bold text-gray-900">

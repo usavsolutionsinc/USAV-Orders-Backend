@@ -6,6 +6,13 @@ import { enrichSerialUnitCatalog } from '@/lib/neon/serial-units-queries';
 import { receiveLineUnits, OverReceiveError } from '@/lib/receiving/receive-line';
 import { withAuth } from '@/lib/auth/withAuth';
 import { AUDIT_ACTION, AUDIT_ENTITY } from '@/lib/audit-logs';
+import {
+  getApiIdempotencyResponse,
+  readIdempotencyKey,
+  saveApiIdempotencyResponse,
+} from '@/lib/api-idempotency';
+
+const IDEMPOTENCY_ROUTE = 'receiving.scan-serial';
 
 interface ReceivingLineCandidate {
   id: number;
@@ -65,6 +72,44 @@ export const POST = withAuth(async (request: NextRequest, ctx) => {
       Number.isFinite(receivingLineIdRaw) && receivingLineIdRaw > 0
         ? Math.floor(receivingLineIdRaw)
         : null;
+
+    // Idempotency: replay a prior cached response when the same Idempotency-Key
+    // (or body client_event_id) is seen again. Lets a flaky-network retry land
+    // on the same answer — including OVER_RECEIVE / already_received — instead
+    // of running the scan twice and tripping the line capacity guard.
+    const idempotencyKey = readIdempotencyKey(request, clientEventId);
+    if (idempotencyKey) {
+      const cached = await getApiIdempotencyResponse(
+        pool,
+        idempotencyKey,
+        IDEMPOTENCY_ROUTE,
+      );
+      if (cached) {
+        return NextResponse.json(cached.response_body, {
+          status: cached.status_code,
+        });
+      }
+    }
+
+    // Wrap NextResponse.json so every meaningful return point also persists
+    // the response under the idempotency key (skips 5xx — those are transient
+    // and a retry should be allowed to succeed).
+    const respond = async (
+      body: Record<string, unknown>,
+      init?: { status?: number },
+    ) => {
+      const status = init?.status ?? 200;
+      if (idempotencyKey && status < 500) {
+        await saveApiIdempotencyResponse(pool, {
+          idempotencyKey,
+          route: IDEMPOTENCY_ROUTE,
+          staffId,
+          statusCode: status,
+          responseBody: body,
+        });
+      }
+      return NextResponse.json(body, init);
+    };
 
     if (!serialNumber) {
       return NextResponse.json(
@@ -148,7 +193,7 @@ export const POST = withAuth(async (request: NextRequest, ctx) => {
       });
     } catch (err) {
       if (err instanceof OverReceiveError) {
-        return NextResponse.json(
+        return respond(
           {
             success: false,
             error: 'OVER_RECEIVE',
@@ -162,6 +207,18 @@ export const POST = withAuth(async (request: NextRequest, ctx) => {
         );
       }
       throw err;
+    }
+
+    // Idempotent re-scan: receiveLineUnits already detected this serial is on
+    // the line. Return success with already_received:true so the UI can show
+    // a friendly toast instead of an error. No background enrichment needed —
+    // the prior scan handled all of that.
+    if (result.already_received) {
+      return respond({
+        success: true,
+        already_received: true,
+        line_state: result.line_state,
+      });
     }
 
     const serialResult = result.serials_recorded[0];
@@ -206,7 +263,7 @@ export const POST = withAuth(async (request: NextRequest, ctx) => {
       }
     });
 
-    return NextResponse.json({
+    return respond({
       success: true,
       serial_unit: serialResult.serial_unit,
       is_new: serialResult.is_new,

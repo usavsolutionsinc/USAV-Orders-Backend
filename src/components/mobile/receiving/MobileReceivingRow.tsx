@@ -34,7 +34,22 @@ function getStatusIcon(status: string | null | undefined, className: string) {
   return <Package className={`${className} text-gray-400`} />;
 }
 
-function getStatusDotBg(status: string | null | undefined) {
+function getStatusDotBg(
+  status: string | null | undefined,
+  qtyReceived?: number,
+  qtyExpected?: number | null,
+) {
+  // When the line is physically complete (received >= expected), prefer the
+  // green "done" color even if workflow_status is still MATCHED or UNBOXED.
+  // Keeps the dot in sync with the green qty text — see comment on line 145.
+  if (
+    qtyExpected != null &&
+    qtyExpected > 0 &&
+    qtyReceived != null &&
+    qtyReceived >= qtyExpected
+  ) {
+    return 'bg-emerald-500';
+  }
   const value = String(status || '').trim().toUpperCase();
   if (value === 'EXPECTED') return 'bg-amber-400';
   if (value === 'ARRIVED' || value === 'MATCHED') return 'bg-blue-500';
@@ -129,7 +144,7 @@ export function MobileReceivingRow({ row, variant, fresh = false, onTap, photosH
         {/* Row 1: Status Dot + Product Title */}
         <div className="flex items-center gap-3">
           <span
-            className={`${isExpanded ? 'h-2.5 w-2.5' : 'h-2 w-2'} shrink-0 rounded-full ${getStatusDotBg(row.workflow_status)}`}
+            className={`${isExpanded ? 'h-2.5 w-2.5' : 'h-2 w-2'} shrink-0 rounded-full ${getStatusDotBg(row.workflow_status, qtyReceived, row.quantity_expected)}`}
             title={workflowLabel}
           />
           <span className={`min-w-0 flex-1 truncate font-bold text-gray-900 ${isExpanded ? 'text-[15px] tracking-tight' : 'text-[13px]'}`}>

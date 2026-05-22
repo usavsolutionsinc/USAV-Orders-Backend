@@ -16,7 +16,14 @@ import {
   sumWarehouseReceivedByPoLineItem,
   updatePurchaseOrder,
 } from '@/lib/zoho';
-import { receiveLineUnits } from '@/lib/receiving/receive-line';
+import { receiveLineUnits, OverReceiveError } from '@/lib/receiving/receive-line';
+import {
+  getApiIdempotencyResponse,
+  readIdempotencyKey,
+  saveApiIdempotencyResponse,
+} from '@/lib/api-idempotency';
+
+const IDEMPOTENCY_ROUTE = 'receiving.mark-received-po';
 import { withAuth } from '@/lib/auth/withAuth';
 import { recordAudit, AUDIT_ACTION, AUDIT_ENTITY } from '@/lib/audit-logs';
 
@@ -110,19 +117,6 @@ async function lineItemsPendingZohoReceive(
   return out;
 }
 
-/** Zoho-linked lines stay MATCHED until purchase receive API succeeds for their PO. */
-function lineQualifiesForDoneAfterZoho(
-  l: { zoho_purchaseorder_id: string | null; zoho_line_item_id: string | null },
-  results: Array<{ purchaseorder_id: string; error: string | null }>,
-): boolean {
-  const poId = String(l.zoho_purchaseorder_id || '').trim();
-  const liId = String(l.zoho_line_item_id || '').trim();
-  if (!poId) return true;
-  if (!liId) return false;
-  const r = results.find((x) => x.purchaseorder_id === poId);
-  return Boolean(r && !r.error);
-}
-
 interface CandidateRow {
   id: number;
   sku: string | null;
@@ -193,6 +187,42 @@ export const POST = withAuth(async (request, ctx) => {
       );
     }
 
+    // Idempotency: long-running Zoho-sync routes are exactly the place a
+    // network blip + client retry can fire the same request twice. Replay the
+    // prior response when we recognize the key, instead of running the full
+    // receive flow again (which would 409 OVER_RECEIVE on the lines we just
+    // committed and double-call Zoho).
+    const idempotencyKey = readIdempotencyKey(request, clientEventId);
+    if (idempotencyKey) {
+      const cached = await getApiIdempotencyResponse(
+        pool,
+        idempotencyKey,
+        IDEMPOTENCY_ROUTE,
+      );
+      if (cached) {
+        return NextResponse.json(cached.response_body, {
+          status: cached.status_code,
+        });
+      }
+    }
+
+    const respond = async (
+      body: Record<string, unknown>,
+      init?: { status?: number },
+    ) => {
+      const status = init?.status ?? 200;
+      if (idempotencyKey && status < 500) {
+        await saveApiIdempotencyResponse(pool, {
+          idempotencyKey,
+          route: IDEMPOTENCY_ROUTE,
+          staffId,
+          statusCode: status,
+          responseBody: body,
+        });
+      }
+      return NextResponse.json(body, init);
+    };
+
     const now = formatPSTTimestamp();
 
     // scan_only is a local-only state action: include ALL lines (even DONE) so
@@ -247,7 +277,7 @@ export const POST = withAuth(async (request, ctx) => {
         [receivingId],
       );
       if (allLines.rows.length === 0) {
-        return NextResponse.json({
+        return respond({
           success: true,
           updated_count: 0,
           receiving_lines: [],
@@ -506,175 +536,131 @@ export const POST = withAuth(async (request, ctx) => {
       byPo.get(poId)!.add(liId);
     }
 
-    // Run the Purchase Receive POST synchronously so the user sees whether Zoho
-    // actually accepted it. Quantities come from Zoho (ordered − received on the
-    // PO), so we never skip a receive solely because the dashboard already says
-    // DONE. Notes/reference updates stay in after() — they're observability,
-    // not the core "PO is now received" signal.
-    const zohoResults: Array<{
-      purchaseorder_id: string;
-      receive_id: string | null;
-      error: string | null;
-      error_kind: 'rate_limit' | 'circuit_open' | 'api' | 'other' | null;
-    }> = [];
-    if (skipZohoReceive) {
-      // "Mark as scanned" intent: flip every linked Zoho PO back to issued so
-      // the local SCANNED state stays consistent with Zoho. Idempotent on POs
-      // not currently in `received` status.
-      for (const zohoPoId of byPo.keys()) {
-        try {
-          await markPurchaseOrderAsUnreceived(zohoPoId);
-          zohoResults.push({
-            purchaseorder_id: zohoPoId,
-            receive_id: null,
-            error: null,
-            error_kind: null,
-          });
-        } catch (err) {
-          const name = err instanceof Error ? err.name : '';
-          const message = err instanceof Error ? err.message : String(err);
-          const kind: 'rate_limit' | 'circuit_open' | 'api' | 'other' =
-            name === 'ZohoRateLimitError'
-              ? 'rate_limit'
-              : name === 'ZohoCircuitOpenError'
-                ? 'circuit_open'
-                : name === 'ZohoApiError'
-                  ? 'api'
-                  : 'other';
-          zohoResults.push({
-            purchaseorder_id: zohoPoId,
-            receive_id: null,
-            error: message,
-            error_kind: kind,
-          });
-          console.error('mark-received-po: markasunreceived failed', zohoPoId, message);
-        }
-      }
-    }
-
-    if (!skipZohoReceive) {
-      for (const zohoPoId of byPo.keys()) {
-        let lineItemsPosted: {
-          line_item_id: string;
-          quantity_received: number;
-          item_id: string;
-        }[] = [];
-        try {
-          const poResp = await getPurchaseOrderById(zohoPoId);
-          assertPurchaseOrderReceivable(poResp);
-          const idSet = byPo.get(zohoPoId)!;
-          const skuByLineItemId = new Map<string, string>();
-          for (const l of updatedLines) {
-            const poId = String(l.zoho_purchaseorder_id || '').trim();
-            if (poId !== zohoPoId) continue;
-            const liId = String(l.zoho_line_item_id || '').trim();
-            if (!liId || !idSet.has(liId)) continue;
-            const sku = String(l.sku || '').trim();
-            if (sku) skuByLineItemId.set(liId, sku);
-          }
-          lineItemsPosted = await lineItemsPendingZohoReceive(
-            poResp,
-            idSet,
-            zohoPoId,
-            skuByLineItemId,
-          );
-          if (lineItemsPosted.length === 0) {
-            zohoResults.push({
-              purchaseorder_id: zohoPoId,
-              receive_id: null,
-              error: null,
-              error_kind: null,
-            });
-            continue;
-          }
-          const receiveResp = await createPurchaseReceive({
-            purchaseOrderId: zohoPoId,
-            lineItems: lineItemsPosted,
-            bills: poResp.purchaseorder?.bills,
-            ...(zohoBillId ? { billId: zohoBillId } : {}),
-            ...(zohoBillNumber ? { billNumberHint: zohoBillNumber } : {}),
-          });
-          const receiveId = getPurchaseReceiveIdFromCreateResponse(receiveResp);
-          zohoResults.push({ purchaseorder_id: zohoPoId, receive_id: receiveId, error: null, error_kind: null });
-          console.log(
-            'mark-received-po: createPurchaseReceive ok',
-            JSON.stringify({ zohoPoId, lineItems: lineItemsPosted, receiveId }),
-          );
-        } catch (err) {
-          const name = err instanceof Error ? err.name : '';
-          const message = err instanceof Error ? err.message : String(err);
-          const kind: 'rate_limit' | 'circuit_open' | 'api' | 'other' =
-            name === 'ZohoRateLimitError'
-              ? 'rate_limit'
-              : name === 'ZohoCircuitOpenError'
-                ? 'circuit_open'
-                : name === 'ZohoApiError'
-                  ? 'api'
-                  : 'other';
-          zohoResults.push({ purchaseorder_id: zohoPoId, receive_id: null, error: message, error_kind: kind });
-          console.error(
-            'mark-received-po: createPurchaseReceive failed',
-            zohoPoId,
-            JSON.stringify({ lineItems: lineItemsPosted, name, message }),
-          );
-        }
-      }
-    }
-
-    const poZohoReceiveSucceeded = new Map(
-      zohoResults.map((r) => [r.purchaseorder_id, !r.error] as const),
-    );
-
+    // Optimistic receive (SoT is local, not Zoho): promote every locally-
+    // complete line to DONE right now. The synchronous Zoho POST used to gate
+    // this — but Zoho can be slow / rate-limited / down, and we don't want the
+    // operator's UI to hang for ~30s+ waiting on it. Zoho sync moves to
+    // after() below; on failure the discrepancy is logged + visible via the
+    // existing receiving-logs realtime channel.
     if (linesUpdatedViaReceiveUnits && updatedLines.length > 0) {
-      if (skipZohoReceive) {
-        const promoteIds = updatedLines
-          .filter((l) => {
-            const po = String(l.zoho_purchaseorder_id || '').trim();
-            const li = String(l.zoho_line_item_id || '').trim();
-            return !po || !li;
-          })
-          .map((l) => l.id);
-        if (promoteIds.length > 0) {
-          await pool.query(
-            `UPDATE receiving_lines
-               SET workflow_status = 'DONE'::inbound_workflow_status_enum,
-                   updated_at = NOW()
-             WHERE id = ANY($1::int[])`,
-            [promoteIds],
-          );
-          const promoted = new Set(promoteIds);
-          for (const l of updatedLines) {
-            if (promoted.has(l.id)) l.workflow_status = 'DONE';
-          }
-        }
-      } else {
-        const promoteIds = updatedLines
-          .filter((l) => lineQualifiesForDoneAfterZoho(l, zohoResults))
-          .map((l) => l.id);
-        if (promoteIds.length > 0) {
-          await pool.query(
-            `UPDATE receiving_lines
-               SET workflow_status = 'DONE'::inbound_workflow_status_enum,
-                   updated_at = NOW()
-             WHERE id = ANY($1::int[])`,
-            [promoteIds],
-          );
-          const promoted = new Set(promoteIds);
-          for (const l of updatedLines) {
-            if (promoted.has(l.id)) l.workflow_status = 'DONE';
-          }
-        }
+      const promoteIds = updatedLines.map((l) => l.id);
+      if (promoteIds.length > 0) {
+        await pool.query(
+          `UPDATE receiving_lines
+             SET workflow_status = 'DONE'::inbound_workflow_status_enum,
+                 updated_at = NOW()
+           WHERE id = ANY($1::int[])`,
+          [promoteIds],
+        );
+        for (const l of updatedLines) l.workflow_status = 'DONE';
       }
     }
 
-    // Background: PO line `description` (serials), plus header notes/reference when needed.
-    // Line-item PUT runs when we have mapped serials; header patch runs when there is
-    // user/shipping context (same conditions as before).
+    // Background: Zoho receive POST, then description/notes PUT, then cache
+    // invalidation. Moved out of the request path so the operator gets an
+    // immediate 1/1 (local SoT). Zoho is best-effort — failure is logged and
+    // the local DONE state stands.
     const needsHeaderPatch =
       Boolean(localTracking) || Boolean(zendeskTicket) ||
       Boolean(notes) || aggregatedSerials.length > 0 || Boolean(serialNumber);
 
     after(async () => {
+      const poZohoReceiveSucceeded = new Map<string, boolean>();
+      try {
+        if (skipZohoReceive) {
+          // "Mark as scanned" intent: flip every linked Zoho PO back to issued
+          // so the local SCANNED state stays consistent with Zoho. Idempotent
+          // on POs not currently in `received` status.
+          for (const zohoPoId of byPo.keys()) {
+            try {
+              await markPurchaseOrderAsUnreceived(zohoPoId);
+              poZohoReceiveSucceeded.set(zohoPoId, true);
+            } catch (err) {
+              poZohoReceiveSucceeded.set(zohoPoId, false);
+              console.error(
+                'mark-received-po: markasunreceived failed (background)',
+                zohoPoId,
+                err instanceof Error ? err.message : err,
+              );
+            }
+          }
+        } else {
+          for (const zohoPoId of byPo.keys()) {
+            let lineItemsPosted: {
+              line_item_id: string;
+              quantity_received: number;
+              item_id: string;
+            }[] = [];
+            try {
+              const poResp = await getPurchaseOrderById(zohoPoId);
+              assertPurchaseOrderReceivable(poResp);
+              const idSet = byPo.get(zohoPoId)!;
+              const skuByLineItemId = new Map<string, string>();
+              for (const l of updatedLines) {
+                const poId = String(l.zoho_purchaseorder_id || '').trim();
+                if (poId !== zohoPoId) continue;
+                const liId = String(l.zoho_line_item_id || '').trim();
+                if (!liId || !idSet.has(liId)) continue;
+                const sku = String(l.sku || '').trim();
+                if (sku) skuByLineItemId.set(liId, sku);
+              }
+              lineItemsPosted = await lineItemsPendingZohoReceive(
+                poResp,
+                idSet,
+                zohoPoId,
+                skuByLineItemId,
+              );
+              if (lineItemsPosted.length === 0) {
+                poZohoReceiveSucceeded.set(zohoPoId, true);
+                continue;
+              }
+              const receiveResp = await createPurchaseReceive({
+                purchaseOrderId: zohoPoId,
+                lineItems: lineItemsPosted,
+                bills: poResp.purchaseorder?.bills,
+                ...(zohoBillId ? { billId: zohoBillId } : {}),
+                ...(zohoBillNumber ? { billNumberHint: zohoBillNumber } : {}),
+              });
+              const receiveId = getPurchaseReceiveIdFromCreateResponse(receiveResp);
+              poZohoReceiveSucceeded.set(zohoPoId, true);
+              console.log(
+                'mark-received-po: createPurchaseReceive ok (background)',
+                JSON.stringify({ zohoPoId, lineItems: lineItemsPosted, receiveId }),
+              );
+            } catch (err) {
+              const message = err instanceof Error ? err.message : String(err);
+              // Zoho says it's already fully received — Zoho is ahead of us,
+              // which is fine: local SoT now matches Zoho's truth. Treat the
+              // PO as succeeded so the description PUT still gets a chance and
+              // we don't surface this as an error.
+              const alreadyReceived = /already\s+created\s+a\s+receive\s+for\s+all\s+the\s+items/i.test(
+                message,
+              );
+              if (alreadyReceived) {
+                poZohoReceiveSucceeded.set(zohoPoId, true);
+                console.log(
+                  'mark-received-po: PO already received in Zoho (background, treated as success)',
+                  zohoPoId,
+                );
+              } else {
+                poZohoReceiveSucceeded.set(zohoPoId, false);
+                console.error(
+                  'mark-received-po: createPurchaseReceive failed (background)',
+                  zohoPoId,
+                  JSON.stringify({
+                    lineItems: lineItemsPosted,
+                    name: err instanceof Error ? err.name : '',
+                    message,
+                  }),
+                );
+              }
+            }
+          }
+        }
+      } catch (err) {
+        console.warn('mark-received-po: Zoho receive background failed', err);
+      }
+
       try {
         if (!skipZohoReceive) {
           for (const zohoPoId of byPo.keys()) {
@@ -790,50 +776,53 @@ export const POST = withAuth(async (request, ctx) => {
       });
     }
 
-    const zohoOk =
-      zohoResults.length === 0
-        ? skipZohoReceive /* scan_only with no linked PO is still success */
-        : zohoResults.every((r) => !r.error);
-    const rateLimited = zohoResults.some((r) => r.error_kind === 'rate_limit');
-    const firstZohoError = zohoResults.find((r) => r.error)?.error ?? null;
-
-    const zohoAttemptHadError = zohoResults.some((r) => r.error);
-    const responseSuccess = !zohoAttemptHadError;
-
+    // Optimistic response: Zoho work is in after() above. We report the local
+    // truth right now — operator sees 1/1 + DONE immediately. Zoho status will
+    // arrive via the realtime channel once the background sync settles.
     let skipReason: string | null = null;
     if (skipZohoReceive) {
       skipReason = 'scan_only';
     } else if (byPo.size === 0 && updatedLines.length > 0) {
       skipReason = 'no_zoho_link';
-    } else if (
-      zohoOk &&
-      zohoResults.length > 0 &&
-      zohoResults.every((r) => r.receive_id == null)
-    ) {
-      skipReason = 'zoho_already_fully_received';
     }
 
-    return NextResponse.json({
-      success: responseSuccess,
+    const zohoPending = !skipReason && byPo.size > 0;
+
+    return respond({
+      success: true,
       receive_intent: skipZohoReceive ? 'scan_only' : 'zoho_receive',
-      ...(zohoAttemptHadError && firstZohoError
-        ? { error: firstZohoError }
-        : zohoAttemptHadError
-          ? { error: 'Zoho purchase receive failed' }
-          : {}),
       updated_count: linesUpdatedViaReceiveUnits ? updatedLines.length : 0,
       receiving_lines: updatedLines,
       receiving_id: receivingId,
       zoho: {
-        attempted: zohoResults.length,
-        ok: zohoOk,
-        rate_limited: rateLimited,
-        results: zohoResults,
-        error: firstZohoError,
+        attempted: byPo.size,
+        ok: true, // local SoT — pending state is informational only
+        pending: zohoPending,
+        rate_limited: false,
+        results: [],
+        error: null,
         ...(skipReason ? { skip_reason: skipReason } : {}),
       },
     });
   } catch (error) {
+    // OVER_RECEIVE bubbles up from receiveLineUnits when a line is already at
+    // capacity and we'd push past it. Surface the structured 409 the rest of
+    // the receiving API uses (matches scan-serial:149-162) instead of leaking
+    // the raw "OVER_RECEIVE: line X already has Y of Z" message at a 500.
+    if (error instanceof OverReceiveError) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: 'OVER_RECEIVE',
+          receiving_line_id: error.receiving_line_id,
+          prior_received: error.prior_received,
+          attempted_units: error.attempted_units,
+          quantity_expected: error.quantity_expected,
+          hint: 're-submit with allow_over_receive:true to force',
+        },
+        { status: 409 },
+      );
+    }
     const message = error instanceof Error ? error.message : 'Failed to mark PO as received';
     console.error('receiving/mark-received-po POST failed:', error);
     return NextResponse.json({ success: false, error: message }, { status: 500 });

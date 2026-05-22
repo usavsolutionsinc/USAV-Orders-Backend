@@ -8,6 +8,7 @@ import { MobileReceivingList } from '@/components/mobile/receiving/MobileReceivi
 import { MobileReceivingViewPills } from '@/components/mobile/receiving/MobileReceivingViewPills';
 import { Menu } from '@/components/Icons';
 import { QuickAccessButton } from '@/components/layout/QuickAccessButton';
+import { ZohoSplitPane } from '@/components/receiving/workspace/ZohoSplitPane';
 
 // Mobile vs desktop selection is done with CSS visibility, not a JS branch.
 // That way old browsers that can't hydrate the app (iOS ≤13, older Android)
@@ -59,6 +60,10 @@ function ReceivingPageInner() {
           history={<ReceivingDashboard />}
         />
       </div>
+
+      {/* Electron-only: right-side Zoho viewer triggered by the per-line
+          "Open in Zoho" action. Hidden until activated; no-op in a browser. */}
+      <ZohoSplitPane />
     </>
   );
 }

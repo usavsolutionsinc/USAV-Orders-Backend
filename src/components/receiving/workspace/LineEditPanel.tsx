@@ -610,6 +610,27 @@ export function LineEditPanel({
         toast.error(data?.error || `Scan failed (${res.status})`);
         return;
       }
+
+      // Server short-circuited an idempotent re-scan: same serial already on
+      // this line. Treat as success — refresh the line so chips/qty stay in
+      // sync, clear the input, and show an informational toast.
+      if (data.already_received) {
+        toast.success(`Already received — ${serial}`);
+        setSerialInput('');
+        if (data.line_state && typeof data.line_state.id === 'number') {
+          const ls = data.line_state;
+          dispatchLineUpdated({
+            id: ls.id,
+            quantity_received: ls.quantity_received,
+            quantity_expected: ls.quantity_expected,
+            workflow_status: ls.workflow_status ?? undefined,
+          });
+        }
+        setTimeout(() => serialRef.current?.focus(), 40);
+        void refreshLineWithSerials();
+        return;
+      }
+
       if (data.line_state && typeof data.line_state.id === 'number') {
         setSerialInput('');
         const ls = data.line_state;
@@ -723,6 +744,7 @@ export function LineEditPanel({
               | {
                   attempted?: number;
                   ok?: boolean;
+                  pending?: boolean;
                   rate_limited?: boolean;
                   error?: string | null;
                   skip_reason?: string | null;
@@ -730,7 +752,17 @@ export function LineEditPanel({
                 }
               | undefined;
             if (zoho?.attempted) {
-              if (zoho.rate_limited) {
+              // Optimistic flow: server already committed locally; Zoho sync
+              // is running in the background. UI shows immediate success;
+              // any Zoho-side failure surfaces via the receiving-logs
+              // realtime channel and a follow-up refresh.
+              if (zoho.pending) {
+                toast.success('Marked as received — Zoho sync in progress', {
+                  id: toastId,
+                  duration: 4500,
+                });
+                setResponseExpanded(false);
+              } else if (zoho.rate_limited) {
                 toast.error('Zoho daily API quota exhausted — PO was NOT marked received in Zoho. Lines stay in Scanned until Zoho succeeds.', {
                   id: toastId,
                   description: 'Wait for the daily reset or reduce other Zoho-touching workflows for now.',
@@ -738,11 +770,25 @@ export function LineEditPanel({
                 });
                 setResponseExpanded(true);
               } else if (!zoho.ok) {
-                toast.error(`Zoho receive failed: ${zoho.error || 'unknown error'}`, {
-                  id: toastId,
-                  duration: 6000,
-                });
-                setResponseExpanded(true);
+                // Treat "already received in Zoho" as success — Zoho is ahead
+                // of us, local SoT now matches.
+                const alreadyReceived = /already\s+created\s+a\s+receive\s+for\s+all\s+the\s+items/i.test(
+                  String(zoho.error || ''),
+                );
+                if (alreadyReceived) {
+                  toast.success('Already marked as received in Zoho', {
+                    id: toastId,
+                    description: 'Local state now matches the Zoho dashboard.',
+                    duration: 5000,
+                  });
+                  setResponseExpanded(false);
+                } else {
+                  toast.error(`Zoho receive failed: ${zoho.error || 'unknown error'}`, {
+                    id: toastId,
+                    duration: 6000,
+                  });
+                  setResponseExpanded(true);
+                }
               } else if (zoho.skip_reason === 'zoho_already_fully_received') {
                 toast.success('Zoho already shows this PO as fully received.', {
                   id: toastId,
@@ -1145,6 +1191,28 @@ export function LineEditPanel({
                 disabled: cartonActionsDisabled || copyingAll,
                 title: 'Copy package + PO details to clipboard',
                 ariaLabel: 'Copy all receiving details',
+              },
+              {
+                key: 'open-zoho',
+                label: 'Zoho',
+                icon: <ExternalLink className="h-3.5 w-3.5" />,
+                onClick: () => {
+                  // Right-pane Zoho viewer (ZohoSplitPane) listens for this
+                  // event and slides in. Never opens a new browser window —
+                  // browser tabs get an "Open externally" link inside the
+                  // pane instead. Keeps the operator's flow in one window.
+                  window.dispatchEvent(
+                    new CustomEvent('open-zoho-pane', {
+                      detail: {
+                        poId: String(row.zoho_purchaseorder_id || '').trim(),
+                        poNumber: String(row.zoho_purchaseorder_number || '').trim(),
+                      },
+                    }),
+                  );
+                },
+                disabled: cartonActionsDisabled,
+                title: 'Open this PO in Zoho (right pane)',
+                ariaLabel: 'Open in Zoho',
               },
             ] satisfies PaneHeaderActionBarAction[]}
             status={

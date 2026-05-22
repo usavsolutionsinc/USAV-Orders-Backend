@@ -158,7 +158,7 @@ export function PoLinesAccordion({ receivingId, activeLineId, activeRowSlot }: P
                   >
                     {line.item_name || line.sku || `Line #${line.id}`}
                   </p>
-                  <p className="mt-0.5 flex flex-wrap items-center gap-x-1.5 gap-y-1 truncate text-[10px] font-semibold uppercase tracking-widest text-gray-500">
+                  <div className="mt-0.5 flex flex-wrap items-center gap-x-1.5 gap-y-1 truncate text-[10px] font-semibold uppercase tracking-widest text-gray-500">
                     <ProgressBadge
                       received={line.quantity_received}
                       expected={line.quantity_expected}
@@ -190,7 +190,7 @@ export function PoLinesAccordion({ receivingId, activeLineId, activeRowSlot }: P
                           ))}
                       </>
                     ) : null}
-                  </p>
+                  </div>
                 </div>
               </div>
               {/* Active row only — slot for condition pills, etc. */}

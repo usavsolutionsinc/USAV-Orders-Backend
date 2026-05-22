@@ -21,7 +21,19 @@ interface MobileCartonSheetProps {
   onClose: () => void;
 }
 
-function getStatusDotBg(status: string | null | undefined) {
+function getStatusDotBg(
+  status: string | null | undefined,
+  qtyReceived?: number,
+  qtyExpected?: number | null,
+) {
+  if (
+    qtyExpected != null &&
+    qtyExpected > 0 &&
+    qtyReceived != null &&
+    qtyReceived >= qtyExpected
+  ) {
+    return 'bg-emerald-500';
+  }
   const value = String(status || '').trim().toUpperCase();
   if (value === 'EXPECTED') return 'bg-amber-400';
   if (value === 'ARRIVED' || value === 'MATCHED') return 'bg-blue-500';
@@ -84,7 +96,7 @@ export function MobileCartonSheet({ row, staffId, open, onClose }: MobileCartonS
         <div className="flex flex-col gap-2">
           <div className="flex min-w-0 items-center gap-2">
             <span
-              className={`h-2 w-2 shrink-0 rounded-full ${getStatusDotBg(row.workflow_status)}`}
+              className={`h-2 w-2 shrink-0 rounded-full ${getStatusDotBg(row.workflow_status, qtyReceived, row.quantity_expected)}`}
               title={workflowLabel}
             />
             <div className="line-clamp-2 text-[14px] font-bold text-gray-900">

@@ -69,3 +69,49 @@ export function readIdempotencyKey(req: Request, bodyKey?: string | null): strin
   const fromBody = bodyKey?.trim();
   return fromHeader || fromBody || null;
 }
+
+/**
+ * Wrap a handler that produces a {status, body} pair with response-level
+ * idempotency. When idempotencyKey is set and a prior response exists, returns
+ * the cached pair without invoking produce(). Otherwise runs produce() and
+ * persists status<500 responses. 5xx is treated as transient and not cached so
+ * the next retry can succeed.
+ */
+export async function withIdempotentResponse<B extends Record<string, unknown>>(
+  db: Pick<Pool, 'query'>,
+  params: {
+    idempotencyKey: string | null;
+    route: string;
+    staffId: number | null;
+  },
+  produce: () => Promise<{ status: number; body: B }>,
+): Promise<{ status: number; body: B; cached: boolean }> {
+  if (params.idempotencyKey) {
+    const cached = await getApiIdempotencyResponse(
+      db,
+      params.idempotencyKey,
+      params.route,
+    );
+    if (cached) {
+      return {
+        status: cached.status_code,
+        body: cached.response_body as B,
+        cached: true,
+      };
+    }
+  }
+
+  const out = await produce();
+
+  if (params.idempotencyKey && out.status < 500) {
+    await saveApiIdempotencyResponse(db, {
+      idempotencyKey: params.idempotencyKey,
+      route: params.route,
+      staffId: params.staffId,
+      statusCode: out.status,
+      responseBody: out.body,
+    });
+  }
+
+  return { ...out, cached: false };
+}
