@@ -432,7 +432,12 @@ function EcwidPairingPanel({
 
 // ─── Main Sidebar ───────────────────────────────────────────────────────────
 
-export function SkuCatalogSidebar() {
+/**
+ * Manuals/SKU-catalog sidebar. `basePath` controls which route the
+ * mode/sort/search URL writes land on so this sidebar can mount under either
+ * `/manuals` (legacy) or `/products` (current home) without forking the file.
+ */
+export function SkuCatalogSidebar({ basePath = '/manuals' }: { basePath?: string } = {}) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const selectedId = searchParams.get('id') ? Number(searchParams.get('id')) : null;
@@ -468,8 +473,9 @@ export function SkuCatalogSidebar() {
       if (val === null) params.delete(key);
       else params.set(key, val);
     }
-    router.replace(`/manuals?${params.toString()}`);
-  }, [router, searchParams]);
+    const qs = params.toString();
+    router.replace(qs ? `${basePath}?${qs}` : basePath);
+  }, [router, searchParams, basePath]);
 
   const handleSearchChange = (value: string) => {
     setLocalSearch(value);

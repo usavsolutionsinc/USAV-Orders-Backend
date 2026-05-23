@@ -44,6 +44,7 @@ import {
 interface PickTask {
   allocationId: number;
   serialUnitId: number;
+  serialNumber: string | null;
   lineId: number;
   sku: string;
   productTitle: string | null;
@@ -52,6 +53,45 @@ interface PickTask {
   plannedQty: number;
   currentState: string;
   platforms: SkuPlatformMapping[];
+}
+
+/**
+ * Scan-gate validator. Confirms the scanned value identifies the right
+ * pick before we commit. Accepts (in priority order):
+ *
+ *   serial   — exact match against the unit's serial_number barcode
+ *   bin      — exact match against the bin barcode (e.g. 'UNSORTED', 'A-12')
+ *   url      — internal mobile QR pointing at the unit (/m/u/{serialUnitId})
+ *   sku      — exact match against the canonical SKU
+ *   platform — exact match against any platform_sku / platform_item_id on
+ *              the SKU's marketplace mappings (Amazon MSKU/ASIN, Ecwid SKU,
+ *              etc.). Lets pickers scan the marketplace label on the
+ *              package rather than always finding the bin barcode.
+ *
+ * Returns null when nothing matches → caller surfaces a mismatch toast and
+ * does NOT call confirm-pick. Comparison is case-insensitive and trimmed.
+ */
+function matchScanToTask(
+  rawScan: string,
+  task: PickTask,
+): 'serial' | 'bin' | 'url' | 'sku' | 'platform' | null {
+  const scan = rawScan.trim();
+  if (!scan) return null;
+  const lower = scan.toLowerCase();
+  if (task.serialNumber && task.serialNumber.trim().toLowerCase() === lower) return 'serial';
+  if (task.bin && task.bin.trim().toLowerCase() === lower) return 'bin';
+  // Internal mobile QR convention: https://<host>/m/u/<serialUnitId>
+  // Match by path only so the host can vary (prod/preview/local).
+  if (scan.includes('/m/u/')) {
+    const m = scan.match(/\/m\/u\/(\d+)(?:[/?#]|$)/);
+    if (m && Number(m[1]) === task.serialUnitId) return 'url';
+  }
+  if (task.sku && task.sku.trim().toLowerCase() === lower) return 'sku';
+  for (const p of task.platforms) {
+    if (p.platformSku && p.platformSku.trim().toLowerCase() === lower) return 'platform';
+    if (p.platformItemId && p.platformItemId.trim().toLowerCase() === lower) return 'platform';
+  }
+  return null;
 }
 
 interface PickOrder {
@@ -97,6 +137,7 @@ function PickerInner() {
   const [shortSheetOpen, setShortSheetOpen] = useState(false);
   const [confirming, setConfirming] = useState(false);
   const [detailsExpanded, setDetailsExpanded] = useState(false);
+  const [scanError, setScanError] = useState<string | null>(null);
 
   // ── Bounce to signin
   useEffect(() => {
@@ -266,17 +307,36 @@ function PickerInner() {
     [currentTask, sessionId, advance, feedback],
   );
 
-  // ── Wire scanner decode → confirm.
-  // Real-world implementation should verify the scanned value matches the
-  // expected SKU/serial before calling confirm. For this scaffold any decode
-  // advances the current task.
+  // ── Scan-gate. Validate the scan identifies the right unit/bin/sku
+  //    before confirming. Rejects mismatches with error feedback so
+  //    accidental scans of nearby items don't false-confirm a pick.
   const handleScanDecode = useCallback(
-    (_value: string) => {
+    (value: string) => {
       if (!currentTask || confirming) return;
+      const matched = matchScanToTask(value, currentTask);
+      if (!matched) {
+        feedback('error');
+        const expectedBits = [
+          currentTask.bin ? `bin ${currentTask.bin}` : null,
+          currentTask.serialNumber ? `serial ${currentTask.serialNumber}` : null,
+        ].filter(Boolean);
+        setScanError(
+          expectedBits.length > 0
+            ? `Scanned "${value.trim()}" — expected ${expectedBits.join(' or ')}.`
+            : `Scanned "${value.trim()}" — doesn't match this pick.`,
+        );
+        return;
+      }
+      setScanError(null);
       void handleConfirmPick();
     },
-    [currentTask, confirming, handleConfirmPick],
+    [currentTask, confirming, feedback, handleConfirmPick],
   );
+
+  // Clear stale error whenever the user moves to a new task.
+  useEffect(() => {
+    setScanError(null);
+  }, [currentTask?.allocationId]);
 
   // ── Render gates
   if (!isLoaded || !user) return null;
@@ -400,13 +460,37 @@ function PickerInner() {
                 )}
               </AnimatePresence>
 
-              {/* Scanner */}
+              {/* Scanner — gated. Hint above tells the picker exactly what to
+                  aim at; the in-place error appears if a wrong code decodes. */}
               <div className="mt-5">
+                <p className="mb-2 text-xs font-semibold text-slate-500">
+                  Scan{' '}
+                  {currentTask.bin && (
+                    <span className="font-mono font-bold text-slate-700">{currentTask.bin}</span>
+                  )}
+                  {currentTask.bin && currentTask.serialNumber && ' or '}
+                  {currentTask.serialNumber && (
+                    <span className="font-mono font-bold text-slate-700">
+                      serial {currentTask.serialNumber}
+                    </span>
+                  )}
+                  {!currentTask.bin && !currentTask.serialNumber && (
+                    <span className="font-mono font-bold text-slate-700">{currentTask.sku}</span>
+                  )}
+                </p>
                 <ScanSurface
                   scanner={scanner}
                   onDecode={handleScanDecode}
-                  manualPlaceholder="Type serial or SKU…"
+                  manualPlaceholder="Type serial, bin, or SKU…"
                 />
+                {scanError && (
+                  <div
+                    role="alert"
+                    className="mt-2 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-xs font-semibold text-red-700"
+                  >
+                    {scanError}
+                  </div>
+                )}
               </div>
             </motion.section>
           </AnimatePresence>

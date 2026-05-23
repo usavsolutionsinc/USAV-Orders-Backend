@@ -29,6 +29,10 @@ export interface PickTaskPlatform {
 export interface PickTaskRow {
   allocationId: number;
   serialUnitId: number;
+  /** Human-scannable serial barcode on the physical unit. Used by the
+   *  picker's scan-gate to validate the right unit was scanned before
+   *  confirming the pick. May be null for legacy units without a serial. */
+  serialNumber: string | null;
   lineId: number;
   sku: string;
   productTitle: string | null;
@@ -128,6 +132,7 @@ export async function loadPickTasks(orderId: number): Promise<PickOrderTasks | n
   const tasksQ = await pool.query<{
     allocation_id: number;
     serial_unit_id: number;
+    serial_number: string | null;
     sku: string;
     product_title: string | null;
     bin: string | null;
@@ -137,6 +142,7 @@ export async function loadPickTasks(orderId: number): Promise<PickOrderTasks | n
   }>(
     `SELECT oua.id            AS allocation_id,
             oua.serial_unit_id,
+            su.serial_number,
             su.sku,
             sc.product_title,
             -- Prefer the human-readable barcode (e.g. 'UNSORTED', 'A-12');
@@ -178,6 +184,7 @@ export async function loadPickTasks(orderId: number): Promise<PickOrderTasks | n
     tasks: tasksQ.rows.map((r, i) => ({
       allocationId: r.allocation_id,
       serialUnitId: r.serial_unit_id,
+      serialNumber: r.serial_number,
       lineId: i + 1,
       sku: r.sku,
       productTitle: r.product_title,

@@ -311,7 +311,7 @@ export function ShippedIntakeForm({ onClose, onSubmit }: ShippedIntakeFormProps)
           <SidebarIntakeFormField label="Condition" required>
             <HorizontalButtonSlider
               aria-label="Condition"
-              variant="slate"
+              variant="nav"
               size="md"
               items={CONDITION_ITEMS}
               value={replacementData.condition}
@@ -366,7 +366,7 @@ export function ShippedIntakeForm({ onClose, onSubmit }: ShippedIntakeFormProps)
           <SidebarIntakeFormField label="Condition" required>
             <HorizontalButtonSlider
               aria-label="Condition"
-              variant="slate"
+              variant="nav"
               size="md"
               items={CONDITION_ITEMS}
               value={addOrderData.condition}

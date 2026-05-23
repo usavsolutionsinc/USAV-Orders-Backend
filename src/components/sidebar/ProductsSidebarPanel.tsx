@@ -9,27 +9,32 @@ import { BARCODE_MODES, type BarcodeMode } from '@/components/barcode/ModeSelect
 import { useBarcodeMode } from '@/hooks/useBarcodeMode';
 import { useLabelRecents } from '@/hooks/useLabelRecents';
 import { useSkuCatalogSearch, type SkuCatalogItem } from '@/hooks/useSkuCatalogSearch';
-import { ChevronDown, Printer, Database, Link2 } from '@/components/Icons';
+import { ChevronDown, Printer, Database, FileText } from '@/components/Icons';
 import { successFeedback } from '@/lib/feedback/confirm';
-import { usePairingQueueCount } from '@/components/products/pairing/usePairingQueueCount';
+import { SkuCatalogSidebar } from '@/components/manuals/SkuCatalogSidebar';
 import { PairingQueueList } from '@/components/products/pairing/PairingQueueList';
 import type { PairingQueueItem } from '@/components/products/pairing/types';
 
-type View = 'catalog' | 'labels' | 'pairing';
+type View = 'manuals' | 'labels' | 'catalog' | 'pairing';
 function parseView(raw: string | null): View {
+  if (raw === 'labels') return 'labels';
   if (raw === 'catalog') return 'catalog';
   if (raw === 'pairing') return 'pairing';
-  return 'labels';
+  // Manuals is the default landing view (folds in the retired /manuals route).
+  return 'manuals';
 }
 
 /**
  * Sidebar surface for `/products`. Hosts:
- *   - View toggle (Label Printer vs Catalog) — drives `?view=` (labels default)
- *   - Label Printer mode dropdown — drives `?mode=` via useBarcodeMode
- *   - SearchBar — drives `?q=` (consumed by ProductsShell table in catalog
- *     view, and by the in-sidebar Ecwid product list in labels view)
- *   - Ecwid product list (labels view) — clicking a row dispatches `sku:fill`
- *     so MultiSkuSnBarcode auto-fills and starts its print flow
+ *   - View toggle — Manuals (default) · Label Printer · Catalog. Writes `?view=`.
+ *     `pairing` remains a valid deep-link view (no pill) so existing
+ *     `/products?view=pairing&sku=` URLs continue to work.
+ *   - Manuals view (default): renders <SkuCatalogSidebar> which owns its own
+ *     search + sort + mode pills + selected-product accordion sections.
+ *   - Labels view: mode dropdown + SearchBar + Ecwid product picker list.
+ *     Picking a row dispatches `sku:fill` for the MultiSkuSnBarcode workspace.
+ *   - Catalog view: SearchBar that drives the ProductsShell table.
+ *   - Pairing view (no pill, URL-only): PairingQueueList; selection writes ?sku=.
  *
  * Mounted by DashboardSidebar when routeKey === 'products'. The right-pane
  * workspace and this panel both read the same URL searchParams, so no
@@ -43,16 +48,14 @@ export function ProductsSidebarPanel() {
 
   const { mode, setMode } = useBarcodeMode();
   const { recents } = useLabelRecents();
-  const { total: pairingDebt } = usePairingQueueCount();
 
   const viewItems = useMemo<HorizontalSliderItem[]>(
     () => [
+      { id: 'manuals', label: 'Manuals',       icon: FileText },
       { id: 'labels',  label: 'Label Printer', icon: Printer },
       { id: 'catalog', label: 'Catalog',       icon: Database },
-      { id: 'pairing', label: 'Pairing',       icon: Link2,
-        count: pairingDebt > 0 ? pairingDebt : undefined },
     ],
-    [pairingDebt],
+    [],
   );
 
   const [searchInput, setSearchInput] = useState(currentQuery);
@@ -83,21 +86,43 @@ export function ProductsSidebarPanel() {
   );
 
   const handleViewChange = useCallback(
-    (id: string) => updateParams({ view: id === 'labels' ? null : id }),
+    // Manuals is the default — drop the param when selected so the URL stays clean.
+    (id: string) => updateParams({ view: id === 'manuals' ? null : id }),
     [updateParams],
   );
-
-  const isPairing = view === 'pairing';
 
   const handleProductPick = useCallback((sku: string) => {
     window.dispatchEvent(new CustomEvent('sku:fill', { detail: { sku } }));
   }, []);
 
+  const isManuals = view === 'manuals';
   const isLabels = view === 'labels';
+  const isPairing = view === 'pairing';
+
+  // Manuals view delegates the whole sidebar body to SkuCatalogSidebar — it
+  // owns its own search, sort/mode pills, and accordion editor. The Products
+  // view pills sit above it.
+  if (isManuals) {
+    return (
+      <div className="flex h-full flex-col overflow-hidden bg-white">
+        <div className={`${sidebarHeaderBandClass} px-3`}>
+          <HorizontalButtonSlider
+            items={viewItems}
+            value={view}
+            onChange={handleViewChange}
+            variant="nav"
+            aria-label="Products view"
+          />
+        </div>
+        <div className="min-h-0 flex-1">
+          <SkuCatalogSidebar basePath="/products" />
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="flex h-full flex-col overflow-hidden bg-white">
-      {/* View toggle — Label Printer leads (default landing surface). */}
       <div className={`${sidebarHeaderBandClass} px-3`}>
         <HorizontalButtonSlider
           items={viewItems}

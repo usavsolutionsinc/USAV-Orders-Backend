@@ -1,6 +1,6 @@
 'use client';
 
-import { createContext, useContext, useEffect, useRef, ReactNode } from 'react';
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, ReactNode } from 'react';
 
 interface AblyContextValue {
   /** Returns the shared Ably Realtime client (or null if unavailable). */
@@ -21,12 +21,19 @@ export function AblyProvider({ children }: { children: ReactNode }) {
   const pendingRef = useRef<((client: any | null) => void)[]>([]);
   const readyRef = useRef(false);
 
-  const getClient = (): Promise<any | null> => {
+  // useCallback with empty deps so the returned function is referentially
+  // stable across renders. Without this, every parent re-render minted a new
+  // `getClient` → new context value → all consumer effects that listed
+  // `getClient` in their deps re-fired, which is how the packer wizard
+  // publish-state effect ended up flooding Ably at >1000 msg/s.
+  const getClient = useCallback((): Promise<any | null> => {
     if (readyRef.current) return Promise.resolve(clientRef.current);
     return new Promise<any | null>((resolve) => {
       pendingRef.current.push(resolve);
     });
-  };
+  }, []);
+
+  const contextValue = useMemo(() => ({ getClient }), [getClient]);
 
   useEffect(() => {
     let disposed = false;
@@ -60,7 +67,7 @@ export function AblyProvider({ children }: { children: ReactNode }) {
   }, []);
 
   return (
-    <AblyContext.Provider value={{ getClient }}>
+    <AblyContext.Provider value={contextValue}>
       {children}
     </AblyContext.Provider>
   );

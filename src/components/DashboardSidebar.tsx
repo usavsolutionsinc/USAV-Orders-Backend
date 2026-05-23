@@ -17,7 +17,6 @@ import { RepairSidebarPanel } from '@/components/sidebar/RepairSidebarPanel';
 import { WalkInSidebarPanel } from '@/components/sidebar/WalkInSidebarPanel';
 import ShippedSidebar from '@/components/ShippedSidebar';
 import UnshippedSidebar from '@/components/unshipped/UnshippedSidebar';
-import { SkuCatalogSidebar } from '@/components/manuals/SkuCatalogSidebar';
 import { ManualsLibrarySidebar } from '@/components/manuals/ManualsLibrarySidebar';
 import { ProductsSidebarPanel } from '@/components/sidebar/ProductsSidebarPanel';
 import { TechSidebarPanel } from '@/components/sidebar/TechSidebarPanel';
@@ -404,7 +403,10 @@ function SidebarContextPanel({ onBackToAppNav }: { onBackToAppNav?: () => void }
   if (routeKey === 'repair') return <WalkInSidebarPanel embedded hideSectionHeader />;
   if (routeKey === 'previous-quarters') return <QuarterSidebar hideSectionHeader />;
   if (routeKey === 'manuals-library') return <ManualsLibrarySidebar />;
-  if (routeKey === 'manuals') return <SkuCatalogSidebar />;
+  // /manuals folds into /products — getSidebarRouteKey('/manuals') now returns
+  // 'products', so this routeKey === 'products' branch above renders
+  // ProductsSidebarPanel which embeds SkuCatalogSidebar on its Manuals view.
+  // Direct SkuCatalogSidebar mount is no longer needed.
 
   if (routeKey === 'tech') {
     // Identity from the verified session cookie. Proxy guarantees user.

@@ -322,7 +322,7 @@ export function LocalPickupTable() {
                 <div>
                   <HorizontalButtonSlider
                     aria-label="Parts status"
-                    variant="slate"
+                    variant="nav"
                     size="md"
                     items={PARTS_STATUS_ITEMS}
                     value={draft.partsStatus}
@@ -337,7 +337,7 @@ export function LocalPickupTable() {
                 <div>
                   <HorizontalButtonSlider
                     aria-label="Receiving grade"
-                    variant="slate"
+                    variant="nav"
                     size="md"
                     items={GRADE_ITEMS}
                     value={draft.receivingGrade ?? ''}

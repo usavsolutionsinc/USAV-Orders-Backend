@@ -92,6 +92,7 @@ export const GET = withAuth(async (request: NextRequest) => {
         `SELECT rl.*,
                 r.receiving_tracking_number,
                 r.carrier,
+                r.source                     AS receiving_source,
                 r.source_platform            AS receiving_source_platform,
                 r.zoho_purchaseorder_number  AS receiving_zoho_purchaseorder_number,
                 r.support_notes              AS receiving_support_notes,
@@ -142,6 +143,7 @@ export const GET = withAuth(async (request: NextRequest) => {
           `SELECT rl.*,
                   r.receiving_tracking_number,
                   r.carrier,
+                  r.source                     AS receiving_source,
                   r.source_platform            AS receiving_source_platform,
                   r.zoho_purchaseorder_number  AS receiving_zoho_purchaseorder_number,
                   r.support_notes              AS receiving_support_notes,
@@ -295,6 +297,7 @@ export const GET = withAuth(async (request: NextRequest) => {
                 r.receiving_tracking_number,
                 r.carrier,
                 r.received_at::text          AS receiving_received_at,
+                r.source                     AS receiving_source,
                 r.source_platform            AS receiving_source_platform,
                 r.zoho_purchaseorder_number  AS receiving_zoho_purchaseorder_number,
                 r.support_notes              AS receiving_support_notes,
@@ -654,6 +657,7 @@ export const PATCH = withAuth(async (request: NextRequest) => {
       `SELECT rl.*,
               r.receiving_tracking_number,
               r.carrier,
+              r.source                     AS receiving_source,
               r.source_platform            AS receiving_source_platform,
               r.zoho_purchaseorder_number  AS receiving_zoho_purchaseorder_number,
               r.support_notes              AS receiving_support_notes,
@@ -776,6 +780,8 @@ function normalizeRow(row: Record<string, unknown>) {
                               ?? null,
     image_url:                (row.image_url as string | null) ?? null,
     source_platform:          (row.receiving_source_platform as string | null) ?? null,
+    /** receiving.source — 'zoho_po' | 'unmatched' | 'local_pickup'. Drives which workspace variant mounts. */
+    receiving_source:         (row.receiving_source as string | null) ?? null,
     photo_count:              row.photo_count != null ? Number(row.photo_count) : 0,
   };
 }

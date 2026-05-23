@@ -18,7 +18,8 @@ import { useLabelRecents } from '@/hooks/useLabelRecents';
 import { useBarcodeMode } from '@/hooks/useBarcodeMode';
 import { CONDITION_OPTIONS } from '@/components/receiving/zoho-po-types';
 import { ConditionPills } from '@/components/receiving/workspace/ConditionPills';
-import { Search, Clipboard, Check, Loader2, X, Printer, Plus } from './Icons';
+import { Search, Clipboard, Check, X, Printer, Plus } from './Icons';
+import { StickyActionBar } from '@/design-system/components/StickyActionBar';
 
 
 type ConditionGrade = (typeof CONDITION_OPTIONS)[number]['value'];
@@ -645,13 +646,21 @@ export default function MultiSkuSnBarcode({ layout = 'vertical' }: MultiSkuSnBar
 
                 {/* Sticky action bar */}
                 <StickyActionBar
-                    accent={accent}
-                    label={primaryLabel}
-                    disabled={primaryDisabled}
-                    isPosting={isPosting}
-                    onPrimary={primaryAction}
-                    mode={mode}
-                    previewReady={previewIsReady}
+                    primary={{
+                        label: primaryLabel,
+                        onClick: primaryAction,
+                        disabled: primaryDisabled,
+                        isLoading: isPosting,
+                        icon: <Check className="h-4 w-4" />,
+                        toneClasses: { bg: accent.ctaBg, hover: accent.ctaHover },
+                        tone: accent.tone,
+                    }}
+                    hints={[
+                        { key: '⏎', label: 'Continue' },
+                        ...((mode === 'print' || mode === 'reprint') && previewIsReady
+                            ? [{ key: '⌘P', label: 'Print' }]
+                            : []),
+                    ]}
                 />
 
                 <RecentsStrip
@@ -1151,56 +1160,3 @@ function PreviewPlaceholder({ mode, sku }: PreviewPlaceholderProps) {
     );
 }
 
-interface StickyActionBarProps {
-    accent: ModeAccent;
-    label: string;
-    disabled: boolean;
-    isPosting: boolean;
-    onPrimary: () => void;
-    mode: BarcodeMode;
-    previewReady: boolean;
-}
-
-function StickyActionBar({ accent, label, disabled, isPosting, onPrimary, mode, previewReady }: StickyActionBarProps) {
-    const showPrintKey = (mode === 'print' || mode === 'reprint') && previewReady;
-
-    return (
-        <div className="sticky bottom-0 z-10 border-t border-gray-200 bg-white/90 px-6 py-3 backdrop-blur">
-            <div className="mx-auto flex w-full max-w-3xl items-center justify-between gap-4">
-                <div className="hidden items-center gap-3 text-xs text-gray-500 sm:flex">
-                    <span className="inline-flex items-center gap-1.5">
-                        <kbd className="rounded-md border border-gray-200 bg-gray-50 px-1.5 py-0.5 font-mono text-[10px] font-bold text-gray-600">⏎</kbd>
-                        <span className="font-semibold uppercase tracking-[0.14em]">Continue</span>
-                    </span>
-                    {showPrintKey && (
-                        <span className="inline-flex items-center gap-1.5">
-                            <kbd className="rounded-md border border-gray-200 bg-gray-50 px-1.5 py-0.5 font-mono text-[10px] font-bold text-gray-600">⌘P</kbd>
-                            <span className="font-semibold uppercase tracking-[0.14em]">Print</span>
-                        </span>
-                    )}
-                </div>
-
-                <button
-                    type="button"
-                    onClick={onPrimary}
-                    disabled={disabled}
-                    className={`inline-flex h-12 flex-1 items-center justify-center gap-2.5 rounded-xl px-6 text-sm font-bold text-white shadow-sm transition-all sm:flex-initial sm:min-w-[260px] ${
-                        disabled ? 'cursor-not-allowed bg-gray-300' : `${accent.ctaBg} ${accent.ctaHover}`
-                    }`}
-                >
-                    {isPosting ? (
-                        <>
-                            <Loader2 className="h-4 w-4 animate-spin" />
-                            <span>{label}</span>
-                        </>
-                    ) : (
-                        <>
-                            <Check className="h-4 w-4" />
-                            <span>{label}</span>
-                        </>
-                    )}
-                </button>
-            </div>
-        </div>
-    );
-}

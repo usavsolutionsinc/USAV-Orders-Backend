@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { toast } from '@/lib/toast';
 import { sidebarHeaderBandClass } from '@/components/layout/header-shell';
 import { X } from '@/components/Icons';
@@ -29,6 +29,7 @@ import { useAblyClient } from '@/contexts/AblyContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { printProductLabel } from '@/lib/print/printProductLabel';
 import { LocalPickupIntakeForm } from '@/components/work-orders/LocalPickupIntakeForm';
+import { UnfoundQueueSidebarToolbar } from '@/components/receiving/unfound/UnfoundQueueSidebarToolbar';
 import {
   dispatchLineUpdated,
   type ReceivingLineRow,
@@ -50,13 +51,69 @@ import {
 
 
 
+/**
+ * Synthesize a ReceivingLineRow for an unmatched carton that has no
+ * receiving_lines rows yet (operator just scanned the tracking; no items
+ * added). UnfoundLineEditPanel only needs receiving_id + receiving_source
+ * to do its work — the rest are placeholders so the row typechecks for
+ * the shared workspace event payload.
+ *
+ * `id` is negated so it can't collide with a real receiving_lines.id when
+ * keying motion components downstream.
+ */
+function buildUnmatchedStubRow(
+  receivingId: number,
+  trackingNumber: string,
+): ReceivingLineRow {
+  return {
+    id: -receivingId,
+    receiving_id: receivingId,
+    tracking_number: trackingNumber,
+    carrier: null,
+    zoho_item_id: null,
+    zoho_line_item_id: null,
+    zoho_purchase_receive_id: null,
+    zoho_purchaseorder_id: null,
+    zoho_purchaseorder_number: null,
+    item_name: null,
+    sku: null,
+    quantity_received: 0,
+    quantity_expected: null,
+    qa_status: 'PENDING',
+    workflow_status: null,
+    disposition_code: 'HOLD',
+    condition_grade: 'BRAND_NEW',
+    disposition_audit: [],
+    needs_test: true,
+    assigned_tech_id: null,
+    zoho_sync_source: null,
+    zoho_last_modified_time: null,
+    zoho_synced_at: null,
+    receiving_type: 'PO',
+    notes: null,
+    created_at: null,
+    image_url: null,
+    source_platform: null,
+    receiving_source: 'unmatched',
+  };
+}
+
 export function ReceivingSidebarPanel() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const pathname = usePathname();
   const { isMobile } = useUIModeOptional();
   const rawMode = searchParams.get('mode');
-  const mode: ReceivingMode =
-    rawMode === 'pickup' ? 'pickup' : rawMode === 'history' ? 'history' : 'receive';
+  // /receiving/unfound owns its own mode — pathname takes precedence over
+  // ?mode= so the Unfound pill stays highlighted on the dedicated route.
+  const isUnfoundRoute = pathname?.startsWith('/receiving/unfound') ?? false;
+  const mode: ReceivingMode = isUnfoundRoute
+    ? 'unfound'
+    : rawMode === 'pickup'
+      ? 'pickup'
+      : rawMode === 'history'
+        ? 'history'
+        : 'receive';
   // Identity is server-derived. The proxy redirects unauthenticated traffic
   // to /signin, so `user` is non-null whenever this sidebar renders. The
   // optional-chain is a TS-narrowing nicety, not a runtime fallback.
@@ -509,18 +566,28 @@ export function ReceivingSidebarPanel() {
     setBulkTracking('');
     setScanBarKey((k) => k + 1); // force remount so SearchField's internal draft resets
     const scanUiId = randomId();
+    const scanStartedAt = Date.now();
     setPendingScans((prev) => {
       const fresh: PendingScan = {
         id: scanUiId,
         tracking: trackingNumber,
         status: 'checking',
-        startedAt: Date.now(),
+        startedAt: scanStartedAt,
       };
       return [
         fresh,
         ...prev.filter((s) => s.tracking !== trackingNumber || s.status !== 'checking'),
       ].slice(0, 10);
     });
+
+    // Tell the right pane to show the "Opening your PO" skeleton loader
+    // while the Zoho lookup is in flight. ReceivingDashboard listens for
+    // `receiving-scan-in-flight` and clears 500ms after `…-resolved`.
+    window.dispatchEvent(
+      new CustomEvent('receiving-scan-in-flight', {
+        detail: { tracking: trackingNumber, startedAt: scanStartedAt },
+      }),
+    );
 
     // 2. Fire-and-forget. Closure captures scanUiId so concurrent scans
     //    update their own chip independently.
@@ -633,6 +700,9 @@ export function ReceivingSidebarPanel() {
           }, 2000);
           // Matched path may have resolved a prior open exception; refresh list.
           void fetchOpenExceptions();
+          // Tell the right-pane loader we're done — workspace open will
+          // cover the swap once the line picker resolves.
+          window.dispatchEvent(new CustomEvent('receiving-scan-resolved'));
         } else {
           const exceptionId = typeof data.exception_id === 'number' ? data.exception_id : null;
           const exceptionReason = typeof data.exception_reason === 'string' ? data.exception_reason : null;
@@ -665,10 +735,49 @@ export function ReceivingSidebarPanel() {
           );
           // Unmatched path always upserts into tracking_exceptions — surface it.
           void fetchOpenExceptions();
+
+          // Auto-open the unfound workspace so the operator can immediately
+          // add items via the Ecwid popover — no extra click on the NO PO
+          // chip. Fetch any existing lines (a re-scan of the same tracking
+          // could have lines from a prior session); fall back to a stub row
+          // so UnfoundLineEditPanel mounts with the right receiving_id.
+          const unmatchedReceivingId =
+            typeof data.receiving_id === 'number' ? data.receiving_id : null;
+          if (unmatchedReceivingId != null) {
+            void (async () => {
+              let openRow: ReceivingLineRow | null = null;
+              try {
+                const linesRes = await fetch(
+                  `/api/receiving-lines?receiving_id=${unmatchedReceivingId}`,
+                );
+                const linesData = await linesRes.json();
+                const rows = Array.isArray(linesData?.receiving_lines)
+                  ? (linesData.receiving_lines as ReceivingLineRow[])
+                  : [];
+                openRow = rows[0] ?? null;
+              } catch {
+                /* fall through to synthetic stub below */
+              }
+              if (!openRow) {
+                openRow = buildUnmatchedStubRow(
+                  unmatchedReceivingId,
+                  trackingNumber,
+                );
+              }
+              setLineAccordionBootstrap('default');
+              setSelectedLine(openRow);
+              setScanDriven(true);
+              window.dispatchEvent(new CustomEvent('receiving-scan-resolved'));
+            })();
+          } else {
+            window.dispatchEvent(new CustomEvent('receiving-scan-resolved'));
+          }
         }
       } catch (err) {
         const message = err instanceof Error ? err.message : 'Network error';
         opts?.onResult?.({ tracking: trackingNumber, matched: false, po_ids: [], error: message });
+        // Clear the right-pane skeleton; chip surfaces the error inline.
+        window.dispatchEvent(new CustomEvent('receiving-scan-resolved'));
         setPendingScans((prev) =>
           prev.map((s) =>
             s.id === scanUiId ? { ...s, status: 'error', errorMessage: message } : s,
@@ -1082,9 +1191,18 @@ export function ReceivingSidebarPanel() {
   }, []);
 
   const updateMode = (nextMode: ReceivingMode) => {
+    // 'unfound' is its own route, not a query-param mode.
+    if (nextMode === 'unfound') {
+      router.push('/receiving/unfound');
+      return;
+    }
     const nextParams = new URLSearchParams(searchParams.toString());
     nextParams.set('mode', nextMode);
-    router.replace(`/receiving?${nextParams.toString()}`);
+    // Coming back from /receiving/unfound — push to /receiving so the
+    // workspace mounts; for in-section mode flips, replace preserves history.
+    const target = `/receiving?${nextParams.toString()}`;
+    if (isUnfoundRoute) router.push(target);
+    else router.replace(target);
   };
 
   const updateStaff = (id: number) => {
@@ -1113,6 +1231,13 @@ export function ReceivingSidebarPanel() {
       {mode === 'pickup' ? (
         <div className="min-h-0 flex-1 overflow-hidden">
           <LocalPickupIntakeForm variant="sidebar" staffId={staffId} />
+        </div>
+      ) : mode === 'unfound' ? (
+        // Unfound queue lives in the right pane (UnfoundQueueTable). The
+        // sidebar carries the toolbar (filter pills + search + refresh) so
+        // the right pane is pure data and the sidebar is pure control.
+        <div className="min-h-0 flex-1 overflow-y-auto">
+          <UnfoundQueueSidebarToolbar />
         </div>
       ) : (
         <>

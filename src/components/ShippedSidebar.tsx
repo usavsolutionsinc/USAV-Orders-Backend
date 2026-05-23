@@ -330,7 +330,7 @@ Shipped: ${result.packed_at ? formatDateTimePST(result.packed_at) : 'Not Shipped
                                 }))}
                                 value={shippedSearchField}
                                 onChange={(id) => onShippedSearchFieldChange(id as ShippedSearchField)}
-                                variant="slate"
+                                variant="nav"
                                 size="md"
                                 aria-label="Shipped search field"
                             />

@@ -105,62 +105,90 @@ export function MobileStationPacking({
   const { normalizeTracking } = useLast8TrackingSearch();
   const { handleLookup } = useMobilePackingLookup({ userId, userName, normalizeTracking, dispatch });
   const { getClient: getAblyClient } = useAblyClient();
+  // Mirror getAblyClient into a ref so the publish-state effect doesn't need
+  // to list it as a dep (its identity is now stable per AblyContext fix, but
+  // the ref pattern keeps the effect resilient to any future provider change).
+  const getAblyClientRef = useRef(getAblyClient);
+  useEffect(() => { getAblyClientRef.current = getAblyClient; }, [getAblyClient]);
 
   // ── Broadcast wizard transitions to packer:{staffId} ───────────────────────
   // Paired desktop displays subscribe to mirror the phone's current state.
+  //
+  // Two safeguards keep this well under Ably's 50 msg/sec per-channel cap:
+  //   1. Dependency array uses only the *primitive* fields that matter for the
+  //      paired display. Object refs like `state.resolvedOrder` would mint a
+  //      new effect run on every reducer dispatch even when nothing actually
+  //      changed for the broadcast — that's how this loop fanned out to 1000+
+  //      publishes/sec when combined with cascading parent re-renders.
+  //   2. Coalesce + lastPayloadRef de-dupe: if multiple state changes land in
+  //      the same tick, we publish once with the latest payload, and only if
+  //      the JSON-serialised payload actually differs from the previous send.
+  const lastPayloadRef = useRef<string>('');
+  const publishTimerRef = useRef<number | null>(null);
+  const orderId = state.resolvedOrder?.orderId ?? null;
+  const fnsku = state.resolvedFba?.fnsku ?? null;
+  const photoCount = state.capturedPhotos.length;
   useEffect(() => {
-    const channelName = `packer:${staffId}`;
-    const orderSummary = state.resolvedOrder
-      ? {
-          orderId: state.resolvedOrder.orderId,
-          productTitle: state.resolvedOrder.productTitle,
-          tracking: state.resolvedOrder.tracking,
-          qty: state.resolvedOrder.qty,
-          condition: state.resolvedOrder.condition,
-          shipByDate: state.resolvedOrder.shipByDate,
-        }
-      : state.resolvedFba
+    if (publishTimerRef.current != null) return;
+    publishTimerRef.current = window.setTimeout(() => {
+      publishTimerRef.current = null;
+
+      const cur = stateRef.current;
+      const orderSummary = cur.resolvedOrder
         ? {
-            fnsku: state.resolvedFba.fnsku,
-            productTitle: state.resolvedFba.productTitle,
-            shipmentRef: state.resolvedFba.shipmentRef,
-            plannedQty: state.resolvedFba.plannedQty,
+            orderId: cur.resolvedOrder.orderId,
+            productTitle: cur.resolvedOrder.productTitle,
+            tracking: cur.resolvedOrder.tracking,
+            qty: cur.resolvedOrder.qty,
+            condition: cur.resolvedOrder.condition,
+            shipByDate: cur.resolvedOrder.shipByDate,
           }
-        : null;
+        : cur.resolvedFba
+          ? {
+              fnsku: cur.resolvedFba.fnsku,
+              productTitle: cur.resolvedFba.productTitle,
+              shipmentRef: cur.resolvedFba.shipmentRef,
+              plannedQty: cur.resolvedFba.plannedQty,
+            }
+          : null;
 
-    const payload = {
-      step: state.step,
-      variant: state.orderVariant,
-      scannedValue: state.scannedValue,
-      orderSummary,
-      photoCount: state.capturedPhotos.length,
-      ts: Date.now(),
-    };
+      const payload = {
+        step: cur.step,
+        variant: cur.orderVariant,
+        scannedValue: cur.scannedValue,
+        orderSummary,
+        photoCount: cur.capturedPhotos.length,
+      };
+      const serialised = JSON.stringify(payload);
+      if (serialised === lastPayloadRef.current) return;
+      lastPayloadRef.current = serialised;
 
-    let cancelled = false;
-    void getAblyClient().then((client) => {
-      if (cancelled || !client) return;
-      try {
-        const ch = client.channels.get(channelName);
-        ch.publish('state', payload).catch(() => {
-          // best-effort; broadcast failure is non-fatal to the packer flow
-        });
-      } catch {
-        // best-effort
-      }
-    });
+      void getAblyClientRef.current().then((client) => {
+        if (!client) return;
+        try {
+          const ch = client.channels.get(`packer:${staffId}`);
+          ch.publish('state', { ...payload, ts: Date.now() }).catch(() => {
+            // best-effort; broadcast failure is non-fatal to the packer flow
+          });
+        } catch {
+          // best-effort
+        }
+      });
+    }, 120);
     return () => {
-      cancelled = true;
+      if (publishTimerRef.current != null) {
+        window.clearTimeout(publishTimerRef.current);
+        publishTimerRef.current = null;
+      }
     };
   }, [
     state.step,
     state.orderVariant,
     state.scannedValue,
-    state.resolvedOrder,
-    state.resolvedFba,
-    state.capturedPhotos.length,
+    orderId,
+    fnsku,
+    photoCount,
     staffId,
-    getAblyClient,
   ]);
 
   // ── Manual input submit (typed/pasted tracking) ────────────────────────────

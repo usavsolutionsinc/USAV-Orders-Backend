@@ -11,9 +11,10 @@ import { useEffect, useState } from 'react';
  * provides one. macOS draws the traffic-light buttons on top, so we leave a
  * gap on the left to keep them clickable.
  *
- * `WebkitAppRegion: 'drag'` intercepts mousedown for window movement;
- * `pointer-events: none` lets regular clicks pass through to the UI below,
- * so a button rendered in the top 28px (rare) still receives clicks.
+ * `WebkitAppRegion: 'drag'` intercepts mousedown for window movement. The
+ * element MUST receive pointer events for that to work — `pointer-events: none`
+ * silently disables the drag region. Any clickable UI rendered into the top
+ * 28px must opt out individually with `WebkitAppRegion: 'no-drag'`.
  */
 export function ElectronDragStrip() {
   const [isElectron, setIsElectron] = useState(false);
@@ -44,7 +45,6 @@ export function ElectronDragStrip() {
         height: 28,
         // @ts-expect-error -- WebkitAppRegion is an Electron-only CSS prop
         WebkitAppRegion: 'drag',
-        pointerEvents: 'none',
         zIndex: 999999,
       }}
     />

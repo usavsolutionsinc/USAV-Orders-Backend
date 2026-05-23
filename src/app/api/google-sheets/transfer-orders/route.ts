@@ -57,7 +57,7 @@ export const POST = withAuth(async (req: NextRequest) => {
             },
         });
     }
-}, { permission: 'admin.manage_features' });
+}, { permission: 'orders.import' });
 
 export const GET = withAuth(async (req: NextRequest) => {
     const startedAt = Date.now();
@@ -91,4 +91,4 @@ export const GET = withAuth(async (req: NextRequest) => {
         details: { queued: true },
     });
     return response;
-}, { permission: 'admin.manage_features' });
+}, { permission: 'orders.import' });

@@ -32,7 +32,10 @@ export function LabelPrintWorkspace() {
   }, []);
 
   return (
-    <div className="space-y-4">
+    // Flex column that fills the /warehouse page's inner flex-col so the
+    // BinLabelPrinter's sticky action bar can mt-auto to the bottom edge
+    // of the scroll container (matches the receiving LineEditPanel pattern).
+    <div className="flex min-h-0 flex-1 flex-col gap-4">
       {queuedBins.length > 0 && (
         <div className="flex items-start justify-between gap-3 rounded-2xl border border-blue-200 bg-blue-50/50 p-4">
           <div className="min-w-0">

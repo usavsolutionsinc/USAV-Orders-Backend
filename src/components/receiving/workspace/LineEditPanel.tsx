@@ -25,8 +25,6 @@ import { createPortal } from 'react-dom';
 import { renderToStaticMarkup } from 'react-dom/server';
 import {
   Barcode,
-  ChevronDown,
-  ChevronUp,
   Clipboard,
   ClipboardList,
   Copy,
@@ -62,6 +60,7 @@ import { SerialCard } from './SerialCard';
 import { PoLinesAccordion } from './PoLinesAccordion';
 import { ReceivingClaimModal } from './ReceivingClaimModal';
 import { WorkspaceCard } from '@/design-system/components';
+import { StickyActionBar } from '@/design-system/components/StickyActionBar';
 import { PaneHeaderActionBar, type PaneHeaderActionBarAction } from '@/components/ui/pane-header';
 import { printProductLabel } from '@/lib/print/printProductLabel';
 import { mobileQrUrl } from '@/lib/barcode-routing';
@@ -1693,117 +1692,48 @@ export function LineEditPanel({
         </div>
       </div>
 
-      {/* Sticky action bar — pinned to the bottom of the workspace. Hosts
-          the existing split-button menu intact (Print only / Mark scanned /
-          Receive) so all handlers + keyboard shortcuts continue to fire.
-          Color picks up the assigned tech's station theme (same palette
-          used elsewhere via `stationThemeColors`) so the operator's eye
-          recognizes "this carton belongs to me" at a glance. Falls back to
-          emerald when no tech is assigned. */}
       {(() => {
         const techTheme = row.assigned_tech_id != null
           ? stationThemeColors[getStaffThemeById(row.assigned_tech_id)]
           : null;
-        const ctaBg = techTheme?.bg ?? 'bg-emerald-600';
-        const ctaHover = techTheme?.hover ?? 'hover:bg-emerald-700';
-        // Derive a slightly lighter border-divider between the split menu
-        // chevron and the main CTA — same hue, lower opacity.
-        const ctaDivider = ctaBg.replace('bg-', 'border-').replace('-600', '-500/50').replace('-500', '-400/50').replace('-900', '-700/50');
         return (
-      <div className="sticky bottom-0 z-10 border-t border-gray-200 bg-white/90 px-6 py-3 backdrop-blur sm:px-10">
-        <div className="mx-auto w-full max-w-3xl">
-          <div className={`relative z-20 flex w-full overflow-visible rounded-xl shadow-sm ${ctaBg}`}>
-            <div className="group/split-menu relative flex shrink-0 self-stretch">
-              <button
-                type="button"
-                aria-haspopup="menu"
-                aria-label={splitMenuAriaLabel}
-                title={splitMenuHoverTitle}
-                className={`flex h-auto min-h-[44px] items-center justify-center rounded-l-xl border-r ${ctaDivider} px-3 text-white outline-none transition-colors ${ctaHover} focus-visible:z-30 focus-visible:ring-2 focus-visible:ring-white/80 focus-visible:ring-offset-2`}
-              >
-                <ChevronDown className="h-4 w-4 opacity-95" aria-hidden />
-              </button>
-              <div
-                className="
-                    invisible absolute left-0 bottom-full z-50 pb-1.5 opacity-0
-                    transition-opacity duration-75
-                    group-hover/split-menu:pointer-events-auto group-hover/split-menu:visible group-hover/split-menu:opacity-100
-                    group-focus-within/split-menu:pointer-events-auto group-focus-within/split-menu:visible group-focus-within/split-menu:opacity-100
-                  "
-                role="presentation"
-              >
-                <ul
-                  role="menu"
-                  aria-label="Single-action review controls"
-                  className="min-w-[12rem] rounded-lg border border-slate-200 bg-white py-1 shadow-xl ring-1 ring-slate-200/80"
-                >
-                  <li role="none">
-                    <button
-                      role="menuitem"
-                      type="button"
-                      disabled={!canPrintReview}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        runPrintLabel();
-                      }}
-                      className="flex w-full items-center gap-2 px-3 py-2 text-left text-[11px] font-black uppercase tracking-wider text-slate-800 transition-colors hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-35"
-                    >
-                      <Printer className="h-3.5 w-3.5 shrink-0" aria-hidden />
-                      Print only
-                    </button>
-                  </li>
-                  <li role="none">
-                    <button
-                      role="menuitem"
-                      type="button"
-                      disabled={!canReceiveReview}
-                      title="Save quantities as Scanned only; skip Zoho purchase receive (no print)"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        void handleReceive('scan_only');
-                      }}
-                      className="flex w-full items-center gap-2 px-3 py-2 text-left text-[11px] font-black uppercase tracking-wider text-slate-800 transition-colors hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-35"
-                    >
-                      <Clipboard className="h-3.5 w-3.5 shrink-0" aria-hidden />
-                      Mark as scanned
-                    </button>
-                  </li>
-                  <li role="none">
-                    <button
-                      role="menuitem"
-                      type="button"
-                      disabled={!canReceiveReview}
-                      title={
-                        row.receiving_id == null
-                          ? 'Line must be linked to a shipment'
-                          : undefined
-                      }
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        void handleReceive('zoho_receive');
-                      }}
-                      className="flex w-full items-center gap-2 px-3 py-2 text-left text-[11px] font-black uppercase tracking-wider text-slate-800 transition-colors hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-35"
-                    >
-                      <PackageCheck className="h-3.5 w-3.5 shrink-0" aria-hidden />
-                      {receiveMenuLabel}
-                    </button>
-                  </li>
-                </ul>
-              </div>
-            </div>
-            <button
-              type="button"
-              onClick={() => void handlePrintAndReceive()}
-              disabled={combinedReviewDisabled}
-              title={printThenReceiveTitle}
-              className={`inline-flex min-h-[44px] min-w-0 flex-1 items-center justify-center gap-2 rounded-r-xl px-4 py-2 text-[12px] font-black uppercase tracking-wider text-white outline-none transition-colors ${ctaHover} disabled:cursor-not-allowed disabled:opacity-60 focus-visible:z-30 focus-visible:ring-2 focus-visible:ring-white/70 focus-visible:ring-offset-2`}
-            >
-              <Printer className="h-4 w-4 shrink-0" aria-hidden />
-              {printReceivePrimaryLabel}
-            </button>
-          </div>
-        </div>
-      </div>
+          <StickyActionBar
+            primary={{
+              label: printReceivePrimaryLabel,
+              onClick: () => void handlePrintAndReceive(),
+              disabled: combinedReviewDisabled,
+              title: printThenReceiveTitle,
+              icon: <Printer className="h-4 w-4 shrink-0" />,
+              toneClasses: {
+                bg: techTheme?.bg ?? 'bg-emerald-600',
+                hover: techTheme?.hover ?? 'hover:bg-emerald-700',
+              },
+              menuLabel: splitMenuAriaLabel,
+              menuTitle: splitMenuHoverTitle,
+              menu: [
+                {
+                  label: 'Print only',
+                  icon: <Printer className="h-3.5 w-3.5 shrink-0" />,
+                  onClick: () => runPrintLabel(),
+                  disabled: !canPrintReview,
+                },
+                {
+                  label: 'Mark as scanned',
+                  icon: <Clipboard className="h-3.5 w-3.5 shrink-0" />,
+                  onClick: () => void handleReceive('scan_only'),
+                  disabled: !canReceiveReview,
+                  title: 'Save quantities as Scanned only; skip Zoho purchase receive (no print)',
+                },
+                {
+                  label: receiveMenuLabel,
+                  icon: <PackageCheck className="h-3.5 w-3.5 shrink-0" />,
+                  onClick: () => void handleReceive('zoho_receive'),
+                  disabled: !canReceiveReview,
+                  title: row.receiving_id == null ? 'Line must be linked to a shipment' : undefined,
+                },
+              ],
+            }}
+          />
         );
       })()}
     </div>

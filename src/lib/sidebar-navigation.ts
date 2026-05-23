@@ -136,7 +136,9 @@ export const APP_SIDEBAR_NAV: SidebarNavItem[] = [
   { id: 'inventory',         label: 'Inventory',   href: '/inventory',          icon: Package,         kind: 'station', requires: 'sku_stock.view' },
   { id: 'warehouse',         label: 'Warehouse',   href: '/warehouse',          icon: Package,         kind: 'station', requires: 'sku_stock.view' },
   { id: 'ai',                label: 'AI Chat',     href: '/ai',                 icon: Zap,             kind: 'bottom' },
-  { id: 'manuals',           label: 'Manuals',     href: '/manuals',            icon: FileText,        kind: 'bottom' },
+  // /manuals folded into /products as the default Manuals view. The /manuals
+  // URL still resolves (it redirects to /products), so external links keep
+  // working — but the standalone bottom-nav entry is gone.
   { id: 'support',           label: 'Support',     href: '/support',            icon: AlertCircle,     kind: 'bottom' },
   { id: 'previous-quarters', label: 'Quarters',    href: '/previous-quarters',  icon: Calendar,        kind: 'bottom', requires: 'reports.view' },
   { id: 'audit-log',         label: 'Audit Log',   href: '/settings/audit',     icon: FileText,        kind: 'bottom', requires: 'admin.view_logs' },
@@ -195,7 +197,9 @@ export function getSidebarRouteKey(pathname: string | null): SidebarRouteKey {
   if (pathname === '/tech' || pathname.startsWith('/tech/')) return 'tech';
   if (pathname === '/packer' || pathname.startsWith('/packer/')) return 'packer';
   if (pathname === '/manuals/library' || pathname.startsWith('/manuals/library/')) return 'manuals-library';
-  if (pathname === '/manuals' || pathname.startsWith('/manuals/')) return 'manuals';
+  // /manuals folded into /products — anyone landing on the legacy URL gets
+  // the Products sidebar (the page-level redirect runs in parallel).
+  if (pathname === '/manuals' || pathname.startsWith('/manuals/')) return 'products';
   if (pathname === '/ai' || pathname.startsWith('/ai/')) return 'ai';
   // /settings/billing and /settings/integrations are leaf-routes under settings
   // but should highlight their own sidebar entry, not the bare Settings link.

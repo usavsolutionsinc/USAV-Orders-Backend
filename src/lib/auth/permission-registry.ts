@@ -92,6 +92,7 @@ export const PERMISSIONS = [
   { id: 'shipping.void_order',      category: 'shipping', label: 'Void shipment', destructive: true, stepUp: true },
   { id: 'orders.view',              category: 'shipping', label: 'View orders' },
   { id: 'orders.create',            category: 'shipping', label: 'Create orders' },
+  { id: 'orders.import',            category: 'shipping', label: 'Import orders (Google Sheets + Ecwid)' },
   { id: 'orders.void',              category: 'shipping', label: 'Void order', destructive: true, stepUp: true },
 
   // ─ FBA ─

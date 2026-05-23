@@ -85,7 +85,7 @@ export function PoTriageDetailView({ id }: PoTriageDetailViewProps) {
       onRowUpdated={(row) => {
         setDetail((prev) => (prev ? { ...prev, row } : prev));
       }}
-      onClose={() => router.push('/inventory/po-mailbox')}
+      onClose={() => router.push('/receiving/unfound')}
     />
   );
 }

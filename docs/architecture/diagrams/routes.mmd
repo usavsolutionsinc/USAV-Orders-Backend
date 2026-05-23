@@ -166,6 +166,18 @@ flowchart LR
   api_admin_po_gmail_status["status"]
   api_admin_po_gmail --> api_admin_po_gmail_status
   click api_admin_po_gmail_status "src/app/api/admin/po-gmail/status/route.ts" "route: src/app/api/admin/po-gmail/status/route.ts"
+  api_admin_po_gmail_triage["triage"]
+  api_admin_po_gmail --> api_admin_po_gmail_triage
+  click api_admin_po_gmail_triage "src/app/api/admin/po-gmail/triage/route.ts" "route: src/app/api/admin/po-gmail/triage/route.ts"
+  api_admin_po_gmail_triage__id["[id]"]
+  api_admin_po_gmail_triage --> api_admin_po_gmail_triage__id
+  click api_admin_po_gmail_triage__id "src/app/api/admin/po-gmail/triage/[id]/route.ts" "route: src/app/api/admin/po-gmail/triage/[id]/route.ts"
+  api_admin_po_gmail_triage__id__detail["detail"]
+  api_admin_po_gmail_triage__id --> api_admin_po_gmail_triage__id__detail
+  click api_admin_po_gmail_triage__id__detail "src/app/api/admin/po-gmail/triage/[id]/detail/route.ts" "route: src/app/api/admin/po-gmail/triage/[id]/detail/route.ts"
+  api_admin_po_gmail_triage__id__extract["extract"]
+  api_admin_po_gmail_triage__id --> api_admin_po_gmail_triage__id__extract
+  click api_admin_po_gmail_triage__id__extract "src/app/api/admin/po-gmail/triage/[id]/extract/route.ts" "route: src/app/api/admin/po-gmail/triage/[id]/extract/route.ts"
   api_admin_po_mirror["po-mirror"]
   api_admin --> api_admin_po_mirror
   api_admin_po_mirror_health["health"]
@@ -198,15 +210,3 @@ flowchart LR
   api_admin_staff__id["[id]"]
   api_admin_staff --> api_admin_staff__id
   click api_admin_staff__id "src/app/api/admin/staff/[id]/route.ts" "route: src/app/api/admin/staff/[id]/route.ts"
-  api_admin_staff__id__detail["detail"]
-  api_admin_staff__id --> api_admin_staff__id__detail
-  click api_admin_staff__id__detail "src/app/api/admin/staff/[id]/detail/route.ts" "route: src/app/api/admin/staff/[id]/detail/route.ts"
-  api_admin_staff__id__enroll_token["enroll-token"]
-  api_admin_staff__id --> api_admin_staff__id__enroll_token
-  click api_admin_staff__id__enroll_token "src/app/api/admin/staff/[id]/enroll-token/route.ts" "route: src/app/api/admin/staff/[id]/enroll-token/route.ts"
-  api_admin_staff__id__passkeys["passkeys"]
-  api_admin_staff__id --> api_admin_staff__id__passkeys
-  click api_admin_staff__id__passkeys "src/app/api/admin/staff/[id]/passkeys/route.ts" "route: src/app/api/admin/staff/[id]/passkeys/route.ts"
-  api_admin_staff__id__passkeys__pid["[pid]"]
-  api_admin_staff__id__passkeys --> api_admin_staff__id__passkeys__pid
-  click api_admin_staff__id__passkeys__pid "src/app/api/admin/staff/[id]/passkeys/[pid]/route.ts" "route: src/app/api/admin/staff/[id]/passkeys/[pid]/route.ts"

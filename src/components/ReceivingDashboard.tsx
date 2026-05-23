@@ -6,6 +6,7 @@ import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
 import ReceivingLinesTable from './station/ReceivingLinesTable';
 import { LocalPickupCatalogPanel } from './work-orders/LocalPickupCatalogPanel';
 import { ReceivingLineWorkspace } from './receiving/workspace/ReceivingLineWorkspace';
+import { ReceivingScanLoader } from './receiving/workspace/ReceivingScanLoader';
 import { ReceivingDetailsStack, type ReceivingDetailsLog } from './station/ReceivingDetailsStack';
 import { useRealtimeInvalidation } from '@/hooks/useRealtimeInvalidation';
 import { useRealtimeToasts } from '@/hooks/useRealtimeToasts';
@@ -56,6 +57,12 @@ export default function ReceivingDashboard() {
   const [workspace, setWorkspace] = useState<WorkspaceState | null>(null);
   const [nav, setNav] = useState<NavState | null>(null);
   const [overlayLog, setOverlayLog] = useState<ReceivingDetailsLog | null>(null);
+  // Scan-in-flight loader state. Populated by 'receiving-scan-in-flight' and
+  // cleared 500ms after 'receiving-scan-resolved' to give the workspace open
+  // animation a moment to land (avoids a flash of the empty state).
+  const [scanInFlight, setScanInFlight] = useState<
+    { tracking: string; startedAt: number } | null
+  >(null);
 
   useEffect(() => {
     const handleOpen = (e: Event) => {
@@ -76,13 +83,39 @@ export default function ReceivingDashboard() {
           : prev,
       );
     };
+    // Scan-loader events: sidebar dispatches in-flight when lookup-po POSTs,
+    // resolved when the response lands. We hold the loader briefly after
+    // resolve so the workspace open animation (~180ms) covers the swap.
+    let clearTimer: ReturnType<typeof setTimeout> | null = null;
+    const handleInFlight = (e: Event) => {
+      const detail = (e as CustomEvent<{ tracking: string; startedAt: number }>).detail;
+      if (!detail?.tracking) return;
+      if (clearTimer) {
+        clearTimeout(clearTimer);
+        clearTimer = null;
+      }
+      setScanInFlight({ tracking: detail.tracking, startedAt: detail.startedAt });
+    };
+    const handleResolved = () => {
+      if (clearTimer) clearTimeout(clearTimer);
+      clearTimer = setTimeout(() => {
+        setScanInFlight(null);
+        clearTimer = null;
+      }, 500);
+    };
+
     window.addEventListener('receiving-workspace-open', handleOpen);
     window.addEventListener('receiving-workspace-close', handleClose);
     window.addEventListener('receiving-line-updated', handleUpdate);
+    window.addEventListener('receiving-scan-in-flight', handleInFlight);
+    window.addEventListener('receiving-scan-resolved', handleResolved);
     return () => {
       window.removeEventListener('receiving-workspace-open', handleOpen);
       window.removeEventListener('receiving-workspace-close', handleClose);
       window.removeEventListener('receiving-line-updated', handleUpdate);
+      window.removeEventListener('receiving-scan-in-flight', handleInFlight);
+      window.removeEventListener('receiving-scan-resolved', handleResolved);
+      if (clearTimer) clearTimeout(clearTimer);
     };
   }, []);
 
@@ -135,7 +168,12 @@ export default function ReceivingDashboard() {
   //                             match opens ReceivingDetailsStack as a
   //                             right-side overlay (below).
   const showWorkspace = !!workspace && !isHistoryMode;
-  const showReceivePrompt = !workspace && !isHistoryMode;
+  // Scan loader has priority over the empty prompt — the operator just
+  // scanned, the workspace is the active surface, the prompt is stale.
+  // Once the workspace mounts it covers both; resolved-but-no-workspace
+  // (e.g. unmatched without auto-open) drops back to the prompt.
+  const showScanLoader = !!scanInFlight && !workspace && !isHistoryMode;
+  const showReceivePrompt = !workspace && !isHistoryMode && !showScanLoader;
 
   return (
     <div className="flex h-full w-full overflow-hidden bg-[linear-gradient(180deg,#f8fbfb_0%,#ffffff_16%)]">
@@ -152,6 +190,17 @@ export default function ReceivingDashboard() {
         >
           <ReceivingLinesTable />
         </div>
+
+        {/* Scan-in-flight skeleton loader. Shown the moment the operator
+            submits a tracking scan; cleared 500ms after the response lands. */}
+        {showScanLoader ? (
+          <div className="absolute inset-0 overflow-hidden">
+            <ReceivingScanLoader
+              tracking={scanInFlight!.tracking}
+              startedAt={scanInFlight!.startedAt}
+            />
+          </div>
+        ) : null}
 
         {/* Receiving empty-state — deliberate "scan to start" landing so the
             operator knows the tab is for adding new events, not browsing. */}

@@ -29,6 +29,7 @@ import { saveWorkOrder } from '@/lib/work-orders/saveWorkOrder';
 import { SIDEBAR_GRAY_ASSIGN_BUTTON_CLASS } from '@/components/ui/sidebarPrimaryButtons';
 import { sectionLabel, fieldLabel, microBadge } from '@/design-system/tokens/typography/presets';
 import { dispatchUsavRefreshData, invalidateDashboardOrderQueries } from '@/lib/dashboard-query-invalidation';
+import { useAuth } from '@/contexts/AuthContext';
 
 type PendingStockFilter = 'all' | 'pending' | 'stock';
 
@@ -78,6 +79,8 @@ export function DashboardManagementPanel({
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
+  const { has } = useAuth();
+  const canImportOrders = has('orders.import');
   type TaskStatus = 'idle' | 'running' | 'done' | 'error';
   type TaskState = { status: TaskStatus; summary?: string };
   const [sheetsTask, setSheetsTask] = useState<TaskState>({ status: 'idle' });
@@ -486,6 +489,8 @@ export function DashboardManagementPanel({
 
             <motion.div variants={itemVariants} className="space-y-4 px-4 pb-4 pt-0 bg-gray-50 rounded-2xl border border-gray-100">
               <div className="space-y-3">
+                {canImportOrders ? (
+                <>
                 <div className="space-y-1.5">
                   <label className={`${microBadge} text-gray-500 px-1`}>Manual Sheet Name</label>
                   <input
@@ -629,6 +634,8 @@ export function DashboardManagementPanel({
                     </motion.div>
                   ) : null}
                 </AnimatePresence>
+                </>
+                ) : null}
 
                 {showNextUnassignedButton ? (
                   <button

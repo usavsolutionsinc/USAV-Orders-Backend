@@ -53,7 +53,7 @@ const ROLE_PERMISSION_SETS = {
     'admin.view_logs',
   ],
   sales: [
-    'dashboard.view', 'orders.view', 'orders.create',
+    'dashboard.view', 'orders.view', 'orders.create', 'orders.import',
     'walk_in.view', 'walk_in.intake',
     'sku_stock.view', 'repair.view', 'reports.view',
   ],

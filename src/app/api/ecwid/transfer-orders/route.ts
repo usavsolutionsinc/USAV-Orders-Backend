@@ -34,4 +34,4 @@ export const POST = withAuth(async (req: NextRequest) => {
       details: {},
     });
   }
-}, { permission: 'integrations.ecwid' });
+}, { permission: 'orders.import' });

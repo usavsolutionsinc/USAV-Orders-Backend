@@ -14,7 +14,9 @@ import { RackLabelPrinter } from '@/components/barcode/RackLabelPrinter';
 
 export function RackLabelWorkspace() {
   return (
-    <div className="space-y-4">
+    // Mirror LabelPrintWorkspace: flex column that fills the /warehouse page's
+    // inner flex-col so the printer's sticky bar can mt-auto to the bottom.
+    <div className="flex min-h-0 flex-1 flex-col gap-4">
       <RackLabelPrinter />
     </div>
   );

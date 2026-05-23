@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-05-22 00:00:22 UTC",
+  "generated_at": "2026-05-22 18:59:06 UTC",
   "project_name": "USAV-Orders-Backend",
   "project_flags": {
     "next": true,
@@ -9,9 +9,9 @@
     "prisma": false,
     "github_actions": true
   },
-  "files_scanned": 1538,
-  "git_head": "dac10049ce9d7d40b18d879bfe7c99c1c981c139",
-  "files_fingerprint": "a765f79dd36d",
+  "files_scanned": 1585,
+  "git_head": "11476f0c26b9a1cb444061a1bfd1cd9cccd5a7ac",
+  "files_fingerprint": "04da99539c7c",
   "diagrams": {
     "mindmap": {
       "title": "Project Overview"

@@ -580,12 +580,6 @@ export function RackLabelPrinter({ variant = 'main' }: RackLabelPrinterProps) {
         bay={bay}
         level={level}
         gln={config.gln}
-        allSelected={allSelected}
-        missingLetter={missingLetter}
-        isPrinting={isPrinting}
-        maxLevels={config.maxLevels}
-        onPrintOne={handlePrintOne}
-        onPrintBay={handlePrintBay}
       />
 
       <ConfigSheet
@@ -598,7 +592,9 @@ export function RackLabelPrinter({ variant = 'main' }: RackLabelPrinterProps) {
   );
 
   return (
-    <div className="flex flex-col gap-4 pb-32">
+    // flex-1 + min-h-0 lets this fill the RackLabelWorkspace height; mt-auto
+    // on the StickyActionBar pins it to the bottom of the page.
+    <div className="flex min-h-0 flex-1 flex-col gap-4">
       <div className="lg:hidden">{picker}</div>
 
       {(selectedRoom || aisle != null) && (
@@ -617,6 +613,10 @@ export function RackLabelPrinter({ variant = 'main' }: RackLabelPrinterProps) {
       <div className="hidden lg:block">{desktopBuilder}</div>
 
       <StickyActionBar
+        // Receiving-page parity: negative margins cancel the /warehouse page's
+        // px-4 py-6 sm:px-6 gutter so the bar spans edge-to-edge and sits
+        // flush against the scroll-container floor (no gap below it).
+        className="mt-auto -mx-4 -mb-6 sm:-mx-6"
         primary={{
           label: isPrinting
             ? 'Printing…'
@@ -642,7 +642,6 @@ export function RackLabelPrinter({ variant = 'main' }: RackLabelPrinterProps) {
             : undefined
         }
         hints={allSelected ? [{ key: '⌘P', label: 'Print' }] : []}
-        className="lg:hidden"
       />
 
       <div className="label-print-zone">
@@ -1129,18 +1128,10 @@ interface GiantRackPreviewPanelProps {
   bay?: number;
   level?: number;
   gln: string;
-  allSelected: boolean;
-  missingLetter: boolean;
-  isPrinting: boolean;
-  maxLevels: number;
-  onPrintOne: () => void;
-  onPrintBay: () => void;
 }
 
 function GiantRackPreviewPanel({
   zoneLetter, roomName, aisle, bay, level, gln,
-  allSelected, missingLetter, isPrinting, maxLevels,
-  onPrintOne, onPrintBay,
 }: GiantRackPreviewPanelProps) {
   const segments: RackSegments | null = zoneLetter && aisle != null && bay != null && level != null
     ? { zone: zoneLetter, aisle, bay, level }
@@ -1192,40 +1183,6 @@ function GiantRackPreviewPanel({
           </div>
         </div>
 
-        <div className="mt-6 flex flex-col items-stretch gap-2 sm:flex-row sm:items-center sm:justify-center">
-          <button
-            type="button"
-            onClick={onPrintOne}
-            disabled={!allSelected || isPrinting || missingLetter}
-            className="flex h-14 items-center justify-center gap-2 rounded-2xl bg-gradient-to-br from-blue-500 to-blue-700 px-8 text-[14px] font-bold tracking-wide text-white shadow-md shadow-blue-600/30 transition-all active:scale-[0.98] disabled:cursor-not-allowed disabled:bg-gray-200 disabled:bg-none disabled:text-gray-400 disabled:shadow-none sm:flex-1"
-          >
-            <Printer className="h-4 w-4" />
-            {isPrinting
-              ? 'Printing…'
-              : missingLetter
-                ? 'Assign a zone letter first'
-                : !allSelected
-                  ? 'Complete the steps in the sidebar'
-                  : 'Print rack label'}
-          </button>
-          {roomName && aisle != null && bay != null && (
-            <button
-              type="button"
-              onClick={onPrintBay}
-              disabled={isPrinting || missingLetter}
-              className="flex h-14 items-center justify-center gap-2 rounded-2xl border border-gray-200 bg-white px-6 text-[13px] font-semibold text-gray-700 transition-colors hover:bg-gray-50 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50 sm:flex-none"
-            >
-              <Printer className="h-4 w-4" />
-              Print bay (×{maxLevels} levels)
-            </button>
-          )}
-        </div>
-
-        {allSelected && (
-          <p className="mt-3 text-center text-[10.5px] text-gray-400">
-            Tip: <kbd className="rounded bg-gray-100 px-1 py-0.5 font-mono text-[10px] text-gray-600">⌘P</kbd> prints the current label.
-          </p>
-        )}
       </div>
     </div>
   );

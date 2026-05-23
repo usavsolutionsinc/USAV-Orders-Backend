@@ -11,6 +11,7 @@ import {
   ShoppingCart,
 } from '@/components/Icons';
 import { LineEditPanel } from './LineEditPanel';
+import { UnfoundLineEditPanel } from './UnfoundLineEditPanel';
 import { ReceivingProgressStepper } from './ReceivingProgressStepper';
 import { dispatchReceivingDetailsOverlay } from '@/utils/events';
 import type { ReceivingLineRow } from '@/components/station/ReceivingLinesTable';
@@ -179,23 +180,37 @@ export function ReceivingLineWorkspace({
         labelPrinted={labelPrinted}
       />
 
-      {/* ── Body — LineEditPanel owns its own scroll + sticky action bar
-          for the modern hero-column layout. We just give it min-h-0 to
-          play nice with the flex column. */}
+      {/* ── Body — variant per receiving.source. Unmatched cartons get the
+          Ecwid-pick-driven UnfoundLineEditPanel; everything else falls back
+          to the canonical LineEditPanel. Both own their own scroll + sticky
+          action bar; we just give the container min-h-0 to play nice with
+          the flex column. */}
       <div className="min-h-0 flex-1 overflow-hidden">
-        <LineEditPanel
-          row={row}
-          staffId={staffId}
-          compact={scanDriven}
-          accordionBootstrap={accordionBootstrap}
-          onPrev={onPrev}
-          onNext={onNext}
-          canPrev={nav?.canPrev ?? false}
-          canNext={nav?.canNext ?? false}
-          itemIndex={nav?.currentIndex}
-          itemTotal={nav?.total}
-          onClose={onClose}
-        />
+        {row.receiving_source === 'unmatched' ? (
+          <UnfoundLineEditPanel
+            row={row}
+            staffId={staffId}
+            onPrev={onPrev}
+            onNext={onNext}
+            canPrev={nav?.canPrev ?? false}
+            canNext={nav?.canNext ?? false}
+            onClose={onClose}
+          />
+        ) : (
+          <LineEditPanel
+            row={row}
+            staffId={staffId}
+            compact={scanDriven}
+            accordionBootstrap={accordionBootstrap}
+            onPrev={onPrev}
+            onNext={onNext}
+            canPrev={nav?.canPrev ?? false}
+            canNext={nav?.canNext ?? false}
+            itemIndex={nav?.currentIndex}
+            itemTotal={nav?.total}
+            onClose={onClose}
+          />
+        )}
       </div>
     </motion.div>
   );

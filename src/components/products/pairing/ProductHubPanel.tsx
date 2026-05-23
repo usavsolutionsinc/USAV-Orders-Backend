@@ -14,6 +14,7 @@ import {
 import { PRODUCT_HUB_PLATFORMS, platformStyle } from './platform-style';
 import { useProductHub } from './useProductHub';
 import type { HubCandidate, HubConfirmed } from './types';
+import { StickyActionBar } from '@/design-system/components/StickyActionBar';
 
 interface ProductHubPanelProps {
   skuCatalogId: number;
@@ -409,37 +410,29 @@ function PendingFooter({
   if (total === 0 && !saveError) return null;
 
   return (
-    <div className="shrink-0 border-t border-gray-200 bg-white px-4 py-3">
-      {saveError && (
-        <div className="mb-2 flex items-center gap-1.5 rounded-md border border-red-200 bg-red-50 px-2 py-1.5 text-[11px] font-semibold text-red-700">
-          <AlertCircle className="h-3.5 w-3.5" />
-          {saveError}
-        </div>
-      )}
-      <div className="flex items-center gap-2">
-        <div className="flex flex-1 flex-wrap gap-3 text-[11px] font-bold uppercase tracking-wider text-gray-600">
+    <StickyActionBar
+      density="compact"
+      error={saveError ?? undefined}
+      leading={
+        <div className="flex flex-wrap gap-3 text-[11px] font-bold uppercase tracking-wider text-gray-600">
           {acceptCount > 0 && <span className="text-blue-700">{acceptCount} accept</span>}
           {rejectCount > 0 && <span className="text-gray-700">{rejectCount} reject</span>}
           {unpairCount > 0 && <span className="text-orange-700">{unpairCount} unpair</span>}
         </div>
-        <button
-          type="button"
-          onClick={onDiscard}
-          disabled={saving || total === 0}
-          className="rounded-md border border-gray-200 bg-white px-3 py-1.5 text-[11px] font-bold text-gray-700 transition-colors hover:bg-gray-50 disabled:opacity-50"
-        >
-          Discard
-        </button>
-        <button
-          type="button"
-          onClick={onSave}
-          disabled={saving || total === 0}
-          className="inline-flex items-center gap-1.5 rounded-md bg-gray-900 px-3 py-1.5 text-[11px] font-black uppercase tracking-wider text-white transition-colors hover:bg-gray-800 disabled:cursor-not-allowed disabled:opacity-50"
-        >
-          {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Link2 className="h-3.5 w-3.5" />}
-          Save {total}
-        </button>
-      </div>
-    </div>
+      }
+      secondary={{
+        label: 'Discard',
+        onClick: onDiscard,
+        disabled: saving || total === 0,
+      }}
+      primary={{
+        label: `Save ${total}`,
+        onClick: onSave,
+        disabled: saving || total === 0,
+        isLoading: saving,
+        tone: 'gray',
+        icon: <Link2 className="h-3.5 w-3.5" />,
+      }}
+    />
   );
 }

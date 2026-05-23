@@ -10,6 +10,7 @@
 
 import { COND_LABEL } from '@/components/station/receiving-constants';
 import {
+  AlertTriangle,
   ClipboardList,
   List,
   ShoppingCart,
@@ -19,12 +20,17 @@ import type { ReceivingLineRow } from '@/components/station/ReceivingLinesTable'
 
 // ── Sidebar mode switcher ───────────────────────────────────────────────────
 
-export type ReceivingMode = 'receive' | 'history' | 'pickup';
+export type ReceivingMode = 'receive' | 'history' | 'pickup' | 'unfound';
 
 export const RECEIVING_MODE_ITEMS: HorizontalSliderItem[] = [
   { id: 'receive', label: 'Receiving',    icon: ClipboardList },
   { id: 'history', label: 'History',      icon: List },
   { id: 'pickup',  label: 'Local Pickup', icon: ShoppingCart },
+  // `unfound` is a route-switch, not a URL-param switch — clicking it
+  // navigates to /receiving/unfound (which mounts UnfoundQueueTable as the
+  // workspace surface). updateMode in ReceivingSidebarPanel handles the
+  // routing branch so the pill UX stays continuous across the section.
+  { id: 'unfound', label: 'Unfound',      icon: AlertTriangle },
 ];
 
 // ── Carton scratch (localStorage) ───────────────────────────────────────────

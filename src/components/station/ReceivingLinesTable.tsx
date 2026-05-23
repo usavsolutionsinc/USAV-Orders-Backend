@@ -60,6 +60,12 @@ export interface ReceivingLineRow {
   last_activity_at?: string | null;
   image_url: string | null;
   source_platform: string | null;
+  /**
+   * receiving.source — 'zoho_po' | 'unmatched' | 'local_pickup'.
+   * Drives which workspace variant mounts (LineEditPanel vs UnfoundLineEditPanel).
+   * Optional so callers that don't fetch from /api/receiving-lines still typecheck.
+   */
+  receiving_source?: string | null;
   serials?: Array<{ id: number; serial_number: string }> | null;
   /** Count of photos attached to this line's carton (from photos table, entity_type='RECEIVING'). */
   photo_count?: number;

@@ -1,9 +1,19 @@
 'use client';
 
 import type { ReactNode } from 'react';
-import { Check, Loader2 } from '@/components/Icons';
+import { AlertCircle, Check, ChevronDown, Loader2 } from '@/components/Icons';
 
 export type StickyActionTone = 'blue' | 'emerald' | 'orange' | 'violet' | 'red' | 'gray';
+
+export type StickyActionDensity = 'comfortable' | 'compact';
+
+export interface StickyActionMenuItem {
+  label: string;
+  onClick: () => void;
+  icon?: ReactNode;
+  disabled?: boolean;
+  title?: string;
+}
 
 interface PrimaryAction {
   label: string;
@@ -11,7 +21,19 @@ interface PrimaryAction {
   disabled?: boolean;
   isLoading?: boolean;
   tone?: StickyActionTone;
+  /** Override the tone palette with arbitrary Tailwind classes — used when the
+   *  caller drives color from a dynamic source (e.g. station theme per row). */
+  toneClasses?: { bg: string; hover: string };
   icon?: ReactNode;
+  /** Title attribute for the main CTA (helps explain disabled states). */
+  title?: string;
+  /** Optional split-button menu shown above the CTA on hover/focus of the
+   *  leading chevron. Items render top-to-bottom in a card that opens upward. */
+  menu?: StickyActionMenuItem[];
+  /** aria-label for the chevron trigger. Defaults to "More actions". */
+  menuLabel?: string;
+  /** title attribute for the chevron trigger. */
+  menuTitle?: string;
 }
 
 interface SecondaryAction {
@@ -31,7 +53,17 @@ interface StickyActionBarProps {
   primary: PrimaryAction;
   secondary?: SecondaryAction;
   hints?: Hint[];
-  /** Max width of the inner content. Defaults to `max-w-3xl`. */
+  /** Replaces the keyboard-hint area on the left with arbitrary content
+   *  (status badges, counts, etc.). When set, `hints` is ignored. */
+  leading?: ReactNode;
+  /** Optional error banner rendered above the row. */
+  error?: ReactNode;
+  /** Layout density — `comfortable` is the default tall CTA;
+   *  `compact` uses smaller buttons for in-card bars. */
+  density?: StickyActionDensity;
+  /** Max width of the inner content. Defaults to `max-w-3xl`. The inner row
+   *  is `mx-auto`, so the buttons sit centered — keeping bottom-right FABs
+   *  from overlapping the action cluster. */
   maxWidth?: string;
   /** Extra class on the outer wrapper (override bg, padding, etc.). */
   className?: string;
@@ -43,15 +75,27 @@ const TONE_BG: Record<StickyActionTone, string> = {
   orange: 'bg-orange-600 hover:bg-orange-700',
   violet: 'bg-violet-700 hover:bg-violet-800',
   red: 'bg-rose-600 hover:bg-rose-700',
-  gray: 'bg-gray-700 hover:bg-gray-800',
+  gray: 'bg-gray-900 hover:bg-gray-800',
+};
+
+const TONE_HOVER_ONLY: Record<StickyActionTone, string> = {
+  blue: 'hover:bg-blue-700',
+  emerald: 'hover:bg-emerald-700',
+  orange: 'hover:bg-orange-700',
+  violet: 'hover:bg-violet-800',
+  red: 'hover:bg-rose-700',
+  gray: 'hover:bg-gray-800',
 };
 
 /**
- * Sticky bottom action bar — primary CTA on the right, optional secondary
- * button + keyboard hint chips on the left. Mirrors the local
- * `StickyActionBar` in `src/components/MultiSkuSnBarcode.tsx` (lines
- * 1202-1246) so the two surfaces share a visual language; promoted here
- * for reuse.
+ * Sticky bottom action bar — the canonical chrome for every "do the thing"
+ * surface (receiving, label printer, pairing). Renders three slots from left
+ * to right:
+ *
+ *  - **Leading**: keyboard `hints` or arbitrary `leading` content (badge counts).
+ *  - **Secondary**: optional outline button (Discard, Cancel).
+ *  - **Primary**: solid-tone CTA. Pass `primary.menu` to turn it into a
+ *    split button — a chevron on the left opens an upward menu on hover/focus.
  *
  * Pinned `bottom-0 z-10` inside its containing scroll surface. Parent must
  * leave room (e.g. `pb-32` on the scroll inner) so content isn't hidden.
@@ -60,61 +104,178 @@ export function StickyActionBar({
   primary,
   secondary,
   hints,
+  leading,
+  error,
+  density = 'comfortable',
   maxWidth = 'max-w-3xl',
   className,
 }: StickyActionBarProps) {
+  const isCompact = density === 'compact';
   const tone = primary.tone ?? 'blue';
+  const baseTone = primary.toneClasses
+    ? `${primary.toneClasses.bg} ${primary.toneClasses.hover}`
+    : TONE_BG[tone];
   const toneClass = primary.disabled
     ? 'cursor-not-allowed bg-gray-300'
-    : TONE_BG[tone];
+    : baseTone;
+  const hoverOnly = primary.toneClasses
+    ? primary.toneClasses.hover
+    : TONE_HOVER_ONLY[tone];
+
+  const primaryHeight = isCompact ? 'h-9' : 'h-12';
+  const primaryPadding = isCompact ? 'px-3' : 'px-6';
+  const primaryText = isCompact
+    ? 'text-[11px] font-black uppercase tracking-wider'
+    : 'text-sm font-bold';
+  const primaryMinWidth = isCompact ? '' : 'sm:flex-initial sm:min-w-[220px]';
+  const primaryRadius = isCompact ? 'rounded-md' : 'rounded-xl';
+
+  const secondaryHeight = isCompact ? 'h-9' : 'h-12';
+  const secondaryPadding = isCompact ? 'px-3' : 'px-4';
+  const secondaryText = isCompact ? 'text-[11px] font-bold' : 'text-sm font-semibold';
+  const secondaryRadius = isCompact ? 'rounded-md' : 'rounded-xl';
+
+  const wrapperPadding = isCompact ? 'px-4 py-3' : 'px-4 py-3 sm:px-6';
+
+  const menu = primary.menu;
+  const hasMenu = Array.isArray(menu) && menu.length > 0;
+
   return (
     <div
-      className={`sticky bottom-0 z-10 border-t border-gray-200 bg-white/90 px-4 py-3 backdrop-blur sm:px-6 ${
+      className={`sticky bottom-0 z-10 border-t border-gray-200 bg-white/90 ${wrapperPadding} backdrop-blur ${
         className ?? ''
       }`}
     >
-      <div className={`mx-auto flex w-full ${maxWidth} items-center justify-between gap-4`}>
-        <div className="hidden items-center gap-3 text-xs text-gray-500 sm:flex">
-          {hints?.map((h) => (
-            <span key={`${h.key}-${h.label}`} className="inline-flex items-center gap-1.5">
-              <kbd className="rounded-md border border-gray-200 bg-gray-50 px-1.5 py-0.5 font-mono text-[10px] font-bold text-gray-600">
-                {h.key}
-              </kbd>
-              <span className="font-semibold uppercase tracking-[0.14em]">{h.label}</span>
-            </span>
-          ))}
-        </div>
+      <div className={`mx-auto flex w-full ${maxWidth} flex-col gap-2`}>
+        {error ? (
+          <div className="flex items-center gap-1.5 rounded-md border border-red-200 bg-red-50 px-2 py-1.5 text-[11px] font-semibold text-red-700">
+            <AlertCircle className="h-3.5 w-3.5" />
+            {error}
+          </div>
+        ) : null}
 
-        <div className="flex flex-1 items-center justify-end gap-2 sm:flex-initial">
-          {secondary ? (
-            <button
-              type="button"
-              onClick={secondary.onClick}
-              disabled={secondary.disabled}
-              className="inline-flex h-12 items-center justify-center gap-1.5 rounded-xl border border-gray-200 bg-white px-4 text-sm font-semibold text-gray-700 shadow-sm transition-colors hover:bg-gray-50 disabled:opacity-40"
-            >
-              {secondary.icon}
-              <span>{secondary.label}</span>
-            </button>
-          ) : null}
-          <button
-            type="button"
-            onClick={primary.onClick}
-            disabled={primary.disabled || primary.isLoading}
-            className={`inline-flex h-12 flex-1 items-center justify-center gap-2.5 rounded-xl px-6 text-sm font-bold text-white shadow-sm transition-all sm:flex-initial sm:min-w-[220px] ${toneClass}`}
-          >
-            {primary.isLoading ? (
+        <div className="flex w-full items-center justify-between gap-4">
+          <div className="hidden min-w-0 flex-1 items-center gap-3 text-xs text-gray-500 sm:flex">
+            {leading ?? (
               <>
-                <Loader2 className="h-4 w-4 animate-spin" />
-                <span>{primary.label}</span>
-              </>
-            ) : (
-              <>
-                {primary.icon ?? <Check className="h-4 w-4" />}
-                <span>{primary.label}</span>
+                {hints?.map((h) => (
+                  <span
+                    key={`${h.key}-${h.label}`}
+                    className="inline-flex items-center gap-1.5"
+                  >
+                    <kbd className="rounded-md border border-gray-200 bg-gray-50 px-1.5 py-0.5 font-mono text-[10px] font-bold text-gray-600">
+                      {h.key}
+                    </kbd>
+                    <span className="font-semibold uppercase tracking-[0.14em]">
+                      {h.label}
+                    </span>
+                  </span>
+                ))}
               </>
             )}
-          </button>
+          </div>
+
+          <div className="flex flex-1 items-center justify-end gap-2 sm:flex-initial">
+            {secondary ? (
+              <button
+                type="button"
+                onClick={secondary.onClick}
+                disabled={secondary.disabled}
+                className={`inline-flex ${secondaryHeight} items-center justify-center gap-1.5 ${secondaryRadius} border border-gray-200 bg-white ${secondaryPadding} ${secondaryText} text-gray-700 shadow-sm transition-colors hover:bg-gray-50 disabled:opacity-40`}
+              >
+                {secondary.icon}
+                <span>{secondary.label}</span>
+              </button>
+            ) : null}
+
+            {hasMenu ? (
+              <div
+                className={`relative z-20 flex flex-1 overflow-visible ${primaryRadius} shadow-sm ${
+                  primary.disabled ? 'bg-gray-300' : baseTone
+                } sm:flex-initial`}
+              >
+                <div className="group/split-menu relative flex shrink-0 self-stretch">
+                  <button
+                    type="button"
+                    aria-haspopup="menu"
+                    aria-label={primary.menuLabel ?? 'More actions'}
+                    title={primary.menuTitle}
+                    className={`flex ${primaryHeight} items-center justify-center ${primaryRadius.replace('rounded', 'rounded-l')} border-r border-white/20 px-3 text-white outline-none transition-colors ${
+                      primary.disabled ? '' : hoverOnly
+                    } focus-visible:z-30 focus-visible:ring-2 focus-visible:ring-white/80 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60`}
+                    disabled={primary.disabled}
+                  >
+                    <ChevronDown className="h-4 w-4 opacity-95" />
+                  </button>
+                  <div
+                    className="invisible absolute left-0 bottom-full z-50 pb-1.5 opacity-0 transition-opacity duration-75 group-hover/split-menu:pointer-events-auto group-hover/split-menu:visible group-hover/split-menu:opacity-100 group-focus-within/split-menu:pointer-events-auto group-focus-within/split-menu:visible group-focus-within/split-menu:opacity-100"
+                    role="presentation"
+                  >
+                    <ul
+                      role="menu"
+                      aria-label={primary.menuLabel ?? 'More actions'}
+                      className="min-w-[12rem] rounded-lg border border-slate-200 bg-white py-1 shadow-xl ring-1 ring-slate-200/80"
+                    >
+                      {menu!.map((item) => (
+                        <li key={item.label} role="none">
+                          <button
+                            role="menuitem"
+                            type="button"
+                            disabled={item.disabled}
+                            title={item.title}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              item.onClick();
+                            }}
+                            className="flex w-full items-center gap-2 px-3 py-2 text-left text-[11px] font-black uppercase tracking-wider text-slate-800 transition-colors hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-35"
+                          >
+                            {item.icon}
+                            {item.label}
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={primary.onClick}
+                  disabled={primary.disabled || primary.isLoading}
+                  title={primary.title}
+                  className={`inline-flex ${primaryHeight} min-w-0 flex-1 items-center justify-center gap-2 ${primaryRadius.replace('rounded', 'rounded-r')} ${primaryPadding} ${primaryText} text-white outline-none transition-colors ${
+                    primary.disabled ? '' : hoverOnly
+                  } focus-visible:z-30 focus-visible:ring-2 focus-visible:ring-white/70 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60`}
+                >
+                  {primary.isLoading ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    primary.icon ?? <Check className="h-4 w-4" />
+                  )}
+                  <span>{primary.label}</span>
+                </button>
+              </div>
+            ) : (
+              <button
+                type="button"
+                onClick={primary.onClick}
+                disabled={primary.disabled || primary.isLoading}
+                title={primary.title}
+                className={`inline-flex ${primaryHeight} flex-1 items-center justify-center gap-2.5 ${primaryRadius} ${primaryPadding} ${primaryText} text-white shadow-sm transition-all ${primaryMinWidth} ${toneClass}`}
+              >
+                {primary.isLoading ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    <span>{primary.label}</span>
+                  </>
+                ) : (
+                  <>
+                    {primary.icon ?? <Check className="h-4 w-4" />}
+                    <span>{primary.label}</span>
+                  </>
+                )}
+              </button>
+            )}
+          </div>
         </div>
       </div>
     </div>
