@@ -27,7 +27,7 @@ export function ReceivingTestTable({
   if (loading) {
     return (
       <div className="flex h-48 items-center justify-center">
-        <p className="text-[10px] font-black uppercase tracking-widest text-teal-400">Loading…</p>
+        <p className="text-micro font-black uppercase tracking-widest text-teal-400">Loading…</p>
       </div>
     );
   }
@@ -36,7 +36,7 @@ export function ReceivingTestTable({
     return (
       <div className="flex h-48 flex-col items-center justify-center gap-2">
         <Package className="w-8 h-8 text-teal-200" />
-        <p className="text-[10px] font-black uppercase tracking-widest text-teal-400">{emptyMessage}</p>
+        <p className="text-micro font-black uppercase tracking-widest text-teal-400">{emptyMessage}</p>
       </div>
     );
   }
@@ -45,9 +45,9 @@ export function ReceivingTestTable({
     <div className="w-full">
       {/* Sticky header */}
       <div className="sticky top-0 z-10 grid grid-cols-[40px_1fr_auto] gap-2 bg-teal-50/90 backdrop-blur-sm border-b border-teal-100 px-4 py-2.5">
-        <p className="text-[9px] font-black uppercase tracking-widest text-teal-600">ID</p>
-        <p className="text-[9px] font-black uppercase tracking-widest text-teal-600">Tracking / SKUs</p>
-        <p className="text-[9px] font-black uppercase tracking-widest text-teal-600">Status</p>
+        <p className="text-eyebrow font-black uppercase tracking-widest text-teal-600">ID</p>
+        <p className="text-eyebrow font-black uppercase tracking-widest text-teal-600">Tracking / SKUs</p>
+        <p className="text-eyebrow font-black uppercase tracking-widest text-teal-600">Status</p>
       </div>
 
       <div>
@@ -72,7 +72,7 @@ export function ReceivingTestTable({
                 }`}
               >
                 {/* Receiving ID chip */}
-                <span className={`text-[10px] font-black font-mono rounded-lg px-1.5 py-0.5 text-center whitespace-nowrap ${
+                <span className={`text-micro font-black font-mono rounded-lg px-1.5 py-0.5 text-center whitespace-nowrap ${
                   isSelected ? 'bg-teal-600 text-white' : 'bg-teal-100 text-teal-700'
                 }`}>
                   #{item.receiving_id}
@@ -80,21 +80,21 @@ export function ReceivingTestTable({
 
                 {/* Tracking + SKUs */}
                 <div className="min-w-0">
-                  <p className={`text-[11px] font-black font-mono truncate leading-snug ${isSelected ? 'text-teal-700' : 'text-gray-700'}`}>
+                  <p className={`text-caption font-black font-mono truncate leading-snug ${isSelected ? 'text-teal-700' : 'text-gray-700'}`}>
                     {item.carrier && (
                       <span className="text-gray-400 mr-1 font-bold not-italic">{item.carrier}</span>
                     )}
                     {trackingShort}
                   </p>
                   {item.line_skus.length > 0 ? (
-                    <p className="text-[9px] font-semibold text-gray-400 truncate mt-0.5">
+                    <p className="text-eyebrow font-semibold text-gray-400 truncate mt-0.5">
                       {item.line_skus.slice(0, 3).join(', ')}
                       {item.line_count > item.line_skus.length
                         ? ` +${item.line_count - item.line_skus.length}`
                         : ''}
                     </p>
                   ) : item.line_count > 0 ? (
-                    <p className="text-[9px] font-semibold text-gray-400 mt-0.5">
+                    <p className="text-eyebrow font-semibold text-gray-400 mt-0.5">
                       {item.line_count} line{item.line_count !== 1 ? 's' : ''}
                     </p>
                   ) : null}
@@ -102,11 +102,11 @@ export function ReceivingTestTable({
 
                 {/* Status badges */}
                 <div className="flex flex-col items-end gap-1">
-                  <span className={`text-[8px] font-black uppercase tracking-widest rounded-md px-1.5 py-0.5 whitespace-nowrap ${workflowCls}`}>
+                  <span className={`text-mini font-black uppercase tracking-widest rounded-md px-1.5 py-0.5 whitespace-nowrap ${workflowCls}`}>
                     {workflowStatusTableLabel(item.workflow_status ?? 'EXPECTED')}
                   </span>
                   {item.qa_status && item.qa_status !== 'PENDING' && (
-                    <span className={`text-[8px] font-black uppercase tracking-widest rounded-md px-1.5 py-0.5 whitespace-nowrap ${qaCls}`}>
+                    <span className={`text-mini font-black uppercase tracking-widest rounded-md px-1.5 py-0.5 whitespace-nowrap ${qaCls}`}>
                       {item.qa_status.replace(/_/g, ' ')}
                     </span>
                   )}

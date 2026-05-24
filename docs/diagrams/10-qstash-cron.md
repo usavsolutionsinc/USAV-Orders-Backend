@@ -1,6 +1,10 @@
-# 10 — QStash Cron Jobs
+# 10 — Scheduled Jobs (Vercel Cron primary)
 
-10 scheduled jobs driven by Upstash QStash. All schedules are declared in `src/config/qstash-schedules.json` and reconciled via `POST /api/qstash/schedules/bootstrap`.
+Most recurring jobs have been migrated from Upstash QStash to **Vercel Cron** (defined in `vercel.json`).
+
+A transition config still exists in `src/config/qstash-schedules.json` (entries marked `"managedBy": "vercel"` are ignored by bootstrap/sync tools).
+
+Route handlers under both `/api/qstash/...` and `/api/cron/...` accept either trigger mechanism via the helpers in `src/lib/qstash.ts`.
 
 ## Schedule overview
 

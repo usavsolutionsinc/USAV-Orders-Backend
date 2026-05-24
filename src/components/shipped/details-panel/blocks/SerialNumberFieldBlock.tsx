@@ -195,7 +195,7 @@ export function SerialNumberFieldBlock({
             <button
               type="button"
               onClick={handleAddRow}
-              className="inline-flex items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-3 py-2 text-[10px] font-black uppercase tracking-wider text-gray-700"
+              className="inline-flex items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-3 py-2 text-micro font-black uppercase tracking-wider text-gray-700"
             >
               <Plus className="w-3 h-3" />
               Add Row
@@ -204,7 +204,7 @@ export function SerialNumberFieldBlock({
               type="button"
               onClick={handleSave}
               disabled={isSaving}
-              className="inline-flex items-center gap-1.5 rounded-lg bg-blue-600 px-3 py-2 text-[10px] font-black uppercase tracking-wider text-white disabled:opacity-50"
+              className="inline-flex items-center gap-1.5 rounded-lg bg-blue-600 px-3 py-2 text-micro font-black uppercase tracking-wider text-white disabled:opacity-50"
             >
               <Check className="w-3 h-3" />
               {isSaving ? 'Saving' : 'Save Serials'}
@@ -212,7 +212,7 @@ export function SerialNumberFieldBlock({
           </div>
 
           {error && (
-            <p className="text-[10px] font-bold text-red-600">{error}</p>
+            <p className="text-micro font-bold text-red-600">{error}</p>
           )}
         </div>
       )}

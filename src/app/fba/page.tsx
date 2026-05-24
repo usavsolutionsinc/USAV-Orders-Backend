@@ -216,7 +216,7 @@ function FbaPageContent() {
                 <FbaErrorState message={error} onRetry={fetchBoard} theme={stationTheme} />
               ) : activeTab === 'shipped' ? (
                 <div className="flex h-full items-center justify-center px-5 text-center">
-                  <p className="max-w-sm text-[11px] font-black uppercase tracking-widest text-gray-400">
+                  <p className="max-w-sm text-caption font-black uppercase tracking-widest text-gray-400">
                     Shipped mode is managed from the sidebar table.
                   </p>
                 </div>
@@ -314,7 +314,7 @@ export default function FbaPage() {
           <div className="flex-1 flex items-center justify-center p-6">
             <div className="w-full max-w-sm rounded-2xl border border-zinc-200/80 bg-white px-6 py-8 text-center shadow-sm shadow-zinc-200/70">
               <Loader2 className="mx-auto h-8 w-8 animate-spin text-zinc-400" />
-              <p className="mt-4 text-[11px] font-black uppercase tracking-[0.2em] text-zinc-500">
+              <p className="mt-4 text-caption font-black uppercase tracking-[0.2em] text-zinc-500">
                 Initializing Workspace
               </p>
             </div>

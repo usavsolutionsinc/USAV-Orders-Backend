@@ -22,18 +22,18 @@ export function ReceivingCartonLabel(payload: ReceivingLabelPayload) {
     <div className="w-full rounded border border-gray-200 bg-white px-2 py-2 shadow-sm">
       <div className="flex flex-nowrap items-stretch gap-3 min-h-[5rem]">
         <div className="min-w-0 flex-1 flex flex-col justify-between py-0.5">
-          <div className="flex items-baseline justify-between gap-2 text-[12px] leading-none">
+          <div className="flex items-baseline justify-between gap-2 text-label leading-none">
             <span className="truncate font-bold text-gray-700">{payload.platform}</span>
             <span className="shrink-0 tabular-nums font-semibold text-gray-600">
               {payload.date}
             </span>
           </div>
           <div className="flex min-h-0 flex-[1_1_auto] min-w-0 items-center justify-center px-0.5 text-center">
-            <span className="line-clamp-3 w-full break-words text-[11px] font-semibold leading-tight text-gray-900">
+            <span className="line-clamp-3 w-full break-words text-caption font-semibold leading-tight text-gray-900">
               {(payload.notes || '').trim()}
             </span>
           </div>
-          <div className="flex items-baseline justify-between gap-2 text-[13px] leading-none">
+          <div className="flex items-baseline justify-between gap-2 text-sm leading-none">
             <ConditionHeaderDisplay code={payload.conditionCode} />
             <span className="shrink-0 tabular-nums font-black text-gray-900">
               {receivingLabelPoCornerDisplay(payload)}

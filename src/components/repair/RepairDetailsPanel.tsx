@@ -209,7 +209,7 @@ export function RepairDetailsPanel({
                 TK Number
               </p>
             )}
-            <p className="text-[10px] font-bold text-orange-600 uppercase tracking-widest mt-1">
+            <p className="text-micro font-bold text-orange-600 uppercase tracking-widest mt-1">
               {isSavingTicket ? 'Saving...' : 'Repair In-Progress'}
             </p>
           </div>
@@ -237,7 +237,7 @@ export function RepairDetailsPanel({
       <div className="flex-1 overflow-y-auto p-6 space-y-6">
         {/* Current Status */}
         <section>
-          <h3 className="text-[10px] font-black uppercase tracking-wider text-gray-500 mb-3 border-b border-gray-200 pb-2">
+          <h3 className="text-micro font-black uppercase tracking-wider text-gray-500 mb-3 border-b border-gray-200 pb-2">
             Update Status
           </h3>
           <select
@@ -319,7 +319,7 @@ export function RepairDetailsPanel({
 
         {/* Customer Information */}
         <section>
-          <h3 className="text-[10px] font-black uppercase tracking-wider text-gray-500 mb-3 border-b border-gray-200 pb-2">
+          <h3 className="text-micro font-black uppercase tracking-wider text-gray-500 mb-3 border-b border-gray-200 pb-2">
             Customer Information
           </h3>
           <div className="space-y-3">
@@ -365,7 +365,7 @@ export function RepairDetailsPanel({
         
         {/* Technical Details */}
         <section>
-          <h3 className="text-[10px] font-black uppercase tracking-wider text-gray-500 mb-3 border-b border-gray-200 pb-2">
+          <h3 className="text-micro font-black uppercase tracking-wider text-gray-500 mb-3 border-b border-gray-200 pb-2">
             Technical Details
           </h3>
           <div className="space-y-3">
@@ -381,7 +381,7 @@ export function RepairDetailsPanel({
         </section>
         
         <section>
-          <h3 className="text-[10px] font-black uppercase tracking-wider text-gray-500 mb-3 border-b border-gray-200 pb-2">
+          <h3 className="text-micro font-black uppercase tracking-wider text-gray-500 mb-3 border-b border-gray-200 pb-2">
             Record
           </h3>
           <div className="space-y-3">
@@ -402,7 +402,7 @@ export function RepairDetailsPanel({
         
         {/* Editable Notes */}
         <section>
-          <h3 className="text-[10px] font-black uppercase tracking-wider text-gray-500 mb-3 border-b border-gray-200 pb-2">
+          <h3 className="text-micro font-black uppercase tracking-wider text-gray-500 mb-3 border-b border-gray-200 pb-2">
             Notes
           </h3>
           <textarea 

@@ -128,10 +128,10 @@ export function SalesIntakeForm({ onClose, onComplete }: SalesIntakeFormProps) {
         {/* Header */}
         <div className="flex items-center justify-between border-b border-gray-100 px-5 py-3">
           <div>
-            <h2 className="text-[13px] font-black uppercase tracking-tight text-gray-900">
+            <h2 className="text-sm font-black uppercase tracking-tight text-gray-900">
               New Sale
             </h2>
-            <p className="mt-0.5 text-[9px] font-black uppercase tracking-widest text-emerald-500">
+            <p className="mt-0.5 text-eyebrow font-black uppercase tracking-widest text-emerald-500">
               Walk-In Order
             </p>
           </div>
@@ -149,13 +149,13 @@ export function SalesIntakeForm({ onClose, onComplete }: SalesIntakeFormProps) {
 
           {/* ── Customer Section ── */}
           <div>
-            <p className="text-[9px] font-black uppercase tracking-widest text-gray-500 mb-2">Customer</p>
+            <p className="text-eyebrow font-black uppercase tracking-widest text-gray-500 mb-2">Customer</p>
 
             <div className="grid grid-cols-2 gap-1.5 mb-3">
               <button
                 type="button"
                 onClick={() => { setCustomerMode('existing'); setIsAnonymous(false); }}
-                className={`rounded-lg px-2 py-2 text-[9px] font-black uppercase tracking-wide transition-colors ${
+                className={`rounded-lg px-2 py-2 text-eyebrow font-black uppercase tracking-wide transition-colors ${
                   customerMode === 'existing'
                     ? 'bg-emerald-600 text-white shadow-sm'
                     : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
@@ -166,7 +166,7 @@ export function SalesIntakeForm({ onClose, onComplete }: SalesIntakeFormProps) {
               <button
                 type="button"
                 onClick={() => { setCustomerMode('anonymous'); setIsAnonymous(true); setSelectedCustomer(null); }}
-                className={`rounded-lg px-2 py-2 text-[9px] font-black uppercase tracking-wide transition-colors ${
+                className={`rounded-lg px-2 py-2 text-eyebrow font-black uppercase tracking-wide transition-colors ${
                   customerMode === 'anonymous'
                     ? 'bg-emerald-600 text-white shadow-sm'
                     : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
@@ -188,22 +188,22 @@ export function SalesIntakeForm({ onClose, onComplete }: SalesIntakeFormProps) {
 
                 {/* Customer results */}
                 <div className="overflow-hidden rounded-xl border border-emerald-200 bg-white">
-                  <div className="grid grid-cols-[1fr_1fr_0.6fr] gap-2 border-b border-emerald-100 bg-emerald-50 px-3 py-2 text-[8px] font-black uppercase tracking-wider text-emerald-700">
+                  <div className="grid grid-cols-[1fr_1fr_0.6fr] gap-2 border-b border-emerald-100 bg-emerald-50 px-3 py-2 text-mini font-black uppercase tracking-wider text-emerald-700">
                     <span>Name</span>
                     <span>Contact</span>
                     <span className="text-right">Action</span>
                   </div>
                   <div className="max-h-36 overflow-y-auto">
                     {loadingCustomers && customerQuery.length > 1 && (
-                      <div className="px-3 py-3 text-[10px] font-bold text-gray-500">Searching...</div>
+                      <div className="px-3 py-3 text-micro font-bold text-gray-500">Searching...</div>
                     )}
                     {!loadingCustomers && customers.length === 0 && customerQuery.length > 1 && (
-                      <div className="px-3 py-3 text-[10px] font-bold text-gray-500">No customers found</div>
+                      <div className="px-3 py-3 text-micro font-bold text-gray-500">No customers found</div>
                     )}
                     {!loadingCustomers && customers.map((c) => (
                       <div
                         key={c.id}
-                        className={`grid grid-cols-[1fr_1fr_0.6fr] gap-2 border-b border-gray-100 px-3 py-2 text-[10px] ${
+                        className={`grid grid-cols-[1fr_1fr_0.6fr] gap-2 border-b border-gray-100 px-3 py-2 text-micro ${
                           selectedCustomer?.id === c.id ? 'bg-emerald-50' : 'bg-white'
                         }`}
                       >
@@ -217,7 +217,7 @@ export function SalesIntakeForm({ onClose, onComplete }: SalesIntakeFormProps) {
                           <button
                             type="button"
                             onClick={() => setSelectedCustomer(c)}
-                            className="rounded-md bg-emerald-600 px-2 py-1 text-[8px] font-black uppercase tracking-wide text-white hover:bg-emerald-700 transition-colors"
+                            className="rounded-md bg-emerald-600 px-2 py-1 text-mini font-black uppercase tracking-wide text-white hover:bg-emerald-700 transition-colors"
                           >
                             Select
                           </button>
@@ -231,8 +231,8 @@ export function SalesIntakeForm({ onClose, onComplete }: SalesIntakeFormProps) {
                   <div className="rounded-xl border border-emerald-200 bg-emerald-50/60 p-3">
                     <div className="flex items-center justify-between">
                       <div>
-                        <p className="text-[11px] font-bold text-emerald-800">{customerName}</p>
-                        <p className="text-[10px] text-emerald-600">
+                        <p className="text-caption font-bold text-emerald-800">{customerName}</p>
+                        <p className="text-micro text-emerald-600">
                           {selectedCustomer.phone_number || selectedCustomer.email_address || 'Selected'}
                         </p>
                       </div>
@@ -247,21 +247,21 @@ export function SalesIntakeForm({ onClose, onComplete }: SalesIntakeFormProps) {
 
             {customerMode === 'anonymous' && (
               <div className="rounded-xl border border-gray-200 bg-gray-50/60 p-3 text-center">
-                <p className="text-[10px] font-bold text-gray-500">Anonymous walk-in sale</p>
+                <p className="text-micro font-bold text-gray-500">Anonymous walk-in sale</p>
               </div>
             )}
           </div>
 
           {/* ── Cart Section ── */}
           <div>
-            <p className="text-[9px] font-black uppercase tracking-widest text-gray-500 mb-2">
+            <p className="text-eyebrow font-black uppercase tracking-widest text-gray-500 mb-2">
               Cart {cartCount > 0 && <span className="text-emerald-600">({cartCount})</span>}
             </p>
 
             {cart.length === 0 ? (
               <div className="rounded-xl border border-dashed border-gray-200 bg-gray-50/60 p-4 text-center">
                 <ShoppingCart className="h-5 w-5 text-gray-300 mx-auto mb-1" />
-                <p className="text-[10px] text-gray-400">Select products from the catalog</p>
+                <p className="text-micro text-gray-400">Select products from the catalog</p>
               </div>
             ) : (
               <div className="space-y-1.5">
@@ -271,8 +271,8 @@ export function SalesIntakeForm({ onClose, onComplete }: SalesIntakeFormProps) {
                     className="flex items-center justify-between rounded-xl border border-gray-100 bg-gray-50/60 px-3 py-2"
                   >
                     <div className="min-w-0 flex-1">
-                      <p className="text-[11px] font-bold text-gray-900 truncate">{item.name}</p>
-                      {item.sku && <p className="text-[8px] font-mono text-gray-400">{item.sku}</p>}
+                      <p className="text-caption font-bold text-gray-900 truncate">{item.name}</p>
+                      {item.sku && <p className="text-mini font-mono text-gray-400">{item.sku}</p>}
                     </div>
                     <div className="flex items-center gap-1.5 shrink-0 ml-2">
                       <button
@@ -282,7 +282,7 @@ export function SalesIntakeForm({ onClose, onComplete }: SalesIntakeFormProps) {
                       >
                         <Minus className="h-3 w-3 text-gray-600" />
                       </button>
-                      <span className="text-[11px] font-black text-gray-900 w-4 text-center">{item.quantity}</span>
+                      <span className="text-caption font-black text-gray-900 w-4 text-center">{item.quantity}</span>
                       <button
                         type="button"
                         onClick={() => updateQuantity(item.variationId, 1)}
@@ -290,7 +290,7 @@ export function SalesIntakeForm({ onClose, onComplete }: SalesIntakeFormProps) {
                       >
                         <Plus className="h-3 w-3 text-gray-600" />
                       </button>
-                      <span className="text-[10px] font-black text-emerald-600 w-14 text-right">
+                      <span className="text-micro font-black text-emerald-600 w-14 text-right">
                         {formatCentsToDollars(item.priceAmount * item.quantity)}
                       </span>
                       <button onClick={() => updateQuantity(item.variationId, -item.quantity)} className="text-gray-400 hover:text-red-500">
@@ -302,10 +302,10 @@ export function SalesIntakeForm({ onClose, onComplete }: SalesIntakeFormProps) {
 
                 {/* Subtotal */}
                 <div className="flex items-center justify-between border-t border-gray-200 pt-2 mt-2">
-                  <span className="text-[10px] font-black uppercase text-gray-900">Subtotal</span>
-                  <span className="text-[13px] font-black text-emerald-600">{formatCentsToDollars(cartSubtotal)}</span>
+                  <span className="text-micro font-black uppercase text-gray-900">Subtotal</span>
+                  <span className="text-sm font-black text-emerald-600">{formatCentsToDollars(cartSubtotal)}</span>
                 </div>
-                <p className="text-[8px] text-gray-400">Tax calculated by Square at checkout</p>
+                <p className="text-mini text-gray-400">Tax calculated by Square at checkout</p>
               </div>
             )}
           </div>
@@ -314,8 +314,8 @@ export function SalesIntakeForm({ onClose, onComplete }: SalesIntakeFormProps) {
           {waitingForTerminal && (
             <div className="rounded-xl border border-blue-200 bg-blue-50 p-4 text-center">
               <Loader2 className="h-6 w-6 animate-spin text-blue-600 mx-auto mb-2" />
-              <p className="text-[11px] font-bold text-blue-800">Waiting for payment on terminal...</p>
-              <p className="text-[9px] text-blue-600 mt-1">Customer should tap or insert card</p>
+              <p className="text-caption font-bold text-blue-800">Waiting for payment on terminal...</p>
+              <p className="text-eyebrow text-blue-600 mt-1">Customer should tap or insert card</p>
             </div>
           )}
         </div>
@@ -341,7 +341,7 @@ export function SalesIntakeForm({ onClose, onComplete }: SalesIntakeFormProps) {
             )}
           </button>
           {submitError && (
-            <p className="text-center text-[9px] font-bold text-red-600">{submitError}</p>
+            <p className="text-center text-eyebrow font-bold text-red-600">{submitError}</p>
           )}
         </div>
       </aside>
@@ -374,7 +374,7 @@ export function SalesIntakeForm({ onClose, onComplete }: SalesIntakeFormProps) {
           <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar">
             <button
               onClick={() => setActiveCategoryId(null)}
-              className={`shrink-0 rounded-lg px-3 py-1.5 text-[9px] font-black uppercase tracking-widest transition-colors ${
+              className={`shrink-0 rounded-lg px-3 py-1.5 text-eyebrow font-black uppercase tracking-widest transition-colors ${
                 activeCategoryId === null
                   ? 'bg-emerald-600 text-white shadow-sm'
                   : 'bg-gray-100 text-gray-600 hover:bg-emerald-50 hover:text-emerald-700'
@@ -386,7 +386,7 @@ export function SalesIntakeForm({ onClose, onComplete }: SalesIntakeFormProps) {
               <button
                 key={cat.id}
                 onClick={() => setActiveCategoryId(cat.id === activeCategoryId ? null : cat.id)}
-                className={`shrink-0 rounded-lg px-3 py-1.5 text-[9px] font-black uppercase tracking-widest transition-colors ${
+                className={`shrink-0 rounded-lg px-3 py-1.5 text-eyebrow font-black uppercase tracking-widest transition-colors ${
                   activeCategoryId === cat.id
                     ? 'bg-emerald-600 text-white shadow-sm'
                     : 'bg-gray-100 text-gray-600 hover:bg-emerald-50 hover:text-emerald-700'
@@ -403,7 +403,7 @@ export function SalesIntakeForm({ onClose, onComplete }: SalesIntakeFormProps) {
           {loadingCatalog ? (
             <div className="flex flex-col items-center justify-center py-20 gap-3">
               <Loader2 className="h-6 w-6 animate-spin text-emerald-500" />
-              <p className="text-[10px] font-black uppercase tracking-widest text-gray-500">Loading Catalog...</p>
+              <p className="text-micro font-black uppercase tracking-widest text-gray-500">Loading Catalog...</p>
             </div>
           ) : catalogItems.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-20 text-center">
@@ -431,18 +431,18 @@ export function SalesIntakeForm({ onClose, onComplete }: SalesIntakeFormProps) {
                     }`}
                   >
                     {inCart && (
-                      <div className="absolute -top-2 -right-2 flex h-5 w-5 items-center justify-center rounded-full bg-emerald-600 text-[9px] font-black text-white shadow">
+                      <div className="absolute -top-2 -right-2 flex h-5 w-5 items-center justify-center rounded-full bg-emerald-600 text-eyebrow font-black text-white shadow">
                         {inCart.quantity}
                       </div>
                     )}
-                    <p className="text-[12px] font-bold text-gray-900 leading-tight line-clamp-2 mb-1">
+                    <p className="text-label font-bold text-gray-900 leading-tight line-clamp-2 mb-1">
                       {item.item_data?.name || 'Item'}
                     </p>
                     {vd?.sku && (
-                      <p className="text-[9px] font-mono text-gray-400 mb-2">{vd.sku}</p>
+                      <p className="text-eyebrow font-mono text-gray-400 mb-2">{vd.sku}</p>
                     )}
                     <div className="flex items-center justify-between">
-                      <span className="text-[13px] font-black text-emerald-600">
+                      <span className="text-sm font-black text-emerald-600">
                         {formatCentsToDollars(price)}
                       </span>
                       {inCart ? (
@@ -461,7 +461,7 @@ export function SalesIntakeForm({ onClose, onComplete }: SalesIntakeFormProps) {
                           </button>
                         </div>
                       ) : (
-                        <span className="text-[8px] font-black uppercase tracking-widest text-gray-400">
+                        <span className="text-mini font-black uppercase tracking-widest text-gray-400">
                           + Add
                         </span>
                       )}

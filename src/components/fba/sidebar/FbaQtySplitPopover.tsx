@@ -51,7 +51,7 @@ export function FbaQtySplitPopover({
           min={1}
           max={maxQty}
           onChange={setMoveQty}
-          className="h-8 w-16 rounded-md border border-gray-200 bg-white text-center text-[13px] font-black tabular-nums outline-none"
+          className="h-8 w-16 rounded-md border border-gray-200 bg-white text-center text-sm font-black tabular-nums outline-none"
         />
         <span className={`${microBadge} text-gray-400`}>of {maxQty}</span>
       </div>
@@ -60,14 +60,14 @@ export function FbaQtySplitPopover({
         <button
           type="button"
           onClick={() => onConfirm(moveQty)}
-          className="flex h-7 flex-1 items-center justify-center rounded-md bg-blue-600 text-[10px] font-bold uppercase tracking-wider text-white transition-colors hover:bg-blue-700"
+          className="flex h-7 flex-1 items-center justify-center rounded-md bg-blue-600 text-micro font-bold uppercase tracking-wider text-white transition-colors hover:bg-blue-700"
         >
           Move
         </button>
         <button
           type="button"
           onClick={onCancel}
-          className="flex h-7 flex-1 items-center justify-center rounded-md border border-gray-200 text-[10px] font-bold uppercase tracking-wider text-gray-600 transition-colors hover:bg-gray-50"
+          className="flex h-7 flex-1 items-center justify-center rounded-md border border-gray-200 text-micro font-bold uppercase tracking-wider text-gray-600 transition-colors hover:bg-gray-50"
         >
           Cancel
         </button>

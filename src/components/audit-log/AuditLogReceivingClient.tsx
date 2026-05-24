@@ -289,7 +289,7 @@ function PODetailView({ detail }: { detail: PODetail }) {
           {po.vendor_name && (
             <div className="text-sm text-slate-500">{po.vendor_name}</div>
           )}
-          <div className="mt-1 text-[11px] text-slate-400">
+          <div className="mt-1 text-caption text-slate-400">
             Zoho PO id: <code className="font-mono">{po.po_id}</code>
           </div>
         </div>
@@ -306,7 +306,7 @@ function PODetailView({ detail }: { detail: PODetail }) {
           {Object.entries(totals.byStatus).map(([status, n]) => (
             <span
               key={status}
-              className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-medium text-slate-700"
+              className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2 py-0.5 text-caption font-medium text-slate-700"
             >
               <span className="font-semibold">{n}</span>
               <span className="text-slate-500">{status}</span>
@@ -348,7 +348,7 @@ function PODetailView({ detail }: { detail: PODetail }) {
 function Stat({ label, value }: { label: string; value: string | number }) {
   return (
     <div>
-      <div className="text-[10px] uppercase tracking-wider text-slate-400">{label}</div>
+      <div className="text-micro uppercase tracking-wider text-slate-400">{label}</div>
       <div className="text-base font-semibold text-slate-900">{value}</div>
     </div>
   );
@@ -384,12 +384,12 @@ function EventCard({ event: ev }: { event: AuditEvent }) {
             <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
               <span className="text-sm font-medium text-slate-900">{meta.label}</span>
               {ev.sku && (
-                <code className="rounded bg-slate-100 px-1.5 py-0.5 text-[11px] font-mono text-slate-700">
+                <code className="rounded bg-slate-100 px-1.5 py-0.5 text-caption font-mono text-slate-700">
                   {ev.sku}
                 </code>
               )}
               {ev.station && (
-                <span className="text-[11px] uppercase tracking-wide text-slate-400">
+                <span className="text-caption uppercase tracking-wide text-slate-400">
                   {ev.station}
                 </span>
               )}
@@ -483,10 +483,10 @@ function RawDetail({ detail }: { detail: Record<string, unknown> }) {
       open={open}
       onToggle={(e) => setOpen((e.target as HTMLDetailsElement).open)}
     >
-      <summary className="cursor-pointer select-none text-[11px] text-slate-400 hover:text-slate-600">
+      <summary className="cursor-pointer select-none text-caption text-slate-400 hover:text-slate-600">
         {open ? 'hide raw payload' : 'show raw payload'}
       </summary>
-      <pre className="mt-1 overflow-x-auto rounded bg-slate-50 px-2 py-1.5 text-[11px] leading-snug text-slate-700">
+      <pre className="mt-1 overflow-x-auto rounded bg-slate-50 px-2 py-1.5 text-caption leading-snug text-slate-700">
         {JSON.stringify(detail, null, 2)}
       </pre>
     </details>
@@ -545,7 +545,7 @@ function CartonsList({ cartons }: { cartons: Carton[] }) {
         <article key={c.id} className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
           <header className="flex items-start justify-between gap-2">
             <div>
-              <div className="text-[11px] uppercase tracking-wider text-slate-400">
+              <div className="text-caption uppercase tracking-wider text-slate-400">
                 Package #{c.id}
               </div>
               <div className="mt-0.5 truncate font-mono text-sm font-medium text-slate-900">
@@ -556,7 +556,7 @@ function CartonsList({ cartons }: { cartons: Carton[] }) {
               )}
             </div>
             {c.is_return && (
-              <span className="rounded-full bg-amber-50 px-2 py-0.5 text-[11px] font-medium text-amber-700 ring-1 ring-amber-100">
+              <span className="rounded-full bg-amber-50 px-2 py-0.5 text-caption font-medium text-amber-700 ring-1 ring-amber-100">
                 Return{c.return_platform ? ` · ${c.return_platform}` : ''}
               </span>
             )}
@@ -582,7 +582,7 @@ function CartonsList({ cartons }: { cartons: Carton[] }) {
 
           {c.photos.length > 0 && (
             <div className="mt-3">
-              <div className="text-[11px] uppercase tracking-wider text-slate-400">
+              <div className="text-caption uppercase tracking-wider text-slate-400">
                 Photos ({c.photos.length})
               </div>
               <div className="mt-1 flex flex-wrap gap-2">
@@ -609,7 +609,7 @@ function CartonsList({ cartons }: { cartons: Carton[] }) {
 function KV({ label, value, span2 = false }: { label: string; value: string; span2?: boolean }) {
   return (
     <div className={span2 ? 'col-span-2' : ''}>
-      <dt className="text-[10px] uppercase tracking-wider text-slate-400">{label}</dt>
+      <dt className="text-micro uppercase tracking-wider text-slate-400">{label}</dt>
       <dd className="text-slate-800">{value}</dd>
     </div>
   );
@@ -656,11 +656,11 @@ function LineCard({ line: l, events }: { line: Line; events: AuditEvent[] }) {
       >
         <div className="min-w-0">
           <div className="flex flex-wrap items-baseline gap-2">
-            <span className="text-[11px] uppercase tracking-wider text-slate-400">
+            <span className="text-caption uppercase tracking-wider text-slate-400">
               Line #{l.id}
             </span>
             {l.sku && (
-              <code className="rounded bg-slate-100 px-1.5 py-0.5 text-[11px] font-mono text-slate-700">
+              <code className="rounded bg-slate-100 px-1.5 py-0.5 text-caption font-mono text-slate-700">
                 {l.sku}
               </code>
             )}
@@ -668,7 +668,7 @@ function LineCard({ line: l, events }: { line: Line; events: AuditEvent[] }) {
               {l.item_name ?? '—'}
             </span>
           </div>
-          <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-slate-500">
+          <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-caption text-slate-500">
             <span className={complete ? 'font-medium text-emerald-700' : ''}>
               {received} / {expected}
             </span>
@@ -677,7 +677,7 @@ function LineCard({ line: l, events }: { line: Line; events: AuditEvent[] }) {
             <QABadge status={l.qa_status} />
             <DispositionBadge code={l.disposition_code} />
             {l.condition_grade && (
-              <span className="rounded-full bg-slate-100 px-1.5 py-0.5 text-[10px] font-medium text-slate-700">
+              <span className="rounded-full bg-slate-100 px-1.5 py-0.5 text-micro font-medium text-slate-700">
                 {l.condition_grade}
               </span>
             )}
@@ -712,7 +712,7 @@ function LineCard({ line: l, events }: { line: Line; events: AuditEvent[] }) {
 
           {l.serials.length > 0 && (
             <div className="mt-3">
-              <div className="text-[11px] uppercase tracking-wider text-slate-400">
+              <div className="text-caption uppercase tracking-wider text-slate-400">
                 Serials ({l.serials.length})
               </div>
               <ul className="mt-1 divide-y divide-slate-100 rounded-md border border-slate-100 bg-slate-50/40">
@@ -721,12 +721,12 @@ function LineCard({ line: l, events }: { line: Line; events: AuditEvent[] }) {
                     <code className="font-mono text-slate-800">{s.serial_number}</code>
                     <div className="flex flex-wrap items-center gap-2 text-slate-500">
                       {s.current_status && (
-                        <span className="rounded-full bg-white px-1.5 py-0.5 text-[10px] ring-1 ring-slate-200">
+                        <span className="rounded-full bg-white px-1.5 py-0.5 text-micro ring-1 ring-slate-200">
                           {s.current_status}
                         </span>
                       )}
                       {s.current_location && (
-                        <span className="rounded-full bg-violet-50 px-1.5 py-0.5 text-[10px] text-violet-800 ring-1 ring-violet-100">
+                        <span className="rounded-full bg-violet-50 px-1.5 py-0.5 text-micro text-violet-800 ring-1 ring-violet-100">
                           {s.current_location}
                         </span>
                       )}
@@ -744,7 +744,7 @@ function LineCard({ line: l, events }: { line: Line; events: AuditEvent[] }) {
           )}
 
           <div className="mt-3">
-            <div className="text-[11px] uppercase tracking-wider text-slate-400">
+            <div className="text-caption uppercase tracking-wider text-slate-400">
               Events ({events.length})
             </div>
             <div className="mt-1 space-y-2">
@@ -778,7 +778,7 @@ function WorkflowBadge({ status }: { status: string }) {
     DONE:          'bg-emerald-100 text-emerald-800',
   };
   return (
-    <span className={`rounded-full px-1.5 py-0.5 text-[10px] font-medium ${TONE[status] ?? 'bg-slate-100 text-slate-700'}`}>
+    <span className={`rounded-full px-1.5 py-0.5 text-micro font-medium ${TONE[status] ?? 'bg-slate-100 text-slate-700'}`}>
       {status}
     </span>
   );
@@ -794,7 +794,7 @@ function QABadge({ status }: { status: string }) {
     HOLD:             'bg-amber-50 text-amber-700',
   };
   return (
-    <span className={`rounded-full px-1.5 py-0.5 text-[10px] font-medium ${TONE[status] ?? 'bg-slate-100 text-slate-700'}`}>
+    <span className={`rounded-full px-1.5 py-0.5 text-micro font-medium ${TONE[status] ?? 'bg-slate-100 text-slate-700'}`}>
       QA: {status}
     </span>
   );
@@ -809,7 +809,7 @@ function DispositionBadge({ code }: { code: string }) {
     REWORK: 'bg-sky-50 text-sky-700',
   };
   return (
-    <span className={`rounded-full px-1.5 py-0.5 text-[10px] font-medium ${TONE[code] ?? 'bg-slate-100 text-slate-700'}`}>
+    <span className={`rounded-full px-1.5 py-0.5 text-micro font-medium ${TONE[code] ?? 'bg-slate-100 text-slate-700'}`}>
       {code}
     </span>
   );

@@ -137,12 +137,12 @@ function HubHeader({
     <header className="shrink-0 border-b border-gray-200 bg-white px-4 py-3">
       <div className="flex items-baseline gap-2">
         <span className="font-mono text-lg font-black tracking-tight text-gray-900">{sku}</span>
-        <span className="inline-flex items-center rounded-md border border-red-200 bg-red-50 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-red-700">
+        <span className="inline-flex items-center rounded-md border border-red-200 bg-red-50 px-1.5 py-0.5 text-micro font-semibold uppercase tracking-wider text-red-700">
           Zoho
         </span>
       </div>
       <p className="mt-1 text-sm font-bold leading-snug text-gray-900">{title || '—'}</p>
-      <div className="mt-2 flex flex-wrap items-center gap-3 text-[10px] font-semibold uppercase tracking-wider text-gray-500">
+      <div className="mt-2 flex flex-wrap items-center gap-3 text-micro font-semibold uppercase tracking-wider text-gray-500">
         <span>
           <span className="text-emerald-600">✓ {confirmedTotal}</span> confirmed
         </span>
@@ -181,11 +181,11 @@ function ChannelSection({
       <section className={`border-l-2 py-2 pl-3 ${style.ring}`}>
         <div className="flex items-center gap-2">
           <span
-            className={`inline-flex items-center rounded-md border px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider ${style.chip}`}
+            className={`inline-flex items-center rounded-md border px-1.5 py-0.5 text-micro font-semibold uppercase tracking-wider ${style.chip}`}
           >
             {style.label}
           </span>
-          <span className="text-[10px] text-gray-400">empty</span>
+          <span className="text-micro text-gray-400">empty</span>
         </div>
       </section>
     );
@@ -198,7 +198,7 @@ function ChannelSection({
     <section className={`border-l-2 py-2 pl-3 ${style.ring}`}>
       <div className="mb-1.5 flex items-center gap-2">
         <span
-          className={`inline-flex items-center rounded-md border px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider ${style.chip}`}
+          className={`inline-flex items-center rounded-md border px-1.5 py-0.5 text-micro font-semibold uppercase tracking-wider ${style.chip}`}
         >
           {style.label}
         </span>
@@ -228,7 +228,7 @@ function ChannelSection({
         <button
           type="button"
           onClick={() => setShowAll(true)}
-          className="mt-1.5 inline-flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wider text-blue-600 hover:text-blue-800"
+          className="mt-1.5 inline-flex items-center gap-1 text-micro font-semibold uppercase tracking-wider text-blue-600 hover:text-blue-800"
         >
           See {moreCount} more <ChevronDown className="h-3 w-3" />
         </button>
@@ -264,13 +264,13 @@ function ConfirmedRow({
         <div className="flex items-center gap-1.5">
           <span className="truncate font-mono text-xs font-bold text-gray-900">{value}</span>
           {confirmed.accountName && (
-            <span className="truncate text-[10px] font-medium uppercase tracking-wider text-gray-500">
+            <span className="truncate text-micro font-medium uppercase tracking-wider text-gray-500">
               {confirmed.accountName}
             </span>
           )}
         </div>
         {confirmed.listingTitle && (
-          <p className="truncate text-[10px] text-gray-500">{confirmed.listingTitle}</p>
+          <p className="truncate text-micro text-gray-500">{confirmed.listingTitle}</p>
         )}
       </div>
       {confirmed.listingUrl && (
@@ -339,18 +339,18 @@ function SuggestionRow({
           <div className="flex items-center gap-1.5">
             <span className="truncate font-mono text-xs font-bold text-gray-900">{value}</span>
             {candidate.accountName && (
-              <span className="truncate text-[10px] font-medium uppercase tracking-wider text-gray-500">
+              <span className="truncate text-micro font-medium uppercase tracking-wider text-gray-500">
                 {candidate.accountName}
               </span>
             )}
-            <span className="ml-auto shrink-0 text-[10px] font-bold text-gray-600">
+            <span className="ml-auto shrink-0 text-micro font-bold text-gray-600">
               {candidate.confidence}
             </span>
           </div>
           {candidate.listingTitle && (
-            <p className="truncate text-[10px] text-gray-600">{candidate.listingTitle}</p>
+            <p className="truncate text-micro text-gray-600">{candidate.listingTitle}</p>
           )}
-          <p className="truncate text-[9px] font-medium uppercase tracking-wider text-gray-400">
+          <p className="truncate text-eyebrow font-medium uppercase tracking-wider text-gray-400">
             {candidate.reason}
           </p>
         </div>
@@ -414,7 +414,7 @@ function PendingFooter({
       density="compact"
       error={saveError ?? undefined}
       leading={
-        <div className="flex flex-wrap gap-3 text-[11px] font-bold uppercase tracking-wider text-gray-600">
+        <div className="flex flex-wrap gap-3 text-caption font-bold uppercase tracking-wider text-gray-600">
           {acceptCount > 0 && <span className="text-blue-700">{acceptCount} accept</span>}
           {rejectCount > 0 && <span className="text-gray-700">{rejectCount} reject</span>}
           {unpairCount > 0 && <span className="text-orange-700">{unpairCount} unpair</span>}

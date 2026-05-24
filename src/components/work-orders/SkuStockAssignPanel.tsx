@@ -250,7 +250,7 @@ export function SkuStockAssignPanel({ technicianOptions, packerOptions }: Props)
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               placeholder="Search SKU or product name…"
-              className="w-full rounded-md border border-gray-200 bg-white py-1.5 pl-7 pr-8 text-[12px] font-semibold text-gray-800 placeholder:text-gray-500 focus:border-gray-400 focus:outline-none focus:ring-0"
+              className="w-full rounded-md border border-gray-200 bg-white py-1.5 pl-7 pr-8 text-label font-semibold text-gray-800 placeholder:text-gray-500 focus:border-gray-400 focus:outline-none focus:ring-0"
             />
             {query && (
               <button
@@ -283,7 +283,7 @@ export function SkuStockAssignPanel({ technicianOptions, packerOptions }: Props)
                   key={item.key}
                   type="button"
                   onClick={() => setViewFilter(item.key)}
-                  className={`rounded-lg px-2 py-1.5 text-[9px] font-black uppercase tracking-[0.14em] transition-colors ${
+                  className={`rounded-lg px-2 py-1.5 text-eyebrow font-black uppercase tracking-[0.14em] transition-colors ${
                     active ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'
                   }`}
                 >
@@ -305,8 +305,8 @@ export function SkuStockAssignPanel({ technicianOptions, packerOptions }: Props)
                   {(selectedRecord.wa_status || 'OPEN').replace('_', ' ')}
                 </span>
               </div>
-              <p className="truncate text-[12px] font-black text-gray-900">{selectedRecord.product_title || selectedRecord.sku}</p>
-              <p className="mt-0.5 text-[10px] font-semibold uppercase tracking-wide text-gray-500">
+              <p className="truncate text-label font-black text-gray-900">{selectedRecord.product_title || selectedRecord.sku}</p>
+              <p className="mt-0.5 text-micro font-semibold uppercase tracking-wide text-gray-500">
                 {selectedRecord.sku}
                 {selectedStockCount != null && (
                   <span className={`ml-1 ${selectedStockCount <= 0 ? 'text-red-600' : 'text-gray-500'}`}>
@@ -314,7 +314,7 @@ export function SkuStockAssignPanel({ technicianOptions, packerOptions }: Props)
                   </span>
                 )}
               </p>
-              <p className="mt-1 text-[10px] font-semibold">
+              <p className="mt-1 text-micro font-semibold">
                 <span className={selectedRecord.assigned_tech_id ? 'text-blue-600' : 'text-orange-500'}>
                   {selectedRecord.assigned_tech_name || 'Tech unassigned'}
                 </span>
@@ -338,7 +338,7 @@ export function SkuStockAssignPanel({ technicianOptions, packerOptions }: Props)
               </div>
             </div>
           ) : (
-            <p className="text-[10px] font-semibold text-gray-500">No stock item selected</p>
+            <p className="text-micro font-semibold text-gray-500">No stock item selected</p>
           )}
         </div>
 
@@ -350,7 +350,7 @@ export function SkuStockAssignPanel({ technicianOptions, packerOptions }: Props)
             </div>
           ) : error ? (
             <div className="px-4 py-8 text-center">
-              <p className="text-[11px] text-red-500">{error}</p>
+              <p className="text-caption text-red-500">{error}</p>
             </div>
           ) : !query.trim() ? (
             <div className="flex flex-col items-center justify-center gap-2 px-8 py-16 text-center">
@@ -358,17 +358,17 @@ export function SkuStockAssignPanel({ technicianOptions, packerOptions }: Props)
                 <path strokeLinecap="round" strokeLinejoin="round"
                   d="m21 21-5.197-5.197m0 0A7.5 7.5 0 1 0 5.196 15.803" />
               </svg>
-              <p className="text-[12px] font-semibold text-gray-500">Search to find a SKU</p>
-              <p className="text-[11px] text-gray-500">
+              <p className="text-label font-semibold text-gray-500">Search to find a SKU</p>
+              <p className="text-caption text-gray-500">
                 Type a SKU or product name, then assign a tech and packer
               </p>
             </div>
           ) : filteredResults.length === 0 ? (
             <div className="flex flex-col items-center justify-center gap-1.5 px-8 py-12 text-center">
-              <p className="text-[12px] font-semibold text-gray-500">
+              <p className="text-label font-semibold text-gray-500">
                 No {viewFilter === 'needs_assign' ? 'assignable' : viewFilter} results for &ldquo;{query}&rdquo;
               </p>
-              <p className="text-[11px] text-gray-500">Try another filter or search term</p>
+              <p className="text-caption text-gray-500">Try another filter or search term</p>
             </div>
           ) : (
             <ul className="divide-y divide-gray-50">
@@ -391,23 +391,23 @@ export function SkuStockAssignPanel({ technicianOptions, packerOptions }: Props)
                               {r.wa_status.replace('_', ' ')}
                             </span>
                           )}
-                          <span className="text-[9px] font-bold text-gray-500 uppercase tracking-wide">
+                          <span className="text-eyebrow font-bold text-gray-500 uppercase tracking-wide">
                             {r.sku}
                           </span>
                           {r.stock != null && (
-                            <span className={`text-[9px] font-bold uppercase tracking-wide ${
+                            <span className={`text-eyebrow font-bold uppercase tracking-wide ${
                               Number(r.stock) <= 0 ? 'text-red-500' : 'text-gray-500'
                             }`}>
                               · Stock {r.stock}
                             </span>
                           )}
                         </div>
-                        <p className="mt-0.5 text-[12px] font-bold text-gray-900 leading-snug truncate">
+                        <p className="mt-0.5 text-label font-bold text-gray-900 leading-snug truncate">
                           {r.product_title || r.sku}
                         </p>
                         {/* Show assigned names only when BOTH are set */}
                         {fullyAssigned && (
-                          <p className="text-[10px] font-semibold text-blue-600 mt-0.5">
+                          <p className="text-micro font-semibold text-blue-600 mt-0.5">
                             {r.assigned_tech_name}
                             {r.assigned_packer_name && (
                               <span className="text-gray-500"> · </span>
@@ -419,7 +419,7 @@ export function SkuStockAssignPanel({ technicianOptions, packerOptions }: Props)
                         )}
                         {/* Partial assignment — nudge to finish */}
                         {!fullyAssigned && (r.assigned_tech_id || r.assigned_packer_id) && (
-                          <p className="text-[10px] font-semibold text-orange-500 mt-0.5">
+                          <p className="text-micro font-semibold text-orange-500 mt-0.5">
                             {r.assigned_tech_id ? r.assigned_tech_name : 'Tech unassigned'}
                             <span className="text-gray-500"> · </span>
                             {r.assigned_packer_id ? r.assigned_packer_name : 'Packer unassigned'}
@@ -457,7 +457,7 @@ export function SkuStockAssignPanel({ technicianOptions, packerOptions }: Props)
         {/* Footer: result count */}
         {filteredResults.length > 0 && (
           <div className="border-t border-gray-100 px-4 py-2 text-right">
-            <span className="text-[10px] font-semibold text-gray-500">
+            <span className="text-micro font-semibold text-gray-500">
               {filteredResults.length} shown
               {results.length !== filteredResults.length && (
                 <> · {results.length} total</>

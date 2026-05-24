@@ -76,10 +76,10 @@ export function ModeSelector({ mode, onModeChange, orientation = 'horizontal' }:
                                 <Icon className="h-4 w-4" />
                             </span>
                             <span className="flex flex-col">
-                                <span className={`text-[12px] font-semibold leading-tight ${isActive ? 'text-gray-900' : 'text-gray-700'}`}>
+                                <span className={`text-label font-semibold leading-tight ${isActive ? 'text-gray-900' : 'text-gray-700'}`}>
                                     {label}
                                 </span>
-                                <span className="text-[10px] font-medium leading-tight text-gray-500">
+                                <span className="text-micro font-medium leading-tight text-gray-500">
                                     {description}
                                 </span>
                             </span>
@@ -130,10 +130,10 @@ export function ModeSelector({ mode, onModeChange, orientation = 'horizontal' }:
                                 <Icon className="h-4 w-4" />
                             </span>
                             <span className="relative z-10 flex min-w-0 flex-col">
-                                <span className={`text-[12px] font-black uppercase tracking-[0.14em] ${isActive ? 'text-gray-900' : 'text-gray-700'}`}>
+                                <span className={`text-label font-black uppercase tracking-[0.14em] ${isActive ? 'text-gray-900' : 'text-gray-700'}`}>
                                     {label}
                                 </span>
-                                <span className="truncate text-[10px] font-semibold text-gray-500">
+                                <span className="truncate text-micro font-semibold text-gray-500">
                                     {description}
                                 </span>
                             </span>
@@ -180,7 +180,7 @@ export function ModeSelector({ mode, onModeChange, orientation = 'horizontal' }:
                             )}
                             <span className="relative z-10 flex flex-col items-center gap-0.5">
                                 <Icon className="w-4 h-4" />
-                                <span className="text-[10px] font-semibold tracking-tight">{label}</span>
+                                <span className="text-micro font-semibold tracking-tight">{label}</span>
                             </span>
                         </button>
                     );

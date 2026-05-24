@@ -140,7 +140,7 @@ function ActiveShipmentCard({
           <Package className="h-4 w-4 shrink-0 text-purple-500" />
           <div className="flex min-w-0 flex-col gap-0.5">
             <div className="flex min-w-0 items-baseline gap-1.5">
-              <span className="truncate font-mono text-[12px] font-black text-gray-900">
+              <span className="truncate font-mono text-label font-black text-gray-900">
                 {shipment.amazon_shipment_id || shipment.shipment_ref}
               </span>
               {editable && (
@@ -157,7 +157,7 @@ function ActiveShipmentCard({
                   <Pencil className="h-3 w-3" />
                 </button>
               )}
-              <span className="shrink-0 text-[10px] font-bold text-gray-400">
+              <span className="shrink-0 text-micro font-bold text-gray-400">
                 {shipment.items.length} SKU · {totalQty} units
               </span>
               <FbaStatusBadge
@@ -169,13 +169,13 @@ function ActiveShipmentCard({
               />
             </div>
             <div className="flex min-w-0 items-center gap-1.5">
-              <p className="truncate font-mono text-[10px] font-bold text-gray-400">
+              <p className="truncate font-mono text-micro font-bold text-gray-400">
                 {shipment.tracking_numbers.length > 1
                   ? `${shipment.tracking_numbers.length} trackings`
                   : `${carrier ? `${carrier} · ` : ''}${primaryTracking}`}
               </p>
               {isShipped && shippedDateLabel ? (
-                <span className="shrink-0 rounded bg-emerald-100 px-1.5 py-0.5 text-[9px] font-black text-emerald-700">
+                <span className="shrink-0 rounded bg-emerald-100 px-1.5 py-0.5 text-eyebrow font-black text-emerald-700">
                   {shippedDateLabel}
                 </span>
               ) : null}
@@ -216,7 +216,7 @@ function ActiveShipmentCard({
                     {unallocatedItems.length > 0 && (
                       <div className="divide-y divide-gray-50">
                         {hasBundles && (
-                          <p className="px-2.5 py-1.5 text-[9px] font-black uppercase tracking-widest text-gray-400">
+                          <p className="px-2.5 py-1.5 text-eyebrow font-black uppercase tracking-widest text-gray-400">
                             Unallocated
                           </p>
                         )}

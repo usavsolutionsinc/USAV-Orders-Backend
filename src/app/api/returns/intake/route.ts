@@ -24,7 +24,7 @@ import { processReturnsIntake } from '@/lib/inventory/returns';
  *   }
  *
  * Shared transaction in src/lib/inventory/returns.ts (used by the
- * /admin/inventory-v2/returns admin page too).
+ * /admin/inventory/returns admin page too).
  *
  * Gated by INVENTORY_V2_RETURNS; off-flag returns 503.
  * Permission: receiving.mark_received.

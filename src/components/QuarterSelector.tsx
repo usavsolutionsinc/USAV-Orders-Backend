@@ -62,12 +62,12 @@ export function QuarterSidebar({ hideSectionHeader = false }: { hideSectionHeade
       {!hideSectionHeader ? (
         <motion.header variants={itemVariants} className="mb-6">
           <h2 className="text-2xl font-black tracking-tighter text-gray-900 uppercase">Quarters</h2>
-          <p className="text-[10px] font-bold text-blue-600 uppercase tracking-[0.2em] mt-1">Archive Access</p>
+          <p className="text-micro font-bold text-blue-600 uppercase tracking-[0.2em] mt-1">Archive Access</p>
         </motion.header>
       ) : null}
 
       <motion.div variants={itemVariants} className="mb-6 rounded-2xl border border-gray-200 bg-gray-50 px-4 py-4">
-        <p className="text-[9px] font-black uppercase tracking-widest text-gray-400">Currently Viewing</p>
+        <p className="text-eyebrow font-black uppercase tracking-widest text-gray-400">Currently Viewing</p>
         <p className="mt-2 text-lg font-black text-gray-900">{selectedQuarter.label}</p>
       </motion.div>
 
@@ -104,16 +104,16 @@ export default function QuarterSelector() {
     <div className="flex h-full w-full flex-col overflow-hidden bg-white">
       <div className={mainStickyHeaderClass}>
         <div className={`${mainStickyHeaderShellRowClass} px-6`}>
-          <p className="truncate text-[11px] font-black uppercase tracking-[0.2em] text-gray-900">Previous Quarters</p>
+          <p className="truncate text-caption font-black uppercase tracking-[0.2em] text-gray-900">Previous Quarters</p>
           <div className="flex items-center gap-3">
-            <span className="hidden text-[10px] font-black uppercase tracking-[0.18em] text-gray-500 sm:block">
+            <span className="hidden text-micro font-black uppercase tracking-[0.18em] text-gray-500 sm:block">
               {selectedQuarter.label}
             </span>
             <a
               href={sheetUrl}
               target="_blank"
               rel="noreferrer"
-              className="inline-flex items-center gap-1.5 border border-gray-900 px-3 py-1 text-[9px] font-black uppercase tracking-[0.18em] text-gray-900 transition-colors hover:bg-gray-900 hover:text-white"
+              className="inline-flex items-center gap-1.5 border border-gray-900 px-3 py-1 text-eyebrow font-black uppercase tracking-[0.18em] text-gray-900 transition-colors hover:bg-gray-900 hover:text-white"
             >
               Open
               <ExternalLink className="h-3.5 w-3.5" />

@@ -297,7 +297,7 @@ export default function SkuDetailView({ sku, variant = 'page', onClose }: SkuDet
           </h1>
           <button
             onClick={() => handleCopy(data.sku, 'sku')}
-            className={`${monoValue} text-[11px] text-gray-500 hover:text-blue-600 transition-colors flex items-center gap-1`}
+            className={`${monoValue} text-caption text-gray-500 hover:text-blue-600 transition-colors flex items-center gap-1`}
           >
             {data.sku}
             {copiedField === 'sku' ? (
@@ -312,7 +312,7 @@ export default function SkuDetailView({ sku, variant = 'page', onClose }: SkuDet
             <p className="text-lg font-black text-gray-900">
               ${data.ecwid.price.toFixed(2)}
             </p>
-            <p className={`text-[10px] font-bold uppercase tracking-wider ${data.ecwid.inStock ? 'text-emerald-600' : 'text-red-500'}`}>
+            <p className={`text-micro font-bold uppercase tracking-wider ${data.ecwid.inStock ? 'text-emerald-600' : 'text-red-500'}`}>
               {data.ecwid.inStock ? 'In Stock' : 'Out of Stock'}
             </p>
           </div>
@@ -339,7 +339,7 @@ export default function SkuDetailView({ sku, variant = 'page', onClose }: SkuDet
             <h2 className={sectionLabel}>Stock Quantity</h2>
             <button
               onClick={() => setShowSetMode(!showSetMode)}
-              className="text-[10px] font-bold uppercase tracking-wider text-blue-600 hover:text-blue-800"
+              className="text-micro font-bold uppercase tracking-wider text-blue-600 hover:text-blue-800"
             >
               {showSetMode ? 'Quick Adjust' : 'Set Exact'}
             </button>
@@ -407,7 +407,7 @@ export default function SkuDetailView({ sku, variant = 'page', onClose }: SkuDet
                 <button
                   onClick={() => adjustDelta !== 0 && handleAdjust(adjustDelta)}
                   disabled={saving || adjustDelta === 0}
-                  className="h-10 px-3 rounded-lg bg-gray-900 text-white text-[10px] font-black uppercase tracking-wider disabled:opacity-40"
+                  className="h-10 px-3 rounded-lg bg-gray-900 text-white text-micro font-black uppercase tracking-wider disabled:opacity-40"
                 >
                   Apply
                 </button>
@@ -440,7 +440,7 @@ export default function SkuDetailView({ sku, variant = 'page', onClose }: SkuDet
                   setEditingLocation(true);
                   setSelectedLocation(data.locations[0] || '');
                 }}
-                className="text-[10px] font-bold uppercase tracking-wider text-blue-600 hover:text-blue-800"
+                className="text-micro font-bold uppercase tracking-wider text-blue-600 hover:text-blue-800"
               >
                 Change
               </button>
@@ -521,7 +521,7 @@ export default function SkuDetailView({ sku, variant = 'page', onClose }: SkuDet
                   <p className={fieldLabel}>UPC</p>
                   <button
                     onClick={() => handleCopy(data.catalog!.upc!, 'upc')}
-                    className={`${monoValue} text-[11px] hover:text-blue-600 transition-colors`}
+                    className={`${monoValue} text-caption hover:text-blue-600 transition-colors`}
                   >
                     {data.catalog.upc}
                     {copiedField === 'upc' && <Check className="inline h-3 w-3 ml-1 text-emerald-500" />}
@@ -531,12 +531,12 @@ export default function SkuDetailView({ sku, variant = 'page', onClose }: SkuDet
               {data.catalog.ean && (
                 <div>
                   <p className={fieldLabel}>EAN</p>
-                  <p className={monoValue + ' text-[11px]'}>{data.catalog.ean}</p>
+                  <p className={monoValue + ' text-caption'}>{data.catalog.ean}</p>
                 </div>
               )}
               <div>
                 <p className={fieldLabel}>Status</p>
-                <span className={`inline-block rounded-full px-2 py-0.5 text-[10px] font-bold uppercase ${
+                <span className={`inline-block rounded-full px-2 py-0.5 text-micro font-bold uppercase ${
                   data.catalog.isActive ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-600'
                 }`}>
                   {data.catalog.isActive ? 'Active' : 'Inactive'}
@@ -555,7 +555,7 @@ export default function SkuDetailView({ sku, variant = 'page', onClose }: SkuDet
                 href={`https://my.ecwid.com/store/${process.env.NEXT_PUBLIC_ECWID_STORE_ID || ''}#product:id=${data.ecwid.id}`}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider text-blue-600 hover:text-blue-800"
+                className="flex items-center gap-1 text-micro font-bold uppercase tracking-wider text-blue-600 hover:text-blue-800"
               >
                 Open in Ecwid
                 <ExternalLink className="h-3 w-3" />
@@ -593,7 +593,7 @@ export default function SkuDetailView({ sku, variant = 'page', onClose }: SkuDet
                     loading="lazy"
                   />
                   {photo.photoType && (
-                    <span className="absolute bottom-1 left-1 rounded bg-black/60 px-1.5 py-0.5 text-[8px] font-bold uppercase text-white">
+                    <span className="absolute bottom-1 left-1 rounded bg-black/60 px-1.5 py-0.5 text-mini font-bold uppercase text-white">
                       {photo.photoType}
                     </span>
                   )}
@@ -624,7 +624,7 @@ export default function SkuDetailView({ sku, variant = 'page', onClose }: SkuDet
                       {row.serial_number && (
                         <button
                           onClick={() => handleCopy(row.serial_number!, `serial-${row.id}`)}
-                          className="text-[11px] font-bold font-mono text-gray-900 hover:text-blue-600 transition-colors block"
+                          className="text-caption font-bold font-mono text-gray-900 hover:text-blue-600 transition-colors block"
                         >
                           SN: {row.serial_number}
                           {copiedField === `serial-${row.id}` && (
@@ -635,7 +635,7 @@ export default function SkuDetailView({ sku, variant = 'page', onClose }: SkuDet
                       {row.shipping_tracking_number && (
                         <button
                           onClick={() => handleCopy(row.shipping_tracking_number!, `tracking-${row.id}`)}
-                          className="text-[11px] font-bold font-mono text-gray-500 hover:text-blue-600 transition-colors block"
+                          className="text-caption font-bold font-mono text-gray-500 hover:text-blue-600 transition-colors block"
                         >
                           Tracking: {row.shipping_tracking_number}
                           {copiedField === `tracking-${row.id}` && (
@@ -644,16 +644,16 @@ export default function SkuDetailView({ sku, variant = 'page', onClose }: SkuDet
                         </button>
                       )}
                       {row.notes && (
-                        <p className="text-[11px] font-medium text-gray-500 mt-1">{row.notes}</p>
+                        <p className="text-caption font-medium text-gray-500 mt-1">{row.notes}</p>
                       )}
                     </div>
                     <div className="text-right flex-shrink-0">
                       {row.location && (
-                        <span className="inline-flex items-center rounded-full bg-blue-50 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider text-blue-700">
+                        <span className="inline-flex items-center rounded-full bg-blue-50 px-2 py-0.5 text-eyebrow font-bold uppercase tracking-wider text-blue-700">
                           {row.location}
                         </span>
                       )}
-                      <p className="text-[10px] font-bold text-gray-400 mt-1">
+                      <p className="text-micro font-bold text-gray-400 mt-1">
                         {formatDate(row.updated_at || row.created_at)}
                       </p>
                     </div>
@@ -683,11 +683,11 @@ export default function SkuDetailView({ sku, variant = 'page', onClose }: SkuDet
                     <span className={`text-sm font-black ${entry.delta > 0 ? 'text-emerald-600' : 'text-red-600'}`}>
                       {entry.delta > 0 ? `+${entry.delta}` : entry.delta}
                     </span>
-                    <span className="rounded-full bg-gray-200 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider text-gray-600">
+                    <span className="rounded-full bg-gray-200 px-2 py-0.5 text-eyebrow font-bold uppercase tracking-wider text-gray-600">
                       {entry.reason}
                     </span>
                   </div>
-                  <span className="text-[10px] font-bold text-gray-400">
+                  <span className="text-micro font-bold text-gray-400">
                     {formatDate(entry.created_at)}
                   </span>
                 </div>
@@ -713,7 +713,7 @@ export default function SkuDetailView({ sku, variant = 'page', onClose }: SkuDet
                     <span className="text-gray-300">&rarr;</span>
                     <span className="text-blue-700">{t.to_location}</span>
                   </div>
-                  <span className="text-[10px] font-bold text-gray-400">
+                  <span className="text-micro font-bold text-gray-400">
                     {formatDate(t.created_at)}
                   </span>
                 </div>

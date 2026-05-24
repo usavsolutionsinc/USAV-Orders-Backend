@@ -205,11 +205,11 @@ export function SkuPairingProductTable({ selectedItem }: SkuPairingProductTableP
                   {/* Product info */}
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2">
-                      <p className="truncate text-[12px] font-semibold text-gray-900">
+                      <p className="truncate text-label font-semibold text-gray-900">
                         {item.product_title || 'Unknown Product'}
                       </p>
                     </div>
-                    <div className="mt-0.5 flex items-center gap-1.5 text-[10px] font-semibold text-gray-500">
+                    <div className="mt-0.5 flex items-center gap-1.5 text-micro font-semibold text-gray-500">
                       <span className="font-mono">{item.item_number}</span>
                       {item.sku && (
                         <>
@@ -229,7 +229,7 @@ export function SkuPairingProductTable({ selectedItem }: SkuPairingProductTableP
 
                   {/* Order count */}
                   <div className="w-16 text-right">
-                    <span className={`font-mono text-[13px] font-black tabular-nums ${item.order_count > 5 ? 'text-amber-600' : 'text-gray-900'}`}>
+                    <span className={`font-mono text-sm font-black tabular-nums ${item.order_count > 5 ? 'text-amber-600' : 'text-gray-900'}`}>
                       {item.order_count}
                     </span>
                   </div>

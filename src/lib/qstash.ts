@@ -39,6 +39,25 @@ export function isQStashOrigin(headers: Headers): boolean {
   return false;
 }
 
+/**
+ * Vercel cron requests carry `Authorization: Bearer ${CRON_SECRET}` and
+ * an `x-vercel-cron: 1` header. Either signal is sufficient.
+ */
+export function isVercelCronOrigin(headers: Headers): boolean {
+  const secret = process.env.CRON_SECRET;
+  if (secret && headers.get('authorization') === `Bearer ${secret}`) return true;
+  if (headers.get('x-vercel-cron') === '1' && process.env.VERCEL === '1') return true;
+  return false;
+}
+
+/**
+ * True if a request looks like an authorized cron trigger — either a real
+ * QStash delivery (legacy) or a Vercel cron invocation (current).
+ */
+export function isAuthorizedCronRequest(headers: Headers): boolean {
+  return isQStashOrigin(headers) || isVercelCronOrigin(headers);
+}
+
 export function getQStashClient(): Client {
   return new Client({
     token: requireEnv('QSTASH_TOKEN'),

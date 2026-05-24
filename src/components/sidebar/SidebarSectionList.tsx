@@ -58,7 +58,7 @@ export function SidebarSectionList<TId extends string = string>({
           return (
             <div
               key={`group:${item.group}:${idx}`}
-              className="border-b border-gray-100 bg-gray-50 px-4 py-1.5 text-[10px] font-semibold uppercase tracking-wide text-gray-500"
+              className="border-b border-gray-100 bg-gray-50 px-4 py-1.5 text-micro font-semibold uppercase tracking-wide text-gray-500"
             >
               {item.group}
             </div>
@@ -84,7 +84,7 @@ export function SidebarSectionList<TId extends string = string>({
             <span className="min-w-0 flex-1">
               <span className="block text-sm font-semibold">{s.label}</span>
               {s.description && (
-                <span className="block truncate text-[11px] font-medium text-gray-500">
+                <span className="block truncate text-caption font-medium text-gray-500">
                   {s.description}
                 </span>
               )}

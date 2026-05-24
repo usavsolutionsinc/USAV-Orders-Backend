@@ -2,6 +2,7 @@ import { StaffManagementTab } from '@/components/admin/StaffManagementTab';
 import { StaffAccessMatrixTab } from '@/components/admin/StaffAccessMatrixTab';
 import { RolesAdminTab } from '@/components/admin/RolesAdminTab';
 import { ConnectionsManagementTab } from '@/components/admin/ConnectionsManagementTab';
+import { IntegrationsTab } from '@/components/admin/IntegrationsTab';
 import { GoalsAnalyticsTab } from '@/components/admin/GoalsAnalyticsTab';
 import { FBAManagementTab } from '@/components/admin/FBAManagementTab';
 import { FeaturesManagementTab } from '@/components/admin/FeaturesManagementTab';
@@ -11,7 +12,7 @@ import { AdminJobsTab } from '@/components/admin/AdminJobsTab';
 import AiChatTab from '@/components/admin/AiChatTab';
 import { ArchitectureTab } from '@/components/admin/ArchitectureTab';
 import { PhotoBackupTab } from '@/components/admin/PhotoBackupTab';
-import { PoMailboxTab } from '@/components/admin/PoMailboxTab';
+import { BillingTab } from '@/components/admin/BillingTab';
 import { AdminOverviewTab } from '@/components/admin/AdminOverviewTab';
 import { getAdminSection, type AdminSection } from '@/components/admin/admin-sections';
 import { requirePermission } from '@/lib/auth/page-guard';
@@ -37,6 +38,7 @@ function renderTab(
     case 'access':       return <StaffAccessMatrixTab />;
     case 'roles':        return <RolesAdminTab />;
     case 'connections':  return <ConnectionsManagementTab />;
+    case 'integrations': return <IntegrationsTab />;
     case 'fba':          return <FBAManagementTab searchTerm={args.searchValue} />;
     case 'features':     return <FeaturesManagementTab />;
     case 'logs':         return <AdminLogsTab initialSearch={args.searchValue} />;
@@ -44,7 +46,7 @@ function renderTab(
     case 'ai_chat':      return <AiChatTab />;
     case 'architecture': return <ArchitectureTab />;
     case 'photo_backup': return <PhotoBackupTab />;
-    case 'po_mailbox':   return <PoMailboxTab />;
+    case 'billing':      return <BillingTab />;
     case 'manuals':
       return (
         <ManualAssignmentTab

@@ -20,7 +20,7 @@ export function DesktopDateGroupHeader({
       className="z-10 flex items-center justify-between border-y border-gray-300 bg-gray-50/80 px-3 py-1"
     >
       <p className={weekHeaderHighContrastDateClass}>{formatDateWithOrdinal(date)}</p>
-      <p className="pr-1 font-dm-sans text-[11px] font-semibold tabular-nums text-gray-900">{total}</p>
+      <p className="pr-1 font-dm-sans text-caption font-semibold tabular-nums text-gray-900">{total}</p>
     </div>
   );
 }

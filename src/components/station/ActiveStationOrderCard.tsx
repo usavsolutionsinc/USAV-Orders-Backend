@@ -258,14 +258,14 @@ export default function ActiveStationOrderCard({
                 ? {
                     icon: Package,
                     iconClassName: 'w-4 h-4 text-purple-600',
-                    textClassName: 'text-[14px] font-black text-blue-700',
+                    textClassName: 'text-sm font-black text-blue-700',
                     className: '',
                   }
                 : {
-                    className: '[&>span]:text-[14px] [&>span]:font-black [&>svg]:w-4 [&>svg]:h-4',
+                    className: '[&>span]:text-sm [&>span]:font-black [&>svg]:w-4 [&>svg]:h-4',
                   })}
             />
-            <span className={`text-[14px] font-black tabular-nums ${getDaysLateTone(daysLate)}`}>
+            <span className={`text-sm font-black tabular-nums ${getDaysLateTone(daysLate)}`}>
               {daysLate}
             </span>
           </div>
@@ -298,7 +298,7 @@ export default function ActiveStationOrderCard({
             {' '}{stripConditionPrefix(activeOrder.productTitle, activeOrder.condition)}
           </h3>
           {activeOrder.inlineMicrocopy ? (
-            <p className="mt-2 text-[11px] font-semibold leading-snug text-emerald-700">
+            <p className="mt-2 text-caption font-semibold leading-snug text-emerald-700">
               {activeOrder.inlineMicrocopy}
             </p>
           ) : null}
@@ -309,7 +309,7 @@ export default function ActiveStationOrderCard({
         <div className={`px-3 mt-2 border-t pt-2 ${variantStyles.section}`}>
           <div className="flex items-center gap-2">
             <ClipboardList className={`w-4 h-4 shrink-0 ${activeColorTextClass}`} />
-            <p className="text-[10px] font-black uppercase text-gray-500 tracking-widest">Testing Notes</p>
+            <p className="text-micro font-black uppercase text-gray-500 tracking-widest">Testing Notes</p>
           </div>
           <p className="mt-1.5 text-xs font-medium text-gray-700 bg-gray-50/80 p-3 rounded-xl border border-gray-100 leading-relaxed">
             {activeOrder.notes}
@@ -332,12 +332,12 @@ export default function ActiveStationOrderCard({
                 className={`mt-2 border-t px-3 pt-3 pb-1 ${variantStyles.section}`}
                 onClick={(e) => e.stopPropagation()}
               >
-                <div className="grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] gap-2 text-[10px] font-bold uppercase tracking-widest text-gray-500">
+                <div className="grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] gap-2 text-micro font-bold uppercase tracking-widest text-gray-500">
                   <div className="min-w-0 rounded-xl bg-gray-50 px-2 py-2">
                     <div className="mb-1 text-gray-400">SKU</div>
                     <div className="flex items-center justify-between gap-1">
                       <div
-                        className="min-w-0 truncate text-[11px] text-gray-900 normal-case tracking-normal font-mono font-bold"
+                        className="min-w-0 truncate text-caption text-gray-900 normal-case tracking-normal font-mono font-bold"
                         title={skuValue || undefined}
                       >
                         {skuValue ? getLast4(skuValue) : 'N/A'}
@@ -358,7 +358,7 @@ export default function ActiveStationOrderCard({
                     <div className="mb-1 whitespace-nowrap text-gray-400">Item #</div>
                     <div className="flex items-center justify-between gap-1">
                       <div
-                        className="block min-w-0 max-w-full truncate text-[11px] text-gray-900 normal-case tracking-normal"
+                        className="block min-w-0 max-w-full truncate text-caption text-gray-900 normal-case tracking-normal"
                         title={itemNumberValue || undefined}
                       >
                         {itemNumberValue
@@ -381,7 +381,7 @@ export default function ActiveStationOrderCard({
                     <div className="mb-1 text-gray-400">Tracking</div>
                     <div className="flex items-center justify-between gap-1">
                       <div
-                        className="min-w-0 truncate text-[11px] text-gray-900 normal-case tracking-normal font-mono font-bold"
+                        className="min-w-0 truncate text-caption text-gray-900 normal-case tracking-normal font-mono font-bold"
                         title={trackingNumber || undefined}
                       >
                         {trackingNumber ? getLast4(trackingNumber) : 'N/A'}
@@ -424,8 +424,8 @@ export default function ActiveStationOrderCard({
           <div className={`border-t bg-blue-50/40 px-4 py-3 ${variantStyles.section}`}>
             <div className="flex items-center justify-between gap-2">
               <div className="min-w-0">
-                <p className="text-[9px] font-black text-blue-700 uppercase tracking-wider">Product Manual</p>
-                <p className="text-[10px] font-bold text-blue-900 truncate">
+                <p className="text-eyebrow font-black text-blue-700 uppercase tracking-wider">Product Manual</p>
+                <p className="text-micro font-bold text-blue-900 truncate">
                   {resolvedManuals.length > 1
                     ? `${resolvedManuals.length} manuals linked`
                     : primaryManual.type || 'Manual linked'}
@@ -436,7 +436,7 @@ export default function ActiveStationOrderCard({
                   href={primaryManual.viewUrl}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-md border border-blue-200 bg-white hover:bg-blue-50 text-[10px] font-black uppercase tracking-wider text-blue-700 transition-colors"
+                  className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-md border border-blue-200 bg-white hover:bg-blue-50 text-micro font-black uppercase tracking-wider text-blue-700 transition-colors"
                 >
                   <ExternalLink className="w-3 h-3" />
                   Open
@@ -444,7 +444,7 @@ export default function ActiveStationOrderCard({
                 <button
                   type="button"
                   onClick={onViewManual}
-                  className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-md bg-indigo-600 hover:bg-indigo-700 text-white text-[10px] font-black uppercase tracking-wider transition-colors"
+                  className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-md bg-indigo-600 hover:bg-indigo-700 text-white text-micro font-black uppercase tracking-wider transition-colors"
                 >
                   View Manual
                 </button>
@@ -465,14 +465,14 @@ export default function ActiveStationOrderCard({
               className={`overflow-hidden border-t ${variantStyles.section}`}
             >
               <div className="px-4 py-2.5 bg-amber-50/60">
-                <p className={`text-[9px] font-black uppercase tracking-wider text-amber-600 mb-1.5`}>
+                <p className={`text-eyebrow font-black uppercase tracking-wider text-amber-600 mb-1.5`}>
                   Storage SKUs ({activeOrder.scannedSkuCodes.length})
                 </p>
                 <div className="flex flex-wrap gap-1.5">
                   {activeOrder.scannedSkuCodes.map((code, i) => (
                     <span
                       key={`${code}-${i}`}
-                      className="text-[10px] font-mono font-bold text-amber-900 bg-amber-100 border border-amber-200 px-2 py-0.5 rounded-md"
+                      className="text-micro font-mono font-bold text-amber-900 bg-amber-100 border border-amber-200 px-2 py-0.5 rounded-md"
                     >
                       {code}
                     </span>
@@ -495,7 +495,7 @@ export default function ActiveStationOrderCard({
             className={`overflow-hidden border-t ${variantStyles.section}`}
           >
             <div className="p-4 bg-emerald-50/60 space-y-2">
-              <p className={`text-[9px] font-black uppercase tracking-wider ${variantStyles.accent}`}>
+              <p className={`text-eyebrow font-black uppercase tracking-wider ${variantStyles.accent}`}>
                 Scanned Serials ({activeOrder.serialNumbers.length}
                 {quantity > 1 ? ` / ${quantity}` : ''})
               </p>
@@ -527,7 +527,7 @@ export default function ActiveStationOrderCard({
                                 animate={framerPresence.stationAddedBadge.animate}
                                 exit={framerPresence.stationAddedBadge.exit}
                                 transition={framerTransition.stationAddedBadge}
-                                className="text-[9px] font-black text-emerald-600 uppercase tracking-wider"
+                                className="text-eyebrow font-black text-emerald-600 uppercase tracking-wider"
                               >
                                 ✓ Added
                               </motion.span>
@@ -552,7 +552,7 @@ export default function ActiveStationOrderCard({
                 </AnimatePresence>
               </div>
               {serialRemoveError && (
-                <p className="text-[10px] font-bold text-red-600">{serialRemoveError}</p>
+                <p className="text-micro font-bold text-red-600">{serialRemoveError}</p>
               )}
             </div>
           </motion.div>

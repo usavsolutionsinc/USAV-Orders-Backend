@@ -63,12 +63,12 @@ export function BinsFilterBar({ counts, rooms, status, room, onParamChange }: Pr
               type="button"
               onClick={() => onParamChange('status', c.id === 'all' ? '' : c.id)}
               aria-pressed={active}
-              className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-[12px] font-semibold ring-1 transition-all active:scale-95 ${
+              className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-label font-semibold ring-1 transition-all active:scale-95 ${
                 active ? ACTIVE_TONE[c.id] : c.tone
               }`}
             >
               {c.label}
-              <span className={`tabular-nums text-[10px] ${active ? 'opacity-90' : 'opacity-60'}`}>
+              <span className={`tabular-nums text-micro ${active ? 'opacity-90' : 'opacity-60'}`}>
                 {n}
               </span>
             </button>

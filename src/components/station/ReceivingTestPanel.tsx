@@ -36,7 +36,7 @@ function WorkflowSteps({ current }: { current: string | null }) {
         const isPast = i < activeIdx;
         return (
           <div key={step.key} className="flex items-center">
-            <div className={`px-2.5 py-1 text-[9px] font-black uppercase tracking-widest rounded-lg transition-all ${
+            <div className={`px-2.5 py-1 text-eyebrow font-black uppercase tracking-widest rounded-lg transition-all ${
               isCurrent
                 ? step.key === 'FAILED' ? 'bg-red-500 text-white' : 'bg-teal-600 text-white'
                 : isPast
@@ -169,16 +169,16 @@ export function ReceivingTestPanel({ item, onUpdated }: ReceivingTestPanelProps)
       {/* Panel header */}
       <div className="flex items-center justify-between px-4 pt-3 pb-2 bg-teal-50/60">
         <div className="flex items-center gap-2 min-w-0">
-          <span className="text-[10px] font-black text-teal-700 font-mono bg-white border border-teal-200 rounded-lg px-2 py-0.5">
+          <span className="text-micro font-black text-teal-700 font-mono bg-white border border-teal-200 rounded-lg px-2 py-0.5">
             #{item.receiving_id}
           </span>
           {item.carrier && (
-            <span className="text-[9px] font-black text-gray-400 uppercase">{item.carrier}</span>
+            <span className="text-eyebrow font-black text-gray-400 uppercase">{item.carrier}</span>
           )}
-          <span className="text-[10px] font-mono font-black text-gray-600 truncate">{trackingDisplay}</span>
+          <span className="text-micro font-mono font-black text-gray-600 truncate">{trackingDisplay}</span>
         </div>
         {item.assigned_tech_name && (
-          <span className="text-[9px] font-black uppercase tracking-wider text-teal-600 flex-shrink-0 ml-2">
+          <span className="text-eyebrow font-black uppercase tracking-wider text-teal-600 flex-shrink-0 ml-2">
             {item.assigned_tech_name}
           </span>
         )}
@@ -188,20 +188,20 @@ export function ReceivingTestPanel({ item, onUpdated }: ReceivingTestPanelProps)
         {/* Matched SKUs */}
         {item.line_skus.length > 0 && (
           <div className="pt-2">
-            <p className="text-[8px] font-black uppercase tracking-widest text-gray-400 mb-1">
+            <p className="text-mini font-black uppercase tracking-widest text-gray-400 mb-1">
               Items ({item.line_count})
             </p>
             <div className="flex flex-wrap gap-1">
               {item.line_skus.map((sku, i) => (
                 <span
                   key={i}
-                  className="text-[9px] font-mono font-black text-indigo-700 bg-indigo-50 border border-indigo-100 rounded-md px-1.5 py-0.5"
+                  className="text-eyebrow font-mono font-black text-indigo-700 bg-indigo-50 border border-indigo-100 rounded-md px-1.5 py-0.5"
                 >
                   {sku}
                 </span>
               ))}
               {item.line_count > item.line_skus.length && (
-                <span className="text-[9px] font-bold text-gray-400">
+                <span className="text-eyebrow font-bold text-gray-400">
                   +{item.line_count - item.line_skus.length} more
                 </span>
               )}
@@ -227,7 +227,7 @@ export function ReceivingTestPanel({ item, onUpdated }: ReceivingTestPanelProps)
                 type="button"
                 onClick={handleStartTest}
                 disabled={saving}
-                className="w-full flex items-center justify-center gap-2 py-3 bg-teal-600 hover:bg-teal-700 text-white rounded-xl text-[11px] font-black uppercase tracking-widest transition-all disabled:opacity-50"
+                className="w-full flex items-center justify-center gap-2 py-3 bg-teal-600 hover:bg-teal-700 text-white rounded-xl text-caption font-black uppercase tracking-widest transition-all disabled:opacity-50"
               >
                 {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : null}
                 Start Test
@@ -244,13 +244,13 @@ export function ReceivingTestPanel({ item, onUpdated }: ReceivingTestPanelProps)
               exit={{ opacity: 0 }}
               className="space-y-2"
             >
-              <p className="text-[8px] font-black uppercase tracking-widest text-gray-400">Test Outcome</p>
+              <p className="text-mini font-black uppercase tracking-widest text-gray-400">Test Outcome</p>
               <div className="grid grid-cols-2 gap-2">
                 <button
                   type="button"
                   onClick={() => handleVerdict('PASSED', 'passed')}
                   disabled={saving}
-                  className="flex items-center justify-center gap-1.5 py-3.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-[12px] font-black uppercase tracking-wider transition-all disabled:opacity-50 shadow-lg shadow-emerald-600/20"
+                  className="flex items-center justify-center gap-1.5 py-3.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-label font-black uppercase tracking-wider transition-all disabled:opacity-50 shadow-lg shadow-emerald-600/20"
                 >
                   {saving ? (
                     <Loader2 className="w-3.5 h-3.5 animate-spin" />
@@ -263,7 +263,7 @@ export function ReceivingTestPanel({ item, onUpdated }: ReceivingTestPanelProps)
                   type="button"
                   onClick={() => setPhase('failed')}
                   disabled={saving}
-                  className="flex items-center justify-center gap-1.5 py-3.5 bg-red-600 hover:bg-red-700 text-white rounded-xl text-[12px] font-black uppercase tracking-wider transition-all disabled:opacity-50 shadow-lg shadow-red-600/20"
+                  className="flex items-center justify-center gap-1.5 py-3.5 bg-red-600 hover:bg-red-700 text-white rounded-xl text-label font-black uppercase tracking-wider transition-all disabled:opacity-50 shadow-lg shadow-red-600/20"
                 >
                   <X className="w-4 h-4" />
                   Defective
@@ -281,14 +281,14 @@ export function ReceivingTestPanel({ item, onUpdated }: ReceivingTestPanelProps)
               exit={{ opacity: 0 }}
               className="space-y-2"
             >
-              <p className="text-[8px] font-black uppercase tracking-widest text-gray-400">Failure Reason</p>
+              <p className="text-mini font-black uppercase tracking-widest text-gray-400">Failure Reason</p>
               <div className="grid grid-cols-2 gap-1.5">
                 {FAIL_OPTS.map((opt) => (
                   <button
                     key={opt.value}
                     type="button"
                     onClick={() => setSelectedFail(opt.value)}
-                    className={`py-2.5 rounded-xl text-[10px] font-black uppercase tracking-wider transition-all border-2 ${
+                    className={`py-2.5 rounded-xl text-micro font-black uppercase tracking-wider transition-all border-2 ${
                       selectedFail === opt.value
                         ? `${opt.cls} border-transparent`
                         : 'bg-gray-50 text-gray-500 border-gray-200 hover:bg-gray-100'
@@ -303,7 +303,7 @@ export function ReceivingTestPanel({ item, onUpdated }: ReceivingTestPanelProps)
                   type="button"
                   onClick={() => handleVerdict(selectedFail, 'failed')}
                   disabled={saving}
-                  className="w-full py-2.5 bg-gray-900 hover:bg-black text-white rounded-xl text-[10px] font-black uppercase tracking-widest transition-all disabled:opacity-50 mt-1"
+                  className="w-full py-2.5 bg-gray-900 hover:bg-black text-white rounded-xl text-micro font-black uppercase tracking-widest transition-all disabled:opacity-50 mt-1"
                 >
                   {saving ? 'Saving…' : 'Confirm & Complete'}
                 </button>
@@ -311,7 +311,7 @@ export function ReceivingTestPanel({ item, onUpdated }: ReceivingTestPanelProps)
               <button
                 type="button"
                 onClick={() => setPhase('in_test')}
-                className="w-full py-1.5 text-[9px] font-black uppercase tracking-wider text-gray-400 hover:text-gray-600 transition-colors"
+                className="w-full py-1.5 text-eyebrow font-black uppercase tracking-wider text-gray-400 hover:text-gray-600 transition-colors"
               >
                 ← Back
               </button>
@@ -330,8 +330,8 @@ export function ReceivingTestPanel({ item, onUpdated }: ReceivingTestPanelProps)
                 <Check className="w-4 h-4 text-white" />
               </div>
               <div>
-                <p className="text-[11px] font-black text-emerald-800 uppercase tracking-widest">Test Passed</p>
-                <p className="text-[9px] text-emerald-600 font-bold mt-0.5">Product marked as working</p>
+                <p className="text-caption font-black text-emerald-800 uppercase tracking-widest">Test Passed</p>
+                <p className="text-eyebrow text-emerald-600 font-bold mt-0.5">Product marked as working</p>
               </div>
             </motion.div>
           )}
@@ -347,8 +347,8 @@ export function ReceivingTestPanel({ item, onUpdated }: ReceivingTestPanelProps)
                 <X className="w-4 h-4 text-white" />
               </div>
               <div>
-                <p className="text-[11px] font-black text-red-800 uppercase tracking-widest">Test Failed</p>
-                <p className="text-[9px] text-red-500 font-bold mt-0.5">
+                <p className="text-caption font-black text-red-800 uppercase tracking-widest">Test Failed</p>
+                <p className="text-eyebrow text-red-500 font-bold mt-0.5">
                   {FAIL_OPTS.find((o) => o.value === selectedFail)?.label ?? 'Defective'}
                 </p>
               </div>
@@ -359,21 +359,21 @@ export function ReceivingTestPanel({ item, onUpdated }: ReceivingTestPanelProps)
         {/* Notes field — always available */}
         {derivedPhase !== 'passed' && phase !== 'done' && derivedPhase !== 'done' && (
           <div className="space-y-1.5">
-            <p className="text-[8px] font-black uppercase tracking-widest text-gray-400">Tech Notes</p>
+            <p className="text-mini font-black uppercase tracking-widest text-gray-400">Tech Notes</p>
             <div className="flex gap-2">
               <textarea
                 value={notes}
                 onChange={(e) => setNotes(e.target.value)}
                 rows={2}
                 placeholder="Add testing notes…"
-                className="flex-1 resize-none rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 text-[11px] font-medium text-gray-700 outline-none focus:border-teal-400 focus:bg-white transition-all"
+                className="flex-1 resize-none rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 text-caption font-medium text-gray-700 outline-none focus:border-teal-400 focus:bg-white transition-all"
               />
               {notes.trim() && notes !== (item.notes ?? '') && (
                 <button
                   type="button"
                   onClick={handleSaveNotes}
                   disabled={saving}
-                  className="flex-shrink-0 px-3 py-2 bg-gray-900 text-white rounded-xl text-[9px] font-black uppercase tracking-widest hover:bg-black disabled:opacity-50 transition-all self-end"
+                  className="flex-shrink-0 px-3 py-2 bg-gray-900 text-white rounded-xl text-eyebrow font-black uppercase tracking-widest hover:bg-black disabled:opacity-50 transition-all self-end"
                 >
                   {saving ? '…' : 'Save'}
                 </button>
@@ -383,7 +383,7 @@ export function ReceivingTestPanel({ item, onUpdated }: ReceivingTestPanelProps)
         )}
 
         {saveError && (
-          <p className="text-[9px] font-black uppercase tracking-wider text-red-500 text-center">
+          <p className="text-eyebrow font-black uppercase tracking-wider text-red-500 text-center">
             Save failed — check connection
           </p>
         )}

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import pool from '@/lib/db';
-import { isQStashOrigin } from '@/lib/qstash';
+import { isAuthorizedCronRequest, isQStashOrigin } from '@/lib/qstash';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 60;
@@ -29,9 +29,11 @@ export async function POST(request: NextRequest) {
   return runStockAlerts();
 }
 
-/** Health probe — no auth required, no work performed. */
-export async function GET() {
-  return NextResponse.json({ ok: true, queue: 'qstash', job: 'stock-alerts' });
+export async function GET(request: NextRequest) {
+  if (!isAuthorizedCronRequest(request.headers)) {
+    return NextResponse.json({ ok: true, queue: 'vercel-cron', job: 'stock-alerts' });
+  }
+  return runStockAlerts();
 }
 
 async function runStockAlerts() {

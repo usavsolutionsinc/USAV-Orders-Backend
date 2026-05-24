@@ -167,12 +167,12 @@ export function SearchField({
   const sizeClasses = size === 'compact'
     ? {
         field: hideUnderline ? 'pb-1' : 'border-b pb-1',
-        input: 'h-7 text-[13px]',
+        input: 'h-7 text-sm',
         rightSlot: 'h-7',
       }
     : {
         field: hideUnderline ? 'pb-1' : 'border-b-2',
-        input: 'h-8 text-[13px]',
+        input: 'h-8 text-sm',
         rightSlot: 'h-8',
       };
 

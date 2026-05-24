@@ -2,7 +2,7 @@
  * returns.ts
  * ────────────────────────────────────────────────────────────────────
  * Phase 7 returns intake transaction. Shared by /api/returns/intake
- * and the /admin/inventory-v2/returns admin page so the bookkeeping
+ * and the /admin/inventory/returns admin page so the bookkeeping
  * lives in one place.
  *
  * Per resolved unit, in one transaction:

@@ -11,10 +11,8 @@ import {
   Settings,
   ShieldCheck,
   ShoppingCart,
-  Tool,
   User,
   Wrench,
-  Zap,
   RefreshCw,
 } from '@/components/Icons';
 
@@ -36,13 +34,8 @@ export type SidebarRouteKey =
   | 'previous-quarters'
   | 'admin'
   | 'audit-log'
-  | 'manuals'
   | 'manuals-library'
-  | 'ai'
   | 'settings'
-  | 'billing'
-  | 'integrations'
-  | 'staff'
   | 'unknown';
 
 export type SidebarIconComponent = (props: { className?: string }) => JSX.Element;
@@ -61,50 +54,16 @@ export interface SidebarNavItem {
   requires?: string;
 }
 
-/**
- * Sidebar items that should never appear in the mobile drawer. Used for
- * filtering the visible nav — actual route gating happens via the
- * pathname allowlist in {@link isMobileAllowedPath}.
- */
 const MOBILE_RESTRICTED_SIDEBAR_IDS = new Set<SidebarRouteKey>([
   'operations',
   'work-orders',
-  'manuals',
   'manuals-library',
   'support',
   'previous-quarters',
   'admin',
   'audit-log',
-  'dashboard',
-  'fba',
-  'walk-in',
-  'replenish',
-  'products',
-  'inventory',
-  'warehouse',
-  'ai',
-  'billing',
-  'integrations',
-  'staff',
-  'settings',
 ]);
 
-/**
- * Mobile-allowed route prefixes. Mobile devices can only land on these —
- * everything else gets redirected to /m/home (the scan-first homepage)
- * by ResponsiveLayout. Intentionally narrow: a warehouse phone is a
- * dedicated scanning device, not a portal into the full back-office app.
- *
- * Allowlist (prefixes; trailing-slash and full-match both accepted):
- *   • `/m`            — mobile root + every /m/* page (home, scan, history, single-record detail)
- *   • `/signin`       — sign-in
- *   • `/receiving`    — receiving station (camera-first photo flow)
- *   • `/packer`       — packing station (camera-first photo flow)
- *   • `/tech`         — testing / technician station
- *   • `/01`, `/414`   — GS1 Digital Link landing pages (deep links from scans)
- *
- * To add a new mobile-allowed surface, extend MOBILE_ALLOWED_PREFIXES.
- */
 const MOBILE_ALLOWED_PREFIXES: ReadonlyArray<string> = [
   '/m',
   '/signin',
@@ -135,16 +94,9 @@ export const APP_SIDEBAR_NAV: SidebarNavItem[] = [
   { id: 'products',          label: 'Products',    href: '/products',           icon: Box,             kind: 'station', requires: 'sku_stock.view' },
   { id: 'inventory',         label: 'Inventory',   href: '/inventory',          icon: Package,         kind: 'station', requires: 'sku_stock.view' },
   { id: 'warehouse',         label: 'Warehouse',   href: '/warehouse',          icon: Package,         kind: 'station', requires: 'sku_stock.view' },
-  { id: 'ai',                label: 'AI Chat',     href: '/ai',                 icon: Zap,             kind: 'bottom' },
-  // /manuals folded into /products as the default Manuals view. The /manuals
-  // URL still resolves (it redirects to /products), so external links keep
-  // working — but the standalone bottom-nav entry is gone.
   { id: 'support',           label: 'Support',     href: '/support',            icon: AlertCircle,     kind: 'bottom' },
   { id: 'previous-quarters', label: 'Quarters',    href: '/previous-quarters',  icon: Calendar,        kind: 'bottom', requires: 'reports.view' },
   { id: 'audit-log',         label: 'Audit Log',   href: '/settings/audit',     icon: FileText,        kind: 'bottom', requires: 'admin.view_logs' },
-  { id: 'staff',             label: 'Team',         href: '/settings/staff',    icon: User,            kind: 'bottom', requires: 'admin.manage_staff' },
-  { id: 'billing',           label: 'Billing',      href: '/settings/billing',   icon: ShieldCheck,     kind: 'bottom', requires: 'admin.view' },
-  { id: 'integrations',      label: 'Integrations', href: '/settings/integrations', icon: Zap,         kind: 'bottom', requires: 'admin.view' },
   { id: 'admin',             label: 'Admin',       href: '/admin',              icon: ShieldCheck,     kind: 'bottom', requires: 'admin.view' },
   { id: 'settings',          label: 'Settings',    href: '/settings',           icon: Settings,        kind: 'bottom' },
 ];
@@ -197,15 +149,8 @@ export function getSidebarRouteKey(pathname: string | null): SidebarRouteKey {
   if (pathname === '/tech' || pathname.startsWith('/tech/')) return 'tech';
   if (pathname === '/packer' || pathname.startsWith('/packer/')) return 'packer';
   if (pathname === '/manuals/library' || pathname.startsWith('/manuals/library/')) return 'manuals-library';
-  // /manuals folded into /products — anyone landing on the legacy URL gets
-  // the Products sidebar (the page-level redirect runs in parallel).
+  // /manuals now redirects to /products (see src/app/manuals/page.tsx)
   if (pathname === '/manuals' || pathname.startsWith('/manuals/')) return 'products';
-  if (pathname === '/ai' || pathname.startsWith('/ai/')) return 'ai';
-  // /settings/billing and /settings/integrations are leaf-routes under settings
-  // but should highlight their own sidebar entry, not the bare Settings link.
-  if (pathname === '/settings/billing' || pathname.startsWith('/settings/billing/')) return 'billing';
-  if (pathname === '/settings/integrations' || pathname.startsWith('/settings/integrations/')) return 'integrations';
-  if (pathname === '/settings/staff' || pathname.startsWith('/settings/staff/')) return 'staff';
   if (pathname === '/settings' || pathname.startsWith('/settings/')) return 'settings';
   return 'unknown';
 }
@@ -256,7 +201,7 @@ export const ROUTE_PERMISSIONS: ReadonlyArray<{ prefix: string; permission: stri
   { prefix: '/previous-quarters',  permission: 'reports.view' },
   // /settings is intentionally NOT gated — every signed-in user can manage
   // their own workstation/appearance settings; admin tabs gate themselves.
-  // /manuals, /support, /ai are always visible.
+  // /support is always visible. (/manuals now redirects into /products)
 ];
 
 export function permissionForPath(pathname: string): string | null {

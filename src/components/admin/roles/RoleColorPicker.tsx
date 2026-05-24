@@ -94,7 +94,7 @@ export function RoleColorPicker({ value, onChange, disabled }: RoleColorPickerPr
         />
       </button>
 
-      <code className="rounded-md bg-gray-100 px-1.5 py-0.5 text-[10px] font-mono text-gray-700">{value}</code>
+      <code className="rounded-md bg-gray-100 px-1.5 py-0.5 text-micro font-mono text-gray-700">{value}</code>
     </div>
   );
 }

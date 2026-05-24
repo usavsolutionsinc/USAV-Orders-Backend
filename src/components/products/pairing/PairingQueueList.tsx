@@ -55,7 +55,7 @@ export function PairingQueueList({ selectedSku, onSelect }: PairingQueueListProp
       </div>
 
       {/* Count bar */}
-      <div className="flex items-center justify-between border-b border-gray-100 px-3 py-1.5 text-[10px] font-black uppercase tracking-wider text-gray-500">
+      <div className="flex items-center justify-between border-b border-gray-100 px-3 py-1.5 text-micro font-black uppercase tracking-wider text-gray-500">
         <span>
           {loading ? 'Loading…' : total === null ? '' : `${total} need review`}
         </span>
@@ -82,7 +82,7 @@ export function PairingQueueList({ selectedSku, onSelect }: PairingQueueListProp
             <p className="text-xs font-bold text-gray-500">
               {query ? 'No matches' : 'All caught up'}
             </p>
-            <p className="mt-1 text-[10px] text-gray-400">
+            <p className="mt-1 text-micro text-gray-400">
               {query
                 ? 'Try a different search term.'
                 : 'No pairing suggestions to review right now.'}
@@ -128,18 +128,18 @@ function PairingQueueRow({
             // eslint-disable-next-line @next/next/no-img-element
             <img src={item.imageUrl} alt="" className="h-full w-full object-cover" />
           ) : (
-            <span className="text-[10px] font-bold text-gray-300">{item.sku.slice(0, 3)}</span>
+            <span className="text-micro font-bold text-gray-300">{item.sku.slice(0, 3)}</span>
           )}
         </span>
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-1.5">
             <span className="truncate font-mono text-xs font-bold text-gray-900">{item.sku}</span>
             <ConfidenceDot value={item.topConfidence} />
-            <span className="text-[10px] font-semibold text-gray-400">
+            <span className="text-micro font-semibold text-gray-400">
               {item.suggestionCount} suggested
             </span>
           </div>
-          <p className="mt-0.5 line-clamp-2 text-[11px] leading-tight text-gray-600">
+          <p className="mt-0.5 line-clamp-2 text-caption leading-tight text-gray-600">
             {item.productTitle || '—'}
           </p>
           <div className="mt-1 flex flex-wrap gap-1">
@@ -148,14 +148,14 @@ function PairingQueueRow({
               return (
                 <span
                   key={p}
-                  className={`inline-flex items-center rounded border px-1.5 py-0 text-[9px] font-semibold uppercase tracking-wider ${style.chip}`}
+                  className={`inline-flex items-center rounded border px-1.5 py-0 text-eyebrow font-semibold uppercase tracking-wider ${style.chip}`}
                 >
                   {style.label}
                 </span>
               );
             })}
             {item.confirmedCount > 0 && (
-              <span className="inline-flex items-center rounded border border-emerald-200 bg-emerald-50 px-1.5 py-0 text-[9px] font-semibold uppercase tracking-wider text-emerald-700">
+              <span className="inline-flex items-center rounded border border-emerald-200 bg-emerald-50 px-1.5 py-0 text-eyebrow font-semibold uppercase tracking-wider text-emerald-700">
                 ✓ {item.confirmedCount}
               </span>
             )}

@@ -33,7 +33,7 @@ function PhotoChip({ count, isAction = false }: { count: number; isAction?: bool
   const has = count > 0;
   return (
     <div
-      className={`inline-flex w-[60px] shrink-0 items-center justify-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-black tabular-nums tracking-wide transition-transform ${
+      className={`inline-flex w-[60px] shrink-0 items-center justify-center gap-1 rounded-full px-2 py-0.5 text-caption font-black tabular-nums tracking-wide transition-transform ${
         isAction
           ? 'bg-blue-600 text-white shadow-sm active:scale-95'
           : has ? 'bg-emerald-50 text-emerald-700' : 'bg-gray-100 text-gray-400'
@@ -105,13 +105,13 @@ export function MobilePackingRow({ row, variant, fresh = false, onTap, photosHre
           <span
             className={`${isExpanded ? 'h-2.5 w-2.5' : 'h-2 w-2'} shrink-0 rounded-full ${getSourceDotBg(row)}`}
           />
-          <span className={`min-w-0 flex-1 truncate font-bold text-gray-900 ${isExpanded ? 'text-[15px] tracking-tight' : 'text-[13px]'}`}>
+          <span className={`min-w-0 flex-1 truncate font-bold text-gray-900 ${isExpanded ? 'text-base tracking-tight' : 'text-sm'}`}>
             {productTitle}
           </span>
         </div>
 
         <div className="mt-3 flex items-center gap-2">
-          <span className={`flex shrink-0 items-center gap-1 whitespace-nowrap font-black uppercase tracking-widest ${isExpanded ? 'text-[11px]' : 'text-[10px]'}`}>
+          <span className={`flex shrink-0 items-center gap-1 whitespace-nowrap font-black uppercase tracking-widest ${isExpanded ? 'text-caption' : 'text-micro'}`}>
             <span className={quantity > 1 ? 'text-yellow-600' : 'text-gray-900'}>
               {quantity}
             </span>

@@ -251,11 +251,11 @@ export function EcwidProductSearchPopover({
         className="mt-1 max-h-[300px] overflow-y-auto"
       >
         {error && (
-          <li className="px-3 py-3 text-[12px] text-red-600">{error}</li>
+          <li className="px-3 py-3 text-label text-red-600">{error}</li>
         )}
 
         {!error && !isLoading && query.trim() && items.length === 0 && (
-          <li className="px-3 py-3 text-[12px] text-gray-500">
+          <li className="px-3 py-3 text-label text-gray-500">
             No matches. Try the other mode or refine the query.
           </li>
         )}
@@ -328,7 +328,7 @@ function ResultRow({ item, isSubmitting, disabled, onSelect }: ResultRowProps) {
               loading="lazy"
             />
           ) : (
-            <div className="flex h-full w-full items-center justify-center text-[10px] text-gray-300">
+            <div className="flex h-full w-full items-center justify-center text-micro text-gray-300">
               —
             </div>
           )}
@@ -336,11 +336,11 @@ function ResultRow({ item, isSubmitting, disabled, onSelect }: ResultRowProps) {
 
         {/* Title + SKU + platform chips */}
         <div className="min-w-0 flex-1">
-          <div className="truncate text-[13px] font-semibold text-gray-900">
+          <div className="truncate text-sm font-semibold text-gray-900">
             {item.product_title}
           </div>
           <div className="mt-0.5 flex flex-wrap items-center gap-1">
-            <span className="font-mono text-[10px] tracking-wide text-gray-500">
+            <span className="font-mono text-micro tracking-wide text-gray-500">
               {displaySku}
             </span>
             {platforms.slice(0, 4).map((p, i) => (
@@ -355,7 +355,7 @@ function ResultRow({ item, isSubmitting, disabled, onSelect }: ResultRowProps) {
         </div>
 
         {isSubmitting && (
-          <span className="text-[10px] font-bold uppercase tracking-wider text-blue-600">
+          <span className="text-micro font-bold uppercase tracking-wider text-blue-600">
             Adding…
           </span>
         )}

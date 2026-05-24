@@ -142,7 +142,7 @@ export function SkuPairingPanel({ onSelectItem, selectedItemNumber, embedded = f
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 placeholder="Search unpaired items..."
-                className="w-full rounded-lg border border-gray-200 bg-gray-50 py-2 pl-8 pr-3 text-[11px] font-bold text-gray-900 outline-none transition-colors placeholder:text-gray-400 focus:border-blue-300 focus:bg-white focus:ring-2 focus:ring-blue-100"
+                className="w-full rounded-lg border border-gray-200 bg-gray-50 py-2 pl-8 pr-3 text-caption font-bold text-gray-900 outline-none transition-colors placeholder:text-gray-400 focus:border-blue-300 focus:bg-white focus:ring-2 focus:ring-blue-100"
               />
             </div>
           </div>
@@ -216,11 +216,11 @@ export function SkuPairingPanel({ onSelectItem, selectedItemNumber, embedded = f
                     <span className={`shrink-0 rounded-full border px-2 py-0.5 ${microBadge} ${platformColor(item.account_source)}`}>
                       {platformLabel(item.account_source)}
                     </span>
-                    <span className="truncate text-[11px] font-mono font-bold text-gray-900">
+                    <span className="truncate text-caption font-mono font-bold text-gray-900">
                       {item.item_number}
                     </span>
                   </div>
-                  <div className="mt-1 flex items-center gap-2 text-[10px] font-semibold text-gray-500">
+                  <div className="mt-1 flex items-center gap-2 text-micro font-semibold text-gray-500">
                     <span className="truncate">{item.product_title || 'No title'}</span>
                     <span className="shrink-0 opacity-40">-</span>
                     <span className="shrink-0">{item.order_count} order{item.order_count !== 1 ? 's' : ''}</span>
@@ -314,15 +314,15 @@ export function SkuPairingDetail({ item, onClose, onPaired }: SkuPairingDetailPr
             className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-emerald-100">
             <Link2 className="h-8 w-8 text-emerald-600" />
           </motion.div>
-          <p className="text-[15px] font-black uppercase tracking-tight text-gray-900">Paired Successfully</p>
-          <p className="mt-1 text-[12px] font-bold text-gray-400">
+          <p className="text-base font-black uppercase tracking-tight text-gray-900">Paired Successfully</p>
+          <p className="mt-1 text-label font-bold text-gray-400">
             {pairResult.ordersUpdated} order{pairResult.ordersUpdated !== 1 ? 's' : ''} updated
             {pairResult.manualsUpdated > 0 ? ` - ${pairResult.manualsUpdated} manual${pairResult.manualsUpdated !== 1 ? 's' : ''} linked` : ''}
           </p>
           <button
             type="button"
             onClick={onClose}
-            className="mt-4 rounded-full border border-gray-200 px-4 py-1.5 text-[10px] font-black uppercase tracking-wider text-gray-600 transition-colors hover:bg-gray-50"
+            className="mt-4 rounded-full border border-gray-200 px-4 py-1.5 text-micro font-black uppercase tracking-wider text-gray-600 transition-colors hover:bg-gray-50"
           >
             Done
           </button>
@@ -343,13 +343,13 @@ export function SkuPairingDetail({ item, onClose, onPaired }: SkuPairingDetailPr
               </span>
               <span className={`${tableHeader} text-gray-400`}>Needs pairing</span>
             </div>
-            <h2 className="mt-2 text-[15px] font-black tracking-tight text-gray-900">
+            <h2 className="mt-2 text-base font-black tracking-tight text-gray-900">
               {item.item_number}
             </h2>
-            <p className="mt-0.5 text-[11px] font-semibold text-gray-500 truncate">
+            <p className="mt-0.5 text-caption font-semibold text-gray-500 truncate">
               {item.product_title || 'No product title'}
             </p>
-            <p className="mt-1 text-[10px] font-bold text-gray-400">
+            <p className="mt-1 text-micro font-bold text-gray-400">
               {item.order_count} order{item.order_count !== 1 ? 's' : ''}
               {item.sku ? ` - Current SKU: ${item.sku}` : ''}
             </p>
@@ -374,7 +374,7 @@ export function SkuPairingDetail({ item, onClose, onPaired }: SkuPairingDetailPr
             value={searchQuery}
             onChange={(e) => { setSearchQuery(e.target.value); setSelectedCatalog(null); }}
             placeholder="Search by SKU or product name..."
-            className="w-full rounded-lg border border-gray-200 bg-gray-50 py-2 pl-8 pr-3 text-[11px] font-bold text-gray-900 outline-none placeholder:text-gray-400 focus:border-blue-300 focus:bg-white focus:ring-2 focus:ring-blue-100"
+            className="w-full rounded-lg border border-gray-200 bg-gray-50 py-2 pl-8 pr-3 text-caption font-bold text-gray-900 outline-none placeholder:text-gray-400 focus:border-blue-300 focus:bg-white focus:ring-2 focus:ring-blue-100"
           />
           {searching && <Loader2 className="absolute right-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 animate-spin text-gray-400" />}
         </div>
@@ -385,7 +385,7 @@ export function SkuPairingDetail({ item, onClose, onPaired }: SkuPairingDetailPr
         {error && (
           <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }}
             className="overflow-hidden border-b border-red-100 bg-red-50 px-4 py-2.5">
-            <div className="flex items-center gap-1.5 text-[10px] font-semibold text-red-700">
+            <div className="flex items-center gap-1.5 text-micro font-semibold text-red-700">
               <AlertCircle className="h-3 w-3" />{error}
             </div>
           </motion.div>
@@ -396,8 +396,8 @@ export function SkuPairingDetail({ item, onClose, onPaired }: SkuPairingDetailPr
       <div className="flex-1 overflow-y-auto">
         {results.length === 0 && searchQuery.trim() && !searching ? (
           <div className="flex flex-col items-center justify-center px-6 py-16 text-center">
-            <p className="text-[11px] font-bold text-gray-400">No Zoho products found</p>
-            <p className="mt-1 text-[10px] text-gray-400">Try a different search term.</p>
+            <p className="text-caption font-bold text-gray-400">No Zoho products found</p>
+            <p className="mt-1 text-micro text-gray-400">Try a different search term.</p>
           </div>
         ) : (
           <AnimatePresence initial={false}>
@@ -422,14 +422,14 @@ export function SkuPairingDetail({ item, onClose, onPaired }: SkuPairingDetailPr
                 >
                   <div className="flex items-center gap-2">
                     {isSelected && <Check className="h-3.5 w-3.5 shrink-0 text-emerald-600" />}
-                    <span className="text-[12px] font-black text-gray-900">{catalog.sku}</span>
+                    <span className="text-label font-black text-gray-900">{catalog.sku}</span>
                     {catalog.category && (
                       <span className={`${microBadge} shrink-0 rounded bg-gray-100 px-1.5 py-0.5 text-gray-500`}>
                         {catalog.category}
                       </span>
                     )}
                   </div>
-                  <p className="mt-0.5 truncate text-[11px] font-semibold text-gray-600">
+                  <p className="mt-0.5 truncate text-caption font-semibold text-gray-600">
                     {catalog.product_title}
                   </p>
                   {catalog.platform_ids.length > 0 && (
@@ -456,7 +456,7 @@ export function SkuPairingDetail({ item, onClose, onPaired }: SkuPairingDetailPr
           className="shrink-0 border-t border-gray-200 bg-white px-4 py-3"
         >
           <div className="mb-2 rounded-lg border border-emerald-100 bg-emerald-50/50 px-3 py-2">
-            <p className="text-[10px] font-bold text-emerald-700">
+            <p className="text-micro font-bold text-emerald-700">
               Pair <span className="font-mono">{item.item_number}</span> ({platformLabel(item.account_source)})
               {' '}&rarr;{' '}
               <span className="font-mono">{selectedCatalog.sku}</span>
@@ -466,7 +466,7 @@ export function SkuPairingDetail({ item, onClose, onPaired }: SkuPairingDetailPr
             type="button"
             onClick={handlePair}
             disabled={pairing}
-            className="flex w-full items-center justify-center gap-2 rounded-xl bg-gray-900 px-4 py-2.5 text-[10px] font-black uppercase tracking-[0.14em] text-white transition-colors hover:bg-gray-800 disabled:cursor-not-allowed disabled:opacity-50"
+            className="flex w-full items-center justify-center gap-2 rounded-xl bg-gray-900 px-4 py-2.5 text-micro font-black uppercase tracking-[0.14em] text-white transition-colors hover:bg-gray-800 disabled:cursor-not-allowed disabled:opacity-50"
           >
             {pairing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Link2 className="h-3.5 w-3.5" />}
             Pair SKU

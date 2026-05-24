@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { isQStashOrigin } from '@/lib/qstash';
+import { isAuthorizedCronRequest, isQStashOrigin } from '@/lib/qstash';
 import { isInventoryV2Replenishment } from '@/lib/feature-flags';
 import { detectReplenishmentNeeds } from '@/lib/replenishment/pick-face';
 
@@ -19,10 +19,7 @@ export const maxDuration = 60;
  * Gated by INVENTORY_V2_REPLENISHMENT. Off-flag returns 503 so the QStash
  * schedule fails fast instead of half-running.
  */
-export async function POST(request: NextRequest) {
-  if (!isQStashOrigin(request.headers)) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
+async function execute() {
   if (!isInventoryV2Replenishment()) {
     return NextResponse.json(
       { ok: false, error: 'INVENTORY_V2_REPLENISHMENT flag is OFF', flag: 'INVENTORY_V2_REPLENISHMENT' },
@@ -46,12 +43,21 @@ export async function POST(request: NextRequest) {
   }
 }
 
-/** Health probe — no auth required. */
-export async function GET() {
-  return NextResponse.json({
-    ok: true,
-    queue: 'qstash',
-    job: 'replenishment-detect',
-    flag: 'INVENTORY_V2_REPLENISHMENT',
-  });
+export async function POST(request: NextRequest) {
+  if (!isQStashOrigin(request.headers)) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+  return execute();
+}
+
+export async function GET(request: NextRequest) {
+  if (!isAuthorizedCronRequest(request.headers)) {
+    return NextResponse.json({
+      ok: true,
+      queue: 'vercel-cron',
+      job: 'replenishment-detect',
+      flag: 'INVENTORY_V2_REPLENISHMENT',
+    });
+  }
+  return execute();
 }

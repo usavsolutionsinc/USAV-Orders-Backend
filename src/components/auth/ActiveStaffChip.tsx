@@ -48,7 +48,7 @@ export function ActiveStaffChip({ variant = 'default', hideSwitch = false }: Act
   if (!user) {
     if (variant === 'inline') {
       return (
-        <a href="/signin" className="inline-flex items-center gap-1.5 rounded-full border border-gray-200 bg-white px-2.5 py-1 text-[11px] font-semibold text-gray-700 hover:bg-gray-50">
+        <a href="/signin" className="inline-flex items-center gap-1.5 rounded-full border border-gray-200 bg-white px-2.5 py-1 text-caption font-semibold text-gray-700 hover:bg-gray-50">
           Sign in →
         </a>
       );
@@ -59,7 +59,7 @@ export function ActiveStaffChip({ variant = 'default', hideSwitch = false }: Act
         className="flex w-full items-center justify-between rounded-xl border border-dashed border-gray-300 bg-white px-3 py-2.5 text-left text-sm font-medium text-gray-700 hover:bg-gray-50"
       >
         <span>Not signed in</span>
-        <span className="text-[11px] text-gray-500">Sign in →</span>
+        <span className="text-caption text-gray-500">Sign in →</span>
       </a>
     );
   }
@@ -74,10 +74,10 @@ export function ActiveStaffChip({ variant = 'default', hideSwitch = false }: Act
         type="button"
         onClick={hideSwitch ? undefined : openSwitcher}
         disabled={hideSwitch}
-        className={`group inline-flex items-center gap-2 rounded-full border ${sc.border} ${sc.light} px-2 py-1 text-[11px] font-semibold ${sc.text} transition ${hideSwitch ? 'cursor-default' : 'hover:bg-white hover:shadow-sm'}`}
+        className={`group inline-flex items-center gap-2 rounded-full border ${sc.border} ${sc.light} px-2 py-1 text-caption font-semibold ${sc.text} transition ${hideSwitch ? 'cursor-default' : 'hover:bg-white hover:shadow-sm'}`}
         title={hideSwitch ? `Signed in as ${staffName || `Staff #${user.staffId}`}` : 'Switch staff'}
       >
-        <span className={`flex h-5 w-5 items-center justify-center rounded-full ${sc.bg} text-[9px] font-bold text-white`}>
+        <span className={`flex h-5 w-5 items-center justify-center rounded-full ${sc.bg} text-eyebrow font-bold text-white`}>
           {staffName ? initials(staffName) : '·'}
         </span>
         <span className="truncate">{staffName || `Staff #${user.staffId}`}</span>
@@ -92,18 +92,18 @@ export function ActiveStaffChip({ variant = 'default', hideSwitch = false }: Act
 
   return (
     <div className={`flex w-full items-center gap-3 rounded-xl border ${sc.border} ${sc.light} px-3 py-2.5`}>
-      <div className={`flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full ${sc.bg} text-[12px] font-bold text-white ring-4 ring-white`}>
+      <div className={`flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full ${sc.bg} text-label font-bold text-white ring-4 ring-white`}>
         {staffName ? initials(staffName) : '·'}
       </div>
       <div className="min-w-0 flex-1">
-        <div className="truncate text-[13px] font-semibold text-gray-900">{staffName || `Staff #${user.staffId}`}</div>
-        <div className={`truncate text-[10px] font-medium uppercase tracking-[0.14em] ${sc.text}`}>{role}</div>
+        <div className="truncate text-sm font-semibold text-gray-900">{staffName || `Staff #${user.staffId}`}</div>
+        <div className={`truncate text-micro font-medium uppercase tracking-[0.14em] ${sc.text}`}>{role}</div>
       </div>
       {!hideSwitch && (
         <button
           type="button"
           onClick={openSwitcher}
-          className="inline-flex items-center gap-1 rounded-md border border-gray-200 bg-white px-2 py-1 text-[10px] font-semibold uppercase tracking-wider text-gray-700 transition hover:bg-gray-50 hover:text-gray-900"
+          className="inline-flex items-center gap-1 rounded-md border border-gray-200 bg-white px-2 py-1 text-micro font-semibold uppercase tracking-wider text-gray-700 transition hover:bg-gray-50 hover:text-gray-900"
           title="Switch to another staff"
         >
           <svg className="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">

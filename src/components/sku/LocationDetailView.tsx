@@ -4,7 +4,7 @@ import { useCallback, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Loader2, Plus } from '@/components/Icons';
-import { PaneHeader, PaneHeaderStatusPill } from '@/components/ui/pane-header';
+import { PaneHeader, PaneHeaderLabel, PaneHeaderCount, PaneHeaderStatusPill } from '@/components/ui/pane-header';
 import { BinAddSkuSheet } from '@/components/sku/BinAddSkuSheet';
 import { BinStockNumpadSheet } from '@/components/sku/BinStockNumpadSheet';
 import { BinRowDetailsSheet } from '@/components/sku/BinRowDetailsSheet';
@@ -230,35 +230,38 @@ export function LocationDetailView({ barcode }: LocationDetailViewProps) {
     <div className="flex h-full min-h-0 w-full flex-col bg-white">
       <PaneHeader
         className="border-slate-200 bg-white"
-        rowClassName="items-start px-4 py-3"
+        rowClassName="px-4"
         leftSlot={
-          <div className="min-w-0">
-            <p className="text-[10px] font-black uppercase tracking-[0.16em] text-slate-500">Bin</p>
-            <h1 className="truncate text-lg font-black text-slate-900">{location.name}</h1>
-            {subtitle && (
-              <p className="mt-0.5 truncate text-[11px] font-semibold text-slate-600">{subtitle}</p>
-            )}
-            {location.barcode && (
-              <p className="mt-0.5 truncate font-mono text-[11px] font-bold text-slate-500">
-                {location.barcode}
-              </p>
-            )}
-          </div>
+          <>
+            <PaneHeaderLabel eyebrow="Bin" value={location.name} valueTitle={location.name} />
+            <PaneHeaderCount count={totalQty} />
+          </>
         }
         rightSlot={
-          <div className="flex flex-col items-end gap-1.5">
+          <>
             {location.capacity != null && (
               <PaneHeaderStatusPill tone="neutral">Cap {location.capacity}</PaneHeaderStatusPill>
             )}
-            <PaneHeaderStatusPill tone="blue">{totalQty} on hand</PaneHeaderStatusPill>
             <button
               type="button"
               onClick={() => refetch()}
-              className="rounded-md border border-slate-300 bg-white px-2.5 py-1 text-[11px] font-bold text-slate-700 active:bg-slate-50"
+              className="rounded-md border border-slate-300 bg-white px-2.5 py-1 text-caption font-bold text-slate-700 active:bg-slate-50"
             >
               Refresh
             </button>
-          </div>
+          </>
+        }
+        belowSlot={
+          (subtitle || location.barcode) ? (
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 border-t border-slate-100 px-4 py-1.5">
+              {subtitle && (
+                <p className="truncate text-caption font-semibold text-slate-600">{subtitle}</p>
+              )}
+              {location.barcode && (
+                <p className="truncate font-mono text-caption font-bold text-slate-500">{location.barcode}</p>
+              )}
+            </div>
+          ) : undefined
         }
       />
 
@@ -270,13 +273,13 @@ export function LocationDetailView({ barcode }: LocationDetailViewProps) {
             className="mb-3 flex w-full items-center justify-between gap-3 rounded-lg border border-blue-200 bg-blue-50 px-4 py-3 text-left active:bg-blue-100"
           >
             <div className="min-w-0">
-              <p className="text-[10px] font-black uppercase tracking-[0.16em] text-blue-700">
+              <p className="text-micro font-black uppercase tracking-[0.16em] text-blue-700">
                 Cycle count active
               </p>
               <p className="mt-0.5 truncate text-sm font-bold text-blue-900">
                 {activeCampaign.data.name}
               </p>
-              <p className="text-[11px] font-bold text-blue-700">
+              <p className="text-caption font-bold text-blue-700">
                 {activeCampaign.data.pending} pending
                 {activeCampaign.data.review > 0
                   ? ` · ${activeCampaign.data.review} in review`
@@ -290,13 +293,13 @@ export function LocationDetailView({ barcode }: LocationDetailViewProps) {
         )}
 
         <div className="mb-2 flex items-center justify-between">
-          <p className="text-[10px] font-black uppercase tracking-[0.16em] text-slate-500">
+          <p className="text-micro font-black uppercase tracking-[0.16em] text-slate-500">
             Contents ({contents.length})
           </p>
           <button
             type="button"
             onClick={() => setAddSheetOpen(true)}
-            className="inline-flex items-center gap-1.5 rounded-md bg-blue-600 px-3 py-1.5 text-[11px] font-bold text-white active:bg-blue-700"
+            className="inline-flex items-center gap-1.5 rounded-md bg-blue-600 px-3 py-1.5 text-caption font-bold text-white active:bg-blue-700"
           >
             <Plus className="h-3.5 w-3.5" />
             Add product
@@ -322,11 +325,11 @@ export function LocationDetailView({ barcode }: LocationDetailViewProps) {
                         {row.sku}
                       </p>
                       {row.productTitle && (
-                        <p className="mt-1 line-clamp-2 text-[11px] leading-snug text-slate-500">
+                        <p className="mt-1 line-clamp-2 text-caption leading-snug text-slate-500">
                           {row.productTitle}
                         </p>
                       )}
-                      <p className="mt-1 text-[10px] font-bold uppercase tracking-widest text-slate-400">
+                      <p className="mt-1 text-micro font-bold uppercase tracking-widest text-slate-400">
                         Counted {formatAgo(row.lastCounted)} ago
                         {row.minQty != null && row.maxQty != null
                           ? ` · ${row.minQty}–${row.maxQty}`
@@ -338,7 +341,7 @@ export function LocationDetailView({ barcode }: LocationDetailViewProps) {
                       <p className="text-2xl font-black tabular-nums text-slate-900">
                         {row.qty}
                       </p>
-                      <p className="mt-0.5 text-[9px] font-bold uppercase tracking-widest text-slate-400">
+                      <p className="mt-0.5 text-eyebrow font-bold uppercase tracking-widest text-slate-400">
                         tap to edit
                       </p>
                     </div>

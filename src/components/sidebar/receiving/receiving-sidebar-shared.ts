@@ -392,9 +392,9 @@ export function readSelectLineDetail(
 // ── Form input class tokens ─────────────────────────────────────────────────
 
 export const SELECT_CLASS =
-  'w-full rounded-md border border-gray-200 bg-white px-1.5 py-0.5 text-[11px] font-semibold text-gray-900 focus:border-blue-300 focus:outline-none focus:ring-2 focus:ring-blue-500/10';
+  'w-full rounded-md border border-gray-200 bg-white px-1.5 py-0.5 text-caption font-semibold text-gray-900 focus:border-blue-300 focus:outline-none focus:ring-2 focus:ring-blue-500/10';
 export const INPUT_CLASS =
-  'w-full rounded-md border border-gray-200 bg-white px-1.5 py-0.5 text-[11px] font-semibold text-gray-900 placeholder:text-gray-400 focus:border-blue-300 focus:outline-none focus:ring-2 focus:ring-blue-500/10';
+  'w-full rounded-md border border-gray-200 bg-white px-1.5 py-0.5 text-caption font-semibold text-gray-900 placeholder:text-gray-400 focus:border-blue-300 focus:outline-none focus:ring-2 focus:ring-blue-500/10';
 
 // ── Type scale (sidebar + workspace share this) ─────────────────────────────
 /**
@@ -409,22 +409,22 @@ export const INPUT_CLASS =
  */
 
 export const TYPE_PRODUCT_TITLE_CLASS =
-  'text-[14px] font-extrabold leading-snug tracking-tight text-slate-900 break-words';
+  'text-sm font-extrabold leading-snug tracking-tight text-slate-900 break-words';
 
 export const TYPE_PRODUCT_TITLE_COMPACT_CLASS =
-  'text-[13px] font-extrabold leading-snug tracking-tight text-slate-900 break-words line-clamp-3';
+  'text-sm font-extrabold leading-snug tracking-tight text-slate-900 break-words line-clamp-3';
 
 export const TYPE_SECTION_TITLE_CLASS =
-  'shrink-0 text-[10px] font-black uppercase tracking-wider';
+  'shrink-0 text-micro font-black uppercase tracking-wider';
 
 export const TYPE_FIELD_LABEL_CLASS =
-  'block text-[9px] font-black uppercase tracking-[0.14em] text-slate-500';
+  'block text-eyebrow font-black uppercase tracking-[0.14em] text-slate-500';
 
 export const TYPE_HEADER_SUMMARY_CLASS =
-  'inline-flex min-w-0 max-w-full flex-wrap items-center justify-end gap-x-1 gap-y-0.5 text-[9px] font-semibold leading-none tracking-wide text-gray-600';
+  'inline-flex min-w-0 max-w-full flex-wrap items-center justify-end gap-x-1 gap-y-0.5 text-eyebrow font-semibold leading-none tracking-wide text-gray-600';
 
 export const TYPE_INPUT_INLINE_CLASS =
-  'text-[11px] font-semibold text-gray-900 placeholder:font-medium placeholder:text-gray-400';
+  'text-caption font-semibold text-gray-900 placeholder:font-medium placeholder:text-gray-400';
 
 // ── Flow-section class + tone tokens ────────────────────────────────────────
 

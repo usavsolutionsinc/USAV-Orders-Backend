@@ -233,7 +233,7 @@ export function RepairTable({ filter }: RepairTableProps) {
             {search && (
               <div className="flex items-center gap-2 px-2 py-0.5 bg-orange-50 text-orange-700 rounded-lg border border-orange-100">
                 <Search className="w-3 h-3" />
-                <span className="text-[9px] font-black uppercase tracking-widest">{search}</span>
+                <span className="text-eyebrow font-black uppercase tracking-widest">{search}</span>
                 <button
                   onClick={clearSearch}
                   className="hover:text-orange-900 transition-colors"
@@ -246,7 +246,7 @@ export function RepairTable({ filter }: RepairTableProps) {
             {selectedRepair && (
               <button
                 onClick={() => setSelectedRepair(null)}
-                className="flex items-center gap-2 px-3 py-1 bg-blue-600 text-white rounded-lg text-[9px] font-black uppercase tracking-widest hover:bg-blue-700 transition-all shadow-lg shadow-blue-600/20"
+                className="flex items-center gap-2 px-3 py-1 bg-blue-600 text-white rounded-lg text-eyebrow font-black uppercase tracking-widest hover:bg-blue-700 transition-all shadow-lg shadow-blue-600/20"
               >
                 Close Panel
               </button>
@@ -260,7 +260,7 @@ export function RepairTable({ filter }: RepairTableProps) {
           {loading ? (
             <div className="flex flex-col items-center justify-center py-40 gap-3 text-gray-500">
               <LoadingSpinner size="lg" className="text-blue-600" />
-              <p className="text-[10px] font-black uppercase tracking-widest">Loading Repairs...</p>
+              <p className="text-micro font-black uppercase tracking-widest">Loading Repairs...</p>
             </div>
           ) : filteredRepairs.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-40 text-center">
@@ -307,31 +307,31 @@ export function RepairTable({ filter }: RepairTableProps) {
                         }`}
                       >
                         <div className="flex flex-col min-w-0 gap-1">
-                          <div className="text-[13px] font-black text-gray-900 truncate leading-tight">
+                          <div className="text-sm font-black text-gray-900 truncate leading-tight">
                             {repair.product_title || 'Unknown Product'}
                           </div>
-                          <div className="text-[11px] font-black text-gray-700 truncate leading-tight">
+                          <div className="text-caption font-black text-gray-700 truncate leading-tight">
                             {repair.issue || repair.source_tracking_number || 'No issue specified'}
                           </div>
                           <div className="flex items-center gap-3 mt-0.5">
-                            <div className="text-[10px] font-black text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-100">
+                            <div className="text-micro font-black text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-100">
                               {repair.price ? `$${repair.price}` : '---'}
                             </div>
-                            <div className="text-[10px] font-black text-gray-700 truncate uppercase tracking-tight">
+                            <div className="text-micro font-black text-gray-700 truncate uppercase tracking-tight">
                               {repair.customer_name || (() => {
                                 if (!repair.contact_info) return 'No Name';
                                 const parts = repair.contact_info.split(',').map((p: string) => p.trim());
                                 return parts[0] || 'No Name';
                               })()}
                             </div>
-                            <div className="text-[9px] font-bold text-gray-500 truncate">
+                            <div className="text-eyebrow font-bold text-gray-500 truncate">
                               {formatPhoneNumber(repair.customer_phone || (() => {
                                 if (!repair.contact_info) return '';
                                 const parts = repair.contact_info.split(',').map((p: string) => p.trim());
                                 return parts[1] || '';
                               })())}
                             </div>
-                            <div className="text-[8px] font-bold text-gray-900 lowercase truncate">
+                            <div className="text-mini font-bold text-gray-900 lowercase truncate">
                               {repair.source_tracking_number || repair.customer_email || (() => {
                                 if (!repair.contact_info) return '';
                                 const parts = repair.contact_info.split(',').map((p: string) => p.trim());

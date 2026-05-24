@@ -232,8 +232,8 @@ export function ManualUpdateDetailsStack({
     >
       <div className="flex items-center justify-between border-b border-gray-100 bg-white/95 px-6 py-4 backdrop-blur">
         <div className="min-w-0">
-          <p className="text-[18px] font-black tracking-tight text-gray-900">Update Manuals</p>
-          <p className="mt-1 truncate text-[10px] font-bold uppercase tracking-[0.22em] text-gray-500">
+          <p className="text-lg font-black tracking-tight text-gray-900">Update Manuals</p>
+          <p className="mt-1 truncate text-micro font-bold uppercase tracking-[0.22em] text-gray-500">
             {row.orderId || 'Order'} {effectiveItemNumber ? `• Item ${effectiveItemNumber}` : '• Item Number Needed'}
           </p>
         </div>
@@ -299,38 +299,38 @@ export function ManualUpdateDetailsStack({
           {error ? (
             <div className="flex items-start gap-2 rounded-2xl border border-red-200 bg-red-50 px-4 py-3">
               <AlertCircle className="mt-0.5 h-4 w-4 text-red-500" />
-              <p className="text-[11px] font-semibold text-red-700">{error}</p>
+              <p className="text-caption font-semibold text-red-700">{error}</p>
             </div>
           ) : null}
 
           {successMessage ? (
             <div className="flex items-center gap-2 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3">
               <Check className="h-4 w-4 text-emerald-600" />
-              <p className="text-[11px] font-semibold text-emerald-700">{successMessage}</p>
+              <p className="text-caption font-semibold text-emerald-700">{successMessage}</p>
             </div>
           ) : null}
 
           <section className="space-y-3">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-[11px] font-black uppercase tracking-[0.22em] text-gray-900">Linked Folder</p>
-                <p className="mt-1 text-[10px] font-semibold text-gray-500">
+                <p className="text-caption font-black uppercase tracking-[0.22em] text-gray-900">Linked Folder</p>
+                <p className="mt-1 text-micro font-semibold text-gray-500">
                   {linkedFolderPath || (effectiveItemNumber ? `assigned/${effectiveItemNumber}` : 'Enter an item number')}
                 </p>
               </div>
-              <span className="rounded-full border border-blue-200 bg-blue-50 px-3 py-1 text-[10px] font-black uppercase tracking-wider text-blue-700">
+              <span className="rounded-full border border-blue-200 bg-blue-50 px-3 py-1 text-micro font-black uppercase tracking-wider text-blue-700">
                 {linkedManuals.length} file{linkedManuals.length !== 1 ? 's' : ''}
               </span>
             </div>
 
             <div className="space-y-2">
               {isLoadingLinked ? (
-                <div className="flex items-center gap-2 rounded-2xl border border-gray-200 bg-white px-4 py-3 text-[11px] font-semibold text-gray-500">
+                <div className="flex items-center gap-2 rounded-2xl border border-gray-200 bg-white px-4 py-3 text-caption font-semibold text-gray-500">
                   <Loader2 className="h-4 w-4 animate-spin" />
                   Loading linked manuals...
                 </div>
               ) : linkedManuals.length === 0 ? (
-                <div className="rounded-2xl border border-dashed border-gray-200 bg-white px-4 py-4 text-[11px] font-semibold text-gray-500">
+                <div className="rounded-2xl border border-dashed border-gray-200 bg-white px-4 py-4 text-caption font-semibold text-gray-500">
                   No manuals are linked for this item yet.
                 </div>
               ) : (
@@ -341,14 +341,14 @@ export function ManualUpdateDetailsStack({
                         <FileText className="h-4 w-4" />
                       </div>
                       <div className="min-w-0 flex-1">
-                        <p className="truncate text-[12px] font-black tracking-tight text-gray-900">{manual.name}</p>
-                        <p className="mt-1 truncate text-[10px] font-semibold text-gray-500">{manual.relative_path || linkedFolderPath}</p>
-                        <p className="mt-1 text-[10px] font-semibold text-gray-500">
+                        <p className="truncate text-label font-black tracking-tight text-gray-900">{manual.name}</p>
+                        <p className="mt-1 truncate text-micro font-semibold text-gray-500">{manual.relative_path || linkedFolderPath}</p>
+                        <p className="mt-1 text-micro font-semibold text-gray-500">
                           {manual.display_name || manual.product_title || 'Linked manual'}
                           {manual.updated_at ? ` • ${formatDate(manual.updated_at)}` : ''}
                         </p>
                         {manual.source_url ? (
-                          <p className="mt-1 truncate text-[10px] font-semibold text-blue-600">{manual.source_url}</p>
+                          <p className="mt-1 truncate text-micro font-semibold text-blue-600">{manual.source_url}</p>
                         ) : null}
                       </div>
                     </div>
@@ -361,24 +361,24 @@ export function ManualUpdateDetailsStack({
           <section className="space-y-3 pb-5">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-[11px] font-black uppercase tracking-[0.22em] text-gray-900">Unassigned Uploads</p>
-                <p className="mt-1 text-[10px] font-semibold text-gray-500">
+                <p className="text-caption font-black uppercase tracking-[0.22em] text-gray-900">Unassigned Uploads</p>
+                <p className="mt-1 text-micro font-semibold text-gray-500">
                   {unassignedFolderPath || 'unassigned'}
                 </p>
               </div>
-              <span className="rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-[10px] font-black uppercase tracking-wider text-amber-700">
+              <span className="rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-micro font-black uppercase tracking-wider text-amber-700">
                 {unassignedManuals.length} waiting
               </span>
             </div>
 
             <div className="space-y-2">
               {isLoadingUnassigned ? (
-                <div className="flex items-center gap-2 rounded-2xl border border-gray-200 bg-white px-4 py-3 text-[11px] font-semibold text-gray-500">
+                <div className="flex items-center gap-2 rounded-2xl border border-gray-200 bg-white px-4 py-3 text-caption font-semibold text-gray-500">
                   <Loader2 className="h-4 w-4 animate-spin" />
                   Loading unassigned manuals...
                 </div>
               ) : unassignedManuals.length === 0 ? (
-                <div className="rounded-2xl border border-dashed border-gray-200 bg-white px-4 py-4 text-[11px] font-semibold text-gray-500">
+                <div className="rounded-2xl border border-dashed border-gray-200 bg-white px-4 py-4 text-caption font-semibold text-gray-500">
                   No PDFs are waiting in the unassigned folder.
                 </div>
               ) : (
@@ -404,20 +404,20 @@ export function ManualUpdateDetailsStack({
                         </div>
                         <div className="min-w-0 flex-1">
                           <div className="flex items-start justify-between gap-3">
-                            <p className="truncate text-[12px] font-black tracking-tight text-gray-900">{manual.name}</p>
+                            <p className="truncate text-label font-black tracking-tight text-gray-900">{manual.name}</p>
                             {isSelected ? (
-                              <span className="rounded-full bg-blue-600 px-2 py-1 text-[9px] font-black uppercase tracking-wider text-white">
+                              <span className="rounded-full bg-blue-600 px-2 py-1 text-eyebrow font-black uppercase tracking-wider text-white">
                                 Selected
                               </span>
                             ) : null}
                           </div>
-                          <p className="mt-1 truncate text-[10px] font-semibold text-gray-500">{manual.relative_path || 'No path'}</p>
-                          <p className="mt-1 text-[10px] font-semibold text-gray-500">
+                          <p className="mt-1 truncate text-micro font-semibold text-gray-500">{manual.relative_path || 'No path'}</p>
+                          <p className="mt-1 text-micro font-semibold text-gray-500">
                             {manual.display_name || manual.product_title || 'Waiting for assignment'}
                             {manual.updated_at ? ` • ${formatDate(manual.updated_at)}` : ''}
                           </p>
                           {manual.source_url ? (
-                            <p className="mt-1 truncate text-[10px] font-semibold text-blue-600">{manual.source_url}</p>
+                            <p className="mt-1 truncate text-micro font-semibold text-blue-600">{manual.source_url}</p>
                           ) : null}
                         </div>
                       </div>
@@ -431,14 +431,14 @@ export function ManualUpdateDetailsStack({
               type="button"
               onClick={() => void handleAssign()}
               disabled={isAssigning || !effectiveItemNumber || !selectedRelativePath}
-              className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-2xl bg-blue-600 text-[11px] font-black uppercase tracking-[0.22em] text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
+              className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-2xl bg-blue-600 text-caption font-black uppercase tracking-[0.22em] text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
             >
               {isAssigning ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
               {isAssigning ? 'Assigning Manual' : 'Assign Selected Manual'}
             </button>
           </section>
           {isSyncing ? (
-            <div className="sticky bottom-0 mt-4 rounded-2xl border border-blue-100 bg-blue-50 px-4 py-3 text-[11px] font-semibold text-blue-700">
+            <div className="sticky bottom-0 mt-4 rounded-2xl border border-blue-100 bg-blue-50 px-4 py-3 text-caption font-semibold text-blue-700">
               Syncing manual inventory from the folder server...
             </div>
           ) : null}

@@ -21,7 +21,7 @@ function ToggleRow({ label, description, checked, onChange }: ToggleRowProps) {
     <label className="flex cursor-pointer items-start justify-between gap-4 py-3">
       <span className="min-w-0">
         <span className="block text-sm font-semibold text-gray-900">{label}</span>
-        {description && <span className="mt-0.5 block text-[11px] text-gray-500">{description}</span>}
+        {description && <span className="mt-0.5 block text-caption text-gray-500">{description}</span>}
       </span>
       <button
         type="button"
@@ -115,7 +115,7 @@ export function QuickAccessSection() {
 
       <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
         <h3 className="mb-2 text-sm font-semibold text-gray-900">Built-in actions</h3>
-        <p className="mb-2 text-[11px] text-gray-500">Choose which actions appear at the top of the popover.</p>
+        <p className="mb-2 text-caption text-gray-500">Choose which actions appear at the top of the popover.</p>
         <div className="divide-y divide-gray-100">
           <ToggleRow
             label="Phone history"
@@ -139,7 +139,7 @@ export function QuickAccessSection() {
 
         <div className="rounded-2xl border border-gray-200 bg-white">
           <div className="border-b border-gray-100 px-4 pb-1 pt-3">
-            <h3 className="text-[11px] font-bold uppercase tracking-wider text-gray-500">FAB appearance</h3>
+            <h3 className="text-caption font-bold uppercase tracking-wider text-gray-500">FAB appearance</h3>
           </div>
           <div className="px-4">
             <ToggleRow
@@ -155,7 +155,7 @@ export function QuickAccessSection() {
       <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
         <div className="mb-3 flex items-baseline justify-between">
           <h3 className="text-sm font-semibold text-gray-900">Pinned pages</h3>
-          <span className="text-[11px] font-medium text-gray-500">
+          <span className="text-caption font-medium text-gray-500">
             {settings.pinned.length} / {MAX_PINS}
           </span>
         </div>
@@ -198,12 +198,12 @@ export function QuickAccessSection() {
                       {p.label}
                     </button>
                   )}
-                  <p className="truncate font-mono text-[11px] text-gray-500">{p.href}</p>
+                  <p className="truncate font-mono text-caption text-gray-500">{p.href}</p>
                 </div>
                 <button
                   type="button"
                   onClick={() => unpin(p.id)}
-                  className="rounded-md border border-gray-300 px-2 py-1 text-[11px] font-medium text-gray-600 hover:border-red-300 hover:bg-red-50 hover:text-red-600"
+                  className="rounded-md border border-gray-300 px-2 py-1 text-caption font-medium text-gray-600 hover:border-red-300 hover:bg-red-50 hover:text-red-600"
                 >
                   Unpin
                 </button>
@@ -213,7 +213,7 @@ export function QuickAccessSection() {
         )}
 
         <div className="mt-4 space-y-2 border-t border-gray-100 pt-4">
-          <p className="text-[11px] font-semibold uppercase tracking-widest text-gray-400">Add manually</p>
+          <p className="text-caption font-semibold uppercase tracking-widest text-gray-400">Add manually</p>
           <div className="grid grid-cols-1 gap-2 sm:grid-cols-[1fr_1fr_auto]">
             <input
               type="text"
@@ -237,7 +237,7 @@ export function QuickAccessSection() {
               Add
             </button>
           </div>
-          {addError && <p className="text-[11px] text-red-600">{addError}</p>}
+          {addError && <p className="text-caption text-red-600">{addError}</p>}
         </div>
       </div>
 
@@ -245,7 +245,7 @@ export function QuickAccessSection() {
         <div className="flex items-center justify-between">
           <div>
             <h3 className="text-sm font-semibold text-gray-900">Recent pages</h3>
-            <p className="text-[11px] text-gray-500">{recents.length} stored on this device</p>
+            <p className="text-caption text-gray-500">{recents.length} stored on this device</p>
           </div>
           <button
             type="button"

@@ -16,7 +16,7 @@ const TONE: Record<string, { bg: string; text: string; value: string }> = {
 export function StatPill({ label, value, tone = 'gray' }: StatPillProps) {
   const t = TONE[tone];
   return (
-    <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-medium ${t.bg}`}>
+    <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-caption font-medium ${t.bg}`}>
       <span className={`uppercase tracking-wider ${t.text}`}>{label}</span>
       <span className={`tabular-nums font-bold ${t.value}`}>{value}</span>
     </span>

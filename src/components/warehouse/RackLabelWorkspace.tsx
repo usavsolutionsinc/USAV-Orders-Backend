@@ -11,13 +11,15 @@
  */
 
 import { RackLabelPrinter } from '@/components/barcode/RackLabelPrinter';
+import { PageHeader } from '@/components/ui/pane-header';
 
 export function RackLabelWorkspace() {
   return (
-    // Mirror LabelPrintWorkspace: flex column that fills the /warehouse page's
-    // inner flex-col so the printer's sticky bar can mt-auto to the bottom.
-    <div className="flex min-h-0 flex-1 flex-col gap-4">
-      <RackLabelPrinter />
+    <div className="flex min-h-0 flex-1 flex-col">
+      <PageHeader title="Rack labels" />
+      <div className="flex min-h-0 flex-1 flex-col gap-4 p-4">
+        <RackLabelPrinter />
+      </div>
     </div>
   );
 }

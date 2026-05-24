@@ -210,7 +210,7 @@ function CartonPageInner() {
               RCV-{receivingId}
             </h1>
             {data?.purchase_orders && data.purchase_orders.length > 0 ? (
-              <p className="mt-0.5 truncate font-mono text-[11px] font-bold text-slate-600">
+              <p className="mt-0.5 truncate font-mono text-caption font-bold text-slate-600">
                 PO{' '}
                 {data.purchase_orders
                   .map((p) => p.zoho_purchaseorder_number || p.zoho_purchaseorder_id)
@@ -228,7 +228,7 @@ function CartonPageInner() {
             <button
               type="button"
               onClick={load}
-              className="rounded-md border border-slate-300 bg-white px-2.5 py-1 text-[11px] font-bold text-slate-700 active:bg-slate-50"
+              className="rounded-md border border-slate-300 bg-white px-2.5 py-1 text-caption font-bold text-slate-700 active:bg-slate-50"
             >
               Refresh
             </button>
@@ -332,14 +332,14 @@ function CartonPageInner() {
                           {line.sku || `Line #${line.id}`}
                         </p>
                         {line.item_name && (
-                          <p className="mt-1 text-[11px] text-slate-500 line-clamp-2 leading-snug">
+                          <p className="mt-1 text-caption text-slate-500 line-clamp-2 leading-snug">
                             {line.item_name}
                           </p>
                         )}
                       </div>
                       <StatusPill status={line.workflow_status} />
                     </div>
-                    <div className="mt-2 flex items-center justify-between text-[11px] font-bold">
+                    <div className="mt-2 flex items-center justify-between text-caption font-bold">
                       <span className={isComplete ? 'text-emerald-600' : 'text-slate-700'}>
                         {received}/{expected ?? '?'} received
                       </span>
@@ -391,7 +391,7 @@ function CartonPageInner() {
             </p>
             <ul className="space-y-2">
               {events.slice(0, 15).map((ev) => (
-                <li key={ev.id} className="flex items-start gap-2 text-[11px]">
+                <li key={ev.id} className="flex items-start gap-2 text-caption">
                   <span className="mt-[3px] inline-block h-1.5 w-1.5 rounded-full bg-slate-400 shrink-0" />
                   <div className="min-w-0 flex-1">
                     <p className="font-bold text-slate-900">
@@ -424,7 +424,7 @@ function CartonPageInner() {
         )}
       </main>
 
-      <footer className="sticky bottom-0 bg-white border-t border-slate-200 px-4 py-3 text-[11px] font-semibold text-slate-500 text-center">
+      <footer className="sticky bottom-0 bg-white border-t border-slate-200 px-4 py-3 text-caption font-semibold text-slate-500 text-center">
         Tap a line to update status, putaway, or scan serial.
       </footer>
     </div>

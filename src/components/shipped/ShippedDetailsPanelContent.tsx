@@ -130,7 +130,7 @@ export function ShippedDetailsPanelContent({
                   </div>
                   <div>
                     <h3 className="text-xs font-black uppercase tracking-[0.2em] text-gray-900">SKU Integrity Photos</h3>
-                    <p className="text-[10px] font-bold text-indigo-600 mt-0.5">{prepackedSku.staticSku}</p>
+                    <p className="text-micro font-bold text-indigo-600 mt-0.5">{prepackedSku.staticSku}</p>
                   </div>
                 </div>
               </div>

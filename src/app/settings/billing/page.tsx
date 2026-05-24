@@ -9,6 +9,7 @@
  */
 
 import { requirePermission } from '@/lib/auth/page-guard';
+import { PageHeader } from '@/components/ui/pane-header';
 import { getOrganization } from '@/lib/tenancy/organizations';
 import { getSubscription } from '@/lib/billing/subscriptions';
 import { entitlementsForPlan, PLAN_PRICE_IDS } from '@/lib/billing/plans';
@@ -45,11 +46,9 @@ export default async function BillingPage() {
 
   return (
     <Shell>
-      <div className="mx-auto max-w-5xl space-y-6 px-6 py-10">
-        <header>
-          <h1 className="text-[28px] font-semibold tracking-tight text-gray-900">Billing</h1>
-          <p className="mt-1 text-[13px] text-gray-500">Workspace: <span className="font-medium text-gray-700">{org.name}</span></p>
-        </header>
+      <PageHeader title="Billing" maxWidth="5xl" />
+      <div className="mx-auto max-w-5xl space-y-6 px-6 py-6">
+        <p className="text-[13px] text-gray-500">Workspace: <span className="font-medium text-gray-700">{org.name}</span></p>
 
         <Card>
           <div className="flex items-start justify-between gap-6">

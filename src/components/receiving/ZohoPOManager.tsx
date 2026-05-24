@@ -71,7 +71,7 @@ export default function ZohoPOManager() {
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Search POs…"
-              className="w-full pl-8 pr-7 py-1.5 text-[11px] border border-gray-200 rounded-lg focus:outline-none focus:border-blue-400 focus:ring-1 focus:ring-blue-100 bg-white placeholder-gray-400"
+              className="w-full pl-8 pr-7 py-1.5 text-caption border border-gray-200 rounded-lg focus:outline-none focus:border-blue-400 focus:ring-1 focus:ring-blue-100 bg-white placeholder-gray-400"
             />
             {search && (
               <button onClick={() => setSearch('')} className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-500">
@@ -84,7 +84,7 @@ export default function ZohoPOManager() {
               <button
                 key={opt.value}
                 onClick={() => setStatusFilter(opt.value)}
-                className={`text-[8px] font-black uppercase tracking-widest px-2 py-0.5 rounded-full border transition-colors ${
+                className={`text-mini font-black uppercase tracking-widest px-2 py-0.5 rounded-full border transition-colors ${
                   statusFilter === opt.value
                     ? 'bg-blue-600 text-white border-blue-600'
                     : 'bg-white text-gray-500 border-gray-200 hover:border-gray-300'
@@ -97,7 +97,7 @@ export default function ZohoPOManager() {
         </div>
 
         <div className="flex items-center justify-between px-3 py-1.5">
-          <span className="text-[8px] font-black uppercase tracking-widest text-gray-500">
+          <span className="text-mini font-black uppercase tracking-widest text-gray-500">
             {isLoading ? 'Loading…' : `${poList?.length ?? 0} orders`}
           </span>
           <button onClick={() => refetch()} disabled={isFetching} className="text-gray-500 hover:text-blue-500 transition-colors disabled:opacity-40" title="Refresh">
@@ -109,12 +109,12 @@ export default function ZohoPOManager() {
           {isLoading ? (
             <div className="flex flex-col items-center justify-center py-20 gap-3 text-gray-500">
               <Loader2 className="h-7 w-7 animate-spin" />
-              <p className="text-[9px] font-black uppercase tracking-widest">Loading POs…</p>
+              <p className="text-eyebrow font-black uppercase tracking-widest">Loading POs…</p>
             </div>
           ) : !poList || poList.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-20 text-center opacity-25">
               <Package className="h-10 w-10 mb-3" />
-              <p className="text-[9px] font-black uppercase tracking-widest">
+              <p className="text-eyebrow font-black uppercase tracking-widest">
                 {debouncedSearch ? 'No matching POs' : 'No purchase orders'}
               </p>
             </div>
@@ -140,7 +140,7 @@ export default function ZohoPOManager() {
                 className="flex flex-col items-center justify-center h-full gap-3 text-gray-500"
               >
                 <Loader2 className="h-8 w-8 animate-spin" />
-                <p className="text-[9px] font-black uppercase tracking-widest">Loading PO details…</p>
+                <p className="text-eyebrow font-black uppercase tracking-widest">Loading PO details…</p>
               </motion.div>
             ) : (
               <motion.div key={selectedPO.purchaseorder_id}
@@ -156,8 +156,8 @@ export default function ZohoPOManager() {
             >
               <Package className="h-16 w-16" />
               <div>
-                <p className="text-[11px] font-black uppercase tracking-widest">Select a Purchase Order</p>
-                <p className="text-[9px] mt-1 text-gray-500">Choose a PO from the list to review and receive items</p>
+                <p className="text-caption font-black uppercase tracking-widest">Select a Purchase Order</p>
+                <p className="text-eyebrow mt-1 text-gray-500">Choose a PO from the list to review and receive items</p>
               </div>
               <ChevronRight className="h-5 w-5 -rotate-90 opacity-50" />
             </motion.div>

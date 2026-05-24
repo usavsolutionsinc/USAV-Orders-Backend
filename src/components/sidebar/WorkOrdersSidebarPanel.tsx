@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { sidebarHeaderBandClass, sidebarHeaderRowClass } from '@/components/layout/header-shell';
 import { InlineNotice } from '@/design-system/components';
@@ -40,8 +40,27 @@ export function WorkOrdersSidebarPanel() {
   const [assignFeedback, setAssignFeedback] = useState<string | null>(null);
   const canStartAssignSession = queue !== 'local_pickups' && queue !== 'stock_replenish';
 
+  // Keep a live ref of searchParams so the search-debounce effect can read the
+  // current URL without depending on it. Depending on searchParams turned this
+  // into a self-feeding loop: the effect ran router.replace, which mutated
+  // searchParams, which re-ran the effect ~250ms later, ad infinitum.
+  const searchParamsRef = useRef(searchParams);
   useEffect(() => {
-    setLocalSearch(searchParams.get('q') || '');
+    searchParamsRef.current = searchParams;
+  }, [searchParams]);
+
+  // Whether `localSearch` was last set by the user typing (true) vs. synced
+  // from the URL (false). Only user-typed changes should trigger the debounced
+  // router.replace — URL→state sync must not write back to the URL.
+  const localSearchIsUserEditRef = useRef(false);
+
+  useEffect(() => {
+    const next = searchParams.get('q') || '';
+    setLocalSearch((prev) => {
+      if (prev === next) return prev;
+      localSearchIsUserEditRef.current = false;
+      return next;
+    });
   }, [searchParams]);
 
   const fetchCounts = useCallback(() => {
@@ -81,14 +100,18 @@ export function WorkOrdersSidebarPanel() {
   }, [fetchCounts, fetchPickupDates]);
 
   useEffect(() => {
+    if (!localSearchIsUserEditRef.current) return;
     const timer = window.setTimeout(() => {
-      const params = new URLSearchParams(searchParams.toString());
-      if (localSearch.trim()) params.set('q', localSearch.trim());
+      const params = new URLSearchParams(searchParamsRef.current.toString());
+      const trimmed = localSearch.trim();
+      if (trimmed) params.set('q', trimmed);
       else params.delete('q');
-      router.replace(`/work-orders?${params.toString()}`);
+      const next = params.toString();
+      if (next === searchParamsRef.current.toString()) return;
+      router.replace(next ? `/work-orders?${next}` : '/work-orders');
     }, 250);
     return () => window.clearTimeout(timer);
-  }, [localSearch, router, searchParams]);
+  }, [localSearch, router]);
 
   const updateQueue = (nextQueue: QueueKey) => {
     const params = new URLSearchParams(searchParams.toString());
@@ -147,8 +170,14 @@ export function WorkOrdersSidebarPanel() {
       <div className={sidebarHeaderRowClass}>
         <SearchBar
           value={localSearch}
-          onChange={setLocalSearch}
-          onClear={() => setLocalSearch('')}
+          onChange={(value) => {
+            localSearchIsUserEditRef.current = true;
+            setLocalSearch(value);
+          }}
+          onClear={() => {
+            localSearchIsUserEditRef.current = true;
+            setLocalSearch('');
+          }}
           placeholder="Search queue, tracking, SKU…"
           variant="emerald"
           className="w-full"

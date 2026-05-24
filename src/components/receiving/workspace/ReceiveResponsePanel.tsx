@@ -258,24 +258,24 @@ export function ReceiveResponsePanel({
           <span className={`mt-1 inline-block h-1.5 w-1.5 shrink-0 rounded-full ${toneStyles.dot}`} aria-hidden />
           <div className="min-w-0 flex-1">
             <div className="flex items-baseline gap-2">
-              <p className={`text-[10px] font-black uppercase tracking-wider ${toneStyles.title}`}>
+              <p className={`text-micro font-black uppercase tracking-wider ${toneStyles.title}`}>
                 {classification.headline}
               </p>
               {classification.verdict !== 'success' ? (
-                <span className="text-[9px] font-semibold tabular-nums text-slate-500">
+                <span className="text-eyebrow font-semibold tabular-nums text-slate-500">
                   {timestamp} · {response.durationMs}ms · HTTP {response.httpStatus || '—'}
                 </span>
               ) : null}
             </div>
             {classification.detail ? (
-              <p className="mt-0.5 text-[10px] font-medium leading-snug text-slate-700">
+              <p className="mt-0.5 text-micro font-medium leading-snug text-slate-700">
                 {classification.detail}
               </p>
             ) : null}
             {showApiErrorCallout ? (
               <div className="mt-1.5 rounded border border-rose-200 bg-rose-50/90 px-1.5 py-1">
-                <p className="text-[8px] font-black uppercase tracking-wide text-rose-800">API response</p>
-                <p className="break-words font-mono text-[10px] leading-snug text-rose-950">
+                <p className="text-mini font-black uppercase tracking-wide text-rose-800">API response</p>
+                <p className="break-words font-mono text-micro leading-snug text-rose-950">
                   {String(body.error)}
                 </p>
               </div>
@@ -287,7 +287,7 @@ export function ReceiveResponsePanel({
                   return (
                     <li
                       key={i}
-                      className="flex items-center gap-1.5 text-[10px] leading-tight"
+                      className="flex items-center gap-1.5 text-micro leading-tight"
                     >
                       <span
                         className={`inline-block h-1.5 w-1.5 shrink-0 rounded-full ${ok ? 'bg-emerald-500' : 'bg-rose-500'}`}
@@ -333,10 +333,10 @@ export function ReceiveResponsePanel({
         </div>
         {expanded ? (
           <div className={`border-t ${toneStyles.border} bg-white/70 px-2 py-1.5`}>
-            <p className="mb-1 text-[8px] font-black uppercase tracking-widest text-slate-500">
+            <p className="mb-1 text-mini font-black uppercase tracking-widest text-slate-500">
               Raw response · /api/receiving/mark-received-po
             </p>
-            <pre className="max-h-56 overflow-auto rounded border border-slate-200 bg-white p-1.5 font-mono text-[9px] leading-relaxed text-slate-700">
+            <pre className="max-h-56 overflow-auto rounded border border-slate-200 bg-white p-1.5 font-mono text-eyebrow leading-relaxed text-slate-700">
 {JSON.stringify(response.body ?? { networkError: response.networkError }, null, 2)}
             </pre>
             <div className="mt-1 flex justify-end">
@@ -352,7 +352,7 @@ export function ReceiveResponsePanel({
                     /* clipboard unavailable */
                   }
                 }}
-                className="rounded border border-slate-200 bg-white px-1.5 py-0.5 text-[9px] font-black uppercase tracking-wider text-slate-600 transition-colors hover:bg-slate-50"
+                className="rounded border border-slate-200 bg-white px-1.5 py-0.5 text-eyebrow font-black uppercase tracking-wider text-slate-600 transition-colors hover:bg-slate-50"
               >
                 Copy JSON
               </button>

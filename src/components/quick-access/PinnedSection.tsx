@@ -23,12 +23,12 @@ export function PinnedSection({ onNavigate }: PinnedSectionProps) {
   return (
     <div className="px-2 py-2">
       <div className="flex items-center justify-between px-2 pb-1">
-        <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400">Pinned</p>
+        <p className="text-micro font-bold uppercase tracking-widest text-gray-400">Pinned</p>
         <PinThisPageButton />
       </div>
 
       {settings.pinned.length === 0 ? (
-        <p className="px-2 py-3 text-[11px] font-medium text-gray-500">
+        <p className="px-2 py-3 text-caption font-medium text-gray-500">
           No pinned pages yet. Use <span className="font-semibold text-blue-600">+ Pin page</span> to bookmark the current page.
         </p>
       ) : (

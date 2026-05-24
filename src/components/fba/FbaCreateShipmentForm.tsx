@@ -121,14 +121,14 @@ export function FbaCreateShipmentForm({
         hintBelow={
           <div className="space-y-1">
             {derivedRef && derivedRef !== 'FBA-00/00/00' ? (
-              <p className="font-mono text-[10px] text-emerald-700">
+              <p className="font-mono text-micro text-emerald-700">
                 Auto: {derivedRef}
               </p>
             ) : null}
             {!isAutoRef ? (
               <button
                 type="button"
-                className="text-[10px] text-blue-600 underline"
+                className="text-micro text-blue-600 underline"
                 onClick={() => {
                   if (!derivedRef || derivedRef === 'FBA-00/00/00') return;
                   lastAutoRefRef.current = derivedRef;
@@ -139,11 +139,11 @@ export function FbaCreateShipmentForm({
               </button>
             ) : null}
             {refIsInvalid ? (
-              <p className="text-[10px] text-amber-600">
+              <p className="text-micro text-amber-600">
                 Invalid plan ref. Set a valid due date or type a custom ref.
               </p>
             ) : null}
-            <p className="text-[10px] leading-snug text-gray-500">
+            <p className="text-micro leading-snug text-gray-500">
               Stored as shipment_ref — not the internal DB row id or Amazon&apos;s FBA shipment id.
             </p>
           </div>

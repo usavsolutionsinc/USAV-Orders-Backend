@@ -113,7 +113,7 @@ export function RepairPickupFlow({ repair, onUpdate, onClose }: RepairPickupFlow
               <h2 className="text-sm font-black uppercase tracking-tight text-gray-900">
                 Pickup Confirmation
               </h2>
-              <p className="mt-0.5 text-[10px] font-bold text-gray-500">
+              <p className="mt-0.5 text-micro font-bold text-gray-500">
                 {rsCode} — {firstName} — {repair.product_title || 'Repair'} —{' '}
                 <span className="text-emerald-600">${repair.price || '0'}</span>
               </p>
@@ -122,7 +122,7 @@ export function RepairPickupFlow({ repair, onUpdate, onClose }: RepairPickupFlow
               <button
                 type="button"
                 onClick={onClose}
-                className="flex items-center gap-1 rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-[9px] font-black uppercase tracking-wide text-gray-600 transition-colors hover:bg-gray-50"
+                className="flex items-center gap-1 rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-eyebrow font-black uppercase tracking-wide text-gray-600 transition-colors hover:bg-gray-50"
               >
                 <ChevronLeft className="h-3 w-3" />
                 Back
@@ -146,9 +146,9 @@ export function RepairPickupFlow({ repair, onUpdate, onClose }: RepairPickupFlow
           </div>
 
           <div className="shrink-0 border-b border-gray-100 px-6 py-3">
-            <p className="text-[11px] text-gray-500 italic leading-relaxed">
+            <p className="text-caption text-gray-500 italic leading-relaxed">
               {PICKUP_TERMS}
-              <span className="ml-2 font-black text-gray-900 not-italic uppercase text-[10px]">
+              <span className="ml-2 font-black text-gray-900 not-italic uppercase text-micro">
                 30-Day Warranty
               </span>
             </p>
@@ -159,7 +159,7 @@ export function RepairPickupFlow({ repair, onUpdate, onClose }: RepairPickupFlow
               <SignaturePad onSignatureChange={setSignatureData} fillHeight label="Pickup Signature" />
             </div>
             <p
-              className={`text-[9px] font-black uppercase tracking-wide transition-opacity ${
+              className={`text-eyebrow font-black uppercase tracking-wide transition-opacity ${
                 signatureData ? 'opacity-0' : 'text-amber-600'
               }`}
             >
@@ -172,14 +172,14 @@ export function RepairPickupFlow({ repair, onUpdate, onClose }: RepairPickupFlow
               type="button"
               onClick={handleDecline}
               disabled={isDeclining || isSubmitting}
-              className="text-[10px] font-black uppercase tracking-wide text-red-500 hover:text-red-700 disabled:opacity-50"
+              className="text-micro font-black uppercase tracking-wide text-red-500 hover:text-red-700 disabled:opacity-50"
             >
               {isDeclining ? 'Recording…' : 'Customer declined to sign'}
             </button>
           </div>
 
           {error && (
-            <div className="shrink-0 border-t border-red-100 bg-red-50 px-6 py-2 text-[11px] font-bold text-red-600">
+            <div className="shrink-0 border-t border-red-100 bg-red-50 px-6 py-2 text-caption font-bold text-red-600">
               {error}
             </div>
           )}
@@ -195,7 +195,7 @@ export function RepairPickupFlow({ repair, onUpdate, onClose }: RepairPickupFlow
                 <h2 className="text-sm font-black uppercase tracking-tight text-gray-900">
                   Take a photo of this receipt to keep a copy
                 </h2>
-                <p className="mt-0.5 text-[10px] font-bold text-gray-500">
+                <p className="mt-0.5 text-micro font-bold text-gray-500">
                   {rsCode} — {firstName} — pickup complete
                 </p>
               </div>
@@ -203,7 +203,7 @@ export function RepairPickupFlow({ repair, onUpdate, onClose }: RepairPickupFlow
             <button
               type="button"
               onClick={onClose}
-              className="flex items-center gap-1 rounded-xl bg-gray-900 px-4 py-2.5 text-[10px] font-black uppercase tracking-wide text-white transition-colors hover:bg-gray-700"
+              className="flex items-center gap-1 rounded-xl bg-gray-900 px-4 py-2.5 text-micro font-black uppercase tracking-wide text-white transition-colors hover:bg-gray-700"
             >
               <X className="h-3 w-3" />
               Done

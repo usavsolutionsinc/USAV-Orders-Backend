@@ -189,11 +189,11 @@ export default function StationHistory({
             <div className={mainStickyHeaderClass}>
                 <div className={mainStickyHeaderRowClass}>
                 <div className="flex items-center gap-2">
-                    <p className="text-[11px] font-black text-gray-900 tracking-tight">
+                    <p className="text-caption font-black text-gray-900 tracking-tight">
                         {stickyDate || (history.length > 0 ? formatDate(history[0].timestamp || (history[0] as any).packedAt) : 'Today')}
                     </p>
                     <div className="h-2 w-px bg-gray-200" />
-                    <p className="text-[11px] font-black text-blue-600 uppercase tracking-widest">
+                    <p className="text-caption font-black text-blue-600 uppercase tracking-widest">
                         Count: {currentCount || history.length}
                     </p>
                 </div>
@@ -204,12 +204,12 @@ export default function StationHistory({
                 {isInitialLoading ? (
                     <div className="flex flex-col items-center justify-center py-40 gap-3 text-gray-400">
                         <Loader2 className="w-8 h-8 animate-spin" />
-                        <p className="text-[10px] font-black uppercase tracking-widest">Loading Records...</p>
+                        <p className="text-micro font-black uppercase tracking-widest">Loading Records...</p>
                     </div>
                 ) : history.length === 0 ? (
                     <div className="flex flex-col items-center justify-center py-40 text-center opacity-20">
                         <Package className="w-16 h-16 mb-4" />
-                        <p className="text-[10px] font-black uppercase tracking-widest">No Logs Found</p>
+                        <p className="text-micro font-black uppercase tracking-widest">No Logs Found</p>
                     </div>
                 ) : (
                     <div className="flex flex-col">
@@ -224,8 +224,8 @@ export default function StationHistory({
                                     data-count={logs[0]?.count || logs.length}
                                     className="bg-gray-50/80 border-y border-gray-100 px-2 py-1 flex items-center justify-between z-10"
                                 >
-                                    <p className="text-[11px] font-black text-gray-900 uppercase tracking-widest">{formatDate(date)}</p>
-                                    <p className="text-[11px] font-black text-gray-400 uppercase">Total: {logs[0]?.count || logs.length} Units</p>
+                                    <p className="text-caption font-black text-gray-900 uppercase tracking-widest">{formatDate(date)}</p>
+                                    <p className="text-caption font-black text-gray-400 uppercase">Total: {logs[0]?.count || logs.length} Units</p>
                                 </div>
                                 {logs.map((log, index) => {
                                     const ts = log.timestamp || (log as any).packedAt;
@@ -237,25 +237,25 @@ export default function StationHistory({
                                             key={log.id} 
                                             className={`grid grid-cols-[55px_1fr_60px_80px_80px] items-center gap-1 px-1 py-1 transition-colors border-b border-gray-50/50 ${index % 2 === 0 ? 'bg-white' : 'bg-gray-50/20'}`}
                                         >
-                                            <div className="text-[11px] font-black text-gray-400 tabular-nums uppercase text-left">
+                                            <div className="text-caption font-black text-gray-400 tabular-nums uppercase text-left">
                                                 {ts ? (
                                                     formatTimePST(ts)
                                                 ) : '--:--'}
                                             </div>
-                                            <div className="text-[11px] font-bold text-gray-900 truncate text-left">
+                                            <div className="text-caption font-bold text-gray-900 truncate text-left">
                                                 {log.title || (log as any).product || 'Unknown Product'}
                                             </div>
-                                            <div className="text-[11px] font-black text-gray-400 uppercase tracking-widest text-left truncate opacity-60">
+                                            <div className="text-caption font-black text-gray-400 uppercase tracking-widest text-left truncate opacity-60">
                                                 {log.status || (log as any).carrier || ''}
                                             </div>
                                             <CopyableText 
                                                 text={log.tracking || (log as any).trackingNumber || ''} 
-                                                className="text-[11px] font-mono font-bold text-blue-600 bg-blue-50/30 px-1 py-0.5 rounded border border-blue-100/30" 
+                                                className="text-caption font-mono font-bold text-blue-600 bg-blue-50/30 px-1 py-0.5 rounded border border-blue-100/30" 
                                                 isSerial={false}
                                             />
                                             <CopyableText 
                                                 text={log.serial || ''} 
-                                                className="text-[11px] font-mono font-bold text-emerald-600 bg-emerald-50/30 px-1 py-0.5 rounded border border-emerald-100/30" 
+                                                className="text-caption font-mono font-bold text-emerald-600 bg-emerald-50/30 px-1 py-0.5 rounded border border-emerald-100/30" 
                                                 isSerial={true}
                                             />
                                         </motion.div>

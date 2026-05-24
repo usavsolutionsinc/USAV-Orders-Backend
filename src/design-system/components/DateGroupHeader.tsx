@@ -48,10 +48,10 @@ export function DateGroupHeader({
       data-count={count}
       className={`${v.bg} border-y ${v.border} px-2 py-1 flex items-center justify-between z-10 ${className}`.trim()}
     >
-      <p className="text-[11px] font-black text-gray-900 uppercase tracking-widest">
+      <p className="text-caption font-black text-gray-900 uppercase tracking-widest">
         {displayDate}
       </p>
-      <p className="text-[11px] font-black text-gray-700 tabular-nums">
+      <p className="text-caption font-black text-gray-700 tabular-nums">
         {count}
       </p>
     </div>

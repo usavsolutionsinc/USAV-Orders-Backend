@@ -207,13 +207,13 @@ export function PoMailboxPreviewPanel({
     <section className={embedded ? 'space-y-2.5' : 'space-y-4'}>
       {!embedded && (title || description) && (
         <div>
-          {title && <h2 className="text-[15px] font-semibold text-gray-900">{title}</h2>}
-          {description && <p className="mt-0.5 text-[12px] text-gray-500">{description}</p>}
+          {title && <h2 className="text-base font-semibold text-gray-900">{title}</h2>}
+          {description && <p className="mt-0.5 text-label text-gray-500">{description}</p>}
         </div>
       )}
 
       {/* Mode toggle — small inline pill row */}
-      <div className={`${embedded ? 'flex w-full' : 'inline-flex'} rounded-md border border-gray-200 bg-white p-0.5 ${embedded ? 'text-[11px]' : 'text-[12px]'} font-medium`}>
+      <div className={`${embedded ? 'flex w-full' : 'inline-flex'} rounded-md border border-gray-200 bg-white p-0.5 ${embedded ? 'text-caption' : 'text-label'} font-medium`}>
         {MODE_TABS.map((t) => (
           <button
             key={t.id}
@@ -302,31 +302,31 @@ function MissingMode(props: {
       {/* Scan controls — run a fresh reconcile to populate the worklist */}
       <div className="flex flex-wrap items-end gap-3 rounded-lg border border-gray-200 bg-white p-3 shadow-sm">
         <label className="flex-1 min-w-[220px]">
-          <span className="block text-[11px] font-medium text-gray-700">Gmail query</span>
+          <span className="block text-caption font-medium text-gray-700">Gmail query</span>
           <input
             type="text"
             value={scanQuery}
             onChange={(e) => setScanQuery(e.target.value)}
             placeholder="is:unread"
-            className="mt-1 w-full rounded-md border border-gray-300 px-2 py-1.5 text-[13px] focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+            className="mt-1 w-full rounded-md border border-gray-300 px-2 py-1.5 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
           />
         </label>
         <label>
-          <span className="block text-[11px] font-medium text-gray-700">Limit</span>
+          <span className="block text-caption font-medium text-gray-700">Limit</span>
           <input
             type="number"
             min={1}
             max={50}
             value={scanLimit}
             onChange={(e) => setScanLimit(Math.min(50, Math.max(1, Number(e.target.value) || 25)))}
-            className="mt-1 w-20 rounded-md border border-gray-300 px-2 py-1.5 text-[13px] focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+            className="mt-1 w-20 rounded-md border border-gray-300 px-2 py-1.5 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
           />
         </label>
         <button
           type="button"
           onClick={onRunReconcile}
           disabled={scanLoading}
-          className="inline-flex items-center gap-1.5 rounded-md bg-blue-600 px-3 py-1.5 text-[13px] font-medium text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
+          className="inline-flex items-center gap-1.5 rounded-md bg-blue-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
         >
           {scanLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}
           Scan + reconcile
@@ -335,14 +335,14 @@ function MissingMode(props: {
           type="button"
           onClick={onRefresh}
           disabled={loading}
-          className="text-[12px] text-gray-500 underline hover:text-gray-900 disabled:opacity-50"
+          className="text-label text-gray-500 underline hover:text-gray-900 disabled:opacity-50"
         >
           Refresh list
         </button>
       </div>
 
       {/* Status filter pills */}
-      <div className="flex flex-wrap items-center gap-2 text-[12px]">
+      <div className="flex flex-wrap items-center gap-2 text-label">
         {MISSING_STATUS_TABS.map((t) => {
           const n = missing?.counts[t.id] ?? 0;
           const active = statusFilter === t.id;
@@ -366,11 +366,11 @@ function MissingMode(props: {
 
       {/* List */}
       {loading && !missing ? (
-        <div className="rounded-md border border-gray-200 bg-white px-4 py-8 text-center text-[13px] text-gray-500">
+        <div className="rounded-md border border-gray-200 bg-white px-4 py-8 text-center text-sm text-gray-500">
           <Loader2 className="mx-auto h-5 w-5 animate-spin text-gray-400" />
         </div>
       ) : !missing || missing.items.length === 0 ? (
-        <div className="rounded-md border border-dashed border-gray-200 bg-white px-4 py-8 text-center text-[13px] text-gray-500">
+        <div className="rounded-md border border-dashed border-gray-200 bg-white px-4 py-8 text-center text-sm text-gray-500">
           {statusFilter === 'pending'
             ? 'Nothing missing — every scanned email matched a PO in Zoho.'
             : `No ${statusFilter} rows.`}
@@ -384,10 +384,10 @@ function MissingMode(props: {
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0 flex-1">
                     <div className="flex flex-wrap items-baseline gap-x-3 gap-y-0.5">
-                      <span className="truncate text-[13px] font-medium text-gray-900">
+                      <span className="truncate text-sm font-medium text-gray-900">
                         {row.email_subject || '(no subject)'}
                       </span>
-                      <span className="truncate text-[12px] text-gray-500">{row.email_from}</span>
+                      <span className="truncate text-label text-gray-500">{row.email_from}</span>
                     </div>
                     <div className="mt-0.5 flex flex-wrap items-center gap-1.5 text-[11.5px] text-gray-500">
                       <span>{new Date(row.scanned_at).toLocaleString()}</span>
@@ -469,7 +469,7 @@ function ScannedMode(props: {
             extra={response.persisted ? `· wrote ${response.persisted.upserted}, resolved ${response.persisted.resolved}` : ''}
           />
           {response.items.length === 0 ? (
-            <p className="text-[13px] text-gray-500">No messages matched.</p>
+            <p className="text-sm text-gray-500">No messages matched.</p>
           ) : (
             <ul className="divide-y divide-gray-100 rounded-md border border-gray-200">
               {response.items.map((item) => {
@@ -486,8 +486,8 @@ function ScannedMode(props: {
                       </button>
                       <div className="min-w-0 flex-1">
                         <div className="flex flex-wrap items-baseline gap-x-3 gap-y-0.5">
-                          <span className="truncate text-[13px] font-medium text-gray-900">{item.subject || '(no subject)'}</span>
-                          <span className="truncate text-[12px] text-gray-500">{item.from}</span>
+                          <span className="truncate text-sm font-medium text-gray-900">{item.subject || '(no subject)'}</span>
+                          <span className="truncate text-label text-gray-500">{item.from}</span>
                         </div>
                         <div className="mt-0.5 flex flex-wrap items-center gap-1.5 text-[11.5px] text-gray-500">
                           <span>{item.date || new Date(Number(item.internalDate)).toLocaleString()}</span>
@@ -580,11 +580,11 @@ function RawMode(props: {
 
       {response && (
         <div className="space-y-2">
-          <div className="text-[12px] text-gray-500">
+          <div className="text-label text-gray-500">
             {response.count} messages · {response.elapsedMs}ms · regex extraction only
           </div>
           {response.items.length === 0 ? (
-            <p className="text-[13px] text-gray-500">No messages matched.</p>
+            <p className="text-sm text-gray-500">No messages matched.</p>
           ) : (
             <ul className="divide-y divide-gray-100 rounded-md border border-gray-200">
               {response.items.map((item) => {
@@ -601,8 +601,8 @@ function RawMode(props: {
                       </button>
                       <div className="min-w-0 flex-1">
                         <div className="flex flex-wrap items-baseline gap-x-3 gap-y-0.5">
-                          <span className="truncate text-[13px] font-medium text-gray-900">{item.subject || '(no subject)'}</span>
-                          <span className="truncate text-[12px] text-gray-500">{item.from}</span>
+                          <span className="truncate text-sm font-medium text-gray-900">{item.subject || '(no subject)'}</span>
+                          <span className="truncate text-label text-gray-500">{item.from}</span>
                         </div>
                         <div className="mt-0.5 flex flex-wrap items-center gap-1.5 text-[11.5px] text-gray-500">
                           <span>{item.date || new Date(Number(item.internalDate)).toLocaleString()}</span>
@@ -656,31 +656,31 @@ function ScanControls(props: {
   return (
     <div className="flex flex-wrap items-end gap-3">
       <label className="flex-1 min-w-[220px]">
-        <span className="block text-[11px] font-medium text-gray-700">Gmail query</span>
+        <span className="block text-caption font-medium text-gray-700">Gmail query</span>
         <input
           type="text"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           placeholder="is:unread"
-          className="mt-1 w-full rounded-md border border-gray-300 px-2 py-1.5 text-[13px] focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+          className="mt-1 w-full rounded-md border border-gray-300 px-2 py-1.5 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
         />
       </label>
       <label>
-        <span className="block text-[11px] font-medium text-gray-700">Limit</span>
+        <span className="block text-caption font-medium text-gray-700">Limit</span>
         <input
           type="number"
           min={1}
           max={50}
           value={limit}
           onChange={(e) => setLimit(Math.min(50, Math.max(1, Number(e.target.value) || 25)))}
-          className="mt-1 w-20 rounded-md border border-gray-300 px-2 py-1.5 text-[13px] focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+          className="mt-1 w-20 rounded-md border border-gray-300 px-2 py-1.5 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
         />
       </label>
       <button
         type="button"
         onClick={onRun}
         disabled={loading}
-        className="inline-flex items-center gap-1.5 rounded-md bg-blue-600 px-3 py-1.5 text-[13px] font-medium text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
+        className="inline-flex items-center gap-1.5 rounded-md bg-blue-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
       >
         {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}
         {actionLabel}
@@ -693,7 +693,7 @@ function SummaryRow({ elapsedMs, counts, extra }: {
   elapsedMs: number; counts: { missing: number; in_zoho: number; received: number; no_match: number }; extra?: string;
 }) {
   return (
-    <div className="flex flex-wrap items-center gap-2 border-t border-gray-100 pt-3 text-[12px] text-gray-500">
+    <div className="flex flex-wrap items-center gap-2 border-t border-gray-100 pt-3 text-label text-gray-500">
       <span><span className="font-semibold text-amber-700">{counts.missing}</span> missing</span>
       <span aria-hidden>·</span>
       <span><span className="font-semibold text-blue-700">{counts.in_zoho}</span> in Zoho</span>

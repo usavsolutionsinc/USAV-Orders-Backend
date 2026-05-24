@@ -171,12 +171,12 @@ export function ReceivingLineOrderRow({
             className={`h-2 w-2 shrink-0 rounded-full ${getStatusDotBg(row.workflow_status, row.quantity_received, row.quantity_expected)}`}
             title={workflowLabel}
           />
-          <div className="truncate text-[13px] font-bold text-gray-900">
+          <div className="truncate text-sm font-bold text-gray-900">
             {productTitle}
           </div>
         </div>
         <div className="mt-0.5 flex items-center gap-2">
-          <div className="min-w-0 flex-1 truncate pl-4 text-[11px] font-black uppercase tracking-widest text-gray-500">
+          <div className="min-w-0 flex-1 truncate pl-4 text-caption font-black uppercase tracking-widest text-gray-500">
             <span className={qtyExpected > 1 ? 'text-yellow-600' : row.quantity_expected && row.quantity_received >= row.quantity_expected ? 'text-emerald-600' : 'text-gray-700'}>
               {quantityText}
             </span>
@@ -565,7 +565,7 @@ export default function ReceivingLinesTable() {
             </div>
           ) : Object.keys(filteredGroupedRecords).length === 0 ? (
             <div className="flex h-full flex-col items-center justify-center gap-3 px-6 text-center">
-              <p className="text-[14px] font-semibold text-gray-500">{emptyMessage}</p>
+              <p className="text-sm font-semibold text-gray-500">{emptyMessage}</p>
             </div>
           ) : (
             <div className="flex w-full flex-col">

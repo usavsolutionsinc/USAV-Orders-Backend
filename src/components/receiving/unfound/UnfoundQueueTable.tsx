@@ -243,14 +243,14 @@ export function UnfoundQueueTable() {
       {/* Table */}
       <div className="min-h-0 flex-1 overflow-auto">
         {error && (
-          <div className="mx-4 mt-4 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-[12px] text-red-700">
+          <div className="mx-4 mt-4 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-label text-red-700">
             {error}
           </div>
         )}
 
-        <table className="min-w-full text-[13px]">
+        <table className="min-w-full text-sm">
           <thead className="sticky top-0 z-10 bg-white shadow-sm">
-            <tr className="text-left text-[10px] font-bold uppercase tracking-wider text-gray-500">
+            <tr className="text-left text-micro font-bold uppercase tracking-wider text-gray-500">
               <th className="px-3 py-2">Zendesk</th>
               <th className="px-3 py-2">Product Title</th>
               <th className="px-3 py-2">Serial numbers</th>
@@ -263,7 +263,7 @@ export function UnfoundQueueTable() {
           <tbody className="divide-y divide-gray-100">
             {!loading && rows.length === 0 && (
               <tr>
-                <td colSpan={7} className="px-3 py-8 text-center text-[12px] text-gray-500">
+                <td colSpan={7} className="px-3 py-8 text-center text-label text-gray-500">
                   {error ? '—' : 'Nothing in the unfound queue. Nice.'}
                 </td>
               </tr>
@@ -320,7 +320,7 @@ function QueueTableRow({
         row.checked ? 'bg-gray-50/60 text-gray-500' : 'text-gray-900'
       }`}
     >
-      <td className="px-3 py-2 font-mono text-[12px]">
+      <td className="px-3 py-2 font-mono text-label">
         <input
           type="text"
           defaultValue={row.zendesk_ticket_id ?? ''}
@@ -343,12 +343,12 @@ function QueueTableRow({
           {row.product_title || '—'}
         </button>
         {row.context && (
-          <div className="mt-0.5 truncate text-[10px] font-normal text-gray-500">
+          <div className="mt-0.5 truncate text-micro font-normal text-gray-500">
             {row.context}
           </div>
         )}
       </td>
-      <td className="max-w-[280px] truncate px-3 py-2 font-mono text-[11px] text-gray-600">
+      <td className="max-w-[280px] truncate px-3 py-2 font-mono text-caption text-gray-600">
         {row.serial_numbers || '—'}
       </td>
       <td className="px-3 py-2">
@@ -359,7 +359,7 @@ function QueueTableRow({
             debouncedPatch({ usa_team_note: e.target.value || null })
           }
           placeholder="—"
-          className="w-full resize-none border-b border-transparent bg-transparent px-1 py-0.5 text-[12px] outline-none focus:border-blue-500"
+          className="w-full resize-none border-b border-transparent bg-transparent px-1 py-0.5 text-label outline-none focus:border-blue-500"
         />
       </td>
       <td className="px-3 py-2">
@@ -370,7 +370,7 @@ function QueueTableRow({
             debouncedPatch({ vietnam_team_note: e.target.value || null })
           }
           placeholder="—"
-          className="w-full resize-none border-b border-transparent bg-transparent px-1 py-0.5 text-[12px] outline-none focus:border-blue-500"
+          className="w-full resize-none border-b border-transparent bg-transparent px-1 py-0.5 text-label outline-none focus:border-blue-500"
         />
       </td>
       <td className="px-3 py-2 text-center">
@@ -383,7 +383,7 @@ function QueueTableRow({
       </td>
       <td className="px-3 py-2 text-right">
         {row.zendesk_ticket_id ? (
-          <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-600">
+          <span className="text-micro font-bold uppercase tracking-wider text-emerald-600">
             Synced
           </span>
         ) : (
@@ -392,7 +392,7 @@ function QueueTableRow({
             onClick={() => void onPush(row)}
             disabled={pushing}
             title="Create a Zendesk ticket from this row"
-            className="flex items-center gap-1 rounded-md border border-blue-200 px-2 py-1 text-[10px] font-bold uppercase tracking-wider text-blue-600 hover:bg-blue-50 disabled:cursor-not-allowed disabled:opacity-50"
+            className="flex items-center gap-1 rounded-md border border-blue-200 px-2 py-1 text-micro font-bold uppercase tracking-wider text-blue-600 hover:bg-blue-50 disabled:cursor-not-allowed disabled:opacity-50"
           >
             <ExternalLink className="h-3 w-3" />
             {pushing ? '…' : 'Push'}

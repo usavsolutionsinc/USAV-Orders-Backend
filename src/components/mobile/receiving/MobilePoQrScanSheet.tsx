@@ -93,7 +93,7 @@ export function MobilePoQrScanSheet({ isOpen, onClose, onDecode }: MobilePoQrSca
                 <button
                   type="button"
                   onClick={() => void scanner.startScanning()}
-                  className="h-11 px-5 rounded-xl bg-blue-600 text-white text-[11px] font-black uppercase tracking-wider active:bg-blue-700"
+                  className="h-11 px-5 rounded-xl bg-blue-600 text-white text-caption font-black uppercase tracking-wider active:bg-blue-700"
                 >
                   Try Again
                 </button>

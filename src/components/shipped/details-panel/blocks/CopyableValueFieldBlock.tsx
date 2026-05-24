@@ -76,7 +76,7 @@ export function CopyableValueFieldBlock({
         >
           {copied ? (
             <div className="flex items-center gap-1">
-              <span className="text-[10px] font-black text-emerald-600 uppercase">Copied!</span>
+              <span className="text-micro font-black text-emerald-600 uppercase">Copied!</span>
               <Check className="w-3.5 h-3.5 text-emerald-600" />
             </div>
           ) : (
@@ -132,7 +132,7 @@ export function CopyableValueFieldBlock({
     <div>
       <div className="mb-1.5 flex items-center justify-between gap-2">
         <div className="flex items-center gap-2">
-          <span className="text-[10px] text-gray-400 font-black uppercase tracking-widest">{label}</span>
+          <span className="text-micro text-gray-400 font-black uppercase tracking-widest">{label}</span>
           {headerAccessory}
         </div>
       </div>

@@ -49,7 +49,7 @@ export function ProductsTable({
 
     return (
         <div className="mx-auto max-w-6xl">
-            <div className="hidden gap-3 border-b border-gray-200 bg-gray-50 px-4 py-2 text-[11px] font-medium uppercase tracking-wide text-gray-500 sm:flex sm:px-6">
+            <div className="hidden gap-3 border-b border-gray-200 bg-gray-50 px-4 py-2 text-caption font-medium uppercase tracking-wide text-gray-500 sm:flex sm:px-6">
                 <div className="w-10" />
                 <div className="flex-1">SKU · Title</div>
                 <div className="w-32">Category</div>

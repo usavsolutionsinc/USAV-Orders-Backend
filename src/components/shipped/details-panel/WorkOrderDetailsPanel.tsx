@@ -233,11 +233,11 @@ export function WorkOrderDetailsPanel({
           <div className="min-w-0">
             <div className="mb-1 flex items-center gap-2">
               <span className={`${sectionLabel} text-emerald-700`}>{row.queueLabel}</span>
-              <span className={`rounded-full px-2 py-0.5 text-[9px] font-black uppercase tracking-[0.2em] ${statusBadgeClass}`}>
+              <span className={`rounded-full px-2 py-0.5 text-eyebrow font-black uppercase tracking-[0.2em] ${statusBadgeClass}`}>
                 {form.status.replace('_', ' ')}
               </span>
             </div>
-            <h2 className="truncate text-[15px] font-black uppercase tracking-tight text-gray-950">
+            <h2 className="truncate text-base font-black uppercase tracking-tight text-gray-950">
               {row.recordLabel}
             </h2>
           </div>
@@ -314,7 +314,7 @@ export function WorkOrderDetailsPanel({
                     <button
                       type="button"
                       onClick={() => setActiveInput('none')}
-                      className="h-8 rounded-lg border border-gray-200 bg-white text-[10px] font-black uppercase tracking-wider text-gray-700"
+                      className="h-8 rounded-lg border border-gray-200 bg-white text-micro font-black uppercase tracking-wider text-gray-700"
                     >
                       Cancel
                     </button>
@@ -322,7 +322,7 @@ export function WorkOrderDetailsPanel({
                       type="button"
                       onClick={() => void fieldSave.saveNotes(notes)}
                       disabled={fieldSave.isSavingNotes}
-                      className="inline-flex h-8 items-center justify-center gap-1.5 rounded-lg bg-gray-900 text-[10px] font-black uppercase tracking-wider text-white hover:bg-gray-800 disabled:opacity-50"
+                      className="inline-flex h-8 items-center justify-center gap-1.5 rounded-lg bg-gray-900 text-micro font-black uppercase tracking-wider text-white hover:bg-gray-800 disabled:opacity-50"
                     >
                       {fieldSave.isSavingNotes ? 'Saving' : 'Submit'}
                     </button>

@@ -77,7 +77,7 @@ export function ConditionPills({ value, onChange }: Props) {
             role="radio"
             aria-checked={isActive}
             onClick={() => onChange(opt.value)}
-            className={`inline-flex h-9 shrink-0 snap-start items-center whitespace-nowrap rounded-full px-4 text-[11px] font-black uppercase tracking-[0.1em] ring-1 ring-inset transition-all active:scale-[0.98] ${
+            className={`inline-flex h-9 shrink-0 snap-start items-center whitespace-nowrap rounded-full px-4 text-caption font-black uppercase tracking-[0.1em] ring-1 ring-inset transition-all active:scale-[0.98] ${
               isActive ? tone.active : tone.inactive
             }`}
           >

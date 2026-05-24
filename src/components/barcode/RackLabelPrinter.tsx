@@ -315,7 +315,7 @@ export function RackLabelPrinter({ variant = 'main' }: RackLabelPrinterProps) {
             {variant === 'sidebar' ? 'Build a rack label' : 'Rack Label Printer'}
           </h1>
           {variant === 'main' && (
-            <p className="mt-1 text-[13px] text-gray-500">
+            <p className="mt-1 text-sm text-gray-500">
               Pick a room, then drill down to the rack level. Prints one large
               QR-only label per rack — no position needed.
             </p>
@@ -359,7 +359,7 @@ export function RackLabelPrinter({ variant = 'main' }: RackLabelPrinterProps) {
             <div className="flex min-w-0 items-center gap-3">
               <ZoneLetterTile letter={zoneLetter} />
               <div className="min-w-0">
-                <p className="truncate text-[15px] font-semibold text-gray-900">{selectedRoom}</p>
+                <p className="truncate text-base font-semibold text-gray-900">{selectedRoom}</p>
                 <p className="mt-0.5 text-[11.5px] text-gray-500">
                   {zoneLetter ? `Zone ${zoneLetter}` : 'No zone letter yet — set one in the Rooms tab.'}
                 </p>
@@ -368,7 +368,7 @@ export function RackLabelPrinter({ variant = 'main' }: RackLabelPrinterProps) {
             <button
               type="button"
               onClick={() => setOverrideStep('zone')}
-              className="shrink-0 rounded-full border border-gray-200 bg-white px-3 py-1.5 text-[11px] font-semibold text-gray-700 transition-colors hover:bg-gray-50"
+              className="shrink-0 rounded-full border border-gray-200 bg-white px-3 py-1.5 text-caption font-semibold text-gray-700 transition-colors hover:bg-gray-50"
             >
               Change
             </button>
@@ -467,10 +467,10 @@ export function RackLabelPrinter({ variant = 'main' }: RackLabelPrinterProps) {
     <div className="flex flex-col gap-4">
       <header className="flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-blue-600">
+          <p className="text-micro font-bold uppercase tracking-[0.16em] text-blue-600">
             Rack Label Printer
           </p>
-          <h1 className="mt-0.5 truncate text-[22px] font-bold tracking-tight text-gray-900">
+          <h1 className="mt-0.5 truncate text-2xl font-bold tracking-tight text-gray-900">
             {selectedRoom ?? 'Pick a room to start'}
           </h1>
           <p className="mt-1 max-w-[60ch] text-[12.5px] leading-snug text-gray-500">
@@ -484,7 +484,7 @@ export function RackLabelPrinter({ variant = 'main' }: RackLabelPrinterProps) {
             <button
               type="button"
               onClick={resetAll}
-              className="flex h-10 items-center gap-1.5 rounded-full border border-gray-200 bg-white px-3 text-[12px] font-semibold text-gray-700 transition-colors hover:bg-gray-50 active:scale-[0.97]"
+              className="flex h-10 items-center gap-1.5 rounded-full border border-gray-200 bg-white px-3 text-label font-semibold text-gray-700 transition-colors hover:bg-gray-50 active:scale-[0.97]"
             >
               <ChevronLeft className="h-3.5 w-3.5" />
               Reset
@@ -527,7 +527,7 @@ export function RackLabelPrinter({ variant = 'main' }: RackLabelPrinterProps) {
             <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-blue-50 to-blue-100 ring-1 ring-blue-200">
               <ChevronLeft className="h-5 w-5 text-blue-500" />
             </div>
-            <p className="text-[13px] font-semibold text-gray-800">
+            <p className="text-sm font-semibold text-gray-800">
               Pick a room in the sidebar
             </p>
             <p className="max-w-[40ch] text-[11.5px] text-gray-500">
@@ -673,7 +673,7 @@ function RoomPicker({ rooms, zoneMap, loading, selectedRoom, onSelect }: RoomPic
   if (rooms.length === 0) {
     return (
       <div className="rounded-2xl border border-dashed border-gray-200 px-5 py-10 text-center">
-        <p className="text-[13px] font-semibold text-gray-700">No rooms yet</p>
+        <p className="text-sm font-semibold text-gray-700">No rooms yet</p>
         <p className="mt-1 text-[11.5px] text-gray-500">
           Open the <span className="font-semibold">Rooms</span> tab and add one — it'll show up here.
         </p>
@@ -698,8 +698,8 @@ function RoomPicker({ rooms, zoneMap, loading, selectedRoom, onSelect }: RoomPic
           >
             <ZoneLetterTile letter={letter} />
             <div className="min-w-0 flex-1">
-              <p className="text-[14px] font-semibold leading-snug text-gray-900 break-words">{room}</p>
-              <p className="mt-0.5 text-[11px] text-gray-500">
+              <p className="text-sm font-semibold leading-snug text-gray-900 break-words">{room}</p>
+              <p className="mt-0.5 text-caption text-gray-500">
                 {letter ? `Zone ${letter}` : 'No zone letter'}
               </p>
             </div>
@@ -713,14 +713,14 @@ function RoomPicker({ rooms, zoneMap, loading, selectedRoom, onSelect }: RoomPic
 function ZoneLetterTile({ letter }: { letter: string | undefined }) {
   if (letter) {
     return (
-      <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-blue-50 to-blue-100/70 font-mono text-[20px] font-semibold text-blue-700 ring-1 ring-blue-200">
+      <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-blue-50 to-blue-100/70 font-mono text-xl font-semibold text-blue-700 ring-1 ring-blue-200">
         {letter}
       </div>
     );
   }
   return (
     <div
-      className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-amber-50 font-mono text-[18px] font-semibold text-amber-700 ring-1 ring-amber-200"
+      className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-amber-50 font-mono text-lg font-semibold text-amber-700 ring-1 ring-amber-200"
       title="No zone letter assigned yet — go to the Rooms tab"
     >
       ?
@@ -771,7 +771,7 @@ function StepPills({ activeStep, zoneLetter, roomName, aisle, bay, level, onPill
                 onClick={() => onPillClick(id)}
                 disabled={!isClickable}
                 aria-current={isActive ? 'step' : undefined}
-                className={`flex h-9 shrink-0 items-center gap-1.5 rounded-full px-3 text-[11px] font-semibold transition-all active:scale-95 ${
+                className={`flex h-9 shrink-0 items-center gap-1.5 rounded-full px-3 text-caption font-semibold transition-all active:scale-95 ${
                   isActive
                     ? 'bg-gradient-to-br from-blue-500 to-blue-700 text-white shadow-md shadow-blue-600/30'
                     : isDone
@@ -780,10 +780,10 @@ function StepPills({ activeStep, zoneLetter, roomName, aisle, bay, level, onPill
                 }`}
                 title={id === 'zone' && roomName ? roomName : undefined}
               >
-                <span className="text-[10px] uppercase tracking-wider opacity-80">{label}</span>
-                <span className="font-mono text-[10px] font-semibold tabular-nums">{value ?? '—'}</span>
+                <span className="text-micro uppercase tracking-wider opacity-80">{label}</span>
+                <span className="font-mono text-micro font-semibold tabular-nums">{value ?? '—'}</span>
               </button>
-              {showChevron && <span className="shrink-0 text-[10px] text-gray-300">›</span>}
+              {showChevron && <span className="shrink-0 text-micro text-gray-300">›</span>}
             </React.Fragment>
           );
         })}
@@ -816,18 +816,18 @@ function LivePreviewBody({ zoneLetter, roomName, aisle, bay, level, gln }: LiveP
     <div className="flex items-center gap-5 rounded-xl bg-gray-50 p-5 ring-1 ring-gray-200/50">
       <div className="min-w-0 flex-1 space-y-2">
         <div>
-          <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-gray-500">Rack code</p>
-          <p className="mt-0.5 whitespace-nowrap font-mono text-[22px] font-black tracking-tight text-gray-900">{code}</p>
+          <p className="text-micro font-semibold uppercase tracking-[0.14em] text-gray-500">Rack code</p>
+          <p className="mt-0.5 whitespace-nowrap font-mono text-2xl font-black tracking-tight text-gray-900">{code}</p>
         </div>
         {roomName && (
           <div>
-            <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-gray-500">Room</p>
-            <p className="mt-0.5 truncate text-[13px] font-semibold text-gray-800">{roomName}</p>
+            <p className="text-micro font-semibold uppercase tracking-[0.14em] text-gray-500">Room</p>
+            <p className="mt-0.5 truncate text-sm font-semibold text-gray-800">{roomName}</p>
           </div>
         )}
         <div>
-          <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-gray-500">Breakdown</p>
-          <p className="mt-0.5 text-[12px] leading-snug text-gray-700">
+          <p className="text-micro font-semibold uppercase tracking-[0.14em] text-gray-500">Breakdown</p>
+          <p className="mt-0.5 text-label leading-snug text-gray-700">
             {humanReadable({ zone: zoneLetter, aisle, bay, level })}
           </p>
         </div>
@@ -842,7 +842,7 @@ function LivePreviewBody({ zoneLetter, roomName, aisle, bay, level, gln }: LiveP
         ) : (
           <div className="flex h-full w-full flex-col items-center justify-center gap-1 text-center">
             <Printer className="h-5 w-5 text-gray-300" />
-            <p className="px-2 text-[10px] font-semibold text-gray-400">
+            <p className="px-2 text-micro font-semibold text-gray-400">
               Barcode appears when all steps are picked
             </p>
           </div>
@@ -927,8 +927,8 @@ function NumericStep({
         transition={reduceMotion ? { duration: 0 } : { duration: 0.2 }}
       >
         <div className={`flex items-baseline justify-between ${hint ? 'mb-1' : 'mb-3'}`}>
-          <h3 className="text-[15px] font-semibold tracking-tight text-gray-900">{title}</h3>
-          <span className="text-[10px] font-medium tabular-nums text-gray-400">
+          <h3 className="text-base font-semibold tracking-tight text-gray-900">{title}</h3>
+          <span className="text-micro font-medium tabular-nums text-gray-400">
             up to {count}
           </span>
         </div>
@@ -951,7 +951,7 @@ function NumericStep({
                     : 'border-gray-200 bg-white text-gray-900 hover:border-gray-300 hover:bg-gray-50'
                 }`}
               >
-                <span className="font-mono text-[18px] font-semibold tabular-nums tracking-tight">
+                <span className="font-mono text-lg font-semibold tabular-nums tracking-tight">
                   {format(n)}
                 </span>
               </button>
@@ -980,7 +980,7 @@ function NumericStep({
               }}
               placeholder={customPlaceholder}
               aria-label={customLabel}
-              className="h-full w-full min-w-0 bg-transparent pr-1 text-center font-mono text-[18px] font-semibold tabular-nums tracking-tight text-gray-900 outline-none placeholder:text-[12px] placeholder:font-medium placeholder:tracking-wide placeholder:text-gray-400 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+              className="h-full w-full min-w-0 bg-transparent pr-1 text-center font-mono text-lg font-semibold tabular-nums tracking-tight text-gray-900 outline-none placeholder:text-label placeholder:font-medium placeholder:tracking-wide placeholder:text-gray-400 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
             />
 
             <div className="ml-1 flex h-12 shrink-0 flex-col justify-center gap-0.5">
@@ -1049,7 +1049,7 @@ function ConfigSheet({ open, onClose, config, onSave }: ConfigSheetProps) {
 
   return (
     <BottomSheet open={open} onClose={onClose} title="Configure counts">
-      <p className="mb-4 text-center text-[12px] text-gray-500">
+      <p className="mb-4 text-center text-label text-gray-500">
         Match these to your warehouse layout. Saved locally — no rebuild required.
       </p>
 
@@ -1060,21 +1060,21 @@ function ConfigSheet({ open, onClose, config, onSave }: ConfigSheetProps) {
       </div>
 
       <div className="mt-4">
-        <label className="text-[10px] font-semibold uppercase tracking-wider text-gray-500">
+        <label className="text-micro font-semibold uppercase tracking-wider text-gray-500">
           GLN (Global Location Number)
         </label>
         <input
           type="text"
           value={draft.gln}
           onChange={(e) => set('gln')(e.target.value)}
-          className="mt-1 h-11 w-full rounded-2xl border border-gray-300 bg-gray-50 px-4 font-mono text-[13px] font-semibold text-gray-900 outline-none focus:border-blue-500 focus:bg-white focus:ring-2 focus:ring-blue-200"
+          className="mt-1 h-11 w-full rounded-2xl border border-gray-300 bg-gray-50 px-4 font-mono text-sm font-semibold text-gray-900 outline-none focus:border-blue-500 focus:bg-white focus:ring-2 focus:ring-blue-200"
         />
-        <p className="mt-1 text-[10px] text-gray-400">
+        <p className="mt-1 text-micro text-gray-400">
           Default is the GS1 documentation placeholder ({DEFAULT_GLN}). Replace once registered with GS1 US.
         </p>
       </div>
 
-      <div className="mt-3 text-[10px] text-gray-400">
+      <div className="mt-3 text-micro text-gray-400">
         Domain in QR: <span className="font-mono">{QR_BASE_URL}</span>
       </div>
 
@@ -1102,7 +1102,7 @@ function ConfigSheet({ open, onClose, config, onSave }: ConfigSheetProps) {
 function NumField({ label, value, onChange }: { label: string; value: number; onChange: (v: string) => void }) {
   return (
     <div>
-      <label className="text-[10px] font-semibold uppercase tracking-wider text-gray-500">{label}</label>
+      <label className="text-micro font-semibold uppercase tracking-wider text-gray-500">{label}</label>
       <input
         type="number"
         inputMode="numeric"
@@ -1145,7 +1145,7 @@ function GiantRackPreviewPanel({
     <div className="rounded-3xl border border-gray-200 bg-white p-8 shadow-sm">
       <div className="mx-auto max-w-3xl">
         <div className="text-center">
-          <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-gray-400">
+          <p className="text-micro font-bold uppercase tracking-[0.22em] text-gray-400">
             Live preview · prints at 3″ × 2″
           </p>
         </div>
@@ -1153,18 +1153,18 @@ function GiantRackPreviewPanel({
         <div className="mt-5 flex items-center justify-center">
           <div className="flex items-start gap-8 rounded-2xl border-2 border-dashed border-gray-200 bg-gradient-to-br from-white to-gray-50/50 p-8 shadow-inner">
             <div className="min-w-0 flex-1">
-              <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-gray-500">
+              <p className="text-caption font-bold uppercase tracking-[0.18em] text-gray-500">
                 USAV Warehouse Rack
               </p>
-              <p className="mt-2 whitespace-nowrap font-mono text-[36px] font-black leading-none tracking-tight text-gray-900">
+              <p className="mt-2 whitespace-nowrap font-mono text-4xl font-black leading-none tracking-tight text-gray-900">
                 {code}
               </p>
               {roomName && (
-                <p className="mt-3 text-[15px] font-bold text-gray-800">
+                <p className="mt-3 text-base font-bold text-gray-800">
                   {roomName}
                 </p>
               )}
-              <p className="mt-2 text-[12px] font-semibold leading-snug text-gray-600">
+              <p className="mt-2 text-label font-semibold leading-snug text-gray-600">
                 {humanReadable({ zone: zoneLetter, aisle, bay, level })}
               </p>
             </div>
@@ -1174,7 +1174,7 @@ function GiantRackPreviewPanel({
               ) : (
                 <div className="flex h-full w-full flex-col items-center justify-center gap-2 text-center">
                   <Printer className="h-7 w-7 text-gray-300" />
-                  <p className="px-4 text-[11px] font-semibold text-gray-400">
+                  <p className="px-4 text-caption font-semibold text-gray-400">
                     Barcode appears when every step is picked in the sidebar
                   </p>
                 </div>

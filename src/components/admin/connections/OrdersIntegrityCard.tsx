@@ -16,7 +16,7 @@ function StatusBanner({ status }: { status: { type: 'success' | 'error'; message
     <motion.div
       initial={{ opacity: 0, y: -10 }}
       animate={{ opacity: 1, y: 0 }}
-      className={`border-l-2 px-4 py-3 text-[10px] font-black uppercase tracking-widest ${
+      className={`border-l-2 px-4 py-3 text-micro font-black uppercase tracking-widest ${
         status.type === 'success'
           ? 'border-l-green-500 bg-green-50/70 text-green-700'
           : 'border-l-red-500 bg-red-50/70 text-red-700'
@@ -150,7 +150,7 @@ export function OrdersIntegrityCard({ embedded = false }: { embedded?: boolean }
 
       <div className={embedded ? 'border-b border-gray-200 pb-3' : ''}>
         <h2 className="text-sm font-black uppercase tracking-widest text-gray-900">Order Sync Health</h2>
-        <p className="text-[9px] font-bold text-gray-500 mt-1">Run the eBay sync, Ecwid exception sync, exception cleanup, and ShipStation upload from one place.</p>
+        <p className="text-eyebrow font-bold text-gray-500 mt-1">Run the eBay sync, Ecwid exception sync, exception cleanup, and ShipStation upload from one place.</p>
       </div>
 
       <div className="overflow-x-auto">
@@ -158,7 +158,7 @@ export function OrdersIntegrityCard({ embedded = false }: { embedded?: boolean }
           <button
             onClick={() => void handleRunFullIntegrity()}
             disabled={anyPending}
-            className="flex items-center gap-2 px-4 py-2 bg-gray-900 hover:bg-black rounded-xl transition-all text-[10px] font-black uppercase tracking-widest text-white shadow-sm disabled:opacity-50"
+            className="flex items-center gap-2 px-4 py-2 bg-gray-900 hover:bg-black rounded-xl transition-all text-micro font-black uppercase tracking-widest text-white shadow-sm disabled:opacity-50"
           >
             <RefreshCw className={`w-3.5 h-3.5 ${isFullSyncRunning ? 'animate-spin' : ''}`} />
             {isFullSyncRunning ? 'Running...' : 'Run Full Sync'}
@@ -166,7 +166,7 @@ export function OrdersIntegrityCard({ embedded = false }: { embedded?: boolean }
           <button
             onClick={() => ebaySyncMutation.mutate()}
             disabled={ebaySyncMutation.isPending || isFullSyncRunning}
-            className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded-xl transition-all text-[10px] font-black uppercase tracking-widest text-white shadow-sm disabled:opacity-50"
+            className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded-xl transition-all text-micro font-black uppercase tracking-widest text-white shadow-sm disabled:opacity-50"
           >
             <RefreshCw className={`w-3.5 h-3.5 ${ebaySyncMutation.isPending ? 'animate-spin' : ''}`} />
             {ebaySyncMutation.isPending ? 'Running...' : 'Sync eBay'}
@@ -174,7 +174,7 @@ export function OrdersIntegrityCard({ embedded = false }: { embedded?: boolean }
           <button
             onClick={() => ecwidExceptionTrackingMutation.mutate()}
             disabled={ecwidExceptionTrackingMutation.isPending || isFullSyncRunning}
-            className="flex items-center gap-2 px-4 py-2 bg-cyan-600 hover:bg-cyan-700 rounded-xl transition-all text-[10px] font-black uppercase tracking-widest text-white shadow-sm disabled:opacity-50"
+            className="flex items-center gap-2 px-4 py-2 bg-cyan-600 hover:bg-cyan-700 rounded-xl transition-all text-micro font-black uppercase tracking-widest text-white shadow-sm disabled:opacity-50"
           >
             <RefreshCw className={`w-3.5 h-3.5 ${ecwidExceptionTrackingMutation.isPending ? 'animate-spin' : ''}`} />
             {ecwidExceptionTrackingMutation.isPending ? 'Running...' : 'Sync Ecwid'}
@@ -182,7 +182,7 @@ export function OrdersIntegrityCard({ embedded = false }: { embedded?: boolean }
           <button
             onClick={() => exceptionsSyncMutation.mutate()}
             disabled={exceptionsSyncMutation.isPending || isFullSyncRunning}
-            className="flex items-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 rounded-xl transition-all text-[10px] font-black uppercase tracking-widest text-white shadow-sm disabled:opacity-50"
+            className="flex items-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 rounded-xl transition-all text-micro font-black uppercase tracking-widest text-white shadow-sm disabled:opacity-50"
           >
             <RefreshCw className={`w-3.5 h-3.5 ${exceptionsSyncMutation.isPending ? 'animate-spin' : ''}`} />
             {exceptionsSyncMutation.isPending ? 'Checking...' : 'Clear Exceptions'}
@@ -206,9 +206,9 @@ export function OrdersIntegrityCard({ embedded = false }: { embedded?: boolean }
 
       {/* Token refresh row */}
       <div className="flex items-center gap-2 overflow-x-auto whitespace-nowrap border-t border-gray-100 pt-4">
-        <div className="text-[9px] font-bold uppercase tracking-widest text-gray-500">eBay Token Refresh</div>
+        <div className="text-eyebrow font-bold uppercase tracking-widest text-gray-500">eBay Token Refresh</div>
         {tokenAccounts.length === 0 ? (
-          <div className="text-[9px] font-bold uppercase tracking-widest text-green-700 bg-green-50 border border-green-200 px-2 py-1">
+          <div className="text-eyebrow font-bold uppercase tracking-widest text-green-700 bg-green-50 border border-green-200 px-2 py-1">
             All Tokens Healthy
           </div>
         ) : (
@@ -221,7 +221,7 @@ export function OrdersIntegrityCard({ embedded = false }: { embedded?: boolean }
                 key={account.id}
                 onClick={() => refreshTokenMutation.mutate(account.account_name)}
                 disabled={refreshTokenMutation.isPending}
-                className="inline-flex items-center gap-2 text-[9px] font-bold uppercase tracking-widest px-2.5 py-1.5 border border-orange-200 bg-orange-50 text-orange-700 hover:bg-orange-100 disabled:opacity-50"
+                className="inline-flex items-center gap-2 text-eyebrow font-bold uppercase tracking-widest px-2.5 py-1.5 border border-orange-200 bg-orange-50 text-orange-700 hover:bg-orange-100 disabled:opacity-50"
               >
                 <RefreshCw className={`w-3 h-3 ${isRefreshing ? 'animate-spin' : ''}`} />
                 {account.account_name}
@@ -239,14 +239,14 @@ export function OrdersIntegrityCard({ embedded = false }: { embedded?: boolean }
           <div className="relative w-full max-w-md bg-white border border-gray-200 shadow-xl p-5 space-y-4">
             <div>
               <h3 className="text-xs font-black uppercase tracking-widest text-gray-900">Upload ShipStation CSV</h3>
-              <p className="text-[10px] font-bold text-gray-600 mt-2">Choose a ShipStation CSV export to import orders and refresh tracking data.</p>
+              <p className="text-micro font-bold text-gray-600 mt-2">Choose a ShipStation CSV export to import orders and refresh tracking data.</p>
             </div>
             <div className="flex items-center justify-end gap-2">
-              <button onClick={() => setIsShipStationInfoOpen(false)} className="px-3 py-2 text-[10px] font-black uppercase tracking-widest text-gray-600 bg-gray-100 hover:bg-gray-200">Cancel</button>
+              <button onClick={() => setIsShipStationInfoOpen(false)} className="px-3 py-2 text-micro font-black uppercase tracking-widest text-gray-600 bg-gray-100 hover:bg-gray-200">Cancel</button>
               <button
                 onClick={() => { setIsShipStationInfoOpen(false); shipStationFileInputRef.current?.click(); }}
                 disabled={anyPending}
-                className="px-3 py-2 text-[10px] font-black uppercase tracking-widest text-white bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50"
+                className="px-3 py-2 text-micro font-black uppercase tracking-widest text-white bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50"
               >
                 {isShipStationSyncing ? 'Uploading...' : 'Choose File'}
               </button>
@@ -260,7 +260,7 @@ export function OrdersIntegrityCard({ embedded = false }: { embedded?: boolean }
 
       {ebaySyncMutation.isSuccess && !isFullSyncRunning && (
         <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} className="p-3 bg-green-50 border border-green-200 rounded-2xl">
-          <div className="text-[10px] font-black text-green-700 uppercase tracking-widest">
+          <div className="text-micro font-black text-green-700 uppercase tracking-widest">
             eBay: Created {ebaySyncMutation.data?.totals?.createdOrders || 0} • Deleted Exceptions {ebaySyncMutation.data?.totals?.deletedExceptions || 0} • Skipped Existing {ebaySyncMutation.data?.totals?.skippedExistingOrders || 0}
           </div>
         </motion.div>
@@ -270,7 +270,7 @@ export function OrdersIntegrityCard({ embedded = false }: { embedded?: boolean }
 
       {exceptionsSyncMutation.isSuccess && !isFullSyncRunning && (
         <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} className="p-3 bg-green-50 border border-green-200 rounded-2xl">
-          <div className="text-[10px] font-black text-green-700 uppercase tracking-widest">
+          <div className="text-micro font-black text-green-700 uppercase tracking-widest">
             Exceptions: Scanned {exceptionsSyncMutation.data?.scanned || 0} • Matched {exceptionsSyncMutation.data?.matched || 0} • Cleared {exceptionsSyncMutation.data?.deleted || 0}
           </div>
         </motion.div>
@@ -278,7 +278,7 @@ export function OrdersIntegrityCard({ embedded = false }: { embedded?: boolean }
 
       {ecwidExceptionTrackingMutation.isSuccess && (
         <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} className="p-3 bg-green-50 border border-green-200 rounded-2xl">
-          <div className="text-[10px] font-black text-green-700 uppercase tracking-widest">
+          <div className="text-micro font-black text-green-700 uppercase tracking-widest">
             Ecwid Tracking: Scanned {ecwidExceptionTrackingMutation.data?.scanned || 0} • Matched {ecwidExceptionTrackingMutation.data?.matched || 0} • Updated {ecwidExceptionTrackingMutation.data?.updated || 0} • Deleted {ecwidExceptionTrackingMutation.data?.deleted || 0}
           </div>
         </motion.div>

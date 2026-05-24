@@ -74,7 +74,7 @@ export function SessionsSection() {
 
       <div className="rounded-xl border border-gray-200 bg-white overflow-hidden">
         <table className="w-full text-sm">
-          <thead className="bg-gray-50 text-left text-[11px] uppercase tracking-wider text-gray-500">
+          <thead className="bg-gray-50 text-left text-caption uppercase tracking-wider text-gray-500">
             <tr>
               <th className="px-3 py-2">Staff</th>
               <th className="px-3 py-2">Device</th>

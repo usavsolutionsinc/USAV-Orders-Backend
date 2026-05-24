@@ -117,11 +117,11 @@ export function SignaturePad({ onSignatureChange, label = 'Customer Signature', 
     <div className={fillHeight ? 'flex h-full flex-col gap-2' : 'space-y-2'}>
       {/* Label row */}
       <div className="flex items-center justify-between">
-        <label className="block text-[9px] font-black uppercase tracking-[0.15em] text-gray-500">
+        <label className="block text-eyebrow font-black uppercase tracking-[0.15em] text-gray-500">
           {label}
         </label>
         <div className="flex items-center gap-3">
-            <span className={`flex items-center gap-1.5 text-[9px] font-black uppercase tracking-wide px-2 py-1 border transition-opacity ${signed ? 'text-orange-600 bg-orange-50 border-orange-200' : 'opacity-0 border-transparent'}`}>
+            <span className={`flex items-center gap-1.5 text-eyebrow font-black uppercase tracking-wide px-2 py-1 border transition-opacity ${signed ? 'text-orange-600 bg-orange-50 border-orange-200' : 'opacity-0 border-transparent'}`}>
               <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
               </svg>
@@ -130,7 +130,7 @@ export function SignaturePad({ onSignatureChange, label = 'Customer Signature', 
           <button
             type="button"
             onClick={handleClear}
-            className="text-[9px] font-black text-red-500 hover:text-red-700 uppercase tracking-wide transition-colors px-2 py-1 hover:bg-red-50"
+            className="text-eyebrow font-black text-red-500 hover:text-red-700 uppercase tracking-wide transition-colors px-2 py-1 hover:bg-red-50"
           >
             Clear
           </button>
@@ -154,12 +154,12 @@ export function SignaturePad({ onSignatureChange, label = 'Customer Signature', 
         />
         {/* Baseline */}
         <div className="absolute bottom-10 left-6 right-6 border-b-2 border-dashed border-gray-200 pointer-events-none" />
-        <span className="absolute bottom-3 left-6 text-[8px] text-gray-400 font-black uppercase tracking-[0.2em] pointer-events-none">
+        <span className="absolute bottom-3 left-6 text-mini text-gray-400 font-black uppercase tracking-[0.2em] pointer-events-none">
           Sign above
         </span>
         {/* Corner accent */}
         {!signed && (
-          <span className="absolute top-3 right-3 text-[8px] font-black text-gray-300 uppercase tracking-wide pointer-events-none">
+          <span className="absolute top-3 right-3 text-mini font-black text-gray-300 uppercase tracking-wide pointer-events-none">
             Touch to sign
           </span>
         )}

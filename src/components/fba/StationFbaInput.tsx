@@ -932,13 +932,13 @@ export default function StationFbaInput({
       {showLabels ? (
         <>
           {fbaScanOnly ? (
-            <p className="text-[10px] font-black uppercase tracking-widest text-zinc-700">
+            <p className="text-micro font-black uppercase tracking-widest text-zinc-700">
               Adding To Today Current Plan
             </p>
           ) : (
-            <p className="text-[10px] font-semibold uppercase tracking-widest text-zinc-500">Station scan</p>
+            <p className="text-micro font-semibold uppercase tracking-widest text-zinc-500">Station scan</p>
           )}
-          <p className="text-[11px] leading-snug text-zinc-500">{fbaScanOnly ? fbaOnlyHint : routingHint}</p>
+          <p className="text-caption leading-snug text-zinc-500">{fbaScanOnly ? fbaOnlyHint : routingHint}</p>
         </>
       ) : null}
 
@@ -991,7 +991,7 @@ export default function StationFbaInput({
           {isFbaLoading ? (
             <Loader2 className="h-3 w-3 shrink-0 animate-spin text-gray-400" />
           ) : null}
-          <p className={`text-[10px] font-bold uppercase tracking-widest ${
+          <p className={`text-micro font-bold uppercase tracking-widest ${
             planHint
               ? 'text-emerald-600'
               : selectedCount > 0
@@ -1060,7 +1060,7 @@ export default function StationFbaInput({
                           patchPendingTodayQty(r.fnsku, v);
                         }}
                         onClick={(e) => e.stopPropagation()}
-                        className="h-7 w-10 border-x border-gray-200 bg-white text-center text-[13px] font-black tabular-nums text-gray-900 outline-none [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+                        className="h-7 w-10 border-x border-gray-200 bg-white text-center text-sm font-black tabular-nums text-gray-900 outline-none [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
                       />
                       <button
                         type="button"
@@ -1089,7 +1089,7 @@ export default function StationFbaInput({
               type="button"
               disabled={isFbaLoading}
               onClick={() => clearPendingTodayPlan()}
-              className="shrink-0 text-[9px] font-black uppercase tracking-[0.12em] text-gray-500 transition-colors hover:text-gray-900 disabled:opacity-50"
+              className="shrink-0 text-eyebrow font-black uppercase tracking-[0.12em] text-gray-500 transition-colors hover:text-gray-900 disabled:opacity-50"
             >
               Cancel
             </button>
@@ -1106,7 +1106,7 @@ export default function StationFbaInput({
                 clearPendingTodayPlan();
                 void handleBulkFnskuPlanFlow(rows);
               }}
-              className="shrink-0 rounded-md bg-purple-600 px-2.5 py-1 text-[9px] font-black uppercase tracking-[0.12em] text-white transition-colors hover:bg-purple-700 disabled:opacity-50"
+              className="shrink-0 rounded-md bg-purple-600 px-2.5 py-1 text-eyebrow font-black uppercase tracking-[0.12em] text-white transition-colors hover:bg-purple-700 disabled:opacity-50"
             >
               {pendingTodayTouchesExistingLine ? 'Update plan' : 'Add to plan'}
             </button>
@@ -1154,7 +1154,7 @@ export default function StationFbaInput({
                       void patchPlanLineQty(line, v);
                     }}
                     onClick={(e) => e.stopPropagation()}
-                    className="h-7 w-10 border-x border-gray-200 bg-white text-center text-[13px] font-black tabular-nums text-gray-900 outline-none [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+                    className="h-7 w-10 border-x border-gray-200 bg-white text-center text-sm font-black tabular-nums text-gray-900 outline-none [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
                   />
                   <button
                     type="button"

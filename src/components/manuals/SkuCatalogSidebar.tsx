@@ -150,10 +150,10 @@ function SelectedBanner({ detail }: { detail: SkuCatalogDetail }) {
           <img src={catalog.image_url} alt="" className="h-9 w-9 rounded-lg object-cover bg-gray-100 shrink-0" />
         )}
         <div className="min-w-0 flex-1">
-          <p className="text-[12px] font-black tracking-tight text-gray-900">
-            {catalog.sku} <span className="text-[9px] font-bold text-gray-400">— ZOHO</span>
+          <p className="text-label font-black tracking-tight text-gray-900">
+            {catalog.sku} <span className="text-eyebrow font-bold text-gray-400">— ZOHO</span>
           </p>
-          <p className="text-[10px] font-semibold text-gray-500">{catalog.product_title}</p>
+          <p className="text-micro font-semibold text-gray-500">{catalog.product_title}</p>
           {catalog.category && (
             <span className={`inline-block mt-1 ${microBadge} rounded-full border px-1.5 py-0.5 bg-white text-gray-600 border-gray-200`}>
               {catalog.category}
@@ -283,7 +283,7 @@ function EcwidPairingPanel({
   if (!ecwidItem) {
     return (
       <div className="px-3 py-6 text-center">
-        <p className="text-[10px] font-bold text-gray-400">Ecwid product not found or already paired</p>
+        <p className="text-micro font-bold text-gray-400">Ecwid product not found or already paired</p>
       </div>
     );
   }
@@ -295,8 +295,8 @@ function EcwidPairingPanel({
           className="mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-emerald-100">
           <Link2 className="h-6 w-6 text-emerald-600" />
         </motion.div>
-        <p className="text-[13px] font-black text-gray-900">Paired Successfully</p>
-        <p className="mt-1 text-[10px] font-semibold text-gray-400">{ecwidItem.display_name}</p>
+        <p className="text-sm font-black text-gray-900">Paired Successfully</p>
+        <p className="mt-1 text-micro font-semibold text-gray-400">{ecwidItem.display_name}</p>
       </div>
     );
   }
@@ -314,9 +314,9 @@ function EcwidPairingPanel({
             </div>
           )}
           <div className="min-w-0 flex-1">
-            <p className="text-[12px] font-black tracking-tight text-gray-900">{ecwidItem.display_name || 'Unnamed'}</p>
-            <p className="text-[10px] font-mono font-bold text-gray-500">Ecwid SKU: {ecwidItem.platform_sku || '—'}</p>
-            <p className="text-[10px] font-semibold text-gray-400">{ecwidItem.order_count} order{ecwidItem.order_count !== 1 ? 's' : ''}</p>
+            <p className="text-label font-black tracking-tight text-gray-900">{ecwidItem.display_name || 'Unnamed'}</p>
+            <p className="text-micro font-mono font-bold text-gray-500">Ecwid SKU: {ecwidItem.platform_sku || '—'}</p>
+            <p className="text-micro font-semibold text-gray-400">{ecwidItem.order_count} order{ecwidItem.order_count !== 1 ? 's' : ''}</p>
           </div>
         </div>
       </div>
@@ -349,12 +349,12 @@ function EcwidPairingPanel({
                   >
                     <div className="flex items-center gap-1.5">
                       {isSelected && <Check className="h-3 w-3 shrink-0 text-emerald-600" />}
-                      <span className="text-[11px] font-black text-gray-900">{sug.sku}</span>
+                      <span className="text-caption font-black text-gray-900">{sug.sku}</span>
                       <span className={`ml-auto shrink-0 rounded-full border px-1.5 py-0.5 ${microBadge} ${simTone}`}>
                         {simPct}%
                       </span>
                     </div>
-                    <p className="mt-0.5 truncate text-[10px] font-semibold text-gray-500">{sug.product_title}</p>
+                    <p className="mt-0.5 truncate text-micro font-semibold text-gray-500">{sug.product_title}</p>
                   </button>
                 );
               })}
@@ -373,7 +373,7 @@ function EcwidPairingPanel({
             value={zohoQuery}
             onChange={(e) => { setZohoQuery(e.target.value); setSelectedZohoId(null); }}
             placeholder="Search by SKU or product name..."
-            className="w-full rounded-lg border border-gray-200 bg-gray-50 py-2 pl-8 pr-3 text-[11px] font-bold text-gray-900 outline-none placeholder:text-gray-400 focus:border-blue-300 focus:bg-white focus:ring-2 focus:ring-blue-100"
+            className="w-full rounded-lg border border-gray-200 bg-gray-50 py-2 pl-8 pr-3 text-caption font-bold text-gray-900 outline-none placeholder:text-gray-400 focus:border-blue-300 focus:bg-white focus:ring-2 focus:ring-blue-100"
           />
           {searchingZoho && <Loader2 className="absolute right-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 animate-spin text-gray-400" />}
         </div>
@@ -383,7 +383,7 @@ function EcwidPairingPanel({
       <div className="flex-1 overflow-y-auto">
         {zohoResults.length === 0 && zohoQuery.trim() && !searchingZoho ? (
           <div className="px-4 py-10 text-center">
-            <p className="text-[10px] font-bold text-gray-400">No Zoho products found</p>
+            <p className="text-micro font-bold text-gray-400">No Zoho products found</p>
           </div>
         ) : (
           zohoResults.map((item) => {
@@ -399,12 +399,12 @@ function EcwidPairingPanel({
               >
                 <div className="flex items-center gap-2">
                   {isSelected && <Check className="h-3.5 w-3.5 shrink-0 text-emerald-600" />}
-                  <span className="text-[11px] font-black text-gray-900">{item.sku}</span>
+                  <span className="text-caption font-black text-gray-900">{item.sku}</span>
                   {item.category && (
                     <span className={`${microBadge} shrink-0 rounded bg-gray-100 px-1.5 py-0.5 text-gray-500`}>{item.category}</span>
                   )}
                 </div>
-                <p className="mt-0.5 truncate text-[10px] font-semibold text-gray-500">{item.product_title}</p>
+                <p className="mt-0.5 truncate text-micro font-semibold text-gray-500">{item.product_title}</p>
               </button>
             );
           })
@@ -419,7 +419,7 @@ function EcwidPairingPanel({
             type="button"
             onClick={handlePair}
             disabled={pairing}
-            className="flex w-full items-center justify-center gap-2 rounded-xl bg-gray-900 px-4 py-2.5 text-[10px] font-black uppercase tracking-[0.14em] text-white transition-colors hover:bg-gray-800 disabled:opacity-50"
+            className="flex w-full items-center justify-center gap-2 rounded-xl bg-gray-900 px-4 py-2.5 text-micro font-black uppercase tracking-[0.14em] text-white transition-colors hover:bg-gray-800 disabled:opacity-50"
           >
             {pairing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Link2 className="h-3.5 w-3.5" />}
             Pair to Zoho SKU
@@ -549,7 +549,7 @@ export function SkuCatalogSidebar({ basePath = '/manuals' }: { basePath?: string
 
       {isPairingMode && !ecwidRowId && (
         <div className="flex-1 flex items-center justify-center px-4">
-          <p className="text-[10px] font-bold text-gray-400 text-center">
+          <p className="text-micro font-bold text-gray-400 text-center">
             Select an Ecwid product from the table to pair
           </p>
         </div>
@@ -570,7 +570,7 @@ export function SkuCatalogSidebar({ basePath = '/manuals' }: { basePath?: string
 
           {!selectedId && !loadingDetail && (
             <div className="shrink-0 border-b border-gray-100 px-3 py-3">
-              <p className="text-[10px] font-bold text-gray-400 text-center">
+              <p className="text-micro font-bold text-gray-400 text-center">
                 Select a product from the table to manage
               </p>
             </div>

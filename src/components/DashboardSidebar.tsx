@@ -27,7 +27,6 @@ import { FbaSidebarPanel } from '@/components/fba/sidebar';
 import { SupportSidebarPanel } from '@/components/sidebar/SupportSidebarPanel';
 import { SettingsSidebarPanel } from '@/components/sidebar/SettingsSidebarPanel';
 import { WorkOrdersSidebarPanel } from '@/components/sidebar/WorkOrdersSidebarPanel';
-import { OperationsSidebarPanel } from '@/components/sidebar/OperationsSidebarPanel';
 import { ReplenishSidebarPanel } from '@/components/sidebar/ReplenishSidebarPanel';
 import { AuditLogSidebarPanel } from '@/components/sidebar/AuditLogSidebarPanel';
 import { useUIMode } from '@/design-system/providers/UIModeProvider';
@@ -82,19 +81,19 @@ function SignedInChip({ user }: { user: NonNullable<ReturnType<typeof useAuth>['
   return (
     <div className="flex items-center gap-2 rounded-xl border border-gray-200 bg-gray-50 px-2.5 py-2">
       <div
-        className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full text-[11px] font-bold text-white"
+        className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full text-caption font-bold text-white"
         style={{ backgroundColor: avatarBg }}
       >
         {initials || '?'}
       </div>
       <div className="min-w-0 flex-1">
         <div className="truncate text-xs font-semibold text-gray-900">{staffName}</div>
-        <div className="truncate text-[10px] uppercase tracking-wider text-gray-500">{role}</div>
+        <div className="truncate text-micro uppercase tracking-wider text-gray-500">{role}</div>
       </div>
       <button
         type="button"
         onClick={() => { void signOut(); }}
-        className="rounded-md px-2 py-1 text-[11px] font-medium text-gray-600 hover:bg-white hover:text-gray-900"
+        className="rounded-md px-2 py-1 text-caption font-medium text-gray-600 hover:bg-white hover:text-gray-900"
         aria-label="Sign out"
       >
         Sign out
@@ -124,113 +123,9 @@ function getSidebarTitle(pathname: string | null) {
     'previous-quarters': 'Quarters',
     admin: 'Admin',
     'audit-log': 'Audit Log',
-    manuals: 'Manuals',
-    ai: 'AI Chat',
     settings: 'Settings',
   };
   return titles[routeKey] ?? 'Home';
-}
-
-// ---------------------------------------------------------------------------
-// AI Chat sidebar panel
-// ---------------------------------------------------------------------------
-function AiSidebarPanel() {
-  const [connectionOk, setConnectionOk] = useState<boolean | null>(null);
-  const [backendInfo, setBackendInfo] = useState<string | null>(null);
-
-  const checkHealth = useCallback(async () => {
-    try {
-      const res = await fetch('/api/ai/openclaw-health');
-      const data = await res.json();
-      setConnectionOk(!!data.ok);
-      setBackendInfo(data.ok ? `${data.backend} · ${data.model}` : null);
-    } catch {
-      setConnectionOk(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    checkHealth();
-    const id = setInterval(checkHealth, 30_000);
-    return () => clearInterval(id);
-  }, [checkHealth]);
-
-  const handleNewChat = () => {
-    window.dispatchEvent(new CustomEvent('ai-new-chat'));
-  };
-
-  return (
-    <div className="h-full overflow-y-auto px-4 py-4 space-y-3">
-      {/* Connection status card */}
-      <div className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm">
-        <div className="flex items-center gap-3 mb-3">
-          <div className="flex h-9 w-9 items-center justify-center rounded-2xl bg-gradient-to-br from-blue-600 to-blue-700">
-            <Zap className="h-4 w-4 text-white" />
-          </div>
-          <div>
-            <p className={`${sectionLabel} text-gray-900`}>AI Assistant</p>
-            <p className="text-[9px] font-bold uppercase tracking-[0.3em] text-gray-500">OpenClaw Gateway</p>
-          </div>
-        </div>
-
-        {/* Status indicator */}
-        <div className="flex items-center gap-2 rounded-2xl border border-gray-100 bg-gray-50 px-3 py-2">
-          {connectionOk === null && (
-            <span className="inline-block h-2 w-2 rounded-full bg-gray-300 animate-pulse" />
-          )}
-          {connectionOk === true && (
-            <span className="relative flex h-2 w-2 flex-shrink-0">
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
-              <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500" />
-            </span>
-          )}
-          {connectionOk === false && (
-            <span className="inline-block h-2 w-2 flex-shrink-0 rounded-full bg-red-500" />
-          )}
-          <span className={`text-[9px] font-black uppercase tracking-[0.25em] ${
-            connectionOk === true ? 'text-emerald-600' :
-            connectionOk === false ? 'text-red-500' : 'text-gray-500'
-          }`}>
-            {connectionOk === null ? 'Checking…' :
-             connectionOk ? 'Backend online' : 'Backend offline'}
-          </span>
-        </div>
-
-        {backendInfo && (
-          <p className="mt-2 text-[9px] font-semibold text-gray-500 truncate" title={backendInfo}>
-            {backendInfo}
-          </p>
-        )}
-      </div>
-
-      {/* Actions */}
-      <div className="space-y-2">
-        <button
-          type="button"
-          onClick={handleNewChat}
-          className={`w-full flex items-center justify-center gap-2 rounded-2xl bg-gray-900 px-4 py-2.5 ${sectionLabel} text-white transition-colors hover:bg-black`}
-        >
-          New Chat
-        </button>
-        <button
-          type="button"
-          onClick={checkHealth}
-          className={`w-full flex items-center justify-center gap-2 rounded-2xl border border-gray-200 px-4 py-2 ${sectionLabel} text-gray-600 transition-colors hover:bg-gray-50`}
-        >
-          Refresh Status
-        </button>
-      </div>
-
-      {/* Info */}
-      <div className="rounded-2xl border border-gray-100 bg-gray-50 p-3">
-        <p className="text-[9px] font-bold uppercase tracking-[0.2em] text-gray-500 mb-1.5">How it works</p>
-        <p className="text-[10px] font-semibold leading-relaxed text-gray-500">
-          Messages route through OpenClaw Gateway (Qwen3:8b) for warehouse ops,
-          NemoClaw RAG for Bose manuals, and Ollama as fallback.
-        </p>
-      </div>
-    </div>
-  );
 }
 
 function SidebarContextPanel({ onBackToAppNav }: { onBackToAppNav?: () => void } = {}) {
@@ -358,10 +253,6 @@ function SidebarContextPanel({ onBackToAppNav }: { onBackToAppNav?: () => void }
     );
   }
 
-  if (routeKey === 'operations') {
-    return <OperationsSidebarPanel />;
-  }
-
   if (routeKey === 'admin') {
     const activeSection = (searchParams.get('section') as AdminSection) || 'overview';
     const validSection = ADMIN_SECTION_OPTIONS.some((item) => item.value === activeSection) ? activeSection : 'overview';
@@ -383,7 +274,6 @@ function SidebarContextPanel({ onBackToAppNav }: { onBackToAppNav?: () => void }
     );
   }
 
-  if (routeKey === 'ai') return <AiSidebarPanel />;
   if (routeKey === 'support') return <SupportSidebarPanel />;
   if (routeKey === 'settings') return <SettingsSidebarPanel />;
   if (routeKey === 'audit-log') return <AuditLogSidebarPanel />;
@@ -403,10 +293,6 @@ function SidebarContextPanel({ onBackToAppNav }: { onBackToAppNav?: () => void }
   if (routeKey === 'repair') return <WalkInSidebarPanel embedded hideSectionHeader />;
   if (routeKey === 'previous-quarters') return <QuarterSidebar hideSectionHeader />;
   if (routeKey === 'manuals-library') return <ManualsLibrarySidebar />;
-  // /manuals folds into /products — getSidebarRouteKey('/manuals') now returns
-  // 'products', so this routeKey === 'products' branch above renders
-  // ProductsSidebarPanel which embeds SkuCatalogSidebar on its Manuals view.
-  // Direct SkuCatalogSidebar mount is no longer needed.
 
   if (routeKey === 'tech') {
     // Identity from the verified session cookie. Proxy guarantees user.
@@ -457,7 +343,7 @@ function NavSection({
             }`}
           >
             <Icon className={`h-5 w-5 ${isActive ? 'text-white' : 'text-gray-500 group-hover:text-blue-500'}`} />
-            <span className="text-[11px] font-black uppercase tracking-wider">{item.label}</span>
+            <span className="text-caption font-black uppercase tracking-wider">{item.label}</span>
           </Link>
         );
       })}
@@ -596,19 +482,19 @@ export default function DashboardSidebar({ inDrawer = false, onNavigate }: { inD
             >
               {groupedNav.main.length > 0 && (
                 <motion.div variants={itemVariants}>
-                  <p className="px-1 pb-2 text-[9px] font-black uppercase tracking-[0.25em] text-blue-600">Main</p>
+                  <p className="px-1 pb-2 text-eyebrow font-black uppercase tracking-[0.25em] text-blue-600">Main</p>
                   <NavSection items={groupedNav.main} pathname={pathname} resolveHref={resolveHref} onNavigate={() => { setShowHomeNavigation(false); onNavigate?.(); }} />
                 </motion.div>
               )}
               {groupedNav.station.length > 0 && (
                 <motion.div variants={itemVariants}>
-                  <p className="px-1 pb-2 text-[9px] font-black uppercase tracking-[0.25em] text-gray-500">Stations</p>
+                  <p className="px-1 pb-2 text-eyebrow font-black uppercase tracking-[0.25em] text-gray-500">Stations</p>
                   <NavSection items={groupedNav.station} pathname={pathname} resolveHref={resolveHref} onNavigate={() => { setShowHomeNavigation(false); onNavigate?.(); }} />
                 </motion.div>
               )}
               {groupedNav.bottom.length > 0 && (
                 <motion.div variants={itemVariants}>
-                  <p className="px-1 pb-2 text-[9px] font-black uppercase tracking-[0.25em] text-gray-500">More</p>
+                  <p className="px-1 pb-2 text-eyebrow font-black uppercase tracking-[0.25em] text-gray-500">More</p>
                   <NavSection items={groupedNav.bottom} pathname={pathname} resolveHref={resolveHref} onNavigate={() => { setShowHomeNavigation(false); onNavigate?.(); }} />
                 </motion.div>
               )}

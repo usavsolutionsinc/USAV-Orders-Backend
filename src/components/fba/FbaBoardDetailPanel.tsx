@@ -130,11 +130,11 @@ function PlanEntryCard({
         <div className="flex min-w-0 flex-1 flex-col gap-0.5">
           <div className="flex items-center gap-2">
             <Calendar className="h-3 w-3 shrink-0 text-purple-500" />
-            <span className="text-[12px] font-black text-gray-900">
+            <span className="text-label font-black text-gray-900">
               {entry.shipment_ref || formatPlanDate(entry.due_date)}
             </span>
           </div>
-          <div className="flex items-center gap-3 pl-5 text-[11px]">
+          <div className="flex items-center gap-3 pl-5 text-caption">
             <span className="flex items-center gap-1 font-bold text-gray-500">
               <ClipboardList className="h-3 w-3 text-purple-400" />
               <span className="tabular-nums">{entry.expected_qty}</span>
@@ -143,7 +143,7 @@ function PlanEntryCard({
               <Check className="h-3 w-3 text-emerald-500" />
               <span className="tabular-nums">{entry.actual_qty}</span>
             </span>
-            <span className="text-[10px] font-bold text-gray-400">
+            <span className="text-micro font-bold text-gray-400">
               {formatCreatedAt(entry.plan_created_at)}
             </span>
           </div>
@@ -187,7 +187,7 @@ function PlanEntryCard({
             </div>
           </div>
 
-          <dl className="space-y-1 text-[11px]">
+          <dl className="space-y-1 text-caption">
             {entry.destination_fc && (
               <div className="flex justify-between gap-3">
                 <dt className="font-semibold text-gray-500">Destination FC</dt>
@@ -219,7 +219,7 @@ function PlanEntryCard({
               <p className={`mb-1.5 ${sectionLabel}`}>Tracking</p>
               <div className="space-y-0.5">
                 {entry.tracking_numbers.map((t, i) => (
-                  <p key={i} className="font-mono text-[10px] font-bold text-gray-600">
+                  <p key={i} className="font-mono text-micro font-bold text-gray-600">
                     {t.carrier && <span className="text-gray-400">{t.carrier} </span>}
                     {t.tracking_number}
                   </p>
@@ -232,24 +232,24 @@ function PlanEntryCard({
             <button
               type="button"
               onClick={() => setConfirmDelete(true)}
-              className="flex items-center gap-1.5 text-[10px] font-bold text-red-500 transition-colors hover:text-red-700"
+              className="flex items-center gap-1.5 text-micro font-bold text-red-500 transition-colors hover:text-red-700"
             >
               <Trash2 className="h-3 w-3" />
               Remove entry
             </button>
           ) : (
             <div className="rounded-lg border border-red-200 bg-red-50 p-3">
-              <p className="text-[11px] font-bold text-red-800">
+              <p className="text-caption font-bold text-red-800">
                 Remove this entry from {entry.shipment_ref || 'plan'}?
               </p>
               {deleteError && (
-                <p className="mt-1 text-[10px] font-semibold text-red-600">{deleteError}</p>
+                <p className="mt-1 text-micro font-semibold text-red-600">{deleteError}</p>
               )}
               <div className="mt-2 grid grid-cols-2 gap-2">
                 <button
                   type="button"
                   onClick={() => { setConfirmDelete(false); setDeleteError(null); }}
-                  className="h-7 rounded-md border border-gray-200 bg-white text-[9px] font-black uppercase tracking-wider text-gray-700 hover:bg-gray-50"
+                  className="h-7 rounded-md border border-gray-200 bg-white text-eyebrow font-black uppercase tracking-wider text-gray-700 hover:bg-gray-50"
                 >
                   Cancel
                 </button>
@@ -257,7 +257,7 @@ function PlanEntryCard({
                   type="button"
                   onClick={() => void handleDelete()}
                   disabled={deleting}
-                  className="inline-flex h-7 items-center justify-center gap-1 rounded-md bg-red-600 text-[9px] font-black uppercase tracking-wider text-white hover:bg-red-700 disabled:opacity-50"
+                  className="inline-flex h-7 items-center justify-center gap-1 rounded-md bg-red-600 text-eyebrow font-black uppercase tracking-wider text-white hover:bg-red-700 disabled:opacity-50"
                 >
                   {deleting ? <Loader2 className="h-2.5 w-2.5 animate-spin" /> : <Trash2 className="h-2.5 w-2.5" />}
                   {deleting ? 'Removing...' : 'Remove'}
@@ -317,7 +317,7 @@ function FbaDeleteControl({ entries, onDeleted }: { entries: PlanEntry[]; onDele
   return (
     <div className="space-y-2">
       {error && (
-        <p className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-[10px] font-semibold text-red-700">
+        <p className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-micro font-semibold text-red-700">
           {error}
         </p>
       )}
@@ -325,7 +325,7 @@ function FbaDeleteControl({ entries, onDeleted }: { entries: PlanEntry[]; onDele
         type="button"
         onClick={() => void handleClick()}
         disabled={deleting}
-        className="w-full h-10 inline-flex items-center justify-center rounded-xl bg-red-600 hover:bg-red-700 text-white text-[10px] font-black uppercase tracking-wider disabled:opacity-50"
+        className="w-full h-10 inline-flex items-center justify-center rounded-xl bg-red-600 hover:bg-red-700 text-white text-micro font-black uppercase tracking-wider disabled:opacity-50"
       >
         {deleting ? 'Deleting...' : isArmed ? 'Click Again To Confirm' : 'Delete Permanently'}
       </button>
@@ -398,14 +398,14 @@ export function FbaBoardDetailPanel({
       <div className="shrink-0 overflow-hidden bg-white">
         {/* Row 1: label */}
         <div className="px-6 pt-4 pb-0">
-          <p className="text-[9px] font-black uppercase tracking-[0.3em] text-purple-700">
+          <p className="text-eyebrow font-black uppercase tracking-[0.3em] text-purple-700">
             FBA Item
           </p>
         </div>
 
         {/* Row 2: title */}
         <div className="px-6 pt-1.5 pb-2 border-b border-gray-200 h-[100px]">
-          <h2 className="line-clamp-4 text-[17px] font-black leading-snug tracking-tight text-gray-950">
+          <h2 className="line-clamp-4 text-lg font-black leading-snug tracking-tight text-gray-950">
             {headerTitle}
           </h2>
         </div>
@@ -424,7 +424,7 @@ export function FbaBoardDetailPanel({
 
         {/* Row 4: FNSKU + totals */}
         <div className="flex items-center justify-between px-6 pt-2 pb-2">
-          <div className="flex items-center gap-4 text-[11px]">
+          <div className="flex items-center gap-4 text-caption">
             <span className="flex items-center gap-1 font-bold text-gray-600">
               <ClipboardList className="h-3 w-3 text-purple-500" />
               <span className="tabular-nums">{totalExpected}</span>
@@ -457,7 +457,7 @@ export function FbaBoardDetailPanel({
           {/* Static details */}
           <section className="py-4">
             <p className={`mb-2 ${sectionLabel}`}>Details</p>
-            <dl className="space-y-1 text-[12px]">
+            <dl className="space-y-1 text-label">
               <div className="flex items-center justify-between gap-4">
                 <dt className="font-semibold text-gray-500">Plans</dt>
                 <dd className="font-black text-gray-800">{entries.length}</dd>
@@ -478,7 +478,7 @@ export function FbaBoardDetailPanel({
                 <Loader2 className="h-5 w-5 animate-spin text-gray-400" />
               </div>
             ) : entries.length === 0 ? (
-              <p className="py-4 text-center text-[11px] font-bold text-gray-400">
+              <p className="py-4 text-center text-caption font-bold text-gray-400">
                 No active plan entries
               </p>
             ) : (
@@ -509,7 +509,7 @@ export function FbaBoardDetailPanel({
                         .map((t) => [t.tracking_number, t]),
                     ).values(),
                   ).map((t, i) => (
-                    <p key={i} className="font-mono text-[11px] font-bold text-gray-700">
+                    <p key={i} className="font-mono text-caption font-bold text-gray-700">
                       {t.carrier && <span className="text-gray-500">{t.carrier} </span>}
                       {t.tracking_number}
                     </p>

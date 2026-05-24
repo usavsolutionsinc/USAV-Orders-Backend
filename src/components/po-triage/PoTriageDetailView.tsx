@@ -46,7 +46,7 @@ export function PoTriageDetailView({ id }: PoTriageDetailViewProps) {
       <div className="flex h-full items-center justify-center bg-gray-50">
         <div className="max-w-md text-center">
           <Mail className="mx-auto h-8 w-8 text-gray-300" />
-          <h1 className="mt-3 text-[15px] font-semibold text-gray-700">PO Mailbox</h1>
+          <h1 className="mt-3 text-base font-semibold text-gray-700">PO Mailbox</h1>
           <p className="mt-1 text-[12.5px] text-gray-500">
             Scan, reconcile, and triage purchase-order emails from the sidebar →
           </p>
@@ -70,7 +70,7 @@ export function PoTriageDetailView({ id }: PoTriageDetailViewProps) {
   if (error) {
     return (
       <div className="flex h-full items-center justify-center bg-gray-50">
-        <div className="max-w-md rounded-md border border-amber-200 bg-amber-50 px-4 py-3 text-[13px] text-amber-800">
+        <div className="max-w-md rounded-md border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
           {error}
         </div>
       </div>

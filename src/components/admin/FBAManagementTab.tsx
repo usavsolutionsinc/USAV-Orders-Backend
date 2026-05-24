@@ -168,13 +168,13 @@ export function FBAManagementTab(_props: FBAManagementTabProps = {}) {
           <div className="mx-auto max-w-2xl space-y-5">
             <header className="flex items-start justify-between gap-3">
               <div className="min-w-0">
-                <p className="text-[10px] font-bold uppercase tracking-widest text-gray-500">FNSKU</p>
+                <p className="text-micro font-bold uppercase tracking-widest text-gray-500">FNSKU</p>
                 <h2 className="mt-0.5 break-all font-mono text-xl font-bold text-gray-900">
                   {detail.fnsku}
                 </h2>
               </div>
               <span
-                className={`inline-flex flex-shrink-0 rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider ${
+                className={`inline-flex flex-shrink-0 rounded-full px-2.5 py-1 text-micro font-bold uppercase tracking-wider ${
                   isStub ? 'bg-amber-50 text-amber-700' : 'bg-emerald-50 text-emerald-700'
                 }`}
               >
@@ -191,7 +191,7 @@ export function FBAManagementTab(_props: FBAManagementTabProps = {}) {
                     setEditTitle(e.target.value);
                     setIsEditing(true);
                   }}
-                  className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-[13px] outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-500/15"
+                  className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-500/15"
                 />
               </FieldRow>
               <FieldRow label="ASIN">
@@ -202,7 +202,7 @@ export function FBAManagementTab(_props: FBAManagementTabProps = {}) {
                     setEditAsin(e.target.value);
                     setIsEditing(true);
                   }}
-                  className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 font-mono text-[12px] outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-500/15"
+                  className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 font-mono text-label outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-500/15"
                 />
               </FieldRow>
               <FieldRow label="SKU">
@@ -213,7 +213,7 @@ export function FBAManagementTab(_props: FBAManagementTabProps = {}) {
                     setEditSku(e.target.value);
                     setIsEditing(true);
                   }}
-                  className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 font-mono text-[12px] outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-500/15"
+                  className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 font-mono text-label outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-500/15"
                 />
               </FieldRow>
 
@@ -227,7 +227,7 @@ export function FBAManagementTab(_props: FBAManagementTabProps = {}) {
                       setEditSku(detail.sku ?? '');
                       setIsEditing(false);
                     }}
-                    className="rounded-lg bg-gray-100 px-3 py-1.5 text-[12px] font-semibold text-gray-700 hover:bg-gray-200"
+                    className="rounded-lg bg-gray-100 px-3 py-1.5 text-label font-semibold text-gray-700 hover:bg-gray-200"
                   >
                     Cancel
                   </button>
@@ -235,7 +235,7 @@ export function FBAManagementTab(_props: FBAManagementTabProps = {}) {
                     type="button"
                     disabled={updateMutation.isPending}
                     onClick={() => updateMutation.mutate()}
-                    className="rounded-lg bg-blue-600 px-3 py-1.5 text-[12px] font-semibold text-white hover:bg-blue-700 disabled:opacity-50"
+                    className="rounded-lg bg-blue-600 px-3 py-1.5 text-label font-semibold text-white hover:bg-blue-700 disabled:opacity-50"
                   >
                     {updateMutation.isPending ? 'Saving…' : 'Save changes'}
                   </button>
@@ -255,10 +255,10 @@ export function FBAManagementTab(_props: FBAManagementTabProps = {}) {
             aria-label="Close FNSKU upload instructions"
           />
           <div className="relative w-full max-w-md rounded-2xl border border-gray-200 bg-white p-5 space-y-4">
-            <h3 className="text-[12px] font-bold uppercase tracking-wider text-gray-900">
+            <h3 className="text-label font-bold uppercase tracking-wider text-gray-900">
               Upload FNSKU CSV
             </h3>
-            <p className="text-[12px] text-gray-700 leading-relaxed">
+            <p className="text-label text-gray-700 leading-relaxed">
               Include <span className="font-bold">fnsku</span>,{' '}
               <span className="font-bold">product_title</span>,{' '}
               <span className="font-bold">asin</span>, and <span className="font-bold">sku</span>{' '}
@@ -269,7 +269,7 @@ export function FBAManagementTab(_props: FBAManagementTabProps = {}) {
               <button
                 type="button"
                 onClick={() => setIsUploadInfoOpen(false)}
-                className="rounded-xl bg-gray-100 px-3 py-2 text-[12px] font-semibold text-gray-700 hover:bg-gray-200"
+                className="rounded-xl bg-gray-100 px-3 py-2 text-label font-semibold text-gray-700 hover:bg-gray-200"
               >
                 Cancel
               </button>
@@ -279,7 +279,7 @@ export function FBAManagementTab(_props: FBAManagementTabProps = {}) {
                   setIsUploadInfoOpen(false);
                   fileInputRef.current?.click();
                 }}
-                className="rounded-xl bg-emerald-600 px-3 py-2 text-[12px] font-semibold text-white hover:bg-emerald-700"
+                className="rounded-xl bg-emerald-600 px-3 py-2 text-label font-semibold text-white hover:bg-emerald-700"
               >
                 Choose File
               </button>
@@ -298,10 +298,10 @@ export function FBAManagementTab(_props: FBAManagementTabProps = {}) {
           />
           <div className="relative w-full max-w-lg rounded-2xl border border-gray-200 bg-white p-5 space-y-4">
             <div>
-              <h3 className="text-[12px] font-bold uppercase tracking-wider text-gray-900">
+              <h3 className="text-label font-bold uppercase tracking-wider text-gray-900">
                 Add FNSKU Mapping
               </h3>
-              <p className="mt-1 text-[11px] text-gray-600">
+              <p className="mt-1 text-caption text-gray-600">
                 Create one catalog row manually when you don&apos;t want to use a CSV upload.
               </p>
             </div>
@@ -312,7 +312,7 @@ export function FBAManagementTab(_props: FBAManagementTabProps = {}) {
                   value={productTitle}
                   onChange={(e) => setProductTitle(e.target.value)}
                   placeholder="Enter product title"
-                  className="w-full rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 text-[12px] outline-none focus:border-blue-500"
+                  className="w-full rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 text-label outline-none focus:border-blue-500"
                 />
               </Field>
               <Field label="ASIN">
@@ -321,7 +321,7 @@ export function FBAManagementTab(_props: FBAManagementTabProps = {}) {
                   value={asin}
                   onChange={(e) => setAsin(e.target.value)}
                   placeholder="Enter ASIN"
-                  className="w-full rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 text-[12px] outline-none focus:border-blue-500"
+                  className="w-full rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 text-label outline-none focus:border-blue-500"
                 />
               </Field>
               <Field label="SKU">
@@ -330,7 +330,7 @@ export function FBAManagementTab(_props: FBAManagementTabProps = {}) {
                   value={sku}
                   onChange={(e) => setSku(e.target.value)}
                   placeholder="Enter SKU"
-                  className="w-full rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 text-[12px] outline-none focus:border-blue-500"
+                  className="w-full rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 text-label outline-none focus:border-blue-500"
                 />
               </Field>
               <Field label="FNSKU">
@@ -339,7 +339,7 @@ export function FBAManagementTab(_props: FBAManagementTabProps = {}) {
                   value={fnsku}
                   onChange={(e) => setFnsku(e.target.value.toUpperCase())}
                   placeholder="Enter FNSKU"
-                  className="w-full rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 text-[12px] outline-none focus:border-blue-500"
+                  className="w-full rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 text-label outline-none focus:border-blue-500"
                 />
               </Field>
             </div>
@@ -347,7 +347,7 @@ export function FBAManagementTab(_props: FBAManagementTabProps = {}) {
               <button
                 type="button"
                 onClick={() => setIsAddOpen(false)}
-                className="rounded-xl bg-gray-100 px-3 py-2 text-[12px] font-semibold text-gray-700 hover:bg-gray-200"
+                className="rounded-xl bg-gray-100 px-3 py-2 text-label font-semibold text-gray-700 hover:bg-gray-200"
               >
                 Cancel
               </button>
@@ -362,7 +362,7 @@ export function FBAManagementTab(_props: FBAManagementTabProps = {}) {
                     fnsku,
                   })
                 }
-                className="rounded-xl bg-blue-600 px-3 py-2 text-[12px] font-semibold text-white hover:bg-blue-700 disabled:opacity-50"
+                className="rounded-xl bg-blue-600 px-3 py-2 text-label font-semibold text-white hover:bg-blue-700 disabled:opacity-50"
               >
                 {createMutation.isPending ? 'Saving…' : 'Save Row'}
               </button>
@@ -377,7 +377,7 @@ export function FBAManagementTab(_props: FBAManagementTabProps = {}) {
 function FieldRow({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div className="grid grid-cols-[120px_1fr] items-center gap-3">
-      <p className="text-[10px] font-bold uppercase tracking-widest text-gray-500">{label}</p>
+      <p className="text-micro font-bold uppercase tracking-widest text-gray-500">{label}</p>
       {children}
     </div>
   );
@@ -386,7 +386,7 @@ function FieldRow({ label, children }: { label: string; children: React.ReactNod
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <label className="space-y-1">
-      <span className="block text-[10px] font-bold uppercase tracking-wider text-gray-700">
+      <span className="block text-micro font-bold uppercase tracking-wider text-gray-700">
         {label}
       </span>
       {children}

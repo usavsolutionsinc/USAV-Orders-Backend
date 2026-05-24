@@ -27,10 +27,27 @@ const config: Config = {
                     800: '#0f1f3d',
                     900: '#0c1b33',
                 },
+                // Semantic aliases bound to design-system CSS variables.
+                // Dark mode swaps via [data-theme='dark'] in globals.css.
+                'text-default': 'var(--ds-color-text-primary)',
+                'text-muted': 'var(--ds-color-text-secondary)',
+                'surface-canvas': 'var(--ds-color-background-canvas)',
+                'surface-card': 'var(--ds-color-background-surface)',
+                'border-soft': 'var(--ds-color-border-subtle)',
             },
             fontFamily: {
                 sans: ['var(--ds-font-sans)', 'DM Sans', 'Inter', 'system-ui', 'sans-serif'],
                 mono: ['var(--ds-font-mono)', 'SFMono-Regular', 'SF Mono', 'Consolas', 'monospace'],
+            },
+            fontSize: {
+                // Sub-12px scale used pervasively in station/sidebar UI.
+                // `mini` and `eyebrow` are the uppercase-tracker patterns
+                // (font-black uppercase tracking-widest) — not general body text.
+                mini: ['8px', { lineHeight: '1.2' }],
+                eyebrow: ['9px', { lineHeight: '1.2' }],
+                micro: ['10px', { lineHeight: '1.2' }],
+                caption: ['11px', { lineHeight: '1.3' }],
+                label: ['12px', { lineHeight: '1.4' }],
             },
             borderRadius: {
                 station: '8px',

@@ -74,16 +74,16 @@ export function MarkAsShippedForm({
       />
 
       <div>
-        <span className="text-[9px] font-black uppercase tracking-[0.14em] text-emerald-800/80 block mb-1">
+        <span className="text-eyebrow font-black uppercase tracking-[0.14em] text-emerald-800/80 block mb-1">
           Date &amp; Time
         </span>
         <input
           type="datetime-local"
           value={packedAt}
           onChange={(e) => setPackedAt(e.target.value)}
-          className="w-full h-8 rounded-lg border border-emerald-200 bg-white px-2 text-[10px] font-bold text-gray-900 outline-none"
+          className="w-full h-8 rounded-lg border border-emerald-200 bg-white px-2 text-micro font-bold text-gray-900 outline-none"
         />
-        <p className="mt-1 text-[9px] font-bold text-gray-600">
+        <p className="mt-1 text-eyebrow font-bold text-gray-600">
           {packedAt ? formatDateTimePST(new Date(packedAt)) : 'N/A'} ·{' '}
           {selectedPackerId ? getStaffName(selectedPackerId) : 'No packer'}
         </p>
@@ -93,12 +93,12 @@ export function MarkAsShippedForm({
         type="button"
         onClick={handleConfirm}
         disabled={isMarkingShipped}
-        className="w-full h-8 inline-flex items-center justify-center rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-[9px] font-black uppercase tracking-wider disabled:opacity-50"
+        className="w-full h-8 inline-flex items-center justify-center rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-eyebrow font-black uppercase tracking-wider disabled:opacity-50"
       >
         {isMarkingShipped ? 'Saving...' : 'Confirm Mark As Shipped'}
       </button>
 
-      {error && <p className="text-[9px] font-bold text-red-600">{error}</p>}
+      {error && <p className="text-eyebrow font-bold text-red-600">{error}</p>}
     </div>
   );
 }

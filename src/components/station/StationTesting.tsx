@@ -382,7 +382,7 @@ export default function StationTesting({
           </div>
 
           <div className="mt-auto pt-6 border-t border-gray-50 text-center">
-            <p className="text-[9px] font-black text-gray-300 uppercase tracking-[0.3em]">USAV TECH v2.6</p>
+            <p className="text-eyebrow font-black text-gray-300 uppercase tracking-[0.3em]">USAV TECH v2.6</p>
           </div>
         </div>
 

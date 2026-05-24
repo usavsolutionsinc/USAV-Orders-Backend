@@ -170,7 +170,7 @@ export function QuickAddManualForm({ itemNumber, onSaved }: QuickAddManualFormPr
               onKeyDown={(e) => { if (e.key === 'Enter') googleInputRef.current?.focus(); }}
               placeholder="Enter item number first…"
               autoComplete="off"
-              className="h-8 w-full rounded-lg border border-blue-200 bg-white px-2.5 text-[11px] font-bold text-gray-800 outline-none focus:ring-2 focus:ring-blue-300 transition"
+              className="h-8 w-full rounded-lg border border-blue-200 bg-white px-2.5 text-caption font-bold text-gray-800 outline-none focus:ring-2 focus:ring-blue-300 transition"
             />
           </div>
         )}
@@ -192,7 +192,7 @@ export function QuickAddManualForm({ itemNumber, onSaved }: QuickAddManualFormPr
               placeholder={itemNumberReady ? 'Paste Drive link or File ID' : 'Enter item number first…'}
               disabled={!itemNumberReady}
               autoComplete="off"
-              className="h-8 flex-1 rounded-lg border border-blue-200 bg-white px-2.5 text-[11px] font-bold text-gray-800 outline-none focus:ring-2 focus:ring-blue-300 disabled:bg-gray-100 disabled:text-gray-500 transition"
+              className="h-8 flex-1 rounded-lg border border-blue-200 bg-white px-2.5 text-caption font-bold text-gray-800 outline-none focus:ring-2 focus:ring-blue-300 disabled:bg-gray-100 disabled:text-gray-500 transition"
             />
             {/* Paste button */}
             <button

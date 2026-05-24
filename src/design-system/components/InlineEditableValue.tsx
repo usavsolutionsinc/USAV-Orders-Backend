@@ -64,7 +64,7 @@ export function InlineEditableValue({
 
   if (!editable) {
     return (
-      <p className={`text-[13px] font-bold text-gray-900 ${monospace ? 'font-mono' : ''} ${valueClassName}`.trim()}>
+      <p className={`text-sm font-bold text-gray-900 ${monospace ? 'font-mono' : ''} ${valueClassName}`.trim()}>
         {displayValue || placeholder}
       </p>
     );
@@ -106,7 +106,7 @@ export function InlineEditableValue({
               }
             }}
             className={[
-              'h-7 w-full border-0 border-b-2 bg-transparent px-0 pb-0.5 pt-0 text-[13px] font-bold text-gray-900 outline-none',
+              'h-7 w-full border-0 border-b-2 bg-transparent px-0 pb-0.5 pt-0 text-sm font-bold text-gray-900 outline-none',
               monospace ? 'font-mono' : '',
               focusToneClassName[tone],
               inputClassName,
@@ -116,7 +116,7 @@ export function InlineEditableValue({
         ) : (
           <button type="button" onClick={() => setIsEditing(true)} className="block w-full py-0 text-left">
             <span
-              className={`block truncate text-[13px] font-bold text-gray-900 ${monospace ? 'font-mono' : ''} ${valueClassName}`.trim()}
+              className={`block truncate text-sm font-bold text-gray-900 ${monospace ? 'font-mono' : ''} ${valueClassName}`.trim()}
             >
               {displayValue || placeholder}
             </span>

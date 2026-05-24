@@ -161,7 +161,7 @@ export function AuditTimeline(props: Props) {
             History
           </h2>
           {!loading && events.length > 0 && (
-            <span className="text-[10px] text-slate-400">{events.length} events</span>
+            <span className="text-micro text-slate-400">{events.length} events</span>
           )}
         </header>
       )}
@@ -195,27 +195,27 @@ export function AuditTimeline(props: Props) {
               >
                 <div className="min-w-0">
                   <span
-                    className={`inline-block rounded-sm px-1.5 py-px text-[9px] font-bold uppercase tracking-wider ${SOURCE_BADGE[ev.source]}`}
+                    className={`inline-block rounded-sm px-1.5 py-px text-eyebrow font-bold uppercase tracking-wider ${SOURCE_BADGE[ev.source]}`}
                     title={ev.source}
                   >
                     {SOURCE_LABEL[ev.source]}
                   </span>
                   <div className="mt-1.5 flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
-                    <span className="font-mono text-[12px] font-semibold text-slate-900">
+                    <span className="font-mono text-label font-semibold text-slate-900">
                       {ev.kind}
                     </span>
                     {ev.sku && (
-                      <span className="font-mono text-[11px] text-slate-600">
+                      <span className="font-mono text-caption text-slate-600">
                         {ev.sku}
                       </span>
                     )}
                     {ev.bin_code && (
-                      <span className="font-mono text-[11px] text-slate-600">
+                      <span className="font-mono text-caption text-slate-600">
                         @ {ev.bin_code}
                       </span>
                     )}
                     {ev.reason_code && (
-                      <span className="rounded-sm bg-slate-100 px-1 py-px text-[10px] text-slate-600">
+                      <span className="rounded-sm bg-slate-100 px-1 py-px text-micro text-slate-600">
                         {ev.reason_code}
                       </span>
                     )}
@@ -226,7 +226,7 @@ export function AuditTimeline(props: Props) {
                       {diffs.map((d, i) => (
                         <li
                           key={i}
-                          className="font-mono text-[11px] text-slate-700"
+                          className="font-mono text-caption text-slate-700"
                         >
                           {d}
                         </li>
@@ -235,10 +235,10 @@ export function AuditTimeline(props: Props) {
                   )}
 
                   {ev.note && (
-                    <p className="mt-1 text-[11px] italic text-slate-500">{ev.note}</p>
+                    <p className="mt-1 text-caption italic text-slate-500">{ev.note}</p>
                   )}
 
-                  <div className="mt-1 flex flex-wrap items-center gap-x-2 text-[10px] text-slate-500">
+                  <div className="mt-1 flex flex-wrap items-center gap-x-2 text-micro text-slate-500">
                     <span className="font-semibold text-slate-700">
                       {ev.actor_name ?? 'Unknown'}
                     </span>

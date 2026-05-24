@@ -87,12 +87,12 @@ export function FbaFnskuDirectoryPanel({
   const inner = (
     <>
       <div className="grid grid-cols-[minmax(0,1fr)_92px_92px_120px] gap-0 px-4 py-3 border-b border-gray-100 bg-gray-50">
-        <div className="min-w-0 pr-3 text-[10px] font-black uppercase tracking-widest text-gray-500 truncate">
+        <div className="min-w-0 pr-3 text-micro font-black uppercase tracking-widest text-gray-500 truncate">
           Product Title
         </div>
-        <div className="pr-3 text-[10px] font-black uppercase tracking-widest text-gray-500 text-right">ASIN</div>
-        <div className="px-0 text-[10px] font-black uppercase tracking-widest text-gray-500 text-right">SKU</div>
-        <div className="px-0 text-[10px] font-black uppercase tracking-widest text-gray-500 text-right">FNSKU</div>
+        <div className="pr-3 text-micro font-black uppercase tracking-widest text-gray-500 text-right">ASIN</div>
+        <div className="px-0 text-micro font-black uppercase tracking-widest text-gray-500 text-right">SKU</div>
+        <div className="px-0 text-micro font-black uppercase tracking-widest text-gray-500 text-right">FNSKU</div>
       </div>
 
       {isLoading ? (
@@ -125,7 +125,7 @@ export function FbaFnskuDirectoryPanel({
               <button
                 type="button"
                 onClick={() => copyValue(row.product_title)}
-                className="min-w-0 w-full pr-3 block text-left text-[11px] font-bold text-gray-900 truncate hover:text-blue-700"
+                className="min-w-0 w-full pr-3 block text-left text-caption font-bold text-gray-900 truncate hover:text-blue-700"
                 title={row.product_title || ''}
               >
                 {row.product_title || '-'}
@@ -134,7 +134,7 @@ export function FbaFnskuDirectoryPanel({
                 <button
                   type="button"
                   onClick={() => copyValue(row.asin)}
-                  className="w-full text-[11px] font-mono font-bold text-gray-700 truncate text-right hover:text-blue-700"
+                  className="w-full text-caption font-mono font-bold text-gray-700 truncate text-right hover:text-blue-700"
                   title={row.asin || ''}
                 >
                   {row.asin || '-'}
@@ -145,7 +145,7 @@ export function FbaFnskuDirectoryPanel({
                       href={`https://www.amazon.com/dp/${encodeURIComponent(String(row.asin).trim())}`}
                       target="_blank"
                       rel="noreferrer"
-                      className="pointer-events-auto inline-flex items-center h-8 px-3 rounded-lg bg-white border border-gray-200 shadow-sm text-[9px] font-black uppercase tracking-wider text-gray-700 hover:bg-gray-50 whitespace-nowrap"
+                      className="pointer-events-auto inline-flex items-center h-8 px-3 rounded-lg bg-white border border-gray-200 shadow-sm text-eyebrow font-black uppercase tracking-wider text-gray-700 hover:bg-gray-50 whitespace-nowrap"
                       onClick={(e) => e.stopPropagation()}
                     >
                       Open on Amazon
@@ -156,7 +156,7 @@ export function FbaFnskuDirectoryPanel({
               <button
                 type="button"
                 onClick={() => copyValue(row.sku)}
-                className="w-full px-0 text-[11px] font-mono font-bold text-gray-700 truncate text-right hover:text-blue-700"
+                className="w-full px-0 text-caption font-mono font-bold text-gray-700 truncate text-right hover:text-blue-700"
                 title={row.sku || ''}
               >
                 {row.sku || '-'}
@@ -164,7 +164,7 @@ export function FbaFnskuDirectoryPanel({
               <button
                 type="button"
                 onClick={() => copyValue(row.fnsku)}
-                className="w-full px-0 text-[11px] font-mono font-bold text-blue-700 truncate text-right hover:text-blue-800"
+                className="w-full px-0 text-caption font-mono font-bold text-blue-700 truncate text-right hover:text-blue-800"
                 title={row.fnsku || ''}
               >
                 {row.fnsku || '-'}
@@ -176,7 +176,7 @@ export function FbaFnskuDirectoryPanel({
       )}
 
       {copiedValue ? (
-        <div className="mx-4 mb-3 inline-flex items-center gap-1.5 px-2 py-1 rounded-lg bg-emerald-50 border border-emerald-200 text-[10px] font-black uppercase tracking-widest text-emerald-700">
+        <div className="mx-4 mb-3 inline-flex items-center gap-1.5 px-2 py-1 rounded-lg bg-emerald-50 border border-emerald-200 text-micro font-black uppercase tracking-widest text-emerald-700">
           <Check className="w-3 h-3" />
           Copied
         </div>

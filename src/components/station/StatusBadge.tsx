@@ -43,7 +43,7 @@ export function StatusBadge({ label, variant = 'muted', className }: StatusBadge
       )}
     >
       <span className={cn('w-[5px] h-[5px] rounded-full shrink-0', v.dot)} />
-      <span className={cn('text-[9px] font-bold tracking-[0.12em] uppercase font-sans', v.text)}>
+      <span className={cn('text-eyebrow font-bold tracking-[0.12em] uppercase font-sans', v.text)}>
         {label}
       </span>
     </span>

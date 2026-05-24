@@ -131,7 +131,7 @@ export function AuditLogDailyReport({ section }: { section: Section }) {
   return (
     <section className="flex h-full min-h-0 w-full flex-col overflow-hidden bg-gray-50">
       <div className="border-b border-gray-200 bg-white px-6 py-4">
-        <p className="text-[10px] font-bold uppercase tracking-widest text-emerald-700">
+        <p className="text-micro font-bold uppercase tracking-widest text-emerald-700">
           {section} audit · daily report
         </p>
         <h2 className="mt-0.5 text-base font-bold text-gray-900">
@@ -162,7 +162,7 @@ export function AuditLogDailyReport({ section }: { section: Section }) {
                 />
               ))}
             </div>
-            <div className="mt-1 flex justify-between text-[9px] tabular-nums text-gray-400">
+            <div className="mt-1 flex justify-between text-eyebrow tabular-nums text-gray-400">
               <span>0:00</span>
               <span>6:00</span>
               <span>12:00</span>
@@ -174,11 +174,11 @@ export function AuditLogDailyReport({ section }: { section: Section }) {
           {/* Top actions */}
           <Card title="Top actions">
             {data.by_action.length === 0 ? (
-              <p className="text-[11px] text-gray-400">No events.</p>
+              <p className="text-caption text-gray-400">No events.</p>
             ) : (
               <ul className="space-y-1.5">
                 {data.by_action.slice(0, 8).map((a) => (
-                  <li key={a.action} className="flex items-center gap-2 text-[11px]">
+                  <li key={a.action} className="flex items-center gap-2 text-caption">
                     <span className="w-32 shrink-0 truncate font-semibold text-gray-800">
                       {actionLabel(a.action)}
                     </span>
@@ -200,7 +200,7 @@ export function AuditLogDailyReport({ section }: { section: Section }) {
           {/* Top staff */}
           <Card title="Top staff">
             {data.by_staff.length === 0 ? (
-              <p className="text-[11px] text-gray-400">No events.</p>
+              <p className="text-caption text-gray-400">No events.</p>
             ) : (
               <ul className="space-y-1.5">
                 {data.by_staff.map((s) => (
@@ -208,7 +208,7 @@ export function AuditLogDailyReport({ section }: { section: Section }) {
                     <button
                       type="button"
                       onClick={() => setParam('staffId', String(s.staff_id))}
-                      className="flex w-full items-center gap-2 text-left text-[11px] hover:opacity-80"
+                      className="flex w-full items-center gap-2 text-left text-caption hover:opacity-80"
                     >
                       <span className="w-32 shrink-0 truncate font-semibold text-gray-800">
                         {s.name ?? `#${s.staff_id}`}
@@ -232,7 +232,7 @@ export function AuditLogDailyReport({ section }: { section: Section }) {
           {/* Top items */}
           <Card title={`Top ${section === 'staff' ? 'staff' : 'items'}`}>
             {data.by_item.length === 0 ? (
-              <p className="text-[11px] text-gray-400">No events.</p>
+              <p className="text-caption text-gray-400">No events.</p>
             ) : (
               <ul className="space-y-1.5">
                 {data.by_item.map((it) => {
@@ -246,7 +246,7 @@ export function AuditLogDailyReport({ section }: { section: Section }) {
                               onClick: () => setParam(itemParam, it.key),
                             }
                           : {})}
-                        className={`flex w-full items-center gap-2 text-left text-[11px] ${
+                        className={`flex w-full items-center gap-2 text-left text-caption ${
                           itemParam ? 'hover:opacity-80' : ''
                         }`}
                       >
@@ -278,7 +278,7 @@ export function AuditLogDailyReport({ section }: { section: Section }) {
 function Card({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <div className="rounded-xl border border-gray-200 bg-white p-4">
-      <p className="text-[10px] font-bold uppercase tracking-widest text-gray-500">{title}</p>
+      <p className="text-micro font-bold uppercase tracking-widest text-gray-500">{title}</p>
       <div className="mt-2">{children}</div>
     </div>
   );
@@ -300,9 +300,9 @@ function TotalsBadge({
   }[tone];
   return (
     <span
-      className={`inline-flex items-baseline gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-semibold ring-1 ${toneClass}`}
+      className={`inline-flex items-baseline gap-1.5 rounded-full px-2.5 py-1 text-caption font-semibold ring-1 ${toneClass}`}
     >
-      <span className="text-[9px] uppercase tracking-wider opacity-70">{label}</span>
+      <span className="text-eyebrow uppercase tracking-wider opacity-70">{label}</span>
       <span className="tabular-nums">{fmtNumber(value)}</span>
     </span>
   );
@@ -318,7 +318,7 @@ function CenterMessage({
   return (
     <div className="flex h-full items-center justify-center p-6">
       <p
-        className={`text-center text-[12px] ${
+        className={`text-center text-label ${
           tone === 'error' ? 'text-rose-600' : 'text-gray-400'
         }`}
       >

@@ -28,13 +28,13 @@ export function ReceivingScanStatusList({
   return (
     <div className="border-t border-gray-200">
       <div className="flex items-center justify-between px-3 pt-2 pb-1">
-        <p className="text-[9px] font-black uppercase tracking-widest text-gray-500">
+        <p className="text-eyebrow font-black uppercase tracking-widest text-gray-500">
           Scans · {pendingScans.length}
         </p>
         <button
           type="button"
           onClick={onClear}
-          className="text-[9px] font-black uppercase tracking-wider text-gray-400 hover:text-gray-700"
+          className="text-eyebrow font-black uppercase tracking-wider text-gray-400 hover:text-gray-700"
         >
           Clear
         </button>

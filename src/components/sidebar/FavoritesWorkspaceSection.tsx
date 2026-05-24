@@ -410,7 +410,7 @@ export function FavoritesWorkspaceSection({
           value={searchValue}
           onChange={(e) => setSearchValue(e.target.value)}
           placeholder="Search Ecwid product by name or SKU"
-          className="w-full rounded-xl border-0 bg-transparent px-3 py-2.5 text-[11px] font-semibold text-gray-900 outline-none placeholder:text-gray-500"
+          className="w-full rounded-xl border-0 bg-transparent px-3 py-2.5 text-caption font-semibold text-gray-900 outline-none placeholder:text-gray-500"
         />
         {searchingProducts ? (
           <div className="flex items-center gap-2 border-t border-gray-100 px-3 py-2.5 text-gray-500">
@@ -436,16 +436,16 @@ export function FavoritesWorkspaceSection({
                   {isSelected && <Check className="mt-0.5 h-3 w-3 shrink-0 text-blue-600" />}
                   <div className="min-w-0 flex-1">
                     {/* Row 1 — title, no truncate */}
-                    <p className={`text-[11px] font-black leading-snug tracking-tight ${isSelected ? 'text-blue-700' : 'text-gray-900'}`}>
+                    <p className={`text-caption font-black leading-snug tracking-tight ${isSelected ? 'text-blue-700' : 'text-gray-900'}`}>
                       {product.name}
                     </p>
                     {/* Row 2 — price (green), SKU immediately to the right */}
                     <div className="mt-0.5 flex w-full min-w-0 items-center justify-start gap-2">
-                      <span className="shrink-0 text-[10px] font-bold tabular-nums text-emerald-600">
+                      <span className="shrink-0 text-micro font-bold tabular-nums text-emerald-600">
                         {product.price != null ? `$${product.price.toFixed(2)}` : ''}
                       </span>
                       <span
-                        className={`min-w-0 truncate text-[10px] font-bold uppercase tracking-[0.14em] ${
+                        className={`min-w-0 truncate text-micro font-bold uppercase tracking-[0.14em] ${
                           isSelected ? 'text-blue-500' : 'text-gray-500'
                         }`}
                       >
@@ -467,12 +467,12 @@ export function FavoritesWorkspaceSection({
       {/* Selected product — two rows */}
       {selectedProduct && (
         <div className="rounded-xl border border-blue-200 bg-white px-3 py-2">
-          <p className="text-[11px] font-black leading-snug text-blue-900">{selectedProduct.name}</p>
+          <p className="text-caption font-black leading-snug text-blue-900">{selectedProduct.name}</p>
           <div className="mt-0.5 flex w-full min-w-0 items-center justify-start gap-2">
-            <span className="shrink-0 text-[10px] font-bold tabular-nums text-emerald-600">
+            <span className="shrink-0 text-micro font-bold tabular-nums text-emerald-600">
               {selectedProduct.price != null ? `$${selectedProduct.price.toFixed(2)}` : ''}
             </span>
-            <span className="min-w-0 truncate text-[10px] font-bold uppercase tracking-[0.14em] text-blue-500">
+            <span className="min-w-0 truncate text-micro font-bold uppercase tracking-[0.14em] text-blue-500">
               {selectedProduct.sku || 'No SKU'}
             </span>
           </div>
@@ -484,7 +484,7 @@ export function FavoritesWorkspaceSection({
         value={draft.label}
         onChange={(e) => setDraft((prev) => ({ ...prev, label: e.target.value }))}
         placeholder="Label"
-        className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-[11px] font-semibold text-gray-900 outline-none focus:border-blue-300"
+        className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-caption font-semibold text-gray-900 outline-none focus:border-blue-300"
       />
 
       {allowRepairDefaults && (
@@ -492,7 +492,7 @@ export function FavoritesWorkspaceSection({
           value={draft.issueTemplate}
           onChange={(e) => setDraft((prev) => ({ ...prev, issueTemplate: e.target.value }))}
           placeholder="Issue template"
-          className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-[11px] font-semibold text-gray-900 outline-none focus:border-blue-300"
+          className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-caption font-semibold text-gray-900 outline-none focus:border-blue-300"
         />
       )}
 
@@ -501,7 +501,7 @@ export function FavoritesWorkspaceSection({
         onChange={(e) => setDraft((prev) => ({ ...prev, notes: e.target.value }))}
         placeholder="Notes"
         rows={2}
-        className="w-full resize-none rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-[11px] font-semibold text-gray-900 outline-none focus:border-blue-300"
+        className="w-full resize-none rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-caption font-semibold text-gray-900 outline-none focus:border-blue-300"
       />
 
       {/* Footer */}
@@ -568,13 +568,13 @@ export function FavoritesWorkspaceSection({
               <h3 className={`${inlineRows ? 'text-base' : 'text-sm'} font-black tracking-tight text-gray-900`}>
                 {title}
                 {favorites.length > 0 && (
-                  <span className="ml-1.5 text-[10px] font-semibold tabular-nums text-gray-500">
+                  <span className="ml-1.5 text-micro font-semibold tabular-nums text-gray-500">
                     {favorites.length}
                   </span>
                 )}
               </h3>
               {description && isListOpen ? (
-                <p className="mt-0.5 text-[11px] font-semibold leading-relaxed text-gray-500">{description}</p>
+                <p className="mt-0.5 text-caption font-semibold leading-relaxed text-gray-500">{description}</p>
               ) : null}
             </div>
           </button>
@@ -663,7 +663,7 @@ export function FavoritesWorkspaceSection({
             return (
               <div key={`${favorite.workspaceKey}-${favorite.id}`}>
                 <div className={inlineRows ? 'py-1.5' : 'rounded-2xl border border-gray-200 bg-gray-50 px-3 py-3'}>
-                  <p className={`${inlineRows ? 'text-[10px] leading-tight' : 'text-[12px] leading-snug'} font-black tracking-tight text-black`}>
+                  <p className={`${inlineRows ? 'text-micro leading-tight' : 'text-label leading-snug'} font-black tracking-tight text-black`}>
                     {favorite.label}
                   </p>
 
@@ -671,7 +671,7 @@ export function FavoritesWorkspaceSection({
                     <div className="min-w-0 flex-1">
                       <div
                         className={`flex w-full min-w-0 items-center justify-start gap-2 font-bold ${
-                          inlineRows ? 'text-[8px] tracking-[0.12em]' : 'text-[10px] tracking-[0.16em]'
+                          inlineRows ? 'text-mini tracking-[0.12em]' : 'text-micro tracking-[0.16em]'
                         }`}
                       >
                         <span className="shrink-0 tabular-nums text-emerald-600">
@@ -682,12 +682,12 @@ export function FavoritesWorkspaceSection({
                         </span>
                       </div>
                       {favorite.issueTemplate ? (
-                        <p className={`${inlineRows ? 'mt-0 text-[8px]' : 'mt-0.5 text-[10px]'} font-semibold uppercase tracking-[0.14em] text-gray-500`}>
+                        <p className={`${inlineRows ? 'mt-0 text-mini' : 'mt-0.5 text-micro'} font-semibold uppercase tracking-[0.14em] text-gray-500`}>
                           {favorite.issueTemplate}
                         </p>
                       ) : null}
                       {!inlineRows && favorite.productTitle && (
-                        <p className="mt-1 text-[11px] font-semibold text-gray-500">{favorite.productTitle}</p>
+                        <p className="mt-1 text-caption font-semibold text-gray-500">{favorite.productTitle}</p>
                       )}
                     </div>
                     <div className={`${inlineRows ? 'flex items-center gap-1 pt-0.5' : 'flex items-center gap-2'}`}>

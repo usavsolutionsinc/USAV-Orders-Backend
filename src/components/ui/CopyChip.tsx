@@ -478,7 +478,7 @@ export const PlatformChip = ({
           <ExternalLink className="h-4 w-4 shrink-0" />
         </span>
         <span
-          className={`min-w-[60px] whitespace-nowrap border-b-2 pb-0.5 text-center font-dm-sans text-[13px] font-bold lowercase leading-none tracking-tight text-black ${underlineClass}`}
+          className={`min-w-[60px] whitespace-nowrap border-b-2 pb-0.5 text-center font-dm-sans text-sm font-bold lowercase leading-none tracking-tight text-black ${underlineClass}`}
         >
           {label}
         </span>

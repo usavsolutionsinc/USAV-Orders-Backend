@@ -54,13 +54,13 @@ export function MobilePackingSheet({ row, open, onClose }: MobilePackingSheetPro
         <div className="flex flex-col gap-2">
           <div className="flex min-w-0 items-center gap-2">
             <span className={`h-2 w-2 shrink-0 rounded-full ${getSourceDotBg(row)}`} />
-            <div className="line-clamp-2 text-[14px] font-bold text-gray-900">
+            <div className="line-clamp-2 text-sm font-bold text-gray-900">
               {productTitle}
             </div>
           </div>
 
           <div className="flex items-center gap-2 pl-4">
-            <span className="shrink-0 text-[11px] font-black uppercase tracking-widest">
+            <span className="shrink-0 text-caption font-black uppercase tracking-widest">
               <span className={quantity > 1 ? 'text-yellow-600' : 'text-gray-700'}>
                 {quantity}
               </span>
@@ -80,7 +80,7 @@ export function MobilePackingSheet({ row, open, onClose }: MobilePackingSheetPro
             <PhotoGallery photos={photos} orderId={orderId} compact launcherTitle={`${photos.length} pack photo${photos.length === 1 ? '' : 's'}`} />
           </div>
         ) : (
-          <p className="rounded-2xl bg-amber-50 px-4 py-3 text-center text-[11px] font-semibold text-amber-700">
+          <p className="rounded-2xl bg-amber-50 px-4 py-3 text-center text-caption font-semibold text-amber-700">
             No pack photos yet — tap below to capture.
           </p>
         )}
@@ -93,12 +93,12 @@ export function MobilePackingSheet({ row, open, onClose }: MobilePackingSheetPro
             className="flex h-14 w-full items-center justify-center gap-3 rounded-2xl bg-blue-600 text-white shadow-sm transition-colors active:bg-blue-700"
           >
             <Camera className="h-6 w-6" />
-            <span className="text-[13px] font-black uppercase tracking-[0.18em]">
+            <span className="text-sm font-black uppercase tracking-[0.18em]">
               Take Photos
             </span>
           </Link>
         ) : (
-          <p className="rounded-2xl bg-rose-50 px-4 py-3 text-center text-[11px] font-semibold text-rose-700">
+          <p className="rounded-2xl bg-rose-50 px-4 py-3 text-center text-caption font-semibold text-rose-700">
             Missing packer log id — cannot attach photos.
           </p>
         )}

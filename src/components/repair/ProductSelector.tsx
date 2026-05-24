@@ -308,7 +308,7 @@ export function ProductSelector({
         >
           <div className="text-xs font-bold uppercase tracking-wide">Other -- Manual Entry</div>
           {selectedProduct?.type === 'Other' && (
-            <div className="mt-1 truncate text-[10px] font-semibold opacity-90">{selectedProduct.model}</div>
+            <div className="mt-1 truncate text-micro font-semibold opacity-90">{selectedProduct.model}</div>
           )}
         </button>
 
@@ -336,7 +336,7 @@ export function ProductSelector({
 
       {/* Breadcrumbs */}
       {(breadcrumbs.length > 0 || showAllProducts) && (
-        <div className="flex flex-wrap items-center gap-1 text-[9px] font-black uppercase tracking-wide text-gray-500">
+        <div className="flex flex-wrap items-center gap-1 text-eyebrow font-black uppercase tracking-wide text-gray-500">
           <button
             type="button"
             onClick={() => void fetchCategoryLevel(null)}
@@ -386,7 +386,7 @@ export function ProductSelector({
           {/* Sub-categories */}
           {!showAllProducts && filteredCategories.length > 0 && (
             <div className="space-y-1.5">
-              <p className="text-[9px] font-black uppercase tracking-[0.15em] text-gray-400">
+              <p className="text-eyebrow font-black uppercase tracking-[0.15em] text-gray-400">
                 {isAtRoot ? 'Categories' : 'Sub-categories'}
               </p>
               <div className="space-y-1.5">
@@ -422,7 +422,7 @@ export function ProductSelector({
           {/* Products grid */}
           {(loadingProducts || filteredProducts.length > 0) && (
             <div className="space-y-2">
-              <p className="text-[9px] font-black uppercase tracking-[0.15em] text-gray-400">
+              <p className="text-eyebrow font-black uppercase tracking-[0.15em] text-gray-400">
                 {loadingProducts ? 'Loading products...' : 'Products'}
               </p>
               {!loadingProducts && (
@@ -454,7 +454,7 @@ export function ProductSelector({
                               decoding="async"
                             />
                           ) : (
-                            <div className="flex h-full w-full items-center justify-center text-[9px] font-black uppercase tracking-widest text-gray-300">
+                            <div className="flex h-full w-full items-center justify-center text-eyebrow font-black uppercase tracking-widest text-gray-300">
                               No Image
                             </div>
                           )}
@@ -481,7 +481,7 @@ export function ProductSelector({
                               {product.price !== null ? `$${product.price.toFixed(2)}` : '--'}
                             </span>
                             {product.sku && (
-                              <span className={`max-w-[55%] truncate text-right text-[9px] font-bold ${selected ? 'text-blue-200' : 'text-gray-400'}`}>
+                              <span className={`max-w-[55%] truncate text-right text-eyebrow font-bold ${selected ? 'text-blue-200' : 'text-gray-400'}`}>
                                 {product.sku}
                               </span>
                             )}
@@ -497,7 +497,7 @@ export function ProductSelector({
                   type="button"
                   onClick={loadMoreProducts}
                   disabled={loadingMoreProducts}
-                  className="mt-2 w-full rounded-xl border border-blue-200 bg-blue-50 px-3 py-2.5 text-[10px] font-black uppercase tracking-wide text-blue-700 transition-colors hover:bg-blue-100 disabled:cursor-not-allowed disabled:opacity-50"
+                  className="mt-2 w-full rounded-xl border border-blue-200 bg-blue-50 px-3 py-2.5 text-micro font-black uppercase tracking-wide text-blue-700 transition-colors hover:bg-blue-100 disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   {loadingMoreProducts ? 'Loading More...' : `Load ${PRODUCT_PAGE_SIZE} More`}
                 </button>
@@ -521,12 +521,12 @@ export function ProductSelector({
             {selectedItems.map((item) => (
               <div key={item.id} className="flex items-center justify-between gap-2 rounded-lg bg-white px-3 py-2">
                 <div className="min-w-0 flex-1">
-                  <p className="truncate text-[10px] font-bold text-gray-900">{item.name}</p>
-                  {item.sku && <p className="text-[9px] font-semibold text-gray-400">{item.sku}</p>}
+                  <p className="truncate text-micro font-bold text-gray-900">{item.name}</p>
+                  {item.sku && <p className="text-eyebrow font-semibold text-gray-400">{item.sku}</p>}
                 </div>
                 <div className="flex flex-shrink-0 items-center gap-2">
                   {item.price !== null && (
-                    <span className="text-[10px] font-black text-emerald-600">${item.price.toFixed(2)}</span>
+                    <span className="text-micro font-black text-emerald-600">${item.price.toFixed(2)}</span>
                   )}
                   <button
                     type="button"

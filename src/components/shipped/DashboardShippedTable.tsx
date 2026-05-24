@@ -651,7 +651,7 @@ export function DashboardShippedTable({
                                     className={`h-2 w-2 shrink-0 rounded-full ${SOURCE_DOT_BG[dotType]}`}
                                     title={SOURCE_DOT_LABEL[dotType]}
                                   />
-                                  <div className="text-[11px] font-bold text-gray-900 truncate">
+                                  <div className="text-caption font-bold text-gray-900 truncate">
                                     {record.product_title
                                       || record.item_number
                                       || record.sku
@@ -659,7 +659,7 @@ export function DashboardShippedTable({
                                   </div>
                                 </div>
                                 <div className="mt-0.5 flex items-center gap-2">
-                                  <div className="text-[9px] font-black text-gray-500 uppercase tracking-widest truncate min-w-0 flex-1 pl-4">
+                                  <div className="text-eyebrow font-black text-gray-500 uppercase tracking-widest truncate min-w-0 flex-1 pl-4">
                                     <span className={(parseInt(String(record.quantity || '1'), 10) || 1) > 1 ? 'text-yellow-600' : undefined}>
                                       {parseInt(String(record.quantity || '1'), 10) || 1}
                                     </span>

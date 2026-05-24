@@ -116,7 +116,7 @@ export default function MobileHomePage() {
 
   if (!isLoaded || !user) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-gray-50 text-[12px] text-gray-400">
+      <div className="flex min-h-screen items-center justify-center bg-gray-50 text-label text-gray-400">
         Loading…
       </div>
     );
@@ -129,10 +129,10 @@ export default function MobileHomePage() {
     <div className="flex min-h-full flex-col gap-4 bg-gradient-to-b from-blue-50/40 via-white to-white px-4 pb-6 pt-5">
       {/* Greeting */}
       <header className="px-1">
-        <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-blue-600">
+        <p className="text-caption font-bold uppercase tracking-[0.16em] text-blue-600">
           {greeting}
         </p>
-        <h1 className="mt-1 text-[24px] font-bold tracking-tight text-gray-900">
+        <h1 className="mt-1 text-2xl font-bold tracking-tight text-gray-900">
           {firstName}
         </h1>
         <p className="mt-0.5 text-[12.5px] leading-snug text-gray-500">
@@ -154,10 +154,10 @@ export default function MobileHomePage() {
 
         <div className="relative flex h-full flex-col justify-between p-6">
           <div className="flex items-start justify-between">
-            <span className="rounded-full bg-white/15 px-3 py-1 text-[10px] font-bold uppercase tracking-[0.18em] text-blue-50 ring-1 ring-white/20 backdrop-blur">
+            <span className="rounded-full bg-white/15 px-3 py-1 text-micro font-bold uppercase tracking-[0.18em] text-blue-50 ring-1 ring-white/20 backdrop-blur">
               Tap to scan
             </span>
-            <div className="flex h-9 w-9 items-center justify-center rounded-full bg-white/20 text-[16px] text-white transition-transform group-active:translate-x-0.5">
+            <div className="flex h-9 w-9 items-center justify-center rounded-full bg-white/20 text-base text-white transition-transform group-active:translate-x-0.5">
               →
             </div>
           </div>
@@ -166,10 +166,10 @@ export default function MobileHomePage() {
             <div className="flex h-20 w-20 items-center justify-center rounded-3xl bg-white/15 ring-1 ring-white/25 backdrop-blur">
               <Barcode className="h-10 w-10 text-white" />
             </div>
-            <h2 className="mt-4 text-[28px] font-bold leading-tight tracking-tight">
+            <h2 className="mt-4 text-3xl font-bold leading-tight tracking-tight">
               Open scanner
             </h2>
-            <p className="mt-1 max-w-[28ch] text-[13px] leading-snug text-blue-50/85">
+            <p className="mt-1 max-w-[28ch] text-sm leading-snug text-blue-50/85">
               Bin, rack, carton, SKU, serial — anything with a barcode or QR.
               We route the next step automatically.
             </p>
@@ -180,7 +180,7 @@ export default function MobileHomePage() {
       {/* Stations — only the ones the user can access. */}
       {stations.length > 0 && (
         <section>
-          <h3 className="px-1 text-[11px] font-bold uppercase tracking-[0.16em] text-gray-500">
+          <h3 className="px-1 text-caption font-bold uppercase tracking-[0.16em] text-gray-500">
             Your stations
           </h3>
           <div
@@ -204,7 +204,7 @@ export default function MobileHomePage() {
                     <Icon className="h-4.5 w-4.5 text-blue-600" />
                   </div>
                   <div className="min-w-0">
-                    <p className="truncate text-[13px] font-semibold leading-tight text-gray-900">
+                    <p className="truncate text-sm font-semibold leading-tight text-gray-900">
                       {s.label}
                     </p>
                     <p className="mt-0.5 line-clamp-2 text-[10.5px] leading-snug text-gray-500">
@@ -220,7 +220,7 @@ export default function MobileHomePage() {
 
       {/* Recent scans */}
       <section className="mt-1">
-        <h3 className="px-1 text-[11px] font-bold uppercase tracking-[0.16em] text-gray-500">
+        <h3 className="px-1 text-caption font-bold uppercase tracking-[0.16em] text-gray-500">
           Recent scans
         </h3>
         {recent.length === 0 ? (
@@ -229,7 +229,7 @@ export default function MobileHomePage() {
             <p className="mt-2 text-[12.5px] font-semibold text-gray-700">
               No scans yet
             </p>
-            <p className="mt-0.5 text-[11px] text-gray-500">
+            <p className="mt-0.5 text-caption text-gray-500">
               Codes you scan today will appear here so you can jump back in.
             </p>
           </div>

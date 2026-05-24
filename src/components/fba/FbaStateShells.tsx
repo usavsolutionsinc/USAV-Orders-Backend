@@ -42,7 +42,7 @@ export function FbaErrorState({
           <button
             type="button"
             onClick={onRetry}
-            className={`mt-4 inline-flex items-center justify-center rounded-full border border-gray-200 px-3 py-1.5 text-[10px] font-black uppercase tracking-[0.14em] text-gray-700 transition-colors ${colors.hover} hover:border-transparent hover:text-white`}
+            className={`mt-4 inline-flex items-center justify-center rounded-full border border-gray-200 px-3 py-1.5 text-micro font-black uppercase tracking-[0.14em] text-gray-700 transition-colors ${colors.hover} hover:border-transparent hover:text-white`}
           >
             Retry
           </button>
@@ -62,7 +62,7 @@ export function FbaEmptyState({
   return (
     <div className="flex h-full flex-col items-center justify-center px-6 py-20 text-center text-gray-500">
       <p className="text-xs font-black uppercase tracking-[0.3em]">{title}</p>
-      {subtitle ? <p className="mt-1 text-[11px]">{subtitle}</p> : null}
+      {subtitle ? <p className="mt-1 text-caption">{subtitle}</p> : null}
     </div>
   );
 }

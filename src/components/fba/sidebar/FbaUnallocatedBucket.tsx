@@ -51,7 +51,7 @@ export function FbaUnallocatedBucket({
 
       {allocations.length === 0 ? (
         <div className={`mx-2 mb-2 ${chrome.emptyShell}`}>
-          <p className={`text-center text-[10px] font-semibold ${chrome.emptyLabel}`}>
+          <p className={`text-center text-micro font-semibold ${chrome.emptyLabel}`}>
             All items allocated to boxes
           </p>
         </div>

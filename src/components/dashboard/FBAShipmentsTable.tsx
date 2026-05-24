@@ -67,7 +67,7 @@ function ReadinessBar({ ready, total }: { ready: number; total: number }) {
           style={{ width: `${pct}%` }}
         />
       </div>
-      <span className="text-[10px] font-bold text-gray-500 tabular-nums">{ready}/{total}</span>
+      <span className="text-micro font-bold text-gray-500 tabular-nums">{ready}/{total}</span>
     </div>
   );
 }
@@ -168,13 +168,13 @@ export default function FBAShipmentsTable() {
       <div className="border-b border-gray-200 bg-purple-50 px-6 py-4">
         <div className="flex items-center justify-between gap-4">
           <div>
-            <h2 className="text-[18px] font-black uppercase tracking-tight text-purple-900">FBA Shipments</h2>
+            <h2 className="text-lg font-black uppercase tracking-tight text-purple-900">FBA Shipments</h2>
             <p className={`mt-1 ${sectionLabel} text-purple-500`}>
               {isLegacy ? 'Receiving Queue (legacy)' : 'Shipment Lifecycle Board'} — {rows.length} shipments
             </p>
           </div>
           {isLegacy && (
-            <span className="text-[9px] font-black uppercase tracking-widest bg-amber-100 text-amber-700 border border-amber-200 px-2 py-1 rounded-lg">
+            <span className="text-eyebrow font-black uppercase tracking-widest bg-amber-100 text-amber-700 border border-amber-200 px-2 py-1 rounded-lg">
               Run migration to enable lifecycle view
             </span>
           )}
@@ -184,13 +184,13 @@ export default function FBAShipmentsTable() {
       <div className="flex-1 overflow-auto">
         {rows.length === 0 ? (
           <div className="flex h-full items-center justify-center">
-            <p className="text-[11px] font-black uppercase tracking-widest text-gray-500">No FBA shipments</p>
+            <p className="text-caption font-black uppercase tracking-widest text-gray-500">No FBA shipments</p>
           </div>
         ) : isLegacy ? (
           /* ── Legacy table (pre-migration) ── */
           <table className="min-w-full border-collapse">
             <thead className="sticky top-0 bg-white">
-              <tr className="border-b border-gray-200 text-left text-[10px] font-black uppercase tracking-widest text-gray-500">
+              <tr className="border-b border-gray-200 text-left text-micro font-black uppercase tracking-widest text-gray-500">
                 <th className="px-3 py-2">ID</th>
                 <th className="px-3 py-2">Tracking</th>
                 <th className="px-3 py-2">Carrier</th>
@@ -204,7 +204,7 @@ export default function FBAShipmentsTable() {
             </thead>
             <tbody>
               {(rows as FBAShipmentLegacyRow[]).map((row) => (
-                <tr key={row.id} className="border-b border-gray-100 text-[11px] font-bold text-gray-700 hover:bg-gray-50">
+                <tr key={row.id} className="border-b border-gray-100 text-caption font-bold text-gray-700 hover:bg-gray-50">
                   <td className="px-3 py-2 font-mono">{row.id}</td>
                   <td className="px-3 py-2 font-mono text-purple-700">{row.shipment_ref || '-'}</td>
                   <td className="px-3 py-2">{row.carrier || '-'}</td>
@@ -222,7 +222,7 @@ export default function FBAShipmentsTable() {
           /* ── Lifecycle table (post-migration) ── */
           <table className="min-w-full border-collapse">
             <thead className="sticky top-0 bg-white z-10">
-              <tr className="border-b border-gray-200 text-left text-[10px] font-black uppercase tracking-widest text-gray-500">
+              <tr className="border-b border-gray-200 text-left text-micro font-black uppercase tracking-widest text-gray-500">
                 <th className="px-3 py-2">Shipment Ref</th>
                 <th className="px-3 py-2">Status</th>
                 <th className="px-3 py-2">Items Ready</th>
@@ -239,11 +239,11 @@ export default function FBAShipmentsTable() {
                 const totalItems = Number(row.total_items) || 0;
                 const readyItems = Number(row.ready_items) + Number(row.labeled_items) + Number(row.shipped_items);
                 return (
-                  <tr key={row.id} className="border-b border-gray-100 text-[11px] font-bold text-gray-700 hover:bg-purple-50 transition-colors">
+                  <tr key={row.id} className="border-b border-gray-100 text-caption font-bold text-gray-700 hover:bg-purple-50 transition-colors">
                     <td className="px-3 py-2">
                       <span className="font-mono text-purple-700 font-black">{row.shipment_ref}</span>
                       {row.notes && (
-                        <p className="text-[9px] text-gray-500 font-normal truncate max-w-[140px]">{row.notes}</p>
+                        <p className="text-eyebrow text-gray-500 font-normal truncate max-w-[140px]">{row.notes}</p>
                       )}
                     </td>
                     <td className="px-3 py-2">

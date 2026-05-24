@@ -20,7 +20,7 @@ export function RecentsStrip({ recents, onPick, onClear }: RecentsStripProps) {
 
   return (
     <div className="flex items-center gap-2 border-t border-gray-100 bg-gray-50/70 px-6 py-2.5">
-      <span className="shrink-0 text-[9px] font-black uppercase tracking-[0.18em] text-gray-500">
+      <span className="shrink-0 text-eyebrow font-black uppercase tracking-[0.18em] text-gray-500">
         Recent
       </span>
       <div className="flex min-w-0 flex-1 items-center gap-1.5 overflow-x-auto scrollbar-hide">
@@ -30,7 +30,7 @@ export function RecentsStrip({ recents, onPick, onClear }: RecentsStripProps) {
             type="button"
             onClick={() => onPick(r.sku)}
             title={r.title ? `${r.title}${r.sn ? ' · ' + r.sn : ''}` : r.sku}
-            className="group inline-flex shrink-0 items-center gap-1.5 rounded-md border border-gray-200 bg-white px-2 py-1 font-mono text-[11px] font-bold text-gray-700 transition-colors hover:border-blue-300 hover:bg-blue-50 hover:text-blue-700"
+            className="group inline-flex shrink-0 items-center gap-1.5 rounded-md border border-gray-200 bg-white px-2 py-1 font-mono text-caption font-bold text-gray-700 transition-colors hover:border-blue-300 hover:bg-blue-50 hover:text-blue-700"
           >
             <RotateCcw className="h-3 w-3 text-gray-400 group-hover:text-blue-500" />
             <span className="truncate max-w-[140px]">{r.sku}</span>

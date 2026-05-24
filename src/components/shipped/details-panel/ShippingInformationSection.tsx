@@ -218,7 +218,7 @@ export function ShippingEditableRow({
     <DetailsPanelRow
       label={label}
       headerAccessory={headerAccessory ? (
-        <span className={headerAccessoryClassName || 'text-[10px] font-black uppercase tracking-wide text-gray-500'}>
+        <span className={headerAccessoryClassName || 'text-micro font-black uppercase tracking-wide text-gray-500'}>
           {headerAccessory}
         </span>
       ) : null}
@@ -697,9 +697,9 @@ function ShippingSerialNumberRow({
       )}
 
       {error ? (
-        <p className="pt-1 text-[10px] font-bold text-red-600">{error}</p>
+        <p className="pt-1 text-micro font-bold text-red-600">{error}</p>
       ) : saveState === 'saved' ? (
-        <p className="pt-1 text-[10px] font-bold text-emerald-600">Serial numbers saved.</p>
+        <p className="pt-1 text-micro font-bold text-emerald-600">Serial numbers saved.</p>
       ) : null}
     </DetailsPanelRow>
   );
@@ -735,7 +735,7 @@ function PrepackedSkuRow({ sku }: { sku: PrepackedSkuInfo }) {
       <div className="space-y-1.5">
         <p className="text-sm font-bold text-black font-mono">{sku.staticSku}</p>
         {sku.productTitle ? (
-          <p className="text-[10px] font-semibold text-gray-500 truncate">{sku.productTitle}</p>
+          <p className="text-micro font-semibold text-gray-500 truncate">{sku.productTitle}</p>
         ) : null}
         {hasPhotos && (
           <PhotoGallery
@@ -821,7 +821,7 @@ function ShippingInfoEditModal({
           >
             <div className="flex items-center justify-between border-b border-gray-100 px-5 py-4">
               <div>
-                <p className="text-[10px] font-black uppercase tracking-[0.24em] text-gray-500">Shipping Info</p>
+                <p className="text-micro font-black uppercase tracking-[0.24em] text-gray-500">Shipping Info</p>
                 <h3 className="mt-1 text-lg font-black tracking-tight text-gray-900">Edit Order Details</h3>
               </div>
               <button
@@ -838,7 +838,7 @@ function ShippingInfoEditModal({
             <div className="space-y-4 px-5 py-5">
               <div className="space-y-4">
                 <label className="block">
-                  <span className="mb-1.5 block text-[10px] font-black uppercase tracking-[0.18em] text-gray-500">Ship By Date</span>
+                  <span className="mb-1.5 block text-micro font-black uppercase tracking-[0.18em] text-gray-500">Ship By Date</span>
                   <input
                     type="text"
                     value={draft.shipByDate}
@@ -848,7 +848,7 @@ function ShippingInfoEditModal({
                   />
                 </label>
                 <label className="block">
-                  <span className="mb-1.5 block text-[10px] font-black uppercase tracking-[0.18em] text-gray-500">Order ID</span>
+                  <span className="mb-1.5 block text-micro font-black uppercase tracking-[0.18em] text-gray-500">Order ID</span>
                   <input
                     type="text"
                     value={draft.orderNumber}
@@ -861,7 +861,7 @@ function ShippingInfoEditModal({
 
               <div className="space-y-3">
                 <div className="flex items-center justify-between">
-                  <p className="text-[10px] font-black uppercase tracking-[0.18em] text-gray-500">Tracking Numbers</p>
+                  <p className="text-micro font-black uppercase tracking-[0.18em] text-gray-500">Tracking Numbers</p>
                 </div>
                 <div className="space-y-2">
                   {draft.trackingRows.map((row, index) => (
@@ -934,7 +934,7 @@ function ShippingInfoEditModal({
 
               <div className="space-y-3">
                 <div className="flex items-center justify-between">
-                  <p className="text-[10px] font-black uppercase tracking-[0.18em] text-gray-500">Serial Numbers</p>
+                  <p className="text-micro font-black uppercase tracking-[0.18em] text-gray-500">Serial Numbers</p>
                 </div>
                 <div className="space-y-2">
                   {(draft.serialRows.length > 0 ? draft.serialRows : ['']).map((row, index) => {
@@ -1122,10 +1122,10 @@ export function ShippingInformationSection({
   const daysLate = getDaysLateNumber(shipped.ship_by_date || shipped.created_at || null);
   const daysLateClassName =
     daysLate > 1
-      ? 'text-[10px] font-black uppercase tracking-wide text-red-600'
+      ? 'text-micro font-black uppercase tracking-wide text-red-600'
       : daysLate === 1
-        ? 'text-[10px] font-black uppercase tracking-wide text-yellow-600'
-        : 'text-[10px] font-black uppercase tracking-wide text-gray-500';
+        ? 'text-micro font-black uppercase tracking-wide text-yellow-600'
+        : 'text-micro font-black uppercase tracking-wide text-gray-500';
   const shippedAtDisplay =
     shipped.packed_at && shipped.packed_at !== '1'
       ? formatDateTimePST(shipped.packed_at)
@@ -1661,7 +1661,7 @@ export function ShippingInformationSection({
             onBlur={ef.onBlur}
             externalUrl={getOrderIdUrl(ef.orderNumber)}
             headerAccessory={accountSourceLabel || undefined}
-            headerAccessoryClassName="text-[10px] font-black tracking-wide text-blue-600"
+            headerAccessoryClassName="text-micro font-black tracking-wide text-blue-600"
             allowEdit={false}
           />
           {/* Item Number moved to ProductDetailsSection — it's a product
@@ -1704,10 +1704,10 @@ export function ShippingInformationSection({
           ) : null}
 
           {ef.isSaving ? (
-            <p className="pt-2 text-[10px] font-bold uppercase tracking-wide text-blue-600">Saving shipping updates...</p>
+            <p className="pt-2 text-micro font-bold uppercase tracking-wide text-blue-600">Saving shipping updates...</p>
           ) : null}
           {ef.isSavingShipByDate ? (
-            <p className="pt-1 text-[10px] font-bold uppercase tracking-wide text-blue-600">Saving ship by date...</p>
+            <p className="pt-1 text-micro font-bold uppercase tracking-wide text-blue-600">Saving ship by date...</p>
           ) : null}
         </div>
       </div>

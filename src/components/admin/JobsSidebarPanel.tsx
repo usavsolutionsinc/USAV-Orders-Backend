@@ -171,7 +171,7 @@ export function JobsSidebarPanel() {
           type="button"
           onClick={() => void query.refetch()}
           disabled={query.isFetching}
-          className="inline-flex w-full items-center justify-center gap-1.5 rounded-lg border border-dashed border-gray-300 bg-white px-3 py-1.5 text-[12px] font-semibold text-gray-700 transition hover:border-blue-400 hover:bg-blue-50 hover:text-blue-700 disabled:opacity-50"
+          className="inline-flex w-full items-center justify-center gap-1.5 rounded-lg border border-dashed border-gray-300 bg-white px-3 py-1.5 text-label font-semibold text-gray-700 transition hover:border-blue-400 hover:bg-blue-50 hover:text-blue-700 disabled:opacity-50"
         >
           {query.isFetching ? 'Refreshing…' : 'Refresh'}
         </button>

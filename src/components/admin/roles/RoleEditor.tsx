@@ -234,21 +234,21 @@ export function RoleEditor({ roleId }: RoleEditorProps) {
             <InlineEdit
               value={role.label}
               onSave={(next) => { if (next !== role.label) void patch({ label: next }, 'label'); }}
-              displayClassName="truncate text-[22px] font-semibold tracking-tight text-gray-900"
+              displayClassName="truncate text-2xl font-semibold tracking-tight text-gray-900"
             />
             <div className="mt-1 flex flex-wrap items-center gap-2">
-              <code className="rounded-full bg-gray-100 px-2 py-0.5 text-[10px] font-mono text-gray-600">{role.key}</code>
+              <code className="rounded-full bg-gray-100 px-2 py-0.5 text-micro font-mono text-gray-600">{role.key}</code>
               {role.is_system && (
-                <span className="rounded-full bg-gray-100 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider text-gray-500">System</span>
+                <span className="rounded-full bg-gray-100 px-1.5 py-0.5 text-eyebrow font-bold uppercase tracking-wider text-gray-500">System</span>
               )}
               {isAdminRole && (
-                <span className="rounded-full bg-amber-100 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider text-amber-900 ring-1 ring-amber-200">All Access</span>
+                <span className="rounded-full bg-amber-100 px-1.5 py-0.5 text-eyebrow font-bold uppercase tracking-wider text-amber-900 ring-1 ring-amber-200">All Access</span>
               )}
-              <span className="text-[11px] text-gray-400">position {role.position}</span>
-              <span className="text-[11px] text-gray-400">· {role.member_count} member{role.member_count === 1 ? '' : 's'}</span>
+              <span className="text-caption text-gray-400">position {role.position}</span>
+              <span className="text-caption text-gray-400">· {role.member_count} member{role.member_count === 1 ? '' : 's'}</span>
             </div>
             <div className="mt-3">
-              <div className="mb-1.5 text-[10px] font-semibold uppercase tracking-wider text-gray-500">Color</div>
+              <div className="mb-1.5 text-micro font-semibold uppercase tracking-wider text-gray-500">Color</div>
               <RoleColorPicker
                 value={role.color}
                 onChange={(hex) => void patch({ color: hex }, 'color')}
@@ -260,7 +260,7 @@ export function RoleEditor({ roleId }: RoleEditorProps) {
             <button
               type="button"
               onClick={() => setDuplicateOpen(true)}
-              className="rounded-md border border-gray-200 bg-white px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wider text-gray-700 hover:bg-gray-50"
+              className="rounded-md border border-gray-200 bg-white px-2.5 py-1 text-caption font-semibold uppercase tracking-wider text-gray-700 hover:bg-gray-50"
             >
               Duplicate
             </button>
@@ -269,7 +269,7 @@ export function RoleEditor({ roleId }: RoleEditorProps) {
               onClick={deleteRole}
               disabled={role.is_system || role.member_count > 0 || busy === 'delete'}
               title={role.is_system ? 'System roles cannot be deleted' : role.member_count > 0 ? 'Remove all members first' : 'Delete role'}
-              className="rounded-md border border-red-200 bg-white px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wider text-red-700 hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-50"
+              className="rounded-md border border-red-200 bg-white px-2.5 py-1 text-caption font-semibold uppercase tracking-wider text-red-700 hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-50"
             >
               Delete
             </button>
@@ -282,7 +282,7 @@ export function RoleEditor({ roleId }: RoleEditorProps) {
         <header className="flex items-center justify-between border-b border-gray-100 px-5 py-3">
           <div>
             <h2 className="text-sm font-semibold text-gray-900">.access</h2>
-            <p className="mt-0.5 text-[11px] text-gray-500">
+            <p className="mt-0.5 text-caption text-gray-500">
               Quick-toggle which sidebar pages this role can see. Each toggle flips the matching <code className="font-mono">.view</code> permission below.
             </p>
           </div>
@@ -311,7 +311,7 @@ export function RoleEditor({ roleId }: RoleEditorProps) {
         <header className="flex items-center justify-between border-b border-gray-100 px-5 py-3">
           <div>
             <h2 className="text-sm font-semibold text-gray-900">Permissions</h2>
-            <p className="mt-0.5 text-[11px] text-gray-500">
+            <p className="mt-0.5 text-caption text-gray-500">
               {isAdminRole
                 ? 'Admin role grants every permission and cannot be customised.'
                 : `Toggle what staff in this role can do. ${enabledSet.size} of many enabled.`}
@@ -320,7 +320,7 @@ export function RoleEditor({ roleId }: RoleEditorProps) {
         </header>
         {PERMISSION_CATEGORIES.map((cat) => (
           <div key={cat.id} className="border-b border-gray-100 last:border-b-0">
-            <div className="bg-gray-50/60 px-5 py-2 text-[10px] font-bold uppercase tracking-widest text-gray-500">{cat.label}</div>
+            <div className="bg-gray-50/60 px-5 py-2 text-micro font-bold uppercase tracking-widest text-gray-500">{cat.label}</div>
             <ul className="divide-y divide-gray-100">
               {cat.permissions.map((perm) => (
                 <PermissionToggle
@@ -343,45 +343,45 @@ export function RoleEditor({ roleId }: RoleEditorProps) {
         <header className="flex items-center justify-between border-b border-gray-100 px-5 py-3">
           <div>
             <h2 className="text-sm font-semibold text-gray-900">Members</h2>
-            <p className="mt-0.5 text-[11px] text-gray-500">{members.length} staff hold this role.</p>
+            <p className="mt-0.5 text-caption text-gray-500">{members.length} staff hold this role.</p>
           </div>
         </header>
         <ul className="divide-y divide-gray-100">
           {members.map((m) => (
             <li key={m.id} className="flex items-center justify-between px-5 py-2">
               <div>
-                <div className="text-sm font-semibold text-gray-900">{m.name} <span className="text-[10px] text-gray-400">#{m.id}</span></div>
-                <div className="text-[11px] text-gray-500">primary role: {m.role}</div>
+                <div className="text-sm font-semibold text-gray-900">{m.name} <span className="text-micro text-gray-400">#{m.id}</span></div>
+                <div className="text-caption text-gray-500">primary role: {m.role}</div>
               </div>
               <button
                 type="button"
                 onClick={() => void removeStaffFromRole(m.id)}
                 disabled={busy === `remove:${m.id}`}
-                className="rounded-md border border-red-200 px-2 py-1 text-[10px] font-semibold uppercase tracking-wider text-red-700 hover:bg-red-50"
+                className="rounded-md border border-red-200 px-2 py-1 text-micro font-semibold uppercase tracking-wider text-red-700 hover:bg-red-50"
               >
                 Remove
               </button>
             </li>
           ))}
           {members.length === 0 && (
-            <li className="px-5 py-6 text-center text-[11px] text-gray-400">No members yet.</li>
+            <li className="px-5 py-6 text-center text-caption text-gray-400">No members yet.</li>
           )}
         </ul>
         {eligibleStaff.length > 0 && (
           <div className="border-t border-gray-100 px-5 py-3">
             <details>
-              <summary className="cursor-pointer text-[12px] font-semibold text-gray-700 hover:text-gray-900">
+              <summary className="cursor-pointer text-label font-semibold text-gray-700 hover:text-gray-900">
                 + Add staff to role ({eligibleStaff.length} eligible)
               </summary>
               <ul className="mt-2 max-h-64 divide-y divide-gray-100 overflow-y-auto rounded-lg border border-gray-100">
                 {eligibleStaff.map((s) => (
                   <li key={s.id} className="flex items-center justify-between px-3 py-1.5">
-                    <span className="text-xs text-gray-800">{s.name} <span className="text-[10px] text-gray-400">· {s.role}</span></span>
+                    <span className="text-xs text-gray-800">{s.name} <span className="text-micro text-gray-400">· {s.role}</span></span>
                     <button
                       type="button"
                       onClick={() => void addStaffToRole(s.id)}
                       disabled={busy === `add:${s.id}`}
-                      className="rounded-md border border-gray-200 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-gray-700 hover:bg-gray-50"
+                      className="rounded-md border border-gray-200 px-2 py-0.5 text-micro font-semibold uppercase tracking-wider text-gray-700 hover:bg-gray-50"
                     >
                       Add
                     </button>
@@ -398,17 +398,17 @@ export function RoleEditor({ roleId }: RoleEditorProps) {
         <header className="flex items-center justify-between border-b border-gray-100 px-5 py-3">
           <div>
             <h2 className="text-sm font-semibold text-gray-900">Recent activity</h2>
-            <p className="mt-0.5 text-[11px] text-gray-500">Last 20 changes touching this role.</p>
+            <p className="mt-0.5 text-caption text-gray-500">Last 20 changes touching this role.</p>
           </div>
         </header>
         {audit.length === 0 ? (
-          <p className="px-5 py-6 text-center text-[11px] text-gray-400">No activity yet.</p>
+          <p className="px-5 py-6 text-center text-caption text-gray-400">No activity yet.</p>
         ) : (
           <ul className="divide-y divide-gray-100">
             {audit.map((a) => (
-              <li key={a.id} className="flex items-center gap-3 px-5 py-2 text-[11px]">
+              <li key={a.id} className="flex items-center gap-3 px-5 py-2 text-caption">
                 <span className="font-mono text-gray-700">{a.event}</span>
-                <span className={`rounded-full px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider ring-1 ring-inset ${
+                <span className={`rounded-full px-1.5 py-0.5 text-eyebrow font-bold uppercase tracking-wider ring-1 ring-inset ${
                   a.result === 'ok' ? 'bg-green-100 text-green-800 ring-green-200'
                   : a.result === 'denied' ? 'bg-amber-100 text-amber-800 ring-amber-200'
                   : 'bg-red-100 text-red-800 ring-red-200'

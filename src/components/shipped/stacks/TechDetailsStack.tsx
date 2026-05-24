@@ -195,7 +195,7 @@ export function TechDetailsStack({
           type="button"
           onClick={deleteTechOrder}
           disabled={isDeleting}
-          className="w-full h-10 inline-flex items-center justify-center gap-1.5 rounded-xl bg-red-600 hover:bg-red-700 text-white text-[10px] font-black uppercase tracking-wider disabled:opacity-50"
+          className="w-full h-10 inline-flex items-center justify-center gap-1.5 rounded-xl bg-red-600 hover:bg-red-700 text-white text-micro font-black uppercase tracking-wider disabled:opacity-50"
         >
           <X className="w-3 h-3" />
           {isDeleting

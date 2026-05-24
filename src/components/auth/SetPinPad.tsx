@@ -153,16 +153,16 @@ export function SetPinPad({ staff, onSubmit, onBack }: SetPinPadProps) {
           {initials(staff.name)}
         </div>
       </div>
-      <div className="mt-5 text-[24px] font-semibold tracking-tight text-gray-900">{staff.name}</div>
-      <div className={`mt-0.5 text-[11px] font-medium uppercase tracking-[0.18em] ${t.accentText}`}>
+      <div className="mt-5 text-2xl font-semibold tracking-tight text-gray-900">{staff.name}</div>
+      <div className={`mt-0.5 text-caption font-medium uppercase tracking-[0.18em] ${t.accentText}`}>
         {staff.role.replace(/_/g, ' ')}
       </div>
 
-      <div className="mt-3 inline-flex items-center gap-2 rounded-full bg-slate-900/95 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-white">
+      <div className="mt-3 inline-flex items-center gap-2 rounded-full bg-slate-900/95 px-3 py-1 text-micro font-semibold uppercase tracking-[0.18em] text-white">
         First-time setup
       </div>
 
-      <div className="mt-3 text-[13px] text-gray-500">
+      <div className="mt-3 text-sm text-gray-500">
         {step === 'enter' ? 'Pick a 4–6 digit PIN' : 'Re-enter the same PIN'}
       </div>
 
@@ -224,12 +224,12 @@ export function SetPinPad({ staff, onSubmit, onBack }: SetPinPadProps) {
         type="button"
         disabled={busy || target.length < 4 || (step === 'confirm' && target.length !== pin.length)}
         onClick={advance}
-        className={`mt-6 inline-flex h-12 w-72 items-center justify-center rounded-2xl ${t.primaryBg} ${t.primaryHover} text-[15px] font-semibold text-white shadow-lg shadow-gray-900/15 transition-all hover:shadow-xl hover:shadow-gray-900/20 disabled:cursor-not-allowed disabled:opacity-50`}
+        className={`mt-6 inline-flex h-12 w-72 items-center justify-center rounded-2xl ${t.primaryBg} ${t.primaryHover} text-base font-semibold text-white shadow-lg shadow-gray-900/15 transition-all hover:shadow-xl hover:shadow-gray-900/20 disabled:cursor-not-allowed disabled:opacity-50`}
       >
         {advanceLabel}
       </button>
 
-      <p className="mt-4 max-w-xs text-center text-[11px] leading-relaxed text-gray-400">
+      <p className="mt-4 max-w-xs text-center text-caption leading-relaxed text-gray-400">
         Your PIN is hashed with scrypt before being saved. You can change it later from Settings.
       </p>
     </div>
@@ -253,7 +253,7 @@ function Key({ value, onClick, disabled, theme, ariaLabel, icon }: KeyProps) {
       disabled={disabled}
       onClick={onClick}
       aria-label={ariaLabel || value}
-      className={`group flex h-16 w-20 items-center justify-center rounded-2xl border border-gray-200 bg-white text-[22px] font-semibold text-gray-900 shadow-sm shadow-gray-900/[0.04] transition-all duration-100 ${t.passkeyHover} hover:-translate-y-0.5 hover:shadow-md hover:shadow-gray-900/[0.08] active:scale-95 active:shadow-none focus:outline-none focus:ring-4 ${t.ring} disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:translate-y-0 disabled:hover:shadow-sm`}
+      className={`group flex h-16 w-20 items-center justify-center rounded-2xl border border-gray-200 bg-white text-2xl font-semibold text-gray-900 shadow-sm shadow-gray-900/[0.04] transition-all duration-100 ${t.passkeyHover} hover:-translate-y-0.5 hover:shadow-md hover:shadow-gray-900/[0.08] active:scale-95 active:shadow-none focus:outline-none focus:ring-4 ${t.ring} disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:translate-y-0 disabled:hover:shadow-sm`}
     >
       {icon ? <span className={t.accentText}>{icon}</span> : value}
     </button>

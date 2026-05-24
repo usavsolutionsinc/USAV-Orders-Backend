@@ -34,7 +34,7 @@ export function InlineSaveIndicator({
         : 'text-gray-400';
 
   return (
-    <span className={`shrink-0 text-[9px] font-black uppercase tracking-[0.10rem] leading-none ${toneClassName} ${className}`.trim()}>
+    <span className={`shrink-0 text-eyebrow font-black uppercase tracking-[0.10rem] leading-none ${toneClassName} ${className}`.trim()}>
       {label}
     </span>
   );

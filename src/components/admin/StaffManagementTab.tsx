@@ -984,12 +984,12 @@ export function StaffManagementTab() {
                           type="button"
                           disabled={!member.active}
                           onClick={() => openAvailabilityEditorForDay(member.id, day.dayOfWeek)}
-                          className={`${tableHeader} mt-1 text-[10px] ${member.active ? 'text-gray-600 hover:text-gray-900' : 'text-gray-400'}`}
+                          className={`${tableHeader} mt-1 text-micro ${member.active ? 'text-gray-600 hover:text-gray-900' : 'text-gray-400'}`}
                         >
                           Edit
                         </button>
                         {bucket.extraRulesCount > 0 && (
-                          <div className="mt-1 text-[10px] font-bold text-amber-700">
+                          <div className="mt-1 text-micro font-bold text-amber-700">
                             +{bucket.extraRulesCount} window
                           </div>
                         )}
@@ -1079,11 +1079,11 @@ export function StaffManagementTab() {
                         <div className="min-w-0 flex-1">
                           <h3 className="truncate text-xl font-bold tracking-tight text-gray-900">{member.name}</h3>
                           <div className="mt-1 flex flex-wrap items-center gap-1.5">
-                            <span className="inline-flex items-center rounded-full bg-gray-100 px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-gray-700">{member.role}</span>
+                            <span className="inline-flex items-center rounded-full bg-gray-100 px-2.5 py-0.5 text-micro font-semibold uppercase tracking-[0.14em] text-gray-700">{member.role}</span>
                             {member.employee_id ? (
-                              <span className="inline-flex items-center rounded-full bg-gray-100 px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-gray-700">ID {member.employee_id}</span>
+                              <span className="inline-flex items-center rounded-full bg-gray-100 px-2.5 py-0.5 text-micro font-semibold uppercase tracking-[0.14em] text-gray-700">ID {member.employee_id}</span>
                             ) : null}
-                            <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-[0.14em] ${member.active ? 'bg-emerald-100 text-emerald-800' : 'bg-gray-200 text-gray-600'}`}>
+                            <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-micro font-semibold uppercase tracking-[0.14em] ${member.active ? 'bg-emerald-100 text-emerald-800' : 'bg-gray-200 text-gray-600'}`}>
                               {member.active ? 'Active' : 'Inactive'}
                             </span>
                           </div>
@@ -1129,7 +1129,7 @@ export function StaffManagementTab() {
                       <div className="mt-5 flex items-center gap-4 rounded-3xl border border-gray-200 bg-white px-5 py-4">
                         <div className="min-w-0 flex-1">
                           <p className="text-[10.5px] font-semibold uppercase tracking-[0.16em] text-gray-500">Identity color</p>
-                          <p className="mt-1 text-[12px] text-gray-500">Tap the wheel — picks up on the sidebar, sign-in picker, and FAB.</p>
+                          <p className="mt-1 text-label text-gray-500">Tap the wheel — picks up on the sidebar, sign-in picker, and FAB.</p>
                         </div>
                         <StaffColorWheel value={editColorHex} onChange={setEditColorHex} />
                       </div>
@@ -1141,7 +1141,7 @@ export function StaffManagementTab() {
                       <div className="mt-4 flex items-center gap-4 rounded-3xl border border-gray-200 bg-white px-5 py-4">
                         <div className="min-w-0 flex-1">
                           <p className="text-[10.5px] font-semibold uppercase tracking-[0.16em] text-gray-500">Default home page</p>
-                          <p className="mt-1 text-[12px] text-gray-500">
+                          <p className="mt-1 text-label text-gray-500">
                             Where this staffer lands after sign-in. Use role default keeps the current behavior.
                           </p>
                         </div>
@@ -1157,7 +1157,7 @@ export function StaffManagementTab() {
                         </select>
                       </div>
 
-                      <label className="mt-5 inline-flex cursor-pointer items-center gap-2.5 rounded-full bg-white px-3.5 py-2 text-[11px] font-semibold uppercase tracking-[0.16em] text-gray-600 ring-1 ring-gray-200 transition hover:bg-gray-50">
+                      <label className="mt-5 inline-flex cursor-pointer items-center gap-2.5 rounded-full bg-white px-3.5 py-2 text-caption font-semibold uppercase tracking-[0.16em] text-gray-600 ring-1 ring-gray-200 transition hover:bg-gray-50">
                         <input
                           type="checkbox"
                           checked={editActive}
@@ -1201,21 +1201,21 @@ export function StaffManagementTab() {
                             }
                             updateStaffMutation.mutate(payload);
                           }}
-                          className="inline-flex h-11 items-center justify-center rounded-full bg-gray-900 px-6 text-[12px] font-semibold uppercase tracking-wider text-white shadow-md shadow-gray-900/20 transition hover:bg-gray-800 hover:shadow-lg"
+                          className="inline-flex h-11 items-center justify-center rounded-full bg-gray-900 px-6 text-label font-semibold uppercase tracking-wider text-white shadow-md shadow-gray-900/20 transition hover:bg-gray-800 hover:shadow-lg"
                         >
                           Save
                         </button>
                         <button
                           type="button"
                           onClick={() => setEditingStaffId(null)}
-                          className="inline-flex h-11 items-center justify-center rounded-full border border-gray-200 bg-white px-5 text-[12px] font-semibold uppercase tracking-wider text-gray-700 transition hover:bg-gray-50"
+                          className="inline-flex h-11 items-center justify-center rounded-full border border-gray-200 bg-white px-5 text-label font-semibold uppercase tracking-wider text-gray-700 transition hover:bg-gray-50"
                         >
                           Cancel
                         </button>
                         <button
                           type="button"
                           onClick={() => deleteStaffMutation.mutate(member.id)}
-                          className="ml-auto inline-flex h-11 items-center justify-center rounded-full border border-red-200 bg-white px-5 text-[12px] font-semibold uppercase tracking-wider text-red-700 transition hover:bg-red-50"
+                          className="ml-auto inline-flex h-11 items-center justify-center rounded-full border border-red-200 bg-white px-5 text-label font-semibold uppercase tracking-wider text-red-700 transition hover:bg-red-50"
                         >
                           Deactivate
                         </button>
@@ -1424,7 +1424,7 @@ export function StaffManagementTab() {
         {filteredStaff.length === 0 && (
           <div className="border border-dashed border-gray-300 bg-white px-6 py-10 text-center">
             <p className={sectionLabel}>No Staff Match</p>
-            <p className="mt-2 text-[12px] font-bold text-gray-500">
+            <p className="mt-2 text-label font-bold text-gray-500">
               Change the sidebar filters or add a team member.
             </p>
           </div>

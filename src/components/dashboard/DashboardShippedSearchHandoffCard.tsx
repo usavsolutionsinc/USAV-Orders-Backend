@@ -39,10 +39,10 @@ export function DashboardShippedSearchHandoffCard({
           <p className={`${sectionLabel} text-blue-700`}>
             Shipped Matches
           </p>
-          <p className="mt-1 text-[11px] font-semibold text-blue-900">
+          <p className="mt-1 text-caption font-semibold text-blue-900">
             {isBusy ? 'Checking shipped results...' : `${shippedCount} found in shipped`}
           </p>
-          <p className="mt-1 text-[10px] font-semibold leading-relaxed text-blue-700/80">
+          <p className="mt-1 text-micro font-semibold leading-relaxed text-blue-700/80">
             Open the shipped tab and keep this search text.
           </p>
         </div>

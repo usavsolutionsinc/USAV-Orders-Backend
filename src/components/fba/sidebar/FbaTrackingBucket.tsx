@@ -69,7 +69,7 @@ export function FbaTrackingBucket({
           onChange={(e) => onTrackingChange(bucket.bucketId, e.target.value.toUpperCase())}
           placeholder="1Z999AA10123456784"
           disabled={saving}
-          className={`${chrome.monoInput} !py-1 !text-[10px] min-w-0 flex-1`}
+          className={`${chrome.monoInput} !py-1 !text-micro min-w-0 flex-1`}
           autoFocus={!bucket.trackingNumber}
         />
 

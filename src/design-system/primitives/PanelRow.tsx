@@ -34,7 +34,7 @@ export function PanelRow({
     >
       <div className="mb-1 flex items-center justify-between gap-3">
         <div className="flex min-w-0 items-center gap-2">
-          <span className="truncate text-[9px] font-black uppercase tracking-[0.10rem] leading-none text-gray-500">
+          <span className="truncate text-eyebrow font-black uppercase tracking-[0.10rem] leading-none text-gray-500">
             {label}
           </span>
           {headerAccessory}

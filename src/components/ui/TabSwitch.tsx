@@ -179,7 +179,7 @@ export function TabSwitch({
               }}
               onClick={() => onTabChange(tab.id)}
               className={`relative z-10 flex-1 min-w-[3rem] whitespace-nowrap rounded-lg font-black uppercase tracking-widest transition-colors duration-150 ${
-                upNext || highContrast ? 'px-3 py-2 text-[11px]' : 'px-3 py-1.5 text-[10px]'
+                upNext || highContrast ? 'px-3 py-2 text-caption' : 'px-3 py-1.5 text-micro'
               } ${
                 upNext
                   ? isActive
@@ -207,7 +207,7 @@ export function TabSwitch({
                     initial={{ scale: 0.7, opacity: 0 }}
                     animate={{ scale: 1, opacity: 1 }}
                     transition={{ type: 'spring', stiffness: 420, damping: 26 }}
-                    className={`inline-flex items-center justify-center min-w-[14px] h-[14px] px-[3px] rounded-full text-[8px] font-black tabular-nums leading-none ${
+                    className={`inline-flex items-center justify-center min-w-[14px] h-[14px] px-[3px] rounded-full text-mini font-black tabular-nums leading-none ${
                       upNext
                         ? 'bg-current/[0.14] text-current'
                         : isActive

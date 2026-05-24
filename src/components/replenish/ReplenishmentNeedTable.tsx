@@ -123,12 +123,12 @@ export function ReplenishmentNeedTable({ skuSearch, statusFilter }: Replenishmen
                     <div className="flex flex-col min-w-0">
                       <div className="flex items-center gap-2 min-w-0">
                         <span className="h-2 w-2 rounded-full bg-red-500 shrink-0" title="Needs reorder" />
-                        <div className="text-[12px] font-bold text-gray-900 truncate">
+                        <div className="text-label font-bold text-gray-900 truncate">
                           {row.item_name || 'Unknown Item'}
                         </div>
                       </div>
                       <div className="mt-0.5 flex items-center gap-2">
-                        <div className="text-[10px] font-bold text-gray-500 uppercase tracking-widest truncate min-w-0 flex-1 pl-4">
+                        <div className="text-micro font-bold text-gray-500 uppercase tracking-widest truncate min-w-0 flex-1 pl-4">
                           <span className="text-red-600">{qtyToOrder}</span>
                           {' • '}
                           {row.vendor_name || 'No Vendor'}

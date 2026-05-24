@@ -124,7 +124,7 @@ export function MobileScanConfirmation({
             Detected As
           </p>
           <div className="flex items-center gap-3">
-            <span className={`inline-flex items-center gap-2 rounded-xl border px-3.5 py-2.5 text-[11px] font-black uppercase tracking-wide ${config.badge}`}>
+            <span className={`inline-flex items-center gap-2 rounded-xl border px-3.5 py-2.5 text-caption font-black uppercase tracking-wide ${config.badge}`}>
               <ActiveIcon className="h-4 w-4" />
               {config.label}
             </span>
@@ -179,7 +179,7 @@ export function MobileScanConfirmation({
             type="button"
             onClick={() => onConfirm(scannedValue, currentType)}
             disabled={isLoading}
-            className={`flex-1 h-[52px] rounded-2xl text-white text-[12px] font-black uppercase tracking-wider flex items-center justify-center gap-2 transition-colors disabled:opacity-50 ${config.confirmBtn}`}
+            className={`flex-1 h-[52px] rounded-2xl text-white text-label font-black uppercase tracking-wider flex items-center justify-center gap-2 transition-colors disabled:opacity-50 ${config.confirmBtn}`}
           >
             {isLoading ? (
               <Loader2 className="h-5 w-5 animate-spin" />
@@ -195,7 +195,7 @@ export function MobileScanConfirmation({
           <button
             type="button"
             onClick={onRescan}
-            className="h-[52px] px-5 rounded-2xl bg-gray-100 text-gray-700 text-[12px] font-black uppercase tracking-wider active:bg-gray-200 transition-colors"
+            className="h-[52px] px-5 rounded-2xl bg-gray-100 text-gray-700 text-label font-black uppercase tracking-wider active:bg-gray-200 transition-colors"
           >
             Rescan
           </button>

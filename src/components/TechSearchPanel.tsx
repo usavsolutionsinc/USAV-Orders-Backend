@@ -94,7 +94,7 @@ export default function TechSearchPanel() {
             <div className="flex-1 overflow-y-auto p-4 space-y-3">
                 {results.length > 0 && (
                     <>
-                        <p className="text-[8px] font-bold text-gray-500 uppercase tracking-widest">
+                        <p className="text-mini font-bold text-gray-500 uppercase tracking-widest">
                             {results.length} Result{results.length !== 1 ? 's' : ''} Found
                         </p>
                         
@@ -105,7 +105,7 @@ export default function TechSearchPanel() {
                             >
                                 {/* Status Badge */}
                                 <div className="flex items-center justify-between">
-                                    <span className={`px-2 py-1 rounded-lg text-[8px] font-black uppercase tracking-widest ${
+                                    <span className={`px-2 py-1 rounded-lg text-mini font-black uppercase tracking-widest ${
                                         result.is_shipped 
                                             ? 'bg-emerald-100 text-emerald-700'
                                             : 'bg-amber-100 text-amber-700'
@@ -119,7 +119,7 @@ export default function TechSearchPanel() {
                                     <div className="bg-emerald-600 text-white p-3 rounded-lg">
                                         <div className="flex items-center justify-between">
                                             <div className="flex-1">
-                                                <p className="text-[8px] font-bold uppercase tracking-widest opacity-80 mb-1">
+                                                <p className="text-mini font-bold uppercase tracking-widest opacity-80 mb-1">
                                                     Serial Number
                                                 </p>
                                                 <p className="text-sm font-black font-mono">
@@ -141,19 +141,19 @@ export default function TechSearchPanel() {
                                 )}
 
                                 {/* Product Info */}
-                                <div className="space-y-2 text-[10px]">
+                                <div className="space-y-2 text-micro">
                                     <div className="flex items-start justify-between gap-2">
-                                        <span className="text-gray-500 font-bold uppercase tracking-wider text-[8px]">Product</span>
+                                        <span className="text-gray-500 font-bold uppercase tracking-wider text-mini">Product</span>
                                         <span className="font-semibold text-right flex-1">{result.customer}</span>
                                     </div>
 
                                     <div className="flex items-start justify-between gap-2">
-                                        <span className="text-gray-500 font-bold uppercase tracking-wider text-[8px]">Condition</span>
+                                        <span className="text-gray-500 font-bold uppercase tracking-wider text-mini">Condition</span>
                                         <span className="font-semibold text-right flex-1">{result.product}</span>
                                     </div>
 
                                     <div className="pt-2 border-t border-gray-200 flex items-center justify-between gap-2">
-                                        <span className="text-gray-500 font-bold uppercase tracking-wider text-[8px]">Order ID</span>
+                                        <span className="text-gray-500 font-bold uppercase tracking-wider text-mini">Order ID</span>
                                         <div className="flex items-center gap-2">
                                             <span className="font-mono font-semibold">{result.tracking_number}</span>
                                             <button
@@ -170,7 +170,7 @@ export default function TechSearchPanel() {
                                     </div>
 
                                     <div className="flex items-center justify-between gap-2">
-                                        <span className="text-gray-500 font-bold uppercase tracking-wider text-[8px]">Tracking</span>
+                                        <span className="text-gray-500 font-bold uppercase tracking-wider text-mini">Tracking</span>
                                         <div className="flex items-center gap-2">
                                             <span className="font-mono font-semibold">{result.order_id}</span>
                                             <button
@@ -194,7 +194,7 @@ export default function TechSearchPanel() {
                 {results.length === 0 && searchQuery && !isSearching && (
                     <div className="flex flex-col items-center justify-center py-12 text-center opacity-40">
                         <Package className="w-12 h-12 mb-3 text-gray-300" />
-                        <p className="text-[10px] font-black uppercase tracking-widest text-gray-400">
+                        <p className="text-micro font-black uppercase tracking-widest text-gray-400">
                             No Results Found
                         </p>
                     </div>

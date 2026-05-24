@@ -14,7 +14,7 @@ USAV Orders Backend is an internal operations platform for a 5-person warehouse 
 | Raw SQL | `pg` Pool (`src/lib/db.ts`, `src/lib/neon-client.ts`) |
 | Realtime | Ably (WebSocket/SSE) |
 | Caching | Upstash Redis + in-memory (`src/lib/cache.ts`) |
-| Job Scheduling | Upstash QStash |
+| Job Scheduling | Vercel Cron (primary) + Upstash QStash (legacy/on-demand) |
 | File Storage | Vercel Blob |
 | Desktop | Electron |
 | Deployment | Vercel (web), Electron Builder (desktop), PM2 (pipeline) |

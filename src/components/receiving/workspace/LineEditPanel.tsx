@@ -145,7 +145,7 @@ function ReceiveProgressToast({ startedAt, intent }: { startedAt: number; intent
   const label = intent === 'scan_only' ? 'Marking as scanned…' : 'Receiving in Zoho…';
   return (
     <div className="flex min-w-[260px] flex-col gap-2">
-      <div className="flex items-center justify-between text-[12px] font-semibold text-gray-900">
+      <div className="flex items-center justify-between text-label font-semibold text-gray-900">
         <span>{label}</span>
         <span className="tabular-nums text-gray-500">{elapsed}s</span>
       </div>
@@ -1294,7 +1294,7 @@ export function LineEditPanel({
                       />
                     </div>
                     {filledExtraTrackingsCount > 0 ? (
-                      <span className="shrink-0 rounded bg-slate-200/90 px-1 py-px text-[9px] font-black tabular-nums text-slate-700">
+                      <span className="shrink-0 rounded bg-slate-200/90 px-1 py-px text-eyebrow font-black tabular-nums text-slate-700">
                         +{filledExtraTrackingsCount}
                       </span>
                     ) : null}
@@ -1449,7 +1449,7 @@ export function LineEditPanel({
                             setSourcePlatform(opt.value);
                             void savePlatform(opt.value);
                           }}
-                          className={`inline-flex h-8 items-center whitespace-nowrap rounded-full border px-3 text-[10px] font-black uppercase tracking-wide transition-colors ${
+                          className={`inline-flex h-8 items-center whitespace-nowrap rounded-full border px-3 text-micro font-black uppercase tracking-wide transition-colors ${
                             isActive
                               ? 'border-blue-600 bg-blue-600 text-white'
                               : 'border-gray-200 bg-white text-gray-600 hover:border-gray-300 hover:bg-gray-50'
@@ -1482,7 +1482,7 @@ export function LineEditPanel({
                             setReceivingType(opt.value);
                             patch({ receiving_type: opt.value });
                           }}
-                          className={`inline-flex h-8 items-center whitespace-nowrap rounded-full border px-3 text-[10px] font-black uppercase tracking-wide transition-colors ${
+                          className={`inline-flex h-8 items-center whitespace-nowrap rounded-full border px-3 text-micro font-black uppercase tracking-wide transition-colors ${
                             isActive
                               ? 'border-blue-600 bg-blue-600 text-white'
                               : 'border-gray-200 bg-white text-gray-600 hover:border-gray-300 hover:bg-gray-50'
@@ -1653,7 +1653,7 @@ export function LineEditPanel({
                     ? 'Link this line to a shipment to save support notes'
                     : 'Ticket context, vendor issues, PO-wide notes…'
                 }
-                className="mt-1 w-full resize-none rounded-md border border-slate-200 bg-white px-2 py-1 text-[11px] font-medium leading-snug text-slate-900 placeholder:text-slate-400 focus:border-blue-300 focus:outline-none focus:ring-2 focus:ring-blue-500/10 disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-400"
+                className="mt-1 w-full resize-none rounded-md border border-slate-200 bg-white px-2 py-1 text-caption font-medium leading-snug text-slate-900 placeholder:text-slate-400 focus:border-blue-300 focus:outline-none focus:ring-2 focus:ring-blue-500/10 disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-400"
               />
             </div>
           </div>

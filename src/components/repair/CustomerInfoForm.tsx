@@ -120,7 +120,7 @@ export function CustomerInfoForm({
                         <button
                             type="button"
                             onClick={addSerialNumber}
-                            className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-wide text-emerald-600 hover:text-emerald-700 transition-colors"
+                            className="flex items-center gap-1 text-micro font-bold uppercase tracking-wide text-emerald-600 hover:text-emerald-700 transition-colors"
                         >
                             <Plus className="h-3 w-3" />
                             Add
@@ -180,10 +180,10 @@ export function CustomerInfoForm({
 
             {/* Info strip */}
             <div className="rounded-xl bg-orange-600 p-4 text-white">
-                <p className="text-[10px] font-bold leading-relaxed">
+                <p className="text-micro font-bold leading-relaxed">
                     Product received into repair center — typically repaired within <span className="font-black">3-10 working days</span>.
                 </p>
-                <p className="mt-1.5 text-[9px] font-black uppercase tracking-[0.15em] text-orange-200">
+                <p className="mt-1.5 text-eyebrow font-black uppercase tracking-[0.15em] text-orange-200">
                     30-Day Warranty on all repairs
                 </p>
             </div>

@@ -303,7 +303,7 @@ export function MobilePackingReviewStep({
                     </div>
                     {renderStatusBadge(photo.uploadStatus)}
                     {photo.uploadStatus === 'failed' && photo.errorMessage && (
-                      <div className="absolute inset-x-0 bottom-0 bg-red-600/90 text-white text-[8px] font-bold px-1.5 py-0.5 leading-tight truncate">
+                      <div className="absolute inset-x-0 bottom-0 bg-red-600/90 text-white text-mini font-bold px-1.5 py-0.5 leading-tight truncate">
                         {photo.errorMessage}
                       </div>
                     )}
@@ -326,7 +326,7 @@ export function MobilePackingReviewStep({
       {/* Status line — lives between the photo grid and the Done button so
           the packer can read what's happening at a glance. */}
       {statusText && (
-        <div className="flex items-center justify-center gap-2 text-[11px] font-bold uppercase tracking-wider">
+        <div className="flex items-center justify-center gap-2 text-caption font-bold uppercase tracking-wider">
           {isUploading || isCompleting ? (
             <Loader2 className="w-3.5 h-3.5 animate-spin text-gray-500" />
           ) : allUploaded ? (
@@ -351,7 +351,7 @@ export function MobilePackingReviewStep({
         onClick={handlePrimary}
         disabled={primaryDisabled}
         className={cn(
-          'w-full h-[56px] rounded-2xl text-white text-[13px] font-black uppercase tracking-wider flex items-center justify-center gap-2 transition-colors disabled:opacity-50',
+          'w-full h-[56px] rounded-2xl text-white text-sm font-black uppercase tracking-wider flex items-center justify-center gap-2 transition-colors disabled:opacity-50',
           hasFailed
             ? 'bg-red-600 active:bg-red-700'
             : 'bg-emerald-600 active:bg-emerald-700',

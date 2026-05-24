@@ -1,4 +1,9 @@
 #!/usr/bin/env node
+/**
+ * ensure-google-sheets-qstash-schedules.js
+ * Legacy helper. Google Sheets transfer is now primarily driven by Vercel Cron.
+ * This script can still be used to (re)create a QStash fallback schedule if needed.
+ */
 
 const path = require('path');
 const { Client } = require('@upstash/qstash');

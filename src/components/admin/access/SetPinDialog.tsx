@@ -61,7 +61,7 @@ export function SetPinDialog({ open, staffName, onClose, onSubmit }: SetPinDialo
 
         <div className="mt-5 space-y-3">
           <label className="block">
-            <span className="block text-[11px] font-semibold uppercase tracking-wider text-gray-500">New PIN</span>
+            <span className="block text-caption font-semibold uppercase tracking-wider text-gray-500">New PIN</span>
             <input
               autoFocus
               type="password"
@@ -74,7 +74,7 @@ export function SetPinDialog({ open, staffName, onClose, onSubmit }: SetPinDialo
             />
           </label>
           <label className="block">
-            <span className="block text-[11px] font-semibold uppercase tracking-wider text-gray-500">Confirm PIN</span>
+            <span className="block text-caption font-semibold uppercase tracking-wider text-gray-500">Confirm PIN</span>
             <input
               type="password"
               inputMode="numeric"

@@ -115,7 +115,7 @@ export function ManualsSection({ catalogId, manuals, onRefresh }: ManualsSection
   return (
     <div className="space-y-2">
       {manuals.length === 0 && !showAdd && (
-        <p className="text-[10px] font-semibold text-gray-400 px-1">No manuals linked yet.</p>
+        <p className="text-micro font-semibold text-gray-400 px-1">No manuals linked yet.</p>
       )}
 
       {manuals.map((manual) => (
@@ -124,7 +124,7 @@ export function ManualsSection({ catalogId, manuals, onRefresh }: ManualsSection
             <FileText className="h-3.5 w-3.5 text-gray-400 mt-0.5 shrink-0" />
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-1.5">
-                <span className="truncate text-[11px] font-bold text-gray-800">
+                <span className="truncate text-caption font-bold text-gray-800">
                   {manual.display_name || 'Untitled Manual'}
                 </span>
                 {manual.type && (
@@ -138,7 +138,7 @@ export function ManualsSection({ catalogId, manuals, onRefresh }: ManualsSection
                   href={manualHref(manual)!}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="mt-0.5 inline-flex items-center gap-1 text-[9px] font-bold text-blue-600 hover:text-blue-800"
+                  className="mt-0.5 inline-flex items-center gap-1 text-eyebrow font-bold text-blue-600 hover:text-blue-800"
                   onClick={(e) => e.stopPropagation()}
                 >
                   <ExternalLink className="h-2.5 w-2.5" /> Open
@@ -171,19 +171,19 @@ export function ManualsSection({ catalogId, manuals, onRefresh }: ManualsSection
                 value={displayName}
                 onChange={(e) => setDisplayName(e.target.value)}
                 placeholder="Display name"
-                className="w-full rounded-lg border border-gray-200 bg-gray-50 px-2.5 py-1.5 text-[11px] font-bold text-gray-900 placeholder:text-gray-400"
+                className="w-full rounded-lg border border-gray-200 bg-gray-50 px-2.5 py-1.5 text-caption font-bold text-gray-900 placeholder:text-gray-400"
               />
               <input
                 type="text"
                 value={googleFileId}
                 onChange={(e) => setGoogleFileId(e.target.value)}
                 placeholder="Google Doc file ID"
-                className="w-full rounded-lg border border-gray-200 bg-gray-50 px-2.5 py-1.5 text-[11px] font-mono font-bold text-gray-900 placeholder:text-gray-400"
+                className="w-full rounded-lg border border-gray-200 bg-gray-50 px-2.5 py-1.5 text-caption font-mono font-bold text-gray-900 placeholder:text-gray-400"
               />
               <select
                 value={manualType}
                 onChange={(e) => setManualType(e.target.value)}
-                className="w-full rounded-lg border border-gray-200 bg-gray-50 px-2.5 py-1.5 text-[11px] font-bold text-gray-900"
+                className="w-full rounded-lg border border-gray-200 bg-gray-50 px-2.5 py-1.5 text-caption font-bold text-gray-900"
               >
                 {MANUAL_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
               </select>
@@ -192,7 +192,7 @@ export function ManualsSection({ catalogId, manuals, onRefresh }: ManualsSection
                   type="button"
                   onClick={handleSave}
                   disabled={saving || !googleFileId.trim()}
-                  className="flex-1 flex items-center justify-center gap-1.5 rounded-lg bg-gray-900 px-3 py-1.5 text-[10px] font-black uppercase tracking-wider text-white hover:bg-gray-800 disabled:opacity-50"
+                  className="flex-1 flex items-center justify-center gap-1.5 rounded-lg bg-gray-900 px-3 py-1.5 text-micro font-black uppercase tracking-wider text-white hover:bg-gray-800 disabled:opacity-50"
                 >
                   {saving && <Loader2 className="h-3 w-3 animate-spin" />}
                   {editingId ? 'Update' : 'Add Manual'}
@@ -202,7 +202,7 @@ export function ManualsSection({ catalogId, manuals, onRefresh }: ManualsSection
                     type="button"
                     onClick={() => handleRemove(editingId)}
                     disabled={removing === editingId}
-                    className="flex items-center gap-1 rounded-lg border border-red-200 px-2.5 py-1.5 text-[10px] font-black uppercase tracking-wider text-red-600 hover:bg-red-50"
+                    className="flex items-center gap-1 rounded-lg border border-red-200 px-2.5 py-1.5 text-micro font-black uppercase tracking-wider text-red-600 hover:bg-red-50"
                   >
                     {removing === editingId ? <Loader2 className="h-3 w-3 animate-spin" /> : <Trash2 className="h-3 w-3" />}
                   </button>
@@ -210,7 +210,7 @@ export function ManualsSection({ catalogId, manuals, onRefresh }: ManualsSection
                 <button
                   type="button"
                   onClick={resetForm}
-                  className="rounded-lg border border-gray-200 px-3 py-1.5 text-[10px] font-black uppercase tracking-wider text-gray-500 hover:bg-gray-50"
+                  className="rounded-lg border border-gray-200 px-3 py-1.5 text-micro font-black uppercase tracking-wider text-gray-500 hover:bg-gray-50"
                 >
                   Cancel
                 </button>
@@ -224,7 +224,7 @@ export function ManualsSection({ catalogId, manuals, onRefresh }: ManualsSection
         <button
           type="button"
           onClick={() => { resetForm(); setShowAdd(true); }}
-          className="flex items-center gap-1.5 rounded-lg px-2 py-1.5 text-[10px] font-black uppercase tracking-wider text-blue-600 hover:bg-blue-50 transition-colors"
+          className="flex items-center gap-1.5 rounded-lg px-2 py-1.5 text-micro font-black uppercase tracking-wider text-blue-600 hover:bg-blue-50 transition-colors"
         >
           <Plus className="h-3 w-3" /> Add Manual
         </button>

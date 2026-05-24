@@ -112,7 +112,7 @@ function RepairMobilePageInner() {
             </p>
             <h1 className="truncate text-lg font-black text-slate-900">{rsCode}</h1>
             {repair && (
-              <p className="mt-0.5 truncate text-[11px] font-bold text-slate-600">
+              <p className="mt-0.5 truncate text-caption font-bold text-slate-600">
                 {customerFirstName} · {repair.product_title || 'Bose Repair'}
               </p>
             )}
@@ -147,7 +147,7 @@ function RepairMobilePageInner() {
                 type="button"
                 onClick={() => handleStatusChange(status)}
                 disabled={!repair || !!updatingStatus}
-                className={`shrink-0 rounded-full border px-3.5 py-2 text-[11px] font-black uppercase tracking-wide transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed ${tone}`}
+                className={`shrink-0 rounded-full border px-3.5 py-2 text-caption font-black uppercase tracking-wide transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed ${tone}`}
               >
                 {pending ? 'Saving…' : status}
               </button>

@@ -151,7 +151,7 @@ export function ScanCameraMobile({
           <div className="flex-shrink-0 flex items-center justify-between px-4 pt-[max(0.75rem,env(safe-area-inset-top))] pb-2">
             <div className="flex-1 min-w-0">
               {header ?? (
-                <p className="text-[10px] font-black uppercase tracking-[0.2em] text-white/60">
+                <p className="text-micro font-black uppercase tracking-[0.2em] text-white/60">
                   Scan Barcode
                 </p>
               )}
@@ -274,7 +274,7 @@ export function ScanCameraMobile({
                 <button
                   type="button"
                   onClick={attemptStartCamera}
-                  className="h-11 px-5 rounded-xl bg-blue-600 text-white text-[11px] font-black uppercase tracking-wider active:bg-blue-700 transition-colors"
+                  className="h-11 px-5 rounded-xl bg-blue-600 text-white text-caption font-black uppercase tracking-wider active:bg-blue-700 transition-colors"
                 >
                   Try Again
                 </button>
@@ -305,7 +305,7 @@ export function ScanCameraMobile({
                   disabled={!manualValue.trim()}
                   className="
                     h-11 px-4 rounded-xl bg-blue-600 text-white
-                    text-[11px] font-black uppercase tracking-wider
+                    text-caption font-black uppercase tracking-wider
                     disabled:opacity-40 active:bg-blue-700
                   "
                 >

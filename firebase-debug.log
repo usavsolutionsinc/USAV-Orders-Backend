@@ -586,3 +586,101 @@
 [debug] [2026-05-22T15:48:54.779Z] > authorizing via signed-in user (flowframebackend@gmail.com)
 [debug] [2026-05-22T15:48:54.780Z] > command requires scopes: ["email","openid","https://www.googleapis.com/auth/cloudplatformprojects.readonly","https://www.googleapis.com/auth/firebase","https://www.googleapis.com/auth/cloud-platform"]
 [debug] [2026-05-22T15:48:54.780Z] > authorizing via signed-in user (flowframebackend@gmail.com)
+[debug] [2026-05-24T03:11:56.323Z] > command requires scopes: ["email","openid","https://www.googleapis.com/auth/cloudplatformprojects.readonly","https://www.googleapis.com/auth/firebase","https://www.googleapis.com/auth/cloud-platform"]
+[debug] [2026-05-24T03:11:56.324Z] > authorizing via signed-in user (flowframebackend@gmail.com)
+[debug] [2026-05-24T03:11:56.324Z] > command requires scopes: ["email","openid","https://www.googleapis.com/auth/cloudplatformprojects.readonly","https://www.googleapis.com/auth/firebase","https://www.googleapis.com/auth/cloud-platform"]
+[debug] [2026-05-24T03:11:56.324Z] > authorizing via signed-in user (flowframebackend@gmail.com)
+[debug] [2026-05-24T03:11:56.329Z] > command requires scopes: ["email","openid","https://www.googleapis.com/auth/cloudplatformprojects.readonly","https://www.googleapis.com/auth/firebase","https://www.googleapis.com/auth/cloud-platform"]
+[debug] [2026-05-24T03:11:56.329Z] > authorizing via signed-in user (flowframebackend@gmail.com)
+[debug] [2026-05-24T03:11:56.543Z] > command requires scopes: ["email","openid","https://www.googleapis.com/auth/cloudplatformprojects.readonly","https://www.googleapis.com/auth/firebase","https://www.googleapis.com/auth/cloud-platform"]
+[debug] [2026-05-24T03:11:56.543Z] > authorizing via signed-in user (flowframebackend@gmail.com)
+[debug] [2026-05-24T03:11:56.544Z] > command requires scopes: ["email","openid","https://www.googleapis.com/auth/cloudplatformprojects.readonly","https://www.googleapis.com/auth/firebase","https://www.googleapis.com/auth/cloud-platform"]
+[debug] [2026-05-24T03:11:56.544Z] > authorizing via signed-in user (flowframebackend@gmail.com)
+[debug] [2026-05-24T03:11:56.547Z] > command requires scopes: ["email","openid","https://www.googleapis.com/auth/cloudplatformprojects.readonly","https://www.googleapis.com/auth/firebase","https://www.googleapis.com/auth/cloud-platform"]
+[debug] [2026-05-24T03:11:56.547Z] > authorizing via signed-in user (flowframebackend@gmail.com)
+[debug] [2026-05-24T03:11:56.548Z] > command requires scopes: ["email","openid","https://www.googleapis.com/auth/cloudplatformprojects.readonly","https://www.googleapis.com/auth/firebase","https://www.googleapis.com/auth/cloud-platform"]
+[debug] [2026-05-24T03:11:56.548Z] > authorizing via signed-in user (flowframebackend@gmail.com)
+[debug] [2026-05-24T17:54:17.214Z] > command requires scopes: ["email","openid","https://www.googleapis.com/auth/cloudplatformprojects.readonly","https://www.googleapis.com/auth/firebase","https://www.googleapis.com/auth/cloud-platform"]
+[debug] [2026-05-24T17:54:17.215Z] > authorizing via signed-in user (flowframebackend@gmail.com)
+[debug] [2026-05-24T17:54:17.215Z] > command requires scopes: ["email","openid","https://www.googleapis.com/auth/cloudplatformprojects.readonly","https://www.googleapis.com/auth/firebase","https://www.googleapis.com/auth/cloud-platform"]
+[debug] [2026-05-24T17:54:17.215Z] > authorizing via signed-in user (flowframebackend@gmail.com)
+[debug] [2026-05-24T17:54:17.220Z] > command requires scopes: ["email","openid","https://www.googleapis.com/auth/cloudplatformprojects.readonly","https://www.googleapis.com/auth/firebase","https://www.googleapis.com/auth/cloud-platform"]
+[debug] [2026-05-24T17:54:17.220Z] > authorizing via signed-in user (flowframebackend@gmail.com)
+[debug] [2026-05-24T17:54:17.420Z] > command requires scopes: ["email","openid","https://www.googleapis.com/auth/cloudplatformprojects.readonly","https://www.googleapis.com/auth/firebase","https://www.googleapis.com/auth/cloud-platform"]
+[debug] [2026-05-24T17:54:17.420Z] > authorizing via signed-in user (flowframebackend@gmail.com)
+[debug] [2026-05-24T17:54:17.421Z] > command requires scopes: ["email","openid","https://www.googleapis.com/auth/cloudplatformprojects.readonly","https://www.googleapis.com/auth/firebase","https://www.googleapis.com/auth/cloud-platform"]
+[debug] [2026-05-24T17:54:17.421Z] > authorizing via signed-in user (flowframebackend@gmail.com)
+[debug] [2026-05-24T17:54:17.421Z] > command requires scopes: ["email","openid","https://www.googleapis.com/auth/cloudplatformprojects.readonly","https://www.googleapis.com/auth/firebase","https://www.googleapis.com/auth/cloud-platform"]
+[debug] [2026-05-24T17:54:17.421Z] > authorizing via signed-in user (flowframebackend@gmail.com)
+[debug] [2026-05-24T17:54:17.422Z] > command requires scopes: ["email","openid","https://www.googleapis.com/auth/cloudplatformprojects.readonly","https://www.googleapis.com/auth/firebase","https://www.googleapis.com/auth/cloud-platform"]
+[debug] [2026-05-24T17:54:17.422Z] > authorizing via signed-in user (flowframebackend@gmail.com)
+[debug] [2026-05-24T17:54:26.471Z] > command requires scopes: ["email","openid","https://www.googleapis.com/auth/cloudplatformprojects.readonly","https://www.googleapis.com/auth/firebase","https://www.googleapis.com/auth/cloud-platform"]
+[debug] [2026-05-24T17:54:26.473Z] > authorizing via signed-in user (flowframebackend@gmail.com)
+[debug] [2026-05-24T17:54:26.473Z] > command requires scopes: ["email","openid","https://www.googleapis.com/auth/cloudplatformprojects.readonly","https://www.googleapis.com/auth/firebase","https://www.googleapis.com/auth/cloud-platform"]
+[debug] [2026-05-24T17:54:26.473Z] > authorizing via signed-in user (flowframebackend@gmail.com)
+[debug] [2026-05-24T17:54:26.478Z] > command requires scopes: ["email","openid","https://www.googleapis.com/auth/cloudplatformprojects.readonly","https://www.googleapis.com/auth/firebase","https://www.googleapis.com/auth/cloud-platform"]
+[debug] [2026-05-24T17:54:26.478Z] > authorizing via signed-in user (flowframebackend@gmail.com)
+[debug] [2026-05-24T17:54:26.685Z] > command requires scopes: ["email","openid","https://www.googleapis.com/auth/cloudplatformprojects.readonly","https://www.googleapis.com/auth/firebase","https://www.googleapis.com/auth/cloud-platform"]
+[debug] [2026-05-24T17:54:26.685Z] > authorizing via signed-in user (flowframebackend@gmail.com)
+[debug] [2026-05-24T17:54:26.685Z] > command requires scopes: ["email","openid","https://www.googleapis.com/auth/cloudplatformprojects.readonly","https://www.googleapis.com/auth/firebase","https://www.googleapis.com/auth/cloud-platform"]
+[debug] [2026-05-24T17:54:26.685Z] > authorizing via signed-in user (flowframebackend@gmail.com)
+[debug] [2026-05-24T17:54:26.688Z] > command requires scopes: ["email","openid","https://www.googleapis.com/auth/cloudplatformprojects.readonly","https://www.googleapis.com/auth/firebase","https://www.googleapis.com/auth/cloud-platform"]
+[debug] [2026-05-24T17:54:26.688Z] > authorizing via signed-in user (flowframebackend@gmail.com)
+[debug] [2026-05-24T17:54:26.689Z] > command requires scopes: ["email","openid","https://www.googleapis.com/auth/cloudplatformprojects.readonly","https://www.googleapis.com/auth/firebase","https://www.googleapis.com/auth/cloud-platform"]
+[debug] [2026-05-24T17:54:26.689Z] > authorizing via signed-in user (flowframebackend@gmail.com)
+[debug] [2026-05-24T18:00:07.367Z] > command requires scopes: ["email","openid","https://www.googleapis.com/auth/cloudplatformprojects.readonly","https://www.googleapis.com/auth/firebase","https://www.googleapis.com/auth/cloud-platform"]
+[debug] [2026-05-24T18:00:07.368Z] > authorizing via signed-in user (flowframebackend@gmail.com)
+[debug] [2026-05-24T18:00:07.368Z] > command requires scopes: ["email","openid","https://www.googleapis.com/auth/cloudplatformprojects.readonly","https://www.googleapis.com/auth/firebase","https://www.googleapis.com/auth/cloud-platform"]
+[debug] [2026-05-24T18:00:07.368Z] > authorizing via signed-in user (flowframebackend@gmail.com)
+[debug] [2026-05-24T18:00:07.374Z] > command requires scopes: ["email","openid","https://www.googleapis.com/auth/cloudplatformprojects.readonly","https://www.googleapis.com/auth/firebase","https://www.googleapis.com/auth/cloud-platform"]
+[debug] [2026-05-24T18:00:07.374Z] > authorizing via signed-in user (flowframebackend@gmail.com)
+[debug] [2026-05-24T18:00:07.566Z] > command requires scopes: ["email","openid","https://www.googleapis.com/auth/cloudplatformprojects.readonly","https://www.googleapis.com/auth/firebase","https://www.googleapis.com/auth/cloud-platform"]
+[debug] [2026-05-24T18:00:07.566Z] > authorizing via signed-in user (flowframebackend@gmail.com)
+[debug] [2026-05-24T18:00:07.566Z] > command requires scopes: ["email","openid","https://www.googleapis.com/auth/cloudplatformprojects.readonly","https://www.googleapis.com/auth/firebase","https://www.googleapis.com/auth/cloud-platform"]
+[debug] [2026-05-24T18:00:07.566Z] > authorizing via signed-in user (flowframebackend@gmail.com)
+[debug] [2026-05-24T18:00:07.567Z] > command requires scopes: ["email","openid","https://www.googleapis.com/auth/cloudplatformprojects.readonly","https://www.googleapis.com/auth/firebase","https://www.googleapis.com/auth/cloud-platform"]
+[debug] [2026-05-24T18:00:07.567Z] > authorizing via signed-in user (flowframebackend@gmail.com)
+[debug] [2026-05-24T18:00:07.568Z] > command requires scopes: ["email","openid","https://www.googleapis.com/auth/cloudplatformprojects.readonly","https://www.googleapis.com/auth/firebase","https://www.googleapis.com/auth/cloud-platform"]
+[debug] [2026-05-24T18:00:07.568Z] > authorizing via signed-in user (flowframebackend@gmail.com)
+[debug] [2026-05-24T18:00:45.433Z] > command requires scopes: ["email","openid","https://www.googleapis.com/auth/cloudplatformprojects.readonly","https://www.googleapis.com/auth/firebase","https://www.googleapis.com/auth/cloud-platform"]
+[debug] [2026-05-24T18:00:45.434Z] > authorizing via signed-in user (flowframebackend@gmail.com)
+[debug] [2026-05-24T18:00:45.434Z] > command requires scopes: ["email","openid","https://www.googleapis.com/auth/cloudplatformprojects.readonly","https://www.googleapis.com/auth/firebase","https://www.googleapis.com/auth/cloud-platform"]
+[debug] [2026-05-24T18:00:45.434Z] > authorizing via signed-in user (flowframebackend@gmail.com)
+[debug] [2026-05-24T18:00:45.439Z] > command requires scopes: ["email","openid","https://www.googleapis.com/auth/cloudplatformprojects.readonly","https://www.googleapis.com/auth/firebase","https://www.googleapis.com/auth/cloud-platform"]
+[debug] [2026-05-24T18:00:45.439Z] > authorizing via signed-in user (flowframebackend@gmail.com)
+[debug] [2026-05-24T18:00:45.690Z] > command requires scopes: ["email","openid","https://www.googleapis.com/auth/cloudplatformprojects.readonly","https://www.googleapis.com/auth/firebase","https://www.googleapis.com/auth/cloud-platform"]
+[debug] [2026-05-24T18:00:45.690Z] > authorizing via signed-in user (flowframebackend@gmail.com)
+[debug] [2026-05-24T18:00:45.690Z] > command requires scopes: ["email","openid","https://www.googleapis.com/auth/cloudplatformprojects.readonly","https://www.googleapis.com/auth/firebase","https://www.googleapis.com/auth/cloud-platform"]
+[debug] [2026-05-24T18:00:45.691Z] > authorizing via signed-in user (flowframebackend@gmail.com)
+[debug] [2026-05-24T18:00:45.692Z] > command requires scopes: ["email","openid","https://www.googleapis.com/auth/cloudplatformprojects.readonly","https://www.googleapis.com/auth/firebase","https://www.googleapis.com/auth/cloud-platform"]
+[debug] [2026-05-24T18:00:45.692Z] > authorizing via signed-in user (flowframebackend@gmail.com)
+[debug] [2026-05-24T18:00:45.692Z] > command requires scopes: ["email","openid","https://www.googleapis.com/auth/cloudplatformprojects.readonly","https://www.googleapis.com/auth/firebase","https://www.googleapis.com/auth/cloud-platform"]
+[debug] [2026-05-24T18:00:45.692Z] > authorizing via signed-in user (flowframebackend@gmail.com)
+[debug] [2026-05-24T18:00:57.488Z] > command requires scopes: ["email","openid","https://www.googleapis.com/auth/cloudplatformprojects.readonly","https://www.googleapis.com/auth/firebase","https://www.googleapis.com/auth/cloud-platform"]
+[debug] [2026-05-24T18:00:57.489Z] > authorizing via signed-in user (flowframebackend@gmail.com)
+[debug] [2026-05-24T18:00:57.489Z] > command requires scopes: ["email","openid","https://www.googleapis.com/auth/cloudplatformprojects.readonly","https://www.googleapis.com/auth/firebase","https://www.googleapis.com/auth/cloud-platform"]
+[debug] [2026-05-24T18:00:57.489Z] > authorizing via signed-in user (flowframebackend@gmail.com)
+[debug] [2026-05-24T18:00:57.494Z] > command requires scopes: ["email","openid","https://www.googleapis.com/auth/cloudplatformprojects.readonly","https://www.googleapis.com/auth/firebase","https://www.googleapis.com/auth/cloud-platform"]
+[debug] [2026-05-24T18:00:57.494Z] > authorizing via signed-in user (flowframebackend@gmail.com)
+[debug] [2026-05-24T18:00:57.698Z] > command requires scopes: ["email","openid","https://www.googleapis.com/auth/cloudplatformprojects.readonly","https://www.googleapis.com/auth/firebase","https://www.googleapis.com/auth/cloud-platform"]
+[debug] [2026-05-24T18:00:57.698Z] > authorizing via signed-in user (flowframebackend@gmail.com)
+[debug] [2026-05-24T18:00:57.698Z] > command requires scopes: ["email","openid","https://www.googleapis.com/auth/cloudplatformprojects.readonly","https://www.googleapis.com/auth/firebase","https://www.googleapis.com/auth/cloud-platform"]
+[debug] [2026-05-24T18:00:57.698Z] > authorizing via signed-in user (flowframebackend@gmail.com)
+[debug] [2026-05-24T18:00:57.699Z] > command requires scopes: ["email","openid","https://www.googleapis.com/auth/cloudplatformprojects.readonly","https://www.googleapis.com/auth/firebase","https://www.googleapis.com/auth/cloud-platform"]
+[debug] [2026-05-24T18:00:57.699Z] > authorizing via signed-in user (flowframebackend@gmail.com)
+[debug] [2026-05-24T18:00:57.699Z] > command requires scopes: ["email","openid","https://www.googleapis.com/auth/cloudplatformprojects.readonly","https://www.googleapis.com/auth/firebase","https://www.googleapis.com/auth/cloud-platform"]
+[debug] [2026-05-24T18:00:57.699Z] > authorizing via signed-in user (flowframebackend@gmail.com)
+[debug] [2026-05-24T18:01:29.632Z] > command requires scopes: ["email","openid","https://www.googleapis.com/auth/cloudplatformprojects.readonly","https://www.googleapis.com/auth/firebase","https://www.googleapis.com/auth/cloud-platform"]
+[debug] [2026-05-24T18:01:29.633Z] > authorizing via signed-in user (flowframebackend@gmail.com)
+[debug] [2026-05-24T18:01:29.633Z] > command requires scopes: ["email","openid","https://www.googleapis.com/auth/cloudplatformprojects.readonly","https://www.googleapis.com/auth/firebase","https://www.googleapis.com/auth/cloud-platform"]
+[debug] [2026-05-24T18:01:29.633Z] > authorizing via signed-in user (flowframebackend@gmail.com)
+[debug] [2026-05-24T18:01:29.639Z] > command requires scopes: ["email","openid","https://www.googleapis.com/auth/cloudplatformprojects.readonly","https://www.googleapis.com/auth/firebase","https://www.googleapis.com/auth/cloud-platform"]
+[debug] [2026-05-24T18:01:29.639Z] > authorizing via signed-in user (flowframebackend@gmail.com)
+[debug] [2026-05-24T18:01:29.832Z] > command requires scopes: ["email","openid","https://www.googleapis.com/auth/cloudplatformprojects.readonly","https://www.googleapis.com/auth/firebase","https://www.googleapis.com/auth/cloud-platform"]
+[debug] [2026-05-24T18:01:29.832Z] > authorizing via signed-in user (flowframebackend@gmail.com)
+[debug] [2026-05-24T18:01:29.832Z] > command requires scopes: ["email","openid","https://www.googleapis.com/auth/cloudplatformprojects.readonly","https://www.googleapis.com/auth/firebase","https://www.googleapis.com/auth/cloud-platform"]
+[debug] [2026-05-24T18:01:29.832Z] > authorizing via signed-in user (flowframebackend@gmail.com)
+[debug] [2026-05-24T18:01:29.833Z] > command requires scopes: ["email","openid","https://www.googleapis.com/auth/cloudplatformprojects.readonly","https://www.googleapis.com/auth/firebase","https://www.googleapis.com/auth/cloud-platform"]
+[debug] [2026-05-24T18:01:29.833Z] > authorizing via signed-in user (flowframebackend@gmail.com)
+[debug] [2026-05-24T18:01:29.833Z] > command requires scopes: ["email","openid","https://www.googleapis.com/auth/cloudplatformprojects.readonly","https://www.googleapis.com/auth/firebase","https://www.googleapis.com/auth/cloud-platform"]
+[debug] [2026-05-24T18:01:29.833Z] > authorizing via signed-in user (flowframebackend@gmail.com)

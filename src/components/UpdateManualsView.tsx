@@ -130,8 +130,8 @@ export default function UpdateManualsView({ techId, days = 365 }: UpdateManualsV
       <div className={sidebarHeaderBandClass}>
         <div className="flex min-h-[44px] items-center justify-between gap-3 px-3">
           <div className="min-w-0 flex items-baseline gap-2">
-            <p className="text-[12px] font-semibold tracking-tight text-gray-950">{missingCount}</p>
-            <p className="truncate text-[11px] font-semibold tracking-tight text-gray-500">
+            <p className="text-label font-semibold tracking-tight text-gray-950">{missingCount}</p>
+            <p className="truncate text-caption font-semibold tracking-tight text-gray-500">
               {missingCount === 1 ? 'order' : 'orders'} without a manual
             </p>
           </div>
@@ -155,7 +155,7 @@ export default function UpdateManualsView({ techId, days = 365 }: UpdateManualsV
       {/* ── Error banner ── */}
       {error && (
         <div className="flex-shrink-0 mx-6 mt-4 rounded-2xl border border-red-200 bg-red-50 px-4 py-3">
-          <p className="text-[10px] font-black uppercase tracking-widest text-red-700">{error}</p>
+          <p className="text-micro font-black uppercase tracking-widest text-red-700">{error}</p>
         </div>
       )}
 

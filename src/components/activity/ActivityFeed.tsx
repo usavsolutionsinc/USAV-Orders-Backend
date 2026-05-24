@@ -193,7 +193,7 @@ export function ActivityFeed({ maxItems = 50 }: { maxItems?: number }) {
                 )
               )}
               {isLedger && entry.scan_ref && (
-                <div className="truncate text-[10px] text-gray-400">SKU {entry.scan_ref}</div>
+                <div className="truncate text-micro text-gray-400">SKU {entry.scan_ref}</div>
               )}
             </div>
             <span className="shrink-0 text-gray-400">{formatTime(entry.created_at)}</span>

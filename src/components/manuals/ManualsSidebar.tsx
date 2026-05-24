@@ -47,13 +47,13 @@ function ManualRow({
           <FileText className={`h-3.5 w-3.5 ${isSelected ? 'text-blue-600' : 'text-gray-500 group-hover:text-blue-500'}`} />
         </div>
         <div className="min-w-0 flex-1">
-          <p className={`text-[11px] font-black tracking-tight truncate leading-tight ${
+          <p className={`text-caption font-black tracking-tight truncate leading-tight ${
             isSelected ? 'text-blue-900' : 'text-gray-900'
           }`}>
             {title}
           </p>
           {subtitle && (
-            <p className={`mt-0.5 text-[9px] font-bold uppercase tracking-wider truncate ${
+            <p className={`mt-0.5 text-eyebrow font-bold uppercase tracking-wider truncate ${
               isSelected ? 'text-blue-500' : 'text-gray-500'
             }`}>
               {subtitle}
@@ -164,7 +164,7 @@ export function ManualsSidebar({ embedded = false }: { embedded?: boolean }) {
           <div className="flex items-center justify-center py-12">
             <div className="text-center space-y-2">
               <div className="h-8 w-8 border-2 border-blue-200 border-t-blue-600 rounded-full animate-spin mx-auto" />
-              <p className="text-[10px] font-bold uppercase tracking-widest text-gray-500">Searching…</p>
+              <p className="text-micro font-bold uppercase tracking-widest text-gray-500">Searching…</p>
             </div>
           </div>
         ) : manuals.length === 0 ? (
@@ -191,7 +191,7 @@ export function ManualsSidebar({ embedded = false }: { embedded?: boolean }) {
       </div>
 
       <div className="border-t border-gray-100 bg-white px-3 py-2">
-        <p className="text-[9px] font-bold uppercase tracking-[0.2em] text-gray-500">
+        <p className="text-eyebrow font-bold uppercase tracking-[0.2em] text-gray-500">
           {manuals.length} manual{manuals.length !== 1 ? 's' : ''}
           {localSearch.trim() ? ` for "${localSearch.trim()}"` : ' total'}
         </p>

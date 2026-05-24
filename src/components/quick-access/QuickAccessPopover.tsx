@@ -95,20 +95,20 @@ export function QuickAccessPopover({ onClose, onOpenHistoryPopover }: QuickAcces
     >
       <header className="flex shrink-0 items-center justify-between gap-2 border-b border-gray-100 px-4 py-2.5">
         <div className="flex items-center gap-2">
-          <p className="text-[12px] font-bold text-gray-900">Quick access</p>
+          <p className="text-label font-bold text-gray-900">Quick access</p>
         </div>
         <div className="flex items-center gap-1.5">
           {!isMobile && (
             <button
               type="button"
               onClick={handleOpenCommandBar}
-              className="inline-flex items-center gap-1.5 rounded-md border border-gray-200 bg-gray-50 px-2 py-1 text-[11px] font-semibold text-gray-700 transition-colors hover:border-gray-300 hover:bg-white hover:text-gray-900"
+              className="inline-flex items-center gap-1.5 rounded-md border border-gray-200 bg-gray-50 px-2 py-1 text-caption font-semibold text-gray-700 transition-colors hover:border-gray-300 hover:bg-white hover:text-gray-900"
               aria-label="Open command bar"
               title="Search the app (⌘K)"
             >
               <Search className="h-3 w-3" />
               <span>Search</span>
-              <kbd className="rounded-sm bg-white px-1 font-mono text-[9px] text-gray-500 border border-gray-200">⌘K</kbd>
+              <kbd className="rounded-sm bg-white px-1 font-mono text-eyebrow text-gray-500 border border-gray-200">⌘K</kbd>
             </button>
           )}
           <button
@@ -150,15 +150,15 @@ export function QuickAccessPopover({ onClose, onOpenHistoryPopover }: QuickAcces
             onChange={(hex) => updateColorMutation.mutate(hex)}
           />
           <div className="min-w-0 flex-1">
-            <div className="truncate text-[13px] font-semibold text-gray-900">{staffName || `Staff #${user.staffId}`}</div>
-            <div className="truncate text-[10px] font-medium uppercase tracking-[0.14em] text-gray-500">{user.role.replace(/_/g, ' ')}</div>
+            <div className="truncate text-sm font-semibold text-gray-900">{staffName || `Staff #${user.staffId}`}</div>
+            <div className="truncate text-micro font-medium uppercase tracking-[0.14em] text-gray-500">{user.role.replace(/_/g, ' ')}</div>
           </div>
           <div className="flex shrink-0 items-center gap-1.5">
             {showSwitchStaff && (
               <button
                 type="button"
                 onClick={() => { onClose(); openSwitcher(); }}
-                className="inline-flex items-center gap-1 rounded-md border border-gray-200 bg-white px-2 py-1 text-[10px] font-semibold uppercase tracking-wider text-gray-700 transition hover:bg-gray-50 hover:text-gray-900"
+                className="inline-flex items-center gap-1 rounded-md border border-gray-200 bg-white px-2 py-1 text-micro font-semibold uppercase tracking-wider text-gray-700 transition hover:bg-gray-50 hover:text-gray-900"
                 title="Switch to another staff"
               >
                 <svg className="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M16 3h5v5"/><path d="M21 3l-7 7"/><path d="M8 21H3v-5"/><path d="M3 21l7-7"/></svg>
@@ -182,8 +182,8 @@ export function QuickAccessPopover({ onClose, onOpenHistoryPopover }: QuickAcces
           onClick={() => { onClose(); router.push('/signin'); }}
           className="flex shrink-0 items-center justify-between border-t border-gray-100 bg-gray-50/60 px-4 py-3 text-left transition hover:bg-gray-100"
         >
-          <span className="text-[13px] font-semibold text-gray-900">Sign in</span>
-          <span className="text-[11px] text-gray-500">Pick a staff →</span>
+          <span className="text-sm font-semibold text-gray-900">Sign in</span>
+          <span className="text-caption text-gray-500">Pick a staff →</span>
         </button>
       )}
 
@@ -191,7 +191,7 @@ export function QuickAccessPopover({ onClose, onOpenHistoryPopover }: QuickAcces
         <Link
           href="/settings?section=quick-access"
           onClick={onClose}
-          className="text-[11px] font-semibold text-gray-600 hover:text-gray-900"
+          className="text-caption font-semibold text-gray-600 hover:text-gray-900"
         >
           Manage in Settings →
         </Link>
@@ -235,7 +235,7 @@ function SelfColorWheel({
     >
       {/* Inner avatar — white ring separates it from the conic hue ring */}
       <span
-        className="relative flex h-full w-full items-center justify-center rounded-full text-[14px] font-bold text-white ring-2 ring-white"
+        className="relative flex h-full w-full items-center justify-center rounded-full text-sm font-bold text-white ring-2 ring-white"
         style={{ backgroundColor: value }}
       >
         {initials}

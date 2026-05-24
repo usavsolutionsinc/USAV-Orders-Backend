@@ -5,31 +5,47 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   Package,
   Wrench,
-  AlertCircle,
-  Clock,
   Activity,
   Loader2,
   Barcode,
 } from '@/components/Icons';
-import { OperationsHeader } from './OperationsHeader';
-import { StatCard } from '@/design-system/components/StatCard';
+import { GlobalHeaderBar } from './GlobalHeaderBar';
+import { WelcomeHero } from './WelcomeHero';
+import { PerformanceGoals } from './PerformanceGoals';
+import { DashboardKPICard } from './DashboardKPICard';
+import { OperationsMatrix } from './OperationsMatrix';
+import { StaffGoalsRail } from './StaffGoalsRail';
+import { LiveFeedCard } from './LiveFeedCard';
+import { SystemHealthRow } from './SystemHealthRow';
+import { InventoryHealthRow } from './InventoryHealthRow';
+import { ExceptionsRow } from './ExceptionsRow';
+import { PipelineRow } from './PipelineRow';
+import { VelocityAndDeadStock } from './VelocityAndDeadStock';
+import { SupportOverviewCard } from './SupportOverviewCard';
+import { SecondaryKPITiles } from './SecondaryKPITiles';
 import { useAblyChannel } from '@/hooks/useAblyChannel';
-import { useSearchParams } from 'next/navigation';
-import { WorkOrdersDashboard } from '@/components/work-orders/WorkOrdersDashboard';
 import PendingOrdersTable from '@/components/PendingOrdersTable';
 import type { DashboardData } from '@/features/operations/types';
+import { sectionLabel, cardTitle } from '@/design-system/tokens/typography/presets';
 
-type View = 'work-queue' | 'orders';
-
-function resolveView(raw: string | null): View {
-  if (raw === 'orders') return 'orders';
-  return 'work-queue';
+function SectionHeader({ eyebrow, title, meta }: { eyebrow: string; title: string; meta?: string }) {
+  return (
+    <div className="mb-3 flex items-end justify-between gap-4">
+      <div>
+        <span className={sectionLabel}>{eyebrow}</span>
+        <h2 className={`${cardTitle} mt-0.5`}>{title}</h2>
+      </div>
+      {meta && (
+        <span className="hidden sm:inline-flex text-caption font-semibold text-gray-400">
+          {meta}
+        </span>
+      )}
+    </div>
+  );
 }
 
 export function OperationsDashboard() {
   const queryClient = useQueryClient();
-  const searchParams = useSearchParams();
-  const currentView = resolveView(searchParams.get('view'));
 
   const { data, isLoading } = useQuery<DashboardData>({
     queryKey: ['dashboard-operations', '24h'],
@@ -41,7 +57,6 @@ export function OperationsDashboard() {
     refetchInterval: 60000,
   });
 
-  // Ably Realtime — KPI live updates
   const channelName = 'dashboard:operations';
 
   useAblyChannel(channelName, 'kpi_update', (msg) => {
@@ -59,33 +74,140 @@ export function OperationsDashboard() {
   });
 
   return (
-    <div className="h-full w-full overflow-hidden bg-slate-50/50 flex flex-col font-sans">
-      <OperationsHeader title="USAV" />
+    <div className="flex-1 flex flex-col min-w-0 h-full overflow-y-auto bg-gray-50 text-gray-900">
+      <GlobalHeaderBar ablyStatus="connected" />
 
-      {/* KPI TILES — GROUNDED IN DESIGN SYSTEM 2026 */}
-      <section className="grid grid-cols-6 bg-white border-b border-slate-200 shadow-sm flex-none">
-        <StatCard category="all" label="Daily Velocity" value={data?.summary.all.value || 0} delta={data?.summary.all.delta} icon={<Activity />} isLoading={isLoading} />
-        <StatCard category="tested" label="Tested Today" value={data?.summary.tested.value || 0} delta={data?.summary.tested.delta} icon={<Barcode />} isLoading={isLoading} />
-        <StatCard category="repair" label="Repair Queue" value={data?.summary.repair.value || 0} delta={data?.summary.repair.delta} icon={<Wrench />} isLoading={isLoading} />
-        <StatCard category="fba" label="FBA / FNSKU" value={data?.summary.fba.value || 0} delta={data?.summary.fba.delta} icon={<Package />} isLoading={isLoading} />
-        <StatCard category="outOfStock" label="Alerts / OOS" value={data?.summary.outOfStock.value || 0} delta={data?.summary.outOfStock.delta} icon={<AlertCircle />} isLoading={isLoading} />
-        <StatCard category="pendingLate" label="Late Orders" value={data?.summary.pendingLate.value || 0} delta={data?.summary.pendingLate.delta} icon={<Clock />} isLoading={isLoading} />
-      </section>
+      <main className="flex-1 w-full max-w-[1440px] mx-auto px-4 sm:px-6 lg:px-8 pt-6 pb-16 space-y-6">
 
-      {/* MAIN CONTENT — VIEW ROUTED */}
-      <div className="flex-1 min-h-0 overflow-hidden">
-        <Suspense fallback={
-          <div className="flex h-full items-center justify-center">
-            <Loader2 className="h-6 w-6 animate-spin text-slate-400" />
+        <section>
+          <WelcomeHero />
+        </section>
+
+        <section>
+          <SystemHealthRow />
+        </section>
+
+        <section>
+          <SectionHeader
+            eyebrow="Today’s snapshot"
+            title="Numbers at a glance"
+            meta="Live · refreshes every minute"
+          />
+          <div className="grid grid-cols-2 xl:grid-cols-4 gap-3">
+            <DashboardKPICard
+              title="Daily velocity"
+              value={data?.summary.all.value?.toString() || '0'}
+              subtext="Total units processed"
+              trend={String(data?.summary.all.delta || '+0%')}
+              isPositive={String(data?.summary.all.delta || '').startsWith('+')}
+              icon={Activity}
+              colorTone="amber"
+              chartType="bar"
+            />
+            <DashboardKPICard
+              title="Tested today"
+              value={data?.summary.tested.value?.toString() || '0'}
+              subtext="QA completed units"
+              trend={String(data?.summary.tested.delta || '+0%')}
+              isPositive={String(data?.summary.tested.delta || '').startsWith('+')}
+              icon={Barcode}
+              colorTone="emerald"
+              chartType="donut"
+              progress={78}
+            />
+            <DashboardKPICard
+              title="FBA intake"
+              value={data?.summary.fba.value?.toString() || '0'}
+              subtext="FNSKU shipments today"
+              trend={String(data?.summary.fba.delta || '+0%')}
+              isPositive={String(data?.summary.fba.delta || '').startsWith('+')}
+              icon={Package}
+              colorTone="amber"
+              chartType="bar"
+            />
+            <DashboardKPICard
+              title="Repair queue"
+              value={data?.summary.repair.value?.toString() || '0'}
+              subtext="Awaiting service"
+              trend={String(data?.summary.repair.delta || '+0%')}
+              isPositive={!String(data?.summary.repair.delta || '').startsWith('+')}
+              icon={Wrench}
+              colorTone="orange"
+              chartType="donut"
+              progress={45}
+            />
           </div>
-        }>
-          {currentView === 'orders' ? (
-            <PendingOrdersTable />
-          ) : (
-            <WorkOrdersDashboard basePath="/operations" />
-          )}
-        </Suspense>
-      </div>
+
+          <div className="mt-3">
+            <SecondaryKPITiles summary={data?.summary} />
+          </div>
+        </section>
+
+        <section>
+          <StaffGoalsRail staffProgress={data?.staffProgress} isLoading={isLoading} />
+        </section>
+
+        <section>
+          <InventoryHealthRow />
+        </section>
+
+        <section>
+          <ExceptionsRow />
+        </section>
+
+        <section>
+          <PipelineRow />
+        </section>
+
+        <section>
+          <VelocityAndDeadStock />
+        </section>
+
+        <section>
+          <SectionHeader
+            eyebrow="Goals & recommendations"
+            title="What to focus on next"
+          />
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
+            <div className="lg:col-span-8">
+              <OperationsMatrix />
+            </div>
+            <div className="lg:col-span-4">
+              <PerformanceGoals />
+            </div>
+          </div>
+        </section>
+
+        <section>
+          <SupportOverviewCard />
+        </section>
+
+        <section>
+          <LiveFeedCard
+            feed={data?.activityFeed}
+            isLoading={isLoading}
+            ablyStatus="connected"
+          />
+        </section>
+
+        <section>
+          <SectionHeader
+            eyebrow="Operational ledger"
+            title="Outbound pending orders"
+          />
+          <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+            <Suspense
+              fallback={
+                <div className="flex h-64 items-center justify-center">
+                  <Loader2 className="h-5 w-5 animate-spin text-gray-400" />
+                </div>
+              }
+            >
+              <PendingOrdersTable />
+            </Suspense>
+          </div>
+        </section>
+      </main>
     </div>
   );
 }

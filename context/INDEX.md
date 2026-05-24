@@ -11,7 +11,7 @@ Comprehensive documentation for the USAV Orders Backend codebase. Use these for 
 | [API-ROUTES.md](./API-ROUTES.md) | ~160 | All 60+ API endpoints organized by domain |
 | [INTEGRATIONS.md](./INTEGRATIONS.md) | ~200 | eBay, Zoho, Google Sheets, shipping carriers, Ably, Ecwid/Square, AI |
 | [STAFF-SYSTEM.md](./STAFF-SYSTEM.md) | ~120 | Staff directory, theming, constants, cache, assignment UI |
-| [REALTIME-AND-CACHING.md](./REALTIME-AND-CACHING.md) | ~130 | Ably channels, 4 cache layers, QStash background jobs |
+| [REALTIME-AND-CACHING.md](./REALTIME-AND-CACHING.md) | ~130 | Ably channels, 4 cache layers, QStash (legacy) + Vercel Cron background jobs |
 | [UI-PATTERNS.md](./UI-PATTERNS.md) | ~180 | Design system, styling conventions, state management, animations |
 | [ENV-VARS.md](./ENV-VARS.md) | ~60 | All environment variables |
 | [HOOKS.md](./HOOKS.md) | ~80 | Custom React hooks reference |
@@ -58,7 +58,7 @@ Michael(1/green), Thuc(2/blue), Sang(3/purple), Tuan(4/black), Thuy(5/red), Cuon
 - FBA log writer: `src/lib/fba/createFbaLog.ts`
 - Realtime publishing: `src/lib/realtime/publish.ts`
 - Cache helpers: `src/lib/cache.ts`, `src/lib/cache/upstash-cache.ts`
-- QStash client: `src/lib/qstash.ts`
+- QStash client (now hybrid with Vercel Cron): `src/lib/qstash.ts`
 - Pipeline orchestrator: `src/lib/pipeline/orchestrator.ts`
 - Pipeline config: `src/lib/pipeline/config.ts`
 - Jetson trainer: `scripts/jetson/trainer.py`
@@ -67,5 +67,5 @@ Michael(1/green), Thuc(2/blue), Sang(3/purple), Tuan(4/black), Thuy(5/red), Cuon
 PostgreSQL on Neon serverless. Drizzle ORM + raw pg Pool. 50+ tables + 5 pipeline tables.
 
 ### Deployment
-Vercel (web) + Electron (desktop) + PM2 (pipeline). After deploy: `POST /api/qstash/schedules/bootstrap`.
+Vercel (web) + Electron (desktop) + PM2 (pipeline). Vercel Cron is primary; bootstrap QStash only for remaining legacy jobs.
 Pipeline: `npm run pipeline:start` (Mac) + `systemctl start jetson-trainer` (Jetson).

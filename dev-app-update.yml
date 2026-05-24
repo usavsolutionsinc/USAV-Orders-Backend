@@ -1,0 +1,14 @@
+# electron-updater dev-mode config.
+#
+# In a packaged build, electron-builder writes app-update.yml into the bundle
+# from the `publish` block of electron-builder.yml. In a dev run there is no
+# such file, so electron-updater normally short-circuits. Setting
+# `autoUpdater.forceDevUpdateConfig = true` plus this file makes it talk to
+# the real GitHub Releases feed during `npm run desktop:dev`, so the
+# in-app "Check for updates" button is testable end-to-end without packaging.
+#
+# Keep this in sync with the `publish:` section of electron-builder.yml.
+provider: github
+owner: usavsolutionsinc
+repo: USAV-Orders-Backend
+releaseType: release

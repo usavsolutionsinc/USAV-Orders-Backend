@@ -203,7 +203,7 @@ export function ManualAssignmentSidebarPanel() {
               <Loader2 className="w-5 h-5 animate-spin text-blue-500" />
             </div>
           ) : filteredCategories.length === 0 ? (
-            <p className="py-6 text-center text-[10px] font-black uppercase tracking-widest text-gray-400">
+            <p className="py-6 text-center text-micro font-black uppercase tracking-widest text-gray-400">
               No categories match this search
             </p>
           ) : (
@@ -221,11 +221,11 @@ export function ManualAssignmentSidebarPanel() {
                   }`}
                 >
                   {/* Title: full wrap, bold, no truncate */}
-                  <p className={`text-[13px] font-bold leading-snug break-words ${isActive ? 'text-white' : 'text-gray-900'}`}>
+                  <p className={`text-sm font-bold leading-snug break-words ${isActive ? 'text-white' : 'text-gray-900'}`}>
                     {cat.title}
                   </p>
                   {cat.productCount !== undefined && cat.productCount > 0 && (
-                    <p className={`mt-1 text-[10px] font-semibold ${isActive ? 'text-blue-100' : 'text-gray-400'}`}>
+                    <p className={`mt-1 text-micro font-semibold ${isActive ? 'text-blue-100' : 'text-gray-400'}`}>
                       {cat.productCount} products
                     </p>
                   )}
@@ -238,13 +238,13 @@ export function ManualAssignmentSidebarPanel() {
             <Loader2 className="w-5 h-5 animate-spin text-blue-500" />
           </div>
         ) : filteredGroups.length === 0 ? (
-          <p className="py-6 text-center text-[10px] font-black uppercase tracking-widest text-gray-400">
+          <p className="py-6 text-center text-micro font-black uppercase tracking-widest text-gray-400">
             No recent orders match this search
           </p>
         ) : (
           filteredGroups.map((group) => (
             <div key={group.date}>
-              <p className="px-2 pb-1.5 pt-4 text-[9px] font-black uppercase tracking-widest text-gray-400">
+              <p className="px-2 pb-1.5 pt-4 text-eyebrow font-black uppercase tracking-widest text-gray-400">
                 {group.label}
               </p>
               {group.orders.map((order) => {
@@ -264,7 +264,7 @@ export function ManualAssignmentSidebarPanel() {
                   >
                     <div className="flex items-start justify-between gap-2">
                       {/* Title: full wrap, bold, no truncate */}
-                      <p className={`flex-1 text-[13px] font-bold leading-snug break-words ${isActive ? 'text-white' : 'text-gray-900'}`}>
+                      <p className={`flex-1 text-sm font-bold leading-snug break-words ${isActive ? 'text-white' : 'text-gray-900'}`}>
                         {displayTitle}
                       </p>
                       <span
@@ -280,7 +280,7 @@ export function ManualAssignmentSidebarPanel() {
                     </div>
                     {order.is_shipped && (
                       <span
-                        className={`mt-1.5 inline-block text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full ${
+                        className={`mt-1.5 inline-block text-eyebrow font-black uppercase tracking-wider px-2 py-0.5 rounded-full ${
                           isActive ? 'bg-blue-500 text-blue-100' : 'bg-emerald-50 text-emerald-700'
                         }`}
                       >

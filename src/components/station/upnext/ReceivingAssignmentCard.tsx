@@ -55,12 +55,12 @@ export function ReceivingAssignmentCard({ item }: ReceivingAssignmentCardProps) 
     >
       <div className="flex items-center justify-between mb-4 px-3">
         <div className="flex items-center gap-2">
-          <div className="flex items-center gap-1.5 text-[14px] font-black text-gray-900">
+          <div className="flex items-center gap-1.5 text-sm font-black text-gray-900">
             <Package className="w-4 h-4 text-teal-600" />
             <span>{ago || 'Receiving'}</span>
           </div>
         </div>
-        <span className="inline-flex items-center rounded-lg border border-teal-200 px-3 py-2 text-[10px] font-black uppercase tracking-widest text-gray-900">
+        <span className="inline-flex items-center rounded-lg border border-teal-200 px-3 py-2 text-micro font-black uppercase tracking-widest text-gray-900">
           Receiving
         </span>
       </div>
@@ -68,13 +68,13 @@ export function ReceivingAssignmentCard({ item }: ReceivingAssignmentCardProps) 
       <div className="mb-4 px-3">
         <div className="mb-1.5 flex items-center justify-between gap-2">
           <div className="flex items-center gap-2 min-w-0">
-            <span className="text-[13px] font-black text-gray-900">{item.line_count || 1}</span>
-            <span className="text-[13px] font-black uppercase tracking-wider text-gray-500">-</span>
-            <span className="text-[13px] font-black uppercase truncate text-gray-900">
+            <span className="text-sm font-black text-gray-900">{item.line_count || 1}</span>
+            <span className="text-sm font-black uppercase tracking-wider text-gray-500">-</span>
+            <span className="text-sm font-black uppercase truncate text-gray-900">
               {workflowStatusTableLabel(item.workflow_status)}
             </span>
           </div>
-          <span className="text-[13px] font-mono font-black text-gray-900 px-1.5 py-0.5 rounded border border-gray-300">
+          <span className="text-sm font-mono font-black text-gray-900 px-1.5 py-0.5 rounded border border-gray-300">
             #{item.receiving_id}
           </span>
         </div>
@@ -85,7 +85,7 @@ export function ReceivingAssignmentCard({ item }: ReceivingAssignmentCardProps) 
 
       {(item.line_skus.length > 0 || item.carrier || item.qa_status) && (
         <div className="mb-4 mx-3 rounded-xl border border-teal-200 px-3 py-2">
-          <div className="text-[10px] font-black uppercase tracking-widest text-teal-700 mb-1">
+          <div className="text-micro font-black uppercase tracking-widest text-teal-700 mb-1">
             Receiving Details
           </div>
           <p className="text-sm text-gray-900 break-words whitespace-pre-wrap">
@@ -100,19 +100,19 @@ export function ReceivingAssignmentCard({ item }: ReceivingAssignmentCardProps) 
 
       <div className="flex items-center gap-2 px-3 pt-2 border-t border-teal-200">
         <div className="min-w-0 flex-1">
-          <div className="text-[10px] font-black text-gray-900 truncate">
+          <div className="text-micro font-black text-gray-900 truncate">
             {item.assigned_tech_name || 'Receiving Queue'}
           </div>
-          <div className="text-[10px] text-gray-500 truncate">
+          <div className="text-micro text-gray-500 truncate">
             {workflowStatusTableLabel(item.workflow_status)}
           </div>
         </div>
-        <span className={`text-[9px] font-black uppercase tracking-widest border rounded-lg px-2 py-0.5 ${statusCls}`}>
+        <span className={`text-eyebrow font-black uppercase tracking-widest border rounded-lg px-2 py-0.5 ${statusCls}`}>
           {workflowStatusTableLabel(item.workflow_status)}
         </span>
         <button
           onClick={(e) => { e.stopPropagation(); openReceiving(); }}
-          className="flex items-center gap-1 px-3 py-1.5 bg-teal-600 hover:bg-teal-700 text-white rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ml-auto"
+          className="flex items-center gap-1 px-3 py-1.5 bg-teal-600 hover:bg-teal-700 text-white rounded-xl text-micro font-black uppercase tracking-widest transition-all ml-auto"
         >
           <ExternalLink className="w-3 h-3" />
           Open

@@ -238,14 +238,14 @@ export function FbaShippedTable({ stationTheme = 'green', searchQuery = '', embe
   return (
     <div className={embedded ? 'flex min-h-0 flex-1 flex-col overflow-hidden bg-white' : 'flex min-h-0 flex-1 flex-col bg-white'}>
       {error ? (
-        <div className="mx-3 my-2 rounded-lg border border-red-200 bg-red-50 px-2.5 py-2 text-[11px] font-semibold text-red-700">
+        <div className="mx-3 my-2 rounded-lg border border-red-200 bg-red-50 px-2.5 py-2 text-caption font-semibold text-red-700">
           {error}
         </div>
       ) : null}
 
       <div className="min-h-0 flex-1 overflow-y-auto">
         {grouped.length === 0 ? (
-          <div className="px-4 py-10 text-center text-[11px] font-bold uppercase tracking-wider text-gray-400">
+          <div className="px-4 py-10 text-center text-caption font-bold uppercase tracking-wider text-gray-400">
             No shipped rows
           </div>
         ) : (
@@ -273,10 +273,10 @@ export function FbaShippedTable({ stationTheme = 'green', searchQuery = '', embe
                     className="grid w-full grid-cols-[minmax(0,1fr)_auto] items-center gap-2 px-3 py-2 text-left hover:bg-gray-50"
                   >
                     <div className="min-w-0">
-                      <p className="truncate font-mono text-[11px] font-black text-gray-900">
+                      <p className="truncate font-mono text-caption font-black text-gray-900">
                         {String(row.amazon_shipment_id || row.shipment_ref || `#${row.id}`).toUpperCase()}
                       </p>
-                      <p className="mt-0.5 truncate text-[10px] font-bold text-gray-500">
+                      <p className="mt-0.5 truncate text-micro font-bold text-gray-500">
                         UPS {String(primaryUps?.tracking_number || '—')} · {Number(row.shipped_items || 0)}/{Number(row.total_items || 0)}
                       </p>
                     </div>
@@ -287,7 +287,7 @@ export function FbaShippedTable({ stationTheme = 'green', searchQuery = '', embe
                     <div className="space-y-2 border-t border-gray-100 px-3 py-2.5">
                       <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                         <label className="min-w-0">
-                          <span className="mb-1 block text-[10px] font-black uppercase tracking-widest text-gray-500">
+                          <span className="mb-1 block text-micro font-black uppercase tracking-widest text-gray-500">
                             FBA Shipment ID
                           </span>
                           <input
@@ -303,7 +303,7 @@ export function FbaShippedTable({ stationTheme = 'green', searchQuery = '', embe
                           />
                         </label>
                         <label className="min-w-0">
-                          <span className="mb-1 block text-[10px] font-black uppercase tracking-widest text-gray-500">
+                          <span className="mb-1 block text-micro font-black uppercase tracking-widest text-gray-500">
                             UPS Tracking
                           </span>
                           <input
@@ -324,14 +324,14 @@ export function FbaShippedTable({ stationTheme = 'green', searchQuery = '', embe
                         type="button"
                         onClick={() => void saveShipment(row)}
                         disabled={savingShipmentId === row.id}
-                        className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-gray-300 bg-white px-2.5 text-[10px] font-black uppercase tracking-wider text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+                        className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-gray-300 bg-white px-2.5 text-micro font-black uppercase tracking-wider text-gray-700 hover:bg-gray-50 disabled:opacity-50"
                       >
                         {savingShipmentId === row.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />}
                         Save Shipment
                       </button>
 
                       {itemLoadingId === row.id ? (
-                        <div className="flex items-center gap-2 py-2 text-[11px] font-semibold text-gray-500">
+                        <div className="flex items-center gap-2 py-2 text-caption font-semibold text-gray-500">
                           <Loader2 className="h-3.5 w-3.5 animate-spin" />
                           Loading FNSKUs…
                         </div>
@@ -349,22 +349,22 @@ export function FbaShippedTable({ stationTheme = 'green', searchQuery = '', embe
                                     onChange={(e) =>
                                       setItemFnskuDrafts((prev) => ({ ...prev, [item.id]: e.target.value.toUpperCase() }))
                                     }
-                                    className="h-8 w-40 max-w-full rounded-md border border-gray-300 bg-white px-2 font-mono text-[11px] font-bold text-gray-900 outline-none focus:border-gray-500"
+                                    className="h-8 w-40 max-w-full rounded-md border border-gray-300 bg-white px-2 font-mono text-caption font-bold text-gray-900 outline-none focus:border-gray-500"
                                   />
                                   <button
                                     type="button"
                                     onClick={() => void saveItemFnsku(row.id, item)}
                                     disabled={savingItemId === item.id}
-                                    className="inline-flex h-8 items-center rounded-md border border-gray-300 px-2 text-[9px] font-black uppercase tracking-wider text-gray-700 hover:bg-gray-100 disabled:opacity-50"
+                                    className="inline-flex h-8 items-center rounded-md border border-gray-300 px-2 text-eyebrow font-black uppercase tracking-wider text-gray-700 hover:bg-gray-100 disabled:opacity-50"
                                   >
                                     {savingItemId === item.id ? <Loader2 className="h-3 w-3 animate-spin" /> : 'Save'}
                                   </button>
                                 </div>
-                                <p className="mt-1 truncate text-[10px] font-semibold text-gray-600">
+                                <p className="mt-1 truncate text-micro font-semibold text-gray-600">
                                   {item.display_title || 'No title'}
                                 </p>
                               </div>
-                              <div className={`text-right text-[10px] font-black tabular-nums ${theme.text}`}>
+                              <div className={`text-right text-micro font-black tabular-nums ${theme.text}`}>
                                 {Number(item.actual_qty || 0)}/{Number(item.expected_qty || 0)}
                               </div>
                             </div>

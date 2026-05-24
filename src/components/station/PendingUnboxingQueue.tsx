@@ -109,7 +109,7 @@ function BoxRow({
         <span className={`${microBadge} leading-none ${isActive ? 'text-indigo-500' : 'text-gray-500'}`}>
           {carrierShort}
         </span>
-        <span className={`text-[9px] font-bold font-mono leading-none mt-0.5 ${isActive ? 'text-indigo-700' : 'text-gray-700'}`}>
+        <span className={`text-eyebrow font-bold font-mono leading-none mt-0.5 ${isActive ? 'text-indigo-700' : 'text-gray-700'}`}>
           {trackingShort.slice(-4)}
         </span>
       </div>
@@ -132,7 +132,7 @@ function BoxRow({
         </div>
         {box.line_count > 0 ? (
           <div className="flex items-center gap-1.5">
-            <span className="text-[9px] font-bold text-gray-500">{box.line_count} item{box.line_count !== 1 ? 's' : ''}</span>
+            <span className="text-eyebrow font-bold text-gray-500">{box.line_count} item{box.line_count !== 1 ? 's' : ''}</span>
             {box.total_expected > 0 && (
               <>
                 <div className="h-1 w-12 bg-gray-100 rounded-full overflow-hidden">
@@ -148,7 +148,7 @@ function BoxRow({
             )}
           </div>
         ) : (
-          <p className="text-[9px] font-semibold text-gray-400 italic">No PO linked</p>
+          <p className="text-eyebrow font-semibold text-gray-400 italic">No PO linked</p>
         )}
       </div>
 
@@ -310,7 +310,7 @@ function LineItemsPanel({
                       <span className={`${dataValue} tabular-nums text-gray-700`}>
                         {line.quantity_received}
                         <span className="text-gray-300 mx-0.5 font-normal">/</span>
-                        <span className="text-gray-500 text-[11px]">{line.quantity_expected ?? '?'}</span>
+                        <span className="text-gray-500 text-caption">{line.quantity_expected ?? '?'}</span>
                       </span>
                       {line.quantity_expected != null && line.quantity_expected > 0 && (
                         <div className="h-1 w-10 bg-gray-100 rounded-full overflow-hidden mt-1 ml-auto">
@@ -324,7 +324,7 @@ function LineItemsPanel({
                   </div>
 
                   {line.notes && (
-                    <p className="mt-1.5 text-[9px] font-semibold text-gray-500 italic truncate">
+                    <p className="mt-1.5 text-eyebrow font-semibold text-gray-500 italic truncate">
                       {line.notes}
                     </p>
                   )}
@@ -438,7 +438,7 @@ function LineSerialsSection({
             }
           }}
           placeholder="Scan serial..."
-          className="flex-1 rounded border border-indigo-200 bg-white px-2 py-1 text-[10px] font-mono font-bold text-gray-900 outline-none"
+          className="flex-1 rounded border border-indigo-200 bg-white px-2 py-1 text-micro font-mono font-bold text-gray-900 outline-none"
         />
         <button
           type="button"
@@ -451,7 +451,7 @@ function LineSerialsSection({
       </div>
 
       {error && (
-        <p className="mt-1 text-[9px] font-bold text-red-600">{error}</p>
+        <p className="mt-1 text-eyebrow font-bold text-red-600">{error}</p>
       )}
 
       <div className="mt-2 max-h-24 overflow-y-auto rounded border border-indigo-100 bg-white/80 p-1.5">
@@ -463,7 +463,7 @@ function LineSerialsSection({
           <div className="space-y-1">
             {serials.map((row) => (
               <div key={row.id} className="flex items-center justify-between gap-2 rounded bg-gray-50 px-2 py-1">
-                <span className="truncate text-[10px] font-mono font-bold text-gray-800">{row.serial_number}</span>
+                <span className="truncate text-micro font-mono font-bold text-gray-800">{row.serial_number}</span>
                 <button
                   type="button"
                   onClick={() => deleteSerial(row.id)}
@@ -476,7 +476,7 @@ function LineSerialsSection({
           </div>
         )}
       </div>
-      <p className="mt-1 text-[8px] font-semibold uppercase tracking-wider text-gray-500">
+      <p className="mt-1 text-mini font-semibold uppercase tracking-wider text-gray-500">
         Receiving #{receivingId} · Source: RECEIVING
       </p>
     </div>

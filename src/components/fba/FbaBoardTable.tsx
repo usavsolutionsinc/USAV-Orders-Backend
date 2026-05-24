@@ -352,10 +352,10 @@ export function FbaBoardTable({
 
               {/* Center: title + qty/status row */}
               <div className="flex min-w-0 flex-col gap-0.5">
-                <p className="whitespace-normal break-words text-[13px] font-bold leading-snug text-gray-900">
+                <p className="whitespace-normal break-words text-sm font-bold leading-snug text-gray-900">
                   {item.display_title}
                 </p>
-                <div className="flex flex-wrap items-center gap-3 text-[11px]">
+                <div className="flex flex-wrap items-center gap-3 text-caption">
                   <span className="flex items-center gap-1 font-bold text-gray-600">
                     <ClipboardList className="h-3.5 w-3.5 text-purple-500" />
                     <span className="tabular-nums">{item.expected_qty}</span>
@@ -410,7 +410,7 @@ function StatusPill({ status }: { status: string }) {
   const color = STATUS_PILL_COLOR[s] ?? 'bg-gray-100 text-gray-600';
 
   return (
-    <span className={`inline-block rounded-full px-2 py-0.5 text-[9px] font-black uppercase tracking-wider ${color}`}>
+    <span className={`inline-block rounded-full px-2 py-0.5 text-eyebrow font-black uppercase tracking-wider ${color}`}>
       {s.replace(/_/g, ' ')}
     </span>
   );

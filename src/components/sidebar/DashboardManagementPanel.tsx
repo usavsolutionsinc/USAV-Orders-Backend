@@ -4,7 +4,12 @@ import { ReactNode, useCallback, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useQueryClient } from '@tanstack/react-query';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
-import { AnimatePresence, motion } from 'framer-motion';
+import { AnimatePresence, motion, type Transition } from 'framer-motion';
+import {
+  framerPresence,
+  framerTransition,
+} from '@/design-system/foundations/motion-framer';
+import { useMotionTransition } from '@/design-system/foundations/motion-framer-hooks';
 import {
   AlertTriangle,
   Box,
@@ -60,6 +65,37 @@ interface SearchHistory {
   timestamp: Date;
   resultCount?: number;
 }
+
+// Module-scope motion transitions / variants — defined here (not inside the
+// component) so React doesn't re-allocate them on every render. These are
+// intentionally local to this panel: they encode its specific kinetic rhythm
+// and aren't shared across the design system.
+const PANEL_ITEM_SPRING: Transition = { type: 'spring', damping: 25, stiffness: 350, mass: 0.5 };
+const PANEL_TASK_ROW_SPRING: Transition = { type: 'spring', damping: 20, stiffness: 300 };
+const PANEL_ICON_POP_SPRING: Transition = { type: 'spring', damping: 12, stiffness: 300 };
+const PANEL_STATUS_BANNER_SPRING: Transition = { type: 'spring', damping: 26, stiffness: 340, mass: 0.5 };
+const PANEL_STATUS_ICON_SPRING: Transition = { type: 'spring', damping: 14, stiffness: 280, delay: 0.1 };
+
+const containerVariants = {
+  hidden: { opacity: 0 },
+  visible: {
+    opacity: 1,
+    transition: {
+      staggerChildren: 0.05,
+      delayChildren: 0.05,
+    },
+  },
+};
+
+const itemVariants = {
+  hidden: { opacity: 0, x: -20, filter: 'blur(4px)' },
+  visible: {
+    opacity: 1,
+    x: 0,
+    filter: 'blur(0px)',
+    transition: PANEL_ITEM_SPRING,
+  },
+};
 
 export function DashboardManagementPanel({
   showIntakeForm = false,
@@ -381,26 +417,11 @@ export function DashboardManagementPanel({
     }
   };
 
-  const containerVariants = {
-    hidden: { opacity: 0 },
-    visible: {
-      opacity: 1,
-      transition: {
-        staggerChildren: 0.05,
-        delayChildren: 0.05,
-      },
-    },
-  };
 
-  const itemVariants = {
-    hidden: { opacity: 0, x: -20, filter: 'blur(4px)' },
-    visible: {
-      opacity: 1,
-      x: 0,
-      filter: 'blur(0px)',
-      transition: { type: 'spring', damping: 25, stiffness: 350, mass: 0.5 },
-    },
-  };
+  // Reduced-motion-aware transitions for the two collapse-height regions.
+  // Hooks must run unconditionally — keep these above any early returns.
+  const expansionTransition = useMotionTransition(framerTransition.cardExpansion);
+  const expansionDelayedTransition = useMotionTransition({ ...framerTransition.cardExpansion, delay: 0.15 });
 
   if (showIntakeForm) {
     return <ShippedIntakeForm onClose={onCloseForm || (() => {})} onSubmit={onFormSubmit || (() => {})} />;
@@ -498,7 +519,7 @@ export function DashboardManagementPanel({
                     value={manualSheetName}
                     onChange={(e) => setManualSheetName(e.target.value)}
                     placeholder="e.g., Sheet_01_14_2026"
-                    className="w-full px-3 py-2 bg-white border border-gray-200 rounded-xl text-[11px] font-mono text-gray-900 outline-none focus:border-blue-500 transition-all"
+                    className="w-full px-3 py-2 bg-white border border-gray-200 rounded-xl text-caption font-mono text-gray-900 outline-none focus:border-blue-500 transition-all"
                     disabled={isTransferring}
                   />
                 </div>
@@ -525,10 +546,10 @@ export function DashboardManagementPanel({
                 <AnimatePresence>
                   {isTransferring || (sheetsTask.status !== 'idle' && ecwidTask.status !== 'idle') ? (
                     <motion.div
-                      initial={{ height: 0, opacity: 0 }}
-                      animate={{ height: 'auto', opacity: 1 }}
-                      exit={{ height: 0, opacity: 0 }}
-                      transition={{ type: 'spring', damping: 24, stiffness: 300 }}
+                      initial={framerPresence.collapseHeight.initial}
+                      animate={framerPresence.collapseHeight.animate}
+                      exit={framerPresence.collapseHeight.exit}
+                      transition={expansionTransition}
                       className="overflow-hidden"
                     >
                       <div className="rounded-xl border border-blue-100 bg-blue-50/50 px-3 py-3 space-y-2.5">
@@ -548,7 +569,7 @@ export function DashboardManagementPanel({
                             key={Math.floor(elapsedMs / 1000)}
                             initial={{ opacity: 0.5, y: -4 }}
                             animate={{ opacity: 1, y: 0 }}
-                            className="text-[11px] font-mono font-bold text-blue-500 tabular-nums"
+                            className="text-caption font-mono font-bold text-blue-500 tabular-nums"
                           >
                             {(elapsedMs / 1000).toFixed(1)}s
                           </motion.span>
@@ -565,7 +586,7 @@ export function DashboardManagementPanel({
                               key={label}
                               initial={{ opacity: 0, x: -6 }}
                               animate={{ opacity: 1, x: 0 }}
-                              transition={{ type: 'spring', damping: 20, stiffness: 300 }}
+                              transition={PANEL_TASK_ROW_SPRING}
                               className="flex items-center gap-2"
                             >
                               <div className="w-4 h-4 flex items-center justify-center shrink-0">
@@ -573,7 +594,7 @@ export function DashboardManagementPanel({
                                   <motion.div
                                     initial={{ scale: 0 }}
                                     animate={{ scale: 1 }}
-                                    transition={{ type: 'spring', damping: 12, stiffness: 300 }}
+                                    transition={PANEL_ICON_POP_SPRING}
                                   >
                                     <Check className="w-3 h-3 text-blue-600" />
                                   </motion.div>
@@ -581,7 +602,7 @@ export function DashboardManagementPanel({
                                   <motion.div
                                     initial={{ scale: 0 }}
                                     animate={{ scale: 1 }}
-                                    transition={{ type: 'spring', damping: 12, stiffness: 300 }}
+                                    transition={PANEL_ICON_POP_SPRING}
                                   >
                                     <AlertTriangle className="w-3 h-3 text-red-500" />
                                   </motion.div>
@@ -591,7 +612,7 @@ export function DashboardManagementPanel({
                                   <span className="w-1.5 h-1.5 rounded-full bg-gray-300" />
                                 )}
                               </div>
-                              <span className={`text-[10px] font-semibold ${
+                              <span className={`text-micro font-semibold ${
                                 task.status === 'running' ? 'text-blue-700'
                                   : task.status === 'done' ? 'text-blue-500'
                                   : task.status === 'error' ? 'text-red-500'
@@ -602,7 +623,7 @@ export function DashboardManagementPanel({
                               {task.summary && task.status !== 'running' && (
                                 <span
                                   title={task.status === 'error' ? task.summary : undefined}
-                                  className={`text-[9px] font-medium ml-auto ${
+                                  className={`text-eyebrow font-medium ml-auto ${
                                     task.status === 'error'
                                       ? 'max-w-[min(260px,50vw)] text-red-600 whitespace-normal leading-snug text-right'
                                       : 'max-w-[120px] truncate text-gray-400'
@@ -659,7 +680,7 @@ export function DashboardManagementPanel({
                   initial={{ opacity: 0, y: 8, scale: 0.97 }}
                   animate={{ opacity: 1, y: 0, scale: 1 }}
                   exit={{ opacity: 0, y: -6, scale: 0.97 }}
-                  transition={{ type: 'spring', damping: 26, stiffness: 340, mass: 0.5 }}
+                  transition={PANEL_STATUS_BANNER_SPRING}
                   className={`rounded-2xl border overflow-hidden ${
                     status.type === 'success'
                       ? 'bg-emerald-50/80 border-emerald-200/60'
@@ -673,13 +694,13 @@ export function DashboardManagementPanel({
                     <motion.div
                       initial={{ scale: 0, rotate: -90 }}
                       animate={{ scale: 1, rotate: 0 }}
-                      transition={{ type: 'spring', damping: 14, stiffness: 280, delay: 0.1 }}
+                      transition={PANEL_STATUS_ICON_SPRING}
                     >
                       {status.type === 'success' ? <Check className="w-4 h-4 shrink-0" /> : <AlertTriangle className="w-4 h-4 shrink-0" />}
                     </motion.div>
                     <div className="min-w-0 flex-1">
                       <p className={sectionLabel}>{status.type === 'success' ? 'Sync Complete' : 'Sync Failed'}</p>
-                      <p className="text-[9px] font-medium leading-relaxed opacity-80">{status.message}</p>
+                      <p className="text-eyebrow font-medium leading-relaxed opacity-80">{status.message}</p>
                     </div>
                     <button
                       type="button"
@@ -694,9 +715,9 @@ export function DashboardManagementPanel({
                   {/* Details breakdown */}
                   {status.type === 'success' && status.details ? (
                     <motion.div
-                      initial={{ height: 0, opacity: 0 }}
-                      animate={{ height: 'auto', opacity: 1 }}
-                      transition={{ type: 'spring', damping: 24, stiffness: 300, delay: 0.15 }}
+                      initial={framerPresence.collapseHeight.initial}
+                      animate={framerPresence.collapseHeight.animate}
+                      transition={expansionDelayedTransition}
                       className="border-t border-emerald-200/40"
                     >
                       <div className="px-4 py-3 space-y-2.5">
@@ -732,7 +753,7 @@ export function DashboardManagementPanel({
                               transition={{ delay: 0.25 + i * 0.05 }}
                               className="text-center rounded-xl bg-white/60 border border-emerald-100/60 py-1.5"
                             >
-                              <p className="text-[13px] font-black text-emerald-700 tabular-nums">{stat.value}</p>
+                              <p className="text-sm font-black text-emerald-700 tabular-nums">{stat.value}</p>
                               <p className={`${microBadge} text-emerald-500`}>{stat.label}</p>
                             </motion.div>
                           ))}
@@ -761,7 +782,7 @@ export function DashboardManagementPanel({
           </div>
 
           <motion.footer variants={itemVariants} className="mt-auto pt-4 border-t border-gray-100 opacity-30 text-center">
-            <p className="text-[7px] font-mono uppercase tracking-[0.2em] text-gray-500">USAV INFRASTRUCTURE</p>
+            <p className="text-eyebrow font-mono uppercase tracking-[0.2em] text-gray-500">USAV INFRASTRUCTURE</p>
           </motion.footer>
         </div>
       </motion.div>

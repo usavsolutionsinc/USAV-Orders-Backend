@@ -114,7 +114,7 @@ function Group({ label, children }: { label?: string; children: React.ReactNode 
   return (
     <div>
       {label && (
-        <div className="mb-2 px-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-gray-400">
+        <div className="mb-2 px-1 text-micro font-semibold uppercase tracking-[0.18em] text-gray-400">
           {label}
         </div>
       )}
@@ -151,18 +151,18 @@ function Row({ staff: s, onPick, onMessage, isRecent }: RowProps) {
           <span className={`absolute -right-0.5 -top-0.5 z-[1] h-2.5 w-2.5 rounded-full ${t.recentDot} ring-2 ring-white`} aria-hidden />
         )}
         <div
-          className={`flex h-11 w-11 items-center justify-center rounded-full text-[14px] font-bold text-white ring-4 ${t.avatarRing} transition-transform duration-150 group-hover:scale-[1.04]`}
+          className={`flex h-11 w-11 items-center justify-center rounded-full text-sm font-bold text-white ring-4 ${t.avatarRing} transition-transform duration-150 group-hover:scale-[1.04]`}
           style={{ backgroundColor: getStaffColorHex(s) }}
         >
           {initials(s.name)}
         </div>
       </div>
       <div className="min-w-0 flex-1">
-        <div className={`truncate text-[15px] font-semibold text-gray-900 transition-colors ${t.nameHover}`}>{s.name}</div>
-        <div className="truncate text-[11px] font-medium uppercase tracking-[0.14em] text-gray-500">
+        <div className={`truncate text-base font-semibold text-gray-900 transition-colors ${t.nameHover}`}>{s.name}</div>
+        <div className="truncate text-caption font-medium uppercase tracking-[0.14em] text-gray-500">
           {s.role.replace(/_/g, ' ')}
           {needsSetup && (
-            <span className="ml-2 inline-flex items-center gap-1 rounded-full bg-blue-50 px-1.5 py-0.5 text-[9px] font-semibold tracking-normal text-blue-700 ring-1 ring-inset ring-blue-100">
+            <span className="ml-2 inline-flex items-center gap-1 rounded-full bg-blue-50 px-1.5 py-0.5 text-eyebrow font-semibold tracking-normal text-blue-700 ring-1 ring-inset ring-blue-100">
               <svg className="h-2.5 w-2.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
                 <path d="M12 5v14" /><path d="M5 12h14" />
               </svg>

@@ -49,13 +49,6 @@ export {
   useUpdateRepairField,
 } from './useRepairQueries';
 
-export {
-  useShipped,
-  useShippedRecord,
-  useUpdateShippedStatus,
-  useUpdateShippedField,
-} from './useShippedQueries';
-
 export { useStaffNameMap } from './useStaffNameMap';
 export { useTodayStaffAvailability } from './useTodayStaffAvailability';
 export { useOrderAssignment } from './useOrderAssignment';
@@ -90,7 +83,6 @@ export { useReceivingDetailForm } from './useReceivingDetailForm';
 export {
   useRepairsTable,
 } from './useRepairs';
-export { useShippedTableData } from './useShippedTableData';
 export { useTechLogs } from './useTechLogs';
 export { useUpNextData } from './useUpNextData';
 export { useLocations } from './useLocations';

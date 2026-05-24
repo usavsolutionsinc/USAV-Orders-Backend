@@ -161,7 +161,7 @@ export default function UnshippedSidebar(props: UnshippedSidebarProps) {
             <h2 className="text-xl font-black tracking-tighter uppercase leading-none text-gray-900">
               Unshipped
             </h2>
-            <p className="text-[9px] font-bold text-blue-600 uppercase tracking-widest mt-1">
+            <p className="text-eyebrow font-bold text-blue-600 uppercase tracking-widest mt-1">
               Shipping Queue
             </p>
           </motion.header>

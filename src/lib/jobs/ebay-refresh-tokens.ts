@@ -1,5 +1,7 @@
 import pool from '@/lib/db';
 import { refreshEbayAccessToken } from '@/lib/ebay/token-refresh';
+import { decryptIntegrationPayload, encryptIntegrationPayload } from '@/lib/integrations/crypto';
+import { tenantQuery } from '@/lib/tenancy/db';
 
 export interface EbayRefreshTokensJobResult {
   success: boolean;
@@ -12,8 +14,9 @@ export interface EbayRefreshTokensJobResult {
 
 export async function runEbayRefreshTokensJob(): Promise<EbayRefreshTokensJobResult> {
   const startedAt = Date.now();
-  const { rows: accounts } = await pool.query<{ account_name: string; refresh_token: string }>(
-    `SELECT account_name, refresh_token
+  // RLS bypass select via pool (raw connection without GUC) to fetch expiring accounts across all tenants
+  const { rows: accounts } = await pool.query<{ account_name: string; refresh_token: string; organization_id: string }>(
+    `SELECT account_name, refresh_token, organization_id
      FROM ebay_accounts
      WHERE (platform = 'EBAY' OR platform IS NULL)
        AND is_active = true
@@ -39,23 +42,29 @@ export async function runEbayRefreshTokensJob(): Promise<EbayRefreshTokensJobRes
   let refreshed = 0;
   const errors: string[] = [];
 
-  for (const { account_name, refresh_token } of accounts) {
+  for (const { account_name, refresh_token, organization_id } of accounts) {
     try {
+      // Decrypt the integration refresh token
+      const decryptedRefreshToken = decryptIntegrationPayload<string>(refresh_token);
+
       const { accessToken, expiresIn } = await refreshEbayAccessToken(
         clientId,
         clientSecret,
-        refresh_token
+        decryptedRefreshToken
       );
       const newExpiresAt = new Date(Date.now() + expiresIn * 1000);
+      const encryptedAccessToken = encryptIntegrationPayload(accessToken);
 
-      await pool.query(
+      // Perform update scoped under tenantQuery for RLS policy compliance
+      await tenantQuery(
+        organization_id,
         `UPDATE ebay_accounts
          SET access_token = $1, token_expires_at = $2, updated_at = NOW()
          WHERE account_name = $3`,
-        [accessToken, newExpiresAt, account_name]
+        [encryptedAccessToken, newExpiresAt, account_name]
       );
       refreshed++;
-      console.log(`[ebay-refresh-tokens] refreshed account=${account_name}`);
+      console.log(`[ebay-refresh-tokens] refreshed account=${account_name} under organization=${organization_id}`);
     } catch (error: any) {
       errors.push(`${account_name}: ${error?.message || 'unknown'}`);
       console.error(`[ebay-refresh-tokens] failed account=${account_name}`, error);
@@ -71,3 +80,4 @@ export async function runEbayRefreshTokensJob(): Promise<EbayRefreshTokensJobRes
     durationMs: Date.now() - startedAt,
   };
 }
+

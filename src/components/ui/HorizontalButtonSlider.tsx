@@ -2,6 +2,7 @@
 
 import { useCallback, useRef, type RefObject, type WheelEvent } from 'react';
 import { motion } from 'framer-motion';
+import { framerTransition } from '@/design-system/foundations/motion-framer';
 
 export type HorizontalSliderTone = 'zinc' | 'yellow' | 'emerald' | 'red' | 'blue' | 'orange' | 'purple';
 
@@ -108,8 +109,8 @@ export function HorizontalButtonSlider({
 
   const sizeCls =
     size === 'lg'
-      ? 'min-h-10 px-3.5 py-2 text-[10px] tracking-wide'
-      : 'h-8 px-3 text-[9px] tracking-wide';
+      ? 'min-h-10 px-3.5 py-2 text-micro tracking-wide'
+      : 'h-8 px-3 text-eyebrow tracking-wide';
 
   // The `nav` variant uses scale-up + shadow on the active pill; the
   // overflow-x-auto would clip those on the Y axis too (browser quirk),
@@ -127,7 +128,7 @@ export function HorizontalButtonSlider({
   return (
     <div className={className}>
       {legend ? (
-        <span className="mb-1.5 block text-[8px] font-black uppercase tracking-widest text-zinc-400">
+        <span className="mb-1.5 block text-mini font-black uppercase tracking-widest text-zinc-400">
           {legend}
         </span>
       ) : null}
@@ -169,7 +170,7 @@ export function HorizontalButtonSlider({
                   title={isDisabled ? `${item.label} (coming soon)` : item.label}
                   disabled={isDisabled}
                   animate={{ scale: isActive && !isDisabled ? 1.04 : 1 }}
-                  transition={{ type: 'spring', stiffness: 380, damping: 28, mass: 0.6 }}
+                  transition={framerTransition.sliderIndicator}
                   whileTap={isDisabled ? undefined : { scale: 0.96 }}
                   onClick={isDisabled ? undefined : () => onChange(item.id)}
                   className={`group relative inline-flex snap-start items-center whitespace-nowrap rounded-full font-black uppercase transition-colors ring-1 ring-inset ${sizeCls} ${stateClass}`}
@@ -206,7 +207,7 @@ export function HorizontalButtonSlider({
                   aria-selected={isActive}
                   aria-label={item.label}
                   animate={{ scale: isActive ? 1.04 : 1 }}
-                  transition={{ type: 'spring', stiffness: 380, damping: 28, mass: 0.6 }}
+                  transition={framerTransition.sliderIndicator}
                   whileTap={{ scale: 0.96 }}
                   onClick={() => onChange(item.id)}
                   className={`group relative inline-flex snap-start items-center whitespace-nowrap rounded-full font-black uppercase transition-colors ${sizeCls} ${stateClass}`}
@@ -230,7 +231,7 @@ export function HorizontalButtonSlider({
                   role="tab"
                   aria-selected={isActive}
                   animate={{ scale: isActive ? 1.03 : 1 }}
-                  transition={{ type: 'spring', stiffness: 380, damping: 28, mass: 0.6 }}
+                  transition={framerTransition.sliderIndicator}
                   whileTap={{ scale: 0.95 }}
                   onClick={() => onChange(item.id)}
                   className={`snap-start whitespace-nowrap rounded-full border font-black uppercase transition-colors ${sizeCls} ${
@@ -255,7 +256,7 @@ export function HorizontalButtonSlider({
                 role="tab"
                 aria-selected={isActive}
                 animate={{ scale: isActive ? 1.03 : 1 }}
-                transition={{ type: 'spring', stiffness: 380, damping: 28, mass: 0.6 }}
+                transition={framerTransition.sliderIndicator}
                 whileTap={{ scale: 0.92 }}
                 onClick={() => onChange(item.id)}
                 className={`snap-start whitespace-nowrap rounded-full font-black uppercase transition-colors ring-1 ring-inset ${sizeCls} ${

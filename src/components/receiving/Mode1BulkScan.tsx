@@ -138,7 +138,7 @@ export default function Mode1BulkScan({ staffId, onEntryAdded }: Mode1BulkScanPr
         <div className="flex h-full flex-col bg-white overflow-hidden">
             {/* Compact header */}
             <div className="flex items-center justify-between px-5 py-3 border-b border-gray-100">
-                <p className="text-[10px] font-black uppercase tracking-[0.15em] text-gray-400">Bulk Scan</p>
+                <p className="text-micro font-black uppercase tracking-[0.15em] text-gray-400">Bulk Scan</p>
                 <motion.span
                     key={sessionCount}
                     initial={{ scale: 1.3, color: '#3b82f6' }}
@@ -182,7 +182,7 @@ export default function Mode1BulkScan({ staffId, onEntryAdded }: Mode1BulkScanPr
                 {recentScans.length === 0 ? (
                     <div className="flex flex-col items-center justify-center py-16 text-center opacity-40">
                         <Package className="mb-2 h-8 w-8" />
-                        <p className="text-[10px] font-bold uppercase tracking-widest">Ready to scan</p>
+                        <p className="text-micro font-bold uppercase tracking-widest">Ready to scan</p>
                     </div>
                 ) : (
                     <ul>
@@ -214,13 +214,13 @@ export default function Mode1BulkScan({ staffId, onEntryAdded }: Mode1BulkScanPr
 
                                         {/* Tracking info */}
                                         <div className="min-w-0 flex-1">
-                                            <p className="truncate font-mono text-[11px] font-bold text-gray-800">
+                                            <p className="truncate font-mono text-caption font-bold text-gray-800">
                                                 {entry.tracking}
                                             </p>
                                             {entry.status === 'error' ? (
-                                                <p className="text-[10px] font-semibold text-red-500">{entry.errorMsg}</p>
+                                                <p className="text-micro font-semibold text-red-500">{entry.errorMsg}</p>
                                             ) : (
-                                                <p className="text-[10px] font-medium text-gray-400">{entry.carrier}</p>
+                                                <p className="text-micro font-medium text-gray-400">{entry.carrier}</p>
                                             )}
                                         </div>
 

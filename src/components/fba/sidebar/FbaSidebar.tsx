@@ -105,7 +105,7 @@ function FbaCatalogSidebarInner() {
   return (
     <div className="relative flex h-full w-full flex-col overflow-hidden bg-white">
       <div className={`${sidebarSubBandClass} px-3 py-2.5`}>
-        <p className="mb-2 text-[10px] font-semibold uppercase tracking-widest text-zinc-500">
+        <p className="mb-2 text-micro font-semibold uppercase tracking-widest text-zinc-500">
           Catalog search
         </p>
         <SearchBar
@@ -119,12 +119,12 @@ function FbaCatalogSidebarInner() {
       </div>
 
       <div className="min-h-0 flex-1 space-y-2 overflow-y-auto px-3 py-3">
-        <p className="text-[10px] font-semibold uppercase tracking-widest text-zinc-500">Catalog actions</p>
+        <p className="text-micro font-semibold uppercase tracking-widest text-zinc-500">Catalog actions</p>
 
         <button type="button" onClick={emitOpenAddFba} className={actionRowClass}>
           <span>
             <span className="block text-xs font-bold text-zinc-900">Add Catalog Row</span>
-            <span className="mt-0.5 block text-[11px] text-zinc-500">Create one FNSKU mapping manually</span>
+            <span className="mt-0.5 block text-caption text-zinc-500">Create one FNSKU mapping manually</span>
           </span>
           <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md border border-zinc-200 bg-white text-zinc-600">
             <Plus className="h-4 w-4" />
@@ -134,7 +134,7 @@ function FbaCatalogSidebarInner() {
         <button type="button" onClick={emitOpenUploadFba} className={actionRowClass}>
           <span>
             <span className="block text-xs font-bold text-zinc-900">Upload CSV</span>
-            <span className="mt-0.5 block text-[11px] text-zinc-500">Import many FNSKU mappings from a file</span>
+            <span className="mt-0.5 block text-caption text-zinc-500">Import many FNSKU mappings from a file</span>
           </span>
           <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md border border-zinc-200 bg-white text-zinc-600">
             <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
@@ -151,7 +151,7 @@ function FbaCatalogSidebarInner() {
         <button type="button" onClick={clearFilters} className={actionRowClass}>
           <span>
             <span className="block text-xs font-bold text-zinc-900">Clear search</span>
-            <span className="mt-0.5 block text-[11px] text-zinc-500">Reset the current catalog search</span>
+            <span className="mt-0.5 block text-caption text-zinc-500">Reset the current catalog search</span>
           </span>
           <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md border border-zinc-200 bg-white text-zinc-600">
             <X className="h-4 w-4" />
@@ -160,7 +160,7 @@ function FbaCatalogSidebarInner() {
       </div>
 
       <div className={`${sidebarSubBandClass} mt-auto px-3 py-3`}>
-        <p className="text-[10px] font-semibold uppercase tracking-widest text-zinc-500">FBA Station</p>
+        <p className="text-micro font-semibold uppercase tracking-widest text-zinc-500">FBA Station</p>
         <Link
           href="/fba"
           className="mt-2 flex w-full items-center justify-center rounded-lg border border-violet-200 bg-violet-50 px-3 py-2 text-xs font-bold text-violet-900 transition-colors hover:bg-violet-100"
@@ -475,7 +475,7 @@ function FbaWorkspaceSidebarInner() {
         {/* Shipped: search filter */}
         {activeTab === 'shipped' && (
           <div className={`${sidebarSubBandClass} px-3 py-2.5`}>
-            <p className="mb-2 text-[10px] font-semibold uppercase tracking-widest text-gray-500">
+            <p className="mb-2 text-micro font-semibold uppercase tracking-widest text-gray-500">
               Filter shipped list
             </p>
             <SearchBar
@@ -502,12 +502,12 @@ function FbaWorkspaceSidebarInner() {
             <button
               type="button"
               onClick={handleSelectAll}
-              className="text-[10px] font-black uppercase tracking-widest text-gray-600 hover:text-gray-900"
+              className="text-micro font-black uppercase tracking-widest text-gray-600 hover:text-gray-900"
             >
               {allBoardSelected ? 'Deselect all' : 'Select all'}
             </button>
             {someBoardSelected && (
-              <span className="ml-auto text-[10px] font-bold tabular-nums text-gray-400">
+              <span className="ml-auto text-micro font-bold tabular-nums text-gray-400">
                 {boardSelectionCount.selectedQty}
               </span>
             )}
@@ -542,7 +542,7 @@ function FbaWorkspaceSidebarInner() {
 
         {/* Plans error banner */}
         {plansError && (
-          <div className="mx-3 my-2 rounded-lg border border-red-200 bg-red-50 px-2.5 py-2 text-[11px] font-semibold text-red-700">
+          <div className="mx-3 my-2 rounded-lg border border-red-200 bg-red-50 px-2.5 py-2 text-caption font-semibold text-red-700">
             {plansError}
           </div>
         )}

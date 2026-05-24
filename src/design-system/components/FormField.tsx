@@ -39,7 +39,7 @@ export function FormField({
         isVertical ? 'flex flex-col gap-1.5' : 'flex items-center gap-3'
       } ${className}`.trim()}
     >
-      <label className="text-[10px] font-bold uppercase tracking-[0.16em] text-gray-700 flex items-center gap-1">
+      <label className="text-micro font-bold uppercase tracking-[0.16em] text-gray-700 flex items-center gap-1">
         {label}
         {required && <span className="text-red-500">*</span>}
         {optionalHint && !required && (
@@ -50,7 +50,7 @@ export function FormField({
       </label>
       {children}
       {hintBelow && (
-        <p className="text-[10px] text-gray-400">{hintBelow}</p>
+        <p className="text-micro text-gray-400">{hintBelow}</p>
       )}
     </div>
   );

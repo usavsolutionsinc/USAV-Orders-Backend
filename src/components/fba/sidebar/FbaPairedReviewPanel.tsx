@@ -463,18 +463,18 @@ export function FbaPairedReviewPanel({
           className="flex w-full items-center justify-between gap-2 rounded-lg border border-gray-200 bg-gray-50/90 px-2.5 py-2 text-left transition-colors hover:bg-gray-100"
           aria-expanded={false}
         >
-          <span className="text-[10px] font-black uppercase tracking-widest text-gray-600">
+          <span className="text-micro font-black uppercase tracking-widest text-gray-600">
             Combine review
           </span>
           <div className="flex min-w-0 flex-1 items-center justify-end gap-2">
             {selectedItems.length > 0 ? (
-              <span className="truncate text-[10px] font-bold tabular-nums text-gray-500">
+              <span className="truncate text-micro font-bold tabular-nums text-gray-500">
                 {selectedItems.length} · {collapsedTotalQty}
               </span>
             ) : lockedFbaId ? (
-              <span className="truncate font-mono text-[10px] font-bold text-emerald-700">{lockedFbaId}</span>
+              <span className="truncate font-mono text-micro font-bold text-emerald-700">{lockedFbaId}</span>
             ) : (
-              <span className="text-[10px] font-semibold text-gray-400">Tap to expand</span>
+              <span className="text-micro font-semibold text-gray-400">Tap to expand</span>
             )}
             <ChevronDown className="h-4 w-4 shrink-0 text-gray-400" />
           </div>
@@ -493,7 +493,7 @@ export function FbaPairedReviewPanel({
     <div className="border-b border-gray-100">
       {onToggleExpanded ? (
         <div className="flex items-center justify-between px-3 pt-2.5 pb-1">
-          <p className="text-[10px] font-black uppercase tracking-widest text-gray-500">Combine review</p>
+          <p className="text-micro font-black uppercase tracking-widest text-gray-500">Combine review</p>
           <button
             type="button"
             onClick={onToggleExpanded}
@@ -510,7 +510,7 @@ export function FbaPairedReviewPanel({
         {/* FBA Shipment ID — parent card header */}
         <div>
           <div className="flex items-center justify-between mb-1">
-            <p className="text-[9px] font-black uppercase tracking-widest text-gray-500">FBA Shipment ID</p>
+            <p className="text-eyebrow font-black uppercase tracking-widest text-gray-500">FBA Shipment ID</p>
             {lockedFbaId && (
               <button
                 type="button"
@@ -534,7 +534,7 @@ export function FbaPairedReviewPanel({
             className={`${chrome.monoInput} ${lockedFbaId ? '!bg-emerald-50 !border-emerald-200 !text-emerald-800' : ''}`}
           />
           {activeSplit ? (
-            <p className="mt-1.5 text-[9px] font-semibold leading-snug text-amber-800">
+            <p className="mt-1.5 text-eyebrow font-semibold leading-snug text-amber-800">
               If you change this FBA ID from the prefilled value, Save creates a new active shipment for these
               FNSKUs with this Amazon ID and UPS; the original card keeps its FBA ID for remaining lines.
             </p>
@@ -615,7 +615,7 @@ export function FbaPairedReviewPanel({
             type="button"
             onClick={addBucket}
             disabled={saving}
-            className="flex h-8 w-full items-center justify-center gap-1.5 rounded-lg border border-dashed border-gray-300 text-[10px] font-bold uppercase tracking-wider text-gray-500 transition-colors hover:border-blue-400 hover:bg-blue-50/50 hover:text-blue-600 disabled:opacity-40"
+            className="flex h-8 w-full items-center justify-center gap-1.5 rounded-lg border border-dashed border-gray-300 text-micro font-bold uppercase tracking-wider text-gray-500 transition-colors hover:border-blue-400 hover:bg-blue-50/50 hover:text-blue-600 disabled:opacity-40"
           >
             <Plus className="h-3 w-3" />
             Add UPS Tracking Box

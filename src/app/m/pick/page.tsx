@@ -206,7 +206,7 @@ function QueueCard({
           <div className="flex items-baseline gap-2">
             <p className="truncate text-base font-bold text-slate-900">{row.orderLabel}</p>
             {row.accountSource && (
-              <span className="shrink-0 rounded-md bg-slate-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-slate-600">
+              <span className="shrink-0 rounded-md bg-slate-100 px-1.5 py-0.5 text-micro font-semibold uppercase tracking-wider text-slate-600">
                 {row.accountSource}
               </span>
             )}

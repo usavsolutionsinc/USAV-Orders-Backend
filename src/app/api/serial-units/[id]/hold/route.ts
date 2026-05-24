@@ -14,7 +14,7 @@ import { holdUnit } from '@/lib/inventory/hold';
  * Returns 409 if the unit is already ON_HOLD.
  *
  * Shared logic lives in src/lib/inventory/hold.ts (used by the
- * /admin/inventory-v2/holds admin page too).
+ * /admin/inventory/holds admin page too).
  *
  * Gated by INVENTORY_V2_RETURNS; off-flag returns 503.
  * Permission: sku_stock.adjust.

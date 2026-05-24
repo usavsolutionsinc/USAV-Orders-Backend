@@ -152,7 +152,7 @@ export function DesktopAppDownload() {
               href={macUrl}
               extra={
                 hasBothMacArches ? (
-                  <div className="mt-3 inline-flex rounded-lg bg-gray-100 p-0.5 text-[11px]">
+                  <div className="mt-3 inline-flex rounded-lg bg-gray-100 p-0.5 text-caption">
                     <ArchToggle
                       active={macArchPick === 'arm64'}
                       onClick={() => setMacArchPick('arm64')}
@@ -251,7 +251,7 @@ function PlatformCard({
           {icon}
         </div>
         {highlighted && (
-          <span className="rounded-full bg-white/20 px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-widest text-white ring-1 ring-white/30">
+          <span className="rounded-full bg-white/20 px-2.5 py-0.5 text-micro font-bold uppercase tracking-widest text-white ring-1 ring-white/30">
             Your device
           </span>
         )}

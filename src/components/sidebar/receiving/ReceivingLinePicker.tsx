@@ -19,7 +19,7 @@ export function ReceivingLinePicker({ rows, onPick, onCancel }: Props) {
   return (
     <div className="border-b border-blue-200 bg-blue-50/60 px-3 py-2">
       <div className="mb-1 flex items-center justify-between">
-        <p className="text-[9px] font-black uppercase tracking-wider text-blue-700">
+        <p className="text-eyebrow font-black uppercase tracking-wider text-blue-700">
           Pick a line
         </p>
         <button
@@ -41,7 +41,7 @@ export function ReceivingLinePicker({ rows, onPick, onCancel }: Props) {
               key={line.id}
               type="button"
               onClick={() => onPick(line)}
-              className={`rounded border px-2 py-1 text-left text-[10px] font-bold transition-colors ${
+              className={`rounded border px-2 py-1 text-left text-micro font-bold transition-colors ${
                 open
                   ? 'border-blue-200 bg-white text-blue-900 hover:bg-blue-100'
                   : 'border-gray-200 bg-gray-50 text-gray-500 hover:bg-gray-100'

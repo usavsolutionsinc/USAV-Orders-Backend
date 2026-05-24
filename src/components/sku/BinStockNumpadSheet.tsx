@@ -277,10 +277,10 @@ export function BinStockNumpadSheet({
           ←
         </button>
         <div className="min-w-0 flex-1 text-center">
-          <p className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-500">
+          <p className="text-micro font-black uppercase tracking-[0.18em] text-slate-500">
             Edit stock
           </p>
-          <p className="truncate font-mono text-[13px] font-black text-slate-900">
+          <p className="truncate font-mono text-sm font-black text-slate-900">
             {row.sku}
           </p>
         </div>
@@ -297,7 +297,7 @@ export function BinStockNumpadSheet({
       {/* ── Body ── */}
       <main className="flex-1 overflow-auto px-4 py-5 space-y-5">
         {title && (
-          <p className="text-center text-[12px] leading-snug font-bold text-slate-600">
+          <p className="text-center text-label leading-snug font-bold text-slate-600">
             {title}
           </p>
         )}
@@ -333,7 +333,7 @@ export function BinStockNumpadSheet({
         {/* Current vs projected */}
         <div className="mx-auto grid w-full max-w-sm grid-cols-3 items-center gap-2 rounded-lg border border-slate-200 bg-white px-4 py-4 shadow-sm">
           <div className="text-center">
-            <p className="text-[9px] font-black uppercase tracking-widest text-slate-500">
+            <p className="text-eyebrow font-black uppercase tracking-widest text-slate-500">
               On hand
             </p>
             <p className="mt-1 font-mono text-3xl font-black text-slate-900">
@@ -341,7 +341,7 @@ export function BinStockNumpadSheet({
             </p>
           </div>
           <div className="text-center">
-            <p className="text-[9px] font-black uppercase tracking-widest text-slate-500">
+            <p className="text-eyebrow font-black uppercase tracking-widest text-slate-500">
               Change
             </p>
             <p
@@ -354,7 +354,7 @@ export function BinStockNumpadSheet({
             </p>
           </div>
           <div className="text-center">
-            <p className="text-[9px] font-black uppercase tracking-widest text-slate-500">
+            <p className="text-eyebrow font-black uppercase tracking-widest text-slate-500">
               After
             </p>
             <p className="mt-1 font-mono text-3xl font-black text-slate-900">
@@ -378,7 +378,7 @@ export function BinStockNumpadSheet({
               placeholder="Reason note (required)"
               value={noteDraft}
               onChange={(e) => setNoteDraft(e.target.value)}
-              className="w-full rounded-md border border-amber-300 bg-amber-50 px-2 py-1.5 text-[12px] font-bold text-slate-900 placeholder:font-medium placeholder:text-amber-700/70 focus:border-amber-500 focus:outline-none"
+              className="w-full rounded-md border border-amber-300 bg-amber-50 px-2 py-1.5 text-label font-bold text-slate-900 placeholder:font-medium placeholder:text-amber-700/70 focus:border-amber-500 focus:outline-none"
             />
           )}
           {reason?.requires_photo && (
@@ -386,7 +386,7 @@ export function BinStockNumpadSheet({
               <button
                 type="button"
                 onClick={() => setCameraOpen(true)}
-                className={`flex-1 rounded-md px-2 py-2 text-[11px] font-black uppercase tracking-widest ${
+                className={`flex-1 rounded-md px-2 py-2 text-caption font-black uppercase tracking-widest ${
                   pendingShots.length > 0
                     ? 'bg-emerald-600 text-white'
                     : 'border border-amber-400 bg-amber-100 text-amber-800'
@@ -410,7 +410,7 @@ export function BinStockNumpadSheet({
                     setPendingShots([]);
                   }}
                   aria-label="Discard photos"
-                  className="rounded-md border border-slate-300 bg-white px-2 py-2 text-[11px] font-bold text-slate-700"
+                  className="rounded-md border border-slate-300 bg-white px-2 py-2 text-caption font-bold text-slate-700"
                 >
                   Clear
                 </button>
@@ -487,10 +487,10 @@ export function BinStockNumpadSheet({
           maxPhotos={3}
           header={
             <div className="min-w-0">
-              <p className="text-[9px] font-black uppercase tracking-[0.2em] text-white/60">
+              <p className="text-eyebrow font-black uppercase tracking-[0.2em] text-white/60">
                 Evidence
               </p>
-              <p className="truncate text-[13px] font-black text-white">{row.sku}</p>
+              <p className="truncate text-sm font-black text-white">{row.sku}</p>
             </div>
           }
           onDone={(shots) => {

@@ -117,7 +117,7 @@ export function ContextualManualLinkRow({
       label="Product Manual"
       headerAccessory={
         effectiveItemNumber ? (
-          <span className="truncate text-[10px] font-black uppercase tracking-wide text-gray-500">
+          <span className="truncate text-micro font-black uppercase tracking-wide text-gray-500">
             {effectiveItemNumber}
           </span>
         ) : null

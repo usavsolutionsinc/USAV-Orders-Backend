@@ -63,7 +63,7 @@ export function AppearanceSection() {
                 aria-pressed={isActive}
               >
                 <div className="text-sm font-semibold">{DENSITY_LABELS[d]}</div>
-                <div className="mt-1 text-[11px] text-gray-500">{DENSITY_HINTS[d]}</div>
+                <div className="mt-1 text-caption text-gray-500">{DENSITY_HINTS[d]}</div>
               </button>
             );
           })}
@@ -93,7 +93,7 @@ export function AppearanceSection() {
             );
           })}
         </div>
-        <p className="mt-3 text-[11px] text-gray-500">
+        <p className="mt-3 text-caption text-gray-500">
           Applies globally. 100% is the default; higher values are easier to read from across the warehouse.
         </p>
       </div>

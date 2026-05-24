@@ -93,7 +93,7 @@ export function FbaCatalogSidebarPanel() {
           <button
             type="button"
             onClick={emitOpenAddFba}
-            className="inline-flex items-center justify-center gap-1 rounded-lg border border-dashed border-gray-300 bg-white px-2 py-1.5 text-[11px] font-semibold text-gray-700 transition hover:border-blue-400 hover:bg-blue-50 hover:text-blue-700"
+            className="inline-flex items-center justify-center gap-1 rounded-lg border border-dashed border-gray-300 bg-white px-2 py-1.5 text-caption font-semibold text-gray-700 transition hover:border-blue-400 hover:bg-blue-50 hover:text-blue-700"
           >
             <svg
               className="h-3 w-3"
@@ -112,7 +112,7 @@ export function FbaCatalogSidebarPanel() {
           <button
             type="button"
             onClick={emitOpenUploadFba}
-            className="inline-flex items-center justify-center gap-1 rounded-lg border border-dashed border-gray-300 bg-white px-2 py-1.5 text-[11px] font-semibold text-gray-700 transition hover:border-emerald-400 hover:bg-emerald-50 hover:text-emerald-700"
+            className="inline-flex items-center justify-center gap-1 rounded-lg border border-dashed border-gray-300 bg-white px-2 py-1.5 text-caption font-semibold text-gray-700 transition hover:border-emerald-400 hover:bg-emerald-50 hover:text-emerald-700"
           >
             <svg
               className="h-3 w-3"

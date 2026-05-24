@@ -24,7 +24,7 @@ export function PlatformBadge({ orderId, accountSource, showBorder = false, clas
 
   return (
     <span
-      className={`text-[10px] font-black uppercase tracking-wider ${textColor} ${showBorder ? `border-l-2 pl-1.5 ${borderColor}` : ''} ${className}`.trim()}
+      className={`text-micro font-black uppercase tracking-wider ${textColor} ${showBorder ? `border-l-2 pl-1.5 ${borderColor}` : ''} ${className}`.trim()}
     >
       {label}
     </span>

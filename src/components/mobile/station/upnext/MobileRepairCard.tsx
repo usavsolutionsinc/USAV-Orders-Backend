@@ -50,10 +50,10 @@ export function MobileRepairCard({ repair, techId, isExpanded, onToggleExpand, o
               showYear={false}
               icon={Settings}
               iconClassName="w-4 h-4 text-orange-600"
-              textClassName="text-[15px] font-black text-blue-700"
+              textClassName="text-base font-black text-blue-700"
               className=""
             />
-            <span className={`text-[15px] font-black ${getDaysLateTone(card.daysLate)}`}>
+            <span className={`text-base font-black ${getDaysLateTone(card.daysLate)}`}>
               {card.daysLate}
             </span>
           </div>
@@ -73,7 +73,7 @@ export function MobileRepairCard({ repair, techId, isExpanded, onToggleExpand, o
 
         {/* ── Body ── */}
         <div className="px-3">
-          <h4 className="text-[17px] font-black text-gray-900 leading-tight">
+          <h4 className="text-lg font-black text-gray-900 leading-tight">
             {repair.productTitle || 'Unknown Product'}
           </h4>
         </div>
@@ -81,7 +81,7 @@ export function MobileRepairCard({ repair, techId, isExpanded, onToggleExpand, o
         {/* ── Issue (always visible) ── */}
         {repair.issue && (
           <div className="mt-2.5 border-t border-orange-100 px-3 pt-2">
-            <p className="text-[15px] font-bold text-gray-700 leading-relaxed line-clamp-2">{repair.issue}</p>
+            <p className="text-base font-bold text-gray-700 leading-relaxed line-clamp-2">{repair.issue}</p>
           </div>
         )}
 
@@ -93,8 +93,8 @@ export function MobileRepairCard({ repair, techId, isExpanded, onToggleExpand, o
 
           {card.hasOutcome && !card.hasOutOfStock && (
             <div className="mb-2 rounded-xl border border-emerald-200 bg-emerald-50/40 px-3 py-2.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.85),inset_0_0_0_1px_rgba(16,185,129,0.06)]">
-              <span className="mb-1 block text-[11px] font-black uppercase tracking-widest text-emerald-700">Repaired Part</span>
-              <p className="text-[15px] text-gray-900 break-words leading-snug">{repair.repairOutcome}</p>
+              <span className="mb-1 block text-caption font-black uppercase tracking-widest text-emerald-700">Repaired Part</span>
+              <p className="text-base text-gray-900 break-words leading-snug">{repair.repairOutcome}</p>
             </div>
           )}
 
@@ -155,7 +155,7 @@ export function MobileRepairCard({ repair, techId, isExpanded, onToggleExpand, o
                     onClick={stopProp}
                     placeholder="What was repaired?"
                     rows={3}
-                    className="w-full resize-none rounded-lg border border-emerald-200 bg-white px-3 py-2.5 text-[13px] font-bold leading-relaxed text-gray-900 shadow-[inset_0_1px_0_rgba(255,255,255,0.9)] focus:outline-none focus:ring-2 focus:ring-emerald-400 placeholder:text-gray-400"
+                    className="w-full resize-none rounded-lg border border-emerald-200 bg-white px-3 py-2.5 text-sm font-bold leading-relaxed text-gray-900 shadow-[inset_0_1px_0_rgba(255,255,255,0.9)] focus:outline-none focus:ring-2 focus:ring-emerald-400 placeholder:text-gray-400"
                     autoFocus
                   />
                   <div className="grid grid-cols-2 gap-3">

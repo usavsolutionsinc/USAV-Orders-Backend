@@ -35,7 +35,7 @@ export function ReceivingContextCard({ row, lineIndex, lineTotal }: Props) {
     <section className="flex items-center gap-4 rounded-2xl bg-white p-5 shadow-sm ring-1 ring-gray-200/60">
       <div className="min-w-0 flex-1">
         <p
-          className="line-clamp-2 text-[15px] font-extrabold leading-snug tracking-tight text-gray-900"
+          className="line-clamp-2 text-base font-extrabold leading-snug tracking-tight text-gray-900"
           title={title}
         >
           {title}

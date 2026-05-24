@@ -24,7 +24,7 @@ export function DeviceModeToggle() {
         type="button"
         onClick={() => setModeOverride(modeOverride === 'desktop' ? null : 'desktop')}
         title={modeOverride === 'desktop' ? 'Desktop mode (locked) — click to auto-detect' : 'Switch to desktop mode'}
-        className={`flex items-center gap-1.5 rounded-xl px-2.5 py-1.5 text-[9px] font-black uppercase tracking-widest transition-all ${
+        className={`flex items-center gap-1.5 rounded-xl px-2.5 py-1.5 text-eyebrow font-black uppercase tracking-widest transition-all ${
           !isMobileMode
             ? 'bg-gray-900 text-white shadow-sm'
             : 'text-gray-400 hover:bg-gray-100 hover:text-gray-600'
@@ -39,7 +39,7 @@ export function DeviceModeToggle() {
         type="button"
         onClick={() => setModeOverride(modeOverride === 'mobile' ? null : 'mobile')}
         title={modeOverride === 'mobile' ? 'Mobile mode (locked) — click to auto-detect' : 'Switch to mobile mode'}
-        className={`flex items-center gap-1.5 rounded-xl px-2.5 py-1.5 text-[9px] font-black uppercase tracking-widest transition-all ${
+        className={`flex items-center gap-1.5 rounded-xl px-2.5 py-1.5 text-eyebrow font-black uppercase tracking-widest transition-all ${
           isMobileMode
             ? 'bg-blue-600 text-white shadow-sm'
             : 'text-gray-400 hover:bg-gray-100 hover:text-gray-600'
@@ -56,7 +56,7 @@ export function DeviceModeToggle() {
             type="button"
             onClick={() => setModeOverride(null)}
             title="Reset to auto-detect"
-            className="rounded-lg px-2 py-1 text-[8px] font-black uppercase tracking-widest text-gray-400 hover:bg-gray-100 hover:text-gray-600 transition-colors"
+            className="rounded-lg px-2 py-1 text-mini font-black uppercase tracking-widest text-gray-400 hover:bg-gray-100 hover:text-gray-600 transition-colors"
           >
             Auto
           </button>

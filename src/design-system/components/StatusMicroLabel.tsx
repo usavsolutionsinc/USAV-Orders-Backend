@@ -47,7 +47,7 @@ export function StatusMicroLabel({ status, label, className = '' }: StatusMicroL
 
   return (
     <UnderlineValue
-      value={<span className="text-[9px] font-black uppercase tracking-[0.08em] leading-none">{resolvedLabel}</span>}
+      value={<span className="text-eyebrow font-black uppercase tracking-[0.08em] leading-none">{resolvedLabel}</span>}
       tone={tone}
       className={className}
       truncate={false}

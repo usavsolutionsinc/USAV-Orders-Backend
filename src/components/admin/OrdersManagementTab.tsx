@@ -194,7 +194,7 @@ export function OrdersManagementTab() {
               <button
                 key={tab}
                 onClick={() => setFilterTab(tab)}
-                className={`px-4 py-1.5 rounded-xl font-black text-[9px] uppercase tracking-wider transition-all ${
+                className={`px-4 py-1.5 rounded-xl font-black text-eyebrow uppercase tracking-wider transition-all ${
                   filterTab === tab
                     ? tab === 'need to order'
                       ? 'bg-orange-500 text-white shadow-md shadow-orange-500/20'
@@ -227,7 +227,7 @@ export function OrdersManagementTab() {
                 !defaultPackerExists ||
                 unassignedRemainingOrderIds.length === 0
               }
-              className="px-3 py-1.5 rounded-xl border border-emerald-200 bg-emerald-50 text-[9px] font-black uppercase tracking-widest text-emerald-700 hover:bg-emerald-100 disabled:opacity-50"
+              className="px-3 py-1.5 rounded-xl border border-emerald-200 bg-emerald-50 text-eyebrow font-black uppercase tracking-widest text-emerald-700 hover:bg-emerald-100 disabled:opacity-50"
             >
               Assign Left Unassigned: {getStaffName(DEFAULT_TECH_ID)} + {getStaffName(DEFAULT_PACKER_ID)}
             </button>
@@ -243,7 +243,7 @@ export function OrdersManagementTab() {
                 setSelectedOrderIds(orders.map((order) => order.id));
               }}
               disabled={orders.length === 0}
-              className="px-3 py-1.5 rounded-xl border border-gray-200 text-[9px] font-black uppercase tracking-widest text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+              className="px-3 py-1.5 rounded-xl border border-gray-200 text-eyebrow font-black uppercase tracking-widest text-gray-700 hover:bg-gray-50 disabled:opacity-50"
             >
               {orders.length > 0 && selectedOrderIds.length === orders.length ? 'Unselect All' : 'Select All'}
             </button>
@@ -288,7 +288,7 @@ export function OrdersManagementTab() {
                           variant="full"
                           className="h-9 rounded-lg"
                         />
-                        <span className="inline-flex items-center h-9 px-3 rounded-lg bg-gray-100 border border-gray-200 text-[10px] font-black text-gray-800">
+                        <span className="inline-flex items-center h-9 px-3 rounded-lg bg-gray-100 border border-gray-200 text-micro font-black text-gray-800">
                           Qty:{Math.max(1, parseInt(String(order.quantity ?? '1'), 10) || 1)}
                         </span>
                       </div>
@@ -307,7 +307,7 @@ export function OrdersManagementTab() {
                             const value = order.shipping_tracking_number || '';
                             if (value) navigator.clipboard.writeText(value);
                           }}
-                          className="inline-flex items-center h-9 gap-1.5 px-3 rounded-lg bg-blue-50 border border-blue-100 text-[10px] font-black text-blue-700"
+                          className="inline-flex items-center h-9 gap-1.5 px-3 rounded-lg bg-blue-50 border border-blue-100 text-micro font-black text-blue-700"
                           title="Click to copy tracking number"
                         >
                           <span className={`${microBadge} text-blue-500`}>Tracking</span>
@@ -334,7 +334,7 @@ export function OrdersManagementTab() {
                             const value = order.order_id || '';
                             if (value) navigator.clipboard.writeText(value);
                           }}
-                          className="inline-flex items-center h-9 gap-1.5 px-3 rounded-lg bg-gray-50 border border-gray-100 text-[10px] font-black text-gray-800"
+                          className="inline-flex items-center h-9 gap-1.5 px-3 rounded-lg bg-gray-50 border border-gray-100 text-micro font-black text-gray-800"
                           title="Click to copy order ID"
                         >
                           <span className={`${microBadge} text-gray-500`}>Order</span>

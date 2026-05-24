@@ -160,12 +160,12 @@ export function PhotoCapture({ onCapture, disabled = false, className }: PhotoCa
             )}
           >
             <Camera size={24} strokeWidth={1.5} />
-            <span className="text-[10px] font-bold tracking-[0.12em] uppercase font-sans">
+            <span className="text-micro font-bold tracking-[0.12em] uppercase font-sans">
               Take Photo
             </span>
           </button>
           {cameraError && (
-            <p className="mt-2 rounded-lg bg-red-50 px-3 py-2 text-[11px] font-semibold text-red-600">
+            <p className="mt-2 rounded-lg bg-red-50 px-3 py-2 text-caption font-semibold text-red-600">
               {cameraError}
             </p>
           )}

@@ -203,7 +203,7 @@ export function MobileScanSheet({
           <div className="flex-shrink-0 flex items-center justify-between px-4 pt-[max(0.75rem,env(safe-area-inset-top))] pb-2">
             <div className="flex-1 min-w-0">
               {header ?? (
-                <p className="text-[10px] font-black uppercase tracking-[0.2em] text-white/60">
+                <p className="text-micro font-black uppercase tracking-[0.2em] text-white/60">
                   Scan Barcode
                 </p>
               )}
@@ -249,14 +249,14 @@ export function MobileScanSheet({
                   <button
                     type="button"
                     onClick={handleStartCamera}
-                    className="h-11 px-5 rounded-xl bg-blue-600 text-white text-[11px] font-black uppercase tracking-wider active:bg-blue-700 transition-colors"
+                    className="h-11 px-5 rounded-xl bg-blue-600 text-white text-caption font-black uppercase tracking-wider active:bg-blue-700 transition-colors"
                   >
                     Try Again
                   </button>
                   <button
                     type="button"
                     onClick={handleOpenManual}
-                    className="h-11 px-5 rounded-xl bg-white/10 text-white text-[11px] font-black uppercase tracking-wider active:bg-white/20 transition-colors"
+                    className="h-11 px-5 rounded-xl bg-white/10 text-white text-caption font-black uppercase tracking-wider active:bg-white/20 transition-colors"
                   >
                     Type Manually
                   </button>
@@ -327,7 +327,7 @@ export function MobileScanSheet({
                         key={label}
                         type="button"
                         onClick={() => onModeChange(mode)}
-                        className={`rounded-full border px-3.5 min-h-[44px] text-[10px] font-black uppercase tracking-wider transition-all active:scale-95 whitespace-nowrap ${
+                        className={`rounded-full border px-3.5 min-h-[44px] text-micro font-black uppercase tracking-wider transition-all active:scale-95 whitespace-nowrap ${
                           isActive ? activeClass : 'bg-white/10 text-white/60 border-white/20'
                         }`}
                       >
@@ -341,7 +341,7 @@ export function MobileScanSheet({
                 <button
                   type="button"
                   onClick={handleOpenManual}
-                  className="mt-3 w-full text-center text-[10px] font-bold text-white/50 uppercase tracking-wider active:text-white/70 transition-colors"
+                  className="mt-3 w-full text-center text-micro font-bold text-white/50 uppercase tracking-wider active:text-white/70 transition-colors"
                 >
                   Type manually
                 </button>
@@ -378,7 +378,7 @@ export function MobileScanSheet({
                 <button
                   type="button"
                   onClick={handleBackToScan}
-                  className="text-[10px] font-bold text-white/60 uppercase tracking-wider active:text-white/80 transition-colors"
+                  className="text-micro font-bold text-white/60 uppercase tracking-wider active:text-white/80 transition-colors"
                 >
                   ← Back to camera
                 </button>
@@ -397,7 +397,7 @@ export function MobileScanSheet({
                 <button
                   type="submit"
                   disabled={!manualValue.trim()}
-                  className="h-12 px-5 rounded-xl bg-blue-600 text-white text-[11px] font-black uppercase tracking-wider disabled:opacity-40 active:bg-blue-700 transition-colors"
+                  className="h-12 px-5 rounded-xl bg-blue-600 text-white text-caption font-black uppercase tracking-wider disabled:opacity-40 active:bg-blue-700 transition-colors"
                 >
                   Go
                 </button>

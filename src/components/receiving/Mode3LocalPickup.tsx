@@ -146,9 +146,9 @@ export default function Mode3LocalPickup({ staffId }: Mode3LocalPickupProps) {
         <div className="flex h-full flex-col overflow-hidden bg-white">
             {/* Header */}
             <div className="border-b border-gray-200 bg-gray-50 px-6 py-4">
-                <p className="text-[11px] font-black uppercase tracking-[0.2em] text-gray-500">Mode 3</p>
+                <p className="text-caption font-black uppercase tracking-[0.2em] text-gray-500">Mode 3</p>
                 <h2 className="text-lg font-black uppercase tracking-tight text-gray-900 leading-none">Local Pickup</h2>
-                <p className="mt-1 text-[10px] font-semibold text-gray-500">
+                <p className="mt-1 text-micro font-semibold text-gray-500">
                     No tracking number — search by product to log a received item
                 </p>
             </div>
@@ -181,15 +181,15 @@ export default function Mode3LocalPickup({ staffId }: Mode3LocalPickupProps) {
                         {query && results.length === 0 && !isSearching && (
                             <div className="flex flex-col items-center justify-center py-16 text-center">
                                 <Package className="mb-3 h-8 w-8 text-gray-200" />
-                                <p className="text-[11px] font-black uppercase tracking-widest text-gray-500">No products found</p>
+                                <p className="text-caption font-black uppercase tracking-widest text-gray-500">No products found</p>
                             </div>
                         )}
 
                         {!query && (
                             <div className="flex flex-col items-center justify-center py-16 text-center px-6">
                                 <Search className="mb-3 h-8 w-8 text-gray-200" />
-                                <p className="text-[11px] font-black uppercase tracking-widest text-gray-500">Search Products</p>
-                                <p className="mt-1 text-[10px] font-semibold text-gray-500">Type a product name or SKU number</p>
+                                <p className="text-caption font-black uppercase tracking-widest text-gray-500">Search Products</p>
+                                <p className="mt-1 text-micro font-semibold text-gray-500">Type a product name or SKU number</p>
                             </div>
                         )}
 
@@ -212,10 +212,10 @@ export default function Mode3LocalPickup({ staffId }: Mode3LocalPickupProps) {
                                                     {item.product_title || '—'}
                                                 </p>
                                                 <div className="mt-1 flex items-center gap-2">
-                                                    <span className="text-[9px] font-mono font-black text-blue-600 uppercase">
+                                                    <span className="text-eyebrow font-mono font-black text-blue-600 uppercase">
                                                         {item.sku || '—'}
                                                     </span>
-                                                    <span className="text-[9px] font-bold text-gray-500">
+                                                    <span className="text-eyebrow font-bold text-gray-500">
                                                         Stock: {item.stock || '0'}
                                                     </span>
                                                 </div>
@@ -251,10 +251,10 @@ export default function Mode3LocalPickup({ staffId }: Mode3LocalPickupProps) {
                                     <p className="text-sm font-black text-gray-900 leading-tight line-clamp-2">
                                         {selectedItem.product_title}
                                     </p>
-                                    <p className="mt-1 font-mono text-[10px] font-bold text-blue-600 uppercase">
+                                    <p className="mt-1 font-mono text-micro font-bold text-blue-600 uppercase">
                                         SKU: {selectedItem.sku || '—'}
                                     </p>
-                                    <p className="text-[10px] font-bold text-gray-500">
+                                    <p className="text-micro font-bold text-gray-500">
                                         Current stock: {selectedItem.stock || '0'}
                                     </p>
                                 </div>
@@ -295,7 +295,7 @@ export default function Mode3LocalPickup({ staffId }: Mode3LocalPickupProps) {
                                     <select
                                         value={conditionGrade}
                                         onChange={(e) => setConditionGrade(e.target.value)}
-                                        className="w-full rounded-2xl border border-gray-200 bg-gray-50 px-4 py-2.5 text-[11px] font-black uppercase tracking-wider text-gray-900 outline-none focus:border-blue-500"
+                                        className="w-full rounded-2xl border border-gray-200 bg-gray-50 px-4 py-2.5 text-caption font-black uppercase tracking-wider text-gray-900 outline-none focus:border-blue-500"
                                     >
                                         <option value="BRAND_NEW">Brand New</option>
                                         <option value="USED_A">Used — A</option>
@@ -311,7 +311,7 @@ export default function Mode3LocalPickup({ staffId }: Mode3LocalPickupProps) {
                                     <select
                                         value={receivedBy}
                                         onChange={(e) => setReceivedBy(e.target.value)}
-                                        className="w-full rounded-2xl border border-gray-200 bg-gray-50 px-4 py-2.5 text-[11px] font-black uppercase tracking-wider text-gray-900 outline-none focus:border-blue-500"
+                                        className="w-full rounded-2xl border border-gray-200 bg-gray-50 px-4 py-2.5 text-caption font-black uppercase tracking-wider text-gray-900 outline-none focus:border-blue-500"
                                     >
                                         <option value="">Select Staff</option>
                                         {staff.map((s) => (
@@ -322,11 +322,11 @@ export default function Mode3LocalPickup({ staffId }: Mode3LocalPickupProps) {
 
                                 {/* Generated ref preview */}
                                 <div className="rounded-xl border border-gray-100 bg-gray-50 px-3 py-2">
-                                    <p className="text-[9px] font-black uppercase tracking-widest text-gray-500">Generated Reference</p>
-                                    <p className="mt-0.5 font-mono text-[10px] font-bold text-gray-600">
+                                    <p className="text-eyebrow font-black uppercase tracking-widest text-gray-500">Generated Reference</p>
+                                    <p className="mt-0.5 font-mono text-micro font-bold text-gray-600">
                                         LOCAL-{selectedItem.sku || selectedItem.id}-…
                                     </p>
-                                    <p className="mt-0.5 text-[9px] font-semibold text-gray-500">
+                                    <p className="mt-0.5 text-eyebrow font-semibold text-gray-500">
                                         Auto-generated · Carrier: LOCAL · QA: Passed
                                     </p>
                                 </div>
@@ -337,7 +337,7 @@ export default function Mode3LocalPickup({ staffId }: Mode3LocalPickupProps) {
                                     type="button"
                                     onClick={handleSubmit}
                                     disabled={isSubmitting || !!successEntry}
-                                    className={`w-full rounded-2xl py-3.5 text-[11px] font-black uppercase tracking-widest shadow-lg transition-all ${
+                                    className={`w-full rounded-2xl py-3.5 text-caption font-black uppercase tracking-widest shadow-lg transition-all ${
                                         successEntry
                                             ? 'bg-emerald-500 text-white shadow-emerald-500/20'
                                             : 'bg-gray-900 text-white hover:bg-black shadow-gray-900/20 disabled:bg-gray-300 disabled:cursor-not-allowed'

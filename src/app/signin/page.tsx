@@ -274,7 +274,7 @@ export default function SignInPage() {
           <button
             type="button"
             onClick={() => setShowPhoneQr(true)}
-            className="group inline-flex items-center gap-2 rounded-full border border-gray-200 bg-white/70 px-4 py-2 text-[12px] font-medium text-gray-600 shadow-sm shadow-gray-900/[0.03] backdrop-blur transition-all hover:border-gray-300 hover:bg-white hover:text-gray-900"
+            className="group inline-flex items-center gap-2 rounded-full border border-gray-200 bg-white/70 px-4 py-2 text-label font-medium text-gray-600 shadow-sm shadow-gray-900/[0.03] backdrop-blur transition-all hover:border-gray-300 hover:bg-white hover:text-gray-900"
           >
             <PhoneQrIcon />
             Use your phone to sign in
@@ -283,8 +283,8 @@ export default function SignInPage() {
       ) : (
         <div className="w-full max-w-md">
           <div className="text-center">
-            <h1 className="text-[28px] font-semibold tracking-tight text-gray-900">Sign in</h1>
-            <p className="mt-1.5 text-[13px] text-gray-500">Tap your name to continue.</p>
+            <h1 className="text-3xl font-semibold tracking-tight text-gray-900">Sign in</h1>
+            <p className="mt-1.5 text-sm text-gray-500">Tap your name to continue.</p>
           </div>
           <div className="mt-8">
             <StaffPickerList
@@ -302,7 +302,7 @@ export default function SignInPage() {
               <button
                 type="button"
                 onClick={() => setShowPhoneQr(true)}
-                className="group inline-flex items-center gap-2 rounded-full border border-gray-200 bg-white/70 px-4 py-2 text-[12px] font-medium text-gray-600 shadow-sm shadow-gray-900/[0.03] backdrop-blur transition-all hover:border-gray-300 hover:bg-white hover:text-gray-900"
+                className="group inline-flex items-center gap-2 rounded-full border border-gray-200 bg-white/70 px-4 py-2 text-label font-medium text-gray-600 shadow-sm shadow-gray-900/[0.03] backdrop-blur transition-all hover:border-gray-300 hover:bg-white hover:text-gray-900"
               >
                 <PhoneQrIcon />
                 Use your phone to sign in
@@ -357,10 +357,10 @@ function PhoneSigninQrPopover({ onClose }: { onClose: () => void }) {
         </button>
 
         <div className="text-center">
-          <div className="mx-auto inline-flex items-center justify-center rounded-full bg-slate-900/95 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-white">
+          <div className="mx-auto inline-flex items-center justify-center rounded-full bg-slate-900/95 px-3 py-1 text-micro font-semibold uppercase tracking-[0.18em] text-white">
             Phone sign-in
           </div>
-          <h2 className="mt-3 text-[19px] font-semibold tracking-tight text-gray-900">
+          <h2 className="mt-3 text-lg font-semibold tracking-tight text-gray-900">
             Scan to sign in on your phone
           </h2>
           <p className="mt-1.5 text-[12.5px] leading-relaxed text-gray-500">
@@ -395,7 +395,7 @@ function PhoneSigninQrPopover({ onClose }: { onClose: () => void }) {
 function Step({ n, children }: { n: number; children: React.ReactNode }) {
   return (
     <li className="flex items-start gap-2.5">
-      <span className="mt-[1px] inline-flex h-4 w-4 flex-shrink-0 items-center justify-center rounded-full bg-slate-900 text-[9px] font-bold text-white">
+      <span className="mt-[1px] inline-flex h-4 w-4 flex-shrink-0 items-center justify-center rounded-full bg-slate-900 text-eyebrow font-bold text-white">
         {n}
       </span>
       <span>{children}</span>
@@ -416,7 +416,7 @@ interface RememberMeToggleProps {
  */
 function RememberMeToggle({ checked, onChange }: RememberMeToggleProps) {
   return (
-    <label className="group inline-flex cursor-pointer items-center gap-3 rounded-full border border-gray-200 bg-white/80 px-4 py-2 text-[12px] font-medium text-gray-600 shadow-sm shadow-gray-900/[0.03] backdrop-blur transition-all hover:border-gray-300 hover:text-gray-900">
+    <label className="group inline-flex cursor-pointer items-center gap-3 rounded-full border border-gray-200 bg-white/80 px-4 py-2 text-label font-medium text-gray-600 shadow-sm shadow-gray-900/[0.03] backdrop-blur transition-all hover:border-gray-300 hover:text-gray-900">
       <span
         className={`relative inline-flex h-5 w-9 shrink-0 items-center rounded-full transition-colors ${
           checked ? 'bg-slate-900' : 'bg-gray-300'

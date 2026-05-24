@@ -30,7 +30,7 @@ export function UndoToast({
             <button
               type="button"
               onClick={onUndo}
-              className="shrink-0 rounded-full border border-gray-200 px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.14em] text-gray-700 transition-colors hover:border-violet-200 hover:text-violet-900"
+              className="shrink-0 rounded-full border border-gray-200 px-2.5 py-1 text-micro font-black uppercase tracking-[0.14em] text-gray-700 transition-colors hover:border-violet-200 hover:text-violet-900"
             >
               Undo
             </button>

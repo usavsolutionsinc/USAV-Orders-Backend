@@ -253,8 +253,8 @@ export function FbaWorkspaceScanField({
                   <div className="flex items-start gap-2">
                     <AlertCircle className={`mt-0.5 h-4 w-4 shrink-0 ${themeColors.text}`} />
                     <div>
-                      <p className="text-[10px] font-black uppercase tracking-[0.16em] text-gray-800">Apply to selected plans</p>
-                      <p className="mt-1 text-[11px] leading-5 text-gray-900">
+                      <p className="text-micro font-black uppercase tracking-[0.16em] text-gray-800">Apply to selected plans</p>
+                      <p className="mt-1 text-caption leading-5 text-gray-900">
                         Changes here will apply to all {trackingTargetPlanIds.length} selected plans.
                       </p>
                     </div>
@@ -290,7 +290,7 @@ export function FbaWorkspaceScanField({
                 type="button"
                 onClick={() => void onSaveTracking()}
                 disabled={saving || !trackingReady}
-                className={`w-full rounded-xl border-2 px-3 py-2.5 text-[11px] font-black uppercase tracking-[0.12em] transition-colors ${
+                className={`w-full rounded-xl border-2 px-3 py-2.5 text-caption font-black uppercase tracking-[0.12em] transition-colors ${
                   trackingReady && !saving
                     ? `${themeColors.border} ${themeColors.light} text-gray-900 hover:opacity-95`
                     : 'cursor-not-allowed border-gray-200 bg-gray-100 text-gray-400'
@@ -301,20 +301,20 @@ export function FbaWorkspaceScanField({
             </div>
 
             {saveError && (
-              <p className="rounded-lg border border-red-200 bg-red-50 px-2.5 py-2 text-[11px] font-semibold text-red-700">
+              <p className="rounded-lg border border-red-200 bg-red-50 px-2.5 py-2 text-caption font-semibold text-red-700">
                 {saveError}
               </p>
             )}
 
             {/* Selection summary + clear */}
             <div className={`${scanChrome.trackingSectionBorder} flex items-center justify-between gap-2 pt-3`}>
-              <span className="text-[10px] font-black uppercase tracking-[0.14em] text-gray-500">
+              <span className="text-micro font-black uppercase tracking-[0.14em] text-gray-500">
                 {selectedCount} item{selectedCount !== 1 ? 's' : ''} selected
               </span>
               <button
                 type="button"
                 onClick={() => clearSelection()}
-                className="rounded-full border border-gray-200 px-2.5 py-1 text-[9px] font-black uppercase tracking-[0.14em] text-gray-500 transition-colors hover:bg-gray-50 hover:text-gray-800"
+                className="rounded-full border border-gray-200 px-2.5 py-1 text-eyebrow font-black uppercase tracking-[0.14em] text-gray-500 transition-colors hover:bg-gray-50 hover:text-gray-800"
               >
                 Clear
               </button>

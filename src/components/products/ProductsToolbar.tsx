@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { Search, Plus, X } from '@/components/Icons';
-import { PaneHeader } from '@/components/ui/pane-header';
+import { PageHeader } from '@/components/ui/pane-header';
 
 export type ActiveFilter = 'all' | 'active' | 'inactive';
 
@@ -41,11 +41,10 @@ export function ProductsToolbar({
     }, [draft, q, onQChange]);
 
     return (
-        <PaneHeader
-            className="sticky top-0 z-10 border-b border-gray-200 bg-white"
-            rowClassName="flex min-h-[44px] items-center justify-between gap-4 px-4 pt-3 sm:px-6"
+        <PageHeader
+            className="border-gray-200 bg-white"
             maxWidth="6xl"
-            leftSlot={<h1 className="text-xl font-semibold text-gray-900">Products</h1>}
+            title="Products"
             rightSlot={
                 <button
                     type="button"

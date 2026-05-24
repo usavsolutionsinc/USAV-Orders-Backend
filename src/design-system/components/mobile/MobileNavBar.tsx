@@ -93,7 +93,7 @@ export function MobileNavBar({
 
               {/* Label — always visible */}
               <span className={`
-                text-[9px] font-black uppercase tracking-[0.12em] leading-none
+                text-eyebrow font-black uppercase tracking-[0.12em] leading-none
                 ${isActive ? 'text-blue-600' : 'text-gray-400'}
               `.trim()}>
                 {item.label}

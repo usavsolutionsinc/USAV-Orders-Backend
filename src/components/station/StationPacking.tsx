@@ -196,14 +196,14 @@ export default function StationPacking({
                   <Loader2 className={`w-4 h-4 animate-spin ${activeColor.text}`} />
                 ) : (
                   <div className="h-6 min-w-6 px-1 bg-white rounded border border-gray-100 shadow-sm flex items-center justify-center">
-                    <span className="text-[8px] font-black text-gray-400">ENTER</span>
+                    <span className="text-mini font-black text-gray-400">ENTER</span>
                   </div>
                 )}
               </>
             )}
           />
 
-          <p className="text-[10px] font-bold text-gray-400 px-1">
+          <p className="text-micro font-bold text-gray-400 px-1">
             Supports tracking, FNSKU/ASIN (10 chars: <code className="font-mono">X00</code> or <code className="font-mono">B0</code> prefix), FBA, and{' '}
             <code className="font-mono">SKU:VALUE</code> scans.
           </p>
@@ -237,31 +237,31 @@ export default function StationPacking({
               >
                 <div className="flex items-center justify-between gap-3 mb-2">
                   <div className="flex items-center gap-2">
-                    <p className="text-[10px] font-black text-purple-500 uppercase tracking-widest">FBA Scan</p>
+                    <p className="text-micro font-black text-purple-500 uppercase tracking-widest">FBA Scan</p>
                     {activeFba.isNew && (
-                      <span className="text-[9px] font-black bg-blue-100 text-blue-700 border border-blue-200 rounded-lg px-1.5 py-0.5 uppercase tracking-wider">
+                      <span className="text-eyebrow font-black bg-blue-100 text-blue-700 border border-blue-200 rounded-lg px-1.5 py-0.5 uppercase tracking-wider">
                         Added to Today
                       </span>
                     )}
                   </div>
                   {activeFba.shipmentRef && (
-                    <span className="text-[10px] font-mono font-black text-purple-700">{activeFba.shipmentRef}</span>
+                    <span className="text-micro font-mono font-black text-purple-700">{activeFba.shipmentRef}</span>
                   )}
                 </div>
                 <h3 className="text-base font-black text-gray-900 leading-tight">{activeFba.productTitle}</h3>
                 <div className="mt-3 flex items-stretch justify-between gap-3 rounded-xl border border-purple-100 bg-purple-50/40 px-3 py-2.5">
                   <div className="min-w-0 flex-1" title={activeFba.fnsku}>
-                    <p className="text-[8px] font-black text-purple-400 uppercase tracking-wider">FNSKU</p>
+                    <p className="text-mini font-black text-purple-400 uppercase tracking-wider">FNSKU</p>
                     <p className="text-sm font-mono font-black text-gray-900 tabular-nums">{getLast4(activeFba.fnsku)}</p>
                   </div>
                   <div className="flex-1 text-center border-x border-purple-100/80 px-2">
-                    <p className="text-[8px] font-black text-gray-400 uppercase tracking-wider">Planned</p>
+                    <p className="text-mini font-black text-gray-400 uppercase tracking-wider">Planned</p>
                     <p className="text-sm font-black text-gray-900 tabular-nums">
                       {activeFba.plannedQty > 0 ? activeFba.plannedQty : '—'}
                     </p>
                   </div>
                   <div className="min-w-0 flex-1 text-right">
-                    <p className="text-[8px] font-black text-gray-400 uppercase tracking-wider">Scanned</p>
+                    <p className="text-mini font-black text-gray-400 uppercase tracking-wider">Scanned</p>
                     <p className="text-sm font-black text-gray-900 tabular-nums">
                       {activeFba.combinedPackScannedQty}
                     </p>
@@ -282,10 +282,10 @@ export default function StationPacking({
                 className="p-4 bg-white rounded-2xl border border-gray-200 shadow-sm"
               >
                 <div className="flex items-center justify-between gap-3 mb-2">
-                  <p className="text-[10px] font-black text-gray-500 uppercase tracking-widest">
+                  <p className="text-micro font-black text-gray-500 uppercase tracking-widest">
                     {activeOrder.scanType === 'SKU' ? 'Active SKU' : 'Active Order'}
                   </p>
-                  <span className="text-[10px] font-mono font-black text-gray-700">
+                  <span className="text-micro font-mono font-black text-gray-700">
                     {activeOrder.scanType === 'SKU'
                       ? (activeOrder.sku || activeOrder.tracking || 'N/A')
                       : (activeOrder.orderId || 'N/A')}
@@ -294,15 +294,15 @@ export default function StationPacking({
                 <h3 className="text-base font-black text-gray-900 leading-tight">{activeOrder.productTitle}</h3>
                 <div className="mt-3 grid grid-cols-3 gap-3">
                   <div className="bg-gray-50 rounded-xl px-3 py-2 border border-gray-100">
-                    <p className="text-[9px] font-black text-gray-400 uppercase tracking-wider mb-1">Qty</p>
+                    <p className="text-eyebrow font-black text-gray-400 uppercase tracking-wider mb-1">Qty</p>
                     <p className="text-xs font-bold text-gray-800">{activeOrder.qty}</p>
                   </div>
                   <div className="bg-gray-50 rounded-xl px-3 py-2 border border-gray-100">
-                    <p className="text-[9px] font-black text-gray-400 uppercase tracking-wider mb-1">Condition</p>
+                    <p className="text-eyebrow font-black text-gray-400 uppercase tracking-wider mb-1">Condition</p>
                     <p className="text-xs font-bold text-gray-800">{activeOrder.condition}</p>
                   </div>
                   <div className="bg-gray-50 rounded-xl px-3 py-2 border border-gray-100">
-                    <p className="text-[9px] font-black text-gray-400 uppercase tracking-wider mb-1">
+                    <p className="text-eyebrow font-black text-gray-400 uppercase tracking-wider mb-1">
                       {activeOrder.scanType === 'SKU' ? 'SKU' : 'TRK #'}
                     </p>
                     <p className="text-xs font-mono font-bold text-gray-800">
@@ -317,7 +317,7 @@ export default function StationPacking({
           </AnimatePresence>
 
           <div className="mt-auto pt-6 border-t border-gray-50 text-center">
-            <p className="text-[9px] font-black text-gray-300 uppercase tracking-[0.3em]">USAV PACK v2.6</p>
+            <p className="text-eyebrow font-black text-gray-300 uppercase tracking-[0.3em]">USAV PACK v2.6</p>
           </div>
         </div>
       </div>

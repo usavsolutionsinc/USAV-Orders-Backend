@@ -100,11 +100,11 @@ export function PoLinesAccordion({ receivingId, activeLineId, activeRowSlot }: P
   return (
     <section className="rounded-2xl bg-white p-4 shadow-sm ring-1 ring-gray-200/60">
       <div className="mb-2 flex items-center justify-between">
-        <h3 className="text-[11px] font-bold uppercase tracking-[0.14em] text-gray-500">
+        <h3 className="text-caption font-bold uppercase tracking-[0.14em] text-gray-500">
           PO items · {rows.length}
         </h3>
         {rows.length > 1 ? (
-          <span className="text-[10px] font-bold uppercase tracking-widest text-gray-400">
+          <span className="text-micro font-bold uppercase tracking-widest text-gray-400">
             Click to switch
           </span>
         ) : null}
@@ -153,12 +153,12 @@ export function PoLinesAccordion({ receivingId, activeLineId, activeRowSlot }: P
                 />
                 <div className="min-w-0 flex-1">
                   <p
-                    className="truncate text-[12px] font-bold text-gray-900"
+                    className="truncate text-label font-bold text-gray-900"
                     title={line.item_name ?? undefined}
                   >
                     {line.item_name || line.sku || `Line #${line.id}`}
                   </p>
-                  <div className="mt-0.5 flex flex-wrap items-center gap-x-1.5 gap-y-1 truncate text-[10px] font-semibold uppercase tracking-widest text-gray-500">
+                  <div className="mt-0.5 flex flex-wrap items-center gap-x-1.5 gap-y-1 truncate text-micro font-semibold uppercase tracking-widest text-gray-500">
                     <ProgressBadge
                       received={line.quantity_received}
                       expected={line.quantity_expected}

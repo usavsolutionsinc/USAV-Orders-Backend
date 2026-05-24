@@ -146,7 +146,7 @@ export function MobileReceivingList() {
 
   if (isLoading && reversedRows.length === 0) {
     return (
-      <div className="flex h-full items-center justify-center bg-white text-[11px] font-black uppercase tracking-widest text-gray-400">
+      <div className="flex h-full items-center justify-center bg-white text-caption font-black uppercase tracking-widest text-gray-400">
         Loading…
       </div>
     );
@@ -155,10 +155,10 @@ export function MobileReceivingList() {
   if (reversedRows.length === 0) {
     return (
       <div className="flex h-full flex-col items-center justify-center gap-2 bg-white px-6 text-center">
-        <p className="text-[13px] font-black uppercase tracking-[0.18em] text-gray-700">
+        <p className="text-sm font-black uppercase tracking-[0.18em] text-gray-700">
           No packages yet
         </p>
-        <p className="max-w-[260px] text-[11px] font-semibold text-gray-500">
+        <p className="max-w-[260px] text-caption font-semibold text-gray-500">
           Scan a tracking number on the desktop to drop one in here.
         </p>
       </div>

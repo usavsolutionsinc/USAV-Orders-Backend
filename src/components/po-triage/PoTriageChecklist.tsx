@@ -196,10 +196,10 @@ export function PoTriageChecklist({ detail, onRowUpdated, onClose }: PoTriageChe
           </button>
         )}
         <div className="min-w-0 flex-1">
-          <h1 className="truncate text-[15px] font-semibold text-gray-900">
+          <h1 className="truncate text-base font-semibold text-gray-900">
             {row.email_subject || '(no subject)'}
           </h1>
-          <p className="truncate text-[12px] text-gray-500">{row.email_from}</p>
+          <p className="truncate text-label text-gray-500">{row.email_from}</p>
         </div>
         <PileBadge pile={row.pile} />
       </header>
@@ -211,7 +211,7 @@ export function PoTriageChecklist({ detail, onRowUpdated, onClose }: PoTriageChe
           {/* PO# confirmation rows */}
           <div className="space-y-2">
             <div className="flex items-center justify-between gap-2">
-              <h2 className="text-[11px] font-semibold uppercase tracking-wider text-gray-500">
+              <h2 className="text-caption font-semibold uppercase tracking-wider text-gray-500">
                 Extracted fields
               </h2>
               <button
@@ -231,7 +231,7 @@ export function PoTriageChecklist({ detail, onRowUpdated, onClose }: PoTriageChe
             </div>
 
             {row.po_numbers.length === 0 ? (
-              <p className="rounded-md border border-dashed border-gray-200 px-3 py-3 text-[12px] text-gray-500">
+              <p className="rounded-md border border-dashed border-gray-200 px-3 py-3 text-label text-gray-500">
                 No PO numbers extracted. Read the email body, then type the right Zoho PO#
                 below and Mark uploaded if you handled it manually.
               </p>
@@ -273,10 +273,10 @@ export function PoTriageChecklist({ detail, onRowUpdated, onClose }: PoTriageChe
 
           {/* Zoho compare card */}
           <div className="mt-3 rounded-md border border-gray-200 bg-gray-50 px-3 py-2">
-            <h3 className="text-[11px] font-semibold uppercase tracking-wider text-gray-500">
+            <h3 className="text-caption font-semibold uppercase tracking-wider text-gray-500">
               Zoho compare
             </h3>
-            <dl className="mt-1.5 space-y-1 text-[12px]">
+            <dl className="mt-1.5 space-y-1 text-label">
               <div className="flex items-baseline justify-between gap-2">
                 <dt className="text-gray-500">PO# already in Zoho?</dt>
                 <dd className={poAlreadyInZoho ? 'font-medium text-amber-700' : 'font-medium text-gray-900'}>
@@ -305,7 +305,7 @@ export function PoTriageChecklist({ detail, onRowUpdated, onClose }: PoTriageChe
           {/* Zoho-uploaded input */}
           <div className="mt-3">
             <label className="block">
-              <span className="block text-[11px] font-semibold uppercase tracking-wider text-gray-500">
+              <span className="block text-caption font-semibold uppercase tracking-wider text-gray-500">
                 Zoho PO# I uploaded
               </span>
               <input
@@ -314,7 +314,7 @@ export function PoTriageChecklist({ detail, onRowUpdated, onClose }: PoTriageChe
                 onChange={(e) => setZohoUploaded(e.target.value)}
                 onBlur={saveZohoUploaded}
                 placeholder="e.g. PO-44821"
-                className="mt-1 w-full rounded-md border border-gray-200 px-2 py-1.5 font-mono text-[13px] focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-200"
+                className="mt-1 w-full rounded-md border border-gray-200 px-2 py-1.5 font-mono text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-200"
               />
             </label>
             {row.zoho_uploaded_at && (
@@ -327,7 +327,7 @@ export function PoTriageChecklist({ detail, onRowUpdated, onClose }: PoTriageChe
           {/* Notes */}
           <div className="mt-3">
             <label className="block">
-              <span className="block text-[11px] font-semibold uppercase tracking-wider text-gray-500">
+              <span className="block text-caption font-semibold uppercase tracking-wider text-gray-500">
                 Notes
               </span>
               <textarea
@@ -345,17 +345,17 @@ export function PoTriageChecklist({ detail, onRowUpdated, onClose }: PoTriageChe
         {/* Email body column */}
         <section className="min-h-0 flex-1 overflow-y-auto bg-gray-50 px-4 py-3">
           <div className="mb-2 flex items-center justify-between">
-            <h2 className="text-[11px] font-semibold uppercase tracking-wider text-gray-500">
+            <h2 className="text-caption font-semibold uppercase tracking-wider text-gray-500">
               Email body
             </h2>
             {detail.body.hasAttachments && (
-              <span className="rounded bg-amber-50 px-1.5 py-0.5 text-[10px] text-amber-700">
+              <span className="rounded bg-amber-50 px-1.5 py-0.5 text-micro text-amber-700">
                 has attachments
               </span>
             )}
           </div>
           {detail.body.error ? (
-            <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-[12px] text-amber-800">
+            <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-label text-amber-800">
               Couldn&apos;t load body: {detail.body.error}
             </div>
           ) : (
@@ -371,7 +371,7 @@ export function PoTriageChecklist({ detail, onRowUpdated, onClose }: PoTriageChe
         <button
           type="button"
           onClick={copyZohoPayload}
-          className="inline-flex items-center gap-1.5 rounded-md border border-gray-200 px-2.5 py-1.5 text-[12px] text-gray-700 hover:bg-gray-50"
+          className="inline-flex items-center gap-1.5 rounded-md border border-gray-200 px-2.5 py-1.5 text-label text-gray-700 hover:bg-gray-50"
         >
           <Copy className="h-3.5 w-3.5" />
           Copy details
@@ -381,7 +381,7 @@ export function PoTriageChecklist({ detail, onRowUpdated, onClose }: PoTriageChe
             href={gmailUrl}
             target="_blank"
             rel="noreferrer"
-            className="inline-flex items-center gap-1.5 rounded-md border border-gray-200 px-2.5 py-1.5 text-[12px] text-gray-700 hover:bg-gray-50"
+            className="inline-flex items-center gap-1.5 rounded-md border border-gray-200 px-2.5 py-1.5 text-label text-gray-700 hover:bg-gray-50"
           >
             <ExternalLink className="h-3.5 w-3.5" />
             Open in Gmail
@@ -396,7 +396,7 @@ export function PoTriageChecklist({ detail, onRowUpdated, onClose }: PoTriageChe
             type="button"
             onClick={markUploaded}
             disabled={saving || !zohoUploaded.trim() || row.pile === 'done'}
-            className="inline-flex items-center gap-1.5 rounded-md bg-emerald-600 px-3 py-1.5 text-[12px] font-medium text-white hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-50"
+            className="inline-flex items-center gap-1.5 rounded-md bg-emerald-600 px-3 py-1.5 text-label font-medium text-white hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-50"
           >
             <Send className="h-3.5 w-3.5" />
             Mark uploaded
@@ -438,7 +438,7 @@ function PilePicker({
         type="button"
         onClick={() => setOpen((o) => !o)}
         disabled={disabled}
-        className="inline-flex items-center gap-1.5 rounded-md border border-gray-200 px-2.5 py-1.5 text-[12px] text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+        className="inline-flex items-center gap-1.5 rounded-md border border-gray-200 px-2.5 py-1.5 text-label text-gray-700 hover:bg-gray-50 disabled:opacity-50"
       >
         <Send className="h-3.5 w-3.5" />
         Move to…
@@ -459,7 +459,7 @@ function PilePicker({
                     onPick(p);
                     setOpen(false);
                   }}
-                  className={`flex w-full items-center justify-between px-3 py-1.5 text-left text-[12px] ${
+                  className={`flex w-full items-center justify-between px-3 py-1.5 text-left text-label ${
                     active
                       ? 'cursor-default text-gray-400'
                       : 'text-gray-700 hover:bg-gray-50'
@@ -490,14 +490,14 @@ function ConfidenceDot({ level }: { level: 'high' | 'medium' | 'low' }) {
 function SourceChip({ source }: { source: TriageFieldState['source'] }) {
   if (source === 'llm') {
     return (
-      <span className="rounded bg-purple-50 px-1 py-0.5 font-mono text-[9px] font-semibold uppercase text-purple-700">
+      <span className="rounded bg-purple-50 px-1 py-0.5 font-mono text-eyebrow font-semibold uppercase text-purple-700">
         AI
       </span>
     );
   }
   if (source === 'user') {
     return (
-      <span className="rounded bg-emerald-50 px-1 py-0.5 font-mono text-[9px] font-semibold uppercase text-emerald-700">
+      <span className="rounded bg-emerald-50 px-1 py-0.5 font-mono text-eyebrow font-semibold uppercase text-emerald-700">
         You
       </span>
     );
@@ -519,7 +519,7 @@ function LlmFieldList({
 
   return (
     <div className="mt-3 space-y-1.5">
-      <h3 className="text-[11px] font-semibold uppercase tracking-wider text-gray-500">
+      <h3 className="text-caption font-semibold uppercase tracking-wider text-gray-500">
         AI-extracted
       </h3>
       <ul className="divide-y divide-gray-100 rounded-md border border-gray-200">

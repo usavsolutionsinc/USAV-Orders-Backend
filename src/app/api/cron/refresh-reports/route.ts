@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import pool from '@/lib/db';
-import { isQStashOrigin } from '@/lib/qstash';
+import { isAuthorizedCronRequest, isQStashOrigin } from '@/lib/qstash';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 120;
@@ -13,11 +13,7 @@ export const maxDuration = 120;
  * Triggered by QStash on a daily schedule (see src/config/qstash-schedules.json).
  * Previously a Vercel cron — migrated 2026-05-18 to avoid Vercel cron billing.
  */
-export async function POST(request: NextRequest) {
-  if (!isQStashOrigin(request.headers)) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
-
+async function execute() {
   const startedAt = Date.now();
   const refreshed: string[] = [];
   const failed: Array<{ view: string; error: string }> = [];
@@ -39,7 +35,16 @@ export async function POST(request: NextRequest) {
   });
 }
 
-/** Health probe — no auth required, no work performed. */
-export async function GET() {
-  return NextResponse.json({ ok: true, queue: 'qstash', job: 'refresh-reports' });
+export async function POST(request: NextRequest) {
+  if (!isQStashOrigin(request.headers)) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+  return execute();
+}
+
+export async function GET(request: NextRequest) {
+  if (!isAuthorizedCronRequest(request.headers)) {
+    return NextResponse.json({ ok: true, queue: 'vercel-cron', job: 'refresh-reports' });
+  }
+  return execute();
 }

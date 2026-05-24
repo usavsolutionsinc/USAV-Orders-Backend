@@ -32,7 +32,7 @@ export function UnderlineValue({
   return (
     <span
       className={[
-        'inline-block border-b-2 pb-0.5 text-[13px] font-bold leading-none',
+        'inline-block border-b-2 pb-0.5 text-sm font-bold leading-none',
         monospace ? 'font-mono' : '',
         truncate ? 'max-w-full truncate' : '',
         toneClasses[tone],

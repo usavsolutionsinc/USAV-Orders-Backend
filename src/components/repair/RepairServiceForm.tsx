@@ -77,7 +77,7 @@ const RepairServiceForm: React.FC<RepairServiceFormProps> = ({
             )}
           </div>
           <p className="mt-1 text-center text-xs font-semibold tracking-[0.2em] text-gray-500">Scan to update</p>
-          <p className="text-[10px] font-bold text-gray-400">{repairServiceCode}</p>
+          <p className="text-micro font-bold text-gray-400">{repairServiceCode}</p>
         </div>
       </div>
 

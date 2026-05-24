@@ -31,7 +31,7 @@ export function StatTile({ category, label, value, delta, icon, isLoading }: Sta
       <div className={`absolute left-0 top-0 bottom-0 w-1 ${accentColor} opacity-0 group-hover:opacity-100 transition-all duration-200`} />
 
       <div className="flex items-center justify-between">
-        <span className="text-[10px] font-black uppercase tracking-[0.1em] text-slate-400 group-hover:text-slate-600 transition-colors truncate pr-2">
+        <span className="text-micro font-black uppercase tracking-[0.1em] text-slate-400 group-hover:text-slate-600 transition-colors truncate pr-2">
           {label}
         </span>
         <div className="text-slate-200 group-hover:text-slate-400 transition-colors">
@@ -49,7 +49,7 @@ export function StatTile({ category, label, value, delta, icon, isLoading }: Sta
         )}
 
         {delta !== undefined && delta !== 0 && (
-          <span className={`text-[10px] font-bold tabular-nums ${delta >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
+          <span className={`text-micro font-bold tabular-nums ${delta >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
             {delta > 0 ? '\u2191' : '\u2193'}{Math.abs(delta)}%
           </span>
         )}

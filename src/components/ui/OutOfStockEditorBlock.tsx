@@ -56,7 +56,7 @@ export function OutOfStockEditorBlock({
         </span>
         <div className="flex items-center gap-2">
           <span
-            className={`text-[9px] font-bold uppercase tracking-wide text-emerald-500 transition-opacity duration-300 ${
+            className={`text-eyebrow font-bold uppercase tracking-wide text-emerald-500 transition-opacity duration-300 ${
               showSaved ? 'opacity-100' : 'opacity-0'
             }`}
           >
@@ -83,7 +83,7 @@ export function OutOfStockEditorBlock({
         className={`w-full bg-transparent text-sm font-normal text-gray-900 outline-none placeholder:text-gray-500 ${dmSans.className}`}
       />
       {!autoSaveOnChange && saveHint ? (
-        <p className="mt-1.5 text-[10px] font-bold tracking-wide text-gray-500">
+        <p className="mt-1.5 text-micro font-bold tracking-wide text-gray-500">
           {saveHint}
         </p>
       ) : null}

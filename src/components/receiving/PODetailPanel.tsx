@@ -83,13 +83,13 @@ export function PODetailPanel({ po, onClose, onReceived }: PODetailPanelProps) {
         <div className="h-14 w-14 rounded-full bg-green-100 flex items-center justify-center">
           <Check className="h-7 w-7 text-green-600" />
         </div>
-        <p className="text-[13px] font-black text-gray-800 uppercase tracking-wide">Items Received</p>
-        <p className="text-[11px] text-gray-500">
+        <p className="text-sm font-black text-gray-800 uppercase tracking-wide">Items Received</p>
+        <p className="text-caption text-gray-500">
           Receiving record #{successId} created and saved to Zoho Inventory.
         </p>
         <button
           onClick={onClose}
-          className="mt-2 text-[10px] font-black uppercase tracking-widest text-blue-600 hover:text-blue-700 transition-colors"
+          className="mt-2 text-micro font-black uppercase tracking-widest text-blue-600 hover:text-blue-700 transition-colors"
         >
           Close
         </button>
@@ -103,16 +103,16 @@ export function PODetailPanel({ po, onClose, onReceived }: PODetailPanelProps) {
       <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100">
         <div>
           <div className="flex items-center gap-2">
-            <span className="text-[12px] font-black text-gray-900 uppercase tracking-wide">
+            <span className="text-label font-black text-gray-900 uppercase tracking-wide">
               {po.purchaseorder_number || po.purchaseorder_id}
             </span>
             <span
-              className={`text-[8px] font-black uppercase tracking-widest px-1.5 py-0.5 rounded border ${statusColor(po.status)}`}
+              className={`text-mini font-black uppercase tracking-widest px-1.5 py-0.5 rounded border ${statusColor(po.status)}`}
             >
               {po.status}
             </span>
           </div>
-          <p className="text-[10px] text-gray-500 mt-0.5">
+          <p className="text-micro text-gray-500 mt-0.5">
             {po.vendor_name} &middot; {fmtDate(po.date)}
             {po.delivery_date ? ` · Due ${fmtDate(po.delivery_date)}` : ''}
           </p>
@@ -130,13 +130,13 @@ export function PODetailPanel({ po, onClose, onReceived }: PODetailPanelProps) {
         {lines.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-20 text-center opacity-30">
             <Package className="h-10 w-10 mb-3" />
-            <p className="text-[10px] font-black uppercase tracking-widest">No line items</p>
+            <p className="text-micro font-black uppercase tracking-widest">No line items</p>
           </div>
         ) : (
           <div className="divide-y divide-gray-50">
             <div className="grid grid-cols-[1fr_80px_90px_110px] gap-2 px-4 py-1.5 bg-gray-50 border-b border-gray-100 sticky top-0 z-10">
               {['Item', 'Expected', 'Receive', 'Condition'].map((h) => (
-                <span key={h} className="text-[8px] font-black uppercase tracking-widest text-gray-500">{h}</span>
+                <span key={h} className="text-mini font-black uppercase tracking-widest text-gray-500">{h}</span>
               ))}
             </div>
 
@@ -149,16 +149,16 @@ export function PODetailPanel({ po, onClose, onReceived }: PODetailPanelProps) {
                   className="grid grid-cols-[1fr_80px_90px_110px] gap-2 px-4 py-2.5 items-center"
                 >
                   <div className="min-w-0">
-                    <p className="text-[11px] font-semibold text-gray-800 truncate leading-tight">
+                    <p className="text-caption font-semibold text-gray-800 truncate leading-tight">
                       {line.name || line.item_id}
                     </p>
-                    {line.sku && <p className="text-[9px] font-mono text-gray-500 mt-0.5">{line.sku}</p>}
+                    {line.sku && <p className="text-eyebrow font-mono text-gray-500 mt-0.5">{line.sku}</p>}
                   </div>
 
                   <div className="text-center">
-                    <span className="text-[12px] font-black tabular-nums text-gray-700">{line.quantity ?? '—'}</span>
+                    <span className="text-label font-black tabular-nums text-gray-700">{line.quantity ?? '—'}</span>
                     {remaining > 0 && line.quantity_received != null && line.quantity_received > 0 && (
-                      <p className="text-[8px] text-orange-500 font-semibold">{remaining} left</p>
+                      <p className="text-mini text-orange-500 font-semibold">{remaining} left</p>
                     )}
                   </div>
 
@@ -169,13 +169,13 @@ export function PODetailPanel({ po, onClose, onReceived }: PODetailPanelProps) {
                     value={ls.quantity_received}
                     onChange={(e) => updateLine(line.line_item_id, 'quantity_received', e.target.value)}
                     placeholder="0"
-                    className="w-full text-center text-[12px] font-black tabular-nums border border-gray-200 rounded-lg px-2 py-1.5 focus:outline-none focus:border-blue-400 focus:ring-1 focus:ring-blue-100 transition-colors bg-white"
+                    className="w-full text-center text-label font-black tabular-nums border border-gray-200 rounded-lg px-2 py-1.5 focus:outline-none focus:border-blue-400 focus:ring-1 focus:ring-blue-100 transition-colors bg-white"
                   />
 
                   <select
                     value={ls.condition_grade}
                     onChange={(e) => updateLine(line.line_item_id, 'condition_grade', e.target.value)}
-                    className="w-full text-[10px] font-bold border border-gray-200 rounded-lg px-2 py-1.5 focus:outline-none focus:border-blue-400 focus:ring-1 focus:ring-blue-100 transition-colors bg-white text-gray-700"
+                    className="w-full text-micro font-bold border border-gray-200 rounded-lg px-2 py-1.5 focus:outline-none focus:border-blue-400 focus:ring-1 focus:ring-blue-100 transition-colors bg-white text-gray-700"
                   >
                     {CONDITION_OPTIONS.map((o) => (
                       <option key={o.value} value={o.value}>{o.label}</option>
@@ -192,11 +192,11 @@ export function PODetailPanel({ po, onClose, onReceived }: PODetailPanelProps) {
       <div className="border-t border-gray-100 px-4 py-3 bg-white">
         <div className="flex items-center gap-4 mb-3">
           <div className="flex items-center gap-1.5">
-            <span className="text-[9px] font-black uppercase tracking-widest text-gray-500">Channel</span>
+            <span className="text-eyebrow font-black uppercase tracking-widest text-gray-500">Channel</span>
             <select
               value={targetChannel}
               onChange={(e) => setTargetChannel(e.target.value)}
-              className="text-[10px] font-bold border border-gray-200 rounded-md px-2 py-1 focus:outline-none focus:border-blue-400 bg-white text-gray-700"
+              className="text-micro font-bold border border-gray-200 rounded-md px-2 py-1 focus:outline-none focus:border-blue-400 bg-white text-gray-700"
             >
               {CHANNEL_OPTIONS.map((o) => (
                 <option key={o.value} value={o.value}>{o.label}</option>
@@ -215,16 +215,16 @@ export function PODetailPanel({ po, onClose, onReceived }: PODetailPanelProps) {
                 }`}
               />
             </div>
-            <span className="text-[9px] font-black uppercase tracking-widest text-gray-500">Needs Test</span>
+            <span className="text-eyebrow font-black uppercase tracking-widest text-gray-500">Needs Test</span>
           </label>
         </div>
 
-        {error && <p className="text-[10px] font-semibold text-red-500 mb-2">{error}</p>}
+        {error && <p className="text-micro font-semibold text-red-500 mb-2">{error}</p>}
 
         <button
           onClick={handleReceive}
           disabled={submitting || lines.length === 0}
-          className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 disabled:opacity-40 disabled:cursor-not-allowed text-white text-[11px] font-black uppercase tracking-widest transition-colors"
+          className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 disabled:opacity-40 disabled:cursor-not-allowed text-white text-caption font-black uppercase tracking-widest transition-colors"
         >
           {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
           {submitting ? 'Receiving…' : 'Receive Items'}

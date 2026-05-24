@@ -135,7 +135,7 @@ export function ReceivingLineWorkspace({
           by clicking a different row), keeping the workspace persistent. */}
       <PaneHeader
         className="z-20 shrink-0 border-b border-gray-200 bg-white shadow-[0_1px_0_rgba(15,23,42,0.04)]"
-        rowClassName="flex min-h-[44px] items-center justify-between gap-4 px-4 py-2 sm:px-6"
+        rowClassName="px-4 sm:px-6"
         leftSlot={
           <>
             <PaneHeaderIconBadge Icon={Icon} bg={chipBg} tint={tint} />

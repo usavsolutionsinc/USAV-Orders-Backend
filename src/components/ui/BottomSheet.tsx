@@ -153,7 +153,7 @@ function SheetPanel({ title, dragDisabled, maxWidth, reduceMotion, onClose, chil
         )}
         {title && (
           <div className="px-6 pt-2 pb-1 text-center">
-            <h3 className="text-[15px] font-semibold tracking-tight text-gray-900">
+            <h3 className="text-base font-semibold tracking-tight text-gray-900">
               {title}
             </h3>
           </div>
@@ -195,7 +195,7 @@ function DialogPanel({ title, maxWidth, reduceMotion, children }: DialogPanelPro
       >
         {title && (
           <div className="border-b border-gray-100 px-6 pt-5 pb-4 text-center">
-            <h3 className="text-[16px] font-semibold tracking-tight text-gray-900">
+            <h3 className="text-base font-semibold tracking-tight text-gray-900">
               {title}
             </h3>
           </div>
@@ -232,7 +232,7 @@ export function ConfirmSheet({
   return (
     <BottomSheet open={open} onClose={onClose} dragDisabled={destructive} title={title}>
       {message && (
-        <p className="mb-5 text-center text-[13px] leading-relaxed text-gray-600">
+        <p className="mb-5 text-center text-sm leading-relaxed text-gray-600">
           {message}
         </p>
       )}
@@ -310,7 +310,7 @@ export function PromptSheet({
   return (
     <BottomSheet open={open} onClose={onClose} title={title}>
       {message && (
-        <p className="mb-3 text-center text-[12px] text-gray-500">{message}</p>
+        <p className="mb-3 text-center text-label text-gray-500">{message}</p>
       )}
       <input
         ref={inputRef}

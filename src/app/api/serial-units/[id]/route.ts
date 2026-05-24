@@ -92,7 +92,7 @@ export async function GET(
 
     // Optional rich detail — events timeline (full, oldest-first), condition
     // history, allocations, and tsn cross-refs. Mirrors the legacy
-    // /admin/inventory-v2/units/[ref] page so the inventory shell can render
+    // /admin/inventory/units/[ref] page so the inventory shell can render
     // the same view without bouncing through admin SSR.
     const includeFull = request.nextUrl.searchParams.get('include') === 'full';
     let fullDetail: {

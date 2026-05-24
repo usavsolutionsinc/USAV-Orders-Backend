@@ -157,12 +157,12 @@ export function DashboardDetailsStack({
       <section className="mx-8 space-y-2">
         {mode === 'tech' ? (
           <div className="flex items-center gap-2 rounded-xl border border-gray-200 bg-white p-2">
-            <span className="text-[9px] font-black uppercase tracking-wider text-gray-500 whitespace-nowrap">Undo</span>
+            <span className="text-eyebrow font-black uppercase tracking-wider text-gray-500 whitespace-nowrap">Undo</span>
             <button
               type="button"
               onClick={handleUndo}
               disabled={isUndoing}
-              className="flex-1 h-8 inline-flex items-center justify-center rounded-lg bg-amber-500 hover:bg-amber-600 text-white text-[9px] font-black uppercase tracking-wider disabled:opacity-50"
+              className="flex-1 h-8 inline-flex items-center justify-center rounded-lg bg-amber-500 hover:bg-amber-600 text-white text-eyebrow font-black uppercase tracking-wider disabled:opacity-50"
             >
               {isUndoing ? 'Undoing...' : 'Undo Last Scan'}
             </button>
@@ -210,7 +210,7 @@ export function DashboardDetailsStack({
               <button
                 type="button"
                 onClick={() => setActiveInput?.('none')}
-                className="h-8 rounded-lg bg-white border border-gray-200 text-gray-700 text-[9px] font-black uppercase tracking-wider"
+                className="h-8 rounded-lg bg-white border border-gray-200 text-gray-700 text-eyebrow font-black uppercase tracking-wider"
               >
                 Cancel
               </button>
@@ -218,7 +218,7 @@ export function DashboardDetailsStack({
                 type="button"
               onClick={() => void fieldSave.saveNotes(notes)}
               disabled={fieldSave.isSavingNotes}
-              className="h-8 inline-flex items-center justify-center gap-1.5 rounded-lg bg-gray-900 hover:bg-gray-800 text-white text-[9px] font-black uppercase tracking-wider disabled:opacity-50"
+              className="h-8 inline-flex items-center justify-center gap-1.5 rounded-lg bg-gray-900 hover:bg-gray-800 text-white text-eyebrow font-black uppercase tracking-wider disabled:opacity-50"
             >
               <Check className="w-3 h-3" />
               {fieldSave.isSavingNotes ? 'Saving' : 'Submit'}

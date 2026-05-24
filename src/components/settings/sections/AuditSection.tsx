@@ -57,7 +57,7 @@ export function AuditSection() {
 
       <div className="rounded-xl border border-gray-200 bg-white overflow-hidden">
         <table className="w-full text-sm">
-          <thead className="bg-gray-50 text-left text-[11px] uppercase tracking-wider text-gray-500">
+          <thead className="bg-gray-50 text-left text-caption uppercase tracking-wider text-gray-500">
             <tr>
               <th className="px-3 py-2">When</th>
               <th className="px-3 py-2">Who</th>
@@ -77,11 +77,11 @@ export function AuditSection() {
                 </td>
                 <td className="px-3 py-2 text-xs font-mono">{row.event}</td>
                 <td className="px-3 py-2">
-                  <span className={`rounded-full px-2 py-0.5 text-[11px] ${RESULT_CLASS[row.result] || 'bg-gray-100 text-gray-700'}`}>
+                  <span className={`rounded-full px-2 py-0.5 text-caption ${RESULT_CLASS[row.result] || 'bg-gray-100 text-gray-700'}`}>
                     {row.result}
                   </span>
                 </td>
-                <td className="px-3 py-2 text-[11px] font-mono text-gray-500 max-w-[400px] truncate">
+                <td className="px-3 py-2 text-caption font-mono text-gray-500 max-w-[400px] truncate">
                   {Object.keys(row.detail || {}).length > 0 ? JSON.stringify(row.detail) : ''}
                 </td>
               </tr>

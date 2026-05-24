@@ -100,7 +100,7 @@ export function ReceivingProgressStepper({ row, photoCount, serialCount, isCompl
                 </span>
               </div>
               <span
-                className={`mt-1.5 text-[10px] font-black uppercase tracking-[0.14em] ${
+                className={`mt-1.5 text-micro font-black uppercase tracking-[0.14em] ${
                   s === 'done'
                     ? 'text-blue-600'
                     : s === 'active'
@@ -128,13 +128,13 @@ function StepDot({ state, index }: { state: StepState; index: number }) {
   }
   if (state === 'active') {
     return (
-      <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-white text-[10px] font-black text-blue-700 ring-2 ring-blue-500">
+      <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-white text-micro font-black text-blue-700 ring-2 ring-blue-500">
         {index}
       </span>
     );
   }
   return (
-    <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-white text-[10px] font-black text-gray-400 ring-2 ring-gray-200">
+    <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-white text-micro font-black text-gray-400 ring-2 ring-gray-200">
       {index}
     </span>
   );

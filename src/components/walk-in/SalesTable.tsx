@@ -141,7 +141,7 @@ export function SalesTable() {
               {search && (
                 <div className="flex items-center gap-2 px-2 py-0.5 bg-emerald-50 text-emerald-700 rounded-lg border border-emerald-100">
                   <Search className="w-3 h-3" />
-                  <span className="text-[9px] font-black uppercase tracking-widest">{search}</span>
+                  <span className="text-eyebrow font-black uppercase tracking-widest">{search}</span>
                   <button onClick={clearSearch} className="hover:text-emerald-900 transition-colors" aria-label="Clear search">
                     <X className="w-2.5 h-2.5" />
                   </button>
@@ -150,7 +150,7 @@ export function SalesTable() {
               {selectedSale && (
                 <button
                   onClick={() => setSelectedSale(null)}
-                  className="px-3 py-1 bg-emerald-600 text-white rounded-lg text-[9px] font-black uppercase tracking-widest hover:bg-emerald-700 transition-all"
+                  className="px-3 py-1 bg-emerald-600 text-white rounded-lg text-eyebrow font-black uppercase tracking-widest hover:bg-emerald-700 transition-all"
                 >
                   Close
                 </button>
@@ -164,7 +164,7 @@ export function SalesTable() {
           {loading ? (
             <div className="flex flex-col items-center justify-center py-40 gap-3">
               <LoadingSpinner size="lg" className="text-emerald-600" />
-              <p className="text-[10px] font-black uppercase tracking-widest text-gray-500">Loading Sales...</p>
+              <p className="text-micro font-black uppercase tracking-widest text-gray-500">Loading Sales...</p>
             </div>
           ) : sales.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-40 text-center">
@@ -184,7 +184,7 @@ export function SalesTable() {
                     <ShoppingCart className="w-8 h-8 text-emerald-300" />
                   </div>
                   <p className="text-sm font-bold text-gray-500">No sales this week</p>
-                  <p className="text-[10px] text-gray-400 mt-1">
+                  <p className="text-micro text-gray-400 mt-1">
                     Use the product catalog in the sidebar to create a sale, or navigate to a previous week
                   </p>
                 </div>
@@ -229,27 +229,27 @@ export function SalesTable() {
                           }`}
                         >
                           <div className="flex flex-col min-w-0 gap-1">
-                            <div className="text-[13px] font-black text-gray-900 truncate leading-tight">
+                            <div className="text-sm font-black text-gray-900 truncate leading-tight">
                               {getItemsSummary(sale)}
                             </div>
                             <div className="flex items-center gap-3 mt-0.5">
-                              <div className={`text-[9px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded ${
+                              <div className={`text-eyebrow font-black uppercase tracking-wider px-1.5 py-0.5 rounded ${
                                 (Array.isArray(sale.line_items) && sale.line_items.some((li) => isRepairSku(li.sku)))
                                   ? 'bg-orange-50 text-orange-600 border border-orange-100'
                                   : 'bg-emerald-50 text-emerald-600 border border-emerald-100'
                               }`}>
                                 {(Array.isArray(sale.line_items) && sale.line_items.some((li) => isRepairSku(li.sku))) ? 'RS' : 'Sale'}
                               </div>
-                              <div className="text-[10px] font-black text-emerald-600">
+                              <div className="text-micro font-black text-emerald-600">
                                 {formatCentsToDollars(sale.total)}
                               </div>
                               {sale.customer_name && (
-                                <div className="text-[10px] font-bold text-gray-700 truncate">
+                                <div className="text-micro font-bold text-gray-700 truncate">
                                   {sale.customer_name}
                                 </div>
                               )}
                               {sale.notes && (
-                                <div className="text-[9px] text-gray-400 truncate">{sale.notes}</div>
+                                <div className="text-eyebrow text-gray-400 truncate">{sale.notes}</div>
                               )}
                             </div>
                           </div>

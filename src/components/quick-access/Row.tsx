@@ -38,11 +38,11 @@ export function Row({ icon, iconBg = 'bg-gray-900', label, subLabel, trailing, o
         {icon}
       </span>
       <span className="min-w-0 flex-1">
-        <span className={`block truncate text-[13px] font-semibold ${active ? 'text-blue-700' : 'text-gray-900'}`}>
+        <span className={`block truncate text-sm font-semibold ${active ? 'text-blue-700' : 'text-gray-900'}`}>
           {label}
         </span>
         {subLabel && (
-          <span className="block truncate text-[11px] font-medium text-gray-500">{subLabel}</span>
+          <span className="block truncate text-caption font-medium text-gray-500">{subLabel}</span>
         )}
       </span>
       {trailing && <span className="ml-2 flex-shrink-0">{trailing}</span>}

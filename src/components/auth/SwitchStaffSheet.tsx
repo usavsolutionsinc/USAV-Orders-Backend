@@ -126,8 +126,8 @@ export function SwitchStaffSheet() {
         ) : (
           <>
             <div className="text-center">
-              <h2 className="text-[22px] font-semibold tracking-tight text-gray-900">Switch staff</h2>
-              <p className="mt-1 text-[12px] text-gray-500">{currentStaffName}</p>
+              <h2 className="text-2xl font-semibold tracking-tight text-gray-900">Switch staff</h2>
+              <p className="mt-1 text-label text-gray-500">{currentStaffName}</p>
             </div>
             <div className="mt-6">
               <StaffPickerList

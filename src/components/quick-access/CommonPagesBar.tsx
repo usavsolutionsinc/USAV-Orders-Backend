@@ -95,7 +95,7 @@ export function CommonPagesBar({ onNavigate }: CommonPagesBarProps) {
               chip.onClick(router);
               onNavigate();
             }}
-            className="inline-flex flex-shrink-0 items-center gap-1.5 rounded-full border border-gray-200 bg-white px-3 py-1 text-[11px] font-semibold text-gray-700 shadow-sm transition-colors hover:border-blue-300 hover:bg-blue-50 hover:text-blue-700"
+            className="inline-flex flex-shrink-0 items-center gap-1.5 rounded-full border border-gray-200 bg-white px-3 py-1 text-caption font-semibold text-gray-700 shadow-sm transition-colors hover:border-blue-300 hover:bg-blue-50 hover:text-blue-700"
           >
             <span className="text-gray-500">{chip.icon}</span>
             {chip.label}

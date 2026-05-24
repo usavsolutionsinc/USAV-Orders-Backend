@@ -78,12 +78,12 @@ export function PhotoCaptureSurface({
       maxPhotos={maxPhotos}
       header={
         <div className="min-w-0">
-          <p className="text-[10px] font-black uppercase tracking-[0.22em] text-white/60">
+          <p className="text-micro font-black uppercase tracking-[0.22em] text-white/60">
             Add receiving photos
           </p>
-          <p className="truncate text-[13px] font-black text-white">{headerLabel}</p>
+          <p className="truncate text-sm font-black text-white">{headerLabel}</p>
           {entries.length > 0 ? (
-            <p className="mt-0.5 text-[10px] font-bold uppercase tracking-widest text-white/50">
+            <p className="mt-0.5 text-micro font-bold uppercase tracking-widest text-white/50">
               {entries.filter((e) => e.state === 'done').length}/{entries.length} uploaded
               {entries.some((e) => e.state === 'failed') ? ' · retry available in gallery' : ''}
             </p>

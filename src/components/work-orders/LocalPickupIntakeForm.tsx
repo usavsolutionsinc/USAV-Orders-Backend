@@ -338,7 +338,7 @@ export function LocalPickupIntakeForm({
         <div className="overflow-hidden rounded-xl border border-emerald-100 bg-white">
           <div className="max-h-56 overflow-y-auto divide-y divide-gray-50">
             {catalogItems.length === 0 && !loadingCatalog && (
-              <p className="px-3 py-3 text-[10px] font-bold text-gray-500">
+              <p className="px-3 py-3 text-micro font-bold text-gray-500">
                 No products found
               </p>
             )}
@@ -362,15 +362,15 @@ export function LocalPickupIntakeForm({
                   )}
                 </div>
                 <div className="min-w-0 flex-1">
-                  <p className="truncate text-[11px] font-bold text-gray-900 leading-tight">
+                  <p className="truncate text-caption font-bold text-gray-900 leading-tight">
                     {item.product_title}
                   </p>
                   <div className="mt-0.5 flex items-center gap-2">
-                    <span className="text-[9px] font-mono font-black uppercase text-emerald-600">
+                    <span className="text-eyebrow font-mono font-black uppercase text-emerald-600">
                       {item.sku}
                     </span>
                     {item.category && (
-                      <span className="text-[9px] font-bold uppercase tracking-wider text-gray-400">
+                      <span className="text-eyebrow font-bold uppercase tracking-wider text-gray-400">
                         {item.category}
                       </span>
                     )}
@@ -418,13 +418,13 @@ export function LocalPickupIntakeForm({
                 <Package className="h-5 w-5 text-gray-200" />
               )}
             </div>
-            <p className="min-w-0 flex-1 text-[11px] font-bold text-gray-900 leading-snug">
+            <p className="min-w-0 flex-1 text-caption font-bold text-gray-900 leading-snug">
               {line.product_title}
             </p>
           </div>
 
           {/* Row 2: price, qty, condition, parts, expand arrow */}
-          <div className="flex items-center gap-2 text-[9px]">
+          <div className="flex items-center gap-2 text-eyebrow">
             <span className="font-black text-emerald-700">
               {line.total ? `$${line.total}` : '$0'}
             </span>
@@ -472,13 +472,13 @@ export function LocalPickupIntakeForm({
         </div>
 
         {/* Title */}
-        <p className="text-[13px] font-bold text-gray-900 leading-snug">
+        <p className="text-sm font-bold text-gray-900 leading-snug">
           {line.product_title}
         </p>
 
         {/* Ecwid SKU + collapse arrow */}
         <div className="flex items-center justify-between">
-          <p className="text-[10px] font-mono font-black uppercase text-emerald-600">
+          <p className="text-micro font-mono font-black uppercase text-emerald-600">
             Ecwid: {line.sku}
           </p>
           {variant === 'sidebar' && (
@@ -496,7 +496,7 @@ export function LocalPickupIntakeForm({
             condition picker in the app shares the receiving workspace's
             colored ring-pill UX. */}
         <div>
-          <label className="block text-[9px] font-black uppercase tracking-wider text-gray-500 mb-1">
+          <label className="block text-eyebrow font-black uppercase tracking-wider text-gray-500 mb-1">
             Condition Received
           </label>
           <ConditionPills
@@ -507,14 +507,14 @@ export function LocalPickupIntakeForm({
 
         {/* Parts status */}
         <div>
-          <label className="block text-[9px] font-black uppercase tracking-wider text-gray-500 mb-1">
+          <label className="block text-eyebrow font-black uppercase tracking-wider text-gray-500 mb-1">
             Parts
           </label>
           <div className="grid grid-cols-2 gap-1.5">
             <button
               type="button"
               onClick={() => patchLine(line.key, { partsStatus: 'COMPLETE' })}
-              className={`h-7 rounded-md text-[9px] font-black uppercase tracking-wider transition-colors ${
+              className={`h-7 rounded-md text-eyebrow font-black uppercase tracking-wider transition-colors ${
                 !isMissing
                   ? 'bg-emerald-600 text-white'
                   : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
@@ -525,7 +525,7 @@ export function LocalPickupIntakeForm({
             <button
               type="button"
               onClick={() => patchLine(line.key, { partsStatus: 'MISSING_PARTS' })}
-              className={`h-7 rounded-md text-[9px] font-black uppercase tracking-wider transition-colors ${
+              className={`h-7 rounded-md text-eyebrow font-black uppercase tracking-wider transition-colors ${
                 isMissing
                   ? 'bg-amber-500 text-white'
                   : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
@@ -539,32 +539,32 @@ export function LocalPickupIntakeForm({
               value={line.missingPartsNote}
               onChange={(e) => patchLine(line.key, { missingPartsNote: e.target.value })}
               placeholder="List missing parts…"
-              className="mt-1.5 min-h-[44px] w-full rounded-md border border-amber-200 bg-amber-50/50 px-2 py-1.5 text-[11px] text-gray-900 placeholder:text-gray-400 focus:outline-none focus:border-amber-400"
+              className="mt-1.5 min-h-[44px] w-full rounded-md border border-amber-200 bg-amber-50/50 px-2 py-1.5 text-caption text-gray-900 placeholder:text-gray-400 focus:outline-none focus:border-amber-400"
             />
           )}
         </div>
 
         {/* Condition note */}
         <div>
-          <label className="block text-[9px] font-black uppercase tracking-wider text-gray-500 mb-1">
+          <label className="block text-eyebrow font-black uppercase tracking-wider text-gray-500 mb-1">
             Condition note
           </label>
           <textarea
             value={line.conditionNote}
             onChange={(e) => patchLine(line.key, { conditionNote: e.target.value })}
             placeholder="What's wrong or notable about the unit…"
-            className="min-h-[44px] w-full rounded-md border border-gray-200 bg-white px-2 py-1.5 text-[11px] text-gray-900 placeholder:text-gray-400 focus:outline-none focus:border-emerald-400"
+            className="min-h-[44px] w-full rounded-md border border-gray-200 bg-white px-2 py-1.5 text-caption text-gray-900 placeholder:text-gray-400 focus:outline-none focus:border-emerald-400"
           />
         </div>
 
         {/* Total Price + Qty — bottom */}
         <div className="grid grid-cols-2 gap-2 border-t border-gray-100 pt-2.5">
           <div>
-            <label className="block text-[9px] font-black uppercase tracking-wider text-gray-500 mb-1">
+            <label className="block text-eyebrow font-black uppercase tracking-wider text-gray-500 mb-1">
               Total Price
             </label>
             <div className="relative">
-              <span className="pointer-events-none absolute left-2 top-1/2 -translate-y-1/2 text-[11px] font-bold text-emerald-700">$</span>
+              <span className="pointer-events-none absolute left-2 top-1/2 -translate-y-1/2 text-caption font-bold text-emerald-700">$</span>
               <input
                 type="number"
                 inputMode="numeric"
@@ -576,12 +576,12 @@ export function LocalPickupIntakeForm({
                   if (v === '' || Number(v) >= 0) patchLine(line.key, { total: v });
                 }}
                 placeholder="0.00"
-                className="h-7 w-full rounded-md border border-gray-200 bg-white pl-5 pr-2 text-[11px] font-bold text-emerald-700 focus:outline-none focus:border-emerald-500"
+                className="h-7 w-full rounded-md border border-gray-200 bg-white pl-5 pr-2 text-caption font-bold text-emerald-700 focus:outline-none focus:border-emerald-500"
               />
             </div>
           </div>
           <div>
-            <label className="block text-[9px] font-black uppercase tracking-wider text-gray-500 mb-1">
+            <label className="block text-eyebrow font-black uppercase tracking-wider text-gray-500 mb-1">
               Qty
             </label>
             <input
@@ -596,7 +596,7 @@ export function LocalPickupIntakeForm({
               onKeyDown={(e) => {
                 if (e.key === 'Enter') (e.target as HTMLInputElement).blur();
               }}
-              className="h-7 w-full rounded-md border border-gray-200 bg-white px-2 text-center text-[11px] font-black text-gray-900 focus:outline-none focus:border-emerald-500"
+              className="h-7 w-full rounded-md border border-gray-200 bg-white px-2 text-center text-caption font-black text-gray-900 focus:outline-none focus:border-emerald-500"
             />
           </div>
         </div>
@@ -609,10 +609,10 @@ export function LocalPickupIntakeForm({
     <div className="space-y-2">
       {cart.length > 0 && (
         <div className="flex items-center justify-between border-t border-gray-200 pt-2">
-          <span className="text-[10px] font-black uppercase tracking-wider text-gray-500">
+          <span className="text-micro font-black uppercase tracking-wider text-gray-500">
             Subtotal
           </span>
-          <span className="text-[13px] font-black text-emerald-600">
+          <span className="text-sm font-black text-emerald-600">
             {formatMoney(cartSubtotal)}
           </span>
         </div>
@@ -641,7 +641,7 @@ export function LocalPickupIntakeForm({
         )}
       </button>
       {submitError && (
-        <p className="text-center text-[9px] font-bold text-red-600">{submitError}</p>
+        <p className="text-center text-eyebrow font-bold text-red-600">{submitError}</p>
       )}
     </div>
   );
@@ -651,10 +651,10 @@ export function LocalPickupIntakeForm({
     return (
       <div className="flex h-full min-h-0 flex-col overflow-hidden bg-white">
         <div className="border-b border-gray-100 px-3 py-2.5">
-          <p className="text-[9px] font-black uppercase tracking-widest text-emerald-500">
+          <p className="text-eyebrow font-black uppercase tracking-widest text-emerald-500">
             Local Pickup
           </p>
-          <h3 className="mt-0.5 text-[12px] font-black uppercase tracking-tight text-gray-900">
+          <h3 className="mt-0.5 text-label font-black uppercase tracking-tight text-gray-900">
             New Intake
           </h3>
         </div>
@@ -663,7 +663,7 @@ export function LocalPickupIntakeForm({
           {cart.length === 0 ? (
             <div className="rounded-xl border border-dashed border-gray-200 bg-gray-50/60 p-4 text-center">
               <ShoppingCart className="mx-auto mb-1 h-5 w-5 text-gray-300" />
-              <p className="text-[10px] font-bold text-gray-400">
+              <p className="text-micro font-bold text-gray-400">
                 Pick products from the catalog →
               </p>
             </div>
@@ -687,10 +687,10 @@ export function LocalPickupIntakeForm({
       <aside className="flex w-[380px] shrink-0 flex-col border-r border-gray-200 bg-white">
         <div className="flex items-center justify-between border-b border-gray-100 px-5 py-4">
           <div>
-            <p className="text-[9px] font-black uppercase tracking-widest text-emerald-500">
+            <p className="text-eyebrow font-black uppercase tracking-widest text-emerald-500">
               Local Pickup
             </p>
-            <h2 className="mt-0.5 text-[14px] font-black uppercase tracking-tight text-gray-900">
+            <h2 className="mt-0.5 text-sm font-black uppercase tracking-tight text-gray-900">
               New Intake
             </h2>
           </div>
@@ -714,10 +714,10 @@ export function LocalPickupIntakeForm({
 
       <main className="flex min-h-0 flex-1 flex-col overflow-hidden">
         <div className="border-b border-gray-200 bg-white px-5 py-3">
-          <p className="text-[9px] font-black uppercase tracking-widest text-gray-500">
+          <p className="text-eyebrow font-black uppercase tracking-widest text-gray-500">
             Cart
           </p>
-          <p className="text-[11px] font-bold text-gray-600">
+          <p className="text-caption font-bold text-gray-600">
             {cart.length === 0
               ? 'Add products from the left to start'
               : `${cart.length} product${cart.length === 1 ? '' : 's'} · ${cartCount} unit${cartCount === 1 ? '' : 's'}`}
@@ -731,8 +731,8 @@ export function LocalPickupIntakeForm({
                 <div className="mx-auto mb-3 flex h-14 w-14 items-center justify-center rounded-full bg-emerald-50">
                   <ShoppingCart className="h-7 w-7 text-emerald-300" />
                 </div>
-                <p className="text-[12px] font-bold text-gray-500">Cart is empty</p>
-                <p className="mt-1 text-[10px] text-gray-400">
+                <p className="text-label font-bold text-gray-500">Cart is empty</p>
+                <p className="mt-1 text-micro text-gray-400">
                   Search the catalog on the left to add products to this pickup
                 </p>
               </div>

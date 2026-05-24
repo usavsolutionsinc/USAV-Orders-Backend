@@ -14,7 +14,7 @@ export function DetailGrid({ children, className = '' }: DetailGridProps) {
     <div
       className={`grid gap-2 ${
         isMobile
-          ? 'grid-cols-1 sm:grid-cols-2 text-[11px] font-bold uppercase tracking-[0.16em] text-gray-700'
+          ? 'grid-cols-1 sm:grid-cols-2 text-caption font-bold uppercase tracking-[0.16em] text-gray-700'
           : 'grid-cols-2'
       } ${className}`}
     >

@@ -21,10 +21,10 @@ interface PaneHeaderLabelProps {
 }
 
 export const paneHeaderLabelEyebrowClass =
-  'text-[9px] font-black uppercase tracking-widest text-gray-400';
+  'text-eyebrow font-black uppercase tracking-widest text-gray-400';
 
 export const paneHeaderLabelValueClass =
-  'truncate text-[14px] font-black tracking-tight text-gray-900';
+  'truncate text-sm font-black tracking-tight text-gray-900';
 
 export function PaneHeaderLabel({
   eyebrow,
@@ -178,7 +178,7 @@ export function PaneHeaderStatusPill({
   return (
     <span
       className={cn(
-        'inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-[10px] font-black uppercase tracking-widest ring-1 ring-inset',
+        'inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-micro font-black uppercase tracking-widest ring-1 ring-inset',
         STATUS_TONE_CLASS[tone],
         className,
       )}
@@ -309,7 +309,7 @@ interface PaneHeaderActionBarProps {
 }
 
 const PANE_HEADER_ACTION_BTN_CLASS =
-  'inline-flex h-7 items-center gap-1 rounded-md px-1.5 text-[10px] font-bold uppercase tracking-widest text-slate-500 transition-colors hover:bg-slate-50 hover:text-slate-800 disabled:cursor-not-allowed disabled:opacity-40';
+  'inline-flex h-7 items-center gap-1 rounded-md px-1.5 text-micro font-bold uppercase tracking-widest text-slate-500 transition-colors hover:bg-slate-50 hover:text-slate-800 disabled:cursor-not-allowed disabled:opacity-40';
 
 const PANE_HEADER_ACTION_NAV_CLASS =
   'inline-flex h-7 w-7 items-center justify-center rounded-md text-slate-500 transition-colors hover:bg-slate-50 hover:text-slate-800 disabled:cursor-not-allowed disabled:opacity-40';
@@ -356,7 +356,7 @@ export function PaneHeaderActionBar({
       ))}
       {status != null ? (
         <span
-          className="text-[9px] font-black uppercase tracking-[0.18em] text-blue-600"
+          className="text-eyebrow font-black uppercase tracking-[0.18em] text-blue-600"
           aria-live="polite"
         >
           {status}
@@ -410,7 +410,7 @@ export function PaneHeaderWeekNav({
 }: PaneHeaderWeekNavProps) {
   return (
     <div className="flex items-center gap-1.5">
-      <span className="text-[11px] font-black uppercase tracking-widest text-neutral-900">
+      <span className="text-caption font-black uppercase tracking-widest text-neutral-900">
         {rangeLabel}
       </span>
       <button

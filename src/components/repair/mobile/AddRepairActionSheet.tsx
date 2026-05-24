@@ -110,7 +110,7 @@ export function AddRepairActionSheet({ repairId, onClose, onSaved }: Props) {
             <button
               type="button"
               onClick={onClose}
-              className="text-[11px] font-black uppercase tracking-wide text-slate-500 active:text-slate-900"
+              className="text-caption font-black uppercase tracking-wide text-slate-500 active:text-slate-900"
             >
               Cancel
             </button>
@@ -120,7 +120,7 @@ export function AddRepairActionSheet({ repairId, onClose, onSaved }: Props) {
             <button
               type="button"
               onClick={() => setStep('type')}
-              className="text-[11px] font-black uppercase tracking-wide text-slate-500 active:text-slate-900"
+              className="text-caption font-black uppercase tracking-wide text-slate-500 active:text-slate-900"
             >
               ← Back
             </button>
@@ -131,7 +131,7 @@ export function AddRepairActionSheet({ repairId, onClose, onSaved }: Props) {
               type="button"
               onClick={handleSave}
               disabled={submitting}
-              className="rounded-lg bg-orange-500 px-3 py-1.5 text-[11px] font-black uppercase tracking-wide text-white shadow-sm active:bg-orange-600 disabled:opacity-50"
+              className="rounded-lg bg-orange-500 px-3 py-1.5 text-caption font-black uppercase tracking-wide text-white shadow-sm active:bg-orange-600 disabled:opacity-50"
             >
               {submitting ? 'Saving…' : 'Save'}
             </button>
@@ -153,7 +153,7 @@ export function AddRepairActionSheet({ repairId, onClose, onSaved }: Props) {
                   {t.emoji}
                 </span>
                 <p className="mt-1 text-sm font-black text-slate-900">{t.label}</p>
-                <p className="text-[10px] font-semibold text-slate-500 leading-snug">{t.sub}</p>
+                <p className="text-micro font-semibold text-slate-500 leading-snug">{t.sub}</p>
               </button>
             ))}
           </div>
@@ -256,7 +256,7 @@ function Field({
 }) {
   return (
     <label className="block">
-      <span className="block text-[10px] font-black uppercase tracking-[0.14em] text-slate-500 mb-1">
+      <span className="block text-micro font-black uppercase tracking-[0.14em] text-slate-500 mb-1">
         {label}
       </span>
       <input
@@ -289,7 +289,7 @@ function FieldTextarea({
 }) {
   return (
     <label className="block">
-      <span className="block text-[10px] font-black uppercase tracking-[0.14em] text-slate-500 mb-1">
+      <span className="block text-micro font-black uppercase tracking-[0.14em] text-slate-500 mb-1">
         {label}
       </span>
       <textarea

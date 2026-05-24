@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { isQStashOrigin } from '@/lib/qstash';
+import { isAuthorizedCronRequest, isQStashOrigin } from '@/lib/qstash';
 import {
   GoogleSheetsTransferOrdersJobError,
   runGoogleSheetsTransferOrders,
@@ -9,18 +9,12 @@ import { syncOrderExceptionsToOrders } from '@/lib/orders-exceptions';
 export const dynamic = 'force-dynamic';
 export const maxDuration = 300;
 
-export async function POST(request: NextRequest) {
-  if (!isQStashOrigin(request.headers)) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
-
-  const body = (await request.json().catch(() => ({}))) as { manualSheetName?: string };
-  console.log('[qstash/google-sheets/transfer-orders] Starting job', {
-    manualSheetName: body.manualSheetName ?? '(auto-detect)',
+async function execute(manualSheetName: string | undefined) {
+  console.log('[google-sheets/transfer-orders] Starting job', {
+    manualSheetName: manualSheetName ?? '(auto-detect)',
   });
-
   try {
-    const result = await runGoogleSheetsTransferOrders(body.manualSheetName, 'all');
+    const result = await runGoogleSheetsTransferOrders(manualSheetName, 'all');
 
     // Immediately resolve any open exceptions that now match newly imported orders
     let exceptionsResolved = 0;
@@ -57,6 +51,18 @@ export async function POST(request: NextRequest) {
   }
 }
 
-export async function GET() {
-  return NextResponse.json({ ok: true, queue: 'qstash', job: 'google-sheets-transfer-orders' });
+export async function POST(request: NextRequest) {
+  if (!isQStashOrigin(request.headers)) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+  const body = (await request.json().catch(() => ({}))) as { manualSheetName?: string };
+  return execute(body.manualSheetName);
+}
+
+export async function GET(request: NextRequest) {
+  if (!isAuthorizedCronRequest(request.headers)) {
+    return NextResponse.json({ ok: true, queue: 'vercel-cron', job: 'google-sheets-transfer-orders' });
+  }
+  const manualSheetName = request.nextUrl.searchParams.get('manualSheetName') ?? undefined;
+  return execute(manualSheetName);
 }

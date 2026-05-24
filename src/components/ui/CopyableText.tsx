@@ -27,7 +27,7 @@ export function IdentifierRow({ text, displayText, icon, underlineClassName }: I
             <div className="flex h-6 w-6 shrink-0 items-center justify-center text-black">
                 {icon}
             </div>
-            <div className="min-w-0 flex-1 truncate text-[12px] font-black tracking-tight text-black">
+            <div className="min-w-0 flex-1 truncate text-label font-black tracking-tight text-black">
                 {isEmpty ? '---' : displayText}
             </div>
             <button
@@ -39,7 +39,7 @@ export function IdentifierRow({ text, displayText, icon, underlineClassName }: I
             >
                 {copied
                     ? <Check className="h-4 w-4 text-black" />
-                    : <span className="text-[13px] leading-none">📋</span>}
+                    : <span className="text-sm leading-none">📋</span>}
             </button>
         </div>
     );
@@ -49,7 +49,7 @@ export const OrderIdRow = ({ text }: { text: string }) => (
     <IdentifierRow
         text={text}
         displayText={text ? `#${text}` : '---'}
-        icon={<span className="text-[18px] font-black leading-none">#</span>}
+        icon={<span className="text-lg font-black leading-none">#</span>}
         underlineClassName="border-gray-300"
     />
 );
@@ -67,7 +67,7 @@ export const SerialRow = ({ text, displayText }: { text: string; displayText?: s
     <IdentifierRow
         text={text}
         displayText={displayText ?? (text || '---')}
-        icon={<span className="text-[17px] leading-none">🏷️</span>}
+        icon={<span className="text-lg leading-none">🏷️</span>}
         underlineClassName="border-emerald-500"
     />
 );

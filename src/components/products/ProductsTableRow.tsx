@@ -11,7 +11,7 @@ interface ProductsTableRowProps {
 export function ProductsTableRow({ row }: ProductsTableRowProps) {
     const skuHref = `/products/${encodeURIComponent(row.sku)}`;
     const inventoryHref = `/inventory?search=${encodeURIComponent(row.sku)}`;
-    const adminHref = `/admin/inventory-v2/sku/${encodeURIComponent(row.sku)}`;
+    const adminHref = `/admin/inventory/sku/${encodeURIComponent(row.sku)}`;
 
     return (
         <div className="group relative flex items-center gap-3 border-b border-gray-100 px-4 py-2.5 hover:bg-blue-50/40 sm:px-6">
@@ -33,7 +33,7 @@ export function ProductsTableRow({ row }: ProductsTableRowProps) {
                         loading="lazy"
                     />
                 ) : (
-                    <span className="text-[10px] font-mono uppercase text-gray-400">
+                    <span className="text-micro font-mono uppercase text-gray-400">
                         {(row.sku || '?').slice(0, 3)}
                     </span>
                 )}
@@ -43,7 +43,7 @@ export function ProductsTableRow({ row }: ProductsTableRowProps) {
                 <div className="flex items-baseline gap-2">
                     <span className="truncate font-mono text-xs text-gray-500">{row.sku}</span>
                     {!row.is_active ? (
-                        <span className="rounded bg-gray-100 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-gray-500">
+                        <span className="rounded bg-gray-100 px-1.5 py-0.5 text-micro font-medium uppercase tracking-wide text-gray-500">
                             Inactive
                         </span>
                     ) : null}
@@ -59,19 +59,19 @@ export function ProductsTableRow({ row }: ProductsTableRowProps) {
 
             <div className="pointer-events-none relative z-[1] hidden shrink-0 sm:block">
                 {row.gtin ? (
-                    <span className="font-mono text-[11px] text-gray-500">{row.gtin}</span>
+                    <span className="font-mono text-caption text-gray-500">{row.gtin}</span>
                 ) : (
-                    <span className="text-[11px] text-gray-300">no GTIN</span>
+                    <span className="text-caption text-gray-300">no GTIN</span>
                 )}
             </div>
 
             <div className="pointer-events-none relative z-[1] hidden shrink-0 sm:block">
                 {row.has_ecwid_link ? (
-                    <span className="rounded bg-emerald-50 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-emerald-700">
+                    <span className="rounded bg-emerald-50 px-1.5 py-0.5 text-micro font-medium uppercase tracking-wide text-emerald-700">
                         Ecwid
                     </span>
                 ) : (
-                    <span className="text-[10px] uppercase tracking-wide text-gray-300">—</span>
+                    <span className="text-micro uppercase tracking-wide text-gray-300">—</span>
                 )}
             </div>
 
@@ -96,7 +96,7 @@ function RowAction({ href, label, external }: RowActionProps) {
         <Link
             href={href}
             onClick={(event) => event.stopPropagation()}
-            className="inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[11px] font-medium text-gray-500 hover:bg-white hover:text-gray-900"
+            className="inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-caption font-medium text-gray-500 hover:bg-white hover:text-gray-900"
         >
             {label}
             {external ? <ExternalLink className="h-3 w-3" /> : null}

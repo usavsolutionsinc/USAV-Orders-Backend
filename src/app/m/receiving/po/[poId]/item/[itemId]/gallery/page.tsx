@@ -39,7 +39,7 @@ export default function MobileItemGalleryPage(
 
   if (!item?.receiving_id) {
     return (
-      <div className="grid min-h-screen place-items-center bg-black text-[11px] font-bold uppercase tracking-widest text-white/60">
+      <div className="grid min-h-screen place-items-center bg-black text-caption font-bold uppercase tracking-widest text-white/60">
         Loading…
       </div>
     );

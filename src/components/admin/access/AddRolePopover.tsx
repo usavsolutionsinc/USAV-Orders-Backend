@@ -92,7 +92,7 @@ export function AddRolePopover({ roles, onAdd, disabled }: AddRolePopoverProps) 
         type="button"
         onClick={() => setOpen((v) => !v)}
         disabled={disabled}
-        className="inline-flex items-center gap-1 rounded-full border border-dashed border-gray-300 bg-white px-2 py-0.5 text-[11px] font-semibold text-gray-700 transition hover:border-blue-400 hover:text-blue-700 disabled:opacity-50"
+        className="inline-flex items-center gap-1 rounded-full border border-dashed border-gray-300 bg-white px-2 py-0.5 text-caption font-semibold text-gray-700 transition hover:border-blue-400 hover:text-blue-700 disabled:opacity-50"
       >
         <svg className="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M12 5v14"/><path d="M5 12h14"/></svg>
         Add role
@@ -115,8 +115,8 @@ export function AddRolePopover({ roles, onAdd, disabled }: AddRolePopoverProps) 
                   className="flex w-full items-center gap-2 px-3 py-1.5 text-left hover:bg-gray-50"
                 >
                   <span className="h-2.5 w-2.5 flex-shrink-0 rounded-full" style={{ backgroundColor: r.color }} aria-hidden />
-                  <span className="flex-1 truncate text-[12px] font-semibold text-gray-900">{r.label}</span>
-                  <span className="text-[10px] text-gray-400">{r.key}</span>
+                  <span className="flex-1 truncate text-label font-semibold text-gray-900">{r.label}</span>
+                  <span className="text-micro text-gray-400">{r.key}</span>
                 </button>
               </li>
             ))}

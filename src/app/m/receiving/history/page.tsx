@@ -111,7 +111,7 @@ export default function MobileReceivingPipelinePage() {
           <Menu className="h-6 w-6" />
         </button>
 
-        <h1 className="flex-1 text-[17px] font-black tracking-tight text-gray-900">
+        <h1 className="flex-1 text-lg font-black tracking-tight text-gray-900">
           Receiving
         </h1>
 
@@ -134,7 +134,7 @@ export default function MobileReceivingPipelinePage() {
                 placeholder="Search PO #, SKU, or item"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                className="h-11 w-full rounded-full border border-gray-200 bg-white pl-9 pr-9 text-[14px] font-semibold text-gray-900 placeholder:text-gray-400 shadow-md shadow-black/10 focus:border-blue-500 focus:outline-none"
+                className="h-11 w-full rounded-full border border-gray-200 bg-white pl-9 pr-9 text-sm font-semibold text-gray-900 placeholder:text-gray-400 shadow-md shadow-black/10 focus:border-blue-500 focus:outline-none"
               />
               {search && (
                 <button
@@ -181,15 +181,15 @@ export default function MobileReceivingPipelinePage() {
             ))}
           </div>
         ) : error ? (
-          <p className="px-6 py-12 text-center text-[12px] font-bold text-rose-600">
+          <p className="px-6 py-12 text-center text-label font-bold text-rose-600">
             Couldn't load receiving lines. Pull to refresh.
           </p>
         ) : rows.length === 0 ? (
           <div className="px-6 py-16 text-center">
-            <p className="text-[13px] font-black uppercase tracking-[0.18em] text-gray-700">
+            <p className="text-sm font-black uppercase tracking-[0.18em] text-gray-700">
               No matches
             </p>
-            <p className="mt-1 text-[11px] font-semibold text-gray-500">
+            <p className="mt-1 text-caption font-semibold text-gray-500">
               Try switching the filter, clearing the search, or scanning a PO label.
             </p>
           </div>

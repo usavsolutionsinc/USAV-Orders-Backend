@@ -298,12 +298,12 @@ export default function ReceivingLogs({ onSelectLog, selectedLogId }: ReceivingL
                 {isLoading && data.length === 0 ? (
                     <div className="flex flex-col items-center justify-center py-40 gap-3 text-gray-400">
                         <Loader2 className="w-8 h-8 animate-spin" />
-                        <p className="text-[10px] font-black uppercase tracking-widest">Loading Records...</p>
+                        <p className="text-micro font-black uppercase tracking-widest">Loading Records...</p>
                     </div>
                 ) : sortedEntries.length === 0 ? (
                     <div className="flex flex-col items-center justify-center py-40 text-center opacity-20">
                         <Package className="w-16 h-16 mb-4" />
-                        <p className="text-[10px] font-black uppercase tracking-widest">No Logs Found</p>
+                        <p className="text-micro font-black uppercase tracking-widest">No Logs Found</p>
                     </div>
                 ) : (
                     <div className="flex flex-col">
@@ -331,7 +331,7 @@ export default function ReceivingLogs({ onSelectLog, selectedLogId }: ReceivingL
                                             selectedLogId === log.id ? 'bg-blue-50/60' : index % 2 === 0 ? 'bg-white' : 'bg-gray-50/20'
                                         }`}
                                     >
-                                        <div className="text-[11px] font-black text-gray-400 tabular-nums uppercase text-left">
+                                        <div className="text-caption font-black text-gray-400 tabular-nums uppercase text-left">
                                             {formatDbTime(log.timestamp)}
                                         </div>
                                         <div className="flex items-center gap-2 min-w-0">
@@ -341,16 +341,16 @@ export default function ReceivingLogs({ onSelectLog, selectedLogId }: ReceivingL
                                                 underlineClass="border-blue-500"
                                                 truncateDisplay={false}
                                             />
-                                            <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest opacity-60 truncate">
+                                            <span className="text-micro font-black text-gray-400 uppercase tracking-widest opacity-60 truncate">
                                                 {log.status || 'Unknown'}
                                             </span>
                                             {log.is_return ? (
-                                                <span className="rounded border border-amber-200 bg-amber-50 px-1.5 py-0.5 text-[8px] font-black uppercase tracking-widest text-amber-700">
+                                                <span className="rounded border border-amber-200 bg-amber-50 px-1.5 py-0.5 text-mini font-black uppercase tracking-widest text-amber-700">
                                                     Return
                                                 </span>
                                             ) : null}
                                             {String(log.target_channel || '').toUpperCase() === 'FBA' ? (
-                                                <span className="rounded border border-purple-200 bg-purple-50 px-1.5 py-0.5 text-[8px] font-black uppercase tracking-widest text-purple-700">
+                                                <span className="rounded border border-purple-200 bg-purple-50 px-1.5 py-0.5 text-mini font-black uppercase tracking-widest text-purple-700">
                                                     FBA
                                                 </span>
                                             ) : null}

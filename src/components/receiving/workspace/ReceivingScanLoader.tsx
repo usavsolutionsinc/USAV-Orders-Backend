@@ -44,17 +44,17 @@ export function ReceivingScanLoader({ tracking, startedAt }: ReceivingScanLoader
       <div className="w-full max-w-3xl space-y-4">
         {/* Hero card — the focal point: tracking + status + progress bar */}
         <div className="rounded-2xl border border-gray-200 bg-white px-6 py-7 shadow-sm">
-          <p className="text-[10px] font-black uppercase tracking-[0.18em] text-blue-600">
+          <p className="text-micro font-black uppercase tracking-[0.18em] text-blue-600">
             Finding your PO
           </p>
-          <h2 className="mt-1 text-[18px] font-extrabold tracking-tight text-gray-900">
+          <h2 className="mt-1 text-lg font-extrabold tracking-tight text-gray-900">
             Opening your PO
           </h2>
           <div className="mt-3 flex items-baseline gap-2">
-            <span className="font-mono text-[13px] tracking-wide text-gray-700">
+            <span className="font-mono text-sm tracking-wide text-gray-700">
               {tracking}
             </span>
-            <span className="text-[11px] font-semibold tabular-nums text-gray-400">
+            <span className="text-caption font-semibold tabular-nums text-gray-400">
               · {elapsed}s
             </span>
           </div>

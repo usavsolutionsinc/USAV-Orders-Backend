@@ -18,6 +18,7 @@ import { ReceivingOverviewCard } from './receiving/ReceivingOverviewCard';
 import { useReceivingDetailForm, normalizeCarrier } from '@/hooks/useReceivingDetailForm';
 import {
   PaneHeader,
+  PaneHeaderIconBadge,
   PaneHeaderLabel,
   PaneHeaderTabs,
   PaneHeaderActionBar,
@@ -189,24 +190,20 @@ export function ReceivingDetailsStack({ log, onClose, onUpdated, onDeleted }: Re
           the 2026 ops convention (Vercel/Front/Stripe pattern). */}
       <PaneHeader
         className="border-gray-100 bg-white/90 backdrop-blur-xl"
-        rowClassName="px-6 py-4"
+        rowClassName="px-6"
         leftSlot={
-          <div className="flex items-center gap-3">
-            <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-blue-600 shadow-md shadow-blue-200">
-              <Package className="h-5 w-5 text-white" />
-            </div>
+          <>
+            <PaneHeaderIconBadge Icon={Package} bg="bg-blue-600" tint="text-white" />
             <PaneHeaderLabel
               eyebrow={
                 <>
                   RECEIVING <span className="text-gray-500"> · {formatDateTimePST(log.timestamp)}</span>
                 </>
               }
-              eyebrowClassName="text-[10px] font-black uppercase tracking-[0.2em] text-gray-600"
               value={`#${log.id}`}
-              valueClassName="truncate text-[18px] font-black tracking-tight text-gray-900 leading-tight"
               valueTitle={`Receiving #${log.id}`}
             />
-          </div>
+          </>
         }
         rightSlot={
           <>
@@ -214,7 +211,7 @@ export function ReceivingDetailsStack({ log, onClose, onUpdated, onDeleted }: Re
               type="button"
               onClick={handleEditPO}
               disabled={isOpeningEditor || form.isSaving}
-              className="group inline-flex items-center gap-1.5 rounded-xl bg-blue-600 px-3.5 py-2 text-[11px] font-black uppercase tracking-wider text-white transition-colors hover:bg-blue-700 disabled:opacity-50"
+              className="group inline-flex items-center gap-1.5 rounded-xl bg-blue-600 px-3.5 py-2 text-caption font-black uppercase tracking-wider text-white transition-colors hover:bg-blue-700 disabled:opacity-50"
             >
               {isOpeningEditor ? (
                 <Loader2 className="h-3.5 w-3.5 animate-spin" />
@@ -361,7 +358,7 @@ export function ReceivingDetailsStack({ log, onClose, onUpdated, onDeleted }: Re
 
           {/* Needs Test */}
           <div className="rounded-2xl border border-gray-200 bg-gray-50 p-3 space-y-3">
-            <label className="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-gray-700">
+            <label className="flex items-center gap-2 text-micro font-black uppercase tracking-widest text-gray-700">
               <input
                 type="checkbox"
                 checked={form.needsTest}
@@ -387,7 +384,7 @@ export function ReceivingDetailsStack({ log, onClose, onUpdated, onDeleted }: Re
                         key={tech.id}
                         type="button"
                         onClick={() => form.setAssignedTechId(String(tech.id))}
-                        className={`rounded-xl px-4 py-2 text-[11px] font-black uppercase tracking-wider whitespace-nowrap transition-all ${
+                        className={`rounded-xl px-4 py-2 text-caption font-black uppercase tracking-wider whitespace-nowrap transition-all ${
                           isActive ? `${colors.bg} text-white` : `bg-gray-100 ${colors.text} hover:${colors.light}`
                         }`}
                       >
@@ -403,11 +400,11 @@ export function ReceivingDetailsStack({ log, onClose, onUpdated, onDeleted }: Re
           {/* Condition + Carrier */}
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5">
-              <label className="text-[9px] font-black uppercase tracking-widest text-gray-500">Condition</label>
+              <label className="text-eyebrow font-black uppercase tracking-widest text-gray-500">Condition</label>
               <ViewDropdown options={CONDITION_OPTS} value={form.conditionGrade} onChange={form.setConditionGrade} borderRadius="12px" backgroundColor="#f9fafb" fontSize="11px" />
             </div>
             <div className="space-y-1.5">
-              <label className="text-[9px] font-black uppercase tracking-widest text-gray-500">Carrier</label>
+              <label className="text-eyebrow font-black uppercase tracking-widest text-gray-500">Carrier</label>
               <ViewDropdown
                 options={CARRIER_OPTS.some((o) => o.value === form.carrier) ? CARRIER_OPTS : [{ value: form.carrier, label: form.carrier }, ...CARRIER_OPTS]}
                 value={form.carrier}
@@ -422,11 +419,11 @@ export function ReceivingDetailsStack({ log, onClose, onUpdated, onDeleted }: Re
           {/* Disposition + QA Status */}
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5">
-              <label className="text-[9px] font-black uppercase tracking-widest text-gray-500">Disposition</label>
+              <label className="text-eyebrow font-black uppercase tracking-widest text-gray-500">Disposition</label>
               <ViewDropdown options={DISPOSITION_OPTS} value={form.dispositionCode} onChange={form.setDispositionCode} borderRadius="12px" backgroundColor="#f9fafb" fontSize="11px" />
             </div>
             <div className="space-y-1.5">
-              <label className="text-[9px] font-black uppercase tracking-widest text-gray-500">QA Status</label>
+              <label className="text-eyebrow font-black uppercase tracking-widest text-gray-500">QA Status</label>
               <ViewDropdown options={QA_OPTS} value={form.qaStatus} onChange={form.setQaStatus} borderRadius="12px" backgroundColor="#f9fafb" fontSize="11px" />
             </div>
           </div>
@@ -438,13 +435,13 @@ export function ReceivingDetailsStack({ log, onClose, onUpdated, onDeleted }: Re
           {/* Delete */}
           <div className="space-y-2 pb-4">
             {form.saveState === 'error' && (
-              <p className="text-center text-[10px] font-black uppercase tracking-wider text-red-500">Save failed — check connection</p>
+              <p className="text-center text-micro font-black uppercase tracking-wider text-red-500">Save failed — check connection</p>
             )}
             <button
               type="button"
               onClick={form.handleDelete}
               disabled={form.isDeleting}
-              className="inline-flex h-10 w-full items-center justify-center gap-2 rounded-xl bg-red-600 text-[10px] font-black uppercase tracking-wider text-white hover:bg-red-700 disabled:opacity-50"
+              className="inline-flex h-10 w-full items-center justify-center gap-2 rounded-xl bg-red-600 text-micro font-black uppercase tracking-wider text-white hover:bg-red-700 disabled:opacity-50"
             >
               <Trash2 className="h-3.5 w-3.5" />
               {form.isDeleting ? 'Deleting...' : 'Delete Row'}

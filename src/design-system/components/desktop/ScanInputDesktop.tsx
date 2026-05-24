@@ -112,7 +112,7 @@ export function ScanInputDesktop({
   return (
     <div className={`space-y-1 ${className}`.trim()}>
       {label && (
-        <label className="block text-[9px] font-black uppercase tracking-[0.2em] text-gray-500">
+        <label className="block text-eyebrow font-black uppercase tracking-[0.2em] text-gray-500">
           {label}
         </label>
       )}
@@ -161,7 +161,7 @@ export function ScanInputDesktop({
             spellCheck={false}
             className={`
               flex-1 bg-transparent border-0 outline-none
-              h-10 text-[13px] font-bold text-gray-900
+              h-10 text-sm font-bold text-gray-900
               placeholder:text-gray-400 placeholder:font-medium
               ${icon ? 'pl-1' : 'pl-3.5'} pr-3
             `.trim()}
@@ -188,7 +188,7 @@ export function ScanInputDesktop({
           {!isProcessing && (
             <span className="pr-2.5 flex-shrink-0">
               <span className="h-6 min-w-6 px-1.5 bg-white rounded border border-gray-100 shadow-sm flex items-center justify-center">
-                <span className="text-[8px] font-black text-gray-400">ENTER</span>
+                <span className="text-mini font-black text-gray-400">ENTER</span>
               </span>
             </span>
           )}

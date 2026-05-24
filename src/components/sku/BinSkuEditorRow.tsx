@@ -187,11 +187,11 @@ export function BinSkuEditorRow({
         >
           <p className="font-mono text-sm font-black text-slate-900">{row.sku}</p>
           {row.productTitle && (
-            <p className="mt-1 line-clamp-2 text-[11px] leading-snug text-slate-500">
+            <p className="mt-1 line-clamp-2 text-caption leading-snug text-slate-500">
               {row.productTitle}
             </p>
           )}
-          <p className="mt-1 text-[10px] font-bold uppercase tracking-widest text-slate-400">
+          <p className="mt-1 text-micro font-bold uppercase tracking-widest text-slate-400">
             Counted {formatAgo(row.lastCounted)} ago
             {row.minQty != null && row.maxQty != null
               ? ` · ${row.minQty}–${row.maxQty}`
@@ -248,7 +248,7 @@ export function BinSkuEditorRow({
           {/* Absolute qty + min/max */}
           <div className="grid grid-cols-3 gap-2">
             <label className="block">
-              <span className="text-[9px] font-black uppercase tracking-widest text-slate-500">
+              <span className="text-eyebrow font-black uppercase tracking-widest text-slate-500">
                 Qty
               </span>
               <input
@@ -260,7 +260,7 @@ export function BinSkuEditorRow({
               />
             </label>
             <label className="block">
-              <span className="text-[9px] font-black uppercase tracking-widest text-slate-500">
+              <span className="text-eyebrow font-black uppercase tracking-widest text-slate-500">
                 Min
               </span>
               <input
@@ -273,7 +273,7 @@ export function BinSkuEditorRow({
               />
             </label>
             <label className="block">
-              <span className="text-[9px] font-black uppercase tracking-widest text-slate-500">
+              <span className="text-eyebrow font-black uppercase tracking-widest text-slate-500">
                 Max
               </span>
               <input
@@ -327,7 +327,7 @@ export function BinSkuEditorRow({
           </div>
 
           {error && (
-            <p className="text-[11px] font-bold text-rose-600">{error}</p>
+            <p className="text-caption font-bold text-rose-600">{error}</p>
           )}
         </div>
       )}

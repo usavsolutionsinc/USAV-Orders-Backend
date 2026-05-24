@@ -73,7 +73,7 @@ export function ReceivingPhotosSection({
             </svg>
           </div>
           <div className="flex items-center gap-2">
-            <h3 className="text-[11px] font-black uppercase tracking-[0.2em] text-gray-900">{sectionTitle}</h3>
+            <h3 className="text-caption font-black uppercase tracking-[0.2em] text-gray-900">{sectionTitle}</h3>
             {isFetching ? <Loader2 className="h-3 w-3 animate-spin text-gray-400" aria-hidden /> : null}
           </div>
         </div>
@@ -86,8 +86,8 @@ export function ReceivingPhotosSection({
       ) : galleryPhotos.length === 0 ? (
         <div className="flex min-h-[5.5rem] items-center justify-center rounded-xl border-2 border-dashed border-gray-100 bg-gray-50 px-4">
           <div className="text-center">
-            <p className="text-[9px] font-black uppercase tracking-widest text-gray-400">No photos yet</p>
-            <p className="mt-1 text-[9px] font-medium text-gray-400">
+            <p className="text-eyebrow font-black uppercase tracking-widest text-gray-400">No photos yet</p>
+            <p className="mt-1 text-eyebrow font-medium text-gray-400">
               Mobile app → Receiving → ID <span className="font-mono font-black">#{receivingId}</span>
             </p>
           </div>

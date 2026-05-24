@@ -36,13 +36,13 @@ export function OfflineBanner() {
           <div className="flex items-center justify-between px-4 py-2.5 bg-navy-900 text-white">
             <div className="flex items-center gap-2">
               <WifiOff size={14} className="shrink-0 text-navy-200" />
-              <span className="text-[10px] font-bold tracking-[0.12em] uppercase font-sans text-navy-100">
+              <span className="text-micro font-bold tracking-[0.12em] uppercase font-sans text-navy-100">
                 Working offline — scans will sync when reconnected
               </span>
             </div>
             <button
               onClick={() => window.location.reload()}
-              className="flex items-center gap-1 text-[10px] text-navy-300 hover:text-white transition-colors touch-manipulation"
+              className="flex items-center gap-1 text-micro text-navy-300 hover:text-white transition-colors touch-manipulation"
               aria-label="Retry connection"
             >
               <RefreshCw size={12} />

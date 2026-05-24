@@ -156,7 +156,7 @@ export function AuditLogFilterStrip() {
 
   return (
     <div className="border-b border-gray-100 bg-white/60 px-3 py-2.5">
-      <p className="px-1 pb-1 text-[9px] font-black uppercase tracking-widest text-emerald-700/80">
+      <p className="px-1 pb-1 text-eyebrow font-black uppercase tracking-widest text-emerald-700/80">
         Filters
       </p>
 
@@ -167,7 +167,7 @@ export function AuditLogFilterStrip() {
             key={opt.id}
             type="button"
             onClick={() => applyPreset(opt.id)}
-            className={`flex-1 rounded-md px-1.5 py-1 text-[10px] font-bold uppercase tracking-wider transition ${
+            className={`flex-1 rounded-md px-1.5 py-1 text-micro font-bold uppercase tracking-wider transition ${
               preset === opt.id
                 ? 'bg-emerald-600 text-white shadow-sm shadow-emerald-200'
                 : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
@@ -185,13 +185,13 @@ export function AuditLogFilterStrip() {
             type="date"
             value={customStart}
             onChange={(e) => setCustomStart(e.target.value)}
-            className="h-8 rounded-md border border-gray-200 bg-white px-2 text-[11px] text-gray-800 outline-none focus:border-emerald-400 focus:ring-2 focus:ring-emerald-100"
+            className="h-8 rounded-md border border-gray-200 bg-white px-2 text-caption text-gray-800 outline-none focus:border-emerald-400 focus:ring-2 focus:ring-emerald-100"
           />
           <input
             type="date"
             value={customEnd}
             onChange={(e) => setCustomEnd(e.target.value)}
-            className="h-8 rounded-md border border-gray-200 bg-white px-2 text-[11px] text-gray-800 outline-none focus:border-emerald-400 focus:ring-2 focus:ring-emerald-100"
+            className="h-8 rounded-md border border-gray-200 bg-white px-2 text-caption text-gray-800 outline-none focus:border-emerald-400 focus:ring-2 focus:ring-emerald-100"
           />
         </div>
       )}
@@ -297,7 +297,7 @@ function StaffCombobox({
             if (!open) setOpen(true);
           }}
           placeholder="Filter by staff…"
-          className="h-8 w-full rounded-md border border-gray-200 bg-white pl-7 pr-7 text-[11px] text-gray-800 outline-none transition placeholder:text-gray-400 focus:border-emerald-400 focus:ring-2 focus:ring-emerald-100"
+          className="h-8 w-full rounded-md border border-gray-200 bg-white pl-7 pr-7 text-caption text-gray-800 outline-none transition placeholder:text-gray-400 focus:border-emerald-400 focus:ring-2 focus:ring-emerald-100"
         />
         {value != null && !open && (
           <button
@@ -319,7 +319,7 @@ function StaffCombobox({
               onChange(null);
               setOpen(false);
             }}
-            className="flex w-full items-center gap-2 px-2.5 py-1.5 text-left text-[11px] text-gray-500 hover:bg-gray-50"
+            className="flex w-full items-center gap-2 px-2.5 py-1.5 text-left text-caption text-gray-500 hover:bg-gray-50"
           >
             <span className="inline-flex h-4 w-4 items-center justify-center rounded-full bg-gray-100">
               <Search className="h-2.5 w-2.5" />
@@ -327,10 +327,10 @@ function StaffCombobox({
             All staff
           </button>
           {loading && (
-            <div className="px-2.5 py-2 text-[11px] text-gray-400">Loading…</div>
+            <div className="px-2.5 py-2 text-caption text-gray-400">Loading…</div>
           )}
           {!loading && options.length === 0 && (
-            <div className="px-2.5 py-2 text-[11px] text-gray-400">No matches.</div>
+            <div className="px-2.5 py-2 text-caption text-gray-400">No matches.</div>
           )}
           {options.map((opt) => (
             <button
@@ -345,14 +345,14 @@ function StaffCombobox({
               }`}
             >
               <div className="min-w-0">
-                <div className="truncate text-[11px] font-semibold text-gray-800">
+                <div className="truncate text-caption font-semibold text-gray-800">
                   {opt.name}
                 </div>
-                <div className="truncate text-[10px] text-gray-500">
+                <div className="truncate text-micro text-gray-500">
                   {opt.role ?? '—'}
                 </div>
               </div>
-              <div className="shrink-0 text-[10px] tabular-nums text-gray-400">
+              <div className="shrink-0 text-micro tabular-nums text-gray-400">
                 {opt.event_count.toLocaleString()}
               </div>
             </button>

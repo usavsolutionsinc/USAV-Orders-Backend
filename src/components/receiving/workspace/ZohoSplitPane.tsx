@@ -126,7 +126,7 @@ export function ZohoSplitPane() {
       />
 
       <header className="flex h-10 shrink-0 items-center justify-between border-b border-gray-100 bg-gray-50 px-3">
-        <span className="text-[11px] font-black uppercase tracking-[0.18em] text-gray-600">
+        <span className="text-caption font-black uppercase tracking-[0.18em] text-gray-600">
           Zoho · Purchase Order
         </span>
         <button
@@ -146,7 +146,7 @@ export function ZohoSplitPane() {
           // Browser tab fallback — Zoho blocks iframe embedding, so we surface
           // the same "open externally" affordance the rest of the receiving
           // workspace uses (see the LISTING PREVIEW card).
-          <div className="flex h-full flex-col items-center justify-center gap-3 p-6 text-center text-[12px] text-gray-500">
+          <div className="flex h-full flex-col items-center justify-center gap-3 p-6 text-center text-label text-gray-500">
             <p className="leading-snug">
               Embedded Zoho is only available in the desktop app.
             </p>
@@ -154,7 +154,7 @@ export function ZohoSplitPane() {
               href={url}
               target="_blank"
               rel="noreferrer"
-              className="rounded-md bg-blue-600 px-3 py-1.5 text-[11px] font-black uppercase tracking-[0.16em] text-white hover:bg-blue-700"
+              className="rounded-md bg-blue-600 px-3 py-1.5 text-caption font-black uppercase tracking-[0.16em] text-white hover:bg-blue-700"
             >
               Open in Zoho
             </a>

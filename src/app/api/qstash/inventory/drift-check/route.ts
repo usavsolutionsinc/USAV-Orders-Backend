@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import pool from '@/lib/db';
-import { isQStashOrigin } from '@/lib/qstash';
+import { isAuthorizedCronRequest, isQStashOrigin } from '@/lib/qstash';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 60;
@@ -27,11 +27,7 @@ export const maxDuration = 60;
  * Triggered by QStash on a daily schedule (see qstash-schedules.json).
  * Auth: isQStashOrigin (signature header or Bearer $QSTASH_TOKEN).
  */
-export async function POST(request: NextRequest) {
-  if (!isQStashOrigin(request.headers)) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
-
+async function execute() {
   const startedAt = Date.now();
   try {
     const c = await pool.connect();
@@ -112,7 +108,16 @@ export async function POST(request: NextRequest) {
   }
 }
 
-/** Health probe — no auth required, no work performed. */
-export async function GET() {
-  return NextResponse.json({ ok: true, queue: 'qstash', job: 'inventory-drift-check' });
+export async function POST(request: NextRequest) {
+  if (!isQStashOrigin(request.headers)) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+  return execute();
+}
+
+export async function GET(request: NextRequest) {
+  if (!isAuthorizedCronRequest(request.headers)) {
+    return NextResponse.json({ ok: true, queue: 'vercel-cron', job: 'inventory-drift-check' });
+  }
+  return execute();
 }

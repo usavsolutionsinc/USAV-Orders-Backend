@@ -161,7 +161,7 @@ export function StaffSection() {
 
       <div className="rounded-xl border border-gray-200 bg-white overflow-hidden">
         <table className="w-full text-sm">
-          <thead className="bg-gray-50 text-left text-[11px] uppercase tracking-wider text-gray-500">
+          <thead className="bg-gray-50 text-left text-caption uppercase tracking-wider text-gray-500">
             <tr>
               <th className="px-3 py-2">Name</th>
               <th className="px-3 py-2">Role</th>
@@ -226,7 +226,7 @@ export function StaffSection() {
             <div className="inline-block bg-white p-3 rounded-lg border border-gray-200">
               <QRCode value={qrFor.url} size={220} level="M" />
             </div>
-            <p className="mt-3 break-all text-[10px] text-gray-400">{qrFor.url}</p>
+            <p className="mt-3 break-all text-micro text-gray-400">{qrFor.url}</p>
             <button type="button" onClick={() => setQrFor(null)} className="mt-4 rounded-lg bg-gray-900 px-4 py-1.5 text-sm font-semibold text-white">Done</button>
           </div>
         </div>

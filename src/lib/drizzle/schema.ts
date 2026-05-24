@@ -1,9 +1,17 @@
-import { pgTable, serial, text, varchar, boolean, timestamp, integer, date, primaryKey, json, jsonb, pgEnum, bigserial, bigint, uuid, numeric, uniqueIndex, index } from 'drizzle-orm/pg-core';
+import { pgTable, serial, text, varchar, boolean, timestamp, integer, date, primaryKey, json, jsonb, pgEnum, bigserial, bigint, uuid, numeric, uniqueIndex, index, customType } from 'drizzle-orm/pg-core';
 import { sql } from 'drizzle-orm';
+
+// ─── Multi-tenancy Helper ─────────────
+export function orgIdCol() {
+  return uuid('organization_id')
+    .notNull()
+    .default(sql`NULLIF(current_setting('app.current_org', true), '')::uuid`);
+}
 
 // eBay Accounts table
 export const ebayAccounts = pgTable('ebay_accounts', {
   id: serial('id').primaryKey(),
+  organizationId: orgIdCol(),
   accountName: varchar('account_name', { length: 50 }).notNull().unique(),
   ebayUserId: varchar('ebay_user_id', { length: 100 }),
   accessToken: text('access_token').notNull(),
@@ -15,7 +23,10 @@ export const ebayAccounts = pgTable('ebay_accounts', {
   isActive: boolean('is_active').default(true),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow(),
-});
+}, (table) => ({
+  orgEbayUserIdx: uniqueIndex('ux_ebay_accounts_org_ebay_user').on(table.organizationId, table.ebayUserId),
+  orgIdx: index('idx_ebay_accounts_organization').on(table.organizationId),
+}));
 
 // Staff table
 //
@@ -1867,11 +1878,6 @@ export type NewUnitIdSequence = typeof unitIdSequences.$inferInsert;
 //
 // The Drizzle helper below mirrors that column shape so $inferInsert treats
 // `organizationId` as optional (the DB default fills it in).
-function orgIdCol() {
-  return uuid('organization_id')
-    .notNull()
-    .default(sql`NULLIF(current_setting('app.current_org', true), '')::uuid`);
-}
 
 // Tenant root. Every business table gets `organization_id` referencing this
 // in the next migration. USAV is org #1 with a fixed UUID
@@ -1898,3 +1904,63 @@ export const organizations = pgTable('organizations', {
 
 export type Organization = typeof organizations.$inferSelect;
 export type NewOrganization = typeof organizations.$inferInsert;
+
+// eBay API Calls audit logger table
+export const ebayApiCalls = pgTable('ebay_api_calls', {
+  id: serial('id').primaryKey(),
+  organizationId: orgIdCol(),
+  endpoint: text('endpoint').notNull(),
+  method: text('method').notNull(),
+  latencyMs: integer('latency_ms').notNull(),
+  statusCode: integer('status_code').notNull(),
+  errorMessage: text('error_message'),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+}, (table) => ({
+  orgIdx: index('idx_ebay_api_calls_organization').on(table.organizationId),
+}));
+
+
+export const pgVector = customType<{ data: number[] }>({
+  dataType() {
+    return 'vector(1536)';
+  },
+  toDriver(value: number[]): string {
+    return `[${value.join(',')}]`;
+  },
+  fromDriver(value: unknown): number[] {
+    if (typeof value === 'string') {
+      return value.slice(1, -1).split(',').map(Number);
+    }
+    return value as number[];
+  }
+});
+
+export const ragDocuments = pgTable('rag_documents', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  organizationId: orgIdCol(),
+  fileName: text('file_name').notNull(),
+  fileSize: integer('file_size').notNull(),
+  mimeType: text('mime_type').notNull(),
+  filePath: text('file_path').notNull(),
+  chunkCount: integer('chunk_count').notNull().default(0),
+  status: text('status').notNull().default('pending'),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+}, (table) => ({
+  orgIdx: index('idx_rag_documents_organization_id').on(table.organizationId),
+}));
+
+export const ragDocumentChunks = pgTable('rag_document_chunks', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  documentId: uuid('document_id')
+    .notNull()
+    .references(() => ragDocuments.id, { onDelete: 'cascade' }),
+  organizationId: orgIdCol(),
+  text: text('text').notNull(),
+  embedding: pgVector('embedding').notNull(),
+  chunkIndex: integer('chunk_index').notNull(),
+}, (table) => ({
+  orgIdx: index('idx_rag_document_chunks_organization_id').on(table.organizationId),
+  docIdx: index('idx_rag_document_chunks_document_id').on(table.documentId),
+}));
+

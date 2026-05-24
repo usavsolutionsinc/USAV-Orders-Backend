@@ -24,7 +24,7 @@ export function OrderIdFieldBlock({
       externalLabel={/^\d{3}-\d+-\d+$/.test(orderId) ? 'Open Amazon order in Seller Central in new tab' : 'Open Ecwid order in new tab'}
       headerAccessory={
         accountSourceLabel ? (
-          <span className="text-[10px] font-black tracking-wide text-blue-600">
+          <span className="text-micro font-black tracking-wide text-blue-600">
             {accountSourceLabel}
           </span>
         ) : null

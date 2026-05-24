@@ -139,17 +139,17 @@ function CurrentGoalEntry({
     >
       <div className="flex items-center justify-between gap-2">
         <div className="flex items-center gap-2 min-w-0">
-          <div className={`h-5 w-5 rounded-sm ${colors.light} flex items-center justify-center text-[9px] font-black ${colors.text}`}>
+          <div className={`h-5 w-5 rounded-sm ${colors.light} flex items-center justify-center text-eyebrow font-black ${colors.text}`}>
             {row.name[0]}
           </div>
           <div className="min-w-0">
-            <p className="truncate text-[11px] font-bold text-slate-900">{row.name}</p>
-            <p className="truncate text-[9px] font-medium uppercase tracking-[0.12em] text-slate-400">
+            <p className="truncate text-caption font-bold text-slate-900">{row.name}</p>
+            <p className="truncate text-eyebrow font-medium uppercase tracking-[0.12em] text-slate-400">
               {row.station}
             </p>
           </div>
         </div>
-        <span className={`text-[9px] font-black uppercase tracking-widest ${statusDisplay.className}`}>
+        <span className={`text-eyebrow font-black uppercase tracking-widest ${statusDisplay.className}`}>
           {statusDisplay.label}
         </span>
       </div>
@@ -170,7 +170,7 @@ function CurrentGoalEntry({
                 e.stopPropagation();
                 setIsEditing(true);
               }}
-              className="flex items-center gap-0.5 text-[10px] font-black tabular-nums text-slate-600 transition-colors hover:text-blue-600"
+              className="flex items-center gap-0.5 text-micro font-black tabular-nums text-slate-600 transition-colors hover:text-blue-600"
             >
               <span>{row.today_count}</span>
               <span className="text-slate-300">/</span>
@@ -180,7 +180,7 @@ function CurrentGoalEntry({
             </button>
           ) : (
             <div className="flex items-center gap-1">
-              <span className="text-[10px] font-black tabular-nums text-slate-400">{row.today_count}/</span>
+              <span className="text-micro font-black tabular-nums text-slate-400">{row.today_count}/</span>
               <input
                 ref={inputRef}
                 type="text"
@@ -199,7 +199,7 @@ function CurrentGoalEntry({
                   }
                 }}
                 disabled={isSaving}
-                className="w-8 border-b-2 border-blue-500 bg-blue-50/50 py-0 text-center text-[10px] font-black tabular-nums text-blue-700 outline-none"
+                className="w-8 border-b-2 border-blue-500 bg-blue-50/50 py-0 text-center text-micro font-black tabular-nums text-blue-700 outline-none"
               />
               {isSaving && (
                 <Loader2 className="absolute -right-4 h-2.5 w-2.5 animate-spin text-blue-500" />
@@ -330,7 +330,7 @@ export function GoalsSidebarPanel() {
         <section className="space-y-2">
           <div className="flex items-center justify-between px-1">
             <p className={sectionLabel}>Current Goals</p>
-            <span className="text-[10px] font-semibold uppercase tracking-[0.12em] text-gray-400">
+            <span className="text-micro font-semibold uppercase tracking-[0.12em] text-gray-400">
               {filteredRows.length}
             </span>
           </div>

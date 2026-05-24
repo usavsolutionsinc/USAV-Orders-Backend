@@ -169,7 +169,7 @@ export function OperationsLogSection() {
       {/* Results */}
       <div className="rounded-xl border border-gray-200 bg-white overflow-hidden">
         <table className="w-full text-sm">
-          <thead className="bg-gray-50 text-left text-[11px] uppercase tracking-wider text-gray-500">
+          <thead className="bg-gray-50 text-left text-caption uppercase tracking-wider text-gray-500">
             <tr>
               <th className="px-3 py-2">When</th>
               <th className="px-3 py-2">Source</th>
@@ -195,7 +195,7 @@ export function OperationsLogSection() {
                   {new Date(row.created_at).toLocaleString()}
                 </td>
                 <td className="px-3 py-2">
-                  <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${KIND_BADGE[row.kind] ?? 'bg-gray-100 text-gray-700'}`}>
+                  <span className={`rounded-full px-2 py-0.5 text-micro font-bold ${KIND_BADGE[row.kind] ?? 'bg-gray-100 text-gray-700'}`}>
                     {row.kind}
                   </span>
                 </td>
@@ -204,16 +204,16 @@ export function OperationsLogSection() {
                     {row.actor_name ?? <span className="text-gray-400">—</span>}
                   </div>
                   {row.actor_role && (
-                    <div className="text-[10px] text-gray-400">{row.actor_role}</div>
+                    <div className="text-micro text-gray-400">{row.actor_role}</div>
                   )}
                   {row.station && (
-                    <div className="text-[10px] font-mono text-gray-400">@ {row.station}</div>
+                    <div className="text-micro font-mono text-gray-400">@ {row.station}</div>
                   )}
                 </td>
                 <td className="px-3 py-2 text-xs font-mono text-gray-800">{row.action}</td>
                 <td className="px-3 py-2 text-xs">
                   {row.entity_type && (
-                    <div className="text-[10px] uppercase tracking-wider text-gray-400">
+                    <div className="text-micro uppercase tracking-wider text-gray-400">
                       {row.entity_type}
                     </div>
                   )}
@@ -221,17 +221,17 @@ export function OperationsLogSection() {
                     <div className="font-mono text-gray-700">{row.entity_id}</div>
                   )}
                 </td>
-                <td className="px-3 py-2 text-[11px] text-gray-500 max-w-[300px]">
+                <td className="px-3 py-2 text-caption text-gray-500 max-w-[300px]">
                   {row.detail_value && (
                     <div className="font-mono truncate" title={row.detail_value}>
                       {row.detail_value}
                     </div>
                   )}
                   {row.scan_ref && (
-                    <div className="text-[10px] text-gray-400 font-mono">scan: {row.scan_ref}</div>
+                    <div className="text-micro text-gray-400 font-mono">scan: {row.scan_ref}</div>
                   )}
                   {row.metadata && typeof row.metadata === 'object' && Object.keys(row.metadata).length > 0 && (
-                    <div className="text-[10px] text-gray-400 font-mono truncate" title={JSON.stringify(row.metadata)}>
+                    <div className="text-micro text-gray-400 font-mono truncate" title={JSON.stringify(row.metadata)}>
                       {JSON.stringify(row.metadata)}
                     </div>
                   )}

@@ -129,7 +129,7 @@ export function GoalsAnalyticsTab() {
     <section className="flex h-full min-h-0 w-full flex-col overflow-hidden bg-gray-50">
       <header className="flex flex-wrap items-center justify-between gap-3 border-b border-gray-200 bg-white px-6 py-4">
         <div className="min-w-0">
-          <p className="text-[10px] font-bold uppercase tracking-widest text-gray-500">
+          <p className="text-micro font-bold uppercase tracking-widest text-gray-500">
             {staffSummary.role} · {staffSummary.station}
           </p>
           <h2 className="mt-0.5 truncate text-lg font-bold text-gray-900">{staffSummary.name}</h2>
@@ -140,7 +140,7 @@ export function GoalsAnalyticsTab() {
               key={option.value}
               type="button"
               onClick={() => setRangeFilter(option.value)}
-              className={`rounded-md px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wider transition ${
+              className={`rounded-md px-2.5 py-1 text-micro font-semibold uppercase tracking-wider transition ${
                 rangeFilter === option.value
                   ? 'bg-blue-600 text-white'
                   : 'bg-blue-50 text-blue-700 hover:bg-blue-100'
@@ -152,7 +152,7 @@ export function GoalsAnalyticsTab() {
           <select
             value={stationFilter}
             onChange={(e) => setStationFilter(e.target.value as StationFilter)}
-            className="ml-2 rounded-md border border-gray-300 px-2 py-1 text-[11px]"
+            className="ml-2 rounded-md border border-gray-300 px-2 py-1 text-caption"
           >
             <option value="ALL">All stations</option>
             <option value="TECH">Tech</option>
@@ -187,7 +187,7 @@ export function GoalsAnalyticsTab() {
           </div>
 
           <div className="rounded-xl border border-gray-200 bg-white p-4">
-            <p className="text-[10px] font-bold uppercase tracking-widest text-gray-500">Trend</p>
+            <p className="text-micro font-bold uppercase tracking-widest text-gray-500">Trend</p>
             <div className="mt-3 flex items-end gap-2">
               {[...staffSummary.recent].reverse().map((entry) => {
                 const metrics = getProgress(entry.actual, entry.goal);
@@ -202,7 +202,7 @@ export function GoalsAnalyticsTab() {
                         title={`${entry.logged_date}: ${entry.actual}/${entry.goal}`}
                       />
                     </div>
-                    <span className="text-[9px] font-medium text-gray-400">
+                    <span className="text-eyebrow font-medium text-gray-400">
                       {formatShortDate(entry.logged_date).split(' ')[1]}
                     </span>
                   </div>
@@ -212,7 +212,7 @@ export function GoalsAnalyticsTab() {
           </div>
 
           <div className="rounded-xl border border-gray-200 bg-white">
-            <div className="grid grid-cols-[1fr_80px_80px_100px] gap-x-3 border-b border-gray-200 px-4 py-2.5 text-[10px] font-bold uppercase tracking-widest text-gray-500">
+            <div className="grid grid-cols-[1fr_80px_80px_100px] gap-x-3 border-b border-gray-200 px-4 py-2.5 text-micro font-bold uppercase tracking-widest text-gray-500">
               <p>Date</p>
               <p className="text-right">Actual</p>
               <p className="text-right">Goal</p>
@@ -224,7 +224,7 @@ export function GoalsAnalyticsTab() {
               return (
                 <div
                   key={entry.logged_date}
-                  className="grid grid-cols-[1fr_80px_80px_100px] gap-x-3 border-b border-gray-100 px-4 py-2.5 text-[12px] last:border-b-0"
+                  className="grid grid-cols-[1fr_80px_80px_100px] gap-x-3 border-b border-gray-100 px-4 py-2.5 text-label last:border-b-0"
                 >
                   <p className="text-gray-700">{formatShortDate(entry.logged_date)}</p>
                   <p className="text-right tabular-nums text-gray-900">{entry.actual}</p>
@@ -253,9 +253,9 @@ function DetailCard({
 }) {
   return (
     <div className="rounded-xl border border-gray-200 bg-white p-3">
-      <p className="text-[10px] font-bold uppercase tracking-widest text-gray-500">{label}</p>
-      <div className="mt-1 text-[15px] font-bold text-gray-900">{value}</div>
-      {hint ? <p className="mt-0.5 text-[10px] text-gray-500">{hint}</p> : null}
+      <p className="text-micro font-bold uppercase tracking-widest text-gray-500">{label}</p>
+      <div className="mt-1 text-base font-bold text-gray-900">{value}</div>
+      {hint ? <p className="mt-0.5 text-micro text-gray-500">{hint}</p> : null}
     </div>
   );
 }

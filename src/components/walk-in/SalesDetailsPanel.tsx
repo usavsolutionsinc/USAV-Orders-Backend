@@ -48,7 +48,7 @@ export function SalesDetailsPanel({
             <p className="text-xl font-black text-gray-900 tracking-tight leading-none truncate">
               {sale.customer_name || 'Walk-In Customer'}
             </p>
-            <p className="text-[10px] font-bold text-emerald-600 uppercase tracking-widest mt-1">
+            <p className="text-micro font-bold text-emerald-600 uppercase tracking-widest mt-1">
               {sale.status === 'completed' ? 'Sale Complete' : sale.status}
             </p>
           </div>
@@ -73,7 +73,7 @@ export function SalesDetailsPanel({
       <div className="flex-1 overflow-y-auto p-6 space-y-6">
         {/* Line Items */}
         <section>
-          <h3 className="text-[10px] font-black uppercase tracking-wider text-gray-500 mb-3 border-b border-gray-200 pb-2">
+          <h3 className="text-micro font-black uppercase tracking-wider text-gray-500 mb-3 border-b border-gray-200 pb-2">
             Items
           </h3>
           {lineItems.length === 0 ? (
@@ -86,18 +86,18 @@ export function SalesDetailsPanel({
                   className="flex items-center justify-between rounded-lg border border-gray-100 bg-gray-50/60 px-3 py-2"
                 >
                   <div className="min-w-0 flex-1">
-                    <p className="text-[12px] font-bold text-gray-900 truncate">
+                    <p className="text-label font-bold text-gray-900 truncate">
                       {item.name || 'Item'}
                     </p>
                     {item.sku && (
-                      <p className="text-[10px] font-mono text-gray-500">{item.sku}</p>
+                      <p className="text-micro font-mono text-gray-500">{item.sku}</p>
                     )}
                   </div>
                   <div className="text-right shrink-0 ml-3">
-                    <p className="text-[11px] font-black text-gray-900">
+                    <p className="text-caption font-black text-gray-900">
                       {formatCentsToDollars(item.price)}
                     </p>
-                    <p className="text-[9px] font-bold text-gray-400">
+                    <p className="text-eyebrow font-bold text-gray-400">
                       Qty: {item.quantity}
                     </p>
                   </div>
@@ -109,7 +109,7 @@ export function SalesDetailsPanel({
 
         {/* Order Summary */}
         <section>
-          <h3 className="text-[10px] font-black uppercase tracking-wider text-gray-500 mb-3 border-b border-gray-200 pb-2">
+          <h3 className="text-micro font-black uppercase tracking-wider text-gray-500 mb-3 border-b border-gray-200 pb-2">
             Order Summary
           </h3>
           <div className="space-y-2">
@@ -136,7 +136,7 @@ export function SalesDetailsPanel({
 
         {/* Customer Info */}
         <section>
-          <h3 className="text-[10px] font-black uppercase tracking-wider text-gray-500 mb-3 border-b border-gray-200 pb-2">
+          <h3 className="text-micro font-black uppercase tracking-wider text-gray-500 mb-3 border-b border-gray-200 pb-2">
             Customer
           </h3>
           <div className="space-y-3">
@@ -161,7 +161,7 @@ export function SalesDetailsPanel({
 
         {/* Payment Info */}
         <section>
-          <h3 className="text-[10px] font-black uppercase tracking-wider text-gray-500 mb-3 border-b border-gray-200 pb-2">
+          <h3 className="text-micro font-black uppercase tracking-wider text-gray-500 mb-3 border-b border-gray-200 pb-2">
             Payment
           </h3>
           <div className="space-y-3">
@@ -189,7 +189,7 @@ export function SalesDetailsPanel({
 
         {/* Record */}
         <section>
-          <h3 className="text-[10px] font-black uppercase tracking-wider text-gray-500 mb-3 border-b border-gray-200 pb-2">
+          <h3 className="text-micro font-black uppercase tracking-wider text-gray-500 mb-3 border-b border-gray-200 pb-2">
             Record
           </h3>
           <div className="space-y-3">

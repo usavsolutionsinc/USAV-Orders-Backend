@@ -116,18 +116,18 @@ export function AdminLogsTab(_props: AdminLogsTabProps = {}) {
         <div className="mx-auto max-w-3xl space-y-5">
           <header className="flex items-start justify-between gap-3">
             <div className="min-w-0">
-              <p className="text-[10px] font-bold uppercase tracking-widest text-gray-500">
+              <p className="text-micro font-bold uppercase tracking-widest text-gray-500">
                 {event.kind} event
               </p>
               <h2 className="mt-0.5 break-words text-lg font-bold text-gray-900">
                 {event.action}
               </h2>
-              <p className="mt-0.5 break-all font-mono text-[11px] text-gray-400">
+              <p className="mt-0.5 break-all font-mono text-caption text-gray-400">
                 {event.event_id}
               </p>
             </div>
             <span
-              className={`inline-flex flex-shrink-0 rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider ${
+              className={`inline-flex flex-shrink-0 rounded-full px-2.5 py-1 text-micro font-bold uppercase tracking-wider ${
                 event.kind === 'AUDIT'
                   ? 'bg-blue-50 text-blue-700'
                   : 'bg-purple-50 text-purple-700'
@@ -151,14 +151,14 @@ export function AdminLogsTab(_props: AdminLogsTabProps = {}) {
 
           {(event.detail_value || event.detail_route) && (
             <div className="rounded-xl border border-gray-200 bg-white p-4">
-              <p className="text-[10px] font-bold uppercase tracking-widest text-gray-500">Detail</p>
+              <p className="text-micro font-bold uppercase tracking-widest text-gray-500">Detail</p>
               {event.detail_value ? (
-                <p className="mt-1 break-words text-[13px] text-gray-900">{event.detail_value}</p>
+                <p className="mt-1 break-words text-sm text-gray-900">{event.detail_value}</p>
               ) : null}
               {event.detail_route ? (
                 <a
                   href={event.detail_route}
-                  className="mt-2 inline-block text-[12px] font-semibold text-blue-600 hover:underline"
+                  className="mt-2 inline-block text-label font-semibold text-blue-600 hover:underline"
                 >
                   Open route →
                 </a>
@@ -168,8 +168,8 @@ export function AdminLogsTab(_props: AdminLogsTabProps = {}) {
 
           {event.notes ? (
             <div className="rounded-xl border border-gray-200 bg-white p-4">
-              <p className="text-[10px] font-bold uppercase tracking-widest text-gray-500">Notes</p>
-              <p className="mt-1 whitespace-pre-wrap break-words text-[13px] text-gray-900">
+              <p className="text-micro font-bold uppercase tracking-widest text-gray-500">Notes</p>
+              <p className="mt-1 whitespace-pre-wrap break-words text-sm text-gray-900">
                 {event.notes}
               </p>
             </div>
@@ -184,8 +184,8 @@ export function AdminLogsTab(_props: AdminLogsTabProps = {}) {
 
           {event.metadata && Object.keys(event.metadata).length > 0 ? (
             <div className="rounded-xl border border-gray-200 bg-white p-4">
-              <p className="text-[10px] font-bold uppercase tracking-widest text-gray-500">Metadata</p>
-              <pre className="mt-2 overflow-x-auto rounded-lg bg-gray-50 p-3 text-[11px] text-gray-800">
+              <p className="text-micro font-bold uppercase tracking-widest text-gray-500">Metadata</p>
+              <pre className="mt-2 overflow-x-auto rounded-lg bg-gray-50 p-3 text-caption text-gray-800">
                 {JSON.stringify(event.metadata, null, 2)}
               </pre>
             </div>
@@ -199,8 +199,8 @@ export function AdminLogsTab(_props: AdminLogsTabProps = {}) {
 function DetailCard({ label, value }: { label: string; value: React.ReactNode }) {
   return (
     <div className="rounded-xl border border-gray-200 bg-white p-3">
-      <p className="text-[10px] font-bold uppercase tracking-widest text-gray-500">{label}</p>
-      <div className="mt-1 break-words text-[13px] font-semibold text-gray-900">{value}</div>
+      <p className="text-micro font-bold uppercase tracking-widest text-gray-500">{label}</p>
+      <div className="mt-1 break-words text-sm font-semibold text-gray-900">{value}</div>
     </div>
   );
 }

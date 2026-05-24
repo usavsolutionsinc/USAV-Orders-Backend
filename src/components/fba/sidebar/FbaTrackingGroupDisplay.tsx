@@ -60,10 +60,10 @@ export function FbaTrackingGroupDisplay({
         ) : (
           <div className="flex items-center gap-1.5 text-blue-500">
             <MapPin className="h-3 w-3" />
-            <span className="font-mono text-[11px] font-black">No tracking</span>
+            <span className="font-mono text-caption font-black">No tracking</span>
           </div>
         )}
-        <span className="ml-auto shrink-0 text-[10px] font-black tabular-nums text-blue-400/80">
+        <span className="ml-auto shrink-0 text-micro font-black tabular-nums text-blue-400/80">
           {items.length} SKU{items.length !== 1 ? 's' : ''} · {totalQty} units
         </span>
       </div>

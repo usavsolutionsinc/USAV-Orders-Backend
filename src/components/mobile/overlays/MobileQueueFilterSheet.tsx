@@ -59,7 +59,7 @@ export function MobileQueueFilterSheet({
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center justify-between gap-3 border-b border-gray-100 px-4 py-3">
-              <h2 id="queue-filter-sheet-title" className="text-[13px] font-black uppercase tracking-[0.18em] text-gray-900">
+              <h2 id="queue-filter-sheet-title" className="text-sm font-black uppercase tracking-[0.18em] text-gray-900">
                 {title}
               </h2>
               <button

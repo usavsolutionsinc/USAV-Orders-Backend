@@ -2,19 +2,26 @@
 
 import { useEffect, useState } from 'react';
 
+const STRIP_HEIGHT = 36;
+const STRIP_BACKGROUND = '#2d2d2d'; // medium-dark neutral grey
+const MAC_TRAFFIC_LIGHTS_INSET = 78;
+
 /**
- * Invisible draggable strip pinned to the top of the window. Only mounts
+ * Visible draggable strip pinned to the top of the window. Only mounts
  * inside the Electron shell — in a browser tab it returns null.
  *
- * The BrowserWindow uses `titleBarStyle: 'hiddenInset'` (no native title bar),
- * which means content reaches y=0 with no built-in drag region. This strip
- * provides one. macOS draws the traffic-light buttons on top, so we leave a
- * gap on the left to keep them clickable.
+ * Renders as a plain black band across the full window width with no text
+ * or controls; its only job is to give the user something to grab when they
+ * want to move the window. On macOS it leaves room on the left for the
+ * traffic-light buttons (which the OS paints on top of the strip).
+ *
+ * Body content is pushed down by the strip's height while this is mounted
+ * so the app's first row doesn't slide under the strip and lose its top
+ * edge. The padding is removed on unmount.
  *
  * `WebkitAppRegion: 'drag'` intercepts mousedown for window movement. The
  * element MUST receive pointer events for that to work — `pointer-events: none`
- * silently disables the drag region. Any clickable UI rendered into the top
- * 28px must opt out individually with `WebkitAppRegion: 'no-drag'`.
+ * silently disables the drag region.
  */
 export function ElectronDragStrip() {
   const [isElectron, setIsElectron] = useState(false);
@@ -28,6 +35,19 @@ export function ElectronDragStrip() {
     );
     setIsElectron(electron);
     setIsMac(/Mac|iPhone|iPod|iPad/.test(navigator.platform));
+
+    if (!electron) return;
+
+    // Tag <html> so a single CSS rule in globals.css can push the body down
+    // by the strip height with `!important`, defeating React's inline body
+    // `style={{ padding: 0 }}` without us having to fight it from JS.
+    document.documentElement.classList.add('electron-shell');
+    document.documentElement.style.setProperty('--electron-titlebar-height', `${STRIP_HEIGHT}px`);
+
+    return () => {
+      document.documentElement.classList.remove('electron-shell');
+      document.documentElement.style.removeProperty('--electron-titlebar-height');
+    };
   }, []);
 
   if (!isElectron) return null;
@@ -38,14 +58,18 @@ export function ElectronDragStrip() {
       style={{
         position: 'fixed',
         top: 0,
-        // Leave room for the macOS traffic-light buttons (~78px), otherwise
-        // the drag region swallows their clicks.
-        left: isMac ? 78 : 0,
+        left: 0,
         right: 0,
-        height: 28,
+        height: STRIP_HEIGHT,
+        background: STRIP_BACKGROUND,
+        // macOS paints the traffic lights on top of this strip; we still want
+        // the drag region to span edge-to-edge so the strip looks like a
+        // single flat black band. The OS-level traffic-light hit areas
+        // intercept clicks before our drag region sees them.
+        paddingLeft: isMac ? MAC_TRAFFIC_LIGHTS_INSET : 0,
+        zIndex: 999999,
         // @ts-expect-error -- WebkitAppRegion is an Electron-only CSS prop
         WebkitAppRegion: 'drag',
-        zIndex: 999999,
       }}
     />
   );

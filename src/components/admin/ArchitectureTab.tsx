@@ -210,7 +210,7 @@ export function ArchitectureTab() {
               {activeDiagram?.title ?? 'Architecture'}
             </h2>
             {activeDiagram?.description ? (
-              <p className="mt-0.5 text-[12px]" style={{ color: palette.textMuted }}>
+              <p className="mt-0.5 text-label" style={{ color: palette.textMuted }}>
                 {activeDiagram.description}
               </p>
             ) : null}
@@ -243,16 +243,16 @@ export function ArchitectureTab() {
               }}
             >
               <p className="font-semibold">Diagrams haven&apos;t been generated yet.</p>
-              <p className="mt-2 text-[13px]" style={{ color: palette.textMuted }}>
+              <p className="mt-2 text-sm" style={{ color: palette.textMuted }}>
                 {data.hint || data.reason}
               </p>
               <pre
-                className="mt-3 overflow-x-auto rounded-md p-3 text-[12px]"
+                className="mt-3 overflow-x-auto rounded-md p-3 text-label"
                 style={{ background: palette.surface, color: palette.text }}
               >
                 python3 ~/.hermes-usav/skills/software-development/codebase-visualizer/scripts/generate.py
               </pre>
-              <p className="mt-2 text-[12px]" style={{ color: palette.textMuted }}>
+              <p className="mt-2 text-label" style={{ color: palette.textMuted }}>
                 The post-commit git hook runs this automatically after every commit
                 that touches source files.
               </p>
@@ -263,12 +263,12 @@ export function ArchitectureTab() {
             <div className="flex h-full w-full items-center justify-center">
               <div className="flex max-w-xs flex-col items-center gap-3 text-center">
                 <p
-                  className="text-[13px] font-bold"
+                  className="text-sm font-bold"
                   style={{ color: palette.text }}
                 >
                   Pick a diagram
                 </p>
-                <p className="text-[11px]" style={{ color: palette.textMuted }}>
+                <p className="text-caption" style={{ color: palette.textMuted }}>
                   Select a diagram from the left to view it.
                 </p>
               </div>
@@ -287,7 +287,7 @@ export function ArchitectureTab() {
                   }}
                 >
                   <p className="font-semibold">Render error</p>
-                  <pre className="mt-1 whitespace-pre-wrap text-[11px]">{renderError}</pre>
+                  <pre className="mt-1 whitespace-pre-wrap text-caption">{renderError}</pre>
                 </div>
               )}
               <div
@@ -304,7 +304,7 @@ export function ArchitectureTab() {
               >
                 <div ref={targetRef} className="mermaid-target" />
               </div>
-              <p className="mt-3 text-[11px]" style={{ color: palette.textMuted }}>
+              <p className="mt-3 text-caption" style={{ color: palette.textMuted }}>
                 Click nodes with file paths to open them in VS Code.
               </p>
             </div>
@@ -338,7 +338,7 @@ function PillButton({
       onClick={onClick}
       disabled={disabled}
       title={title}
-      className="rounded-md px-3 py-1.5 text-[12px] font-medium transition-colors disabled:opacity-50"
+      className="rounded-md px-3 py-1.5 text-label font-medium transition-colors disabled:opacity-50"
       style={{
         background: accent ? palette.accent : palette.bg,
         color: accent ? '#ffffff' : palette.text,

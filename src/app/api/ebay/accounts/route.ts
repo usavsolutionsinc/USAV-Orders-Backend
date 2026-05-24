@@ -1,14 +1,15 @@
 import { NextResponse } from 'next/server';
-import pool from '@/lib/db';
 import { withAuth } from '@/lib/auth/withAuth';
+import { tenantQuery } from '@/lib/tenancy/db';
 
 /**
  * GET /api/ebay/accounts
- * Get all eBay accounts with their status
+ * Get all eBay accounts with their status for the current tenant organization
  */
-export const GET = withAuth(async () => {
+export const GET = withAuth(async (req, ctx) => {
   try {
-    const result = await pool.query(
+    const result = await tenantQuery(
+      ctx.organizationId,
       `SELECT 
         id, 
         account_name, 
@@ -20,7 +21,9 @@ export const GET = withAuth(async () => {
         marketplace_id,
         platform
       FROM ebay_accounts 
-      ORDER BY account_name`
+      WHERE organization_id = $1
+      ORDER BY account_name`,
+      [ctx.organizationId]
     );
 
     return NextResponse.json({ 
@@ -39,9 +42,9 @@ export const GET = withAuth(async () => {
 
 /**
  * PUT /api/ebay/accounts
- * Update an eBay account (e.g., toggle active status)
+ * Update an eBay account (e.g., toggle active status) for the current tenant organization
  */
-export const PUT = withAuth(async (req: Request) => {
+export const PUT = withAuth(async (req, ctx) => {
   try {
     const body = await req.json();
     const { id, is_active } = body;
@@ -53,10 +56,18 @@ export const PUT = withAuth(async (req: Request) => {
       );
     }
 
-    await pool.query(
-      'UPDATE ebay_accounts SET is_active = $1, updated_at = NOW() WHERE id = $2',
-      [is_active, id]
+    const result = await tenantQuery(
+      ctx.organizationId,
+      'UPDATE ebay_accounts SET is_active = $1, updated_at = NOW() WHERE id = $2 AND organization_id = $3',
+      [is_active, id, ctx.organizationId]
     );
+
+    if (result.rowCount === 0) {
+      return NextResponse.json(
+        { success: false, error: 'Account not found or access denied' },
+        { status: 404 }
+      );
+    }
 
     return NextResponse.json({ 
       success: true,
@@ -70,3 +81,4 @@ export const PUT = withAuth(async (req: Request) => {
     );
   }
 }, { permission: 'integrations.ebay' });
+

@@ -130,11 +130,11 @@ export function SkuLocationFinder() {
                         {h.sku}
                       </div>
                       {h.product_title && (
-                        <div className="mt-0.5 line-clamp-1 text-[11px] text-gray-600">
+                        <div className="mt-0.5 line-clamp-1 text-caption text-gray-600">
                           {h.product_title}
                         </div>
                       )}
-                      <div className="mt-0.5 text-[10px] text-gray-400">
+                      <div className="mt-0.5 text-micro text-gray-400">
                         {h.bin_count} bin{h.bin_count === 1 ? '' : 's'} ·{' '}
                         {h.total_qty} unit{h.total_qty === 1 ? '' : 's'}
                       </div>

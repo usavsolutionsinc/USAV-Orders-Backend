@@ -130,12 +130,12 @@ const OrdersQueueTableRow = memo(function OrdersQueueTableRow({
           ) : (
             <span className="h-2 w-2 rounded-full bg-yellow-400 shrink-0" title="Pending order" />
           )}
-          <div className="text-[12px] font-bold text-gray-900 truncate">
+          <div className="text-label font-bold text-gray-900 truncate">
             {record.product_title || 'Unknown Product'}
           </div>
         </div>
         <div className="mt-0.5 flex items-center gap-2">
-          <div className="text-[10px] font-bold text-gray-500 uppercase tracking-widest truncate min-w-0 flex-1">
+          <div className="text-micro font-bold text-gray-500 uppercase tracking-widest truncate min-w-0 flex-1">
             <span className={qtyClass}>{qty}</span>
             {' • '}
             <span className={String(record.condition || '').trim().toLowerCase() === 'new' ? 'text-yellow-600' : undefined}>

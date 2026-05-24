@@ -2,12 +2,56 @@
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "crons": [
     {
-      "path": "/api/cron/zoho/po-sync?mode=delta",
-      "schedule": "17 * * * *"
+      "path": "/api/qstash/shipping/sync-due?limit=100&concurrency=5",
+      "schedule": "0 */2 * * *"
     },
     {
-      "path": "/api/cron/zoho/po-sync?mode=full",
+      "path": "/api/qstash/google-sheets/transfer-orders",
+      "schedule": "30 15 * * 1-5"
+    },
+    {
+      "path": "/api/qstash/google-sheets/transfer-orders",
+      "schedule": "0 18 * * 1-5"
+    },
+    {
+      "path": "/api/qstash/google-sheets/transfer-orders",
+      "schedule": "0 22 * * 1-5"
+    },
+    {
+      "path": "/api/qstash/staff-goals/history",
+      "schedule": "30 0 * * *"
+    },
+    {
+      "path": "/api/qstash/shipping/sync-due?limit=200&concurrency=8&carriers=UPS,USPS,FEDEX",
+      "schedule": "0 0 * * 2-6"
+    },
+    {
+      "path": "/api/qstash/replenishment/sync",
+      "schedule": "0 13 * * *"
+    },
+    {
+      "path": "/api/cron/stock-alerts",
+      "schedule": "0 14 * * *"
+    },
+    {
+      "path": "/api/cron/refresh-reports",
       "schedule": "30 10 * * *"
+    },
+    {
+      "path": "/api/qstash/inventory/drift-check",
+      "schedule": "0 11 * * *"
+    },
+    {
+      "path": "/api/cron/replenishment-detect",
+      "schedule": "0 */4 * * *"
+    },
+    {
+      "path": "/api/qstash/ebay/refresh-tokens",
+      "schedule": "0 * * * *"
+    },
+    {
+      "path": "/api/qstash/google-photos/daily",
+      "schedule": "0 2 * * *"
     }
   ]
 }

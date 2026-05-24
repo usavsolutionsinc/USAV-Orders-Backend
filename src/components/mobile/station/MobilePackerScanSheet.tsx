@@ -334,10 +334,10 @@ export function MobilePackerScanSheet({
                 <p className="text-sm font-bold text-white mb-1">Camera unavailable</p>
                 <p className="text-xs text-gray-400 mb-4">{scanner.error || 'Enable camera access in settings.'}</p>
                 <div className="flex flex-col gap-2 w-full max-w-[200px]">
-                  <button type="button" onClick={() => scanner.startScanning()} className="h-11 px-5 rounded-xl bg-blue-600 text-white text-[11px] font-black uppercase tracking-wider active:bg-blue-700 transition-colors">
+                  <button type="button" onClick={() => scanner.startScanning()} className="h-11 px-5 rounded-xl bg-blue-600 text-white text-caption font-black uppercase tracking-wider active:bg-blue-700 transition-colors">
                     Try Again
                   </button>
-                  <button type="button" onClick={handleOpenManual} className="h-11 px-5 rounded-xl bg-white/10 text-white text-[11px] font-black uppercase tracking-wider active:bg-white/20 transition-colors">
+                  <button type="button" onClick={handleOpenManual} className="h-11 px-5 rounded-xl bg-white/10 text-white text-caption font-black uppercase tracking-wider active:bg-white/20 transition-colors">
                     Type Manually
                   </button>
                 </div>
@@ -393,7 +393,7 @@ export function MobilePackerScanSheet({
                   <button
                     type="button"
                     onClick={handleRescan}
-                    className="h-11 px-6 rounded-xl bg-white/15 text-white text-[11px] font-black uppercase tracking-wider active:bg-white/25 transition-colors"
+                    className="h-11 px-6 rounded-xl bg-white/15 text-white text-caption font-black uppercase tracking-wider active:bg-white/25 transition-colors"
                   >
                     Try Again
                   </button>
@@ -448,7 +448,7 @@ export function MobilePackerScanSheet({
                     </div>
 
                     {/* Product title */}
-                    <h3 className="text-[15px] font-black text-gray-900 leading-tight mb-3">
+                    <h3 className="text-base font-black text-gray-900 leading-tight mb-3">
                       {displayTitle || 'Unknown product'}
                     </h3>
 
@@ -479,7 +479,7 @@ export function MobilePackerScanSheet({
                       <button
                         type="button"
                         onClick={handleConfirm}
-                        className={`flex-1 h-[52px] rounded-2xl text-white text-[12px] font-black uppercase tracking-wider flex items-center justify-center gap-2 transition-colors ${
+                        className={`flex-1 h-[52px] rounded-2xl text-white text-label font-black uppercase tracking-wider flex items-center justify-center gap-2 transition-colors ${
                           isException
                             ? 'bg-amber-600 active:bg-amber-700'
                             : isFba
@@ -495,7 +495,7 @@ export function MobilePackerScanSheet({
                       <button
                         type="button"
                         onClick={handleRescan}
-                        className="h-[52px] px-5 rounded-2xl bg-gray-100 text-gray-700 text-[12px] font-black uppercase tracking-wider active:bg-gray-200 transition-colors"
+                        className="h-[52px] px-5 rounded-2xl bg-gray-100 text-gray-700 text-label font-black uppercase tracking-wider active:bg-gray-200 transition-colors"
                       >
                         Rescan
                       </button>
@@ -567,7 +567,7 @@ export function MobilePackerScanSheet({
                 <button
                   type="submit"
                   disabled={!manualValue.trim()}
-                  className="h-12 px-5 rounded-xl bg-emerald-600 text-white text-[11px] font-black uppercase tracking-wider disabled:opacity-40 active:bg-emerald-700 transition-colors"
+                  className="h-12 px-5 rounded-xl bg-emerald-600 text-white text-caption font-black uppercase tracking-wider disabled:opacity-40 active:bg-emerald-700 transition-colors"
                 >
                   Go
                 </button>

@@ -40,10 +40,10 @@ export function ProductLabelPreview({ sku, title, serialNumber, className = '' }
       <canvas ref={canvasRef} className="max-w-full" />
       <div className="mt-1 font-mono text-base font-black tracking-tight text-gray-900">{sku}</div>
       {title && (
-        <div className="mt-0.5 max-w-full truncate px-1 text-[11px] text-gray-500">{title}</div>
+        <div className="mt-0.5 max-w-full truncate px-1 text-caption text-gray-500">{title}</div>
       )}
       {serialNumber && (
-        <div className="mt-0.5 font-mono text-[10px] text-gray-500">SN: {serialNumber}</div>
+        <div className="mt-0.5 font-mono text-micro text-gray-500">SN: {serialNumber}</div>
       )}
     </div>
   );

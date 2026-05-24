@@ -99,13 +99,13 @@ export function MobileCartonSheet({ row, staffId, open, onClose }: MobileCartonS
               className={`h-2 w-2 shrink-0 rounded-full ${getStatusDotBg(row.workflow_status, qtyReceived, row.quantity_expected)}`}
               title={workflowLabel}
             />
-            <div className="line-clamp-2 text-[14px] font-bold text-gray-900">
+            <div className="line-clamp-2 text-sm font-bold text-gray-900">
               {productTitle}
             </div>
           </div>
 
           <div className="flex items-center gap-2 pl-4">
-            <span className="flex shrink-0 items-center gap-1 text-[11px] font-black uppercase tracking-widest">
+            <span className="flex shrink-0 items-center gap-1 text-caption font-black uppercase tracking-widest">
               <span
                 className={
                   qtyExpected > 1 && qtyReceived < qtyExpected
@@ -140,7 +140,7 @@ export function MobileCartonSheet({ row, staffId, open, onClose }: MobileCartonS
             <ReceivingPhotoStrip receivingId={receivingId} staffId={staffId} />
           </div>
         ) : (
-          <p className="rounded-2xl bg-amber-50 px-4 py-3 text-center text-[11px] font-semibold text-amber-700">
+          <p className="rounded-2xl bg-amber-50 px-4 py-3 text-center text-caption font-semibold text-amber-700">
             No package id yet — scan tracking from desktop first.
           </p>
         )}
@@ -154,7 +154,7 @@ export function MobileCartonSheet({ row, staffId, open, onClose }: MobileCartonS
             className="flex h-14 w-full items-center justify-center gap-3 rounded-2xl bg-blue-600 text-white shadow-sm transition-colors active:bg-blue-700"
           >
             <Camera className="h-6 w-6" />
-            <span className="text-[13px] font-black uppercase tracking-[0.18em]">
+            <span className="text-sm font-black uppercase tracking-[0.18em]">
               Take Photos
             </span>
           </Link>

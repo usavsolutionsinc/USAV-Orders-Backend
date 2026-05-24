@@ -32,9 +32,9 @@ export function AdminPickerRow({
     >
       {leading ? <div className="flex-shrink-0">{leading}</div> : null}
       <div className="min-w-0 flex-1">
-        <div className="truncate text-[13px] font-semibold text-gray-900">{title}</div>
+        <div className="truncate text-sm font-semibold text-gray-900">{title}</div>
         {subtitle ? (
-          <div className="truncate text-[10px] font-medium uppercase tracking-wider text-gray-500">
+          <div className="truncate text-micro font-medium uppercase tracking-wider text-gray-500">
             {subtitle}
           </div>
         ) : null}

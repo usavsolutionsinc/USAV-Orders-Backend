@@ -61,12 +61,12 @@ export function MobileReceivingCard({ item }: MobileReceivingCardProps) {
       {/* -- Header -- */}
       <div className="flex items-center justify-between mb-4 px-3">
         <div className="flex items-center gap-2">
-          <div className="flex items-center gap-1.5 text-[15px] font-black text-gray-900">
+          <div className="flex items-center gap-1.5 text-base font-black text-gray-900">
             <Package className="w-5 h-5 text-teal-600" />
             <span>{ago || 'Receiving'}</span>
           </div>
         </div>
-        <span className="inline-flex items-center rounded-lg border border-teal-200 px-3 py-2 text-[11px] font-black uppercase tracking-widest text-gray-900">
+        <span className="inline-flex items-center rounded-lg border border-teal-200 px-3 py-2 text-caption font-black uppercase tracking-widest text-gray-900">
           Receiving
         </span>
       </div>
@@ -75,17 +75,17 @@ export function MobileReceivingCard({ item }: MobileReceivingCardProps) {
       <div className="mb-4 px-3">
         <div className="mb-1.5 flex items-center justify-between gap-2">
           <div className="flex items-center gap-2 min-w-0">
-            <span className="text-[14px] font-black text-gray-900">{item.line_count || 1}</span>
-            <span className="text-[14px] font-black uppercase tracking-wider text-gray-500">-</span>
-            <span className="text-[14px] font-black uppercase truncate text-gray-900">
+            <span className="text-sm font-black text-gray-900">{item.line_count || 1}</span>
+            <span className="text-sm font-black uppercase tracking-wider text-gray-500">-</span>
+            <span className="text-sm font-black uppercase truncate text-gray-900">
               {workflowStatusTableLabel(item.workflow_status)}
             </span>
           </div>
-          <span className="text-[14px] font-mono font-black text-gray-900 px-1.5 py-0.5 rounded border border-gray-300">
+          <span className="text-sm font-mono font-black text-gray-900 px-1.5 py-0.5 rounded border border-gray-300">
             #{item.receiving_id}
           </span>
         </div>
-        <h4 className="text-[17px] font-black text-gray-900 leading-tight">
+        <h4 className="text-lg font-black text-gray-900 leading-tight">
           {item.tracking_number || 'Receiving Assignment'}
         </h4>
       </div>
@@ -93,10 +93,10 @@ export function MobileReceivingCard({ item }: MobileReceivingCardProps) {
       {/* -- Details block -- */}
       {(item.line_skus.length > 0 || item.carrier || item.qa_status) && (
         <div className="mb-4 mx-3 rounded-xl border border-teal-200 px-3 py-2.5">
-          <div className="text-[11px] font-black uppercase tracking-widest text-teal-700 mb-1">
+          <div className="text-caption font-black uppercase tracking-widest text-teal-700 mb-1">
             Receiving Details
           </div>
-          <p className="text-[15px] text-gray-900 break-words whitespace-pre-wrap">
+          <p className="text-base text-gray-900 break-words whitespace-pre-wrap">
             {[
               item.carrier ? `Carrier: ${item.carrier}` : null,
               item.qa_status ? `QA: ${item.qa_status}` : null,
@@ -109,10 +109,10 @@ export function MobileReceivingCard({ item }: MobileReceivingCardProps) {
       {/* -- Footer -- */}
       <div className="flex items-center gap-2 px-3 pt-2 border-t border-teal-200">
         <div className="min-w-0 flex-1">
-          <div className="text-[11px] font-black text-gray-900 truncate">
+          <div className="text-caption font-black text-gray-900 truncate">
             {item.assigned_tech_name || 'Receiving Queue'}
           </div>
-          <div className="text-[11px] text-gray-500 truncate">
+          <div className="text-caption text-gray-500 truncate">
             {workflowStatusTableLabel(item.workflow_status)}
           </div>
         </div>
@@ -121,7 +121,7 @@ export function MobileReceivingCard({ item }: MobileReceivingCardProps) {
         </span>
         <button
           onClick={(e) => { e.stopPropagation(); openReceiving(); }}
-          className="flex items-center gap-1 min-h-[44px] px-4 py-2 bg-teal-600 active:bg-teal-700 active:scale-95 text-white rounded-xl text-[11px] font-black uppercase tracking-widest transition-transform ml-auto"
+          className="flex items-center gap-1 min-h-[44px] px-4 py-2 bg-teal-600 active:bg-teal-700 active:scale-95 text-white rounded-xl text-caption font-black uppercase tracking-widest transition-transform ml-auto"
         >
           <ExternalLink className="w-3.5 h-3.5" />
           Open

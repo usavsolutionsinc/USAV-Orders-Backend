@@ -118,7 +118,7 @@ export default function StaffSelector({ role = 'all', selectedStaffId, onSelect,
                                             {labelOverrides?.[member.id] ?? member.name}
                                         </span>
                                         {role === 'all' ? (
-                                            <span className="ml-2 text-[9px] font-black uppercase tracking-wider text-gray-500">
+                                            <span className="ml-2 text-eyebrow font-black uppercase tracking-wider text-gray-500">
                                                 {member.role}
                                             </span>
                                         ) : null}

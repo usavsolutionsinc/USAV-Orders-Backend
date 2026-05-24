@@ -371,7 +371,7 @@ Shipped: ${result.packed_at ? formatDateTimePST(result.packed_at) : 'Not Shipped
                                                             {result.is_shipped ? 'Shipped' : 'Pending'}
                                                         </span>
                                                     </div>
-                                                    <p className="text-[9px] text-gray-500 font-semibold truncate">{result.product_title}</p>
+                                                    <p className="text-eyebrow text-gray-500 font-semibold truncate">{result.product_title}</p>
                                                     <p className={`${microBadge} font-mono text-gray-500 truncate`}>{result.shipping_tracking_number}</p>
                                                 </div>
                                             </button>
@@ -454,7 +454,7 @@ Shipped: ${result.packed_at ? formatDateTimePST(result.packed_at) : 'Not Shipped
                     </motion.div>
 
                     <motion.footer variants={itemVariants} className="mt-auto pt-4 border-t border-gray-200 opacity-30 text-center">
-                        <p className="text-[7px] font-mono uppercase tracking-[0.2em] text-gray-500">USAV SHIPPED</p>
+                        <p className="text-eyebrow font-mono uppercase tracking-[0.2em] text-gray-500">USAV SHIPPED</p>
                     </motion.footer>
             </div>
         </motion.div>

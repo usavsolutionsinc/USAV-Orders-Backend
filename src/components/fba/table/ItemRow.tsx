@@ -119,7 +119,7 @@ export function ItemRow({
                 <p className={T.itemTitle}>{item.display_title}</p>
               </div>
               <div className="mt-0.5 flex items-center gap-2">
-                <div className="min-w-0 flex-1 truncate text-[10px] font-bold uppercase tracking-widest text-gray-500">
+                <div className="min-w-0 flex-1 truncate text-micro font-bold uppercase tracking-widest text-gray-500">
                   <span
                     className={`tabular-nums ${item.expected_qty > 1 ? 'text-yellow-600' : ''}`}
                     title="Planned quantity"

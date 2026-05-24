@@ -50,17 +50,17 @@ export function ReceivingReturnBanner({
         >
           <div className="mt-1 h-1.5 w-1.5 flex-shrink-0 rounded-full bg-amber-500" />
           <div className="min-w-0 flex-1">
-            <p className="text-[9px] font-black uppercase tracking-wider text-amber-800">
+            <p className="text-eyebrow font-black uppercase tracking-wider text-amber-800">
               Return detected
             </p>
-            <p className="mt-0.5 truncate font-mono text-[10px] font-bold text-gray-900">
+            <p className="mt-0.5 truncate font-mono text-micro font-bold text-gray-900">
               {ret.serial_number}
             </p>
             {ret.sku && (
-              <p className="truncate text-[9px] font-bold text-gray-600">{ret.sku}</p>
+              <p className="truncate text-eyebrow font-bold text-gray-600">{ret.sku}</p>
             )}
             {ret.prior_status && (
-              <p className="text-[8px] font-black uppercase tracking-wider text-gray-400">
+              <p className="text-mini font-black uppercase tracking-wider text-gray-400">
                 prior: {ret.prior_status}
               </p>
             )}

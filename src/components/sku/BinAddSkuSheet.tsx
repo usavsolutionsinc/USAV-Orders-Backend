@@ -221,10 +221,10 @@ export function BinAddSkuSheet({
           {selected ? '←' : <X className="mx-auto h-4 w-4" />}
         </button>
         <div className="min-w-0 flex-1">
-          <p className="text-[10px] font-black uppercase tracking-[0.16em] text-slate-500">
+          <p className="text-micro font-black uppercase tracking-[0.16em] text-slate-500">
             Add to bin
           </p>
-          <p className="truncate font-mono text-[13px] font-black text-slate-900">
+          <p className="truncate font-mono text-sm font-black text-slate-900">
             {binBarcode}
           </p>
         </div>
@@ -261,7 +261,7 @@ export function BinAddSkuSheet({
               </p>
             )}
             {!debounced.trim() && (
-              <p className="px-2 py-8 text-center text-[11px] font-bold uppercase tracking-widest text-slate-400">
+              <p className="px-2 py-8 text-center text-caption font-bold uppercase tracking-widest text-slate-400">
                 Type a few characters to search
               </p>
             )}
@@ -286,18 +286,18 @@ export function BinAddSkuSheet({
                           {sku}
                         </p>
                         {row.product_title && (
-                          <p className="mt-1 line-clamp-2 text-[11px] leading-snug text-slate-500">
+                          <p className="mt-1 line-clamp-2 text-caption leading-snug text-slate-500">
                             {row.product_title}
                           </p>
                         )}
                       </div>
                       {row.source === 'stock' ? (
-                        <span className="shrink-0 rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-bold text-slate-700">
+                        <span className="shrink-0 rounded-full bg-slate-100 px-2 py-0.5 text-micro font-bold text-slate-700">
                           {row.stock ?? 0} on hand
                         </span>
                       ) : (
                         <span
-                          className="shrink-0 rounded-full bg-blue-100 px-2 py-0.5 text-[10px] font-bold text-blue-700"
+                          className="shrink-0 rounded-full bg-blue-100 px-2 py-0.5 text-micro font-bold text-blue-700"
                           title="Not yet in stock — will create the entry on first put"
                         >
                           Ecwid only
@@ -317,17 +317,17 @@ export function BinAddSkuSheet({
               {selected.sku}
             </p>
             {selected.product_title && (
-              <p className="mt-1 text-[11px] leading-snug text-slate-500">
+              <p className="mt-1 text-caption leading-snug text-slate-500">
                 {selected.product_title}
               </p>
             )}
-            <p className="mt-2 text-[10px] font-bold uppercase tracking-widest text-slate-400">
+            <p className="mt-2 text-micro font-bold uppercase tracking-widest text-slate-400">
               Currently {selected.stock ?? 0} total on hand
             </p>
           </div>
 
           <label className="mt-6 block">
-            <span className="text-[10px] font-black uppercase tracking-[0.16em] text-slate-500">
+            <span className="text-micro font-black uppercase tracking-[0.16em] text-slate-500">
               Add to this bin
             </span>
             <input

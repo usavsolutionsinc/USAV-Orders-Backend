@@ -189,7 +189,7 @@ export function MobilePackingConfirmCard({
             <button
               type="button"
               onClick={handleFbaConfirmPress}
-              className={`w-full h-[52px] rounded-2xl text-white text-[12px] font-black uppercase tracking-wider flex items-center justify-center gap-2 transition-colors ${
+              className={`w-full h-[52px] rounded-2xl text-white text-label font-black uppercase tracking-wider flex items-center justify-center gap-2 transition-colors ${
                 fbaIsShort ? 'bg-amber-600 active:bg-amber-700' : config.confirmBtn
               }`}
             >
@@ -201,7 +201,7 @@ export function MobilePackingConfirmCard({
             <button
               type="button"
               onClick={onReject}
-              className="w-full h-[48px] rounded-2xl bg-gray-100 text-gray-700 text-[12px] font-black uppercase tracking-wider active:bg-gray-200 transition-colors"
+              className="w-full h-[48px] rounded-2xl bg-gray-100 text-gray-700 text-label font-black uppercase tracking-wider active:bg-gray-200 transition-colors"
             >
               No, Rescan
             </button>
@@ -242,7 +242,7 @@ export function MobilePackingConfirmCard({
             {config.label}
           </span>
         </div>
-        <span className="text-[11px] font-mono font-black text-gray-700">
+        <span className="text-caption font-mono font-black text-gray-700">
           #{getLast4(order.orderId)}
         </span>
       </div>
@@ -259,7 +259,7 @@ export function MobilePackingConfirmCard({
         {displayShipBy && (
           <div className="flex items-center gap-3">
             <ShipByDate date={displayShipBy} showPrefix={false} showYear={false} />
-            <span className={`text-[13px] font-black tabular-nums ${getDaysLateTone(daysLate)}`}>
+            <span className={`text-sm font-black tabular-nums ${getDaysLateTone(daysLate)}`}>
               {daysLate > 0 ? `${daysLate}d late` : 'On time'}
             </span>
           </div>
@@ -277,10 +277,10 @@ export function MobilePackingConfirmCard({
             glance, with a quieter "Tracking" eyebrow above it. */}
         {order.tracking && (
           <div className="bg-gray-50 rounded-xl px-3 py-2.5 border border-gray-100">
-            <p className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mb-0.5">
+            <p className="text-micro font-black text-gray-400 uppercase tracking-[0.2em] mb-0.5">
               Tracking
             </p>
-            <p className="text-[15px] font-mono font-black text-gray-900 tabular-nums truncate">
+            <p className="text-base font-mono font-black text-gray-900 tabular-nums truncate">
               {order.tracking}
             </p>
           </div>
@@ -305,13 +305,13 @@ export function MobilePackingConfirmCard({
             {order.sku && (
               <div className="bg-gray-50 rounded-xl px-3 py-2.5 border border-gray-100">
                 <p className="text-xs font-black text-gray-400 uppercase tracking-wider mb-1">SKU</p>
-                <p className="text-[11px] font-mono font-bold text-gray-800 truncate">{getLast4(order.sku)}</p>
+                <p className="text-caption font-mono font-bold text-gray-800 truncate">{getLast4(order.sku)}</p>
               </div>
             )}
             {order.itemNumber && (
               <div className="bg-gray-50 rounded-xl px-3 py-2.5 border border-gray-100">
                 <p className="text-xs font-black text-gray-400 uppercase tracking-wider mb-1">Item #</p>
-                <p className="text-[11px] font-bold text-gray-800 truncate">{getLast4(order.itemNumber)}</p>
+                <p className="text-caption font-bold text-gray-800 truncate">{getLast4(order.itemNumber)}</p>
               </div>
             )}
           </div>
@@ -324,7 +324,7 @@ export function MobilePackingConfirmCard({
           <button
             type="button"
             onClick={onConfirm}
-            className={`w-full h-[52px] rounded-2xl text-white text-[12px] font-black uppercase tracking-wider flex items-center justify-center gap-2 transition-colors ${config.confirmBtn}`}
+            className={`w-full h-[52px] rounded-2xl text-white text-label font-black uppercase tracking-wider flex items-center justify-center gap-2 transition-colors ${config.confirmBtn}`}
           >
             <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
@@ -334,7 +334,7 @@ export function MobilePackingConfirmCard({
           <button
             type="button"
             onClick={onReject}
-            className="w-full h-[48px] rounded-2xl bg-gray-100 text-gray-700 text-[12px] font-black uppercase tracking-wider active:bg-gray-200 transition-colors"
+            className="w-full h-[48px] rounded-2xl bg-gray-100 text-gray-700 text-label font-black uppercase tracking-wider active:bg-gray-200 transition-colors"
           >
             No, Rescan
           </button>

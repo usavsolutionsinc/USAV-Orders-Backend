@@ -105,26 +105,26 @@ export function FbaFnskuScanToast({ pendingPlans, stationTheme }: FbaFnskuScanTo
           <div className="flex items-start gap-2">
             <Package className="mt-0.5 h-4 w-4 shrink-0 text-purple-600" />
             <div className="min-w-0 flex-1">
-              <p className="text-[10px] font-black uppercase tracking-[0.14em] text-purple-800">
+              <p className="text-micro font-black uppercase tracking-[0.14em] text-purple-800">
                 Station FNSKU scan
               </p>
-              <p className="mt-0.5 truncate font-mono text-[11px] font-black text-gray-900">
+              <p className="mt-0.5 truncate font-mono text-caption font-black text-gray-900">
                 {detail.fnsku}
               </p>
               {detail.productTitle ? (
-                <p className="mt-0.5 truncate text-[10px] text-gray-600">{detail.productTitle}</p>
+                <p className="mt-0.5 truncate text-micro text-gray-600">{detail.productTitle}</p>
               ) : null}
 
               {addedMsg ? (
-                <p className="mt-1.5 text-[10px] font-bold text-emerald-700">{addedMsg}</p>
+                <p className="mt-1.5 text-micro font-bold text-emerald-700">{addedMsg}</p>
               ) : pendingPlans.length === 0 ? (
-                <p className="mt-1.5 text-[10px] text-gray-500">No open plans to add to.</p>
+                <p className="mt-1.5 text-micro text-gray-500">No open plans to add to.</p>
               ) : pendingPlans.length === 1 ? (
                 <button
                   type="button"
                   onClick={handleAdd}
                   disabled={adding}
-                  className={`mt-1.5 flex items-center gap-1 rounded-full border border-purple-300 bg-white px-2.5 py-1 text-[9px] font-black uppercase tracking-[0.14em] text-purple-700 transition-colors hover:bg-purple-100 disabled:opacity-50 ${chrome.cardFocusRing}`}
+                  className={`mt-1.5 flex items-center gap-1 rounded-full border border-purple-300 bg-white px-2.5 py-1 text-eyebrow font-black uppercase tracking-[0.14em] text-purple-700 transition-colors hover:bg-purple-100 disabled:opacity-50 ${chrome.cardFocusRing}`}
                 >
                   {adding ? <Loader2 className="h-3 w-3 animate-spin" /> : null}
                   Add to {pendingPlans[0].shipment_ref || 'plan'}
@@ -134,7 +134,7 @@ export function FbaFnskuScanToast({ pendingPlans, stationTheme }: FbaFnskuScanTo
                   <select
                     value={selectedPlanId}
                     onChange={(e) => setSelectedPlanId(e.target.value)}
-                    className="rounded-lg border border-purple-200 bg-white px-2 py-1 text-[10px] font-bold text-gray-900 outline-none focus:border-purple-400"
+                    className="rounded-lg border border-purple-200 bg-white px-2 py-1 text-micro font-bold text-gray-900 outline-none focus:border-purple-400"
                   >
                     <option value="">Pick plan…</option>
                     {pendingPlans.map((p) => (
@@ -147,7 +147,7 @@ export function FbaFnskuScanToast({ pendingPlans, stationTheme }: FbaFnskuScanTo
                     type="button"
                     onClick={handleAdd}
                     disabled={adding || !selectedPlanId}
-                    className={`flex items-center gap-1 rounded-full border border-purple-300 bg-white px-2.5 py-1 text-[9px] font-black uppercase tracking-[0.14em] text-purple-700 transition-colors hover:bg-purple-100 disabled:opacity-40 ${chrome.cardFocusRing}`}
+                    className={`flex items-center gap-1 rounded-full border border-purple-300 bg-white px-2.5 py-1 text-eyebrow font-black uppercase tracking-[0.14em] text-purple-700 transition-colors hover:bg-purple-100 disabled:opacity-40 ${chrome.cardFocusRing}`}
                   >
                     {adding ? <Loader2 className="h-3 w-3 animate-spin" /> : 'Add'}
                   </button>

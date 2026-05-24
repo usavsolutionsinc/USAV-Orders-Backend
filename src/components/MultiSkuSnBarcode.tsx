@@ -507,8 +507,8 @@ export default function MultiSkuSnBarcode({ layout = 'vertical' }: MultiSkuSnBar
     const previewPanelEl = showPreviewPanel ? (
         isHorizontal && !previewIsReady ? (
             <div className="flex h-full min-h-[260px] flex-col items-center justify-center gap-2 border-t border-gray-200 bg-gray-50 px-6 py-10 text-center">
-                <span className="text-[10px] font-black uppercase tracking-[0.18em] text-gray-400">Live Preview</span>
-                <p className="text-[12px] font-semibold text-gray-400 max-w-[260px]">
+                <span className="text-micro font-black uppercase tracking-[0.18em] text-gray-400">Live Preview</span>
+                <p className="text-label font-semibold text-gray-400 max-w-[260px]">
                     {mode === 'sn-to-sku'
                         ? 'Scan a SKU and at least one serial to preview the log entry.'
                         : 'Scan or type a SKU to preview the label.'}
@@ -771,7 +771,7 @@ function ModeBanner({ mode, accent }: ModeBannerProps) {
             className={`flex items-center justify-between rounded-2xl bg-gradient-to-r ${accent.bannerFrom} ${accent.bannerTo} px-5 py-3 ring-1 ring-gray-200/60`}
         >
             <div className="flex items-center gap-3">
-                <span className={`rounded-lg px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.16em] ${accent.bannerTag}`}>
+                <span className={`rounded-lg px-2.5 py-1 text-micro font-bold uppercase tracking-[0.16em] ${accent.bannerTag}`}>
                     {modeLabel(mode)}
                 </span>
                 <span className={`text-sm font-semibold ${accent.bannerText}`}>{accent.tagline}</span>
@@ -913,7 +913,7 @@ function ProductContextCard({
             </div>
 
             <span className={`shrink-0 rounded-lg px-2.5 py-1 text-sm font-bold tabular-nums ring-1 ${stockClass}`}>
-                {stock || '0'} <span className="text-[10px] font-semibold uppercase tracking-wider">stock</span>
+                {stock || '0'} <span className="text-micro font-semibold uppercase tracking-wider">stock</span>
             </span>
         </section>
     );
@@ -953,7 +953,7 @@ function SerialScanCard({
                     Serial numbers
                 </h3>
                 {serialNumbers.length > 0 && (
-                    <span className={`rounded-md px-2 py-0.5 text-[11px] font-bold tabular-nums ${accent.chip}`}>
+                    <span className={`rounded-md px-2 py-0.5 text-caption font-bold tabular-nums ${accent.chip}`}>
                         {serialNumbers.length} added
                     </span>
                 )}
@@ -1003,7 +1003,7 @@ function SerialScanCard({
                     {serialNumbers.map((sn, idx) => (
                         <span
                             key={sn + idx}
-                            className="inline-flex items-center gap-1.5 rounded-lg bg-gray-100 px-2.5 py-1 font-mono text-[12px] font-semibold text-gray-700"
+                            className="inline-flex items-center gap-1.5 rounded-lg bg-gray-100 px-2.5 py-1 font-mono text-label font-semibold text-gray-700"
                         >
                             <span className="truncate max-w-[180px]">{sn}</span>
                             <button
@@ -1082,7 +1082,7 @@ function PreviewCardModern({
                     {mode === 'sn-to-sku' ? 'Review' : 'Live preview'}
                 </h3>
                 {!isPrintMode || mode === 'reprint' ? null : (
-                    <span className={`rounded-md px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider ${accent.chip}`}>
+                    <span className={`rounded-md px-2 py-0.5 text-micro font-bold uppercase tracking-wider ${accent.chip}`}>
                         Ready
                     </span>
                 )}
@@ -1096,7 +1096,7 @@ function PreviewCardModern({
                 <div className="mx-auto flex aspect-[2/1] w-full max-w-[420px] items-start gap-3 rounded-xl bg-white p-3 ring-1 ring-gray-200/50">
                     <div className="flex min-w-0 flex-1 flex-col justify-start gap-1">
                         {title ? (
-                            <p className="line-clamp-2 text-[11px] font-bold leading-tight text-gray-900">{title}</p>
+                            <p className="line-clamp-2 text-caption font-bold leading-tight text-gray-900">{title}</p>
                         ) : null}
                         <p className="font-mono text-sm font-bold tracking-tight text-gray-900 break-all">{uniqueSku}</p>
                     </div>
@@ -1112,11 +1112,11 @@ function PreviewCardModern({
             ) : (
                 <div className="space-y-2 rounded-xl bg-gray-50 p-5 ring-1 ring-gray-200/50">
                     <div>
-                        <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-gray-500">SKU</p>
+                        <p className="text-micro font-semibold uppercase tracking-[0.14em] text-gray-500">SKU</p>
                         <p className="font-mono text-base font-bold text-gray-900">{uniqueSku}</p>
                     </div>
                     <div>
-                        <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-gray-500">
+                        <p className="text-micro font-semibold uppercase tracking-[0.14em] text-gray-500">
                             Serials ({serialNumbers.length})
                         </p>
                         <p className="break-all font-mono text-xs text-gray-700">
@@ -1125,7 +1125,7 @@ function PreviewCardModern({
                     </div>
                     {location && (
                         <div>
-                            <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-gray-500">Location</p>
+                            <p className="text-micro font-semibold uppercase tracking-[0.14em] text-gray-500">Location</p>
                             <p className="font-mono text-xs text-gray-700">{location}</p>
                         </div>
                     )}

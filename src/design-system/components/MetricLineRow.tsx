@@ -26,11 +26,11 @@ export function MetricLineRow({
       ].join(' ').trim()}
     >
       <div className="min-w-0">
-        <p className="text-[9px] font-black uppercase tracking-[0.10rem] leading-none text-gray-500">
+        <p className="text-eyebrow font-black uppercase tracking-[0.10rem] leading-none text-gray-500">
           {label}
         </p>
-        <div className="mt-1 text-[13px] font-bold text-gray-900">{value}</div>
-        {meta ? <div className="mt-1 text-[10px] text-gray-600">{meta}</div> : null}
+        <div className="mt-1 text-sm font-bold text-gray-900">{value}</div>
+        {meta ? <div className="mt-1 text-micro text-gray-600">{meta}</div> : null}
       </div>
       {action}
     </div>

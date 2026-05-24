@@ -8,7 +8,7 @@
  * roving focus, arrow-key navigation, and group rendering; this component
  * provides the visual shell (framer-motion modal + backdrop blur),
  * server-side fuzzy search via /api/global-search, recents in localStorage,
- * and an "Ask AI" affordance that deep-links into /ai with the query.
+ * and an "Ask AI" affordance that deep-links into /admin?section=ai_chat with the query.
  *
  * `shouldFilter={false}` because we mix two filtering sources:
  *  - static nav items (filtered manually below by query.includes)
@@ -19,7 +19,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Command } from 'cmdk';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
+import { framerPresence, framerTransition } from '@/design-system/foundations/motion-framer';
 import { useRouter, usePathname } from 'next/navigation';
 import {
   Search,
@@ -139,6 +140,7 @@ function buildNavItems(permissions?: ReadonlySet<string>): NavOption[] {
 // ── Component ─────────────────────────────────────────────────────────────
 
 export function CommandBar() {
+  const shouldReduceMotion = useReducedMotion();
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
   const [searchResults, setSearchResults] = useState<SearchResult[]>([]);
@@ -256,7 +258,7 @@ export function CommandBar() {
 
   const handleAskAi = useCallback(() => {
     const q = query.trim();
-    const href = q ? `/ai?q=${encodeURIComponent(q)}` : '/ai';
+    const href = q ? `/admin?section=ai_chat&q=${encodeURIComponent(q)}` : '/admin?section=ai_chat';
     router.push(href);
     setOpen(false);
   }, [query, router]);
@@ -274,22 +276,24 @@ export function CommandBar() {
           {/* Backdrop */}
           <motion.div
             key="cmdk-scrim"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: 0.15, ease: 'easeOut' }}
+            initial={framerPresence.workOrderScrim.initial}
+            animate={framerPresence.workOrderScrim.animate}
+            exit={framerPresence.workOrderScrim.exit}
+            transition={shouldReduceMotion ? { duration: 0 } : framerTransition.overlayScrim}
             className="fixed inset-0 z-[1000] bg-gray-900/40 backdrop-blur-md"
             onClick={() => setOpen(false)}
             aria-hidden
           />
 
-          {/* Dialog */}
+          {/* Dialog — top-anchored command palette. Slides down from above
+              (negative y), unlike the centered workOrderModal which rises from
+              below. Kept inline because the direction is distinct. */}
           <motion.div
             key="cmdk-dialog"
-            initial={{ opacity: 0, scale: 0.96, y: -8 }}
-            animate={{ opacity: 1, scale: 1, y: 0 }}
-            exit={{ opacity: 0, scale: 0.96, y: -8 }}
-            transition={{ type: 'spring', damping: 28, stiffness: 360, mass: 0.7 }}
+            initial={shouldReduceMotion ? { opacity: 0 } : { opacity: 0, scale: 0.96, y: -8 }}
+            animate={shouldReduceMotion ? { opacity: 1 } : { opacity: 1, scale: 1, y: 0 }}
+            exit={shouldReduceMotion ? { opacity: 0 } : { opacity: 0, scale: 0.96, y: -8 }}
+            transition={shouldReduceMotion ? { duration: 0 } : { type: 'spring', damping: 28, stiffness: 360, mass: 0.7 }}
             className="fixed inset-x-0 top-0 z-[1001] flex justify-center px-4 pt-[12vh] md:pt-[16vh]"
           >
             <Command
@@ -310,9 +314,9 @@ export function CommandBar() {
                   onValueChange={setQuery}
                   placeholder="Search pages, orders, repairs, SKUs…"
                   autoFocus
-                  className="flex-1 bg-transparent text-[15px] font-medium text-gray-900 placeholder:text-gray-400 outline-none"
+                  className="flex-1 bg-transparent text-base font-medium text-gray-900 placeholder:text-gray-400 outline-none"
                 />
-                <kbd className="hidden shrink-0 rounded-md border border-gray-200 bg-gray-50 px-1.5 py-0.5 font-mono text-[10px] font-semibold text-gray-500 md:inline-flex">
+                <kbd className="hidden shrink-0 rounded-md border border-gray-200 bg-gray-50 px-1.5 py-0.5 font-mono text-micro font-semibold text-gray-500 md:inline-flex">
                   ESC
                 </kbd>
               </div>
@@ -321,14 +325,14 @@ export function CommandBar() {
               <Command.List
                 className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-2 py-2"
               >
-                <Command.Empty className="px-4 py-10 text-center text-[13px] text-gray-500">
+                <Command.Empty className="px-4 py-10 text-center text-sm text-gray-500">
                   {searching ? 'Searching…' : query.trim() ? `No matches for "${query}"` : 'Type to search'}
                 </Command.Empty>
 
                 {showRecentGroup && (
                   <Command.Group
                     heading="Recent"
-                    className="[&_[cmdk-group-heading]]:px-3 [&_[cmdk-group-heading]]:py-2 [&_[cmdk-group-heading]]:text-[10px] [&_[cmdk-group-heading]]:font-black [&_[cmdk-group-heading]]:uppercase [&_[cmdk-group-heading]]:tracking-widest [&_[cmdk-group-heading]]:text-gray-400"
+                    className="[&_[cmdk-group-heading]]:px-3 [&_[cmdk-group-heading]]:py-2 [&_[cmdk-group-heading]]:text-micro [&_[cmdk-group-heading]]:font-black [&_[cmdk-group-heading]]:uppercase [&_[cmdk-group-heading]]:tracking-widest [&_[cmdk-group-heading]]:text-gray-400"
                   >
                     {recents.map((r) => {
                       const Icon = r.entityType
@@ -351,7 +355,7 @@ export function CommandBar() {
                 {filteredNav.length > 0 && (
                   <Command.Group
                     heading="Pages"
-                    className="[&_[cmdk-group-heading]]:px-3 [&_[cmdk-group-heading]]:py-2 [&_[cmdk-group-heading]]:text-[10px] [&_[cmdk-group-heading]]:font-black [&_[cmdk-group-heading]]:uppercase [&_[cmdk-group-heading]]:tracking-widest [&_[cmdk-group-heading]]:text-gray-400"
+                    className="[&_[cmdk-group-heading]]:px-3 [&_[cmdk-group-heading]]:py-2 [&_[cmdk-group-heading]]:text-micro [&_[cmdk-group-heading]]:font-black [&_[cmdk-group-heading]]:uppercase [&_[cmdk-group-heading]]:tracking-widest [&_[cmdk-group-heading]]:text-gray-400"
                   >
                     {filteredNav.map((n) => {
                       const Icon = n.icon;
@@ -374,7 +378,7 @@ export function CommandBar() {
                 {showSearchGroup && searchResults.length > 0 && (
                   <Command.Group
                     heading="Search results"
-                    className="[&_[cmdk-group-heading]]:px-3 [&_[cmdk-group-heading]]:py-2 [&_[cmdk-group-heading]]:text-[10px] [&_[cmdk-group-heading]]:font-black [&_[cmdk-group-heading]]:uppercase [&_[cmdk-group-heading]]:tracking-widest [&_[cmdk-group-heading]]:text-gray-400"
+                    className="[&_[cmdk-group-heading]]:px-3 [&_[cmdk-group-heading]]:py-2 [&_[cmdk-group-heading]]:text-micro [&_[cmdk-group-heading]]:font-black [&_[cmdk-group-heading]]:uppercase [&_[cmdk-group-heading]]:tracking-widest [&_[cmdk-group-heading]]:text-gray-400"
                   >
                     {searchResults.map((r) => {
                       const Icon = ENTITY_ICONS[r.entityType] || Search;
@@ -404,7 +408,7 @@ export function CommandBar() {
                 {showAskAi && (
                   <Command.Group
                     heading="AI"
-                    className="[&_[cmdk-group-heading]]:px-3 [&_[cmdk-group-heading]]:py-2 [&_[cmdk-group-heading]]:text-[10px] [&_[cmdk-group-heading]]:font-black [&_[cmdk-group-heading]]:uppercase [&_[cmdk-group-heading]]:tracking-widest [&_[cmdk-group-heading]]:text-gray-400"
+                    className="[&_[cmdk-group-heading]]:px-3 [&_[cmdk-group-heading]]:py-2 [&_[cmdk-group-heading]]:text-micro [&_[cmdk-group-heading]]:font-black [&_[cmdk-group-heading]]:uppercase [&_[cmdk-group-heading]]:tracking-widest [&_[cmdk-group-heading]]:text-gray-400"
                   >
                     <CmdRow
                       value={`ai ask ${query}`}
@@ -422,7 +426,7 @@ export function CommandBar() {
               </Command.List>
 
               {/* Footer */}
-              <div className="flex items-center justify-between gap-3 border-t border-gray-100 bg-gray-50/70 px-4 py-2 text-[10px] font-bold text-gray-500">
+              <div className="flex items-center justify-between gap-3 border-t border-gray-100 bg-gray-50/70 px-4 py-2 text-micro font-bold text-gray-500">
                 <div className="flex items-center gap-3">
                   <span className="inline-flex items-center gap-1">
                     <kbd className="rounded border border-gray-200 bg-white px-1 py-0.5 font-mono">↑↓</kbd>
@@ -467,17 +471,17 @@ function CmdRow({ value, icon, label, subLabel, badge, onSelect }: CmdRowProps) 
     <Command.Item
       value={value}
       onSelect={onSelect}
-      className="group mx-1 flex cursor-pointer items-center gap-3 rounded-lg px-3 py-2 text-left text-[13px] text-gray-800 transition-colors data-[selected=true]:bg-gray-100 data-[selected=true]:text-gray-900 aria-selected:bg-gray-100"
+      className="group mx-1 flex cursor-pointer items-center gap-3 rounded-lg px-3 py-2 text-left text-sm text-gray-800 transition-colors data-[selected=true]:bg-gray-100 data-[selected=true]:text-gray-900 aria-selected:bg-gray-100"
     >
       <span className="flex h-5 w-5 shrink-0 items-center justify-center">{icon}</span>
       <span className="min-w-0 flex-1">
         <span className="block truncate font-semibold">{label}</span>
         {subLabel && (
-          <span className="block truncate text-[11px] font-medium text-gray-500">{subLabel}</span>
+          <span className="block truncate text-caption font-medium text-gray-500">{subLabel}</span>
         )}
       </span>
       {badge && (
-        <span className="shrink-0 rounded-md bg-gray-100 px-1.5 py-0.5 text-[9px] font-black uppercase tracking-widest text-gray-500 group-data-[selected=true]:bg-white group-data-[selected=true]:text-gray-700">
+        <span className="shrink-0 rounded-md bg-gray-100 px-1.5 py-0.5 text-eyebrow font-black uppercase tracking-widest text-gray-500 group-data-[selected=true]:bg-white group-data-[selected=true]:text-gray-700">
           {badge}
         </span>
       )}

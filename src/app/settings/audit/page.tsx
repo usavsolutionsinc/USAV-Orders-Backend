@@ -16,6 +16,7 @@
 
 import { requirePermission } from '@/lib/auth/page-guard';
 import pool from '@/lib/db';
+import { PageHeader } from '@/components/ui/pane-header';
 
 interface AuditRow {
   id: number;
@@ -81,22 +82,20 @@ export default async function AuditPage({ searchParams }: PageProps) {
 
   return (
     <div className="min-h-screen bg-gray-50 antialiased">
-      <div className="mx-auto max-w-6xl space-y-4 px-6 py-10">
-        <header>
-          <h1 className="text-[28px] font-semibold tracking-tight text-gray-900">Audit log</h1>
-          <p className="mt-1 text-[13px] text-gray-500">
-            Every privileged write, every permission denial. Last {PAGE_SIZE} rows{source || action ? ' matching filter' : ''}.
-          </p>
-        </header>
+      <PageHeader title="Audit log" maxWidth="6xl" />
+      <div className="mx-auto max-w-6xl space-y-4 px-6 py-6">
+        <p className="text-sm text-gray-500">
+          Every privileged write, every permission denial. Last {PAGE_SIZE} rows{source || action ? ' matching filter' : ''}.
+        </p>
 
-        <form className="flex flex-wrap items-center gap-2 rounded-2xl border border-gray-200 bg-white p-3 text-[12px] shadow-sm">
+        <form className="flex flex-wrap items-center gap-2 rounded-2xl border border-gray-200 bg-white p-3 text-label shadow-sm">
           <label className="flex items-center gap-2">
             <span className="font-medium text-gray-500">Source</span>
             <input
               name="source"
               defaultValue={source ?? ''}
               placeholder="e.g. receiving"
-              className="rounded-lg border border-gray-200 bg-white px-2.5 py-1 text-[12px] focus:border-slate-400 focus:outline-none focus:ring-1 focus:ring-slate-200"
+              className="rounded-lg border border-gray-200 bg-white px-2.5 py-1 text-label focus:border-slate-400 focus:outline-none focus:ring-1 focus:ring-slate-200"
             />
           </label>
           <label className="flex items-center gap-2">
@@ -105,7 +104,7 @@ export default async function AuditPage({ searchParams }: PageProps) {
               name="action"
               defaultValue={action ?? ''}
               placeholder="e.g. mark_received"
-              className="rounded-lg border border-gray-200 bg-white px-2.5 py-1 text-[12px] focus:border-slate-400 focus:outline-none focus:ring-1 focus:ring-slate-200"
+              className="rounded-lg border border-gray-200 bg-white px-2.5 py-1 text-label focus:border-slate-400 focus:outline-none focus:ring-1 focus:ring-slate-200"
             />
           </label>
           <button type="submit" className="rounded-lg bg-slate-900 px-3 py-1 font-medium text-white hover:bg-slate-800">Apply</button>
@@ -116,7 +115,7 @@ export default async function AuditPage({ searchParams }: PageProps) {
 
         <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
           <table className="min-w-full divide-y divide-gray-100 text-[12.5px]">
-            <thead className="bg-gray-50 text-left text-[11px] font-medium uppercase tracking-[0.08em] text-gray-500">
+            <thead className="bg-gray-50 text-left text-caption font-medium uppercase tracking-[0.08em] text-gray-500">
               <tr>
                 <th className="px-3 py-2">When</th>
                 <th className="px-3 py-2">Actor</th>
@@ -153,7 +152,7 @@ export default async function AuditPage({ searchParams }: PageProps) {
         {nextCursor && (
           <div className="text-right">
             <a
-              className="inline-flex items-center rounded-2xl border border-gray-200 bg-white px-3 py-1.5 text-[12px] font-medium text-gray-700 shadow-sm hover:text-gray-900"
+              className="inline-flex items-center rounded-2xl border border-gray-200 bg-white px-3 py-1.5 text-label font-medium text-gray-700 shadow-sm hover:text-gray-900"
               href={`?${new URLSearchParams({
                 ...(source ? { source } : {}),
                 ...(action ? { action } : {}),

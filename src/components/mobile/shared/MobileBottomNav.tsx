@@ -118,7 +118,7 @@ export function MobileBottomNav() {
             <Barcode className="h-7 w-7" />
           </button>
           <span
-            className={`absolute -bottom-0.5 text-[9px] font-black uppercase tracking-[0.14em] leading-none ${
+            className={`absolute -bottom-0.5 text-eyebrow font-black uppercase tracking-[0.14em] leading-none ${
               isActive('/m/scan') ? 'text-blue-600' : 'text-gray-500'
             }`}
           >
@@ -170,7 +170,7 @@ function NavTab({ label, icon: Icon, active, onClick }: NavTabProps) {
       <span className="flex h-6 w-6 items-center justify-center">
         <Icon className="h-5 w-5" />
       </span>
-      <span className={`text-[9px] font-black uppercase tracking-[0.12em] leading-none ${active ? 'text-blue-600' : 'text-gray-400'}`}>
+      <span className={`text-eyebrow font-black uppercase tracking-[0.12em] leading-none ${active ? 'text-blue-600' : 'text-gray-400'}`}>
         {label}
       </span>
     </button>

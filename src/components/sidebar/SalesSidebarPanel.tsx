@@ -171,7 +171,7 @@ export function SalesSidebarPanel({ embedded = false }: SalesSidebarPanelProps) 
             <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar">
               <button
                 onClick={() => setActiveCategoryId(null)}
-                className={`shrink-0 rounded-lg px-2.5 py-1.5 text-[9px] font-black uppercase tracking-widest transition-colors ${
+                className={`shrink-0 rounded-lg px-2.5 py-1.5 text-eyebrow font-black uppercase tracking-widest transition-colors ${
                   activeCategoryId === null
                     ? 'bg-emerald-600 text-white shadow-sm'
                     : 'bg-gray-100 text-gray-600 hover:bg-emerald-50 hover:text-emerald-700'
@@ -183,7 +183,7 @@ export function SalesSidebarPanel({ embedded = false }: SalesSidebarPanelProps) 
                 <button
                   key={cat.id}
                   onClick={() => setActiveCategoryId(cat.id === activeCategoryId ? null : cat.id)}
-                  className={`shrink-0 rounded-lg px-2.5 py-1.5 text-[9px] font-black uppercase tracking-widest transition-colors ${
+                  className={`shrink-0 rounded-lg px-2.5 py-1.5 text-eyebrow font-black uppercase tracking-widest transition-colors ${
                     activeCategoryId === cat.id
                       ? 'bg-emerald-600 text-white shadow-sm'
                       : 'bg-gray-100 text-gray-600 hover:bg-emerald-50 hover:text-emerald-700'
@@ -224,15 +224,15 @@ export function SalesSidebarPanel({ embedded = false }: SalesSidebarPanelProps) 
                     >
                       <div className="flex items-start justify-between gap-2">
                         <div className="min-w-0 flex-1">
-                          <p className="text-[11px] font-bold text-gray-900 leading-tight line-clamp-2">
+                          <p className="text-caption font-bold text-gray-900 leading-tight line-clamp-2">
                             {item.item_data?.name || 'Item'}
                           </p>
                           {vd?.sku && (
-                            <p className="text-[8px] font-mono text-gray-400 mt-0.5">{vd.sku}</p>
+                            <p className="text-mini font-mono text-gray-400 mt-0.5">{vd.sku}</p>
                           )}
                         </div>
                         <div className="shrink-0 text-right">
-                          <p className="text-[11px] font-black text-emerald-600">{formatCentsToDollars(price)}</p>
+                          <p className="text-caption font-black text-emerald-600">{formatCentsToDollars(price)}</p>
                           {inCart && (
                             <div className="flex items-center gap-1 mt-1" onClick={(e) => e.stopPropagation()}>
                               <button
@@ -241,7 +241,7 @@ export function SalesSidebarPanel({ embedded = false }: SalesSidebarPanelProps) 
                               >
                                 <Minus className="h-2.5 w-2.5 text-emerald-600" />
                               </button>
-                              <span className="text-[10px] font-black text-emerald-700 w-4 text-center">{inCart.quantity}</span>
+                              <span className="text-micro font-black text-emerald-700 w-4 text-center">{inCart.quantity}</span>
                               <button
                                 onClick={() => updateCartQty(v.id, 1)}
                                 className="p-0.5 rounded border border-emerald-200 bg-white hover:bg-emerald-50"
@@ -268,7 +268,7 @@ export function SalesSidebarPanel({ embedded = false }: SalesSidebarPanelProps) 
             <p className="text-2xl font-black text-emerald-700 tracking-tight">
               {formatCentsToDollars(totalRevenue)}
             </p>
-            <p className="text-[10px] font-bold text-emerald-500 mt-0.5">
+            <p className="text-micro font-bold text-emerald-500 mt-0.5">
               {recentSales.length} sale{recentSales.length !== 1 ? 's' : ''}
             </p>
           </div>
@@ -288,14 +288,14 @@ export function SalesSidebarPanel({ embedded = false }: SalesSidebarPanelProps) 
                     className="rounded-xl border border-gray-100 bg-gray-50/60 px-3 py-2"
                   >
                     <div className="flex items-center justify-between">
-                      <span className="text-[11px] font-bold text-gray-900">
+                      <span className="text-caption font-bold text-gray-900">
                         {items.length === 1 ? firstName : `${firstName} +${items.length - 1}`}
                       </span>
-                      <span className="text-[11px] font-black text-emerald-600 shrink-0 ml-2">
+                      <span className="text-caption font-black text-emerald-600 shrink-0 ml-2">
                         {formatCentsToDollars(sale.total)}
                       </span>
                     </div>
-                    <p className="text-[9px] text-gray-400 mt-0.5">
+                    <p className="text-eyebrow text-gray-400 mt-0.5">
                       {sale.created_at ? new Date(sale.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }) : ''}
                     </p>
                   </div>
@@ -311,7 +311,7 @@ export function SalesSidebarPanel({ embedded = false }: SalesSidebarPanelProps) 
         <div className="shrink-0 border-t border-gray-200 bg-white px-3 py-3 space-y-2">
           <div className="space-y-1">
             {cart.map((c) => (
-              <div key={c.variationId} className="flex items-center justify-between text-[10px]">
+              <div key={c.variationId} className="flex items-center justify-between text-micro">
                 <span className="font-bold text-gray-800 truncate max-w-[140px]">{c.name}</span>
                 <div className="flex items-center gap-2">
                   <span className="text-gray-500">×{c.quantity}</span>
@@ -325,7 +325,7 @@ export function SalesSidebarPanel({ embedded = false }: SalesSidebarPanelProps) 
           </div>
 
           <div className="flex items-center justify-between border-t border-gray-100 pt-2">
-            <span className="text-[10px] font-black uppercase text-gray-900">
+            <span className="text-micro font-black uppercase text-gray-900">
               {cartCount} item{cartCount !== 1 ? 's' : ''} · {formatCentsToDollars(cartTotal)}
             </span>
           </div>
@@ -336,20 +336,20 @@ export function SalesSidebarPanel({ embedded = false }: SalesSidebarPanelProps) 
             className="w-full flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-emerald-600 to-green-600 px-4 py-2.5 text-white shadow-lg shadow-emerald-500/20 transition-all hover:from-emerald-700 hover:to-green-700 disabled:from-gray-400 disabled:to-gray-400 disabled:shadow-none"
           >
             <ShoppingCart className="h-4 w-4" />
-            <span className="text-[10px] font-black uppercase tracking-widest">
+            <span className="text-micro font-black uppercase tracking-widest">
               {isSubmitting ? 'Sending...' : `Charge ${formatCentsToDollars(cartTotal)}`}
             </span>
           </button>
 
           {submitError && (
-            <p className="text-[9px] font-bold text-red-600 text-center">{submitError}</p>
+            <p className="text-eyebrow font-bold text-red-600 text-center">{submitError}</p>
           )}
         </div>
       )}
 
       {submitSuccess && cart.length === 0 && (
         <div className="shrink-0 border-t border-emerald-200 bg-emerald-50 px-3 py-3 text-center">
-          <p className="text-[10px] font-bold text-emerald-700">Sent to terminal — waiting for payment</p>
+          <p className="text-micro font-bold text-emerald-700">Sent to terminal — waiting for payment</p>
         </div>
       )}
     </div>

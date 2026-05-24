@@ -478,10 +478,10 @@ export function WorkOrderAssignmentCard({
       </button>
 
       <div className="min-w-0 text-center leading-tight">
-        <p className="text-[9px] font-black uppercase tracking-[0.22em] text-gray-500">
+        <p className="text-eyebrow font-black uppercase tracking-[0.22em] text-gray-500">
           {remaining} remaining
         </p>
-        <p className="mt-0.5 text-[8px] font-black uppercase tracking-[0.16em] text-gray-500">
+        <p className="mt-0.5 text-mini font-black uppercase tracking-[0.16em] text-gray-500">
           {todayUnassignedCount} unassigned · {todayTotalCount} total today
         </p>
       </div>
@@ -501,7 +501,7 @@ export function WorkOrderAssignmentCard({
   const headerEyebrow = (
     <div className="flex w-full min-w-0 items-center justify-between gap-3">
       <div className="flex min-h-[26px] min-w-0 flex-1 items-center">
-        <span className="truncate text-[13px] font-black uppercase tracking-[0.08em] leading-none text-gray-500">
+        <span className="truncate text-sm font-black uppercase tracking-[0.08em] leading-none text-gray-500">
           {assignmentHeaderContextText(row)}
         </span>
       </div>
@@ -536,7 +536,7 @@ export function WorkOrderAssignmentCard({
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               transition={{ duration: 0.15 }}
-              className="break-words text-[22px] font-black leading-tight tracking-tight text-gray-950 [overflow-wrap:anywhere]"
+              className="break-words text-2xl font-black leading-tight tracking-tight text-gray-950 [overflow-wrap:anywhere]"
               style={{
                 height: '100%',
                 overflowY: 'auto',
@@ -559,7 +559,7 @@ export function WorkOrderAssignmentCard({
               emptyMessage="No technicians"
             />
             {staffContext && (staffContext.techniciansOff?.length || staffContext.techniciansInactive?.length) ? (
-              <p className="mt-1.5 text-[9px] font-bold text-gray-400">
+              <p className="mt-1.5 text-eyebrow font-bold text-gray-400">
                 Unavailable: {[
                   ...(staffContext.techniciansOff || []).map((m) => `${m.name} (Off today)`),
                   ...(staffContext.techniciansInactive || []).map((m) => `${m.name} (Inactive)`),
@@ -578,7 +578,7 @@ export function WorkOrderAssignmentCard({
               emptyMessage="No packers"
             />
             {staffContext && (staffContext.packersOff?.length || staffContext.packersInactive?.length) ? (
-              <p className="mt-1.5 text-[9px] font-bold text-gray-400">
+              <p className="mt-1.5 text-eyebrow font-bold text-gray-400">
                 Unavailable: {[
                   ...(staffContext.packersOff || []).map((m) => `${m.name} (Off today)`),
                   ...(staffContext.packersInactive || []).map((m) => `${m.name} (Inactive)`),
@@ -588,7 +588,7 @@ export function WorkOrderAssignmentCard({
           </div>
 
           <div className="flex items-center justify-between gap-3 border-t border-gray-100 pt-3">
-            <span className="text-[9px] font-black uppercase tracking-[0.22em] text-gray-500">
+            <span className="text-eyebrow font-black uppercase tracking-[0.22em] text-gray-500">
               Deadline
             </span>
             <input
@@ -599,7 +599,7 @@ export function WorkOrderAssignmentCard({
                 setDeadline(next);
                 updateCurrentDraft({ deadline: next });
               }}
-              className="rounded-md border border-gray-200 bg-white px-2 py-1 text-[10px] font-bold text-gray-800 outline-none transition-colors focus:border-gray-400 tabular-nums"
+              className="rounded-md border border-gray-200 bg-white px-2 py-1 text-micro font-bold text-gray-800 outline-none transition-colors focus:border-gray-400 tabular-nums"
             />
           </div>
 
@@ -607,7 +607,7 @@ export function WorkOrderAssignmentCard({
             <button
               type="button"
               onClick={handleMarkDone}
-              className="h-8 rounded-lg border border-gray-200 bg-gray-50 text-[9px] font-black uppercase tracking-[0.18em] text-gray-700 transition-colors hover:border-gray-300 hover:bg-gray-100"
+              className="h-8 rounded-lg border border-gray-200 bg-gray-50 text-eyebrow font-black uppercase tracking-[0.18em] text-gray-700 transition-colors hover:border-gray-300 hover:bg-gray-100"
             >
               Mark as Done
             </button>
@@ -615,7 +615,7 @@ export function WorkOrderAssignmentCard({
               <button
                 type="button"
                 onClick={handleMarkShipped}
-                className="h-8 rounded-lg bg-emerald-600 text-[9px] font-black uppercase tracking-[0.18em] text-white transition-colors hover:bg-emerald-700 shadow-sm"
+                className="h-8 rounded-lg bg-emerald-600 text-eyebrow font-black uppercase tracking-[0.18em] text-white transition-colors hover:bg-emerald-700 shadow-sm"
               >
                 Mark as Shipped
               </button>

@@ -98,13 +98,13 @@ export function QcChecklistSection({ catalogId, qcChecks, onRefresh }: QcCheckli
   return (
     <div className="space-y-2">
       {qcChecks.length === 0 && !showAdd && (
-        <p className="text-[10px] font-semibold text-gray-400 px-1">No QC steps defined yet.</p>
+        <p className="text-micro font-semibold text-gray-400 px-1">No QC steps defined yet.</p>
       )}
 
       {qcChecks.map((check, idx) => (
         <div key={check.id} className="flex items-center gap-2 rounded-xl bg-gray-50 px-2.5 py-2 group">
-          <span className="shrink-0 w-5 text-center text-[10px] font-black text-gray-400 tabular-nums">{idx + 1}</span>
-          <span className="flex-1 min-w-0 truncate text-[11px] font-bold text-gray-800">{check.step_label}</span>
+          <span className="shrink-0 w-5 text-center text-micro font-black text-gray-400 tabular-nums">{idx + 1}</span>
+          <span className="flex-1 min-w-0 truncate text-caption font-bold text-gray-800">{check.step_label}</span>
           <span className={`shrink-0 rounded-full border px-1.5 py-0.5 ${microBadge} ${stepTypeBadgeClass(check.step_type)}`}>
             {check.step_type}
           </span>
@@ -133,12 +133,12 @@ export function QcChecklistSection({ catalogId, qcChecks, onRefresh }: QcCheckli
                 value={stepLabel}
                 onChange={(e) => setStepLabel(e.target.value)}
                 placeholder="Check step description"
-                className="w-full rounded-lg border border-gray-200 bg-gray-50 px-2.5 py-1.5 text-[11px] font-bold text-gray-900 placeholder:text-gray-400"
+                className="w-full rounded-lg border border-gray-200 bg-gray-50 px-2.5 py-1.5 text-caption font-bold text-gray-900 placeholder:text-gray-400"
               />
               <select
                 value={stepType}
                 onChange={(e) => setStepType(e.target.value)}
-                className="w-full rounded-lg border border-gray-200 bg-gray-50 px-2.5 py-1.5 text-[11px] font-bold text-gray-900"
+                className="w-full rounded-lg border border-gray-200 bg-gray-50 px-2.5 py-1.5 text-caption font-bold text-gray-900"
               >
                 {STEP_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
               </select>
@@ -147,7 +147,7 @@ export function QcChecklistSection({ catalogId, qcChecks, onRefresh }: QcCheckli
                   type="button"
                   onClick={handleSave}
                   disabled={saving || !stepLabel.trim()}
-                  className="flex-1 flex items-center justify-center gap-1.5 rounded-lg bg-gray-900 px-3 py-1.5 text-[10px] font-black uppercase tracking-wider text-white hover:bg-gray-800 disabled:opacity-50"
+                  className="flex-1 flex items-center justify-center gap-1.5 rounded-lg bg-gray-900 px-3 py-1.5 text-micro font-black uppercase tracking-wider text-white hover:bg-gray-800 disabled:opacity-50"
                 >
                   {saving && <Loader2 className="h-3 w-3 animate-spin" />}
                   {editingId ? 'Update' : 'Add Step'}
@@ -157,7 +157,7 @@ export function QcChecklistSection({ catalogId, qcChecks, onRefresh }: QcCheckli
                     type="button"
                     onClick={() => handleRemove(editingId)}
                     disabled={removing === editingId}
-                    className="flex items-center gap-1 rounded-lg border border-red-200 px-2.5 py-1.5 text-[10px] font-black uppercase tracking-wider text-red-600 hover:bg-red-50"
+                    className="flex items-center gap-1 rounded-lg border border-red-200 px-2.5 py-1.5 text-micro font-black uppercase tracking-wider text-red-600 hover:bg-red-50"
                   >
                     {removing === editingId ? <Loader2 className="h-3 w-3 animate-spin" /> : <Trash2 className="h-3 w-3" />}
                   </button>
@@ -165,7 +165,7 @@ export function QcChecklistSection({ catalogId, qcChecks, onRefresh }: QcCheckli
                 <button
                   type="button"
                   onClick={resetForm}
-                  className="rounded-lg border border-gray-200 px-3 py-1.5 text-[10px] font-black uppercase tracking-wider text-gray-500 hover:bg-gray-50"
+                  className="rounded-lg border border-gray-200 px-3 py-1.5 text-micro font-black uppercase tracking-wider text-gray-500 hover:bg-gray-50"
                 >
                   Cancel
                 </button>
@@ -179,7 +179,7 @@ export function QcChecklistSection({ catalogId, qcChecks, onRefresh }: QcCheckli
         <button
           type="button"
           onClick={() => { resetForm(); setShowAdd(true); }}
-          className="flex items-center gap-1.5 rounded-lg px-2 py-1.5 text-[10px] font-black uppercase tracking-wider text-blue-600 hover:bg-blue-50 transition-colors"
+          className="flex items-center gap-1.5 rounded-lg px-2 py-1.5 text-micro font-black uppercase tracking-wider text-blue-600 hover:bg-blue-50 transition-colors"
         >
           <Plus className="h-3 w-3" /> Add Step
         </button>

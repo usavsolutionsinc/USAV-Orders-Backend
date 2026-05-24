@@ -22,6 +22,9 @@ import type { WorkOrderRow } from '@/components/work-orders/types';
 import { sectionLabel, microBadge } from '@/design-system/tokens/typography/presets';
 import {
   PaneHeader,
+  PaneHeaderIconBadge,
+  PaneHeaderLabel,
+  PaneHeaderCloseButton,
   PaneHeaderStatusPill,
   PaneHeaderTabs,
   PaneHeaderActionBar,
@@ -352,53 +355,38 @@ export function ShippedDetailsPanel({
     >
       <PaneHeader
         className="shrink-0 border-b-0 bg-white/90 backdrop-blur-xl"
-        rowClassName="px-8 py-5"
+        rowClassName="px-6"
         leftSlot={
-          <div className="flex items-center gap-3">
-            <div className="w-12 h-12 bg-blue-600 rounded-2xl flex items-center justify-center shadow-lg shadow-blue-200">
-              <Package className="w-6 h-6 text-white" />
-            </div>
-            <div className="min-w-0">
-              <p className="text-[10px] font-black uppercase tracking-[0.2em] text-gray-500">
-                {showExceptionsFallback ? 'Exceptions' : 'Order #'}
-              </p>
-              <button
-                type="button"
-                onClick={handleCopyOrderId}
-                className="mt-0.5 truncate text-[20px] font-black leading-none tracking-tight text-gray-900 transition-colors hover:text-blue-700"
-                title="Click to copy"
-                aria-label={`Copy ${orderIdDisplay}`}
-              >
-                {orderIdDisplay}
-              </button>
-              {copiedOrderId && (
-                <p className={`${microBadge} tracking-wider text-emerald-600 mt-0.5`}>Copied</p>
-              )}
-              <div className="mt-2 flex flex-wrap items-center gap-2">
-                <QtyBadge quantity={(shipped as any).quantity} />
-                <PaneHeaderStatusPill tone={statusTone} pulse>
-                  {statusLabel}
-                </PaneHeaderStatusPill>
-              </div>
-            </div>
-          </div>
+          <>
+            <PaneHeaderIconBadge Icon={Package} bg="bg-blue-600" tint="text-white" />
+            <PaneHeaderLabel
+              eyebrow={showExceptionsFallback ? 'Exceptions' : 'Order #'}
+              value={
+                <button
+                  type="button"
+                  onClick={handleCopyOrderId}
+                  className="truncate text-left transition-colors hover:text-blue-700"
+                  title={copiedOrderId ? 'Copied' : 'Click to copy'}
+                  aria-label={`Copy ${orderIdDisplay}`}
+                >
+                  {orderIdDisplay}
+                  {copiedOrderId && <span className="ml-1 text-emerald-600">✓</span>}
+                </button>
+              }
+              valueTitle={orderIdDisplay}
+            />
+          </>
         }
-        rightSlot={
-          <button
-            onClick={onClose}
-            className="inline-flex h-9 w-9 items-center justify-center rounded-xl text-gray-500 transition-all hover:bg-gray-100 hover:text-gray-900 active:scale-95"
-            aria-label="Close details"
-          >
-            <X className="h-5 w-5" />
-          </button>
-        }
+        rightSlot={<PaneHeaderCloseButton onClick={onClose} ariaLabel="Close details" />}
         belowSlot={
           <>
-            {/* Action bar — full width, flat (no card chrome), same `px-8`
-                gutter as the identity row so icons align with the rest of
-                the panel chrome. Sits directly under the identity row and
-                above the tabs (the dual-sticky top-actions header). */}
-            <div className="px-8 py-2">
+            <div className="flex flex-wrap items-center gap-2 px-6 pb-2">
+              <QtyBadge quantity={(shipped as any).quantity} />
+              <PaneHeaderStatusPill tone={statusTone} pulse>
+                {statusLabel}
+              </PaneHeaderStatusPill>
+            </div>
+            <div className="px-6 py-2">
               <PaneHeaderActionBar
                 iconOnly
                 variant="card"
@@ -411,9 +399,6 @@ export function ShippedDetailsPanel({
             </div>
             <PaneHeaderTabs<ShippedActiveSection>
               tabs={[
-                // Hide Return until the order is actually packed — otherwise
-                // the tab would lead to an empty section (pending orders
-                // have no return info to show yet).
                 ...(hasReturnContent
                   ? [{ value: 'return' as const, label: 'Return' }]
                   : []),
@@ -422,7 +407,7 @@ export function ShippedDetailsPanel({
               ]}
               value={activeSection}
               onChange={setActiveSection}
-              className="px-8"
+              className="px-6"
             />
           </>
         }

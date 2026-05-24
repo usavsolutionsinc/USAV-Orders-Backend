@@ -9,7 +9,8 @@
     },
     "retries": 3,
     "timeout": 180,
-    "label": "shipping-sync-due"
+    "label": "shipping-sync-due",
+    "managedBy": "vercel"
   },
   {
     "scheduleId": "ebay-refresh-tokens-hourly",
@@ -18,7 +19,8 @@
     "body": {},
     "retries": 3,
     "timeout": 60,
-    "label": "ebay-refresh-tokens"
+    "label": "ebay-refresh-tokens",
+    "managedBy": "vercel"
   },
   {
     "scheduleId": "google-sheets-transfer-orders-0830-pacific",
@@ -27,7 +29,8 @@
     "body": {},
     "retries": 3,
     "timeout": 300,
-    "label": "google-sheets-transfer-orders"
+    "label": "google-sheets-transfer-orders",
+    "managedBy": "vercel"
   },
   {
     "scheduleId": "google-sheets-transfer-orders-1000-weekdays-pacific",
@@ -36,7 +39,8 @@
     "body": {},
     "retries": 3,
     "timeout": 300,
-    "label": "google-sheets-transfer-orders"
+    "label": "google-sheets-transfer-orders",
+    "managedBy": "vercel"
   },
   {
     "scheduleId": "google-sheets-transfer-orders-1600-weekdays-pacific",
@@ -45,7 +49,8 @@
     "body": {},
     "retries": 3,
     "timeout": 300,
-    "label": "google-sheets-transfer-orders"
+    "label": "google-sheets-transfer-orders",
+    "managedBy": "vercel"
   },
   {
     "scheduleId": "staff-goal-history-nightly-pacific",
@@ -54,7 +59,8 @@
     "body": {},
     "retries": 3,
     "timeout": 120,
-    "label": "staff-goal-history-snapshot"
+    "label": "staff-goal-history-snapshot",
+    "managedBy": "vercel"
   },
   {
     "scheduleId": "shipping-sync-all-carriers-5pm-weekdays-pacific",
@@ -67,7 +73,8 @@
     },
     "retries": 3,
     "timeout": 300,
-    "label": "shipping-sync-all-carriers-eod"
+    "label": "shipping-sync-all-carriers-eod",
+    "managedBy": "vercel"
   },
   {
     "scheduleId": "replenishment-sync-daily-6am-pacific",
@@ -76,7 +83,8 @@
     "body": {},
     "retries": 3,
     "timeout": 120,
-    "label": "replenishment-sync"
+    "label": "replenishment-sync",
+    "managedBy": "vercel"
   },
   {
     "scheduleId": "stock-alerts-daily-1400-utc",
@@ -85,7 +93,8 @@
     "body": {},
     "retries": 3,
     "timeout": 60,
-    "label": "stock-alerts"
+    "label": "stock-alerts",
+    "managedBy": "vercel"
   },
   {
     "scheduleId": "refresh-reports-daily-1030-utc",
@@ -94,7 +103,8 @@
     "body": {},
     "retries": 3,
     "timeout": 120,
-    "label": "refresh-reports"
+    "label": "refresh-reports",
+    "managedBy": "vercel"
   },
   {
     "scheduleId": "inventory-drift-check-daily-1100-utc",
@@ -103,7 +113,8 @@
     "body": {},
     "retries": 3,
     "timeout": 60,
-    "label": "inventory-drift-check"
+    "label": "inventory-drift-check",
+    "managedBy": "vercel"
   },
   {
     "scheduleId": "google-photos-daily-0200-utc",
@@ -112,7 +123,8 @@
     "body": {},
     "retries": 3,
     "timeout": 300,
-    "label": "google-photos-daily-backup"
+    "label": "google-photos-daily-backup",
+    "managedBy": "vercel"
   },
   {
     "scheduleId": "replenishment-detect-every-4h",
@@ -121,7 +133,8 @@
     "body": {},
     "retries": 3,
     "timeout": 60,
-    "label": "replenishment-detect"
+    "label": "replenishment-detect",
+    "managedBy": "vercel"
   },
   {
     "scheduleId": "sku-pairing-refresh-suggestions-nightly-pacific",
@@ -130,6 +143,7 @@
     "body": {},
     "retries": 2,
     "timeout": 300,
-    "label": "sku-pairing-refresh-suggestions"
+    "label": "sku-pairing-refresh-suggestions",
+    "managedBy": "vercel"
   }
 ]

@@ -176,10 +176,10 @@ export function ReceivingClaimModal({ open, row, onClose, onTicketCreated }: Pro
             {/* Header */}
             <div className="flex shrink-0 items-center justify-between border-b border-gray-100 bg-gradient-to-r from-rose-50 to-amber-50 px-5 py-4">
               <div>
-                <p className="text-[10px] font-black uppercase tracking-[0.14em] text-rose-700">
+                <p className="text-micro font-black uppercase tracking-[0.14em] text-rose-700">
                   File a claim
                 </p>
-                <p className="mt-0.5 text-[15px] font-extrabold tracking-tight text-gray-900">
+                <p className="mt-0.5 text-base font-extrabold tracking-tight text-gray-900">
                   Receiving #{row.receiving_id}
                 </p>
               </div>
@@ -197,7 +197,7 @@ export function ReceivingClaimModal({ open, row, onClose, onTicketCreated }: Pro
             {/* Body */}
             <div className="space-y-4 overflow-y-auto px-5 py-4">
               <div>
-                <p className="mb-1.5 text-[10px] font-black uppercase tracking-[0.14em] text-gray-500">
+                <p className="mb-1.5 text-micro font-black uppercase tracking-[0.14em] text-gray-500">
                   Claim type
                 </p>
                 <HorizontalButtonSlider
@@ -211,7 +211,7 @@ export function ReceivingClaimModal({ open, row, onClose, onTicketCreated }: Pro
               </div>
 
               <div>
-                <p className="mb-1.5 text-[10px] font-black uppercase tracking-[0.14em] text-gray-500">
+                <p className="mb-1.5 text-micro font-black uppercase tracking-[0.14em] text-gray-500">
                   Severity
                 </p>
                 <HorizontalButtonSlider
@@ -227,7 +227,7 @@ export function ReceivingClaimModal({ open, row, onClose, onTicketCreated }: Pro
               <div>
                 <label
                   htmlFor="claim-reason"
-                  className="mb-1.5 block text-[10px] font-black uppercase tracking-[0.14em] text-gray-500"
+                  className="mb-1.5 block text-micro font-black uppercase tracking-[0.14em] text-gray-500"
                 >
                   What happened?
                 </label>
@@ -245,13 +245,13 @@ export function ReceivingClaimModal({ open, row, onClose, onTicketCreated }: Pro
                           ? 'Received model XL2 instead of MX5…'
                           : 'Inconsistent QA, multiple units DOA…'
                   }
-                  className="block w-full resize-none rounded-lg border border-gray-200 bg-white px-3 py-2 text-[12px] font-medium leading-snug text-gray-900 outline-none focus:border-rose-500 focus:ring-2 focus:ring-rose-500/20"
+                  className="block w-full resize-none rounded-lg border border-gray-200 bg-white px-3 py-2 text-label font-medium leading-snug text-gray-900 outline-none focus:border-rose-500 focus:ring-2 focus:ring-rose-500/20"
                 />
               </div>
 
               <div className="rounded-xl border border-gray-200 bg-gray-50/60 p-3">
                 <div className="mb-2 flex items-center justify-between">
-                  <p className="text-[10px] font-black uppercase tracking-[0.14em] text-gray-500">
+                  <p className="text-micro font-black uppercase tracking-[0.14em] text-gray-500">
                     Ticket preview {previewLoading ? '(updating…)' : '(editable)'}
                   </p>
                   {(subjectTouched.current || descriptionTouched.current) ? (
@@ -263,7 +263,7 @@ export function ReceivingClaimModal({ open, row, onClose, onTicketCreated }: Pro
                         // Nudge the preview effect to re-run with current inputs.
                         setReason((r) => r);
                       }}
-                      className="text-[10px] font-bold uppercase tracking-wider text-gray-500 hover:text-gray-900"
+                      className="text-micro font-bold uppercase tracking-wider text-gray-500 hover:text-gray-900"
                     >
                       Reset to template
                     </button>
@@ -272,7 +272,7 @@ export function ReceivingClaimModal({ open, row, onClose, onTicketCreated }: Pro
 
                 <label
                   htmlFor="claim-subject"
-                  className="mb-1 block text-[9px] font-black uppercase tracking-[0.14em] text-gray-400"
+                  className="mb-1 block text-eyebrow font-black uppercase tracking-[0.14em] text-gray-400"
                 >
                   Subject
                 </label>
@@ -285,12 +285,12 @@ export function ReceivingClaimModal({ open, row, onClose, onTicketCreated }: Pro
                     setSubject(e.target.value);
                   }}
                   placeholder={previewLoading ? 'Generating…' : 'Subject'}
-                  className="mb-3 block w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-[12px] font-semibold text-gray-900 outline-none focus:border-rose-500 focus:ring-2 focus:ring-rose-500/20"
+                  className="mb-3 block w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-label font-semibold text-gray-900 outline-none focus:border-rose-500 focus:ring-2 focus:ring-rose-500/20"
                 />
 
                 <label
                   htmlFor="claim-body"
-                  className="mb-1 block text-[9px] font-black uppercase tracking-[0.14em] text-gray-400"
+                  className="mb-1 block text-eyebrow font-black uppercase tracking-[0.14em] text-gray-400"
                 >
                   Body
                 </label>
@@ -303,11 +303,11 @@ export function ReceivingClaimModal({ open, row, onClose, onTicketCreated }: Pro
                   }}
                   rows={10}
                   placeholder={previewLoading ? 'Generating…' : 'Ticket body'}
-                  className="block w-full resize-y rounded-lg border border-gray-200 bg-white px-3 py-2 font-mono text-[11px] leading-snug text-gray-900 outline-none focus:border-rose-500 focus:ring-2 focus:ring-rose-500/20"
+                  className="block w-full resize-y rounded-lg border border-gray-200 bg-white px-3 py-2 font-mono text-caption leading-snug text-gray-900 outline-none focus:border-rose-500 focus:ring-2 focus:ring-rose-500/20"
                 />
               </div>
 
-              <p className="text-[10px] font-semibold leading-snug text-gray-500">
+              <p className="text-micro font-semibold leading-snug text-gray-500">
                 The template auto-fills from PO, tracking, photos, and the active line. Edit either
                 field above before posting. A ticket # will be filed back into the Support section
                 automatically.
@@ -315,14 +315,14 @@ export function ReceivingClaimModal({ open, row, onClose, onTicketCreated }: Pro
 
               {draftBody ? (
                 <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2">
-                  <p className="text-[10px] font-black uppercase tracking-widest text-amber-700">
+                  <p className="text-micro font-black uppercase tracking-widest text-amber-700">
                     Bridge unreachable — copy this body to Zendesk
                   </p>
                   <textarea
                     readOnly
                     value={draftBody}
                     rows={6}
-                    className="mt-1.5 block w-full resize-none rounded border border-amber-200 bg-white px-2 py-1.5 font-mono text-[10px] text-gray-800 outline-none"
+                    className="mt-1.5 block w-full resize-none rounded border border-amber-200 bg-white px-2 py-1.5 font-mono text-micro text-gray-800 outline-none"
                     onFocus={(e) => e.currentTarget.select()}
                   />
                   <button
@@ -332,7 +332,7 @@ export function ReceivingClaimModal({ open, row, onClose, onTicketCreated }: Pro
                         toast.success('Body copied to clipboard');
                       });
                     }}
-                    className="mt-1.5 text-[10px] font-bold uppercase tracking-widest text-amber-700 hover:text-amber-900"
+                    className="mt-1.5 text-micro font-bold uppercase tracking-widest text-amber-700 hover:text-amber-900"
                   >
                     Copy to clipboard
                   </button>
@@ -346,7 +346,7 @@ export function ReceivingClaimModal({ open, row, onClose, onTicketCreated }: Pro
                 type="button"
                 onClick={onClose}
                 disabled={submitting}
-                className="inline-flex h-10 items-center rounded-xl border border-gray-200 bg-white px-4 text-[11px] font-bold uppercase tracking-widest text-gray-700 transition-colors hover:bg-gray-50 disabled:opacity-50"
+                className="inline-flex h-10 items-center rounded-xl border border-gray-200 bg-white px-4 text-caption font-bold uppercase tracking-widest text-gray-700 transition-colors hover:bg-gray-50 disabled:opacity-50"
               >
                 Cancel
               </button>
@@ -354,7 +354,7 @@ export function ReceivingClaimModal({ open, row, onClose, onTicketCreated }: Pro
                 type="button"
                 onClick={submit}
                 disabled={submitting || !row.receiving_id || !subject.trim() || !description.trim()}
-                className="inline-flex h-10 items-center gap-1.5 rounded-xl bg-rose-600 px-4 text-[11px] font-black uppercase tracking-widest text-white shadow-sm transition-colors hover:bg-rose-700 disabled:cursor-not-allowed disabled:opacity-50"
+                className="inline-flex h-10 items-center gap-1.5 rounded-xl bg-rose-600 px-4 text-caption font-black uppercase tracking-widest text-white shadow-sm transition-colors hover:bg-rose-700 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
                 {submitting ? 'Creating…' : 'Create Zendesk ticket'}

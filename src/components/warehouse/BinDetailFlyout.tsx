@@ -70,13 +70,13 @@ export function BinDetailFlyout({ row, onClose }: Props) {
       >
         <header className="flex items-start gap-3 border-b border-gray-200 px-4 py-3">
           <div className="min-w-0 flex-1">
-            <div className="text-[10px] font-bold uppercase tracking-wider text-gray-500">
+            <div className="text-micro font-bold uppercase tracking-wider text-gray-500">
               Bin
             </div>
             <div className="truncate font-mono text-lg font-semibold text-gray-900">
               {row.barcode ?? row.name}
             </div>
-            <div className="mt-0.5 text-[11px] text-gray-500">
+            <div className="mt-0.5 text-caption text-gray-500">
               {row.room ?? '—'}{row.zone_letter ? ` [${row.zone_letter}]` : ''} · Row {row.row_label ?? '—'} · Col {row.col_label ?? '—'}
             </div>
           </div>
@@ -124,7 +124,7 @@ export function BinDetailFlyout({ row, onClose }: Props) {
 
             {/* Contents */}
             <section>
-              <h3 className="mb-2 text-[10px] font-bold uppercase tracking-[0.16em] text-gray-500">
+              <h3 className="mb-2 text-micro font-bold uppercase tracking-[0.16em] text-gray-500">
                 Contents
               </h3>
               {loading && (
@@ -153,12 +153,12 @@ export function BinDetailFlyout({ row, onClose }: Props) {
                         </span>
                       </div>
                       {c.productTitle && (
-                        <div className="mt-0.5 line-clamp-1 text-[11px] text-gray-500">
+                        <div className="mt-0.5 line-clamp-1 text-caption text-gray-500">
                           {c.productTitle}
                         </div>
                       )}
                       {(c.minQty != null || c.maxQty != null) && (
-                        <div className="mt-0.5 text-[10px] text-gray-400">
+                        <div className="mt-0.5 text-micro text-gray-400">
                           min {c.minQty ?? '—'} · max {c.maxQty ?? '—'}
                         </div>
                       )}
@@ -170,7 +170,7 @@ export function BinDetailFlyout({ row, onClose }: Props) {
 
             {/* History */}
             <section>
-              <h3 className="mb-2 text-[10px] font-bold uppercase tracking-[0.16em] text-gray-500">
+              <h3 className="mb-2 text-micro font-bold uppercase tracking-[0.16em] text-gray-500">
                 Recent history
               </h3>
               <AuditTimeline binId={row.id} limit={20} compact noHeader />
@@ -185,7 +185,7 @@ export function BinDetailFlyout({ row, onClose }: Props) {
 function Stat({ label, value }: { label: string; value: string }) {
   return (
     <div>
-      <div className="text-[9px] font-semibold uppercase tracking-wider text-gray-500">
+      <div className="text-eyebrow font-semibold uppercase tracking-wider text-gray-500">
         {label}
       </div>
       <div className="mt-0.5 text-lg font-semibold tabular-nums text-gray-900">

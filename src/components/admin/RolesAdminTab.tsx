@@ -27,7 +27,7 @@ export function RolesAdminTab() {
             </svg>
           </div>
           <h2 className="text-base font-semibold text-gray-900">Pick a role</h2>
-          <p className="mt-1 text-[12px] text-gray-500">
+          <p className="mt-1 text-label text-gray-500">
             Choose a role from the sidebar to edit its permissions, color, and members. Drag to reorder priority. Click + to create a new role.
           </p>
         </div>

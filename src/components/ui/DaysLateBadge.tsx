@@ -31,7 +31,7 @@ export function DaysLateBadge({
   return (
     <span
       className={[
-        'inline-flex h-8 items-center justify-center rounded-lg border px-2.5 text-[10px] font-black uppercase tracking-wider whitespace-nowrap',
+        'inline-flex h-8 items-center justify-center rounded-lg border px-2.5 text-micro font-black uppercase tracking-wider whitespace-nowrap',
         tone,
         className,
       ].join(' ')}

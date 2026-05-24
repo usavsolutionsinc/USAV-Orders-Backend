@@ -82,28 +82,28 @@ function BinPageInner() {
       <header className="sticky top-0 z-10 bg-white border-b border-slate-200 px-4 py-3">
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
-            <p className="text-[10px] font-black uppercase tracking-[0.16em] text-slate-500">
+            <p className="text-micro font-black uppercase tracking-[0.16em] text-slate-500">
               Bin
             </p>
             <h1 className="truncate text-lg font-black text-slate-900">
               {bin?.location.name || barcode}
             </h1>
             {subtitle && (
-              <p className="mt-0.5 truncate text-[11px] font-semibold text-slate-600">
+              <p className="mt-0.5 truncate text-caption font-semibold text-slate-600">
                 {subtitle}
               </p>
             )}
           </div>
           <div className="flex flex-col items-end gap-1.5">
             {bin?.location.capacity != null && (
-              <span className="inline-flex items-center rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-bold text-slate-700">
+              <span className="inline-flex items-center rounded-full bg-slate-100 px-2 py-0.5 text-micro font-bold text-slate-700">
                 Cap {bin.location.capacity}
               </span>
             )}
             <button
               type="button"
               onClick={load}
-              className="rounded-md border border-slate-300 bg-white px-2.5 py-1 text-[11px] font-bold text-slate-700 active:bg-slate-50"
+              className="rounded-md border border-slate-300 bg-white px-2.5 py-1 text-caption font-bold text-slate-700 active:bg-slate-50"
             >
               Refresh
             </button>
@@ -126,7 +126,7 @@ function BinPageInner() {
         {!loading && bin && (
           <>
             <section>
-              <p className="px-1 mb-2 text-[10px] font-black uppercase tracking-[0.16em] text-slate-500">
+              <p className="px-1 mb-2 text-micro font-black uppercase tracking-[0.16em] text-slate-500">
                 Contents ({bin.contents.length})
               </p>
               {bin.contents.length === 0 ? (
@@ -150,7 +150,7 @@ function BinPageInner() {
                               {row.sku}
                             </p>
                             {row.productTitle && (
-                              <p className="mt-1 text-[11px] text-slate-500 line-clamp-2 leading-snug">
+                              <p className="mt-1 text-caption text-slate-500 line-clamp-2 leading-snug">
                                 {row.productTitle}
                               </p>
                             )}
@@ -160,7 +160,7 @@ function BinPageInner() {
                               {row.qty}
                             </p>
                             {row.minQty != null && row.maxQty != null && (
-                              <p className="text-[10px] font-bold text-slate-500">
+                              <p className="text-micro font-bold text-slate-500">
                                 {row.minQty}–{row.maxQty}
                               </p>
                             )}
@@ -180,7 +180,7 @@ function BinPageInner() {
         )}
       </main>
 
-      <footer className="sticky bottom-0 bg-white border-t border-slate-200 px-4 py-3 text-[11px] font-semibold text-slate-500 text-center">
+      <footer className="sticky bottom-0 bg-white border-t border-slate-200 px-4 py-3 text-caption font-semibold text-slate-500 text-center">
         Staff #{staffId}
       </footer>
     </div>

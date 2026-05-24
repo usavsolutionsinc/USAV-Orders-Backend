@@ -114,10 +114,10 @@ export function ArchitectureSidebarPanel() {
       stats={
         manifest ? (
           <div className="flex w-full flex-col gap-0.5">
-            <p className="text-[10px] font-bold uppercase tracking-wider text-gray-500">
+            <p className="text-micro font-bold uppercase tracking-wider text-gray-500">
               {manifest.files_scanned.toLocaleString()} files · {manifest.git_head.slice(0, 7)}
             </p>
-            <p className="text-[10px] text-gray-400">Generated {manifest.generated_at}</p>
+            <p className="text-micro text-gray-400">Generated {manifest.generated_at}</p>
           </div>
         ) : null
       }
@@ -125,7 +125,7 @@ export function ArchitectureSidebarPanel() {
         <button
           type="button"
           onClick={() => void refresh()}
-          className="inline-flex w-full items-center justify-center gap-1.5 rounded-lg border border-dashed border-gray-300 bg-white px-3 py-1.5 text-[12px] font-semibold text-gray-700 transition hover:border-blue-400 hover:bg-blue-50 hover:text-blue-700"
+          className="inline-flex w-full items-center justify-center gap-1.5 rounded-lg border border-dashed border-gray-300 bg-white px-3 py-1.5 text-label font-semibold text-gray-700 transition hover:border-blue-400 hover:bg-blue-50 hover:text-blue-700"
         >
           <svg
             className="h-3.5 w-3.5"

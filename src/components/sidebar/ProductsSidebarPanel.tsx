@@ -243,10 +243,10 @@ function ModeDropdown({ mode, onChange }: ModeDropdownProps) {
           <CurrentIcon className="h-4 w-4" />
         </span>
         <span className="flex min-w-0 flex-1 flex-col">
-          <span className="text-[11px] font-black uppercase tracking-[0.14em] text-gray-900">
+          <span className="text-caption font-black uppercase tracking-[0.14em] text-gray-900">
             {current.label}
           </span>
-          <span className="truncate text-[10px] font-medium text-gray-500">
+          <span className="truncate text-micro font-medium text-gray-500">
             {current.description}
           </span>
         </span>
@@ -287,10 +287,10 @@ function ModeDropdown({ mode, onChange }: ModeDropdownProps) {
                     <Icon className="h-4 w-4" />
                   </span>
                   <span className="flex min-w-0 flex-col">
-                    <span className="text-[11px] font-black uppercase tracking-[0.14em] text-gray-900">
+                    <span className="text-caption font-black uppercase tracking-[0.14em] text-gray-900">
                       {label}
                     </span>
-                    <span className="truncate text-[10px] font-medium text-gray-500">
+                    <span className="truncate text-micro font-medium text-gray-500">
                       {description}
                     </span>
                   </span>
@@ -341,21 +341,21 @@ function ProductPickerList({ query, recents, onPick }: ProductPickerListProps) {
   return (
     <div className="flex-1 overflow-y-auto">
       {isLoading && items.length === 0 ? (
-        <div className="px-4 py-6 text-center text-[11px] font-semibold text-gray-400">
+        <div className="px-4 py-6 text-center text-caption font-semibold text-gray-400">
           Loading products…
         </div>
       ) : isError ? (
-        <div className="px-4 py-6 text-center text-[11px] font-semibold text-red-500">
+        <div className="px-4 py-6 text-center text-caption font-semibold text-red-500">
           Couldn't load products.
         </div>
       ) : items.length === 0 ? (
-        <div className="px-4 py-6 text-center text-[11px] font-semibold text-gray-400">
+        <div className="px-4 py-6 text-center text-caption font-semibold text-gray-400">
           {trimmedQuery ? 'No matches.' : 'No Ecwid products available.'}
         </div>
       ) : (
         <ul className="divide-y divide-gray-100">
           {recentItems.length > 0 && (
-            <li className="bg-gray-50 px-3 py-1.5 text-[9px] font-black uppercase tracking-[0.18em] text-gray-500">
+            <li className="bg-gray-50 px-3 py-1.5 text-eyebrow font-black uppercase tracking-[0.18em] text-gray-500">
               Recent
             </li>
           )}
@@ -363,7 +363,7 @@ function ProductPickerList({ query, recents, onPick }: ProductPickerListProps) {
             <ProductRow key={`recent-${item.id}`} item={item} onPick={onPick} />
           ))}
           {recentItems.length > 0 && restItems.length > 0 && (
-            <li className="bg-gray-50 px-3 py-1.5 text-[9px] font-black uppercase tracking-[0.18em] text-gray-500">
+            <li className="bg-gray-50 px-3 py-1.5 text-eyebrow font-black uppercase tracking-[0.18em] text-gray-500">
               All
             </li>
           )}
@@ -405,10 +405,10 @@ function ProductRow({ item, onPick }: ProductRowProps) {
           )}
         </span>
         <span className="flex min-w-0 flex-1 flex-col">
-          <span className="text-[12px] font-semibold leading-snug text-gray-900 break-words">
+          <span className="text-label font-semibold leading-snug text-gray-900 break-words">
             {item.product_title || item.sku}
           </span>
-          <span className="truncate font-mono text-[10px] text-gray-500">{item.sku}</span>
+          <span className="truncate font-mono text-micro text-gray-500">{item.sku}</span>
         </span>
       </button>
     </li>

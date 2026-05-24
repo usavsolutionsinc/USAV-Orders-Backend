@@ -213,7 +213,7 @@ export default function MobileScanPage() {
             <button
               type="button"
               onClick={() => void scanner.startScanning()}
-              className="rounded-lg bg-white/10 px-4 py-2 text-[11px] font-black uppercase tracking-widest text-white hover:bg-white/20"
+              className="rounded-lg bg-white/10 px-4 py-2 text-caption font-black uppercase tracking-widest text-white hover:bg-white/20"
             >
               Try Again
             </button>
@@ -236,13 +236,13 @@ export default function MobileScanPage() {
               autoComplete="off"
               autoCapitalize="characters"
               spellCheck={false}
-              className="flex-1 rounded-lg border border-gray-300 bg-white px-3 py-2 text-[14px] font-mono text-gray-900 placeholder:text-gray-400 focus:outline-none focus:border-gray-500"
+              className="flex-1 rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm font-mono text-gray-900 placeholder:text-gray-400 focus:outline-none focus:border-gray-500"
             />
             <button
               type="button"
               onClick={() => sendScan(input)}
               disabled={!input.trim()}
-              className={`rounded-lg px-4 py-2 text-[12px] font-black uppercase tracking-wider text-white disabled:opacity-40 ${themeColors.bg} ${themeColors.hover}`}
+              className={`rounded-lg px-4 py-2 text-label font-black uppercase tracking-wider text-white disabled:opacity-40 ${themeColors.bg} ${themeColors.hover}`}
             >
               Send
             </button>
@@ -264,7 +264,7 @@ export default function MobileScanPage() {
           </p>
           <div className="flex flex-col gap-1 max-h-40 overflow-auto">
             {scans.length === 0 ? (
-              <p className="text-[11px] text-gray-400">Nothing yet.</p>
+              <p className="text-caption text-gray-400">Nothing yet.</p>
             ) : (
               scans.map((s) => (
                 <div
@@ -273,7 +273,7 @@ export default function MobileScanPage() {
                 >
                   <div className="flex items-center gap-2 min-w-0">
                     <StatusDot status={s.status} />
-                    <span className="truncate font-mono text-[12px] text-gray-800">{s.tracking}</span>
+                    <span className="truncate font-mono text-label text-gray-800">{s.tracking}</span>
                   </div>
                   <span className="shrink-0 text-xs text-gray-400 uppercase tracking-wider">
                     {statusLabel(s)}

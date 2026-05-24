@@ -27,7 +27,7 @@ export default function MobileReceivingLivePage() {
           <Menu className="h-6 w-6" />
         </button>
 
-        <h1 className="flex-1 text-[17px] font-black tracking-tight text-gray-900">
+        <h1 className="flex-1 text-lg font-black tracking-tight text-gray-900">
           Receiving
         </h1>
 

@@ -63,7 +63,7 @@ export function MobilePackingPhotoStep({
       <p className="text-xs font-black uppercase tracking-[0.2em] text-white/50">
         Ready to pack
       </p>
-      <p className="text-[13px] font-black text-white truncate">{productTitle}</p>
+      <p className="text-sm font-black text-white truncate">{productTitle}</p>
     </div>
   ) : undefined;
 

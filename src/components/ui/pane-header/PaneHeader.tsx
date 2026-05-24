@@ -36,6 +36,16 @@ const MAX_WIDTH_CLASS: Record<NonNullable<PaneHeaderProps['maxWidth']>, string> 
   '7xl': 'mx-auto w-full max-w-7xl',
 };
 
+/**
+ * Matches utilities that grow the row past 44px or change its alignment in a
+ * way that breaks sidebar alignment. Page headers must stay at 44px — callers
+ * who need this kind of override are almost always rendering a detail-pane
+ * header, in which case PaneHeader is correct but they should be aware they
+ * are opting out of the page-header alignment contract.
+ */
+const ROW_HEIGHT_OVERRIDE_RE =
+  /(?:^|\s)(?:py-|pt-|pb-|h-\d|min-h-)/;
+
 export function PaneHeader({
   leftSlot,
   rightSlot,
@@ -44,6 +54,15 @@ export function PaneHeader({
   rowClassName,
   maxWidth,
 }: PaneHeaderProps) {
+  if (process.env.NODE_ENV !== 'production' && rowClassName && ROW_HEIGHT_OVERRIDE_RE.test(rowClassName)) {
+    console.warn(
+      'PaneHeader: `rowClassName` contains a height/vertical-padding override. ' +
+        'For page-level headers (top of a route), use PageHeader instead — it locks the row at 44px so it aligns with the sidebar back button. ' +
+        'PaneHeader with this override is appropriate for detail-pane headers (flyouts, side panels). ' +
+        `Got: "${rowClassName}"`,
+    );
+  }
+
   const shell = cn(mainStickyHeaderClass, className);
   const row = cn(paneHeaderRowClass, rowClassName);
   const container = maxWidth ? MAX_WIDTH_CLASS[maxWidth] : null;

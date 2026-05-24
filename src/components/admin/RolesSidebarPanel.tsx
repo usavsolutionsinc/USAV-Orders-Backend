@@ -111,7 +111,7 @@ export function RolesSidebarPanel() {
         <button
           type="button"
           onClick={() => setCreateOpen(true)}
-          className="inline-flex w-full items-center justify-center gap-1.5 rounded-lg border border-dashed border-gray-300 bg-white px-3 py-1.5 text-[12px] font-semibold text-gray-700 transition hover:border-blue-400 hover:bg-blue-50 hover:text-blue-700"
+          className="inline-flex w-full items-center justify-center gap-1.5 rounded-lg border border-dashed border-gray-300 bg-white px-3 py-1.5 text-label font-semibold text-gray-700 transition hover:border-blue-400 hover:bg-blue-50 hover:text-blue-700"
         >
           <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M12 5v14"/><path d="M5 12h14"/></svg>
           Create role
@@ -198,19 +198,19 @@ function SortableRoleRow({ role, selected, onPick }: SortableRoleRowProps) {
           className="min-w-0 flex-1 text-left"
         >
           <div className="flex items-center gap-1.5">
-            <span className="truncate text-[13px] font-semibold text-gray-900">{role.label}</span>
+            <span className="truncate text-sm font-semibold text-gray-900">{role.label}</span>
             {role.is_system && (
-              <span className="rounded-full bg-gray-100 px-1.5 py-0.5 text-[8px] font-bold uppercase tracking-wider text-gray-500">
+              <span className="rounded-full bg-gray-100 px-1.5 py-0.5 text-mini font-bold uppercase tracking-wider text-gray-500">
                 System
               </span>
             )}
           </div>
-          <div className="truncate text-[10px] font-medium uppercase tracking-wider text-gray-500">
+          <div className="truncate text-micro font-medium uppercase tracking-wider text-gray-500">
             {role.key}
           </div>
         </button>
 
-        <span title={`${role.member_count} member${role.member_count === 1 ? '' : 's'}`} className="flex-shrink-0 rounded-full bg-gray-100 px-1.5 py-0.5 text-[10px] font-semibold tabular-nums text-gray-600">
+        <span title={`${role.member_count} member${role.member_count === 1 ? '' : 's'}`} className="flex-shrink-0 rounded-full bg-gray-100 px-1.5 py-0.5 text-micro font-semibold tabular-nums text-gray-600">
           {role.member_count}
         </span>
       </div>

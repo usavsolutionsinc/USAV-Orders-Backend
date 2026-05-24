@@ -103,10 +103,10 @@ function FeedbackBody({ activeOrder, lastSerial }: { activeOrder: ActiveStationO
       <div className="flex items-center justify-between gap-2">
         <div className="flex min-w-0 items-center gap-1.5">
           <Icon className={`h-3.5 w-3.5 shrink-0 ${tint}`} />
-          <span className="text-[9px] font-black uppercase tracking-widest text-gray-400">
+          <span className="text-eyebrow font-black uppercase tracking-widest text-gray-400">
             {label}
           </span>
-          <span className="truncate text-[11px] font-black tracking-tight text-gray-900">
+          <span className="truncate text-caption font-black tracking-tight text-gray-900">
             #{identifier}
           </span>
         </div>
@@ -126,7 +126,7 @@ function FeedbackBody({ activeOrder, lastSerial }: { activeOrder: ActiveStationO
             transition={{ duration: 0.32, ease: [0.22, 1, 0.36, 1] }}
           />
         </div>
-        <span className="shrink-0 text-[10px] font-black tabular-nums text-gray-700">
+        <span className="shrink-0 text-micro font-black tabular-nums text-gray-700">
           {scanned}/{qty}
           {remaining > 0 ? (
             <span className="ml-1 font-bold text-gray-400">· {remaining} left</span>
@@ -149,8 +149,8 @@ function FeedbackBody({ activeOrder, lastSerial }: { activeOrder: ActiveStationO
           >
             <div className="mt-1.5 flex items-center gap-1.5 rounded-md bg-emerald-50 px-2 py-1 ring-1 ring-inset ring-emerald-200">
               <Barcode className="h-3 w-3 text-emerald-600" />
-              <span className="text-[9px] font-black uppercase tracking-widest text-emerald-600">Last</span>
-              <span className="truncate font-mono text-[10px] font-bold text-emerald-900">{lastSerial}</span>
+              <span className="text-eyebrow font-black uppercase tracking-widest text-emerald-600">Last</span>
+              <span className="truncate font-mono text-micro font-bold text-emerald-900">{lastSerial}</span>
             </div>
           </motion.div>
         ) : null}

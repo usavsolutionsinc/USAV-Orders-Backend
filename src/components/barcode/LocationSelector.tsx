@@ -134,7 +134,7 @@ export function LocationSelector({
               value={value}
               onChange={onChange}
               variant="boxy"
-              buttonClassName="h-12 w-full border-b border-gray-200 bg-white px-5 pr-12 text-left text-[10px] font-black uppercase tracking-widest text-gray-900 outline-none transition-colors hover:bg-gray-50"
+              buttonClassName="h-12 w-full border-b border-gray-200 bg-white px-5 pr-12 text-left text-micro font-black uppercase tracking-widest text-gray-900 outline-none transition-colors hover:bg-gray-50"
             />
           </div>
           <button
@@ -146,7 +146,7 @@ export function LocationSelector({
             title={showAdd ? 'Cancel' : 'Add new location'}
           >
             {showAdd ? <X className="h-3.5 w-3.5" /> : (
-              <><Plus className="h-3.5 w-3.5" /><span className="text-[9px] font-black uppercase tracking-widest">New</span></>
+              <><Plus className="h-3.5 w-3.5" /><span className="text-eyebrow font-black uppercase tracking-widest">New</span></>
             )}
           </button>
         </div>
@@ -162,7 +162,7 @@ export function LocationSelector({
       {currentLocation && (
         <div className="flex items-center gap-2 px-5 py-2.5 bg-gray-50 border-b border-gray-200">
           <MapPin className="h-3 w-3 text-orange-500" />
-          <span className="text-[9px] font-black uppercase tracking-widest text-gray-500">Current:</span>
+          <span className="text-eyebrow font-black uppercase tracking-widest text-gray-500">Current:</span>
           <span className="text-xs font-black font-mono text-orange-600">{currentLocation}</span>
         </div>
       )}
@@ -175,7 +175,7 @@ export function LocationSelector({
             value={selectedRoom}
             onChange={(z) => { setSelectedZone(z); if (!z) onChange(''); }}
             variant="boxy"
-            buttonClassName="h-14 w-full border-b border-gray-400 bg-white px-5 pr-12 text-left text-[13px] font-bold uppercase tracking-wide text-gray-900 outline-none transition-colors hover:bg-gray-50"
+            buttonClassName="h-14 w-full border-b border-gray-400 bg-white px-5 pr-12 text-left text-sm font-bold uppercase tracking-wide text-gray-900 outline-none transition-colors hover:bg-gray-50"
           />
         </div>
         <button
@@ -187,7 +187,7 @@ export function LocationSelector({
           title={showAdd ? 'Cancel' : 'Add new location'}
         >
           {showAdd ? <X className="h-3.5 w-3.5" /> : (
-            <><Plus className="h-3.5 w-3.5" /><span className="text-[9px] font-black uppercase tracking-widest">New</span></>
+            <><Plus className="h-3.5 w-3.5" /><span className="text-eyebrow font-black uppercase tracking-widest">New</span></>
           )}
         </button>
       </div>
@@ -198,7 +198,7 @@ export function LocationSelector({
           <div className="flex items-center gap-2 mb-2">
             <span className={sectionLabel}>Select Bin — {selectedRoom}</span>
             {value && (
-              <span className="text-[10px] font-black font-mono text-blue-600 bg-blue-50 px-2 py-0.5 rounded">
+              <span className="text-micro font-black font-mono text-blue-600 bg-blue-50 px-2 py-0.5 rounded">
                 {value}
               </span>
             )}
@@ -209,9 +209,9 @@ export function LocationSelector({
             <table className="w-full border-collapse">
               <thead>
                 <tr>
-                  <th className="w-10 p-1 text-[9px] font-black text-gray-400 text-center">ROW</th>
+                  <th className="w-10 p-1 text-eyebrow font-black text-gray-400 text-center">ROW</th>
                   {grid.allCols.map((col) => (
-                    <th key={col} className="p-1 text-[9px] font-black text-gray-400 text-center min-w-[36px]">
+                    <th key={col} className="p-1 text-eyebrow font-black text-gray-400 text-center min-w-[36px]">
                       {col}
                     </th>
                   ))}
@@ -220,7 +220,7 @@ export function LocationSelector({
               <tbody>
                 {grid.rowLabels.map((row) => (
                   <tr key={row}>
-                    <td className="p-1 text-[10px] font-black text-gray-500 text-center">{row}</td>
+                    <td className="p-1 text-micro font-black text-gray-500 text-center">{row}</td>
                     {grid.allCols.map((col) => {
                       const hasCell = grid.rows[row]?.includes(col);
                       const bin = locations.find(
@@ -239,7 +239,7 @@ export function LocationSelector({
                           <button
                             type="button"
                             onClick={() => handleGridSelect(row, col)}
-                            className={`h-8 w-full rounded text-[9px] font-black uppercase tracking-wider transition-all ${
+                            className={`h-8 w-full rounded text-eyebrow font-black uppercase tracking-wider transition-all ${
                               isSelected
                                 ? 'bg-blue-600 text-white ring-2 ring-blue-300'
                                 : isCurrent
@@ -329,7 +329,7 @@ function AddForm({
         </button>
       </div>
       {createError && (
-        <p className="text-[10px] font-bold text-red-600">{createError.message}</p>
+        <p className="text-micro font-bold text-red-600">{createError.message}</p>
       )}
     </div>
   );

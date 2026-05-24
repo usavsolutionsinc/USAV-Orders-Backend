@@ -17,10 +17,12 @@ type CardTone = 'emerald' | 'red' | 'orange' | 'purple' | 'teal' | 'gray';
  * Visual treatment when `isSelected` is true on desktop.
  * - `stripe` (default, legacy): left 3px accent + bottom border, in-line with the row stack.
  * - `framed`: full perimeter ring + rounded corners + soft lift. Card visually
- *   detaches from the row stack on selection. Use for cards where actions
- *   have moved off the card itself (e.g. `OrderCard` in /tech Up Next).
+ *   detaches from the row stack on selection.
+ * - `linear`: Linear/Superhuman-style row. Left 3px accent on selection, subtle
+ *   bg on hover, no ring or lift. Preserves vertical row rhythm; the selected
+ *   card never visually jumps out of the stack. Used by the /tech Up Next list.
  */
-type CardShellVariant = 'stripe' | 'framed';
+type CardShellVariant = 'stripe' | 'framed' | 'linear';
 
 interface CardShellProps {
   children: ReactNode;
@@ -95,7 +97,20 @@ export function CardShell({
     // Idle: continues to act as a row in the stack — bottom separator + hover.
     : `relative cursor-pointer px-0 py-3 transition-colors bg-white border-b-2 ${border.idle} hover:${border.active}`;
 
-  const desktopClasses = variant === 'framed' ? desktopFramedClasses : desktopStripeClasses;
+  // `linear`: row stays in the stack at all times. Selected = left 3px accent
+  // bar + tinted bg, no ring, no lift, no rounding. Hover = subtle bg only,
+  // no border change so neighbours never shift. The trailing-action slot in
+  // children should reserve its own width so opacity reveals don't jump.
+  const desktopLinearClasses = isSelected
+    ? `relative cursor-pointer px-3 py-2.5 transition-colors ${selected.bg} ${selected.accent} before:absolute before:inset-y-1.5 before:left-0 before:w-[3px] before:rounded-r-full`
+    : `relative cursor-pointer px-3 py-2.5 transition-colors bg-white hover:bg-gray-50`;
+
+  const desktopClasses =
+    variant === 'framed'
+      ? desktopFramedClasses
+      : variant === 'linear'
+      ? desktopLinearClasses
+      : desktopStripeClasses;
 
   const mobileClasses = `rounded-2xl border mb-2 px-0 py-3 transition-colors relative ${
     isSelected
@@ -105,6 +120,9 @@ export function CardShell({
 
   const presence = isMobile ? framerPresenceMobile.mobileCard : framerPresence.upNextRow;
   const transition = isMobile ? framerTransitionMobile.mobileCardMount : framerTransition.upNextRowMount;
+  // Linear variant intentionally suppresses the lift/scale hover gesture so
+  // rows don't jump and neighbours never shift. Hover state is bg-only.
+  const hoverGesture = !isMobile && variant === 'linear' ? undefined : framerGesture.cardHover;
 
   return (
     <motion.div
@@ -112,11 +130,11 @@ export function CardShell({
       initial={presence.initial}
       animate={presence.animate}
       exit={presence.exit}
-      whileHover={framerGesture.cardHover}
+      whileHover={hoverGesture}
       whileTap={framerGesture.tapPress}
       transition={transition}
       onClick={onClick}
-      className={`${isMobile ? mobileClasses : desktopClasses} ${className}`}
+      className={`group ${isMobile ? mobileClasses : desktopClasses} ${className}`}
     >
       {children}
     </motion.div>

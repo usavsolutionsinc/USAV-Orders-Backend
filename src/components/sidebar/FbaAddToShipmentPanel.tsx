@@ -172,7 +172,7 @@ export function FbaAddToShipmentPanel({
                 disabled={!hasShipments}
               />
             </div>
-            {addError ? <p className="text-[10px] font-semibold text-red-600">{addError}</p> : null}
+            {addError ? <p className="text-micro font-semibold text-red-600">{addError}</p> : null}
             <button
               type="button"
               onClick={() => void handleAddFnsku()}
@@ -183,7 +183,7 @@ export function FbaAddToShipmentPanel({
               Add to plan
             </button>
             {!hasShipments ? (
-              <p className="text-[10px] text-gray-500">
+              <p className="text-micro text-gray-500">
                 Open a plan to enable manual entries.
               </p>
             ) : null}

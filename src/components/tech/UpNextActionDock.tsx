@@ -93,7 +93,7 @@ export function UpNextActionDock({ order }: UpNextActionDockProps) {
         <button
           type="button"
           onClick={() => setShowEditor((v) => !v)}
-          className={`inline-flex h-12 flex-1 items-center justify-center gap-2 rounded-xl border text-[12px] font-black uppercase tracking-widest transition-colors ${
+          className={`inline-flex h-12 flex-1 items-center justify-center gap-2 rounded-xl border text-label font-black uppercase tracking-widest transition-colors ${
             hasOutOfStock || showEditor
               ? 'border-red-300 bg-red-50 text-red-700 hover:bg-red-100'
               : 'border-red-200 bg-white text-red-600 hover:bg-red-50'
@@ -105,7 +105,7 @@ export function UpNextActionDock({ order }: UpNextActionDockProps) {
         <button
           type="button"
           onClick={handleStart}
-          className="inline-flex h-12 flex-1 items-center justify-center gap-2 rounded-xl bg-emerald-600 text-[12px] font-black uppercase tracking-widest text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.22),inset_0_-1px_0_rgba(6,95,70,0.34)] transition-colors hover:bg-emerald-700"
+          className="inline-flex h-12 flex-1 items-center justify-center gap-2 rounded-xl bg-emerald-600 text-label font-black uppercase tracking-widest text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.22),inset_0_-1px_0_rgba(6,95,70,0.34)] transition-colors hover:bg-emerald-700"
         >
           <Play className="h-4 w-4" />
           <span>Start</span>

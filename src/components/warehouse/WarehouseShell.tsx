@@ -19,6 +19,7 @@ import { LabelPrintWorkspace } from './LabelPrintWorkspace';
 import { RackLabelWorkspace } from './RackLabelWorkspace';
 import { RackDetailView } from './RackDetailView';
 import { WarehouseMap, type MapViewMode } from './WarehouseMap';
+import { PageHeader } from '@/components/ui/pane-header';
 
 type InventoryTab = 'rooms' | 'bins' | 'labels' | 'racks' | 'map';
 
@@ -70,18 +71,16 @@ function BinsTabBody() {
 
   return (
     <>
-      <div className="space-y-4">
-        <header className="flex items-baseline justify-between">
-          <div>
-            <h1 className="text-xl font-semibold text-gray-900">Bins</h1>
-            <p className="text-sm text-gray-500">
-              {loading
-                ? 'Loading…'
-                : `${visibleRows.length} of ${counts.total} bin${counts.total === 1 ? '' : 's'}`}
-            </p>
-          </div>
-        </header>
-
+      <PageHeader
+        title="Bins"
+        count={visibleRows.length}
+        metaSlot={
+          <span className="text-xs text-gray-500">
+            {loading ? 'Loading…' : `of ${counts.total}`}
+          </span>
+        }
+      />
+      <div className="space-y-4 px-4 pt-4 sm:px-6">
         <BinsFilterBar
           counts={counts}
           rooms={rooms}
@@ -134,14 +133,14 @@ function MapTabBody() {
 
   return (
     <>
-      <div className="space-y-4">
-        <header className="flex items-baseline justify-between gap-3">
-          <div>
-            <h1 className="text-xl font-semibold text-gray-900">Warehouse map</h1>
-            <p className="text-sm text-gray-500">
-              {loading ? 'Loading…' : `Viewing by ${mode === 'fill' ? 'fill %' : mode === 'age' ? 'last counted' : 'issues'}`}
-            </p>
-          </div>
+      <PageHeader
+        title="Warehouse map"
+        metaSlot={
+          <span className="text-xs text-gray-500">
+            {loading ? 'Loading…' : `by ${mode === 'fill' ? 'fill %' : mode === 'age' ? 'last counted' : 'issues'}`}
+          </span>
+        }
+        rightSlot={
           <button
             type="button"
             onClick={toggleEmpty}
@@ -154,8 +153,9 @@ function MapTabBody() {
           >
             {showEmpty ? 'Hide' : 'Show'} empty bins
           </button>
-        </header>
-
+        }
+      />
+      <div className="space-y-4 px-4 pt-4 sm:px-6">
         <WarehouseMap
           rows={rows}
           loading={loading}

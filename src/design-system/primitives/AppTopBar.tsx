@@ -39,7 +39,7 @@ export function AppTopBar({ title, onOpenDrawer, trailing, className }: AppTopBa
         </button>
 
         <div className="flex h-full min-w-0 items-center justify-center bg-white px-3">
-          <span className="truncate text-[10px] font-black uppercase tracking-[0.18em] text-gray-700">
+          <span className="truncate text-micro font-black uppercase tracking-[0.18em] text-gray-700">
             {title}
           </span>
         </div>

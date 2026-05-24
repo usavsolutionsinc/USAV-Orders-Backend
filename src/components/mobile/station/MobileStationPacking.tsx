@@ -470,7 +470,7 @@ export function MobileStationPacking({
               <div className="flex items-center gap-2">
                 <NetworkChip compact />
                 <MobileSettingsButton />
-                <span className="text-[11px] font-black text-gray-500 tabular-nums">
+                <span className="text-caption font-black text-gray-500 tabular-nums">
                   {todayCount}/{goal}
                 </span>
                 <div className="p-2 bg-gray-900 text-white rounded-xl">
@@ -550,7 +550,7 @@ export function MobileStationPacking({
                   </div>
                   <p className="text-sm font-bold text-gray-500">Scan a tracking number to start</p>
                   {!suppressBottomActionBar && (
-                    <p className="text-[11px] text-gray-400 mt-1">
+                    <p className="text-caption text-gray-400 mt-1">
                       Use the camera button or type below
                     </p>
                   )}
@@ -575,7 +575,7 @@ export function MobileStationPacking({
                 <Loader2 className="w-8 h-8 text-gray-400 animate-spin mb-4" />
                 <p className="text-sm font-bold text-gray-600">Looking up order...</p>
                 {state.scannedValue && (
-                  <p className="text-[11px] font-mono text-gray-400 mt-2 break-all px-4 text-center">
+                  <p className="text-caption font-mono text-gray-400 mt-2 break-all px-4 text-center">
                     {state.scannedValue}
                   </p>
                 )}
@@ -679,7 +679,7 @@ export function MobileStationPacking({
                 <button
                   type="button"
                   onClick={handleSuccessFinished}
-                  className="mt-8 h-[52px] px-8 rounded-2xl bg-gray-900 text-white text-[12px] font-black uppercase tracking-wider active:bg-gray-800 transition-colors"
+                  className="mt-8 h-[52px] px-8 rounded-2xl bg-gray-900 text-white text-label font-black uppercase tracking-wider active:bg-gray-800 transition-colors"
                 >
                   Scan Next
                 </button>
@@ -727,11 +727,11 @@ export function MobileStationPacking({
             role="status"
           >
             <Barcode className="h-4 w-4 flex-shrink-0 text-white/80" />
-            <p className="text-[12px] font-bold flex-1">{scanToast.message}</p>
+            <p className="text-label font-bold flex-1">{scanToast.message}</p>
             <button
               type="button"
               onClick={() => setScanToast(null)}
-              className="text-[11px] font-black uppercase tracking-wider text-white/70 active:text-white"
+              className="text-caption font-black uppercase tracking-wider text-white/70 active:text-white"
               aria-label="Dismiss"
             >
               Dismiss

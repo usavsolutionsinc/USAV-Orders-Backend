@@ -287,13 +287,13 @@ export function TechTable({ testedBy }: TechTableProps) {
                                   className={`h-2 w-2 shrink-0 rounded-full ${SOURCE_DOT_BG[dotType]}`}
                                   title={SOURCE_DOT_LABEL[dotType]}
                                 />
-                                <div className="text-[11px] font-bold text-gray-900 truncate">
+                                <div className="text-caption font-bold text-gray-900 truncate">
                                   {hasUsableProductTitle(record.product_title)
                                     ? normalizeProductTitle(record.product_title)
                                     : 'Unknown Product'}
                                 </div>
                               </div>
-                              <div className="text-[9px] font-black text-gray-500 uppercase tracking-widest truncate mt-0.5 pl-4">
+                              <div className="text-eyebrow font-black text-gray-500 uppercase tracking-widest truncate mt-0.5 pl-4">
                                 <span className={(parseInt(String(record.quantity || '1'), 10) || 1) > 1 ? 'text-yellow-600' : undefined}>
                                   {parseInt(String(record.quantity || '1'), 10) || 1}
                                 </span> • {conditionLabel}

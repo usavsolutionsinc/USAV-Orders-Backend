@@ -11,6 +11,7 @@
 
 import { requirePermission } from '@/lib/auth/page-guard';
 import pool from '@/lib/db';
+import { PageHeader } from '@/components/ui/pane-header';
 import { IntegrationCard } from './IntegrationCard';
 
 const PROVIDER_CATALOG = [
@@ -55,13 +56,11 @@ export default async function IntegrationsPage() {
 
   return (
     <div className="min-h-screen bg-gray-50 antialiased">
-      <div className="mx-auto max-w-5xl space-y-6 px-6 py-10">
-        <header>
-          <h1 className="text-[28px] font-semibold tracking-tight text-gray-900">Integrations</h1>
-          <p className="mt-1 text-[13px] text-gray-500">
-            Connected services for this workspace. Credentials are encrypted at rest with the workspace vault.
-          </p>
-        </header>
+      <PageHeader title="Integrations" maxWidth="5xl" />
+      <div className="mx-auto max-w-5xl space-y-6 px-6 py-6">
+        <p className="text-[13px] text-gray-500">
+          Connected services for this workspace. Credentials are encrypted at rest with the workspace vault.
+        </p>
 
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {PROVIDER_CATALOG.map((p) => (

@@ -1,6 +1,6 @@
 'use client';
 
-import { InventoryControlsPanel } from '@/components/inventory-v2/InventoryControlsPanel';
+import { InventoryControlsPanel } from '@/components/inventory/InventoryControlsPanel';
 
 /**
  * Sidebar panel for the inventory area.

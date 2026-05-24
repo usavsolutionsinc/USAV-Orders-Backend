@@ -255,7 +255,7 @@ export function SiteTooltipProvider({ children }: { children: React.ReactNode })
                 onLayoutAnimationComplete={handleLayoutAnimComplete}
                 transition={{ duration: 0.22, ease: [0.4, 0, 0.2, 1] }}
                 style={{ overflow: 'hidden' }}
-                className="flex max-w-[min(90vw,24rem)] items-start gap-2 rounded-md bg-gray-900 px-2.5 py-1.5 text-[11px] font-semibold text-white shadow-md"
+                className="flex max-w-[min(90vw,24rem)] items-start gap-2 rounded-md bg-gray-900 px-2.5 py-1.5 text-caption font-semibold text-white shadow-md"
               >
                 <AnimatePresence mode="popLayout">
                   <motion.div

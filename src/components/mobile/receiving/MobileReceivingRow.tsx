@@ -64,7 +64,7 @@ function PhotoChip({ count, isAction = false }: { count: number; isAction?: bool
   const has = count > 0;
   return (
     <div
-      className={`inline-flex w-[60px] shrink-0 items-center justify-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-black tabular-nums tracking-wide transition-transform ${
+      className={`inline-flex w-[60px] shrink-0 items-center justify-center gap-1 rounded-full px-2 py-0.5 text-caption font-black tabular-nums tracking-wide transition-transform ${
         isAction
           ? 'bg-blue-600 text-white shadow-sm active:scale-95'
           : has ? 'bg-emerald-50 text-emerald-700' : 'bg-gray-100 text-gray-400'
@@ -147,14 +147,14 @@ export function MobileReceivingRow({ row, variant, fresh = false, onTap, photosH
             className={`${isExpanded ? 'h-2.5 w-2.5' : 'h-2 w-2'} shrink-0 rounded-full ${getStatusDotBg(row.workflow_status, qtyReceived, row.quantity_expected)}`}
             title={workflowLabel}
           />
-          <span className={`min-w-0 flex-1 truncate font-bold text-gray-900 ${isExpanded ? 'text-[15px] tracking-tight' : 'text-[13px]'}`}>
+          <span className={`min-w-0 flex-1 truncate font-bold text-gray-900 ${isExpanded ? 'text-base tracking-tight' : 'text-sm'}`}>
             {productTitle}
           </span>
         </div>
 
         {/* Row 2: meta on the left, chips pushed right, photo icon pinned far right */}
         <div className="mt-3 flex items-center gap-2">
-          <span className={`flex shrink-0 items-center gap-1 whitespace-nowrap font-black uppercase tracking-widest ${isExpanded ? 'text-[11px]' : 'text-[10px]'}`}>
+          <span className={`flex shrink-0 items-center gap-1 whitespace-nowrap font-black uppercase tracking-widest ${isExpanded ? 'text-caption' : 'text-micro'}`}>
             <span
               className={
                 qtyExpected > 1 && qtyReceived < qtyExpected
@@ -197,7 +197,7 @@ export function MobileReceivingRow({ row, variant, fresh = false, onTap, photosH
             href={photosHref}
             prefetch={false}
             aria-label="Take photos"
-            className="pointer-events-auto mt-3 inline-flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-blue-600 text-white text-[12px] font-black uppercase tracking-[0.18em] shadow-[0_6px_14px_-6px_rgba(37,99,235,0.55)] active:scale-[0.98] active:bg-blue-700 transition-transform"
+            className="pointer-events-auto mt-3 inline-flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-blue-600 text-white text-label font-black uppercase tracking-[0.18em] shadow-[0_6px_14px_-6px_rgba(37,99,235,0.55)] active:scale-[0.98] active:bg-blue-700 transition-transform"
           >
             <Camera className="h-4 w-4" />
             <span>Take Photos</span>

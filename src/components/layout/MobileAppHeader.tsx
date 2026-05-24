@@ -41,7 +41,7 @@ export function MobileAppHeaderFallback({
         </button>
 
         <div className="flex min-w-0 items-center bg-white px-3">
-          <span className="truncate text-[10px] font-black uppercase tracking-[0.18em] text-gray-700">
+          <span className="truncate text-micro font-black uppercase tracking-[0.18em] text-gray-700">
             {appTitle}
           </span>
         </div>
@@ -94,7 +94,7 @@ export function MobileAppHeader({ onOpenAppNav, className }: MobileAppHeaderProp
         </button>
 
         <div className="flex min-w-0 items-center bg-white px-3">
-          <span className="truncate text-[10px] font-black uppercase tracking-[0.18em] text-gray-700">
+          <span className="truncate text-micro font-black uppercase tracking-[0.18em] text-gray-700">
             {appTitle}
           </span>
         </div>

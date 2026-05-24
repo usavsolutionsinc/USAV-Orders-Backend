@@ -46,7 +46,7 @@ export function StatusChip({ status, compact }: Props) {
   }
   return (
     <span
-      className={`inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wider ring-1 ${tone.bg} ${tone.text} ${tone.ring}`}
+      className={`inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-eyebrow font-semibold uppercase tracking-wider ring-1 ${tone.bg} ${tone.text} ${tone.ring}`}
     >
       <span className={`h-1.5 w-1.5 rounded-full ${tone.dot}`} />
       {tone.label}

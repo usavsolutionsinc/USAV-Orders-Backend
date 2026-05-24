@@ -242,8 +242,8 @@ export function RoomsSidebarList() {
       <div className="border-b border-gray-100 bg-gradient-to-b from-white to-gray-50/50 px-4 pt-4 pb-3">
         <div className="flex items-start justify-between gap-2">
           <div className="min-w-0">
-            <h2 className="text-[18px] font-bold tracking-tight text-gray-900">Rooms</h2>
-            <p className="mt-0.5 text-[11px] font-medium text-gray-500">
+            <h2 className="text-lg font-bold tracking-tight text-gray-900">Rooms</h2>
+            <p className="mt-0.5 text-caption font-medium text-gray-500">
               {loading
                 ? 'Loading…'
                 : `${orderedSummaries.length} room${orderedSummaries.length === 1 ? '' : 's'} · ${totals.bins} bin${totals.bins === 1 ? '' : 's'} · ${totals.qty} unit${totals.qty === 1 ? '' : 's'}`}
@@ -256,7 +256,7 @@ export function RoomsSidebarList() {
                 successFeedback();
                 startCreate();
               }}
-              className={`flex h-9 items-center gap-1 rounded-full px-3 text-[12px] font-semibold transition-all active:scale-[0.97] ${
+              className={`flex h-9 items-center gap-1 rounded-full px-3 text-label font-semibold transition-all active:scale-[0.97] ${
                 creating
                   ? 'bg-gradient-to-br from-blue-500 to-blue-700 text-white shadow-md shadow-blue-600/30'
                   : 'border border-gray-200 bg-white text-gray-700 hover:bg-gray-50'
@@ -426,7 +426,7 @@ function ZoneTile({ letter, active }: { letter: string | null; active: boolean }
   if (letter) {
     return (
       <div
-        className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl font-mono text-[16px] font-semibold ring-1 transition-colors ${
+        className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl font-mono text-base font-semibold ring-1 transition-colors ${
           active
             ? 'bg-gradient-to-br from-blue-500 to-blue-700 text-white ring-blue-700/20 shadow-sm shadow-blue-600/30'
             : 'bg-gradient-to-br from-blue-50 to-blue-100/70 text-blue-700 ring-blue-200'
@@ -438,7 +438,7 @@ function ZoneTile({ letter, active }: { letter: string | null; active: boolean }
   }
   return (
     <div
-      className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-amber-50 font-mono text-[14px] font-semibold text-amber-700 ring-1 ring-amber-200"
+      className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-amber-50 font-mono text-sm font-semibold text-amber-700 ring-1 ring-amber-200"
       title="No zone letter assigned"
     >
       ?
@@ -467,7 +467,7 @@ function EmptyState({ query, onAdd }: { query: string; onAdd: () => void }) {
           <X className="h-5 w-5 text-gray-400" />
         </div>
         <p className="text-[12.5px] font-semibold text-gray-700">No rooms match “{query}”</p>
-        <p className="max-w-[240px] text-[11px] text-gray-500">
+        <p className="max-w-[240px] text-caption text-gray-500">
           Try a different name or zone letter.
         </p>
       </div>
@@ -479,14 +479,14 @@ function EmptyState({ query, onAdd }: { query: string; onAdd: () => void }) {
         <Plus className="h-5 w-5 text-blue-500" />
       </div>
       <p className="text-[12.5px] font-semibold text-gray-700">No rooms yet</p>
-      <p className="max-w-[240px] text-[11px] text-gray-500">
+      <p className="max-w-[240px] text-caption text-gray-500">
         Add your first room. Each room gets a zone letter that prints on every
         label.
       </p>
       <button
         type="button"
         onClick={onAdd}
-        className="mt-1 inline-flex h-9 items-center gap-1 rounded-full bg-gradient-to-br from-blue-500 to-blue-700 px-3 text-[12px] font-semibold text-white shadow-md shadow-blue-600/30"
+        className="mt-1 inline-flex h-9 items-center gap-1 rounded-full bg-gradient-to-br from-blue-500 to-blue-700 px-3 text-label font-semibold text-white shadow-md shadow-blue-600/30"
       >
         <Plus className="h-3.5 w-3.5" />
         Add a room

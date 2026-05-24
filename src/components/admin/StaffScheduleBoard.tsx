@@ -118,11 +118,11 @@ export function StaffScheduleBoard({
       {/* Header bar */}
       <div className="flex flex-wrap items-center justify-between gap-3 border-b border-gray-100 px-5 py-3.5">
         <div className="flex items-center gap-2.5">
-          <h2 className="text-[15px] font-bold tracking-tight text-gray-900">Work calendar</h2>
-          <span className="rounded-full bg-gray-900 px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-white">
+          <h2 className="text-base font-bold tracking-tight text-gray-900">Work calendar</h2>
+          <span className="rounded-full bg-gray-900 px-2.5 py-0.5 text-micro font-semibold uppercase tracking-[0.14em] text-white">
             9 AM – 5 PM
           </span>
-          <span className="text-[11px] font-medium text-gray-500">{timezoneLabel}</span>
+          <span className="text-caption font-medium text-gray-500">{timezoneLabel}</span>
         </div>
         <div className="flex items-center gap-1.5 rounded-full bg-gray-100 p-1">
           <WeekToggle label="This week" active={weekView === 'current'} onClick={() => setWeekView('current')} />
@@ -147,11 +147,11 @@ export function StaffScheduleBoard({
                   <p className={`text-[10.5px] font-bold uppercase tracking-[0.14em] ${isToday ? 'text-amber-700' : 'text-gray-500'}`}>
                     {day.label}
                   </p>
-                  <p className={`mt-0.5 text-[15px] font-bold tracking-tight ${isToday ? 'text-amber-900' : 'text-gray-900'}`}>
+                  <p className={`mt-0.5 text-base font-bold tracking-tight ${isToday ? 'text-amber-900' : 'text-gray-900'}`}>
                     {formatDayNumber(day.date)}
                   </p>
                 </div>
-                <span className="rounded-full bg-gray-100 px-2 py-0.5 text-[10px] font-bold tabular-nums text-gray-700">
+                <span className="rounded-full bg-gray-100 px-2 py-0.5 text-micro font-bold tabular-nums text-gray-700">
                   {dayShifts.length}
                 </span>
               </div>
@@ -190,7 +190,7 @@ function WeekToggle({ label, active, onClick }: { label: string; active: boolean
     <button
       type="button"
       onClick={onClick}
-      className={`rounded-full px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.14em] transition ${
+      className={`rounded-full px-3 py-1.5 text-caption font-semibold uppercase tracking-[0.14em] transition ${
         active ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'
       }`}
     >
@@ -223,12 +223,12 @@ function ShiftAvatarPill({
     >
       <span
         aria-hidden
-        className="flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-full text-[9px] font-bold text-white ring-2 ring-white"
+        className="flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-full text-eyebrow font-bold text-white ring-2 ring-white"
         style={{ backgroundColor: color }}
       >
         {initials(shift.staff_name)}
       </span>
-      <span className="truncate text-[11px] font-semibold text-gray-900">{shift.staff_name.split(/\s+/)[0]}</span>
+      <span className="truncate text-caption font-semibold text-gray-900">{shift.staff_name.split(/\s+/)[0]}</span>
       {isCovering && (
         <span className="rounded-full bg-amber-100 px-1.5 py-0.5 text-[8.5px] font-bold uppercase tracking-wide text-amber-800">
           Cover

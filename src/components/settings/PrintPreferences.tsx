@@ -148,7 +148,7 @@ export function PrintPreferences({ onClose }: PrintPreferencesProps) {
               <option key={p.id} value={p.id}>{p.label}</option>
             ))}
           </select>
-          <span className="mt-1 block text-[11px] text-gray-500">
+          <span className="mt-1 block text-caption text-gray-500">
             Forces this paper size for every silent print. Pick &ldquo;Let each label decide&rdquo;
             if different labels use different stock.
           </span>

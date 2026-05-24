@@ -53,7 +53,7 @@ function StaffButtonRow({
                 e.stopPropagation();
                 if (!disabled && !isActive) void onAssign(member.id);
               }}
-              className={`touch-manipulation h-14 min-w-[112px] px-3.5 rounded-xl text-[11px] font-black uppercase tracking-[0.08em] border transition-all disabled:opacity-50 ${isActive ? themeClass.active : themeClass.inactive}`}
+              className={`touch-manipulation h-14 min-w-[112px] px-3.5 rounded-xl text-caption font-black uppercase tracking-[0.08em] border transition-all disabled:opacity-50 ${isActive ? themeClass.active : themeClass.inactive}`}
             >
               {member.name}
             </button>

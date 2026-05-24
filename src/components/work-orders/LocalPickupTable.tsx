@@ -195,13 +195,13 @@ export function LocalPickupTable() {
       <div className="border-b border-[var(--color-neutral-200)] px-5 py-4">
         <div className="flex items-start justify-between gap-4">
           <div>
-            <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[var(--color-neutral-700)]">
+            <p className="text-micro font-semibold uppercase tracking-[0.18em] text-[var(--color-neutral-700)]">
               Local Pickups
             </p>
-            <h2 className="mt-1 text-[18px] font-semibold text-[var(--color-neutral-900)]">
+            <h2 className="mt-1 text-lg font-semibold text-[var(--color-neutral-900)]">
               {selectedDateLabel}
             </h2>
-            <p className="mt-1 text-[13px] text-[var(--color-neutral-700)]">
+            <p className="mt-1 text-sm text-[var(--color-neutral-700)]">
               {data?.summary.item_count ?? 0} items · {toMoneyDisplay(data?.summary.total_value || '0')}
               {data?.summary.missing_parts_count ? ` · ${data.summary.missing_parts_count} missing parts` : ''}
             </p>
@@ -210,7 +210,7 @@ export function LocalPickupTable() {
             <button
               type="button"
               onClick={() => setIsIntakeOpen((open) => !open)}
-              className={`inline-flex items-center gap-2 rounded-lg px-3 py-1.5 text-[10px] font-semibold uppercase tracking-[0.18em] transition-colors ${
+              className={`inline-flex items-center gap-2 rounded-lg px-3 py-1.5 text-micro font-semibold uppercase tracking-[0.18em] transition-colors ${
                 isIntakeOpen
                   ? 'bg-gray-100 text-[var(--color-neutral-900)] hover:bg-gray-200'
                   : 'bg-emerald-600 text-white shadow-sm hover:bg-emerald-700'
@@ -229,7 +229,7 @@ export function LocalPickupTable() {
             <button
               type="button"
               onClick={() => refetch()}
-              className="inline-flex items-center gap-2 border-b border-[var(--color-neutral-900)] py-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-[var(--color-neutral-900)]"
+              className="inline-flex items-center gap-2 border-b border-[var(--color-neutral-900)] py-1 text-micro font-semibold uppercase tracking-[0.18em] text-[var(--color-neutral-900)]"
             >
               <RefreshCw className={`h-3.5 w-3.5 ${isFetching ? 'animate-spin' : ''}`} />
               Refresh
@@ -250,7 +250,7 @@ export function LocalPickupTable() {
         </div>
       ) : (
         <>
-      <div className="grid grid-cols-[minmax(240px,2fr)_80px_160px_110px_minmax(180px,1.2fr)_120px_120px_90px] border-b border-[var(--color-neutral-200)] px-5 py-2 text-[10px] font-semibold uppercase tracking-[0.16em] text-[var(--color-neutral-700)]">
+      <div className="grid grid-cols-[minmax(240px,2fr)_80px_160px_110px_minmax(180px,1.2fr)_120px_120px_90px] border-b border-[var(--color-neutral-200)] px-5 py-2 text-micro font-semibold uppercase tracking-[0.16em] text-[var(--color-neutral-700)]">
         <div>Product</div>
         <div>Qty</div>
         <div>Parts</div>
@@ -289,20 +289,20 @@ export function LocalPickupTable() {
                 className="grid grid-cols-[minmax(240px,2fr)_80px_160px_110px_minmax(180px,1.2fr)_120px_120px_90px] items-start gap-4 border-b border-[var(--color-neutral-200)] px-5 py-4"
               >
                 <div className="min-w-0">
-                  <p className="truncate text-[14px] font-semibold text-[var(--color-neutral-900)]">
+                  <p className="truncate text-sm font-semibold text-[var(--color-neutral-900)]">
                     {row.product_title || 'Unnamed pickup'}
                   </p>
                   <div className="mt-1 flex flex-wrap items-center gap-2">
-                    {row.sku ? <span className="text-[11px] font-mono text-[var(--color-brand-primary)]">{row.sku}</span> : null}
+                    {row.sku ? <span className="text-caption font-mono text-[var(--color-brand-primary)]">{row.sku}</span> : null}
                     {row.category ? (
-                      <span className="rounded-md bg-emerald-50 px-1.5 py-0.5 text-[9px] font-black uppercase tracking-wider text-emerald-700">
+                      <span className="rounded-md bg-emerald-50 px-1.5 py-0.5 text-eyebrow font-black uppercase tracking-wider text-emerald-700">
                         {row.category}
                       </span>
                     ) : null}
-                    {row.tracking_number ? <span className="text-[11px] text-[var(--color-neutral-700)]">{row.tracking_number}</span> : null}
-                    {row.work_order_status ? <StatusBadge status={row.work_order_status} className="text-[9px]" /> : null}
+                    {row.tracking_number ? <span className="text-caption text-[var(--color-neutral-700)]">{row.tracking_number}</span> : null}
+                    {row.work_order_status ? <StatusBadge status={row.work_order_status} className="text-eyebrow" /> : null}
                   </div>
-                  <p className="mt-2 text-[11px] text-[var(--color-neutral-700)]">
+                  <p className="mt-2 text-caption text-[var(--color-neutral-700)]">
                     Intake {formatMediumDateTime(row.received_at)}
                   </p>
                   {isMissing ? (
@@ -310,12 +310,12 @@ export function LocalPickupTable() {
                       value={draft.missingPartsNote}
                       onChange={(e) => updateDraft(row.receiving_id, { missingPartsNote: e.target.value })}
                       placeholder="List the missing parts here..."
-                      className="mt-3 min-h-[70px] w-full border-b border-[var(--color-warning)] bg-transparent pb-2 text-[12px] text-[var(--color-neutral-900)] placeholder:text-gray-500 focus:outline-none"
+                      className="mt-3 min-h-[70px] w-full border-b border-[var(--color-warning)] bg-transparent pb-2 text-label text-[var(--color-neutral-900)] placeholder:text-gray-500 focus:outline-none"
                     />
                   ) : null}
                 </div>
 
-                <div className="pt-1 text-[14px] font-semibold text-[var(--color-neutral-900)]">
+                <div className="pt-1 text-sm font-semibold text-[var(--color-neutral-900)]">
                   {row.quantity}
                 </div>
 
@@ -352,7 +352,7 @@ export function LocalPickupTable() {
                     value={draft.conditionNote}
                     onChange={(e) => updateDraft(row.receiving_id, { conditionNote: e.target.value })}
                     placeholder="Condition note"
-                    className="min-h-[70px] w-full border-b border-[var(--color-neutral-200)] bg-transparent pb-2 text-[12px] text-[var(--color-neutral-900)] placeholder:text-gray-500 focus:outline-none"
+                    className="min-h-[70px] w-full border-b border-[var(--color-neutral-200)] bg-transparent pb-2 text-label text-[var(--color-neutral-900)] placeholder:text-gray-500 focus:outline-none"
                   />
                 </div>
 
@@ -361,9 +361,9 @@ export function LocalPickupTable() {
                     value={draft.offerPrice}
                     onChange={(e) => updateDraft(row.receiving_id, { offerPrice: e.target.value })}
                     placeholder="0.00"
-                    className="w-full border-b border-[var(--color-neutral-200)] bg-transparent py-1 text-[12px] font-semibold text-[var(--color-neutral-900)] focus:outline-none"
+                    className="w-full border-b border-[var(--color-neutral-200)] bg-transparent py-1 text-label font-semibold text-[var(--color-neutral-900)] focus:outline-none"
                   />
-                  <p className="mt-2 text-[10px] uppercase tracking-[0.16em] text-[var(--color-neutral-700)]">
+                  <p className="mt-2 text-micro uppercase tracking-[0.16em] text-[var(--color-neutral-700)]">
                     Seller offer
                   </p>
                 </div>
@@ -373,9 +373,9 @@ export function LocalPickupTable() {
                     value={draft.total}
                     onChange={(e) => updateDraft(row.receiving_id, { total: e.target.value })}
                     placeholder={row.total || '0.00'}
-                    className="w-full border-b border-[var(--color-neutral-200)] bg-transparent py-1 text-[12px] font-semibold text-[var(--color-neutral-900)] focus:outline-none"
+                    className="w-full border-b border-[var(--color-neutral-200)] bg-transparent py-1 text-label font-semibold text-[var(--color-neutral-900)] focus:outline-none"
                   />
-                  <p className="mt-2 text-[10px] uppercase tracking-[0.16em] text-[var(--color-neutral-700)]">
+                  <p className="mt-2 text-micro uppercase tracking-[0.16em] text-[var(--color-neutral-700)]">
                     Running total
                   </p>
                 </div>
@@ -385,7 +385,7 @@ export function LocalPickupTable() {
                     type="button"
                     onClick={() => saveRow(row)}
                     disabled={savingId === row.receiving_id}
-                    className="inline-flex items-center gap-2 border-b border-[var(--color-neutral-900)] py-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-[var(--color-neutral-900)] disabled:opacity-40"
+                    className="inline-flex items-center gap-2 border-b border-[var(--color-neutral-900)] py-1 text-micro font-semibold uppercase tracking-[0.18em] text-[var(--color-neutral-900)] disabled:opacity-40"
                   >
                     {savingId === row.receiving_id ? (
                       <Loader2 className="h-3.5 w-3.5 animate-spin" />

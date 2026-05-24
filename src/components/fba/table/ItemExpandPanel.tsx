@@ -96,12 +96,12 @@ export function ItemExpandPanel({
       className="border-t border-zinc-100 bg-stone-50/95 px-4 py-4"
       onClick={(e) => e.stopPropagation()}
     >
-      <p className="mb-2 text-[10px] font-black uppercase tracking-[0.16em] text-sky-700">FNSKU details</p>
+      <p className="mb-2 text-micro font-black uppercase tracking-[0.16em] text-sky-700">FNSKU details</p>
       <div className="grid gap-2 md:grid-cols-3">
         {item.asin ? (
           <div className="rounded-2xl border border-zinc-200 bg-white px-3 py-2.5">
-            <p className="text-[9px] font-black uppercase tracking-[0.14em] text-zinc-400">Catalog</p>
-            <p className="mt-1 text-[11px] font-mono text-zinc-700">
+            <p className="text-eyebrow font-black uppercase tracking-[0.14em] text-zinc-400">Catalog</p>
+            <p className="mt-1 text-caption font-mono text-zinc-700">
               <span>
                 ASIN <span className="text-zinc-900">{item.asin}</span>
               </span>
@@ -109,8 +109,8 @@ export function ItemExpandPanel({
           </div>
         ) : null}
         <div className="rounded-2xl border border-zinc-200 bg-white px-3 py-2.5">
-          <p className="text-[9px] font-black uppercase tracking-[0.14em] text-zinc-400">Plan</p>
-          <p className="mt-1 text-[11px] font-mono text-zinc-700">
+          <p className="text-eyebrow font-black uppercase tracking-[0.14em] text-zinc-400">Plan</p>
+          <p className="mt-1 text-caption font-mono text-zinc-700">
             <span className="text-zinc-900">{item.plan_ref}</span>
             {item.amazon_shipment_id ? (
               <>
@@ -124,13 +124,13 @@ export function ItemExpandPanel({
         </div>
         {item.destination_fc ? (
           <div className="rounded-2xl border border-zinc-200 bg-white px-3 py-2.5">
-            <p className="text-[9px] font-black uppercase tracking-[0.14em] text-zinc-400">Destination</p>
-            <p className="mt-1 text-[11px] font-mono text-zinc-900">{item.destination_fc}</p>
+            <p className="text-eyebrow font-black uppercase tracking-[0.14em] text-zinc-400">Destination</p>
+            <p className="mt-1 text-caption font-mono text-zinc-900">{item.destination_fc}</p>
           </div>
         ) : null}
       </div>
 
-      <p className="mb-2 mt-4 text-[10px] font-black uppercase tracking-[0.16em] text-zinc-500">Status</p>
+      <p className="mb-2 mt-4 text-micro font-black uppercase tracking-[0.16em] text-zinc-500">Status</p>
       <div className="grid gap-2 sm:grid-cols-2">
         {statusOptions.map((option) => (
           <button
@@ -144,15 +144,15 @@ export function ItemExpandPanel({
                 : 'border-zinc-200 bg-white text-zinc-700 hover:border-zinc-300 hover:bg-zinc-50'
             } ${saving ? 'cursor-wait opacity-70' : ''}`}
           >
-            <p className="text-[10px] font-black uppercase tracking-[0.14em]">{option.label}</p>
-            <p className="mt-1 text-[10px] font-medium text-zinc-500">{option.hint}</p>
+            <p className="text-micro font-black uppercase tracking-[0.14em]">{option.label}</p>
+            <p className="mt-1 text-micro font-medium text-zinc-500">{option.hint}</p>
           </button>
         ))}
       </div>
 
       {(localStatus === 'pending_out_of_stock' || localStatus === 'pending_qc_fail') && (
         <div className="mt-3 flex max-w-md flex-col gap-1.5">
-          <label className="text-[10px] font-black uppercase tracking-[0.14em] text-zinc-500">Note for team</label>
+          <label className="text-micro font-black uppercase tracking-[0.14em] text-zinc-500">Note for team</label>
           <textarea
             value={localNote}
             disabled={saving}
@@ -183,7 +183,7 @@ export function ItemExpandPanel({
           <RemoveFromPlanButton fnsku={item.fnsku} onConfirm={() => onRequestRemove(item)} />
         ) : null}
       </div>
-      {saving ? <p className="mt-2 text-[10px] font-medium text-zinc-400">Saving changes...</p> : null}
+      {saving ? <p className="mt-2 text-micro font-medium text-zinc-400">Saving changes...</p> : null}
     </div>
   );
 }

@@ -217,3 +217,44 @@ textarea {
 .recv-indet-bar {
   animation: recv-indet 1.2s ease-in-out infinite;
 }
+
+/* ---------------------------------------------------------------------------
+   Electron shell — body offset for the top drag strip
+   ---------------------------------------------------------------------------
+   When ElectronDragStrip mounts it tags <html> with `.electron-shell` and
+   sets `--electron-titlebar-height`. This rule pushes the body's content
+   down by that height so the strip doesn't cover the top of the app.
+   Uses `!important` because <body> in layout.tsx carries an inline
+   `style={{ padding: 0 }}` that would otherwise win.
+   --------------------------------------------------------------------------- */
+html.electron-shell body {
+  padding-top: var(--electron-titlebar-height, 0px) !important;
+  box-sizing: border-box;
+}
+
+/* ---------------------------------------------------------------------------
+   Electron shell — slide-in detail panel offset
+   ---------------------------------------------------------------------------
+   Right-aligned slide-in detail panels (ShippedDetailsPanel,
+   WorkOrderDetailsPanel, ReceivingDetailsStack, AdminDetailsStack,
+   SalesDetailsPanel, RepairDetailsPanel, SkuDetailView, FbaBoardDetailPanel,
+   ZohoSplitPane, etc.) all use the same `fixed right-0 top-0 h-screen`
+   anchor pattern. When the Electron drag strip is mounted, they need to
+   clear it at the top and shrink their height to match — otherwise their
+   close button / header sits under the strip and the panel overflows the
+   bottom of the viewport by the strip's height.
+
+   The selector is intentionally scoped to `.fixed.right-0.top-0` so full-
+   viewport modals (`.fixed.inset-0`) and bottom sheets stay untouched. The
+   rule lives outside any @layer so it beats Tailwind utilities without
+   needing `!important`.
+
+   Future migration target: a shared `DetailPanelShell` component will absorb
+   this offset, at which point this block becomes a defense-in-depth fallback.
+   --------------------------------------------------------------------------- */
+html.electron-shell .fixed.right-0.top-0 {
+  top: var(--electron-titlebar-height, 0px);
+}
+html.electron-shell .fixed.right-0.top-0.h-screen {
+  height: calc(100vh - var(--electron-titlebar-height, 0px));
+}

@@ -18,7 +18,6 @@ export * from './sidebar-intake';
 export * from './DateGroupHeader';
 export * from './FormField';
 export * from './OverlaySearch';
-export * from './CopyChip';
 export * from './TabSwitch';
 export * from './Skeletons';
 export * from './ResponsiveShell';

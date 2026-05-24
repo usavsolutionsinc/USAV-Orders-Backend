@@ -331,10 +331,10 @@ export function RepairIntakeForm({ onClose, onSubmit, initialData, favoriteSkuId
                 {/* Header */}
                 <div className="flex items-center justify-between border-b border-gray-100 px-5 py-3">
                     <div>
-                        <h2 className="text-[13px] font-black uppercase tracking-tight text-gray-900">
+                        <h2 className="text-sm font-black uppercase tracking-tight text-gray-900">
                             Repair Intake
                         </h2>
-                        <p className="mt-0.5 text-[9px] font-black uppercase tracking-widest text-orange-500">
+                        <p className="mt-0.5 text-eyebrow font-black uppercase tracking-widest text-orange-500">
                             {STEPS[currentStepIndex].label}
                         </p>
                     </div>
@@ -360,12 +360,12 @@ export function RepairIntakeForm({ onClose, onSubmit, initialData, favoriteSkuId
                             type="button"
                             onClick={handleBack}
                             disabled={currentStep === 'product'}
-                            className="flex items-center gap-1 text-[10px] font-black text-gray-500 transition-colors hover:text-gray-900 disabled:invisible"
+                            className="flex items-center gap-1 text-micro font-black text-gray-500 transition-colors hover:text-gray-900 disabled:invisible"
                         >
                             <ChevronLeft className="h-3.5 w-3.5" />
                             Back
                         </button>
-                        <span className="text-[10px] font-black text-gray-400">
+                        <span className="text-micro font-black text-gray-400">
                             {currentStepIndex + 1}/{STEPS.length}
                         </span>
                     </div>
@@ -447,7 +447,7 @@ export function RepairIntakeForm({ onClose, onSubmit, initialData, favoriteSkuId
                                 <button
                                     type="button"
                                     onClick={() => setCustomerMode('existing')}
-                                    className={`rounded-lg px-2 py-2 text-[9px] font-black uppercase tracking-wide transition-colors ${
+                                    className={`rounded-lg px-2 py-2 text-eyebrow font-black uppercase tracking-wide transition-colors ${
                                         customerMode === 'existing'
                                             ? 'bg-orange-600 text-white shadow-sm'
                                             : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
@@ -458,7 +458,7 @@ export function RepairIntakeForm({ onClose, onSubmit, initialData, favoriteSkuId
                                 <button
                                     type="button"
                                     onClick={() => setCustomerMode('new')}
-                                    className={`rounded-lg px-2 py-2 text-[9px] font-black uppercase tracking-wide transition-colors ${
+                                    className={`rounded-lg px-2 py-2 text-eyebrow font-black uppercase tracking-wide transition-colors ${
                                         customerMode === 'new'
                                             ? 'bg-orange-600 text-white shadow-sm'
                                             : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
@@ -478,25 +478,25 @@ export function RepairIntakeForm({ onClose, onSubmit, initialData, favoriteSkuId
                                         className={orangeInputClass}
                                     />
                                     <div className="overflow-hidden rounded-xl border border-orange-200 bg-white">
-                                        <div className="grid grid-cols-[1fr_1fr_0.6fr] gap-2 border-b border-orange-100 bg-orange-50 px-3 py-2 text-[8px] font-black uppercase tracking-wider text-orange-700">
+                                        <div className="grid grid-cols-[1fr_1fr_0.6fr] gap-2 border-b border-orange-100 bg-orange-50 px-3 py-2 text-mini font-black uppercase tracking-wider text-orange-700">
                                             <span>Name</span>
                                             <span>Phone</span>
                                             <span className="text-right">Action</span>
                                         </div>
                                         <div className="max-h-36 overflow-y-auto">
                                             {loadingCustomers && (
-                                                <div className="px-3 py-3 text-[10px] font-bold text-gray-500">Loading...</div>
+                                                <div className="px-3 py-3 text-micro font-bold text-gray-500">Loading...</div>
                                             )}
                                             {!loadingCustomers && customerSearchError && (
-                                                <div className="px-3 py-3 text-[10px] font-bold text-red-600">{customerSearchError}</div>
+                                                <div className="px-3 py-3 text-micro font-bold text-red-600">{customerSearchError}</div>
                                             )}
                                             {!loadingCustomers && !customerSearchError && customerResults.length === 0 && (
-                                                <div className="px-3 py-3 text-[10px] font-bold text-gray-500">No customers found.</div>
+                                                <div className="px-3 py-3 text-micro font-bold text-gray-500">No customers found.</div>
                                             )}
                                             {!loadingCustomers && !customerSearchError && customerResults.map((customer) => (
                                                 <div
                                                     key={customer.id}
-                                                    className={`grid grid-cols-[1fr_1fr_0.6fr] gap-2 border-b border-gray-100 px-3 py-2 text-[10px] text-gray-700 ${
+                                                    className={`grid grid-cols-[1fr_1fr_0.6fr] gap-2 border-b border-gray-100 px-3 py-2 text-micro text-gray-700 ${
                                                         selectedCustomerId === customer.id ? 'bg-orange-50' : 'bg-white'
                                                     }`}
                                                 >
@@ -506,7 +506,7 @@ export function RepairIntakeForm({ onClose, onSubmit, initialData, favoriteSkuId
                                                         <button
                                                             type="button"
                                                             onClick={() => applyExistingCustomer(customer)}
-                                                            className="rounded-md bg-orange-600 px-2 py-1 text-[8px] font-black uppercase tracking-wide text-white hover:bg-orange-700 transition-colors"
+                                                            className="rounded-md bg-orange-600 px-2 py-1 text-mini font-black uppercase tracking-wide text-white hover:bg-orange-700 transition-colors"
                                                         >
                                                             Select
                                                         </button>
@@ -535,17 +535,17 @@ export function RepairIntakeForm({ onClose, onSubmit, initialData, favoriteSkuId
                     {/* ── STEP 3: Agreement text ── */}
                     {currentStep === 'agreement' && (
                         <div className="space-y-4">
-                            <div className="space-y-2 text-[11px] text-gray-700 leading-relaxed border-l-4 border-orange-600 pl-4">
+                            <div className="space-y-2 text-caption text-gray-700 leading-relaxed border-l-4 border-orange-600 pl-4">
                                 <p>
                                     Your Bose product has been received into our repair center. Under normal circumstances it will
                                     be repaired within the next <span className="font-black text-gray-900">3-10 working days</span> and returned to you.
                                 </p>
-                                <p className="font-black text-gray-900 uppercase tracking-wide text-[10px]">
+                                <p className="font-black text-gray-900 uppercase tracking-wide text-micro">
                                     30-Day Warranty on all repair services.
                                 </p>
                             </div>
 
-                            <p className="text-[10px] text-gray-500 italic leading-relaxed bg-gray-50 p-3 border border-gray-200 rounded-xl">
+                            <p className="text-micro text-gray-500 italic leading-relaxed bg-gray-50 p-3 border border-gray-200 rounded-xl">
                                 By signing below, I consent to conduct this transaction electronically
                                 and agree to the listed repair price, terms, and any unexpected delays in the repair process.
                             </p>
@@ -555,7 +555,7 @@ export function RepairIntakeForm({ onClose, onSubmit, initialData, favoriteSkuId
                                     <div className="flex h-4 w-4 items-center justify-center rounded-full bg-green-500">
                                         <Check className="h-2.5 w-2.5 text-white" />
                                     </div>
-                                    <span className="text-[9px] font-black uppercase tracking-wide text-green-600">
+                                    <span className="text-eyebrow font-black uppercase tracking-wide text-green-600">
                                         Signature captured
                                     </span>
                                 </div>
@@ -571,7 +571,7 @@ export function RepairIntakeForm({ onClose, onSubmit, initialData, favoriteSkuId
                             <button
                                 type="button"
                                 onClick={handleBack}
-                                className="flex items-center gap-1 rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-[9px] font-black uppercase tracking-wide text-gray-600 transition-colors hover:bg-gray-50"
+                                className="flex items-center gap-1 rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-eyebrow font-black uppercase tracking-wide text-gray-600 transition-colors hover:bg-gray-50"
                             >
                                 <ChevronLeft className="h-3 w-3" />
                                 Back
@@ -611,7 +611,7 @@ export function RepairIntakeForm({ onClose, onSubmit, initialData, favoriteSkuId
                     </div>
 
                     {currentStep === 'agreement' && !signatureData && (
-                        <p className="text-center text-[8px] font-black uppercase tracking-wide text-amber-600">
+                        <p className="text-center text-mini font-black uppercase tracking-wide text-amber-600">
                             Signature required to submit
                         </p>
                     )}
@@ -662,7 +662,7 @@ export function RepairIntakeForm({ onClose, onSubmit, initialData, favoriteSkuId
                             <h2 className="text-sm font-black uppercase tracking-tight text-gray-900">
                                 Customer Signature
                             </h2>
-                            <p className="mt-0.5 text-[10px] font-bold text-gray-500">
+                            <p className="mt-0.5 text-micro font-bold text-gray-500">
                                 {formData.customer.name} — {formData.product.model} — <span className="text-emerald-600">${formData.price}</span>
                             </p>
                         </div>
@@ -670,7 +670,7 @@ export function RepairIntakeForm({ onClose, onSubmit, initialData, favoriteSkuId
                             <button
                                 type="button"
                                 onClick={() => setCurrentStep('customer')}
-                                className="flex items-center gap-1 rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-[9px] font-black uppercase tracking-wide text-gray-600 transition-colors hover:bg-gray-50"
+                                className="flex items-center gap-1 rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-eyebrow font-black uppercase tracking-wide text-gray-600 transition-colors hover:bg-gray-50"
                             >
                                 <ChevronLeft className="h-3 w-3" />
                                 Back
@@ -695,10 +695,10 @@ export function RepairIntakeForm({ onClose, onSubmit, initialData, favoriteSkuId
 
                     {/* Agreement text */}
                     <div className="shrink-0 border-b border-gray-100 px-6 py-3">
-                        <p className="text-[11px] text-gray-500 italic leading-relaxed">
+                        <p className="text-caption text-gray-500 italic leading-relaxed">
                             By signing below, I consent to conduct this transaction electronically
                             and agree to the listed repair price, terms, and any unexpected delays in the repair process.
-                            <span className="ml-2 font-black text-gray-900 not-italic uppercase text-[10px]">30-Day Warranty</span>
+                            <span className="ml-2 font-black text-gray-900 not-italic uppercase text-micro">30-Day Warranty</span>
                         </p>
                     </div>
 
@@ -710,7 +710,7 @@ export function RepairIntakeForm({ onClose, onSubmit, initialData, favoriteSkuId
                     </div>
 
                     <div className="shrink-0 border-t border-gray-100 px-6 py-3 text-center">
-                        <p className={`text-[9px] font-black uppercase tracking-wide transition-opacity ${signatureData ? 'opacity-0' : 'text-amber-600'}`}>
+                        <p className={`text-eyebrow font-black uppercase tracking-wide transition-opacity ${signatureData ? 'opacity-0' : 'text-amber-600'}`}>
                             Signature required to submit
                         </p>
                     </div>

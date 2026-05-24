@@ -197,6 +197,28 @@ export const framerTransition = {
     mass: 0.28,
   } satisfies Transition,
 
+  /** Collapsible card/section expansion (softer than sidebarExpand) */
+  cardExpansion: {
+    type: 'spring' as const,
+    damping: 24,
+    stiffness: 300,
+  } satisfies Transition,
+
+  /** Sliding indicator on horizontal tab/button sliders */
+  sliderIndicator: {
+    type: 'spring' as const,
+    damping: 28,
+    stiffness: 380,
+    mass: 0.6,
+  } satisfies Transition,
+
+  /** Bumping animated numeric quantities (FBA qty, counts, badges) */
+  quantityBump: {
+    type: 'spring' as const,
+    damping: 30,
+    stiffness: 500,
+  } satisfies Transition,
+
   /**
    * Title row swap + layout — `layout` for line-wrap; opacity/y for keyed row changes.
    * Footer stays outside `LayoutGroup` / `AnimatePresence` so it does not crossfade or layout-shift.
@@ -278,6 +300,12 @@ export const framerPresence = {
     initial: { opacity: 0, scale: 0.94, y: 14 },
     animate: { opacity: 1, scale: 1, y: 0 },
     exit: { opacity: 0, scale: 0.94, y: 8 },
+  },
+  /** Inline status / feedback message — fade + slight slide from top */
+  statusMessage: {
+    initial: { opacity: 0, y: -10 },
+    animate: { opacity: 1, y: 0 },
+    exit: { opacity: 0, y: -6 },
   },
 } as const;
 

@@ -112,7 +112,7 @@ export function PairingSection({ catalogId, catalogSku, platformIds, onRefresh }
       {/* Zoho source-of-truth row */}
       {catalogSku && (
         <div className="flex items-center gap-2 rounded-xl px-2.5 py-2 bg-gray-50">
-          <span className="shrink-0 text-[11px] font-mono font-bold text-gray-800">
+          <span className="shrink-0 text-caption font-mono font-bold text-gray-800">
             {catalogSku}
           </span>
           <span className="flex-1" />
@@ -123,7 +123,7 @@ export function PairingSection({ catalogId, catalogSku, platformIds, onRefresh }
       )}
 
       {platformIds.length === 0 && !catalogSku && !showForm && (
-        <p className="text-[10px] font-semibold text-gray-400 px-1">No platform pairings yet.</p>
+        <p className="text-micro font-semibold text-gray-400 px-1">No platform pairings yet.</p>
       )}
 
       {platformIds.map((pid) => {
@@ -142,11 +142,11 @@ export function PairingSection({ catalogId, catalogSku, platformIds, onRefresh }
               isEditing ? 'bg-blue-50 ring-1 ring-blue-200' : 'bg-gray-50'
             }`}
           >
-            <span className="shrink-0 text-[11px] font-mono font-bold text-gray-800">
+            <span className="shrink-0 text-caption font-mono font-bold text-gray-800">
               {pid.platform_sku || pid.platform_item_id || '—'}
             </span>
             {pid.account_name && (
-              <span className="shrink-0 text-[9px] font-semibold text-gray-400">{pid.account_name}</span>
+              <span className="shrink-0 text-eyebrow font-semibold text-gray-400">{pid.account_name}</span>
             )}
             <span className="flex-1" />
             <span className={`shrink-0 rounded-full border px-1.5 py-0.5 ${microBadge} ${getOrderPlatformColor(displayPlatform)} ${getOrderPlatformBorderColor(displayPlatform)}`}>
@@ -194,7 +194,7 @@ export function PairingSection({ catalogId, catalogSku, platformIds, onRefresh }
                   value={itemValue}
                   onChange={(e) => setItemValue(e.target.value)}
                   placeholder="Paste SKU / ASIN / item number"
-                  className="w-full rounded-lg border border-gray-200 bg-gray-50 py-1.5 pl-2.5 pr-20 text-[11px] font-bold text-gray-900 placeholder:text-gray-400"
+                  className="w-full rounded-lg border border-gray-200 bg-gray-50 py-1.5 pl-2.5 pr-20 text-caption font-bold text-gray-900 placeholder:text-gray-400"
                 />
                 {itemValue.trim() && (
                   <span className={`absolute right-1.5 top-1/2 -translate-y-1/2 rounded-full border px-1.5 py-0.5 ${microBadge} bg-white ${getOrderPlatformColor(detectedKey)} ${getOrderPlatformBorderColor(detectedKey)}`}>
@@ -207,14 +207,14 @@ export function PairingSection({ catalogId, catalogSku, platformIds, onRefresh }
                 value={accountName}
                 onChange={(e) => setAccountName(e.target.value)}
                 placeholder="Account name (optional)"
-                className="w-full rounded-lg border border-gray-200 bg-gray-50 px-2.5 py-1.5 text-[11px] font-bold text-gray-900 placeholder:text-gray-400"
+                className="w-full rounded-lg border border-gray-200 bg-gray-50 px-2.5 py-1.5 text-caption font-bold text-gray-900 placeholder:text-gray-400"
               />
               <div className="flex items-center gap-2">
                 <button
                   type="button"
                   onClick={handleSave}
                   disabled={saving || !itemValue.trim()}
-                  className="flex-1 flex items-center justify-center gap-1.5 rounded-lg bg-gray-900 px-3 py-1.5 text-[10px] font-black uppercase tracking-wider text-white hover:bg-gray-800 disabled:opacity-50"
+                  className="flex-1 flex items-center justify-center gap-1.5 rounded-lg bg-gray-900 px-3 py-1.5 text-micro font-black uppercase tracking-wider text-white hover:bg-gray-800 disabled:opacity-50"
                 >
                   {saving ? <Loader2 className="h-3 w-3 animate-spin" /> : <Link2 className="h-3 w-3" />}
                   {editingRowId ? 'Update' : 'Pair'}
@@ -224,7 +224,7 @@ export function PairingSection({ catalogId, catalogSku, platformIds, onRefresh }
                     type="button"
                     onClick={() => handleRemove(editingRowId)}
                     disabled={removing === editingRowId}
-                    className="flex items-center gap-1 rounded-lg border border-red-200 px-2.5 py-1.5 text-[10px] font-black uppercase tracking-wider text-red-600 hover:bg-red-50"
+                    className="flex items-center gap-1 rounded-lg border border-red-200 px-2.5 py-1.5 text-micro font-black uppercase tracking-wider text-red-600 hover:bg-red-50"
                   >
                     {removing === editingRowId ? <Loader2 className="h-3 w-3 animate-spin" /> : <Trash2 className="h-3 w-3" />}
                   </button>
@@ -232,7 +232,7 @@ export function PairingSection({ catalogId, catalogSku, platformIds, onRefresh }
                 <button
                   type="button"
                   onClick={resetForm}
-                  className="rounded-lg border border-gray-200 px-3 py-1.5 text-[10px] font-black uppercase tracking-wider text-gray-500 hover:bg-gray-50"
+                  className="rounded-lg border border-gray-200 px-3 py-1.5 text-micro font-black uppercase tracking-wider text-gray-500 hover:bg-gray-50"
                 >
                   Cancel
                 </button>
@@ -246,7 +246,7 @@ export function PairingSection({ catalogId, catalogSku, platformIds, onRefresh }
         <button
           type="button"
           onClick={openAdd}
-          className="flex items-center gap-1.5 rounded-lg px-2 py-1.5 text-[10px] font-black uppercase tracking-wider text-blue-600 hover:bg-blue-50 transition-colors"
+          className="flex items-center gap-1.5 rounded-lg px-2 py-1.5 text-micro font-black uppercase tracking-wider text-blue-600 hover:bg-blue-50 transition-colors"
         >
           <Plus className="h-3 w-3" /> Add Pairing
         </button>

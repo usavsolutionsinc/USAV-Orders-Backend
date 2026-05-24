@@ -48,7 +48,7 @@ export function BarcodeScanner({ isOpen, onScan, onClose }: BarcodeScannerProps)
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-2">
             <ScanLine size={16} className="text-navy-700" />
-            <span className="text-[9px] font-bold tracking-[0.15em] uppercase text-navy-700 font-sans">
+            <span className="text-eyebrow font-bold tracking-[0.15em] uppercase text-navy-700 font-sans">
               Point at barcode
             </span>
           </div>

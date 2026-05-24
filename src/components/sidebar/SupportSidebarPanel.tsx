@@ -9,7 +9,7 @@ export function SupportSidebarPanel() {
       <div className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm">
         <p className={`${sectionLabel} text-rose-600`}>Customer Support</p>
         <h3 className={`mt-2 ${cardTitle}`}>Operational queue</h3>
-        <p className="mt-2 text-[11px] font-semibold leading-relaxed text-gray-600">
+        <p className="mt-2 text-caption font-semibold leading-relaxed text-gray-600">
           This page centralizes eBay unread conversations, eBay return requests, and Zendesk open tickets so support
           work is triaged from one queue.
         </p>

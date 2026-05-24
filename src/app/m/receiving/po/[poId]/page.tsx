@@ -109,18 +109,18 @@ export default function MobilePoDetailPage(props: { params: Promise<{ poId: stri
         ) : (
           <>
             <div className="flex items-center gap-2">
-              <p className="text-[20px] font-black tracking-tight text-gray-900">
+              <p className="text-xl font-black tracking-tight text-gray-900">
                 PO {header.po_number || header.po_id}
               </p>
               <span
-                className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-black uppercase tracking-wide ${
+                className={`inline-flex items-center rounded-full px-2 py-0.5 text-micro font-black uppercase tracking-wide ${
                   STATUS_TONE[header.status] ?? 'bg-slate-100 text-slate-600'
                 }`}
               >
                 {header.status}
               </span>
             </div>
-            <p className="mt-1 text-[12px] font-bold text-gray-600">
+            <p className="mt-1 text-label font-bold text-gray-600">
               {header.qty_received}/{header.qty_expected || '?'} received
               {' · '}
               {header.open_items} open
@@ -141,7 +141,7 @@ export default function MobilePoDetailPage(props: { params: Promise<{ poId: stri
               key={t}
               type="button"
               onClick={() => setTab(t)}
-              className={`h-12 flex-1 text-[12px] font-black uppercase tracking-[0.18em] transition-colors ${
+              className={`h-12 flex-1 text-label font-black uppercase tracking-[0.18em] transition-colors ${
                 active ? 'text-gray-900' : 'text-gray-400'
               }`}
             >
@@ -160,7 +160,7 @@ export default function MobilePoDetailPage(props: { params: Promise<{ poId: stri
 
       {/* Tab content */}
       {error ? (
-        <p className="px-6 py-12 text-center text-[12px] font-bold text-rose-600">
+        <p className="px-6 py-12 text-center text-label font-bold text-rose-600">
           Couldn't load PO {poId}.
         </p>
       ) : tab === 'items' ? (
@@ -178,7 +178,7 @@ export default function MobilePoDetailPage(props: { params: Promise<{ poId: stri
 function ItemsList({ poId, items }: { poId: string; items: PoItem[] }) {
   if (items.length === 0) {
     return (
-      <p className="px-6 py-10 text-center text-[12px] font-bold text-gray-500">
+      <p className="px-6 py-10 text-center text-label font-bold text-gray-500">
         No purchase order items yet.
       </p>
     );
@@ -204,21 +204,21 @@ function ItemsList({ poId, items }: { poId: string; items: PoItem[] }) {
                     className="object-cover"
                   />
                 ) : (
-                  <span className="absolute inset-0 grid place-items-center text-[10px] font-black uppercase tracking-wider text-gray-400">
+                  <span className="absolute inset-0 grid place-items-center text-micro font-black uppercase tracking-wider text-gray-400">
                     {it.sku?.slice(0, 4) || 'SKU'}
                   </span>
                 )}
               </div>
               <div className="min-w-0 flex-1">
-                <p className="truncate text-[13px] font-black tracking-tight text-gray-900">
+                <p className="truncate text-sm font-black tracking-tight text-gray-900">
                   {it.item_name || it.sku || 'Untitled item'}
                 </p>
-                <p className="mt-0.5 text-[11px] font-bold text-gray-500">
+                <p className="mt-0.5 text-caption font-bold text-gray-500">
                   {it.sku ? `${it.sku} · ` : ''}
                   {it.quantity_received}/{it.quantity_expected ?? '?'}
                   {' · '}
                   <span
-                    className={`inline-flex items-center rounded px-1.5 py-0.5 text-[9px] font-black uppercase tracking-wider ${
+                    className={`inline-flex items-center rounded px-1.5 py-0.5 text-eyebrow font-black uppercase tracking-wider ${
                       STATUS_TONE[status] ?? 'bg-slate-100 text-slate-600'
                     }`}
                   >
@@ -226,7 +226,7 @@ function ItemsList({ poId, items }: { poId: string; items: PoItem[] }) {
                   </span>
                 </p>
               </div>
-              <span className="inline-flex items-center gap-1 rounded-full bg-gray-100 px-2 py-0.5 text-[11px] font-black text-gray-700">
+              <span className="inline-flex items-center gap-1 rounded-full bg-gray-100 px-2 py-0.5 text-caption font-black text-gray-700">
                 <Camera className="h-3.5 w-3.5" />
                 {it.item_photo_count}
               </span>
@@ -242,7 +242,7 @@ function ItemsList({ poId, items }: { poId: string; items: PoItem[] }) {
 function PoPhotosTab({ header, staffId }: { header: PoHeader | undefined; staffId: number }) {
   if (!header?.receiving_id) {
     return (
-      <p className="px-6 py-10 text-center text-[12px] font-bold text-gray-500">
+      <p className="px-6 py-10 text-center text-label font-bold text-gray-500">
         No receiving package yet — scan tracking from desktop first.
       </p>
     );

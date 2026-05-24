@@ -31,8 +31,8 @@ export default function StationGoalBar({
   return (
     <div className="space-y-1.5 px-1">
       <div className="flex items-center justify-between">
-        <p className={`text-[9px] font-black ${progressTextClass} tabular-nums`}>{count}/{safeGoal} {label}</p>
-        <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest">{remaining} {remainingLabel}</p>
+        <p className={`text-eyebrow font-black ${progressTextClass} tabular-nums`}>{count}/{safeGoal} {label}</p>
+        <p className="text-eyebrow font-black text-gray-400 uppercase tracking-widest">{remaining} {remainingLabel}</p>
       </div>
       <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
         <motion.div

@@ -219,43 +219,43 @@ export default function StockZohoOrdersTable({ searchValue, onClearSearch }: Sto
                   <div key={row.id} className="px-4 py-3 hover:bg-gray-50/60 transition-colors">
                     <div className="grid grid-cols-[minmax(0,1.6fr)_90px_90px_130px_120px_minmax(0,1fr)] gap-3 items-start">
                       <div className="min-w-0">
-                        <p className="text-[12px] font-black text-gray-900 truncate">{row.item_name || 'Unknown Item'}</p>
+                        <p className="text-label font-black text-gray-900 truncate">{row.item_name || 'Unknown Item'}</p>
                         <p className={`${fieldLabel} mt-0.5 truncate`}>
                           {row.sku || 'No SKU'} • {row.vendor_name || 'No Vendor'}
                         </p>
-                        <p className="text-[10px] font-bold text-gray-500 mt-1 truncate">
+                        <p className="text-micro font-bold text-gray-500 mt-1 truncate">
                           Avail {normalizeNumberText(row.zoho_quantity_available)} • Incoming {normalizeNumberText(row.zoho_incoming_quantity)}
                         </p>
                       </div>
 
-                      <div className="text-[10px] font-black text-gray-700">
+                      <div className="text-micro font-black text-gray-700">
                         <p className="uppercase tracking-widest text-gray-500">Need</p>
                         <p className="mt-1">{normalizeNumberText(row.quantity_needed)}</p>
                       </div>
 
-                      <div className="text-[10px] font-black text-gray-700">
+                      <div className="text-micro font-black text-gray-700">
                         <p className="uppercase tracking-widest text-gray-500">Order</p>
                         <p className="mt-1">{normalizeNumberText(row.quantity_to_order)}</p>
                       </div>
 
-                      <div className="text-[10px] font-black text-gray-700 min-w-0">
+                      <div className="text-micro font-black text-gray-700 min-w-0">
                         <p className="uppercase tracking-widest text-gray-500">PO #</p>
                         <p className="mt-1 truncate">{row.zoho_po_number || 'Not created'}</p>
                       </div>
 
                       <div>
-                        <span className={`inline-flex items-center rounded-full border px-2 py-1 text-[9px] font-black uppercase tracking-wider ${statusPillClass(String(row.status || ''))}`}>
+                        <span className={`inline-flex items-center rounded-full border px-2 py-1 text-eyebrow font-black uppercase tracking-wider ${statusPillClass(String(row.status || ''))}`}>
                           {String(row.status || 'unknown').replace(/_/g, ' ')}
                         </span>
                       </div>
 
                       <div className="min-w-0">
-                        <p className={`${tableHeader} text-[9px]`}>Orders Waiting</p>
-                        <p className="text-[10px] font-bold text-gray-600 mt-1 truncate">
+                        <p className={`${tableHeader} text-eyebrow`}>Orders Waiting</p>
+                        <p className="text-micro font-bold text-gray-600 mt-1 truncate">
                           {waitingOrdersLabel || '—'}
                         </p>
                         {row.notes ? (
-                          <p className="text-[10px] font-semibold text-amber-700 mt-1 truncate">{row.notes}</p>
+                          <p className="text-micro font-semibold text-amber-700 mt-1 truncate">{row.notes}</p>
                         ) : null}
                       </div>
                     </div>

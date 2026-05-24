@@ -73,12 +73,12 @@ function PlatformSkuRow({ entry }: { entry: PlatformSkuEntry }) {
     <div className="flex items-center gap-2 py-1">
       <div className="flex w-[88px] shrink-0 flex-col items-start gap-0.5">
         <span
-          className={`inline-flex w-full items-center justify-center rounded-md border px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider ${style.chip}`}
+          className={`inline-flex w-full items-center justify-center rounded-md border px-1.5 py-0.5 text-micro font-semibold uppercase tracking-wider ${style.chip}`}
         >
           {style.label}
         </span>
         {entry.accountName && (
-          <span className="w-full truncate text-[9px] font-medium uppercase tracking-wider text-gray-400">
+          <span className="w-full truncate text-eyebrow font-medium uppercase tracking-wider text-gray-400">
             {entry.accountName}
           </span>
         )}
@@ -93,7 +93,7 @@ function PlatformSkuRow({ entry }: { entry: PlatformSkuEntry }) {
         />
       </div>
       {entry.itemId && entry.itemId !== entry.value && (
-        <span className="shrink-0 font-mono text-[10px] text-gray-400">
+        <span className="shrink-0 font-mono text-micro text-gray-400">
           {entry.itemId}
         </span>
       )}
@@ -243,7 +243,7 @@ export function ProductDetailsSection({
           <DetailsPanelRow
             label="Condition"
             actions={isSavingCondition ? (
-              <span className="text-[10px] font-black uppercase tracking-wide text-blue-600">Saving</span>
+              <span className="text-micro font-black uppercase tracking-wide text-blue-600">Saving</span>
             ) : null}
           >
             <ConditionPills value={conditionValue} onChange={handleConditionChange} />

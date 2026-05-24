@@ -11,6 +11,7 @@
 
 import { requirePermission } from '@/lib/auth/page-guard';
 import pool from '@/lib/db';
+import { PageHeader } from '@/components/ui/pane-header';
 import { StaffTable } from './StaffTable';
 
 interface StaffRow {
@@ -39,13 +40,11 @@ export default async function StaffPage() {
 
   return (
     <div className="min-h-screen bg-gray-50 antialiased">
-      <div className="mx-auto max-w-5xl space-y-6 px-6 py-10">
-        <header>
-          <h1 className="text-[28px] font-semibold tracking-tight text-gray-900">Team</h1>
-          <p className="mt-1 text-[13px] text-gray-500">
-            Invite teammates, change roles, deactivate access. Active sessions are revoked the moment you deactivate.
-          </p>
-        </header>
+      <PageHeader title="Team" maxWidth="5xl" />
+      <div className="mx-auto max-w-5xl space-y-6 px-6 py-6">
+        <p className="text-[13px] text-gray-500">
+          Invite teammates, change roles, deactivate access. Active sessions are revoked the moment you deactivate.
+        </p>
 
         <StaffTable initialStaff={r.rows.map((s) => ({
           ...s,

@@ -350,7 +350,7 @@ export default function AiChatTab() {
                 <Loader2 className="h-4 w-4 animate-spin text-gray-400" />
               </div>
             ) : sessions.length === 0 ? (
-              <div className="px-4 py-8 text-center text-[11px] text-gray-400">
+              <div className="px-4 py-8 text-center text-caption text-gray-400">
                 No chat history yet
               </div>
             ) : (
@@ -365,10 +365,10 @@ export default function AiChatTab() {
                   >
                     <MessageSquare className="mt-0.5 h-3.5 w-3.5 flex-shrink-0 text-gray-400" />
                     <div className="min-w-0 flex-1">
-                      <p className="truncate text-[12px] font-medium text-gray-800">
+                      <p className="truncate text-label font-medium text-gray-800">
                         {s.title || 'Untitled chat'}
                       </p>
-                      <div className="mt-0.5 flex items-center gap-2 text-[10px] text-gray-400">
+                      <div className="mt-0.5 flex items-center gap-2 text-micro text-gray-400">
                         <span>{formatRelativeDate(s.updatedAt)}</span>
                         <span>{s.messageCount} msg{s.messageCount !== 1 ? 's' : ''}</span>
                       </div>
@@ -410,14 +410,14 @@ export default function AiChatTab() {
               </div>
               <div className="min-w-0">
                 <p className={sectionLabel}>USAV Ops Assistant</p>
-                <p className="truncate text-[13px] font-medium text-gray-700">
+                <p className="truncate text-sm font-medium text-gray-700">
                   Powered by OpenClaw Gateway
                 </p>
               </div>
             </div>
 
             <div className="flex items-center gap-2">
-              <div className="hidden border border-gray-200 bg-white px-3 py-1.5 text-[10px] font-medium text-gray-600 md:block">
+              <div className="hidden border border-gray-200 bg-white px-3 py-1.5 text-micro font-medium text-gray-600 md:block">
                 USAV Scoped
               </div>
               <button
@@ -432,7 +432,7 @@ export default function AiChatTab() {
           </div>
 
           <div className="grid gap-px border-t border-gray-200 bg-gray-200 px-6 py-px md:grid-cols-3">
-            <div className="flex items-center gap-2 bg-[#fbfbfa] px-3 py-2 text-[11px] text-gray-600">
+            <div className="flex items-center gap-2 bg-[#fbfbfa] px-3 py-2 text-caption text-gray-600">
               {connectionStatus === 'online' ? (
                 <Check className="h-4 w-4 text-emerald-600" />
               ) : connectionStatus === 'offline' ? (
@@ -442,11 +442,11 @@ export default function AiChatTab() {
               )}
               <span>{statusLabel(connectionStatus)}</span>
             </div>
-            <div className="flex items-center gap-2 bg-[#fbfbfa] px-3 py-2 text-[11px] text-gray-600">
+            <div className="flex items-center gap-2 bg-[#fbfbfa] px-3 py-2 text-caption text-gray-600">
               <Database className="h-4 w-4 text-gray-500" />
               <span>USAV warehouse data only — no personal/finance access</span>
             </div>
-            <div className="flex items-center gap-2 bg-[#fbfbfa] px-3 py-2 text-[11px] text-gray-600">
+            <div className="flex items-center gap-2 bg-[#fbfbfa] px-3 py-2 text-caption text-gray-600">
               <Clock className="h-4 w-4 text-gray-500" />
               <span>Routes through OpenClaw Gateway with USAV scope</span>
             </div>
@@ -462,10 +462,10 @@ export default function AiChatTab() {
                     <PackageCheck className="h-4 w-4 text-gray-500" />
                     USAV Warehouse Assistant
                   </div>
-                  <h1 className="text-[24px] font-semibold tracking-tight text-gray-900">
+                  <h1 className="text-2xl font-semibold tracking-tight text-gray-900">
                     Ask about orders, shipping, staff, FBA, repairs, inventory, or Bose service manuals.
                   </h1>
-                  <p className="max-w-2xl text-[13px] leading-7 text-gray-600">
+                  <p className="max-w-2xl text-sm leading-7 text-gray-600">
                     This assistant routes through the OpenClaw Gateway with strict USAV scope.
                     Shipped-count summaries resolve locally. Bose manual queries go through
                     NemoClaw RAG for service manual lookup.
@@ -482,7 +482,7 @@ export default function AiChatTab() {
                     <Database className="h-4 w-4 text-gray-500" />
                     What This Assistant Can Access
                   </div>
-                  <div className="space-y-3 text-[12px] leading-6 text-gray-600">
+                  <div className="space-y-3 text-label leading-6 text-gray-600">
                     <div className="border-b border-gray-100 pb-3">
                       <p className="font-medium text-gray-900">Orders & Shipping</p>
                       <p>Orders, tracking numbers, packer logs, station activity</p>
@@ -517,9 +517,9 @@ export default function AiChatTab() {
                     <div key={msg.id} className="ml-auto w-full max-w-2xl border border-gray-200 bg-white px-4 py-3">
                       <div className="flex items-center justify-between gap-3">
                         <span className={sectionLabel}>Question</span>
-                        <span className="text-[10px] text-gray-500">{timestampLabel}</span>
+                        <span className="text-micro text-gray-500">{timestampLabel}</span>
                       </div>
-                      <p className="mt-2 text-[13px] leading-6 text-gray-900">{msg.content}</p>
+                      <p className="mt-2 text-sm leading-6 text-gray-900">{msg.content}</p>
                     </div>
                   );
                 }
@@ -529,9 +529,9 @@ export default function AiChatTab() {
                     <div key={msg.id} className="w-full max-w-3xl border border-red-200 bg-red-50 px-4 py-3 text-red-700">
                       <div className="flex items-center justify-between gap-3">
                         <span className={`${sectionLabel} text-red-500`}>Error</span>
-                        <span className="text-[10px] text-red-500">{timestampLabel}</span>
+                        <span className="text-micro text-red-500">{timestampLabel}</span>
                       </div>
-                      <p className="mt-2 text-[12px] leading-6 whitespace-pre-wrap">{msg.content}</p>
+                      <p className="mt-2 text-label leading-6 whitespace-pre-wrap">{msg.content}</p>
                     </div>
                   );
                 }
@@ -555,7 +555,7 @@ export default function AiChatTab() {
                     <Loader2 className="h-4 w-4 animate-spin text-gray-400" />
                     <div>
                       <p className={sectionLabel}>Working</p>
-                      <p className="mt-1 text-[12px] text-gray-600">
+                      <p className="mt-1 text-label text-gray-600">
                         Routing through OpenClaw Gateway
                       </p>
                     </div>
@@ -579,7 +579,7 @@ export default function AiChatTab() {
                 onKeyDown={handleKeyDown}
                 placeholder="Ask about orders, shipping, staff, FBA, Bose manuals..."
                 disabled={isLoading}
-                className="min-h-[24px] flex-1 resize-none bg-transparent text-[13px] leading-6 text-gray-800 placeholder-gray-400 focus:outline-none disabled:cursor-not-allowed"
+                className="min-h-[24px] flex-1 resize-none bg-transparent text-sm leading-6 text-gray-800 placeholder-gray-400 focus:outline-none disabled:cursor-not-allowed"
                 style={{ maxHeight: '160px' }}
               />
               <button
@@ -593,7 +593,7 @@ export default function AiChatTab() {
               </button>
             </div>
 
-            <div className="mt-2 flex flex-wrap items-center justify-between gap-2 text-[10px] text-gray-500">
+            <div className="mt-2 flex flex-wrap items-center justify-between gap-2 text-micro text-gray-500">
               <span>Shift+Enter for new line. USAV-scoped queries only.</span>
               <span>Powered by OpenClaw</span>
             </div>

@@ -85,9 +85,9 @@ export function MobileOrderCard({
               date={card.displayShipByDate || ''}
               showPrefix={false}
               showYear={false}
-              className="[&>span]:text-[15px] [&>span]:font-black [&>svg]:w-4 [&>svg]:h-4"
+              className="[&>span]:text-base [&>span]:font-black [&>svg]:w-4 [&>svg]:h-4"
             />
-            <span className={`text-[15px] font-black ${getDaysLateTone(card.daysLate)}`}>
+            <span className={`text-base font-black ${getDaysLateTone(card.daysLate)}`}>
               {card.daysLate}
             </span>
           </div>
@@ -118,7 +118,7 @@ export function MobileOrderCard({
 
         {/* ── Body ── */}
         <div className="px-3">
-          <h4 className="text-[17px] font-black text-gray-900 leading-tight">
+          <h4 className="text-lg font-black text-gray-900 leading-tight">
             <InlineQtyPrefix quantity={card.quantity} />
             {order.condition && <><span className={getConditionColor(order.condition)}>{order.condition}</span>{' '}</>}
             {order.product_title}

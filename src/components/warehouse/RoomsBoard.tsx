@@ -284,7 +284,7 @@ export function RoomsBoard() {
       <header className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <h1 className="text-2xl font-bold tracking-tight text-gray-900">Rooms</h1>
-          <p className="mt-1 text-[13px] text-gray-500">
+          <p className="mt-1 text-sm text-gray-500">
             {loading
               ? 'Loading rooms…'
               : `${orderedSummaries.length} room${orderedSummaries.length === 1 ? '' : 's'} · ${totals.bins} bin${totals.bins === 1 ? '' : 's'} · ${totals.qty} unit${totals.qty === 1 ? '' : 's'}`}
@@ -295,7 +295,7 @@ export function RoomsBoard() {
             <button
               type="button"
               onClick={() => { successFeedback(); setAddingRoom(true); }}
-              className="inline-flex h-11 items-center gap-1.5 rounded-full bg-gradient-to-br from-blue-500 to-blue-700 px-4 text-[13px] font-semibold text-white shadow-md shadow-blue-600/30 transition-transform active:scale-[0.97]"
+              className="inline-flex h-11 items-center gap-1.5 rounded-full bg-gradient-to-br from-blue-500 to-blue-700 px-4 text-sm font-semibold text-white shadow-md shadow-blue-600/30 transition-transform active:scale-[0.97]"
             >
               <Plus className="h-4 w-4" />
               Add room
@@ -345,7 +345,7 @@ export function RoomsBoard() {
             <button
               type="button"
               onClick={() => setAddingRoom(true)}
-              className="mt-2 inline-flex h-11 items-center gap-1.5 rounded-full bg-gradient-to-br from-blue-500 to-blue-700 px-4 text-[13px] font-semibold text-white shadow-md shadow-blue-600/30"
+              className="mt-2 inline-flex h-11 items-center gap-1.5 rounded-full bg-gradient-to-br from-blue-500 to-blue-700 px-4 text-sm font-semibold text-white shadow-md shadow-blue-600/30"
             >
               <Plus className="h-4 w-4" />
               Add your first room
@@ -386,7 +386,7 @@ export function RoomsBoard() {
             <button
               type="button"
               onClick={() => setAddingRoom(true)}
-              className="mt-1 flex h-16 w-full items-center justify-center gap-2 rounded-2xl border-2 border-dashed border-blue-300 bg-blue-50/40 text-[13px] font-semibold text-blue-700 transition-colors hover:bg-blue-100/60 active:scale-[0.99]"
+              className="mt-1 flex h-16 w-full items-center justify-center gap-2 rounded-2xl border-2 border-dashed border-blue-300 bg-blue-50/40 text-sm font-semibold text-blue-700 transition-colors hover:bg-blue-100/60 active:scale-[0.99]"
             >
               <Plus className="h-4 w-4" />
               Add Room
@@ -525,7 +525,7 @@ function RoomCard({ summary, editMode, mutating, onOpen, onStartEdit, onRequestD
           <div className="flex items-start gap-3">
             <ZoneTile letter={summary.letter} />
             <div className="min-w-0 flex-1">
-              <p className="truncate text-[15px] font-semibold leading-snug tracking-tight text-gray-900">
+              <p className="truncate text-base font-semibold leading-snug tracking-tight text-gray-900">
                 {summary.room}
               </p>
               <p className="mt-0.5 text-[11.5px] font-medium text-gray-500">
@@ -570,13 +570,13 @@ function RoomCard({ summary, editMode, mutating, onOpen, onStartEdit, onRequestD
 function ZoneTile({ letter }: { letter: string | null }) {
   if (letter) {
     return (
-      <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-blue-50 to-blue-100/70 font-mono text-[20px] font-semibold text-blue-700 ring-1 ring-blue-200">
+      <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-blue-50 to-blue-100/70 font-mono text-xl font-semibold text-blue-700 ring-1 ring-blue-200">
         {letter}
       </div>
     );
   }
   return (
-    <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-amber-50 font-mono text-[18px] font-semibold text-amber-700 ring-1 ring-amber-200" title="No zone letter assigned yet">
+    <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-amber-50 font-mono text-lg font-semibold text-amber-700 ring-1 ring-amber-200" title="No zone letter assigned yet">
       ?
     </div>
   );
@@ -590,7 +590,7 @@ function Tally({ label, n, tone }: { label: string; n: number; tone: 'slate' | '
     tone === 'purple' ? 'bg-purple-50 text-purple-700 ring-purple-200' :
                         'bg-slate-50 text-slate-700 ring-slate-200';
   return (
-    <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider ring-1 ${cls}`}>
+    <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-micro font-semibold uppercase tracking-wider ring-1 ${cls}`}>
       {label}
       <span className="tabular-nums">{n}</span>
     </span>
@@ -642,9 +642,9 @@ function RoomEditSheet({
   return (
     <BottomSheet open={open} onClose={onClose} title={title}>
       {message && (
-        <p className="mb-3 text-center text-[12px] text-gray-500">{message}</p>
+        <p className="mb-3 text-center text-label text-gray-500">{message}</p>
       )}
-      <label className="text-[10px] font-semibold uppercase tracking-wider text-gray-500">
+      <label className="text-micro font-semibold uppercase tracking-wider text-gray-500">
         Room Name
       </label>
       <input
@@ -661,7 +661,7 @@ function RoomEditSheet({
         className="mt-1 mb-4 h-12 w-full rounded-2xl border border-gray-300 bg-gray-50 px-4 text-sm font-semibold text-gray-900 outline-none transition-colors focus:border-blue-500 focus:bg-white focus:ring-2 focus:ring-blue-200"
       />
 
-      <label className="text-[10px] font-semibold uppercase tracking-wider text-gray-500">
+      <label className="text-micro font-semibold uppercase tracking-wider text-gray-500">
         Zone letter (A–Z)
       </label>
       <div className="mt-2 mb-4 grid grid-cols-6 gap-1.5 sm:grid-cols-9">
@@ -674,7 +674,7 @@ function RoomEditSheet({
               type="button"
               disabled={isLocked && !isSelected}
               onClick={() => { scanFeedback(); setLetter(l); }}
-              className={`relative flex h-10 items-center justify-center rounded-xl text-[14px] font-semibold tabular-nums transition-all active:scale-[0.95] ${
+              className={`relative flex h-10 items-center justify-center rounded-xl text-sm font-semibold tabular-nums transition-all active:scale-[0.95] ${
                 isSelected
                   ? 'bg-gradient-to-br from-blue-500 to-blue-700 text-white shadow-md shadow-blue-600/30'
                   : isLocked

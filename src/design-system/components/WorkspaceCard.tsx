@@ -58,7 +58,7 @@ export function WorkspaceCard({
       {(label || actions) && (
         <header className="flex items-center justify-between px-5 pt-4">
           {label ? (
-            <h3 className="text-[11px] font-bold uppercase tracking-[0.14em] text-gray-500">
+            <h3 className="text-caption font-bold uppercase tracking-[0.14em] text-gray-500">
               {label}
             </h3>
           ) : (

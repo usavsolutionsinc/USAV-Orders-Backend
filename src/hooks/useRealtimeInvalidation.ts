@@ -1,7 +1,14 @@
 'use client';
 
+import { useEffect, useRef } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
-import { getOrdersChannelName, getRepairsChannelName, getStationChannelName, getWalkInChannelName } from '@/lib/realtime/channels';
+import {
+  getOrdersChannelName,
+  getRepairsChannelName,
+  getStationChannelName,
+  getWalkInChannelName,
+} from '@/lib/realtime/channels';
+import { useAblyClient } from '@/contexts/AblyContext';
 import { useAblyChannel } from './useAblyChannel';
 
 const ORDERS_CHANNEL = getOrdersChannelName();
@@ -14,6 +21,17 @@ interface UseRealtimeInvalidationOptions {
   repair?: boolean;
   receiving?: boolean;
   walkIn?: boolean;
+  /**
+   * Register a connection listener that invalidates *all* dashboard caches
+   * when the Ably realtime client reconnects after a disconnect (e.g. laptop
+   * sleep, network blip). Events published while disconnected are lost, so a
+   * broad invalidate is the safe recovery.
+   *
+   * Set `true` on the top-level dashboard page; channel-scoped consumers
+   * (e.g. a mobile receiving list) typically don't need this — their parent
+   * dashboard handles it.
+   */
+  reconnect?: boolean;
 }
 
 export function useRealtimeInvalidation({
@@ -21,6 +39,7 @@ export function useRealtimeInvalidation({
   repair = false,
   receiving = false,
   walkIn = false,
+  reconnect = false,
 }: UseRealtimeInvalidationOptions = {}) {
   const queryClient = useQueryClient();
 
@@ -123,4 +142,63 @@ export function useRealtimeInvalidation({
     },
     walkIn,
   );
+
+  // ─── Reconnect listener ────────────────────────────────────────────────
+  // Events published while the realtime client is disconnected are lost, so
+  // when the connection recovers we invalidate broadly. Hooks must run
+  // unconditionally — the `reconnect` flag gates the effect body, not the
+  // hook call itself.
+  const { getClient } = useAblyClient();
+  const wasDisconnectedRef = useRef(false);
+
+  useEffect(() => {
+    if (!reconnect) return;
+    let disposed = false;
+    let listener: ((stateChange: { current: string; previous: string }) => void) | null = null;
+    let client: { connection: { on: (fn: typeof listener) => void; off: (fn: typeof listener) => void } } | null = null;
+
+    getClient()
+      .then((c) => {
+        if (disposed || !c) return;
+        client = c as typeof client;
+        listener = (stateChange) => {
+          const { current } = stateChange;
+          if (current === 'disconnected' || current === 'suspended') {
+            wasDisconnectedRef.current = true;
+          }
+          if (current === 'connected' && wasDisconnectedRef.current) {
+            wasDisconnectedRef.current = false;
+            console.log('[ably] Reconnected after disconnect — invalidating dashboard caches');
+            queryClient.invalidateQueries({ queryKey: ['dashboard-table'] });
+            queryClient.invalidateQueries({ queryKey: ['shipped-table'] });
+            queryClient.invalidateQueries({ queryKey: ['shipped-table-fba'] });
+            queryClient.invalidateQueries({ queryKey: ['fba-board'] });
+            queryClient.invalidateQueries({ queryKey: ['fba-shipments'] });
+            queryClient.invalidateQueries({ queryKey: ['repairs'] });
+            queryClient.invalidateQueries({ queryKey: ['receiving'] });
+            queryClient.invalidateQueries({ queryKey: ['receiving-pending-unboxing'] });
+            queryClient.invalidateQueries({ queryKey: ['receiving-lines-table'] });
+            queryClient.invalidateQueries({ queryKey: ['receiving-lines'] });
+            queryClient.invalidateQueries({ queryKey: ['receiving-lines-with-serials'] });
+            queryClient.invalidateQueries({ queryKey: ['receiving-line-serials'] });
+            queryClient.invalidateQueries({ queryKey: ['walk-in-sales'] });
+            queryClient.invalidateQueries({ queryKey: ['dashboard-operations'] });
+          }
+        };
+        client?.connection.on(listener);
+      })
+      .catch(() => {});
+
+    return () => {
+      disposed = true;
+      if (client && listener) {
+        try {
+          client.connection.off(listener);
+        } catch {
+          /* ignore */
+        }
+      }
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [reconnect]);
 }

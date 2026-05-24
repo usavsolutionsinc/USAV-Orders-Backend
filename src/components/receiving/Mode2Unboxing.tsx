@@ -237,7 +237,7 @@ function PhotoGrid({ receivingId }: { receivingId: string }) {
             )}
 
             <div className="mt-2 rounded-xl border border-blue-100 bg-blue-50 px-3 py-2">
-                <p className="text-[10px] font-bold text-blue-700">
+                <p className="text-micro font-bold text-blue-700">
                     Open the mobile app → Receiving Station → select entry <span className="font-mono font-black">#{receivingId}</span> to take photos. Page auto-refreshes every 3s.
                 </p>
             </div>
@@ -432,7 +432,7 @@ export default function Mode2Unboxing({ staffId }: Mode2UnboxingProps) {
                     <div className="flex flex-1 flex-col items-center justify-center text-center px-6">
                         <Check className="mb-3 h-10 w-10 text-emerald-400" />
                         <p className={sectionLabel}>All Clear</p>
-                        <p className="mt-1 text-[10px] font-semibold text-gray-500">No pending packages to unbox</p>
+                        <p className="mt-1 text-micro font-semibold text-gray-500">No pending packages to unbox</p>
                     </div>
                 ) : (
                     <ul className="flex-1 overflow-y-auto divide-y divide-gray-50">
@@ -549,7 +549,7 @@ export default function Mode2Unboxing({ staffId }: Mode2UnboxingProps) {
                                                                 {line.sku || '—'}
                                                             </p>
                                                             {line.item_name && (
-                                                                <p className="mt-0.5 truncate text-[10px] text-gray-500">
+                                                                <p className="mt-0.5 truncate text-micro text-gray-500">
                                                                     {line.item_name}
                                                                 </p>
                                                             )}
@@ -578,7 +578,7 @@ export default function Mode2Unboxing({ staffId }: Mode2UnboxingProps) {
                                                                 {scannedSerials.map((sn, i) => (
                                                                     <span
                                                                         key={`${line.id}-${i}`}
-                                                                        className="rounded border border-gray-200 bg-white px-1.5 py-0.5 font-mono text-[9px] text-gray-700"
+                                                                        className="rounded border border-gray-200 bg-white px-1.5 py-0.5 font-mono text-eyebrow text-gray-700"
                                                                     >
                                                                         {sn}
                                                                     </span>
@@ -614,7 +614,7 @@ export default function Mode2Unboxing({ staffId }: Mode2UnboxingProps) {
                                         <button
                                             type="button"
                                             onClick={() => setIsReturn(false)}
-                                            className={`rounded-xl border px-3 py-2.5 text-[10px] font-black uppercase tracking-widest transition-all ${
+                                            className={`rounded-xl border px-3 py-2.5 text-micro font-black uppercase tracking-widest transition-all ${
                                                 !isReturn
                                                     ? 'border-blue-300 bg-blue-50 text-blue-700'
                                                     : 'border-gray-200 bg-white text-gray-400 hover:border-gray-300'
@@ -625,7 +625,7 @@ export default function Mode2Unboxing({ staffId }: Mode2UnboxingProps) {
                                         <button
                                             type="button"
                                             onClick={() => setIsReturn(true)}
-                                            className={`rounded-xl border px-3 py-2.5 text-[10px] font-black uppercase tracking-widest transition-all ${
+                                            className={`rounded-xl border px-3 py-2.5 text-micro font-black uppercase tracking-widest transition-all ${
                                                 isReturn
                                                     ? 'border-amber-300 bg-amber-50 text-amber-700'
                                                     : 'border-gray-200 bg-white text-gray-400 hover:border-gray-300'
@@ -643,7 +643,7 @@ export default function Mode2Unboxing({ staffId }: Mode2UnboxingProps) {
                                             <select
                                                 value={returnPlatform}
                                                 onChange={(e) => setReturnPlatform(e.target.value)}
-                                                className="w-full rounded-xl border border-amber-200 bg-amber-50 px-4 py-2.5 text-[11px] font-black uppercase tracking-wider text-amber-800 outline-none focus:border-amber-400"
+                                                className="w-full rounded-xl border border-amber-200 bg-amber-50 px-4 py-2.5 text-caption font-black uppercase tracking-wider text-amber-800 outline-none focus:border-amber-400"
                                             >
                                                 <option value="">Select platform</option>
                                                 {RETURN_PLATFORM_OPTIONS.map((opt) => (
@@ -679,7 +679,7 @@ export default function Mode2Unboxing({ staffId }: Mode2UnboxingProps) {
                                                 key={opt.value}
                                                 type="button"
                                                 onClick={() => setQaStatus(opt.value)}
-                                                className={`rounded-xl px-3 py-1.5 text-[10px] font-black uppercase tracking-wider transition-all ${
+                                                className={`rounded-xl px-3 py-1.5 text-micro font-black uppercase tracking-wider transition-all ${
                                                     qaStatus === opt.value
                                                         ? opt.color === 'emerald'
                                                             ? 'bg-emerald-600 text-white'
@@ -700,7 +700,7 @@ export default function Mode2Unboxing({ staffId }: Mode2UnboxingProps) {
                                     <select
                                         value={dispositionCode}
                                         onChange={(e) => setDispositionCode(e.target.value)}
-                                        className="w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-2.5 text-[11px] font-black uppercase tracking-wider text-gray-900 outline-none focus:border-blue-500"
+                                        className="w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-2.5 text-caption font-black uppercase tracking-wider text-gray-900 outline-none focus:border-blue-500"
                                     >
                                         {DISPOSITION_OPTIONS.map((opt) => (
                                             <option key={opt.value} value={opt.value}>{opt.label}</option>
@@ -795,7 +795,7 @@ export default function Mode2Unboxing({ staffId }: Mode2UnboxingProps) {
                 <div className="flex flex-1 flex-col items-center justify-center text-center">
                     <Package className="mb-3 h-10 w-10 text-gray-300" />
                     <p className={sectionLabel}>Select a package</p>
-                    <p className="mt-1 text-[10px] font-semibold text-gray-500">Pick an entry from the queue to begin unboxing</p>
+                    <p className="mt-1 text-micro font-semibold text-gray-500">Pick an entry from the queue to begin unboxing</p>
                 </div>
             )}
         </div>

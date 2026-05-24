@@ -82,14 +82,14 @@ export function UnfoundQueueSidebarToolbar() {
     <div className="flex flex-col gap-3 p-3">
       {/* Title + Refresh */}
       <div className="flex items-center justify-between">
-        <h2 className="text-[14px] font-bold tracking-tight text-gray-900">
+        <h2 className="text-sm font-bold tracking-tight text-gray-900">
           Unfound queue
         </h2>
         <button
           type="button"
           onClick={onRefresh}
           title="Refresh"
-          className="flex items-center gap-1 rounded-md border border-gray-200 px-2 py-1 text-[10px] font-bold uppercase tracking-wider text-gray-600 hover:bg-gray-50"
+          className="flex items-center gap-1 rounded-md border border-gray-200 px-2 py-1 text-micro font-bold uppercase tracking-wider text-gray-600 hover:bg-gray-50"
         >
           <RefreshCw className="h-3 w-3" />
           Refresh
@@ -104,13 +104,13 @@ export function UnfoundQueueSidebarToolbar() {
           defaultValue={q}
           onChange={(e) => onSearch(e.target.value)}
           placeholder="Search title, serial, note, ticket…"
-          className="h-8 w-full rounded-md border border-gray-200 bg-white pl-7 pr-3 text-[12px] outline-none focus:border-blue-500"
+          className="h-8 w-full rounded-md border border-gray-200 bg-white pl-7 pr-3 text-label outline-none focus:border-blue-500"
         />
       </div>
 
       {/* Kind filter pills — stacked one per row to fit the narrow sidebar */}
       <div className="flex flex-col gap-1">
-        <p className="text-[10px] font-bold uppercase tracking-wider text-gray-400">
+        <p className="text-micro font-bold uppercase tracking-wider text-gray-400">
           Source
         </p>
         {ENABLED_KINDS.map((k) => (
@@ -118,7 +118,7 @@ export function UnfoundQueueSidebarToolbar() {
             key={k}
             type="button"
             onClick={() => onKind(k)}
-            className={`rounded-md px-2.5 py-1.5 text-left text-[12px] font-semibold transition-colors ${
+            className={`rounded-md px-2.5 py-1.5 text-left text-label font-semibold transition-colors ${
               kind === k
                 ? 'bg-blue-600 text-white'
                 : 'border border-gray-200 bg-white text-gray-600 hover:border-gray-300'
@@ -130,7 +130,7 @@ export function UnfoundQueueSidebarToolbar() {
       </div>
 
       {/* Show-checked toggle */}
-      <label className="flex items-center gap-1.5 text-[12px] text-gray-700">
+      <label className="flex items-center gap-1.5 text-label text-gray-700">
         <input
           type="checkbox"
           checked={showChecked}

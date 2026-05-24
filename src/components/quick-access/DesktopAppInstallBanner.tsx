@@ -61,10 +61,10 @@ export function DesktopAppInstallBanner({ onAction }: DesktopAppInstallBannerPro
         </span>
 
         <div className="relative min-w-0 flex-1">
-          <div className="text-[12px] font-black uppercase tracking-widest text-white/90">
+          <div className="text-label font-black uppercase tracking-widest text-white/90">
             Install desktop app
           </div>
-          <div className="truncate text-[11px] font-medium text-white/80">
+          <div className="truncate text-caption font-medium text-white/80">
             Get full access — silent print, scanners, more
           </div>
         </div>

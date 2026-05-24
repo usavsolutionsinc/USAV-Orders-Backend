@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { isQStashOrigin } from '@/lib/qstash';
+import { isAuthorizedCronRequest, isQStashOrigin } from '@/lib/qstash';
 import pool from '@/lib/db';
 import type { AlbumResult } from '@/lib/google-photos/client';
 import {
@@ -24,11 +24,7 @@ interface CronResult {
   errors: Array<{ photoId: number; message: string }>;
 }
 
-export async function POST(request: NextRequest) {
-  if (!isQStashOrigin(request.headers)) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
-
+async function execute(request: NextRequest) {
   const startedAt = new Date();
   const date = yesterdayUtc();
   const result: CronResult = {
@@ -141,6 +137,16 @@ export async function POST(request: NextRequest) {
   }
 }
 
-export async function GET() {
-  return NextResponse.json({ ok: true, queue: 'qstash', job: 'google-photos-daily' });
+export async function POST(request: NextRequest) {
+  if (!isQStashOrigin(request.headers)) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+  return execute(request);
+}
+
+export async function GET(request: NextRequest) {
+  if (!isAuthorizedCronRequest(request.headers)) {
+    return NextResponse.json({ ok: true, queue: 'vercel-cron', job: 'google-photos-daily' });
+  }
+  return execute(request);
 }

@@ -142,11 +142,11 @@ export function SerialCard({
   return (
     <section className="rounded-2xl bg-white p-4 shadow-sm ring-1 ring-gray-200/60">
       <div className="mb-2 flex items-center justify-between">
-        <h3 className="text-[11px] font-bold uppercase tracking-[0.14em] text-gray-500">
+        <h3 className="text-caption font-bold uppercase tracking-[0.14em] text-gray-500">
           Serial numbers
         </h3>
         <span
-          className={`rounded-md px-2 py-0.5 text-[10px] font-black uppercase tracking-widest ring-1 ${tallyClass}`}
+          className={`rounded-md px-2 py-0.5 text-micro font-black uppercase tracking-widest ring-1 ${tallyClass}`}
         >
           {tally}
         </span>
@@ -204,7 +204,7 @@ export function SerialCard({
           type="button"
           onClick={submit}
           disabled={!scan.trim() || isSubmitting || disabled}
-          className={`inline-flex h-11 items-center justify-center rounded-xl px-4 text-[12px] font-black uppercase tracking-wider text-white shadow-sm transition-colors disabled:cursor-not-allowed disabled:bg-gray-300 ${
+          className={`inline-flex h-11 items-center justify-center rounded-xl px-4 text-label font-black uppercase tracking-wider text-white shadow-sm transition-colors disabled:cursor-not-allowed disabled:bg-gray-300 ${
             editing
               ? 'bg-amber-500 hover:bg-amber-600'
               : 'bg-blue-600 hover:bg-blue-700'
@@ -244,7 +244,7 @@ export function SerialCard({
         <div className="mt-3 border-t border-gray-100 pt-3">
           <label
             htmlFor={notesId}
-            className="block text-[10px] font-bold uppercase tracking-[0.14em] text-gray-500"
+            className="block text-micro font-bold uppercase tracking-[0.14em] text-gray-500"
           >
             Notes
           </label>
@@ -255,7 +255,7 @@ export function SerialCard({
             onBlur={onNotesBlur}
             rows={2}
             placeholder="PO-line notes (saved on blur)"
-            className="mt-1 w-full resize-none rounded-xl border border-gray-200 bg-white px-3 py-2 text-[12px] font-medium leading-snug text-gray-900 placeholder:text-gray-400 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+            className="mt-1 w-full resize-none rounded-xl border border-gray-200 bg-white px-3 py-2 text-label font-medium leading-snug text-gray-900 placeholder:text-gray-400 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
           />
         </div>
       ) : null}
@@ -312,7 +312,7 @@ function SerialChipWithMenu({
                 type="button"
                 role="menuitem"
                 onClick={() => onEdit(serial)}
-                className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-[11px] font-bold uppercase tracking-widest text-gray-700 hover:bg-gray-50"
+                className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-caption font-bold uppercase tracking-widest text-gray-700 hover:bg-gray-50"
               >
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-3.5 w-3.5 shrink-0 text-gray-500">
                   <path d="M12 20h9" strokeLinecap="round" />
@@ -326,7 +326,7 @@ function SerialChipWithMenu({
                 type="button"
                 role="menuitem"
                 onClick={() => onDelete(serial)}
-                className="flex w-full items-center gap-2 border-t border-gray-100 px-3 py-1.5 text-left text-[11px] font-bold uppercase tracking-widest text-rose-600 hover:bg-rose-50"
+                className="flex w-full items-center gap-2 border-t border-gray-100 px-3 py-1.5 text-left text-caption font-bold uppercase tracking-widest text-rose-600 hover:bg-rose-50"
               >
                 <X className="h-3.5 w-3.5 shrink-0" />
                 Delete

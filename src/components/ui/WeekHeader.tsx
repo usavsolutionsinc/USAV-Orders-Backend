@@ -23,11 +23,11 @@ export const weekDayGroupBandClass =
 
 /** Date label in a day-group row — matches mobile week tables + {@link DateGroupHeader}. */
 export const weekDayGroupDateClass =
-  'text-[11px] font-black uppercase tracking-[0.2em] text-gray-700';
+  'text-caption font-black uppercase tracking-[0.2em] text-gray-700';
 
 /** Count in a day-group row. */
 export const weekDayGroupCountClass =
-  'text-[11px] font-black tabular-nums text-gray-900';
+  'text-caption font-black tabular-nums text-gray-900';
 
 /** Desktop high-contrast date label — alias of the generalized PaneHeader title class. */
 export const weekHeaderHighContrastDateClass = paneHeaderHighContrastTitleClass;

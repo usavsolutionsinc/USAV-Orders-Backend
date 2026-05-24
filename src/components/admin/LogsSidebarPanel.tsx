@@ -182,7 +182,7 @@ export function LogsSidebarPanel() {
             });
           }}
           placeholder="Filter by actor staff id"
-          className="h-9 w-full rounded-lg border border-gray-200 bg-white px-3 text-[12px] text-gray-900 outline-none transition placeholder:text-gray-400 focus:border-blue-400 focus:ring-2 focus:ring-blue-500/15"
+          className="h-9 w-full rounded-lg border border-gray-200 bg-white px-3 text-label text-gray-900 outline-none transition placeholder:text-gray-400 focus:border-blue-400 focus:ring-2 focus:ring-blue-500/15"
         />
       }
     >
@@ -194,7 +194,7 @@ export function LogsSidebarPanel() {
         <>
           {grouped.map((group) => (
             <div key={group.key} className="mb-2">
-              <p className="px-1 pb-1.5 pt-2 text-[9px] font-black uppercase tracking-widest text-gray-400">
+              <p className="px-1 pb-1.5 pt-2 text-eyebrow font-black uppercase tracking-widest text-gray-400">
                 {group.label}
               </p>
               <ul className="space-y-1.5">
@@ -231,16 +231,16 @@ export function LogsSidebarPanel() {
               type="button"
               onClick={() => setOffset((prev) => Math.max(0, prev - PAGE_LIMIT))}
               disabled={offset <= 0}
-              className="rounded-md border border-gray-300 px-2 py-1 text-[11px] font-semibold text-gray-700 disabled:opacity-50"
+              className="rounded-md border border-gray-300 px-2 py-1 text-caption font-semibold text-gray-700 disabled:opacity-50"
             >
               Prev
             </button>
-            <span className="text-[10px] text-gray-500">offset {offset}</span>
+            <span className="text-micro text-gray-500">offset {offset}</span>
             <button
               type="button"
               onClick={() => setOffset((prev) => prev + PAGE_LIMIT)}
               disabled={!hasMore}
-              className="rounded-md border border-gray-300 px-2 py-1 text-[11px] font-semibold text-gray-700 disabled:opacity-50"
+              className="rounded-md border border-gray-300 px-2 py-1 text-caption font-semibold text-gray-700 disabled:opacity-50"
             >
               Next
             </button>

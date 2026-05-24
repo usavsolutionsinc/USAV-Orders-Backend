@@ -120,7 +120,7 @@ export function ReceivingAuditModal({ open, onClose, receivingId }: Props) {
           <div className="min-w-0">
             <p
               id="receiving-audit-title"
-              className="text-[10px] font-black uppercase tracking-[0.16em] text-slate-500"
+              className="text-micro font-black uppercase tracking-[0.16em] text-slate-500"
             >
               Audit log
             </p>
@@ -137,15 +137,15 @@ export function ReceivingAuditModal({ open, onClose, receivingId }: Props) {
         </div>
         <div className="min-h-0 flex-1 overflow-y-auto px-3 py-2">
           {loading ? (
-            <p className="py-6 text-center text-[11px] text-slate-500">Loading activity…</p>
+            <p className="py-6 text-center text-caption text-slate-500">Loading activity…</p>
           ) : error ? (
-            <p className="py-6 text-center text-[11px] font-medium text-rose-600">{error}</p>
+            <p className="py-6 text-center text-caption font-medium text-rose-600">{error}</p>
           ) : events.length === 0 ? (
-            <p className="py-6 text-center text-[11px] text-slate-500">No activity recorded yet.</p>
+            <p className="py-6 text-center text-caption text-slate-500">No activity recorded yet.</p>
           ) : (
             <ul className="space-y-2">
               {events.map((ev) => (
-                <li key={ev.id} className="flex items-start gap-2 text-[11px]">
+                <li key={ev.id} className="flex items-start gap-2 text-caption">
                   <span className="mt-[3px] inline-block h-1.5 w-1.5 shrink-0 rounded-full bg-slate-400" aria-hidden />
                   <div className="min-w-0 flex-1">
                     <p className="font-bold text-slate-900">
@@ -167,7 +167,7 @@ export function ReceivingAuditModal({ open, onClose, receivingId }: Props) {
                       {ev.station ? ` · ${ev.station}` : ''}
                       {ev.receiving_line_id != null ? ` · line ${ev.receiving_line_id}` : ''}
                     </p>
-                    <p className="text-[10px] tabular-nums text-slate-400">
+                    <p className="text-micro tabular-nums text-slate-400">
                       {formatDateTimePST(ev.occurred_at)}
                     </p>
                     {ev.notes ? (

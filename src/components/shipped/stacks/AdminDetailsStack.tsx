@@ -6,7 +6,7 @@ import { Check, Package, X } from '@/components/Icons';
 import { DashboardDetailsStack } from './DashboardDetailsStack';
 import { buildShippedCopyInfo } from '@/utils/copyallshipped';
 import { getStaffThemeById, stationThemeClasses } from '@/utils/staff-colors';
-import { PaneHeader, PaneHeaderStatusPill } from '@/components/ui/pane-header';
+import { PaneHeader, PaneHeaderIconBadge, PaneHeaderStatusPill, PaneHeaderTitle, PaneHeaderCloseButton } from '@/components/ui/pane-header';
 
 interface StaffOption {
   id: number;
@@ -78,27 +78,17 @@ export function AdminDetailsStack({
     >
       <PaneHeader
         className="border-gray-100 bg-white/90 backdrop-blur-xl"
-        rowClassName="px-8 py-5"
+        rowClassName="px-6"
         leftSlot={
-          <div className="flex items-center gap-3">
-            <div className="w-12 h-12 bg-blue-600 rounded-2xl flex items-center justify-center shadow-lg shadow-blue-200">
-              <Package className="w-6 h-6 text-white" />
-            </div>
-            <p className="text-[20px] font-black text-gray-900 tracking-tight leading-none">Admin Details</p>
-          </div>
+          <>
+            <PaneHeaderIconBadge Icon={Package} bg="bg-blue-600" tint="text-white" />
+            <PaneHeaderTitle>Admin Details</PaneHeaderTitle>
+          </>
         }
         rightSlot={
           <>
-            <PaneHeaderStatusPill tone="blue">
-              {selectedCount} selected
-            </PaneHeaderStatusPill>
-            <button
-              onClick={onClose}
-              className="inline-flex h-9 w-9 items-center justify-center rounded-xl text-gray-500 transition-all hover:bg-gray-100 hover:text-gray-900 active:scale-95"
-              aria-label="Close panel"
-            >
-              <X className="h-5 w-5" />
-            </button>
+            <PaneHeaderStatusPill tone="blue">{selectedCount} selected</PaneHeaderStatusPill>
+            <PaneHeaderCloseButton onClick={onClose} ariaLabel="Close panel" />
           </>
         }
       />
@@ -106,12 +96,12 @@ export function AdminDetailsStack({
       <div className="px-6 py-5 space-y-4">
         <div className="space-y-3">
           <div className="space-y-2">
-            <label className="text-[9px] font-black uppercase tracking-widest text-gray-500">Tester</label>
+            <label className="text-eyebrow font-black uppercase tracking-widest text-gray-500">Tester</label>
             <div className="flex flex-wrap gap-1.5">
               <button
                 type="button"
                 onClick={() => onBulkTesterChange(null)}
-                className={`px-2.5 h-8 rounded-lg text-[10px] font-black uppercase tracking-wider border ${
+                className={`px-2.5 h-8 rounded-lg text-micro font-black uppercase tracking-wider border ${
                   bulkTesterId === null
                     ? 'bg-blue-600 text-white border-blue-600'
                     : 'bg-gray-50 text-gray-700 border-gray-200 hover:bg-gray-100'
@@ -127,7 +117,7 @@ export function AdminDetailsStack({
                     key={member.id}
                     type="button"
                     onClick={() => onBulkTesterChange(member.id)}
-                    className={`px-2.5 h-8 rounded-lg text-[10px] font-black uppercase tracking-wider border ${
+                    className={`px-2.5 h-8 rounded-lg text-micro font-black uppercase tracking-wider border ${
                       bulkTesterId === member.id ? themeClasses.active : themeClasses.inactive
                     }`}
                   >
@@ -139,12 +129,12 @@ export function AdminDetailsStack({
           </div>
 
           <div className="space-y-2">
-            <label className="text-[9px] font-black uppercase tracking-widest text-gray-500">Packer</label>
+            <label className="text-eyebrow font-black uppercase tracking-widest text-gray-500">Packer</label>
             <div className="flex flex-wrap gap-1.5">
               <button
                 type="button"
                 onClick={() => onBulkPackerChange(null)}
-                className={`px-2.5 h-8 rounded-lg text-[10px] font-black uppercase tracking-wider border ${
+                className={`px-2.5 h-8 rounded-lg text-micro font-black uppercase tracking-wider border ${
                   bulkPackerId === null
                     ? 'bg-blue-600 text-white border-blue-600'
                     : 'bg-gray-50 text-gray-700 border-gray-200 hover:bg-gray-100'
@@ -160,7 +150,7 @@ export function AdminDetailsStack({
                     key={member.id}
                     type="button"
                     onClick={() => onBulkPackerChange(member.id)}
-                    className={`px-2.5 h-8 rounded-lg text-[10px] font-black uppercase tracking-wider border ${
+                    className={`px-2.5 h-8 rounded-lg text-micro font-black uppercase tracking-wider border ${
                       bulkPackerId === member.id ? themeClasses.active : themeClasses.inactive
                     }`}
                   >
@@ -175,7 +165,7 @@ export function AdminDetailsStack({
             type="button"
             onClick={onApplyBulk}
             disabled={selectedCount === 0 || isApplyingBulk || (bulkTesterId === null && bulkPackerId === null)}
-            className="w-full h-10 inline-flex items-center justify-center gap-1.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-[10px] font-black uppercase tracking-wider disabled:opacity-50"
+            className="w-full h-10 inline-flex items-center justify-center gap-1.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-micro font-black uppercase tracking-wider disabled:opacity-50"
           >
             <Check className="w-3 h-3" />
             {isApplyingBulk ? 'Applying...' : 'Apply To Selected'}

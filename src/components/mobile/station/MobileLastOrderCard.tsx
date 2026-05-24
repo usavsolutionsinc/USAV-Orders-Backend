@@ -195,7 +195,7 @@ export function MobileLastOrderCard({ packerId, refreshKey = 0 }: MobileLastOrde
                 {timeAgo(lastOrder.packedAt)}
               </span>
             </div>
-            <p className="text-[13px] font-black text-gray-900 truncate leading-tight mt-0.5">
+            <p className="text-sm font-black text-gray-900 truncate leading-tight mt-0.5">
               {lastOrder.productTitle || lastOrder.tracking || 'Unknown order'}
             </p>
           </div>
@@ -293,7 +293,7 @@ export function MobileLastOrderCard({ packerId, refreshKey = 0 }: MobileLastOrde
                             className="w-full h-full object-cover"
                             loading="lazy"
                           />
-                          <span className="absolute bottom-0.5 right-0.5 bg-black/60 text-white text-[8px] font-black rounded px-1 py-0.5 tabular-nums">
+                          <span className="absolute bottom-0.5 right-0.5 bg-black/60 text-white text-mini font-black rounded px-1 py-0.5 tabular-nums">
                             {i + 1}
                           </span>
                         </motion.button>
@@ -306,7 +306,7 @@ export function MobileLastOrderCard({ packerId, refreshKey = 0 }: MobileLastOrde
                       className="w-full h-16 rounded-xl border-2 border-dashed border-gray-200 flex items-center justify-center gap-2 text-gray-400 active:border-emerald-300 active:text-emerald-500 transition-colors"
                     >
                       <Camera className="w-5 h-5" />
-                      <span className="text-[11px] font-bold">No photos — tap to add</span>
+                      <span className="text-caption font-bold">No photos — tap to add</span>
                     </button>
                   )}
                 </div>
@@ -335,7 +335,7 @@ export function MobileLastOrderCard({ packerId, refreshKey = 0 }: MobileLastOrde
                 <p className="text-xs font-black uppercase tracking-[0.2em] text-white/50">
                   Add photos · last packed
                 </p>
-                <p className="text-[13px] font-black text-white truncate">
+                <p className="text-sm font-black text-white truncate">
                   {lastOrder.productTitle || lastOrder.tracking || 'Last order'}
                 </p>
               </div>
@@ -357,7 +357,7 @@ export function MobileLastOrderCard({ packerId, refreshKey = 0 }: MobileLastOrde
           >
             {/* Top bar */}
             <div className="flex-shrink-0 flex items-center justify-between px-4 pt-[max(0.75rem,env(safe-area-inset-top))] pb-3">
-              <p className="text-[11px] font-black text-white/60 tabular-nums">
+              <p className="text-caption font-black text-white/60 tabular-nums">
                 {previewIndex + 1} / {lastOrder.photos.length}
               </p>
               <button
@@ -405,7 +405,7 @@ export function MobileLastOrderCard({ packerId, refreshKey = 0 }: MobileLastOrde
                   <button
                     type="button"
                     onClick={() => setPreviewIndex(previewIndex - 1)}
-                    className="h-12 px-5 rounded-2xl bg-white/10 text-white text-[11px] font-black uppercase tracking-wider active:bg-white/20 transition-colors"
+                    className="h-12 px-5 rounded-2xl bg-white/10 text-white text-caption font-black uppercase tracking-wider active:bg-white/20 transition-colors"
                   >
                     Prev
                   </button>
@@ -414,7 +414,7 @@ export function MobileLastOrderCard({ packerId, refreshKey = 0 }: MobileLastOrde
                   <button
                     type="button"
                     onClick={() => setPreviewIndex(previewIndex + 1)}
-                    className="h-12 px-5 rounded-2xl bg-white/10 text-white text-[11px] font-black uppercase tracking-wider active:bg-white/20 transition-colors"
+                    className="h-12 px-5 rounded-2xl bg-white/10 text-white text-caption font-black uppercase tracking-wider active:bg-white/20 transition-colors"
                   >
                     Next
                   </button>

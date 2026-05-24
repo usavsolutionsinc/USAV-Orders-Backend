@@ -72,7 +72,7 @@ export function BarcodeStepper({ mode, activeStep, onStepClick }: BarcodeStepper
                     />
                   )}
                   <span
-                    className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[10px] font-black tabular-nums transition-colors ${
+                    className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-micro font-black tabular-nums transition-colors ${
                       isCompleted
                         ? 'bg-blue-600 text-white'
                         : isActive
@@ -83,7 +83,7 @@ export function BarcodeStepper({ mode, activeStep, onStepClick }: BarcodeStepper
                     {isCompleted ? <Check className="h-3 w-3" /> : step.id}
                   </span>
                   <span
-                    className={`truncate text-[11px] font-black uppercase tracking-[0.16em] ${
+                    className={`truncate text-caption font-black uppercase tracking-[0.16em] ${
                       isActive
                         ? 'text-gray-900'
                         : isCompleted

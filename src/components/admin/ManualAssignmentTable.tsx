@@ -96,7 +96,7 @@ export function ManualAssignmentTable({
                     {row.itemNumber || '—'}
                   </p>
                   {row.orderId && (
-                    <p className="text-[10px] font-semibold text-gray-500 truncate mt-0.5">
+                    <p className="text-micro font-semibold text-gray-500 truncate mt-0.5">
                       {row.orderId}
                     </p>
                   )}

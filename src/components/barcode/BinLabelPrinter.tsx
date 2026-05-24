@@ -13,13 +13,12 @@
  * for the picked room comes from locations.zone_letter on the server.
  */
 
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
 import { LocationDataMatrix } from './LocationDataMatrix';
 import { toast } from 'sonner';
-import { BottomSheet } from '@/components/ui/BottomSheet';
 import { SkeletonCardGrid } from '@/components/ui/SkeletonCard';
-import { Check, ChevronDown, ChevronLeft, ChevronUp, Printer, Settings } from '@/components/Icons';
+import { ChevronLeft, Printer, Settings } from '@/components/Icons';
 import { successFeedback, errorFeedback, scanFeedback } from '@/lib/feedback/confirm';
 import { useLocations } from '@/hooks/useLocations';
 import { useHorizontalWheelScroll } from '@/hooks/useHorizontalWheelScroll';
@@ -31,75 +30,26 @@ import {
 } from '@/hooks/useLabelPrinterStore';
 import { WorkspaceCard, StickyActionBar } from '@/design-system/components';
 import {
-  DEFAULT_GLN,
-  QR_BASE_URL,
-  bayHand,
   gs1LocationAi,
   locationCode,
   noPad,
   pad2,
   type LocationSegments,
 } from '@/lib/barcode-routing';
-
-// ─── Types & constants ────────────────────────────────────────────────────
-
-interface PrinterConfig {
-  maxAisles: number;
-  maxBays: number;
-  maxLevels: number;
-  maxPositions: number;
-  gln: string;
-}
-
-const DEFAULT_CONFIG: PrinterConfig = {
-  maxAisles: 6,
-  maxBays: 12,
-  maxLevels: 5,
-  maxPositions: 20,
-  gln: DEFAULT_GLN,
-};
-
-const CONFIG_KEY = 'binPrinter.config.v4';
-
-type Step = 'zone' | 'aisle' | 'bay' | 'level' | 'position';
-const STEPS: { id: Step; label: string }[] = [
-  { id: 'zone',     label: 'Zone' },
-  { id: 'aisle',    label: 'Aisle' },
-  { id: 'bay',      label: 'Bay' },
-  { id: 'level',    label: 'Level' },
-  { id: 'position', label: 'Position' },
-];
-
-// ─── Storage helpers ──────────────────────────────────────────────────────
-
-function loadConfig(): PrinterConfig {
-  if (typeof window === 'undefined') return DEFAULT_CONFIG;
-  try {
-    const raw = window.localStorage.getItem(CONFIG_KEY);
-    if (!raw) return DEFAULT_CONFIG;
-    const parsed = JSON.parse(raw);
-    return {
-      maxAisles: clampMax(parsed?.maxAisles, DEFAULT_CONFIG.maxAisles),
-      maxBays: clampMax(parsed?.maxBays, DEFAULT_CONFIG.maxBays),
-      maxLevels: clampMax(parsed?.maxLevels, DEFAULT_CONFIG.maxLevels),
-      maxPositions: clampMax(parsed?.maxPositions, DEFAULT_CONFIG.maxPositions),
-      gln: typeof parsed?.gln === 'string' && parsed.gln.trim() ? parsed.gln.trim() : DEFAULT_GLN,
-    };
-  } catch {
-    return DEFAULT_CONFIG;
-  }
-}
-
-function saveConfig(cfg: PrinterConfig): void {
-  if (typeof window === 'undefined') return;
-  try { window.localStorage.setItem(CONFIG_KEY, JSON.stringify(cfg)); } catch { /* ignore */ }
-}
-
-function clampMax(v: unknown, fallback: number): number {
-  const n = typeof v === 'number' ? v : parseInt(String(v ?? ''), 10);
-  if (!Number.isFinite(n) || n < 1) return fallback;
-  return Math.min(99, Math.max(1, Math.floor(n)));
-}
+import {
+  ConfigSheet,
+  DEFAULT_CONFIG,
+  GiantPreviewPanel,
+  NumericStep,
+  PrintLabel,
+  STEPS,
+  type PrinterConfig,
+  type Step,
+  humanReadable,
+  loadConfig,
+  partialCode,
+  saveConfig,
+} from './bin-label-printer';
 
 // ─── Component ────────────────────────────────────────────────────────────
 
@@ -359,7 +309,7 @@ export function BinLabelPrinter({ variant = 'main' }: BinLabelPrinterProps) {
             {variant === 'sidebar' ? 'Build a bin label' : 'Location Label Printer'}
           </h1>
           {variant === 'main' && (
-            <p className="mt-1 text-[13px] text-gray-500">
+            <p className="mt-1 text-sm text-gray-500">
               Pick a room, then drill down to the bin. Prints a QR-only GS1 Digital Link label.
             </p>
           )}
@@ -403,7 +353,7 @@ export function BinLabelPrinter({ variant = 'main' }: BinLabelPrinterProps) {
             <div className="flex min-w-0 items-center gap-3">
               <ZoneLetterTile letter={zoneLetter} />
               <div className="min-w-0">
-                <p className="truncate text-[15px] font-semibold text-gray-900">{selectedRoom}</p>
+                <p className="truncate text-base font-semibold text-gray-900">{selectedRoom}</p>
                 <p className="mt-0.5 text-[11.5px] text-gray-500">
                   {zoneLetter ? `Zone ${zoneLetter}` : 'No zone letter yet — set one in the Rooms tab.'}
                 </p>
@@ -412,7 +362,7 @@ export function BinLabelPrinter({ variant = 'main' }: BinLabelPrinterProps) {
             <button
               type="button"
               onClick={() => setOverrideStep('zone')}
-              className="shrink-0 rounded-full border border-gray-200 bg-white px-3 py-1.5 text-[11px] font-semibold text-gray-700 transition-colors hover:bg-gray-50"
+              className="shrink-0 rounded-full border border-gray-200 bg-white px-3 py-1.5 text-caption font-semibold text-gray-700 transition-colors hover:bg-gray-50"
             >
               Change
             </button>
@@ -533,10 +483,10 @@ export function BinLabelPrinter({ variant = 'main' }: BinLabelPrinterProps) {
     <div className="flex flex-col gap-4">
       <header className="flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-blue-600">
+          <p className="text-micro font-bold uppercase tracking-[0.16em] text-blue-600">
             Location Label Printer
           </p>
-          <h1 className="mt-0.5 truncate text-[22px] font-bold tracking-tight text-gray-900">
+          <h1 className="mt-0.5 truncate text-2xl font-bold tracking-tight text-gray-900">
             {selectedRoom ?? 'Pick a room to start'}
           </h1>
           <p className="mt-1 max-w-[60ch] text-[12.5px] leading-snug text-gray-500">
@@ -550,7 +500,7 @@ export function BinLabelPrinter({ variant = 'main' }: BinLabelPrinterProps) {
             <button
               type="button"
               onClick={resetAll}
-              className="flex h-10 items-center gap-1.5 rounded-full border border-gray-200 bg-white px-3 text-[12px] font-semibold text-gray-700 transition-colors hover:bg-gray-50 active:scale-[0.97]"
+              className="flex h-10 items-center gap-1.5 rounded-full border border-gray-200 bg-white px-3 text-label font-semibold text-gray-700 transition-colors hover:bg-gray-50 active:scale-[0.97]"
             >
               <ChevronLeft className="h-3.5 w-3.5" />
               Reset
@@ -594,7 +544,7 @@ export function BinLabelPrinter({ variant = 'main' }: BinLabelPrinterProps) {
             <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-blue-50 to-blue-100 ring-1 ring-blue-200">
               <ChevronLeft className="h-5 w-5 text-blue-500" />
             </div>
-            <p className="text-[13px] font-semibold text-gray-800">
+            <p className="text-sm font-semibold text-gray-800">
               Pick a room in the sidebar
             </p>
             <p className="max-w-[40ch] text-[11.5px] text-gray-500">
@@ -761,7 +711,7 @@ function RoomPicker({ rooms, zoneMap, loading, selectedRoom, onSelect }: RoomPic
   if (rooms.length === 0) {
     return (
       <div className="rounded-2xl border border-dashed border-gray-200 px-5 py-10 text-center">
-        <p className="text-[13px] font-semibold text-gray-700">No rooms yet</p>
+        <p className="text-sm font-semibold text-gray-700">No rooms yet</p>
         <p className="mt-1 text-[11.5px] text-gray-500">
           Open the <span className="font-semibold">Rooms</span> tab and add one — it'll show up here.
         </p>
@@ -786,8 +736,8 @@ function RoomPicker({ rooms, zoneMap, loading, selectedRoom, onSelect }: RoomPic
           >
             <ZoneLetterTile letter={letter} />
             <div className="min-w-0 flex-1">
-              <p className="text-[14px] font-semibold leading-snug text-gray-900 break-words">{room}</p>
-              <p className="mt-0.5 text-[11px] text-gray-500">
+              <p className="text-sm font-semibold leading-snug text-gray-900 break-words">{room}</p>
+              <p className="mt-0.5 text-caption text-gray-500">
                 {letter ? `Zone ${letter}` : 'No zone letter'}
               </p>
             </div>
@@ -801,14 +751,14 @@ function RoomPicker({ rooms, zoneMap, loading, selectedRoom, onSelect }: RoomPic
 function ZoneLetterTile({ letter }: { letter: string | undefined }) {
   if (letter) {
     return (
-      <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-blue-50 to-blue-100/70 font-mono text-[20px] font-semibold text-blue-700 ring-1 ring-blue-200">
+      <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-blue-50 to-blue-100/70 font-mono text-xl font-semibold text-blue-700 ring-1 ring-blue-200">
         {letter}
       </div>
     );
   }
   return (
     <div
-      className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-amber-50 font-mono text-[18px] font-semibold text-amber-700 ring-1 ring-amber-200"
+      className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-amber-50 font-mono text-lg font-semibold text-amber-700 ring-1 ring-amber-200"
       title="No zone letter assigned yet — go to the Rooms tab"
     >
       ?
@@ -855,13 +805,13 @@ function StepPills({ activeStep, zoneLetter, roomName, aisle, bay, level, positi
           const isClickable = isDone || isActive;
           const showChevron = idx < STEPS.length - 1;
           return (
-            <React.Fragment key={id}>
+            <Fragment key={id}>
               <button
                 type="button"
                 onClick={() => onPillClick(id)}
                 disabled={!isClickable}
                 aria-current={isActive ? 'step' : undefined}
-                className={`flex h-9 shrink-0 items-center gap-1.5 rounded-full px-3 text-[11px] font-semibold transition-all active:scale-95 ${
+                className={`flex h-9 shrink-0 items-center gap-1.5 rounded-full px-3 text-caption font-semibold transition-all active:scale-95 ${
                   isActive
                     ? 'bg-gradient-to-br from-blue-500 to-blue-700 text-white shadow-md shadow-blue-600/30'
                     : isDone
@@ -870,11 +820,11 @@ function StepPills({ activeStep, zoneLetter, roomName, aisle, bay, level, positi
                 }`}
                 title={id === 'zone' && roomName ? roomName : undefined}
               >
-                <span className="text-[10px] uppercase tracking-wider opacity-80">{label}</span>
-                <span className="font-mono text-[10px] font-semibold tabular-nums">{value ?? '—'}</span>
+                <span className="text-micro uppercase tracking-wider opacity-80">{label}</span>
+                <span className="font-mono text-micro font-semibold tabular-nums">{value ?? '—'}</span>
               </button>
-              {showChevron && <span className="shrink-0 text-[10px] text-gray-300">›</span>}
-            </React.Fragment>
+              {showChevron && <span className="shrink-0 text-micro text-gray-300">›</span>}
+            </Fragment>
           );
         })}
       </div>
@@ -907,18 +857,18 @@ function LivePreviewBody({ zoneLetter, roomName, aisle, bay, level, position, gl
     <div className="flex items-center gap-5 rounded-xl bg-gray-50 p-5 ring-1 ring-gray-200/50">
       <div className="min-w-0 flex-1 space-y-2">
         <div>
-          <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-gray-500">Location code</p>
-          <p className="mt-0.5 whitespace-nowrap font-mono text-[18px] font-black tracking-tight text-gray-900">{code}</p>
+          <p className="text-micro font-semibold uppercase tracking-[0.14em] text-gray-500">Location code</p>
+          <p className="mt-0.5 whitespace-nowrap font-mono text-lg font-black tracking-tight text-gray-900">{code}</p>
         </div>
         {roomName && (
           <div>
-            <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-gray-500">Room</p>
-            <p className="mt-0.5 truncate text-[13px] font-semibold text-gray-800">{roomName}</p>
+            <p className="text-micro font-semibold uppercase tracking-[0.14em] text-gray-500">Room</p>
+            <p className="mt-0.5 truncate text-sm font-semibold text-gray-800">{roomName}</p>
           </div>
         )}
         <div>
-          <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-gray-500">Breakdown</p>
-          <p className="mt-0.5 text-[12px] leading-snug text-gray-700">
+          <p className="text-micro font-semibold uppercase tracking-[0.14em] text-gray-500">Breakdown</p>
+          <p className="mt-0.5 text-label leading-snug text-gray-700">
             {humanReadable({ zone: zoneLetter, aisle, bay, level, position })}
           </p>
         </div>
@@ -933,7 +883,7 @@ function LivePreviewBody({ zoneLetter, roomName, aisle, bay, level, position, gl
         ) : (
           <div className="flex h-full w-full flex-col items-center justify-center gap-1 text-center">
             <Printer className="h-5 w-5 text-gray-300" />
-            <p className="px-2 text-[10px] font-semibold text-gray-400">
+            <p className="px-2 text-micro font-semibold text-gray-400">
               QR appears when all steps are picked
             </p>
           </div>
@@ -943,429 +893,3 @@ function LivePreviewBody({ zoneLetter, roomName, aisle, bay, level, position, gl
   );
 }
 
-function partialCode(s: { zone?: string; aisle?: number; bay?: number; level?: number; position?: number }): string {
-  // WMS convention: placeholder hyphens match the *width* of the segment
-  // they replace (two for pad2, one for noPad) so the unfilled label code
-  // visually aligns with its filled counterpart — `A-01-01-1-01` ↔
-  // `?---------` rather than the previous mix of `-` + em-dash that
-  // rendered as inconsistent dash widths.
-  const parts: string[] = [];
-  parts.push(s.zone ?? '?');
-  parts.push(s.aisle != null ? pad2(s.aisle) : '--');
-  parts.push(s.bay != null ? pad2(s.bay) : '--');
-  parts.push(s.level != null ? noPad(s.level) : '-');
-  parts.push(s.position != null ? pad2(s.position) : '--');
-  return parts.join('-');
-}
-
-function humanReadable(s: { zone?: string; aisle?: number; bay?: number; level?: number; position?: number }): string {
-  // Zone letter is omitted intentionally — it already appears in the big
-  // code and the zone/room line above this breadcrumb.
-  const out: string[] = [];
-  if (s.aisle != null) out.push(`Aisle ${pad2(s.aisle)}`);
-  if (s.bay != null) out.push(`Bay ${pad2(s.bay)} (${bayHand(s.bay)})`);
-  if (s.level != null) out.push(`Level ${noPad(s.level)}`);
-  if (s.position != null) out.push(`Position ${pad2(s.position)}`);
-  return out.join(' → ') || 'Pick a room above';
-}
-
-// ─── Numeric step (aisle / bay / level) ───────────────────────────────────
-
-interface NumericStepProps {
-  title: string;
-  prefix: string;
-  count: number;
-  selected?: number;
-  onPick: (n: number) => void;
-  renderTag?: (n: number) => string | null;
-  customLabel?: string;
-  /** Optional one-line explainer rendered between title and the tile grid. */
-  hint?: string;
-  /** When true, tile labels are unpadded ("1", "2", …) — matches the level
-   *  segment on printed labels which uses {@link noPad}. Defaults to false. */
-  unpadded?: boolean;
-}
-
-const NUMERIC_QUICK_PICKS = [1, 2, 3, 4, 5, 6, 7, 8, 9] as const;
-
-function NumericStep({
-  title, prefix, count, selected, onPick, renderTag, hint, unpadded,
-  customLabel = 'Custom #',
-}: NumericStepProps) {
-  const format = unpadded ? noPad : pad2;
-  // selected > 9 means a custom value is the current pick; highlight the
-  // 10th tile so users can see what they entered without scanning the
-  // step pills at the top.
-  const isCustomSelected = selected != null && selected > 9;
-  const customPlaceholder = '10+';
-  const reduceMotion = useReducedMotion();
-
-  const [custom, setCustom] = useState('');
-  const customNum = parseInt(custom, 10);
-  const customValid =
-    Number.isFinite(customNum) && customNum >= 1 && customNum <= 99;
-
-  const confirmCustom = () => {
-    if (!customValid) return;
-    onPick(customNum);
-    setCustom('');
-  };
-
-  // Stepper buttons. First tap on either arrow with an empty field always
-  // lands on 10 (one past the quick-pick range), so the user discovers the
-  // custom range without overshooting. Subsequent taps step from there.
-  const stepBy = (delta: number) => {
-    if (!customValid) {
-      setCustom('10');
-      return;
-    }
-    const next = Math.min(99, Math.max(1, customNum + delta));
-    setCustom(String(next));
-  };
-
-  return (
-    <AnimatePresence mode="popLayout">
-      <motion.div
-        key={prefix || 'num'}
-        initial={{ opacity: 0, y: 8 }}
-        animate={{ opacity: 1, y: 0 }}
-        exit={{ opacity: 0, y: -8 }}
-        transition={reduceMotion ? { duration: 0 } : { duration: 0.2 }}
-      >
-        <div className={`flex items-baseline justify-between ${hint ? 'mb-1' : 'mb-3'}`}>
-          <h3 className="text-[15px] font-semibold tracking-tight text-gray-900">{title}</h3>
-          <span className="text-[10px] font-medium tabular-nums text-gray-400">
-            up to {count}
-          </span>
-        </div>
-
-        {hint && (
-          <p className="mb-3 text-[11.5px] leading-snug text-gray-500">{hint}</p>
-        )}
-
-        <div className="grid grid-cols-3 gap-2 sm:grid-cols-4 md:grid-cols-5">
-          {NUMERIC_QUICK_PICKS.map((n) => {
-            const isSelected = selected === n;
-            const tag = renderTag ? renderTag(n) : null;
-            return (
-              <button
-                key={n}
-                type="button"
-                onClick={() => onPick(n)}
-                className={`relative flex h-16 flex-col items-center justify-center rounded-2xl border text-center transition-all active:scale-[0.97] ${
-                  isSelected
-                    ? 'border-transparent bg-gradient-to-br from-blue-500 to-blue-700 text-white shadow-md shadow-blue-600/30'
-                    : 'border-gray-200 bg-white text-gray-900 hover:border-gray-300 hover:bg-gray-50'
-                }`}
-              >
-                <span className="font-mono text-[18px] font-semibold tabular-nums tracking-tight">
-                  {prefix}{format(n)}
-                </span>
-                {tag && (
-                  <span className={`mt-0.5 text-[9px] font-bold uppercase tracking-wider ${
-                    isSelected ? 'text-white/80' : 'text-gray-400'
-                  }`}>
-                    {tag}
-                  </span>
-                )}
-              </button>
-            );
-          })}
-
-          {/* 10th tile = inline custom input with stepper + checkmark.
-              Subsumes the separate "Custom #" row that used to live below
-              the grid. */}
-          <div
-            className={`relative flex h-16 items-center rounded-2xl border border-dashed bg-white pl-3 pr-1 transition-colors ${
-              isCustomSelected
-                ? 'border-blue-300 ring-2 ring-blue-200'
-                : 'border-gray-300 focus-within:border-blue-400 focus-within:ring-2 focus-within:ring-blue-100'
-            }`}
-            aria-label={customLabel}
-          >
-            <input
-              type="number"
-              inputMode="numeric"
-              min={1}
-              max={99}
-              value={custom}
-              onChange={(e) => setCustom(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') confirmCustom();
-                if (e.key === 'ArrowUp') { e.preventDefault(); stepBy(1); }
-                if (e.key === 'ArrowDown') { e.preventDefault(); stepBy(-1); }
-              }}
-              placeholder={customPlaceholder}
-              aria-label={customLabel}
-              className="h-full w-full min-w-0 bg-transparent pr-1 text-center font-mono text-[18px] font-semibold tabular-nums tracking-tight text-gray-900 outline-none placeholder:text-[12px] placeholder:font-medium placeholder:tracking-wide placeholder:text-gray-400 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-            />
-
-            <div className="ml-1 flex h-12 shrink-0 flex-col justify-center gap-0.5">
-              <button
-                type="button"
-                onClick={() => stepBy(1)}
-                aria-label="Increment"
-                className="flex h-[22px] w-7 items-center justify-center rounded-md text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-900 active:scale-95"
-              >
-                <ChevronUp className="h-3.5 w-3.5" />
-              </button>
-              <button
-                type="button"
-                onClick={() => stepBy(-1)}
-                aria-label="Decrement"
-                className="flex h-[22px] w-7 items-center justify-center rounded-md text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-900 active:scale-95"
-              >
-                <ChevronDown className="h-3.5 w-3.5" />
-              </button>
-            </div>
-
-            <button
-              type="button"
-              onClick={confirmCustom}
-              disabled={!customValid}
-              aria-label={`Confirm ${customLabel.toLowerCase()}`}
-              className="ml-1 flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-blue-500 to-blue-700 text-white shadow-sm transition-all active:scale-95 disabled:cursor-not-allowed disabled:bg-gray-200 disabled:bg-none disabled:text-gray-400 disabled:shadow-none"
-            >
-              <Check className="h-4 w-4" />
-            </button>
-          </div>
-        </div>
-      </motion.div>
-    </AnimatePresence>
-  );
-}
-
-// ─── Configuration sheet ──────────────────────────────────────────────────
-
-interface ConfigSheetProps {
-  open: boolean;
-  onClose: () => void;
-  config: PrinterConfig;
-  onSave: (next: PrinterConfig) => void;
-}
-
-function ConfigSheet({ open, onClose, config, onSave }: ConfigSheetProps) {
-  const [draft, setDraft] = useState<PrinterConfig>(config);
-  useEffect(() => { if (open) setDraft(config); }, [open, config]);
-
-  const set = (k: keyof PrinterConfig) => (v: string) => {
-    if (k === 'gln') return setDraft({ ...draft, gln: v.trim() || DEFAULT_GLN });
-    setDraft({ ...draft, [k]: clampMax(v, (DEFAULT_CONFIG as unknown as Record<string, number>)[k]) });
-  };
-
-  const handleSave = () => {
-    onSave({
-      maxAisles: clampMax(draft.maxAisles, DEFAULT_CONFIG.maxAisles),
-      maxBays: clampMax(draft.maxBays, DEFAULT_CONFIG.maxBays),
-      maxLevels: clampMax(draft.maxLevels, DEFAULT_CONFIG.maxLevels),
-      maxPositions: clampMax(draft.maxPositions, DEFAULT_CONFIG.maxPositions),
-      gln: draft.gln.trim() || DEFAULT_GLN,
-    });
-  };
-
-  const handleReset = () => setDraft({ ...DEFAULT_CONFIG });
-
-  return (
-    <BottomSheet open={open} onClose={onClose} title="Configure counts">
-      <p className="mb-4 text-center text-[12px] text-gray-500">
-        Match these to your warehouse layout. Saved locally — no rebuild required.
-      </p>
-
-      <div className="grid grid-cols-2 gap-3">
-        <NumField label="Aisles" value={draft.maxAisles} onChange={set('maxAisles')} />
-        <NumField label="Bays" value={draft.maxBays} onChange={set('maxBays')} />
-        <NumField label="Levels" value={draft.maxLevels} onChange={set('maxLevels')} />
-        <NumField label="Positions" value={draft.maxPositions} onChange={set('maxPositions')} />
-      </div>
-
-      <div className="mt-4">
-        <label className="text-[10px] font-semibold uppercase tracking-wider text-gray-500">
-          GLN (Global Location Number)
-        </label>
-        <input
-          type="text"
-          value={draft.gln}
-          onChange={(e) => set('gln')(e.target.value)}
-          className="mt-1 h-11 w-full rounded-2xl border border-gray-300 bg-gray-50 px-4 font-mono text-[13px] font-semibold text-gray-900 outline-none focus:border-blue-500 focus:bg-white focus:ring-2 focus:ring-blue-200"
-        />
-        <p className="mt-1 text-[10px] text-gray-400">
-          Default is the GS1 documentation placeholder ({DEFAULT_GLN}). Replace once registered with GS1 US.
-        </p>
-      </div>
-
-      <div className="mt-3 text-[10px] text-gray-400">
-        Domain in QR: <span className="font-mono">{QR_BASE_URL}</span>
-      </div>
-
-      <div className="mt-5 flex flex-col gap-2 sm:flex-row-reverse sm:gap-3">
-        <button
-          type="button"
-          onClick={handleSave}
-          className="flex h-12 w-full items-center justify-center rounded-2xl bg-gradient-to-br from-blue-500 to-blue-700 text-sm font-semibold tracking-wide text-white shadow-md shadow-blue-600/30 transition-transform active:scale-[0.98] sm:flex-1"
-        >
-          <Check className="mr-1.5 h-4 w-4" />
-          Save
-        </button>
-        <button
-          type="button"
-          onClick={handleReset}
-          className="flex h-12 w-full items-center justify-center rounded-2xl text-sm font-semibold text-gray-600 transition-colors hover:bg-gray-100 sm:flex-1"
-        >
-          Reset
-        </button>
-      </div>
-    </BottomSheet>
-  );
-}
-
-function NumField({ label, value, onChange }: { label: string; value: number; onChange: (v: string) => void }) {
-  return (
-    <div>
-      <label className="text-[10px] font-semibold uppercase tracking-wider text-gray-500">{label}</label>
-      <input
-        type="number"
-        inputMode="numeric"
-        min={1}
-        max={99}
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        className="mt-1 h-12 w-full rounded-2xl border border-gray-300 bg-gray-50 px-4 text-center text-lg font-semibold tabular-nums text-gray-900 outline-none focus:border-blue-500 focus:bg-white focus:ring-2 focus:ring-blue-200"
-      />
-    </div>
-  );
-}
-
-// ─── Giant preview panel (desktop main-pane) ─────────────────────────────
-// When the picker has been promoted to the sidebar, the main pane is freed
-// up to render the label at near-actual size — closer to "what you'll get"
-// than the small mobile preview. Owns the primary print actions inline
-// (no sticky bar on desktop since the panel itself dominates the workspace).
-
-interface GiantPreviewPanelProps {
-  zoneLetter?: string;
-  roomName?: string;
-  aisle?: number;
-  bay?: number;
-  level?: number;
-  position?: number;
-  gln: string;
-}
-
-function GiantPreviewPanel({
-  zoneLetter, roomName, aisle, bay, level, position, gln,
-}: GiantPreviewPanelProps) {
-  const segments: LocationSegments | null = zoneLetter && aisle != null && bay != null && level != null && position != null
-    ? { zone: zoneLetter, aisle, bay, level, position }
-    : null;
-  const code = segments
-    ? locationCode(segments)
-    : partialCode({ zone: zoneLetter, aisle, bay, level, position });
-  const ai = segments ? gs1LocationAi(segments, { gln }) : null;
-
-  return (
-    <div className="rounded-3xl border border-gray-200 bg-white p-8 shadow-sm">
-      <div className="mx-auto max-w-3xl">
-        <div className="text-center">
-          <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-gray-400">
-            Live preview · prints at 3″ × 2″
-          </p>
-        </div>
-
-        <div className="mt-5 flex items-center justify-center">
-          <div className="flex items-start gap-8 rounded-2xl border-2 border-dashed border-gray-200 bg-gradient-to-br from-white to-gray-50/50 p-8 shadow-inner">
-            <div className="min-w-0 flex-1">
-              <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-gray-500">
-                USAV Warehouse Location
-              </p>
-              <p className="mt-2 whitespace-nowrap font-mono text-[30px] font-black leading-none tracking-tight text-gray-900">
-                {code}
-              </p>
-              {roomName && (
-                <p className="mt-3 text-[15px] font-bold text-gray-800">
-                  {roomName}
-                </p>
-              )}
-              <p className="mt-2 text-[12px] font-semibold leading-snug text-gray-600">
-                {humanReadable({ zone: zoneLetter, aisle, bay, level, position })}
-              </p>
-            </div>
-            <div className="flex h-[220px] w-[220px] shrink-0 items-center justify-center rounded-xl bg-white p-3 ring-1 ring-gray-200">
-              {ai ? (
-                <LocationDataMatrix value={ai} size={196} fgColor="#0F172A" />
-              ) : (
-                <div className="flex h-full w-full flex-col items-center justify-center gap-2 text-center">
-                  <Printer className="h-7 w-7 text-gray-300" />
-                  <p className="px-4 text-[11px] font-semibold text-gray-400">
-                    Barcode appears when every step is picked in the sidebar
-                  </p>
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-
-      </div>
-    </div>
-  );
-}
-
-// ─── Print label ──────────────────────────────────────────────────────────
-
-function PrintLabel({ segments, roomName, gln }: { segments: LocationSegments; roomName: string; gln: string }) {
-  const code = locationCode(segments);
-  const ai = gs1LocationAi(segments, { gln });
-  return (
-    <div className="label-print-card" style={labelCardStyle}>
-      <div style={labelLeftStyle}>
-        <div style={labelEyebrowStyle}>USAV Warehouse Location</div>
-        <div style={labelCodeStyle}>{code}</div>
-        {roomName && <div style={labelRoomStyle}>{roomName}</div>}
-        <div style={labelHumanStyle}>
-          Aisle {pad2(segments.aisle)} · Bay {pad2(segments.bay)} ({bayHand(segments.bay)})<br />
-          Level {noPad(segments.level)} · Position {pad2(segments.position)}
-        </div>
-      </div>
-      <div style={labelQrStyle}>
-        <LocationDataMatrix value={ai} size={110} />
-      </div>
-    </div>
-  );
-}
-
-// 3in × 2in label stock — sized to fill the @page declared in globals.css.
-const labelCardStyle: React.CSSProperties = {
-  width: '3in',
-  height: '2in',
-  margin: 0,
-  padding: '0.12in',
-  display: 'inline-flex',
-  alignItems: 'flex-start',
-  gap: '0.1in',
-  verticalAlign: 'top',
-  fontFamily: '"Inter", "Arial", sans-serif',
-  color: '#000',
-  background: '#fff',
-  boxSizing: 'border-box',
-  overflow: 'hidden',
-};
-const labelLeftStyle: React.CSSProperties = { flex: '1 1 auto', minWidth: 0 };
-const labelEyebrowStyle: React.CSSProperties = {
-  fontSize: '7px', fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: '#666',
-};
-const labelCodeStyle: React.CSSProperties = {
-  fontSize: '15px', fontWeight: 800, fontFamily: '"JetBrains Mono", monospace',
-  letterSpacing: '-0.02em', marginTop: '4px', color: '#000', lineHeight: 1,
-  whiteSpace: 'nowrap',
-};
-const labelRoomStyle: React.CSSProperties = {
-  fontSize: '9px', fontWeight: 700, marginTop: '4px', color: '#0F172A',
-};
-const labelHumanStyle: React.CSSProperties = {
-  fontSize: '7.5px', fontWeight: 600, marginTop: '3px', lineHeight: '1.35', color: '#333',
-};
-const labelQrStyle: React.CSSProperties = {
-  flex: '0 0 auto',
-  display: 'flex',
-  alignItems: 'center',
-  justifyContent: 'center',
-};

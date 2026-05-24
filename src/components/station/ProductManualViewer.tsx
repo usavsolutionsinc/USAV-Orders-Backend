@@ -21,7 +21,7 @@ export default function ProductManualViewer({ manuals, isLoading = false, classN
       <div className={`flex items-center justify-center h-full bg-gray-50 rounded-xl border border-gray-200 ${className}`}>
         <div className="flex flex-col items-center gap-2">
           <Loader2 className="w-5 h-5 animate-spin text-indigo-500" />
-          <p className="text-[10px] font-black text-gray-400 uppercase tracking-wider">Loading manual...</p>
+          <p className="text-micro font-black text-gray-400 uppercase tracking-wider">Loading manual...</p>
         </div>
       </div>
     );
@@ -51,7 +51,7 @@ export default function ProductManualViewer({ manuals, isLoading = false, classN
                   key={m.id}
                   type="button"
                   onClick={() => setActiveIndex(i)}
-                  className={`px-2.5 py-1 rounded text-[10px] font-black uppercase tracking-wider transition-all ${
+                  className={`px-2.5 py-1 rounded text-micro font-black uppercase tracking-wider transition-all ${
                     i === safeIndex
                       ? 'bg-white text-indigo-700 shadow-sm'
                       : 'bg-indigo-500/60 text-indigo-100 hover:bg-indigo-500'
@@ -62,7 +62,7 @@ export default function ProductManualViewer({ manuals, isLoading = false, classN
               ))}
             </div>
           ) : (
-            <p className="text-[11px] font-black uppercase tracking-wider text-white truncate">{typeLabel}</p>
+            <p className="text-caption font-black uppercase tracking-wider text-white truncate">{typeLabel}</p>
           )}
         </div>
 
@@ -72,7 +72,7 @@ export default function ProductManualViewer({ manuals, isLoading = false, classN
             href={selected.viewUrl}
             target="_blank"
             rel="noopener noreferrer"
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white text-indigo-700 text-[10px] font-black uppercase tracking-wider hover:bg-indigo-50 shadow-sm transition-all"
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white text-indigo-700 text-micro font-black uppercase tracking-wider hover:bg-indigo-50 shadow-sm transition-all"
           >
             <ExternalLink className="w-3 h-3" />
             Open Manual

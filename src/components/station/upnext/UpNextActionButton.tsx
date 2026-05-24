@@ -44,12 +44,12 @@ const TONE_CLASSES: Record<Tone, { desktop: string; mobile: string }> = {
 
 const SIZE_CLASSES: Record<Size, { desktop: string; mobile: string }> = {
   sm: {
-    desktop: 'min-h-[38px] rounded-lg text-[9px] tracking-[0.16em] gap-1.5',
-    mobile:  'min-h-[44px] rounded-lg text-[9px] tracking-[0.16em] gap-2',
+    desktop: 'min-h-[38px] rounded-lg text-eyebrow tracking-[0.16em] gap-1.5',
+    mobile:  'min-h-[44px] rounded-lg text-eyebrow tracking-[0.16em] gap-2',
   },
   md: {
-    desktop: 'min-h-[44px] rounded-xl text-[10px] tracking-widest gap-1.5',
-    mobile:  'min-h-[48px] rounded-xl text-[10px] tracking-widest gap-3',
+    desktop: 'min-h-[44px] rounded-xl text-micro tracking-widest gap-1.5',
+    mobile:  'min-h-[48px] rounded-xl text-micro tracking-widest gap-3',
   },
 };
 

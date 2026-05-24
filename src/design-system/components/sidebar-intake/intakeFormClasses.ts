@@ -1,7 +1,7 @@
 /** Shared with `ShippedIntakeForm` and FBA create shipment — keep in sync. */
 
 export const SIDEBAR_INTAKE_LABEL_CLASS =
-  'block text-[10px] font-black uppercase tracking-widest text-gray-700';
+  'block text-micro font-black uppercase tracking-widest text-gray-700';
 
 const SIDEBAR_INTAKE_INPUT_BASE_CLASS =
   'w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl text-sm font-semibold focus:outline-none focus:ring-2 focus:border-transparent transition-all';
@@ -43,13 +43,13 @@ export const SIDEBAR_INTAKE_SUBTITLE_ACCENT: Record<
   'green' | 'violet' | 'blue' | 'purple' | 'yellow' | 'black' | 'red' | 'lightblue' | 'pink',
   string
 > = {
-  green: 'text-[8px] font-bold text-green-600 uppercase tracking-widest',
-  violet: 'text-[8px] font-bold text-violet-600 uppercase tracking-widest',
-  blue: 'text-[8px] font-bold text-blue-600 uppercase tracking-widest',
-  purple: 'text-[8px] font-bold text-purple-600 uppercase tracking-widest',
-  yellow: 'text-[8px] font-bold text-amber-600 uppercase tracking-widest',
-  black: 'text-[8px] font-bold text-slate-700 uppercase tracking-widest',
-  red: 'text-[8px] font-bold text-red-600 uppercase tracking-widest',
-  lightblue: 'text-[8px] font-bold text-sky-600 uppercase tracking-widest',
-  pink: 'text-[8px] font-bold text-pink-600 uppercase tracking-widest',
+  green: 'text-mini font-bold text-green-600 uppercase tracking-widest',
+  violet: 'text-mini font-bold text-violet-600 uppercase tracking-widest',
+  blue: 'text-mini font-bold text-blue-600 uppercase tracking-widest',
+  purple: 'text-mini font-bold text-purple-600 uppercase tracking-widest',
+  yellow: 'text-mini font-bold text-amber-600 uppercase tracking-widest',
+  black: 'text-mini font-bold text-slate-700 uppercase tracking-widest',
+  red: 'text-mini font-bold text-red-600 uppercase tracking-widest',
+  lightblue: 'text-mini font-bold text-sky-600 uppercase tracking-widest',
+  pink: 'text-mini font-bold text-pink-600 uppercase tracking-widest',
 };

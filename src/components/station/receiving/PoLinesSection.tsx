@@ -80,7 +80,7 @@ function PoLineRow({ line }: { line: ReceivingLine }) {
     <div className="border-b border-gray-100 last:border-b-0 px-3 py-2.5">
       {/* Row 1 — full-width product title. No truncation; wraps as needed. */}
       <p
-        className="text-[12px] font-bold text-gray-900 leading-snug"
+        className="text-label font-bold text-gray-900 leading-snug"
         title={line.item_name ?? undefined}
       >
         {line.item_name || line.sku || `Line #${line.id}`}
@@ -92,7 +92,7 @@ function PoLineRow({ line }: { line: ReceivingLine }) {
       <div className="mt-1.5 flex items-center justify-between gap-3">
         <div className="flex min-w-0 flex-wrap items-center gap-1.5">
           <span
-            className={`flex shrink-0 items-center gap-0.5 text-[11px] font-black tabular-nums ${
+            className={`flex shrink-0 items-center gap-0.5 text-caption font-black tabular-nums ${
               qtyOk ? 'text-emerald-600' : 'text-gray-700'
             }`}
           >
@@ -102,24 +102,24 @@ function PoLineRow({ line }: { line: ReceivingLine }) {
             {qtyOk ? <Check className="h-3 w-3 text-emerald-500" aria-hidden /> : null}
           </span>
           <span
-            className={`rounded px-1.5 py-0.5 text-[9px] font-black uppercase tracking-widest ${badgeCls}`}
+            className={`rounded px-1.5 py-0.5 text-eyebrow font-black uppercase tracking-widest ${badgeCls}`}
           >
             {workflowStatusTableLabel(line.workflow_status)}
           </span>
           {condGrade && condGrade !== 'PENDING' ? (
             <span
-              className={`rounded px-1.5 py-0.5 text-[9px] font-black uppercase tracking-widest ring-1 ring-inset ring-gray-200 ${conditionColor}`}
+              className={`rounded px-1.5 py-0.5 text-eyebrow font-black uppercase tracking-widest ring-1 ring-inset ring-gray-200 ${conditionColor}`}
             >
               {conditionLabel}
             </span>
           ) : null}
           {line.needs_test ? (
-            <span className="rounded bg-orange-100 px-1.5 py-0.5 text-[9px] font-black uppercase tracking-widest text-orange-700">
+            <span className="rounded bg-orange-100 px-1.5 py-0.5 text-eyebrow font-black uppercase tracking-widest text-orange-700">
               Test
             </span>
           ) : null}
           {line.assigned_tech_name ? (
-            <span className="truncate text-[9px] font-bold text-gray-400">
+            <span className="truncate text-eyebrow font-bold text-gray-400">
               → {line.assigned_tech_name}
             </span>
           ) : null}
@@ -186,18 +186,18 @@ export function PoLinesSection({ receivingId, trackingNumber }: PoLinesSectionPr
 
       {lines.length === 0 ? (
         <div className="text-center py-4 space-y-2">
-          <p className="text-[10px] font-bold text-gray-400">No items linked yet.</p>
+          <p className="text-micro font-bold text-gray-400">No items linked yet.</p>
           <button
             type="button"
             onClick={handleSearchAndLink}
             disabled={markingReceived}
-            className="inline-flex items-center gap-1.5 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-[10px] font-black uppercase tracking-widest disabled:opacity-50 transition-all"
+            className="inline-flex items-center gap-1.5 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-micro font-black uppercase tracking-widest disabled:opacity-50 transition-all"
           >
             {markingReceived ? <Loader2 className="h-3 w-3 animate-spin" /> : <Package className="h-3 w-3" />}
             Search Zoho PO
           </button>
           {markResult === 'err' && (
-            <p className="text-[9px] text-red-500 font-bold">Search failed — try again</p>
+            <p className="text-eyebrow text-red-500 font-bold">Search failed — try again</p>
           )}
         </div>
       ) : (

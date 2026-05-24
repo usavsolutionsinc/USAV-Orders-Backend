@@ -110,10 +110,10 @@ export function PhoneHistoryPopover({ onClose }: PhoneHistoryPopoverProps) {
     >
       <div className="flex items-start justify-between">
         <div>
-          <p className="text-[10px] font-black uppercase tracking-widest text-gray-500">
+          <p className="text-micro font-black uppercase tracking-widest text-gray-500">
             Phone history
           </p>
-          <p className="mt-0.5 text-[13px] font-black text-gray-900">
+          <p className="mt-0.5 text-sm font-black text-gray-900">
             Recent packs · tap to resume
           </p>
         </div>
@@ -132,7 +132,7 @@ export function PhoneHistoryPopover({ onClose }: PhoneHistoryPopoverProps) {
           <div className="h-5 w-5 rounded-full border-2 border-gray-200 border-t-gray-600 animate-spin" />
         </div>
       ) : entries.length === 0 ? (
-        <p className="mt-3 rounded-lg border border-dashed border-gray-200 bg-gray-50/60 px-3 py-6 text-center text-[11px] italic text-gray-400">
+        <p className="mt-3 rounded-lg border border-dashed border-gray-200 bg-gray-50/60 px-3 py-6 text-center text-caption italic text-gray-400">
           {error ?? 'No recent packs yet — pack an order to see history here.'}
         </p>
       ) : (
@@ -143,20 +143,20 @@ export function PhoneHistoryPopover({ onClose }: PhoneHistoryPopoverProps) {
               onClick={() => handleResume(first)}
               className="w-full rounded-xl border border-emerald-200 bg-emerald-50/70 px-3 py-3 text-left transition-colors active:bg-emerald-100"
             >
-              <p className="text-[9px] font-black uppercase tracking-widest text-emerald-700">
+              <p className="text-eyebrow font-black uppercase tracking-widest text-emerald-700">
                 Resume last pack
               </p>
-              <p className="mt-0.5 truncate text-[13px] font-black text-gray-900">
+              <p className="mt-0.5 truncate text-sm font-black text-gray-900">
                 {first.productTitle || first.tracking || `Log #${first.packerLogId}`}
               </p>
-              <div className="mt-1 flex items-center gap-2 text-[10px] text-gray-600">
+              <div className="mt-1 flex items-center gap-2 text-micro text-gray-600">
                 <span className="inline-flex items-center gap-1">
                   <Clock className="h-3 w-3" />
                   {timeAgo(first.packedAt)}
                 </span>
                 {first.carrier && (
                   <span
-                    className={`inline-flex items-center rounded-md border px-1.5 py-0.5 text-[9px] font-black uppercase tracking-wider ${carrierBadgeColor(first.carrier)}`}
+                    className={`inline-flex items-center rounded-md border px-1.5 py-0.5 text-eyebrow font-black uppercase tracking-wider ${carrierBadgeColor(first.carrier)}`}
                   >
                     {first.carrier}
                   </span>
@@ -181,10 +181,10 @@ export function PhoneHistoryPopover({ onClose }: PhoneHistoryPopoverProps) {
                   className="flex w-full items-center gap-2 px-3 py-2 text-left transition-colors active:bg-gray-50"
                 >
                   <div className="min-w-0 flex-1">
-                    <p className="truncate text-[12px] font-bold text-gray-900">
+                    <p className="truncate text-label font-bold text-gray-900">
                       {entry.productTitle || entry.tracking || `Log #${entry.packerLogId}`}
                     </p>
-                    <div className="mt-0.5 flex items-center gap-2 text-[10px] text-gray-500">
+                    <div className="mt-0.5 flex items-center gap-2 text-micro text-gray-500">
                       <span>{timeAgo(entry.packedAt)}</span>
                       {entry.tracking && (
                         <span className="font-mono">TRK {getLast4(entry.tracking)}</span>
@@ -193,7 +193,7 @@ export function PhoneHistoryPopover({ onClose }: PhoneHistoryPopoverProps) {
                     </div>
                   </div>
                   {entry.photos.length > 0 && (
-                    <span className="inline-flex shrink-0 items-center gap-0.5 text-[10px] text-gray-400">
+                    <span className="inline-flex shrink-0 items-center gap-0.5 text-micro text-gray-400">
                       <Image className="h-3 w-3" />
                       {entry.photos.length}
                     </span>

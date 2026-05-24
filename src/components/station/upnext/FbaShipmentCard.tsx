@@ -63,7 +63,7 @@ function TrackingSection({
     <div className="border-b border-gray-100 last:border-b-0">
       {editable ? (
         <div className="w-full min-w-0 border-t border-blue-100/70 bg-blue-50/50 px-2 py-2">
-          <p className="mb-1 text-[9px] font-black uppercase tracking-widest text-blue-400/90">UPS tracking</p>
+          <p className="mb-1 text-eyebrow font-black uppercase tracking-widest text-blue-400/90">UPS tracking</p>
           <InlineEditableValue
             className="w-full min-w-0"
             value={editVal}
@@ -74,8 +74,8 @@ function TrackingSection({
             tone="blue"
             showEditIcon
             editIconPosition="end"
-            valueClassName="text-[11px] text-blue-800 break-all !whitespace-normal"
-            inputClassName="text-[11px]"
+            valueClassName="text-caption text-blue-800 break-all !whitespace-normal"
+            inputClassName="text-caption"
           />
         </div>
       ) : null}
@@ -243,11 +243,11 @@ export function FbaShipmentCard({
           <div className="flex min-w-0 flex-col gap-0.5">
             <div className="flex min-w-0 items-baseline gap-1.5">
               {shipment.amazon_shipment_id && (
-                <span className="truncate font-mono text-[12px] font-black text-gray-900">
+                <span className="truncate font-mono text-label font-black text-gray-900">
                   {shipment.amazon_shipment_id}
                 </span>
               )}
-              <span className="shrink-0 text-[10px] font-bold text-gray-400">
+              <span className="shrink-0 text-micro font-bold text-gray-400">
                 {items.length} SKU · {totalQty} units
               </span>
               <FbaStatusBadge
@@ -259,13 +259,13 @@ export function FbaShipmentCard({
               />
             </div>
             <div className="flex min-w-0 items-center gap-1.5">
-              <p className="truncate font-mono text-[10px] font-bold text-gray-400">
+              <p className="truncate font-mono text-micro font-bold text-gray-400">
                 {shipment.tracking_numbers.length > 1
                   ? `${shipment.tracking_numbers.length} trackings`
                   : `${carrier ? `${carrier} · ` : ''}${primaryTracking}`}
               </p>
               {isShipped && shippedDateLabel ? (
-                <span className="shrink-0 rounded bg-emerald-100 px-1.5 py-0.5 text-[9px] font-black text-emerald-700">
+                <span className="shrink-0 rounded bg-emerald-100 px-1.5 py-0.5 text-eyebrow font-black text-emerald-700">
                   {shippedDateLabel}
                 </span>
               ) : null}
@@ -288,7 +288,7 @@ export function FbaShipmentCard({
             <div className="border-t border-gray-100 px-3">
               {editable ? (
                 <div className="border-b border-gray-100 py-2.5">
-                  <p className="text-[9px] font-black uppercase tracking-widest text-gray-400">FBA Shipment ID</p>
+                  <p className="text-eyebrow font-black uppercase tracking-widest text-gray-400">FBA Shipment ID</p>
                   <InlineEditableValue
                     value={editableAmazonId}
                     placeholder="FBA1234ABCD"
@@ -314,7 +314,7 @@ export function FbaShipmentCard({
                   />
                 ))
               ) : items.length === 0 ? (
-                <p className="py-3 text-center text-[11px] font-bold text-gray-400">No items</p>
+                <p className="py-3 text-center text-caption font-bold text-gray-400">No items</p>
               ) : syntheticBundle ? (
                 <FbaTrackingGroupDisplay
                   bundle={syntheticBundle}

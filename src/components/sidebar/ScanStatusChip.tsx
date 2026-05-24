@@ -61,7 +61,7 @@ export function ScanStatusChip({
     <div className="flex items-center justify-between gap-2 px-3 py-1.5 border-b border-gray-50 hover:bg-gray-50/50 transition-colors">
       <div className="flex items-center gap-1.5 min-w-0">
         <span
-          className={`shrink-0 rounded px-1.5 py-0.5 text-[9px] font-black uppercase tracking-widest ${PILL_TONE[status]}`}
+          className={`shrink-0 rounded px-1.5 py-0.5 text-eyebrow font-black uppercase tracking-widest ${PILL_TONE[status]}`}
           title={status === 'unmatched' ? 'Tracking logged — no matching Zoho PO yet' : undefined}
         >
           {label}
@@ -69,7 +69,7 @@ export function ScanStatusChip({
         <TrackingChip value={tracking} display={getLast4(tracking)} />
         {status === 'error' && errorMessage ? (
           <span
-            className="truncate text-[9px] font-semibold text-red-600"
+            className="truncate text-eyebrow font-semibold text-red-600"
             title={errorMessage}
           >
             {errorMessage}
@@ -81,7 +81,7 @@ export function ScanStatusChip({
             target="_blank"
             rel="noreferrer"
             title={exceptionReason ? `Queued #${exceptionId} · ${exceptionReason}` : `Queued #${exceptionId}`}
-            className="shrink-0 rounded bg-gray-100 px-1.5 py-0.5 text-[9px] font-black uppercase tracking-widest text-gray-600 hover:bg-gray-200 hover:text-gray-900"
+            className="shrink-0 rounded bg-gray-100 px-1.5 py-0.5 text-eyebrow font-black uppercase tracking-widest text-gray-600 hover:bg-gray-200 hover:text-gray-900"
           >
             #{exceptionId}
           </a>

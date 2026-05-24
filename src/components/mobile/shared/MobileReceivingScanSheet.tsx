@@ -241,7 +241,7 @@ export function MobileReceivingScanSheet({
                 <button
                   type="button"
                   onClick={() => void scanner.startScanning()}
-                  className="h-11 px-5 rounded-xl bg-blue-600 text-white text-[11px] font-black uppercase tracking-wider active:bg-blue-700"
+                  className="h-11 px-5 rounded-xl bg-blue-600 text-white text-caption font-black uppercase tracking-wider active:bg-blue-700"
                 >
                   Try Again
                 </button>
@@ -294,7 +294,7 @@ export function MobileReceivingScanSheet({
                 {scans.slice(0, 4).map((s) => (
                   <div
                     key={s.id}
-                    className={`rounded-lg border px-3 py-2 text-[11px] backdrop-blur-sm ${
+                    className={`rounded-lg border px-3 py-2 text-caption backdrop-blur-sm ${
                       s.status === 'matched'
                         ? 'bg-emerald-50/90 border-emerald-300 text-emerald-800'
                         : s.status === 'unmatched'
@@ -346,7 +346,7 @@ export function MobileReceivingScanSheet({
               <button
                 type="submit"
                 disabled={!manualTracking.trim()}
-                className="h-12 px-5 rounded-xl bg-emerald-600 text-white text-[11px] font-black uppercase tracking-wider disabled:opacity-40 active:bg-emerald-700"
+                className="h-12 px-5 rounded-xl bg-emerald-600 text-white text-caption font-black uppercase tracking-wider disabled:opacity-40 active:bg-emerald-700"
               >
                 Send
               </button>

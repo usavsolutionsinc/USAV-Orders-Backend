@@ -124,10 +124,10 @@ function EcwidPairingTable({ basePath }: { basePath: string }) {
     <div className="flex h-full flex-col overflow-hidden bg-white">
       <div className={mainStickyHeaderClass}>
         <div className={`${mainStickyHeaderShellRowClass} px-6`}>
-          <p className="truncate text-[11px] font-black uppercase tracking-[0.2em] text-gray-900">
+          <p className="truncate text-caption font-black uppercase tracking-[0.2em] text-gray-900">
             SKU Pairing
           </p>
-          <span className="text-[10px] font-black uppercase tracking-[0.18em] text-gray-500">
+          <span className="text-micro font-black uppercase tracking-[0.18em] text-gray-500">
             {loading ? 'Loading...' : `${total} unpaired`}
           </span>
         </div>
@@ -147,7 +147,7 @@ function EcwidPairingTable({ basePath }: { basePath: string }) {
         ) : items.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-20 text-center px-8">
             <Check className="h-8 w-8 text-emerald-400 mb-2" />
-            <p className="text-[11px] font-black uppercase tracking-[0.2em] text-gray-500">
+            <p className="text-caption font-black uppercase tracking-[0.2em] text-gray-500">
               {query ? 'No matches' : 'All Ecwid products paired'}
             </p>
           </div>
@@ -175,17 +175,17 @@ function EcwidPairingTable({ basePath }: { basePath: string }) {
                   </div>
                 )}
                 <div className="min-w-0 flex-1">
-                  <p className="truncate text-[11px] font-bold text-gray-900">
+                  <p className="truncate text-caption font-bold text-gray-900">
                     {item.display_name || 'Unnamed Product'}
                   </p>
                 </div>
                 <div className="w-16 text-center">
-                  <span className="text-[10px] font-mono font-bold text-gray-500">
+                  <span className="text-micro font-mono font-bold text-gray-500">
                     {item.platform_sku || '—'}
                   </span>
                 </div>
                 <div className="w-16 text-right">
-                  <span className={`font-mono text-[12px] font-black tabular-nums ${item.order_count > 5 ? 'text-amber-600' : 'text-gray-900'}`}>
+                  <span className={`font-mono text-label font-black tabular-nums ${item.order_count > 5 ? 'text-amber-600' : 'text-gray-900'}`}>
                     {item.order_count}
                   </span>
                 </div>
@@ -260,8 +260,8 @@ function CatalogTable({ basePath }: { basePath: string }) {
     <div className="flex h-full flex-col overflow-hidden bg-white">
       <div className={mainStickyHeaderClass}>
         <div className={`${mainStickyHeaderShellRowClass} px-6`}>
-          <p className="truncate text-[11px] font-black uppercase tracking-[0.2em] text-gray-900">{title}</p>
-          <span className="text-[10px] font-black uppercase tracking-[0.18em] text-gray-500">
+          <p className="truncate text-caption font-black uppercase tracking-[0.2em] text-gray-900">{title}</p>
+          <span className="text-micro font-black uppercase tracking-[0.18em] text-gray-500">
             {loading ? 'Loading...' : `${total} product${total !== 1 ? 's' : ''}`}
           </span>
         </div>
@@ -283,7 +283,7 @@ function CatalogTable({ basePath }: { basePath: string }) {
         ) : items.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-20 text-center px-8">
             <Package className="h-8 w-8 text-gray-300 mb-2" />
-            <p className="text-[11px] font-black uppercase tracking-[0.2em] text-gray-500">
+            <p className="text-caption font-black uppercase tracking-[0.2em] text-gray-500">
               {query ? 'No matches' : 'No products'}
             </p>
           </div>
@@ -311,8 +311,8 @@ function CatalogTable({ basePath }: { basePath: string }) {
                   <img src={displayImage} alt="" className="h-8 w-8 rounded-lg object-cover bg-gray-100 shrink-0" />
                 )}
                 <div className="min-w-0 flex-1">
-                  <p className="truncate text-[11px] font-bold text-gray-900">{displayName}</p>
-                  <p className="truncate text-[11px] font-bold text-gray-500">{displaySku}</p>
+                  <p className="truncate text-caption font-bold text-gray-900">{displayName}</p>
+                  <p className="truncate text-caption font-bold text-gray-500">{displaySku}</p>
                 </div>
                 <div className="w-20 flex items-center justify-center">
                   {item.category ? (
@@ -320,28 +320,28 @@ function CatalogTable({ basePath }: { basePath: string }) {
                       {item.category}
                     </span>
                   ) : (
-                    <span className="text-gray-300 text-[10px]">&mdash;</span>
+                    <span className="text-gray-300 text-micro">&mdash;</span>
                   )}
                 </div>
                 <div className="w-20 flex items-center justify-center">
                   {item.platform_count > 0 ? (
                     <span className={`${microBadge} rounded bg-blue-50 text-blue-600 px-1.5 py-0.5`}>{item.platform_count}</span>
                   ) : (
-                    <span className="text-gray-300 text-[10px]">&mdash;</span>
+                    <span className="text-gray-300 text-micro">&mdash;</span>
                   )}
                 </div>
                 <div className="w-20 flex items-center justify-center">
                   {item.manual_count > 0 ? (
                     <span className={`${microBadge} rounded bg-emerald-50 text-emerald-600 px-1.5 py-0.5`}>{item.manual_count}</span>
                   ) : (
-                    <span className="text-gray-300 text-[10px]">&mdash;</span>
+                    <span className="text-gray-300 text-micro">&mdash;</span>
                   )}
                 </div>
                 <div className="w-16 flex items-center justify-center">
                   {item.qc_step_count > 0 ? (
                     <span className={`${microBadge} rounded bg-amber-50 text-amber-600 px-1.5 py-0.5`}>{item.qc_step_count}</span>
                   ) : (
-                    <span className="text-gray-300 text-[10px]">&mdash;</span>
+                    <span className="text-gray-300 text-micro">&mdash;</span>
                   )}
                 </div>
               </button>

@@ -14,6 +14,7 @@
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
 import { BinLabelPrinter } from '@/components/barcode/BinLabelPrinter';
+import { PageHeader } from '@/components/ui/pane-header';
 
 export function LabelPrintWorkspace() {
   const [queuedBins, setQueuedBins] = useState<number[]>([]);
@@ -32,14 +33,13 @@ export function LabelPrintWorkspace() {
   }, []);
 
   return (
-    // Flex column that fills the /warehouse page's inner flex-col so the
-    // BinLabelPrinter's sticky action bar can mt-auto to the bottom edge
-    // of the scroll container (matches the receiving LineEditPanel pattern).
-    <div className="flex min-h-0 flex-1 flex-col gap-4">
-      {queuedBins.length > 0 && (
+    <div className="flex min-h-0 flex-1 flex-col">
+      <PageHeader title="Label printer" />
+      <div className="flex min-h-0 flex-1 flex-col gap-4 p-4">
+        {queuedBins.length > 0 && (
         <div className="flex items-start justify-between gap-3 rounded-2xl border border-blue-200 bg-blue-50/50 p-4">
           <div className="min-w-0">
-            <p className="text-[13px] font-semibold text-blue-900">
+            <p className="text-sm font-semibold text-blue-900">
               {queuedBins.length} bin{queuedBins.length === 1 ? '' : 's'} queued from Bins
             </p>
             <p className="mt-0.5 text-[11.5px] text-blue-700">
@@ -49,14 +49,15 @@ export function LabelPrintWorkspace() {
           <button
             type="button"
             onClick={() => setQueuedBins([])}
-            className="shrink-0 text-[11px] font-semibold text-blue-700 hover:text-blue-900"
+            className="shrink-0 text-caption font-semibold text-blue-700 hover:text-blue-900"
           >
             Clear
           </button>
         </div>
       )}
 
-      <BinLabelPrinter />
+        <BinLabelPrinter />
+      </div>
     </div>
   );
 }

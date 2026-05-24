@@ -33,7 +33,7 @@ export default function MobilePoPhotoCapturePage(
 
   if (isLoading) {
     return (
-      <div className="grid min-h-screen place-items-center bg-black text-[11px] font-bold uppercase tracking-widest text-white/60">
+      <div className="grid min-h-screen place-items-center bg-black text-caption font-bold uppercase tracking-widest text-white/60">
         Opening camera…
       </div>
     );
@@ -43,10 +43,10 @@ export default function MobilePoPhotoCapturePage(
     return (
       <div className="grid min-h-screen place-items-center bg-slate-50 px-6 text-center">
         <div>
-          <p className="text-[13px] font-black uppercase tracking-wider text-gray-700">
+          <p className="text-sm font-black uppercase tracking-wider text-gray-700">
             No receiving package yet
           </p>
-          <p className="mt-1 text-[11px] font-bold text-gray-500">
+          <p className="mt-1 text-caption font-bold text-gray-500">
             Scan the package tracking on the desktop first, then come back.
           </p>
         </div>

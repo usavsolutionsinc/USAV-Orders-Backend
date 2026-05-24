@@ -92,7 +92,7 @@ export function FbaQuickAddFnskuModal({ stationTheme = 'blue' }: { stationTheme?
       <div className="relative z-[111] w-full max-w-lg overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-2xl shadow-zinc-900/15">
         <div className="flex items-center justify-between border-b border-zinc-200 px-4 py-3">
           <div>
-            <p className={`text-[10px] font-black uppercase tracking-[0.16em] ${chrome.sectionLabel}`}>Quick add</p>
+            <p className={`text-micro font-black uppercase tracking-[0.16em] ${chrome.sectionLabel}`}>Quick add</p>
             <h2 className="mt-1 text-sm font-black text-zinc-900">Add FNSKU details</h2>
           </div>
           <button
@@ -136,7 +136,7 @@ export function FbaQuickAddFnskuModal({ stationTheme = 'blue' }: { stationTheme?
             label="FNSKU"
             required
             hintBelow={
-              <p className="text-[10px] leading-snug text-zinc-500">
+              <p className="text-micro leading-snug text-zinc-500">
                 Save the FNSKU now and fill in more catalog details later if needed.
               </p>
             }
@@ -178,7 +178,7 @@ export function FbaQuickAddFnskuModal({ stationTheme = 'blue' }: { stationTheme?
             type="button"
             onClick={() => setOpen(false)}
             disabled={saving}
-            className="rounded-xl border border-zinc-200 bg-white px-4 py-2 text-[10px] font-black uppercase tracking-[0.14em] text-zinc-600 transition-colors hover:border-zinc-300 hover:bg-zinc-50 disabled:opacity-40"
+            className="rounded-xl border border-zinc-200 bg-white px-4 py-2 text-micro font-black uppercase tracking-[0.14em] text-zinc-600 transition-colors hover:border-zinc-300 hover:bg-zinc-50 disabled:opacity-40"
           >
             Cancel
           </button>

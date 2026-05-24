@@ -119,7 +119,7 @@ function PillRow<T extends string>({
             key={opt.value || '__empty__'}
             type="button"
             onClick={() => onChange(opt.value)}
-            className={`rounded-full px-3 py-1 text-[11px] font-bold uppercase tracking-wider transition-colors ${
+            className={`rounded-full px-3 py-1 text-caption font-bold uppercase tracking-wider transition-colors ${
               active
                 ? activeClass
                 : 'border border-gray-200 bg-white text-gray-500 hover:border-gray-300 hover:text-gray-700'
@@ -150,7 +150,7 @@ function ConditionPillRow({ value, onChange, disabled }: ConditionPillRowProps) 
             type="button"
             disabled={disabled}
             onClick={() => onChange(opt.value)}
-            className={`rounded-full px-3 py-1 text-[11px] font-bold uppercase tracking-wider transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${
+            className={`rounded-full px-3 py-1 text-caption font-bold uppercase tracking-wider transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${
               active
                 ? opt.value === 'PARTS'
                   ? 'bg-orange-700 text-white'
@@ -199,10 +199,10 @@ function UnfoundLineCard({ line, onConditionChange }: UnfoundLineCardProps) {
           />
         ) : null}
         <div className="min-w-0 flex-1">
-          <div className="truncate text-[14px] font-semibold text-gray-900">
+          <div className="truncate text-sm font-semibold text-gray-900">
             {line.item_name ?? line.sku ?? `Line ${line.id}`}
           </div>
-          <div className="mt-0.5 flex flex-wrap items-center gap-2 text-[11px] text-gray-500">
+          <div className="mt-0.5 flex flex-wrap items-center gap-2 text-caption text-gray-500">
             <span className="tabular-nums">
               {line.quantity_received ?? 0}/{line.quantity_expected ?? 1}
             </span>
@@ -474,26 +474,26 @@ export function UnfoundLineEditPanel({
                   value={listingUrl}
                   onChange={(e) => setListingUrl(e.target.value)}
                   placeholder="ebay.com/itm/…"
-                  className="min-w-[200px] flex-1 border-b border-gray-200 bg-transparent px-1 py-1 text-[13px] outline-none focus:border-blue-500"
+                  className="min-w-[200px] flex-1 border-b border-gray-200 bg-transparent px-1 py-1 text-sm outline-none focus:border-blue-500"
                 />
-                <label className="flex items-center gap-1 text-[11px] text-gray-500">
+                <label className="flex items-center gap-1 text-caption text-gray-500">
                   <span className="font-bold uppercase tracking-wider">#</span>
                   <input
                     type="text"
                     value={listingRef}
                     onChange={(e) => setListingRef(e.target.value)}
                     placeholder="3675"
-                    className="w-20 border-b border-gray-200 bg-transparent px-1 py-1 text-[13px] tabular-nums outline-none focus:border-blue-500"
+                    className="w-20 border-b border-gray-200 bg-transparent px-1 py-1 text-sm tabular-nums outline-none focus:border-blue-500"
                   />
                 </label>
-                <label className="flex items-center gap-1 text-[11px] text-gray-500">
+                <label className="flex items-center gap-1 text-caption text-gray-500">
                   <span>📍</span>
                   <input
                     type="text"
                     value={locationCode}
                     onChange={(e) => setLocationCode(e.target.value)}
                     placeholder="1314"
-                    className="w-20 border-b border-gray-200 bg-transparent px-1 py-1 text-[13px] tabular-nums outline-none focus:border-blue-500"
+                    className="w-20 border-b border-gray-200 bg-transparent px-1 py-1 text-sm tabular-nums outline-none focus:border-blue-500"
                   />
                 </label>
               </div>
@@ -528,7 +528,7 @@ export function UnfoundLineEditPanel({
               <button
                 type="button"
                 onClick={() => setPopoverOpen(true)}
-                className="flex items-center gap-1 rounded-md bg-blue-600 px-2.5 py-1 text-[11px] font-bold uppercase tracking-wider text-white hover:bg-blue-700"
+                className="flex items-center gap-1 rounded-md bg-blue-600 px-2.5 py-1 text-caption font-bold uppercase tracking-wider text-white hover:bg-blue-700"
               >
                 <Plus className="h-3 w-3" />
                 Add item
@@ -548,7 +548,7 @@ export function UnfoundLineEditPanel({
 
               <div className="space-y-2">
                 {lines.length === 0 && !linesLoading && (
-                  <p className="py-6 text-center text-[12px] text-gray-500">
+                  <p className="py-6 text-center text-label text-gray-500">
                     No items yet. Click <span className="font-semibold">Add item</span> to
                     search the Ecwid catalog and pick a product.
                   </p>

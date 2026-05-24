@@ -150,7 +150,7 @@ function PhotoPageInner() {
             <p className="text-xs font-black uppercase tracking-[0.2em] text-white/60">
               Pack photos
             </p>
-            <p className="truncate text-[13px] font-black text-white">PL-{packerLogId}</p>
+            <p className="truncate text-sm font-black text-white">PL-{packerLogId}</p>
           </div>
         }
       />
@@ -168,7 +168,7 @@ function PhotoPageInner() {
           Pack photos
         </p>
         <h1 className="text-lg font-black text-slate-900">PL-{packerLogId}</h1>
-        <p className="mt-1 text-[11px] font-bold text-slate-600">
+        <p className="mt-1 text-caption font-bold text-slate-600">
           {successCount}/{entries.length} uploaded
           {errorCount > 0 ? ` · ${errorCount} failed` : ''}
         </p>
@@ -187,11 +187,11 @@ function PhotoPageInner() {
               className="h-16 w-16 rounded object-cover"
             />
             <div className="min-w-0 flex-1">
-              <p className="text-[11px] font-black uppercase tracking-wider text-slate-600">
+              <p className="text-caption font-black uppercase tracking-wider text-slate-600">
                 Photo {i + 1}
               </p>
               <p
-                className={`mt-0.5 text-[11px] font-bold ${
+                className={`mt-0.5 text-caption font-bold ${
                   e.state === 'done'
                     ? 'text-emerald-600'
                     : e.state === 'error'
@@ -240,7 +240,7 @@ function PhotoPageInner() {
             </button>
           </div>
         ) : (
-          <p className="text-center text-[11px] font-bold text-slate-500">
+          <p className="text-center text-caption font-bold text-slate-500">
             Hold on — uploading…
           </p>
         )}

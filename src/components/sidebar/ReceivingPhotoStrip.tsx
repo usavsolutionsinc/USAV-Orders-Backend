@@ -69,14 +69,14 @@ export const ReceivingPhotoStrip = memo(function ReceivingPhotoStrip({
 
   if (isLoading && galleryPhotos.length === 0) {
     return (
-      <div className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">
+      <div className="text-micro font-bold text-gray-400 uppercase tracking-widest">
         Loading photos…
       </div>
     );
   }
   if (error) {
     return (
-      <div className="text-[10px] font-bold text-rose-500 uppercase tracking-widest">
+      <div className="text-micro font-bold text-rose-500 uppercase tracking-widest">
         Photo load failed
       </div>
     );

@@ -71,6 +71,11 @@ export function useDashboardSelectedOrder(detailsEnabled: boolean) {
   // Tracks the ID we've already applied locally but whose URL update may still be in flight.
   // Prevents the openOrderId-sync effect from reverting to the stale URL value.
   const pendingOrderIdRef = useRef<number | null>(null);
+  // Tracks an openOrderId that the user just closed. The URL update from
+  // replaceOpenOrderId(null) is async; without this guard, the sync effect re-runs
+  // with the stale URL value, re-resolves the order, and reopens the panel —
+  // producing the "X closes halfway then reopens / errors out" bug.
+  const ignoredOpenOrderIdRef = useRef<number | null>(null);
 
   const openOrderId = useMemo(() => {
     return parseDashboardOpenOrderId(searchParams.get('openOrderId'));
@@ -106,6 +111,7 @@ export function useDashboardSelectedOrder(detailsEnabled: boolean) {
     pendingOrderIdRef.current = null;
     clearStoredSelection();
     if (syncUrl && openOrderId != null) {
+      ignoredOpenOrderIdRef.current = openOrderId;
       replaceOpenOrderId(null);
     }
   }, [openOrderId, replaceOpenOrderId]);
@@ -154,6 +160,9 @@ export function useDashboardSelectedOrder(detailsEnabled: boolean) {
 
   useEffect(() => {
     if (openOrderId == null) {
+      // URL has caught up to a cleared state; the close-in-flight guard is no
+      // longer needed.
+      ignoredOpenOrderIdRef.current = null;
       // CRITICAL: bail if a router.replace from applySelectedOrder hasn't landed yet.
       // Without this, the render between setSelectedShipped(A) and the URL catching up
       // to ?openOrderId=A sees `openOrderId == null && selectedShipped` and clears the
@@ -164,6 +173,11 @@ export function useDashboardSelectedOrder(detailsEnabled: boolean) {
       }
       return;
     }
+
+    // If this URL value is one the user just closed and the router.replace(null)
+    // hasn't landed yet, ignore it — otherwise we'd re-resolve and reopen the
+    // panel mid-exit.
+    if (ignoredOpenOrderIdRef.current === openOrderId) return;
 
     // Clear the pending flag once the URL catches up to the value we set.
     if (pendingOrderIdRef.current === openOrderId) {

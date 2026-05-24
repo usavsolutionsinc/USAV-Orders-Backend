@@ -86,7 +86,7 @@ export function SkuIdentity({
     return (
       <div className={`flex flex-wrap items-center gap-1.5 ${className}`}>
         <span className="font-mono text-sm font-bold tabular-nums text-slate-900">{canonicalSku}</span>
-        <span className={`inline-flex items-center rounded-md border px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider ${platformChipClass('zoho')}`}>
+        <span className={`inline-flex items-center rounded-md border px-1.5 py-0.5 text-micro font-semibold uppercase tracking-wider ${platformChipClass('zoho')}`}>
           Zoho
         </span>
         {visiblePlatforms.map((p, i) => (
@@ -105,7 +105,7 @@ export function SkuIdentity({
         <span className="font-mono text-2xl font-extrabold tabular-nums tracking-tight text-slate-900">
           {canonicalSku}
         </span>
-        <span className={`inline-flex items-center rounded-md border px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider ${platformChipClass('zoho')}`}>
+        <span className={`inline-flex items-center rounded-md border px-1.5 py-0.5 text-micro font-semibold uppercase tracking-wider ${platformChipClass('zoho')}`}>
           Zoho
         </span>
       </div>
@@ -122,7 +122,7 @@ export function SkuIdentity({
 
 function PlatformSkuChip({ mapping, dense = false }: { mapping: SkuPlatformMapping; dense?: boolean }) {
   const value = (mapping.platformSku && mapping.platformSku.trim()) || mapping.platformItemId || '';
-  const sizing = dense ? 'px-1.5 py-0.5 text-[10px]' : 'px-2 py-0.5 text-xs';
+  const sizing = dense ? 'px-1.5 py-0.5 text-micro' : 'px-2 py-0.5 text-xs';
   return (
     <span
       title={`${platformLabel(mapping.platform)} · ${value}${mapping.platformItemId ? ` · ${mapping.platformItemId}` : ''}`}

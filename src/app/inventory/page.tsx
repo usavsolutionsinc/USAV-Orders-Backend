@@ -1,5 +1,5 @@
 import { Suspense } from 'react';
-import { InventoryV2Shell } from '@/components/inventory-v2/InventoryV2Shell';
+import { InventoryShell } from '@/components/inventory/InventoryShell';
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
 
 export default function InventoryPage() {
@@ -12,7 +12,7 @@ export default function InventoryPage() {
                     </div>
                 }
             >
-                <InventoryV2Shell />
+                <InventoryShell />
             </Suspense>
         </div>
     );

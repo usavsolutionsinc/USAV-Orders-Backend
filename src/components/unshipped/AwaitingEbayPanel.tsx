@@ -171,7 +171,7 @@ export function AwaitingEbayPanel({ onRefresh }: { onRefresh?: () => void }) {
               type="button"
               onClick={() => refreshTokenMutation.mutate(account.account_name)}
               disabled={isRefreshing}
-              className="shrink-0 inline-flex items-center gap-1 rounded-lg bg-amber-600 px-2 py-1 text-[9px] font-black uppercase text-white hover:bg-amber-700 disabled:opacity-60"
+              className="shrink-0 inline-flex items-center gap-1 rounded-lg bg-amber-600 px-2 py-1 text-eyebrow font-black uppercase text-white hover:bg-amber-700 disabled:opacity-60"
             >
               <RefreshCw className={`w-3 h-3 ${isRefreshing ? 'animate-spin' : ''}`} />
               Refresh
@@ -186,7 +186,7 @@ export function AwaitingEbayPanel({ onRefresh }: { onRefresh?: () => void }) {
           type="button"
           onClick={() => ebayBackfillMutation.mutate()}
           disabled={ebayBackfillMutation.isPending || ebayDisabled}
-          className="shrink-0 inline-flex items-center gap-1 rounded-lg bg-amber-600 px-2 py-1 text-[9px] font-black uppercase text-white hover:bg-amber-700 disabled:opacity-50 disabled:cursor-not-allowed"
+          className="shrink-0 inline-flex items-center gap-1 rounded-lg bg-amber-600 px-2 py-1 text-eyebrow font-black uppercase text-white hover:bg-amber-700 disabled:opacity-50 disabled:cursor-not-allowed"
         >
           <RefreshCw className={`w-3 h-3 ${ebayBackfillMutation.isPending ? 'animate-spin' : ''}`} />
           Run
@@ -199,7 +199,7 @@ export function AwaitingEbayPanel({ onRefresh }: { onRefresh?: () => void }) {
           type="button"
           onClick={() => ecwidBackfillMutation.mutate()}
           disabled={ecwidBackfillMutation.isPending}
-          className="shrink-0 inline-flex items-center gap-1 rounded-lg bg-indigo-600 px-2 py-1 text-[9px] font-black uppercase text-white hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed"
+          className="shrink-0 inline-flex items-center gap-1 rounded-lg bg-indigo-600 px-2 py-1 text-eyebrow font-black uppercase text-white hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed"
         >
           <RefreshCw className={`w-3 h-3 ${ecwidBackfillMutation.isPending ? 'animate-spin' : ''}`} />
           Run
@@ -212,7 +212,7 @@ export function AwaitingEbayPanel({ onRefresh }: { onRefresh?: () => void }) {
           type="button"
           onClick={() => integrityCheckMutation.mutate(false)}
           disabled={integrityCheckMutation.isPending}
-          className="shrink-0 inline-flex items-center gap-1 rounded-lg bg-gray-600 px-2 py-1 text-[9px] font-black uppercase text-white hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed"
+          className="shrink-0 inline-flex items-center gap-1 rounded-lg bg-gray-600 px-2 py-1 text-eyebrow font-black uppercase text-white hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed"
           title="Deduplicate orders by unique (order_id, tracking). Keeps most complete row per group."
         >
           <ShieldCheck className={`w-3 h-3 ${integrityCheckMutation.isPending ? 'animate-pulse' : ''}`} />
@@ -229,7 +229,7 @@ export function AwaitingEbayPanel({ onRefresh }: { onRefresh?: () => void }) {
             {logs.map((log) => (
               <p
                 key={log.id}
-                className={`text-[10px] font-medium leading-tight ${
+                className={`text-micro font-medium leading-tight ${
                   log.type === 'success' ? 'text-emerald-700' : 'text-red-600'
                 }`}
               >

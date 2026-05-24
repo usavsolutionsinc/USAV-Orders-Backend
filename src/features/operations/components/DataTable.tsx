@@ -28,8 +28,8 @@ export function DataTable<T extends { id: string | number }>({
     <div className="bg-white border border-slate-200 rounded-sm overflow-hidden flex flex-col h-full">
       <div className="px-4 py-3 border-b border-slate-100 bg-slate-50/30 flex items-baseline justify-between">
         <div className="flex items-baseline gap-3">
-          <h3 className="text-[11px] font-black text-slate-900 uppercase tracking-[0.1em]">{title}</h3>
-          {subtitle && <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">{subtitle}</span>}
+          <h3 className="text-caption font-black text-slate-900 uppercase tracking-[0.1em]">{title}</h3>
+          {subtitle && <span className="text-micro text-slate-400 font-bold uppercase tracking-wider">{subtitle}</span>}
         </div>
       </div>
       
@@ -41,7 +41,7 @@ export function DataTable<T extends { id: string | number }>({
                 <th
                   key={idx}
                   style={{ width: col.width }}
-                  className={`px-4 py-2.5 text-[10px] font-bold text-slate-400 uppercase tracking-widest ${col.className || ''}`}
+                  className={`px-4 py-2.5 text-micro font-bold text-slate-400 uppercase tracking-widest ${col.className || ''}`}
                 >
                   {col.header}
                 </th>
@@ -61,7 +61,7 @@ export function DataTable<T extends { id: string | number }>({
               ))
             ) : data.length === 0 ? (
               <tr>
-                <td colSpan={columns.length} className="px-4 py-12 text-center text-[11px] text-slate-400 font-bold uppercase tracking-widest">
+                <td colSpan={columns.length} className="px-4 py-12 text-center text-caption text-slate-400 font-bold uppercase tracking-widest">
                   No records found
                 </td>
               </tr>
@@ -71,7 +71,7 @@ export function DataTable<T extends { id: string | number }>({
                   {columns.map((col, idx) => (
                     <td
                       key={idx}
-                      className={`px-4 py-2.5 text-[13px] font-medium text-slate-700 tabular-nums align-bottom ${col.className || ''}`}
+                      className={`px-4 py-2.5 text-sm font-medium text-slate-700 tabular-nums align-bottom ${col.className || ''}`}
                     >
                       <div className="pb-0.5 border-b border-transparent group-hover:border-slate-100 transition-colors">
                         {typeof col.accessor === 'function'

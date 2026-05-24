@@ -93,10 +93,10 @@ export function LocalPickupCatalogPanel() {
       {/* Header — search + category pills */}
       <div className="shrink-0 border-b border-gray-200 bg-white px-5 py-4 space-y-3">
         <div>
-          <p className="text-[9px] font-black uppercase tracking-widest text-emerald-500">
+          <p className="text-eyebrow font-black uppercase tracking-widest text-emerald-500">
             Local Pickup · Catalog
           </p>
-          <h2 className="mt-0.5 text-[18px] font-black uppercase tracking-tight text-gray-900">
+          <h2 className="mt-0.5 text-lg font-black uppercase tracking-tight text-gray-900">
             Pick products to add to the intake
           </h2>
         </div>
@@ -128,7 +128,7 @@ export function LocalPickupCatalogPanel() {
                   ? 'Search by product title…'
                   : 'Search by Ecwid SKU…'
             }
-            className="h-12 w-full rounded-2xl border border-gray-200 bg-gray-50 pl-12 pr-12 text-[14px] font-semibold text-gray-900 outline-none transition-all focus:border-transparent focus:bg-white focus:ring-2 focus:ring-emerald-500"
+            className="h-12 w-full rounded-2xl border border-gray-200 bg-gray-50 pl-12 pr-12 text-sm font-semibold text-gray-900 outline-none transition-all focus:border-transparent focus:bg-white focus:ring-2 focus:ring-emerald-500"
           />
           <Search className="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-gray-400" />
           {isFetching ? (
@@ -149,7 +149,7 @@ export function LocalPickupCatalogPanel() {
             <button
               type="button"
               onClick={() => setActiveCategory(null)}
-              className={`shrink-0 rounded-lg px-3 py-1.5 text-[9px] font-black uppercase tracking-widest transition-colors ${
+              className={`shrink-0 rounded-lg px-3 py-1.5 text-eyebrow font-black uppercase tracking-widest transition-colors ${
                 activeCategory === null
                   ? 'bg-emerald-600 text-white shadow-sm'
                   : 'bg-gray-100 text-gray-600 hover:bg-emerald-50 hover:text-emerald-700'
@@ -164,7 +164,7 @@ export function LocalPickupCatalogPanel() {
                 onClick={() =>
                   setActiveCategory(activeCategory === category ? null : category)
                 }
-                className={`shrink-0 rounded-lg px-3 py-1.5 text-[9px] font-black uppercase tracking-widest transition-colors ${
+                className={`shrink-0 rounded-lg px-3 py-1.5 text-eyebrow font-black uppercase tracking-widest transition-colors ${
                   activeCategory === category
                     ? 'bg-emerald-600 text-white shadow-sm'
                     : 'bg-gray-100 text-gray-600 hover:bg-emerald-50 hover:text-emerald-700'
@@ -182,7 +182,7 @@ export function LocalPickupCatalogPanel() {
         {isFetching && filteredItems.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-20 gap-3">
             <Loader2 className="h-6 w-6 animate-spin text-emerald-500" />
-            <p className="text-[10px] font-black uppercase tracking-widest text-gray-500">
+            <p className="text-micro font-black uppercase tracking-widest text-gray-500">
               Loading Catalog…
             </p>
           </div>
@@ -194,7 +194,7 @@ export function LocalPickupCatalogPanel() {
             <p className="text-sm font-bold text-gray-500">
               {query ? 'No products match your search' : 'No products to show'}
             </p>
-            <p className="mt-1 text-[10px] text-gray-400">
+            <p className="mt-1 text-micro text-gray-400">
               Try another search term or clear the category filter
             </p>
           </div>
@@ -225,15 +225,15 @@ export function LocalPickupCatalogPanel() {
                       <Package className="h-14 w-14 text-gray-200" />
                     )}
                   </div>
-                  <p className="text-[15px] font-bold leading-snug text-gray-900">
+                  <p className="text-base font-bold leading-snug text-gray-900">
                     {item.product_title}
                   </p>
                   <div className="mt-1 space-y-0.5">
-                    <p className="text-[10px] font-mono font-black uppercase text-emerald-600">
+                    <p className="text-micro font-mono font-black uppercase text-emerald-600">
                       Ecwid: {item.sku}
                     </p>
                     {item.zoho_sku && item.zoho_sku !== item.sku && (
-                      <p className="text-[10px] font-mono font-black uppercase text-orange-500">
+                      <p className="text-micro font-mono font-black uppercase text-orange-500">
                         Zoho: {item.zoho_sku}
                       </p>
                     )}

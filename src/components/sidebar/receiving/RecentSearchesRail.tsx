@@ -64,7 +64,7 @@ export function RecentSearchesRail() {
   return (
     <section className="border-t border-indigo-100 bg-gradient-to-b from-indigo-50/30 to-white">
       <div className="flex items-center justify-between px-3 pt-2 pb-1">
-        <p className="flex items-center gap-1.5 text-[9px] font-black uppercase tracking-widest text-indigo-700">
+        <p className="flex items-center gap-1.5 text-eyebrow font-black uppercase tracking-widest text-indigo-700">
           <Search className="h-3 w-3" />
           Recent searches · {entries.length}
         </p>
@@ -81,10 +81,10 @@ export function RecentSearchesRail() {
       {entries.length === 0 ? (
         <div className="px-3 py-3">
           <div className="rounded-lg border border-dashed border-indigo-200 bg-white px-3 py-3 text-center">
-            <p className="text-[10px] font-bold uppercase tracking-widest text-indigo-400">
+            <p className="text-micro font-bold uppercase tracking-widest text-indigo-400">
               No searches yet
             </p>
-            <p className="mt-1 text-[10px] font-semibold leading-snug text-gray-500">
+            <p className="mt-1 text-micro font-semibold leading-snug text-gray-500">
               Search above by tracking number or PO #.
             </p>
           </div>
@@ -124,16 +124,16 @@ function SearchRailRow({ entry }: { entry: ReceivingSearchEntry }) {
           aria-hidden
         />
         <div className="min-w-0 flex-1">
-          <p className="truncate font-mono text-[11px] font-bold text-gray-900">
+          <p className="truncate font-mono text-caption font-bold text-gray-900">
             {truncatedTracking}
           </p>
-          <p className="truncate text-[9px] font-semibold uppercase tracking-widest text-gray-500">
+          <p className="truncate text-eyebrow font-semibold uppercase tracking-widest text-gray-500">
             <span className="text-indigo-600">#{entry.receivingId}</span>
             {' · '}
             <span>{entry.lineCount} {entry.lineCount === 1 ? 'line' : 'lines'}</span>
           </p>
         </div>
-        <span className="shrink-0 tabular-nums text-[9px] font-bold text-gray-400">
+        <span className="shrink-0 tabular-nums text-eyebrow font-bold text-gray-400">
           {relativeTime(entry.at)}
         </span>
         <X className="invisible h-3 w-3 shrink-0 text-gray-300 group-hover:visible" aria-hidden />

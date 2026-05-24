@@ -78,7 +78,7 @@ export function GlobalDesktopSkuScanner() {
   return (
     <div className="fixed inset-0 z-[200] flex flex-col bg-black">
       <div className="flex items-center justify-between px-4 pt-[max(0.75rem,env(safe-area-inset-top))] pb-2">
-        <p className="text-[10px] font-black uppercase tracking-[0.2em] text-white/60">Scan SKU Barcode</p>
+        <p className="text-micro font-black uppercase tracking-[0.2em] text-white/60">Scan SKU Barcode</p>
         <button
           type="button"
           onClick={() => void handleCloseScanner()}
@@ -131,7 +131,7 @@ export function GlobalDesktopSkuScanner() {
           />
           <button
             type="submit"
-            className="h-11 rounded-xl bg-blue-600 px-4 text-[11px] font-black uppercase tracking-wider text-white active:bg-blue-700"
+            className="h-11 rounded-xl bg-blue-600 px-4 text-caption font-black uppercase tracking-wider text-white active:bg-blue-700"
           >
             Go
           </button>

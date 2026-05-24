@@ -267,7 +267,7 @@ export function MobilePackerSpamCamera({
             <button
               type="button"
               onClick={attemptStart}
-              className="h-11 px-5 rounded-xl bg-blue-600 text-white text-[11px] font-black uppercase tracking-wider active:bg-blue-700 transition-colors"
+              className="h-11 px-5 rounded-xl bg-blue-600 text-white text-caption font-black uppercase tracking-wider active:bg-blue-700 transition-colors"
             >
               Try Again
             </button>
@@ -276,7 +276,7 @@ export function MobilePackerSpamCamera({
               <button
                 type="button"
                 onClick={handleUseTestPhoto}
-                className="mt-3 h-11 px-5 rounded-xl bg-amber-500 text-black text-[11px] font-black uppercase tracking-wider active:bg-amber-600 transition-colors"
+                className="mt-3 h-11 px-5 rounded-xl bg-amber-500 text-black text-caption font-black uppercase tracking-wider active:bg-amber-600 transition-colors"
               >
                 Use Test Photo · Dev
               </button>
@@ -321,7 +321,7 @@ export function MobilePackerSpamCamera({
           <button
             type="button"
             onClick={handleCancel}
-            className="h-12 px-4 rounded-2xl bg-white/10 text-white text-[11px] font-bold active:bg-white/20 transition-colors"
+            className="h-12 px-4 rounded-2xl bg-white/10 text-white text-caption font-bold active:bg-white/20 transition-colors"
           >
             Cancel
           </button>
@@ -342,7 +342,7 @@ export function MobilePackerSpamCamera({
             type="button"
             onClick={handleDone}
             disabled={shots.length === 0}
-            className="h-12 px-4 rounded-2xl bg-emerald-500 text-white text-[11px] font-black uppercase tracking-wider active:bg-emerald-600 transition-colors disabled:opacity-40 disabled:active:bg-emerald-500 flex items-center gap-1.5"
+            className="h-12 px-4 rounded-2xl bg-emerald-500 text-white text-caption font-black uppercase tracking-wider active:bg-emerald-600 transition-colors disabled:opacity-40 disabled:active:bg-emerald-500 flex items-center gap-1.5"
           >
             <Check className="h-4 w-4" />
             Done

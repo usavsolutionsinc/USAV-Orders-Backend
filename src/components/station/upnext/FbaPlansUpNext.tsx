@@ -52,7 +52,7 @@ function EmptyPlansSlate({
         <button
           type="button"
           onClick={onCreatePlan}
-          className="mt-2 text-[10px] font-black uppercase tracking-[0.14em] text-purple-700 underline"
+          className="mt-2 text-micro font-black uppercase tracking-[0.14em] text-purple-700 underline"
         >
           + Create new plan
         </button>

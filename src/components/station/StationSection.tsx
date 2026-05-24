@@ -18,7 +18,7 @@ export function StationSection({
     <div className={cn('mb-6', className)}>
       {label && (
         <div className="flex items-center h-8 px-4 border-b border-gray-100">
-          <span className="text-[9px] font-bold tracking-[0.15em] uppercase text-gray-400 font-sans">
+          <span className="text-eyebrow font-bold tracking-[0.15em] uppercase text-gray-400 font-sans">
             {label}
           </span>
         </div>

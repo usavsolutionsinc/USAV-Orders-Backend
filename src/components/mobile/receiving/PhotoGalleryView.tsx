@@ -80,7 +80,7 @@ export function PhotoGalleryView({ title, subtitle, backHref, scope, captureHref
         right={
           <a
             href={captureHref}
-            className="rounded-full bg-blue-600 px-3.5 py-2 text-[11px] font-black uppercase tracking-widest text-white active:bg-blue-700"
+            className="rounded-full bg-blue-600 px-3.5 py-2 text-caption font-black uppercase tracking-widest text-white active:bg-blue-700"
           >
             + Photo
           </a>
@@ -94,11 +94,11 @@ export function PhotoGalleryView({ title, subtitle, backHref, scope, captureHref
           ))}
         </div>
       ) : error ? (
-        <p className="px-6 py-12 text-center text-[12px] font-bold text-rose-400">
+        <p className="px-6 py-12 text-center text-label font-bold text-rose-400">
           Couldn't load photos.
         </p>
       ) : photos.length === 0 && pendingTiles.length === 0 ? (
-        <p className="px-6 py-12 text-center text-[12px] font-bold text-white/70">
+        <p className="px-6 py-12 text-center text-label font-bold text-white/70">
           No photos yet. Tap + Photo to add one.
         </p>
       ) : (
@@ -107,7 +107,7 @@ export function PhotoGalleryView({ title, subtitle, backHref, scope, captureHref
             <div key={p.id} className="relative aspect-square bg-gray-900">
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img src={p.previewUrl} alt="" className="absolute inset-0 h-full w-full object-cover opacity-60" />
-              <div className="absolute inset-0 grid place-items-center text-[10px] font-black uppercase tracking-widest">
+              <div className="absolute inset-0 grid place-items-center text-micro font-black uppercase tracking-widest">
                 {p.state === 'queued' && '⌛ queued'}
                 {p.state === 'uploading' && '↑ uploading'}
                 {p.state === 'failed' && (
@@ -152,7 +152,7 @@ export function PhotoGalleryView({ title, subtitle, backHref, scope, captureHref
               if (match) handleDelete(match.id);
               setZoom(null);
             }}
-            className="absolute bottom-6 left-1/2 -translate-x-1/2 rounded-full bg-rose-600 px-5 py-2.5 text-[11px] font-black uppercase tracking-widest text-white active:bg-rose-700"
+            className="absolute bottom-6 left-1/2 -translate-x-1/2 rounded-full bg-rose-600 px-5 py-2.5 text-caption font-black uppercase tracking-widest text-white active:bg-rose-700"
           >
             Delete
           </button>

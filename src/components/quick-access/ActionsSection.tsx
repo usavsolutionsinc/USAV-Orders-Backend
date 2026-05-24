@@ -20,7 +20,7 @@ export function ActionsSection({ actions, onOpenHistoryPopover }: ActionsSection
 
   return (
     <div className="px-2 py-2">
-      <p className="px-2 pb-1 text-[10px] font-bold uppercase tracking-widest text-gray-400">Actions</p>
+      <p className="px-2 pb-1 text-micro font-bold uppercase tracking-widest text-gray-400">Actions</p>
       <div className="space-y-0.5">
         <Row
           icon={<Smartphone className="h-4 w-4" />}

@@ -174,7 +174,7 @@ export function TrackingExceptionsTable() {
               key={tab.id}
               type="button"
               onClick={() => setStatusTab(tab.id)}
-              className={`rounded-md px-2.5 py-1 text-[10px] font-black uppercase tracking-widest transition-colors ${
+              className={`rounded-md px-2.5 py-1 text-micro font-black uppercase tracking-widest transition-colors ${
                 statusTab === tab.id
                   ? 'bg-gray-900 text-white'
                   : 'bg-white text-gray-600 ring-1 ring-gray-200 hover:text-gray-900'
@@ -189,24 +189,24 @@ export function TrackingExceptionsTable() {
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           placeholder="Search tracking…"
-          className="ml-auto w-64 rounded-md border border-gray-200 bg-white px-3 py-1.5 text-[12px] font-semibold text-gray-900 placeholder:text-gray-400 focus:border-blue-300 focus:outline-none focus:ring-2 focus:ring-blue-500/10"
+          className="ml-auto w-64 rounded-md border border-gray-200 bg-white px-3 py-1.5 text-label font-semibold text-gray-900 placeholder:text-gray-400 focus:border-blue-300 focus:outline-none focus:ring-2 focus:ring-blue-500/10"
         />
         <button
           type="button"
           onClick={() => void fetchRows()}
           disabled={loading}
-          className="rounded-md bg-gray-900 px-3 py-1.5 text-[10px] font-black uppercase tracking-widest text-white hover:bg-gray-800 disabled:opacity-50"
+          className="rounded-md bg-gray-900 px-3 py-1.5 text-micro font-black uppercase tracking-widest text-white hover:bg-gray-800 disabled:opacity-50"
           aria-label="Reload list"
         >
           {loading ? 'Loading…' : 'Reload'}
         </button>
-        <span className="text-[10px] font-bold uppercase tracking-widest text-gray-500">
+        <span className="text-micro font-bold uppercase tracking-widest text-gray-500">
           {total} {total === 1 ? 'row' : 'rows'}
         </span>
       </div>
 
       {error && (
-        <div className="border-b border-red-200 bg-red-50 px-6 py-2 text-[12px] font-bold text-red-700">
+        <div className="border-b border-red-200 bg-red-50 px-6 py-2 text-label font-bold text-red-700">
           {error}
         </div>
       )}
@@ -215,15 +215,15 @@ export function TrackingExceptionsTable() {
       <div className="min-h-0 flex-1 overflow-auto">
         {!loading && !hasRows && (
           <div className="flex flex-col items-center justify-center px-6 py-24 text-center">
-            <p className="text-[13px] font-bold text-gray-700">No exceptions in this view.</p>
-            <p className="mt-1 text-[11px] font-semibold text-gray-500">
+            <p className="text-sm font-bold text-gray-700">No exceptions in this view.</p>
+            <p className="mt-1 text-caption font-semibold text-gray-500">
               Unmatched receiving scans are logged here automatically.
             </p>
           </div>
         )}
 
-        <table className="w-full border-collapse text-left text-[12px]">
-          <thead className="sticky top-0 bg-gray-50 text-[9px] font-black uppercase tracking-widest text-gray-500">
+        <table className="w-full border-collapse text-left text-label">
+          <thead className="sticky top-0 bg-gray-50 text-eyebrow font-black uppercase tracking-widest text-gray-500">
             <tr>
               <th className="px-4 py-2">Tracking</th>
               <th className="px-4 py-2">Carrier</th>
@@ -259,7 +259,7 @@ export function TrackingExceptionsTable() {
                   </td>
                   <td className="px-4 py-2">
                     <span
-                      className={`inline-flex items-center rounded-full px-2 py-0.5 text-[9px] font-black uppercase tracking-widest ${STATUS_PILL[row.status]}`}
+                      className={`inline-flex items-center rounded-full px-2 py-0.5 text-eyebrow font-black uppercase tracking-widest ${STATUS_PILL[row.status]}`}
                     >
                       {row.status}
                     </span>
@@ -373,7 +373,7 @@ function TrackingExceptionEditDialog({ row, onClose, onSave, onDelete }: EditDia
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
       <div className="w-full max-w-lg rounded-xl bg-white shadow-2xl">
         <div className="flex items-center justify-between border-b border-gray-200 px-5 py-3">
-          <h2 className="text-[12px] font-black uppercase tracking-widest text-gray-900">
+          <h2 className="text-label font-black uppercase tracking-widest text-gray-900">
             Edit exception #{row.id}
           </h2>
           <button
@@ -388,35 +388,35 @@ function TrackingExceptionEditDialog({ row, onClose, onSave, onDelete }: EditDia
 
         <div className="space-y-3 px-5 py-4">
           <label className="block">
-            <span className="text-[9px] font-black uppercase tracking-widest text-gray-500">
+            <span className="text-eyebrow font-black uppercase tracking-widest text-gray-500">
               Tracking number
             </span>
             <input
               type="text"
               value={trackingNumber}
               onChange={(e) => setTrackingNumber(e.target.value)}
-              className="mt-1 w-full rounded-md border border-gray-200 px-2 py-1.5 text-[12px] font-mono text-gray-900 focus:border-blue-300 focus:outline-none focus:ring-2 focus:ring-blue-500/10"
+              className="mt-1 w-full rounded-md border border-gray-200 px-2 py-1.5 text-label font-mono text-gray-900 focus:border-blue-300 focus:outline-none focus:ring-2 focus:ring-blue-500/10"
             />
           </label>
           <label className="block">
-            <span className="text-[9px] font-black uppercase tracking-widest text-gray-500">
+            <span className="text-eyebrow font-black uppercase tracking-widest text-gray-500">
               Reason
             </span>
             <input
               type="text"
               value={reason}
               onChange={(e) => setReason(e.target.value)}
-              className="mt-1 w-full rounded-md border border-gray-200 px-2 py-1.5 text-[12px] font-semibold text-gray-900 focus:border-blue-300 focus:outline-none focus:ring-2 focus:ring-blue-500/10"
+              className="mt-1 w-full rounded-md border border-gray-200 px-2 py-1.5 text-label font-semibold text-gray-900 focus:border-blue-300 focus:outline-none focus:ring-2 focus:ring-blue-500/10"
             />
           </label>
           <label className="block">
-            <span className="text-[9px] font-black uppercase tracking-widest text-gray-500">
+            <span className="text-eyebrow font-black uppercase tracking-widest text-gray-500">
               Status
             </span>
             <select
               value={status}
               onChange={(e) => setStatus(e.target.value as TrackingExceptionRow['status'])}
-              className="mt-1 w-full rounded-md border border-gray-200 bg-white px-2 py-1.5 text-[12px] font-bold text-gray-900 focus:border-blue-300 focus:outline-none focus:ring-2 focus:ring-blue-500/10"
+              className="mt-1 w-full rounded-md border border-gray-200 bg-white px-2 py-1.5 text-label font-bold text-gray-900 focus:border-blue-300 focus:outline-none focus:ring-2 focus:ring-blue-500/10"
             >
               <option value="open">Open</option>
               <option value="resolved">Resolved</option>
@@ -424,19 +424,19 @@ function TrackingExceptionEditDialog({ row, onClose, onSave, onDelete }: EditDia
             </select>
           </label>
           <label className="block">
-            <span className="text-[9px] font-black uppercase tracking-widest text-gray-500">
+            <span className="text-eyebrow font-black uppercase tracking-widest text-gray-500">
               Notes
             </span>
             <textarea
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
               rows={3}
-              className="mt-1 w-full rounded-md border border-gray-200 px-2 py-1.5 text-[12px] font-semibold text-gray-900 focus:border-blue-300 focus:outline-none focus:ring-2 focus:ring-blue-500/10"
+              className="mt-1 w-full rounded-md border border-gray-200 px-2 py-1.5 text-label font-semibold text-gray-900 focus:border-blue-300 focus:outline-none focus:ring-2 focus:ring-blue-500/10"
             />
           </label>
 
           {err && (
-            <p className="rounded-md bg-red-50 px-3 py-2 text-[11px] font-bold text-red-700">{err}</p>
+            <p className="rounded-md bg-red-50 px-3 py-2 text-caption font-bold text-red-700">{err}</p>
           )}
         </div>
 
@@ -446,20 +446,20 @@ function TrackingExceptionEditDialog({ row, onClose, onSave, onDelete }: EditDia
               type="button"
               onClick={() => setConfirmingDelete(true)}
               disabled={saving}
-              className="rounded-md px-2.5 py-1.5 text-[10px] font-black uppercase tracking-widest text-red-600 hover:bg-red-50 disabled:opacity-50"
+              className="rounded-md px-2.5 py-1.5 text-micro font-black uppercase tracking-widest text-red-600 hover:bg-red-50 disabled:opacity-50"
             >
               Delete
             </button>
           ) : (
             <div className="flex items-center gap-2">
-              <span className="text-[10px] font-bold uppercase tracking-widest text-red-700">
+              <span className="text-micro font-bold uppercase tracking-widest text-red-700">
                 Confirm delete?
               </span>
               <button
                 type="button"
                 onClick={() => void handleDelete()}
                 disabled={saving}
-                className="rounded-md bg-red-600 px-2.5 py-1.5 text-[10px] font-black uppercase tracking-widest text-white hover:bg-red-700 disabled:opacity-50"
+                className="rounded-md bg-red-600 px-2.5 py-1.5 text-micro font-black uppercase tracking-widest text-white hover:bg-red-700 disabled:opacity-50"
               >
                 Yes, delete
               </button>
@@ -467,7 +467,7 @@ function TrackingExceptionEditDialog({ row, onClose, onSave, onDelete }: EditDia
                 type="button"
                 onClick={() => setConfirmingDelete(false)}
                 disabled={saving}
-                className="rounded-md px-2.5 py-1.5 text-[10px] font-black uppercase tracking-widest text-gray-600 hover:bg-gray-100"
+                className="rounded-md px-2.5 py-1.5 text-micro font-black uppercase tracking-widest text-gray-600 hover:bg-gray-100"
               >
                 Cancel
               </button>
@@ -479,7 +479,7 @@ function TrackingExceptionEditDialog({ row, onClose, onSave, onDelete }: EditDia
               type="button"
               onClick={onClose}
               disabled={saving}
-              className="rounded-md px-2.5 py-1.5 text-[10px] font-black uppercase tracking-widest text-gray-600 hover:bg-gray-100 disabled:opacity-50"
+              className="rounded-md px-2.5 py-1.5 text-micro font-black uppercase tracking-widest text-gray-600 hover:bg-gray-100 disabled:opacity-50"
             >
               Cancel
             </button>
@@ -487,7 +487,7 @@ function TrackingExceptionEditDialog({ row, onClose, onSave, onDelete }: EditDia
               type="button"
               onClick={() => void handleSave()}
               disabled={saving || !dirty}
-              className="rounded-md bg-gray-900 px-3 py-1.5 text-[10px] font-black uppercase tracking-widest text-white hover:bg-gray-800 disabled:opacity-50"
+              className="rounded-md bg-gray-900 px-3 py-1.5 text-micro font-black uppercase tracking-widest text-white hover:bg-gray-800 disabled:opacity-50"
             >
               {saving ? 'Saving…' : 'Save'}
             </button>

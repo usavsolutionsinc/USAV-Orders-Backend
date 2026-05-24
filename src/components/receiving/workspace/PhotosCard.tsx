@@ -94,19 +94,19 @@ export function PhotosCard({ receivingId, staffId, onMakeClaim }: Props) {
   return (
     <section className="rounded-2xl bg-white p-4 shadow-sm ring-1 ring-gray-200/60">
       <div className="mb-2 flex items-center justify-between">
-        <h3 className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-[0.14em] text-gray-500">
+        <h3 className="flex items-center gap-1.5 text-caption font-bold uppercase tracking-[0.14em] text-gray-500">
           <Camera className="h-3 w-3" />
           Photos
         </h3>
         <span
-          className={`rounded-md px-2 py-0.5 text-[10px] font-black uppercase tracking-widest ring-1 ${countClass}`}
+          className={`rounded-md px-2 py-0.5 text-micro font-black uppercase tracking-widest ring-1 ${countClass}`}
         >
           {count} {count === 1 ? 'photo' : 'photos'}
         </span>
       </div>
 
       {!enabled ? (
-        <p className="text-[11px] font-semibold text-gray-400">
+        <p className="text-caption font-semibold text-gray-400">
           Scan a tracking number to receive photos.
         </p>
       ) : isLoading && galleryPhotos.length === 0 ? (
@@ -117,10 +117,10 @@ export function PhotosCard({ receivingId, staffId, onMakeClaim }: Props) {
         </div>
       ) : galleryPhotos.length === 0 ? (
         <div className="rounded-xl border border-dashed border-gray-200 bg-gray-50/60 px-4 py-5 text-center">
-          <p className="text-[11px] font-bold uppercase tracking-widest text-gray-400">
+          <p className="text-caption font-bold uppercase tracking-widest text-gray-400">
             No photos yet
           </p>
-          <p className="mt-1 text-[10px] font-semibold leading-snug text-gray-500">
+          <p className="mt-1 text-micro font-semibold leading-snug text-gray-500">
             The phone will auto-capture as the package is unboxed.
           </p>
         </div>
@@ -138,7 +138,7 @@ export function PhotosCard({ receivingId, staffId, onMakeClaim }: Props) {
           type="button"
           onClick={handleRequestOnPhone}
           disabled={!enabled}
-          className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-3 text-[11px] font-bold uppercase tracking-widest text-gray-700 transition-colors hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
+          className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-3 text-caption font-bold uppercase tracking-widest text-gray-700 transition-colors hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
         >
           <Smartphone className="h-3.5 w-3.5" />
           Open on phone
@@ -148,7 +148,7 @@ export function PhotosCard({ receivingId, staffId, onMakeClaim }: Props) {
           type="button"
           onClick={onMakeClaim}
           disabled={!enabled || !onMakeClaim}
-          className="inline-flex h-9 items-center gap-1.5 rounded-lg bg-rose-600 px-3 text-[11px] font-bold uppercase tracking-widest text-white shadow-sm transition-colors hover:bg-rose-700 disabled:cursor-not-allowed disabled:opacity-50"
+          className="inline-flex h-9 items-center gap-1.5 rounded-lg bg-rose-600 px-3 text-caption font-bold uppercase tracking-widest text-white shadow-sm transition-colors hover:bg-rose-700 disabled:cursor-not-allowed disabled:opacity-50"
         >
           Make a claim →
         </button>

@@ -84,7 +84,7 @@ export function RecentOrderManualsBlock({
   if (isLoading) {
     return (
       <section className="mx-8 mt-4 rounded-xl border border-blue-100 bg-blue-50/50 px-4 py-2.5">
-        <div className="inline-flex items-center gap-2 text-blue-700 text-[10px] font-black uppercase tracking-wider">
+        <div className="inline-flex items-center gap-2 text-blue-700 text-micro font-black uppercase tracking-wider">
           <Loader2 className="w-3.5 h-3.5 animate-spin" />
           Loading Manuals
         </div>
@@ -96,17 +96,17 @@ export function RecentOrderManualsBlock({
     return (
       <section className="mx-8 mt-4 rounded-xl border border-blue-100 bg-blue-50/50 px-3 py-2.5">
         <div className="flex items-center justify-between gap-2 mb-2">
-          <p className="text-[10px] font-black uppercase tracking-wider text-blue-800">Manual Folder</p>
-          <span className="text-[9px] font-black uppercase tracking-wider text-gray-500">
+          <p className="text-micro font-black uppercase tracking-wider text-blue-800">Manual Folder</p>
+          <span className="text-eyebrow font-black uppercase tracking-wider text-gray-500">
             {effectiveItemNumber ? `Item ${effectiveItemNumber}` : 'Item Number Required'}
           </span>
         </div>
         {!effectiveItemNumber ? (
-          <p className="text-[10px] font-semibold text-gray-500">
+          <p className="text-micro font-semibold text-gray-500">
             Add the item number to this order before linking a manual.
           </p>
         ) : (
-          <p className="text-[10px] font-semibold text-gray-500">
+          <p className="text-micro font-semibold text-gray-500">
             No PDFs are linked in the manual library for this item yet. Use the Update Manuals view to move a file from
             `manuals/unassigned` into this item folder.
           </p>
@@ -119,14 +119,14 @@ export function RecentOrderManualsBlock({
     <section className="mx-8 mt-4 rounded-xl border border-blue-100 bg-blue-50/50 px-3 py-2">
       <div className="flex items-center justify-between gap-2">
         <div>
-          <p className="text-[10px] font-black uppercase tracking-wider text-blue-800">Manual Folder</p>
-          <p className="mt-1 text-[9px] font-semibold text-gray-500">{folderPath || `assigned/${effectiveItemNumber}`}</p>
+          <p className="text-micro font-black uppercase tracking-wider text-blue-800">Manual Folder</p>
+          <p className="mt-1 text-eyebrow font-semibold text-gray-500">{folderPath || `assigned/${effectiveItemNumber}`}</p>
         </div>
         <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar">
           {manuals.map((manual) => (
             <div key={manual.relative_path || manual.id} className="inline-flex items-center gap-1.5 rounded-lg border border-blue-200 bg-white px-2 py-1">
               <FileText className="h-3 w-3 text-blue-700" />
-              <span className="text-[9px] font-black tracking-wider text-gray-700 whitespace-nowrap">
+              <span className="text-eyebrow font-black tracking-wider text-gray-700 whitespace-nowrap">
                 {manual.file_name || manual.display_name || manual.product_title || 'Manual'}
               </span>
             </div>

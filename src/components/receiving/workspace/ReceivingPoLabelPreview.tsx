@@ -41,16 +41,16 @@ export function ReceivingPoLabelPreview({
     <div className={innerShell}>
       <div className="flex min-h-[6.5rem] flex-nowrap items-stretch gap-4">
         <div className="min-w-0 flex flex-1 flex-col justify-between py-1">
-          <div className="flex items-baseline justify-between gap-2 text-[14px] leading-none">
+          <div className="flex items-baseline justify-between gap-2 text-sm leading-none">
             <span className="truncate font-bold text-gray-700">{platform}</span>
             <span className="shrink-0 tabular-nums font-semibold text-gray-600">{date}</span>
           </div>
           <div className="flex min-h-0 flex-1 min-w-0 items-center justify-center px-0.5">
-            <span className="line-clamp-3 w-full text-center text-[11px] font-semibold leading-tight tracking-normal text-gray-900 normal-case">
+            <span className="line-clamp-3 w-full text-center text-caption font-semibold leading-tight tracking-normal text-gray-900 normal-case">
               {notes.trim()}
             </span>
           </div>
-          <div className="flex items-baseline justify-between gap-2 text-[15px] leading-none">
+          <div className="flex items-baseline justify-between gap-2 text-base leading-none">
             <ConditionHeaderDisplay code={conditionCode} />
             <span className="shrink-0 tabular-nums font-black text-gray-900">
               {receivingLabelPoCornerDisplay({
@@ -77,8 +77,8 @@ export function ReceivingPoLabelPreview({
   return (
     <div className="border-t border-gray-200 bg-gray-50">
       <div className="flex items-center gap-3 px-3 pt-3 pb-2">
-        <span className="text-[9px] font-black tabular-nums text-gray-500 tracking-widest">03</span>
-        <span className="text-[9px] font-black uppercase tracking-[0.18em] text-gray-600">
+        <span className="text-eyebrow font-black tabular-nums text-gray-500 tracking-widest">03</span>
+        <span className="text-eyebrow font-black uppercase tracking-[0.18em] text-gray-600">
           Review &amp; print
         </span>
       </div>

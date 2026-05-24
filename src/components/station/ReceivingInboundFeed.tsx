@@ -22,7 +22,7 @@ function isRecentlyUnboxed(log: FeedLog): boolean {
 function TrackingChip({ tracking }: { tracking?: string }) {
   const display = tracking ? tracking.slice(-8) : '—';
   return (
-    <span className="text-[9px] font-mono font-black text-blue-700 bg-blue-50 border border-blue-100 rounded-md px-1.5 py-0.5">
+    <span className="text-eyebrow font-mono font-black text-blue-700 bg-blue-50 border border-blue-100 rounded-md px-1.5 py-0.5">
       {display}
     </span>
   );
@@ -31,7 +31,7 @@ function TrackingChip({ tracking }: { tracking?: string }) {
 function CarrierChip({ carrier }: { carrier?: string | null }) {
   if (!carrier || carrier === 'Unknown') return null;
   return (
-    <span className="text-[8px] font-black uppercase tracking-widest text-gray-500 bg-gray-100 rounded px-1.5 py-0.5">
+    <span className="text-mini font-black uppercase tracking-widest text-gray-500 bg-gray-100 rounded px-1.5 py-0.5">
       {carrier}
     </span>
   );
@@ -65,20 +65,20 @@ function FeedRow({ log, isSelected, onClick, idx }: FeedRowProps) {
         <TrackingChip tracking={log.tracking} />
         <CarrierChip carrier={log.status} />
         {condLabel && (
-          <span className="text-[8px] font-black uppercase tracking-widest text-gray-400">{condLabel}</span>
+          <span className="text-mini font-black uppercase tracking-widest text-gray-400">{condLabel}</span>
         )}
-        <span className={`text-[8px] font-black uppercase tracking-widest rounded px-1.5 py-0.5 ml-auto ${qaCls}`}>
+        <span className={`text-mini font-black uppercase tracking-widest rounded px-1.5 py-0.5 ml-auto ${qaCls}`}>
           {(log.qa_status ?? 'PENDING').replace(/_/g, ' ')}
         </span>
       </div>
       <div className="flex items-center gap-2 mt-1.5">
         {log.needs_test && (
-          <span className="text-[8px] font-black uppercase tracking-widest text-orange-700 bg-orange-50 border border-orange-100 rounded px-1.5 py-0.5">
+          <span className="text-mini font-black uppercase tracking-widest text-orange-700 bg-orange-50 border border-orange-100 rounded px-1.5 py-0.5">
             Needs Test
           </span>
         )}
         {log.unboxed_at && (
-          <span className="text-[8px] text-gray-400 font-bold">
+          <span className="text-mini text-gray-400 font-bold">
             Unboxed {formatDateTimePST(log.unboxed_at)}
           </span>
         )}
@@ -130,8 +130,8 @@ export function ReceivingInboundFeed({ onSelectLog }: ReceivingInboundFeedProps)
             <Package className="h-4 w-4 text-white" />
           </div>
           <div>
-            <p className="text-[13px] font-black text-gray-900 leading-none">Inbound Feed</p>
-            <p className="text-[9px] font-bold uppercase tracking-widest text-gray-400 mt-0.5">
+            <p className="text-sm font-black text-gray-900 leading-none">Inbound Feed</p>
+            <p className="text-eyebrow font-bold uppercase tracking-widest text-gray-400 mt-0.5">
               Receiving Activity
             </p>
           </div>
@@ -146,7 +146,7 @@ export function ReceivingInboundFeed({ onSelectLog }: ReceivingInboundFeedProps)
         <button
           type="button"
           onClick={() => setSection('testing')}
-          className={`flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-[10px] font-black uppercase tracking-wider transition-all ${
+          className={`flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-micro font-black uppercase tracking-wider transition-all ${
             section === 'testing'
               ? 'bg-orange-500 text-white'
               : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
@@ -154,7 +154,7 @@ export function ReceivingInboundFeed({ onSelectLog }: ReceivingInboundFeedProps)
         >
           Needs Testing
           {needsTesting.length > 0 && (
-            <span className={`rounded-full px-1.5 py-0.5 text-[8px] font-black ${
+            <span className={`rounded-full px-1.5 py-0.5 text-mini font-black ${
               section === 'testing' ? 'bg-white/30' : 'bg-orange-100 text-orange-700'
             }`}>
               {needsTesting.length}
@@ -164,7 +164,7 @@ export function ReceivingInboundFeed({ onSelectLog }: ReceivingInboundFeedProps)
         <button
           type="button"
           onClick={() => setSection('unboxed')}
-          className={`flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-[10px] font-black uppercase tracking-wider transition-all ${
+          className={`flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-micro font-black uppercase tracking-wider transition-all ${
             section === 'unboxed'
               ? 'bg-indigo-600 text-white'
               : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
@@ -172,7 +172,7 @@ export function ReceivingInboundFeed({ onSelectLog }: ReceivingInboundFeedProps)
         >
           Recently Unboxed
           {recentlyUnboxed.length > 0 && (
-            <span className={`rounded-full px-1.5 py-0.5 text-[8px] font-black ${
+            <span className={`rounded-full px-1.5 py-0.5 text-mini font-black ${
               section === 'unboxed' ? 'bg-white/30' : 'bg-indigo-100 text-indigo-700'
             }`}>
               {recentlyUnboxed.length}
@@ -190,7 +190,7 @@ export function ReceivingInboundFeed({ onSelectLog }: ReceivingInboundFeedProps)
         ) : rows.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-20 gap-3">
             <Package className="w-10 h-10 text-gray-200" />
-            <p className="text-[10px] font-black uppercase tracking-widest text-gray-300">
+            <p className="text-micro font-black uppercase tracking-widest text-gray-300">
               {section === 'testing' ? 'No items need testing' : 'Nothing unboxed in last 48h'}
             </p>
           </div>
@@ -211,7 +211,7 @@ export function ReceivingInboundFeed({ onSelectLog }: ReceivingInboundFeedProps)
 
       {/* Footer count */}
       <div className="border-t border-gray-100 px-4 py-2 bg-gray-50/60">
-        <p className="text-[9px] font-black uppercase tracking-widest text-gray-400">
+        <p className="text-eyebrow font-black uppercase tracking-widest text-gray-400">
           {rows.length} item{rows.length !== 1 ? 's' : ''} •{' '}
           {section === 'testing' ? 'sorted by recency' : 'last 48 hours'}
         </p>

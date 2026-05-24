@@ -203,10 +203,10 @@ export function ReplenishSidebarPanel() {
           <div className="mt-3 px-3 py-2.5 rounded-xl bg-red-50 border border-red-200">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-[11px] font-black uppercase tracking-wider text-red-700">
+                <p className="text-caption font-black uppercase tracking-wider text-red-700">
                   {urgentCount} need ordering
                 </p>
-                <p className="text-[10px] font-bold text-red-600/70 mt-0.5">
+                <p className="text-micro font-bold text-red-600/70 mt-0.5">
                   {urgentOrdersWaiting} order{urgentOrdersWaiting !== 1 ? 's' : ''} blocked
                 </p>
               </div>

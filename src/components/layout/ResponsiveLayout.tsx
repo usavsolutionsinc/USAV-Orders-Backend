@@ -144,10 +144,14 @@ export function ResponsiveLayout({ children }: ResponsiveLayoutProps) {
   // open the side nav at narrow viewports — useUIMode can return `desktop`
   // when device detection misses and we'd otherwise leave the drawer
   // unmounted. CSS-hides on real desktop widths.
+  // On /operations the desktop sidebar is hidden and the drawer is the only
+  // way into the app nav, so the overlay must render at every viewport (not
+  // md:hidden). Elsewhere it stays mobile-only.
+  const drawerVisibleOnDesktop = routeKey === 'operations';
   const drawerOverlay = (
     <AnimatePresence>
       {drawerOpen && (
-        <div className="md:hidden">
+        <div className={drawerVisibleOnDesktop ? '' : 'md:hidden'}>
           <motion.div
             key="drawer-backdrop"
             variants={backdropVariants}
@@ -167,7 +171,7 @@ export function ResponsiveLayout({ children }: ResponsiveLayoutProps) {
             animate="visible"
             exit="hidden"
             transition={drawerTransition}
-            className="fixed inset-y-0 left-0 z-50 w-full shadow-2xl"
+            className="fixed inset-y-0 left-0 z-50 w-full max-w-xs shadow-2xl"
           >
             <button
               type="button"
@@ -188,14 +192,17 @@ export function ResponsiveLayout({ children }: ResponsiveLayoutProps) {
 
   // ── Desktop layout ──
   if (!isMobile) {
+    const hideDesktopSidebar = routeKey === 'operations';
     return (
       <div className="flex h-full w-full overflow-hidden">
         <GlobalWedgeScannerMount />
         <PhoneScanBridgeMount />
         <OfflineBanner />
-        <Suspense fallback={null}>
-          <DashboardSidebar />
-        </Suspense>
+        {!hideDesktopSidebar && (
+          <Suspense fallback={null}>
+            <DashboardSidebar />
+          </Suspense>
+        )}
         <div className="flex-1 flex flex-col min-w-0 h-full overflow-hidden relative">
           <main className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
             {children}

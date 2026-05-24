@@ -171,7 +171,7 @@ export function AccessSidebarPanel() {
               if (v) p.set('search', v); else p.delete('search');
             })}
             placeholder="Search name, code, or id…"
-            className="h-9 w-full rounded-xl border border-gray-200 bg-white pl-8 pr-2.5 text-[13px] text-gray-900 outline-none transition placeholder:text-gray-400 focus:border-blue-400 focus:ring-2 focus:ring-blue-500/15"
+            className="h-9 w-full rounded-xl border border-gray-200 bg-white pl-8 pr-2.5 text-sm text-gray-900 outline-none transition placeholder:text-gray-400 focus:border-blue-400 focus:ring-2 focus:ring-blue-500/15"
           />
           <svg className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <circle cx="11" cy="11" r="8"/>
@@ -189,7 +189,7 @@ export function AccessSidebarPanel() {
             onClick={() => setParam((p) => {
               if (s === 'all') p.delete('accessStatus'); else p.set('accessStatus', s);
             })}
-            className={`flex-1 rounded-lg px-2 py-1 text-[10px] font-bold uppercase tracking-wider transition ${
+            className={`flex-1 rounded-lg px-2 py-1 text-micro font-bold uppercase tracking-wider transition ${
               statusFilter === s ? 'bg-blue-600 text-white shadow-sm shadow-blue-200' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
             }`}
           >
@@ -211,7 +211,7 @@ export function AccessSidebarPanel() {
         <button
           type="button"
           onClick={() => setAddOpen(true)}
-          className="inline-flex w-full items-center justify-center gap-1.5 rounded-lg border border-dashed border-gray-300 bg-white px-3 py-1.5 text-[12px] font-semibold text-gray-700 transition hover:border-blue-400 hover:bg-blue-50 hover:text-blue-700"
+          className="inline-flex w-full items-center justify-center gap-1.5 rounded-lg border border-dashed border-gray-300 bg-white px-3 py-1.5 text-label font-semibold text-gray-700 transition hover:border-blue-400 hover:bg-blue-50 hover:text-blue-700"
         >
           <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M12 5v14"/><path d="M5 12h14"/></svg>
           Add staff
@@ -299,7 +299,7 @@ function StaffSidebarRow({ row, selected, onPick }: StaffSidebarRowProps) {
         }`}
       >
         <div className="relative flex-shrink-0">
-          <div className={`flex h-8 w-8 items-center justify-center rounded-full ${sc.bg} text-[11px] font-bold text-white`}>
+          <div className={`flex h-8 w-8 items-center justify-center rounded-full ${sc.bg} text-caption font-bold text-white`}>
             {initials(row.name)}
           </div>
           {isAdmin && (
@@ -312,10 +312,10 @@ function StaffSidebarRow({ row, selected, onPick }: StaffSidebarRowProps) {
         </div>
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-1.5">
-            <span className="truncate text-[13px] font-semibold text-gray-900">{row.name}</span>
-            <span className="text-[9px] text-gray-400">#{row.id}</span>
+            <span className="truncate text-sm font-semibold text-gray-900">{row.name}</span>
+            <span className="text-eyebrow text-gray-400">#{row.id}</span>
           </div>
-          <div className="truncate text-[10px] font-medium uppercase tracking-wider text-gray-500">
+          <div className="truncate text-micro font-medium uppercase tracking-wider text-gray-500">
             {row.role.replace(/_/g, ' ')}
           </div>
         </div>
@@ -367,7 +367,7 @@ function SortableStaffSidebarRow({ row, selected, onPick }: StaffSidebarRowProps
           className="flex min-w-0 flex-1 items-center gap-2.5 text-left"
         >
           <div className="relative flex-shrink-0">
-            <div className={`flex h-8 w-8 items-center justify-center rounded-full ${sc.bg} text-[11px] font-bold text-white`}>
+            <div className={`flex h-8 w-8 items-center justify-center rounded-full ${sc.bg} text-caption font-bold text-white`}>
               {initials(row.name)}
             </div>
             {isAdmin && (
@@ -380,10 +380,10 @@ function SortableStaffSidebarRow({ row, selected, onPick }: StaffSidebarRowProps
           </div>
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-1.5">
-              <span className="truncate text-[13px] font-semibold text-gray-900">{row.name}</span>
-              <span className="text-[9px] text-gray-400">#{row.id}</span>
+              <span className="truncate text-sm font-semibold text-gray-900">{row.name}</span>
+              <span className="text-eyebrow text-gray-400">#{row.id}</span>
             </div>
-            <div className="truncate text-[10px] font-medium uppercase tracking-wider text-gray-500">
+            <div className="truncate text-micro font-medium uppercase tracking-wider text-gray-500">
               {row.role.replace(/_/g, ' ')}
             </div>
           </div>

@@ -178,7 +178,7 @@ export function SupportDashboard() {
                               <div className="flex items-start justify-between gap-3">
                                 <div className="min-w-0">
                                   <p className={`truncate ${dataValue}`}>{item.subject}</p>
-                                  <p className="mt-1 text-[11px] font-semibold text-gray-500">
+                                  <p className="mt-1 text-caption font-semibold text-gray-500">
                                     {item.otherPartyUsername} • {item.referenceType || 'MESSAGE'} {item.referenceId || ''}
                                   </p>
                                 </div>
@@ -186,7 +186,7 @@ export function SupportDashboard() {
                                   {item.unreadCount} unread
                                 </span>
                               </div>
-                              <p className="mt-2 text-[11px] font-semibold text-gray-500">{formatMediumDateTime(item.createdDate)}</p>
+                              <p className="mt-2 text-caption font-semibold text-gray-500">{formatMediumDateTime(item.createdDate)}</p>
                             </div>
                           ))}
                         </div>
@@ -206,7 +206,7 @@ export function SupportDashboard() {
                               <div className="flex items-start justify-between gap-3">
                                 <div className="min-w-0">
                                   <p className={dataValue}>Return #{item.returnId || 'Pending'}</p>
-                                  <p className="mt-1 text-[11px] font-semibold text-gray-500">
+                                  <p className="mt-1 text-caption font-semibold text-gray-500">
                                     Order {item.orderId || 'N/A'} • Item {item.itemId || 'N/A'}
                                   </p>
                                 </div>
@@ -214,7 +214,7 @@ export function SupportDashboard() {
                                   {item.state}
                                 </span>
                               </div>
-                              <p className="mt-2 text-[11px] font-semibold text-gray-500">{formatMediumDateTime(item.lastModifiedDate || item.creationDate)}</p>
+                              <p className="mt-2 text-caption font-semibold text-gray-500">{formatMediumDateTime(item.lastModifiedDate || item.creationDate)}</p>
                             </div>
                           ))}
                         </div>
@@ -274,7 +274,7 @@ export function SupportDashboard() {
                       <div className="flex items-start justify-between gap-3">
                         <div className="min-w-0">
                           <p className={`truncate ${dataValue}`}>{ticket.subject}</p>
-                          <p className="mt-1 text-[11px] font-semibold text-gray-500">
+                          <p className="mt-1 text-caption font-semibold text-gray-500">
                             #{ticket.id} • {ticket.requesterName}
                           </p>
                         </div>
@@ -282,7 +282,7 @@ export function SupportDashboard() {
                           {ticket.status}
                         </span>
                       </div>
-                      <p className="mt-2 text-[11px] font-semibold text-gray-500">{formatMediumDateTime(ticket.updatedAt)}</p>
+                      <p className="mt-2 text-caption font-semibold text-gray-500">{formatMediumDateTime(ticket.updatedAt)}</p>
                     </a>
                   ))}
                 </div>

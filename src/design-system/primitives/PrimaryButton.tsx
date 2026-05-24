@@ -38,17 +38,17 @@ const toneClasses: Record<ButtonTone, string> = {
 // ─── Size classes (desktop) ──────────────────────────────────────────────────
 
 const desktopSizeClasses: Record<ButtonSize, string> = {
-  sm: 'h-8 px-3 text-[11px] gap-1.5 rounded-lg',
-  md: 'h-9 px-4 text-[12px] gap-2 rounded-xl',
-  lg: 'h-10 px-5 text-[13px] gap-2 rounded-xl',
+  sm: 'h-8 px-3 text-caption gap-1.5 rounded-lg',
+  md: 'h-9 px-4 text-label gap-2 rounded-xl',
+  lg: 'h-10 px-5 text-sm gap-2 rounded-xl',
 };
 
 // ─── Size classes (mobile) — larger touch targets ────────────────────────────
 
 const mobileSizeClasses: Record<ButtonSize, string> = {
-  sm: 'h-11 px-4 text-[12px] gap-2 rounded-xl',   // Promoted from h-8 → h-11 (44px min)
-  md: 'h-12 px-5 text-[12px] gap-2.5 rounded-2xl',
-  lg: 'h-14 px-6 text-[13px] gap-2.5 rounded-2xl',
+  sm: 'h-11 px-4 text-label gap-2 rounded-xl',   // Promoted from h-8 → h-11 (44px min)
+  md: 'h-12 px-5 text-label gap-2.5 rounded-2xl',
+  lg: 'h-14 px-6 text-sm gap-2.5 rounded-2xl',
 };
 
 // ─── Icon-only size classes (mobile) ─────────────────────────────────────────

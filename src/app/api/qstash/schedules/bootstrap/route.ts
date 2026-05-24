@@ -29,7 +29,12 @@ export const POST = withAuth(async (req: NextRequest) => {
   try {
     const client = getQStashClient();
     const existingSchedules = await client.schedules.list();
-    const expectedIds = new Set(HEAVY_JOB_SCHEDULES.map((schedule) => schedule.scheduleId));
+
+    const qstashOnlySchedules = HEAVY_JOB_SCHEDULES.filter(
+      (s) => (s as any).managedBy !== 'vercel'
+    );
+
+    const expectedIds = new Set(qstashOnlySchedules.map((schedule) => schedule.scheduleId));
     const obsoleteSchedules = existingSchedules.filter(
       (schedule) => !expectedIds.has(String(schedule.scheduleId)),
     );
@@ -41,7 +46,7 @@ export const POST = withAuth(async (req: NextRequest) => {
     }
 
     const results = await Promise.all(
-      HEAVY_JOB_SCHEDULES.map(async ({ headers, ...schedule }) => {
+      qstashOnlySchedules.map(async ({ headers, ...schedule }) => {
         const result = await upsertQStashSchedule({ ...schedule, headers });
         return { ...schedule, ...result };
       })
@@ -52,6 +57,7 @@ export const POST = withAuth(async (req: NextRequest) => {
       schedules: results,
       deletedScheduleIds: obsoleteSchedules.map((schedule) => String(schedule.scheduleId)),
       count: results.length,
+      note: 'Entries with managedBy:"vercel" are skipped (now driven by vercel.json crons)',
     });
   } catch (error: any) {
     console.error('[qstash/schedules/bootstrap]', error);

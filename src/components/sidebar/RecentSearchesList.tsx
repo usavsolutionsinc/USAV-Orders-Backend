@@ -65,7 +65,7 @@ export function RecentSearchesList({
               index < items.length - 1 ? 'border-b border-gray-200' : ''
             }`}
           >
-            <span className="truncate text-[11px] font-semibold text-gray-900">
+            <span className="truncate text-caption font-semibold text-gray-900">
               {getDisplayQuery ? getDisplayQuery(item) : item.query}
             </span>
             <span className={`shrink-0 ${microBadge} text-gray-500`}>

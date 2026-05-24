@@ -72,7 +72,7 @@ export function DeleteOrderControl({
       type="button"
       onClick={handleDelete}
       disabled={deleteOrderMutation.isPending}
-      className="w-full h-10 inline-flex items-center justify-center rounded-xl bg-red-600 hover:bg-red-700 text-white text-[10px] font-black uppercase tracking-wider disabled:opacity-50"
+      className="w-full h-10 inline-flex items-center justify-center rounded-xl bg-red-600 hover:bg-red-700 text-white text-micro font-black uppercase tracking-wider disabled:opacity-50"
     >
       {deleteOrderMutation.isPending ? 'Deleting...' : isDeleteArmed ? 'Click Again To Confirm' : 'Delete Permanently'}
     </button>

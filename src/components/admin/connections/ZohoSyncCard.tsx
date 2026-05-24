@@ -91,13 +91,13 @@ export function ZohoSyncCard({ embedded = false }: { embedded?: boolean }) {
       <div className={`flex items-center justify-between gap-3 ${embedded ? 'border-b border-gray-200 pb-3' : ''}`}>
         <div>
           <h2 className="text-sm font-black uppercase tracking-widest text-gray-900">Zoho Receiving Sync</h2>
-          <p className="text-[9px] font-bold text-gray-500 mt-1">Refresh the Zoho token, sync expected PO lines, or import one purchase receive.</p>
+          <p className="text-eyebrow font-bold text-gray-500 mt-1">Refresh the Zoho token, sync expected PO lines, or import one purchase receive.</p>
         </div>
         <div className="flex items-center gap-2">
           <button
             onClick={() => void handleRefresh()}
             disabled={anyPending}
-            className="flex items-center gap-2 px-4 py-2 bg-gray-100 hover:bg-gray-200 rounded-xl transition-all text-[10px] font-black uppercase tracking-widest text-gray-700 disabled:opacity-50"
+            className="flex items-center gap-2 px-4 py-2 bg-gray-100 hover:bg-gray-200 rounded-xl transition-all text-micro font-black uppercase tracking-widest text-gray-700 disabled:opacity-50"
           >
             <RefreshCw className={`w-3.5 h-3.5 ${zohoRefreshMutation.isPending ? 'animate-spin' : ''}`} />
             {zohoRefreshMutation.isPending ? 'Refreshing...' : 'Refresh Token'}
@@ -105,7 +105,7 @@ export function ZohoSyncCard({ embedded = false }: { embedded?: boolean }) {
           <button
             onClick={() => void handleSync()}
             disabled={anyPending}
-            className="flex items-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 rounded-xl transition-all text-[10px] font-black uppercase tracking-widest text-white shadow-sm disabled:opacity-50"
+            className="flex items-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 rounded-xl transition-all text-micro font-black uppercase tracking-widest text-white shadow-sm disabled:opacity-50"
           >
             <RefreshCw className={`w-3.5 h-3.5 ${zohoSyncMutation.isPending ? 'animate-spin' : ''}`} />
             {zohoSyncMutation.isPending ? 'Syncing...' : 'Sync Expected POs'}
@@ -118,12 +118,12 @@ export function ZohoSyncCard({ embedded = false }: { embedded?: boolean }) {
           value={purchaseReceiveId}
           onChange={(e) => setPurchaseReceiveId(e.target.value)}
           placeholder="Enter purchase receive ID"
-          className="flex-1 rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 text-[10px] font-bold uppercase tracking-widest text-gray-900 outline-none focus:border-emerald-500"
+          className="flex-1 rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 text-micro font-bold uppercase tracking-widest text-gray-900 outline-none focus:border-emerald-500"
         />
         <button
           onClick={() => void handleImportOne()}
           disabled={!purchaseReceiveId.trim() || anyPending}
-          className="px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded-xl transition-all text-[10px] font-black uppercase tracking-widest text-white shadow-sm disabled:opacity-50"
+          className="px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded-xl transition-all text-micro font-black uppercase tracking-widest text-white shadow-sm disabled:opacity-50"
         >
           {zohoImportOneMutation.isPending ? 'Importing...' : 'Import Receive'}
         </button>
@@ -133,7 +133,7 @@ export function ZohoSyncCard({ embedded = false }: { embedded?: boolean }) {
         <motion.div
           initial={{ opacity: 0, y: -10 }}
           animate={{ opacity: 1, y: 0 }}
-          className={`border-l-2 px-4 py-3 text-[10px] font-black uppercase tracking-widest ${
+          className={`border-l-2 px-4 py-3 text-micro font-black uppercase tracking-widest ${
             status.type === 'success' ? 'border-l-green-500 bg-green-50/70 text-green-700' : 'border-l-red-500 bg-red-50/70 text-red-700'
           }`}
         >

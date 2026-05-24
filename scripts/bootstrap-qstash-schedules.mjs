@@ -2,13 +2,12 @@
 /**
  * bootstrap-qstash-schedules.mjs
  * ────────────────────────────────────────────────────────────────────
- * Mirror of POST /api/qstash/schedules/bootstrap. Reads
- * src/config/qstash-schedules.json and upserts every entry against
- * QStash, then prunes any schedules that aren't in the config.
+ * Mirror of POST /api/qstash/schedules/bootstrap.
  *
- * Useful when you need to register schedules before a Vercel deploy
- * lands (e.g. just after pushing the config). Otherwise prefer hitting
- * the bootstrap endpoint via the deployed app.
+ * Only processes entries that do NOT have "managedBy": "vercel".
+ * Most recurring schedules have migrated to vercel.json crons.
+ *
+ * Useful for any remaining QStash-driven jobs.
  *
  * Env required: QSTASH_TOKEN, NEXT_PUBLIC_APP_URL (or APP_URL).
  *
@@ -59,10 +58,11 @@ async function main() {
   }
 
   const config = loadConfig();
-  console.log(`Bootstrapping ${config.length} schedule(s) against ${base}\n`);
+  const qstashManaged = config.filter((s: any) => s.managedBy !== 'vercel');
+  console.log(`Bootstrapping ${qstashManaged.length} QStash-managed schedule(s) against ${base} (skipping ${config.length - qstashManaged.length} vercel-managed)`);
 
   const existing = await client.schedules.list();
-  const expectedIds = new Set(config.map((s) => s.scheduleId));
+  const expectedIds = new Set(qstashManaged.map((s) => s.scheduleId));
   const obsolete = existing.filter((s) => !expectedIds.has(String(s.scheduleId)));
   if (obsolete.length > 0) {
     console.log(`Pruning ${obsolete.length} obsolete schedule(s):`);
@@ -74,7 +74,7 @@ async function main() {
   }
 
   const results = [];
-  for (const entry of config) {
+  for (const entry of qstashManaged) {
     const destination = `${base}${entry.path.startsWith('/') ? entry.path : `/${entry.path}`}`;
     const headers = { 'content-type': 'application/json', ...(entry.headers || {}) };
     try {

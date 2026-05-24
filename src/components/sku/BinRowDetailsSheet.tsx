@@ -313,10 +313,10 @@ export function BinRowDetailsSheet({
           ←
         </button>
         <div className="min-w-0 flex-1 text-center">
-          <p className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-500">
+          <p className="text-micro font-black uppercase tracking-[0.18em] text-slate-500">
             Row details
           </p>
-          <p className="truncate font-mono text-[13px] font-black text-slate-900">
+          <p className="truncate font-mono text-sm font-black text-slate-900">
             {row.sku}
           </p>
         </div>
@@ -325,7 +325,7 @@ export function BinRowDetailsSheet({
 
       <main className="flex-1 overflow-auto px-4 py-4 space-y-5 pb-32">
         {!isAdmin && (
-          <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-[11px] font-bold text-amber-800">
+          <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-caption font-bold text-amber-800">
             Product title and SKU swap require <span className="uppercase">admin</span> role.
             You&apos;re signed in as <span className="uppercase">{role}</span>. Limits + counts are still editable.
           </div>
@@ -338,11 +338,11 @@ export function BinRowDetailsSheet({
             isAdmin ? '' : 'opacity-50 pointer-events-none'
           }`}
         >
-          <p className="text-[10px] font-black uppercase tracking-[0.16em] text-slate-500">
+          <p className="text-micro font-black uppercase tracking-[0.16em] text-slate-500">
             Product title
           </p>
           {row.productTitle && (
-            <p className="text-[10px] leading-snug text-slate-500">
+            <p className="text-micro leading-snug text-slate-500">
               <span className="font-bold">Catalog:</span>{' '}
               <span className="font-mono">{row.productTitle}</span>
             </p>
@@ -372,7 +372,7 @@ export function BinRowDetailsSheet({
               )}
             </button>
           </div>
-          <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400">
+          <p className="text-micro font-bold uppercase tracking-widest text-slate-400">
             Stored in sku_stock.display_name_override · wins over Ecwid
           </p>
         </section>
@@ -384,10 +384,10 @@ export function BinRowDetailsSheet({
             isAdmin ? '' : 'opacity-50 pointer-events-none'
           }`}
         >
-          <p className="text-[10px] font-black uppercase tracking-[0.16em] text-slate-500">
+          <p className="text-micro font-black uppercase tracking-[0.16em] text-slate-500">
             Change SKU
           </p>
-          <p className="text-[10px] leading-snug text-slate-500">
+          <p className="text-micro leading-snug text-slate-500">
             Move{' '}
             <span className="font-mono font-bold">{row.qty}</span> from{' '}
             <span className="font-mono">{row.sku}</span> to the SKU below.
@@ -417,10 +417,10 @@ export function BinRowDetailsSheet({
 
         {/* Transfer to another bin */}
         <section className="rounded-lg border border-slate-200 bg-white p-3 shadow-sm space-y-2">
-          <p className="text-[10px] font-black uppercase tracking-[0.16em] text-slate-500">
+          <p className="text-micro font-black uppercase tracking-[0.16em] text-slate-500">
             Move to another bin
           </p>
-          <p className="text-[10px] leading-snug text-slate-500">
+          <p className="text-micro leading-snug text-slate-500">
             Scan or type the destination bin and how many to move.
           </p>
           <div className="grid grid-cols-[1fr_5rem] gap-2">
@@ -462,12 +462,12 @@ export function BinRowDetailsSheet({
 
         {/* Min / max */}
         <section className="rounded-lg border border-slate-200 bg-white p-3 shadow-sm space-y-2">
-          <p className="text-[10px] font-black uppercase tracking-[0.16em] text-slate-500">
+          <p className="text-micro font-black uppercase tracking-[0.16em] text-slate-500">
             Min / max
           </p>
           <div className="grid grid-cols-2 gap-2">
             <label className="block">
-              <span className="text-[9px] font-black uppercase tracking-widest text-slate-500">
+              <span className="text-eyebrow font-black uppercase tracking-widest text-slate-500">
                 Min
               </span>
               <input
@@ -480,7 +480,7 @@ export function BinRowDetailsSheet({
               />
             </label>
             <label className="block">
-              <span className="text-[9px] font-black uppercase tracking-widest text-slate-500">
+              <span className="text-eyebrow font-black uppercase tracking-widest text-slate-500">
                 Max
               </span>
               <input

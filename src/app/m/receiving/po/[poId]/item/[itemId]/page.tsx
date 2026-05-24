@@ -119,23 +119,23 @@ export default function MobilePurchaseOrderItemDetailPage(
                 {item.image_url ? (
                   <Image src={item.image_url} alt="" fill sizes="64px" className="object-cover" />
                 ) : (
-                  <span className="absolute inset-0 grid place-items-center text-[10px] font-black uppercase tracking-wider text-gray-400">
+                  <span className="absolute inset-0 grid place-items-center text-micro font-black uppercase tracking-wider text-gray-400">
                     {item.sku?.slice(0, 4) || 'SKU'}
                   </span>
                 )}
               </div>
               <div className="min-w-0 flex-1">
-                <p className="text-[15px] font-black tracking-tight text-gray-900">
+                <p className="text-base font-black tracking-tight text-gray-900">
                   {item.item_name || 'Untitled item'}
                 </p>
-                <p className="mt-0.5 text-[11px] font-bold uppercase tracking-wider text-gray-500">
+                <p className="mt-0.5 text-caption font-bold uppercase tracking-wider text-gray-500">
                   {item.sku ? `SKU ${item.sku}` : 'No SKU'}
                 </p>
-                <p className="mt-1 flex flex-wrap gap-x-2 gap-y-1 text-[11px] font-bold text-gray-700">
+                <p className="mt-1 flex flex-wrap gap-x-2 gap-y-1 text-caption font-bold text-gray-700">
                   <span>{item.quantity_received}/{item.quantity_expected ?? '?'}</span>
                   {item.workflow_status ? (
                     <span
-                      className={`inline-flex items-center rounded px-1.5 py-0.5 text-[9px] font-black uppercase tracking-wider ${
+                      className={`inline-flex items-center rounded px-1.5 py-0.5 text-eyebrow font-black uppercase tracking-wider ${
                         STATUS_TONE[item.workflow_status] ?? 'bg-slate-100 text-slate-600'
                       }`}
                     >
@@ -143,7 +143,7 @@ export default function MobilePurchaseOrderItemDetailPage(
                     </span>
                   ) : null}
                   {item.condition_grade ? (
-                    <span className="inline-flex items-center rounded bg-gray-100 px-1.5 py-0.5 text-[9px] font-black uppercase tracking-wider text-gray-700">
+                    <span className="inline-flex items-center rounded bg-gray-100 px-1.5 py-0.5 text-eyebrow font-black uppercase tracking-wider text-gray-700">
                       {item.condition_grade.replace('_', ' ')}
                     </span>
                   ) : null}
@@ -157,14 +157,14 @@ export default function MobilePurchaseOrderItemDetailPage(
       {/* Photos block */}
       <section className="px-4 py-4">
         <div className="mb-2 flex items-center justify-between">
-          <p className="text-[11px] font-black uppercase tracking-[0.18em] text-gray-700">
+          <p className="text-caption font-black uppercase tracking-[0.18em] text-gray-700">
             Photos ({photos.length})
           </p>
           {photos.length > 0 ? (
             <Link
               href={galleryHref}
               prefetch={false}
-              className="text-[11px] font-black uppercase tracking-wider text-blue-600 active:text-blue-700"
+              className="text-caption font-black uppercase tracking-wider text-blue-600 active:text-blue-700"
             >
               View all
             </Link>
@@ -174,7 +174,7 @@ export default function MobilePurchaseOrderItemDetailPage(
           <Link
             href={captureHref}
             prefetch={false}
-            className="flex h-24 items-center justify-center gap-2 rounded-2xl border-2 border-dashed border-gray-200 bg-gray-50 text-[11px] font-black uppercase tracking-[0.18em] text-gray-500 active:bg-gray-100"
+            className="flex h-24 items-center justify-center gap-2 rounded-2xl border-2 border-dashed border-gray-200 bg-gray-50 text-caption font-black uppercase tracking-[0.18em] text-gray-500 active:bg-gray-100"
           >
             <Camera className="h-5 w-5" /> Take first photo
           </Link>
@@ -196,8 +196,8 @@ export default function MobilePurchaseOrderItemDetailPage(
 
       {/* Details block */}
       {item ? (
-        <section className="border-t border-gray-100 px-4 py-4 text-[12px] font-bold">
-          <p className="mb-2 text-[11px] font-black uppercase tracking-[0.18em] text-gray-700">
+        <section className="border-t border-gray-100 px-4 py-4 text-label font-bold">
+          <p className="mb-2 text-caption font-black uppercase tracking-[0.18em] text-gray-700">
             Details
           </p>
           <dl className="space-y-1.5">
@@ -211,7 +211,7 @@ export default function MobilePurchaseOrderItemDetailPage(
       ) : null}
 
       {error ? (
-        <p className="px-6 py-10 text-center text-[12px] font-bold text-rose-600">
+        <p className="px-6 py-10 text-center text-label font-bold text-rose-600">
           Couldn't load this item.
         </p>
       ) : null}
@@ -226,10 +226,10 @@ export default function MobilePurchaseOrderItemDetailPage(
 function Row({ label, value }: { label: string; value: string }) {
   return (
     <div className="flex items-baseline justify-between gap-2">
-      <dt className="text-[10px] font-black uppercase tracking-wider text-gray-500">
+      <dt className="text-micro font-black uppercase tracking-wider text-gray-500">
         {label}
       </dt>
-      <dd className="truncate text-right text-[12px] font-bold text-gray-900">{value}</dd>
+      <dd className="truncate text-right text-label font-bold text-gray-900">{value}</dd>
     </div>
   );
 }

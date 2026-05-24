@@ -137,7 +137,7 @@ export function StaffAdminSidebarPanel() {
         <button
           type="button"
           onClick={emitOpenAddStaff}
-          className="inline-flex w-full items-center justify-center gap-1.5 rounded-lg border border-dashed border-gray-300 bg-white px-3 py-1.5 text-[12px] font-semibold text-gray-700 transition hover:border-blue-400 hover:bg-blue-50 hover:text-blue-700"
+          className="inline-flex w-full items-center justify-center gap-1.5 rounded-lg border border-dashed border-gray-300 bg-white px-3 py-1.5 text-label font-semibold text-gray-700 transition hover:border-blue-400 hover:bg-blue-50 hover:text-blue-700"
         >
           <svg
             className="h-3.5 w-3.5"
@@ -168,7 +168,7 @@ export function StaffAdminSidebarPanel() {
                 onPick={() => setParam((p) => p.set('staffId', String(row.id)))}
                 leading={
                   <div
-                    className="flex h-8 w-8 items-center justify-center rounded-full text-[11px] font-bold text-white"
+                    className="flex h-8 w-8 items-center justify-center rounded-full text-caption font-bold text-white"
                     style={{ backgroundColor: getStaffColorHex(row) }}
                   >
                     {initials(row.name)}

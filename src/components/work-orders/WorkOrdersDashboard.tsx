@@ -374,14 +374,14 @@ export function WorkOrdersDashboard({ basePath = '/work-orders' }: { basePath?: 
               {queue === 'stock_replenish' ? 'Stock Replenish' : 'Work Queue'}
             </h1>
             {queue !== 'stock_replenish' && (
-              <span className="text-[11px] font-bold tabular-nums text-slate-400">
+              <span className="text-caption font-bold tabular-nums text-slate-400">
                 {counts[queue] ?? rows.length}
                 {query ? ` \u00B7 "${query}"` : ''}
               </span>
             )}
           </div>
           {queue !== 'stock_replenish' && queue !== 'local_pickups' && unassignedRows.length > 0 && (
-            <span className="text-[10px] font-black uppercase tracking-widest text-orange-500">
+            <span className="text-micro font-black uppercase tracking-widest text-orange-500">
               {unassignedRows.length} unassigned
             </span>
           )}
@@ -401,7 +401,7 @@ export function WorkOrdersDashboard({ basePath = '/work-orders' }: { basePath?: 
             </div>
           ) : rows.length === 0 ? (
             <div className="flex h-full items-center justify-center">
-              <p className="text-[10px] font-black uppercase tracking-widest text-slate-300">
+              <p className="text-micro font-black uppercase tracking-widest text-slate-300">
                 No work orders in queue
               </p>
             </div>
@@ -582,14 +582,14 @@ function WorkOrderTableRow({
         {/* Row 1: dot + title */}
         <div className="flex items-center gap-2 min-w-0">
           <span className={`h-2 w-2 rounded-full ${dotColor} shrink-0`} title={dotTitle} />
-          <span className="text-[12px] font-bold text-gray-900 truncate">
+          <span className="text-label font-bold text-gray-900 truncate">
             {row.title || 'Unknown'}
           </span>
         </div>
 
         {/* Row 2: qty • condition • tech • packer • days late • priority • deadline */}
         <div className="mt-0.5 flex items-center gap-2">
-          <div className="text-[10px] font-bold text-gray-500 uppercase tracking-widest truncate min-w-0 flex-1">
+          <div className="text-micro font-bold text-gray-500 uppercase tracking-widest truncate min-w-0 flex-1">
             {row.quantity && <><span className={parseInt(String(row.quantity), 10) > 1 ? 'text-yellow-600' : 'text-gray-500'}>{row.quantity}</span>{' \u2022 '}</>}
             {row.condition && <><span className={row.condition.toLowerCase() === 'new' ? 'text-yellow-600' : undefined}>{row.condition}</span>{' \u2022 '}</>}
             <span className={techName ? getStaffTextColor(row.techId) : undefined}>{techDisplay}</span>

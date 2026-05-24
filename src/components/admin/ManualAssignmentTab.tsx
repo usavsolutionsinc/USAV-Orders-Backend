@@ -263,7 +263,7 @@ export function InlineManualForm({ row, onSaved, onClose }: InlineFormProps) {
                 {manualsLoading ? (
                   <div className="flex items-center gap-2 py-1">
                     <Loader2 className="w-3.5 h-3.5 animate-spin text-indigo-400" />
-                    <p className="text-[10px] font-semibold text-indigo-500">Loading manual records...</p>
+                    <p className="text-micro font-semibold text-indigo-500">Loading manual records...</p>
                   </div>
                 ) : (
                   manuals.map((manual) => (
@@ -274,9 +274,9 @@ export function InlineManualForm({ row, onSaved, onClose }: InlineFormProps) {
                       <div className="min-w-0 flex-1">
                         <p className={`${sectionLabel} ${manual.isActive ? 'text-indigo-700' : 'text-indigo-500'}`}>
                           {manual.displayName || manual.type || 'Manual'}
-                          {!manual.isActive && <span className="ml-1 text-[8px] normal-case tracking-normal font-semibold opacity-70">(inactive)</span>}
+                          {!manual.isActive && <span className="ml-1 text-mini normal-case tracking-normal font-semibold opacity-70">(inactive)</span>}
                         </p>
-                        <p className="mt-0.5 text-[9px] font-mono text-gray-500 truncate">{manual.itemNumber || 'NO-ITEM'}</p>
+                        <p className="mt-0.5 text-eyebrow font-mono text-gray-500 truncate">{manual.itemNumber || 'NO-ITEM'}</p>
                       </div>
                       <div className="flex items-center gap-1 flex-shrink-0">
                         <a href={manual.viewUrl} target="_blank" rel="noopener noreferrer"

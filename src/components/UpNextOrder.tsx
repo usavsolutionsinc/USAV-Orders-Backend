@@ -5,7 +5,8 @@ import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { framerPresence, framerTransition, framerVariants, SkeletonList } from '@/design-system';
 import confetti from 'canvas-confetti';
-import { AlertCircle, ClipboardList, List, Package, ShoppingCart, Wrench } from './Icons';
+import { AlertCircle, Barcode, ClipboardList, List, Package, ShoppingCart, Wrench } from './Icons';
+import { dispatchUpNextPreview } from '@/utils/events';
 import { OrderCard } from './station/upnext/OrderCard';
 import { RepairCard } from './station/upnext/RepairCard';
 import { FbaItemCard } from './station/upnext/FbaItemCard';
@@ -332,16 +333,16 @@ export default function UpNextOrder({ techId, onStart, onMissingParts, onAllComp
               >
                 <div className="flex items-center gap-2 px-1 pt-0.5">
                   {lateCount > 0 && (
-                    <span className="flex items-center gap-1 text-[9px] font-black uppercase tracking-widest text-red-500">
+                    <span className="flex items-center gap-1 text-eyebrow font-black uppercase tracking-widest text-red-500">
                       <span className="inline-block w-1.5 h-1.5 rounded-full bg-red-500" />
                       {lateCount} late
                     </span>
                   )}
                   {lateCount > 0 && dueTodayCount > 0 && (
-                    <span className="text-gray-500 text-[9px]">·</span>
+                    <span className="text-gray-500 text-eyebrow">·</span>
                   )}
                   {dueTodayCount > 0 && (
-                    <span className="flex items-center gap-1 text-[9px] font-black uppercase tracking-widest text-amber-500">
+                    <span className="flex items-center gap-1 text-eyebrow font-black uppercase tracking-widest text-amber-500">
                       <span className="inline-block w-1.5 h-1.5 rounded-full bg-amber-400" />
                       {dueTodayCount} due today
                     </span>
@@ -496,6 +497,18 @@ export default function UpNextOrder({ techId, onStart, onMissingParts, onAllComp
           return <div className="sticky bottom-0 left-0 right-0 z-10">{filterBar}</div>;
         })()}
 
+        {/* ── Scan-to-preview — floats at the bottom of the sidebar (desktop
+              only). Stays visible while the queue scrolls so the tech can
+              jump to any order without scrolling for it. Separate from the
+              top-of-page scan-to-start bar; this surface is strictly
+              view-only and triggers the same preview action as a card click. ── */}
+        <div className="sticky bottom-0 left-0 right-0 z-20 -mx-1 mt-2 hidden md:block">
+          <div className="pointer-events-none absolute inset-x-0 -top-3 h-3 bg-gradient-to-t from-white to-transparent" />
+          <div className="bg-white/95 px-1 pb-1.5 pt-1 backdrop-blur-sm">
+            <ScanToPreviewInput orders={[...nonStockOrders, ...stockOrders]} />
+          </div>
+        </div>
+
     </div>
   );
 }
@@ -524,10 +537,118 @@ function SectionHeader({ label, color = 'orange' }: { label: string; color?: 'or
   return (
     <div className="flex items-center gap-2 px-1 py-1.5 mb-1">
       <div className={`h-px flex-1 ${lineClass}`} />
-      <span className={`text-[9px] font-black uppercase tracking-widest ${textClass}`}>
+      <span className={`text-eyebrow font-black uppercase tracking-widest ${textClass}`}>
         {label}
       </span>
       <div className={`h-px flex-1 ${lineClass}`} />
+    </div>
+  );
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+ *  ScanToPreviewInput
+ *  ───────────────────────────────────────────────────────────────────────
+ *  Floats at the bottom of the sidebar. Tech scans a tracking number (or
+ *  types one and presses Enter); we search the current Up Next set for a
+ *  matching order and fire `tech-upnext-preview`, which the workspace
+ *  treats identically to clicking the sidebar card.
+ *
+ *  View-only — never starts or fulfills the order. That's the role of the
+ *  top-of-page scan-to-fulfill bar.
+ *
+ *  Match rule: exact `trim()` on `shipping_tracking_number`, falling back
+ *  to an exact match on `order_id`.
+ *  ─────────────────────────────────────────────────────────────────── */
+
+type ScanFeedback = 'idle' | 'matched' | 'missed';
+
+function ScanToPreviewInput({ orders }: { orders: any[] }) {
+  const [value, setValue] = useState('');
+  const [feedback, setFeedback] = useState<ScanFeedback>('idle');
+  const feedbackTimerRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (feedbackTimerRef.current !== null) {
+        window.clearTimeout(feedbackTimerRef.current);
+      }
+    };
+  }, []);
+
+  const flash = (next: ScanFeedback) => {
+    setFeedback(next);
+    if (feedbackTimerRef.current !== null) window.clearTimeout(feedbackTimerRef.current);
+    feedbackTimerRef.current = window.setTimeout(() => setFeedback('idle'), 900);
+  };
+
+  const handleSubmit = () => {
+    const needle = value.trim();
+    if (!needle) return;
+    const lower = needle.toLowerCase();
+    const match = orders.find((o) => {
+      const trk = String(o?.shipping_tracking_number || '').trim().toLowerCase();
+      const oid = String(o?.order_id || '').trim().toLowerCase();
+      return (trk && trk === lower) || (oid && oid === lower);
+    });
+    if (match) {
+      dispatchUpNextPreview({ kind: 'order', order: match });
+      setValue('');
+      flash('matched');
+    } else {
+      flash('missed');
+    }
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      handleSubmit();
+    } else if (e.key === 'Escape') {
+      setValue('');
+      setFeedback('idle');
+    }
+  };
+
+  const wrapperTone =
+    feedback === 'matched'
+      ? 'border-emerald-300 bg-emerald-50/80 ring-1 ring-inset ring-emerald-200'
+      : feedback === 'missed'
+      ? 'border-red-300 bg-red-50/80 ring-1 ring-inset ring-red-200'
+      : 'border-gray-200 bg-white focus-within:border-blue-300 focus-within:ring-1 focus-within:ring-inset focus-within:ring-blue-200';
+
+  return (
+    <div
+      className={`flex items-center gap-2 rounded-lg border px-2.5 py-1.5 shadow-[0_4px_12px_-4px_rgba(15,23,42,0.12)] transition-colors ${wrapperTone}`}
+    >
+      <Barcode
+        className={`h-3.5 w-3.5 flex-shrink-0 ${
+          feedback === 'matched' ? 'text-emerald-500' : feedback === 'missed' ? 'text-red-500' : 'text-gray-400'
+        }`}
+      />
+      <input
+        type="text"
+        value={value}
+        onChange={(e) => setValue(e.target.value)}
+        onKeyDown={handleKeyDown}
+        placeholder="Scan tracking to preview…"
+        aria-label="Scan tracking number to preview order"
+        spellCheck={false}
+        autoComplete="off"
+        className="min-w-0 flex-1 bg-transparent text-label font-semibold text-gray-900 outline-none placeholder:font-medium placeholder:text-gray-400"
+      />
+      {feedback === 'missed' ? (
+        <span className="text-micro font-black uppercase tracking-widest text-red-500">
+          No match
+        </span>
+      ) : feedback === 'matched' ? (
+        <span className="text-micro font-black uppercase tracking-widest text-emerald-600">
+          Selected
+        </span>
+      ) : (
+        <kbd className="hidden rounded bg-gray-100 px-1 py-px text-eyebrow font-bold text-gray-500 sm:inline-flex">
+          ↵
+        </kbd>
+      )}
     </div>
   );
 }

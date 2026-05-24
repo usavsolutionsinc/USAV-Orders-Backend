@@ -67,7 +67,7 @@ export default function OfflinePage() {
             Retry
           </button>
         </div>
-        <p className="pt-4 text-[10px] font-bold uppercase tracking-widest text-slate-400">
+        <p className="pt-4 text-micro font-bold uppercase tracking-widest text-slate-400">
           {online ? 'online' : 'offline'}
         </p>
       </div>

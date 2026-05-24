@@ -91,7 +91,7 @@ export function BinsTable({ rows, loading, selected, onSelectChange, onRowClick 
     <div className="rounded-xl border border-gray-200 bg-white overflow-hidden">
       <div className="overflow-x-auto">
         <table className="w-full text-sm">
-          <thead className="bg-gray-50 text-left text-[10px] font-bold uppercase tracking-wider text-gray-500">
+          <thead className="bg-gray-50 text-left text-micro font-bold uppercase tracking-wider text-gray-500">
             <tr>
               <th className="w-10 px-3 py-2">
                 <input
@@ -143,10 +143,10 @@ export function BinsTable({ rows, loading, selected, onSelectChange, onRowClick 
                     <div className="font-semibold text-gray-900">
                       {row.room ?? <span className="text-gray-400">—</span>}
                       {row.zone_letter && (
-                        <span className="ml-1 font-mono text-[10px] text-blue-600">[{row.zone_letter}]</span>
+                        <span className="ml-1 font-mono text-micro text-blue-600">[{row.zone_letter}]</span>
                       )}
                     </div>
-                    <div className="text-[10px] text-gray-500">
+                    <div className="text-micro text-gray-500">
                       {row.row_label ?? '—'} · {row.col_label ?? '—'}
                     </div>
                   </td>
@@ -200,7 +200,7 @@ function Th({
       >
         {label}
         {active && (
-          <span className="text-[8px]" aria-hidden>
+          <span className="text-mini" aria-hidden>
             {dir === 'asc' ? '▲' : '▼'}
           </span>
         )}

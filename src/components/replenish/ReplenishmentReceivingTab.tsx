@@ -79,7 +79,7 @@ export function ReplenishmentReceivingTab({ skuSearch }: ReplenishmentReceivingT
                   <div className="grid grid-cols-[minmax(0,1.6fr)_90px_90px_120px_110px_110px] gap-3 items-start">
                     {/* Item info */}
                     <div className="min-w-0">
-                      <p className="text-[12px] font-black text-gray-900 truncate">
+                      <p className="text-label font-black text-gray-900 truncate">
                         {row.item_name || 'Unknown Item'}
                       </p>
                       <p className={`${fieldLabel} mt-0.5 truncate`}>
@@ -89,13 +89,13 @@ export function ReplenishmentReceivingTab({ skuSearch }: ReplenishmentReceivingT
                     </div>
 
                     {/* Expected */}
-                    <div className="text-[10px] font-black text-gray-700">
+                    <div className="text-micro font-black text-gray-700">
                       <p className={`uppercase tracking-widest text-gray-500 ${tableHeader}`}>Expected</p>
                       <p className="mt-1">{numText(row.quantity_expected)}</p>
                     </div>
 
                     {/* Received */}
-                    <div className="text-[10px] font-black text-gray-700">
+                    <div className="text-micro font-black text-gray-700">
                       <p className={`uppercase tracking-widest text-gray-500 ${tableHeader}`}>Received</p>
                       <p className={`mt-1 ${row.quantity_received >= row.quantity_expected ? 'text-emerald-600' : 'text-amber-600'}`}>
                         {numText(row.quantity_received)}
@@ -103,21 +103,21 @@ export function ReplenishmentReceivingTab({ skuSearch }: ReplenishmentReceivingT
                     </div>
 
                     {/* PO # */}
-                    <div className="text-[10px] font-black text-gray-700 min-w-0">
+                    <div className="text-micro font-black text-gray-700 min-w-0">
                       <p className={`uppercase tracking-widest text-gray-500 ${tableHeader}`}>PO #</p>
                       <p className="mt-1 truncate">{row.zoho_po_number || '—'}</p>
                     </div>
 
                     {/* Workflow status */}
                     <div>
-                      <span className={`inline-flex items-center rounded-full border px-2 py-1 text-[9px] font-black uppercase tracking-wider ${workflowStatusColor(row.workflow_status)}`}>
+                      <span className={`inline-flex items-center rounded-full border px-2 py-1 text-eyebrow font-black uppercase tracking-wider ${workflowStatusColor(row.workflow_status)}`}>
                         {workflowStatusTableLabel(row.workflow_status)}
                       </span>
                     </div>
 
                     {/* QA status */}
                     <div>
-                      <span className={`inline-flex items-center rounded-full border px-2 py-1 text-[9px] font-black uppercase tracking-wider ${
+                      <span className={`inline-flex items-center rounded-full border px-2 py-1 text-eyebrow font-black uppercase tracking-wider ${
                         row.qa_status === 'PASSED'
                           ? 'bg-emerald-100 text-emerald-700 border-emerald-200'
                           : row.qa_status === 'PENDING'

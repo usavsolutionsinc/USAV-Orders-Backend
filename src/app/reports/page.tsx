@@ -2,6 +2,7 @@
 
 import { Suspense, useCallback, useEffect, useState } from 'react';
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
+import { PageHeader } from '@/components/ui/pane-header';
 
 type Tab = 'utilization' | 'velocity' | 'dead';
 
@@ -46,35 +47,37 @@ function ReportsPageInner() {
 
   return (
     <div className="flex h-full min-h-0 w-full flex-col bg-white">
-      <header className="border-b border-slate-200 bg-white px-4 py-3">
-        <p className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-500">
-          Reports
-        </p>
-        <div className="mt-2 flex gap-2">
-          {TABS.map((t) => (
-            <button
-              key={t.id}
-              type="button"
-              onClick={() => setTab(t.id)}
-              aria-pressed={tab === t.id}
-              className={`rounded-md px-3 py-1.5 text-xs font-bold ${
-                tab === t.id
-                  ? 'bg-slate-900 text-white'
-                  : 'border border-slate-300 bg-white text-slate-700'
-              }`}
-            >
-              {t.label}
-            </button>
-          ))}
+      <PageHeader
+        title="Reports"
+        rightSlot={
           <button
             type="button"
             onClick={load}
-            className="ml-auto rounded-md border border-slate-300 bg-white px-3 py-1.5 text-xs font-bold text-slate-700"
+            className="rounded-md border border-slate-300 bg-white px-3 py-1 text-xs font-bold text-slate-700"
           >
             Refresh
           </button>
-        </div>
-      </header>
+        }
+        belowSlot={
+          <div className="flex gap-2 border-t border-slate-100 px-3 py-2">
+            {TABS.map((t) => (
+              <button
+                key={t.id}
+                type="button"
+                onClick={() => setTab(t.id)}
+                aria-pressed={tab === t.id}
+                className={`rounded-md px-3 py-1.5 text-xs font-bold ${
+                  tab === t.id
+                    ? 'bg-slate-900 text-white'
+                    : 'border border-slate-300 bg-white text-slate-700'
+                }`}
+              >
+                {t.label}
+              </button>
+            ))}
+          </div>
+        }
+      />
 
       <main className="min-h-0 flex-1 overflow-auto px-3 py-3">
         {loading && (
@@ -101,8 +104,8 @@ function ReportsPageInner() {
 function ReportTable({ tab, rows }: { tab: Tab; rows: Array<Record<string, unknown>> }) {
   if (tab === 'utilization') {
     return (
-      <table className="w-full text-left text-[12px]">
-        <thead className="sticky top-0 bg-slate-50 text-[10px] font-black uppercase tracking-widest text-slate-600">
+      <table className="w-full text-left text-label">
+        <thead className="sticky top-0 bg-slate-50 text-micro font-black uppercase tracking-widest text-slate-600">
           <tr>
             <th className="px-3 py-2">Bin</th>
             <th className="px-3 py-2">Room</th>
@@ -139,8 +142,8 @@ function ReportTable({ tab, rows }: { tab: Tab; rows: Array<Record<string, unkno
   }
   if (tab === 'velocity') {
     return (
-      <table className="w-full text-left text-[12px]">
-        <thead className="sticky top-0 bg-slate-50 text-[10px] font-black uppercase tracking-widest text-slate-600">
+      <table className="w-full text-left text-label">
+        <thead className="sticky top-0 bg-slate-50 text-micro font-black uppercase tracking-widest text-slate-600">
           <tr>
             <th className="px-3 py-2">Tier</th>
             <th className="px-3 py-2">SKU</th>
@@ -174,8 +177,8 @@ function ReportTable({ tab, rows }: { tab: Tab; rows: Array<Record<string, unkno
     );
   }
   return (
-    <table className="w-full text-left text-[12px]">
-      <thead className="sticky top-0 bg-slate-50 text-[10px] font-black uppercase tracking-widest text-slate-600">
+    <table className="w-full text-left text-label">
+      <thead className="sticky top-0 bg-slate-50 text-micro font-black uppercase tracking-widest text-slate-600">
         <tr>
           <th className="px-3 py-2">SKU</th>
           <th className="px-3 py-2">Product</th>

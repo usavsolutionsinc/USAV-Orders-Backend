@@ -78,14 +78,14 @@ export function AssignmentOverlayCard({
         <div className="min-w-0 flex-1">
           {!headerEyebrow ? (
             <div className={`${showHeaderGradient ? 'text-blue-100' : 'text-gray-600'}`.trim()}>
-              <p className={`truncate text-[9px] font-black uppercase tracking-[0.10rem] ${showHeaderGradient ? 'text-blue-100' : 'text-gray-500'}`.trim()}>
+              <p className={`truncate text-eyebrow font-black uppercase tracking-[0.10rem] ${showHeaderGradient ? 'text-blue-100' : 'text-gray-500'}`.trim()}>
                 Assignment
               </p>
             </div>
           ) : null}
           {title != null ? (
             <h3
-              className={`text-[22px] font-black leading-[1.1] tracking-tight ${showHeaderGradient ? 'text-white' : 'text-gray-950'} ${!headerEyebrow ? 'mt-1' : ''}`.trim()}
+              className={`text-2xl font-black leading-[1.1] tracking-tight ${showHeaderGradient ? 'text-white' : 'text-gray-950'} ${!headerEyebrow ? 'mt-1' : ''}`.trim()}
             >
               {title}
             </h3>
@@ -111,7 +111,7 @@ export function AssignmentOverlayCard({
         ) : null}
       </div>
       {meta ? (
-        <div className={`text-[9px] font-black uppercase tracking-[0.08em] ${showHeaderGradient ? 'text-blue-100' : 'text-gray-500'}`.trim()}>
+        <div className={`text-eyebrow font-black uppercase tracking-[0.08em] ${showHeaderGradient ? 'text-blue-100' : 'text-gray-500'}`.trim()}>
           {meta}
         </div>
       ) : null}

@@ -28,7 +28,7 @@ export function ReceivingCartonStaffDropdown({ receivingId, staffId, onMakeClaim
         <button
           type="button"
           onClick={onMakeClaim}
-          className="inline-flex shrink-0 items-center gap-1 self-stretch rounded-lg bg-orange-500 px-4 text-[10px] font-black uppercase tracking-widest text-white shadow-sm transition-colors hover:bg-orange-600"
+          className="inline-flex shrink-0 items-center gap-1 self-stretch rounded-lg bg-orange-500 px-4 text-micro font-black uppercase tracking-widest text-white shadow-sm transition-colors hover:bg-orange-600"
           title="File a damage / wrong-item / missing claim for this package"
         >
           Claim →

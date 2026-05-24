@@ -31,7 +31,7 @@ export default function AiAnswerCard({
           <span className={sectionLabel}>
             {modeLabel || 'Assistant'}
           </span>
-          <span className="text-[10px] text-gray-500">{timestampLabel}</span>
+          <span className="text-micro text-gray-500">{timestampLabel}</span>
         </div>
       </div>
     );
@@ -44,23 +44,23 @@ export default function AiAnswerCard({
           <p className={sectionLabel}>
             {analysis.modeLabel}
           </p>
-          <h3 className="mt-1 text-[14px] font-semibold tracking-tight text-gray-900">{analysis.title}</h3>
+          <h3 className="mt-1 text-sm font-semibold tracking-tight text-gray-900">{analysis.title}</h3>
           {analysis.timeframe ? (
-            <p className="mt-1 text-[11px] text-gray-500">{analysis.timeframe.exactLabel}</p>
+            <p className="mt-1 text-caption text-gray-500">{analysis.timeframe.exactLabel}</p>
           ) : null}
         </div>
         <div className="flex items-center gap-2">
           <span className={`border px-2 py-1 ${sectionLabel} ${confidenceClasses(analysis.confidence)}`}>
             {analysis.confidence} confidence
           </span>
-          <span className="text-[10px] text-gray-500">{timestampLabel}</span>
+          <span className="text-micro text-gray-500">{timestampLabel}</span>
         </div>
       </div>
 
       <div className="space-y-4 px-4 py-4">
         <MarkdownRenderer content={analysis.summary} />
         {content.trim() && content.trim() !== analysis.summary.trim() ? (
-          <div className="border-l border-gray-200 pl-3 text-[11px] leading-6 text-gray-600">
+          <div className="border-l border-gray-200 pl-3 text-caption leading-6 text-gray-600">
             <MarkdownRenderer content={content} />
           </div>
         ) : null}
@@ -70,9 +70,9 @@ export default function AiAnswerCard({
             {analysis.metrics.map((metric) => (
               <div key={metric.label} className="border border-gray-200 px-3 py-2">
                 <p className={sectionLabel}>{metric.label}</p>
-                <p className="mt-1 text-[18px] font-semibold tracking-tight text-gray-900">{metric.value}</p>
+                <p className="mt-1 text-lg font-semibold tracking-tight text-gray-900">{metric.value}</p>
                 {metric.detail ? (
-                  <p className="mt-1 text-[11px] leading-5 text-gray-500">{metric.detail}</p>
+                  <p className="mt-1 text-caption leading-5 text-gray-500">{metric.detail}</p>
                 ) : null}
               </div>
             ))}
@@ -86,7 +86,7 @@ export default function AiAnswerCard({
             </div>
             <div className="divide-y divide-gray-100">
               {analysis.breakdown.map((row) => (
-                <div key={row.id} className="flex items-center justify-between gap-3 px-3 py-2 text-[12px]">
+                <div key={row.id} className="flex items-center justify-between gap-3 px-3 py-2 text-label">
                   <div className="min-w-0">
                     {row.href ? (
                       <a href={row.href} className="font-medium text-gray-900 underline-offset-2 hover:underline">
@@ -95,7 +95,7 @@ export default function AiAnswerCard({
                     ) : (
                       <span className="font-medium text-gray-900">{row.label}</span>
                     )}
-                    {row.detail ? <p className="text-[11px] text-gray-500">{row.detail}</p> : null}
+                    {row.detail ? <p className="text-caption text-gray-500">{row.detail}</p> : null}
                   </div>
                   <span className={tableCell}>{row.value}</span>
                 </div>
@@ -113,20 +113,20 @@ export default function AiAnswerCard({
               {analysis.sampleRecords.map((record) => (
                 <div key={record.id} className="px-3 py-2">
                   {record.href ? (
-                    <a href={record.href} className="text-[12px] font-medium text-gray-900 underline-offset-2 hover:underline">
+                    <a href={record.href} className="text-label font-medium text-gray-900 underline-offset-2 hover:underline">
                       {record.primary}
                     </a>
                   ) : (
-                    <p className="text-[12px] font-medium text-gray-900">{record.primary}</p>
+                    <p className="text-label font-medium text-gray-900">{record.primary}</p>
                   )}
-                  {record.secondary ? <p className="mt-1 text-[11px] text-gray-500">{record.secondary}</p> : null}
+                  {record.secondary ? <p className="mt-1 text-caption text-gray-500">{record.secondary}</p> : null}
                 </div>
               ))}
             </div>
           </details>
         ) : null}
 
-        <div className="flex flex-wrap gap-2 text-[10px]">
+        <div className="flex flex-wrap gap-2 text-micro">
           {analysis.sources.map((source) => (
             <span key={source.id} className="border border-gray-200 bg-gray-50 px-2 py-1 text-gray-600" title={source.detail}>
               {source.label}
@@ -140,7 +140,7 @@ export default function AiAnswerCard({
               <a
                 key={action.href}
                 href={action.href}
-                className="border border-gray-300 px-3 py-1.5 text-[11px] font-medium text-gray-700 transition-colors hover:border-gray-400 hover:text-gray-900"
+                className="border border-gray-300 px-3 py-1.5 text-caption font-medium text-gray-700 transition-colors hover:border-gray-400 hover:text-gray-900"
               >
                 {action.label}
               </a>
@@ -155,7 +155,7 @@ export default function AiAnswerCard({
                 key={prompt}
                 type="button"
                 onClick={() => onFollowUp?.(prompt)}
-                className="border border-gray-200 px-3 py-1.5 text-left text-[11px] text-gray-600 transition-colors hover:border-gray-300 hover:bg-gray-50 hover:text-gray-900"
+                className="border border-gray-200 px-3 py-1.5 text-left text-caption text-gray-600 transition-colors hover:border-gray-300 hover:bg-gray-50 hover:text-gray-900"
               >
                 {prompt}
               </button>

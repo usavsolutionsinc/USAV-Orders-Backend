@@ -93,8 +93,8 @@ export function PoMailboxTab() {
           <Mail className="h-5 w-5" />
         </div>
         <div>
-          <h1 className="text-[22px] font-semibold tracking-tight text-gray-900">PO Mailbox</h1>
-          <p className="mt-0.5 text-[13px] text-gray-500">
+          <h1 className="text-2xl font-semibold tracking-tight text-gray-900">PO Mailbox</h1>
+          <p className="mt-0.5 text-sm text-gray-500">
             Dedicated Gmail account scanned for purchase-order emails. Connect once; refresh tokens
             are stored server-side and rotated automatically.
           </p>
@@ -103,7 +103,7 @@ export function PoMailboxTab() {
 
       <section className="rounded-lg border border-gray-200 bg-white shadow-sm">
         <div className="border-b border-gray-100 px-5 py-3">
-          <h2 className="text-[14px] font-medium text-gray-900">Connection</h2>
+          <h2 className="text-sm font-medium text-gray-900">Connection</h2>
         </div>
 
         <div className="space-y-4 px-5 py-4">
@@ -115,12 +115,12 @@ export function PoMailboxTab() {
                 detail={status.accountEmail ?? '(account email unavailable)'}
               />
               {status.connectedAt && (
-                <p className="text-[12px] text-gray-500">
+                <p className="text-label text-gray-500">
                   Connected {new Date(status.connectedAt).toLocaleString()}
                 </p>
               )}
               {status.needsReconnect && status.needsReconnectReason && (
-                <div className="flex items-start gap-2 rounded-md bg-amber-50 px-3 py-2 text-[12px] text-amber-800">
+                <div className="flex items-start gap-2 rounded-md bg-amber-50 px-3 py-2 text-label text-amber-800">
                   <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
                   <div>
                     <div className="font-medium">Refresh token rejected</div>
@@ -133,7 +133,7 @@ export function PoMailboxTab() {
                 <button
                   type="button"
                   onClick={handleConnect}
-                  className="inline-flex items-center gap-1.5 rounded-md border border-gray-300 bg-white px-3 py-1.5 text-[13px] font-medium text-gray-700 hover:bg-gray-50"
+                  className="inline-flex items-center gap-1.5 rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50"
                 >
                   <RefreshCw className="h-4 w-4" />
                   Reconnect
@@ -142,7 +142,7 @@ export function PoMailboxTab() {
                   type="button"
                   onClick={handleDisconnect}
                   disabled={disconnecting}
-                  className="inline-flex items-center gap-1.5 rounded-md border border-red-200 bg-white px-3 py-1.5 text-[13px] font-medium text-red-600 hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-60"
+                  className="inline-flex items-center gap-1.5 rounded-md border border-red-200 bg-white px-3 py-1.5 text-sm font-medium text-red-600 hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-60"
                 >
                   {disconnecting ? <Loader2 className="h-4 w-4 animate-spin" /> : <X className="h-4 w-4" />}
                   Disconnect
@@ -155,12 +155,12 @@ export function PoMailboxTab() {
               <button
                 type="button"
                 onClick={handleConnect}
-                className="inline-flex items-center gap-1.5 rounded-md bg-blue-600 px-3 py-1.5 text-[13px] font-medium text-white hover:bg-blue-700"
+                className="inline-flex items-center gap-1.5 rounded-md bg-blue-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-blue-700"
               >
                 <Mail className="h-4 w-4" />
                 Connect PO mailbox
               </button>
-              <p className="text-[12px] text-gray-500">
+              <p className="text-label text-gray-500">
                 You&apos;ll be redirected to Google to sign in as the dedicated PO email account and approve
                 the <code className="rounded bg-gray-100 px-1 py-0.5">gmail.modify</code> scope.
               </p>
@@ -171,9 +171,9 @@ export function PoMailboxTab() {
 
       <section className="rounded-lg border border-gray-200 bg-white shadow-sm">
         <div className="border-b border-gray-100 px-5 py-3">
-          <h2 className="text-[14px] font-medium text-gray-900">Scope &amp; storage</h2>
+          <h2 className="text-sm font-medium text-gray-900">Scope &amp; storage</h2>
         </div>
-        <dl className="grid grid-cols-1 gap-x-6 gap-y-2 px-5 py-4 text-[13px] sm:grid-cols-[140px_1fr]">
+        <dl className="grid grid-cols-1 gap-x-6 gap-y-2 px-5 py-4 text-sm sm:grid-cols-[140px_1fr]">
           <dt className="text-gray-500">Scope granted</dt>
           <dd className="text-gray-900 break-all">{status?.scope ?? '—'}</dd>
           <dt className="text-gray-500">Refresh token</dt>
@@ -200,8 +200,8 @@ function StatusRow({ ok, label, detail }: { ok: boolean; label: string; detail: 
         {ok ? <Check className="h-3.5 w-3.5" /> : <X className="h-3.5 w-3.5" />}
       </span>
       <div className="min-w-0">
-        <div className="text-[14px] font-medium text-gray-900">{label}</div>
-        <div className="truncate text-[12px] text-gray-500">{detail}</div>
+        <div className="text-sm font-medium text-gray-900">{label}</div>
+        <div className="truncate text-label text-gray-500">{detail}</div>
       </div>
     </div>
   );

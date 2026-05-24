@@ -88,7 +88,7 @@ export function AuditLogSidebarPanel() {
       {/* Section nav */}
       <div className="border-b border-gray-100 px-3 py-3">
         <p className={`px-1 ${sectionLabel} text-emerald-600`}>Audit Log</p>
-        <p className={`mt-1 px-1 text-[11px] font-semibold leading-snug text-gray-500`}>
+        <p className={`mt-1 px-1 text-caption font-semibold leading-snug text-gray-500`}>
           Every event captured per page — who, when, what changed.
         </p>
         <div className="mt-3">
@@ -129,7 +129,7 @@ export function AuditLogSidebarPanel() {
         ) : activeSection?.id === 'sku' ? (
           <SkuPicker />
         ) : activeSection?.id === 'staff' ? (
-          <div className="px-4 py-6 text-center text-[11px] text-gray-400">
+          <div className="px-4 py-6 text-center text-caption text-gray-400">
             Pick a staff member above to load their cross-section audit feed.
           </div>
         ) : (
@@ -205,9 +205,9 @@ function ReceivingPOPicker({
             {error}
           </div>
         ) : loading ? (
-          <div className="p-4 text-center text-[11px] text-gray-400">Loading…</div>
+          <div className="p-4 text-center text-caption text-gray-400">Loading…</div>
         ) : list.length === 0 ? (
-          <div className="p-4 text-center text-[11px] text-gray-400">No POs found.</div>
+          <div className="p-4 text-center text-caption text-gray-400">No POs found.</div>
         ) : (
           <ul className="divide-y divide-gray-100">
             {list.map((po) => {
@@ -231,14 +231,14 @@ function ReceivingPOPicker({
                       <div className={`truncate text-xs font-semibold ${fieldLabel} text-gray-900`}>
                         {po.po_number ?? po.po_id}
                       </div>
-                      <div className="shrink-0 text-[10px] text-gray-400">
+                      <div className="shrink-0 text-micro text-gray-400">
                         {relTime(po.latest_event_at)}
                       </div>
                     </div>
                     {po.vendor_name && (
-                      <div className="truncate text-[11px] text-gray-500">{po.vendor_name}</div>
+                      <div className="truncate text-caption text-gray-500">{po.vendor_name}</div>
                     )}
-                    <div className="mt-1 flex items-center gap-1.5 text-[10px] text-gray-500">
+                    <div className="mt-1 flex items-center gap-1.5 text-micro text-gray-500">
                       <span>{po.line_count}L</span>
                       <span>·</span>
                       <span>{po.carton_count}C</span>
@@ -326,9 +326,9 @@ function SidebarListPicker({
             {error}
           </div>
         ) : loading ? (
-          <div className="p-4 text-center text-[11px] text-gray-400">Loading…</div>
+          <div className="p-4 text-center text-caption text-gray-400">Loading…</div>
         ) : rows.length === 0 ? (
-          <div className="p-4 text-center text-[11px] text-gray-400">Nothing here.</div>
+          <div className="p-4 text-center text-caption text-gray-400">Nothing here.</div>
         ) : (
           <ul className="divide-y divide-gray-100">
             {rows.map((row) => {
@@ -349,14 +349,14 @@ function SidebarListPicker({
                         {row.title}
                       </div>
                       {row.trailing && (
-                        <div className="shrink-0 text-[10px] text-gray-400">{row.trailing}</div>
+                        <div className="shrink-0 text-micro text-gray-400">{row.trailing}</div>
                       )}
                     </div>
                     {row.subtitle && (
-                      <div className="truncate text-[11px] text-gray-500">{row.subtitle}</div>
+                      <div className="truncate text-caption text-gray-500">{row.subtitle}</div>
                     )}
                     {row.meta && (
-                      <div className="mt-1 text-[10px] text-gray-500">{row.meta}</div>
+                      <div className="mt-1 text-micro text-gray-500">{row.meta}</div>
                     )}
                   </button>
                 </li>

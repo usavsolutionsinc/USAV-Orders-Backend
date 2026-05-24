@@ -43,7 +43,7 @@ export default function MobileItemPhotoCapturePage(
 
   if (isLoading) {
     return (
-      <div className="grid min-h-screen place-items-center bg-black text-[11px] font-bold uppercase tracking-widest text-white/60">
+      <div className="grid min-h-screen place-items-center bg-black text-caption font-bold uppercase tracking-widest text-white/60">
         Opening camera…
       </div>
     );
@@ -52,7 +52,7 @@ export default function MobileItemPhotoCapturePage(
   if (error || !item?.receiving_id) {
     return (
       <div className="grid min-h-screen place-items-center bg-slate-50 px-6 text-center">
-        <p className="text-[12px] font-bold text-gray-600">
+        <p className="text-label font-bold text-gray-600">
           This item isn't ready for photos yet.
         </p>
       </div>

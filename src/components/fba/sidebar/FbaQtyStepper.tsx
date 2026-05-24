@@ -51,7 +51,7 @@ export function FbaQtyStepper({
         min={0}
         onChange={(v) => onChange(Math.max(0, v))}
         onClick={(e) => e.stopPropagation()}
-        className={`h-7 w-10 border-x bg-white text-center text-[12px] font-black tabular-nums outline-none [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none ${inputBorder}`}
+        className={`h-7 w-10 border-x bg-white text-center text-label font-black tabular-nums outline-none [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none ${inputBorder}`}
       />
       <button
         type="button"
@@ -74,8 +74,8 @@ export function FbaQtyStepper({
 export function FbaQtyDisplay({ value }: { value: number }) {
   return (
     <div className="flex shrink-0 flex-col items-center text-center px-2">
-      <span className="text-[14px] font-black tabular-nums text-gray-900">{value}</span>
-      <span className="text-[9px] font-black uppercase tracking-widest text-gray-400">qty</span>
+      <span className="text-sm font-black tabular-nums text-gray-900">{value}</span>
+      <span className="text-eyebrow font-black uppercase tracking-widest text-gray-400">qty</span>
     </div>
   );
 }

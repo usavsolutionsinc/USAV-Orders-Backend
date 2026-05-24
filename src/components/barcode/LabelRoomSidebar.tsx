@@ -48,10 +48,10 @@ export function LabelRoomSidebar({
   return (
     <div className="flex h-full min-h-0 flex-col">
       <div className="border-b border-gray-100 bg-gradient-to-b from-white to-gray-50/50 px-4 pb-3 pt-4">
-        <h2 className="text-[15px] font-bold tracking-tight text-gray-900">
+        <h2 className="text-base font-bold tracking-tight text-gray-900">
           Pick a room
         </h2>
-        <p className="mt-0.5 text-[11px] text-gray-500">
+        <p className="mt-0.5 text-caption text-gray-500">
           {selectedRoom
             ? `Zone ${zoneLetter ?? '?'} · ${selectedRoom}`
             : emptySubtitle}
@@ -83,7 +83,7 @@ export function LabelRoomSidebar({
                 >
                   <ZoneLetterTile letter={letter} active={isSelected} />
                   <div className="min-w-0 flex-1">
-                    <p className="break-words text-[14px] font-semibold leading-snug text-gray-900">
+                    <p className="break-words text-sm font-semibold leading-snug text-gray-900">
                       {room}
                     </p>
                     {!letter && (
@@ -105,7 +105,7 @@ export function LabelRoomSidebar({
 function EmptyRooms() {
   return (
     <div className="rounded-2xl border border-dashed border-gray-200 px-5 py-10 text-center">
-      <p className="text-[13px] font-semibold text-gray-700">No rooms yet</p>
+      <p className="text-sm font-semibold text-gray-700">No rooms yet</p>
       <p className="mt-1 text-[11.5px] text-gray-500">
         Open the <span className="font-semibold">Rooms</span> tab and add one — it'll show up here.
       </p>
@@ -116,7 +116,7 @@ function EmptyRooms() {
 function NoMatches({ query }: { query: string }) {
   return (
     <div className="rounded-2xl border border-dashed border-gray-200 px-5 py-10 text-center">
-      <p className="text-[13px] font-semibold text-gray-700">
+      <p className="text-sm font-semibold text-gray-700">
         No rooms match “{query.trim()}”
       </p>
       <p className="mt-1 text-[11.5px] text-gray-500">
@@ -130,7 +130,7 @@ function ZoneLetterTile({ letter, active }: { letter: string | undefined; active
   if (letter) {
     return (
       <div
-        className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl font-mono text-[20px] font-semibold ring-1 transition-colors ${
+        className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl font-mono text-xl font-semibold ring-1 transition-colors ${
           active
             ? 'bg-gradient-to-br from-blue-500 to-blue-700 text-white ring-blue-700/20 shadow-sm shadow-blue-600/30'
             : 'bg-gradient-to-br from-blue-50 to-blue-100/70 text-blue-700 ring-blue-200'
@@ -142,7 +142,7 @@ function ZoneLetterTile({ letter, active }: { letter: string | undefined; active
   }
   return (
     <div
-      className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-amber-50 font-mono text-[18px] font-semibold text-amber-700 ring-1 ring-amber-200"
+      className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-amber-50 font-mono text-lg font-semibold text-amber-700 ring-1 ring-amber-200"
       title="No zone letter assigned yet — go to the Rooms tab"
     >
       ?

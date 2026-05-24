@@ -66,8 +66,8 @@ export const POST = withAuth(async (req, ctx) => {
     const session = await createCheckoutSession({
       customerId,
       priceId,
-      successUrl: `${origin}/settings/billing?status=success`,
-      cancelUrl:  `${origin}/settings/billing?status=cancelled`,
+      successUrl: `${origin}/admin?section=billing&status=success`,
+      cancelUrl:  `${origin}/admin?section=billing&status=cancelled`,
       orgId: org.id,
     });
     return NextResponse.json({ url: session.url });

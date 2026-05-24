@@ -35,8 +35,10 @@ async function main() {
   });
 
   const baseUrl = getBaseUrl();
-  const expectedSchedules = loadExpectedSchedules();
+  const allExpected = loadExpectedSchedules();
+  const expectedSchedules = allExpected.filter((s) => s.managedBy !== 'vercel');
   const expectedIds = new Set(expectedSchedules.map((schedule) => String(schedule.scheduleId)));
+  console.log(`Considering ${expectedSchedules.length} QStash-managed schedules (${allExpected.length - expectedSchedules.length} are vercel-managed and ignored here)`);
 
   const existingSchedules = await client.schedules.list();
   const obsoleteSchedules = existingSchedules.filter(

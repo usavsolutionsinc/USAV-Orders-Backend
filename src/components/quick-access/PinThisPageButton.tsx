@@ -49,7 +49,7 @@ export function PinThisPageButton({ onPinned }: PinThisPageButtonProps) {
     <button
       type="button"
       onClick={handleClick}
-      className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-[10px] font-bold uppercase tracking-widest text-blue-600 hover:bg-blue-50"
+      className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-micro font-bold uppercase tracking-widest text-blue-600 hover:bg-blue-50"
     >
       <svg className="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
         <line x1="12" y1="5" x2="12" y2="19" />

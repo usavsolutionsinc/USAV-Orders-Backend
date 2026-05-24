@@ -45,10 +45,10 @@ export function MobileFbaItemCard({ item, isExpanded, onToggleExpand }: MobileFb
               showYear={false}
               icon={Package}
               iconClassName="w-4 h-4 text-purple-600"
-              textClassName="text-[15px] font-black text-blue-700"
+              textClassName="text-base font-black text-blue-700"
               className=""
             />
-            <span className="text-[15px] font-black tabular-nums text-blue-700">{card.daysLate}</span>
+            <span className="text-base font-black tabular-nums text-blue-700">{card.daysLate}</span>
           </div>
           <div className="flex items-center gap-2">
             <button
@@ -69,7 +69,7 @@ export function MobileFbaItemCard({ item, isExpanded, onToggleExpand }: MobileFb
 
         {/* ── Body ── */}
         <div className="px-3">
-          <h4 className="text-[17px] font-black text-gray-900 leading-tight">
+          <h4 className="text-lg font-black text-gray-900 leading-tight">
             <InlineQtyPrefix quantity={card.qtyLabel} />
             {card.conditionLabel && <><span className={card.conditionColor}>{card.conditionLabel}</span>{' '}</>}
             {item.product_title || `FNSKU • ${card.fnskuLast4}`}

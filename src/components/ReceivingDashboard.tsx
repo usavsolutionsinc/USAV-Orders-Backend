@@ -285,13 +285,13 @@ function ReceiveEmptyState() {
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4h4v4H4V4zm6 0h1v4h-1V4zm3 0h1v4h-1V4zm3 0h1v4h-1V4zm3 0h1v4h-1V4zM4 16h4v4H4v-4zm6 0h1v4h-1v-4zm3 0h1v4h-1v-4zm3 0h1v4h-1v-4zm3 0h1v4h-1v-4z" />
           </svg>
         </div>
-        <p className="text-[10px] font-black uppercase tracking-[0.18em] text-gray-400">
+        <p className="text-micro font-black uppercase tracking-[0.18em] text-gray-400">
           Ready to receive
         </p>
-        <h2 className="mt-1 text-[15px] font-extrabold tracking-tight text-gray-900">
+        <h2 className="mt-1 text-base font-extrabold tracking-tight text-gray-900">
           Scan a new tracking number to start
         </h2>
-        <p className="mt-2 text-[12px] font-semibold leading-snug text-gray-600">
+        <p className="mt-2 text-label font-semibold leading-snug text-gray-600">
           Or pick a recent PO from the sidebar to update it. Flip to{' '}
           <span className="font-black text-gray-900">History</span> from the
           sidebar to browse and search past entries.

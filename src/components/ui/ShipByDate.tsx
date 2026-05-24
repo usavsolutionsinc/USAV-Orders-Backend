@@ -19,7 +19,7 @@ export function ShipByDate({
   showYear = true,
   icon: Icon = Calendar,
   iconClassName = 'w-3 h-3 text-blue-600',
-  textClassName = 'text-[9px] font-bold text-blue-700',
+  textClassName = 'text-eyebrow font-bold text-blue-700',
 }: ShipByDateProps) {
   if (!date) return null;
 

@@ -247,7 +247,7 @@ export function ReceivingRecentRail({ selectedLineId, limit = 20 }: Props) {
   return (
     <section className="border-t border-gray-100 bg-white">
       <div className="flex items-center justify-between px-3 pt-2 pb-1">
-        <p className="text-[9px] font-black uppercase tracking-widest text-gray-500">
+        <p className="text-eyebrow font-black uppercase tracking-widest text-gray-500">
           Recent · {rows.length}
           {allRows.length > rows.length ? (
             <span className="ml-1 font-bold text-gray-300">/ {allRows.length}</span>
@@ -264,7 +264,7 @@ export function ReceivingRecentRail({ selectedLineId, limit = 20 }: Props) {
           ))}
         </div>
       ) : rows.length === 0 ? (
-        <p className="px-3 py-3 text-[10px] font-semibold text-gray-400">
+        <p className="px-3 py-3 text-micro font-semibold text-gray-400">
           No recent activity yet.
         </p>
       ) : (
@@ -480,7 +480,7 @@ function RailRow({
         />
         <div className="min-w-0 flex-1">
           <div className="flex min-w-0 items-center gap-1.5">
-            <p className="truncate text-[11px] font-bold text-gray-900" title={title}>
+            <p className="truncate text-caption font-bold text-gray-900" title={title}>
               {title}
             </p>
             {showInlinePkgChip ? (
@@ -508,7 +508,7 @@ function RailRow({
               </button>
             ) : null}
           </div>
-          <p className="truncate text-[9px] font-semibold uppercase tracking-widest text-gray-500">
+          <p className="truncate text-eyebrow font-semibold uppercase tracking-widest text-gray-500">
             <span className={isComplete ? 'text-emerald-600' : 'text-gray-600'}>
               {qty}
             </span>
@@ -519,7 +519,7 @@ function RailRow({
             ) : null}
           </p>
         </div>
-        <span className="shrink-0 tabular-nums text-[9px] font-bold text-gray-400">
+        <span className="shrink-0 tabular-nums text-eyebrow font-bold text-gray-400">
           {relativeTime(activityAt)}
         </span>
       </button>
@@ -722,7 +722,7 @@ function RowPreviewPopover({
         {/* Title + status chips */}
         <div>
           <div className="flex items-start gap-2">
-            <p className="flex-1 text-[13px] font-black leading-snug text-gray-900">
+            <p className="flex-1 text-sm font-black leading-snug text-gray-900">
               {title}
             </p>
             {groupSize > 1 ? (
@@ -732,14 +732,14 @@ function RowPreviewPopover({
             ) : null}
           </div>
           <div className="mt-1.5 flex flex-wrap items-center gap-1">
-            <span className={`rounded px-1.5 py-0.5 text-[9px] font-black uppercase tracking-widest ring-1 ring-inset ${conditionTone}`}>
+            <span className={`rounded px-1.5 py-0.5 text-eyebrow font-black uppercase tracking-widest ring-1 ring-inset ${conditionTone}`}>
               {conditionLabel}
             </span>
-            <span className={`rounded px-1.5 py-0.5 text-[9px] font-black uppercase tracking-widest ${workflowTone}`}>
+            <span className={`rounded px-1.5 py-0.5 text-eyebrow font-black uppercase tracking-widest ${workflowTone}`}>
               {workflowLabel}
             </span>
             {row.needs_test ? (
-              <span className="rounded bg-orange-100 px-1.5 py-0.5 text-[9px] font-black uppercase tracking-widest text-orange-700">
+              <span className="rounded bg-orange-100 px-1.5 py-0.5 text-eyebrow font-black uppercase tracking-widest text-orange-700">
                 Test
               </span>
             ) : null}
@@ -747,7 +747,7 @@ function RowPreviewPopover({
                 operator can see at-a-glance whether the package has any
                 visual evidence attached without opening the workspace. */}
             <span
-              className={`ml-auto inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[9px] font-black uppercase tracking-widest ${
+              className={`ml-auto inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-eyebrow font-black uppercase tracking-widest ${
                 (row.photo_count ?? 0) > 0
                   ? 'bg-blue-50 text-blue-700 ring-1 ring-inset ring-blue-200'
                   : 'bg-gray-50 text-gray-400 ring-1 ring-inset ring-gray-200'
@@ -763,10 +763,10 @@ function RowPreviewPopover({
         {/* Qty progress bar */}
         <div>
           <div className="flex items-baseline justify-between">
-            <span className="text-[9px] font-black uppercase tracking-widest text-gray-400">
+            <span className="text-eyebrow font-black uppercase tracking-widest text-gray-400">
               Received
             </span>
-            <span className={`text-[11px] font-black tabular-nums ${isComplete ? 'text-emerald-600' : 'text-gray-700'}`}>
+            <span className={`text-caption font-black tabular-nums ${isComplete ? 'text-emerald-600' : 'text-gray-700'}`}>
               {row.quantity_received}
               <span className="text-gray-300 mx-0.5">/</span>
               <span className="text-gray-400">{row.quantity_expected ?? '?'}</span>
@@ -801,7 +801,7 @@ function RowPreviewPopover({
 
         {/* Footer: activity + open CTA */}
         <div className="flex items-center justify-between border-t border-gray-100 pt-2.5">
-          <span className="text-[9px] font-bold uppercase tracking-widest text-gray-400">
+          <span className="text-eyebrow font-bold uppercase tracking-widest text-gray-400">
             {relativeTime(row.last_activity_at ?? row.created_at)} ago
             {row.assigned_tech_id ? ` · ${getStaffName(row.assigned_tech_id)}` : ''}
           </span>
@@ -811,7 +811,7 @@ function RowPreviewPopover({
               onOpenWorkspace();
               onDismiss();
             }}
-            className="rounded-md bg-blue-600 px-2.5 py-1 text-[10px] font-black uppercase tracking-widest text-white shadow-sm transition-colors hover:bg-blue-700"
+            className="rounded-md bg-blue-600 px-2.5 py-1 text-micro font-black uppercase tracking-widest text-white shadow-sm transition-colors hover:bg-blue-700"
           >
             Open →
           </button>

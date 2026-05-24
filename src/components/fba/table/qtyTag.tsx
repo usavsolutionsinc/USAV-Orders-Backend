@@ -6,7 +6,7 @@ export function qtyTag(value: number, kind: 'planned' | 'printed' | 'remaining')
   };
   return (
     <span
-      className={`inline-flex min-w-[28px] items-center justify-center rounded-full border px-1.5 py-0.5 text-[10px] font-semibold tabular-nums ${cfg[kind]}`}
+      className={`inline-flex min-w-[28px] items-center justify-center rounded-full border px-1.5 py-0.5 text-micro font-semibold tabular-nums ${cfg[kind]}`}
     >
       {value}
     </span>

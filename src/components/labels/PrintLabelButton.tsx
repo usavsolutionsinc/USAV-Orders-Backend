@@ -19,9 +19,9 @@ type Props = {
 
 const variantClass: Record<Variant, string> = {
   primary:
-    'rounded-xl bg-gray-900 text-white px-4 py-2 text-[10px] hover:bg-black shadow-lg shadow-gray-900/20',
+    'rounded-xl bg-gray-900 text-white px-4 py-2 text-micro hover:bg-black shadow-lg shadow-gray-900/20',
   ghost:
-    'rounded-lg border border-gray-200 bg-white text-gray-600 px-3 py-1.5 text-[10px] hover:border-gray-300 hover:text-gray-800',
+    'rounded-lg border border-gray-200 bg-white text-gray-600 px-3 py-1.5 text-micro hover:border-gray-300 hover:text-gray-800',
   icon:
     'rounded-lg border border-gray-200 bg-white text-gray-500 h-8 w-8 justify-center hover:border-gray-300 hover:text-gray-800',
 };

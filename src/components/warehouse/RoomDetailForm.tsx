@@ -31,6 +31,7 @@ import {
   X,
 } from '@/components/Icons';
 import { successFeedback, errorFeedback, scanFeedback } from '@/lib/feedback/confirm';
+import { PageHeader } from '@/components/ui/pane-header';
 
 const LETTERS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('');
 
@@ -298,32 +299,24 @@ export function RoomDetailForm() {
     : 'Update the friendly name or zone letter. Renames cascade through bins and rekey their barcodes.';
 
   return (
-    <div className="flex flex-col gap-4 pb-28">
-      {/* Hero header */}
-      <header className="flex items-start justify-between gap-3">
-        <div className="flex min-w-0 items-center gap-3">
-          <BigZoneTile letter={trimmedLetter} placeholder={creating && !trimmedLetter} />
-          <div className="min-w-0">
-            <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-blue-600">
-              {creating ? 'New room' : 'Editing room'}
-            </p>
-            <h1 className="truncate text-[22px] font-bold tracking-tight text-gray-900">
-              {trimmedName || title || 'Untitled room'}
-            </h1>
-            <p className="mt-1 max-w-[60ch] text-[12.5px] leading-snug text-gray-500">
-              {subtitle}
-            </p>
-          </div>
-        </div>
-        <button
-          type="button"
-          onClick={() => setParam((p) => { p.delete('room'); p.delete('new'); })}
-          aria-label="Close room editor"
-          className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-gray-200 bg-white text-gray-500 transition-colors hover:bg-gray-50"
-        >
-          <X className="h-4 w-4" />
-        </button>
-      </header>
+    <div className="flex flex-col pb-28">
+      <PageHeader
+        eyebrow={creating ? 'New room' : 'Editing room'}
+        value={trimmedName || title || 'Untitled room'}
+        valueTitle={trimmedName || title || undefined}
+        onClose={() => setParam((p) => { p.delete('room'); p.delete('new'); })}
+      />
+
+      {/* Hero: zone tile + subtitle */}
+      <div className="flex items-start gap-3 px-4 py-4">
+        <BigZoneTile letter={trimmedLetter} placeholder={creating && !trimmedLetter} />
+        <p className="max-w-[60ch] text-[12.5px] leading-snug text-gray-500">
+          {subtitle}
+        </p>
+      </div>
+
+      <div className="flex flex-col gap-4 px-4">
+      {/* Hero block ends; below is the original form structure */}
 
       {/* Stats card (only when editing an existing room with data) */}
       {!creating && stats && (
@@ -334,7 +327,7 @@ export function RoomDetailForm() {
             <button
               type="button"
               onClick={goToBins}
-              className="inline-flex h-7 items-center gap-1 rounded-full bg-blue-50 px-2.5 text-[11px] font-semibold text-blue-700 ring-1 ring-blue-200 transition-colors hover:bg-blue-100"
+              className="inline-flex h-7 items-center gap-1 rounded-full bg-blue-50 px-2.5 text-caption font-semibold text-blue-700 ring-1 ring-blue-200 transition-colors hover:bg-blue-100"
               disabled={!selectedRoom}
             >
               <Box className="h-3.5 w-3.5" />
@@ -381,7 +374,7 @@ export function RoomDetailForm() {
 
       {/* Name field */}
       <WorkspaceCard label="Room name">
-        <p className="mb-2 text-[11px] text-gray-500">
+        <p className="mb-2 text-caption text-gray-500">
           The friendly label your team sees in pickers, scanners, and reports.
         </p>
         <input
@@ -390,14 +383,14 @@ export function RoomDetailForm() {
           onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
           placeholder="e.g. Zone 1 – New"
           autoComplete="off"
-          className={`h-12 w-full rounded-2xl border bg-gray-50 px-4 text-[15px] font-semibold text-gray-900 outline-none transition-colors focus:bg-white focus:ring-2 ${
+          className={`h-12 w-full rounded-2xl border bg-gray-50 px-4 text-base font-semibold text-gray-900 outline-none transition-colors focus:bg-white focus:ring-2 ${
             (nameTaken || renameTaken)
               ? 'border-red-300 focus:border-red-500 focus:ring-red-200'
               : 'border-gray-200 focus:border-blue-500 focus:ring-blue-200'
           }`}
         />
         {(nameTaken || renameTaken) && (
-          <p className="mt-1.5 text-[11px] font-medium text-red-600">
+          <p className="mt-1.5 text-caption font-medium text-red-600">
             A room named “{trimmedName}” already exists.
           </p>
         )}
@@ -407,12 +400,12 @@ export function RoomDetailForm() {
       <WorkspaceCard
         label="Zone letter"
         actions={
-          <span className="rounded-full bg-blue-50 px-2 py-0.5 font-mono text-[11px] font-semibold text-blue-700 ring-1 ring-blue-200">
+          <span className="rounded-full bg-blue-50 px-2 py-0.5 font-mono text-caption font-semibold text-blue-700 ring-1 ring-blue-200">
             {trimmedLetter || '—'}
           </span>
         }
       >
-        <p className="mb-3 text-[11px] text-gray-500">
+        <p className="mb-3 text-caption text-gray-500">
           One A–Z letter per room. Locked letters are already in use by
           another room.
         </p>
@@ -429,7 +422,7 @@ export function RoomDetailForm() {
                   scanFeedback();
                   setForm((f) => ({ ...f, letter: l }));
                 }}
-                className={`relative flex h-10 items-center justify-center rounded-xl text-[14px] font-semibold tabular-nums transition-all active:scale-[0.95] ${
+                className={`relative flex h-10 items-center justify-center rounded-xl text-sm font-semibold tabular-nums transition-all active:scale-[0.95] ${
                   isSelected
                     ? 'bg-gradient-to-br from-blue-500 to-blue-700 text-white shadow-md shadow-blue-600/30'
                     : isLocked
@@ -447,7 +440,7 @@ export function RoomDetailForm() {
 
       {/* Description */}
       <WorkspaceCard label="Notes (optional)">
-        <p className="mb-2 text-[11px] text-gray-500">
+        <p className="mb-2 text-caption text-gray-500">
           Anything pickers should know — e.g. “fragile only” or “overflow cage.”
         </p>
         <textarea
@@ -470,7 +463,7 @@ export function RoomDetailForm() {
         <WorkspaceCard tone="red" label="Danger zone">
           <div className="flex items-start gap-3">
             <div className="min-w-0 flex-1">
-              <p className="text-[13px] font-semibold text-gray-900">
+              <p className="text-sm font-semibold text-gray-900">
                 Delete this room
               </p>
               <p className="mt-0.5 text-[11.5px] text-gray-500">
@@ -482,7 +475,7 @@ export function RoomDetailForm() {
               type="button"
               onClick={() => setConfirmDelete(true)}
               disabled={roomMutating}
-              className="inline-flex h-10 shrink-0 items-center gap-1.5 rounded-full bg-red-50 px-3 text-[12px] font-semibold text-red-700 ring-1 ring-red-200 transition-colors hover:bg-red-100 active:scale-95 disabled:opacity-50"
+              className="inline-flex h-10 shrink-0 items-center gap-1.5 rounded-full bg-red-50 px-3 text-label font-semibold text-red-700 ring-1 ring-red-200 transition-colors hover:bg-red-100 active:scale-95 disabled:opacity-50"
             >
               <Trash2 className="h-3.5 w-3.5" />
               Delete
@@ -528,6 +521,7 @@ export function RoomDetailForm() {
           { key: 'Esc', label: 'Close' },
         ]}
       />
+      </div>
     </div>
   );
 }
@@ -547,10 +541,10 @@ function EmptyState({ loading, roomCount, onCreate }: EmptyStateProps) {
         <LayoutDashboard className="h-7 w-7 text-blue-600" />
       </div>
       <div className="space-y-1">
-        <h2 className="text-[18px] font-bold tracking-tight text-gray-900">
+        <h2 className="text-lg font-bold tracking-tight text-gray-900">
           {loading ? 'Loading rooms…' : 'Pick a room to edit'}
         </h2>
-        <p className="max-w-[42ch] text-[13px] leading-snug text-gray-500">
+        <p className="max-w-[42ch] text-sm leading-snug text-gray-500">
           {loading
             ? 'Fetching room records and bin counts from the database…'
             : roomCount === 0
@@ -565,7 +559,7 @@ function EmptyState({ loading, roomCount, onCreate }: EmptyStateProps) {
             successFeedback();
             onCreate();
           }}
-          className="inline-flex h-11 items-center gap-1.5 rounded-full bg-gradient-to-br from-blue-500 to-blue-700 px-4 text-[13px] font-semibold text-white shadow-md shadow-blue-600/30 transition-transform active:scale-[0.98]"
+          className="inline-flex h-11 items-center gap-1.5 rounded-full bg-gradient-to-br from-blue-500 to-blue-700 px-4 text-sm font-semibold text-white shadow-md shadow-blue-600/30 transition-transform active:scale-[0.98]"
         >
           <Plus className="h-4 w-4" />
           {roomCount === 0 ? 'Add your first room' : 'Add a new room'}
@@ -585,13 +579,13 @@ function EmptyState({ loading, roomCount, onCreate }: EmptyStateProps) {
 function BigZoneTile({ letter, placeholder }: { letter: string; placeholder: boolean }) {
   if (placeholder || !letter) {
     return (
-      <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-gray-50 to-gray-100 font-mono text-[22px] font-semibold text-gray-300 ring-1 ring-gray-200">
+      <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-gray-50 to-gray-100 font-mono text-2xl font-semibold text-gray-300 ring-1 ring-gray-200">
         <Pencil className="h-5 w-5" />
       </div>
     );
   }
   return (
-    <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-blue-500 to-blue-700 font-mono text-[22px] font-semibold text-white shadow-md shadow-blue-600/30 ring-1 ring-blue-700/30">
+    <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-blue-500 to-blue-700 font-mono text-2xl font-semibold text-white shadow-md shadow-blue-600/30 ring-1 ring-blue-700/30">
       {letter}
     </div>
   );
@@ -614,11 +608,11 @@ function Stat({
       : 'text-gray-900';
   return (
     <div className="rounded-2xl bg-gradient-to-b from-gray-50/70 to-white px-3 py-2.5 ring-1 ring-gray-100">
-      <div className="flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wider text-gray-500">
+      <div className="flex items-center gap-1 text-micro font-semibold uppercase tracking-wider text-gray-500">
         {icon}
         {label}
       </div>
-      <p className={`mt-1 text-[19px] font-bold tabular-nums leading-none ${valueClass}`}>
+      <p className={`mt-1 text-lg font-bold tabular-nums leading-none ${valueClass}`}>
         {value}
       </p>
     </div>
@@ -645,7 +639,7 @@ function Tally({
           : 'bg-slate-50 text-slate-700 ring-slate-200';
   return (
     <span
-      className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider ring-1 ${cls}`}
+      className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-micro font-semibold uppercase tracking-wider ring-1 ${cls}`}
     >
       {label}
       <span className="tabular-nums">{n}</span>

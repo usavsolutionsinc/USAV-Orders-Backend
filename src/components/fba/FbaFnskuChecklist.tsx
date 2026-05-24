@@ -86,8 +86,8 @@ function AnimatedQty({ value }: { value: number }) {
         initial={{ y: -8, opacity: 0, scale: 0.85 }}
         animate={{ y: 0, opacity: 1, scale: 1 }}
         exit={{ y: 8, opacity: 0, scale: 0.85 }}
-        transition={{ type: 'spring', stiffness: 500, damping: 30 }}
-        className="inline-block w-8 text-center font-mono text-[13px] font-black tabular-nums text-zinc-900"
+        transition={framerTransition.quantityBump}
+        className="inline-block w-8 text-center font-mono text-sm font-black tabular-nums text-zinc-900"
       >
         {value}
       </motion.span>
@@ -368,8 +368,8 @@ export function FbaFnskuChecklist({
           <motion.div initial={{ scale: 0 }} animate={{ scale: 1 }} transition={{ type: 'spring', stiffness: 400, damping: 18, delay: 0.1 }} className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-emerald-100">
             <Check className="h-8 w-8 text-emerald-600" />
           </motion.div>
-          <motion.p initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.22 }} className="text-[15px] font-black uppercase tracking-tight text-zinc-900">Added to Today&apos;s Plan</motion.p>
-          <motion.p initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.32 }} className="mt-1 text-[12px] font-bold text-zinc-400">
+          <motion.p initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.22 }} className="text-base font-black uppercase tracking-tight text-zinc-900">Added to Today&apos;s Plan</motion.p>
+          <motion.p initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.32 }} className="mt-1 text-label font-bold text-zinc-400">
             {addedCount} item{addedCount !== 1 ? 's' : ''} added{skippedCount > 0 ? ` · ${skippedCount} already existed` : ''}
           </motion.p>
         </motion.div>
@@ -426,8 +426,8 @@ export function FbaFnskuChecklist({
         >
           <div className="min-w-0">
             <p className={`${tableHeader} ${themeColors.text}`}>{headerEyebrow}</p>
-            <h2 className="mt-2 text-[15px] font-black tracking-tight text-zinc-900">{headerTitle}</h2>
-            <p className="mt-1 max-w-md text-[11px] leading-5 text-zinc-500">{headerSubtitle}</p>
+            <h2 className="mt-2 text-base font-black tracking-tight text-zinc-900">{headerTitle}</h2>
+            <p className="mt-1 max-w-md text-caption leading-5 text-zinc-500">{headerSubtitle}</p>
           </div>
           <div className="flex items-center gap-2">
             {/* Draft mode: Add to plan button */}
@@ -441,7 +441,7 @@ export function FbaFnskuChecklist({
                   whileTap={{ scale: 0.95 }}
                   onClick={handleAddToTodayPlan}
                   disabled={creating || newDraftItems.length === 0}
-                  className={`flex h-9 items-center gap-1.5 rounded-full px-4 text-[10px] font-black uppercase tracking-[0.14em] text-white transition-colors disabled:cursor-not-allowed disabled:opacity-40 ${themeColors.bg} ${themeColors.hover}`}
+                  className={`flex h-9 items-center gap-1.5 rounded-full px-4 text-micro font-black uppercase tracking-[0.14em] text-white transition-colors disabled:cursor-not-allowed disabled:opacity-40 ${themeColors.bg} ${themeColors.hover}`}
                 >
                   {creating ? <Loader2 className="h-3 w-3 animate-spin" /> : <Package className="h-3 w-3" />}
                   Add {newDraftItems.length > 0 ? `${newDraftItems.length} ` : ''}to plan
@@ -465,7 +465,7 @@ export function FbaFnskuChecklist({
         <AnimatePresence>
           {createError && (
             <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }} className="overflow-hidden border-b border-red-100 bg-red-50 px-4 py-2.5">
-              <div className="flex items-center gap-1.5 text-[10px] font-semibold text-red-700">
+              <div className="flex items-center gap-1.5 text-micro font-semibold text-red-700">
                 <AlertCircle className="h-3 w-3" />{createError}
               </div>
             </motion.div>
@@ -481,7 +481,7 @@ export function FbaFnskuChecklist({
               exit={{ opacity: 0, height: 0 }}
               className={`overflow-hidden border-b px-4 py-2.5 ${themeColors.border} ${themeColors.light}`}
             >
-              <div className={`flex items-center gap-1.5 text-[10px] font-semibold ${themeColors.text}`}>
+              <div className={`flex items-center gap-1.5 text-micro font-semibold ${themeColors.text}`}>
                 <Check className="h-3 w-3" />
                 {alreadyInPlanCount} FNSKU{alreadyInPlanCount !== 1 ? 's' : ''} already in today&apos;s plan — skipped
               </div>
@@ -574,7 +574,7 @@ export function FbaFnskuChecklist({
                   {/* Left: Title */}
                   <div className="min-w-0 flex flex-col">
                     <div className="flex min-w-0 items-center gap-1.5">
-                      <p className="truncate text-[12px] font-semibold text-zinc-900">
+                      <p className="truncate text-label font-semibold text-zinc-900">
                         {item.product_title || item.fnsku}
                       </p>
                       {item.alreadyInPlan && (
@@ -590,7 +590,7 @@ export function FbaFnskuChecklist({
                         </span>
                       )}
                     </div>
-                    <div className="mt-1 truncate text-[10px] font-semibold text-zinc-500">
+                    <div className="mt-1 truncate text-micro font-semibold text-zinc-500">
                       {item.found
                         ? [item.asin].filter(Boolean).join(' · ') || 'No metadata'
                         : 'You can still add this now and complete product details later.'}
@@ -675,12 +675,12 @@ export function FbaFnskuChecklist({
                       {/* Left: Title + sub-info */}
                       <div className="flex min-w-0 flex-1 flex-col">
                         <div className="flex min-w-0 items-center gap-2">
-                          <p className={`truncate text-[12px] font-semibold text-zinc-900 ${isCompleted ? 'text-zinc-600' : ''}`}>
+                          <p className={`truncate text-label font-semibold text-zinc-900 ${isCompleted ? 'text-zinc-600' : ''}`}>
                             {item.display_title || item.fnsku}
                           </p>
                           <StatusBadge status={item.status} />
                         </div>
-                        <div className="mt-1 flex flex-wrap items-center gap-x-1.5 gap-y-1 text-[10px] font-semibold text-zinc-500">
+                        <div className="mt-1 flex flex-wrap items-center gap-x-1.5 gap-y-1 text-micro font-semibold text-zinc-500">
                           {item.asin && <span className="truncate">{item.asin}</span>}
                           {(item.ready_by_name || item.verified_by_name) && <span className="shrink-0 opacity-40">·</span>}
                           {item.ready_by_name && (
@@ -778,7 +778,7 @@ export function FbaFnskuChecklist({
                               placeholder="Add a note for this item…"
                               rows={2}
                               autoFocus
-                              className="flex-1 resize-none bg-transparent text-[10px] font-semibold leading-5 text-zinc-700 outline-none placeholder:text-zinc-400"
+                              className="flex-1 resize-none bg-transparent text-micro font-semibold leading-5 text-zinc-700 outline-none placeholder:text-zinc-400"
                             />
                             <button
                               type="button"
@@ -811,11 +811,11 @@ export function FbaFnskuChecklist({
             className="absolute bottom-4 left-1/2 z-50 flex -translate-x-1/2 items-center gap-2 rounded-2xl border border-emerald-200 bg-white px-3 py-2.5 shadow-lg shadow-zinc-200/80"
           >
             <Check className="h-3.5 w-3.5 shrink-0 text-emerald-500" />
-            <p className="max-w-[200px] truncate text-[10px] font-bold text-zinc-700">Moved to print: <span className="text-zinc-500">{undoToast.label}</span></p>
+            <p className="max-w-[200px] truncate text-micro font-bold text-zinc-700">Moved to print: <span className="text-zinc-500">{undoToast.label}</span></p>
             <button
               type="button"
               onClick={handleUndoMoveToPrint}
-              className="rounded-full border border-zinc-200 bg-white px-2.5 py-1 text-[9px] font-black uppercase tracking-[0.14em] text-zinc-600 transition-colors hover:border-zinc-300 hover:bg-zinc-50"
+              className="rounded-full border border-zinc-200 bg-white px-2.5 py-1 text-eyebrow font-black uppercase tracking-[0.14em] text-zinc-600 transition-colors hover:border-zinc-300 hover:bg-zinc-50"
             >
               Undo
             </button>
