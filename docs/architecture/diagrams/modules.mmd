@@ -55,8 +55,6 @@ flowchart LR
   click lib_jobs "src/lib/jobs/ebay-sync.ts" "Open src/lib/jobs/ebay-sync.ts"
   app_m["app/m"]
   click app_m "src/app/m/layout.tsx" "Open src/app/m/layout.tsx"
-  components_TechDashboard_tsx["components/TechDashboard.tsx"]
-  click components_TechDashboard_tsx "src/components/TechDashboard.tsx" "Open src/components/TechDashboard.tsx"
   components_unshipped["components/unshipped"]
   click components_unshipped "src/components/unshipped/UnshippedTable.tsx" "Open src/components/unshipped/UnshippedTable.tsx"
   components_inventory["components/inventory"]
@@ -67,6 +65,8 @@ flowchart LR
   click components_tech "src/components/tech/UpNextActionDock.tsx" "Open src/components/tech/UpNextActionDock.tsx"
   app_receiving["app/receiving"]
   click app_receiving "src/app/receiving/page.tsx" "Open src/app/receiving/page.tsx"
+  components_TechDashboard_tsx["components/TechDashboard.tsx"]
+  click components_TechDashboard_tsx "src/components/TechDashboard.tsx" "Open src/components/TechDashboard.tsx"
   components_walk_in["components/walk-in"]
   click components_walk_in "src/components/walk-in/SalesDetailsPanel.tsx" "Open src/components/walk-in/SalesDetailsPanel.tsx"
   lib_tenancy["lib/tenancy"]
@@ -224,7 +224,6 @@ flowchart LR
   components_TechDashboard_tsx --> components_shipped
   components_TechDashboard_tsx --> components_station
   components_TechDashboard_tsx --> components_tech
-  components_TechDashboard_tsx --> components_ui
   components_TechDashboard_tsx --> hooks
   components_TechDashboard_tsx --> lib_neon
   components_TechDashboard_tsx --> utils

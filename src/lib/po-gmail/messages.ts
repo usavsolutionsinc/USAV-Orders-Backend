@@ -14,6 +14,7 @@
  * haven't built yet).
  */
 
+import DOMPurify from 'isomorphic-dompurify';
 import { poGmailFetch } from './client';
 
 const GMAIL_API = 'https://gmail.googleapis.com/gmail/v1/users/me';
@@ -28,7 +29,8 @@ export interface GmailMessageEnvelope {
   from: string;
   to: string;
   date: string; // raw Date header
-  bodyText: string; // decoded, plaintext-ish
+  bodyText: string; // decoded, plaintext-ish (display fallback)
+  bodyHtml: string | null; // DOMPurify-sanitized HTML, ready for iframe
   hasAttachments: boolean;
 }
 
@@ -63,22 +65,87 @@ function base64UrlDecode(data: string): string {
   return Buffer.from(padded, 'base64').toString('utf8');
 }
 
+// Zero-width / spam-evasion characters injected into many marketing emails.
+// Stripping them keeps the plaintext readable and avoids the wall-of-&zwnj;
+// output we used to render.
+//   U+00AD  soft hyphen
+//   U+200B  zero-width space
+//   U+200C  zero-width non-joiner (the visible "zwnj" entity decodes to this)
+//   U+200D  zero-width joiner
+//   U+2060  word joiner
+//   U+FEFF  zero-width no-break space / BOM
+const INVISIBLE_CHARS_RE = /[­​-‍⁠﻿]/g;
+
+const NAMED_ENTITIES: Record<string, string> = {
+  nbsp: ' ',
+  amp: '&',
+  lt: '<',
+  gt: '>',
+  quot: '"',
+  apos: "'",
+  zwnj: '‌',
+  zwj: '‍',
+  shy: '­',
+  ndash: '–',
+  mdash: '—',
+  hellip: '…',
+  lsquo: '‘',
+  rsquo: '’',
+  ldquo: '“',
+  rdquo: '”',
+  copy: '©',
+  reg: '®',
+  trade: '™',
+};
+
+function decodeEntities(s: string): string {
+  return s.replace(/&(#x?[0-9a-fA-F]+|[a-zA-Z]+);/g, (full, body) => {
+    if (body[0] === '#') {
+      const codePoint =
+        body[1] === 'x' || body[1] === 'X'
+          ? parseInt(body.slice(2), 16)
+          : parseInt(body.slice(1), 10);
+      if (!Number.isFinite(codePoint) || codePoint < 0 || codePoint > 0x10ffff) {
+        return full;
+      }
+      try {
+        return String.fromCodePoint(codePoint);
+      } catch {
+        return full;
+      }
+    }
+    return NAMED_ENTITIES[body] ?? full;
+  });
+}
+
 function stripHtml(html: string): string {
-  return html
-    .replace(/<style[\s\S]*?<\/style>/gi, ' ')
-    .replace(/<script[\s\S]*?<\/script>/gi, ' ')
-    .replace(/<br\s*\/?\s*>/gi, '\n')
-    .replace(/<\/?(p|div|li|tr|h[1-6])\b[^>]*>/gi, '\n')
-    .replace(/<[^>]+>/g, ' ')
-    .replace(/&nbsp;/g, ' ')
-    .replace(/&amp;/g, '&')
-    .replace(/&lt;/g, '<')
-    .replace(/&gt;/g, '>')
-    .replace(/&quot;/g, '"')
-    .replace(/&#39;/g, "'")
+  return decodeEntities(
+    html
+      .replace(/<style[\s\S]*?<\/style>/gi, ' ')
+      .replace(/<script[\s\S]*?<\/script>/gi, ' ')
+      .replace(/<br\s*\/?\s*>/gi, '\n')
+      .replace(/<\/?(p|div|li|tr|h[1-6])\b[^>]*>/gi, '\n')
+      .replace(/<[^>]+>/g, ' '),
+  )
+    .replace(INVISIBLE_CHARS_RE, '')
     .replace(/[ \t]+/g, ' ')
     .replace(/\n{3,}/g, '\n\n')
     .trim();
+}
+
+// Sanitize raw email HTML for display in a sandboxed iframe. DOMPurify
+// strips scripts, event handlers, iframes, and other dangerous nodes; we
+// also drop the zero-width spam-evasion characters so the rendered text
+// reads cleanly. Returns null when the source HTML is effectively empty.
+function sanitizeHtml(html: string): string | null {
+  const cleaned = html.replace(INVISIBLE_CHARS_RE, '');
+  const safe = DOMPurify.sanitize(cleaned, {
+    USE_PROFILES: { html: true },
+    FORBID_TAGS: ['style', 'script', 'iframe', 'object', 'embed', 'form'],
+    FORBID_ATTR: ['style', 'srcset'],
+    ALLOW_DATA_ATTR: false,
+  });
+  return safe.trim().length > 0 ? safe : null;
 }
 
 function pickHeader(part: GmailPart | undefined, name: string): string {
@@ -107,12 +174,18 @@ function detectAttachments(part: GmailPart | undefined): boolean {
   return (part.parts ?? []).some(detectAttachments);
 }
 
-function extractBodyText(payload: GmailPart | undefined): string {
-  const plain = walkForBody(payload, 'text/plain');
-  if (plain) return plain;
+function extractBody(payload: GmailPart | undefined): {
+  text: string;
+  html: string | null;
+} {
   const html = walkForBody(payload, 'text/html');
-  if (html) return stripHtml(html);
-  return '';
+  const plain = walkForBody(payload, 'text/plain');
+  return {
+    // Plain-text fallback: prefer the multipart text/plain alternative when
+    // the sender included one; otherwise derive readable text from the HTML.
+    text: plain ? plain.replace(INVISIBLE_CHARS_RE, '') : html ? stripHtml(html) : '',
+    html: html ? sanitizeHtml(html) : null,
+  };
 }
 
 export async function listMessageIds(
@@ -145,6 +218,7 @@ export async function fetchMessage(id: string): Promise<GmailMessageEnvelope> {
     throw new Error(`Gmail messages.get failed for ${id} (${res.status}): ${await res.text()}`);
   }
   const raw = (await res.json()) as GmailRawMessage;
+  const body = extractBody(raw.payload);
 
   return {
     id: raw.id,
@@ -156,7 +230,8 @@ export async function fetchMessage(id: string): Promise<GmailMessageEnvelope> {
     from: pickHeader(raw.payload, 'From'),
     to: pickHeader(raw.payload, 'To'),
     date: pickHeader(raw.payload, 'Date'),
-    bodyText: extractBodyText(raw.payload),
+    bodyText: body.text,
+    bodyHtml: body.html,
     hasAttachments: detectAttachments(raw.payload),
   };
 }

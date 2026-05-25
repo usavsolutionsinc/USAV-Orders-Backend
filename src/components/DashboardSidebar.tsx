@@ -31,7 +31,6 @@ import { ReplenishSidebarPanel } from '@/components/sidebar/ReplenishSidebarPane
 import { AuditLogSidebarPanel } from '@/components/sidebar/AuditLogSidebarPanel';
 import { useUIMode } from '@/design-system/providers/UIModeProvider';
 import { useAuth } from '@/contexts/AuthContext';
-import { getStaffColorHex } from '@/utils/staff-colors';
 import {
   getSidebarRouteKey,
   getSidebarNavItems,
@@ -42,8 +41,6 @@ import type { ShippedFormData } from '@/components/shipped';
 import { dispatchCloseShippedDetails, DASHBOARD_SHIPPED_FOCUS_SEARCH_PARAM } from '@/utils/events';
 import { getDashboardOrderViewFromSearch, parseDashboardOpenOrderId } from '@/utils/dashboard-search-state';
 import { useDashboardSearchController } from '@/hooks/useDashboardSearchController';
-import { DeviceModeToggle } from '@/components/sidebar/DeviceModeToggle';
-
 const MOBILE_SIDEBAR_MIN_WIDTH = 420;
 
 const DASHBOARD_VIEW_ITEMS: HorizontalSliderItem[] = [
@@ -52,56 +49,6 @@ const DASHBOARD_VIEW_ITEMS: HorizontalSliderItem[] = [
   { id: 'unshipped', label: 'Awaiting', icon: AlertCircle },
   { id: 'fba',       label: 'FBA',      icon: Package },
 ];
-
-function SignedInChip({ user }: { user: NonNullable<ReturnType<typeof useAuth>['user']> }) {
-  const { signOut } = useAuth();
-  const [staffName, setStaffName] = useState<string>('You');
-  const [staffColorHex, setStaffColorHex] = useState<string | null>(null);
-  const role = (user.role || '').replace(/_/g, ' ');
-
-  useEffect(() => {
-    let cancelled = false;
-    fetch(`/api/staff?id=${user.staffId}`, { cache: 'no-store' })
-      .then((r) => (r.ok ? r.json() : null))
-      .then((data: { staff?: { name?: string; color_hex?: string | null } } | null) => {
-        if (cancelled || !data?.staff) return;
-        if (data.staff.name) setStaffName(data.staff.name);
-        if (data.staff.color_hex) setStaffColorHex(data.staff.color_hex);
-      })
-      .catch(() => { /* fall back to "You" */ });
-    return () => { cancelled = true; };
-  }, [user.staffId]);
-
-  const initials = staffName
-    .split(/\s+/).filter(Boolean).slice(0, 2)
-    .map((p) => p[0]?.toUpperCase() ?? '').join('');
-
-  const avatarBg = getStaffColorHex({ id: user.staffId, color_hex: staffColorHex });
-
-  return (
-    <div className="flex items-center gap-2 rounded-xl border border-gray-200 bg-gray-50 px-2.5 py-2">
-      <div
-        className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full text-caption font-bold text-white"
-        style={{ backgroundColor: avatarBg }}
-      >
-        {initials || '?'}
-      </div>
-      <div className="min-w-0 flex-1">
-        <div className="truncate text-xs font-semibold text-gray-900">{staffName}</div>
-        <div className="truncate text-micro uppercase tracking-wider text-gray-500">{role}</div>
-      </div>
-      <button
-        type="button"
-        onClick={() => { void signOut(); }}
-        className="rounded-md px-2 py-1 text-caption font-medium text-gray-600 hover:bg-white hover:text-gray-900"
-        aria-label="Sign out"
-      >
-        Sign out
-      </button>
-    </div>
-  );
-}
-
 
 function getSidebarTitle(pathname: string | null) {
   const routeKey = getSidebarRouteKey(pathname);
@@ -284,8 +231,7 @@ function SidebarContextPanel({ onBackToAppNav }: { onBackToAppNav?: () => void }
   // /inventory's main shell owns its own header search + filter chips, but
   // we still mount a small sidebar panel here so the section nav pills
   // (Inventory ↔ PO Mailbox) live in the standard sidebar slot like every
-  // other section. /products falls through to `return null` below since
-  // its toolbar lives entirely in <ProductsShell>.
+  // other section.
   if (routeKey === 'inventory') return <InventorySidebarPanel />;
   if (routeKey === 'products') return <ProductsSidebarPanel />;
   if (routeKey === 'warehouse') return <WarehouseSidebarPanel />;
@@ -499,20 +445,6 @@ export default function DashboardSidebar({ inDrawer = false, onNavigate }: { inD
                 </motion.div>
               )}
             </div>
-            {authUser && (
-              <motion.div
-                variants={itemVariants}
-                className="flex-shrink-0 px-3 pb-2"
-              >
-                <SignedInChip user={authUser} />
-              </motion.div>
-            )}
-            <motion.div
-              variants={itemVariants}
-              className={`flex-shrink-0 ${inDrawer ? 'pb-[max(1rem,env(safe-area-inset-bottom))]' : ''}`}
-            >
-              <DeviceModeToggle />
-            </motion.div>
           </motion.div>
         ) : (
           <motion.div initial="hidden" animate="visible" variants={containerVariants} className="h-full flex flex-col overflow-hidden bg-white">

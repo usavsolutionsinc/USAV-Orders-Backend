@@ -42,26 +42,42 @@ export function SkeletonRow() {
   );
 }
 
+/**
+ * Mirrors the Linear-variant `OrderCard` row used in the /tech Up Next list.
+ * Three stacked rows inside `px-3 py-2.5`:
+ *   1. id chip · channel chip + chevron slot
+ *   2. title line
+ *   3. ship-by pill + urgency phrase ... condition badge + qty pill
+ */
 export function SkeletonOrderCard() {
   return (
     <motion.div
       {...framerPresence.upNextRow}
       transition={framerTransition.upNextRowMount}
-      className="bg-white rounded-2xl border border-gray-100 p-4 mb-3 shadow-sm"
+      className="relative bg-white px-3 py-2.5 border-b border-gray-100"
     >
-      <div className="flex justify-between items-center mb-4">
-        <div className="flex gap-2">
-          <SkeletonBase width="80px" height="20px" />
-          <SkeletonBase width="40px" height="20px" />
+      {/* Row 1 — meta line */}
+      <div className="flex items-center justify-between gap-2">
+        <div className="flex items-center gap-1.5">
+          <SkeletonBase width="48px" height="10px" />
+          <span className="h-1 w-1 rounded-full bg-gray-200" />
+          <SkeletonBase width="64px" height="10px" />
         </div>
-        <SkeletonBase width="60px" height="20px" />
+        <SkeletonBase width="14px" height="14px" />
       </div>
-      
-      <div className="space-y-3">
-        <SkeletonBase width="90%" height="1.25rem" />
-        <div className="flex gap-2">
-          <SkeletonBase width="100px" height="32px" className="rounded-lg" />
-          <SkeletonBase width="100px" height="32px" className="rounded-lg" />
+
+      {/* Row 2 — title */}
+      <div className="mt-1.5">
+        <SkeletonBase width="70%" height="14px" />
+      </div>
+
+      {/* Row 3 — ship-by + urgency + (right) condition + qty */}
+      <div className="mt-2 flex items-center gap-1.5">
+        <SkeletonBase width="48px" height="18px" className="rounded-md" />
+        <SkeletonBase width="56px" height="10px" />
+        <div className="ml-auto flex items-center gap-1">
+          <SkeletonBase width="40px" height="16px" className="rounded" />
+          <SkeletonBase width="24px" height="14px" className="rounded" />
         </div>
       </div>
     </motion.div>

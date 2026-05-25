@@ -50,6 +50,8 @@ export const TRIAGE_PILE_META: Record<TriagePile, TriagePileMeta> = {
 
 export interface TriageDetailBody {
   text: string;
+  /** DOMPurify-sanitized HTML. null when the source had no text/html part. */
+  html: string | null;
   length: number;
   subject: string;
   from: string;

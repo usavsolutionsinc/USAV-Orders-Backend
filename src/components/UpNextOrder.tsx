@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { framerPresence, framerTransition, framerVariants, SkeletonList } from '@/design-system';
+import { framerPresence, framerTransition, framerVariants, SkeletonBase, SkeletonList } from '@/design-system';
 import confetti from 'canvas-confetti';
 import { AlertCircle, Barcode, ClipboardList, List, Package, ShoppingCart, Wrench } from './Icons';
 import { dispatchUpNextPreview } from '@/utils/events';
@@ -293,14 +293,36 @@ export default function UpNextOrder({ techId, onStart, onMissingParts, onAllComp
   ].filter((section) => section.count > 0 && !HIDDEN_SECTION_IDS.has(section.id as UpNextTabId));
 
   if (loading) {
+    // Skeleton mirrors the loaded layout:
+    //   • Sticky nav slider (rounded-full pills, h-8) — one "active" pill is
+    //     filled to match the blue selected state without committing to a
+    //     specific tab while data is in flight.
+    //   • Urgency summary row (late / due-today eyebrow chips).
+    //   • Linear-style row cards (see SkeletonOrderCard).
     return (
-      <div className="flex flex-col gap-1">
-        <div className="h-10 w-full bg-white mb-2 flex gap-2 overflow-x-hidden px-1">
-          <div className="h-8 w-16 bg-gray-100 rounded-full animate-pulse flex-shrink-0" />
-          <div className="h-8 w-20 bg-gray-100 rounded-full animate-pulse flex-shrink-0" />
-          <div className="h-8 w-20 bg-gray-100 rounded-full animate-pulse flex-shrink-0" />
+      <div className="relative flex flex-col">
+        <div className="sticky top-0 z-10 bg-white pb-1.5">
+          <div className="-mx-1 overflow-x-hidden py-2">
+            <div className="flex min-w-max gap-2 px-1">
+              <div className="h-8 w-20 flex-shrink-0 rounded-full bg-blue-600/90 animate-pulse" />
+              <div className="h-8 w-24 flex-shrink-0 rounded-full bg-white ring-1 ring-inset ring-gray-200 animate-pulse" />
+              <div className="h-8 w-20 flex-shrink-0 rounded-full bg-white ring-1 ring-inset ring-gray-200 animate-pulse" />
+              <div className="h-8 w-24 flex-shrink-0 rounded-full bg-white ring-1 ring-inset ring-gray-200 animate-pulse" />
+            </div>
+          </div>
+          <div className="flex items-center gap-2 px-1 pt-0.5">
+            <span className="inline-flex items-center gap-1">
+              <span className="inline-block h-1.5 w-1.5 rounded-full bg-red-200" />
+              <SkeletonBase width="44px" height="10px" />
+            </span>
+            <span className="text-gray-300 text-eyebrow">·</span>
+            <span className="inline-flex items-center gap-1">
+              <span className="inline-block h-1.5 w-1.5 rounded-full bg-amber-200" />
+              <SkeletonBase width="64px" height="10px" />
+            </span>
+          </div>
         </div>
-        <SkeletonList count={4} type="card" />
+        <SkeletonList count={5} type="card" />
       </div>
     );
   }

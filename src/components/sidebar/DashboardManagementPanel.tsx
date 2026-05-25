@@ -781,9 +781,6 @@ export function DashboardManagementPanel({
             </AnimatePresence>
           </div>
 
-          <motion.footer variants={itemVariants} className="mt-auto pt-4 border-t border-gray-100 opacity-30 text-center">
-            <p className="text-eyebrow font-mono uppercase tracking-[0.2em] text-gray-500">USAV INFRASTRUCTURE</p>
-          </motion.footer>
         </div>
       </motion.div>
 

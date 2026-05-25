@@ -1,28 +1,3 @@
-export interface ProductListRow {
-    id: number;
-    sku: string;
-    product_title: string | null;
-    category: string | null;
-    gtin: string | null;
-    upc: string | null;
-    image_url: string | null;
-    is_active: boolean;
-    has_ecwid_link: boolean;
-}
-
-export interface ProductsListResponse {
-    success: true;
-    items: ProductListRow[];
-    total: number;
-    limit: number;
-    offset: number;
-}
-
-export interface ProductsListError {
-    success: false;
-    error: string;
-}
-
 export interface ProductDetailPayload {
     success: true;
     product: {

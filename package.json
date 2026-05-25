@@ -5,7 +5,9 @@
   "main": "electron/main.js",
   "scripts": {
     "dev": "next dev --turbopack",
+    "prebuild": "node scripts/generate-release-notes.mjs",
     "build": "NODE_OPTIONS='--max-old-space-size=4096' next build --webpack",
+    "release-notes:generate": "node scripts/generate-release-notes.mjs",
     "start": "next start",
     "vercel:env:push": "node scripts/push-vercel-env.js",
     "desktop:dev": "node scripts/electron-dev.js",
@@ -102,6 +104,7 @@
     "google-auth-library": "^10.6.2",
     "googleapis-common": "^8.0.1",
     "idb": "^8.0.3",
+    "isomorphic-dompurify": "^3.14.0",
     "lucide-react": "^1.7.0",
     "multer": "^2.1.1",
     "next": "16.1.1",

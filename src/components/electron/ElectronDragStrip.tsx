@@ -24,8 +24,7 @@ const MAC_TRAFFIC_LIGHTS_INSET = 78;
  * silently disables the drag region.
  */
 export function ElectronDragStrip() {
-  const [isElectron, setIsElectron] = useState(false);
-  const [isMac, setIsMac] = useState(false);
+  const [showStrip, setShowStrip] = useState(false);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -33,14 +32,13 @@ export function ElectronDragStrip() {
       (window as Window & { desktopApp?: { isElectron?: boolean } })
         .desktopApp?.isElectron,
     );
-    setIsElectron(electron);
-    setIsMac(/Mac|iPhone|iPod|iPad/.test(navigator.platform));
+    const isMac = /Mac|iPhone|iPod|iPad/.test(navigator.platform);
+    // Only mac needs the custom strip — Windows/Linux use the native window chrome.
+    const enabled = electron && isMac;
+    setShowStrip(enabled);
 
-    if (!electron) return;
+    if (!enabled) return;
 
-    // Tag <html> so a single CSS rule in globals.css can push the body down
-    // by the strip height with `!important`, defeating React's inline body
-    // `style={{ padding: 0 }}` without us having to fight it from JS.
     document.documentElement.classList.add('electron-shell');
     document.documentElement.style.setProperty('--electron-titlebar-height', `${STRIP_HEIGHT}px`);
 
@@ -50,7 +48,7 @@ export function ElectronDragStrip() {
     };
   }, []);
 
-  if (!isElectron) return null;
+  if (!showStrip) return null;
 
   return (
     <div
@@ -62,11 +60,7 @@ export function ElectronDragStrip() {
         right: 0,
         height: STRIP_HEIGHT,
         background: STRIP_BACKGROUND,
-        // macOS paints the traffic lights on top of this strip; we still want
-        // the drag region to span edge-to-edge so the strip looks like a
-        // single flat black band. The OS-level traffic-light hit areas
-        // intercept clicks before our drag region sees them.
-        paddingLeft: isMac ? MAC_TRAFFIC_LIGHTS_INSET : 0,
+        paddingLeft: MAC_TRAFFIC_LIGHTS_INSET,
         zIndex: 999999,
         // @ts-expect-error -- WebkitAppRegion is an Electron-only CSS prop
         WebkitAppRegion: 'drag',

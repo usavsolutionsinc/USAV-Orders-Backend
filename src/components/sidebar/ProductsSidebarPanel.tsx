@@ -9,16 +9,15 @@ import { BARCODE_MODES, type BarcodeMode } from '@/components/barcode/ModeSelect
 import { useBarcodeMode } from '@/hooks/useBarcodeMode';
 import { useLabelRecents } from '@/hooks/useLabelRecents';
 import { useSkuCatalogSearch, type SkuCatalogItem } from '@/hooks/useSkuCatalogSearch';
-import { ChevronDown, Printer, Database, FileText } from '@/components/Icons';
+import { ChevronDown, Printer, FileText } from '@/components/Icons';
 import { successFeedback } from '@/lib/feedback/confirm';
 import { SkuCatalogSidebar } from '@/components/manuals/SkuCatalogSidebar';
 import { PairingQueueList } from '@/components/products/pairing/PairingQueueList';
 import type { PairingQueueItem } from '@/components/products/pairing/types';
 
-type View = 'manuals' | 'labels' | 'catalog' | 'pairing';
+type View = 'manuals' | 'labels' | 'pairing';
 function parseView(raw: string | null): View {
   if (raw === 'labels') return 'labels';
-  if (raw === 'catalog') return 'catalog';
   if (raw === 'pairing') return 'pairing';
   // Manuals is the default landing view (folds in the retired /manuals route).
   return 'manuals';
@@ -26,14 +25,13 @@ function parseView(raw: string | null): View {
 
 /**
  * Sidebar surface for `/products`. Hosts:
- *   - View toggle — Manuals (default) · Label Printer · Catalog. Writes `?view=`.
+ *   - View toggle — Manuals (default) · Label Printer. Writes `?view=`.
  *     `pairing` remains a valid deep-link view (no pill) so existing
  *     `/products?view=pairing&sku=` URLs continue to work.
  *   - Manuals view (default): renders <SkuCatalogSidebar> which owns its own
  *     search + sort + mode pills + selected-product accordion sections.
  *   - Labels view: mode dropdown + SearchBar + Ecwid product picker list.
  *     Picking a row dispatches `sku:fill` for the MultiSkuSnBarcode workspace.
- *   - Catalog view: SearchBar that drives the ProductsShell table.
  *   - Pairing view (no pill, URL-only): PairingQueueList; selection writes ?sku=.
  *
  * Mounted by DashboardSidebar when routeKey === 'products'. The right-pane
@@ -53,7 +51,6 @@ export function ProductsSidebarPanel() {
     () => [
       { id: 'manuals', label: 'Manuals',       icon: FileText },
       { id: 'labels',  label: 'Label Printer', icon: Printer },
-      { id: 'catalog', label: 'Catalog',       icon: Database },
     ],
     [],
   );
@@ -165,11 +162,7 @@ export function ProductsSidebarPanel() {
         />
       ) : isPairing ? (
         <PairingSidebarQueue />
-      ) : (
-        // Catalog view: leave the rest of the sidebar empty — the table in
-        // the main pane is the primary interaction surface.
-        <div className="flex-1" />
-      )}
+      ) : null}
     </div>
   );
 }

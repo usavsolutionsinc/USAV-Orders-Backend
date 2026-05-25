@@ -1,10 +1,9 @@
 'use client';
 
-import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Suspense, useCallback, useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { AnimatePresence } from 'framer-motion';
 import { Loader2 } from '@/components/Icons';
-import { OverlaySearchBar } from '@/components/ui/OverlaySearchBar';
 import { FbaQuickAddFnskuModal } from '@/components/fba/FbaQuickAddFnskuModal';
 import { FbaCreatePlanModal } from '@/components/fba/FbaCreatePlanModal';
 import { FbaErrorState } from '@/components/fba/FbaStateShells';
@@ -131,31 +130,7 @@ function FbaPageContent() {
     [board.pending, weekRange],
   );
 
-  // ── FNSKU search ────────────────────────────────────────────────────────
-  const [searchQuery, setSearchQuery] = useState('');
-  const searchInputRef = useRef<HTMLInputElement | null>(null);
-
-  const searchVariant = useMemo((): 'blue' | 'orange' | 'emerald' | 'purple' | 'red' | 'gray' => {
-    const m: Record<string, 'blue' | 'orange' | 'emerald' | 'purple' | 'red' | 'gray'> = {
-      green: 'emerald', blue: 'blue', purple: 'purple',
-      yellow: 'orange', black: 'gray', red: 'red', lightblue: 'blue', pink: 'red',
-    };
-    return m[stationTheme] ?? 'blue';
-  }, [stationTheme]);
-
-  useEffect(() => {
-    setSearchQuery('');
-  }, [activeTab]);
-
-  const filteredPendingItems = useMemo(() => {
-    if (!searchQuery.trim()) return combineItemsForWeek;
-    const q = searchQuery.trim().toUpperCase();
-    return combineItemsForWeek.filter(
-      (item) =>
-        item.fnsku.toUpperCase().includes(q) ||
-        (item.display_title || '').toUpperCase().includes(q),
-    );
-  }, [combineItemsForWeek, searchQuery]);
+  const filteredPendingItems = combineItemsForWeek;
 
   // ── Detail panel ────────────────────────────────────────────────────────
   const [detailItem, setDetailItem] = useState<FbaBoardItem | null>(null);
@@ -187,24 +162,12 @@ function FbaPageContent() {
                 </div>
               ) : (
                 <>
-                  <div className="shrink-0 border-b border-gray-100 bg-white px-3 py-2">
-                    <OverlaySearchBar
-                      value={searchQuery}
-                      onChange={setSearchQuery}
-                      onClear={() => setSearchQuery('')}
-                      onClose={() => setSearchQuery('')}
-                      inputRef={searchInputRef}
-                      placeholder="Filter by FNSKU…"
-                      variant={searchVariant}
-                      className="w-full max-w-xl"
-                    />
-                  </div>
                   <div className="relative min-h-0 flex-1 overflow-hidden">
                     <FbaBoardTable
                       items={filteredPendingItems}
                       loading={loading && !board.pending.length}
                       stationTheme={stationTheme}
-                      emptyMessage={searchQuery ? 'No items match this FNSKU' : 'No pending FBA items'}
+                      emptyMessage="No pending FBA items"
                       onDetailOpen={setDetailItem}
                       weekRange={weekRange}
                       weekOffset={weekOffset}

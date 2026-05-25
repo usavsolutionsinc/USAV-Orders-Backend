@@ -98,6 +98,7 @@ export async function GET(
       bodyResult.status === 'fulfilled' && bodyResult.value
         ? {
             text: bodyResult.value.bodyText,
+            html: bodyResult.value.bodyHtml,
             length: bodyResult.value.bodyText.length,
             subject: bodyResult.value.subject,
             from: bodyResult.value.from,
@@ -108,6 +109,7 @@ export async function GET(
           }
         : {
             text: '',
+            html: null as string | null,
             length: 0,
             subject: row.email_subject ?? '',
             from: row.email_from ?? '',

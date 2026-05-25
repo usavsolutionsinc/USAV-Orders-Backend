@@ -3,15 +3,21 @@
 /**
  * Unfound queue table — the flat presentation surface for v_unfound_queue.
  *
- * Toolbar (filter pills, "Show checked", search, Refresh) lives in the
- * sidebar via UnfoundQueueSidebarToolbar. The table reads filter state
- * from URL search params so both components share one source of truth
- * — no prop drilling, no shared store. Back/forward in the browser
- * respects the operator's filter selection.
+ * Toolbar (filter pills, search, Refresh) lives in the sidebar via
+ * UnfoundQueueSidebarToolbar. The table reads filter state from URL search
+ * params so both components share one source of truth — no prop drilling,
+ * no shared store. Back/forward in the browser respects the operator's
+ * filter selection.
+ *
+ * Filter tabs map to server-side filters as follows:
+ *   • all                  → kind=all,                 checked=false
+ *   • unmatched_receiving  → kind=unmatched_receiving, checked=false
+ *   • email_po             → kind=email_po,            checked=false
+ *   • checked              → kind=all,                 checked=true
  *
  * Inline edit pattern: each editable cell debounces a PATCH against
  * /api/receiving/unfound-queue/[kind]/[id]. Optimistic update first;
- * revert via re-fetch on failure.
+ * revert just that row on failure.
  */
 
 import { useCallback, useEffect, useRef, useState } from 'react';
@@ -28,17 +34,21 @@ export type QueueKind =
   | 'all'
   | 'email_po'
   | 'unmatched_receiving'
-  | 'station_exception';
+  | 'station_exception'
+  | 'checked';
 
 /**
  * Station exceptions ('station_exception') were removed from the sidebar
  * filter — operators triage those directly from the affected stations.
  * The type union keeps it for back-compat with deep-linked URLs.
+ *
+ * 'checked' is a pseudo-kind: server-side it maps to kind=all + checked=true.
  */
 export const ENABLED_KINDS: QueueKind[] = [
   'all',
   'unmatched_receiving',
   'email_po',
+  'checked',
 ];
 
 export const KIND_LABELS: Record<QueueKind, string> = {
@@ -46,10 +56,11 @@ export const KIND_LABELS: Record<QueueKind, string> = {
   unmatched_receiving: 'Unmatched receiving',
   email_po: 'PO mailbox',
   station_exception: 'Station exceptions',
+  checked: 'Checked',
 };
 
 interface QueueRow {
-  kind: Exclude<QueueKind, 'all'>;
+  kind: Exclude<QueueKind, 'all' | 'checked'>;
   source_id: string;
   organization_id: string;
   product_title: string | null;
@@ -121,7 +132,6 @@ export function UnfoundQueueTable() {
   const searchParams = useSearchParams();
 
   const kind = parseKind(searchParams.get('uf_kind'));
-  const showChecked = searchParams.get('uf_checked') === '1';
   const search = searchParams.get('uf_q') ?? '';
 
   const [rows, setRows] = useState<QueueRow[]>([]);
@@ -129,10 +139,9 @@ export function UnfoundQueueTable() {
   const [error, setError] = useState<string | null>(null);
   const [pushing, setPushing] = useState<string | null>(null);
   // Per-row "Saved" pulse — keyed `${kind}:${source_id}`, shows for ~1.5s
-  // after a successful PATCH so the operator gets unmistakable confirmation
-  // before the row's checked-out styling sets in. Rows the operator just
-  // checked are also held in stickyRowsRef so the next refetch doesn't make
-  // them vanish (server-side checked=false filter would otherwise hide them).
+  // after a successful note / zendesk-id PATCH so the operator gets
+  // unmistakable confirmation. Check toggles refetch instead, so the row
+  // simply leaves the current tab.
   const [savedKeys, setSavedKeys] = useState<Set<string>>(() => new Set());
   // Slide-in details panel — open by clicking a row's subject/title. Lives
   // here (vs. its own URL route) so closing returns the operator to their
@@ -141,7 +150,6 @@ export function UnfoundQueueTable() {
 
   const abortRef = useRef<AbortController | null>(null);
   const searchDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const stickyRowsRef = useRef<Map<string, QueueRow>>(new Map());
 
   // ─── Fetch ──────────────────────────────────────────────────────────────────
   const fetchRows = useCallback(async () => {
@@ -151,9 +159,14 @@ export function UnfoundQueueTable() {
     setLoading(true);
     setError(null);
 
+    // 'checked' tab is a pseudo-kind: server-side it's kind=all + checked=true.
+    // All other tabs hide checked rows so completed work disappears immediately.
+    const serverKind = kind === 'checked' ? 'all' : kind;
+    const serverChecked = kind === 'checked' ? 'true' : 'false';
+
     const url = new URL('/api/receiving/unfound-queue', window.location.origin);
-    url.searchParams.set('kind', kind);
-    url.searchParams.set('checked', showChecked ? 'all' : 'false');
+    url.searchParams.set('kind', serverKind);
+    url.searchParams.set('checked', serverChecked);
     if (search.trim()) url.searchParams.set('q', search.trim());
 
     try {
@@ -165,16 +178,7 @@ export function UnfoundQueueTable() {
       if (!res.ok || !body.success) {
         throw new Error(body.error ?? `fetch failed (${res.status})`);
       }
-      const serverRows = body.rows ?? [];
-      // Merge in sticky rows that the operator just checked but the server's
-      // current filter (checked=false) hides. Their presence here proves the
-      // check landed — the operator sees a checked row, not a vanished one.
-      const seen = new Set(serverRows.map((r) => `${r.kind}:${r.source_id}`));
-      const stickyExtras: QueueRow[] = [];
-      stickyRowsRef.current.forEach((row, key) => {
-        if (!seen.has(key)) stickyExtras.push(row);
-      });
-      setRows([...stickyExtras, ...serverRows]);
+      setRows(body.rows ?? []);
     } catch (err: unknown) {
       if ((err as { name?: string })?.name === 'AbortError') return;
       setError(err instanceof Error ? err.message : 'fetch failed');
@@ -182,10 +186,10 @@ export function UnfoundQueueTable() {
     } finally {
       if (!controller.signal.aborted) setLoading(false);
     }
-  }, [kind, showChecked, search]);
+  }, [kind, search]);
 
-  // Debounce only when the search term changed. Kind/checked toggles fetch
-  // immediately so the operator's pill click feels instant.
+  // Debounce only when the search term changed. Kind toggles fetch immediately
+  // so the operator's pill click feels instant.
   useEffect(() => {
     if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current);
     searchDebounceRef.current = setTimeout(
@@ -200,11 +204,8 @@ export function UnfoundQueueTable() {
   }, [fetchRows, search]);
 
   // Sidebar's Refresh button dispatches this so we don't need a shared ref.
-  // Refresh also clears sticky checked rows — operator explicitly asking for
-  // a fresh server view means they're done acknowledging recent checks.
   useEffect(() => {
     const handler = () => {
-      stickyRowsRef.current.clear();
       void fetchRows();
     };
     window.addEventListener(UNFOUND_QUEUE_REFRESH_EVENT, handler);
@@ -218,8 +219,12 @@ export function UnfoundQueueTable() {
     async (row: QueueRow, patch: PatchBody) => {
       const rowKey = `${row.kind}:${row.source_id}`;
       const optimisticRow: QueueRow = { ...row, ...patch };
+      const isCheckToggle = patch.checked !== undefined;
 
-      // Optimistic update (visible immediately).
+      // Optimistic update so the row reflects the change immediately. For a
+      // check toggle the row will disappear on the next refetch anyway, but
+      // the optimistic state keeps the checkbox in sync between click and
+      // refetch.
       setRows((prev) =>
         prev.map((r) =>
           r.kind === row.kind && r.source_id === row.source_id
@@ -239,8 +244,6 @@ export function UnfoundQueueTable() {
         );
         const body = await res.json().catch(() => ({}));
         if (!res.ok || !body.success) {
-          // Surface the full server payload to devtools — toast text often
-          // gets dismissed before the operator notices the code/detail.
           console.error('[unfound-queue PATCH] failed', { status: res.status, body });
           throw new Error(
             body.error ??
@@ -249,32 +252,29 @@ export function UnfoundQueueTable() {
           );
         }
 
-        // On a successful `checked: true`, keep the row visible past the
-        // default server filter so the operator sees "I saved it" instead of
-        // "it disappeared." Sticky map is cleared by the Refresh button.
-        if (patch.checked === true) {
-          stickyRowsRef.current.set(rowKey, optimisticRow);
-        } else if (patch.checked === false) {
-          stickyRowsRef.current.delete(rowKey);
-        }
-
-        // Brief "Saved" pulse on the row so confirmation is unmistakable.
-        setSavedKeys((prev) => {
-          const next = new Set(prev);
-          next.add(rowKey);
-          return next;
-        });
-        setTimeout(() => {
+        if (isCheckToggle) {
+          // Check toggles change the row's tab membership — pull a fresh
+          // server view so the row leaves (or, on the Checked tab, joins)
+          // the current list.
+          void fetchRows();
+        } else {
+          // Note / Zendesk-ID updates keep the row in place. Show a brief
+          // "Saved" pulse so the operator sees the write landed.
           setSavedKeys((prev) => {
-            if (!prev.has(rowKey)) return prev;
             const next = new Set(prev);
-            next.delete(rowKey);
+            next.add(rowKey);
             return next;
           });
-        }, 1500);
+          setTimeout(() => {
+            setSavedKeys((prev) => {
+              if (!prev.has(rowKey)) return prev;
+              const next = new Set(prev);
+              next.delete(rowKey);
+              return next;
+            });
+          }, 1500);
+        }
       } catch (err) {
-        // Revert just this row — DON'T refetch (refetching wipes other
-        // operator-in-progress optimistic edits + sticky checked rows).
         toast.error(err instanceof Error ? err.message : 'Update failed');
         setRows((prev) =>
           prev.map((r) =>
@@ -283,7 +283,7 @@ export function UnfoundQueueTable() {
         );
       }
     },
-    [],
+    [fetchRows],
   );
 
   const pushToZendesk = useCallback(
@@ -322,9 +322,6 @@ export function UnfoundQueueTable() {
   }, []);
 
   const handleDeleted = useCallback((deletedRow: QueueRow) => {
-    stickyRowsRef.current.delete(
-      `${deletedRow.kind}:${deletedRow.source_id}`,
-    );
     setRows((prev) =>
       prev.filter(
         (r) =>
@@ -365,7 +362,18 @@ export function UnfoundQueueTable() {
           </div>
         )}
 
-        <table className="min-w-full text-sm">
+        <table className="w-full table-fixed text-sm">
+          {/* Explicit widths keep columns stable across filter changes —
+              without these, the table relayouts every time the content per
+              column changes (e.g. tracking chips vs. PO chips vs. empty). */}
+          <colgroup>
+            <col style={{ width: '108px' }} />
+            <col style={{ width: '32%' }} />
+            <col style={{ width: '26%' }} />
+            <col style={{ width: '26%' }} />
+            <col style={{ width: '88px' }} />
+            <col style={{ width: '96px' }} />
+          </colgroup>
           <thead className="sticky top-0 z-10 bg-white shadow-sm">
             <tr className="text-left text-micro font-bold uppercase tracking-wider text-gray-500">
               <th className="px-3 py-2">Zendesk</th>
@@ -452,21 +460,28 @@ function QueueTableRow({
     [onPatch, row],
   );
 
-  // Stop click propagation in interactive cells so the row's onClick
-  // doesn't fire when the operator edits a textarea, toggles the
-  // checkbox, types in Zendesk #, or clicks a copy chip.
-  const stopRowClick = useCallback((e: React.MouseEvent) => {
-    e.stopPropagation();
-  }, []);
+  // Row-level handler: open the details panel for clicks anywhere in the
+  // row EXCEPT on an inline control (text input, textarea, button, label).
+  // This lets the operator click the empty padding around a "—" placeholder
+  // and still get the panel — without us having to remember stopPropagation
+  // on every interactive descendant.
+  const handleRowClick = useCallback(
+    (e: React.MouseEvent) => {
+      const target = e.target as HTMLElement | null;
+      if (target?.closest('input, textarea, button, label')) return;
+      onOpen(row);
+    },
+    [onOpen, row],
+  );
 
   return (
     <tr
-      onClick={() => onOpen(row)}
+      onClick={handleRowClick}
       className={`cursor-pointer align-top transition-colors hover:bg-blue-50/40 ${
         row.checked ? 'bg-gray-50/60 text-gray-500' : 'text-gray-900'
       }`}
     >
-      <td className="px-3 py-2 font-mono text-label" onClick={stopRowClick}>
+      <td className="px-3 py-2 font-mono text-label">
         <input
           type="text"
           defaultValue={row.zendesk_ticket_id ?? ''}
@@ -492,12 +507,10 @@ function QueueTableRow({
                   {prefix || row.product_title || '—'}
                 </div>
                 {poNumbers.length > 0 && (
-                  // Chips stop propagation so clicking copies the PO# instead
-                  // of opening the detail panel.
-                  <div
-                    className="mt-0.5 flex flex-wrap items-center gap-1.5"
-                    onClick={stopRowClick}
-                  >
+                  // Chips render <button> internally — the row-level handler
+                  // skips clicks that land inside a <button>, so copy still
+                  // wins over opening the panel.
+                  <div className="mt-0.5 flex flex-wrap items-center gap-1.5">
                     {poNumbers.map((po) => (
                       <PoChip key={po} value={po} display={getLast4(po)} />
                     ))}
@@ -513,12 +526,10 @@ function QueueTableRow({
               {row.context && (
                 <div className="mt-0.5 flex flex-wrap items-center gap-1.5 text-micro font-normal text-gray-500">
                   {row.kind === 'unmatched_receiving' ? (
-                    <span onClick={stopRowClick}>
-                      <TrackingChip
-                        value={row.context}
-                        display={getLast4(row.context)}
-                      />
-                    </span>
+                    <TrackingChip
+                      value={row.context}
+                      display={getLast4(row.context)}
+                    />
                   ) : (
                     <span className="truncate">{row.context}</span>
                   )}
@@ -528,7 +539,7 @@ function QueueTableRow({
           );
         })()}
       </td>
-      <td className="px-3 py-2" onClick={stopRowClick}>
+      <td className="px-3 py-2">
         <textarea
           rows={1}
           defaultValue={row.usa_team_note ?? ''}
@@ -539,7 +550,7 @@ function QueueTableRow({
           className="w-full resize-none border-b border-transparent bg-transparent px-1 py-0.5 text-label outline-none focus:border-blue-500"
         />
       </td>
-      <td className="px-3 py-2" onClick={stopRowClick}>
+      <td className="px-3 py-2">
         <textarea
           rows={1}
           defaultValue={row.vietnam_team_note ?? ''}
@@ -550,7 +561,7 @@ function QueueTableRow({
           className="w-full resize-none border-b border-transparent bg-transparent px-1 py-0.5 text-label outline-none focus:border-blue-500"
         />
       </td>
-      <td className="px-3 py-2 text-center" onClick={stopRowClick}>
+      <td className="px-3 py-2 text-center">
         <div className="flex items-center justify-center gap-1.5">
           <input
             type="checkbox"
@@ -565,7 +576,7 @@ function QueueTableRow({
           ) : null}
         </div>
       </td>
-      <td className="px-3 py-2 text-right" onClick={stopRowClick}>
+      <td className="px-3 py-2 text-right">
         {row.zendesk_ticket_id ? (
           <span className="text-micro font-bold uppercase tracking-wider text-emerald-600">
             Synced

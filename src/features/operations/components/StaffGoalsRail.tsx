@@ -12,7 +12,7 @@ interface StaffGoalsRailProps {
 
 const STATUS_TONE = {
   on_track: { ring: '#6B9080', dot: 'bg-emerald-500', chip: 'bg-emerald-50 text-emerald-700',  label: 'On track' },
-  at_risk:  { ring: '#F59E0B', dot: 'bg-amber-500',   chip: 'bg-amber-50 text-amber-700',      label: 'At risk'  },
+  at_risk:  { ring: '#F59E0B', dot: 'bg-amber-500',   chip: 'bg-amber-50 text-amber-700',      label: 'Close to goal' },
   behind:   { ring: '#E07A5F', dot: 'bg-rose-500',    chip: 'bg-rose-50 text-rose-700',        label: 'Behind'   },
 } as const;
 

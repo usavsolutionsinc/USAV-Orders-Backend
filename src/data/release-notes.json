@@ -1,0 +1,1996 @@
+{
+  "generatedAt": "2026-05-25T22:43:19.011Z",
+  "count": 199,
+  "commits": [
+    {
+      "sha": "846ef0c1074d8fdf46175017915a290e30cc0110",
+      "shortSha": "846ef0c",
+      "date": "2026-05-25T14:48:25-07:00",
+      "author": "usavsolutionsinc",
+      "subject": "ai extract and updates to the unfound receiving orders list",
+      "body": "",
+      "type": "other",
+      "title": "ai extract and updates to the unfound receiving orders list"
+    },
+    {
+      "sha": "23f6295a708c574e3a29a8027e7a18c0a37c0e05",
+      "shortSha": "23f6295",
+      "date": "2026-05-25T09:08:30-07:00",
+      "author": "usavsolutionsinc",
+      "subject": "updated the TS error fixed and should deploy now",
+      "body": "",
+      "type": "other",
+      "title": "updated the TS error fixed and should deploy now"
+    },
+    {
+      "sha": "4815e12266583da23d63d23f5441957dc9424086",
+      "shortSha": "4815e12",
+      "date": "2026-05-25T01:23:38-07:00",
+      "author": "DENSENSE8",
+      "subject": "chore: rollup of in-flight receiving, repair, operations, and FBA work",
+      "body": "Bundles parallel updates that accumulated alongside the inventory\nsidebar overhaul. No single coherent feature — touches several areas at\nonce, captured here so the working tree clears.\n\n## Receiving + Ecwid\n\n- New /api/ecwid/recent-repair-orders endpoint\n- scripts/sync-ecwid-incoming-repairs updated\n- Receiving workspace: LineEditPanel, ReceivingLineWorkspace,\n  ReceivingClaimModal, ReceivingPoLabelPreview, ProgressStepper,\n  label helpers\n- UnfoundQueueTable + EcwidProductSearchPopover updates\n- Sidebar: ReceivingSidebarPanel, ActiveCartonFeedback,\n  ReceivingRecentRail, receiving-sidebar-shared\n- New UnmatchedItemsSection workspace component\n- Removed UnfoundLineEditPanel (superseded by inline editing)\n- Migration: 2026-05-25_receiving_source_platform_ecwid.sql\n- Migration: 2026-05-25_unfound_queue_drop_linked.sql\n\n## Repair\n\n- RepairDetailsPanel + RepairIntakeForm updates\n- useRepairQueries + repair-service-queries adjustments\n- /api/repair-service/next route changes\n- /api/m/rs/[id] page tweaks\n- Migration: 2026-05-25_repair_drop_incoming_status.sql\n\n## Operations dashboard\n\n- New DataSourcePopover + KpiDetailsModal\n- operations-data-sources catalog\n- Dashboard recomposed: DashboardKPICard, GlobalHeaderBar,\n  LiveFeedCard, SecondaryKPITiles, OperationsDashboard\n- Removed WelcomeHero (replaced by the new header bar)\n\n## FBA\n\n- New board-drag + catalog-key-validation lib helpers\n- FbaBoardDetailPanel + sidebar drag components\n  (ActiveShipments, DraggableLineRow, TrackingBucket,\n  TrackingGroupDisplay, UnallocatedBucket)\n- /fba page wiring\n\n## Shared / misc\n\n- Icons.tsx, HorizontalButtonSlider, StickyActionBar polish\n- New SlideOverBackdrop UI primitive\n- PackerTable, TechDashboard, ShippedSidebar, ShippedDetailsPanel,\n  WorkOrderDetailsPanel, SkuDetailView, SalesDetailsPanel,\n  ReceivingDetailsStack updates\n- Drizzle schema + printReceivingLabel + zendesk-claim-template +\n  scripts/seed-roles updates\n- New docs/skills/* notes (Code Architecture, Feature Interaction Map,\n  Frontend Modernization, UX/UI Analysis plan)\n- app/layout.tsx tweak\n\nCo-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>",
+      "type": "chore",
+      "title": "rollup of in-flight receiving, repair, operations, and FBA work"
+    },
+    {
+      "sha": "84ed2cce32d6c7ae1f8544d963daacd0cf56dff4",
+      "shortSha": "84ed2cc",
+      "date": "2026-05-25T01:21:51-07:00",
+      "author": "DENSENSE8",
+      "subject": "feat(inventory): tabbed sidebar overhaul + activity inbox in FAB popover",
+      "body": "## Inventory sidebar\n\nReplace the single flat inventory sidebar with a 6-tab structure modeled\nafter the dashboard/shipped sidebar pattern:\n\n- Activity (default landing) · Bins · SKUs · Units · Alerts · Counts\n- Per-tab scoped-search field pills (All / Bin Barcode / Zone / Room /\n  SKU Held; All / SKU / Product Title / Brand; etc.)\n- Multi-select bucket filter chips with server-side counts where the\n  endpoint exposes them\n- 250ms debounced TanStack search with per-tab cache keys\n- Per-tab recent searches in localStorage\n- Cross-tab handoff card surfaces when another tab has more matches for\n  the active query\n- Deep-linkable URL state: `/inventory/<tab>?q=…&field=…&filter=…&open=…`\n- Sub-route pages under /inventory/{activity,bins,skus,units,alerts,counts}\n\n## Detail pane\n\nRow clicks now fill the main right pane (not a slide-in overlay).\nSelection is driven by `?open=<kind>:<publicRef>` so refresh restores\nstate. ESC and `[` / `]` keys close / walk prev-next through the\ncurrent result list.\n\nDetail panels:\n- BinDetailsPanel / SkuDetailsPanel / UnitDetailsPanel reuse existing\n  ByBin / BySku / ByUnit views\n- UnitDetailsPanel adds grade + hold/release action cards on top of the\n  unit timeline\n- AlertDetailsPanel — read-only feed view + Acknowledge button\n- CountCampaignDetailsPanel — campaign progress + status\n\n## API\n\nNew read endpoints:\n- GET /api/inventory/alerts — stock_alerts with bucket counts\n- GET /api/inventory/counts — cycle_count_campaigns with derived status\n  + per-line progress\n\nNew mutation endpoints:\n- POST /api/inventory/alerts/[id]/ack — sets resolved_at, idempotent\n- POST /api/serial-units/[id]/grade — updates condition_grade, appends\n  inventory_event + serial_unit_condition_history (linked via event id)\n\nReuses existing /api/serial-units/[id]/hold + /release for hold actions.\n\nAdds permissions: `stock_alerts.ack`, `serial_units.grade`.\n\n## Activity inbox\n\nRelocate the bottom-left ActivityInboxDock into the Quick Access FAB\npopover as an \"Actions\" row with a Bell icon and a rose-colored unread\nbadge. Click opens a secondary ActivityInboxPopover (same pattern as\nPhone history). ActivityInboxDock export retained for opt-in callers\nbut no longer auto-mounted from ResponsiveLayout.\n\nCo-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>",
+      "type": "feature",
+      "title": "tabbed sidebar overhaul + activity inbox in FAB popover"
+    },
+    {
+      "sha": "1ac48ae07402b9ef692e5b21e66af81105053141",
+      "shortSha": "1ac48ae",
+      "date": "2026-05-24T13:26:30-07:00",
+      "author": "DENSENSE8",
+      "subject": "updated the main interface and design system, tech pages to be very simple",
+      "body": "",
+      "type": "other",
+      "title": "updated the main interface and design system, tech pages to be very simple"
+    },
+    {
+      "sha": "0f309dafb0fed78f6edb88a661a18a776705de6e",
+      "shortSha": "0f309da",
+      "date": "2026-05-22T17:04:20-07:00",
+      "author": "usavsolutionsinc",
+      "subject": "updated a lot",
+      "body": "",
+      "type": "other",
+      "title": "updated a lot"
+    },
+    {
+      "sha": "11476f0c26b9a1cb444061a1bfd1cd9cccd5a7ac",
+      "shortSha": "11476f0",
+      "date": "2026-05-22T11:59:04-07:00",
+      "author": "usavsolutionsinc",
+      "subject": "feat(electron): Edit menu + draggable top strip",
+      "body": "Two long-missing shell affordances:\n\n1. Edit menu (cut/copy/paste/select-all). The menu was just View + Window,\n   so Cmd+V was never routed through Electron's role-based clipboard\n   handler — meaning paste into embedded <webview> content (the Zoho login\n   form via the new ZohoSplitPane) silently failed. Adding the Edit\n   submenu — plus the standard macOS app submenu — wires Cmd+C / Cmd+V /\n   Cmd+X / Cmd+A into the focused guest page.\n\n2. ElectronDragStrip. titleBarStyle:'hiddenInset' removes the native title\n   bar but the renderer's content covered y=0 with no app-region:drag,\n   leaving the window un-draggable. The new component is a fixed 28px\n   strip at the top: WebkitAppRegion:'drag' with pointer-events:none, so\n   mousedown drags the window while regular clicks pass through to the\n   UI below. On macOS we leave a 78px gap for the traffic-light buttons.\n   Mounted in app/layout.tsx; only renders when desktopApp.isElectron.",
+      "type": "feature",
+      "title": "Edit menu + draggable top strip"
+    },
+    {
+      "sha": "c4452a12e09dbb383d45288af7357ef76201b55d",
+      "shortSha": "c4452a1",
+      "date": "2026-05-22T11:26:23-07:00",
+      "author": "usavsolutionsinc",
+      "subject": "feat(receiving): optimistic receive, idempotent rescans, Zoho slide-in pane",
+      "body": "OVER_RECEIVE → graceful: receiveLineUnits short-circuits when the same serial\nis already on this line, returning already_received instead of throwing. UI\nswaps the over-receive confirm dialog for a success toast in that case.\n\nIdempotency wrapper: scan-serial + mark-received-po now cache responses in\napi_idempotency_responses by (Idempotency-Key | client_event_id, route), so\nnetwork retries replay the same answer instead of re-running.\n\nOptimistic Receive: mark-received-po returns success as soon as local DB\nwrites commit. Lines eager-promote to DONE locally (SoT is here, not Zoho).\ncreatePurchaseReceive + description PUT + DONE-gate moved into after();\nZoho \"already created a receive for all the items\" is treated as success.\nOperator sees 1/1 + green dot immediately; Zoho catches up in the\nbackground.\n\nConnection-pool fix: threaded the receiveLineUnits transaction client into\nthe ledger / tech_serial_numbers / inventory_events writes that previously\nused pool.query — they were grabbing a second connection out of poolMax=3\nin prod and tripping the 30s query_timeout under concurrent receivers.\n\nDot color sync: every receiving status dot (mobile rows + carton sheet +\nstation table + recent rail) now turns emerald when received >= expected,\nmatching the green qty text instead of staying blue on MATCHED.\n\nZoho slide-in: per-line flow header gets an \"Open in Zoho\" action that\nreveals an in-app right-side pane (ZohoSplitPane). Electron mounts the\nembedded webview; browser tabs see an \"Open in Zoho\" link. Draggable\nleft edge resizes; width is persisted to localStorage. No popup windows.\n\nHydration fix: PoLinesAccordion was nesting a <div> chip inside a <p>.",
+      "type": "feature",
+      "title": "optimistic receive, idempotent rescans, Zoho slide-in pane"
+    },
+    {
+      "sha": "5e19cd9197b8ace5573b5c262dd56988fdced00e",
+      "shortSha": "5e19cd9",
+      "date": "2026-05-22T10:18:21-07:00",
+      "author": "usavsolutionsinc",
+      "subject": "fixed ts error",
+      "body": "",
+      "type": "fix",
+      "title": "fixed ts error"
+    },
+    {
+      "sha": "5e9208c97d7143c48c2b3fcd53bbc503842f2569",
+      "shortSha": "5e9208c",
+      "date": "2026-05-22T08:49:21-07:00",
+      "author": "DENSENSE8",
+      "subject": "feat: receiving workflow overhaul, SKU pairing hub, PO mailbox triage, and warehouse/label improvements",
+      "body": "- Receiving: refactored line workspace, serial scanning, condition pills, photo capture, audit timeline, and mobile receiving flow\n- SKU catalog: new pairing hub with batch pairing, pairing queue, suggestion seeding, and pairing-queries lib\n- PO mailbox: added triage routes/components and LLM-based extraction helper\n- Barcode/labels: new GS1 DataMatrix, location/rack label printers, label room sidebar, and printer store hook\n- Warehouse: rack detail/label workspace, room finder context, room sidebar list\n- Shipped details panel: removed legacy panel and shipping edit card, updated stacks and action bar\n- Mobile: new bottom nav, mobile home/history routes, scan FAB improvements\n- Inventory v2: controls panel, URL state hook, removed moved-banner\n- Misc: barcode routing updates, receiving label helpers, manifest/icon updates, cleanup of unused hooks/components\n\nCo-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>",
+      "type": "feature",
+      "title": "receiving workflow overhaul, SKU pairing hub, PO mailbox triage, and warehouse/label improvements"
+    },
+    {
+      "sha": "dac10049ce9d7d40b18d879bfe7c99c1c981c139",
+      "shortSha": "dac1004",
+      "date": "2026-05-21T17:00:21-07:00",
+      "author": "usavsolutionsinc",
+      "subject": "sku and receiving and products mutlisku component",
+      "body": "",
+      "type": "other",
+      "title": "sku and receiving and products mutlisku component"
+    },
+    {
+      "sha": "7a7b8108393066d8537b9249fc8dbf53a10b76cd",
+      "shortSha": "7a7b810",
+      "date": "2026-05-21T13:48:15-07:00",
+      "author": "usavsolutionsinc",
+      "subject": "updated picker and receiving mobile display",
+      "body": "",
+      "type": "other",
+      "title": "updated picker and receiving mobile display"
+    },
+    {
+      "sha": "5884266918d534731142c2c64246a217e7f2bcfd",
+      "shortSha": "5884266",
+      "date": "2026-05-21T12:13:19-07:00",
+      "author": "usavsolutionsinc",
+      "subject": "updated the receiving display for the mobile view",
+      "body": "",
+      "type": "other",
+      "title": "updated the receiving display for the mobile view"
+    },
+    {
+      "sha": "914779ede2725eaafe0a70db213ab31839cd57f0",
+      "shortSha": "914779e",
+      "date": "2026-05-21T11:14:43-07:00",
+      "author": "usavsolutionsinc",
+      "subject": "bug fix for tech and packer org id",
+      "body": "",
+      "type": "other",
+      "title": "bug fix for tech and packer org id"
+    },
+    {
+      "sha": "a03598e71c21e430a958e79700a826c8dbf86e1e",
+      "shortSha": "a03598e",
+      "date": "2026-05-21T15:12:40+07:00",
+      "author": "IT-USAV",
+      "subject": "chore: remove .env from github",
+      "body": "",
+      "type": "chore",
+      "title": "remove .env from github"
+    },
+    {
+      "sha": "21b9ab08abec6d513c3beb1f3057fc62f5d15d9e",
+      "shortSha": "21b9ab0",
+      "date": "2026-05-20T16:11:47-07:00",
+      "author": "usavsolutionsinc",
+      "subject": "updated silent printing for macos intel support",
+      "body": "",
+      "type": "other",
+      "title": "updated silent printing for macos intel support"
+    },
+    {
+      "sha": "cfe69d23ea5e3a36863c8e66b4640e062a52cbef",
+      "shortSha": "cfe69d2",
+      "date": "2026-05-20T13:27:30-07:00",
+      "author": "usavsolutionsinc",
+      "subject": "updated ZD updates from receiving and zoho submit via async functions, permissions update,",
+      "body": "",
+      "type": "other",
+      "title": "updated ZD updates from receiving and zoho submit via async functions, permissions update,"
+    },
+    {
+      "sha": "0349c92339216fdafdc59bedfc31302738a38654",
+      "shortSha": "0349c92",
+      "date": "2026-05-20T12:58:31-07:00",
+      "author": "DENSENSE8",
+      "subject": "updated global staff and org and move resolver qr code",
+      "body": "",
+      "type": "other",
+      "title": "updated global staff and org and move resolver qr code"
+    },
+    {
+      "sha": "908fc1ae39780f4767d197236d654f7251048a68",
+      "shortSha": "908fc1a",
+      "date": "2026-05-19T16:54:50-07:00",
+      "author": "usavsolutionsinc",
+      "subject": "fixed some bugs causing errors in the system like role picker for staff and packing website problems",
+      "body": "",
+      "type": "fix",
+      "title": "fixed some bugs causing errors in the system like role picker for staff and packing website problems"
+    },
+    {
+      "sha": "9ec76f3843e4d55ae869019755b0c854d03e5885",
+      "shortSha": "9ec76f3",
+      "date": "2026-05-19T15:13:55-07:00",
+      "author": "usavsolutionsinc",
+      "subject": "products: restore SKU label printer workspace on /products",
+      "body": "Wires the orphaned MultiSkuSnBarcode component (last rendered on the\ndeleted /sku-stock route — see commit b158976) back into /products as\na URL-toggled view.\n\nSidebar (ProductsSidebarPanel):\n- SearchBar — drives ?q= (consumed by ProductsShell table)\n- Catalog / Label Printer view toggle — drives ?view=labels\n- Mode pills (Print / Reprint / SN-to-SKU / Move Location) — vertical\n  orientation in the sidebar, drives ?mode= via useBarcodeMode\n- Recents strip surfaces last-printed SKUs and dispatches sku:fill so\n  the workspace re-loads them with one click\n\nMain pane (ProductsWorkspace):\n- ?view=labels → MultiSkuSnBarcode layout=\"horizontal\" (lazy-loaded\n  via next/dynamic; ssr:false because the QR library is browser-only)\n- default     → ProductsShell (existing catalog table)\n\nQR-only end-to-end: the workspace renders via renderQr() and prints\nvia printProductLabels which builds an HTML template with <QRCode>\nfrom react-qr-code. No 1D barcode rendering on this surface.\n\nMounted via DashboardSidebar's routeKey === 'products' branch.\n\nCo-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>",
+      "type": "other",
+      "title": "products: restore SKU label printer workspace on /products"
+    },
+    {
+      "sha": "216e036fe1e3874449d7a486477ed221c7702863",
+      "shortSha": "216e036",
+      "date": "2026-05-19T14:40:42-07:00",
+      "author": "usavsolutionsinc",
+      "subject": "New manuals blob and printing page, new photos backup button to gemini for hunting down for evidence and updated warehouse and inventory changes",
+      "body": "",
+      "type": "other",
+      "title": "New manuals blob and printing page, new photos backup button to gemini for hunting down for evidence and updated warehouse and inventory changes"
+    },
+    {
+      "sha": "48506e38eadf55193dae69483467bdcafcf8243e",
+      "shortSha": "48506e3",
+      "date": "2026-05-19T14:31:29-07:00",
+      "author": "usavsolutionsinc",
+      "subject": "manuals: convert .docx → PDF, host in Vercel Blob, add /manuals/library",
+      "body": "Pipeline:\n- scripts/convert-and-upload-manuals.mjs runs LibreOffice headless (with\n  per-worker UserInstallation profiles to avoid the singleton-lock race)\n  on every .docx under public/Manuals/, drops PDFs into converted-manuals/,\n  and uploads them to Blob at stable paths\n  manuals/<original-relative-path>.pdf\n- scripts/backfill-manual-blob-urls.mjs upserts a product_manuals row per\n  Blob object via the partial unique index on (relative_path)\n  WHERE is_active=true, with display_name derived from folder context.\n\nUI:\n- /manuals/library route + ManualsLibrarySidebar with drill-down folder\n  cards (rounded-2xl, indigo-tinted icons, breadcrumb navigation) and a\n  client-side fuzzy matcher that highlights matched characters across the\n  full 392-row dataset\n- ManualLibrary main pane renders the PDF inline via <iframe src=blobUrl>\n- New Library pill on SkuCatalogSidebar; mirrored mode pills on the new\n  sidebar so navigation is symmetric in both directions\n- sku-catalog manuals query and ManualsSection now return + render\n  source_url (prefers Blob PDF, falls back to legacy Google Doc id)\n\nRun with:\n  npm run manuals:convert-upload   # one-time per docx → blob\n  npm run manuals:backfill-db      # one-time per blob → product_manuals\n\nCo-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>",
+      "type": "other",
+      "title": "manuals: convert .docx → PDF, host in Vercel Blob, add /manuals/library"
+    },
+    {
+      "sha": "2abe07fcdbfa69d3b24856b61f0de0de99cafd1e",
+      "shortSha": "2abe07f",
+      "date": "2026-05-19T02:06:59-07:00",
+      "author": "DENSENSE8",
+      "subject": "ware house printer, repair page, tech page, fully updated the receiving pipeline, improve mobile app for pills display not dropdowns,",
+      "body": "",
+      "type": "other",
+      "title": "ware house printer, repair page, tech page, fully updated the receiving pipeline, improve mobile app for pills display not dropdowns,"
+    },
+    {
+      "sha": "2ad4f44515f6251a083365e53f6c0c203496a085",
+      "shortSha": "2ad4f44",
+      "date": "2026-05-18T16:52:07-07:00",
+      "author": "usavsolutionsinc",
+      "subject": "inventory: ByFilter view + State/Condition chips",
+      "body": "New view for /inventory: ?state=A,B&condition=USED_A surfaces every\nserial_unit matching the filter combo. Filter chips are sticky in the\nheader alongside the search bar, so an operator can compose\n\"STOCKED USED_A iPhones\" without leaving the page.\n\n- API: GET /api/inventory/units accepts repeatable or comma-separated\n  state[] + condition[], plus sku/location/q/limit/offset. Joins\n  sku_catalog for product_title in one query; returns paginated list +\n  total. Skip-friendly DB types via ::text casts on the enums.\n- InventoryFilterChips: dropdown per dimension, color-coded badges\n  matching plan §8 (19 statuses + 5 conditions). Selected count badge\n  on the trigger; Clear pill appears once any filter is set. Click\n  outside closes the open dropdown.\n- ByFilterResultList: server-paginated unit feed (100 rows / page,\n  Load more), stale-request guard, per-row cross-links to ?unit /\n  ?sku / ?bin (single-click drill from any dimension).\n- InventoryV2Shell: 5th view ('by-filter') gated by state[] or\n  condition[] in the URL. Search and filters compose — single-target\n  inputs (?sku/?bin/?unit) take precedence so a SKU drilldown narrows\n  by chip selection.\n- types: 'by-filter' view + states/conditions in InventoryV2ViewState,\n  UnitListRow / UnitListResponse, exported SERIAL_STATUS_VALUES and\n  CONDITION_GRADE_VALUES constants.\n\nCo-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>",
+      "type": "other",
+      "title": "inventory: ByFilter view + State/Condition chips"
+    },
+    {
+      "sha": "b158976f49247c610acfa5dcc06724c3e4c7b895",
+      "shortSha": "b158976",
+      "date": "2026-05-18T16:47:02-07:00",
+      "author": "usavsolutionsinc",
+      "subject": "inventory rename Phase D + ByUnit view + empty-bin toggle",
+      "body": "Phase D cleanup (the legacy /sku-stock surface is now fully gone):\n- Delete /sku-stock route tree (3 pages); next.config.ts redirects keep\n  printed labels + operator bookmarks working\n- Delete dead components: SkuBrowser, SkuStockSidebarList,\n  SkuStockWorkspace, SkuStockSidebarPanel (the post-rename strip left\n  these unreachable)\n- Drop SkuStockSidebarPanel routeKey branch + 'sku-stock' title-map\n  entry from DashboardSidebar\n- Drop 'sku-stock' from SidebarRouteKey union, getSidebarRouteKey\n  classifier, and ROUTE_PERMISSIONS\n- Phase A copies /inventory/sku/[sku] and /inventory/location/[barcode]\n  now redirect to the canonical shell view (?sku= and ?bin=) instead of\n  rendering the legacy SkuDetailView / LocationDetailView via RouteShell\n\nClient URL sweep — everything that pointed at /sku-stock now targets\n/inventory directly (no 308 hop):\n- bin/[barcode]/page.tsx, m/b/[barcode]/page.tsx\n- GlobalDesktopSkuScanner, MobileScanFab (ROUTE_SPECIFIC_PREFIXES)\n- ShippingInformationSection PrepackedSkuRow drilldown\n- LocationDetailView SKU click + view-all-locations\n- SkuDetailView panel-close fallback\n- warehouse/BinDetailFlyout, warehouse/SkuLocationFinder hrefs\n- lib/barcode-routing — scan-route redirect + printed-QR builder; the\n  /sku-stock/location regex stays so older printed labels still parse\n- admin/StaffManagementTab default_home_path: drop /sku-stock, add\n  /warehouse and /products\n\nP3 — ByUnit view (/inventory?unit=ref):\n- New components/inventory-v2/ByUnitView.tsx: fetches /api/serial-units\n  by id or serial number; renders header, 4-field grid, event timeline\n- types.ts: 'by-unit' added to InventoryV2View; SerialUnitDetailPayload\n- InventoryV2Shell: handles ?unit=, mutual-exclusion across sku/bin/unit\n- InventoryV2SearchBar: GS1 /21/serial scans + serial_full/partial\n  classifier hits + bare numeric (<=7 digits) all resolve to unit\n\nP3 — empty-bin opacity toggle on /warehouse Map (plan §15 #5):\n- WarehouseMap: new showEmpty prop (default false); empty cells render\n  at opacity-30 with hover-restore\n- WarehouseShell MapTabBody: Show/Hide empty bins pill, persisted to\n  ?showEmpty=1\n\nMisc:\n- Fix unrelated type error in api/auth/signout: detail: null ->\n  detail: undefined to match audit() signature\n\nCo-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>",
+      "type": "other",
+      "title": "inventory rename Phase D + ByUnit view + empty-bin toggle"
+    },
+    {
+      "sha": "a418c2cd8a9af467443602e8e642e9b8d298eaea",
+      "shortSha": "a418c2c",
+      "date": "2026-05-18T16:40:50-07:00",
+      "author": "usavsolutionsinc",
+      "subject": "inventory/warehouse rename Phase B/C + pinless signin",
+      "body": "Renames the bin/room/zone surface from inventory/* to warehouse/*\n(components, sidebar panel, /warehouse route) and adds /products and\n/warehouse to the sidebar nav. /sku-stock keeps redirecting to\n/inventory/* via next.config.ts.\n\nAdds pinless sign-in behind AUTH_PINLESS_SIGNIN: when set, the staff\npicker exposes a `pinless` flag, the signin route skips PIN verification\nand audits as `signin.pinless`. Default behavior unchanged when the env\nvar is off.\n\nOther fixes bundled in this stash:\n- Zoho OAuth scope adds ZohoInventory.bills.READ for billed-PO receives\n- debug-bills route accepts ?bill_id to inspect a single bill payload\n- @simplewebauthn type imports moved to @simplewebauthn/types\n- src/lib/db.ts pool typed as PgPool instead of any\n- mark-received null-safety on staffId\n- scan/resolve redirectTo paths point at /inventory/sku|location\n\nCo-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>",
+      "type": "other",
+      "title": "inventory/warehouse rename Phase B/C + pinless signin"
+    },
+    {
+      "sha": "03c06df08c26bc90512e72c6da3d657e81fc81d0",
+      "shortSha": "03c06df",
+      "date": "2026-05-18T16:40:47-07:00",
+      "author": "usavsolutionsinc",
+      "subject": "desktop app: install page with OS detection + Vercel Blob installer hosting",
+      "body": "Replaces the 404 /desktop-app destination from the install banner with a\nreal landing page that auto-detects macOS/Windows, highlights the user's\nplatform, and downloads the matching installer (Apple Silicon, Intel, or\nWindows). API route reads installer URLs from Vercel Blob (prefix\ndesktop-installers/) with GitHub Releases as fallback. New\n`npm run desktop:upload` script publishes binaries from desktop-dist/\nto Blob without redeploying the app.\n\nCo-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>",
+      "type": "other",
+      "title": "desktop app: install page with OS detection + Vercel Blob installer hosting"
+    },
+    {
+      "sha": "b822685c8908bd175d4e3c3a98dca0db0af1cfb6",
+      "shortSha": "b822685",
+      "date": "2026-05-18T12:47:24-07:00",
+      "author": "DENSENSE8",
+      "subject": "auth: admin perms no step-up; sidebar avatar uses DB color_hex",
+      "body": "- Remove admin.manage_staff/roles/features from STEP_UP_PERMISSIONS so a\n  signed-in admin doesn't get re-prompted for PIN on /admin?section=access\n- SignedInChip reads staff.color_hex from /api/staff and applies it inline\n  instead of hardcoded bg-gray-900\n- Ignore /desktop-dist2 build output\n\nCo-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>",
+      "type": "other",
+      "title": "auth: admin perms no step-up; sidebar avatar uses DB color_hex"
+    },
+    {
+      "sha": "3d8b201e3a5846e170728696dacafe1912bf7101",
+      "shortSha": "3d8b201",
+      "date": "2026-05-18T08:40:24-07:00",
+      "author": "DENSENSE8",
+      "subject": "plan: Products / Inventory / Warehouse rename + modernization",
+      "body": "Comprehensive UX/UI plan for renaming two existing top-level routes\nand introducing a first-class Products page. Saved to\ncontext/page-rename-products-inventory-warehouse-plan.md.\n\nThe rename map:\n  /sku-stock  →  /inventory   (live ledger — search by SKU / unit /\n                                location / state / condition)\n  /inventory  →  /warehouse   (the page that's currently misnamed —\n                                rooms, bins, fill bars, physical map)\n  /products   →  NEW          (sku_catalog editor — search, edit,\n                                bulk sync, click-into-inventory)\n\nWhy: today's labels don't match what each page actually shows. The\nexisting /inventory route renders WarehouseMap + RoomsBoard + BinsTable\n— it's the warehouse, not the ledger. Renaming makes the navigation\nmatch the operator's mental model:\n  Products    \"what do we sell?\"\n  Inventory   \"where is each unit right now?\"\n  Warehouse   \"what's in this physical location?\"\n\nPlan covers (15 sections, ~800 lines):\n  - naming rationale + back-compat redirects via next.config.js\n  - file + component + sidebar rename map (with the conflict-order\n    trick: warehouse rename FIRST so the inventory slot frees up)\n  - information architecture (one job per page, with what each page\n    does NOT do)\n  - cross-page navigation graph\n  - per-page UX/UI:\n      * Products: virtualized catalog table + filter chips + detail\n        page with attributes/platform-links/kit/QC/live-stock summary\n      * Inventory: universal search + filter chips + four views\n        (pulse / by-sku / by-bin / by-unit) on one URL surface\n      * Warehouse: three view modes (map / list / print labels) with\n        DRIFT-alert banner and open-cycle-count strip\n  - shared primitives (StatusBadge, ConditionBadge, ScanInput, etc.)\n  - mobile/narrow-viewport behavior\n  - consistent search+filter grammar (one ScanInput across all three)\n  - realtime Ably channels + cache tag invalidation contract\n  - permission gating (reuses sku_stock.* + bin.* + print.label)\n  - 4-phase rollout (A: routes exist alongside; B: modernize behind\n    feature flags; C: flip flags + relabel sidebar; D: delete legacy)\n  - file-level implementation plan: 15 commits, ~2.5-3.5 weeks\n  - 8 open decisions captured for follow-up\n\nNo code changes — plan-only commit. Implementation follows once the\nplan is approved.\n\nCo-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>",
+      "type": "other",
+      "title": "plan: Products / Inventory / Warehouse rename + modernization"
+    },
+    {
+      "sha": "735375c2bf8f76f2a6d614c557f9132491bf9aba",
+      "shortSha": "735375c",
+      "date": "2026-05-18T08:01:05-07:00",
+      "author": "DENSENSE8",
+      "subject": "inventory v2 #4: Zoho order-intake webhook + auto-allocation",
+      "body": "Operationalizes Phase 4 end-to-end. Zoho POSTs an order-created\nwebhook, the receiver normalizes the payload, the shared ingest\nhelper upserts orders rows + auto-allocates (when the flag is on).\n\nsrc/lib/inventory/order-intake.ts (NEW):\n  - ingestOrder({externalId, source, lineItems, ...}):\n      1. Per line: SELECT existing orders row by (order_id, sku) →\n         INSERT if missing (status='open', account_source = source).\n         Transactional batch — partial failures roll back.\n      2. Per resulting orders row: call allocateOrder() with a\n         deterministic clientEventId derived from\n         \"order-intake:{source}:{externalId}:{sku}\" so retries idempo-\n         tent. Allocation runs in its own transaction so one failing\n         line doesn't roll back its siblings.\n      3. Returns {externalId, source, totalLines, unitsAllocated,\n         lines[]}. Each line carries {sku, orderId, created,\n         allocation: AllocateOrderResult | null}. null when the flag\n         is off (helper still creates orders rows, skips alloc).\n  - Source string validated against /[a-z0-9_-]+/i so future eBay /\n    manual integrations get the same path.\n\nsrc/app/api/webhooks/zoho/orders/route.ts (NEW):\n  - POST handler:\n      * Fails CLOSED when ZOHO_WEBHOOK_SECRET env var is unset — 503.\n      * Returns 401 on header mismatch\n        (x-zoho-webhook-secret: $ZOHO_WEBHOOK_SECRET).\n      * extractZohoOrder() pulls salesorder_id + line_items out of\n        either {\"salesorder\": {...}} or top-level shapes (Zoho\n        Inventory vs Books vs subtype variation). Tolerates missing\n        fields; returns null when payload doesn't look like an order\n        (ping events, malformed bodies).\n      * Lines with no SKU are dropped silently.\n  - GET probe: returns {ok, webhook, configured} so Zoho's \"Test\"\n    button reports the secret-presence status without exposing it.\n\nIdempotency:\n  - orders rows: dedup on (order_id, sku) — re-running the same\n    webhook doesn't double-create.\n  - allocations: per-line clientEventId on inventory_events ON\n    CONFLICT DO NOTHING.\n  - All allocation failures are logged but never break the response\n    so Zoho doesn't see retries for downstream issues.\n\nOperations:\n  1. Set ZOHO_WEBHOOK_SECRET in Vercel env to a long random string.\n  2. Configure Zoho Inventory webhook for \"Sales order created\" →\n     POST https://app.example/api/webhooks/zoho/orders with header\n     x-zoho-webhook-secret: <that secret>.\n  3. Flip INVENTORY_V2_ALLOCATION on Vercel when ready.\n\nZero new tsc errors.\n\nCo-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>",
+      "type": "other",
+      "title": "inventory v2 #4: Zoho order-intake webhook + auto-allocation"
+    },
+    {
+      "sha": "35ff10b04eb50d5f39b9d8b5f297a860cd3be69b",
+      "shortSha": "35ff10b",
+      "date": "2026-05-18T07:58:02-07:00",
+      "author": "DENSENSE8",
+      "subject": "inventory v2 #2: cycle count admin UI",
+      "body": "Operationalizes the Phase 0 cycle_count_campaigns + cycle_count_lines\ntables (2026-05-14 migration). No UI existed; this lands the full\noperator + admin workflow.\n\nsrc/lib/inventory/cycle-count.ts (NEW):\n  - createCampaign(name, varianceTol, createdByStaffId) — INSERTs\n    the campaign + snapshots every bin_contents row (qty > 0 OR\n    last_counted IS NULL) into cycle_count_lines (status='pending').\n    Returns {campaignId, lineCount}.\n  - submitCount(lineId, countedQty) — auto-routes to status='counted'\n    when within campaign.variance_tol, status='pending_review' when\n    outside. Computes variance + variance fraction inline.\n  - approveLine(lineId) — for variance != 0, INSERTs sku_stock_ledger\n    with reason='CYCLE_COUNT_ADJ'; updates bin_contents.qty +\n    last_counted to match counted_qty; flips line to 'approved'.\n  - rejectLine(lineId) — line → 'rejected'; no stock changes.\n  - closeCampaign(campaignId) — auto-approves remaining 'counted'\n    lines (inline to keep one transaction, since pg disallows nested\n    transactions); leaves 'pending_review' alone; flips campaign\n    status to 'closed' + stamps closed_at.\n\nsrc/app/admin/inventory-v2/cycle-counts/page.tsx (NEW):\n  - Create-campaign form (name + variance_tol).\n  - Last-50 campaigns table with per-status counts (total / counted\n    / pending_review / approved). Pending-review counter goes amber\n    when > 0 so it grabs attention.\n\nsrc/app/admin/inventory-v2/cycle-counts/[id]/page.tsx (NEW):\n  - Header with status badge + \"Close campaign\" action (open-only).\n  - Status filter pills (all / pending / counted / pending_review /\n    approved / rejected) drive the lines query via ?status=...\n  - Per-line: bin name (linked) + SKU (linked) + expected/counted\n    qty + colored variance + status badge.\n  - Inline action per status:\n      pending      → number input + Submit button\n      pending_review or counted → Approve / Reject buttons\n      approved/rejected → audit text (\"by Tuan\")\n  - All actions are server actions calling the helper; pages\n    revalidatePath after each so the new state lands in the same\n    render cycle.\n  - Variance color codes: gray when 0; red when > tolerance; amber\n    otherwise.\n\nDashboard \"Quick links\" row gains \"Cycle counts →\".\n\nZero new tsc errors in any new file. (Four pre-existing TS2347 errors\nin /api/cycle-counts/* routes are untouched.)\n\nCo-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>",
+      "type": "other",
+      "title": "inventory v2 #2: cycle count admin UI"
+    },
+    {
+      "sha": "c90635eaae4afa42b8ca03a31103a5263825c0ec",
+      "shortSha": "c90635e",
+      "date": "2026-05-18T07:53:09-07:00",
+      "author": "DENSENSE8",
+      "subject": "inventory v2 #3: throughput dashboard",
+      "body": "Diagnostic aggregation over inventory_events. Lives at\n/admin/inventory-v2/throughput.\n\nTime-range selector pills (24h / 72h / 7d) drive the same query band.\nAll four sections re-run in parallel on range change:\n\n  - Totals: events count, distinct actors, distinct units touched.\n    Three tiles with semantic colors (blue / emerald / purple).\n  - By event type: horizontal-bar list with magnitude proportional\n    to the leader. Useful at-a-glance to spot which phases are\n    actively flowing (e.g. lots of RECEIVED but no SHIPPED means\n    Phase 2 is on but Phase 5 hasn't been activated yet).\n  - Station × hour heatmap: 6-column grid (RECEIVING / TECH / PACK /\n    SHIP / MOBILE / SYSTEM) by hour bucket, intensity ∝ count.\n    Hover for tooltip with the exact bucket + station + count.\n    Hidden when no rows match the range.\n  - By actor: top-50 staff by event count + last-active timestamp.\n\nPure read; no flag gate. Numbers stay sparse until the flagged paths\nemit; the panel still renders cleanly with zero rows.\n\nDashboard \"Quick links\" gains \"Throughput →\".\n\nZero new tsc errors.\n\nCo-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>",
+      "type": "other",
+      "title": "inventory v2 #3: throughput dashboard"
+    },
+    {
+      "sha": "4d69d80d9891d4eb5f695ba2694f2c20ad66299a",
+      "shortSha": "4d69d80",
+      "date": "2026-05-18T07:50:54-07:00",
+      "author": "DENSENSE8",
+      "subject": "inventory v2 #1: returns intake admin tool + shared helper",
+      "body": "Phase 7 returns operations get a UI. Extracts the transaction into\nsrc/lib/inventory/returns.ts; /api/returns/intake and the new admin\npage share the same code path.\n\nsrc/lib/inventory/returns.ts (NEW):\n  - processReturnsIntake(input) → ReturnsIntakeResult (success |\n    400/404 failure with missing serials/ids).\n  - Per resolved unit: ledger +1 RETURN_CUSTOMER, unit → RETURNED,\n    inventory_events RETURNED with stock_ledger_id linked.\n  - Caller pre-extracts GS1 URLs from raw scans via parseScannedUrl\n    so the helper takes normalized serials.\n\nAPI route slimmed 190 → 100 lines. Behavior unchanged; response shape\nunchanged (snake_case keys preserved for existing callers).\n\nsrc/app/admin/inventory-v2/returns/page.tsx (NEW):\n  - Top form: textarea for serials (newline OR comma separated),\n    plus optional tracking number + reason. Server action splits\n    numeric entries (id), GS1 URLs (parsed), bare strings (uppercased).\n  - Recent returns table: last 50 RETURNED inventory_events with\n    unit + sku links, prev status, tracking, reason, actor.\n  - URL query params drive flash messages: ?ok=1 (green banner)\n    or ?error=... + ?missing=... (red banner listing the IDs that\n    didn't match). Preview-mode banner when flag is off.\n\nDashboard \"Quick links\" row gains a \"Returns intake →\" button.\n\nZero new tsc errors.\n\nCo-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>",
+      "type": "other",
+      "title": "inventory v2 #1: returns intake admin tool + shared helper"
+    },
+    {
+      "sha": "e18cb4d292b21971a71883de489ae8f9fa6b117e",
+      "shortSha": "e18cb4d",
+      "date": "2026-05-18T07:47:09-07:00",
+      "author": "DENSENSE8",
+      "subject": "QR label UI surgery on MultiSkuSnBarcode + BarcodePreview",
+      "body": "Lands the operator-facing half of the QR-only label migration. The\nin-app preview and the data-fetching path now match the print template\nlanded in 86e6d3b.\n\nThis commit bundles my surgical edits on top of an in-flight parallel\nrestructure of these two files (condition picker, NotesCard split,\nProductContextCard slimmed, etc. — pre-existing work). The QR-specific\nchanges are isolated to:\n\nsrc/components/MultiSkuSnBarcode.tsx — data + render:\n  - Drop loadBarcodeLibrary/renderBarcode imports + the\n    window.JsBarcode global ambient type. Add loadQrLibrary/renderQr.\n  - New state: gtin + qrUrl alongside uniqueSku. Both populated by\n    the new fetchNextUnitId() helper that calls /api/units/next-id\n    (introduced in d6e7326) and stashes the response triple.\n  - All four /api/sku-manager?action=current call sites swap to\n    fetchNextUnitId(). The /api/sku-manager?action=increment call in\n    handleFinalAction is GONE — /api/units/next-id is atomic, so\n    every call returns a fresh unit id with no separate commit step.\n  - renderBarcodeCanvas → renderQrCanvas (async; pulls in the qrcode\n    library dynamically via loadQrLibrary). The downstream useEffect\n    that drives canvas redraws now reacts to qrUrl OR uniqueSku and\n    void-fires the async render.\n  - handleSkuChange + handleChangeSku reset the new gtin/qrUrl too.\n  - printProductLabels invocation in handleFinalAction passes\n    { gtin, qrPayloads: [qrUrl ⨉ serialNumbers.length] } so the\n    print template renders the GS1 Digital Link QR from\n    src/lib/print/printProductLabel.ts (which already handles\n    that case from the prior commit).\n\nsrc/components/MultiSkuSnBarcode.tsx — PreviewCardModern layout:\n  - Print-mode preview redesigned. Was: centered canvas-then-text\n    stack. Now: title + unit id + (optional) SN/LOC on the left,\n    QR canvas (160×160) on the right. Matches the ZPL template\n    visually.\n\nsrc/components/barcode/BarcodePreview.tsx — vertical-mode preview:\n  - Same layout flip for the sidebar/mobile compact mode. Comfy\n    (horizontal) renders a 128×128 QR; compact renders 96×96.\n  - Drops the centered text block under the (formerly 1D) canvas.\n\nWhat's preserved from the parallel work:\n  - ConditionGrade state + the new <SerialScanCard> condition select\n  - NotesCard split out of the preview\n  - ProductContextCard slimmed (no currentLocation/onChangeSku)\n  - StickyActionBar + ModernSkuField + WorkspaceCard structure\n\nZero new tsc errors. Reprint mode still works (no GTIN/QR override —\nfalls back to the legacy URL form in the print template).\n\nCo-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>",
+      "type": "other",
+      "title": "QR label UI surgery on MultiSkuSnBarcode + BarcodePreview"
+    },
+    {
+      "sha": "91169695c8714654dbe06daa3aa025f9713d701a",
+      "shortSha": "9116969",
+      "date": "2026-05-18T01:06:18-07:00",
+      "author": "DENSENSE8",
+      "subject": "inventory v2: hold/release helpers + admin page",
+      "body": "Extracts the Phase 7 hold + release transactions into\nsrc/lib/inventory/hold.ts. /api/serial-units/[id]/{hold,release} now\ndelegate. New /admin/inventory-v2/holds page exposes the same\noperations via server actions.\n\nsrc/lib/inventory/hold.ts (NEW):\n  - holdUnit(input) — 409 if already ON_HOLD; stashes prev status in\n    inventory_events.payload.restore_status; idempotent via\n    clientEventId. Returns HoldUnitResult (success | failure with\n    HTTP-style status).\n  - releaseUnit(input) — 409 if not ON_HOLD; recovers restore_status\n    from the most recent HELD event's payload; force_status override\n    (validated against the RESTORABLE_STATUSES set).\n  - isRestorableStatus(value) type guard.\n  - No feature-flag check here — caller decides.\n\nRoute slimming:\n  - /api/serial-units/[id]/hold/route.ts: 107 → 49 lines.\n  - /api/serial-units/[id]/release/route.ts: 124 → 55 lines.\n  - Behavior unchanged; response shapes identical.\n\nsrc/app/admin/inventory-v2/holds/page.tsx (NEW):\n  - Top form: place a unit on hold. Accepts numeric id OR normalized\n    serial; server action looks up by either. Required reason.\n    Server-side validation returns ?error= codes that render as a\n    red banner.\n  - Held-units table: every serial_units row where current_status =\n    'ON_HOLD'. LATERAL join pulls the matching HELD inventory_event\n    for reason, restore_status, held_at, held_by_name.\n  - Per-row Release: server action with an optional force_status\n    select (blank = auto-recover from payload). Disabled when the\n    INVENTORY_V2_RETURNS flag is off; preview-mode banner shown.\n  - All rows link to /admin/inventory-v2/units/{id} for the full\n    timeline.\n\nDashboard: adds a \"Quick links\" nav row below preflight with buttons\nfor Events explorer, Bulk allocate, and Holds.\n\nZero new tsc errors.\n\nCo-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>",
+      "type": "other",
+      "title": "inventory v2: hold/release helpers + admin page"
+    },
+    {
+      "sha": "ccc06043b9aa9a51a86ff8301838c0fe02e34d90",
+      "shortSha": "ccc0604",
+      "date": "2026-05-18T01:01:45-07:00",
+      "author": "DENSENSE8",
+      "subject": "inventory v2: bulk-allocate admin page + shared allocation helper",
+      "body": "Extracts the Phase 4 allocation transaction into\nsrc/lib/inventory/allocate.ts so /api/orders/[id]/allocate and the\nnew bulk-allocate admin page share one code path. FIFO selection,\nSKIP LOCKED contention, per-unit event emission, idx_oua_open_unit\nguard — all in one place.\n\nsrc/lib/inventory/allocate.ts (NEW):\n  - allocateOrder(input) returns AllocateOrderResult (discriminated\n    success vs failure). Success carries the per-unit list with\n    allocationId + eventId; failure carries the HTTP-style status\n    (400/404/409) for the API caller to forward.\n  - isValidConditionGrade type guard.\n  - Helper does NOT check the feature flag — callers decide so test\n    harnesses can bypass.\n\nsrc/app/api/orders/[id]/allocate/route.ts:\n  - Slimmed from 186 lines to 74. Delegates the body of the request\n    to allocateOrder(). Response shape unchanged.\n  - Still gated by INVENTORY_V2_ALLOCATION and permission orders.view.\n\nsrc/app/admin/inventory-v2/bulk-allocate/page.tsx (NEW):\n  - Lists every orders row with a non-empty sku, no open\n    order_unit_allocations row, and a non-shipped status.\n  - LEFT JOIN LATERAL counts STOCKED serial_units for the matching\n    SKU so each row shows \"available_stocked vs qty\" at a glance.\n    Color-codes green (eligible), amber (partial), red (zero).\n  - Per-row Allocate button is a <form> with a server action that\n    calls allocateOrder() and revalidatePath()s the page so the\n    result lands in the same render. Disabled when:\n      * available_stocked < requested qty (label \"Insufficient\"), or\n      * INVENTORY_V2_ALLOCATION flag is off (preview mode banner)\n  - Pagination: 100 per page, ?page=N offset cursor.\n  - Footer explains the underlying mechanism + links to the helper\n    file so operators can find the source of truth.\n\nDashboard: the existing \"Order unit allocations\" section grows a\n\"Bulk allocate →\" link in its header. Off-flag, the bulk-allocate\npage still renders the candidate list in preview mode — useful for\nseeing what would happen before flipping the flag.\n\nZero new tsc errors.\n\nCo-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>",
+      "type": "other",
+      "title": "inventory v2: bulk-allocate admin page + shared allocation helper"
+    },
+    {
+      "sha": "85cca78f8183c64bbb0f57a2d3a6449453cf5700",
+      "shortSha": "85cca78",
+      "date": "2026-05-18T00:56:18-07:00",
+      "author": "DENSENSE8",
+      "subject": "inventory v2 admin: events explorer page + dashboard link",
+      "body": "New page at /admin/inventory-v2/events. Server-rendered, paginated\n(100 per page), filterable browse of the inventory_events stream.\n\nFilters (URL-driven, GET form so deep links are shareable):\n  event_type   exact match from the canonical EVENT_TYPES list\n  station      RECEIVING | TECH | PACK | SHIP | MOBILE | SYSTEM\n  sku          exact match\n  unit         serial_units.id\n  actor        staff.id (dropdown of active staff)\n  since/until  YYYY-MM-DD; until is inclusive (treated as\n               < $until+1 day in the query)\n  page         zero-indexed pagination cursor\n\nAll filters compose into a single WHERE clause via parameterized SQL.\nCOUNT(*) runs first so the header shows total + page-of-pages; the\nLIMIT/OFFSET pull uses the same params array extended with page-size\n+ offset.\n\nResult rows are mini-versions of the per-unit timeline row: clickable\nunit id → /admin/inventory-v2/units/{id}, clickable sku →\n/admin/inventory-v2/sku/{sku}, plus the prev→next status diff and\nbin name when present.\n\nDashboard tweak: the \"Recent inventory events\" section header now\ncarries an \"Open explorer →\" button linking through to the new page.\nThe recent-50 inline view stays as the at-a-glance pulse; deep\ninvestigation goes to /events.\n\nZero new tsc errors. Read-only, gated by admin.view.\n\nCo-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>",
+      "type": "other",
+      "title": "inventory v2 admin: events explorer page + dashboard link"
+    },
+    {
+      "sha": "6ad1979408590e112d167a37da79561f27f37178",
+      "shortSha": "6ad1979",
+      "date": "2026-05-18T00:52:18-07:00",
+      "author": "DENSENSE8",
+      "subject": "inventory v2 admin: preflight panel + open DRIFT alerts surface",
+      "body": "Two new sections on /admin/inventory-v2 that pair with the drift-check\ncron landed in c040e55.\n\nPreflight panel (PASS / WARN / FAIL per check):\n  1. Schema artifacts — every Phase 0/1 table, enum value, and the\n     fn_next_unit_seq function present.\n  2. tech_serial_numbers backfill — eligible-but-unlinked count is 0.\n     WARN with a pointer to scripts/backfill-tech-serial-unit-id.mjs\n     if any remain.\n  3. sku_catalog GTIN coverage — every row has a gtin value. WARN\n     with a pointer to scripts/backfill-internal-gtins.mjs otherwise.\n  4. sku_stock ↔ ledger drift — v_sku_stock_drift empty AND no open\n     DRIFT alerts. PASS when both clean; WARN when alerts are open\n     but the view is clean (cron will resolve on next tick); FAIL\n     when the view is non-empty (a writer bypassed the ledger).\n\nHeader pill flips between \"all green — safe to flip flags\" and\n\"attention required\". Footer notes the one phase-specific\nprecondition that doesn't fit a universal check: Phase 5 (PACKING)\nneeds Phase 4 (ALLOCATION) flipped first so order_unit_allocations\nrows exist.\n\nOpen DRIFT alerts section: only renders when stock_alerts has open\nrows of alert_type='DRIFT'. Red background to grab attention, table\nshows SKU (clickable → /admin/inventory-v2/sku/{sku}), worst |Δ|,\ntriggered_at, the detail line built by the drift-check route.\n\nTwo new loaders:\n  - loadGtinCoverage — single SELECT counting sku_catalog rows\n    with/without gtin.\n  - loadOpenDriftAlerts — last 25 open DRIFT alerts ordered newest.\n\nZero new tsc errors. Read-only, gated by admin.view.\n\nCo-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>",
+      "type": "other",
+      "title": "inventory v2 admin: preflight panel + open DRIFT alerts surface"
+    },
+    {
+      "sha": "c040e55107f3a2212f2fd5871e1c0b63d862e458",
+      "shortSha": "c040e55",
+      "date": "2026-05-18T00:44:43-07:00",
+      "author": "DENSENSE8",
+      "subject": "inventory v2: drift-check cron + DRIFT stock-alert type",
+      "body": "Catches the moment sku_stock.stock (or .boxed_stock) disagrees with\nSUM(sku_stock_ledger) per dimension — the canary that a writer\nbypassed the ledger trigger and quantities went out of sync.\n\nsrc/lib/migrations/2026-05-18_stock_alerts_drift.sql:\n  - Extends stock_alerts_type_chk to permit a fourth alert_type:\n    'DRIFT'. Pure CHECK rewrite, idempotent. Applied vs Neon\n    (neondb) at deploy time — constraint now reads\n    CHECK (alert_type IN ('LOW_STOCK','NEVER_COUNTED','STALE_COUNT','DRIFT')).\n\nsrc/app/api/qstash/inventory/drift-check/route.ts:\n  POST handler (isQStashOrigin gated):\n    1. INSERT stock_alerts rows of alert_type='DRIFT' for every SKU\n       in v_sku_stock_drift. ON CONFLICT DO NOTHING dedupes against\n       the idx_stock_alerts_open partial unique idx so one open\n       alert per SKU. qty_at_trigger = max(|warehouse Δ|, |boxed Δ|).\n    2. Resolve any open DRIFT alerts whose SKU is no longer drifted\n       (the trigger projection caught up).\n    3. Return { opened, resolved, worst[5], elapsed_ms } so QStash\n       logs are useful at a glance.\n  GET handler: tiny health probe { ok: true, queue: 'qstash',\n  job: 'inventory-drift-check' }.\n\nsrc/config/qstash-schedules.json:\n  Adds inventory-drift-check-daily-1100-utc at \"0 11 * * *\" (between\n  the existing refresh-reports 10:30 UTC and stock-alerts 14:00 UTC).\n  Run /api/qstash/schedules/bootstrap (or scripts/bootstrap-qstash-\n  schedules.mjs) after this deploys to register the schedule.\n\nDesigned as a passive safety net — drift should always be empty when\nthe trigger is healthy. If it's ever non-empty, the alert surfaces\nin /admin/inventory-v2's drift section AND in stock_alerts so the\nexisting alerting pipeline catches it.\n\nCo-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>",
+      "type": "other",
+      "title": "inventory v2: drift-check cron + DRIFT stock-alert type"
+    },
+    {
+      "sha": "86e6d3b9dde0951f41ddf54ca809a6cbcc1fb20d",
+      "shortSha": "86e6d3b",
+      "date": "2026-05-18T00:37:49-07:00",
+      "author": "DENSENSE8",
+      "subject": "QR label migration: QR-only print template + GTIN backfill ran",
+      "body": "Two more pieces of the QR-only / title-left / QR-right unit-label\nmigration. Lands the print-template surgery and the one-time GTIN\nbackfill for every existing sku_catalog row.\n\nsrc/lib/print/printProductLabel.ts — QR-only template:\n  - Drops the JsBarcode CDN script + 1D barcode-row entirely. The\n    1D barcode under the SKU code is gone.\n  - Layout: title + serial + sku stacked on the LEFT, QR on the\n    RIGHT (0.88in × 0.88in, was 0.86in to give the SVG a touch more\n    bleed). Title font promoted (12px bold), serial promoted (14px\n    monospace bold) since it's now the primary visual identifier.\n  - QR is pre-rendered as inline SVG via react-qr-code (already a\n    dep). No remote script wait; popup waitMs dropped from 600 → 200.\n  - PrintProductLabelInput extended with optional { qrPayload, gtin }.\n    Resolution order: qrPayload (e.g. from /api/units/next-id) →\n    GS1 Digital Link via buildGs1UnitUrl(QR_BASE_URL, gtin, serial)\n    → legacy /m/u/{serial} → /sku-stock/{sku}. Callers that don't\n    know the GTIN still work — the GS1 form just doesn't apply.\n  - PrintProductLabelsInput extended with { gtin, qrPayloads[] }\n    so the multi-print path passes the shared GTIN once and per-\n    label QR payloads index-aligned with serialNumbers.\n\nscripts/backfill-internal-gtins.mjs — one-time stamper:\n  - For every sku_catalog row where gtin IS NULL OR '': generate the\n    deterministic GTIN-14 ('02' + 11-digit zero-padded id + check\n    digit) and persist via UPDATE … SET gtin = COALESCE(NULLIF(gtin,\n    ''), $candidate). Concurrent /api/units/next-id calls take their\n    own COALESCE path; the first writer wins, conflicts are counted\n    as a non-error.\n  - --dry-run and --limit N flags. Idempotent; re-running processes\n    only remaining unstamped rows.\n\nBackfill ran against Neon (neondb): 1194 sku_catalog rows stamped,\n0 conflicts, 0 failures, 0 remaining without GTIN. Every existing\nSKU is now QR-printable without an extra round-trip.\n\nStill pending (was paused due to active edits): MultiSkuSnBarcode.tsx +\nBarcodePreview.tsx rewrite to call /api/units/next-id and render QR\nin the in-app preview. Will land after the parallel edits there settle.\n\nCo-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>",
+      "type": "other",
+      "title": "QR label migration: QR-only print template + GTIN backfill ran"
+    },
+    {
+      "sha": "d6e7326df6a8e8615d6ff695fe344055ac90a9fa",
+      "shortSha": "d6e7326",
+      "date": "2026-05-18T00:30:16-07:00",
+      "author": "DENSENSE8",
+      "subject": "QR label migration: internal-GTIN + unit-ID + /api/units/next-id (infra)",
+      "body": "Lands the supporting infrastructure for the upcoming QR-only / title-\nleft / QR-right unit-label format. Zero existing-flow change; the UI\nsurgery on MultiSkuSnBarcode + BarcodePreview + printProductLabel\nfollows in a separate commit so it doesn't collide with parallel work\non those files.\n\nDecisions baked in (2026-05-18):\n  - QR-only labels, no 1D barcode in the unit-label preview / print path.\n  - Title-left / QR-right preview layout.\n  - Internal pseudo-GTIN-14 per SKU (prefix `02` reserved-internal range).\n  - New unit-id format {SKU_SHORT}-{YEAR}-{SEQ6} replaces legacy `:A01`.\n  - Condition is database-only; QR encodes only the unit identity.\n  - Internal-only QR scanning; production app URL is the QR origin.\n\nNew files:\n  src/lib/inventory/internal-gtin.ts\n    - gs1CheckDigit(13-digit body) — mod-10 algorithm with alternating\n      3/1 weights right-to-left. Validated against known GS1 demo\n      00614141999996 (computes check digit 6).\n    - generateInternalGtin(skuCatalogId) — deterministic 14-digit:\n      \"02\" + 11-digit zero-padded id + check digit.\n    - getOrCreateInternalGtin — read sku_catalog.gtin; if empty, mint\n      one and persist via UPDATE … SET gtin = COALESCE(NULLIF(gtin,''),\n      $candidate). Safe under concurrency (first writer wins).\n    - isValidGtin14 sanity helper.\n\n  src/lib/inventory/unit-id.ts\n    - shortSku(text) — uppercase + strip non-[A-Z0-9-] + 20-char cap.\n    - formatUnitId(short, year, seq) — `{short}-{year}-{seq6}`.\n    - allocateNextUnitId(skuCatalogId, skuText, yearOverride?) — uses\n      Phase 0's fn_next_unit_seq for atomic per-(sku, year) allocation.\n\n  src/app/api/units/next-id/route.ts\n    - POST endpoint. Body: { sku } or { sku_catalog_id }.\n    - Resolves sku_catalog row → ensures GTIN → allocates unit-id →\n      builds buildGs1UnitUrl(origin, gtin, unitId). Returns\n      { unitId, gtin, qrUrl, skuCatalogId, sku, productTitle, year, seq, skuShort }.\n    - Single round trip from the printer UI; replaces the legacy\n      /api/sku-manager?action=current then ?action=increment dance.\n    - Permission gate: print.label.\n\nModified:\n  src/app/api/get-title-by-sku/route.ts\n    - Response now includes skuCatalogId + gtin (additive — existing\n      callers reading title/stock/location/imageUrl are unaffected).\n\n  src/utils/barcode.ts\n    - Adds loadQrLibrary / renderQr / generateQrDataUrl using the\n      `qrcode` npm package. Dynamic import so the ~30KB doesn't land\n      in pages that don't print labels.\n    - Existing JsBarcode loaders + renderers KEPT — receiving labels,\n      walk-in receipts, and ProductLabelPreview still use 1D barcodes;\n      only the unit-label preview drops to QR-only.\n\nDependencies:\n  package.json — adds qrcode + @types/qrcode.\n\nZero new tsc errors in any of these files.\n\nCo-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>",
+      "type": "other",
+      "title": "QR label migration: internal-GTIN + unit-ID + /api/units/next-id (infra)"
+    },
+    {
+      "sha": "f9005d2331082aacc63794e04dff5bd96e7c4b87",
+      "shortSha": "f9005d2",
+      "date": "2026-05-17T23:57:58-07:00",
+      "author": "DENSENSE8",
+      "subject": "QStash: bootstrap script + sync replenishment entry back to config",
+      "body": "While running the cron migration to QStash I noticed\nqstash-schedules.json was already missing replenishment-sync-daily-\n6am-pacific even though it had been registered with QStash live.\nRunning the bootstrap would have pruned it (the bootstrap deletes\nany QStash schedule not in the config). Adding the entry back so\nthe config mirrors reality and no schedule gets dropped on the\nnext bootstrap.\n\nNew script scripts/bootstrap-qstash-schedules.mjs:\n- Mirrors POST /api/qstash/schedules/bootstrap so you can register\n  schedules from a dev machine without waiting for a Vercel deploy\n  (useful when you've just pushed a config change and need the\n  schedule live before the deploy finishes building).\n- `--list` flag for a read-only inventory.\n- Reads QSTASH_TOKEN + NEXT_PUBLIC_APP_URL from .env.\n\nBootstrap was run against production QStash: 10 schedules now\nregistered, including the two cron-migration entries from this\nsession (stock-alerts, refresh-reports) and an orphaned\nshipping-sync-all-carriers-5pm-weekdays-pacific that was in the\nconfig but had never been bootstrapped.\n\nCo-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>",
+      "type": "other",
+      "title": "QStash: bootstrap script + sync replenishment entry back to config"
+    },
+    {
+      "sha": "8085f0bed3d41d9b7d89037add424e55bf18d993",
+      "shortSha": "8085f0b",
+      "date": "2026-05-17T23:40:43-07:00",
+      "author": "DENSENSE8",
+      "subject": "Move Vercel crons to QStash (zero Vercel cron billing)",
+      "body": "Removes both jobs from vercel.json so Vercel stops invoicing for cron\ninvocations. The same two jobs continue to run on the same daily UTC\nschedule via QStash, which we already pay for.\n\nvercel.json:\n- crons array emptied. The file stays in place; future Vercel-specific\n  settings (rewrites, headers) can land here without re-creating it.\n\nsrc/config/qstash-schedules.json — two new entries:\n- stock-alerts-daily-1400-utc      cron \"0 14 * * *\"  → /api/cron/stock-alerts\n- refresh-reports-daily-1030-utc   cron \"30 10 * * *\" → /api/cron/refresh-reports\n  (same UTC times the Vercel crons used, so no behavior change.)\n\nsrc/app/api/cron/stock-alerts/route.ts &\nsrc/app/api/cron/refresh-reports/route.ts:\n- Convert the cron logic from GET to POST so QStash can drive it\n  (QStash publishJSON always POSTs). Auth-gate the POST with\n  isQStashOrigin (signature or Bearer $QSTASH_TOKEN).\n- Add a trivial GET health probe — no auth, no work, just returns\n  { ok: true, queue: 'qstash', job: ... }. Matches the pattern used\n  by every other route under /api/qstash/.\n- Add `export const dynamic = 'force-dynamic'` and `maxDuration` so\n  the routes don't get statically rendered and have enough runtime\n  budget for the materialized-view refresh.\n\nActivation:\nAfter this deploys, POST /api/qstash/schedules/bootstrap to register\nthe two new schedules in QStash. The bootstrap route deletes obsolete\nschedules automatically, so the previous Vercel cron entries (now\ngone) have no equivalent to remove on the QStash side.\n\nCo-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>",
+      "type": "other",
+      "title": "Move Vercel crons to QStash (zero Vercel cron billing)"
+    },
+    {
+      "sha": "058b7771599626782667d077e27508904cefa82f",
+      "shortSha": "058b777",
+      "date": "2026-05-17T23:31:15-07:00",
+      "author": "DENSENSE8",
+      "subject": "inventory v2 Phase 8.4: SKU detail page + cross-links",
+      "body": "New /admin/inventory-v2/sku/[sku]:\n- sku_catalog row (title, category, GTIN, UPC, EAN, active flag).\n- Current stock: sku_stock.stock (WAREHOUSE) + .boxed_stock + serial\n  unit total, plus a breakdown by current_status badge.\n- Bin distribution: bin_contents rows joined to locations with qty,\n  min/max thresholds, last_counted timestamp.\n- Recent serial units (last 25 of total): serial number → link to\n  per-unit timeline, status badge, condition grade, location,\n  updated_at.\n- Open allocations: order id, unit id (→ per-unit), state, when, by.\n- Stock ledger (last 100): delta with color, reason, dimension,\n  refs (ord# / rl# / su#), actor.\n- Recent inventory events (last 50) with unit links.\n\nCross-linking:\n- Dashboard /admin/inventory-v2 grows a second search form for SKU\n  lookup beside the existing unit lookup. Both are server-action\n  forms — no client bundle.\n- Recent-events table on the dashboard now linkifies the unit id\n  and SKU cells so each event row is a starting point into either\n  detail page.\n- Per-unit page header linkifies the SKU value.\n\nRead-only across the board. Gated by admin.view.\n\nCo-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>",
+      "type": "other",
+      "title": "inventory v2 Phase 8.4: SKU detail page + cross-links"
+    },
+    {
+      "sha": "b04c75a7eb67639ecd3699f7c5f537cccf4fd01f",
+      "shortSha": "b04c75a",
+      "date": "2026-05-17T23:17:24-07:00",
+      "author": "DENSENSE8",
+      "subject": "inventory v2 Phase 8.2/8.3: per-unit timeline + lookup form",
+      "body": "Phase 8.2 — /admin/inventory-v2/units/[ref]:\n- Read-only per-unit page. The `ref` segment accepts either a numeric\n  serial_units.id or a serial number (case-insensitive, trimmed).\n- Sections (parallel queries, fault-isolated):\n    * Current state — sku, status, condition, location, origin/receiving\n      line, shipment, tracking, timestamps, notes.\n    * inventory_events timeline — every event for the unit, oldest first.\n      Renders prev→next status diff, station, bin name, actor name,\n      JSON payload, client_event_id + stock_ledger_id footer.\n    * serial_unit_condition_history — grade transitions with notes.\n      Section hidden if empty.\n    * Order allocations — every allocation (open + RELEASED).\n      Section hidden if empty.\n    * tech_serial_numbers cross-refs — legacy audit linkage.\n      Section hidden if empty.\n- StatusBadge component with palette for all 19 serial_status_enum\n  values so the timeline reads at a glance.\n- Gated by admin.view.\n\nPhase 8.3 — Search box on /admin/inventory-v2:\n- Server-action form at the top of the dashboard. Reads `ref` from\n  the submit and redirect()s to /admin/inventory-v2/units/{ref}.\n- Uses Next 16 form action attribute (server action), no client\n  bundle added.\n\nTogether: operators can paste any serial into the dashboard search,\nland on the unit's full lifecycle timeline, and trace every event\nback to the actor + payload that produced it.\n\nZero new tsc errors.\n\nCo-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>",
+      "type": "other",
+      "title": "inventory v2 Phase 8.2/8.3: per-unit timeline + lookup form"
+    },
+    {
+      "sha": "b4b01225206c70ba17465f90988fcc2f376617a3",
+      "shortSha": "b4b0122",
+      "date": "2026-05-17T23:14:05-07:00",
+      "author": "DENSENSE8",
+      "subject": "inventory v2 Phase 8.1: admin status page + backfill fix",
+      "body": "Activation status:\n- Phase 0 migration applied to Neon (neondb).\n- Phase 1 migration applied (printer_profiles.default_for CHECK extended).\n- Backfill ran successfully: 353 tech_serial_numbers rows linked to\n  serial_units (75 reused, 278 created); 0 eligible rows remaining.\n  Final state: 417 TSN with serial, 373 linked, 425 serial_units total.\n\nBackfill fix (scripts/backfill-tech-serial-unit-id.mjs):\n- tech_serial_numbers has no direct sku column; first run failed with\n  \"column sku does not exist\" (42703). Fixed by LEFT JOIN to the legacy\n  sku table via source_sku_id so the serial_units upsert can fill in\n  sku for those rows. FNSKU-type TSN rows continue to be skipped.\n\nNew admin dashboard (src/app/admin/inventory-v2/page.tsx):\n- Server-rendered, read-only. Gated by admin.view.\n- Six sections in parallel queries (one slow query doesn't block):\n    1. Feature flag snapshot — reads inventoryV2FlagSnapshot(),\n       maps each env var to its phase.\n    2. Schema artifacts — verifies all 7 expected tables, 10 new enum\n       values, and fn_next_unit_seq() are present.\n    3. Backfill progress — total / linked / unlinked-eligible TSN\n       counts + serial_units row count.\n    4. SKU stock drift — queries v_sku_stock_drift; empty means the\n       trg_sku_stock_from_ledger trigger is healthy.\n    5. Order unit allocations — count + oldest per state.\n    6. Recent inventory_events — last 50 events with status diff +\n       actor name.\n- Tailwind, status pills, monospace IDs, dynamic page (no caching).\n\nThis is the first piece of Phase 8 (reporting / polish). Reachable at\n/admin/inventory-v2; not yet wired into the admin tab nav (the user\nis touching that file in parallel — adding a tab entry can come in a\nfollow-up commit).\n\nCo-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>",
+      "type": "other",
+      "title": "inventory v2 Phase 8.1: admin status page + backfill fix"
+    },
+    {
+      "sha": "caadad3c4530b39d67e804dabd304924dd9119fd",
+      "shortSha": "caadad3",
+      "date": "2026-05-17T22:59:17-07:00",
+      "author": "DENSENSE8",
+      "subject": "inventory v2 Phase 7: returns intake + hold/release (flagged)",
+      "body": "Per context/inventory_system_upgrade_plan.md §6.7, §6.8 and §10 Phase 7.\nThree new endpoints behind INVENTORY_V2_RETURNS (OFF by default).\n\nPOST /api/returns/intake:\n  - For each scanned/identified unit (serials raw or GS1 URLs, or\n    explicit serial_unit_ids):\n      * sku_stock_ledger row +1 reason='RETURN_CUSTOMER' (trigger\n        projects the qty back onto sku_stock.stock automatically).\n      * serial_units.current_status → RETURNED.\n      * inventory_events RETURNED with prev_status reflecting the actual\n        prior lifecycle state, stock_ledger_id linked.\n  - All in one transaction; rejects with the missing serials/ids if any\n    input cannot be resolved, leaving zero mutations committed.\n  - Body: { tracking_number?, order_id?, reason?, serials?[],\n            serial_unit_ids?[], client_event_id? }.\n  - Permission: receiving.mark_received (returns physically arrive at\n    the receiving dock).\n\nPOST /api/serial-units/[id]/hold:\n  - Transitions any non-ON_HOLD unit to ON_HOLD.\n  - Stashes the previous lifecycle state in the HELD inventory_event's\n    payload.restore_status so the release endpoint can roll it back.\n  - Requires a `reason` body field.\n  - Returns 409 if the unit is already ON_HOLD (no double-hold).\n  - Permission: sku_stock.adjust.\n\nPOST /api/serial-units/[id]/release:\n  - Companion to hold. Reads the most recent HELD event's payload.\n    restore_status to recover the pre-hold state; falls back to\n    STOCKED if absent/invalid.\n  - `force_status` body field overrides the auto-recovery — e.g. send\n    'TRIAGED' to push a held unit back into the refurb flow instead of\n    straight to STOCKED.\n  - Returns 409 if the unit isn't currently ON_HOLD.\n  - Emits RELEASED_HOLD event with prev='ON_HOLD', next=restored.\n  - Permission: sku_stock.adjust.\n\nAll single-transaction. Zero new tsc errors.\n\nThis is the last functional phase. Phase 8 in the plan is \"Reporting,\ncycle counts, polish (ongoing)\" — UI work + dashboards that build on\nthe inventory_events / sku_stock_ledger primitives all six prior\nphases just wired up.\n\nCo-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>",
+      "type": "other",
+      "title": "inventory v2 Phase 7: returns intake + hold/release (flagged)"
+    },
+    {
+      "sha": "426ff893817e7df650b401e7704c79fc17dde01b",
+      "shortSha": "426ff89",
+      "date": "2026-05-17T22:57:08-07:00",
+      "author": "DENSENSE8",
+      "subject": "inventory v2 Phase 6: FBA serial linkage + per-unit decrement (flagged)",
+      "body": "Per context/inventory_system_upgrade_plan.md §6.6 and §10 Phase 6.\nTwo new endpoints behind INVENTORY_V2_FBA_SERIAL_LINK (OFF by default).\n\nPOST /api/fba/items/[id]/link-unit:\n  - Resolves a scanned serial (raw or GS1 Digital Link URL) or\n    explicit serial_unit_id.\n  - INSERT fba_shipment_item_units (composite PK provides idempotency\n    on retry) tying the unit to the FBA shipment item line.\n  - If the unit is currently STOCKED, transitions it → ALLOCATED and\n    emits an ALLOCATED inventory_events row (station='PACK',\n    payload.source='fba.link-unit'). Already-ALLOCATED units (e.g.\n    re-scanned after a brief pause) stay put.\n  - Body: { scan? | serial_unit_id?, client_event_id? }.\n\nPOST /api/fba/shipments/[id]/ship-units:\n  - For every linked serial_unit on the shipment (joined through\n    fba_shipment_items → fba_shipment_item_units) NOT already SHIPPED:\n      * inventory_events PACKED (prev=current, next='PACKED')\n      * inventory_events LABELED (prev='PACKED', next='LABELED')\n      * sku_stock_ledger row delta=-1 reason='SOLD' dimension='WAREHOUSE'\n      * serial_units.current_status → SHIPPED\n      * inventory_events SHIPPED with stock_ledger_id linked\n  - All in one transaction; FOR UPDATE OF su locks each unit row.\n  - Idempotent — re-running after success finds zero non-SHIPPED units\n    and returns { shipped_unit_count: 0 }.\n  - Body: { client_event_id? }.\n\nThe existing /api/fba/shipments/close endpoint is untouched. It\ncontinues to drive the FBA shipment status machine for non-serialized\nlines. Phase 6's two new endpoints add the per-unit decrement that\nthe legacy close never performed — Tier-3 FBA shipments now produce\nthe same sku_stock_ledger trail as direct orders.\n\nPermission gate: fba.stage_shipments (existing). Zero new tsc errors.\n\nCo-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>",
+      "type": "other",
+      "title": "inventory v2 Phase 6: FBA serial linkage + per-unit decrement (flagged)"
+    },
+    {
+      "sha": "24a7e4f58b441b4c8bb62b96ca4f92c653c4b3eb",
+      "shortSha": "24a7e4f",
+      "date": "2026-05-17T22:55:03-07:00",
+      "author": "DENSENSE8",
+      "subject": "inventory v2 Phase 5: pack/ship single-decrement transaction (flagged)",
+      "body": "Per context/inventory_system_upgrade_plan.md §6.5 and §10 Phase 5.\nThis is THE CORE FIX. Behind INVENTORY_V2_PACKING (OFF by default).\n\nPOST /api/pack/ship is a single transaction that:\n\n  1. Resolves every input serial (raw text or GS1 Digital Link URL via\n     Phase 1's parseScannedUrl) and serial_unit_id explicitly, then\n     FOR UPDATEs the matching serial_units rows.\n  2. Validates that EVERY unit has an open (non-RELEASED) allocation\n     for THIS order in a pre-SHIPPED state. On any mismatch the\n     transaction returns 409 with the offending units and ZERO writes\n     are committed.\n  3. Per unit, in order:\n       - order_unit_allocations.state → SHIPPED\n       - inventory_events PACKED  (idempotent via clientEventId:unit:PACKED)\n       - inventory_events LABELED (idempotent via :LABELED suffix)\n       - sku_stock_ledger row delta=-1 reason='SOLD' dimension='WAREHOUSE'\n         (the trg_sku_stock_from_ledger trigger projects this onto\n          sku_stock.stock atomically — THE DECREMENT)\n       - serial_units.current_status → SHIPPED\n       - inventory_events SHIPPED (idempotent, stock_ledger_id linked)\n  4. Writes ONE packer_logs row (ORDERS type) keyed to the shipment so\n     the existing shipped-dashboard query keeps working unchanged.\n  5. Writes ONE station_activity_logs row (PACK / PACK_SHIPPED) for\n     cross-station visibility.\n  6. Flips orders.status='shipped' LAST so any concurrent reader sees\n     the event-side state before the order flag changes.\n\nOff-flag: returns 503 immediately so callers fall back to the legacy\n/api/packing-logs path. No production behavior changes until the flag\nflips and operators are running the v2 receive → triage → test →\nallocate → pick → ship flow end-to-end.\n\nBody:\n  {\n    order_id: number,\n    serials?: string[],\n    serial_unit_ids?: number[],\n    tracking_number?: string,\n    carrier?: string,\n    client_event_id?: string\n  }\n\nPermission gate: packing.complete_order (existing packer permission).\n\nCo-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>",
+      "type": "other",
+      "title": "inventory v2 Phase 5: pack/ship single-decrement transaction (flagged)"
+    },
+    {
+      "sha": "1735fec158d97427f4dc930840143b8903afd9a0",
+      "shortSha": "1735fec",
+      "date": "2026-05-17T22:53:00-07:00",
+      "author": "DENSENSE8",
+      "subject": "inventory v2 Phase 4: order allocation + pick scan (flagged)",
+      "body": "Per context/inventory_system_upgrade_plan.md §6.3, §6.4 and §10 Phase 4.\nThree new endpoints behind INVENTORY_V2_ALLOCATION (OFF by default).\n\nThis is the phase that fixes the double-counting problem described in\nthe plan: from here on, an order does not consume \"available\" stock at\nhandoff — it reserves a specific unit via order_unit_allocations, and\nthe unit stays in the same physical state machine while the order\nwalks ALLOCATED → PICKED → PACKED → SHIPPED. The single decrement\nevent lands in Phase 5.\n\nPOST /api/orders/[id]/allocate:\n  - Loads orders.{sku, quantity, condition}.\n  - SELECT serial_units WHERE current_status='STOCKED' AND sku=$\n      [AND condition_grade=$], ORDER BY id ASC, LIMIT $qty,\n      FOR UPDATE SKIP LOCKED (concurrent allocators get disjoint sets).\n  - INSERT order_unit_allocations row per unit (state='ALLOCATED').\n    idx_oua_open_unit (partial UNIQUE on serial_unit_id WHERE state\n    != 'RELEASED') from Phase 0 guarantees no double-allocation.\n  - UPDATE serial_units SET current_status='ALLOCATED'.\n  - INSERT inventory_events ALLOCATED (prev='STOCKED', next='ALLOCATED',\n    payload.allocation_id, payload.ordinal).\n  - Returns partial=true with the actual count when fewer units are\n    available than requested.\n  - Body: { quantity?, condition_grade?, client_event_id? }.\n\nPOST /api/orders/[id]/release:\n  - Snapshots every non-RELEASED order_unit_allocations row for the order\n    via FOR UPDATE.\n  - UPDATE state='RELEASED', released_at, released_reason per row.\n  - Returns unit to STOCKED only if current_status is an outbound state\n    (ALLOCATED/PICKED/PACKED/LABELED/STAGED) — defensive against\n    SHIPPED units that shouldn't have an open allocation.\n  - Emits RELEASED events with prev_status reflecting the unit's pre-release\n    state. Idempotent: re-running after release is a no-op.\n  - Body: { reason?, client_event_id? }.\n\nPOST /api/pick/scan:\n  - Accepts either { scan: rawSerial | GS1DigitalLinkUrl } or\n    { serial_unit_id }. Uses Phase 1's parseScannedUrl() so QR scans\n    work natively.\n  - Resolves the unit + finds an open ALLOCATED row (optionally\n    constrained to order_id when supplied — needed when the same SKU\n    has multiple open allocations).\n  - On mismatch (no open ALLOCATED for the unit, or allocation already\n    advanced): returns 409 with mismatch=true. Operator can retry with\n    override_mismatch=true; the override is recorded in the\n    inventory_events payload for audit.\n  - Transitions allocation → PICKED, unit → PICKED. Emits PICKED event\n    with prev_status reflecting the actual previous unit state.\n  - Body: { scan? | serial_unit_id?, order_id?, bin_id?,\n            client_event_id?, override_mismatch? }.\n\nAll three are single-transaction. Off-flag, each returns 503 so callers\ncan fall back to legacy flows without ambiguity.\n\nPermission gate: orders.view on all three. A dedicated pick.scan\npermission can land in a follow-up if the warehouse wants tighter\nRBAC at the pick station.\n\nCo-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>",
+      "type": "other",
+      "title": "inventory v2 Phase 4: order allocation + pick scan (flagged)"
+    },
+    {
+      "sha": "19f7154524a23b79a5cfcc6ce07794b9fd73a0bd",
+      "shortSha": "19f7154",
+      "date": "2026-05-17T22:49:30-07:00",
+      "author": "DENSENSE8",
+      "subject": "inventory v2 Phase 3: tech-station lifecycle wiring (flagged)",
+      "body": "Per context/inventory_system_upgrade_plan.md §6.2 and §10 Phase 3.\nBehind INVENTORY_V2_TECH_LIFECYCLE (OFF by default). Off-flag, every\ntech-scan flow is byte-identical to today.\n\nPhase 3 has two prongs:\n\nA) Passive linkage (insertTechSerialForTracking.ts):\n   Every tech-scanned serial that lands a tech_serial_numbers row also\n   gets a matching serial_units master row + the new serial_unit_id FK\n   stamped + an inventory_events NOTE entry so the unit's timeline\n   reflects the scan. Emits 'NOTE' (not TEST_START) because a tech\n   add-serial does not necessarily imply testing intent — many scans\n   are outbound-order association.\n\n   - linkTechSerialToInventoryV2(db, args): upsert serial_units by\n     normalized_serial (fill-in only via COALESCE), stamp FK on the\n     just-inserted TSN row, append inventory_events with payload\n     carrying source='tech.add-serial' + tech_serial_number_id.\n   - Wrapped in try/catch so any failure logs and the legacy write\n     path (tech_serial_numbers + SAL + orders.status_history) remains\n     authoritative.\n\nB) Active state transitions (new /api/tech/test-result):\n   POST endpoint that records explicit test outcomes for a single\n   serialized unit. Three actions:\n     'start' → TEST_START event, unit → IN_TEST\n     'pass'  → TEST_PASS event,  unit → GRADED  (optional grade update\n                writes serial_unit_condition_history row referencing\n                the new inventory_event)\n     'fail'  → TEST_FAIL event,  unit → IN_REPAIR\n\n   Body: serial_unit_id | serial_number, action, condition_grade?,\n   notes?, client_event_id? (UUID for idempotent retries).\n\n   Single transaction. Gated on the flag — off-flag returns 503 so\n   callers can fall back to legacy tech-station flows. Permission gate:\n   tech.scan_serial (existing technician permission).\n\nCo-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>",
+      "type": "other",
+      "title": "inventory v2 Phase 3: tech-station lifecycle wiring (flagged)"
+    },
+    {
+      "sha": "14ebb811e2e037994c42ccb40d2fd8a9db75ffd7",
+      "shortSha": "14ebb81",
+      "date": "2026-05-17T22:33:10-07:00",
+      "author": "DENSENSE8",
+      "subject": "inventory v2 Phase 2: receive + putaway in one transaction (flagged)",
+      "body": "Per context/inventory_system_upgrade_plan.md §6.1 and §10 Phase 2.\nBehind INVENTORY_V2_RECEIVING_PUTAWAY (OFF by default). Off-flag\nbehavior is byte-identical to the previous mark-received flow.\n\nFeature flag helper (src/lib/feature-flags.ts):\n- Central env-var reader for all inventory v2 phase flags. Truthy parser\n  accepts true|1|on|yes. Snapshot helper for admin/debug pages.\n- One flag per phase (RECEIVING_PUTAWAY, TECH_LIFECYCLE, ALLOCATION,\n  PACKING, FBA_SERIAL_LINK, RETURNS) so each rollout flips\n  independently.\n\nReceive + putaway transaction (src/app/api/receiving/mark-received/route.ts):\n- New helper applyInventoryV2Effects() wraps four writes in one\n  transaction() (from @/lib/neon-client):\n    1. serial_units upsert (Tier 3) with current_location set when a\n       destination bin is provided. Replaces the standalone upsert in\n       the flagged path; off-flag path keeps the original upsert.\n    2. sku_stock_ledger row +qtyReceived (reason='RECEIVED',\n       dimension='WAREHOUSE') when sku is set, qty > 0, and\n       disposition is ACCEPT. The trg_sku_stock_from_ledger trigger\n       projects this onto sku_stock.stock atomically.\n    3. inventory_events RECEIVED — always emitted on the flagged path,\n       even when qty=0 or disposition=SCRAP/RTV, so the lifecycle\n       timeline reflects every intake.\n    4. inventory_events PUTAWAY — only when destination_bin_id is set\n       AND disposition=ACCEPT. Also flips serial_units.current_status\n       to STOCKED.\n- New optional request fields:\n    destination_bin_id   — locations.id of the bin scanned at receive time\n    client_event_id      — UUID from the scanner UI for idempotent retries\n                           (suffixed :RECEIVED / :PUTAWAY internally so\n                           one client token covers both events).\n- Response carries the inventory_v2 result block when the flag is on,\n  so the scanner UI can confirm the events landed.\n\nBest-effort overlay design: the line update commits independently\n(unchanged). If the new transaction fails, we log and continue rather\nthan failing the whole receive — matches existing Zoho-failure handling\nin the same route.\n\nZero new tsc errors (baseline of 2 pre-existing TS2347 unchanged).\n\nCo-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>",
+      "type": "other",
+      "title": "inventory v2 Phase 2: receive + putaway in one transaction (flagged)"
+    },
+    {
+      "sha": "4fdada3d0f3d47e1ceba083b8659c7adbfc754ba",
+      "shortSha": "4fdada3",
+      "date": "2026-05-17T22:28:29-07:00",
+      "author": "DENSENSE8",
+      "subject": "inventory v2 Phase 1: GS1 Digital Link scan resolver + unit labels + scan routes",
+      "body": "Per context/inventory_system_upgrade_plan.md §7 (scan + labels) and §10\nPhase 1. Additive only — no existing scan flow is altered.\n\nScan resolver (src/lib/scan-resolver.ts):\n- Add parseScannedUrl() recognizing GS1 Digital Link (/01/{gtin}/21/{serial},\n  /01/{gtin}/10/{lot}, /01/{gtin}) plus internal short prefixes (/l, /p,\n  /o, /s, /q). Returns a discriminated ScannedUrlEntity or null so callers\n  can fall through to the legacy classifyInput pattern cascade.\n- Tolerant of scheme-less inputs (\"inv.example.com/01/...\") via a URL\n  placeholder fallback.\n- buildGs1UnitUrl + buildInternalEntityUrl helpers for the inverse direction\n  (label generation).\n\nLabel printing (src/lib/print/zpl-templates.ts, /api/print/dispatch):\n- buildUnitZpl: new template for Tier-3 GS1 unit labels (2x1\" / 406x203\n  dots, same stock as existing carton/product/bin). QR encodes the GS1\n  Digital Link URL via the new builder.\n- Extend LabelClass union with 'unit' and add the switch case in\n  POST /api/print/dispatch.\n- Migration 2026-05-17_inventory_v2_phase1.sql: replace\n  printer_profiles.default_for CHECK to allow 'unit'.\n\nInternal scan resolver API (src/app/api/scan/resolve/route.ts):\n- GET|POST /api/scan/resolve accepts {input} and returns a typed\n  {kind, source, entity, redirectTo} payload. URL branch first, then\n  classifyInput fallback. Resolves serial_units.id and sku_catalog.sku\n  lookups when possible so the scanner UI doesn't need a second hop.\n\nPublic scan-URL landings (src/app/{l,p,o,s,q}/...):\n- /l/[ref]   redirects to /sku-stock/location/{barcode} on match.\n- /s/[sku]   redirects to /sku-stock/{sku}.\n- /p/[tracking] redirects to /shipped?tracking=...\n- /o/[orderId]  redirects to /dashboard?orderId=...\n- /q/[payload]  redirects to /m/signin?scan=... (mobile UA) or\n                /dashboard?scan=... (desktop). Generic landing for\n                opaque scanner tokens.\n- The existing /01/[gtin]/21/[serial] and /01/[gtin] pages already\n  cover GS1 Digital Link unit + product paths; left unchanged.\n\nDatabase queries in new files use the typed @/lib/neon-client helpers\n(queryOne) rather than the loosely-typed default pool, so my Phase 1\nadditions add zero new TS2347 errors.\n\nCo-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>",
+      "type": "other",
+      "title": "inventory v2 Phase 1: GS1 Digital Link scan resolver + unit labels + scan routes"
+    },
+    {
+      "sha": "2a8fc962147ddea5d3ab6c077e065e985a52d966",
+      "shortSha": "2a8fc96",
+      "date": "2026-05-17T11:20:14-07:00",
+      "author": "DENSENSE8",
+      "subject": "inventory v2 Phase 0: schema declarations + migration + repositories",
+      "body": "Pure-foundation phase. Zero behavior change to existing routes; all\nexisting reads/writes continue to work. Sets up the typed Drizzle layer\nand the new tables the application code will start using in Phase 1+.\n\nPer context/inventory_system_upgrade_plan.md §5 (Schema decisions) and\n§10 (Phase 0 — Schema and ORM alignment).\n\nDrizzle schema (src/lib/drizzle/schema.ts):\n- New pgEnum serialStatusEnum with original 2026-04-10 set plus Phase 0\n  expansion (TRIAGED, IN_REPAIR, REPAIR_DONE, IN_TEST, GRADED,\n  ALLOCATED, PACKED, LABELED, STAGED, ON_HOLD).\n- Declare existing-but-undeclared inventory tables: locations,\n  binContents, locationTransfers, serialUnits, skuStockLedger,\n  inventoryEvents, reasonCodes, printerProfiles, stockAlerts,\n  cycleCountCampaigns, cycleCountLines. All previously accessed via\n  raw SQL only; now typed.\n- Add Phase 0 NEW tables: serialUnitConditionHistory,\n  orderUnitAllocations, fbaShipmentItemUnits, unitIdSequences.\n- Re-export $inferSelect/$inferInsert types for every new table.\n\nMigration (src/lib/migrations/2026-05-17_inventory_v2_phase0.sql):\n- ALTER TYPE serial_status_enum ADD VALUE × 10 (idempotent DO blocks).\n- CREATE TABLE serial_unit_condition_history with chk_grade_changed\n  CHECK (prev_grade IS DISTINCT FROM new_grade).\n- CREATE TABLE order_unit_allocations with partial UNIQUE INDEX\n  idx_oua_open_unit on serial_unit_id WHERE state != 'RELEASED'\n  (enforces one open allocation per unit; released history preserved).\n- CREATE TABLE fba_shipment_item_units (Tier-3 FBA serial linkage).\n- CREATE TABLE unit_id_sequences with fn_next_unit_seq() function for\n  atomic per-SKU-per-year sequence allocation.\n\nBackfill (scripts/backfill-tech-serial-unit-id.mjs):\n- Idempotent: stamps tech_serial_numbers.serial_unit_id by find-or-create\n  on serial_units.normalized_serial. Skips FNSKU-type and empty serials.\n- Supports --dry-run, --limit N, --batch-size N. Safe to run repeatedly.\n\nRepositories (src/lib/repositories/inventory/):\n- serialUnits: upsertSerialUnit (fill-in only via COALESCE on conflict),\n  findBy{Normalized,Serial}, getById, normalizeSerial.\n- inventoryEvents: appendInventoryEvent with clientEventId idempotency\n  (returns {event, created}); typed InventoryEventType union;\n  listEventsFor{SerialUnit,Sku,ReceivingLine}; listRecentEventsByType.\n- stockLedger: appendLedgerRow with delta != 0 guard; listLedgerForSku;\n  ledgerSum (validates trigger projection).\n- locations: findLocationBy{Barcode,Name}; listBins (room/binType filter,\n  skips room-header rows); listBinContentsBy{Location,Sku};\n  totalBinQtyForSku.\n- allocations: allocate (relies on idx_oua_open_unit for collision);\n  advanceState (rejects RELEASED rows); release (idempotent);\n  findOpenAllocationForUnit; listAllocationsForOrder.\n- conditionHistory: recordChange (DB CHECK rejects no-op); listHistoryForUnit.\n- index.ts: namespaced barrel exports.\n\nWhat this commit does NOT do:\n- Touch any existing API route or workflow.\n- Run the migration or backfill (those are deploy-time / ops actions).\n- Wire the new repositories into receiving / tech / pack / FBA flows\n  (that's Phase 1–5, gated behind feature flags per the plan).\n\nCo-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>",
+      "type": "other",
+      "title": "inventory v2 Phase 0: schema declarations + migration + repositories"
+    },
+    {
+      "sha": "b8dc5725016aac60a3f7d142209e5d72d7641a7d",
+      "shortSha": "b8dc572",
+      "date": "2026-05-17T00:38:43-07:00",
+      "author": "DENSENSE8",
+      "subject": "auth system + sidebar nav pills redesign",
+      "body": "auth:\n- /signin with PIN-first flow, optional Face ID passkey upgrade, self-serve PIN creation (POST /api/auth/pin/create gated on pin_hash IS NULL)\n- session cookies (usav_sid) with device-kind aware TTLs, scrypt PIN hashing + 5-try lockout\n- proxy enforce-mode is now default (no guest mode); only /signin, /m/enroll, /api/auth/*, and static assets stay public\n\nadmin + access:\n- roles editor with permission toggles, color picker, duplicate/reorder\n- per-staff access matrix, override permissions, enroll-token + reset-pin flows\n- admin sub-sections now have their own sidebar panels (jobs, logs, fba, manuals, features, etc.)\n\naudit log:\n- new /audit-log pages: receiving, packing, tech, sku, staff\n- shared filter strip (day/start/end/staff)\n- per-aggregator queries under src/lib/audit-log/\n\nsidebar redesign:\n- HorizontalButtonSlider gets a 'nav' variant: blue-600 fill on active, 1.04 spring scale, optional icon + disabled state\n- pill row replaces ViewDropdown/TabSwitch across FBA, Receiving, Tech, SkuStock, Packer, Walk-In, Dashboard, Work Orders, Replenish, Admin, Audit Log, plus the in-panel Shipped type filter, Pending stock filter, and Repair sub-tabs\n- ActiveStaffChip removed from per-panel headers (identity lives on the bottom-of-sidebar SignedInChip)\n\ninventory:\n- new /inventory page with bins overview, room manager, label printing\n- bin detail flyout + SKU finder\n\nmobile + misc:\n- MobilePageHeader uses read-only ActiveStaffChip (no per-page staff dropdown)\n- phone-pair flow removed (superseded by global signin)\n- Quick Access FAB icon: always Search now\n- Tooltip primitive for icon-only triggers\n- new Settings page (appearance, hardware, audit, sessions, security, workstation)\n\nCo-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>",
+      "type": "other",
+      "title": "auth system + sidebar nav pills redesign"
+    },
+    {
+      "sha": "64072679780411d302725476086f8b6b2afcc94d",
+      "shortSha": "6407267",
+      "date": "2026-05-15T17:01:00-07:00",
+      "author": "usavsolutionsinc",
+      "subject": "updated the receiving pipeline for photos and the inventory bin creation",
+      "body": "",
+      "type": "other",
+      "title": "updated the receiving pipeline for photos and the inventory bin creation"
+    },
+    {
+      "sha": "900993ece57d1b799150749923a4eee41fba3907",
+      "shortSha": "900993e",
+      "date": "2026-05-14T17:00:37-07:00",
+      "author": "usavsolutionsinc",
+      "subject": "updated the architecture",
+      "body": "",
+      "type": "other",
+      "title": "updated the architecture"
+    },
+    {
+      "sha": "209791d6310d5b18b9120f4f88754268c1e79edf",
+      "shortSha": "209791d",
+      "date": "2026-05-14T17:00:22-07:00",
+      "author": "usavsolutionsinc",
+      "subject": "updated the sku stock for QR Code acknowledgement and different printing of labels and editing of location and stock via bin# to sku and mermaid and HTML process flows",
+      "body": "",
+      "type": "other",
+      "title": "updated the sku stock for QR Code acknowledgement and different printing of labels and editing of location and stock via bin# to sku and mermaid and HTML process flows"
+    },
+    {
+      "sha": "b680dbdfc9c1e09db8e567db969ad5d3ac991bf3",
+      "shortSha": "b680dbd",
+      "date": "2026-05-14T13:28:28-07:00",
+      "author": "usavsolutionsinc",
+      "subject": "updated the proxy problem",
+      "body": "",
+      "type": "other",
+      "title": "updated the proxy problem"
+    },
+    {
+      "sha": "433578b0df63ddf857a8d7ea090ab8b27560ba78",
+      "shortSha": "433578b",
+      "date": "2026-05-13T17:00:28-07:00",
+      "author": "usavsolutionsinc",
+      "subject": "updated the whole receiving pipeline",
+      "body": "",
+      "type": "other",
+      "title": "updated the whole receiving pipeline"
+    },
+    {
+      "sha": "7ae98020d827673d9331466b5e987e88eea147f5",
+      "shortSha": "7ae9802",
+      "date": "2026-05-13T08:45:08-07:00",
+      "author": "DENSENSE8",
+      "subject": "udpated the receiving side bar to be more modern",
+      "body": "",
+      "type": "other",
+      "title": "udpated the receiving side bar to be more modern"
+    },
+    {
+      "sha": "b4c236d99cf9daf908cf8671a0dc292315c4d400",
+      "shortSha": "b4c236d",
+      "date": "2026-05-11T16:07:27-07:00",
+      "author": "usavsolutionsinc",
+      "subject": "updated the print window sizing for the receiving side bar",
+      "body": "",
+      "type": "other",
+      "title": "updated the print window sizing for the receiving side bar"
+    },
+    {
+      "sha": "f87910d902c7ac3a084ea1fff7a3fb0aa2800f50",
+      "shortSha": "f87910d",
+      "date": "2026-05-11T15:39:35-07:00",
+      "author": "usavsolutionsinc",
+      "subject": "updated the unique key bug in packer table",
+      "body": "",
+      "type": "other",
+      "title": "updated the unique key bug in packer table"
+    },
+    {
+      "sha": "c955543d918895847b32736883661d587d39caae",
+      "shortSha": "c955543",
+      "date": "2026-05-11T15:30:54-07:00",
+      "author": "usavsolutionsinc",
+      "subject": "udpated the packer flow to included the photos in mobile mode",
+      "body": "",
+      "type": "other",
+      "title": "udpated the packer flow to included the photos in mobile mode"
+    },
+    {
+      "sha": "dc87e8b9148a48aa36cb3c6bde9e244387890e43",
+      "shortSha": "dc87e8b",
+      "date": "2026-05-11T14:46:56-07:00",
+      "author": "usavsolutionsinc",
+      "subject": "updates to websocket for packers for photo uploads and tech displaying for time and global short cuts for searching and more",
+      "body": "",
+      "type": "other",
+      "title": "updates to websocket for packers for photo uploads and tech displaying for time and global short cuts for searching and more"
+    },
+    {
+      "sha": "cdc71016fa809430953ef82e9bab2880999681f8",
+      "shortSha": "cdc7101",
+      "date": "2026-04-15T16:55:14-07:00",
+      "author": "usavsolutionsinc",
+      "subject": "tracking excetpions table and zoho addition",
+      "body": "",
+      "type": "other",
+      "title": "tracking excetpions table and zoho addition"
+    },
+    {
+      "sha": "ec81f15ba54763e98090c51cabc9d28e400dad5c",
+      "shortSha": "ec81f15",
+      "date": "2026-04-15T13:31:52-07:00",
+      "author": "usavsolutionsinc",
+      "subject": "updated the safari qrcode check and scanning",
+      "body": "",
+      "type": "other",
+      "title": "updated the safari qrcode check and scanning"
+    },
+    {
+      "sha": "c25d2afcc6b50a97455fd5a9fc76187413f809f5",
+      "shortSha": "c25d2af",
+      "date": "2026-04-15T13:17:13-07:00",
+      "author": "usavsolutionsinc",
+      "subject": "updated the receiving pipeline and the tech pipeline a lot",
+      "body": "",
+      "type": "other",
+      "title": "updated the receiving pipeline and the tech pipeline a lot"
+    },
+    {
+      "sha": "76fff128fc5a3b97ebd15ab7dbf012bd8ff28a4e",
+      "shortSha": "76fff12",
+      "date": "2026-04-14T17:02:08-07:00",
+      "author": "usavsolutionsinc",
+      "subject": "updated the notes display",
+      "body": "",
+      "type": "other",
+      "title": "updated the notes display"
+    },
+    {
+      "sha": "0fc12ce1c3b7ab72125d6857cab506f3124fab6f",
+      "shortSha": "0fc12ce",
+      "date": "2026-04-14T16:52:44-07:00",
+      "author": "usavsolutionsinc",
+      "subject": "updated the current receiving pipeline",
+      "body": "",
+      "type": "other",
+      "title": "updated the current receiving pipeline"
+    },
+    {
+      "sha": "1bbf52e9b2354d273dad9d80604c48e5bd7b06e2",
+      "shortSha": "1bbf52e",
+      "date": "2026-04-13T16:25:41-07:00",
+      "author": "usavsolutionsinc",
+      "subject": "updated receiving flow UX & UI and FBA stability",
+      "body": "",
+      "type": "other",
+      "title": "updated receiving flow UX & UI and FBA stability"
+    },
+    {
+      "sha": "b37f303a711860868e83dbc53337ce369b6350e7",
+      "shortSha": "b37f303",
+      "date": "2026-04-10T17:01:18-07:00",
+      "author": "usavsolutionsinc",
+      "subject": "big updates to the current receiving pipeline and more",
+      "body": "",
+      "type": "other",
+      "title": "big updates to the current receiving pipeline and more"
+    },
+    {
+      "sha": "348ab20d62f3f4d3638a66c133eb12d59adda8ed",
+      "shortSha": "348ab20",
+      "date": "2026-04-08T21:26:14-07:00",
+      "author": "DENSENSE8",
+      "subject": "upgraded the main nemoclaw to USAV build AI chat bot for RAG fetch",
+      "body": "",
+      "type": "other",
+      "title": "upgraded the main nemoclaw to USAV build AI chat bot for RAG fetch"
+    },
+    {
+      "sha": "5fdff86261417133bc5b4beeef7061307ce23652",
+      "shortSha": "5fdff86",
+      "date": "2026-04-08T21:24:07-07:00",
+      "author": "DENSENSE8",
+      "subject": "updated the chat and FBA flow",
+      "body": "",
+      "type": "other",
+      "title": "updated the chat and FBA flow"
+    },
+    {
+      "sha": "9231dd18d7e7b90353b11e760ad57c54d6b7bde7",
+      "shortSha": "9231dd1",
+      "date": "2026-04-08T16:55:06-07:00",
+      "author": "usavsolutionsinc",
+      "subject": "updated the api hammering and qstash jobs and sku table display in sku stock",
+      "body": "",
+      "type": "other",
+      "title": "updated the api hammering and qstash jobs and sku table display in sku stock"
+    },
+    {
+      "sha": "6fdd92a115c802c1e5bdc60e585ba89b2bfef632",
+      "shortSha": "6fdd92a",
+      "date": "2026-04-08T16:19:38-07:00",
+      "author": "usavsolutionsinc",
+      "subject": "more consistency and receiving zoho api calls lessened",
+      "body": "",
+      "type": "other",
+      "title": "more consistency and receiving zoho api calls lessened"
+    },
+    {
+      "sha": "b717215bb92f4505bec82b4458088881b3c53797",
+      "shortSha": "b717215",
+      "date": "2026-04-07T16:58:42-07:00",
+      "author": "usavsolutionsinc",
+      "subject": "ton of updates to the repair page to walk in page and forms",
+      "body": "",
+      "type": "other",
+      "title": "ton of updates to the repair page to walk in page and forms"
+    },
+    {
+      "sha": "def5e0072732c08a9c2f52e005bccd3079bf886f",
+      "shortSha": "def5e00",
+      "date": "2026-04-07T07:48:09-07:00",
+      "author": "DENSENSE8",
+      "subject": "open claw router RAG & bose manual and troubleshooting",
+      "body": "",
+      "type": "other",
+      "title": "open claw router RAG & bose manual and troubleshooting"
+    },
+    {
+      "sha": "3dbe4c08150cb76884cb8a251e53b48a49e0725e",
+      "shortSha": "3dbe4c0",
+      "date": "2026-04-06T21:05:13-07:00",
+      "author": "DENSENSE8",
+      "subject": "open claw router RAG & bose manual and troubleshooting",
+      "body": "",
+      "type": "other",
+      "title": "open claw router RAG & bose manual and troubleshooting"
+    },
+    {
+      "sha": "35c6a5dd47be5d2e45632136dde04350f373e042",
+      "shortSha": "35c6a5d",
+      "date": "2026-04-06T16:59:53-07:00",
+      "author": "usavsolutionsinc",
+      "subject": "udpated the overall consistency and improved code base and added replenish page",
+      "body": "",
+      "type": "other",
+      "title": "udpated the overall consistency and improved code base and added replenish page"
+    },
+    {
+      "sha": "c4f61ba51d5dacbb3fbe9ab974c00acd103822cb",
+      "shortSha": "c4f61ba",
+      "date": "2026-04-06T11:40:50-07:00",
+      "author": "usavsolutionsinc",
+      "subject": "feat: show transfer + exceptions stats in sidebar, remove redundant schedule",
+      "body": "- Updated DashboardManagementPanel with animated result card showing\n  processed/inserted/updated counts and exceptions auto-resolved badge\n- Exceptions sync now runs inline after Google Sheets transfer, making\n  the separate 30-min QStash schedule redundant (already removed from config)\n\nCo-Authored-By: Claude Opus 4.6 (1M context) <noreply@anthropic.com>",
+      "type": "feature",
+      "title": "show transfer + exceptions stats in sidebar, remove redundant schedule"
+    },
+    {
+      "sha": "188bc31a3a2c3e747cfdc636ba0de6b23dc20e78",
+      "shortSha": "188bc31",
+      "date": "2026-04-06T10:45:48-07:00",
+      "author": "usavsolutionsinc",
+      "subject": "fix: resolve FK violation in orders-exceptions sync by marking resolved instead of deleting",
+      "body": "DELETE FROM orders_exceptions violated the station_scan_sessions FK\nconstraint. Changed to UPDATE status='resolved' to preserve the audit\ntrail. Also added isQStashOrigin auth guard for consistency.\n\nCo-Authored-By: Claude Opus 4.6 (1M context) <noreply@anthropic.com>",
+      "type": "fix",
+      "title": "resolve FK violation in orders-exceptions sync by marking resolved instead of deleting"
+    },
+    {
+      "sha": "8f59de2f6347bc761511d489d65f922266ce7974",
+      "shortSha": "8f59de2",
+      "date": "2026-04-06T10:16:45-07:00",
+      "author": "usavsolutionsinc",
+      "subject": "fix: replace verifySignatureAppRouter with shared isQStashOrigin across all QStash routes",
+      "body": "All 8 QStash route handlers were failing with SignatureError due to the\nverifySignatureAppRouter wrapper. Extracted a shared isQStashOrigin()\nhelper in lib/qstash.ts and applied it consistently to every route.\n\nCo-Authored-By: Claude Opus 4.6 (1M context) <noreply@anthropic.com>",
+      "type": "fix",
+      "title": "replace verifySignatureAppRouter with shared isQStashOrigin across all QStash routes"
+    },
+    {
+      "sha": "0e771c45700304a489a72b23055b9ae5fc5afb6e",
+      "shortSha": "0e771c4",
+      "date": "2026-04-06T10:03:39-07:00",
+      "author": "usavsolutionsinc",
+      "subject": "fix: replace broken QStash signature verification with origin check",
+      "body": "The verifySignatureAppRouter wrapper was causing SignatureError on every\nQStash delivery, resulting in persistent 500s. Switched to a lightweight\norigin check (upstash-signature header presence) and added detailed\nlogging to surface any downstream job errors.\n\nCo-Authored-By: Claude Opus 4.6 (1M context) <noreply@anthropic.com>",
+      "type": "fix",
+      "title": "replace broken QStash signature verification with origin check"
+    },
+    {
+      "sha": "4d4618f3186a193cd331e050de70c1252ddf7684",
+      "shortSha": "4d4618f",
+      "date": "2026-04-03T17:01:36-07:00",
+      "author": "usavsolutionsinc",
+      "subject": "updated tons for the mobile mode of the app",
+      "body": "",
+      "type": "other",
+      "title": "updated tons for the mobile mode of the app"
+    },
+    {
+      "sha": "95c78e9e297079485babfe9509243176a7319070",
+      "shortSha": "95c78e9",
+      "date": "2026-04-03T09:46:48-07:00",
+      "author": "usavsolutionsinc",
+      "subject": "USPS tracking number improvement and FBA additions including FBA SHIPMENT ID to UPS tracking number",
+      "body": "",
+      "type": "other",
+      "title": "USPS tracking number improvement and FBA additions including FBA SHIPMENT ID to UPS tracking number"
+    },
+    {
+      "sha": "662998cebc1faf6e793726a805d0c8d88e81faaa",
+      "shortSha": "662998c",
+      "date": "2026-04-02T09:12:31-07:00",
+      "author": "usavsolutionsinc",
+      "subject": "updated the TS error",
+      "body": "",
+      "type": "other",
+      "title": "updated the TS error"
+    },
+    {
+      "sha": "63a0a8abb1f29f6b03e72652c99886ed65c762cf",
+      "shortSha": "63a0a8a",
+      "date": "2026-04-01T16:51:49-07:00",
+      "author": "usavsolutionsinc",
+      "subject": "FBA Updates, Mobile PWA updates, added operation page update with work order dashboard, improved overall DB integrity",
+      "body": "",
+      "type": "other",
+      "title": "FBA Updates, Mobile PWA updates, added operation page update with work order dashboard, improved overall DB integrity"
+    },
+    {
+      "sha": "5e9a2faa187beeb0347d35bd7c0dd5788ab70435",
+      "shortSha": "5e9a2fa",
+      "date": "2026-03-30T12:18:15-07:00",
+      "author": "usavsolutionsinc",
+      "subject": "websocket support and dynamic goals and history reports",
+      "body": "",
+      "type": "other",
+      "title": "websocket support and dynamic goals and history reports"
+    },
+    {
+      "sha": "3d57366e0e849c4095baf94f815f1ca234c3ef85",
+      "shortSha": "3d57366",
+      "date": "2026-03-29T23:59:30-07:00",
+      "author": "DENSENSE8",
+      "subject": "added mobile mode support PWA and components, design system desktop and mobile, upgraded context files for better overall flow for updating website in the future + hard rules for agentic awareness",
+      "body": "",
+      "type": "other",
+      "title": "added mobile mode support PWA and components, design system desktop and mobile, upgraded context files for better overall flow for updating website in the future + hard rules for agentic awareness"
+    },
+    {
+      "sha": "87070a102e4a14aeca156d700bb761f90f4cd007",
+      "shortSha": "87070a1",
+      "date": "2026-03-27T16:59:30-07:00",
+      "author": "usavsolutionsinc",
+      "subject": "updated the FBA logic and other items as well",
+      "body": "",
+      "type": "other",
+      "title": "updated the FBA logic and other items as well"
+    },
+    {
+      "sha": "c282cfe26f1079d31d2dd00ce30fc911cf445634",
+      "shortSha": "c282cfe",
+      "date": "2026-03-27T01:54:31-07:00",
+      "author": "DENSENSE8",
+      "subject": "updated the fba logic",
+      "body": "",
+      "type": "other",
+      "title": "updated the fba logic"
+    },
+    {
+      "sha": "cf23b41842592036ae76a143986ae78fddc9dd97",
+      "shortSha": "cf23b41",
+      "date": "2026-03-26T17:04:09-07:00",
+      "author": "usavsolutionsinc",
+      "subject": "updated the FBA page and side logic",
+      "body": "",
+      "type": "other",
+      "title": "updated the FBA page and side logic"
+    },
+    {
+      "sha": "1d015c949f4dcc833b3d129c20beb3cdf71eb0b1",
+      "shortSha": "1d015c9",
+      "date": "2026-03-26T16:50:55-07:00",
+      "author": "usavsolutionsinc",
+      "subject": "cleaned up most of the code base via NEON and added more to the FBA page made it cleaner and user friendly, cleaned",
+      "body": "",
+      "type": "other",
+      "title": "cleaned up most of the code base via NEON and added more to the FBA page made it cleaner and user friendly, cleaned"
+    },
+    {
+      "sha": "b02dffe47b960cf86a532d977381c26ba5f7dce9",
+      "shortSha": "b02dffe",
+      "date": "2026-03-26T09:02:26-07:00",
+      "author": "usavsolutionsinc",
+      "subject": "FBA aand tech scan improved endpoints",
+      "body": "",
+      "type": "other",
+      "title": "FBA aand tech scan improved endpoints"
+    },
+    {
+      "sha": "4a4ccbaa6704c532327e3215636bbd0b61a64307",
+      "shortSha": "4a4ccba",
+      "date": "2026-03-25T12:24:05-07:00",
+      "author": "usavsolutionsinc",
+      "subject": "updating the station trakcing number for fba fnskus",
+      "body": "",
+      "type": "other",
+      "title": "updating the station trakcing number for fba fnskus"
+    },
+    {
+      "sha": "d829ae84ec43e85f70f54cc70e6a99c33c7e5280",
+      "shortSha": "d829ae8",
+      "date": "2026-03-25T11:53:00-07:00",
+      "author": "usavsolutionsinc",
+      "subject": "fba update and testing station update",
+      "body": "",
+      "type": "other",
+      "title": "fba update and testing station update"
+    },
+    {
+      "sha": "333e580ba3f9516445f099f67498d812f2f51a40",
+      "shortSha": "333e580",
+      "date": "2026-03-24T17:02:10-07:00",
+      "author": "usavsolutionsinc",
+      "subject": "fba",
+      "body": "",
+      "type": "other",
+      "title": "fba"
+    },
+    {
+      "sha": "4cf8377ab529cdb9ed60957b4beacfcac9b1ad98",
+      "shortSha": "4cf8377",
+      "date": "2026-03-24T13:37:54-07:00",
+      "author": "usavsolutionsinc",
+      "subject": "updated the FBA and other pages including the fba logic for stationtesting",
+      "body": "",
+      "type": "other",
+      "title": "updated the FBA and other pages including the fba logic for stationtesting"
+    },
+    {
+      "sha": "9d2a9584cf004ad09ffd0c234b28966ce0db6654",
+      "shortSha": "9d2a958",
+      "date": "2026-03-23T11:50:15-07:00",
+      "author": "usavsolutionsinc",
+      "subject": "updated the use proper tracking number regex and serial number identifier and better formatting for upnextorders",
+      "body": "",
+      "type": "other",
+      "title": "updated the use proper tracking number regex and serial number identifier and better formatting for upnextorders"
+    },
+    {
+      "sha": "fdd7fd36ec12df962bef80b8438c4d5de0c6050e",
+      "shortSha": "fdd7fd3",
+      "date": "2026-03-23T09:48:28-07:00",
+      "author": "usavsolutionsinc",
+      "subject": "updated the work order and the techstation",
+      "body": "",
+      "type": "other",
+      "title": "updated the work order and the techstation"
+    },
+    {
+      "sha": "fe16ebcbaa7bd49ff6cdf2116b7ff051c23990c5",
+      "shortSha": "fe16ebc",
+      "date": "2026-03-23T09:29:43-07:00",
+      "author": "usavsolutionsinc",
+      "subject": "updated the FBA page work orders and repair to square",
+      "body": "",
+      "type": "other",
+      "title": "updated the FBA page work orders and repair to square"
+    },
+    {
+      "sha": "116e09ca531bf4cd3b8a27e97dcbd8fce08594c4",
+      "shortSha": "116e09c",
+      "date": "2026-03-20T09:45:04-07:00",
+      "author": "usavsolutionsinc",
+      "subject": "updated the FBA page and the tech station",
+      "body": "",
+      "type": "other",
+      "title": "updated the FBA page and the tech station"
+    },
+    {
+      "sha": "afbdf888332856af70178b443e5656291bc173fa",
+      "shortSha": "afbdf88",
+      "date": "2026-03-19T09:39:58-07:00",
+      "author": "usavsolutionsinc",
+      "subject": "updated ecwid to include incoming repair service orders",
+      "body": "",
+      "type": "other",
+      "title": "updated ecwid to include incoming repair service orders"
+    },
+    {
+      "sha": "fea729bd70bfb13d882936f4347d97fb009e45c5",
+      "shortSha": "fea729b",
+      "date": "2026-03-18T16:59:16-07:00",
+      "author": "usavsolutionsinc",
+      "subject": "improved the overall code base to be leaner",
+      "body": "",
+      "type": "other",
+      "title": "improved the overall code base to be leaner"
+    },
+    {
+      "sha": "231127046a959864ae0676b198644da3e7b91131",
+      "shortSha": "2311270",
+      "date": "2026-03-18T13:16:48-07:00",
+      "author": "usavsolutionsinc",
+      "subject": "removed cron jobs",
+      "body": "",
+      "type": "other",
+      "title": "removed cron jobs"
+    },
+    {
+      "sha": "3112d5e6040419bda3c1d854974fd2725be2f0e9",
+      "shortSha": "3112d5e",
+      "date": "2026-03-18T13:12:04-07:00",
+      "author": "usavsolutionsinc",
+      "subject": "updated Zoho and station testing",
+      "body": "",
+      "type": "other",
+      "title": "updated Zoho and station testing"
+    },
+    {
+      "sha": "094f66cd355790d9eaacafd4f295296607a37ab4",
+      "shortSha": "094f66c",
+      "date": "2026-03-17T13:44:11-07:00",
+      "author": "usavsolutionsinc",
+      "subject": "changed cron jobs to qstash jobs and updated the ECWID to RS Table",
+      "body": "",
+      "type": "other",
+      "title": "changed cron jobs to qstash jobs and updated the ECWID to RS Table"
+    },
+    {
+      "sha": "a31697ec698e03e5239e57d9787dc632c66c6fcb",
+      "shortSha": "a31697e",
+      "date": "2026-03-17T11:47:35-07:00",
+      "author": "usavsolutionsinc",
+      "subject": "added cron jobs fixed bugs",
+      "body": "",
+      "type": "other",
+      "title": "added cron jobs fixed bugs"
+    },
+    {
+      "sha": "b236ef7010b0262d08426b479651499abae5b235",
+      "shortSha": "b236ef7",
+      "date": "2026-03-17T09:16:26-07:00",
+      "author": "usavsolutionsinc",
+      "subject": "updated ably and details panel to include better styling",
+      "body": "",
+      "type": "other",
+      "title": "updated ably and details panel to include better styling"
+    },
+    {
+      "sha": "f480274cb50fa7c689c6844fdc9785e520a1bb9c",
+      "shortSha": "f480274",
+      "date": "2026-03-16T15:10:12-07:00",
+      "author": "usavsolutionsinc",
+      "subject": "fixed the tech station",
+      "body": "",
+      "type": "fix",
+      "title": "fixed the tech station"
+    },
+    {
+      "sha": "ceb53d15801915767b09415cd523bfe3bf3083df",
+      "shortSha": "ceb53d1",
+      "date": "2026-03-16T13:09:25-07:00",
+      "author": "usavsolutionsinc",
+      "subject": "tech history fix",
+      "body": "",
+      "type": "other",
+      "title": "tech history fix"
+    },
+    {
+      "sha": "b4f1abb33a2e28b5a066d7a85b36b6b14976e12f",
+      "shortSha": "b4f1abb",
+      "date": "2026-03-16T12:05:16-07:00",
+      "author": "usavsolutionsinc",
+      "subject": "added ably websocket support and updated the @upnext orders display a ton",
+      "body": "",
+      "type": "other",
+      "title": "added ably websocket support and updated the @upnext orders display a ton"
+    },
+    {
+      "sha": "80df8ae20dc2be0012606c57537f96fd884f1908",
+      "shortSha": "80df8ae",
+      "date": "2026-03-16T09:02:59-07:00",
+      "author": "usavsolutionsinc",
+      "subject": "updated the work flow for up next orders and pages",
+      "body": "",
+      "type": "other",
+      "title": "updated the work flow for up next orders and pages"
+    },
+    {
+      "sha": "a1e771b346337c4bb20e1f839a31d146482ed9f5",
+      "shortSha": "a1e771b",
+      "date": "2026-03-13T17:02:01-07:00",
+      "author": "usavsolutionsinc",
+      "subject": "Refine work order details panel workflow",
+      "body": "",
+      "type": "other",
+      "title": "Refine work order details panel workflow"
+    },
+    {
+      "sha": "a26d55ed35db49169b537f23bb1f35fecb048842",
+      "shortSha": "a26d55e",
+      "date": "2026-03-13T09:06:05-07:00",
+      "author": "usavsolutionsinc",
+      "subject": "overall consistence UX and UI",
+      "body": "",
+      "type": "other",
+      "title": "overall consistence UX and UI"
+    },
+    {
+      "sha": "3d571af5d69d3b4dcc790d525ba2f03d7e9cc03a",
+      "shortSha": "3d571af",
+      "date": "2026-03-12T13:41:13-07:00",
+      "author": "usavsolutionsinc",
+      "subject": "all the same time zone formatting across all api points",
+      "body": "",
+      "type": "other",
+      "title": "all the same time zone formatting across all api points"
+    },
+    {
+      "sha": "5fa64b65203dac3c230de817458fb9b65d19db8b",
+      "shortSha": "5fa64b6",
+      "date": "2026-03-12T10:21:13-07:00",
+      "author": "usavsolutionsinc",
+      "subject": "updated all endpoints and tables tech packer and receiving for better integrity updated_at and created_at",
+      "body": "",
+      "type": "other",
+      "title": "updated all endpoints and tables tech packer and receiving for better integrity updated_at and created_at"
+    },
+    {
+      "sha": "91d9d64890d1b287eafe9520945f7408c61bc1b5",
+      "shortSha": "91d9d64",
+      "date": "2026-03-12T09:13:34-07:00",
+      "author": "usavsolutionsinc",
+      "subject": "updated the packer table and the station testing upnext orders",
+      "body": "",
+      "type": "other",
+      "title": "updated the packer table and the station testing upnext orders"
+    },
+    {
+      "sha": "1711049b83c0af63c335da04b9cc6e3aa1f3312c",
+      "shortSha": "1711049",
+      "date": "2026-03-12T09:06:43-07:00",
+      "author": "usavsolutionsinc",
+      "subject": "updated tons of data management endpoints to only be lean in terms of DB table design",
+      "body": "",
+      "type": "other",
+      "title": "updated tons of data management endpoints to only be lean in terms of DB table design"
+    },
+    {
+      "sha": "64a33b8af9b7b2e26527ca91145925d6ed3f8cde",
+      "shortSha": "64a33b8",
+      "date": "2026-03-11T17:01:45-07:00",
+      "author": "usavsolutionsinc",
+      "subject": "fix TS build error in FbaLabelQueue by replacing Set spread with Array.from",
+      "body": "Avoids 'Set can only be iterated with downlevelIteration' error when TypeScript\ntarget is below ES2015.\n\nMade-with: Cursor",
+      "type": "fix",
+      "title": "fix TS build error in FbaLabelQueue by replacing Set spread with Array.from"
+    },
+    {
+      "sha": "a2215394e6caddef4bd5168a735c53fc4458d045",
+      "shortSha": "a221539",
+      "date": "2026-03-11T10:56:52-07:00",
+      "author": "usavsolutionsinc",
+      "subject": "fixed the tech station errors and updated the work orders assignments",
+      "body": "",
+      "type": "fix",
+      "title": "fixed the tech station errors and updated the work orders assignments"
+    },
+    {
+      "sha": "cc8d5db8f2bbde558062c811d8329567a7f5cdc4",
+      "shortSha": "cc8d5db",
+      "date": "2026-03-11T09:50:55-07:00",
+      "author": "usavsolutionsinc",
+      "subject": "search bar fixed and added work_assignments page",
+      "body": "",
+      "type": "other",
+      "title": "search bar fixed and added work_assignments page"
+    },
+    {
+      "sha": "754d95590661f75d19cade2b3c81247dd680d115",
+      "shortSha": "754d955",
+      "date": "2026-03-10T15:33:15-07:00",
+      "author": "usavsolutionsinc",
+      "subject": "adding a unified shipping_tracking_numbers table",
+      "body": "",
+      "type": "other",
+      "title": "adding a unified shipping_tracking_numbers table"
+    },
+    {
+      "sha": "5ca7616d1308b8cc8f16eb1cc20ec360cecfc2bf",
+      "shortSha": "5ca7616",
+      "date": "2026-03-10T13:55:00-07:00",
+      "author": "usavsolutionsinc",
+      "subject": "updated wa table to include a deadline_at column for better work orders trackign number and the up next orders component for better edge to edge and order display",
+      "body": "",
+      "type": "other",
+      "title": "updated wa table to include a deadline_at column for better work orders trackign number and the up next orders component for better edge to edge and order display"
+    },
+    {
+      "sha": "432cb9bf8db4b0b2a3cd3db04de9b73d34509617",
+      "shortSha": "432cb9b",
+      "date": "2026-03-10T12:21:18-07:00",
+      "author": "usavsolutionsinc",
+      "subject": "updated the upnext order to include dismiss and fixed the stuck logic for active order and shipped orders display",
+      "body": "",
+      "type": "other",
+      "title": "updated the upnext order to include dismiss and fixed the stuck logic for active order and shipped orders display"
+    },
+    {
+      "sha": "aa7f7f12956ffd3fcf884fcabe298635bad632b2",
+      "shortSha": "aa7f7f1",
+      "date": "2026-03-10T11:14:45-07:00",
+      "author": "usavsolutionsinc",
+      "subject": "filter logic is all good.",
+      "body": "",
+      "type": "other",
+      "title": "filter logic is all good."
+    },
+    {
+      "sha": "280506c152c5790a96f840ae78fc61a5b1804e8c",
+      "shortSha": "280506c",
+      "date": "2026-03-10T10:53:51-07:00",
+      "author": "usavsolutionsinc",
+      "subject": "fix: correct file casing for Linux case-sensitive filesystem",
+      "body": "Rename dashboarddetailsStack.tsx -> DashboardDetailsStack.tsx and\nadminDetailsStack.tsx -> AdminDetailsStack.tsx so Vercel (Linux) can\nresolve the imports that reference the PascalCase filenames.\n\nMade-with: Cursor",
+      "type": "fix",
+      "title": "correct file casing for Linux case-sensitive filesystem"
+    },
+    {
+      "sha": "ccf87a6b34ef8645b03657f3e87bc88f958aa2fe",
+      "shortSha": "ccf87a6",
+      "date": "2026-03-10T10:49:53-07:00",
+      "author": "usavsolutionsinc",
+      "subject": "added a ton of changes, across zoho, tech orders and fba updates and upnext orders",
+      "body": "",
+      "type": "other",
+      "title": "added a ton of changes, across zoho, tech orders and fba updates and upnext orders"
+    },
+    {
+      "sha": "7945c405966ee2dc18ccdff16a199e64d1211838",
+      "shortSha": "7945c40",
+      "date": "2026-03-09T13:08:50-07:00",
+      "author": "usavsolutionsinc",
+      "subject": "updated zoho endpoints to match docs",
+      "body": "",
+      "type": "other",
+      "title": "updated zoho endpoints to match docs"
+    },
+    {
+      "sha": "b02816d62d7843086a253175b1c45d7cbe6a5ca4",
+      "shortSha": "b02816d",
+      "date": "2026-03-09T12:12:23-07:00",
+      "author": "usavsolutionsinc",
+      "subject": "improved zoho, station testing, station packing, order filtering in the dashboard pages",
+      "body": "",
+      "type": "other",
+      "title": "improved zoho, station testing, station packing, order filtering in the dashboard pages"
+    },
+    {
+      "sha": "75ef301840d870501127fcf253b2b6d329bbf90d",
+      "shortSha": "75ef301",
+      "date": "2026-03-09T10:08:42-07:00",
+      "author": "usavsolutionsinc",
+      "subject": "api domain name for zoho inventory pull",
+      "body": "",
+      "type": "other",
+      "title": "api domain name for zoho inventory pull"
+    },
+    {
+      "sha": "954c5d2bec30318df7fca24180b55138ee12099b",
+      "shortSha": "954c5d2",
+      "date": "2026-03-09T09:52:18-07:00",
+      "author": "usavsolutionsinc",
+      "subject": "fixed ts errors",
+      "body": "",
+      "type": "fix",
+      "title": "fixed ts errors"
+    },
+    {
+      "sha": "6bbacde26c8e845e71aa7dca01b538d3ab01e8d2",
+      "shortSha": "6bbacde",
+      "date": "2026-03-09T09:45:19-07:00",
+      "author": "usavsolutionsinc",
+      "subject": "updated the connections for zoho and double tab slider in station testing and sku generator sn fix",
+      "body": "",
+      "type": "other",
+      "title": "updated the connections for zoho and double tab slider in station testing and sku generator sn fix"
+    },
+    {
+      "sha": "91fb693ca2996412a7e40a1655acf4f38d13dabd",
+      "shortSha": "91fb693",
+      "date": "2026-03-06T16:40:56-08:00",
+      "author": "usavsolutionsinc",
+      "subject": "added a mark as shipped date",
+      "body": "",
+      "type": "other",
+      "title": "added a mark as shipped date"
+    },
+    {
+      "sha": "591eda80bd3d951410f893ee6754cc04e4098939",
+      "shortSha": "591eda8",
+      "date": "2026-03-06T16:33:16-08:00",
+      "author": "usavsolutionsinc",
+      "subject": "updated the product_manuals CRUD and fixed ts errors",
+      "body": "",
+      "type": "other",
+      "title": "updated the product_manuals CRUD and fixed ts errors"
+    },
+    {
+      "sha": "477031b706df4eab33304c28317378dcecedf8e1",
+      "shortSha": "477031b",
+      "date": "2026-03-06T16:17:12-08:00",
+      "author": "usavsolutionsinc",
+      "subject": "added zoho integration",
+      "body": "",
+      "type": "other",
+      "title": "added zoho integration"
+    },
+    {
+      "sha": "906fa0931c8ce25dcd07a5768adbc52d9d2c7d00",
+      "shortSha": "906fa09",
+      "date": "2026-03-06T15:06:51-08:00",
+      "author": "usavsolutionsinc",
+      "subject": "updated ably, created a FBA page, updated the multisku form",
+      "body": "",
+      "type": "other",
+      "title": "updated ably, created a FBA page, updated the multisku form"
+    },
+    {
+      "sha": "c8c9cb54795f111fd2ebff63f8322c613dcf8293",
+      "shortSha": "c8c9cb5",
+      "date": "2026-03-06T13:20:47-08:00",
+      "author": "usavsolutionsinc",
+      "subject": "updated the up next order and receiving",
+      "body": "",
+      "type": "other",
+      "title": "updated the up next order and receiving"
+    },
+    {
+      "sha": "ec9359f9cfdc0172c2a014aacecb130d8520c4cf",
+      "shortSha": "ec9359f",
+      "date": "2026-03-06T12:30:39-08:00",
+      "author": "usavsolutionsinc",
+      "subject": "add a photos table for receiving and packers",
+      "body": "",
+      "type": "other",
+      "title": "add a photos table for receiving and packers"
+    },
+    {
+      "sha": "3eb60ea46df8ae8355c21d52aaf894ac5229077d",
+      "shortSha": "3eb60ea",
+      "date": "2026-03-06T12:12:54-08:00",
+      "author": "usavsolutionsinc",
+      "subject": "updated the staff and staff colors",
+      "body": "",
+      "type": "other",
+      "title": "updated the staff and staff colors"
+    },
+    {
+      "sha": "4f80c5946a99658e546f447df6af8e389f7fff8f",
+      "shortSha": "4f80c59",
+      "date": "2026-03-06T11:24:04-08:00",
+      "author": "usavsolutionsinc",
+      "subject": "fixed the ts errors",
+      "body": "",
+      "type": "fix",
+      "title": "fixed the ts errors"
+    },
+    {
+      "sha": "c7e30d119c0ecf3bbee5073b42d3ca71fb0c4603",
+      "shortSha": "c7e30d1",
+      "date": "2026-03-06T11:16:45-08:00",
+      "author": "usavsolutionsinc",
+      "subject": "updated the receiving table and the manuals to item number to all be industry standard",
+      "body": "",
+      "type": "other",
+      "title": "updated the receiving table and the manuals to item number to all be industry standard"
+    },
+    {
+      "sha": "7f34615e8c9611bebb5db224916dc8c1ed00bae4",
+      "shortSha": "7f34615",
+      "date": "2026-03-05T13:07:58-08:00",
+      "author": "usavsolutionsinc",
+      "subject": "add to receiving table and made work_assigments table and added ably websocket for client updates google like behavior",
+      "body": "",
+      "type": "other",
+      "title": "add to receiving table and made work_assigments table and added ably websocket for client updates google like behavior"
+    },
+    {
+      "sha": "300a6f8b04508b692cbd267a8a47be43d10a9c52",
+      "shortSha": "300a6f8",
+      "date": "2026-03-04T15:28:06-08:00",
+      "author": "usavsolutionsinc",
+      "subject": "updated the ebay sync and integrity logic",
+      "body": "",
+      "type": "other",
+      "title": "updated the ebay sync and integrity logic"
+    },
+    {
+      "sha": "af38b7b7f0d85b7e949775e4e614c2950e2ebbaa",
+      "shortSha": "af38b7b",
+      "date": "2026-03-04T14:55:12-08:00",
+      "author": "usavsolutionsinc",
+      "subject": "added manual and tighten up the logic for stationtesting",
+      "body": "",
+      "type": "other",
+      "title": "added manual and tighten up the logic for stationtesting"
+    },
+    {
+      "sha": "b354bbba3c1ae5adeb46af8a5c26192febb843bc",
+      "shortSha": "b354bbb",
+      "date": "2026-03-04T13:08:52-08:00",
+      "author": "usavsolutionsinc",
+      "subject": "updated the code base to include manuals for tech scans, better caching weekly from server side architecture, improved receiving table,",
+      "body": "",
+      "type": "other",
+      "title": "updated the code base to include manuals for tech scans, better caching weekly from server side architecture, improved receiving table,"
+    },
+    {
+      "sha": "4e864d4377727e59c270cdc51a04a09a21b714b7",
+      "shortSha": "4e864d4",
+      "date": "2026-03-04T09:46:04-08:00",
+      "author": "usavsolutionsinc",
+      "subject": "updated the drizzle schema",
+      "body": "",
+      "type": "other",
+      "title": "updated the drizzle schema"
+    },
+    {
+      "sha": "348f7022ac95941cbcedf6766a7c963ff1aa40aa",
+      "shortSha": "348f702",
+      "date": "2026-03-04T09:02:16-08:00",
+      "author": "usavsolutionsinc",
+      "subject": "updated the repair service cache issue",
+      "body": "",
+      "type": "other",
+      "title": "updated the repair service cache issue"
+    },
+    {
+      "sha": "19172e317891abc30e4d7a3a8c6998727a2b4493",
+      "shortSha": "19172e3",
+      "date": "2026-03-03T15:54:46-08:00",
+      "author": "usavsolutionsinc",
+      "subject": "improved overall code base, implemented vercel KV caching",
+      "body": "",
+      "type": "other",
+      "title": "improved overall code base, implemented vercel KV caching"
+    },
+    {
+      "sha": "adc594186b1f1a888b7087254ac04edaaa3e642d",
+      "shortSha": "adc5941",
+      "date": "2026-03-03T09:34:43-08:00",
+      "author": "usavsolutionsinc",
+      "subject": "search params ts error fix",
+      "body": "",
+      "type": "other",
+      "title": "search params ts error fix"
+    },
+    {
+      "sha": "1a946f58ed0a3fb28de78556606749d0750cccad",
+      "shortSha": "1a946f5",
+      "date": "2026-03-03T09:26:31-08:00",
+      "author": "usavsolutionsinc",
+      "subject": "updated the connections tab, dashbord tab and fitlering x10",
+      "body": "",
+      "type": "other",
+      "title": "updated the connections tab, dashbord tab and fitlering x10"
+    },
+    {
+      "sha": "14fcaa367c4ad1bb884ff4fced5b27401c82079a",
+      "shortSha": "14fcaa3",
+      "date": "2026-03-02T11:28:08-08:00",
+      "author": "usavsolutionsinc",
+      "subject": "updated the whole flow, removed google sheet support for the sync and scripts logic",
+      "body": "",
+      "type": "other",
+      "title": "updated the whole flow, removed google sheet support for the sync and scripts logic"
+    },
+    {
+      "sha": "0751763ff3bf5a5c2d9aa7ef0e490ab6ba93844d",
+      "shortSha": "0751763",
+      "date": "2026-02-27T16:56:10-08:00",
+      "author": "usavsolutionsinc",
+      "subject": "bug fix",
+      "body": "",
+      "type": "other",
+      "title": "bug fix"
+    },
+    {
+      "sha": "dc18727b52fd61230d2ce7e669d989ec766b69e1",
+      "shortSha": "dc18727",
+      "date": "2026-02-27T16:38:47-08:00",
+      "author": "usavsolutionsinc",
+      "subject": "ts fix",
+      "body": "",
+      "type": "other",
+      "title": "ts fix"
+    },
+    {
+      "sha": "cea3e6961a0d0b64092e4292b1c0c53bc17cf524",
+      "shortSha": "cea3e69",
+      "date": "2026-02-27T16:23:29-08:00",
+      "author": "usavsolutionsinc",
+      "subject": "ts fix",
+      "body": "",
+      "type": "other",
+      "title": "ts fix"
+    },
+    {
+      "sha": "332b3d1342cf7f66a43f25537ba5732ec6f109ac",
+      "shortSha": "332b3d1",
+      "date": "2026-02-27T16:13:26-08:00",
+      "author": "usavsolutionsinc",
+      "subject": "updated the serach bar crash",
+      "body": "",
+      "type": "other",
+      "title": "updated the serach bar crash"
+    },
+    {
+      "sha": "00d72ba202129e6f1c6dd545366176f13614b461",
+      "shortSha": "00d72ba",
+      "date": "2026-02-27T16:04:48-08:00",
+      "author": "usavsolutionsinc",
+      "subject": "one single side bar",
+      "body": "",
+      "type": "other",
+      "title": "one single side bar"
+    },
+    {
+      "sha": "c2245f0c2a67811b1041e0a98564ff6b47c82c72",
+      "shortSha": "c2245f0",
+      "date": "2026-02-27T12:31:13-08:00",
+      "author": "usavsolutionsinc",
+      "subject": "updated the packer logs and the receiving table tech table X/shipped",
+      "body": "",
+      "type": "other",
+      "title": "updated the packer logs and the receiving table tech table X/shipped"
+    },
+    {
+      "sha": "2f81edfb70d806d4b97339402e2af7bd6dcabf83",
+      "shortSha": "2f81edf",
+      "date": "2026-02-27T12:07:27-08:00",
+      "author": "usavsolutionsinc",
+      "subject": "perfected moved entirely away from google sheets",
+      "body": "",
+      "type": "performance",
+      "title": "perfected moved entirely away from google sheets"
+    },
+    {
+      "sha": "bcb9527b87f0b1a47c622a528b9754b9cab80aab",
+      "shortSha": "bcb9527",
+      "date": "2026-02-26T16:44:33-08:00",
+      "author": "usavsolutionsinc",
+      "subject": "updated and started on the manuals",
+      "body": "",
+      "type": "other",
+      "title": "updated and started on the manuals"
+    },
+    {
+      "sha": "952197a20e8e0138a8af3eab71d1e081abe4738f",
+      "shortSha": "952197a",
+      "date": "2026-02-26T13:32:18-08:00",
+      "author": "usavsolutionsinc",
+      "subject": "removed the assigment page and just updated the dashboarddetailsstack to include the selections of tester id and packer id",
+      "body": "",
+      "type": "other",
+      "title": "removed the assigment page and just updated the dashboarddetailsstack to include the selections of tester id and packer id"
+    },
+    {
+      "sha": "93bd52b9d3d272331bc5552d563e13fb07bf3ed5",
+      "shortSha": "93bd52b",
+      "date": "2026-02-26T10:28:10-08:00",
+      "author": "usavsolutionsinc",
+      "subject": "backend caching upstash KV and qstash for api timer",
+      "body": "",
+      "type": "other",
+      "title": "backend caching upstash KV and qstash for api timer"
+    },
+    {
+      "sha": "f804d3e539ef149dd5d01689f895f16413a87518",
+      "shortSha": "f804d3e",
+      "date": "2026-02-26T10:02:01-08:00",
+      "author": "usavsolutionsinc",
+      "subject": "updated to include filtered tested by dashboard shipping in station stesting",
+      "body": "",
+      "type": "other",
+      "title": "updated to include filtered tested by dashboard shipping in station stesting"
+    },
+    {
+      "sha": "28580984a4826871231db518f3e3f491a416e538",
+      "shortSha": "2858098",
+      "date": "2026-02-26T09:05:37-08:00",
+      "author": "usavsolutionsinc",
+      "subject": "restructured and improved the general code base",
+      "body": "",
+      "type": "other",
+      "title": "restructured and improved the general code base"
+    },
+    {
+      "sha": "22d8f711a644a0810592229dead34f1064dada7e",
+      "shortSha": "22d8f71",
+      "date": "2026-02-25T12:24:19-08:00",
+      "author": "usavsolutionsinc",
+      "subject": "improved the overall flow",
+      "body": "",
+      "type": "other",
+      "title": "improved the overall flow"
+    },
+    {
+      "sha": "ed2faf4998488f614afdef6cdef8e64b04cb23f1",
+      "shortSha": "ed2faf4",
+      "date": "2026-02-24T16:31:37-08:00",
+      "author": "usavsolutionsinc",
+      "subject": "updated the display of the shipped table",
+      "body": "",
+      "type": "other",
+      "title": "updated the display of the shipped table"
+    },
+    {
+      "sha": "1f7a9561a401d3e788860c24af32b819ab0d155c",
+      "shortSha": "1f7a956",
+      "date": "2026-02-24T16:25:47-08:00",
+      "author": "usavsolutionsinc",
+      "subject": "updated the display and add FBA suppoort to the station testing",
+      "body": "",
+      "type": "other",
+      "title": "updated the display and add FBA suppoort to the station testing"
+    },
+    {
+      "sha": "23b8272144a79d927e040acd70efa08b460e124f",
+      "shortSha": "23b8272",
+      "date": "2026-02-24T16:11:11-08:00",
+      "author": "usavsolutionsinc",
+      "subject": "updated the dashboard dispplay",
+      "body": "",
+      "type": "other",
+      "title": "updated the dashboard dispplay"
+    },
+    {
+      "sha": "2ed9ce40aa6e0f3a2bb35e6448542299e9428d68",
+      "shortSha": "2ed9ce4",
+      "date": "2026-02-24T15:25:43-08:00",
+      "author": "usavsolutionsinc",
+      "subject": "updated receiving and tech add serial number to be used by mobile as well",
+      "body": "",
+      "type": "other",
+      "title": "updated receiving and tech add serial number to be used by mobile as well"
+    },
+    {
+      "sha": "e110d4f683f54cba96458b6d8f126d14fb78f224",
+      "shortSha": "e110d4f",
+      "date": "2026-02-24T12:19:10-08:00",
+      "author": "usavsolutionsinc",
+      "subject": "PST time stamp in receiving",
+      "body": "",
+      "type": "other",
+      "title": "PST time stamp in receiving"
+    },
+    {
+      "sha": "a7435744ca93d64c3217ada6d889977e9dba8dab",
+      "shortSha": "a743574",
+      "date": "2026-02-24T10:59:31-08:00",
+      "author": "usavsolutionsinc",
+      "subject": "allowed connections prod url support and updated the tech details stack",
+      "body": "",
+      "type": "other",
+      "title": "allowed connections prod url support and updated the tech details stack"
+    },
+    {
+      "sha": "7fd8d76ff49cd817dfb083af46b814ccda1809f1",
+      "shortSha": "7fd8d76",
+      "date": "2026-02-24T10:27:11-08:00",
+      "author": "usavsolutionsinc",
+      "subject": "updated the SN post to tech_serial_numbers table with out finding order",
+      "body": "",
+      "type": "other",
+      "title": "updated the SN post to tech_serial_numbers table with out finding order"
+    },
+    {
+      "sha": "df43a304af20bcc2702204197157caf170ae726b",
+      "shortSha": "df43a30",
+      "date": "2026-02-24T09:29:17-08:00",
+      "author": "usavsolutionsinc",
+      "subject": "updated the post and upsert to the order_exceptions and the tech_serial_numbers table",
+      "body": "",
+      "type": "other",
+      "title": "updated the post and upsert to the order_exceptions and the tech_serial_numbers table"
+    },
+    {
+      "sha": "248de1c53178a09086787b4481683b32223b109c",
+      "shortSha": "248de1c",
+      "date": "2026-02-23T16:58:57-08:00",
+      "author": "usavsolutionsinc",
+      "subject": "updated the display of the tech table and upnextorder,",
+      "body": "",
+      "type": "other",
+      "title": "updated the display of the tech table and upnextorder,"
+    },
+    {
+      "sha": "fbe31e470c120bc6dc9087e20163263ec0461100",
+      "shortSha": "fbe31e4",
+      "date": "2026-02-23T15:42:37-08:00",
+      "author": "usavsolutionsinc",
+      "subject": "added days late and more back fill for orders and cleaned up UI",
+      "body": "",
+      "type": "other",
+      "title": "added days late and more back fill for orders and cleaned up UI"
+    },
+    {
+      "sha": "79c3c1ebdfcb0e3b7c2330f49c2c9b035a32412b",
+      "shortSha": "79c3c1e",
+      "date": "2026-02-23T10:59:19-08:00",
+      "author": "usavsolutionsinc",
+      "subject": "CRUD Update to import latest orders",
+      "body": "",
+      "type": "other",
+      "title": "CRUD Update to import latest orders"
+    },
+    {
+      "sha": "23af556c4b671891428d0b8873c6a54f6b3c1afa",
+      "shortSha": "23af556",
+      "date": "2026-02-23T10:18:08-08:00",
+      "author": "usavsolutionsinc",
+      "subject": "updated the shipstation endpint",
+      "body": "",
+      "type": "other",
+      "title": "updated the shipstation endpint"
+    },
+    {
+      "sha": "9de2d840c096bcc42bb567cacc291a1f211f64a1",
+      "shortSha": "9de2d84",
+      "date": "2026-02-23T10:10:02-08:00",
+      "author": "usavsolutionsinc",
+      "subject": "allowed orders without matches to the system and updated the shipstation records",
+      "body": "",
+      "type": "other",
+      "title": "allowed orders without matches to the system and updated the shipstation records"
+    },
+    {
+      "sha": "f3188594a83017985d85de43fcc9a08b61eeea59",
+      "shortSha": "f318859",
+      "date": "2026-02-18T09:47:37-08:00",
+      "author": "usavsolutionsinc",
+      "subject": "updated the serial number post from stationtesting",
+      "body": "",
+      "type": "other",
+      "title": "updated the serial number post from stationtesting"
+    },
+    {
+      "sha": "022606847adc4f7f640cde721cbd33f7ce4b7a3c",
+      "shortSha": "0226068",
+      "date": "2026-02-16T16:51:16-08:00",
+      "author": "usavsolutionsinc",
+      "subject": "updated the tech scanning insert endpoints to tech_serial_numbers table",
+      "body": "",
+      "type": "other",
+      "title": "updated the tech scanning insert endpoints to tech_serial_numbers table"
+    },
+    {
+      "sha": "816d85d839f6a8a6104f23a34dc1a16936d7be2c",
+      "shortSha": "816d85d",
+      "date": "2026-02-16T14:56:25-08:00",
+      "author": "usavsolutionsinc",
+      "subject": "updated the tech_serial_number sheet schema",
+      "body": "",
+      "type": "other",
+      "title": "updated the tech_serial_number sheet schema"
+    },
+    {
+      "sha": "9774011165df82e1031189fb48e952b9047be871",
+      "shortSha": "9774011",
+      "date": "2026-02-16T14:25:11-08:00",
+      "author": "usavsolutionsinc",
+      "subject": "added qty condition and order_id support",
+      "body": "",
+      "type": "other",
+      "title": "added qty condition and order_id support"
+    },
+    {
+      "sha": "f70d4ee8359a045c98efdf86bb6a798bb155233e",
+      "shortSha": "f70d4ee",
+      "date": "2026-02-16T14:19:07-08:00",
+      "author": "usavsolutionsinc",
+      "subject": "updated the upnextorder styling for the tech statiosn",
+      "body": "",
+      "type": "other",
+      "title": "updated the upnextorder styling for the tech statiosn"
+    },
+    {
+      "sha": "468869e035d5c55c255827a73759cd77edec70c3",
+      "shortSha": "468869e",
+      "date": "2026-02-16T13:41:12-08:00",
+      "author": "usavsolutionsinc",
+      "subject": "updated the repair table and the details panel to handle copy and paste",
+      "body": "",
+      "type": "other",
+      "title": "updated the repair table and the details panel to handle copy and paste"
+    },
+    {
+      "sha": "87e2960119056cee013a302c6dc7f006853348b0",
+      "shortSha": "87e2960",
+      "date": "2026-02-16T13:10:46-08:00",
+      "author": "usavsolutionsinc",
+      "subject": "added qty counter",
+      "body": "",
+      "type": "other",
+      "title": "added qty counter"
+    },
+    {
+      "sha": "64413eeee7fc5e60574839ab683f68657d12a0fa",
+      "shortSha": "64413ee",
+      "date": "2026-02-16T11:45:41-08:00",
+      "author": "usavsolutionsinc",
+      "subject": "updated the orders and tech details,",
+      "body": "",
+      "type": "other",
+      "title": "updated the orders and tech details,"
+    },
+    {
+      "sha": "36b67bcf9f7002710b6e2816cbf20d0ad4b6d979",
+      "shortSha": "36b67bc",
+      "date": "2026-02-16T09:54:29-08:00",
+      "author": "usavsolutionsinc",
+      "subject": "fixed the sku-stock columns",
+      "body": "",
+      "type": "fix",
+      "title": "fixed the sku-stock columns"
+    },
+    {
+      "sha": "b3ce108a74962c0054e3a5db7a09fbb5c2437f9a",
+      "shortSha": "b3ce108",
+      "date": "2026-02-16T09:45:16-08:00",
+      "author": "usavsolutionsinc",
+      "subject": "updated the display of ship by date",
+      "body": "",
+      "type": "other",
+      "title": "updated the display of ship by date"
+    },
+    {
+      "sha": "e752bcc34a884fc3c685fc482d36cbd8ca9374ad",
+      "shortSha": "e752bcc",
+      "date": "2026-02-16T09:32:32-08:00",
+      "author": "usavsolutionsinc",
+      "subject": "updated the title fetch for the sku-stock mutlisn sku gen and all time zones to use PST instead of local",
+      "body": "",
+      "type": "other",
+      "title": "updated the title fetch for the sku-stock mutlisn sku gen and all time zones to use PST instead of local"
+    },
+    {
+      "sha": "5b53979c2d44f86bfdd645282839e4e6d9c1d609",
+      "shortSha": "5b53979",
+      "date": "2026-02-13T16:36:54-08:00",
+      "author": "usavsolutionsinc",
+      "subject": "fixed the column gaps in all tables and repair table sorting",
+      "body": "",
+      "type": "fix",
+      "title": "fixed the column gaps in all tables and repair table sorting"
+    },
+    {
+      "sha": "737ec1728e0648b01c87dad85abf4768d3ac0f8a",
+      "shortSha": "737ec17",
+      "date": "2026-02-13T16:16:05-08:00",
+      "author": "usavsolutionsinc",
+      "subject": "updated the display for the dashboard",
+      "body": "",
+      "type": "other",
+      "title": "updated the display for the dashboard"
+    },
+    {
+      "sha": "5f08492e1422514d5622f488946e9700735a5d6f",
+      "shortSha": "5f08492",
+      "date": "2026-02-13T15:14:37-08:00",
+      "author": "usavsolutionsinc",
+      "subject": "added update shipping label",
+      "body": "",
+      "type": "other",
+      "title": "added update shipping label"
+    },
+    {
+      "sha": "34269c3e7ad7883df06063cfab05d529fff4f0ba",
+      "shortSha": "34269c3",
+      "date": "2026-02-13T13:26:48-08:00",
+      "author": "usavsolutionsinc",
+      "subject": "updated the shippedintakeform",
+      "body": "",
+      "type": "other",
+      "title": "updated the shippedintakeform"
+    },
+    {
+      "sha": "6af6104c99c1523ac89b35ccc8b1c99c7864610d",
+      "shortSha": "6af6104",
+      "date": "2026-02-13T11:01:09-08:00",
+      "author": "usavsolutionsinc",
+      "subject": "admin page",
+      "body": "",
+      "type": "other",
+      "title": "admin page"
+    },
+    {
+      "sha": "84c778fd479a694ca6c3deb0d4ecee6862fad9f0",
+      "shortSha": "84c778f",
+      "date": "2026-02-13T10:10:09-08:00",
+      "author": "usavsolutionsinc",
+      "subject": "updated the dashboarddetailsstack to have delete order button.",
+      "body": "",
+      "type": "other",
+      "title": "updated the dashboarddetailsstack to have delete order button."
+    },
+    {
+      "sha": "49d4ba82af8809bc96a63ce54ca350dbe6696428",
+      "shortSha": "49d4ba8",
+      "date": "2026-02-12T14:44:48-08:00",
+      "author": "usavsolutionsinc",
+      "subject": "updated the dashboard to include editable ship by date and shipped details update",
+      "body": "",
+      "type": "other",
+      "title": "updated the dashboard to include editable ship by date and shipped details update"
+    },
+    {
+      "sha": "103f619110e96e7ddbeee19625e045fb0d6e9489",
+      "shortSha": "103f619",
+      "date": "2026-02-12T13:23:24-08:00",
+      "author": "usavsolutionsinc",
+      "subject": "updated the receiving display and packer from mobile shipped table display logic",
+      "body": "",
+      "type": "other",
+      "title": "updated the receiving display and packer from mobile shipped table display logic"
+    },
+    {
+      "sha": "a4307f6fe2266bccaffc800654c0f63ac769dceb",
+      "shortSha": "a4307f6",
+      "date": "2026-02-12T10:10:52-08:00",
+      "author": "usavsolutionsinc",
+      "subject": "updated the table and the endpoints for mobile app",
+      "body": "",
+      "type": "other",
+      "title": "updated the table and the endpoints for mobile app"
+    }
+  ]
+}

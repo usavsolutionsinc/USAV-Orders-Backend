@@ -3,10 +3,12 @@
 /**
  * Sidebar toolbar for the Unfound queue.
  *
- * Renders the filter pills (kind), "Show checked" toggle, search box, and
- * Refresh button. Writes filter state to URL search params (uf_kind,
- * uf_checked, uf_q) so UnfoundQueueTable — which reads the same params —
- * stays in lockstep without a shared store.
+ * Renders the filter pills (kind), search box, and Refresh button. Writes
+ * filter state to URL search params (uf_kind, uf_q) so UnfoundQueueTable —
+ * which reads the same params — stays in lockstep without a shared store.
+ *
+ * The 'Checked' pill is a pseudo-kind: server-side the table translates it
+ * to kind=all + checked=true. All other pills hide checked rows.
  *
  * Refresh dispatches a `unfound-queue-refresh` window event the table
  * listens for. Keeps the toolbar decoupled from the table's fetch hook.
@@ -37,7 +39,6 @@ export function UnfoundQueueSidebarToolbar() {
   const searchParams = useSearchParams();
 
   const kind = parseKind(searchParams.get('uf_kind'));
-  const showChecked = searchParams.get('uf_checked') === '1';
   const q = searchParams.get('uf_q') ?? '';
 
   const searchDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -71,11 +72,6 @@ export function UnfoundQueueSidebarToolbar() {
 
   const onKind = useCallback(
     (next: QueueKind) => setParam('uf_kind', next === 'all' ? null : next),
-    [setParam],
-  );
-
-  const onChecked = useCallback(
-    (checked: boolean) => setParam('uf_checked', checked ? '1' : null),
     [setParam],
   );
 
@@ -209,7 +205,10 @@ export function UnfoundQueueSidebarToolbar() {
         />
       </div>
 
-      {/* Kind filter pills — stacked one per row to fit the narrow sidebar */}
+      {/* Kind filter pills — stacked one per row to fit the narrow sidebar.
+          'Checked' is its own pill (not a separate toggle) so the operator
+          flips between work-to-do and completed work the same way they flip
+          between sources. */}
       <div className="flex flex-col gap-1">
         <p className="text-micro font-bold uppercase tracking-wider text-gray-400">
           Source
@@ -229,17 +228,6 @@ export function UnfoundQueueSidebarToolbar() {
           </button>
         ))}
       </div>
-
-      {/* Show-checked toggle */}
-      <label className="flex items-center gap-1.5 text-label text-gray-700">
-        <input
-          type="checkbox"
-          checked={showChecked}
-          onChange={(e) => onChecked(e.target.checked)}
-          className="h-3.5 w-3.5"
-        />
-        Show checked
-      </label>
     </div>
   );
 }
