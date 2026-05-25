@@ -129,6 +129,27 @@ export function RepairIntakeForm({ onClose, onSubmit, initialData, favoriteSkuId
     const orangeSubmitButtonClass = getSidebarIntakeSubmitButtonClass('orange');
     const orangeInputClass = getSidebarIntakeInputClass('orange');
 
+    const stepAccent = currentStep === 'product'
+        ? {
+            label: 'text-sky-600',
+            counter: 'text-sky-500',
+            progress: 'bg-gradient-to-r from-sky-500 to-cyan-400',
+            continueBtn: 'w-full px-4 py-3 disabled:bg-gray-300 text-white rounded-xl transition-all text-xs font-black uppercase tracking-wide disabled:cursor-not-allowed shadow-lg bg-gradient-to-r from-sky-600 to-blue-600 hover:from-sky-700 hover:to-blue-700 shadow-sky-500/20',
+        }
+        : currentStep === 'customer'
+        ? {
+            label: 'text-indigo-600',
+            counter: 'text-indigo-500',
+            progress: 'bg-gradient-to-r from-indigo-500 to-violet-400',
+            continueBtn: 'w-full px-4 py-3 disabled:bg-gray-300 text-white rounded-xl transition-all text-xs font-black uppercase tracking-wide disabled:cursor-not-allowed shadow-lg bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-700 hover:to-violet-700 shadow-indigo-500/20',
+        }
+        : {
+            label: 'text-orange-500',
+            counter: 'text-orange-500',
+            progress: 'bg-gradient-to-r from-orange-500 to-amber-400',
+            continueBtn: orangeSubmitButtonClass,
+        };
+
     /* ── Data fetching ── */
 
     useEffect(() => {
@@ -334,7 +355,7 @@ export function RepairIntakeForm({ onClose, onSubmit, initialData, favoriteSkuId
                         <h2 className="text-sm font-black uppercase tracking-tight text-gray-900">
                             Repair Intake
                         </h2>
-                        <p className="mt-0.5 text-eyebrow font-black uppercase tracking-widest text-orange-500">
+                        <p className={`mt-0.5 text-eyebrow font-black uppercase tracking-widest ${stepAccent.label}`}>
                             {STEPS[currentStepIndex].label}
                         </p>
                     </div>
@@ -351,7 +372,7 @@ export function RepairIntakeForm({ onClose, onSubmit, initialData, favoriteSkuId
                 <div className="border-b border-gray-100 px-5 py-3 space-y-2">
                     <div className="h-1.5 w-full overflow-hidden rounded-full bg-gray-200">
                         <div
-                            className="h-full rounded-full bg-gradient-to-r from-orange-500 to-orange-400 transition-all duration-500 ease-out"
+                            className={`h-full rounded-full ${stepAccent.progress} transition-all duration-500 ease-out`}
                             style={{ width: `${((currentStepIndex + 1) / STEPS.length) * 100}%` }}
                         />
                     </div>
@@ -365,7 +386,7 @@ export function RepairIntakeForm({ onClose, onSubmit, initialData, favoriteSkuId
                             <ChevronLeft className="h-3.5 w-3.5" />
                             Back
                         </button>
-                        <span className="text-micro font-black text-gray-400">
+                        <span className={`text-micro font-black ${stepAccent.counter}`}>
                             {currentStepIndex + 1}/{STEPS.length}
                         </span>
                     </div>
@@ -424,7 +445,7 @@ export function RepairIntakeForm({ onClose, onSubmit, initialData, favoriteSkuId
                             {/* Favorites — always visible */}
                             <FavoritesWorkspaceSection
                                 workspaceKey="repair"
-                                accent="orange"
+                                accent="blue"
                                 title="Common Repairs"
                                 description=""
                                 emptyLabel="No repair favorites yet"
@@ -449,7 +470,7 @@ export function RepairIntakeForm({ onClose, onSubmit, initialData, favoriteSkuId
                                     onClick={() => setCustomerMode('existing')}
                                     className={`rounded-lg px-2 py-2 text-eyebrow font-black uppercase tracking-wide transition-colors ${
                                         customerMode === 'existing'
-                                            ? 'bg-orange-600 text-white shadow-sm'
+                                            ? 'bg-indigo-600 text-white shadow-sm'
                                             : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
                                     }`}
                                 >
@@ -460,7 +481,7 @@ export function RepairIntakeForm({ onClose, onSubmit, initialData, favoriteSkuId
                                     onClick={() => setCustomerMode('new')}
                                     className={`rounded-lg px-2 py-2 text-eyebrow font-black uppercase tracking-wide transition-colors ${
                                         customerMode === 'new'
-                                            ? 'bg-orange-600 text-white shadow-sm'
+                                            ? 'bg-indigo-600 text-white shadow-sm'
                                             : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
                                     }`}
                                 >
@@ -603,7 +624,7 @@ export function RepairIntakeForm({ onClose, onSubmit, initialData, favoriteSkuId
                                         ? !canProceedFromProduct
                                         : !canProceedFromCustomer
                                 }
-                                className={`flex-1 ${orangeSubmitButtonClass}`}
+                                className={`flex-1 ${stepAccent.continueBtn}`}
                             >
                                 Continue
                             </button>

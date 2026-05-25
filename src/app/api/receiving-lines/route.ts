@@ -285,7 +285,10 @@ export const GET = withAuth(async (request: NextRequest) => {
          ) rs_agg ON TRUE`
       : '';
 
-    values.push(limit, offset);
+    // Fetch extra line rows when `view=all` so merged Zoho-less placeholders
+    // can displace the tail of the list after sort (Recent + History share this).
+    const lineFetchLimit = view === 'all' ? Math.min(limit + 200, 600) : limit;
+    values.push(lineFetchLimit, offset);
 
     const lastScanSelect = view === 'recent' || view === 'all'
       ? `, rs_agg.last_scan::text AS last_scan_at`
@@ -341,17 +344,94 @@ export const GET = withAuth(async (request: NextRequest) => {
       ),
     ]);
 
-    const normalizedList = rowsRes.rows.map(normalizeRow);
+    let normalizedList = rowsRes.rows.map(normalizeRow);
+    let total = Number(countRes.rows[0]?.total ?? 0);
     if (includeSerials) {
       const serialsByLine = await fetchSerialsForLines(normalizedList.map((r) => r.id));
       for (const row of normalizedList) {
         (row as Record<string, unknown>).serials = serialsByLine.get(row.id) ?? [];
       }
     }
+
+    // `receiving.source = 'unmatched'` with zero lines never appears in FROM
+    // receiving_lines — synthesize one row per package so Recent rail + History match.
+    if (view === 'all') {
+      const unmatchedSearchVals: unknown[] = [];
+      let unmatchedSearchSql = '';
+      if (search) {
+        unmatchedSearchSql = ` AND (
+             COALESCE(r.receiving_tracking_number, '') ILIKE $1
+          OR COALESCE(stn.tracking_number_raw, '') ILIKE $1
+          OR COALESCE(stn.tracking_number_normalized, '') ILIKE $1
+        )`;
+        unmatchedSearchVals.push(`%${search}%`);
+      }
+      const [unmatchedPkgsRes, unmatchedCntRes] = await Promise.all([
+        pool.query(
+          `SELECT r.id,
+                  r.receiving_tracking_number,
+                  r.carrier,
+                  r.received_at::text          AS receiving_received_at,
+                  r.created_at::text           AS created_at,
+                  r.support_notes              AS receiving_support_notes,
+                  r.source_platform            AS receiving_source_platform,
+                  r.source                     AS receiving_source,
+                  r.zoho_purchaseorder_number  AS receiving_zoho_purchaseorder_number,
+                  stn.tracking_number_raw      AS shipment_tracking_number,
+                  stn.carrier                  AS shipment_carrier,
+                  stn.latest_status_category   AS shipment_status_category,
+                  stn.is_delivered             AS shipment_is_delivered,
+                  stn.delivered_at::text       AS shipment_delivered_at,
+                  rs_agg.last_scan::text       AS last_scan_at,
+                  (SELECT COUNT(*) FROM photos p
+                     WHERE p.entity_type = 'RECEIVING'
+                       AND p.entity_id = r.id) AS photo_count
+           FROM receiving r
+           LEFT JOIN shipping_tracking_numbers stn ON stn.id = r.shipment_id
+           LEFT JOIN LATERAL (
+               SELECT MAX(rs.scanned_at) AS last_scan
+               FROM receiving_scans rs
+               WHERE rs.receiving_id = r.id
+            ) rs_agg ON TRUE
+           WHERE r.source = 'unmatched'
+             AND NOT EXISTS (
+               SELECT 1 FROM receiving_lines rl WHERE rl.receiving_id = r.id
+             )
+             ${unmatchedSearchSql}
+           ORDER BY COALESCE(rs_agg.last_scan::text, r.received_at::text, r.created_at::text) DESC NULLS LAST,
+                    r.id DESC
+           LIMIT 150`,
+          unmatchedSearchVals,
+        ),
+        pool.query(
+          `SELECT COUNT(*)::bigint AS n
+             FROM receiving r
+             LEFT JOIN shipping_tracking_numbers stn ON stn.id = r.shipment_id
+            WHERE r.source = 'unmatched'
+              AND NOT EXISTS (
+                SELECT 1 FROM receiving_lines rl WHERE rl.receiving_id = r.id
+              )
+              ${unmatchedSearchSql}`,
+          unmatchedSearchVals,
+        ),
+      ]);
+      total += Number(unmatchedCntRes.rows[0]?.n ?? 0);
+      const placeholderNorm = unmatchedPkgsRes.rows.map((pkg) =>
+        normalizeRow(buildUnmatchedEmptyReceivingLine(pkg as Record<string, unknown>)),
+      );
+      for (const row of placeholderNorm) {
+        if (includeSerials) (row as Record<string, unknown>).serials = [];
+      }
+      normalizedList = [...normalizedList, ...placeholderNorm].sort((a, b) =>
+        compareReceivingRowsByRecentActivity(a, b),
+      );
+      normalizedList = normalizedList.slice(offset, offset + limit);
+    }
+
     return NextResponse.json({
       success: true,
       receiving_lines: normalizedList,
-      total: Number(countRes.rows[0]?.total ?? 0),
+      total,
       limit,
       offset,
     });
@@ -708,6 +788,77 @@ export const DELETE = withAuth(async (request: NextRequest) => {
     return NextResponse.json({ success: false, error: msg }, { status: 500 });
   }
 }, { permission: 'receiving.mark_received' });
+
+/** Label for unmatched cartons that have no `receiving_lines` yet (Recent + History). */
+const UNMATCHED_EMPTY_LINE_LABEL = 'Unfound receiving';
+
+/**
+ * `normalizeRow` input: synthetic line id `-receiving_id`, real `receiving_id`
+ * (matches `buildUnmatchedStubRow` in the sidebar).
+ */
+function buildUnmatchedEmptyReceivingLine(pkg: Record<string, unknown>): Record<string, unknown> {
+  const rid = Number(pkg.id);
+  return {
+    id: -rid,
+    receiving_id: rid,
+    receiving_tracking_number: pkg.receiving_tracking_number,
+    carrier: pkg.carrier,
+    receiving_received_at: pkg.receiving_received_at,
+    receiving_support_notes: pkg.receiving_support_notes ?? null,
+    receiving_source: 'unmatched',
+    receiving_source_platform: pkg.receiving_source_platform,
+    receiving_zoho_purchaseorder_number: pkg.receiving_zoho_purchaseorder_number,
+    shipment_tracking_number: pkg.shipment_tracking_number,
+    shipment_carrier: pkg.shipment_carrier,
+    shipment_status_category: pkg.shipment_status_category,
+    shipment_is_delivered: pkg.shipment_is_delivered,
+    shipment_delivered_at: pkg.shipment_delivered_at,
+    item_name: UNMATCHED_EMPTY_LINE_LABEL,
+    sku: null,
+    zoho_item_id: null,
+    zoho_line_item_id: null,
+    zoho_purchase_receive_id: null,
+    zoho_purchaseorder_id: null,
+    zoho_purchaseorder_number: pkg.receiving_zoho_purchaseorder_number ?? null,
+    quantity_received: 0,
+    quantity_expected: null,
+    qa_status: 'PENDING',
+    workflow_status: 'EXPECTED',
+    disposition_code: 'HOLD',
+    condition_grade: 'BRAND_NEW',
+    disposition_audit: [],
+    needs_test: true,
+    assigned_tech_id: null,
+    zoho_sync_source: null,
+    zoho_last_modified_time: null,
+    zoho_synced_at: null,
+    notes: null,
+    receiving_type: 'PO',
+    created_at: pkg.created_at,
+    last_scan_at: pkg.last_scan_at,
+    image_url: null,
+    photo_count: pkg.photo_count,
+    zoho_reference_number: null,
+  };
+}
+
+function receivingRowActivityTs(row: {
+  last_activity_at?: string | null;
+  created_at?: string | null;
+}) {
+  const raw = row.last_activity_at ?? row.created_at ?? null;
+  if (!raw) return 0;
+  const t = new Date(raw).getTime();
+  return Number.isFinite(t) ? t : 0;
+}
+
+function compareReceivingRowsByRecentActivity(
+  a: { last_activity_at?: string | null; created_at?: string | null; id: number },
+  b: { last_activity_at?: string | null; created_at?: string | null; id: number },
+) {
+  const d = receivingRowActivityTs(b) - receivingRowActivityTs(a);
+  return d !== 0 ? d : b.id - a.id;
+}
 
 // ─── Normalize ────────────────────────────────────────────────────────────────
 function normalizeRow(row: Record<string, unknown>) {

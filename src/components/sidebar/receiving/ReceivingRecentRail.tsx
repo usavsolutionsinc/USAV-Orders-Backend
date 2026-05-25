@@ -246,7 +246,7 @@ export function ReceivingRecentRail({ selectedLineId, limit = 20 }: Props) {
 
   return (
     <section className="border-t border-gray-100 bg-white">
-      <div className="flex items-center justify-between px-3 pt-2 pb-1">
+      <div className="flex items-center justify-between px-3 py-1">
         <p className="text-eyebrow font-black uppercase tracking-widest text-gray-500">
           Recent · {rows.length}
           {allRows.length > rows.length ? (
@@ -660,34 +660,88 @@ function RowPreviewPopover({
   // viewport right edge. Re-measured on mount + window resize so the popover
   // sticks to the row even if the sidebar reflows.
   const POPOVER_WIDTH = 320;
+  const POPOVER_FALLBACK_HEIGHT = 440;
+  const VIEWPORT_PADDING = 8;
   const GAP = 10;
-  const [coords, setCoords] = useState<{ left: number; top: number; flipped: boolean } | null>(null);
+  const [coords, setCoords] = useState<{ left: number; top: number; flipped: boolean } | null>(
+    null,
+  );
+  const popoverRef = useRef<HTMLDivElement | null>(null);
+
+  const measurePosition = useCallback(() => {
+    if (!anchorEl) return null;
+    const rect = anchorEl.getBoundingClientRect();
+    const vw = window.innerWidth;
+    const vh = window.innerHeight;
+    const rightSpace = vw - rect.right;
+    const flipped = rightSpace < POPOVER_WIDTH + GAP + 12;
+    const left = flipped
+      ? Math.max(VIEWPORT_PADDING, rect.left - POPOVER_WIDTH - GAP)
+      : Math.min(vw - POPOVER_WIDTH - VIEWPORT_PADDING, rect.right + GAP);
+
+    const popH =
+      popoverRef.current?.getBoundingClientRect().height ?? POPOVER_FALLBACK_HEIGHT;
+    const desiredTop = rect.top;
+    const maxTop = Math.max(VIEWPORT_PADDING, vh - popH - VIEWPORT_PADDING);
+    const top = Math.max(VIEWPORT_PADDING, Math.min(desiredTop, maxTop));
+
+    return { left, top, flipped };
+  }, [anchorEl]);
 
   useLayoutEffect(() => {
     if (!anchorEl) return;
-    const measure = () => {
-      const rect = anchorEl.getBoundingClientRect();
-      const vw = window.innerWidth;
-      const vh = window.innerHeight;
-      const rightSpace = vw - rect.right;
-      const flipped = rightSpace < POPOVER_WIDTH + GAP + 12;
-      const left = flipped
-        ? Math.max(8, rect.left - POPOVER_WIDTH - GAP)
-        : Math.min(vw - POPOVER_WIDTH - 8, rect.right + GAP);
-      // Clamp to viewport vertically so the popover doesn't sit off-screen
-      // for rows near the bottom of the list.
-      const desiredTop = rect.top;
-      const top = Math.min(Math.max(8, desiredTop), vh - 80);
-      setCoords({ left, top, flipped });
+
+    const apply = () => {
+      const next = measurePosition();
+      if (!next) return;
+      setCoords((prev) => {
+        if (
+          prev &&
+          prev.left === next.left &&
+          prev.top === next.top &&
+          prev.flipped === next.flipped
+        ) {
+          return prev;
+        }
+        return next;
+      });
     };
-    measure();
-    window.addEventListener('resize', measure);
-    window.addEventListener('scroll', measure, true);
+
+    apply();
+    window.addEventListener('resize', apply);
+    window.addEventListener('scroll', apply, true);
     return () => {
-      window.removeEventListener('resize', measure);
-      window.removeEventListener('scroll', measure, true);
+      window.removeEventListener('resize', apply);
+      window.removeEventListener('scroll', apply, true);
     };
-  }, [anchorEl]);
+  }, [anchorEl, measurePosition]);
+
+  const previewVisible = coords !== null;
+  useLayoutEffect(() => {
+    const el = popoverRef.current;
+    if (!anchorEl || !previewVisible || !el || typeof ResizeObserver === 'undefined') return;
+
+    const refine = () => {
+      const next = measurePosition();
+      if (!next) return;
+      setCoords((prev) => {
+        if (
+          prev &&
+          prev.left === next.left &&
+          prev.top === next.top &&
+          prev.flipped === next.flipped
+        ) {
+          return prev;
+        }
+        return next;
+      });
+    };
+
+    refine();
+    const ro = new ResizeObserver(refine);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [anchorEl, previewVisible, measurePosition]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -701,6 +755,7 @@ function RowPreviewPopover({
 
   return createPortal(
     <motion.div
+      ref={popoverRef}
       role="dialog"
       aria-label={`Preview ${title}`}
       onMouseEnter={onMouseEnter}
@@ -714,7 +769,7 @@ function RowPreviewPopover({
         top: coords.top,
         left: coords.left,
         width: POPOVER_WIDTH,
-        zIndex: 200,
+        zIndex: 9999,
       }}
       className="rounded-xl border border-gray-200 bg-white shadow-2xl ring-1 ring-black/5"
     >
@@ -782,15 +837,8 @@ function RowPreviewPopover({
           </div>
         </div>
 
-        {/* Identifier chips — evenly distributed across the row so each chip
-            sits in its own balanced slot regardless of underlying value
-            length. Grid keeps cells equal-width; chips align to the start
-            of their cell. */}
-        <div
-          className={`grid items-center gap-2 border-t border-gray-100 pt-3 ${
-            serialsCsv ? 'grid-cols-4' : 'grid-cols-3'
-          }`}
-        >
+        {/* Identifier chips — right-aligned wrapping row */}
+        <div className="flex flex-wrap items-center justify-end gap-2 border-t border-gray-100 pt-3">
           <OrderIdChip value={poValue} display={getLast4(poValue)} />
           <SkuScanRefChip value={skuValue} display={getLast4(skuValue)} />
           <TrackingChip value={trackingValue} display={getLast4(trackingValue)} />

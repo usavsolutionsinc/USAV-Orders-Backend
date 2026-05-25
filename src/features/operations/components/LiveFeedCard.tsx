@@ -5,6 +5,8 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Barcode, Package, Wrench, Activity } from '@/components/Icons';
 import type { DashboardData } from '@/features/operations/types';
 import { sectionLabel } from '@/design-system/tokens/typography/presets';
+import { getStaffColorHex } from '@/utils/staff-colors';
+import { useStaffColorVersion } from '@/contexts/StaffColorsProvider';
 
 interface LiveFeedCardProps {
   feed: DashboardData['activityFeed'] | undefined;
@@ -53,6 +55,7 @@ function timeAgo(iso: string): string {
 
 export function LiveFeedCard({ feed, isLoading, ablyStatus = 'connected' }: LiveFeedCardProps) {
   const rows = (feed ?? []).slice(0, 12);
+  useStaffColorVersion();
 
   return (
     <section>
@@ -133,8 +136,14 @@ export function LiveFeedCard({ feed, isLoading, ablyStatus = 'connected' }: Live
                         {row.summary}
                       </p>
                       {row.actor_name && (
-                        <p className="text-[10px] text-[#A89F91] font-medium mt-0.5 truncate">
-                          by {row.actor_name}
+                        <p className="text-[10px] font-medium mt-0.5 truncate text-[#A89F91]">
+                          by{' '}
+                          <span
+                            className="font-bold"
+                            style={{ color: getStaffColorHex({ id: row.staff_id ?? null }) }}
+                          >
+                            {row.actor_name}
+                          </span>
                         </p>
                       )}
                     </div>

@@ -19,6 +19,7 @@ import { DeleteOrderControl } from '@/components/shipped/stacks/DeleteOrderContr
 import { useOrderFieldSave } from '@/hooks/useOrderFieldSave';
 import type { ShippedOrder } from '@/lib/neon/orders-queries';
 import { dispatchNavigateShippedDetails } from '@/utils/events';
+import { SlideOverBackdrop } from '@/components/ui/SlideOverBackdrop';
 import { saveWorkOrder } from '@/lib/work-orders/saveWorkOrder';
 import {
   WorkOrderAssignmentCard,
@@ -220,13 +221,15 @@ export function WorkOrderDetailsPanel({
   }, [onSaved, row.entityId, row.entityType]);
 
   return (
-    <motion.div
-      initial={{ x: '100%' }}
-      animate={{ x: 0 }}
-      exit={{ x: '100%' }}
-      transition={{ type: 'spring', damping: 26, stiffness: 360, mass: 0.45 }}
-      className="fixed right-0 top-0 z-[100] flex h-screen w-[400px] flex-col overflow-hidden border-l border-gray-200 bg-white shadow-[-24px_0_48px_rgba(0,0,0,0.06)]"
-    >
+    <>
+      <SlideOverBackdrop onClose={onClose} />
+      <motion.div
+        initial={{ x: '100%' }}
+        animate={{ x: 0 }}
+        exit={{ x: '100%' }}
+        transition={{ type: 'spring', damping: 26, stiffness: 360, mass: 0.45 }}
+        className="fixed right-0 top-0 z-[100] flex h-screen w-[400px] flex-col overflow-hidden border-l border-gray-200 bg-white shadow-[-24px_0_48px_rgba(0,0,0,0.06)]"
+      >
       {/* Header */}
       <div className="shrink-0 border-b border-gray-100 bg-white px-5 py-4">
         <div className="flex items-start justify-between gap-3">
@@ -385,6 +388,7 @@ export function WorkOrderDetailsPanel({
           />
         ) : null}
       </AnimatePresence>
-    </motion.div>
+      </motion.div>
+    </>
   );
 }

@@ -6,6 +6,7 @@ import type { RSRecord } from '@/lib/neon/repair-service-queries';
 import { RepairActionTimeline } from '@/components/repair/mobile/RepairActionTimeline';
 import { AddRepairActionSheet } from '@/components/repair/mobile/AddRepairActionSheet';
 import { NetworkChip } from '@/components/mobile/NetworkChip';
+import { useActivityInboxOptional } from '@/contexts/ActivityInboxContext';
 
 const STATUS_OPTIONS = [
   'Awaiting Parts',
@@ -42,6 +43,7 @@ function daysSince(iso: string | null | undefined): string {
 function RepairMobilePageInner() {
   const params = useParams<{ id: string }>();
   const repairId = Number(params?.id);
+  const inbox = useActivityInboxOptional();
 
   const [repair, setRepair] = useState<RSRecord | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -79,7 +81,8 @@ function RepairMobilePageInner() {
   const handleStatusChange = useCallback(
     async (next: string) => {
       if (!repair || updatingStatus) return;
-      const previous = repair.status;
+      const previous = repair.status ?? '';
+      if (previous === next) return;
       setUpdatingStatus(next);
       setRepair({ ...repair, status: next });
       try {
@@ -89,6 +92,11 @@ function RepairMobilePageInner() {
           body: JSON.stringify({ id: repair.id, status: next }),
         });
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        inbox?.pushRepairStatusChange({
+          repairId: repair.id,
+          previousStatus: previous,
+          nextStatus: next,
+        });
       } catch (err) {
         setRepair({ ...repair, status: previous });
         setError(err instanceof Error ? err.message : 'Status update failed');
@@ -96,7 +104,7 @@ function RepairMobilePageInner() {
         setUpdatingStatus(null);
       }
     },
-    [repair, updatingStatus],
+    [repair, updatingStatus, inbox],
   );
 
   const customerFirstName = useMemo(() => firstNameOf(repair?.contact_info), [repair?.contact_info]);

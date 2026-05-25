@@ -211,9 +211,12 @@ async function upsertIncomingRepair(client, params) {
            source_tracking_number = COALESCE(NULLIF(source_tracking_number, ''), $6),
            source_sku = COALESCE(NULLIF(source_sku, ''), $7),
            intake_channel = COALESCE(NULLIF(intake_channel, ''), 'shipment'),
-           incoming_status = CASE
-             WHEN COALESCE(incoming_status, '') IN ('', 'pending_repair') THEN 'incoming'
-             ELSE incoming_status
+           status = CASE
+             WHEN received_at IS NULL
+                  AND COALESCE(status, '') NOT IN ('Done', 'Picked Up', 'Shipped')
+                  AND COALESCE(status, '') IN ('Pending Repair', 'Incoming Shipment')
+               THEN 'Incoming Shipment'
+             ELSE status
            END,
            delivered_at = COALESCE(delivered_at, $8),
            updated_at = NOW()
@@ -237,10 +240,10 @@ async function upsertIncomingRepair(client, params) {
     `INSERT INTO repair_service
        (
          created_at, updated_at, ticket_number, contact_info, product_title, price, issue, serial_number, notes, status,
-         source_system, source_order_id, source_tracking_number, source_sku, intake_channel, incoming_status,
+         source_system, source_order_id, source_tracking_number, source_sku, intake_channel,
          delivered_at, received_at, intake_confirmed_at, received_by_staff_id
        )
-     VALUES ($1, $1, NULL, $2, $3, $4, 'Ecwid inbound repair shipment', '', $5, 'Incoming Shipment', 'ecwid', $6, $7, $8, 'shipment', 'incoming', $9, NULL, NULL, NULL)
+     VALUES ($1, $1, NULL, $2, $3, $4, 'Ecwid inbound repair shipment', '', $5, 'Incoming Shipment', 'ecwid', $6, $7, $8, 'shipment', $9, NULL, NULL, NULL)
      RETURNING id, ticket_number`,
     [
       params.orderDate ?? new Date().toISOString(),

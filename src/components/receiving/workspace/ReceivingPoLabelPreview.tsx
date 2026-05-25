@@ -19,6 +19,7 @@ export function ReceivingPoLabelPreview({
   platform,
   notes,
   zendeskTicket,
+  trackingNumber,
   conditionCode,
   date,
   embedded,
@@ -30,6 +31,7 @@ export function ReceivingPoLabelPreview({
     platform,
     notes,
     zendeskTicket,
+    trackingNumber,
     conditionCode,
     date,
   });
@@ -59,6 +61,7 @@ export function ReceivingPoLabelPreview({
                 platform,
                 notes,
                 zendeskTicket,
+                trackingNumber,
                 conditionCode,
                 date,
               })}

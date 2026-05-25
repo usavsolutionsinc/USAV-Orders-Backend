@@ -32,7 +32,11 @@ interface Props {
  * bridge fails or returns no number.
  */
 export function ReceivingClaimModal({ open, row, onClose, onTicketCreated }: Props) {
-  const [claimType, setClaimType] = useState<ClaimType>('damage');
+  // Auto-select 'unfound' when the carton has no Zoho match — support's
+  // routing for unmatched-tracking claims is different from damage/missing.
+  const initialClaimType: ClaimType =
+    row.receiving_source === 'unmatched' ? 'unfound' : 'damage';
+  const [claimType, setClaimType] = useState<ClaimType>(initialClaimType);
   const [severity, setSeverity] = useState<ClaimSeverity>('medium');
   const [reason, setReason] = useState('');
   const [submitting, setSubmitting] = useState(false);
@@ -56,9 +60,12 @@ export function ReceivingClaimModal({ open, row, onClose, onTicketCreated }: Pro
     setDraftBody(null);
     setSubject('');
     setDescription('');
+    setClaimType(
+      row.receiving_source === 'unmatched' ? 'unfound' : 'damage',
+    );
     subjectTouched.current = false;
     descriptionTouched.current = false;
-  }, [open, row.receiving_id, row.id]);
+  }, [open, row.receiving_id, row.id, row.receiving_source]);
 
   // Fetch the server-rendered template whenever inputs change. Debounced so
   // typing in "reason" doesn't hammer the endpoint.
@@ -180,7 +187,11 @@ export function ReceivingClaimModal({ open, row, onClose, onTicketCreated }: Pro
                   File a claim
                 </p>
                 <p className="mt-0.5 text-base font-extrabold tracking-tight text-gray-900">
-                  Receiving #{row.receiving_id}
+                  {row.receiving_source === 'unmatched'
+                    ? 'Unfound'
+                    : row.zoho_purchaseorder_number
+                      ? `PO ${row.zoho_purchaseorder_number}`
+                      : `Receiving #${row.receiving_id ?? '—'}`}
                 </p>
               </div>
               <button

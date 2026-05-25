@@ -2,7 +2,24 @@
 
 import { ReactNode, useState, useEffect, useRef } from 'react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
-import { Search, ChevronLeft, ChevronRight, Copy, Check, AlertTriangle, Plus, Barcode, ClipboardList, Layout, Package } from './Icons';
+import {
+    Search,
+    ChevronLeft,
+    ChevronRight,
+    Copy,
+    Check,
+    AlertTriangle,
+    Plus,
+    Barcode,
+    ClipboardList,
+    Layout,
+    Package,
+    Layers,
+    FileText,
+    Hash,
+    Truck,
+    Cpu,
+} from './Icons';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ShippedIntakeForm, type ShippedFormData } from './shipped';
 import { ShippedDetailsPanel } from './shipped/ShippedDetailsPanel';
@@ -19,7 +36,7 @@ import { sectionLabel, microBadge } from '@/design-system/tokens/typography/pres
 import {
     getShippedSearchHelperText,
     getShippedSearchPlaceholder,
-    SHIPPED_SEARCH_FIELD_OPTIONS,
+    SHIPPED_SEARCH_FIELDS,
     type ShippedSearchField,
 } from '@/lib/shipped-search';
 
@@ -56,6 +73,18 @@ const SHIPPED_FILTER_ITEMS: HorizontalSliderItem[] = [
     { id: 'sku',    label: 'SKU',    icon: Barcode },
     { id: 'fba',    label: 'FBA',    icon: Package },
 ];
+
+const SHIPPED_SEARCH_FIELD_ICONS: Record<
+    ShippedSearchField,
+    NonNullable<HorizontalSliderItem['icon']>
+> = {
+    all: Layers,
+    order_id: Hash,
+    tracking: Truck,
+    product_title: FileText,
+    sku: Barcode,
+    serial_number: Cpu,
+};
 
 export default function ShippedSidebar({
     showIntakeForm = false,
@@ -324,9 +353,10 @@ Shipped: ${result.packed_at ? formatDateTimePST(result.packed_at) : 'Not Shipped
 
                         {onShippedSearchFieldChange && (
                             <HorizontalButtonSlider
-                                items={SHIPPED_SEARCH_FIELD_OPTIONS.map((option) => ({
-                                    id: option.id,
-                                    label: option.label,
+                                items={SHIPPED_SEARCH_FIELDS.map((field) => ({
+                                    id: field.id,
+                                    label: field.label,
+                                    icon: SHIPPED_SEARCH_FIELD_ICONS[field.id],
                                 }))}
                                 value={shippedSearchField}
                                 onChange={(id) => onShippedSearchFieldChange(id as ShippedSearchField)}

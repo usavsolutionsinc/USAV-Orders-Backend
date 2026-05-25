@@ -6,6 +6,7 @@ import { ResponsiveLayout } from "../components/layout/ResponsiveLayout";
 import { HeaderProvider } from "../contexts/HeaderContext";
 import { FbaWorkspaceProvider } from "../contexts/FbaWorkspaceContext";
 import { AuthProvider } from "../contexts/AuthContext";
+import { ActivityInboxProvider } from "../contexts/ActivityInboxContext";
 import { StaffColorsProvider } from "../contexts/StaffColorsProvider";
 import { StaffSwitcherProvider } from "../contexts/StaffSwitcherContext";
 import { SwitchStaffSheet } from "../components/auth/SwitchStaffSheet";
@@ -45,6 +46,7 @@ export default function RootLayout({
                 <OfflineBanner />
                 <Providers>
                     <AuthProvider>
+                        <ActivityInboxProvider>
                         <StaffColorsProvider>
                         <StaffSwitcherProvider>
                             <HeaderProvider>
@@ -57,6 +59,7 @@ export default function RootLayout({
                             <SwitchStaffSheet />
                         </StaffSwitcherProvider>
                         </StaffColorsProvider>
+                        </ActivityInboxProvider>
                     </AuthProvider>
                 </Providers>
                 <InstallPrompt />

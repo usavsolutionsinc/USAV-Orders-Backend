@@ -1035,7 +1035,6 @@ export const repairService = pgTable('repair_service', {
   sourceTrackingNumber: text('source_tracking_number'),
   sourceSku: text('source_sku'),
   intakeChannel: text('intake_channel'),
-  incomingStatus: text('incoming_status'),
   deliveredAt: timestamp('delivered_at', { withTimezone: true }),
   receivedAt: timestamp('received_at', { withTimezone: true }),
   intakeConfirmedAt: timestamp('intake_confirmed_at', { withTimezone: true }),

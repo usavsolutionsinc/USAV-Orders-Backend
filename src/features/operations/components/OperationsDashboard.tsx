@@ -1,6 +1,6 @@
 'use client';
 
-import React, { Suspense } from 'react';
+import React, { Suspense, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   Package,
@@ -10,13 +10,11 @@ import {
   Barcode,
 } from '@/components/Icons';
 import { GlobalHeaderBar } from './GlobalHeaderBar';
-import { WelcomeHero } from './WelcomeHero';
 import { PerformanceGoals } from './PerformanceGoals';
 import { DashboardKPICard } from './DashboardKPICard';
 import { OperationsMatrix } from './OperationsMatrix';
 import { StaffGoalsRail } from './StaffGoalsRail';
 import { LiveFeedCard } from './LiveFeedCard';
-import { SystemHealthRow } from './SystemHealthRow';
 import { InventoryHealthRow } from './InventoryHealthRow';
 import { ExceptionsRow } from './ExceptionsRow';
 import { PipelineRow } from './PipelineRow';
@@ -27,6 +25,7 @@ import { useAblyChannel } from '@/hooks/useAblyChannel';
 import PendingOrdersTable from '@/components/PendingOrdersTable';
 import type { DashboardData } from '@/features/operations/types';
 import { sectionLabel, cardTitle } from '@/design-system/tokens/typography/presets';
+import { KpiDetailsModal, type KpiKind } from './KpiDetailsModal';
 
 function SectionHeader({ eyebrow, title, meta }: { eyebrow: string; title: string; meta?: string }) {
   return (
@@ -46,6 +45,7 @@ function SectionHeader({ eyebrow, title, meta }: { eyebrow: string; title: strin
 
 export function OperationsDashboard() {
   const queryClient = useQueryClient();
+  const [openKpi, setOpenKpi] = useState<KpiKind | null>(null);
 
   const { data, isLoading } = useQuery<DashboardData>({
     queryKey: ['dashboard-operations', '24h'],
@@ -75,17 +75,9 @@ export function OperationsDashboard() {
 
   return (
     <div className="flex-1 flex flex-col min-w-0 h-full overflow-y-auto bg-gray-50 text-gray-900">
-      <GlobalHeaderBar ablyStatus="connected" />
+      <GlobalHeaderBar />
 
       <main className="flex-1 w-full max-w-[1440px] mx-auto px-4 sm:px-6 lg:px-8 pt-6 pb-16 space-y-6">
-
-        <section>
-          <WelcomeHero />
-        </section>
-
-        <section>
-          <SystemHealthRow />
-        </section>
 
         <section>
           <SectionHeader
@@ -103,6 +95,7 @@ export function OperationsDashboard() {
               icon={Activity}
               colorTone="amber"
               chartType="bar"
+              onOpen={() => setOpenKpi('velocity')}
             />
             <DashboardKPICard
               title="Tested today"
@@ -114,6 +107,7 @@ export function OperationsDashboard() {
               colorTone="emerald"
               chartType="donut"
               progress={78}
+              onOpen={() => setOpenKpi('tested')}
             />
             <DashboardKPICard
               title="FBA intake"
@@ -124,6 +118,7 @@ export function OperationsDashboard() {
               icon={Package}
               colorTone="amber"
               chartType="bar"
+              onOpen={() => setOpenKpi('fba')}
             />
             <DashboardKPICard
               title="Repair queue"
@@ -135,6 +130,7 @@ export function OperationsDashboard() {
               colorTone="orange"
               chartType="donut"
               progress={45}
+              onOpen={() => setOpenKpi('repair')}
             />
           </div>
 
@@ -208,6 +204,19 @@ export function OperationsDashboard() {
           </div>
         </section>
       </main>
+
+      <KpiDetailsModal
+        kind={openKpi}
+        value={
+          openKpi === 'velocity' ? data?.summary.all.value
+          : openKpi === 'tested' ? data?.summary.tested.value
+          : openKpi === 'fba' ? data?.summary.fba.value
+          : openKpi === 'repair' ? data?.summary.repair.value
+          : undefined
+        }
+        activityFeed={data?.activityFeed}
+        onClose={() => setOpenKpi(null)}
+      />
     </div>
   );
 }

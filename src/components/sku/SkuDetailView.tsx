@@ -26,6 +26,7 @@ import {
   cardTitle,
 } from '@/design-system/tokens/typography/presets';
 import { AuditTimeline } from '@/components/audit/AuditTimeline';
+import { SlideOverBackdrop } from '@/components/ui/SlideOverBackdrop';
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -231,15 +232,18 @@ export default function SkuDetailView({ sku, variant = 'page', onClose }: SkuDet
   const wrapPanel = (content: React.ReactNode) => {
     if (!isPanel) return content;
     return (
-      <motion.div
-        initial={{ x: '100%' }}
-        animate={{ x: 0 }}
-        exit={{ x: '100%' }}
-        transition={{ type: 'spring', damping: 25, stiffness: 350, mass: 0.5 }}
-        className="fixed right-0 top-0 z-[100] flex h-screen w-[420px] max-w-full flex-col overflow-hidden border-l border-gray-200 bg-white shadow-[-20px_0_50px_rgba(0,0,0,0.05)]"
-      >
-        {content}
-      </motion.div>
+      <>
+        <SlideOverBackdrop onClose={handleClose} />
+        <motion.div
+          initial={{ x: '100%' }}
+          animate={{ x: 0 }}
+          exit={{ x: '100%' }}
+          transition={{ type: 'spring', damping: 25, stiffness: 350, mass: 0.5 }}
+          className="fixed right-0 top-0 z-[100] flex h-screen w-[420px] max-w-full flex-col overflow-hidden border-l border-gray-200 bg-white shadow-[-20px_0_50px_rgba(0,0,0,0.05)]"
+        >
+          {content}
+        </motion.div>
+      </>
     );
   };
 

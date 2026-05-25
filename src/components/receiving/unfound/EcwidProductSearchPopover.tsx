@@ -29,12 +29,10 @@
  */
 
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
-import { motion } from 'framer-motion';
+import { createPortal } from 'react-dom';
+import { motion, AnimatePresence } from 'framer-motion';
+import { X } from '@/components/Icons';
 import { SearchBar } from '@/components/ui/SearchBar';
-import {
-  framerPresence,
-  framerTransition,
-} from '@/design-system/foundations/motion-framer';
 import { microBadge } from '@/design-system/tokens/typography/presets';
 
 export interface EcwidProductSelection {
@@ -46,7 +44,14 @@ export interface EcwidProductSelection {
   sku: string;
   item_name: string;
   image_url: string | null;
+  /** Set when the row came from /api/ecwid/recent-repair-orders (-RS SKU link). */
+  is_repair_service?: boolean;
+  ecwid_order_id?: string;
+  ecwid_product_url?: string | null;
 }
+
+/** How the unmatched-items workspace opened this popover (parent supplies when visible). */
+export type EcwidProductPopoverMode = 'search' | 'repair_service';
 
 export interface EcwidProductSearchPopoverProps {
   /**
@@ -54,7 +59,9 @@ export interface EcwidProductSearchPopoverProps {
    * it into POST /api/receiving/add-unmatched-line without re-threading.
    */
   receivingId: number;
-  /** Optional initial query (e.g. parsed product title from listing URL) */
+  /** Catalog search (`/api/sku-catalog/search`) vs recent repair-service Ecwid picks. */
+  popoverMode: EcwidProductPopoverMode;
+  /** Optional initial query (e.g. parsed product title from listing URL); catalog mode only */
   initialQuery?: string;
   onSelect: (selection: EcwidProductSelection) => void | Promise<void>;
   onClose: () => void;
@@ -74,6 +81,10 @@ interface SearchItem {
   product_title: string;
   image_url: string | null;
   platform_ids: PlatformIdRef[];
+  /** Present when the row was loaded from /api/ecwid/recent-repair-orders */
+  order_id?: string;
+  order_date?: string;
+  product_url?: string | null;
 }
 
 interface SearchResponse {
@@ -82,19 +93,20 @@ interface SearchResponse {
   error?: string;
 }
 
-type SearchMode = 'title' | 'ecwid_sku';
+type CatalogSearchField = 'title' | 'ecwid_sku';
 
 const DEBOUNCE_MS = 200;
 const MAX_RESULTS = 20;
 
 export function EcwidProductSearchPopover({
   receivingId: _receivingId,
+  popoverMode,
   initialQuery = '',
   onSelect,
   onClose,
 }: EcwidProductSearchPopoverProps) {
   const [query, setQuery] = useState(initialQuery);
-  const [mode, setMode] = useState<SearchMode>('title');
+  const [searchField, setSearchField] = useState<CatalogSearchField>('title');
   const [items, setItems] = useState<SearchItem[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -104,8 +116,41 @@ export function EcwidProductSearchPopover({
   const abortRef = useRef<AbortController | null>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // ─── Search with debounce + abort ──────────────────────────────────────────
+  // ─── Recent repair-service orders (Ecwid `-RS` SKUs) ─────────────────────────
   useEffect(() => {
+    if (popoverMode !== 'repair_service') return;
+    let cancelled = false;
+    setItems([]);
+    setError(null);
+    setIsLoading(true);
+    abortRef.current?.abort();
+
+    fetch('/api/ecwid/recent-repair-orders?limit=30')
+      .then(async (res) => {
+        const body = (await res.json()) as SearchResponse;
+        if (!res.ok || !body.success) {
+          throw new Error(body.error ?? `load failed (${res.status})`);
+        }
+        if (!cancelled) setItems(body.items ?? []);
+      })
+      .catch((err: unknown) => {
+        if (cancelled) return;
+        setItems([]);
+        setError(err instanceof Error ? err.message : 'Failed to load repair orders');
+      })
+      .finally(() => {
+        if (!cancelled) setIsLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [popoverMode]);
+
+  // ─── Catalog search with debounce + abort ───────────────────────────────────
+  useEffect(() => {
+    if (popoverMode !== 'search') return;
+
     if (debounceRef.current) clearTimeout(debounceRef.current);
 
     const trimmed = query.trim();
@@ -126,7 +171,7 @@ export function EcwidProductSearchPopover({
 
       const url = new URL('/api/sku-catalog/search', window.location.origin);
       url.searchParams.set('q', trimmed);
-      url.searchParams.set('searchField', mode);
+      url.searchParams.set('searchField', searchField);
       url.searchParams.set('limit', String(MAX_RESULTS));
 
       fetch(url.toString(), { signal: controller.signal })
@@ -150,7 +195,7 @@ export function EcwidProductSearchPopover({
     return () => {
       if (debounceRef.current) clearTimeout(debounceRef.current);
     };
-  }, [query, mode]);
+  }, [popoverMode, query, searchField]);
 
   // Cleanup on unmount
   useEffect(() => () => abortRef.current?.abort(), []);
@@ -180,97 +225,173 @@ export function EcwidProductSearchPopover({
           sku: displaySku,
           item_name: item.product_title,
           image_url: item.image_url,
+          ...(popoverMode === 'repair_service'
+            ? {
+                is_repair_service: true,
+                ecwid_order_id: item.order_id ?? '',
+                ecwid_product_url: item.product_url ?? null,
+              }
+            : {}),
         });
       } finally {
         setSubmittingId(null);
       }
     },
-    [onSelect],
+    [onSelect, popoverMode],
   );
 
   const placeholder = useMemo(
     () =>
-      mode === 'title'
+      searchField === 'title'
         ? 'Search Ecwid product title…'
         : 'Search Ecwid SKU…',
-    [mode],
+    [searchField],
   );
 
-  return (
-    <motion.div
-      role="dialog"
-      aria-label="Search Ecwid products"
-      initial={framerPresence.dropdownPanel.initial}
-      animate={framerPresence.dropdownPanel.animate}
-      exit={framerPresence.dropdownPanel.exit}
-      transition={framerTransition.dropdownOpen}
-      className="absolute inset-x-0 top-0 z-40 mx-2 max-h-[420px] overflow-hidden rounded-lg border border-blue-200 bg-white shadow-xl"
-    >
-      {/* Header: mode toggle + close */}
+  const dialogAria =
+    popoverMode === 'repair_service'
+      ? 'Recent Ecwid repair-service orders'
+      : 'Search Ecwid products';
+
+  if (typeof window === 'undefined') return null;
+
+  // Portal-mounted centered modal so the workspace's overflow-y / stacking
+  // contexts can't clip it. Backdrop covers the viewport; the dialog
+  // wrapper pins to the top (items-start + top padding) and offsets right
+  // by the desktop sidebar width so it visually centers on the workspace.
+  return createPortal(
+    <AnimatePresence>
+      <motion.div
+        key="ecwid-search-backdrop"
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+        className="fixed inset-0 z-[118] bg-gray-900/50 backdrop-blur-sm"
+        onClick={onClose}
+      />
+      <motion.div
+        key="ecwid-search-dialog"
+        role="dialog"
+        aria-label={dialogAria}
+        initial={{ opacity: 0, y: 8 }}
+        animate={{ opacity: 1, y: 0 }}
+        exit={{ opacity: 0, y: 4 }}
+        transition={{ duration: 0.18, ease: [0.22, 1, 0.36, 1] }}
+        className="pointer-events-none fixed inset-0 z-[120] flex items-start justify-center p-4 pt-[8vh] md:pl-[360px]"
+      >
+        <div
+          onClick={(e) => e.stopPropagation()}
+          className="pointer-events-auto flex max-h-[80vh] w-full max-w-2xl flex-col overflow-hidden rounded-2xl border border-blue-200 bg-white shadow-2xl ring-1 ring-gray-200"
+        >
+      {/* Header: catalog toggle + close (repair mode is a fixed list) */}
       <div className="flex items-center justify-between border-b border-gray-100 px-3 py-2">
-        <div className="flex gap-1">
-          <ModeButton
-            active={mode === 'title'}
-            onClick={() => setMode('title')}
-            label="By title"
-          />
-          <ModeButton
-            active={mode === 'ecwid_sku'}
-            onClick={() => setMode('ecwid_sku')}
-            label="By SKU"
-          />
-        </div>
+        {popoverMode === 'search' ? (
+          <div className="flex gap-1">
+            <ModeButton
+              active={searchField === 'title'}
+              onClick={() => setSearchField('title')}
+              label="By title"
+            />
+            <ModeButton
+              active={searchField === 'ecwid_sku'}
+              onClick={() => setSearchField('ecwid_sku')}
+              label="By SKU"
+            />
+          </div>
+        ) : (
+          <span className={`${microBadge} text-gray-700`}>
+            Recent -RS Ecwid orders
+          </span>
+        )}
         <button
           type="button"
           onClick={onClose}
-          className={`${microBadge} rounded px-2 py-1 text-gray-500 hover:bg-gray-100`}
+          aria-label="Close search"
+          className="rounded-lg p-1.5 text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-700"
         >
-          Esc
+          <X className="h-4 w-4" />
         </button>
       </div>
 
-      {/* Search input */}
-      <div className="px-2 pt-2">
-        <SearchBar
-          value={query}
-          onChange={setQuery}
-          placeholder={placeholder}
-          autoFocus
-          isSearching={isLoading}
-          variant="blue"
-          size="compact"
-          hideUnderline
-        />
-      </div>
+      {/* Search input — catalog flow only */}
+      {popoverMode === 'search' ? (
+        <div className="px-2 pt-2">
+          <SearchBar
+            value={query}
+            onChange={setQuery}
+            placeholder={placeholder}
+            autoFocus
+            isSearching={isLoading}
+            variant="blue"
+            size="compact"
+            hideUnderline
+          />
+        </div>
+      ) : (
+        <p className="px-3 pt-2 text-micro text-gray-500">
+          Pick an order containing a repair-service SKU to link this carton.
+        </p>
+      )}
 
-      {/* Results */}
+      {/* Results — flex-1 lets the list grow to fill the dialog's max-h-[80vh]
+          envelope instead of being artificially capped at 300px. */}
       <ul
         id={listboxId}
         role="listbox"
-        aria-label="Ecwid product results"
-        className="mt-1 max-h-[300px] overflow-y-auto"
+        aria-label={
+          popoverMode === 'repair_service'
+            ? 'Recent repair-service order lines'
+            : 'Ecwid product results'
+        }
+        className="min-h-[120px] flex-1 overflow-y-auto"
       >
         {error && (
           <li className="px-3 py-3 text-label text-red-600">{error}</li>
         )}
 
-        {!error && !isLoading && query.trim() && items.length === 0 && (
+        {!error &&
+          !isLoading &&
+          popoverMode === 'search' &&
+          query.trim() &&
+          items.length === 0 && (
           <li className="px-3 py-3 text-label text-gray-500">
             No matches. Try the other mode or refine the query.
           </li>
         )}
 
+        {!error &&
+          !isLoading &&
+          popoverMode === 'repair_service' &&
+          items.length === 0 && (
+          <li className="px-3 py-3 text-label text-gray-500">
+            No recent repair-service line items (-RS SKU) found in Ecwid orders.
+          </li>
+        )}
+
+        {!error &&
+          popoverMode === 'repair_service' &&
+          isLoading &&
+          items.length === 0 && (
+            <li className="px-3 py-4 text-micro font-semibold text-gray-400">
+              Loading recent Ecwid orders…
+            </li>
+          )}
+
         {items.map((item) => (
           <ResultRow
             key={item.id}
             item={item}
+            showOrderMeta={popoverMode === 'repair_service'}
             isSubmitting={submittingId === item.id}
             disabled={submittingId != null && submittingId !== item.id}
             onSelect={handleSelect}
           />
         ))}
       </ul>
-    </motion.div>
+        </div>
+      </motion.div>
+    </AnimatePresence>,
+    document.body,
   );
 }
 
@@ -300,12 +421,13 @@ function ModeButton({ active, onClick, label }: ModeButtonProps) {
 
 interface ResultRowProps {
   item: SearchItem;
+  showOrderMeta?: boolean;
   isSubmitting: boolean;
   disabled: boolean;
   onSelect: (item: SearchItem) => void;
 }
 
-function ResultRow({ item, isSubmitting, disabled, onSelect }: ResultRowProps) {
+function ResultRow({ item, showOrderMeta, isSubmitting, disabled, onSelect }: ResultRowProps) {
   const platforms = item.platform_ids?.filter((p) => p?.platform) ?? [];
   const displaySku = item.sku ?? item.zoho_sku ?? '—';
 
@@ -343,6 +465,11 @@ function ResultRow({ item, isSubmitting, disabled, onSelect }: ResultRowProps) {
             <span className="font-mono text-micro tracking-wide text-gray-500">
               {displaySku}
             </span>
+            {showOrderMeta && item.order_id ? (
+              <span className="text-micro font-semibold normal-case text-sky-600">
+                Order #{item.order_id}
+              </span>
+            ) : null}
             {platforms.slice(0, 4).map((p, i) => (
               <span
                 key={`${p.platform}-${i}`}

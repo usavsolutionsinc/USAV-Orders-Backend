@@ -1,5 +1,6 @@
 'use client';
 
+import type { HTMLAttributes } from 'react';
 import { MapPin } from '@/components/Icons';
 import { FbaSelectedLineRow } from '@/components/fba/sidebar/FbaSelectedLineRow';
 import { FbaQtyStepper, FbaQtyDisplay } from '@/components/fba/sidebar/FbaQtyStepper';
@@ -25,6 +26,12 @@ export interface FbaTrackingGroupDisplayProps {
   onSetQty?: (item: ShipmentCardItem, qty: number) => void;
   /** When true, rows render with no leading checkbox column (read-only display). */
   hideCheckbox?: boolean;
+  /** When `editable`, the tracking chip strip accepts HTML5 drops from combine-review (`FBA_BOARD_DND_TYPE`). */
+  trackingStripBoardDrop?:
+    | (Pick<HTMLAttributes<HTMLDivElement>, 'onDragEnter' | 'onDragLeave' | 'onDragOver' | 'onDrop'> & {
+        draggingOver?: boolean;
+      })
+    | undefined;
 }
 
 /**
@@ -44,6 +51,7 @@ export function FbaTrackingGroupDisplay({
   onAdjustQty,
   onSetQty,
   hideCheckbox = false,
+  trackingStripBoardDrop,
 }: FbaTrackingGroupDisplayProps) {
   const resolveQty = (item: ShipmentCardItem) => (getQty ? getQty(item) : item.expected_qty);
   const totalQty = items.reduce((s, i) => s + resolveQty(i), 0);
@@ -51,10 +59,23 @@ export function FbaTrackingGroupDisplay({
 
   if (items.length === 0) return null;
 
+  const chipStripDraggingOver =
+    editable && trackingStripBoardDrop?.draggingOver;
+
+  const chipStripDragHandlers =
+    editable && trackingStripBoardDrop
+      ? (({ draggingOver: _stripHighlight, ...handlers }) => handlers)(trackingStripBoardDrop)
+      : undefined;
+
   return (
     <div className="border-b border-gray-100 last:border-b-0">
       {/* Tracking header — same visual as editor (TrackingChip) */}
-      <div className="flex items-center gap-2 border-b border-blue-50 bg-blue-50/30 px-3 py-2">
+      <div
+        className={`flex items-center gap-2 border-b border-blue-50 bg-blue-50/30 px-3 py-2 ${
+          chipStripDraggingOver ? 'ring-2 ring-inset ring-blue-400 bg-blue-100/40' : ''
+        }`}
+        {...(chipStripDragHandlers ?? {})}
+      >
         {tracking ? (
           <TrackingChip value={tracking} display={getLast4(tracking)} />
         ) : (

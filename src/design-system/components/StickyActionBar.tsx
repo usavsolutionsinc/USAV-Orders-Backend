@@ -65,8 +65,13 @@ interface StickyActionBarProps {
    *  is `mx-auto`, so the buttons sit centered — keeping bottom-right FABs
    *  from overlapping the action cluster. */
   maxWidth?: string;
+  /** When true, the primary CTA stretches to the full inner width (e.g. sidebar
+   *  receiving workspace). Hints/leading sit above when present. */
+  primaryFullWidth?: boolean;
   /** Extra class on the outer wrapper (override bg, padding, etc.). */
   className?: string;
+  /** Applied to the row that contains primary/secondary actions. */
+  actionRowClassName?: string;
 }
 
 const TONE_BG: Record<StickyActionTone, string> = {
@@ -85,6 +90,16 @@ const TONE_HOVER_ONLY: Record<StickyActionTone, string> = {
   violet: 'hover:bg-violet-800',
   red: 'hover:bg-rose-700',
   gray: 'hover:bg-gray-800',
+};
+
+/** Solid fill only — split track uses filter hover so chevron + label stay one tone. */
+const TONE_BG_SOLID: Record<StickyActionTone, string> = {
+  blue: 'bg-blue-600',
+  emerald: 'bg-emerald-600',
+  orange: 'bg-orange-600',
+  violet: 'bg-violet-700',
+  red: 'bg-rose-600',
+  gray: 'bg-gray-900',
 };
 
 /**
@@ -108,7 +123,9 @@ export function StickyActionBar({
   error,
   density = 'comfortable',
   maxWidth = 'max-w-3xl',
+  primaryFullWidth = false,
   className,
+  actionRowClassName,
 }: StickyActionBarProps) {
   const isCompact = density === 'compact';
   const tone = primary.tone ?? 'blue';
@@ -121,6 +138,11 @@ export function StickyActionBar({
   const hoverOnly = primary.toneClasses
     ? primary.toneClasses.hover
     : TONE_HOVER_ONLY[tone];
+  const splitTrackBg = primary.disabled
+    ? 'bg-gray-300'
+    : primary.toneClasses
+      ? primary.toneClasses.bg
+      : TONE_BG_SOLID[tone];
 
   const primaryHeight = isCompact ? 'h-9' : 'h-12';
   const primaryPadding = isCompact ? 'px-3' : 'px-6';
@@ -135,10 +157,16 @@ export function StickyActionBar({
   const secondaryText = isCompact ? 'text-caption font-bold' : 'text-sm font-semibold';
   const secondaryRadius = isCompact ? 'rounded-md' : 'rounded-xl';
 
-  const wrapperPadding = isCompact ? 'px-4 py-3' : 'px-4 py-3 sm:px-6';
+  /** Full-bleed bar; horizontal padding matches typical pane bodies (e.g. `LineEditPanel` `px-4 sm:px-6`). */
+  const wrapperPadding = isCompact ? 'py-3' : 'py-3 sm:py-3';
+  const innerGutter = isCompact ? 'px-4' : 'px-4 sm:px-6';
 
   const menu = primary.menu;
   const hasMenu = Array.isArray(menu) && menu.length > 0;
+
+  const hasLeadingContent = (hints?.length ?? 0) > 0 || leading != null;
+  /** One wide CTA only — skips an empty leading flex column eating half the bar. */
+  const soloWideCta = primaryFullWidth && !secondary && !hasLeadingContent;
 
   return (
     <div
@@ -146,7 +174,7 @@ export function StickyActionBar({
         className ?? ''
       }`}
     >
-      <div className={`mx-auto flex w-full ${maxWidth} flex-col gap-2`}>
+      <div className={`mx-auto flex w-full ${maxWidth} flex-col gap-2 ${innerGutter}`}>
         {error ? (
           <div className="flex items-center gap-1.5 rounded-md border border-red-200 bg-red-50 px-2 py-1.5 text-caption font-semibold text-red-700">
             <AlertCircle className="h-3.5 w-3.5" />
@@ -154,28 +182,52 @@ export function StickyActionBar({
           </div>
         ) : null}
 
-        <div className="flex w-full items-center justify-between gap-4">
-          <div className="hidden min-w-0 flex-1 items-center gap-3 text-xs text-gray-500 sm:flex">
-            {leading ?? (
-              <>
-                {hints?.map((h) => (
-                  <span
-                    key={`${h.key}-${h.label}`}
-                    className="inline-flex items-center gap-1.5"
-                  >
-                    <kbd className="rounded-md border border-gray-200 bg-gray-50 px-1.5 py-0.5 font-mono text-micro font-bold text-gray-600">
-                      {h.key}
-                    </kbd>
-                    <span className="font-semibold uppercase tracking-[0.14em]">
-                      {h.label}
+        <div
+          className={`${
+            soloWideCta
+              ? 'flex w-full min-w-0 items-stretch gap-2'
+              : primaryFullWidth
+                ? 'flex w-full flex-col gap-3 sm:flex-row sm:items-stretch sm:justify-between sm:gap-4'
+                : 'flex w-full items-center justify-between gap-4'
+          } ${actionRowClassName ?? ''}`}
+        >
+          {!soloWideCta ? (
+            <div
+              className={
+                primaryFullWidth
+                  ? 'min-w-0 flex flex-wrap items-center gap-3 text-xs text-gray-500 sm:flex-1'
+                  : 'hidden min-w-0 flex-1 items-center gap-3 text-xs text-gray-500 sm:flex'
+              }
+            >
+              {leading ?? (
+                <>
+                  {hints?.map((h) => (
+                    <span
+                      key={`${h.key}-${h.label}`}
+                      className="inline-flex items-center gap-1.5"
+                    >
+                      <kbd className="rounded-md border border-gray-200 bg-gray-50 px-1.5 py-0.5 font-mono text-micro font-bold text-gray-600">
+                        {h.key}
+                      </kbd>
+                      <span className="font-semibold uppercase tracking-[0.14em]">
+                        {h.label}
+                      </span>
                     </span>
-                  </span>
-                ))}
-              </>
-            )}
-          </div>
+                  ))}
+                </>
+              )}
+            </div>
+          ) : null}
 
-          <div className="flex flex-1 items-center justify-end gap-2 sm:flex-initial">
+          <div
+            className={
+              soloWideCta
+                ? 'flex min-w-0 flex-1 flex-row items-stretch gap-2'
+                : primaryFullWidth
+                  ? 'flex w-full min-w-0 flex-col gap-2 sm:w-auto sm:flex-1 sm:flex-row sm:items-stretch sm:justify-end'
+                  : 'flex flex-1 items-center justify-end gap-2 sm:flex-initial'
+            }
+          >
             {secondary ? (
               <button
                 type="button"
@@ -190,9 +242,9 @@ export function StickyActionBar({
 
             {hasMenu ? (
               <div
-                className={`relative z-20 flex flex-1 overflow-visible ${primaryRadius} shadow-sm ${
-                  primary.disabled ? 'bg-gray-300' : baseTone
-                } sm:flex-initial`}
+                className={`relative z-20 flex min-w-0 overflow-visible ${primaryRadius} shadow-sm transition-[filter] duration-100 ${
+                  primary.disabled ? 'cursor-not-allowed' : 'hover:brightness-[0.96] active:brightness-[0.92]'
+                } ${splitTrackBg} ${soloWideCta || primaryFullWidth ? 'w-full min-w-0 flex-1' : 'flex-1 sm:flex-initial'}`}
               >
                 <div className="group/split-menu relative flex shrink-0 self-stretch">
                   <button
@@ -200,9 +252,7 @@ export function StickyActionBar({
                     aria-haspopup="menu"
                     aria-label={primary.menuLabel ?? 'More actions'}
                     title={primary.menuTitle}
-                    className={`flex ${primaryHeight} items-center justify-center ${primaryRadius.replace('rounded', 'rounded-l')} border-r border-white/20 px-3 text-white outline-none transition-colors ${
-                      primary.disabled ? '' : hoverOnly
-                    } focus-visible:z-30 focus-visible:ring-2 focus-visible:ring-white/80 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60`}
+                    className={`flex ${primaryHeight} items-center justify-center ${primaryRadius.replace('rounded', 'rounded-l')} border-r border-white/20 bg-transparent px-3 text-white outline-none transition-[filter] focus-visible:z-30 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-white/70 disabled:cursor-not-allowed disabled:opacity-60`}
                     disabled={primary.disabled}
                   >
                     <ChevronDown className="h-4 w-4 opacity-95" />
@@ -242,9 +292,7 @@ export function StickyActionBar({
                   onClick={primary.onClick}
                   disabled={primary.disabled || primary.isLoading}
                   title={primary.title}
-                  className={`inline-flex ${primaryHeight} min-w-0 flex-1 items-center justify-center gap-2 ${primaryRadius.replace('rounded', 'rounded-r')} ${primaryPadding} ${primaryText} text-white outline-none transition-colors ${
-                    primary.disabled ? '' : hoverOnly
-                  } focus-visible:z-30 focus-visible:ring-2 focus-visible:ring-white/70 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60`}
+                  className={`inline-flex ${primaryHeight} min-w-0 flex-1 items-center justify-center gap-2 ${primaryRadius.replace('rounded', 'rounded-r')} ${primaryPadding} ${primaryText} bg-transparent text-white outline-none transition-[filter] focus-visible:z-30 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-white/70 disabled:cursor-not-allowed disabled:opacity-60`}
                 >
                   {primary.isLoading ? (
                     <Loader2 className="h-4 w-4 animate-spin" />
@@ -260,7 +308,9 @@ export function StickyActionBar({
                 onClick={primary.onClick}
                 disabled={primary.disabled || primary.isLoading}
                 title={primary.title}
-                className={`inline-flex ${primaryHeight} flex-1 items-center justify-center gap-2.5 ${primaryRadius} ${primaryPadding} ${primaryText} text-white shadow-sm transition-all ${primaryMinWidth} ${toneClass}`}
+                className={`inline-flex ${primaryHeight} items-center justify-center gap-2.5 ${primaryRadius} ${primaryPadding} ${primaryText} text-white shadow-sm transition-all ${
+                  primaryFullWidth ? 'w-full min-w-0 flex-1' : `flex-1 ${primaryMinWidth}`
+                } ${toneClass}`}
               >
                 {primary.isLoading ? (
                   <>

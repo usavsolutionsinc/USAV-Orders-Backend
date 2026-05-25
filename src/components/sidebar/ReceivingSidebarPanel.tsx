@@ -50,7 +50,6 @@ import {
 } from '@/components/sidebar/receiving/receiving-sidebar-shared';
 
 
-
 /**
  * Synthesize a ReceivingLineRow for an unmatched carton that has no
  * receiving_lines rows yet (operator just scanned the tracking; no items
@@ -82,7 +81,11 @@ function buildUnmatchedStubRow(
     qa_status: 'PENDING',
     workflow_status: null,
     disposition_code: 'HOLD',
-    condition_grade: 'BRAND_NEW',
+    // Leave empty so the workspace stepper's "Condition" step does NOT
+    // auto-mark itself done — the DB column defaults to 'BRAND_NEW' but
+    // for the synthetic carton stub the operator hasn't actively chosen
+    // a grade yet.
+    condition_grade: '',
     disposition_audit: [],
     needs_test: true,
     assigned_tech_id: null,
@@ -1259,13 +1262,11 @@ export function ReceivingSidebarPanel() {
       {/* Slim sidebar feedback strip — carton identity + qty progress + last
           serial flash. The full editor moved to the right-pane workspace via
           `receiving-workspace-open` dispatch (see useEffect above). */}
-      <div className="px-3 pt-2">
-        <ActiveCartonFeedback
-          poContext={poContext}
-          selectedLine={selectedLine}
-          lastSerialFlash={lastSerialFlash}
-        />
-      </div>
+      <ActiveCartonFeedback
+        poContext={poContext}
+        selectedLine={selectedLine}
+        lastSerialFlash={lastSerialFlash}
+      />
 
       {/* Scrollable body — picker + scan chips. Editor lives in the right
           pane; closing the workspace clears selectedLine via the

@@ -22,15 +22,16 @@ import type { ReceivingLineRow } from '@/components/station/ReceivingLinesTable'
 
 export type ReceivingMode = 'receive' | 'history' | 'pickup' | 'unfound';
 
+// Sidebar order: Receiving → History → Unfound → Local Pickup.
+// `unfound` is a route-switch (navigates to /receiving/unfound and mounts
+// UnfoundQueueTable as the workspace surface); the other three flip the
+// `?mode=` URL param. updateMode in ReceivingSidebarPanel handles the
+// routing branch so the pill UX stays continuous across the section.
 export const RECEIVING_MODE_ITEMS: HorizontalSliderItem[] = [
   { id: 'receive', label: 'Receiving',    icon: ClipboardList },
   { id: 'history', label: 'History',      icon: List },
-  { id: 'pickup',  label: 'Local Pickup', icon: ShoppingCart },
-  // `unfound` is a route-switch, not a URL-param switch — clicking it
-  // navigates to /receiving/unfound (which mounts UnfoundQueueTable as the
-  // workspace surface). updateMode in ReceivingSidebarPanel handles the
-  // routing branch so the pill UX stays continuous across the section.
   { id: 'unfound', label: 'Unfound',      icon: AlertTriangle },
+  { id: 'pickup',  label: 'Local Pickup', icon: ShoppingCart },
 ];
 
 // ── Carton scratch (localStorage) ───────────────────────────────────────────
@@ -150,6 +151,11 @@ export const SOURCE_PLATFORM_OPTS: Array<{ value: string; label: string }> = [
   { value: 'aliexpress', label: 'AliExp' },
   { value: 'walmart',    label: 'Walmart' },
   { value: 'goodwill',   label: 'Goodwill' },
+  // Auto-selected by the Link Repair Service flow on an unmatched carton.
+  // Label reads ECWID-RS (not plain ECWID) because today this pill only
+  // appears when the carton was paired with an Ecwid order whose item
+  // SKU ends in -RS (repair service).
+  { value: 'ecwid',      label: 'ECWID-RS' },
   { value: 'other',      label: 'Other' },
 ];
 
@@ -159,6 +165,7 @@ export const SOURCE_PLATFORM_LABELS: Record<string, string> = {
   aliexpress: 'AliExpress',
   walmart: 'Walmart',
   goodwill: 'Goodwill',
+  ecwid: 'ECWID-RS',
   other: 'Other',
 };
 
@@ -571,7 +578,13 @@ export function receivingVariantFromType(
 // damage / missing-item / wrong-item / vendor-defect claims as Zendesk tickets
 // (via the existing GAS bridge in src/lib/zendesk.ts).
 
-export type ClaimType = 'damage' | 'missing' | 'wrong_item' | 'vendor_defect';
+export type ClaimType =
+  | 'damage'
+  | 'missing'
+  | 'wrong_item'
+  | 'vendor_defect'
+  | 'unfound'
+  | 'repair_service';
 export type ClaimSeverity = 'low' | 'medium' | 'high';
 
 export const CLAIM_TYPE_OPTIONS: ReadonlyArray<{
@@ -582,10 +595,14 @@ export const CLAIM_TYPE_OPTIONS: ReadonlyArray<{
   /** Inactive pill color. */
   inactive: string;
 }> = [
-  { value: 'damage',        label: 'Damage',        active: 'bg-rose-600 text-white',    inactive: 'bg-rose-50 text-rose-700' },
-  { value: 'missing',       label: 'Missing',       active: 'bg-amber-600 text-white',   inactive: 'bg-amber-50 text-amber-700' },
-  { value: 'wrong_item',    label: 'Wrong item',    active: 'bg-violet-600 text-white',  inactive: 'bg-violet-50 text-violet-700' },
-  { value: 'vendor_defect', label: 'Vendor defect', active: 'bg-orange-600 text-white',  inactive: 'bg-orange-50 text-orange-700' },
+  { value: 'damage',         label: 'Damage',         active: 'bg-rose-600 text-white',    inactive: 'bg-rose-50 text-rose-700' },
+  { value: 'missing',        label: 'Missing',        active: 'bg-amber-600 text-white',   inactive: 'bg-amber-50 text-amber-700' },
+  { value: 'wrong_item',     label: 'Wrong item',     active: 'bg-violet-600 text-white',  inactive: 'bg-violet-50 text-violet-700' },
+  { value: 'vendor_defect',  label: 'Vendor defect',  active: 'bg-orange-600 text-white',  inactive: 'bg-orange-50 text-orange-700' },
+  // Auto-selected by ReceivingClaimModal when row.receiving_source === 'unmatched'.
+  { value: 'unfound',        label: 'Unfound',        active: 'bg-yellow-600 text-white',  inactive: 'bg-yellow-50 text-yellow-700' },
+  // Repair routing — entry point for warranty / in-house bench work.
+  { value: 'repair_service', label: 'Repair service', active: 'bg-sky-600 text-white',     inactive: 'bg-sky-50 text-sky-700' },
 ];
 
 export const CLAIM_SEVERITY_OPTIONS: ReadonlyArray<{

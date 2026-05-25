@@ -14,6 +14,7 @@ import { PanelActionBar } from '@/components/shipped/details-panel/PanelActionBa
 import { usePanelActions } from '@/hooks/usePanelActions';
 import { FnskuCatalogInfoPanel, type FnskuCatalogMeta } from './FnskuCatalogInfoPanel';
 import type { FbaBoardItem } from './FbaBoardTable';
+import { SlideOverBackdrop } from '@/components/ui/SlideOverBackdrop';
 
 /* ── Types ─────────────────────────────────────────────────────────── */
 
@@ -387,13 +388,15 @@ export function FbaBoardDetailPanel({
     'Untitled';
 
   return (
-    <motion.div
-      initial={{ x: '100%' }}
-      animate={{ x: 0 }}
-      exit={{ x: '100%' }}
-      transition={{ type: 'spring', damping: 26, stiffness: 360, mass: 0.45 }}
-      className="fixed right-0 top-0 z-[100] flex h-screen w-[400px] flex-col overflow-hidden border-l border-gray-200 bg-white shadow-[-24px_0_48px_rgba(0,0,0,0.06)]"
-    >
+    <>
+      <SlideOverBackdrop onClose={onClose} />
+      <motion.div
+        initial={{ x: '100%' }}
+        animate={{ x: 0 }}
+        exit={{ x: '100%' }}
+        transition={{ type: 'spring', damping: 26, stiffness: 360, mass: 0.45 }}
+        className="fixed right-0 top-0 z-[100] flex h-screen w-[400px] flex-col overflow-hidden border-l border-gray-200 bg-white shadow-[-24px_0_48px_rgba(0,0,0,0.06)]"
+      >
       {/* ── Fixed header (4 rows) — never scrolls ──────────────────── */}
       <div className="shrink-0 overflow-hidden bg-white">
         {/* Row 1: label */}
@@ -528,5 +531,6 @@ export function FbaBoardDetailPanel({
         </div>
       </div>
     </motion.div>
+    </>
   );
 }

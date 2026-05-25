@@ -62,6 +62,10 @@ export const GET = withAuth(async (request: NextRequest, ctx) => {
   if (kind !== 'all') {
     conditions.push(`kind = $${idx++}`);
     params.push(kind);
+  } else {
+    // 'all' should not surface station_exception — those are now triaged at
+    // the affected station, not in the receiving sidebar.
+    conditions.push(`kind <> 'station_exception'`);
   }
 
   if (checked === 'false') {

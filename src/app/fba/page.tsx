@@ -2,16 +2,15 @@
 
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
-import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
-import { Loader2, Search } from '@/components/Icons';
+import { AnimatePresence } from 'framer-motion';
+import { Loader2 } from '@/components/Icons';
 import { OverlaySearchBar } from '@/components/ui/OverlaySearchBar';
 import { FbaQuickAddFnskuModal } from '@/components/fba/FbaQuickAddFnskuModal';
 import { FbaCreatePlanModal } from '@/components/fba/FbaCreatePlanModal';
-import { FbaLoadingState, FbaErrorState } from '@/components/fba/FbaStateShells';
+import { FbaErrorState } from '@/components/fba/FbaStateShells';
 import { FbaBoardTable, type FbaBoardItem } from '@/components/fba/FbaBoardTable';
 import { FbaBoardDetailPanel } from '@/components/fba/FbaBoardDetailPanel';
 import StationFba from '@/components/station/StationFba';
-import { stationThemeColors } from '@/utils/staff-colors';
 import { useStationTheme } from '@/hooks/useStationTheme';
 import { useAuth } from '@/contexts/AuthContext';
 import { useFbaRealtimeInvalidation } from '@/hooks/useFbaRealtimeInvalidation';
@@ -47,11 +46,6 @@ function resolveActiveTab(rawTab: string | null): Tab {
   if (rawTab === 'shipped') return 'shipped';
   return 'combine';
 }
-
-const TAB_LABELS: Record<Tab, string> = {
-  combine: 'Combine',
-  shipped: 'Shipped',
-};
 
 interface CombineData {
   pending: FbaBoardItem[];
@@ -137,13 +131,9 @@ function FbaPageContent() {
     [board.pending, weekRange],
   );
 
-  const activeItems = activeTab === 'combine' ? combineItemsForWeek : [];
-
   // ── FNSKU search ────────────────────────────────────────────────────────
   const [searchQuery, setSearchQuery] = useState('');
-  const [searchOpen, setSearchOpen] = useState(false);
   const searchInputRef = useRef<HTMLInputElement | null>(null);
-  const prefersReducedMotion = useReducedMotion();
 
   const searchVariant = useMemo((): 'blue' | 'orange' | 'emerald' | 'purple' | 'red' | 'gray' => {
     const m: Record<string, 'blue' | 'orange' | 'emerald' | 'purple' | 'red' | 'gray'> = {
@@ -153,26 +143,9 @@ function FbaPageContent() {
     return m[stationTheme] ?? 'blue';
   }, [stationTheme]);
 
-  // Clear search when tab changes
   useEffect(() => {
     setSearchQuery('');
-    setSearchOpen(false);
   }, [activeTab]);
-
-  // Auto-focus when search bar opens
-  useEffect(() => {
-    if (!searchOpen) return;
-    const id = window.setTimeout(() => {
-      searchInputRef.current?.focus();
-      searchInputRef.current?.select();
-    }, 40);
-    return () => window.clearTimeout(id);
-  }, [searchOpen]);
-
-  const closeSearch = useCallback(() => {
-    setSearchOpen(false);
-    setSearchQuery('');
-  }, []);
 
   const filteredPendingItems = useMemo(() => {
     if (!searchQuery.trim()) return combineItemsForWeek;
@@ -198,83 +171,49 @@ function FbaPageContent() {
     [detailItem, filteredPendingItems],
   );
 
-  const showSearch = activeTab === 'combine';
-  const visibleCount = activeTab === 'combine' ? filteredPendingItems.length : activeItems.length;
-
-  const searchTransition = prefersReducedMotion
-    ? { duration: 0.01 }
-    : { duration: 0.24, ease: [0.22, 1, 0.36, 1] as const };
-  const themeColors = stationThemeColors[stationTheme];
-
   return (
     <div className="flex h-full w-full min-w-0 flex-1 flex-col bg-stone-50">
       <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden border-l border-zinc-200/80 bg-white">
         <StationFba embedded>
           <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
-            <div className="relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-white">
+            <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-white">
               {error ? (
                 <FbaErrorState message={error} onRetry={fetchBoard} theme={stationTheme} />
               ) : activeTab === 'shipped' ? (
-                <div className="flex h-full items-center justify-center px-5 text-center">
+                <div className="flex h-full flex-1 items-center justify-center px-5 text-center">
                   <p className="max-w-sm text-caption font-black uppercase tracking-widest text-gray-400">
                     Shipped mode is managed from the sidebar table.
                   </p>
                 </div>
               ) : (
-                <FbaBoardTable
-                  items={filteredPendingItems}
-                  loading={loading && !board.pending.length}
-                  stationTheme={stationTheme}
-                  emptyMessage={searchQuery ? 'No items match this FNSKU' : 'No pending FBA items'}
-                  onDetailOpen={setDetailItem}
-                  weekRange={weekRange}
-                  weekOffset={weekOffset}
-                  onPrevWeek={() => setWeekOffset((o) => o - 1)}
-                  onNextWeek={() => setWeekOffset((o) => Math.min(0, o + 1))}
-                />
-              )}
-
-              {/* Floating FNSKU search — pending combine table */}
-              {showSearch ? (
                 <>
-                  <AnimatePresence initial={false} mode="wait">
-                    {searchOpen ? (
-                      <div key="fba-search-bar" className="absolute bottom-3 left-3 z-30 w-[320px]">
-                        <OverlaySearchBar
-                          value={searchQuery}
-                          onChange={setSearchQuery}
-                          onClear={() => setSearchQuery('')}
-                          onClose={closeSearch}
-                          inputRef={searchInputRef}
-                          placeholder="Filter by FNSKU…"
-                          variant={searchVariant}
-                          className="w-full"
-                        />
-                      </div>
-                    ) : null}
-                  </AnimatePresence>
-
-                  <AnimatePresence initial={false} mode="wait">
-                    {!searchOpen ? (
-                      <motion.button
-                        key="fba-search-trigger"
-                        type="button"
-                        initial={prefersReducedMotion ? { opacity: 1 } : { opacity: 0, x: -8 }}
-                        animate={prefersReducedMotion ? { opacity: 1 } : { opacity: 1, x: 0 }}
-                        exit={prefersReducedMotion ? { opacity: 0 } : { opacity: 0, x: -8 }}
-                        whileHover={prefersReducedMotion ? undefined : { scale: 1.04 }}
-                        whileTap={prefersReducedMotion ? undefined : { scale: 0.96 }}
-                        transition={searchTransition}
-                        onClick={() => setSearchOpen(true)}
-                        className={`absolute bottom-3 left-3 z-30 flex h-12 w-12 items-center justify-center rounded-2xl text-white shadow-sm will-change-transform transition ${themeColors.bg} ${themeColors.hover}`}
-                        aria-label="Search by FNSKU"
-                      >
-                        <Search className="h-4 w-4" />
-                      </motion.button>
-                    ) : null}
-                  </AnimatePresence>
+                  <div className="shrink-0 border-b border-gray-100 bg-white px-3 py-2">
+                    <OverlaySearchBar
+                      value={searchQuery}
+                      onChange={setSearchQuery}
+                      onClear={() => setSearchQuery('')}
+                      onClose={() => setSearchQuery('')}
+                      inputRef={searchInputRef}
+                      placeholder="Filter by FNSKU…"
+                      variant={searchVariant}
+                      className="w-full max-w-xl"
+                    />
+                  </div>
+                  <div className="relative min-h-0 flex-1 overflow-hidden">
+                    <FbaBoardTable
+                      items={filteredPendingItems}
+                      loading={loading && !board.pending.length}
+                      stationTheme={stationTheme}
+                      emptyMessage={searchQuery ? 'No items match this FNSKU' : 'No pending FBA items'}
+                      onDetailOpen={setDetailItem}
+                      weekRange={weekRange}
+                      weekOffset={weekOffset}
+                      onPrevWeek={() => setWeekOffset((o) => o - 1)}
+                      onNextWeek={() => setWeekOffset((o) => Math.min(0, o + 1))}
+                    />
+                  </div>
                 </>
-              ) : null}
+              )}
             </div>
           </div>
           <FbaQuickAddFnskuModal stationTheme={stationTheme} />

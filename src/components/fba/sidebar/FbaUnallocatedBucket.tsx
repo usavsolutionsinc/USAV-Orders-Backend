@@ -1,5 +1,6 @@
 'use client';
 
+import { useMemo } from 'react';
 import { useDroppable } from '@dnd-kit/core';
 import { FbaDraggableLineRow } from '@/components/fba/sidebar/FbaDraggableLineRow';
 import { FbaQtyStepper } from '@/components/fba/sidebar/FbaQtyStepper';
@@ -30,6 +31,34 @@ export function FbaUnallocatedBucket({
 
   const itemMap = new Map(selectedItems.map((i) => [i.item_id, i]));
   const totalUnits = allocations.reduce((sum, a) => sum + a.qty, 0);
+
+  const sidebarBoardSnapshots = useMemo(
+    () =>
+      allocations
+        .map((alloc) => {
+          const item = itemMap.get(alloc.item_id);
+          if (!item) return null;
+          return {
+            item_id: item.item_id,
+            shipment_id: Number(item.shipment_id),
+            expected_qty: Number(item.expected_qty),
+            actual_qty: Number(item.actual_qty),
+            fnsku: String(item.fnsku || ''),
+            qty: alloc.qty,
+          };
+        })
+        .filter(Boolean) as {
+        item_id: number;
+        shipment_id: number;
+        expected_qty: number;
+        actual_qty: number;
+        fnsku: string;
+        qty: number;
+      }[],
+    [allocations, itemMap],
+  );
+
+  const bucketItemIds = useMemo(() => new Set(allocations.map((a) => a.item_id)), [allocations]);
 
   return (
     <div
@@ -65,6 +94,8 @@ export function FbaUnallocatedBucket({
                 key={alloc.item_id}
                 dragId={`draggable-${alloc.item_id}-unallocated`}
                 dragData={{ itemId: alloc.item_id, sourceContainer: 'unallocated' }}
+                sidebarBoardSnapshots={sidebarBoardSnapshots}
+                bucketItemIds={bucketItemIds}
                 displayTitle={item.display_title || 'No title'}
                 fnsku={String(item.fnsku || '').toUpperCase()}
                 stationTheme={stationTheme}

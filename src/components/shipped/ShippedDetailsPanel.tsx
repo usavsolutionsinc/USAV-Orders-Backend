@@ -32,6 +32,7 @@ import {
 } from '@/components/ui/pane-header';
 import { Settings } from '@/components/Icons';
 import { usePanelActions } from '@/hooks/usePanelActions';
+import { SlideOverBackdrop } from '@/components/ui/SlideOverBackdrop';
 
 export type ShippedActiveInput = 'none' | 'out_of_stock' | 'notes';
 
@@ -346,13 +347,15 @@ export function ShippedDetailsPanel({
   };
 
   return (
-    <motion.div
-      initial={{ x: '100%' }}
-      animate={{ x: 0 }}
-      exit={{ x: '100%' }}
-      transition={{ type: 'spring', damping: 25, stiffness: 350, mass: 0.5 }}
-      className="fixed right-0 top-0 z-[100] flex h-screen w-[420px] flex-col overflow-hidden border-l border-gray-200 bg-white shadow-[-20px_0_50px_rgba(0,0,0,0.05)]"
-    >
+    <>
+      <SlideOverBackdrop onClose={onClose} />
+      <motion.div
+        initial={{ x: '100%' }}
+        animate={{ x: 0 }}
+        exit={{ x: '100%' }}
+        transition={{ type: 'spring', damping: 25, stiffness: 350, mass: 0.5 }}
+        className="fixed right-0 top-0 z-[100] flex h-screen w-[420px] flex-col overflow-hidden border-l border-gray-200 bg-white shadow-[-20px_0_50px_rgba(0,0,0,0.05)]"
+      >
       <PaneHeader
         className="shrink-0 border-b-0 bg-white/90 backdrop-blur-xl"
         rowClassName="px-6"
@@ -517,6 +520,7 @@ export function ShippedDetailsPanel({
           />
         ) : null}
       </AnimatePresence>
-    </motion.div>
+      </motion.div>
+    </>
   );
 }

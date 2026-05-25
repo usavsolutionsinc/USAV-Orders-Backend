@@ -19,7 +19,7 @@ import { UnfoundQueueTable } from '@/components/receiving/unfound/UnfoundQueueTa
 
 function UnfoundPageInner() {
   return (
-    <div className="h-full w-full overflow-hidden bg-[linear-gradient(180deg,#f5fbfa_0%,#ffffff_22%)]">
+    <div className="flex h-full min-h-0 w-full flex-col overflow-hidden bg-[linear-gradient(180deg,#f5fbfa_0%,#ffffff_22%)]">
       <RouteShell
         actions={<ReceivingSidebarPanel />}
         history={<UnfoundQueueTable />}

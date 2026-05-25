@@ -4,6 +4,7 @@ import { motion } from 'framer-motion';
 import { ShoppingCart, ExternalLink } from '../Icons';
 import { PanelActionBar } from '@/components/shipped/details-panel/PanelActionBar';
 import { usePanelActions } from '@/hooks/usePanelActions';
+import { SlideOverBackdrop } from '@/components/ui/SlideOverBackdrop';
 import { formatCentsToDollars } from '@/lib/square/client';
 import type { SquareTransactionRecord } from '@/lib/neon/square-transaction-queries';
 
@@ -31,13 +32,15 @@ export function SalesDetailsPanel({
   const lineItems = Array.isArray(sale.line_items) ? sale.line_items : [];
 
   return (
-    <motion.div
-      initial={{ x: '100%' }}
-      animate={{ x: 0 }}
-      exit={{ x: '100%' }}
-      transition={{ type: 'spring', damping: 25, stiffness: 120 }}
-      className="fixed right-0 top-0 h-screen w-[400px] bg-white border-l border-gray-200 shadow-2xl z-[100] flex flex-col overflow-hidden"
-    >
+    <>
+      <SlideOverBackdrop onClose={onClose} />
+      <motion.div
+        initial={{ x: '100%' }}
+        animate={{ x: 0 }}
+        exit={{ x: '100%' }}
+        transition={{ type: 'spring', damping: 25, stiffness: 120 }}
+        className="fixed right-0 top-0 h-screen w-[400px] bg-white border-l border-gray-200 shadow-2xl z-[100] flex flex-col overflow-hidden"
+      >
       {/* Header */}
       <div className="shrink-0 border-b border-gray-100 bg-white p-6">
         <div className="flex items-center gap-3">
@@ -202,6 +205,7 @@ export function SalesDetailsPanel({
           </div>
         </section>
       </div>
-    </motion.div>
+      </motion.div>
+    </>
   );
 }

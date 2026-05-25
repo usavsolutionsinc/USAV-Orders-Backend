@@ -15,6 +15,11 @@ export type ReceivingLabelPayload = {
   scanValue: string;
   platform: string;
   zendeskTicket?: string;
+  /**
+   * Carton tracking number — corner display falls back to its last-4 when
+   * no PO is set (scanValue would otherwise be the internal `RCV-{id}` handle).
+   */
+  trackingNumber?: string | null;
   /** Support / carton notes printed in the label center — any free text. */
   notes: string;
   conditionCode: string;

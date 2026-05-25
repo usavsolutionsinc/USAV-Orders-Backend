@@ -1,7 +1,40 @@
 'use client';
 
+import { useEffect, useState } from 'react';
 import { Check } from '@/components/Icons';
 import type { ReceivingLineRow } from '@/components/station/ReceivingLinesTable';
+
+/**
+ * Per-line localStorage key set by ConditionPills callers when the operator
+ * actively picks a condition. Without this signal we can't tell apart the
+ * receiving_lines.condition_grade NOT NULL default ('BRAND_NEW') from a real
+ * operator selection — every row comes back from the DB with a non-empty
+ * grade, so a naive "non-empty ⇒ done" check marks Condition done on
+ * cartons the operator hasn't even looked at.
+ */
+const CONDITION_SET_KEY = (lineId: number) =>
+  `receiving-condition-set:${lineId}`;
+
+export function hasConditionBeenSet(lineId: number | null | undefined): boolean {
+  if (typeof window === 'undefined' || lineId == null) return false;
+  try {
+    return !!window.localStorage.getItem(CONDITION_SET_KEY(lineId));
+  } catch {
+    return false;
+  }
+}
+
+export function markConditionSet(lineId: number | null | undefined): void {
+  if (typeof window === 'undefined' || lineId == null) return;
+  try {
+    window.localStorage.setItem(CONDITION_SET_KEY(lineId), String(Date.now()));
+  } catch {
+    /* private-mode / quota — non-fatal */
+  }
+  window.dispatchEvent(
+    new CustomEvent('receiving-condition-set', { detail: { line_id: lineId } }),
+  );
+}
 
 interface Props {
   row: ReceivingLineRow;
@@ -33,12 +66,25 @@ const STEPS: ReadonlyArray<{ key: StepKey; label: string }> = [
  * steps render as done, later steps render as pending.
  */
 export function ReceivingProgressStepper({ row, photoCount, serialCount, isComplete, labelPrinted = false }: Props) {
-  // Derive each step's done-ness from row + counts. The first not-done step
-  // becomes the "active" prompt; all subsequent steps render as pending.
-  const isCondDone = (() => {
-    const g = String(row.condition_grade || '').trim().toUpperCase();
-    return g !== '' && g !== 'PENDING';
-  })();
+  // Track whether the operator has actively picked a condition for THIS
+  // line. We can't rely on row.condition_grade alone because the column
+  // defaults to 'BRAND_NEW' for every newly inserted line, which used to
+  // make Condition auto-mark itself done before the operator even saw
+  // the carton. Falls back to workflow_status for back-compat.
+  const [conditionSet, setConditionSet] = useState(() =>
+    hasConditionBeenSet(row.id),
+  );
+  useEffect(() => {
+    setConditionSet(hasConditionBeenSet(row.id));
+    const handler = (e: Event) => {
+      const detail = (e as CustomEvent<{ line_id: number }>).detail;
+      if (!detail || detail.line_id !== row.id) return;
+      setConditionSet(true);
+    };
+    window.addEventListener('receiving-condition-set', handler);
+    return () => window.removeEventListener('receiving-condition-set', handler);
+  }, [row.id]);
+  const isCondDone = conditionSet || isComplete;
   const expected = row.quantity_expected ?? 0;
   const isSerialDone = expected > 0 ? serialCount >= expected : serialCount > 0;
   const isPhotosDone = photoCount > 0;

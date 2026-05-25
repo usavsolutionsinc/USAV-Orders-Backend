@@ -24,6 +24,7 @@ import {
   PaneHeaderActionBar,
   type PaneHeaderActionBarAction,
 } from '@/components/ui/pane-header';
+import { SlideOverBackdrop } from '@/components/ui/SlideOverBackdrop';
 
 type ReceivingTab = 'overview' | 'lines' | 'details';
 
@@ -177,14 +178,21 @@ export function ReceivingDetailsStack({ log, onClose, onUpdated, onDeleted }: Re
     }
   };
 
+  const backdropClose = () => {
+    if (form.isSaving) return;
+    void form.handleClose();
+  };
+
   return (
-    <motion.div
-      initial={{ x: '100%' }}
-      animate={{ x: 0 }}
-      exit={{ x: '100%' }}
-      transition={{ type: 'spring', damping: 25, stiffness: 350, mass: 0.5 }}
-      className="fixed right-0 top-0 z-[100] h-screen w-[440px] overflow-y-auto border-l border-gray-200 bg-white shadow-[-20px_0_50px_rgba(0,0,0,0.05)]"
-    >
+    <>
+      <SlideOverBackdrop onClose={backdropClose} />
+      <motion.div
+        initial={{ x: '100%' }}
+        animate={{ x: 0 }}
+        exit={{ x: '100%' }}
+        transition={{ type: 'spring', damping: 25, stiffness: 350, mass: 0.5 }}
+        className="fixed right-0 top-0 z-[100] h-screen w-[440px] overflow-y-auto border-l border-gray-200 bg-white shadow-[-20px_0_50px_rgba(0,0,0,0.05)]"
+      >
       {/* Header — eyebrow + value identity, primary "Edit PO" action in the
           right slot, and segmented tabs in the dual-sticky belowSlot. Matches
           the 2026 ops convention (Vercel/Front/Stripe pattern). */}
@@ -453,5 +461,6 @@ export function ReceivingDetailsStack({ log, onClose, onUpdated, onDeleted }: Re
         </div>
       </div>
     </motion.div>
+    </>
   );
 }

@@ -1,6 +1,12 @@
 import pool from '@/lib/db';
 
-export type ClaimType = 'damage' | 'missing' | 'wrong_item' | 'vendor_defect';
+export type ClaimType =
+  | 'damage'
+  | 'missing'
+  | 'wrong_item'
+  | 'vendor_defect'
+  | 'unfound'
+  | 'repair_service';
 export type ClaimSeverity = 'low' | 'medium' | 'high';
 
 export const CLAIM_TYPE_LABEL: Record<ClaimType, string> = {
@@ -8,6 +14,8 @@ export const CLAIM_TYPE_LABEL: Record<ClaimType, string> = {
   missing: 'Missing item',
   wrong_item: 'Wrong item',
   vendor_defect: 'Vendor defect',
+  unfound: 'Unfound — no PO match',
+  repair_service: 'Repair service',
 };
 
 export const CLAIM_SEVERITY_LABEL: Record<ClaimSeverity, string> = {
@@ -96,11 +104,22 @@ export async function buildReceivingClaimTemplate(
     .map((p) => String(p.url || ''))
     .filter((u) => !!u.trim());
 
-  const poRef = carton.zoho_purchaseorder_number || carton.zoho_purchaseorder_id || `#${receivingId}`;
+  // Unfound flow: collapse subject + body to a single short token ("Unfound
+  // PO") and stop pretending the receiving_id IS a PO# — operators were
+  // getting confused by "PO #4232" where 4232 was just the internal row id.
+  const hasPo = !!(carton.zoho_purchaseorder_number || carton.zoho_purchaseorder_id);
+  const poRef = hasPo
+    ? (carton.zoho_purchaseorder_number || carton.zoho_purchaseorder_id) as string
+    : 'Unfound PO';
   const trackingRef = carton.tracking_number || 'n/a';
-  const platformTag = (carton.source_platform || '').trim().toUpperCase() || 'USAV';
+  // Dropped the 'USAV' fallback — the platform tag only leads the subject
+  // when an actual marketplace platform is set.
+  const platformTag = (carton.source_platform || '').trim().toUpperCase();
+  const subjectPrefix = platformTag ? `${platformTag} ` : '';
 
-  const subject = `${platformTag} Receiving Claim — ${CLAIM_TYPE_LABEL[claimType]} — PO ${poRef}`;
+  const subject = hasPo
+    ? `${subjectPrefix}Receiving Claim — ${CLAIM_TYPE_LABEL[claimType]} — PO ${poRef}`
+    : `${subjectPrefix}Receiving Claim — ${poRef}`;
 
   const trimmedReason = String(reason ?? '').trim();
   const descriptionLines: string[] = [

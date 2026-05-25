@@ -10,6 +10,8 @@ import { usePanelActions } from '@/hooks/usePanelActions';
 import { formatPhoneNumber } from '@/utils/phone';
 import { printRepairLabel } from '@/lib/print/printRepairLabel';
 import { RepairPickupFlow } from '@/components/repair/RepairPickupFlow';
+import { useActivityInboxOptional } from '@/contexts/ActivityInboxContext';
+import { SlideOverBackdrop } from '@/components/ui/SlideOverBackdrop';
 
 interface RepairDetailsPanelProps {
   repair: RSRecord;
@@ -43,6 +45,7 @@ export function RepairDetailsPanel({
   disableMoveUp = false,
   disableMoveDown = false,
 }: RepairDetailsPanelProps) {
+  const inbox = useActivityInboxOptional();
   const [notes, setNotes] = useState(repair.notes || '');
   const [ticketNumber, setTicketNumber] = useState(repair.ticket_number || '');
   const [isSaving, setIsSaving] = useState(false);
@@ -143,6 +146,9 @@ export function RepairDetailsPanel({
   };
 
   const handleStatusChange = async (newStatus: string) => {
+    const previousStatus = typeof repair.status === 'string' ? repair.status : '';
+    if (previousStatus === newStatus) return;
+
     setUpdatingStatus(true);
     try {
       const res = await fetch('/api/repair-service', {
@@ -151,6 +157,11 @@ export function RepairDetailsPanel({
         body: JSON.stringify({ id: repair.id, status: newStatus }),
       });
       if (!res.ok) throw new Error('Failed to update status');
+      inbox?.pushRepairStatusChange({
+        repairId: repair.id,
+        previousStatus,
+        nextStatus: newStatus,
+      });
       onUpdate();
     } catch (error) {
       console.error('Error updating status:', error);
@@ -160,13 +171,15 @@ export function RepairDetailsPanel({
   };
 
   return (
-    <motion.div
-      initial={{ x: '100%' }}
-      animate={{ x: 0 }}
-      exit={{ x: '100%' }}
-      transition={{ type: 'spring', damping: 25, stiffness: 120 }}
-      className="fixed right-0 top-0 h-screen w-[400px] bg-white border-l border-gray-200 shadow-2xl z-[100] flex flex-col overflow-hidden"
-    >
+    <>
+      <SlideOverBackdrop onClose={onClose} />
+      <motion.div
+        initial={{ x: '100%' }}
+        animate={{ x: 0 }}
+        exit={{ x: '100%' }}
+        transition={{ type: 'spring', damping: 25, stiffness: 120 }}
+        className="fixed right-0 top-0 h-screen w-[400px] bg-white border-l border-gray-200 shadow-2xl z-[100] flex flex-col overflow-hidden"
+      >
       {/* Header */}
       <div className="shrink-0 border-b border-gray-100 bg-white p-6">
         <div className="flex items-center gap-3">
@@ -430,6 +443,7 @@ export function RepairDetailsPanel({
             document.body,
           )
         : null}
-    </motion.div>
+      </motion.div>
+    </>
   );
 }

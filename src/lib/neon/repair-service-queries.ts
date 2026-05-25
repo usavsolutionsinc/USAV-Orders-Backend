@@ -30,7 +30,6 @@ export interface RSRecord {
   source_tracking_number?: string | null;
   source_sku?: string | null;
   intake_channel?: string | null;
-  incoming_status?: string | null;
   delivered_at?: string | null;
   received_at?: string | null;
   intake_confirmed_at?: string | null;
@@ -56,6 +55,20 @@ export const REPAIR_STATUS_OPTIONS = [
 export type RepairStatus = typeof REPAIR_STATUS_OPTIONS[number];
 
 export type RepairTab = 'incoming' | 'active' | 'done';
+
+/** Statuses shown on the Done tab — also used by station “next repair” exclusions. */
+export const REPAIR_DONE_TAB_STATUSES = ['Done', 'Picked Up', 'Shipped'] as const;
+
+/** Walk-in repairs list — “Incoming” tab (inbound shipments not yet in active workflow). */
+export const REPAIR_INCOMING_TAB_STATUS = 'Incoming Shipment' as const;
+
+function sqlStatusInTerminal(): string {
+  return `(${REPAIR_DONE_TAB_STATUSES.map((s) => `'${s}'`).join(', ')})`;
+}
+
+function sqlIncomingTabStatus(): string {
+  return `'${REPAIR_INCOMING_TAB_STATUS.replace(/'/g, "''")}'`;
+}
 
 function mapRepairRow(row: any): RSRecord {
   const statusHistory = Array.isArray(row.status_history)
@@ -89,7 +102,6 @@ function mapRepairRow(row: any): RSRecord {
     source_tracking_number: row.source_tracking_number ?? null,
     source_sku: row.source_sku ?? null,
     intake_channel: row.intake_channel ?? null,
-    incoming_status: row.incoming_status ?? null,
     delivered_at: normalizePSTTimestamp(row.delivered_at) || null,
     received_at: normalizePSTTimestamp(row.received_at) || null,
     intake_confirmed_at: normalizePSTTimestamp(row.intake_confirmed_at) || null,
@@ -119,7 +131,6 @@ const REPAIR_SELECT_COLUMNS = `
   rs.source_tracking_number,
   rs.source_sku,
   rs.intake_channel,
-  rs.incoming_status,
   rs.delivered_at,
   rs.received_at,
   rs.intake_confirmed_at,
@@ -136,14 +147,16 @@ const REPAIR_FROM = `
 `;
 
 function buildRepairTabWhere(tab: RepairTab) {
+  const terminalList = sqlStatusInTerminal();
+  const incomingSt = sqlIncomingTabStatus();
   if (tab === 'incoming') {
-    return `WHERE COALESCE(rs.incoming_status, '') = 'incoming'`;
+    return `WHERE rs.status = ${incomingSt}`;
   }
   if (tab === 'done') {
-    return `WHERE rs.status IN ('Done', 'Picked Up', 'Shipped')`;
+    return `WHERE rs.status IN ${terminalList}`;
   }
-  return `WHERE COALESCE(rs.incoming_status, '') != 'incoming'
-          AND rs.status NOT IN ('Done', 'Picked Up', 'Shipped')`;
+  return `WHERE rs.status != ${incomingSt}
+          AND rs.status NOT IN ${terminalList}`;
 }
 
 function buildRepairSearchWhere(idx: number, tab?: RepairTab) {
@@ -160,11 +173,13 @@ function buildRepairSearchWhere(idx: number, tab?: RepairTab) {
       OR COALESCE(c.email, '') ILIKE $${idx}
     )`;
 
+  const terminalList = sqlStatusInTerminal();
+  const incomingSt = sqlIncomingTabStatus();
   if (!tab) return `WHERE ${base}`;
-  if (tab === 'incoming') return `WHERE COALESCE(rs.incoming_status, '') = 'incoming' AND ${base}`;
-  if (tab === 'done') return `WHERE rs.status IN ('Done', 'Picked Up', 'Shipped') AND ${base}`;
-  return `WHERE COALESCE(rs.incoming_status, '') != 'incoming'
-          AND rs.status NOT IN ('Done', 'Picked Up', 'Shipped')
+  if (tab === 'incoming') return `WHERE rs.status = ${incomingSt} AND ${base}`;
+  if (tab === 'done') return `WHERE rs.status IN ${terminalList} AND ${base}`;
+  return `WHERE rs.status != ${incomingSt}
+          AND rs.status NOT IN ${terminalList}
           AND ${base}`;
 }
 
@@ -288,7 +303,6 @@ export async function updateRepairField(id: number, field: string, value: any): 
       'source_tracking_number',
       'source_sku',
       'intake_channel',
-      'incoming_status',
       'delivered_at',
       'received_at',
       'intake_confirmed_at',
@@ -323,7 +337,6 @@ export interface CreateRepairParams {
   sourceTrackingNumber?: string | null;
   sourceSku?: string | null;
   intakeChannel?: string | null;
-  incomingStatus?: string | null;
   deliveredAt?: string | null;
   receivedAt?: string | null;
   intakeConfirmedAt?: string | null;
@@ -334,7 +347,6 @@ export interface CreateRepairParams {
 export async function createRepair(params: CreateRepairParams): Promise<RSRecord> {
   const createdAt = normalizePSTTimestamp(params.createdAt, { fallbackToNow: true })!;
   const intakeChannel = params.intakeChannel ?? 'pickup';
-  const incomingStatus = params.incomingStatus ?? 'pending_repair';
   const receivedAt = params.receivedAt ?? (intakeChannel === 'pickup' ? createdAt : null);
   const intakeConfirmedAt = params.intakeConfirmedAt ?? (intakeChannel === 'pickup' ? createdAt : null);
 
@@ -342,10 +354,10 @@ export async function createRepair(params: CreateRepairParams): Promise<RSRecord
     `INSERT INTO repair_service
        (
          created_at, updated_at, ticket_number, contact_info, product_title, price, issue, serial_number, notes, status,
-         source_system, source_order_id, source_tracking_number, source_sku, intake_channel, incoming_status,
+         source_system, source_order_id, source_tracking_number, source_sku, intake_channel,
          delivered_at, received_at, intake_confirmed_at, received_by_staff_id, customer_id
        )
-     VALUES ($1, $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20)
+     VALUES ($1, $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19)
      RETURNING id, ticket_number`,
     [
       createdAt,
@@ -362,7 +374,6 @@ export async function createRepair(params: CreateRepairParams): Promise<RSRecord
       params.sourceTrackingNumber ?? null,
       params.sourceSku ?? null,
       intakeChannel,
-      incomingStatus,
       params.deliveredAt ?? null,
       receivedAt,
       intakeConfirmedAt,
@@ -478,9 +489,12 @@ export async function upsertEcwidIncomingRepair(params: {
              source_tracking_number = COALESCE(NULLIF(source_tracking_number, ''), $5),
              source_sku = COALESCE(NULLIF(source_sku, ''), $6),
              intake_channel = COALESCE(NULLIF(intake_channel, ''), 'shipment'),
-             incoming_status = CASE
-               WHEN COALESCE(incoming_status, '') IN ('', 'pending_repair') THEN 'incoming'
-               ELSE incoming_status
+             status = CASE
+               WHEN received_at IS NULL
+                    AND COALESCE(status, '') NOT IN ('Done', 'Picked Up', 'Shipped')
+                    AND COALESCE(status, '') IN ('Pending Repair', ${sqlIncomingTabStatus()})
+                 THEN ${sqlIncomingTabStatus()}
+               ELSE status
              END,
              delivered_at = COALESCE(delivered_at, $7),
              updated_at = NOW()
@@ -509,13 +523,12 @@ export async function upsertEcwidIncomingRepair(params: {
       issue: 'Ecwid inbound repair shipment',
       serialNumber: '',
       notes,
-      status: 'Incoming Shipment',
+      status: REPAIR_INCOMING_TAB_STATUS,
       sourceSystem: 'ecwid',
       sourceOrderId: params.orderId ?? null,
       sourceTrackingNumber: params.trackingNumber ?? null,
       sourceSku: params.sku ?? null,
       intakeChannel: 'shipment',
-      incomingStatus: 'incoming',
       deliveredAt: params.orderDate ?? null,
       receivedAt: null,
       intakeConfirmedAt: null,

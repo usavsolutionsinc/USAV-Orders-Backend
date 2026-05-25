@@ -15,6 +15,9 @@ const SOURCE_PLATFORMS = new Set([
   'walmart',
   'other',
   'goodwill',
+  // 'ecwid' — auto-applied by the Link Repair Service flow when an
+  // unmatched carton is paired with a recent Ecwid -RS order.
+  'ecwid',
 ]);
 
 /**
@@ -60,6 +63,8 @@ export async function GET(
          r.disposition_code,
          r.condition_grade,
          r.zoho_purchase_receive_id,
+         r.zoho_purchaseorder_id,
+         r.zoho_purchaseorder_number,
          r.zoho_warehouse_id,
          r.support_notes,
          to_char(r.received_at::timestamp, 'YYYY-MM-DD HH24:MI:SS')  AS received_at,
@@ -357,8 +362,10 @@ export async function PATCH(
       values.push(next);
     }
 
-    // PO# linkage — writing either flips `source` to 'zoho_po' so the soft-join
-    // in /api/receiving-lines GET can find this carton by PO#.
+    // PO# linkage — writing either field with a non-null value flips
+    // `source` to 'zoho_po' so the carton drops off the Unfound queue.
+    // The repair-service link flow only writes _number (Ecwid order #),
+    // so the auto-upgrade must also fire for that branch.
     let poWrittenNonNull = false;
     if (Object.prototype.hasOwnProperty.call(body, 'zoho_purchaseorder_id')) {
       const raw = body.zoho_purchaseorder_id;
@@ -372,6 +379,7 @@ export async function PATCH(
       const next = raw == null || raw === '' ? null : String(raw).trim();
       updates.push(`zoho_purchaseorder_number = $${idx++}`);
       values.push(next);
+      if (next) poWrittenNonNull = true;
     }
     if (poWrittenNonNull) {
       // Only upgrade 'unmatched' → 'zoho_po'. Never downgrade.

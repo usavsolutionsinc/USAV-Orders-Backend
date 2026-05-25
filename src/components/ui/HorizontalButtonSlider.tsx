@@ -151,9 +151,9 @@ export function HorizontalButtonSlider({
             if (variant === 'nav') {
               const Icon = item.icon;
               const isDisabled = !!item.disabled;
-              // Label is always visible — pill width stays constant so the
-              // click target doesn't jump around as the user hovers.
-              const labelClass = 'ml-1.5 max-w-[160px]';
+              // Only indent the label when an icon is present — otherwise text
+              // would sit off-center (empty space reserved for a missing icon).
+              const labelClass = Icon ? 'ml-1.5 max-w-[160px]' : 'max-w-[160px]';
               const stateClass = isDisabled
                 ? 'cursor-not-allowed bg-gray-50 text-gray-400 ring-gray-200'
                 : isActive

@@ -4,6 +4,7 @@ import { normalizePSTTimestamp } from '@/utils/date';
 import { parsePositiveInt } from '@/utils/number';
 import { isTransientDbError, queryWithRetry } from '@/lib/db-retry';
 import { withAuth } from '@/lib/auth/withAuth';
+import { REPAIR_DONE_TAB_STATUSES } from '@/lib/neon/repair-service-queries';
 
 export interface RepairQueueItem {
   kind: 'REPAIR';
@@ -27,7 +28,8 @@ export interface RepairQueueItem {
   sku: string | null;
 }
 
-const CLOSED_STATUSES = ['Done', 'Shipped', 'Picked Up'];
+/** Keep in sync with walk-in Repairs “Done” tab (`REPAIR_DONE_TAB_STATUSES`). */
+const CLOSED_STATUSES = [...REPAIR_DONE_TAB_STATUSES];
 const OUT_OF_STOCK_SELECT = `wa.out_of_stock   AS "outOfStock"`;
 const REPAIR_OUTCOME_SELECT = `wa.repair_outcome AS "repairOutcome"`;
 

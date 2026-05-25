@@ -18,6 +18,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { toast } from '@/lib/toast';
 import { ExternalLink } from '@/components/Icons';
+import { TrackingChip, getLast4 } from '@/components/ui/CopyChip';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -27,11 +28,15 @@ export type QueueKind =
   | 'unmatched_receiving'
   | 'station_exception';
 
+/**
+ * Station exceptions ('station_exception') were removed from the sidebar
+ * filter — operators triage those directly from the affected stations.
+ * The type union keeps it for back-compat with deep-linked URLs.
+ */
 export const ENABLED_KINDS: QueueKind[] = [
   'all',
   'unmatched_receiving',
   'email_po',
-  'station_exception',
 ];
 
 export const KIND_LABELS: Record<QueueKind, string> = {
@@ -343,8 +348,17 @@ function QueueTableRow({
           {row.product_title || '—'}
         </button>
         {row.context && (
-          <div className="mt-0.5 truncate text-micro font-normal text-gray-500">
-            {row.context}
+          <div className="mt-0.5 flex items-center gap-1.5 text-micro font-normal text-gray-500">
+            {row.kind === 'unmatched_receiving' ? (
+              // Tracking # for unmatched cartons — canonical blue
+              // TrackingChip (last-4 display + click-to-copy + hover full).
+              <TrackingChip
+                value={row.context}
+                display={getLast4(row.context)}
+              />
+            ) : (
+              <span className="truncate">{row.context}</span>
+            )}
           </div>
         )}
       </td>

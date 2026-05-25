@@ -17,6 +17,11 @@ export interface ReceivingLabelPayload {
   platform: string;
   /** Sidebar Zendesk field — only an all‑digits ticket (# optional) replaces PO last‑4; URLs/other text uses PO shorthand. */
   zendeskTicket?: string;
+  /**
+   * Carton's carrier tracking number. Used as the corner-display fallback
+   * when there's no PO (scanValue is an internal `RCV-{id}` handle).
+   */
+  trackingNumber?: string | null;
   /** Support / line notes shown in the center of the label (any free text). */
   notes: string;
   conditionCode: string;
@@ -50,11 +55,23 @@ function zendeskTicketNumberForLabel(raw: string | null | undefined): string | n
   return digitsOnly ? digitsOnly[1] : null;
 }
 
-/** Bottom‑right carton label: `#ticket` only for numeric Zendesk id; otherwise PO last‑4. */
+/**
+ * Bottom‑right carton label preference order:
+ *   1. `#ticket` for a numeric Zendesk id
+ *   2. Last‑4 of the PO# / scanValue (matched cartons)
+ *   3. Last‑4 of the carton tracking number (unmatched cartons — scanValue
+ *      is `RCV-{id}` which is meaningless to the operator)
+ */
 export function receivingLabelPoCornerDisplay(payload: ReceivingLabelPayload): string {
   const fromZk = zendeskTicketNumberForLabel(payload.zendeskTicket);
   if (fromZk) return `#${fromZk}`;
-  return getLast4(payload.scanValue);
+  const sv = String(payload.scanValue || '').trim();
+  const isInternalRcv = /^RCV-\d+$/i.test(sv);
+  if (isInternalRcv) {
+    const tracking = String(payload.trackingNumber || '').trim();
+    if (tracking) return getLast4(tracking);
+  }
+  return getLast4(sv);
 }
 
 function conditionShort(code: string | null | undefined): string {

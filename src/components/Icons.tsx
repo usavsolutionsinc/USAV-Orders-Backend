@@ -439,3 +439,30 @@ export const Sparkles = ({ className = "w-6 h-6" }: { className?: string }) => (
         <path d="m19 17 1 2.5 2.5.5-2.5 1-1 2.5-1-2.5-2.5-1 2.5-1 1-2.5Z" />
     </svg>
 );
+
+/** Hash — order IDs / numeric references */
+export const Hash = ({ className = "w-6 h-6" }: { className?: string }) => (
+    <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+        <path d="M4 9h16M4 15h16M10 3L8 21M16 3l-2 18" />
+    </svg>
+);
+
+/** Truck — carrier / tracking */
+export const Truck = ({ className = "w-6 h-6" }: { className?: string }) => (
+    <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+        <path d="M14 18V6a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2v11a2 2 0 0 0 2 2h2" />
+        <path d="M15 18h2" />
+        <path d="M19 18h2a2 2 0 0 0 2-2v-3.18a2 2 0 0 0-.66-1.48l-2.64-2.64a2 2 0 0 0-1.48-.66H14" />
+        <circle cx="7" cy="18" r="2" />
+        <circle cx="17" cy="18" r="2" />
+    </svg>
+);
+
+/** CPU — serial / hardware-style identifiers */
+export const Cpu = ({ className = "w-6 h-6" }: { className?: string }) => (
+    <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+        <rect width="16" height="16" x="4" y="4" rx="2" />
+        <rect width="8" height="8" x="8" y="8" rx="1" />
+        <path d="M9 2v2M15 2v2M9 20v2M15 20v2M20 9h2M20 14h2M2 9h2M2 14h2" />
+    </svg>
+);

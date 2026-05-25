@@ -15,7 +15,6 @@ import { ReceivingDetailsStack, type ReceivingDetailsLog } from './station/Recei
 import { RepairDetailsPanel } from './repair/RepairDetailsPanel';
 import { ActiveOrderWorkspace } from './tech/ActiveOrderWorkspace';
 import { OverlaySearchBar } from '@/components/ui/OverlaySearchBar';
-import { Search } from '@/components/Icons';
 import { resolveOrderSearchView } from '@/lib/order-search-resolver';
 import type { RSRecord } from '@/lib/neon/repair-service-queries';
 import type { ActiveStationOrder, ResolvedProductManual } from '@/hooks/useStationTestingController';
@@ -68,7 +67,6 @@ export default function TechDashboard({ techId }: TechDashboardProps) {
 
     const rawView = searchParams.get('view');
     const currentSearch = String(searchParams.get('search') || '');
-    const searchOpen = searchParams.get('searchOpen') === '1';
     const rightViewMode = rawView === 'pending'
         ? 'pending'
         : rawView === 'shipped'
@@ -191,21 +189,20 @@ export default function TechDashboard({ techId }: TechDashboardProps) {
         return () => window.removeEventListener('tech-upnext-preview', handler);
     }, []);
 
-    const showPendingSearch = (rightViewMode === 'pending' || rightViewMode === 'shipped') && (searchOpen || Boolean(currentSearch));
+    const showPendingShippedSearchBar = rightViewMode === 'pending' || rightViewMode === 'shipped';
 
-    const updatePendingSearch = (value: string, keepOpen = true, resolvedView?: 'pending' | 'shipped') => {
+    const updatePendingSearch = (value: string, resolvedView?: 'pending' | 'shipped') => {
         const nextParams = new URLSearchParams(searchParams.toString());
         nextParams.set('staffId', techId);
         nextParams.set('view', resolvedView ?? 'pending');
         if (value.trim()) nextParams.set('search', value.trim());
         else nextParams.delete('search');
-        if (keepOpen) nextParams.set('searchOpen', '1');
-        else nextParams.delete('searchOpen');
+        nextParams.delete('searchOpen');
         const nextSearch = nextParams.toString();
         router.replace(nextSearch ? `/tech?${nextSearch}` : '/tech');
     };
 
-    const applySearchWithResolvedView = async (value: string, keepOpen: boolean) => {
+    const applySearchWithResolvedView = async (value: string) => {
         const trimmed = value.trim();
         if (!trimmed) {
             clearPendingSearch();
@@ -218,13 +215,12 @@ export default function TechDashboard({ techId }: TechDashboardProps) {
             nextParams.set('staffId', techId);
             nextParams.set('view', view);
             nextParams.set('search', trimmed);
-            if (keepOpen) nextParams.set('searchOpen', '1');
-            else nextParams.delete('searchOpen');
+            nextParams.delete('searchOpen');
             if (result.firstOrderId) nextParams.set('openOrderId', String(result.firstOrderId));
             else nextParams.delete('openOrderId');
             router.replace(`/tech?${nextParams.toString()}`);
         } catch {
-            updatePendingSearch(trimmed, keepOpen, 'pending');
+            updatePendingSearch(trimmed, 'pending');
         }
     };
 
@@ -242,34 +238,25 @@ export default function TechDashboard({ techId }: TechDashboardProps) {
         router.replace(nextSearch ? `/tech?${nextSearch}` : '/tech');
     };
 
-    const openPendingSearch = () => {
-        const nextParams = new URLSearchParams(searchParams.toString());
-        nextParams.set('staffId', techId);
-        nextParams.set('view', 'pending');
-        nextParams.set('searchOpen', '1');
-        const nextSearch = nextParams.toString();
-        router.replace(nextSearch ? `/tech?${nextSearch}` : '/tech');
-    };
-
     useEffect(() => {
-        if (!showPendingSearch) return;
+        if (!showPendingShippedSearchBar) return;
         const timeoutId = window.setTimeout(() => {
             const normalizedCurrent = currentSearch.trim();
             const normalizedNext = searchInput.trim();
             if (normalizedCurrent === normalizedNext) return;
-            applySearchWithResolvedView(searchInput, true);
+            void applySearchWithResolvedView(searchInput);
         }, 180);
         return () => window.clearTimeout(timeoutId);
-    }, [searchInput, currentSearch, showPendingSearch]); // eslint-disable-line react-hooks/exhaustive-deps
+    }, [searchInput, currentSearch, showPendingShippedSearchBar]); // eslint-disable-line react-hooks/exhaustive-deps
 
     useEffect(() => {
-        if (!showPendingSearch) return;
+        if (!showPendingShippedSearchBar) return;
         const timeoutId = window.setTimeout(() => {
             searchInputRef.current?.focus();
             searchInputRef.current?.select();
         }, 40);
         return () => window.clearTimeout(timeoutId);
-    }, [showPendingSearch]);
+    }, [showPendingShippedSearchBar]);
 
     const handleLogUpdated = () => {
         setSelectedLog(null);
@@ -285,13 +272,25 @@ export default function TechDashboard({ techId }: TechDashboardProps) {
         queryClient.invalidateQueries({ queryKey: ['receiving-pending-unboxing'] });
     };
 
-    const searchOverlayTransition = prefersReducedMotion
-        ? { duration: 0.01 }
-        : { duration: 0.24, ease: [0.22, 1, 0.36, 1] as const };
 
     return (
-        <div className="flex h-full w-full relative">
-            <div className="relative flex-1 overflow-hidden">
+        <div className="relative flex h-full w-full flex-col">
+            <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden">
+                {showPendingShippedSearchBar ? (
+                    <div className="shrink-0 border-b border-gray-100 bg-white px-3 py-2">
+                        <OverlaySearchBar
+                            value={searchInput}
+                            onChange={setSearchInput}
+                            inputRef={searchInputRef}
+                            placeholder="Search pending orders"
+                            variant="blue"
+                            className="w-full max-w-xl"
+                            onClear={clearPendingSearch}
+                            onClose={clearPendingSearch}
+                        />
+                    </div>
+                ) : null}
+                <div className="relative min-h-0 flex-1 overflow-hidden">
                 {rightViewMode === 'manual' ? (
                     <div className="h-full w-full bg-gray-50 p-4">
                         <ProductManualViewer manuals={lastManuals} className="h-full" />
@@ -352,42 +351,7 @@ export default function TechDashboard({ techId }: TechDashboardProps) {
                     </AnimatePresence>
                 )}
 
-                <AnimatePresence initial={false} mode="wait">
-                    {showPendingSearch && (
-                        <div key="pending-search-bar" className="absolute bottom-3 left-3 z-30 w-[320px]">
-                            <OverlaySearchBar
-                                value={searchInput}
-                                onChange={setSearchInput}
-                                inputRef={searchInputRef}
-                                placeholder="Search pending orders"
-                                variant="blue"
-                                className="w-full"
-                                onClear={clearPendingSearch}
-                                onClose={clearPendingSearch}
-                            />
-                        </div>
-                    )}
-                </AnimatePresence>
-
-                <AnimatePresence initial={false} mode="wait">
-                    {!showPendingSearch && rightViewMode === 'history' && (
-                        <motion.button
-                            key="pending-search-trigger"
-                            type="button"
-                            initial={prefersReducedMotion ? { opacity: 1 } : { opacity: 0, x: -8 }}
-                            animate={prefersReducedMotion ? { opacity: 1 } : { opacity: 1, x: 0 }}
-                            exit={prefersReducedMotion ? { opacity: 0 } : { opacity: 0, x: -8 }}
-                            whileHover={prefersReducedMotion ? undefined : { scale: 1.04 }}
-                            whileTap={prefersReducedMotion ? undefined : { scale: 0.96 }}
-                            transition={searchOverlayTransition}
-                            onClick={openPendingSearch}
-                            className="absolute bottom-3 left-3 z-30 flex h-12 w-12 items-center justify-center rounded-2xl bg-blue-600 text-white shadow-sm shadow-blue-600/25 will-change-transform transition hover:bg-blue-500"
-                            aria-label="Open pending order search"
-                        >
-                            <Search className="h-4 w-4" />
-                        </motion.button>
-                    )}
-                </AnimatePresence>
+                </div>
             </div>
 
             <StationDetailsHandler viewMode={rightViewMode === 'update-manuals' || rightViewMode === 'receiving' ? 'history' : rightViewMode} />

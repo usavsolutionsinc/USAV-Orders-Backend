@@ -20,6 +20,8 @@ interface DashboardKPICardProps {
   activeBarIndex?: number;
   /** Caption that floats above the active bar (default = value) */
   barPeakLabel?: string;
+  /** When set, the entire card is clickable — opens the details modal */
+  onOpen?: () => void;
 }
 
 const TONE = {
@@ -32,10 +34,6 @@ const TONE = {
 
 const DAYS = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
 
-/**
- * KPI card — large value with light decimal, week-of-bars + dot-footer (Lora Piterson "Progress" pattern).
- * The active bar carries a floating peak label; other bars are inert track lines.
- */
 export const DashboardKPICard: React.FC<DashboardKPICardProps> = ({
   title,
   value,
@@ -48,55 +46,67 @@ export const DashboardKPICard: React.FC<DashboardKPICardProps> = ({
   progress = 65,
   activeBarIndex = 5,
   barPeakLabel,
+  onOpen,
 }) => {
   const tone = TONE[colorTone];
+  const clickable = Boolean(onOpen);
 
-  // Split the value so the part after the first non-digit gets a lighter weight (Image 2/3 vibe)
   const valueMatch = value.match(/^([\d,]+)(.*)$/);
   const valueHead = valueMatch?.[1] ?? value;
   const valueTail = valueMatch?.[2] ?? '';
-
-  // 7 bar heights — deterministic shape, active bar is tallest
   const heights = [38, 62, 44, 78, 56, 88, 48];
 
   return (
     <motion.div
       whileHover={{ y: -3 }}
       transition={{ type: 'spring', stiffness: 300, damping: 22 }}
-      className="bg-white rounded-[28px] shadow-[0_4px_24px_rgba(161,140,90,0.06)] p-5 sm:p-6 flex flex-col h-full relative"
+      onClick={clickable ? onOpen : undefined}
+      onKeyDown={
+        clickable
+          ? (e) => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                onOpen?.();
+              }
+            }
+          : undefined
+      }
+      role={clickable ? 'button' : undefined}
+      tabIndex={clickable ? 0 : undefined}
+      aria-haspopup={clickable ? 'dialog' : undefined}
+      aria-label={clickable ? `Show details for ${title}` : undefined}
+      className={`relative flex h-full flex-col rounded-[28px] bg-white p-5 shadow-[0_4px_24px_rgba(161,140,90,0.06)] sm:p-6 ${
+        clickable
+          ? 'cursor-pointer focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500'
+          : ''
+      }`}
     >
-      {/* Header */}
-      <div className="flex items-start justify-between mb-3">
-        <span className="text-[12px] font-semibold text-[#6B6356] tracking-tight">
-          {title}
-        </span>
-        <div className={`w-8 h-8 rounded-xl flex items-center justify-center ${tone.soft} ${tone.text}`}>
-          <Icon className="w-4 h-4" />
+      <div className="mb-3 flex items-start justify-between gap-2">
+        <span className="min-w-0 text-[12px] font-semibold tracking-tight text-[#6B6356]">{title}</span>
+        <div className="flex shrink-0 items-start gap-1">
+          <div className={`flex h-8 w-8 items-center justify-center rounded-xl ${tone.soft} ${tone.text}`}>
+            <Icon className="h-4 w-4" />
+          </div>
         </div>
       </div>
 
-      {/* Big number with lighter tail */}
-      <div className="flex items-baseline gap-1 mb-1">
-        <span className="text-[34px] sm:text-[40px] font-extrabold text-[#2D2A26] tracking-tight leading-none tabular-nums">
+      <div className="mb-1 flex items-baseline gap-1">
+        <span className="text-[34px] font-extrabold leading-none tracking-tight text-[#2D2A26] tabular-nums sm:text-[40px]">
           {valueHead}
         </span>
         {valueTail && (
-          <span className="text-[20px] sm:text-[22px] font-medium text-[#C4BAA8] tracking-tight leading-none tabular-nums">
+          <span className="text-[20px] font-medium leading-none tracking-tight text-[#C4BAA8] tabular-nums sm:text-[22px]">
             {valueTail}
           </span>
         )}
       </div>
-      <p className="text-[11px] font-medium text-[#A89F91] mb-4 leading-tight">
-        {subtext}
-      </p>
+      <p className="mb-4 text-[11px] font-medium leading-tight text-[#A89F91]">{subtext}</p>
 
-      {/* Chart area */}
       {chartType === 'bar' && (
         <div className="mt-auto">
-          <div className="relative flex items-end justify-between gap-1 h-[72px] px-1">
-            {/* Floating peak label above the active bar */}
+          <div className="relative flex h-[72px] items-end justify-between gap-1 px-1">
             <div
-              className="absolute -top-1 text-[10px] font-bold text-[#2D2A26] bg-white border border-[#F0EDE8] px-2 py-0.5 rounded-full shadow-[0_2px_6px_rgba(0,0,0,0.04)] tabular-nums"
+              className="absolute -top-1 rounded-full border border-[#F0EDE8] bg-white px-2 py-0.5 text-[10px] font-bold tracking-tighter text-[#2D2A26] shadow-[0_2px_6px_rgba(0,0,0,0.04)] tabular-nums"
               style={{
                 left: `calc(${(activeBarIndex / 6) * 100}% - 18px)`,
               }}
@@ -119,14 +129,15 @@ export const DashboardKPICard: React.FC<DashboardKPICardProps> = ({
             })}
           </div>
 
-          {/* Dot footer + day labels (Image 1 Progress card) */}
-          <div className="flex items-center justify-between gap-1 mt-2 px-1">
+          <div className="mt-2 flex items-center justify-between gap-1 px-1">
             {DAYS.map((d, i) => {
               const active = i === activeBarIndex;
               return (
-                <div key={i} className="flex flex-col items-center gap-1 w-1.5">
-                  <span className={`w-1 h-1 rounded-full ${active ? tone.dot : 'bg-[#E8E4DD]'}`} />
-                  <span className={`text-[9px] font-bold tracking-wide ${active ? 'text-[#2D2A26]' : 'text-[#C4BAA8]'}`}>
+                <div key={i} className="flex w-1.5 flex-col items-center gap-1">
+                  <span className={`h-1 w-1 rounded-full ${active ? tone.dot : 'bg-[#E8E4DD]'}`} />
+                  <span
+                    className={`text-[9px] font-bold tracking-wide ${active ? 'text-[#2D2A26]' : 'text-[#C4BAA8]'}`}
+                  >
                     {d}
                   </span>
                 </div>
@@ -137,7 +148,7 @@ export const DashboardKPICard: React.FC<DashboardKPICardProps> = ({
       )}
 
       {chartType === 'donut' && (
-        <div className="relative h-[88px] mt-auto flex items-center justify-center">
+        <div className="relative mt-auto flex h-[88px] items-center justify-center">
           <svg className="absolute inset-0 m-auto" width="88" height="88" viewBox="0 0 88 88">
             <circle cx="44" cy="44" r="36" stroke="#F0EDE8" strokeWidth="6" fill="none" />
             <motion.circle
@@ -161,25 +172,22 @@ export const DashboardKPICard: React.FC<DashboardKPICardProps> = ({
             />
           </svg>
           <div className="relative text-center">
-            <div className="text-[20px] font-extrabold text-[#2D2A26] leading-none tabular-nums">{progress}%</div>
-            <div className="text-[8px] font-black text-[#A89F91] uppercase tracking-[0.14em] mt-1">
+            <div className="text-[20px] font-extrabold leading-none tracking-tighter text-[#2D2A26] tabular-nums">{progress}%</div>
+            <div className="mt-1 text-[8px] font-black uppercase tracking-[0.14em] text-[#A89F91]">
               Capacity
             </div>
           </div>
         </div>
       )}
 
-      {/* Trend pill — bottom-right floating */}
-      <div className="mt-3 pt-3 border-t border-[#F5F3EF] flex items-center justify-between">
-        <span className="text-[10px] font-bold text-[#A89F91] uppercase tracking-wider">
-          7-day
-        </span>
+      <div className="mt-3 flex items-center justify-between border-t border-[#F5F3EF] pt-3">
+        <span className="text-[10px] font-bold uppercase tracking-wider text-[#A89F91]">7-day</span>
         <div
-          className={`flex items-center gap-1 text-[11px] font-bold px-2 py-0.5 rounded-full ${
+          className={`flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-bold ${
             isPositive ? 'bg-emerald-50 text-emerald-600' : 'bg-rose-50 text-rose-600'
           }`}
         >
-          <TrendingUp className={`w-3 h-3 ${!isPositive ? 'rotate-180' : ''}`} />
+          <TrendingUp className={`h-3 w-3 ${!isPositive ? 'rotate-180' : ''}`} />
           <span className="tabular-nums">{trend}</span>
         </div>
       </div>

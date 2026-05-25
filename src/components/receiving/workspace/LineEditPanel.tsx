@@ -56,8 +56,10 @@ import { ReceivingProductLabelPreview } from './ReceivingProductLabelPreview';
 import { ReceiveResponsePanel } from './ReceiveResponsePanel';
 import { ReceivingAuditModal } from './ReceivingAuditModal';
 import { ConditionPills } from './ConditionPills';
+import { markConditionSet } from './ReceivingProgressStepper';
 import { SerialCard } from './SerialCard';
 import { PoLinesAccordion } from './PoLinesAccordion';
+import { UnmatchedItemsSection } from './UnmatchedItemsSection';
 import { ReceivingClaimModal } from './ReceivingClaimModal';
 import { WorkspaceCard } from '@/design-system/components';
 import { StickyActionBar } from '@/design-system/components/StickyActionBar';
@@ -252,10 +254,16 @@ export function LineEditPanel({
   const [responseExpanded, setResponseExpanded] = useState(false);
   const serialRef = useRef<HTMLInputElement>(null);
   const listingRef = useRef<HTMLInputElement>(null);
-  /** Full editors for tracking rows — collapsed when carton already has numbers (expand to edit). */
-  const [trackingEditorsOpen, setTrackingEditorsOpen] = useState(true);
+  /** Tracking inline editor — collapsed by default; pencil expands. Chip alone owns the visible display. */
+  const [trackingEditorsOpen, setTrackingEditorsOpen] = useState(false);
   /** Full listing SearchBar — collapsed by default; pencil expands to paste/edit. */
   const [listingEditorOpen, setListingEditorOpen] = useState(false);
+  /** PO# inline editor — collapsed by default; pencil expands. */
+  const [poEditorOpen, setPoEditorOpen] = useState(false);
+  const [poNumberEdit, setPoNumberEdit] = useState(
+    (row.zoho_purchaseorder_number || row.zoho_purchaseorder_id || '').trim(),
+  );
+  const poInputRef = useRef<HTMLInputElement>(null);
   const [auditOpen, setAuditOpen] = useState(false);
   const [copyingAll, setCopyingAll] = useState(false);
 
@@ -295,7 +303,73 @@ export function LineEditPanel({
     setDisp(!row.disposition_code || row.disposition_code === 'HOLD' ? 'ACCEPT' : row.disposition_code);
     setCond(row.condition_grade || 'USED_A');
     setTrackingEdit(row.tracking_number || '');
-  }, [row.id, row.qa_status, row.disposition_code, row.condition_grade, row.tracking_number, row.receiving_type]);
+    setPoNumberEdit((row.zoho_purchaseorder_number || row.zoho_purchaseorder_id || '').trim());
+  }, [row.id, row.qa_status, row.disposition_code, row.condition_grade, row.tracking_number, row.receiving_type, row.zoho_purchaseorder_number, row.zoho_purchaseorder_id]);
+
+  /**
+   * Save the operator-typed PO# to the carton AND every existing
+   * receiving_line for it. /api/receiving/[id] auto-flips
+   * `receiving.source` 'unmatched' → 'zoho_po' on a non-null PO# write,
+   * so the carton drops off the Unfound queue. Fanning out to lines
+   * means mark-received-po + line lookups + the PO accordion all see
+   * the link without waiting for a refresh round-trip.
+   */
+  const persistPoNumber = useCallback(
+    async (nextRaw: string) => {
+      if (row.receiving_id == null) return;
+      const next = String(nextRaw || '').trim();
+      try {
+        const res = await fetch(`/api/receiving/${row.receiving_id}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ zoho_purchaseorder_number: next || null }),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok || !data?.success) {
+          toast.error(data?.error ?? `PO# save failed (${res.status})`);
+          return;
+        }
+        try {
+          const linesRes = await fetch(
+            `/api/receiving-lines?receiving_id=${row.receiving_id}`,
+          );
+          const linesData = await linesRes.json();
+          const rows = Array.isArray(linesData?.receiving_lines)
+            ? linesData.receiving_lines
+            : [];
+          await Promise.all(
+            rows.map((r: { id?: number }) =>
+              r?.id != null
+                ? fetch('/api/receiving-lines', {
+                    method: 'PATCH',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                      id: r.id,
+                      zoho_purchaseorder_number: next || null,
+                    }),
+                  }).catch(() => null)
+                : null,
+            ),
+          );
+        } catch {
+          /* line fan-out is best-effort; the carton write is source of truth */
+        }
+        toast.success(next ? `PO# saved (${next})` : 'PO# cleared');
+        window.dispatchEvent(new CustomEvent('usav-refresh-data'));
+        window.dispatchEvent(
+          new CustomEvent('receiving-package-updated', {
+            detail: {
+              receiving_id: row.receiving_id,
+              zoho_purchaseorder_number: next || null,
+            },
+          }),
+        );
+      } catch (err) {
+        toast.error(err instanceof Error ? err.message : 'PO# save failed');
+      }
+    },
+    [row.receiving_id],
+  );
 
   // When the carton changes, flush scratch for the previous receiving_id
   // so localStorage is not lost before loading the next carton’s scratch.
@@ -322,7 +396,7 @@ export function LineEditPanel({
       setNotes('');
       setExtraTrackings([]);
       setListingEditorOpen(false);
-      setTrackingEditorsOpen(!(row.tracking_number || '').trim());
+      setTrackingEditorsOpen(false);
       return;
     }
     const d = readReceivingLineDetailsScratch(row.receiving_id);
@@ -330,9 +404,9 @@ export function LineEditPanel({
     setListingLink(d.listing);
     const extras = d.extra_trackings.length > 0 ? d.extra_trackings : [];
     setExtraTrackings(extras);
-    const primaryTr = (row.tracking_number || '').trim();
-    const hasExtras = extras.some((t) => t.trim().length > 0);
-    setTrackingEditorsOpen(!primaryTr && !hasExtras);
+    // Tracking editor stays collapsed across row changes — chip + pencil
+    // pattern means the operator opens it explicitly when they need to edit.
+    setTrackingEditorsOpen(false);
   }, [row.receiving_id, row.tracking_number]);
 
   /** Listing chip/editor: always start minimized when the selected line or carton changes. */
@@ -860,15 +934,29 @@ export function LineEditPanel({
   const poNumber = (row.zoho_purchaseorder_number || row.zoho_purchaseorder_id || '').trim();
   const scanValue = poNumber || (row.receiving_id != null ? `RCV-${row.receiving_id}` : '');
   const trackingHint = (row.tracking_number || trackingEdit || '').trim();
+  // Platform precedence on the printed label:
+  //   1. Operator-picked platform pill
+  //   2. 'Local pickup' for PICKUP receiving type
+  //   3. 'Unfound' for unmatched cartons (no PO, no platform) — beats the
+  //      old generic 'Unknown' so the top-left of the label tells the
+  //      receiver the package never matched a PO.
+  //   4. 'Unknown' as a final fallback.
   const labelPlatform = sourcePlatform
     ? (SOURCE_PLATFORM_LABELS[sourcePlatform] ?? sourcePlatform)
-    : String(receivingType || 'PO').toUpperCase() === 'PICKUP' ? 'Local pickup' : 'Unknown';
+    : String(receivingType || 'PO').toUpperCase() === 'PICKUP'
+      ? 'Local pickup'
+      : row.receiving_source === 'unmatched'
+        ? 'Unfound'
+        : 'Unknown';
   const labelDate = new Date().toLocaleDateString('en-US', { month: 'numeric', day: 'numeric', year: '2-digit' });
   const labelPayload: ReceivingLabelPayload = {
     receivingId: row.receiving_id ?? null,
     scanValue,
     platform: labelPlatform,
     zendeskTicket: zendesk.trim() || undefined,
+    // Passed so the corner falls back to tracking last-4 when scanValue
+    // is an internal RCV-{id} (unmatched cartons with no PO).
+    trackingNumber: trackingHint || null,
     notes: notes.trim(),
     conditionCode: cond,
     date: labelDate,
@@ -1273,16 +1361,37 @@ export function LineEditPanel({
                     <Pencil className="h-3 w-3" />
                   </button>
                 </div>
-                {/* PO# copy chip — sits between the listing and the tracking
-                    so the operator can grab the PO number with one tap. */}
-                {(row.zoho_purchaseorder_number || row.zoho_purchaseorder_id) ? (
-                  <div className="flex shrink-0 items-center">
-                    <OrderIdChip
-                      value={String(row.zoho_purchaseorder_number || row.zoho_purchaseorder_id || '')}
-                      display={getLast4(String(row.zoho_purchaseorder_number || row.zoho_purchaseorder_id || ''))}
-                    />
-                  </div>
-                ) : null}
+                {/* PO# copy chip — always rendered (even when no PO is
+                    linked yet) so the edit pencil is reachable on
+                    unmatched cartons. Chip shows last-4 when present, a
+                    placeholder dash otherwise. */}
+                {(() => {
+                  const poVal = (row.zoho_purchaseorder_number || row.zoho_purchaseorder_id || '').trim();
+                  return (
+                    <div className="flex shrink-0 items-center gap-1">
+                      <OrderIdChip
+                        value={poVal}
+                        display={poVal ? getLast4(poVal) : '----'}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setPoEditorOpen((v) => {
+                            const next = !v;
+                            if (next) queueMicrotask(() => poInputRef.current?.focus());
+                            return next;
+                          });
+                        }}
+                        aria-expanded={poEditorOpen}
+                        aria-label={poEditorOpen ? 'Collapse PO# editor' : 'Edit PO#'}
+                        title={poEditorOpen ? 'Done editing PO#' : 'Edit PO#'}
+                        className={RECEIVING_CHIP_EDIT_BTN_CLASS}
+                      >
+                        <Pencil className="h-3 w-3" />
+                      </button>
+                    </div>
+                  );
+                })()}
                 <div className="flex shrink-0 items-center gap-1">
                   <div className="flex items-center gap-1">
                     <div className="min-w-0 max-w-full [&_.relative]:max-w-full">
@@ -1312,8 +1421,34 @@ export function LineEditPanel({
                 </div>
               </div>
 
-              {(trackingEditorsOpen || listingEditorOpen) ? (
+              {(trackingEditorsOpen || listingEditorOpen || poEditorOpen) ? (
                 <div className="mt-2 space-y-2.5 border-t border-slate-100 pt-2">
+                  {poEditorOpen ? (
+                    <div>
+                      <span className={`${FLOW_SECTION_LABEL} mb-1 leading-none`}>PO number</span>
+                      <div className="group">
+                        <SearchBar
+                          value={poNumberEdit}
+                          onChange={setPoNumberEdit}
+                          onSearch={(v) => {
+                            const trimmed = v.trim();
+                            const current = (row.zoho_purchaseorder_number || row.zoho_purchaseorder_id || '').trim();
+                            if (trimmed !== current) {
+                              void persistPoNumber(trimmed);
+                            }
+                          }}
+                          inputRef={poInputRef}
+                          placeholder="PO-1234"
+                          variant="blue"
+                          size="compact"
+                          hideUnderline
+                          pasteOnlyTrailing
+                          className="w-full"
+                        />
+                        <div className={RECEIVING_SCAN_RULE_LINE_CLASS} aria-hidden />
+                      </div>
+                    </div>
+                  ) : null}
                   {trackingEditorsOpen ? (
                     <>
                       <div className="flex items-center justify-between gap-2">
@@ -1432,9 +1567,35 @@ export function LineEditPanel({
                 <div
                   role="radiogroup"
                   aria-label="Source platform"
-                  className="flex flex-wrap items-center gap-1.5"
+                  className="flex flex-nowrap items-center gap-1.5 overflow-x-auto pb-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
                 >
-                  {(['ebay', 'goodwill', 'amazon', 'aliexpress', 'walmart', 'other'] as const)
+                  {/* Synthesized 'Unfound' pill — only for unmatched cartons,
+                      auto-active until the operator picks a real platform.
+                      Front-end only: never written to source_platform. */}
+                  {row.receiving_source === 'unmatched' ? (() => {
+                    const isActive = !sourcePlatform;
+                    return (
+                      <button
+                        key="unfound"
+                        type="button"
+                        role="radio"
+                        aria-checked={isActive}
+                        onClick={() => {
+                          setSourcePlatform('');
+                          void savePlatform('');
+                        }}
+                        title="No Zoho PO matched this carton"
+                        className={`inline-flex h-8 items-center whitespace-nowrap rounded-full border px-3 text-micro font-black uppercase tracking-wide transition-colors ${
+                          isActive
+                            ? 'border-amber-600 bg-amber-500 text-white'
+                            : 'border-amber-200 bg-amber-50 text-amber-700 hover:border-amber-300 hover:bg-amber-100'
+                        }`}
+                      >
+                        Unfound
+                      </button>
+                    );
+                  })() : null}
+                  {(['ebay', 'goodwill', 'amazon', 'aliexpress', 'walmart', 'ecwid', 'other'] as const)
                     .map((id) => SOURCE_PLATFORM_OPTS.find((o) => o.value === id))
                     .filter((o): o is (typeof SOURCE_PLATFORM_OPTS)[number] => !!o)
                     .map((opt) => {
@@ -1503,20 +1664,35 @@ export function LineEditPanel({
               row. The standalone ContextCard and Condition section that used
               to live outside this card are gone — both signals now live
               inside the active PO item. */}
+          {/* Unmatched cartons swap in UnmatchedItemsSection here (Ecwid
+              add-item + Link Repair Service). Matched cartons keep the
+              canonical PoLinesAccordion driven by Zoho data. Same slot, so
+              the rest of the workspace (chips, serial, photos, sticky bar)
+              is identical across the two flows. */}
           {row.receiving_id != null ? (
-            <PoLinesAccordion
-              receivingId={row.receiving_id}
-              activeLineId={row.id}
-              activeRowSlot={
-                <ConditionPills
-                  value={cond}
-                  onChange={(next) => {
-                    setCond(next);
-                    void patch({ condition_grade: next });
-                  }}
-                />
-              }
-            />
+            row.receiving_source === 'unmatched' ? (
+              <UnmatchedItemsSection
+                receivingId={row.receiving_id}
+                sourcePlatformHint={sourcePlatform || undefined}
+                receivingTypeHint={receivingType}
+                listingUrlHint={listingLink || undefined}
+              />
+            ) : (
+              <PoLinesAccordion
+                receivingId={row.receiving_id}
+                activeLineId={row.id}
+                activeRowSlot={
+                  <ConditionPills
+                    value={cond}
+                    onChange={(next) => {
+                      setCond(next);
+                      markConditionSet(row.id);
+                      void patch({ condition_grade: next });
+                    }}
+                  />
+                }
+              />
+            )
           ) : null}
 
           {/* Serial scan + notes — co-located so the operator can leave a
@@ -1698,6 +1874,7 @@ export function LineEditPanel({
           : null;
         return (
           <StickyActionBar
+            primaryFullWidth
             primary={{
               label: printReceivePrimaryLabel,
               onClick: () => void handlePrintAndReceive(),
