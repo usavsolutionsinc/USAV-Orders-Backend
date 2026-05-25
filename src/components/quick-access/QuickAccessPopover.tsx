@@ -24,6 +24,7 @@ function initials(name: string): string {
 interface QuickAccessPopoverProps {
   onClose: () => void;
   onOpenHistoryPopover: () => void;
+  onOpenInboxPopover: () => void;
 }
 
 /**
@@ -33,7 +34,7 @@ interface QuickAccessPopoverProps {
  * The signed-in staff card now lives at the very bottom, just above the
  * "Manage in Settings" footer.
  */
-export function QuickAccessPopover({ onClose, onOpenHistoryPopover }: QuickAccessPopoverProps) {
+export function QuickAccessPopover({ onClose, onOpenHistoryPopover, onOpenInboxPopover }: QuickAccessPopoverProps) {
   const { settings } = useQuickAccess();
   const router = useRouter();
   const { user, signOut } = useAuth();
@@ -129,6 +130,7 @@ export function QuickAccessPopover({ onClose, onOpenHistoryPopover }: QuickAcces
           actions={settings.actions}
           onAction={onClose}
           onOpenHistoryPopover={onOpenHistoryPopover}
+          onOpenInboxPopover={onOpenInboxPopover}
         />
         <PinnedSection onNavigate={onClose} />
         {settings.showRecent && <RecentSection onNavigate={onClose} />}

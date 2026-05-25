@@ -9,6 +9,7 @@ import { useQuickAccess } from '@/lib/quick-access/use-quick-access';
 import { useQuickAccessHotkey } from '@/lib/quick-access/use-hotkey';
 import { QuickAccessPopover } from '@/components/quick-access/QuickAccessPopover';
 import { PhoneHistoryPopover } from '@/components/quick-access/PhoneHistoryPopover';
+import { ActivityInboxPopover } from '@/components/quick-access/ActivityInboxPopover';
 import { useAuth } from '@/contexts/AuthContext';
 import { cn } from '@/utils/_cn';
 
@@ -29,6 +30,7 @@ export function QuickAccessButton({ className, buttonClassName, placement = 'dow
 
   const [menuOpen, setMenuOpen] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
+  const [inboxOpen, setInboxOpen] = useState(false);
   const wrapperRef = useRef<HTMLDivElement>(null);
 
   const authStaffId = authUser?.staffId ?? null;
@@ -54,25 +56,30 @@ export function QuickAccessButton({ className, buttonClassName, placement = 'dow
   useEffect(() => {
     setMenuOpen(false);
     setHistoryOpen(false);
+    setInboxOpen(false);
   }, [pathname]);
 
   useEffect(() => {
-    if (!menuOpen && !historyOpen) return;
+    if (!menuOpen && !historyOpen && !inboxOpen) return;
     const handler = (e: MouseEvent) => {
       if (!wrapperRef.current) return;
       if (!wrapperRef.current.contains(e.target as Node)) {
         setMenuOpen(false);
         setHistoryOpen(false);
+        setInboxOpen(false);
       }
     };
     document.addEventListener('mousedown', handler);
     return () => document.removeEventListener('mousedown', handler);
-  }, [menuOpen, historyOpen]);
+  }, [menuOpen, historyOpen, inboxOpen]);
 
   const toggleMenu = useCallback(() => {
     setMenuOpen((prev) => {
       const next = !prev;
-      if (next) setHistoryOpen(false);
+      if (next) {
+        setHistoryOpen(false);
+        setInboxOpen(false);
+      }
       return next;
     });
   }, []);
@@ -81,7 +88,14 @@ export function QuickAccessButton({ className, buttonClassName, placement = 'dow
 
   const handleOpenHistory = useCallback(() => {
     setMenuOpen(false);
+    setInboxOpen(false);
     setHistoryOpen(true);
+  }, []);
+
+  const handleOpenInbox = useCallback(() => {
+    setMenuOpen(false);
+    setHistoryOpen(false);
+    setInboxOpen(true);
   }, []);
 
   if (!settings.enabled) return null;
@@ -98,6 +112,7 @@ export function QuickAccessButton({ className, buttonClassName, placement = 'dow
           <QuickAccessPopover
             onClose={() => setMenuOpen(false)}
             onOpenHistoryPopover={handleOpenHistory}
+            onOpenInboxPopover={handleOpenInbox}
           />
         </div>
       )}
@@ -105,6 +120,12 @@ export function QuickAccessButton({ className, buttonClassName, placement = 'dow
       {historyOpen && (
         <div className={popoverPosition}>
           <PhoneHistoryPopover onClose={() => setHistoryOpen(false)} />
+        </div>
+      )}
+
+      {inboxOpen && (
+        <div className={popoverPosition}>
+          <ActivityInboxPopover onClose={() => setInboxOpen(false)} />
         </div>
       )}
 

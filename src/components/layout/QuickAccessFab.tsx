@@ -5,9 +5,10 @@ import { useAuth } from '@/contexts/AuthContext';
 import { QuickAccessButton } from './QuickAccessButton';
 
 /**
- * Bottom-right Quick Access FAB wrapper. Reuses QuickAccessButton logic
- * but fixed at the screen corner with FAB-specific sizing/styling if needed.
- * 
+ * Bottom-right Quick Access FAB wrapper. Single button — the activity
+ * inbox lives inside the QuickAccess popover as an "Actions" row that
+ * opens its own secondary popover (mirrors the Phone history pattern).
+ *
  * On mobile, this is often hidden in favor of header integration or
  * contextual triggers.
  */
@@ -15,8 +16,6 @@ export function QuickAccessFab() {
   const { settings } = useQuickAccess();
   const { user: authUser } = useAuth();
 
-  // Hidden when user explicitly disabled it in settings, or when nobody is
-  // signed in.
   if (!settings.enabled) return null;
   if (!authUser) return null;
 

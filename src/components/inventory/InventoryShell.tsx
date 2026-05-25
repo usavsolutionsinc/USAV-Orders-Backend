@@ -6,14 +6,27 @@ import { ByBinView } from './ByBinView';
 import { ByUnitView } from './ByUnitView';
 import { ByFilterResultList } from './ByFilterResultList';
 import { useInventoryUrlState } from './useInventoryUrlState';
+import { InventoryDetailsOverlay } from './panels/InventoryDetailsOverlay';
 import { PageHeader } from '@/components/ui/pane-header';
 
 export function InventoryShell() {
-    const { state, clearAll } = useInventoryUrlState();
+    const { state, sidebar, clearAll } = useInventoryUrlState();
 
     const hasNonFilterTarget =
         state.view === 'by-sku' || state.view === 'by-bin' || state.view === 'by-unit';
     const hasAnyTarget = hasNonFilterTarget || state.view === 'by-filter';
+    const hasOpenDetail = Boolean(sidebar.open);
+
+    // When the sidebar has a detail selection, the detail view becomes the
+    // main pane's content — no header chrome, no max-width container, so the
+    // panel's own header takes over the top of the right pane.
+    if (hasOpenDetail) {
+        return (
+            <div className="flex h-full min-h-0 flex-col bg-white">
+                <InventoryDetailsOverlay />
+            </div>
+        );
+    }
 
     return (
         <div className="flex h-full min-h-0 flex-col bg-gray-50">

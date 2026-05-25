@@ -2,6 +2,15 @@
 
 import { useCallback, useMemo } from 'react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
+import {
+    inventoryTabFromPathname,
+    normalizeBuckets,
+    normalizeInventoryTab,
+    normalizeSearchField,
+    type AnyInventoryBucket,
+    type AnyInventorySearchField,
+    type InventoryTab,
+} from '@/lib/inventory-search';
 import type { InventoryViewState } from './types';
 
 function parseList(raw: string | null): string[] {
@@ -12,6 +21,12 @@ function parseList(raw: string | null): string[] {
         .filter(Boolean);
 }
 
+/**
+ * Legacy view state — kept so the rest of the inventory app (ByBinView,
+ * BySkuView, etc.) keeps working until the detail-panel refactor in Phase 2.
+ * `state.sku/bin/unit` continue to drive the right-pane viewport; the new
+ * tabbed sidebar writes into them when a result is clicked.
+ */
 function readViewState(searchParams: URLSearchParams): InventoryViewState {
     const sku = searchParams.get('sku');
     const bin = searchParams.get('bin');
@@ -27,6 +42,18 @@ function readViewState(searchParams: URLSearchParams): InventoryViewState {
     return { view: 'pulse', sku: null, bin: null, unit: null, states, conditions };
 }
 
+export interface InventorySidebarUrlState {
+    tab: InventoryTab;
+    /** Search input (committed/debounced value, mirrored upstream). */
+    q: string;
+    /** Scoped-search field id; tab-scoped meaning. */
+    field: AnyInventorySearchField;
+    /** Multi-select bucket filter ids; tab-scoped meaning. */
+    buckets: AnyInventoryBucket[];
+    /** Pending detail-panel selection key (Phase 2+). */
+    open: string | null;
+}
+
 export type UrlPatch = {
     sku?: string | null;
     bin?: string | null;
@@ -35,10 +62,19 @@ export type UrlPatch = {
     conditions?: string[];
 };
 
-// `/inventory` is the canonical home for the live ledger; sidebar controls
-// rendered from `/inventory/po-mailbox` should still write search/filter state
-// to the ledger route so navigating back picks up the user's intent.
+export type SidebarUrlPatch = {
+    tab?: InventoryTab;
+    q?: string | null;
+    field?: string | null;
+    buckets?: string[];
+    open?: string | null;
+};
+
 const INVENTORY_PATH = '/inventory';
+
+function tabBasePath(tab: InventoryTab): string {
+    return `${INVENTORY_PATH}/${tab}`;
+}
 
 export function useInventoryUrlState() {
     const router = useRouter();
@@ -49,6 +85,19 @@ export function useInventoryUrlState() {
         () => readViewState(new URLSearchParams(searchParams.toString())),
         [searchParams],
     );
+
+    const sidebar = useMemo<InventorySidebarUrlState>(() => {
+        const tab = inventoryTabFromPathname(pathname);
+        const rawField = searchParams.get('field');
+        const rawBuckets = searchParams.get('filter');
+        return {
+            tab,
+            q: (searchParams.get('q') ?? '').trim(),
+            field: normalizeSearchField(tab, rawField) as AnyInventorySearchField,
+            buckets: normalizeBuckets(tab, rawBuckets) as AnyInventoryBucket[],
+            open: searchParams.get('open'),
+        };
+    }, [pathname, searchParams]);
 
     const setUrl = useCallback(
         (next: UrlPatch) => {
@@ -86,6 +135,47 @@ export function useInventoryUrlState() {
         [pathname, router, searchParams],
     );
 
+    const setSidebarUrl = useCallback(
+        (next: SidebarUrlPatch) => {
+            const sp = new URLSearchParams(searchParams.toString());
+
+            if (next.q !== undefined) {
+                if (next.q && next.q.trim().length > 0) sp.set('q', next.q.trim());
+                else sp.delete('q');
+            }
+            if (next.field !== undefined) {
+                if (next.field && next.field !== 'all') sp.set('field', next.field);
+                else sp.delete('field');
+            }
+            if (next.buckets !== undefined) {
+                if (next.buckets.length > 0) sp.set('filter', next.buckets.join(','));
+                else sp.delete('filter');
+            }
+            if (next.open !== undefined) {
+                if (next.open) sp.set('open', next.open);
+                else sp.delete('open');
+            }
+
+            const nextTab: InventoryTab = next.tab ?? sidebar.tab;
+            if (next.tab && next.tab !== sidebar.tab) {
+                const field = normalizeSearchField(nextTab, sp.get('field'));
+                if (!field || field === 'all') sp.delete('field');
+                const validBuckets = normalizeBuckets(nextTab, sp.get('filter'));
+                if (validBuckets.length > 0) sp.set('filter', validBuckets.join(','));
+                else sp.delete('filter');
+                sp.delete('open');
+            }
+
+            const qs = sp.toString();
+            const targetPath = tabBasePath(nextTab);
+            const url = qs ? `${targetPath}?${qs}` : targetPath;
+
+            if (next.tab && next.tab !== sidebar.tab) router.push(url);
+            else router.replace(url);
+        },
+        [router, searchParams, sidebar.tab],
+    );
+
     const clearAll = useCallback(
         () =>
             setUrl({
@@ -98,5 +188,10 @@ export function useInventoryUrlState() {
         [setUrl],
     );
 
-    return { state, setUrl, clearAll };
+    return { state, sidebar, setUrl, setSidebarUrl, clearAll };
 }
+
+export type { InventoryTab } from '@/lib/inventory-search';
+
+// Keep `normalizeInventoryTab` re-exported for any direct consumer.
+export { normalizeInventoryTab };

@@ -81,6 +81,7 @@ export const PERMISSIONS = [
   { id: 'tech.qc_pass',             category: 'tech', label: 'QC pass' },
   { id: 'tech.qc_fail',             category: 'tech', label: 'QC fail' },
   { id: 'tech.assign_bin',          category: 'tech', label: 'Assign bin from tech' },
+  { id: 'serial_units.grade',       category: 'tech', label: 'Grade serial unit (condition)' },
   { id: 'repair.view',              category: 'tech', label: 'View repair queue' },
   { id: 'repair.intake',            category: 'tech', label: 'Intake repair' },
   { id: 'repair.mark_repaired',     category: 'tech', label: 'Mark repaired' },
@@ -115,6 +116,7 @@ export const PERMISSIONS = [
   { id: 'replenish.view',           category: 'inventory', label: 'View replenishment' },
   { id: 'replenish.create_po',      category: 'inventory', label: 'Create replenishment PO' },
   { id: 'replenish.approve_po',     category: 'inventory', label: 'Approve replenishment PO', destructive: true, stepUp: true },
+  { id: 'stock_alerts.ack',          category: 'inventory', label: 'Acknowledge stock alerts' },
 
   // ─ Operations & Reports ─
   { id: 'dashboard.view',           category: 'ops', label: 'View dashboard' },

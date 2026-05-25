@@ -1,13 +1,15 @@
 'use client';
 
-import { Smartphone } from '@/components/Icons';
+import { Bell, Smartphone } from '@/components/Icons';
 import { Row } from './Row';
+import { useActivityInbox } from '@/contexts/ActivityInboxContext';
 import type { ActionToggles } from '@/lib/quick-access/types';
 
 interface ActionsSectionProps {
   actions: ActionToggles;
   onAction: () => void;
   onOpenHistoryPopover: () => void;
+  onOpenInboxPopover: () => void;
 }
 
 /**
@@ -15,20 +17,47 @@ interface ActionsSectionProps {
  * section as a prominent banner above the sign-in card — see
  * QuickAccessPopover.
  */
-export function ActionsSection({ actions, onOpenHistoryPopover }: ActionsSectionProps) {
-  if (!actions.phoneHistory) return null;
+export function ActionsSection({
+  actions,
+  onOpenHistoryPopover,
+  onOpenInboxPopover,
+}: ActionsSectionProps) {
+  const { items } = useActivityInbox();
+  const unreadCount = items.filter((it) => !it.undone || it.undoFailed).length;
+  const showInbox = items.length > 0;
+  const showPhoneHistory = !!actions.phoneHistory;
+
+  if (!showInbox && !showPhoneHistory) return null;
 
   return (
     <div className="px-2 py-2">
       <p className="px-2 pb-1 text-micro font-bold uppercase tracking-widest text-gray-400">Actions</p>
       <div className="space-y-0.5">
-        <Row
-          icon={<Smartphone className="h-4 w-4" />}
-          iconBg="bg-gray-900"
-          label="Phone history"
-          subLabel="Resume your recent packs"
-          onClick={onOpenHistoryPopover}
-        />
+        {showInbox ? (
+          <Row
+            icon={<Bell className="h-4 w-4" />}
+            iconBg="bg-gray-900"
+            label="Recent activity"
+            subLabel="Reversible updates — undo within 60s"
+            trailing={
+              unreadCount > 0 ? (
+                <span className="inline-flex h-5 min-w-[1.25rem] items-center justify-center rounded-full bg-rose-500 px-1.5 text-mini font-bold text-white">
+                  {unreadCount}
+                </span>
+              ) : null
+            }
+            onClick={onOpenInboxPopover}
+          />
+        ) : null}
+        {showPhoneHistory ? (
+          <Row
+            icon={<Smartphone className="h-4 w-4" />}
+            iconBg="bg-gray-900"
+            label="Phone history"
+            subLabel="Resume your recent packs"
+            onClick={onOpenHistoryPopover}
+          />
+        ) : null}
       </div>
     </div>
   );
