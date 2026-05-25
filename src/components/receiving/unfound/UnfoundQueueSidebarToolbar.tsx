@@ -12,9 +12,10 @@
  * listens for. Keeps the toolbar decoupled from the table's fetch hook.
  */
 
-import { useCallback, useRef } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { RefreshCw, Search } from '@/components/Icons';
+import { Mail, RefreshCw, Search } from '@/components/Icons';
+import { toast } from '@/lib/toast';
 import {
   ENABLED_KINDS,
   KIND_LABELS,
@@ -40,6 +41,21 @@ export function UnfoundQueueSidebarToolbar() {
   const q = searchParams.get('uf_q') ?? '';
 
   const searchDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [scanning, setScanning] = useState(false);
+  // How many emails to pull on the next scan. Persisted to localStorage so
+  // an operator who picks "100" doesn't keep re-selecting it every visit.
+  // Endpoint caps at 200 (see reconcile/route.ts:MAX_LIMIT).
+  const [scanLimit, setScanLimit] = useState<number>(() => {
+    if (typeof window === 'undefined') return 25;
+    const stored = Number(window.localStorage.getItem('unfoundQueue.scanLimit'));
+    return Number.isFinite(stored) && stored >= 10 && stored <= 200 ? stored : 25;
+  });
+  const onScanLimitChange = useCallback((next: number) => {
+    setScanLimit(next);
+    if (typeof window !== 'undefined') {
+      window.localStorage.setItem('unfoundQueue.scanLimit', String(next));
+    }
+  }, []);
 
   // Write a single param (or delete it when empty). All three filters live
   // under `uf_*` so they don't collide with the receiving page's own params.
@@ -78,22 +94,107 @@ export function UnfoundQueueSidebarToolbar() {
     window.dispatchEvent(new CustomEvent(UNFOUND_QUEUE_REFRESH_EVENT));
   }, []);
 
+  // "Scan emails" — fires the PO Mailbox reconcile pipeline: pulls fresh
+  // Gmail messages, extracts PO #s, diffs against the Zoho mirror, and
+  // upserts unmatched ones into email_missing_purchase_orders. Then refreshes
+  // the queue so any newly-landed mailbox rows show up immediately.
+  //
+  // Distinct from Refresh (which only re-queries the local view) — this
+  // actually goes out to Gmail and ingests new emails.
+  const onScanEmails = useCallback(async () => {
+    if (scanning) return;
+    setScanning(true);
+    const loadingId = toast.loading(
+      `Scanning last ${scanLimit} Gmail message${scanLimit === 1 ? '' : 's'}…`,
+    );
+    try {
+      const url = new URL(
+        '/api/admin/po-gmail/reconcile',
+        window.location.origin,
+      );
+      url.searchParams.set('limit', String(scanLimit));
+      const res = await fetch(url.toString(), {
+        method: 'GET',
+        cache: 'no-store',
+      });
+      const body = (await res.json().catch(() => ({}))) as {
+        error?: string;
+        items?: unknown[];
+        persisted?: { upserted?: number; resolved?: number } | null;
+        elapsedMs?: number;
+      };
+      if (res.status === 401 || res.status === 403) {
+        throw new Error('Scan emails requires admin permission');
+      }
+      if (!res.ok) {
+        throw new Error(body.error ?? `scan failed (${res.status})`);
+      }
+      const scanned = Array.isArray(body.items) ? body.items.length : 0;
+      const upserted = body.persisted?.upserted ?? 0;
+      const resolved = body.persisted?.resolved ?? 0;
+      toast.dismiss(loadingId);
+      toast.success(
+        `Scanned ${scanned} email${scanned === 1 ? '' : 's'} · ${upserted} new · ${resolved} resolved`,
+      );
+      // Pull the freshly-persisted rows into the table.
+      window.dispatchEvent(new CustomEvent(UNFOUND_QUEUE_REFRESH_EVENT));
+    } catch (err) {
+      toast.dismiss(loadingId);
+      toast.error(err instanceof Error ? err.message : 'Scan failed');
+    } finally {
+      setScanning(false);
+    }
+  }, [scanning, scanLimit]);
+
   return (
     <div className="flex flex-col gap-3 p-3">
-      {/* Title + Refresh */}
-      <div className="flex items-center justify-between">
+      {/* Title + actions */}
+      <div className="flex items-center justify-between gap-2">
         <h2 className="text-sm font-bold tracking-tight text-gray-900">
           Unfound queue
         </h2>
         <button
           type="button"
           onClick={onRefresh}
-          title="Refresh"
+          title="Refresh the queue from the local DB (no Gmail call)"
           className="flex items-center gap-1 rounded-md border border-gray-200 px-2 py-1 text-micro font-bold uppercase tracking-wider text-gray-600 hover:bg-gray-50"
         >
           <RefreshCw className="h-3 w-3" />
           Refresh
         </button>
+      </div>
+
+      {/* Scan-emails row: depth selector + button. Last-N picker lives next
+          to the action so the operator sees exactly how far back they're
+          about to look. localStorage-persisted (key: unfoundQueue.scanLimit). */}
+      <div className="flex items-center gap-2">
+        <button
+          type="button"
+          onClick={() => void onScanEmails()}
+          disabled={scanning}
+          title={`Pull the last ${scanLimit} Gmail messages and reconcile against Zoho`}
+          className="flex flex-1 items-center justify-center gap-1.5 rounded-md border border-blue-200 bg-blue-50 px-2 py-1.5 text-micro font-bold uppercase tracking-wider text-blue-700 hover:bg-blue-100 disabled:cursor-not-allowed disabled:opacity-60"
+        >
+          <Mail className={`h-3 w-3 ${scanning ? 'animate-pulse' : ''}`} />
+          {scanning ? 'Scanning…' : `Scan last ${scanLimit}`}
+        </button>
+        <label className="sr-only" htmlFor="unfound-scan-limit">
+          Scan depth
+        </label>
+        <select
+          id="unfound-scan-limit"
+          value={scanLimit}
+          onChange={(e) => onScanLimitChange(Number(e.target.value))}
+          disabled={scanning}
+          title="How many recent Gmail messages to fetch on each scan"
+          className="h-7 rounded-md border border-gray-200 bg-white px-1.5 text-micro font-bold tracking-wider text-gray-700 outline-none focus:border-blue-500 disabled:opacity-60"
+        >
+          {[10, 25, 50, 100, 200].map((n) => (
+            <option key={n} value={n}>
+              {n}
+            </option>
+          ))}
+        </select>
       </div>
 
       {/* Search */}

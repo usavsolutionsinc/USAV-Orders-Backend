@@ -58,6 +58,11 @@ function hasLinkedOrder(record: { order_row_id?: number | null; order_id?: strin
   if (record.order_row_id != null) return true;
   return String(record.order_id || '').trim().length > 0;
 }
+
+function isExceptionPackerRecord(record: { row_source?: string | null; exception_reason?: string | null }): boolean {
+  return String(record.row_source || '').trim().toLowerCase() === 'exception'
+    || !!String(record.exception_reason || '').trim();
+}
 import { getStaffName } from '@/utils/staff';
 import { getStaffThemeById, stationThemeColors } from '@/utils/staff-colors';
 import { getStaffTextColor } from '@/design-system/components/StaffBadge';
@@ -303,14 +308,15 @@ export function DashboardShippedTable({
     shippedFilter === 'fba'
       ? dedupedRecords.filter(isFbaPackerRecord)
       : shippedFilter === 'orders'
-        ? dedupedRecords.filter((r) => !isFbaPackerRecord(r) && hasLinkedOrder(r))
+        ? dedupedRecords.filter((r) => !isFbaPackerRecord(r) && (hasLinkedOrder(r) || isExceptionPackerRecord(r)))
         : shippedFilter === 'sku'
           ? dedupedRecords.filter(isSkuPackerRecord)
           : dedupedRecords.filter((r) => {
-              // "all" = actually shipped: orders + FBA. SKU-only rows are prepacked (not shipped) — use SKU tab.
+              // "all" = actually shipped: orders + FBA + unmatched exceptions.
+              // SKU-only rows are prepacked (not shipped) — use SKU tab.
               if (isSkuPackerRecord(r)) return false;
               if (isFbaPackerRecord(r)) return true;
-              return hasLinkedOrder(r);
+              return hasLinkedOrder(r) || isExceptionPackerRecord(r);
             }),
     [dedupedRecords, shippedFilter],
   );

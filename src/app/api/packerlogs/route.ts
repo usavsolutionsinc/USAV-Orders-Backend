@@ -41,7 +41,7 @@ export const GET = withAuth(async (req: NextRequest, ctx) => {
     const CACHE_HEADERS = { 'Cache-Control': `private, max-age=${cacheTTL}, stale-while-revalidate=30` };
 
     try {
-        const cached = await getCachedJson<any[]>('api:packing-logs-v4', cacheLookup);
+        const cached = await getCachedJson<any[]>('api:packing-logs-v5', cacheLookup);
         if (cached) {
             return NextResponse.json(cached, { headers: { 'x-cache': 'HIT', ...CACHE_HEADERS } });
         }
@@ -104,7 +104,11 @@ export const GET = withAuth(async (req: NextRequest, ctx) => {
                 sal.packer_log_id AS packer_log_id,
                 to_char(sal.created_at, 'YYYY-MM-DD HH24:MI:SS') AS created_at,
                 sal.scan_ref,
-                COALESCE(stn.tracking_number_raw, sal.scan_ref, sal.fnsku) AS shipping_tracking_number,
+                COALESCE(stn.tracking_number_raw, oe.shipping_tracking_number, sal.scan_ref, sal.fnsku) AS shipping_tracking_number,
+                oe.id AS orders_exception_id,
+                oe.exception_reason,
+                oe.status AS exception_status,
+                CASE WHEN oe.id IS NOT NULL AND o.id IS NULL THEN 'exception' ELSE 'order' END AS row_source,
                 sal.staff_id AS packed_by,
                 packed_staff.name AS packed_by_name,
                 COALESCE(pl.tracking_type,
@@ -227,6 +231,11 @@ export const GET = withAuth(async (req: NextRequest, ctx) => {
                 LIMIT 1
             ) order_match ON TRUE
             LEFT JOIN orders o ON o.id = order_match.id
+            -- Unmatched packer scans surface here. The packing-logs POST writes
+            -- orders_exception_id onto the station_activity_logs row when the
+            -- tracking doesn't resolve to an order — that's what lets the
+            -- Shipped tab show the exception by tracking number alone.
+            LEFT JOIN orders_exceptions oe ON oe.id = sal.orders_exception_id
             -- Ecwid platform lookup: match a SKU pack scan (e.g. '1071-B:A12')
             -- against sku_platform_ids.platform_sku where platform='ecwid'.
             -- Prefers sku_catalog.product_title (canonical) and falls back to
@@ -465,7 +474,7 @@ export const GET = withAuth(async (req: NextRequest, ctx) => {
             packer_photos_url: photosMap[r.packer_log_id] ?? [],
         }));
 
-        after(() => setCachedJson('api:packing-logs-v4', cacheLookup, rows, cacheTTL, ['packing-logs']));
+        after(() => setCachedJson('api:packing-logs-v5', cacheLookup, rows, cacheTTL, ['packing-logs']));
         return NextResponse.json(rows, { headers: { 'x-cache': 'MISS', ...CACHE_HEADERS } });
     } catch (error: any) {
         console.error('Error fetching packer logs:', error);

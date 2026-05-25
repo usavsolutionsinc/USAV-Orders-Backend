@@ -32,7 +32,11 @@ export const dynamic = 'force-dynamic';
 export const maxDuration = 60;
 
 const DEFAULT_LIMIT = 25;
-const MAX_LIMIT = 50;
+// Cap on the per-call scan window. Operators occasionally want to backfill
+// (e.g. after fixing a parser bug), so 200 is the ceiling. Anything larger
+// risks the function timing out — the cron is the right tool for ongoing
+// sweeps, not a one-shot button.
+const MAX_LIMIT = 200;
 const BODY_PREVIEW_CHARS = 800;
 
 interface ReconcileItem {

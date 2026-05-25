@@ -15,10 +15,12 @@
  */
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { AnimatePresence } from 'framer-motion';
+import { useSearchParams } from 'next/navigation';
 import { toast } from '@/lib/toast';
 import { ExternalLink } from '@/components/Icons';
-import { TrackingChip, getLast4 } from '@/components/ui/CopyChip';
+import { PoChip, TrackingChip, getLast4 } from '@/components/ui/CopyChip';
+import { UnfoundQueueDetailsPanel } from './UnfoundQueueDetailsPanel';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -80,6 +82,30 @@ interface PatchBody {
 const DEBOUNCE_MS = 400;
 const UNFOUND_QUEUE_REFRESH_EVENT = 'unfound-queue-refresh';
 
+// Match the trailing " · PO: A, B, C" suffix the email_po view branch appends
+// to the context column (see v_unfound_queue migration). The PO numbers are
+// pulled out so they can render as PoChips; the subject prefix stays plain.
+//
+// Format coverage:
+//   • Multiple POs: "Subject · PO: 19-14668-49126, 18-14670-03483"
+//   • Single PO:    "Subject · PO: 27-14557-39548"
+const PO_SUFFIX_RE = / · PO:\s*(.+?)\s*$/;
+
+function splitPoContext(context: string | null): {
+  prefix: string;
+  poNumbers: string[];
+} {
+  if (!context) return { prefix: '', poNumbers: [] };
+  const match = context.match(PO_SUFFIX_RE);
+  if (!match) return { prefix: context, poNumbers: [] };
+  const prefix = context.slice(0, match.index).trim();
+  const poNumbers = match[1]!
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean);
+  return { prefix, poNumbers };
+}
+
 // ─── Filter-state helpers (URL search params are the source of truth) ─────────
 
 function parseKind(raw: string | null): QueueKind {
@@ -92,7 +118,6 @@ function parseKind(raw: string | null): QueueKind {
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export function UnfoundQueueTable() {
-  const router = useRouter();
   const searchParams = useSearchParams();
 
   const kind = parseKind(searchParams.get('uf_kind'));
@@ -103,9 +128,20 @@ export function UnfoundQueueTable() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [pushing, setPushing] = useState<string | null>(null);
+  // Per-row "Saved" pulse — keyed `${kind}:${source_id}`, shows for ~1.5s
+  // after a successful PATCH so the operator gets unmistakable confirmation
+  // before the row's checked-out styling sets in. Rows the operator just
+  // checked are also held in stickyRowsRef so the next refetch doesn't make
+  // them vanish (server-side checked=false filter would otherwise hide them).
+  const [savedKeys, setSavedKeys] = useState<Set<string>>(() => new Set());
+  // Slide-in details panel — open by clicking a row's subject/title. Lives
+  // here (vs. its own URL route) so closing returns the operator to their
+  // place in the table with scroll preserved.
+  const [openRow, setOpenRow] = useState<QueueRow | null>(null);
 
   const abortRef = useRef<AbortController | null>(null);
   const searchDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const stickyRowsRef = useRef<Map<string, QueueRow>>(new Map());
 
   // ─── Fetch ──────────────────────────────────────────────────────────────────
   const fetchRows = useCallback(async () => {
@@ -129,7 +165,16 @@ export function UnfoundQueueTable() {
       if (!res.ok || !body.success) {
         throw new Error(body.error ?? `fetch failed (${res.status})`);
       }
-      setRows(body.rows ?? []);
+      const serverRows = body.rows ?? [];
+      // Merge in sticky rows that the operator just checked but the server's
+      // current filter (checked=false) hides. Their presence here proves the
+      // check landed — the operator sees a checked row, not a vanished one.
+      const seen = new Set(serverRows.map((r) => `${r.kind}:${r.source_id}`));
+      const stickyExtras: QueueRow[] = [];
+      stickyRowsRef.current.forEach((row, key) => {
+        if (!seen.has(key)) stickyExtras.push(row);
+      });
+      setRows([...stickyExtras, ...serverRows]);
     } catch (err: unknown) {
       if ((err as { name?: string })?.name === 'AbortError') return;
       setError(err instanceof Error ? err.message : 'fetch failed');
@@ -155,8 +200,13 @@ export function UnfoundQueueTable() {
   }, [fetchRows, search]);
 
   // Sidebar's Refresh button dispatches this so we don't need a shared ref.
+  // Refresh also clears sticky checked rows — operator explicitly asking for
+  // a fresh server view means they're done acknowledging recent checks.
   useEffect(() => {
-    const handler = () => void fetchRows();
+    const handler = () => {
+      stickyRowsRef.current.clear();
+      void fetchRows();
+    };
     window.addEventListener(UNFOUND_QUEUE_REFRESH_EVENT, handler);
     return () => window.removeEventListener(UNFOUND_QUEUE_REFRESH_EVENT, handler);
   }, [fetchRows]);
@@ -166,13 +216,18 @@ export function UnfoundQueueTable() {
   // ─── Mutations ──────────────────────────────────────────────────────────────
   const patchRow = useCallback(
     async (row: QueueRow, patch: PatchBody) => {
+      const rowKey = `${row.kind}:${row.source_id}`;
+      const optimisticRow: QueueRow = { ...row, ...patch };
+
+      // Optimistic update (visible immediately).
       setRows((prev) =>
         prev.map((r) =>
           r.kind === row.kind && r.source_id === row.source_id
-            ? { ...r, ...patch }
+            ? optimisticRow
             : r,
         ),
       );
+
       try {
         const res = await fetch(
           `/api/receiving/unfound-queue/${row.kind}/${encodeURIComponent(row.source_id)}`,
@@ -184,14 +239,51 @@ export function UnfoundQueueTable() {
         );
         const body = await res.json().catch(() => ({}));
         if (!res.ok || !body.success) {
-          throw new Error(body.error ?? `patch failed (${res.status})`);
+          // Surface the full server payload to devtools — toast text often
+          // gets dismissed before the operator notices the code/detail.
+          console.error('[unfound-queue PATCH] failed', { status: res.status, body });
+          throw new Error(
+            body.error ??
+              body.detail ??
+              `patch failed (${res.status}${body.code ? ` · ${body.code}` : ''})`,
+          );
         }
+
+        // On a successful `checked: true`, keep the row visible past the
+        // default server filter so the operator sees "I saved it" instead of
+        // "it disappeared." Sticky map is cleared by the Refresh button.
+        if (patch.checked === true) {
+          stickyRowsRef.current.set(rowKey, optimisticRow);
+        } else if (patch.checked === false) {
+          stickyRowsRef.current.delete(rowKey);
+        }
+
+        // Brief "Saved" pulse on the row so confirmation is unmistakable.
+        setSavedKeys((prev) => {
+          const next = new Set(prev);
+          next.add(rowKey);
+          return next;
+        });
+        setTimeout(() => {
+          setSavedKeys((prev) => {
+            if (!prev.has(rowKey)) return prev;
+            const next = new Set(prev);
+            next.delete(rowKey);
+            return next;
+          });
+        }, 1500);
       } catch (err) {
+        // Revert just this row — DON'T refetch (refetching wipes other
+        // operator-in-progress optimistic edits + sticky checked rows).
         toast.error(err instanceof Error ? err.message : 'Update failed');
-        await fetchRows();
+        setRows((prev) =>
+          prev.map((r) =>
+            r.kind === row.kind && r.source_id === row.source_id ? row : r,
+          ),
+        );
       }
     },
-    [fetchRows],
+    [],
   );
 
   const pushToZendesk = useCallback(
@@ -222,16 +314,36 @@ export function UnfoundQueueTable() {
     [fetchRows],
   );
 
-  const openSource = useCallback(
-    (row: QueueRow) => {
-      // station_exception has no rich detail surface — all actionable data
-      // (tracking, station, notes) is already inline in the queue row.
-      if (row.kind === 'station_exception') return;
-      router.push(
-        `/receiving/unfound/${row.kind}/${encodeURIComponent(row.source_id)}`,
+  const openSource = useCallback((row: QueueRow) => {
+    // All kinds open into the slide-in details panel for inline review +
+    // delete. Per-kind navigation (Open in Gmail / Open in workspace) lives
+    // inside the panel as secondary actions.
+    setOpenRow(row);
+  }, []);
+
+  const handleDeleted = useCallback((deletedRow: QueueRow) => {
+    stickyRowsRef.current.delete(
+      `${deletedRow.kind}:${deletedRow.source_id}`,
+    );
+    setRows((prev) =>
+      prev.filter(
+        (r) =>
+          !(r.kind === deletedRow.kind && r.source_id === deletedRow.source_id),
+      ),
+    );
+  }, []);
+
+  const handlePushedToZendesk = useCallback(
+    (pushedRow: QueueRow, ticketNumber: string) => {
+      setRows((prev) =>
+        prev.map((r) =>
+          r.kind === pushedRow.kind && r.source_id === pushedRow.source_id
+            ? { ...r, zendesk_ticket_id: ticketNumber }
+            : r,
+        ),
       );
     },
-    [router],
+    [],
   );
 
   // ─── Render ─────────────────────────────────────────────────────────────────
@@ -258,7 +370,6 @@ export function UnfoundQueueTable() {
             <tr className="text-left text-micro font-bold uppercase tracking-wider text-gray-500">
               <th className="px-3 py-2">Zendesk</th>
               <th className="px-3 py-2">Product Title</th>
-              <th className="px-3 py-2">Serial numbers</th>
               <th className="px-3 py-2">USA Team Note</th>
               <th className="px-3 py-2">Vietnam Team Note</th>
               <th className="px-3 py-2 text-center">Check</th>
@@ -268,24 +379,43 @@ export function UnfoundQueueTable() {
           <tbody className="divide-y divide-gray-100">
             {!loading && rows.length === 0 && (
               <tr>
-                <td colSpan={7} className="px-3 py-8 text-center text-label text-gray-500">
+                <td colSpan={6} className="px-3 py-8 text-center text-label text-gray-500">
                   {error ? '—' : 'Nothing in the unfound queue. Nice.'}
                 </td>
               </tr>
             )}
-            {rows.map((row) => (
-              <QueueTableRow
-                key={`${row.kind}:${row.source_id}`}
-                row={row}
-                onPatch={patchRow}
-                onPush={pushToZendesk}
-                onOpen={openSource}
-                pushing={pushing === `${row.kind}:${row.source_id}`}
-              />
-            ))}
+            {rows.map((row) => {
+              const rowKey = `${row.kind}:${row.source_id}`;
+              return (
+                <QueueTableRow
+                  key={rowKey}
+                  row={row}
+                  onPatch={patchRow}
+                  onPush={pushToZendesk}
+                  onOpen={openSource}
+                  pushing={pushing === rowKey}
+                  justSaved={savedKeys.has(rowKey)}
+                />
+              );
+            })}
           </tbody>
         </table>
       </div>
+
+      {/* Slide-in details panel (one mount at a time, AnimatePresence for the
+          slide-out transition). Lives at the table root so the backdrop sits
+          above the table content but below any toaster. */}
+      <AnimatePresence>
+        {openRow && (
+          <UnfoundQueueDetailsPanel
+            key={`${openRow.kind}:${openRow.source_id}`}
+            row={openRow}
+            onClose={() => setOpenRow(null)}
+            onDeleted={handleDeleted}
+            onPushedToZendesk={handlePushedToZendesk}
+          />
+        )}
+      </AnimatePresence>
     </div>
   );
 }
@@ -298,6 +428,8 @@ interface QueueTableRowProps {
   onPush: (row: QueueRow) => Promise<void>;
   onOpen: (row: QueueRow) => void;
   pushing: boolean;
+  /** Show a brief "Saved" pulse next to the checkbox after a successful PATCH. */
+  justSaved: boolean;
 }
 
 function QueueTableRow({
@@ -306,6 +438,7 @@ function QueueTableRow({
   onPush,
   onOpen,
   pushing,
+  justSaved,
 }: QueueTableRowProps) {
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -319,13 +452,21 @@ function QueueTableRow({
     [onPatch, row],
   );
 
+  // Stop click propagation in interactive cells so the row's onClick
+  // doesn't fire when the operator edits a textarea, toggles the
+  // checkbox, types in Zendesk #, or clicks a copy chip.
+  const stopRowClick = useCallback((e: React.MouseEvent) => {
+    e.stopPropagation();
+  }, []);
+
   return (
     <tr
-      className={`align-top transition-colors hover:bg-blue-50/40 ${
+      onClick={() => onOpen(row)}
+      className={`cursor-pointer align-top transition-colors hover:bg-blue-50/40 ${
         row.checked ? 'bg-gray-50/60 text-gray-500' : 'text-gray-900'
       }`}
     >
-      <td className="px-3 py-2 font-mono text-label">
+      <td className="px-3 py-2 font-mono text-label" onClick={stopRowClick}>
         <input
           type="text"
           defaultValue={row.zendesk_ticket_id ?? ''}
@@ -340,32 +481,54 @@ function QueueTableRow({
         />
       </td>
       <td className="px-3 py-2 font-semibold">
-        <button
-          type="button"
-          onClick={() => onOpen(row)}
-          className="text-left hover:text-blue-600"
-        >
-          {row.product_title || '—'}
-        </button>
-        {row.context && (
-          <div className="mt-0.5 flex items-center gap-1.5 text-micro font-normal text-gray-500">
-            {row.kind === 'unmatched_receiving' ? (
-              // Tracking # for unmatched cartons — canonical blue
-              // TrackingChip (last-4 display + click-to-copy + hover full).
-              <TrackingChip
-                value={row.context}
-                display={getLast4(row.context)}
-              />
-            ) : (
-              <span className="truncate">{row.context}</span>
-            )}
-          </div>
-        )}
+        {(() => {
+          // Email-PO rows: subject as the title (top), chips as the
+          // identifier below — same shape as tracking-chip rows below.
+          if (row.kind === 'email_po') {
+            const { prefix, poNumbers } = splitPoContext(row.context);
+            return (
+              <>
+                <div className="text-left">
+                  {prefix || row.product_title || '—'}
+                </div>
+                {poNumbers.length > 0 && (
+                  // Chips stop propagation so clicking copies the PO# instead
+                  // of opening the detail panel.
+                  <div
+                    className="mt-0.5 flex flex-wrap items-center gap-1.5"
+                    onClick={stopRowClick}
+                  >
+                    {poNumbers.map((po) => (
+                      <PoChip key={po} value={po} display={getLast4(po)} />
+                    ))}
+                  </div>
+                )}
+              </>
+            );
+          }
+          // Other kinds: product title on top, chip/text below.
+          return (
+            <>
+              <div className="text-left">{row.product_title || '—'}</div>
+              {row.context && (
+                <div className="mt-0.5 flex flex-wrap items-center gap-1.5 text-micro font-normal text-gray-500">
+                  {row.kind === 'unmatched_receiving' ? (
+                    <span onClick={stopRowClick}>
+                      <TrackingChip
+                        value={row.context}
+                        display={getLast4(row.context)}
+                      />
+                    </span>
+                  ) : (
+                    <span className="truncate">{row.context}</span>
+                  )}
+                </div>
+              )}
+            </>
+          );
+        })()}
       </td>
-      <td className="max-w-[280px] truncate px-3 py-2 font-mono text-caption text-gray-600">
-        {row.serial_numbers || '—'}
-      </td>
-      <td className="px-3 py-2">
+      <td className="px-3 py-2" onClick={stopRowClick}>
         <textarea
           rows={1}
           defaultValue={row.usa_team_note ?? ''}
@@ -376,7 +539,7 @@ function QueueTableRow({
           className="w-full resize-none border-b border-transparent bg-transparent px-1 py-0.5 text-label outline-none focus:border-blue-500"
         />
       </td>
-      <td className="px-3 py-2">
+      <td className="px-3 py-2" onClick={stopRowClick}>
         <textarea
           rows={1}
           defaultValue={row.vietnam_team_note ?? ''}
@@ -387,15 +550,22 @@ function QueueTableRow({
           className="w-full resize-none border-b border-transparent bg-transparent px-1 py-0.5 text-label outline-none focus:border-blue-500"
         />
       </td>
-      <td className="px-3 py-2 text-center">
-        <input
-          type="checkbox"
-          checked={row.checked}
-          onChange={(e) => void onPatch(row, { checked: e.target.checked })}
-          className="h-4 w-4"
-        />
+      <td className="px-3 py-2 text-center" onClick={stopRowClick}>
+        <div className="flex items-center justify-center gap-1.5">
+          <input
+            type="checkbox"
+            checked={row.checked}
+            onChange={(e) => void onPatch(row, { checked: e.target.checked })}
+            className="h-4 w-4"
+          />
+          {justSaved ? (
+            <span className="text-micro font-bold uppercase tracking-wider text-emerald-600">
+              Saved
+            </span>
+          ) : null}
+        </div>
       </td>
-      <td className="px-3 py-2 text-right">
+      <td className="px-3 py-2 text-right" onClick={stopRowClick}>
         {row.zendesk_ticket_id ? (
           <span className="text-micro font-bold uppercase tracking-wider text-emerald-600">
             Synced

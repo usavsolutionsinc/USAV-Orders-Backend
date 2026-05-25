@@ -121,7 +121,29 @@ export const PATCH = withAuth(async (request: NextRequest, ctx) => {
       updated_at::text AS updated_at, updated_by
   `;
 
-  const result = await pool.query(sql, insertVals);
+  let result;
+  try {
+    result = await pool.query(sql, insertVals);
+  } catch (err) {
+    // Surface Postgres errors with their code so the client can show
+    // something better than a generic "update failed". 23502 = NOT NULL,
+    // 23503 = FK violation (most likely cause: ctx.staffId not in staff),
+    // 23514 = CHECK violation, 42P01 = table missing (migration not run).
+    const pgErr = err as { code?: string; message?: string; detail?: string };
+    console.error(
+      `[unfound-queue.PATCH] upsert failed kind=${kind} source_id=${sourceId} keys=[${setKeys.join(',')}]`,
+      { code: pgErr.code, message: pgErr.message, detail: pgErr.detail },
+    );
+    return NextResponse.json(
+      {
+        success: false,
+        error: `db error: ${pgErr.message ?? 'unknown'}`,
+        code: pgErr.code,
+        detail: pgErr.detail,
+      },
+      { status: 500 },
+    );
+  }
 
   after(async () => {
     try {
@@ -132,4 +154,118 @@ export const PATCH = withAuth(async (request: NextRequest, ctx) => {
   });
 
   return NextResponse.json({ success: true, overlay: result.rows[0] ?? null });
+}, { permission: 'receiving.view' });
+
+// ─── DELETE — hard-remove the source row from the queue ──────────────────────
+//
+// Per kind:
+//   • email_po           → DELETE FROM email_missing_purchase_orders
+//   • station_exception  → DELETE FROM orders_exceptions
+//   • unmatched_receiving → 422 (destructive — receiving rows may have lines/
+//                           serial_units; operator should use Check or open
+//                           the workspace to delete carefully)
+//
+// Always cleans up the matching unfound_overlay row so a re-ingested email
+// doesn't inherit stale notes/Zendesk references.
+
+export const DELETE = withAuth(async (request: NextRequest, ctx) => {
+  const parsed = paramsFromUrl(request.nextUrl);
+  if (!parsed) {
+    return NextResponse.json({ success: false, error: 'invalid path' }, { status: 400 });
+  }
+  const { kind, sourceId } = parsed;
+  if (!ALLOWED_KINDS.has(kind)) {
+    return NextResponse.json(
+      { success: false, error: `invalid kind: ${kind}` },
+      { status: 400 },
+    );
+  }
+  if (!sourceId) {
+    return NextResponse.json({ success: false, error: 'source id required' }, { status: 400 });
+  }
+
+  if (kind === 'unmatched_receiving') {
+    return NextResponse.json(
+      {
+        success: false,
+        error:
+          'Unmatched receiving rows can have attached lines + serials. Use Check to remove from the queue, or open the workspace to delete carefully.',
+        code: 'UNMATCHED_RECEIVING_DELETE_BLOCKED',
+      },
+      { status: 422 },
+    );
+  }
+
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+
+    let deleted = 0;
+    if (kind === 'email_po') {
+      const res = await client.query(
+        `DELETE FROM email_missing_purchase_orders
+          WHERE id = $1 AND organization_id = $2`,
+        [sourceId, ctx.organizationId],
+      );
+      deleted = res.rowCount ?? 0;
+    } else if (kind === 'station_exception') {
+      // orders_exceptions.id is INTEGER; the URL carries it as string.
+      const numericId = Number(sourceId);
+      if (!Number.isFinite(numericId) || numericId <= 0) {
+        await client.query('ROLLBACK');
+        return NextResponse.json(
+          { success: false, error: 'station_exception id must be numeric' },
+          { status: 400 },
+        );
+      }
+      const res = await client.query(
+        `DELETE FROM orders_exceptions
+          WHERE id = $1 AND organization_id = $2`,
+        [numericId, ctx.organizationId],
+      );
+      deleted = res.rowCount ?? 0;
+    }
+
+    if (deleted === 0) {
+      await client.query('ROLLBACK');
+      return NextResponse.json(
+        { success: false, error: 'source row not found' },
+        { status: 404 },
+      );
+    }
+
+    // Best-effort overlay cleanup. If no overlay row exists, this is a no-op.
+    await client.query(
+      `DELETE FROM unfound_overlay
+        WHERE organization_id = $1
+          AND source_kind = $2
+          AND source_id = $3`,
+      [ctx.organizationId, kind, sourceId],
+    );
+
+    await client.query('COMMIT');
+  } catch (err) {
+    await client.query('ROLLBACK');
+    const pgErr = err as { code?: string; message?: string };
+    console.error(
+      `[unfound-queue.DELETE] failed kind=${kind} source_id=${sourceId}`,
+      { code: pgErr.code, message: pgErr.message },
+    );
+    return NextResponse.json(
+      { success: false, error: `delete failed: ${pgErr.message ?? 'unknown'}` },
+      { status: 500 },
+    );
+  } finally {
+    client.release();
+  }
+
+  after(async () => {
+    try {
+      await invalidateCacheTags(['unfound-queue']);
+    } catch (err) {
+      console.warn('unfound-queue DELETE: cache invalidation failed', err);
+    }
+  });
+
+  return NextResponse.json({ success: true });
 }, { permission: 'receiving.view' });

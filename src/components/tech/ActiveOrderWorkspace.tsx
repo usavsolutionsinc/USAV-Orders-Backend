@@ -3,7 +3,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { motion } from 'framer-motion';
 import { framerPresence, framerTransition } from '@/design-system/foundations/motion-framer';
-import ActiveStationOrderCard from '@/components/station/ActiveStationOrderCard';
 import EmbeddedBrowser from '@/components/EmbeddedBrowser';
 import { Barcode, ChevronDown, ExternalLink, MapPin, Package, Settings } from '@/components/Icons';
 import {
@@ -17,12 +16,12 @@ import type {
   ResolvedProductManual,
 } from '@/hooks/useStationTestingController';
 import type { Order } from '@/components/station/upnext/upnext-types';
-import { stationThemeColors, getStaffThemeById } from '@/utils/staff-colors';
 import { getExternalUrlByItemNumber } from '@/hooks/useExternalItemUrl';
 import { isElectron } from '@/utils/isElectron';
 import { looksLikeFnsku } from '@/lib/scan-resolver';
 import { UpNextActionDock } from './UpNextActionDock';
 import { OrderPreviewPanel } from './OrderPreviewPanel';
+import { ActiveOrderBody } from './ActiveOrderBody';
 
 interface ActiveOrderWorkspaceProps {
   activeOrder: ActiveStationOrder;
@@ -59,9 +58,8 @@ function getVariantIcon(activeOrder: ActiveStationOrder) {
 }
 
 /**
- * Mirrors `externalListingUrl` from {@link ActiveStationOrderCard}: FBA → Amazon
- * keyword search, Repair → external URL by SKU, otherwise → external URL by
- * item number.
+ * FBA → Amazon keyword search by FNSKU; Repair → external URL by SKU;
+ * everything else → external URL by item number.
  */
 function getListingUrl(activeOrder: ActiveStationOrder): string | null {
   const source = activeOrder.sourceType;
@@ -100,7 +98,6 @@ export function ActiveOrderWorkspace({
   previewOrder,
 }: ActiveOrderWorkspaceProps) {
   const { Icon, tint, label } = getVariantIcon(activeOrder);
-  const activeColorText = stationThemeColors[getStaffThemeById(parseInt(techId, 10))].text;
   const trackingDisplay = (activeOrder.tracking || '').trim() || '—';
   const orderIdDisplay = (activeOrder.orderId || '').trim() || trackingDisplay;
   const isPreview = mode === 'preview';
@@ -166,12 +163,8 @@ export function ActiveOrderWorkspace({
             {isPreview && previewOrder ? (
               <OrderPreviewPanel order={previewOrder} />
             ) : (
-              <ActiveStationOrderCard
+              <ActiveOrderBody
                 activeOrder={activeOrder}
-                activeColorTextClass={activeColorText}
-                resolvedManuals={manuals}
-                isManualLoading={isManualLoading}
-                onViewManual={onViewManual}
                 onRemoveSerial={onRemoveSerial}
               />
             )}

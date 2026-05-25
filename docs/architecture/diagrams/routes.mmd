@@ -22,43 +22,40 @@ flowchart LR
   admin(["admin"])
   root --> admin
   click admin "src/app/admin/page.tsx" "page: src/app/admin/page.tsx"
-  admin_inventory_v2(["inventory-v2"])
-  admin --> admin_inventory_v2
-  click admin_inventory_v2 "src/app/admin/inventory-v2/page.tsx" "page: src/app/admin/inventory-v2/page.tsx"
-  admin_inventory_v2_bulk_allocate(["bulk-allocate"])
-  admin_inventory_v2 --> admin_inventory_v2_bulk_allocate
-  click admin_inventory_v2_bulk_allocate "src/app/admin/inventory-v2/bulk-allocate/page.tsx" "page: src/app/admin/inventory-v2/bulk-allocate/page.tsx"
-  admin_inventory_v2_cycle_counts(["cycle-counts"])
-  admin_inventory_v2 --> admin_inventory_v2_cycle_counts
-  click admin_inventory_v2_cycle_counts "src/app/admin/inventory-v2/cycle-counts/page.tsx" "page: src/app/admin/inventory-v2/cycle-counts/page.tsx"
-  admin_inventory_v2_cycle_counts__id(["[id]"])
-  admin_inventory_v2_cycle_counts --> admin_inventory_v2_cycle_counts__id
-  click admin_inventory_v2_cycle_counts__id "src/app/admin/inventory-v2/cycle-counts/[id]/page.tsx" "page: src/app/admin/inventory-v2/cycle-counts/[id]/page.tsx"
-  admin_inventory_v2_events(["events"])
-  admin_inventory_v2 --> admin_inventory_v2_events
-  click admin_inventory_v2_events "src/app/admin/inventory-v2/events/page.tsx" "page: src/app/admin/inventory-v2/events/page.tsx"
-  admin_inventory_v2_holds(["holds"])
-  admin_inventory_v2 --> admin_inventory_v2_holds
-  click admin_inventory_v2_holds "src/app/admin/inventory-v2/holds/page.tsx" "page: src/app/admin/inventory-v2/holds/page.tsx"
-  admin_inventory_v2_returns(["returns"])
-  admin_inventory_v2 --> admin_inventory_v2_returns
-  click admin_inventory_v2_returns "src/app/admin/inventory-v2/returns/page.tsx" "page: src/app/admin/inventory-v2/returns/page.tsx"
-  admin_inventory_v2_sku["sku"]
-  admin_inventory_v2 --> admin_inventory_v2_sku
-  admin_inventory_v2_sku__sku(["[sku]"])
-  admin_inventory_v2_sku --> admin_inventory_v2_sku__sku
-  click admin_inventory_v2_sku__sku "src/app/admin/inventory-v2/sku/[sku]/page.tsx" "page: src/app/admin/inventory-v2/sku/[sku]/page.tsx"
-  admin_inventory_v2_throughput(["throughput"])
-  admin_inventory_v2 --> admin_inventory_v2_throughput
-  click admin_inventory_v2_throughput "src/app/admin/inventory-v2/throughput/page.tsx" "page: src/app/admin/inventory-v2/throughput/page.tsx"
-  admin_inventory_v2_units["units"]
-  admin_inventory_v2 --> admin_inventory_v2_units
-  admin_inventory_v2_units__ref(["[ref]"])
-  admin_inventory_v2_units --> admin_inventory_v2_units__ref
-  click admin_inventory_v2_units__ref "src/app/admin/inventory-v2/units/[ref]/page.tsx" "page: src/app/admin/inventory-v2/units/[ref]/page.tsx"
-  ai(["ai"])
-  root --> ai
-  click ai "src/app/ai/page.tsx" "page: src/app/ai/page.tsx"
+  admin_inventory(["inventory"])
+  admin --> admin_inventory
+  click admin_inventory "src/app/admin/inventory/page.tsx" "page: src/app/admin/inventory/page.tsx"
+  admin_inventory_bulk_allocate(["bulk-allocate"])
+  admin_inventory --> admin_inventory_bulk_allocate
+  click admin_inventory_bulk_allocate "src/app/admin/inventory/bulk-allocate/page.tsx" "page: src/app/admin/inventory/bulk-allocate/page.tsx"
+  admin_inventory_cycle_counts(["cycle-counts"])
+  admin_inventory --> admin_inventory_cycle_counts
+  click admin_inventory_cycle_counts "src/app/admin/inventory/cycle-counts/page.tsx" "page: src/app/admin/inventory/cycle-counts/page.tsx"
+  admin_inventory_cycle_counts__id(["[id]"])
+  admin_inventory_cycle_counts --> admin_inventory_cycle_counts__id
+  click admin_inventory_cycle_counts__id "src/app/admin/inventory/cycle-counts/[id]/page.tsx" "page: src/app/admin/inventory/cycle-counts/[id]/page.tsx"
+  admin_inventory_events(["events"])
+  admin_inventory --> admin_inventory_events
+  click admin_inventory_events "src/app/admin/inventory/events/page.tsx" "page: src/app/admin/inventory/events/page.tsx"
+  admin_inventory_holds(["holds"])
+  admin_inventory --> admin_inventory_holds
+  click admin_inventory_holds "src/app/admin/inventory/holds/page.tsx" "page: src/app/admin/inventory/holds/page.tsx"
+  admin_inventory_returns(["returns"])
+  admin_inventory --> admin_inventory_returns
+  click admin_inventory_returns "src/app/admin/inventory/returns/page.tsx" "page: src/app/admin/inventory/returns/page.tsx"
+  admin_inventory_sku["sku"]
+  admin_inventory --> admin_inventory_sku
+  admin_inventory_sku__sku(["[sku]"])
+  admin_inventory_sku --> admin_inventory_sku__sku
+  click admin_inventory_sku__sku "src/app/admin/inventory/sku/[sku]/page.tsx" "page: src/app/admin/inventory/sku/[sku]/page.tsx"
+  admin_inventory_throughput(["throughput"])
+  admin_inventory --> admin_inventory_throughput
+  click admin_inventory_throughput "src/app/admin/inventory/throughput/page.tsx" "page: src/app/admin/inventory/throughput/page.tsx"
+  admin_inventory_units["units"]
+  admin_inventory --> admin_inventory_units
+  admin_inventory_units__ref(["[ref]"])
+  admin_inventory_units --> admin_inventory_units__ref
+  click admin_inventory_units__ref "src/app/admin/inventory/units/[ref]/page.tsx" "page: src/app/admin/inventory/units/[ref]/page.tsx"
   api["api"]
   root --> api
   api_activity["activity"]
@@ -210,3 +207,6 @@ flowchart LR
   api_admin_staff__id["[id]"]
   api_admin_staff --> api_admin_staff__id
   click api_admin_staff__id "src/app/api/admin/staff/[id]/route.ts" "route: src/app/api/admin/staff/[id]/route.ts"
+  api_admin_staff__id__detail["detail"]
+  api_admin_staff__id --> api_admin_staff__id__detail
+  click api_admin_staff__id__detail "src/app/api/admin/staff/[id]/detail/route.ts" "route: src/app/api/admin/staff/[id]/detail/route.ts"

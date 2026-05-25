@@ -208,6 +208,42 @@ export function OrderIdChipPlaceholder() {
 }
 
 /**
+ * Purchase order number (vendor PO# / extracted from emails). Gray / Hash icon.
+ *
+ * Visually matches {@link OrderIdChip} (also gray + hash) — both represent
+ * "an identifier this row is keyed by" and live in the left/primary
+ * position of their respective row layouts. {@link TrackingChip} stays
+ * blue for carrier tracking, which is a different concept (a physical
+ * package, not an identifier).
+ */
+export const PoChip = ({
+  value,
+  display,
+  disableCopy,
+  width = 'w-fit max-w-full',
+}: {
+  value: string;
+  display?: string;
+  disableCopy?: boolean;
+  width?: string;
+}) => (
+  <CopyChip
+    value={value}
+    display={
+      isEmptyDisplayValue(display ?? value) ||
+      String(display ?? value).trim() === '---'
+        ? '----'
+        : (display ?? value)
+    }
+    icon={<HashIcon />}
+    underlineClass="border-gray-500"
+    iconClass="text-gray-500"
+    width={width}
+    disableCopy={disableCopy}
+  />
+);
+
+/**
  * Carrier shipping tracking number. Blue / MapPin icon.
  * DESIGN SYSTEM RULE: Use ONLY for outbound carrier tracking numbers (UPS, FedEx, USPS…).
  * Do NOT use FNSKU codes — use FnskuChip (purple/Package) for those.

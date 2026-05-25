@@ -1,28 +1,28 @@
 /**
  * LLM-backed field extraction for PO emails (Phase 4 of PO mailbox triage).
  *
- * Why: the regex extractor in `extract.ts` reliably catches PO numbers but
- * can't read line items, totals, vendor names, ship-to, or PO dates from
- * free-form vendor emails. We delegate those to Claude Haiku 4.5 — small,
- * fast, cheap, and with prompt caching on the schema/system prompt to
- * keep cost flat across calls.
+ * Local-only: posts to the Hermes gateway (OpenAI-compatible) on
+ * HERMES_API_URL with the model named in AI_MODEL (defaults to
+ * `gemma-4-e4b`). No cloud fallback — if the gateway is down or the
+ * model returns invalid output, the operator sees a clear error and can
+ * retry once Hermes is back up.
  *
  * The function ALWAYS marks results as low-trust at the consumer side
  * (the checklist UI requires explicit confirmation per field). The model
- * also self-rates confidence per field; we surface that without acting on
- * it ourselves.
+ * also self-rates confidence per field; we surface that without acting
+ * on it ourselves.
  *
- * No SDK dep — plain fetch against api.anthropic.com to keep the
- * dependency surface small. Swap to @anthropic-ai/sdk if we add more
- * Claude features.
+ * No SDK dep — plain fetch against the OpenAI Chat Completions endpoint
+ * the Hermes gateway exposes. The tool definition uses OpenAI's `tools`
+ * + `tool_choice` shape, which gemma-4-e4b and other tool-calling-capable
+ * local models honor.
  */
 
-const ANTHROPIC_URL = 'https://api.anthropic.com/v1/messages';
-const ANTHROPIC_VERSION = '2023-06-01';
-
-// Haiku 4.5 — newest small model. Cheap + fast extraction. Bump to Sonnet
-// if accuracy on real vendor emails proves insufficient.
-const MODEL_ID = 'claude-haiku-4-5-20251001';
+// Default model when AI_MODEL isn't set. Gemma 4 e4B has explicit tool-call
+// support + reasoning, which gives the most disciplined arg adherence we
+// can get from a sub-5GB local model. Swap by setting AI_MODEL in env;
+// the runtime verifies the model is loaded in the Hermes runtime on call.
+const DEFAULT_AI_MODEL = 'gemma-4-e4b';
 
 const SYSTEM_PROMPT = [
   'You extract purchase-order fields from vendor emails into a strict schema.',
@@ -49,66 +49,72 @@ const SYSTEM_PROMPT = [
   'reply with prose.',
 ].join('\n');
 
+const TOOL_NAME = 'report_extracted_fields';
+
 const REPORT_TOOL = {
-  name: 'report_extracted_fields',
-  description: 'Report purchase-order fields extracted from the email body.',
-  input_schema: {
-    type: 'object',
-    additionalProperties: false,
-    properties: {
-      vendor: {
-        type: 'object',
-        additionalProperties: false,
-        properties: {
-          value: { type: 'string' },
-          confidence: { type: 'string', enum: ['high', 'medium', 'low'] },
+  type: 'function',
+  function: {
+    name: TOOL_NAME,
+    description:
+      'Report purchase-order fields extracted from the email body.',
+    parameters: {
+      type: 'object',
+      additionalProperties: false,
+      properties: {
+        vendor: {
+          type: 'object',
+          additionalProperties: false,
+          properties: {
+            value: { type: 'string' },
+            confidence: { type: 'string', enum: ['high', 'medium', 'low'] },
+          },
+          required: ['value', 'confidence'],
         },
-        required: ['value', 'confidence'],
-      },
-      po_date: {
-        type: 'object',
-        additionalProperties: false,
-        properties: {
-          value: { type: 'string', description: 'ISO date YYYY-MM-DD' },
-          confidence: { type: 'string', enum: ['high', 'medium', 'low'] },
+        po_date: {
+          type: 'object',
+          additionalProperties: false,
+          properties: {
+            value: { type: 'string', description: 'ISO date YYYY-MM-DD' },
+            confidence: { type: 'string', enum: ['high', 'medium', 'low'] },
+          },
+          required: ['value', 'confidence'],
         },
-        required: ['value', 'confidence'],
-      },
-      total: {
-        type: 'object',
-        additionalProperties: false,
-        properties: {
-          value: { type: 'string', description: 'Numeric string, no symbols' },
-          confidence: { type: 'string', enum: ['high', 'medium', 'low'] },
+        total: {
+          type: 'object',
+          additionalProperties: false,
+          properties: {
+            value: { type: 'string', description: 'Numeric string, no symbols' },
+            confidence: { type: 'string', enum: ['high', 'medium', 'low'] },
+          },
+          required: ['value', 'confidence'],
         },
-        required: ['value', 'confidence'],
-      },
-      currency: {
-        type: 'object',
-        additionalProperties: false,
-        properties: {
-          value: { type: 'string', description: 'ISO 4217 code: USD, CAD, EUR…' },
-          confidence: { type: 'string', enum: ['high', 'medium', 'low'] },
+        currency: {
+          type: 'object',
+          additionalProperties: false,
+          properties: {
+            value: { type: 'string', description: 'ISO 4217 code: USD, CAD, EUR…' },
+            confidence: { type: 'string', enum: ['high', 'medium', 'low'] },
+          },
+          required: ['value', 'confidence'],
         },
-        required: ['value', 'confidence'],
-      },
-      line_items_count: {
-        type: 'object',
-        additionalProperties: false,
-        properties: {
-          value: { type: 'integer', minimum: 0 },
-          confidence: { type: 'string', enum: ['high', 'medium', 'low'] },
+        line_items_count: {
+          type: 'object',
+          additionalProperties: false,
+          properties: {
+            value: { type: 'integer', minimum: 0 },
+            confidence: { type: 'string', enum: ['high', 'medium', 'low'] },
+          },
+          required: ['value', 'confidence'],
         },
-        required: ['value', 'confidence'],
-      },
-      ship_to: {
-        type: 'object',
-        additionalProperties: false,
-        properties: {
-          value: { type: 'string' },
-          confidence: { type: 'string', enum: ['high', 'medium', 'low'] },
+        ship_to: {
+          type: 'object',
+          additionalProperties: false,
+          properties: {
+            value: { type: 'string' },
+            confidence: { type: 'string', enum: ['high', 'medium', 'low'] },
+          },
+          required: ['value', 'confidence'],
         },
-        required: ['value', 'confidence'],
       },
     },
   },
@@ -128,17 +134,6 @@ export interface LlmExtractedFields {
   ship_to?: LlmFieldResult;
 }
 
-interface AnthropicResponse {
-  id: string;
-  content: Array<{
-    type: string;
-    name?: string;
-    input?: Record<string, unknown>;
-    text?: string;
-  }>;
-  usage?: { input_tokens: number; output_tokens: number; cache_read_input_tokens?: number };
-}
-
 export interface ExtractWithLlmInput {
   subject: string;
   from: string;
@@ -149,9 +144,12 @@ export interface ExtractWithLlmInput {
 
 export interface ExtractWithLlmResult {
   fields: LlmExtractedFields;
+  /** Model id reported by the Hermes runtime (or the env default if omitted). */
+  model: string;
   usage: {
     input_tokens: number;
     output_tokens: number;
+    /** Always 0 for the local Hermes path — kept for API stability. */
     cache_read_input_tokens: number;
   };
 }
@@ -160,18 +158,12 @@ export interface ExtractWithLlmResult {
 // chars is roughly 3k tokens of body — enough for any real PO email.
 const MAX_BODY_CHARS = 12_000;
 
-export async function extractWithLlm(input: ExtractWithLlmInput): Promise<ExtractWithLlmResult> {
-  const apiKey = process.env.ANTHROPIC_API_KEY;
-  if (!apiKey) {
-    throw new Error('ANTHROPIC_API_KEY is not set; AI extraction is disabled');
-  }
-
+function buildUserText(input: ExtractWithLlmInput): string {
   const body =
     input.bodyText.length > MAX_BODY_CHARS
       ? input.bodyText.slice(0, MAX_BODY_CHARS) + '\n\n[…truncated]'
       : input.bodyText;
-
-  const userText = [
+  return [
     `From: ${input.from}`,
     `Subject: ${input.subject}`,
     input.knownPoNumbers?.length
@@ -183,56 +175,99 @@ export async function extractWithLlm(input: ExtractWithLlmInput): Promise<Extrac
   ]
     .filter(Boolean)
     .join('\n');
+}
 
-  // cache_control on the system prompt + tool definition lets Anthropic
-  // reuse the parsed prefix on subsequent calls within ~5 minutes, which
-  // is most of our spend on this endpoint.
+interface OpenAiChatResponse {
+  choices?: Array<{
+    message?: {
+      role?: string;
+      content?: string | null;
+      tool_calls?: Array<{
+        id?: string;
+        type?: string;
+        function?: { name?: string; arguments?: string };
+      }>;
+    };
+    finish_reason?: string;
+  }>;
+  model?: string;
+  usage?: {
+    prompt_tokens?: number;
+    completion_tokens?: number;
+    total_tokens?: number;
+  };
+  error?: { message?: string } | string;
+}
+
+export async function extractWithLlm(
+  input: ExtractWithLlmInput,
+): Promise<ExtractWithLlmResult> {
+  const baseUrl = String(process.env.HERMES_API_URL ?? '').trim();
+  if (!baseUrl) {
+    throw new Error(
+      'HERMES_API_URL is not set; cannot reach the local AI gateway',
+    );
+  }
+  const apiKey = String(process.env.HERMES_API_KEY ?? '').trim();
+  const model = String(process.env.AI_MODEL ?? DEFAULT_AI_MODEL).trim();
+
   const requestBody = {
-    model: MODEL_ID,
+    model,
+    // temperature=0 nails down extraction determinism — small local models
+    // hallucinate tool args far less when sampling is turned off.
+    temperature: 0,
     max_tokens: 1024,
-    system: [
-      {
-        type: 'text',
-        text: SYSTEM_PROMPT,
-        cache_control: { type: 'ephemeral' },
-      },
+    messages: [
+      { role: 'system', content: SYSTEM_PROMPT },
+      { role: 'user', content: buildUserText(input) },
     ],
     tools: [REPORT_TOOL],
-    tool_choice: { type: 'tool', name: REPORT_TOOL.name },
-    messages: [
-      {
-        role: 'user',
-        content: [{ type: 'text', text: userText }],
-      },
-    ],
+    // Force the tool — without this, small models occasionally answer
+    // with prose ("Sure! Here's what I found:") instead of calling the tool.
+    tool_choice: { type: 'function', function: { name: TOOL_NAME } },
   };
 
-  const res = await fetch(ANTHROPIC_URL, {
+  const res = await fetch(`${baseUrl.replace(/\/$/, '')}/chat/completions`, {
     method: 'POST',
     headers: {
       'content-type': 'application/json',
-      'x-api-key': apiKey,
-      'anthropic-version': ANTHROPIC_VERSION,
+      ...(apiKey ? { authorization: `Bearer ${apiKey}` } : {}),
     },
     body: JSON.stringify(requestBody),
   });
   if (!res.ok) {
     const text = (await res.text()).slice(0, 500);
-    throw new Error(`Anthropic API ${res.status}: ${text}`);
+    throw new Error(`AI gateway ${res.status}: ${text}`);
   }
-  const data = (await res.json()) as AnthropicResponse;
+  const data = (await res.json()) as OpenAiChatResponse;
 
-  const toolUse = data.content.find((b) => b.type === 'tool_use' && b.name === REPORT_TOOL.name);
-  if (!toolUse || !toolUse.input) {
-    throw new Error('LLM did not call report_extracted_fields tool');
+  const toolCall = data.choices?.[0]?.message?.tool_calls?.[0];
+  if (!toolCall?.function?.arguments) {
+    // Some local models emit JSON in `content` instead of a tool call.
+    // Surface a clean error so the operator knows to re-run or pick a
+    // different model rather than silently dropping the extraction.
+    throw new Error(
+      `Model "${model}" did not return a ${TOOL_NAME} tool call`,
+    );
+  }
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(toolCall.function.arguments);
+  } catch (err) {
+    throw new Error(
+      `Model "${model}" returned invalid JSON in tool args: ${
+        err instanceof Error ? err.message : 'unknown'
+      }`,
+    );
   }
 
   return {
-    fields: toolUse.input as LlmExtractedFields,
+    fields: parsed as LlmExtractedFields,
+    model: data.model ?? model,
     usage: {
-      input_tokens: data.usage?.input_tokens ?? 0,
-      output_tokens: data.usage?.output_tokens ?? 0,
-      cache_read_input_tokens: data.usage?.cache_read_input_tokens ?? 0,
+      input_tokens: data.usage?.prompt_tokens ?? 0,
+      output_tokens: data.usage?.completion_tokens ?? 0,
+      cache_read_input_tokens: 0,
     },
   };
 }

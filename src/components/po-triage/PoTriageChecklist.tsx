@@ -7,6 +7,7 @@ import {
   ChevronLeft,
   Copy,
   ExternalLink,
+  FileText,
   Loader2,
   RefreshCw,
   Send,
@@ -46,6 +47,7 @@ export function PoTriageChecklist({ detail, onRowUpdated, onClose }: PoTriageChe
   const [zohoUploaded, setZohoUploaded] = useState(row.zoho_uploaded_po_number ?? '');
   const [saving, setSaving] = useState(false);
   const [extracting, setExtracting] = useState(false);
+  const [creatingDraft, setCreatingDraft] = useState(false);
 
   // Sync local state when a fresh detail blob arrives (parent refetches).
   useEffect(() => {
@@ -124,6 +126,70 @@ export function PoTriageChecklist({ detail, onRowUpdated, onClose }: PoTriageChe
     }
   }, [row.id, onRowUpdated]);
 
+  const createZohoDraft = useCallback(async () => {
+    setCreatingDraft(true);
+    const toastId = toast.loading('Creating draft PO in Zoho…');
+    try {
+      const res = await fetch(
+        `/api/admin/po-gmail/create-zoho-draft/${row.id}`,
+        { method: 'POST', headers: { 'Content-Type': 'application/json' } },
+      );
+      const data = (await res.json().catch(() => ({}))) as {
+        success?: boolean;
+        already_drafted?: boolean;
+        purchaseorder_number?: string;
+        zohoUrl?: string;
+        error?: string;
+        code?: string;
+        candidates?: Array<{ contact_id: string; contact_name: string }>;
+      };
+      if (!res.ok || !data.success) {
+        // VENDOR_AMBIGUOUS / VENDOR_NOT_FOUND / VENDOR_MISSING get a helpful
+        // toast pointing the operator at the fix (create the vendor in Zoho,
+        // re-extract, etc.) rather than a generic error.
+        if (data.code === 'VENDOR_NOT_FOUND') {
+          toast.error(data.error ?? 'Vendor not found in Zoho', { id: toastId });
+        } else if (data.code === 'VENDOR_AMBIGUOUS') {
+          toast.error(
+            `${data.error ?? 'Multiple vendors matched.'} (${(data.candidates ?? []).map((c) => c.contact_name).join(', ')})`,
+            { id: toastId },
+          );
+        } else if (data.code === 'VENDOR_MISSING') {
+          toast.error(
+            data.error ?? 'No vendor extracted. Run "Extract with AI" first.',
+            { id: toastId },
+          );
+        } else {
+          throw new Error(data.error ?? `create failed (${res.status})`);
+        }
+        return;
+      }
+      const poNum = data.purchaseorder_number || '(unknown #)';
+      setZohoUploaded(poNum);
+      toast.success(
+        data.already_drafted
+          ? `Already drafted as ${poNum}`
+          : `Draft ${poNum} created in Zoho — open to add line items + publish`,
+        {
+          id: toastId,
+          duration: 8000,
+          action: data.zohoUrl
+            ? {
+                label: 'Open in Zoho',
+                onClick: () => window.open(data.zohoUrl, '_blank', 'noopener'),
+              }
+            : undefined,
+        },
+      );
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Create draft failed', {
+        id: toastId,
+      });
+    } finally {
+      setCreatingDraft(false);
+    }
+  }, [row.id]);
+
   const setPile = useCallback((pile: TriagePile) => {
     void patch({ pile }, `Moved to ${pile}`);
   }, [patch]);
@@ -177,6 +243,19 @@ export function PoTriageChecklist({ detail, onRowUpdated, onClose }: PoTriageChe
     () => (row.gmail_msg_id ? `https://mail.google.com/mail/u/0/#all/${row.gmail_msg_id}` : null),
     [row.gmail_msg_id],
   );
+
+  // The Create-draft button needs at least an extracted vendor name to send
+  // to Zoho — otherwise the endpoint returns VENDOR_MISSING. Disable until
+  // Extract with AI has populated it.
+  const hasExtractedVendor = useMemo(() => {
+    const state = (row.triage_state ?? {}) as Record<string, unknown>;
+    const fields = state.fields;
+    if (!fields || typeof fields !== 'object') return false;
+    const vendor = (fields as Record<string, unknown>).vendor;
+    if (!vendor || typeof vendor !== 'object') return false;
+    const value = (vendor as { value?: unknown }).value;
+    return typeof value === 'string' && value.trim().length > 0;
+  }, [row.triage_state]);
 
   const existingPo = detail.zohoCompare.existingPos[0] ?? null;
   const poAlreadyInZoho = detail.zohoCompare.existingPos.length > 0;
@@ -392,6 +471,31 @@ export function PoTriageChecklist({ detail, onRowUpdated, onClose }: PoTriageChe
 
         <div className="ml-auto flex items-center gap-2">
           {saving && <Loader2 className="h-3.5 w-3.5 animate-spin text-gray-400" />}
+          <button
+            type="button"
+            onClick={createZohoDraft}
+            disabled={
+              creatingDraft ||
+              saving ||
+              row.pile === 'done' ||
+              Boolean(row.zoho_uploaded_po_number)
+            }
+            title={
+              row.zoho_uploaded_po_number
+                ? `Already drafted as ${row.zoho_uploaded_po_number}`
+                : !hasExtractedVendor
+                  ? 'Run "Extract with AI" first so we have a vendor to send'
+                  : 'Create a draft PO in Zoho from extracted fields'
+            }
+            className="inline-flex items-center gap-1.5 rounded-md border border-blue-300 bg-blue-50 px-3 py-1.5 text-label font-medium text-blue-700 hover:bg-blue-100 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {creatingDraft ? (
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            ) : (
+              <FileText className="h-3.5 w-3.5" />
+            )}
+            {creatingDraft ? 'Creating…' : 'Create draft in Zoho'}
+          </button>
           <button
             type="button"
             onClick={markUploaded}

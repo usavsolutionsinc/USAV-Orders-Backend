@@ -45,6 +45,11 @@ export interface PackerRecord {
   fnsku_log_id?: number | null;
   /** Matched `sku.id` when serial was resolved from the `sku` table (SKU pack scan_ref). */
   sku_table_id?: number | null;
+  /** 'exception' when sal.orders_exception_id resolved but no order matched; else 'order'. */
+  row_source?: 'order' | 'exception' | string | null;
+  orders_exception_id?: number | null;
+  exception_reason?: string | null;
+  exception_status?: string | null;
 }
 
 export interface UsePackerLogsOptions {

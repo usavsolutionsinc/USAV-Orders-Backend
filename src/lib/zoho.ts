@@ -345,6 +345,147 @@ export async function getPurchaseOrderById(
   return zohoGet(`/api/v1/purchaseorders/${safeId}`);
 }
 
+// ─── Vendor (contact) search ─────────────────────────────────────────────────
+
+interface ZohoContactSummary {
+  contact_id?: string;
+  contact_name?: string;
+  contact_type?: string;
+  email?: string;
+  status?: string;
+}
+
+/**
+ * Search Zoho contacts for a vendor by name. Used by the PO-mailbox
+ * "Create draft in Zoho" flow to resolve an extracted vendor string to
+ * a real contact_id (required by POST /purchaseorders).
+ *
+ * Returns up to `limit` matches; the caller decides whether a 1-match
+ * is good enough to auto-use vs. a multi-match needs operator picking.
+ */
+export async function searchVendorsByName(
+  name: string,
+  limit = 5,
+): Promise<Array<{ contact_id: string; contact_name: string }>> {
+  const q = String(name || '').trim();
+  if (!q) return [];
+  // contact_name_contains is a Zoho-supported "fuzzy" filter; contact_type
+  // narrows to vendors only (excludes customers).
+  const data = await zohoGet<{ contacts?: ZohoContactSummary[] }>(
+    '/api/v1/contacts',
+    {
+      contact_name_contains: q,
+      contact_type: 'vendor',
+      per_page: Math.min(Math.max(limit, 1), 25),
+    },
+  );
+  return (data.contacts ?? [])
+    .filter((c) => c.contact_id && c.contact_name)
+    .map((c) => ({
+      contact_id: String(c.contact_id),
+      contact_name: String(c.contact_name),
+    }));
+}
+
+// ─── Create purchase order (draft) ───────────────────────────────────────────
+
+export interface CreatePurchaseOrderLine {
+  /** Zoho catalog item_id (preferred). When omitted, `name` + `rate` + `quantity` are required. */
+  item_id?: string;
+  name?: string;
+  description?: string;
+  rate?: number;
+  quantity?: number;
+  unit?: string;
+}
+
+export interface CreatePurchaseOrderInput {
+  vendor_id: string;
+  /** ISO date string (YYYY-MM-DD). Defaults to today (PST) when omitted. */
+  date?: string;
+  /** Zoho auto-generates a PO# when omitted; pass to override. */
+  purchaseorder_number?: string;
+  /** Vendor's own reference (their PO#, invoice ref, etc.) — surfaces on PDF. */
+  reference_number?: string;
+  notes?: string;
+  line_items: CreatePurchaseOrderLine[];
+}
+
+export interface CreatedPurchaseOrder {
+  purchaseorder_id: string;
+  purchaseorder_number: string;
+  status: string;
+  vendor_id: string;
+  vendor_name?: string;
+  date?: string;
+  total?: number;
+}
+
+/**
+ * POST /api/v1/purchaseorders — creates a PO in Zoho's default `draft` status.
+ *
+ * Drafts are private to the org, not sent to the vendor, not counted in
+ * inventory commitments. The operator opens the draft in Zoho's UI,
+ * adjusts line items / vendor / dates as needed, and clicks "Convert to
+ * Open" to publish to the vendor.
+ *
+ * Used by the PO-mailbox "Create draft in Zoho" button — system prepares
+ * the draft from extracted email fields, human reviews + publishes.
+ *
+ * Zoho requires at least one line item; the caller must supply a sensible
+ * stub (e.g. "Items per email body" with rate 0, qty 1) when the email
+ * extraction didn't surface real line items.
+ */
+export async function createPurchaseOrder(
+  input: CreatePurchaseOrderInput,
+): Promise<CreatedPurchaseOrder> {
+  const vendor_id = String(input.vendor_id || '').trim();
+  if (!vendor_id) throw new Error('vendor_id is required');
+  const lines = (input.line_items ?? []).filter(
+    (l) => l.item_id || (l.name && (l.rate != null || l.quantity != null)),
+  );
+  if (lines.length === 0) {
+    throw new Error('createPurchaseOrder requires at least one line item');
+  }
+
+  const body: Record<string, unknown> = {
+    vendor_id,
+    date: input.date || getCurrentPSTDateKey(),
+    line_items: lines.map((l) => ({
+      ...(l.item_id ? { item_id: l.item_id } : {}),
+      ...(l.name ? { name: l.name } : {}),
+      ...(l.description ? { description: l.description } : {}),
+      rate: Number(l.rate ?? 0),
+      quantity: Number(l.quantity ?? 1),
+      ...(l.unit ? { unit: l.unit } : {}),
+    })),
+  };
+  if (input.purchaseorder_number) body.purchaseorder_number = input.purchaseorder_number;
+  if (input.reference_number) body.reference_number = input.reference_number;
+  if (input.notes) body.notes = input.notes;
+
+  const resp = await zohoPost<{
+    code?: number;
+    message?: string;
+    purchaseorder?: Record<string, unknown>;
+  }>('/api/v1/purchaseorders', body);
+
+  const po = resp.purchaseorder ?? {};
+  const purchaseorder_id = String(po.purchaseorder_id ?? '').trim();
+  if (!purchaseorder_id) {
+    throw new Error(`Zoho create-PO returned no purchaseorder_id: ${resp.message ?? 'unknown'}`);
+  }
+  return {
+    purchaseorder_id,
+    purchaseorder_number: String(po.purchaseorder_number ?? ''),
+    status: String(po.status ?? 'draft'),
+    vendor_id: String(po.vendor_id ?? vendor_id),
+    vendor_name: po.vendor_name ? String(po.vendor_name) : undefined,
+    date: po.date ? String(po.date) : undefined,
+    total: typeof po.total === 'number' ? po.total : undefined,
+  };
+}
+
 /**
  * Zoho Inventory rejects purchase receives when the PO is still Draft (or cancelled).
  * Call after GET /purchaseorders/:id before creating a purchase receive.
