@@ -19,5 +19,5 @@ coverage
 .env.*.local
 
 # Electron/desktop extras not needed for web deploy
-electron
+/electron
 server/storage
