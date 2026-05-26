@@ -26,8 +26,8 @@ export function RecentSection({ onNavigate }: RecentSectionProps) {
   if (visible.length === 0) return null;
 
   return (
-    <div className="px-2 py-2">
-      <p className="px-2 pb-1 text-micro font-bold uppercase tracking-widest text-gray-400">Recent</p>
+    <div className="px-2 pb-2 pt-1">
+      <p className="px-2 pb-0.5 text-micro font-bold uppercase tracking-widest text-gray-400">Recent</p>
       <div className="space-y-0.5">
         {visible.map((r) => (
           <Row

@@ -52,7 +52,7 @@ export function FbaSelectedLineRow({
   const rightColStart = showLeading ? 'col-start-3' : 'col-start-2';
 
   return (
-    <div className={`grid ${gridCols} grid-rows-[auto_auto] items-start gap-x-2 gap-y-1 border-b border-gray-100 px-2 py-2 last:border-b-0`}>
+    <div className={`grid ${gridCols} grid-rows-[auto_auto] items-start gap-x-2.5 gap-y-1 border-b border-gray-100 px-3 py-2 last:border-b-0`}>
       {showLeading && (
         <div className="row-span-2">
           {leadingSlot ?? (
@@ -77,24 +77,24 @@ export function FbaSelectedLineRow({
         </p>
       </div>
       <div className={`${metaColStart} row-start-2 flex items-center justify-end gap-1.5 self-end pt-0.5`}>
-        <button
-          type="button"
-          onClick={(e) => {
-            e.stopPropagation();
-            onEditDetails?.();
-          }}
-          className={[
-            'flex h-5 w-5 shrink-0 items-center justify-center rounded text-gray-600 transition-colors',
-            onEditDetails
-              ? 'hover:bg-gray-100 hover:text-gray-900'
-              : 'pointer-events-none cursor-default',
-          ].join(' ')}
-          aria-disabled={!onEditDetails}
-          aria-label={onEditDetails ? `Edit catalog details for ${fnsku}` : `FNSKU ${fnsku}`}
-          title={onEditDetails ? 'Edit catalog details' : undefined}
-        >
-          <Pencil className="h-3 w-3" />
-        </button>
+        {onEditDetails ? (
+          <button
+            type="button"
+            onPointerDown={(e) => {
+              /* Beat parent taps / drag handlers that might steal activation on touch */
+              e.stopPropagation();
+            }}
+            onClick={(e) => {
+              e.stopPropagation();
+              onEditDetails();
+            }}
+            className="relative z-10 flex min-h-[2.25rem] min-w-[2.25rem] shrink-0 items-center justify-center rounded-md text-gray-600 transition-colors hover:bg-gray-100 hover:text-gray-900 active:bg-gray-200"
+            aria-label={`Edit catalog details for ${fnsku}`}
+            title="Edit catalog details"
+          >
+            <Pencil className="h-4 w-4 shrink-0" />
+          </button>
+        ) : null}
         <FnskuChip value={fnsku} />
       </div>
       <div className={`${rightColStart} row-span-2 flex shrink-0 flex-col items-start pt-0.5`}>{rightSlot}</div>

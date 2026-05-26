@@ -106,9 +106,9 @@ export function PhoneHistoryPopover({ onClose }: PhoneHistoryPopoverProps) {
     <div
       role="dialog"
       aria-label="Phone history"
-      className="w-[320px] rounded-xl border border-gray-200 bg-white p-4 shadow-xl"
+      className="flex w-[320px] flex-col overflow-hidden rounded-xl border border-gray-200 bg-white shadow-xl"
     >
-      <div className="flex items-start justify-between">
+      <header className="flex shrink-0 items-start justify-between gap-2 border-b border-gray-100 px-4 py-3">
         <div>
           <p className="text-micro font-black uppercase tracking-widest text-gray-500">
             Phone history
@@ -125,18 +125,19 @@ export function PhoneHistoryPopover({ onClose }: PhoneHistoryPopoverProps) {
         >
           <X className="h-3.5 w-3.5" />
         </button>
-      </div>
+      </header>
 
-      {entries === null ? (
-        <div className="mt-3 flex items-center justify-center py-6">
-          <div className="h-5 w-5 rounded-full border-2 border-gray-200 border-t-gray-600 animate-spin" />
-        </div>
-      ) : entries.length === 0 ? (
-        <p className="mt-3 rounded-lg border border-dashed border-gray-200 bg-gray-50/60 px-3 py-6 text-center text-caption italic text-gray-400">
-          {error ?? 'No recent packs yet — pack an order to see history here.'}
-        </p>
-      ) : (
-        <div className="mt-3 space-y-2">
+      <div className="max-h-[min(70vh,calc(100vh-8rem))] overflow-y-auto overscroll-contain px-4 py-2">
+        {entries === null ? (
+          <div className="flex items-center justify-center py-6">
+            <div className="h-5 w-5 animate-spin rounded-full border-2 border-gray-200 border-t-gray-600" />
+          </div>
+        ) : entries.length === 0 ? (
+          <p className="rounded-lg border border-dashed border-gray-200 bg-gray-50/60 px-3 py-5 text-center text-caption italic text-gray-400">
+            {error ?? 'No recent packs yet — pack an order to see history here.'}
+          </p>
+        ) : (
+          <div className="space-y-2">
           {first && (
             <button
               type="button"
@@ -202,8 +203,9 @@ export function PhoneHistoryPopover({ onClose }: PhoneHistoryPopoverProps) {
               ))}
             </div>
           )}
-        </div>
-      )}
+          </div>
+        )}
+      </div>
     </div>
   );
 }

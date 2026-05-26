@@ -237,19 +237,20 @@ export function FbaPairedReviewPanel({
 
   // Add new UPS tracking bucket
   const addBucket = useCallback(() => {
-    setAllocations((prev) => ({
-      ...prev,
-      buckets: [
-        ...prev.buckets,
-        {
-          bucketId: crypto.randomUUID(),
-          trackingNumber: '',
-          carrier: 'UPS',
-          allocations: [],
-          collapsed: false,
-        },
-      ],
-    }));
+    setAllocations((prev) => {
+      const soleUnallocated = prev.unallocated.length === 1 ? prev.unallocated[0] : null;
+      const newBucket = {
+        bucketId: crypto.randomUUID(),
+        trackingNumber: '',
+        carrier: 'UPS',
+        allocations: soleUnallocated ? [soleUnallocated] : [],
+        collapsed: false,
+      };
+      return {
+        unallocated: soleUnallocated ? [] : prev.unallocated,
+        buckets: [...prev.buckets, newBucket],
+      };
+    });
   }, []);
 
   // Update tracking number on a bucket

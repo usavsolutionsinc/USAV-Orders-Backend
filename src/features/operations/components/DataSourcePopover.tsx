@@ -37,7 +37,7 @@ export function DataSourcePopover({ info, anchorRef, open, onOpenChange }: DataS
     const r = el.getBoundingClientRect();
     let left = r.left + (r.width - WIDTH) / 2;
     left = Math.min(Math.max(8, left), window.innerWidth - WIDTH - 8);
-    setPos({ top: r.bottom + 6, left });
+    setPos({ top: r.bottom + 2, left });
   }, [anchorRef]);
 
   useLayoutEffect(() => {

@@ -69,7 +69,7 @@ export function FbaUnallocatedBucket({
           : 'border-gray-200 bg-gray-50/30'
       }`}
     >
-      <div className="flex items-center justify-between px-2.5 py-1.5">
+      <div className="flex items-center justify-between px-3 py-1.5">
         <p className={`${microBadge} tracking-wider text-gray-500`}>Unallocated</p>
         {allocations.length > 0 && (
           <span className={`${microBadge} tabular-nums text-gray-400`}>

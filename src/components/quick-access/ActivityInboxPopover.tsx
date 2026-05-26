@@ -49,7 +49,7 @@ export function ActivityInboxPopover({ onClose }: ActivityInboxPopoverProps) {
             aria-label="Recent activity inbox"
             className="flex max-h-[calc(100vh-6rem)] w-[340px] flex-col overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-xl"
         >
-            <header className="flex shrink-0 items-start justify-between gap-2 border-b border-gray-100 px-4 py-3">
+            <header className="flex shrink-0 items-start justify-between gap-2 border-b border-gray-100 px-4 py-2">
                 <div>
                     <p className="text-micro font-black uppercase tracking-widest text-gray-500">
                         Recent activity

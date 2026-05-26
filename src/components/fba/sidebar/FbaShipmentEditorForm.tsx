@@ -150,7 +150,7 @@ function UnallocatedDropZone({
       }`}
     >
       {/* Header — matches bundle card + item row grid so checkboxes align vertically */}
-      <div className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-x-2 px-2 py-1.5">
+      <div className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-x-2.5 px-3 py-1.5">
         <div className="flex h-5 w-5 items-center justify-center">
           {items.length > 0 ? (
             <PrintTableCheckbox
@@ -426,9 +426,32 @@ export function FbaShipmentEditorForm({
 
   // ── Bundle CRUD ──
   const addBundle = useCallback(() => {
-    // Prepend so newly added tracking sits above already-added ones
-    setBundles((prev) => [{ link_id: null, tracking_number: '', carrier: 'UPS', allocations: [], collapsed: false }, ...prev]);
-  }, []);
+    setBundles((prev) => {
+      const allocatedIds = new Set<number>();
+      for (const b of prev) for (const a of b.allocations) allocatedIds.add(a.item_id);
+      const unallocated = items.filter((i) => !allocatedIds.has(i.item_id) && !removedItemIds.has(i.item_id));
+
+      let initialAllocations: BundleItemAllocation[] = [];
+      if (unallocated.length === 1) {
+        const it = unallocated[0];
+        initialAllocations = [
+          {
+            item_id: it.item_id,
+            fnsku: it.fnsku,
+            display_title: it.display_title || 'No title',
+            qty: it.expected_qty,
+            max_qty: it.expected_qty,
+          },
+        ];
+      }
+
+      // Prepend so newly added tracking sits above already-added ones
+      return [
+        { link_id: null, tracking_number: '', carrier: 'UPS', allocations: initialAllocations, collapsed: false },
+        ...prev,
+      ];
+    });
+  }, [items, removedItemIds]);
 
   const removeBundle = useCallback((index: number) => {
     setBundles((prev) => {

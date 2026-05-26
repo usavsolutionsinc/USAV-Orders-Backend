@@ -9,30 +9,41 @@ import { BARCODE_MODES, type BarcodeMode } from '@/components/barcode/ModeSelect
 import { useBarcodeMode } from '@/hooks/useBarcodeMode';
 import { useLabelRecents } from '@/hooks/useLabelRecents';
 import { useSkuCatalogSearch, type SkuCatalogItem } from '@/hooks/useSkuCatalogSearch';
-import { ChevronDown, Printer, FileText } from '@/components/Icons';
+import { ChevronDown, Printer, FileText, Link2, Check } from '@/components/Icons';
 import { successFeedback } from '@/lib/feedback/confirm';
-import { SkuCatalogSidebar } from '@/components/manuals/SkuCatalogSidebar';
 import { PairingQueueList } from '@/components/products/pairing/PairingQueueList';
-import type { PairingQueueItem } from '@/components/products/pairing/types';
+import type { PairingQueueItem, PairingSort } from '@/components/products/pairing/types';
+import { LibraryBrowser } from '@/components/manuals/LibraryBrowser';
 
-type View = 'manuals' | 'labels' | 'pairing';
+const PAIRING_SORT_ITEMS: HorizontalSliderItem[] = [
+  { id: 'volume',     label: 'Most ordered' },
+  { id: 'confidence', label: 'Top confidence' },
+  { id: 'count',      label: 'Most suggestions' },
+  { id: 'title',      label: 'Alphabetical' },
+];
+
+function parsePairingSort(raw: string | null): PairingSort {
+  if (raw === 'confidence' || raw === 'count' || raw === 'title') return raw;
+  return 'volume';
+}
+
+type View = 'manuals' | 'labels' | 'pairing' | 'qc';
 function parseView(raw: string | null): View {
   if (raw === 'labels') return 'labels';
   if (raw === 'pairing') return 'pairing';
+  if (raw === 'qc') return 'qc';
   // Manuals is the default landing view (folds in the retired /manuals route).
   return 'manuals';
 }
 
 /**
  * Sidebar surface for `/products`. Hosts:
- *   - View toggle — Manuals (default) · Label Printer. Writes `?view=`.
- *     `pairing` remains a valid deep-link view (no pill) so existing
- *     `/products?view=pairing&sku=` URLs continue to work.
+ *   - View toggle — Manuals (default) · Label Printer · Pairing. Writes `?view=`.
  *   - Manuals view (default): renders <SkuCatalogSidebar> which owns its own
  *     search + sort + mode pills + selected-product accordion sections.
  *   - Labels view: mode dropdown + SearchBar + Ecwid product picker list.
  *     Picking a row dispatches `sku:fill` for the MultiSkuSnBarcode workspace.
- *   - Pairing view (no pill, URL-only): PairingQueueList; selection writes ?sku=.
+ *   - Pairing view: PairingQueueList; selection writes ?sku=.
  *
  * Mounted by DashboardSidebar when routeKey === 'products'. The right-pane
  * workspace and this panel both read the same URL searchParams, so no
@@ -43,6 +54,7 @@ export function ProductsSidebarPanel() {
   const searchParams = useSearchParams();
   const view = parseView(searchParams.get('view'));
   const currentQuery = searchParams.get('q') || '';
+  const pairingSort = parsePairingSort(searchParams.get('sort'));
 
   const { mode, setMode } = useBarcodeMode();
   const { recents } = useLabelRecents();
@@ -51,6 +63,8 @@ export function ProductsSidebarPanel() {
     () => [
       { id: 'manuals', label: 'Manuals',       icon: FileText },
       { id: 'labels',  label: 'Label Printer', icon: Printer },
+      { id: 'pairing', label: 'Pairing',       icon: Link2 },
+      { id: 'qc',      label: 'QC Checklist',  icon: Check },
     ],
     [],
   );
@@ -88,6 +102,12 @@ export function ProductsSidebarPanel() {
     [updateParams],
   );
 
+  const handlePairingSortChange = useCallback(
+    // 'volume' is the default — drop the param when selected so the URL stays clean.
+    (id: string) => updateParams({ sort: id === 'volume' ? null : id }),
+    [updateParams],
+  );
+
   const handleProductPick = useCallback((sku: string) => {
     window.dispatchEvent(new CustomEvent('sku:fill', { detail: { sku } }));
   }, []);
@@ -96,28 +116,9 @@ export function ProductsSidebarPanel() {
   const isLabels = view === 'labels';
   const isPairing = view === 'pairing';
 
-  // Manuals view delegates the whole sidebar body to SkuCatalogSidebar — it
-  // owns its own search, sort/mode pills, and accordion editor. The Products
-  // view pills sit above it.
-  if (isManuals) {
-    return (
-      <div className="flex h-full flex-col overflow-hidden bg-white">
-        <div className={`${sidebarHeaderBandClass} px-3`}>
-          <HorizontalButtonSlider
-            items={viewItems}
-            value={view}
-            onChange={handleViewChange}
-            variant="nav"
-            aria-label="Products view"
-          />
-        </div>
-        <div className="min-h-0 flex-1">
-          <SkuCatalogSidebar basePath="/products" />
-        </div>
-      </div>
-    );
-  }
-
+  // Manuals view = the file-tree library browser (sidebar) + PDF viewer
+  // (main pane). QC delegates to the main pane. Labels/Pairing have their
+  // own sidebar bodies below.
   return (
     <div className="flex h-full flex-col overflow-hidden bg-white">
       <div className={`${sidebarHeaderBandClass} px-3`}>
@@ -139,17 +140,41 @@ export function ProductsSidebarPanel() {
         </div>
       )}
 
-      {/* Search bar — hidden in pairing view; the pairing queue has its own
-          inline search wired to its filter, so a second one was redundant. */}
-      {!isPairing && (
-        <div className={sidebarHeaderRowClass}>
-          <SearchBar
-            value={searchInput}
-            onChange={handleSearchChange}
-            onClear={() => handleSearchChange('')}
-            placeholder={isLabels ? 'Search SKU, title…' : 'Search products…'}
-            variant={isLabels ? 'blue' : 'gray'}
-            size="compact"
+      {/* Shared search bar — drives the Labels picker, the Pairing queue, and
+          the Library file tree off the same `?q=` URL param. Each consumer
+          debounces internally as needed. */}
+      <div className={sidebarHeaderRowClass}>
+        <SearchBar
+          value={searchInput}
+          onChange={handleSearchChange}
+          onClear={() => handleSearchChange('')}
+          placeholder={
+            isLabels
+              ? 'Search SKU, title…'
+              : isPairing
+                ? 'Search pairing queue…'
+                : isManuals
+                  ? 'Fuzzy search folders & manuals…'
+                  : 'Search products…'
+          }
+          variant={isLabels ? 'blue' : 'gray'}
+          size="compact"
+        />
+      </div>
+
+      {/* Pairing sort pills — second row of the sidebar, matches the top-level
+          view-pill style (same HorizontalButtonSlider, `nav` variant). Default
+          'volume' surfaces the highest-order-volume SKUs first. URL-backed via
+          `?sort=` so deep links preserve the sort. */}
+      {isPairing && (
+        <div className="shrink-0 border-b border-gray-100 bg-white px-3 py-1.5">
+          <HorizontalButtonSlider
+            items={PAIRING_SORT_ITEMS}
+            value={pairingSort}
+            onChange={handlePairingSortChange}
+            variant="nav"
+            size="md"
+            aria-label="Pairing queue sort"
           />
         </div>
       )}
@@ -161,7 +186,9 @@ export function ProductsSidebarPanel() {
           onPick={handleProductPick}
         />
       ) : isPairing ? (
-        <PairingSidebarQueue />
+        <PairingSidebarQueue query={searchInput} sort={pairingSort} />
+      ) : isManuals ? (
+        <LibraryBrowser query={searchInput} basePath="/products" />
       ) : null}
     </div>
   );
@@ -174,9 +201,10 @@ export default ProductsSidebarPanel;
 /**
  * The pairing queue list, hosted directly in the sidebar (replaces the
  * standalone left rail in ProductsPairingShell). Selection writes ?sku=
- * so the main pane (ProductHubPanel) picks it up via URL.
+ * so the main pane (ProductHubPanel) picks it up via URL. Search comes in
+ * from the shared sidebar SearchBar (`?q=`).
  */
-function PairingSidebarQueue() {
+function PairingSidebarQueue({ query, sort }: { query: string; sort: PairingSort }) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const selectedSku = searchParams.get('sku') || null;
@@ -193,6 +221,8 @@ function PairingSidebarQueue() {
 
   return (
     <PairingQueueList
+      query={query}
+      sort={sort}
       selectedSku={selectedSku}
       onSelect={handleSelect}
     />
@@ -230,7 +260,9 @@ function ModeDropdown({ mode, onChange }: ModeDropdownProps) {
         onClick={() => setOpen((o) => !o)}
         aria-haspopup="listbox"
         aria-expanded={open}
-        className="flex w-full items-center gap-3 rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-left transition-colors hover:border-gray-300"
+        className={`flex w-full items-center gap-3 rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-left transition-colors hover:border-gray-300 ${
+          open ? 'rounded-b-none border-b-0' : ''
+        }`}
       >
         <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-blue-600 text-white">
           <CurrentIcon className="h-4 w-4" />
@@ -251,7 +283,7 @@ function ModeDropdown({ mode, onChange }: ModeDropdownProps) {
       {open && (
         <ul
           role="listbox"
-          className="absolute left-0 right-0 top-full z-20 mt-1 overflow-hidden rounded-xl border border-gray-200 bg-white shadow-lg"
+          className="absolute left-0 right-0 top-full z-20 overflow-hidden rounded-b-xl rounded-t-none border border-gray-200 border-t-0 bg-white shadow-lg -mt-px"
         >
           {BARCODE_MODES.map(({ id, label, description, Icon }) => {
             const isActive = id === mode;

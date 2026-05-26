@@ -7,9 +7,12 @@ export interface PairingQueueItem {
   imageUrl: string | null;
   suggestionCount: number;
   topConfidence: number;
+  orderCount: number;
   confirmedCount: number;
   platforms: string[];
 }
+
+export type PairingSort = 'volume' | 'confidence' | 'count' | 'title';
 
 export interface PairingQueueResponse {
   success: true;

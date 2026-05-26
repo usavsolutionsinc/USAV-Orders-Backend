@@ -102,8 +102,8 @@ export function QuickAccessButton({ className, buttonClassName, placement = 'dow
   if (!authUser) return null;
 
   const popoverPosition = placement === 'up'
-    ? 'absolute right-0 bottom-full mb-2 z-50'
-    : 'absolute right-0 top-full mt-2 z-50';
+    ? 'absolute right-0 bottom-full mb-0.5 z-50'
+    : 'absolute right-0 top-full mt-0.5 z-50';
 
   return (
     <div ref={wrapperRef} className={cn("relative", className)}>

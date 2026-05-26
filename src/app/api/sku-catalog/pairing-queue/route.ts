@@ -11,6 +11,11 @@ import pool from '@/lib/db';
  *
  * Query params:
  *   q          full-text fragment matched against sku_catalog.sku / product_title
+ *   sort       'volume' (default) | 'confidence' | 'count' | 'title'
+ *              - volume     = most-ordered canonical SKU first (highest leverage)
+ *              - confidence = highest suggestion confidence first (easy wins)
+ *              - count      = most suggestions first (deepest pairing backlog)
+ *              - title      = alphabetical
  *   limit      default 100, max 500
  *   offset     default 0
  *
@@ -18,7 +23,7 @@ import pool from '@/lib/db';
  *   {
  *     success, items: [
  *       { skuCatalogId, sku, productTitle, imageUrl,
- *         suggestionCount, topConfidence,
+ *         suggestionCount, topConfidence, orderCount,
  *         confirmedCount,
  *         platforms: ['amazon','ebay',...]  // platforms with at least one suggestion
  *       }
@@ -28,11 +33,38 @@ import pool from '@/lib/db';
  *
  * Reads from sku_pairing_suggestions so this query is cheap regardless of
  * how large sku_platform_ids gets — the cron does the expensive work.
+ * order_count is a separate aggregate against orders.sku_catalog_id so the
+ * "most ordered SKU = highest pairing priority" sort can be the default.
  */
+
+type SortKey = 'volume' | 'confidence' | 'count' | 'title';
+
+function parseSort(raw: string | null): SortKey {
+  if (raw === 'confidence') return 'confidence';
+  if (raw === 'count') return 'count';
+  if (raw === 'title') return 'title';
+  return 'volume';
+}
+
+function orderByClause(sort: SortKey): string {
+  switch (sort) {
+    case 'confidence':
+      return 'd.top_confidence DESC NULLS LAST, d.suggestion_count DESC, sc.product_title ASC';
+    case 'count':
+      return 'd.suggestion_count DESC, d.top_confidence DESC NULLS LAST, sc.product_title ASC';
+    case 'title':
+      return 'sc.product_title ASC NULLS LAST, sc.sku ASC';
+    case 'volume':
+    default:
+      return 'COALESCE(oc.order_count, 0) DESC, d.top_confidence DESC NULLS LAST, d.suggestion_count DESC';
+  }
+}
+
 export const GET = withAuth(
   async (request) => {
     const url = new URL(request.url);
     const q = (url.searchParams.get('q') || '').trim();
+    const sort = parseSort(url.searchParams.get('sort'));
     const limit = Math.min(Math.max(Number(url.searchParams.get('limit') || 100), 1), 500);
     const offset = Math.max(Number(url.searchParams.get('offset') || 0), 0);
 
@@ -68,6 +100,7 @@ export const GET = withAuth(
           d.suggestion_count   AS "suggestionCount",
           d.top_confidence     AS "topConfidence",
           d.platforms,
+          COALESCE(oc.order_count, 0)::int AS "orderCount",
           (
             SELECT COUNT(*)::int FROM sku_platform_ids sp
              WHERE (sp.sku_catalog_id = sc.id OR sp.platform_sku = sc.sku)
@@ -75,9 +108,15 @@ export const GET = withAuth(
           ) AS "confirmedCount"
         FROM debt d
         JOIN sku_catalog sc ON sc.id = d.sku_catalog_id
+        LEFT JOIN (
+          SELECT sku_catalog_id, COUNT(*)::int AS order_count
+            FROM orders
+           WHERE sku_catalog_id IS NOT NULL
+           GROUP BY sku_catalog_id
+        ) oc ON oc.sku_catalog_id = sc.id
         WHERE sc.is_active = true
         ${qClause}
-        ORDER BY d.top_confidence DESC NULLS LAST, d.suggestion_count DESC, sc.product_title ASC
+        ORDER BY ${orderByClause(sort)}
         LIMIT $${limitIdx} OFFSET $${offsetIdx}
       `;
 

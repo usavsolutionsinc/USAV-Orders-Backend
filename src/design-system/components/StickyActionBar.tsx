@@ -258,7 +258,7 @@ export function StickyActionBar({
                     <ChevronDown className="h-4 w-4 opacity-95" />
                   </button>
                   <div
-                    className="invisible absolute left-0 bottom-full z-50 pb-1.5 opacity-0 transition-opacity duration-75 group-hover/split-menu:pointer-events-auto group-hover/split-menu:visible group-hover/split-menu:opacity-100 group-focus-within/split-menu:pointer-events-auto group-focus-within/split-menu:visible group-focus-within/split-menu:opacity-100"
+                    className="invisible absolute left-0 bottom-full z-50 pb-0.5 opacity-0 transition-opacity duration-75 group-hover/split-menu:pointer-events-auto group-hover/split-menu:visible group-hover/split-menu:opacity-100 group-focus-within/split-menu:pointer-events-auto group-focus-within/split-menu:visible group-focus-within/split-menu:opacity-100"
                     role="presentation"
                   >
                     <ul

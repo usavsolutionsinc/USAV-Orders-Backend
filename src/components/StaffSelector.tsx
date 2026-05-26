@@ -69,7 +69,9 @@ export default function StaffSelector({ role = 'all', selectedStaffId, onSelect,
             <button
                 onClick={() => setIsOpen(!isOpen)}
                 className={`flex items-center gap-2 bg-white border border-gray-400 hover:bg-gray-50 hover:border-gray-500 transition-all shadow-sm ${
-                    isBoxy ? 'min-h-[44px] px-3 py-1 rounded-none h-full w-full justify-between border-0 shadow-none' : 'px-3 py-1.5 rounded-xl w-full justify-between'
+                    isBoxy
+                        ? 'min-h-[44px] px-3 py-1 rounded-none h-full w-full justify-between border-0 shadow-none'
+                        : `px-3 py-1.5 w-full justify-between rounded-xl ${isOpen ? 'rounded-b-none border-b-0' : ''}`
                 }`}
             >
                 <span className={`text-xs font-black tracking-tight ${selectedTheme ? resolved.colors.text : 'text-gray-900'}`}>
@@ -97,7 +99,7 @@ export default function StaffSelector({ role = 'all', selectedStaffId, onSelect,
                         onClick={() => setIsOpen(false)}
                     />
                     <div className={`absolute top-full left-0 w-full bg-white border border-gray-400 shadow-xl overflow-hidden z-[70] animate-in fade-in slide-in-from-top-1 duration-200 ${
-                        isBoxy ? 'rounded-none border-t-0' : 'rounded-xl mt-1'
+                        isBoxy ? 'rounded-none border-t-0' : 'rounded-t-none rounded-b-xl border-t-0 -mt-px'
                     }`}>
                         <div className={`${isBoxy ? '' : 'p-1 space-y-1'}`}>
                             {otherStaff.map((member) => {

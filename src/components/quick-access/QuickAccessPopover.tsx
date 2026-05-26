@@ -94,7 +94,7 @@ export function QuickAccessPopover({ onClose, onOpenHistoryPopover, onOpenInboxP
       aria-label="Quick access"
       className="flex max-h-[calc(100vh-6rem)] w-[340px] flex-col overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-xl"
     >
-      <header className="flex shrink-0 items-center justify-between gap-2 border-b border-gray-100 px-4 py-2.5">
+      <header className="flex shrink-0 items-center justify-between gap-2 border-b border-gray-100 px-4 py-2">
         <div className="flex items-center gap-2">
           <p className="text-label font-bold text-gray-900">Quick access</p>
         </div>

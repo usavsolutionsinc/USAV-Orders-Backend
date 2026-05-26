@@ -165,7 +165,7 @@ function FilterDropdown({ label, count, open, onToggle, onClose, children }: Fil
         const update = () => {
             const rect = triggerRef.current?.getBoundingClientRect();
             if (!rect) return;
-            setCoords({ top: rect.bottom + 4, left: rect.left });
+            setCoords({ top: rect.bottom + 1, left: rect.left });
         };
         update();
         window.addEventListener('resize', update);

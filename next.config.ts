@@ -38,6 +38,10 @@ const withPWA = withPWAInit({
 const nextConfig: NextConfig = {
     turbopack: {},
     outputFileTracingRoot: process.cwd(),
+    // Allow cross-device dev access through Cloudflare quick tunnels
+    // (pnpm dev:tunnel) and LAN IPs. Without this, Next 15+ blocks HMR and
+    // dev asset requests from origins other than localhost.
+    allowedDevOrigins: ['*.trycloudflare.com', '*.ngrok-free.app', '192.168.*'],
     experimental: {
         webpackMemoryOptimizations: true,
         optimizePackageImports: [

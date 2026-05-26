@@ -140,7 +140,7 @@ export function FbaAddToShipmentPanel({
         }}
         className={open ? 'overflow-hidden' : 'overflow-hidden pointer-events-none'}
       >
-        <div className="px-3 py-1">
+        <div className="px-3 pb-2 pt-0">
           <div className="space-y-2">
             <select
               value={addShipmentId === '' ? '' : String(addShipmentId)}

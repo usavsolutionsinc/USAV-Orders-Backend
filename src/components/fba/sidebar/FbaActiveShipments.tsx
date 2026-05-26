@@ -260,23 +260,25 @@ function ActiveShipmentCard({
           <Package className="h-4 w-4 shrink-0 text-purple-500" />
           <div className="flex min-w-0 flex-col gap-0.5">
             <div className="flex min-w-0 items-baseline gap-1.5">
-              <span className="truncate font-mono text-label font-black text-gray-900">
-                {shipment.amazon_shipment_id || shipment.shipment_ref}
+              <span className="inline-flex min-w-0 max-w-full items-center gap-0.5 leading-none">
+                <span className="truncate font-mono text-label font-black leading-none text-gray-900">
+                  {shipment.amazon_shipment_id || shipment.shipment_ref}
+                </span>
+                {editable && (
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      window.dispatchEvent(new CustomEvent(FBA_OPEN_SHIPMENT_EDITOR, { detail: shipment }));
+                    }}
+                    className="inline-flex size-3 shrink-0 items-center justify-center rounded-sm text-purple-400 transition-colors hover:bg-purple-100/80 hover:text-purple-700"
+                    aria-label="Edit shipment"
+                    title="Edit shipment"
+                  >
+                    <Pencil className="pointer-events-none h-2 w-2 shrink-0" />
+                  </button>
+                )}
               </span>
-              {editable && (
-                <button
-                  type="button"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    window.dispatchEvent(new CustomEvent(FBA_OPEN_SHIPMENT_EDITOR, { detail: shipment }));
-                  }}
-                  className="flex h-5 w-5 shrink-0 items-center justify-center rounded text-purple-400 transition-colors hover:bg-purple-100 hover:text-purple-700"
-                  aria-label="Edit shipment"
-                  title="Edit shipment"
-                >
-                  <Pencil className="h-3 w-3" />
-                </button>
-              )}
               <span className="shrink-0 text-micro font-bold text-gray-400">
                 {shipment.items.length} SKU · {totalQty} units
               </span>
@@ -317,7 +319,7 @@ function ActiveShipmentCard({
             style={{ willChange: 'height, opacity' }}
             className="overflow-hidden"
           >
-            <div className="mt-3 border-t border-purple-100 pt-0">
+            <div className="border-t border-purple-100">
               {(() => {
                 const hasBundles = (shipment.bundles?.length ?? 0) > 0;
                 // Compute unallocated items: items not in any tracking bundle

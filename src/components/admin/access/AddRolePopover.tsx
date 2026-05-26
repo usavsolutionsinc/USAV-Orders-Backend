@@ -52,7 +52,7 @@ export function AddRolePopover({ roles, onAdd, disabled }: AddRolePopoverProps) 
       r.left,
       window.innerWidth - POPOVER_WIDTH - 8,
     );
-    setPos({ top: r.bottom + 6, left: Math.max(8, left) });
+    setPos({ top: r.bottom + 2, left: Math.max(8, left) });
   }, []);
 
   useEffect(() => {

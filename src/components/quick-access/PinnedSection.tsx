@@ -21,8 +21,8 @@ export function PinnedSection({ onNavigate }: PinnedSectionProps) {
   const { settings, unpin } = useQuickAccess();
 
   return (
-    <div className="px-2 py-2">
-      <div className="flex items-center justify-between px-2 pb-1">
+    <div className="px-2 pb-2 pt-1">
+      <div className="flex items-center justify-between px-2 pb-0.5">
         <p className="text-micro font-bold uppercase tracking-widest text-gray-400">Pinned</p>
         <PinThisPageButton />
       </div>

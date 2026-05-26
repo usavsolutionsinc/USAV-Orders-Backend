@@ -150,7 +150,7 @@ export function ViewDropdown<T extends string>({
               isBoxy ? 'rounded-none border-t-0' : 'rounded-b-xl -mt-[1px]'
             }`}
           >
-            <ul role="listbox" aria-label="Select view" className="w-full py-1">
+            <ul role="listbox" aria-label="Select view" className="w-full pb-1 pt-0">
               {otherOptions.map((option, index) => {
                 return (
                   <li key={option.value}>

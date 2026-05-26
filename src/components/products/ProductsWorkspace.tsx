@@ -2,7 +2,7 @@
 
 import { useSearchParams } from 'next/navigation';
 import dynamic from 'next/dynamic';
-import { ManualsTables } from '@/components/manuals/ManualsTables';
+import { ManualLibrary } from '@/components/manuals/ManualLibrary';
 
 // Lazy-load the label printer — it pulls in the QR library + barcode helpers
 // + sub-components that aren't needed for the default Manuals view.
@@ -27,7 +27,9 @@ export function ProductsWorkspace() {
 
   if (view === 'labels') return <MultiSkuSnBarcode layout="horizontal" />;
   if (view === 'pairing') return <ProductsPairingShell />;
-  return <ManualsTables basePath="/products" />;
+  // Manuals (default) + QC both render the PDF viewer in the main pane —
+  // selection comes from the sidebar's LibraryBrowser (`?id=`).
+  return <ManualLibrary />;
 }
 
 export default ProductsWorkspace;

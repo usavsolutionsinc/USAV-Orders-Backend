@@ -1,61 +1,45 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Search, X, Loader2, AlertCircle } from '@/components/Icons';
+import { AlertCircle } from '@/components/Icons';
 import { platformStyle } from './platform-style';
 import { usePairingQueue } from './usePairingQueue';
-import type { PairingQueueItem } from './types';
+import type { PairingQueueItem, PairingSort } from './types';
 
 interface PairingQueueListProps {
+  /** Search fragment (sku/title). Comes from the shared sidebar SearchBar. */
+  query: string;
+  /** Sort key. Comes from the sidebar's sort pill row (URL-backed via ?sort=). */
+  sort: PairingSort;
   selectedSku: string | null;
   onSelect: (item: PairingQueueItem) => void;
 }
 
 /**
  * Left rail: canonical SKUs that have at least one pairing suggestion.
- * Ordered by confidence × suggestion volume so the highest-leverage products
- * sit on top. Empty results = "everything's paired" success state.
+ *
+ * Search and sort are both owned by the parent sidebar — the SearchBar drives
+ * `query` and the sort-pill row drives `sort`. This component is dumb: it just
+ * fetches + renders. Default sort is `volume` (most-ordered first) so the
+ * highest-leverage SKUs sit on top.
+ *
+ * Empty results = "everything's paired" success state.
  */
-export function PairingQueueList({ selectedSku, onSelect }: PairingQueueListProps) {
-  const [draft, setDraft] = useState('');
-  const [query, setQuery] = useState('');
-
-  // Debounce
+export function PairingQueueList({ query, sort, selectedSku, onSelect }: PairingQueueListProps) {
+  // Debounce the search prop locally so a sidebar keystroke doesn't slam the
+  // API on every character.
+  const [debouncedQuery, setDebouncedQuery] = useState(query);
   useEffect(() => {
-    const handle = window.setTimeout(() => setQuery(draft.trim()), 250);
+    const handle = window.setTimeout(() => setDebouncedQuery(query.trim()), 250);
     return () => window.clearTimeout(handle);
-  }, [draft]);
+  }, [query]);
 
-  const { items, total, loading, error } = usePairingQueue(query);
+  const { items, total, loading, error } = usePairingQueue(debouncedQuery, sort);
 
   return (
-    <div className="flex h-full min-h-0 flex-col border-r border-gray-200 bg-white">
-      {/* Search */}
-      <div className="shrink-0 border-b border-gray-200 px-3 py-2">
-        <label className="relative block">
-          <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-gray-400" />
-          <input
-            type="search"
-            value={draft}
-            onChange={(e) => setDraft(e.target.value)}
-            placeholder="Search products with pairing debt…"
-            className="w-full rounded-md border border-gray-200 bg-gray-50 py-1.5 pl-8 pr-8 text-xs text-gray-900 placeholder:text-gray-400 focus:border-blue-300 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-100"
-          />
-          {draft ? (
-            <button
-              type="button"
-              onClick={() => setDraft('')}
-              className="absolute right-2 top-1/2 -translate-y-1/2 rounded p-0.5 text-gray-400 hover:bg-gray-100 hover:text-gray-600"
-              aria-label="Clear search"
-            >
-              <X className="h-3.5 w-3.5" />
-            </button>
-          ) : null}
-        </label>
-      </div>
-
+    <div className="flex h-full min-h-0 flex-col bg-white">
       {/* Count bar */}
-      <div className="flex items-center justify-between border-b border-gray-100 px-3 py-1.5 text-micro font-black uppercase tracking-wider text-gray-500">
+      <div className="flex items-center justify-between gap-2 border-b border-gray-100 px-3 py-1.5 text-micro font-black uppercase tracking-wider text-gray-500">
         <span>
           {loading ? 'Loading…' : total === null ? '' : `${total} need review`}
         </span>
@@ -80,10 +64,10 @@ export function PairingQueueList({ selectedSku, onSelect }: PairingQueueListProp
         ) : items.length === 0 ? (
           <div className="px-4 py-12 text-center">
             <p className="text-xs font-bold text-gray-500">
-              {query ? 'No matches' : 'All caught up'}
+              {debouncedQuery ? 'No matches' : 'All caught up'}
             </p>
             <p className="mt-1 text-micro text-gray-400">
-              {query
+              {debouncedQuery
                 ? 'Try a different search term.'
                 : 'No pairing suggestions to review right now.'}
             </p>
@@ -135,6 +119,14 @@ function PairingQueueRow({
           <div className="flex items-center gap-1.5">
             <span className="truncate font-mono text-xs font-bold text-gray-900">{item.sku}</span>
             <ConfidenceDot value={item.topConfidence} />
+            {item.orderCount > 0 && (
+              <span
+                className="inline-flex items-center rounded bg-amber-50 px-1 text-eyebrow font-bold uppercase tracking-wider text-amber-700 ring-1 ring-amber-200"
+                title={`${item.orderCount} order line${item.orderCount === 1 ? '' : 's'} reference this SKU`}
+              >
+                {formatVolume(item.orderCount)} ord
+              </span>
+            )}
             <span className="text-micro font-semibold text-gray-400">
               {item.suggestionCount} suggested
             </span>
@@ -181,5 +173,7 @@ function ConfidenceDot({ value }: { value: number }) {
   );
 }
 
-const _useLoader = Loader2; // silence unused import; reserved for future spinners
-void _useLoader;
+function formatVolume(n: number): string {
+  if (n >= 1000) return `${(n / 1000).toFixed(n >= 10_000 ? 0 : 1)}k`;
+  return String(n);
+}

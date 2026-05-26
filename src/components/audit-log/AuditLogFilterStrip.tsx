@@ -312,7 +312,7 @@ function StaffCombobox({
       </div>
 
       {open && (
-        <div className="absolute left-0 right-0 top-full z-30 mt-1 max-h-60 overflow-y-auto rounded-lg border border-gray-200 bg-white shadow-lg">
+        <div className="absolute left-0 right-0 top-full z-30 max-h-60 overflow-y-auto rounded-b-lg rounded-t-none border border-gray-200 border-t-0 bg-white shadow-lg -mt-px">
           <button
             type="button"
             onClick={() => {

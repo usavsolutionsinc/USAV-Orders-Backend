@@ -140,7 +140,7 @@ export function FbaFnskuDirectoryPanel({
                   {row.asin || '-'}
                 </button>
                 {row.asin ? (
-                  <div className="pointer-events-none absolute top-full mt-1 right-0 opacity-0 group-hover:opacity-100 transition-opacity z-20">
+                  <div className="pointer-events-none absolute top-full mt-0.5 right-0 opacity-0 group-hover:opacity-100 transition-opacity z-20">
                     <a
                       href={`https://www.amazon.com/dp/${encodeURIComponent(String(row.asin).trim())}`}
                       target="_blank"

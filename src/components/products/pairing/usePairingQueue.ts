@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import type { PairingQueueItem, PairingQueueResponse } from './types';
+import type { PairingQueueItem, PairingQueueResponse, PairingSort } from './types';
 
 interface UsePairingQueueResult {
   items: PairingQueueItem[];
@@ -16,7 +16,7 @@ interface UsePairingQueueResult {
  * commits a pair-batch (listening on the `sku-pairing-updated` event the
  * Product Hub dispatches after a successful save).
  */
-export function usePairingQueue(query: string): UsePairingQueueResult {
+export function usePairingQueue(query: string, sort: PairingSort = 'volume'): UsePairingQueueResult {
   const [items, setItems] = useState<PairingQueueItem[]>([]);
   const [total, setTotal] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
@@ -36,6 +36,7 @@ export function usePairingQueue(query: string): UsePairingQueueResult {
       try {
         const url = new URL('/api/sku-catalog/pairing-queue', window.location.origin);
         if (query.trim()) url.searchParams.set('q', query.trim());
+        url.searchParams.set('sort', sort);
         url.searchParams.set('limit', '200');
         const res = await fetch(url.toString(), { credentials: 'same-origin' });
         if (!res.ok) {
@@ -58,7 +59,7 @@ export function usePairingQueue(query: string): UsePairingQueueResult {
 
     run();
     return () => { cancelled = true; };
-  }, [query, refreshKey]);
+  }, [query, sort, refreshKey]);
 
   useEffect(() => {
     const handler = () => refresh();

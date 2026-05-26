@@ -30,8 +30,8 @@ export function ActionsSection({
   if (!showInbox && !showPhoneHistory) return null;
 
   return (
-    <div className="px-2 py-2">
-      <p className="px-2 pb-1 text-micro font-bold uppercase tracking-widest text-gray-400">Actions</p>
+    <div className="px-2 pb-2 pt-1">
+      <p className="px-2 pb-0.5 text-micro font-bold uppercase tracking-widest text-gray-400">Actions</p>
       <div className="space-y-0.5">
         {showInbox ? (
           <Row

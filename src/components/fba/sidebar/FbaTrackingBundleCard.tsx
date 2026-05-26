@@ -79,7 +79,7 @@ export function FbaTrackingBundleCard({
       }`}
     >
       {/* Header — grid matches FbaSelectedLineRow so checkboxes align with item rows below */}
-      <div className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-x-2 bg-gray-50/80 px-2 py-1.5">
+      <div className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-x-2.5 bg-gray-50/80 px-3 py-1.5">
         {/* Col 1: checkbox — always reserves slot for alignment */}
         <div className="flex h-5 w-5 items-center justify-center">
           {bundle.allocations.length > 0 ? (

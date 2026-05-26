@@ -87,8 +87,8 @@ export function ActivityInboxButton({
 
   const popoverPos =
     popoverPlacement === 'up'
-      ? 'bottom-full mb-2 right-0'
-      : 'top-full mt-2 right-0';
+      ? 'bottom-full mb-0.5 right-0'
+      : 'top-full mt-0.5 right-0';
 
   return (
     <div ref={rootRef} className={cn('relative', className)}>
@@ -115,7 +115,7 @@ export function ActivityInboxButton({
             popoverPos,
           )}
         >
-          <div className="flex items-center justify-between border-b border-gray-100 px-3 py-2">
+          <div className="flex items-center justify-between gap-2 border-b border-gray-100 px-3 pb-1.5 pt-2">
             <span className="text-mini font-black uppercase tracking-wider text-gray-700">
               Recent activity
             </span>

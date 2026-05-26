@@ -86,7 +86,7 @@ export function FbaTrackingBucket({
       }`}
     >
       {/* Header */}
-      <div className="flex items-center gap-1.5 px-2 py-1.5">
+      <div className="flex items-center gap-1.5 px-3 py-1.5">
         <button
           type="button"
           onClick={() => onToggleCollapse(bucket.bucketId)}
