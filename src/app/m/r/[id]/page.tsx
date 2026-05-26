@@ -5,6 +5,7 @@ import { useParams, useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
 import { workflowStatusTableLabel } from '@/components/station/receiving-constants';
 import { NetworkChip } from '@/components/mobile/NetworkChip';
+import { ReceivingQaActionSheet } from '@/components/mobile/receiving/ReceivingQaActionSheet';
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -197,6 +198,7 @@ function CartonPageInner() {
   const carton = data?.receiving;
   const lines = useMemo(() => data?.lines ?? [], [data]);
   const events = useMemo(() => data?.events ?? [], [data]);
+  const [actionsOpen, setActionsOpen] = useState(false);
 
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col">
@@ -424,9 +426,35 @@ function CartonPageInner() {
         )}
       </main>
 
-      <footer className="sticky bottom-0 bg-white border-t border-slate-200 px-4 py-3 text-caption font-semibold text-slate-500 text-center">
-        Tap a line to update status, putaway, or scan serial.
+      <footer
+        className="sticky bottom-0 z-20 border-t border-slate-200 bg-white/95 px-4 py-3 backdrop-blur-md"
+        style={{ paddingBottom: 'max(0.75rem, env(safe-area-inset-bottom))' }}
+      >
+        <button
+          type="button"
+          onClick={() => setActionsOpen(true)}
+          disabled={loading || lines.length === 0}
+          className="flex h-12 w-full items-center justify-center rounded-2xl bg-gradient-to-br from-blue-500 to-blue-700 text-sm font-black uppercase tracking-wider text-white shadow-md shadow-blue-600/30 transition-transform active:scale-[0.98] disabled:opacity-40"
+        >
+          {lines.length === 0 ? 'No lines to update' : `Update ${lines.length} line${lines.length === 1 ? '' : 's'}`}
+        </button>
+        <p className="mt-2 text-center text-caption font-semibold text-slate-500">
+          Or tap a line above to update one at a time.
+        </p>
       </footer>
+
+      <ReceivingQaActionSheet
+        open={actionsOpen}
+        onClose={() => setActionsOpen(false)}
+        receivingId={receivingId}
+        lines={lines.map((l) => ({
+          id: l.id,
+          sku: l.sku,
+          workflow_status: l.workflow_status,
+          qa_status: l.qa_status,
+        }))}
+        onMutated={() => { void load(); }}
+      />
     </div>
   );
 }

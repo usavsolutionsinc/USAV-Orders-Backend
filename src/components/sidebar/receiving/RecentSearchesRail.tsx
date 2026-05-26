@@ -107,11 +107,10 @@ function SearchRailRow({ entry }: { entry: ReceivingSearchEntry }) {
     entry.tracking.length > 18 ? `${entry.tracking.slice(0, 4)}…${last4(entry.tracking)}` : entry.tracking;
   return (
     <motion.li
-      layout
-      initial={{ opacity: 0, y: -2 }}
-      animate={{ opacity: 1, y: 0 }}
+      initial={false}
+      animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
-      transition={{ duration: 0.18, ease: [0.22, 1, 0.36, 1] }}
+      transition={{ duration: 0.12, ease: [0.22, 1, 0.36, 1] }}
     >
       <button
         type="button"

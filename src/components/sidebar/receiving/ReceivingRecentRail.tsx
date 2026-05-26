@@ -429,13 +429,12 @@ function RailRow({
   return (
     <motion.li
       ref={rowRef}
-      layout
       role="option"
       aria-selected={isSelected}
-      initial={{ opacity: 0, y: -2 }}
-      animate={{ opacity: 1, y: 0 }}
+      initial={false}
+      animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
-      transition={{ duration: 0.18, ease: [0.22, 1, 0.36, 1] }}
+      transition={{ duration: 0.12, ease: [0.22, 1, 0.36, 1] }}
       className="relative"
       onMouseEnter={scheduleOpen}
       onMouseLeave={scheduleClose}
@@ -558,12 +557,11 @@ function PkgGroupHeader({
 }) {
   return (
     <motion.li
-      layout
       role="presentation"
-      initial={{ opacity: 0, y: -2 }}
-      animate={{ opacity: 1, y: 0 }}
-      exit={{ opacity: 0, y: -2 }}
-      transition={{ duration: 0.18, ease: [0.22, 1, 0.36, 1] }}
+      initial={false}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      transition={{ duration: 0.12, ease: [0.22, 1, 0.36, 1] }}
       className="relative"
     >
       <button

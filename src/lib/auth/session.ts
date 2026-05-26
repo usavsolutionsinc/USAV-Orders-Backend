@@ -5,10 +5,16 @@
  * an entire user's sessions instantly — something a JWT can't do without a
  * blocklist.
  *
- * Idle-timeout policy by device_kind:
+ * Idle-timeout policy by device_kind (when staff.session_policy='default'):
  *   station  →  8 hr idle, 24 hr absolute  (workstation default, survives a coffee break + lunch)
  *   personal → 12 hr idle, 30 days absolute (the "Remember me" device — long-lived)
  *   phone    →  4 hr idle,  4 hr absolute  (matches Ably token TTL)
+ *
+ * Per-staff session_policy overrides:
+ *   extended   — personal devices get 7d idle / 90d absolute; others unchanged
+ *   persistent — no idle, 1 year absolute, sliding (touchSession refreshes it).
+ *                Stays signed in indefinitely so long as the staff keeps using
+ *                the device. Still revocable from the admin UI.
  */
 
 import { randomBytes } from 'node:crypto';
@@ -17,6 +23,8 @@ import pool from '@/lib/db';
 export const SESSION_COOKIE_NAME = 'usav_sid';
 
 export type DeviceKind = 'station' | 'personal' | 'phone';
+export type SessionPolicy = 'default' | 'extended' | 'persistent';
+export const SESSION_POLICIES: readonly SessionPolicy[] = ['default', 'extended', 'persistent'] as const;
 
 export interface SessionRow {
   sid: string;
@@ -44,8 +52,31 @@ const IDLE_WINDOWS: Record<DeviceKind, IdleWindow> = {
   phone:    { idleMs:  4 * 60 * 60 * 1000,    absoluteMs:  4 * 60 * 60 * 1000 },
 };
 
+const EXTENDED_PERSONAL: IdleWindow = {
+  idleMs:     7 * 24 * 60 * 60 * 1000,
+  absoluteMs: 90 * 24 * 60 * 60 * 1000,
+};
+
+const PERSISTENT_WINDOW: IdleWindow = {
+  idleMs:     Number.POSITIVE_INFINITY,
+  absoluteMs: 365 * 24 * 60 * 60 * 1000,
+};
+
+/** Resolve the effective idle/absolute window given device + staff policy. */
+export function resolveSessionWindow(kind: DeviceKind, policy: SessionPolicy): IdleWindow {
+  if (policy === 'persistent') return PERSISTENT_WINDOW;
+  if (policy === 'extended' && kind === 'personal') return EXTENDED_PERSONAL;
+  return IDLE_WINDOWS[kind];
+}
+
+/** @deprecated prefer cookieMaxAgeForSession(session) so policy is honored. */
 export function getCookieMaxAgeSeconds(kind: DeviceKind): number {
   return Math.floor(IDLE_WINDOWS[kind].absoluteMs / 1000);
+}
+
+/** Cookie max-age for a freshly-created/loaded session row. */
+export function cookieMaxAgeForSession(session: { expiresAt: Date }): number {
+  return Math.max(60, Math.floor((session.expiresAt.getTime() - Date.now()) / 1000));
 }
 
 function newSid(): string {
@@ -75,7 +106,15 @@ interface SessionDbRow {
 
 export async function createSession(opts: CreateSessionOpts): Promise<SessionRow> {
   const sid = newSid();
-  const window = IDLE_WINDOWS[opts.deviceKind];
+
+  // Read the staff's current session policy so we apply the right window.
+  const policyR = await pool.query(
+    `SELECT COALESCE(session_policy, 'default') AS policy FROM staff WHERE id = $1`,
+    [opts.staffId],
+  );
+  const policy = ((policyR.rows[0]?.policy ?? 'default') as SessionPolicy);
+  const window = resolveSessionWindow(opts.deviceKind, policy);
+
   const defaultExpiresAt = new Date(Date.now() + window.absoluteMs);
   // Shift-bound expiry wins (if it's sooner). Falls back to the device's
   // absolute window when no shift is provided.
@@ -124,21 +163,24 @@ export async function loadSession(sid: string | null | undefined): Promise<Sessi
   if (!sid || typeof sid !== 'string' || sid.length < 32) return null;
 
   const r = await pool.query(
-    `SELECT sid, staff_id, organization_id, device_kind, device_label, ip::text AS ip, user_agent,
-            created_at, last_seen_at, expires_at, revoked_at
-       FROM staff_sessions
-      WHERE sid = $1
+    `SELECT s.sid, s.staff_id, s.organization_id, s.device_kind, s.device_label,
+            s.ip::text AS ip, s.user_agent,
+            s.created_at, s.last_seen_at, s.expires_at, s.revoked_at,
+            COALESCE(st.session_policy, 'default') AS session_policy
+       FROM staff_sessions s
+       LEFT JOIN staff st ON st.id = s.staff_id
+      WHERE s.sid = $1
       LIMIT 1`,
     [sid],
   );
-  const row = r.rows[0] as SessionDbRow | undefined;
+  const row = r.rows[0] as (SessionDbRow & { session_policy: SessionPolicy }) | undefined;
   if (!row) return null;
   if (row.revoked_at) return null;
   if (row.expires_at.getTime() <= Date.now()) return null;
 
-  const window = IDLE_WINDOWS[row.device_kind as DeviceKind];
+  const window = resolveSessionWindow(row.device_kind as DeviceKind, row.session_policy);
   const idleFor = Date.now() - row.last_seen_at.getTime();
-  if (idleFor > window.idleMs) {
+  if (Number.isFinite(window.idleMs) && idleFor > window.idleMs) {
     // Auto-revoke on idle so the row reflects the truth.
     await pool.query(`UPDATE staff_sessions SET revoked_at = NOW() WHERE sid = $1`, [sid]);
     return null;
@@ -187,10 +229,13 @@ export async function loadSessionWithReason(
   let r;
   try {
     r = await pool.query(
-      `SELECT sid, staff_id, organization_id, device_kind, device_label, ip::text AS ip, user_agent,
-              created_at, last_seen_at, expires_at, revoked_at
-         FROM staff_sessions
-        WHERE sid = $1
+      `SELECT s.sid, s.staff_id, s.organization_id, s.device_kind, s.device_label,
+              s.ip::text AS ip, s.user_agent,
+              s.created_at, s.last_seen_at, s.expires_at, s.revoked_at,
+              COALESCE(st.session_policy, 'default') AS session_policy
+         FROM staff_sessions s
+         LEFT JOIN staff st ON st.id = s.staff_id
+        WHERE s.sid = $1
         LIMIT 1`,
       [sid],
     );
@@ -198,14 +243,14 @@ export async function loadSessionWithReason(
     return { session: null, reason: 'db-error' };
   }
 
-  const row = r.rows[0] as SessionDbRow | undefined;
+  const row = r.rows[0] as (SessionDbRow & { session_policy: SessionPolicy }) | undefined;
   if (!row) return { session: null, reason: 'no-row' };
   if (row.revoked_at) return { session: null, reason: 'revoked' };
   if (row.expires_at.getTime() <= Date.now()) return { session: null, reason: 'expired' };
 
-  const window = IDLE_WINDOWS[row.device_kind as DeviceKind];
+  const window = resolveSessionWindow(row.device_kind as DeviceKind, row.session_policy);
   const idleFor = Date.now() - row.last_seen_at.getTime();
-  if (idleFor > window.idleMs) {
+  if (Number.isFinite(window.idleMs) && idleFor > window.idleMs) {
     await pool.query(`UPDATE staff_sessions SET revoked_at = NOW() WHERE sid = $1`, [sid]);
     return { session: null, reason: 'idle-timed-out' };
   }
@@ -234,7 +279,25 @@ export async function loadSessionWithReason(
  */
 export async function touchSession(sid: string): Promise<void> {
   try {
-    await pool.query(`UPDATE staff_sessions SET last_seen_at = NOW() WHERE sid = $1 AND revoked_at IS NULL`, [sid]);
+    // For persistent-policy staff, slide expires_at forward so the session
+    // never crosses its absolute window as long as they keep using it.
+    // Default/extended policies leave expires_at alone — absolute window is
+    // a hard ceiling for them.
+    const persistentMs = PERSISTENT_WINDOW.absoluteMs;
+    await pool.query(
+      `UPDATE staff_sessions s
+          SET last_seen_at = NOW(),
+              expires_at = CASE
+                WHEN COALESCE(st.session_policy, 'default') = 'persistent'
+                  THEN NOW() + ($2 || ' milliseconds')::INTERVAL
+                ELSE s.expires_at
+              END
+         FROM staff st
+        WHERE s.sid = $1
+          AND s.revoked_at IS NULL
+          AND st.id = s.staff_id`,
+      [sid, String(persistentMs)],
+    );
   } catch {
     // swallow
   }

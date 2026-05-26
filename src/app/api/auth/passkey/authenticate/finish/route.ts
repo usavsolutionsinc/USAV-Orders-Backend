@@ -15,7 +15,7 @@ import {
 } from '@/lib/auth/webauthn';
 import {
   createSession,
-  getCookieMaxAgeSeconds,
+  cookieMaxAgeForSession,
   SESSION_COOKIE_NAME,
   type DeviceKind,
 } from '@/lib/auth/session';
@@ -130,7 +130,7 @@ export async function POST(req: NextRequest) {
     });
     res.cookies.set(SESSION_COOKIE_NAME, session.sid, {
       httpOnly: true, secure: process.env.NODE_ENV === 'production',
-      sameSite: 'lax', path: '/', maxAge: getCookieMaxAgeSeconds(deviceKind),
+      sameSite: 'lax', path: '/', maxAge: cookieMaxAgeForSession(session),
     });
     res.cookies.set(PASSKEY_CHALLENGE_COOKIE, '', {
       httpOnly: true, secure: process.env.NODE_ENV === 'production',

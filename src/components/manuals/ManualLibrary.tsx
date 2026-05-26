@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { FileText, Loader2, ExternalLink, Pencil, Trash2, Plus } from '@/components/Icons';
 import { microBadge, tableHeader } from '@/design-system/tokens/typography/presets';
 import { toast } from '@/lib/toast';
+import { generatePdfThumbnail } from '@/lib/manuals/pdfThumbnail';
 import {
   EditManualModal,
   UploadManualModal,
@@ -21,6 +22,7 @@ interface ManualDetail {
   display_name: string | null;
   google_file_id: string | null;
   source_url: string | null;
+  thumbnail_url: string | null;
   relative_path: string | null;
   folder_path: string | null;
   file_name: string | null;
@@ -108,6 +110,34 @@ export function ManualLibrary() {
     window.addEventListener('manuals-updated', onUpdated);
     return () => window.removeEventListener('manuals-updated', onUpdated);
   }, []);
+
+  // Lazy backfill: if this manual has a source PDF but no thumbnail yet,
+  // generate one client-side and POST it to the backfill endpoint. Fires
+  // once per manual view, never blocks rendering. Older rows (uploaded
+  // before the thumbnail feature shipped) heal as operators browse the
+  // library — no eager backfill job needed.
+  useEffect(() => {
+    if (!manual || manual.thumbnail_url || !manual.source_url) return;
+    let cancelled = false;
+    (async () => {
+      const thumb = await generatePdfThumbnail(manual.source_url!);
+      if (cancelled || !thumb) return;
+      const form = new FormData();
+      form.append('id', String(manual.id));
+      form.append('thumbnail', new File([thumb.blob], 'thumb.jpg', { type: 'image/jpeg' }));
+      try {
+        const res = await fetch('/api/product-manuals/thumbnail', { method: 'POST', body: form });
+        if (!res.ok) return;
+        // Refresh the local row + tell the sidebar so its FileButton picks
+        // up the new thumbnail URL without a full page reload.
+        setReloadToken((n) => n + 1);
+        window.dispatchEvent(new CustomEvent('manuals-updated'));
+      } catch {
+        // Best-effort — the next viewer to open this manual will retry.
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [manual]);
 
   if (!id) return <EmptyViewer />;
   if (loading && !manual) {

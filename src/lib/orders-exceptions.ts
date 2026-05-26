@@ -173,15 +173,20 @@ export async function upsertOpenOrderException(params: {
   return { exception: inserted.rows[0], matchedOrderId: null };
 }
 
+export type { OrderExceptionResolutionDetail } from '@/lib/orders-sync/types';
+import type { OrderExceptionResolutionDetail } from '@/lib/orders-sync/types';
+
 export async function syncOrderExceptionsToOrders(): Promise<{
   scanned: number;
   matched: number;
   deleted: number;
+  resolved: OrderExceptionResolutionDetail[];
+  stillOpen: OrderExceptionResolutionDetail[];
 }> {
   tableEnsured = true;
 
   const openExceptions = await pool.query(
-    `SELECT id, shipping_tracking_number
+    `SELECT id, shipping_tracking_number, source_station
      FROM orders_exceptions
      WHERE status = 'open'
      ORDER BY id ASC`
@@ -189,25 +194,42 @@ export async function syncOrderExceptionsToOrders(): Promise<{
 
   let matched = 0;
   let deleted = 0;
+  const resolved: OrderExceptionResolutionDetail[] = [];
+  const stillOpen: OrderExceptionResolutionDetail[] = [];
 
   for (const row of openExceptions.rows) {
-    const trackingKey18 = normalizeTrackingKey18(String(row.shipping_tracking_number || ''));
-    if (!trackingKey18) continue;
+    const rawTracking = String(row.shipping_tracking_number || '');
+    const trackingKey18 = normalizeTrackingKey18(rawTracking);
+    if (!trackingKey18) {
+      stillOpen.push({
+        exceptionId: row.id,
+        tracking: rawTracking,
+        sourceStation: row.source_station ?? null,
+      });
+      continue;
+    }
 
-    const orderMatch = await pool.query(
-      `SELECT o.id
-       FROM orders o
-       JOIN shipping_tracking_numbers stn ON stn.id = o.shipment_id
-       WHERE RIGHT(regexp_replace(UPPER(stn.tracking_number_normalized), '[^A-Z0-9]', '', 'g'), 18) = $1
-       ORDER BY o.id DESC
-       LIMIT 1`,
-      [trackingKey18]
-    );
-
-    if (orderMatch.rows.length === 0) continue;
+    // Use the shared matcher so we pick up the last-8-digit fallback and the
+    // independent shipment_id lookup. Catches cases where the exception's
+    // tracking was stored slightly differently than the inbound sheet/Ecwid
+    // row (e.g. extra prefix chars trimmed by the tracking normalizer).
+    const order = await findOrderByTrackingKey(rawTracking);
+    if (!order) {
+      stillOpen.push({
+        exceptionId: row.id,
+        tracking: rawTracking,
+        sourceStation: row.source_station ?? null,
+      });
+      continue;
+    }
 
     matched += 1;
-    const order = orderMatch.rows[0];
+    resolved.push({
+      exceptionId: row.id,
+      tracking: rawTracking,
+      matchedOrderId: order.id,
+      sourceStation: row.source_station ?? null,
+    });
 
     // Update status only — shipped state is derived from shipping_tracking_numbers
     await pool.query(
@@ -240,5 +262,7 @@ export async function syncOrderExceptionsToOrders(): Promise<{
     scanned: openExceptions.rows.length,
     matched,
     deleted,
+    resolved,
+    stillOpen,
   };
 }

@@ -121,20 +121,7 @@ export async function handleSerialScan(input: string, ctx: ScanHandlerContext): 
           : contextOrder.scanSessionId ?? ctx.scanSessionIdRef.current,
     };
 
-    // FBA/FNSKU orders always have orderFound=false (they don't map to an orders row),
-    // so exclude them from the exception-card auto-clear logic. Without this, the card
-    // disappears after the first serial and subsequent serials lose context.
-    const qty = Math.max(1, Number(nextOrder.quantity) || 1);
-    const completedExceptionOrder =
-      nextOrder.orderFound === false &&
-      nextOrder.sourceType !== 'fba' &&
-      nextOrder.serialNumbers.length >= qty;
-
-    if (completedExceptionOrder) {
-      ctx.syncActiveOrderState(null);
-    } else {
-      ctx.syncActiveOrderState(nextOrder);
-    }
+    ctx.syncActiveOrderState(nextOrder);
 
     ctx.setSuccessMessage(`Serial ${finalSerial} added ✓ (${data.serialNumbers.length} total)`);
 

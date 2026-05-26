@@ -9,7 +9,7 @@ import { withAuth } from '@/lib/auth/withAuth';
  * As of 2026-02-05, tester_id was removed from orders table.
  * 
  * Techs are now implicitly assigned when they scan a tracking number.
- * Assignment is tracked in tech_serial_numbers.tester_id.
+ * Assignment is tracked in tech_serial_numbers.tested_by.
  */
 export const POST = withAuth(async (req: NextRequest, ctx) => {
   try {

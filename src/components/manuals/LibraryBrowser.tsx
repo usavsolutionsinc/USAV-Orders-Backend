@@ -25,6 +25,7 @@ interface ManualRow {
   product_title: string | null;
   display_name: string | null;
   source_url: string | null;
+  thumbnail_url: string | null;
   folder_path: string | null;
   file_name: string | null;
   status: string;
@@ -926,15 +927,28 @@ function FileButton({
         <Check className="h-3 w-3" />
       </button>
       <button type="button" onClick={onClick} className="absolute inset-0 rounded-2xl" aria-label={`Open ${title}`} />
-      <div
-        className={`pointer-events-none relative mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-xl ring-1 ring-inset ${
-          isSelected
-            ? 'bg-blue-100 text-blue-600 ring-blue-200'
-            : 'bg-gray-50 text-gray-500 ring-gray-200 group-hover:bg-blue-50 group-hover:text-blue-500 group-hover:ring-blue-100'
-        }`}
-      >
-        <FileText className="h-3.5 w-3.5" />
-      </div>
+      {/* Thumbnail (first page of the PDF) when available, fallback to the
+          file-icon glyph for legacy rows that haven't been backfilled yet. */}
+      {manual.thumbnail_url ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          src={manual.thumbnail_url}
+          alt=""
+          className={`pointer-events-none relative mt-0.5 h-10 w-8 shrink-0 rounded-md object-cover ring-1 ring-inset ${
+            isSelected ? 'ring-blue-200' : 'ring-zinc-200 group-hover:ring-blue-100'
+          }`}
+        />
+      ) : (
+        <div
+          className={`pointer-events-none relative mt-0.5 flex h-10 w-8 shrink-0 items-center justify-center rounded-md ring-1 ring-inset ${
+            isSelected
+              ? 'bg-blue-100 text-blue-600 ring-blue-200'
+              : 'bg-gray-50 text-gray-500 ring-gray-200 group-hover:bg-blue-50 group-hover:text-blue-500 group-hover:ring-blue-100'
+          }`}
+        >
+          <FileText className="h-3.5 w-3.5" />
+        </div>
+      )}
       <div className="pointer-events-none relative min-w-0 flex-1">
         <p className={`truncate text-label font-black leading-tight ${isSelected ? 'text-blue-900' : 'text-gray-900'}`}>
           {highlight ? <HighlightedText text={highlight.label} indices={highlight.indices} /> : title}

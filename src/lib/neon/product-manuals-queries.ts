@@ -417,6 +417,7 @@ export async function updateProductManual(params: UpdateProductManualParams): Pr
          END,
          assigned_by = CASE WHEN $12::text IS NULL AND $20 THEN NULL ELSE COALESCE($12, assigned_by) END,
          type = CASE WHEN $13::text IS NULL AND $21 THEN NULL ELSE COALESCE($13, type) END,
+         thumbnail_url = CASE WHEN $22::text IS NULL AND $23 THEN NULL ELSE COALESCE($22, thumbnail_url) END,
          is_active = COALESCE($14, is_active),
          updated_at = NOW()
      WHERE id = $1
@@ -443,6 +444,8 @@ export async function updateProductManual(params: UpdateProductManualParams): Pr
       params.fileName !== undefined && !fileName,
       params.assignedBy !== undefined && !params.assignedBy,
       params.type !== undefined && !params.type,
+      params.thumbnailUrl ?? null,                                    // $22
+      params.thumbnailUrl !== undefined && !params.thumbnailUrl,      // $23 explicit-null flag
     ],
   );
 

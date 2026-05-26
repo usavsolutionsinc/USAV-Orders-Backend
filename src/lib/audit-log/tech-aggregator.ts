@@ -68,15 +68,15 @@ export async function listTechSessions(opts: ListOpts): Promise<TechSessionSumma
 
   if (filters.range.start) {
     params.push(filters.range.start);
-    where.push(`tsn.test_date_time >= $${params.length}::timestamptz`);
+    where.push(`tsn.created_at >= $${params.length}::timestamptz`);
   }
   if (filters.range.end) {
     params.push(filters.range.end);
-    where.push(`tsn.test_date_time <= $${params.length}::timestamptz`);
+    where.push(`tsn.created_at <= $${params.length}::timestamptz`);
   }
   if (filters.staffId != null) {
     params.push(filters.staffId);
-    where.push(`tsn.tester_id = $${params.length}`);
+    where.push(`tsn.tested_by = $${params.length}`);
   }
   if (filters.sku) {
     params.push(filters.sku);
@@ -108,12 +108,12 @@ export async function listTechSessions(opts: ListOpts): Promise<TechSessionSumma
       SELECT
         stn.tracking_number_raw AS tracking,
         tsn.shipment_id AS shipment_id,
-        MAX(tsn.test_date_time) AS latest_event_at,
+        MAX(tsn.created_at) AS latest_event_at,
         COUNT(*)::int AS serial_count,
-        MAX(tsn.tester_id) AS tester_id
+        MAX(tsn.tested_by) AS tester_id
       FROM tech_serial_numbers tsn
       LEFT JOIN shipping_tracking_numbers stn ON stn.id = tsn.shipment_id
-      LEFT JOIN staff s ON s.id = tsn.tester_id
+      LEFT JOIN staff s ON s.id = tsn.tested_by
       WHERE ${where.join(' AND ')}
       GROUP BY stn.tracking_number_raw, tsn.shipment_id
     )
@@ -169,15 +169,15 @@ export async function getTechSessionDetail(
     `SELECT tsn.id,
             tsn.serial_number,
             tsn.serial_type,
-            tsn.test_date_time,
-            tsn.tester_id,
+            tsn.created_at AS test_date_time,
+            tsn.tested_by AS tester_id,
             s.name AS tester_name,
             sk.static_sku AS sku
        FROM tech_serial_numbers tsn
-       LEFT JOIN staff s ON s.id = tsn.tester_id
+       LEFT JOIN staff s ON s.id = tsn.tested_by
        LEFT JOIN sku sk ON sk.id = tsn.source_sku_id
        WHERE tsn.shipment_id = $1
-       ORDER BY tsn.test_date_time DESC NULLS LAST, tsn.id DESC`,
+       ORDER BY tsn.created_at DESC NULLS LAST, tsn.id DESC`,
     [shipmentId],
   );
 

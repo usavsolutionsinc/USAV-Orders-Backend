@@ -1,53 +1,201 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { classifyInput, parseScannedUrl } from '@/lib/scan-resolver';
-import type { ScannedUrlEntity } from '@/lib/scan-resolver';
-import { queryOne } from '@/lib/neon-client';
+import {
+  classifyInput,
+  parseScannedUrl,
+  parseGs1AiPayload,
+  pickAiRoutingValue,
+  type ScannedUrlEntity,
+  type Gs1AiTree,
+} from '@/lib/scan-resolver';
+import { routeScan } from '@/lib/barcode-routing';
+import { normalizeTrackingKey18 } from '@/lib/tracking-format';
+import { query, queryOne } from '@/lib/neon-client';
 import { withAuth } from '@/lib/auth/withAuth';
 
 /**
  * GET|POST /api/scan/resolve
  *
- * Single source of truth for the warehouse-app scanner. Accepts either
- *   ?input=...  (GET query string)
- *   { input: ... } (POST JSON body)
- * and returns a typed entity descriptor PLUS minimal entity data so the
- * scanner UI can route to the right screen without a second roundtrip.
+ * Universal scanner resolver for both desktop and the mobile cockpit
+ * (`/m/scan`).
  *
- * Resolution order:
- *   1. URL parse — GS1 Digital Link or internal /l|/p|/o|/s|/q prefix
- *   2. Pattern classify — tracking | FNSKU | serial_full | serial_partial
- *   3. Fallback: 'unknown' with the normalized form
+ * Resolution cascade (first match wins):
+ *   1. Multi-AI GS1 Data Matrix (FNC1 or parenthesized form)
+ *   2. GS1 Digital Link URL or internal /l|/p|/o|/s|/q prefix
+ *   3. Pattern classify — tracking | FNSKU | serial_full | serial_partial
+ *   4. Fallback: 'unknown'
  *
- * Phase 1 returns identifiers only (no joins). Subsequent phases will
- * enrich each entity with current state, location, allowed actions.
+ * For every scan we additionally look up matching orders (single | multi |
+ * none) and return a `mobileRoute` field that /m/scan uses to navigate
+ * directly to the order detail page when there is exactly one match.
+ *
+ * IMPORTANT: This route NEVER writes to receiving_*. It writes only to
+ * `mobile_scan_events` for telemetry. The mobile center scan button is
+ * intent-routing, not a receiving event.
  */
 
 export const dynamic = 'force-dynamic';
 
-interface ResolveSuccess {
+type ResolveKind =
+  | 'gs1_unit'
+  | 'gs1_lot'
+  | 'gs1_product'
+  | 'gs1_ai'
+  | 'location'
+  | 'package'
+  | 'order'
+  | 'stock'
+  | 'tracking'
+  | 'fnsku'
+  | 'serial_full'
+  | 'serial_partial'
+  | 'generic'
+  | 'unknown';
+
+type MatchOutcome = 'single' | 'multi' | 'none';
+
+interface OrderMatch {
+  id: number;
+  order_id: string;
+  sku: string | null;
+  product_title: string | null;
+  status: string | null;
+  quantity: string | null;
+  account_source: string | null;
+}
+
+interface ResolveResponse {
   ok: true;
-  /** Stable kind that the UI can switch on. */
-  kind:
-    | 'gs1_unit'
-    | 'gs1_lot'
-    | 'gs1_product'
-    | 'location'
-    | 'package'
-    | 'order'
-    | 'stock'
-    | 'tracking'
-    | 'fnsku'
-    | 'serial_full'
-    | 'serial_partial'
-    | 'generic'
-    | 'unknown';
-  source: 'url' | 'pattern' | 'none';
+  kind: ResolveKind;
+  source: 'ai' | 'url' | 'pattern' | 'none';
   raw: string;
   url?: string;
+  ais?: Record<string, string>;
   entity?: Record<string, unknown>;
-  /** Hint for which app section the UI should route to. May be null. */
   redirectTo?: string | null;
+  matches: OrderMatch[];
+  matchOutcome: MatchOutcome;
+  /** Where the mobile cockpit should navigate. NEVER points at /receiving. */
+  mobileRoute: string | null;
 }
+
+// ─── Order lookups ───────────────────────────────────────────────────────────
+
+async function lookupOrdersByTracking(tracking: string): Promise<OrderMatch[]> {
+  const key18 = normalizeTrackingKey18(tracking);
+  if (!key18) return [];
+  try {
+    return await query<OrderMatch>`
+      SELECT DISTINCT o.id, o.order_id, o.sku, o.product_title, o.status, o.quantity, o.account_source
+      FROM orders o
+      JOIN shipping_tracking_numbers stn ON stn.id = o.shipment_id
+      WHERE stn.tracking_number_key18 = ${key18}
+      ORDER BY o.id DESC
+      LIMIT 20
+    `;
+  } catch {
+    return [];
+  }
+}
+
+async function lookupOrdersBySerial(serial: string): Promise<OrderMatch[]> {
+  const norm = serial.trim().toUpperCase();
+  if (!norm) return [];
+  try {
+    const exact = await query<OrderMatch>`
+      SELECT DISTINCT o.id, o.order_id, o.sku, o.product_title, o.status, o.quantity, o.account_source
+      FROM orders o
+      JOIN tech_serial_numbers tsn ON tsn.shipment_id = o.shipment_id
+      WHERE UPPER(tsn.serial_number) = ${norm}
+      ORDER BY o.id DESC
+      LIMIT 20
+    `;
+    if (exact.length) return exact;
+
+    if (norm.length >= 4) {
+      const suffix = await query<OrderMatch>`
+        SELECT DISTINCT o.id, o.order_id, o.sku, o.product_title, o.status, o.quantity, o.account_source
+        FROM orders o
+        JOIN tech_serial_numbers tsn ON tsn.shipment_id = o.shipment_id
+        WHERE UPPER(tsn.serial_number) LIKE ${'%' + norm}
+        ORDER BY o.id DESC
+        LIMIT 20
+      `;
+      if (suffix.length) return suffix;
+    }
+
+    if (norm.length >= 3 && norm.length <= 10) {
+      return await query<OrderMatch>`
+        SELECT DISTINCT o.id, o.order_id, o.sku, o.product_title, o.status, o.quantity, o.account_source
+        FROM orders o
+        JOIN tech_serial_numbers tsn ON tsn.shipment_id = o.shipment_id
+        WHERE UPPER(tsn.serial_number) LIKE ${'%' + norm + '%'}
+        ORDER BY o.id DESC
+        LIMIT 20
+      `;
+    }
+    return [];
+  } catch {
+    return [];
+  }
+}
+
+async function lookupOrderById(orderId: string): Promise<OrderMatch[]> {
+  const trimmed = orderId.trim();
+  if (!trimmed) return [];
+  try {
+    return await query<OrderMatch>`
+      SELECT o.id, o.order_id, o.sku, o.product_title, o.status, o.quantity, o.account_source
+      FROM orders o
+      WHERE o.order_id = ${trimmed}
+      LIMIT 5
+    `;
+  } catch {
+    return [];
+  }
+}
+
+// ─── Receiving lookups ───────────────────────────────────────────────────────
+//
+// Receiving labels print a Data Matrix carrying `R-{id}` (the bare handle).
+// Workers also frequently scan or type the plain PO number. Both should
+// land on the carton detail page `/m/r/{receiving_id}` so tech can mark the
+// tested-pass / tested-fail outcome.
+
+async function lookupReceivingByPoNumber(po: string): Promise<{ id: number; zoho_purchaseorder_number: string | null } | null> {
+  const trimmed = po.trim();
+  if (!trimmed) return null;
+  try {
+    return await queryOne<{ id: number; zoho_purchaseorder_number: string | null }>`
+      SELECT id, zoho_purchaseorder_number
+      FROM receiving
+      WHERE zoho_purchaseorder_number = ${trimmed}
+         OR zoho_purchaseorder_id = ${trimmed}
+      ORDER BY id DESC
+      LIMIT 1
+    `;
+  } catch {
+    return null;
+  }
+}
+
+async function lookupOrdersBySku(sku: string): Promise<OrderMatch[]> {
+  const trimmed = sku.trim();
+  if (!trimmed) return [];
+  try {
+    return await query<OrderMatch>`
+      SELECT o.id, o.order_id, o.sku, o.product_title, o.status, o.quantity, o.account_source
+      FROM orders o
+      WHERE o.sku = ${trimmed}
+        AND (o.status IS NULL OR o.status NOT IN ('shipped', 'cancelled', 'closed'))
+      ORDER BY o.id DESC
+      LIMIT 20
+    `;
+  } catch {
+    return [];
+  }
+}
+
+// ─── URL helper enrichment ───────────────────────────────────────────────────
 
 async function resolveUnit(unitSerial: string): Promise<{ id: number; sku: string | null } | null> {
   try {
@@ -74,131 +222,252 @@ async function resolveSkuByGtin(gtin: string): Promise<string | null> {
   }
 }
 
-async function resolveLocation(ref: string): Promise<{ id: number; barcode: string | null; name: string | null } | null> {
+// ─── Telemetry ───────────────────────────────────────────────────────────────
+
+interface LogParams {
+  staffId: number;
+  raw: string;
+  normalized: string | null;
+  kind: ResolveKind;
+  carrier: string | null;
+  matches: OrderMatch[];
+  outcome: MatchOutcome;
+  routedTo: string | null;
+  parsedAis: Record<string, string> | null;
+  device: unknown;
+}
+
+async function logScanEvent(p: LogParams): Promise<void> {
   try {
-    return await queryOne<{ id: number; barcode: string | null; name: string | null }>`
-      SELECT id, barcode, name FROM locations
-      WHERE barcode = ${ref} OR name = ${ref}
-      LIMIT 1
+    await query`
+      INSERT INTO mobile_scan_events (
+        staff_id, raw_value, normalized, kind, carrier,
+        matched_order_id, match_outcome, routed_to, parsed_ais, device_info
+      )
+      VALUES (
+        ${p.staffId},
+        ${p.raw},
+        ${p.normalized},
+        ${p.kind},
+        ${p.carrier},
+        ${p.matches.length === 1 ? p.matches[0].order_id : null},
+        ${p.outcome},
+        ${p.routedTo},
+        ${p.parsedAis ? JSON.stringify(p.parsedAis) : null}::jsonb,
+        ${p.device ? JSON.stringify(p.device) : null}::jsonb
+      )
     `;
   } catch {
-    return null;
+    // Telemetry must never break the resolver.
   }
 }
 
-async function enrichUrl(entity: ScannedUrlEntity): Promise<ResolveSuccess> {
-  const base: Omit<ResolveSuccess, 'kind' | 'entity' | 'redirectTo'> = {
-    ok: true,
-    source: 'url',
-    raw: entity.url,
-    url: entity.url,
-  };
+// ─── Mobile route picker ─────────────────────────────────────────────────────
+//
+// NEVER returns a `/receiving` route. The mobile center button is not a
+// receiving entry point. When we can't resolve to a single order we return
+// null and let the client show fallback affordances.
 
+function pickMobileRoute(matches: OrderMatch[]): string | null {
+  if (matches.length === 1) {
+    return `/m/orders/${encodeURIComponent(matches[0].order_id)}`;
+  }
+  return null;
+}
+
+async function matchesForUrlEntity(entity: ScannedUrlEntity): Promise<OrderMatch[]> {
   switch (entity.type) {
-    case 'unit': {
-      const unit = await resolveUnit(entity.unitSerial);
-      return {
-        ...base,
-        kind: 'gs1_unit',
-        entity: {
-          gtin: entity.gtin,
-          unitSerial: entity.unitSerial,
-          serialUnitId: unit?.id ?? null,
-          sku: unit?.sku ?? null,
-        },
-        redirectTo: unit ? `/inventory/sku/${encodeURIComponent(unit.sku ?? '')}` : null,
-      };
-    }
+    case 'order':
+      return lookupOrderById(entity.orderId);
+    case 'package':
+      return lookupOrdersByTracking(entity.trackingNumber);
+    case 'unit':
+      return lookupOrdersBySerial(entity.unitSerial);
+    case 'stock':
+      return lookupOrdersBySku(entity.sku);
     case 'gs1_product': {
       const sku = await resolveSkuByGtin(entity.gtin);
-      return {
-        ...base,
-        kind: 'gs1_product',
-        entity: { gtin: entity.gtin, sku },
-        redirectTo: sku ? `/inventory/sku/${encodeURIComponent(sku)}` : '/inventory',
-      };
+      return sku ? lookupOrdersBySku(sku) : [];
     }
-    case 'gs1_lot':
-      return {
-        ...base,
-        kind: 'gs1_lot',
-        entity: { gtin: entity.gtin, lot: entity.lot },
-        redirectTo: null,
-      };
-    case 'location': {
-      const loc = await resolveLocation(entity.locationRef);
-      return {
-        ...base,
-        kind: 'location',
-        entity: { ref: entity.locationRef, locationId: loc?.id ?? null, barcode: loc?.barcode ?? null, name: loc?.name ?? null },
-        redirectTo: loc?.barcode ? `/inventory/location/${encodeURIComponent(loc.barcode)}` : null,
-      };
+    default:
+      return [];
+  }
+}
+
+async function matchesForAiTree(tree: Gs1AiTree): Promise<OrderMatch[]> {
+  const pick = pickAiRoutingValue(tree);
+  if (!pick) return [];
+  switch (pick.kind) {
+    case 'serial':
+      return lookupOrdersBySerial(pick.value);
+    case 'tracking':
+      return lookupOrdersByTracking(pick.value);
+    case 'gtin': {
+      const sku = await resolveSkuByGtin(pick.value);
+      return sku ? lookupOrdersBySku(sku) : [];
     }
-    case 'package':
-      return {
+    default:
+      return [];
+  }
+}
+
+// ─── Main resolve flow ───────────────────────────────────────────────────────
+
+async function resolve(input: string, staffId: number, device: unknown): Promise<ResolveResponse> {
+  const trimmed = String(input ?? '').trim();
+  const base = {
+    ok: true as const,
+    raw: trimmed,
+    matches: [] as OrderMatch[],
+    matchOutcome: 'none' as MatchOutcome,
+    mobileRoute: null as string | null,
+  };
+
+  if (!trimmed) return { ...base, kind: 'unknown', source: 'none' };
+
+  // 0. Internal receiving handles — `R-{id}`, `L-{id}`, `U-{id}`, `REP-{id}`,
+  //    and the URL forms of the same. These are what the receiving station
+  //    actually prints onto carton/line labels (see `printReceivingLabel`).
+  //    They route DIRECTLY to the existing /m/r, /m/l, /m/u, /repair pages
+  //    without touching `mobile_scan_events`-style classification.
+  const handleRoute = routeScan(trimmed);
+  if (handleRoute && handleRoute.redirect && (
+    handleRoute.type === 'receiving' ||
+    handleRoute.type === 'receiving-line' ||
+    handleRoute.type === 'serial-unit'
+  )) {
+    const kind: ResolveKind = handleRoute.type === 'receiving'
+      ? 'package'
+      : handleRoute.type === 'receiving-line'
+        ? 'package'
+        : 'gs1_unit';
+    const result: ResolveResponse = {
+      ...base,
+      kind,
+      source: 'pattern',
+      entity: { handleType: handleRoute.type, redirect: handleRoute.redirect },
+      matches: [],
+      matchOutcome: 'single',
+      mobileRoute: handleRoute.redirect,
+    };
+    await logScanEvent({
+      staffId, raw: trimmed, normalized: null, kind, carrier: null,
+      matches: [], outcome: 'single', routedTo: handleRoute.redirect,
+      parsedAis: null, device,
+    });
+    return result;
+  }
+
+  // 0b. Plain PO number (no `R-` prefix) — look it up in `receiving` and
+  //     route to the same /m/r page.
+  if (/^[A-Z0-9][A-Z0-9_\-]{2,}$/i.test(trimmed)) {
+    const po = await lookupReceivingByPoNumber(trimmed);
+    if (po) {
+      const route = `/m/r/${po.id}`;
+      const result: ResolveResponse = {
         ...base,
         kind: 'package',
-        entity: { trackingNumber: entity.trackingNumber },
-        redirectTo: null,
+        source: 'pattern',
+        entity: { receivingId: po.id, po: po.zoho_purchaseorder_number },
+        matches: [],
+        matchOutcome: 'single',
+        mobileRoute: route,
       };
-    case 'order':
-      return {
-        ...base,
-        kind: 'order',
-        entity: { orderId: entity.orderId },
-        redirectTo: null,
-      };
-    case 'stock':
-      return {
-        ...base,
-        kind: 'stock',
-        entity: { sku: entity.sku },
-        redirectTo: `/inventory/sku/${encodeURIComponent(entity.sku)}`,
-      };
-    case 'generic':
-      return {
-        ...base,
-        kind: 'generic',
-        entity: { payload: entity.payload },
-        redirectTo: null,
-      };
-  }
-}
-
-async function resolve(input: string): Promise<ResolveSuccess> {
-  const trimmed = String(input ?? '').trim();
-  if (!trimmed) {
-    return { ok: true, kind: 'unknown', source: 'none', raw: '' };
+      await logScanEvent({
+        staffId, raw: trimmed, normalized: trimmed.toUpperCase(), kind: 'package',
+        carrier: null, matches: [], outcome: 'single', routedTo: route,
+        parsedAis: null, device,
+      });
+      return result;
+    }
   }
 
-  // 1. URL branch (additive — never throws on non-URLs).
+  // 1. Multi-AI GS1 Data Matrix.
+  const aiTree = parseGs1AiPayload(trimmed);
+  if (aiTree) {
+    const matches = await matchesForAiTree(aiTree);
+    const outcome: MatchOutcome = matches.length === 0 ? 'none' : matches.length === 1 ? 'single' : 'multi';
+    const mobileRoute = pickMobileRoute(matches);
+    const result: ResolveResponse = {
+      ...base, kind: 'gs1_ai', source: 'ai', ais: aiTree.ais,
+      entity: { ais: aiTree.ais }, matches, matchOutcome: outcome, mobileRoute,
+    };
+    await logScanEvent({
+      staffId, raw: trimmed, normalized: null, kind: 'gs1_ai', carrier: null,
+      matches, outcome, routedTo: mobileRoute, parsedAis: aiTree.ais, device,
+    });
+    return result;
+  }
+
+  // 2. URL branch.
   const urlEntity = parseScannedUrl(trimmed);
-  if (urlEntity) return enrichUrl(urlEntity);
+  if (urlEntity) {
+    const matches = await matchesForUrlEntity(urlEntity);
+    const outcome: MatchOutcome = matches.length === 0 ? 'none' : matches.length === 1 ? 'single' : 'multi';
+    const mobileRoute = pickMobileRoute(matches);
+    const kind: ResolveKind = (() => {
+      switch (urlEntity.type) {
+        case 'unit': return 'gs1_unit';
+        case 'gs1_lot': return 'gs1_lot';
+        case 'gs1_product': return 'gs1_product';
+        case 'location': return 'location';
+        case 'package': return 'package';
+        case 'order': return 'order';
+        case 'stock': return 'stock';
+        case 'generic': return 'generic';
+      }
+    })();
+    const result: ResolveResponse = {
+      ...base, kind, source: 'url', url: urlEntity.url,
+      entity: urlEntity as unknown as Record<string, unknown>,
+      matches, matchOutcome: outcome, mobileRoute,
+    };
+    await logScanEvent({
+      staffId, raw: trimmed, normalized: null, kind, carrier: null,
+      matches, outcome, routedTo: mobileRoute, parsedAis: null, device,
+    });
+    return result;
+  }
 
-  // 2. Legacy pattern branch.
+  // 3. Pattern classify branch.
   const classified = classifyInput(trimmed);
-  return {
-    ok: true,
-    kind: classified.type === 'tracking' ? 'tracking' : (classified.type as ResolveSuccess['kind']),
-    source: 'pattern',
-    raw: trimmed,
-    entity: {
-      normalized: classified.normalized,
-      carrier: classified.carrier,
-    },
-    redirectTo: null,
+  let matches: OrderMatch[] = [];
+  if (classified.type === 'tracking') {
+    matches = await lookupOrdersByTracking(classified.normalized);
+  } else if (classified.type === 'serial_full' || classified.type === 'serial_partial') {
+    matches = await lookupOrdersBySerial(classified.normalized);
+  } else {
+    matches = await lookupOrderById(trimmed);
+    if (!matches.length) matches = await lookupOrdersBySku(trimmed);
+  }
+
+  const outcome: MatchOutcome = matches.length === 0 ? 'none' : matches.length === 1 ? 'single' : 'multi';
+  const mobileRoute = pickMobileRoute(matches);
+  const kind: ResolveKind = classified.type === 'tracking'
+    ? 'tracking'
+    : (classified.type as ResolveKind);
+  const result: ResolveResponse = {
+    ...base, kind, source: 'pattern',
+    entity: { normalized: classified.normalized, carrier: classified.carrier },
+    matches, matchOutcome: outcome, mobileRoute,
   };
+  await logScanEvent({
+    staffId, raw: trimmed, normalized: classified.normalized, kind,
+    carrier: classified.carrier, matches, outcome, routedTo: mobileRoute,
+    parsedAis: null, device,
+  });
+  return result;
 }
 
-export const GET = withAuth(async (request: NextRequest) => {
+export const GET = withAuth(async (request: NextRequest, ctx) => {
   const input = request.nextUrl.searchParams.get('input') ?? '';
-  const result = await resolve(input);
+  const result = await resolve(input, ctx.staffId, null);
   return NextResponse.json(result);
 }, { permission: 'sku_stock.view' });
 
-export const POST = withAuth(async (request: NextRequest) => {
+export const POST = withAuth(async (request: NextRequest, ctx) => {
   const body = await request.json().catch(() => ({}));
   const input = typeof body?.input === 'string' ? body.input : '';
-  const result = await resolve(input);
+  const result = await resolve(input, ctx.staffId, body?.device ?? null);
   return NextResponse.json(result);
 }, { permission: 'sku_stock.view' });

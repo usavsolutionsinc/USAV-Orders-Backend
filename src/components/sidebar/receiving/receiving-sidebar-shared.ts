@@ -284,23 +284,10 @@ export function conditionShort(code: string | null | undefined): string {
 
 // ── Scan / exception types ──────────────────────────────────────────────────
 
-export type PendingScan = {
-  id: string;
-  tracking: string;
-  status: 'checking' | 'matched' | 'unmatched' | 'error';
-  startedAt: number;
-  receiving_id?: number;
-  po_ids?: string[];
-  scan_id?: number;
-  exception_id?: number | null;
-  exception_reason?: string | null;
-  errorMessage?: string;
-};
-
 /**
  * Persistent row surfaced from the `tracking_exceptions` DB table. Mirrors
  * the subset of columns the sidebar cares about; full shape lives on the
- * triage page. Distinct from PendingScan (session-only, cleared on reload).
+ * triage page.
  */
 export type OpenException = {
   id: number;

@@ -3,7 +3,7 @@
 /**
  * Right-pane skeleton loader shown while a tracking scan's Zoho lookup is in
  * flight. Replaces the "Ready to receive" empty state so the operator sees
- * activity matching the sidebar's pending chip.
+ * activity while the lookup runs.
  *
  * Wiring (see ReceivingDashboard + ReceivingSidebarPanel.submitTrackingScan):
  *   • Sidebar dispatches `receiving-scan-in-flight` with {tracking, startedAt}

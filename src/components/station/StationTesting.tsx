@@ -335,7 +335,7 @@ export default function StationTesting({
     <div className={`flex flex-col h-full bg-white overflow-hidden ${embedded ? '' : 'border-r border-gray-100'}`}>
       <div className="flex-1 flex flex-col overflow-hidden">
         {/* ── Header (always top) ── */}
-        <div className={`p-4 pb-1 space-y-2 ${isMobile ? 'pt-3 pb-0' : ''}`}>
+        <div className={`space-y-2 px-5 pb-1 pt-4 ${isMobile ? 'pt-3 pb-0' : ''}`}>
           <div className="space-y-0.5">
             <div className="flex items-center justify-between gap-2">
               <h2 className={`font-black text-gray-900 tracking-tighter ${isMobile ? 'text-lg' : 'text-xl'}`}>Welcome, {userName}</h2>
@@ -349,23 +349,20 @@ export default function StationTesting({
             theme={themeColor}
           />
 
-          {/* Desktop: scan bar at top */}
-          {!isMobile && scanBarBlock}
-
-          {/* Sidebar feedback strip — visible only during an active order.
-              The rich workspace lives in the right pane; this is the
-              0.5s-after-scan affordance so the tech can confirm without
-              looking away from the scan input. Hidden on mobile (scan bar
-              is bottom-docked there; the strip renders just above it below). */}
+          {/* Inset scan + active-order strip so focus rings and card borders are
+              not clipped by the column’s overflow-hidden ancestors. */}
           {!isMobile && (
-            <ActiveOrderScanFeedback activeOrder={activeOrder} />
+            <div className="min-w-0 space-y-2 px-1.5">
+              {scanBarBlock}
+              <ActiveOrderScanFeedback activeOrder={activeOrder} />
+            </div>
           )}
         </div>
 
         {/* ── Scrollable content — Up Next queue. Active-order details now live
               in the right pane (see ActiveOrderWorkspace via TechDashboard);
               this sidebar stays focused on the scan input + queue. ── */}
-        <div className={`flex-1 overflow-y-auto no-scrollbar px-4 space-y-3 ${isMobile ? 'pb-2' : 'pb-4'}`}>
+        <div className={`flex-1 space-y-3 overflow-y-auto px-5 pb-4 no-scrollbar ${isMobile ? 'pb-2' : ''}`}>
           <div className="space-y-2 mt-2">
             <UpNextOrder
               techId={userId}
@@ -393,9 +390,11 @@ export default function StationTesting({
             strip sits just above the scan bar so it remains in the tech's
             line of sight after a scan. */}
         {isMobile && (
-          <div className="flex-shrink-0 border-t border-gray-100 bg-white px-4 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] space-y-2">
-            <ActiveOrderScanFeedback activeOrder={activeOrder} />
-            {scanBarBlock}
+          <div className="flex-shrink-0 space-y-2 border-t border-gray-100 bg-white px-5 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
+            <div className="min-w-0 space-y-2 px-1.5">
+              <ActiveOrderScanFeedback activeOrder={activeOrder} />
+              {scanBarBlock}
+            </div>
           </div>
         )}
       </div>

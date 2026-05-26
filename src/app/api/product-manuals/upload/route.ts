@@ -46,6 +46,11 @@ export const POST = withAuth(
     if (!(file instanceof File)) {
       return NextResponse.json({ success: false, error: 'file is required' }, { status: 400 });
     }
+    // Optional companion thumbnail — generated client-side from page 1 of
+    // the PDF so the sidebar can render visual cards. Best-effort: if the
+    // upload comes without one (replace from a non-PDF, generator failure,
+    // backfill not yet performed), we just leave thumbnail_url null.
+    const thumbnailFile = form.get('thumbnail');
     if (file.size === 0) {
       return NextResponse.json({ success: false, error: 'file is empty' }, { status: 400 });
     }
@@ -96,6 +101,25 @@ export const POST = withAuth(
 
       const uploaded = await put(blobKey, buffer, { access: 'public', contentType });
 
+      // Upload the companion thumbnail (if provided) under a sibling key
+      // so del() lifetimes track the parent — we don't actively clean these
+      // up on rename, but Vercel Blob garbage-collects orphans eventually.
+      let thumbnailUrl: string | null = null;
+      if (thumbnailFile instanceof File && thumbnailFile.size > 0) {
+        try {
+          const thumbBuffer = Buffer.from(await thumbnailFile.arrayBuffer());
+          const thumbKey = `product-manuals/thumbs/${Date.now()}_${safeName || 'manual'}.jpg`;
+          const thumbUploaded = await put(thumbKey, thumbBuffer, {
+            access: 'public',
+            contentType: thumbnailFile.type || 'image/jpeg',
+          });
+          thumbnailUrl = thumbUploaded.url;
+        } catch (err) {
+          // Thumbnail is decorative — never fail the whole upload over it.
+          console.warn('[product-manuals/upload] thumbnail save failed:', err);
+        }
+      }
+
       // upsertProductManual hardcodes sku = NULL on insert (the column is
       // populated separately via updateProductManual). For the create flow,
       // if the operator supplied a SKU we PATCH it in after the row exists.
@@ -108,6 +132,7 @@ export const POST = withAuth(
             ...(type ? { type } : {}),
             ...(sku ? { sku } : {}),
             ...(itemNumber ? { itemNumber } : {}),
+            ...(thumbnailUrl ? { thumbnailUrl } : {}),
           })
         : await upsertProductManual({
             sourceUrl: uploaded.url,
@@ -116,6 +141,7 @@ export const POST = withAuth(
             type,
             itemNumber,
             status,
+            thumbnailUrl,
             // Use the uploaded blob's basename as the file_name so the search
             // matcher can match against it.
             fileName: file.name,

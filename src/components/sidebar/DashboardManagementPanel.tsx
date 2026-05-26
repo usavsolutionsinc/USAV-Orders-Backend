@@ -35,6 +35,8 @@ import { SIDEBAR_GRAY_ASSIGN_BUTTON_CLASS } from '@/components/ui/sidebarPrimary
 import { sectionLabel, fieldLabel, microBadge } from '@/design-system/tokens/typography/presets';
 import { dispatchUsavRefreshData, invalidateDashboardOrderQueries } from '@/lib/dashboard-query-invalidation';
 import { useAuth } from '@/contexts/AuthContext';
+import { OrderSyncDialog } from '@/components/sidebar/OrderSyncDialog';
+import type { ExceptionsTabState, TransferTabState } from '@/lib/orders-sync/types';
 
 type PendingStockFilter = 'all' | 'pending' | 'stock';
 
@@ -119,9 +121,10 @@ export function DashboardManagementPanel({
   const canImportOrders = has('orders.import');
   type TaskStatus = 'idle' | 'running' | 'done' | 'error';
   type TaskState = { status: TaskStatus; summary?: string };
-  const [sheetsTask, setSheetsTask] = useState<TaskState>({ status: 'idle' });
-  const [ecwidTask, setEcwidTask] = useState<TaskState>({ status: 'idle' });
-  const [exceptionsTask, setExceptionsTask] = useState<TaskState>({ status: 'idle' });
+  const [sheetsTask, setSheetsTask] = useState<TransferTabState>({ status: 'idle' });
+  const [ecwidTask, setEcwidTask] = useState<TransferTabState>({ status: 'idle' });
+  const [exceptionsTask, setExceptionsTask] = useState<ExceptionsTabState>({ status: 'idle' });
+  const [isSyncDialogOpen, setIsSyncDialogOpen] = useState(false);
   const [elapsedMs, setElapsedMs] = useState(0);
   const elapsedRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const abortRef = useRef<AbortController | null>(null);
@@ -313,14 +316,17 @@ export function DashboardManagementPanel({
     abortRef.current = controller;
     setSheetsTask({ status: 'running' });
     setEcwidTask({ status: 'running' });
-    setExceptionsTask({ status: 'running' });
+    // Exceptions sync runs AFTER sheets+ecwid finish so that rows just inserted
+    // are visible to the matcher. Keep it idle/queued until then.
+    setExceptionsTask({ status: 'idle', summary: 'Queued' });
     setStatus(null);
     setElapsedMs(0);
+    setIsSyncDialogOpen(true);
     const t0 = Date.now();
     elapsedRef.current = setInterval(() => setElapsedMs(Date.now() - t0), 100);
 
     try {
-      const [sheetsResult, ecwidResult, exceptionsResult] = await Promise.allSettled([
+      const [sheetsResult, ecwidResult] = await Promise.allSettled([
         // Google Sheets (non-ecwid platforms)
         fetch('/api/google-sheets/transfer-orders', {
           method: 'POST',
@@ -336,6 +342,13 @@ export function DashboardManagementPanel({
             summary: data.success
               ? (parts.length > 0 ? parts.join(', ') : 'Up to date')
               : (data.error || 'Failed'),
+            error: data.success ? undefined : (data.error || 'Failed'),
+            details: data.details ?? null,
+            inserted: ins,
+            updated: upd,
+            deleted: Number(data.deletedDuplicateOrders || 0),
+            processedRows: Number(data.processedRows || 0),
+            tabName: data.tabName,
           });
           return data;
         }),
@@ -352,10 +365,19 @@ export function DashboardManagementPanel({
             summary: data.success
               ? (parts.length > 0 ? parts.join(', ') : 'Up to date')
               : (data.error || 'Failed'),
+            error: data.success ? undefined : (data.error || 'Failed'),
+            details: data.details ?? null,
+            inserted: ins,
+            updated: upd,
+            deleted: Number(data.deletedDuplicateOrders || 0),
+            processedRows: Number(data.processedRows || 0),
           });
           return data;
         }),
-        // Order exceptions sync
+      ]);
+
+      setExceptionsTask({ status: 'running' });
+      const exceptionsResult = await Promise.allSettled([
         fetch('/api/orders-exceptions/sync', {
           method: 'POST',
           signal: controller.signal,
@@ -366,10 +388,15 @@ export function DashboardManagementPanel({
             summary: data.success
               ? (matched > 0 ? `${matched} resolved` : 'None pending')
               : (data.error || 'Failed'),
+            error: data.success ? undefined : (data.error || 'Failed'),
+            resolved: data.resolved ?? [],
+            stillOpen: data.stillOpen ?? [],
+            scanned: Number(data.scanned || 0),
+            matched,
           });
           return data;
         }),
-      ]);
+      ]).then((arr) => arr[0]);
 
       // Aggregate results for the status banner
       const sheetsData = sheetsResult.status === 'fulfilled' ? sheetsResult.value : null;
@@ -542,9 +569,9 @@ export function DashboardManagementPanel({
                   </button>
                 )}
 
-                {/* Live progress tracker — 3 parallel tasks */}
+                {/* Compact status row — full details live in the centered OrderSyncDialog */}
                 <AnimatePresence>
-                  {isTransferring || (sheetsTask.status !== 'idle' && ecwidTask.status !== 'idle') ? (
+                  {isTransferring || sheetsTask.status !== 'idle' || ecwidTask.status !== 'idle' ? (
                     <motion.div
                       initial={framerPresence.collapseHeight.initial}
                       animate={framerPresence.collapseHeight.animate}
@@ -552,106 +579,31 @@ export function DashboardManagementPanel({
                       transition={expansionTransition}
                       className="overflow-hidden"
                     >
-                      <div className="rounded-xl border border-blue-100 bg-blue-50/50 px-3 py-3 space-y-2.5">
-                        {/* Elapsed timer */}
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-2">
-                            {isTransferring ? (
-                              <Loader2 className="w-3.5 h-3.5 text-blue-600 animate-spin" />
-                            ) : (
-                              <Check className="w-3.5 h-3.5 text-blue-600" />
-                            )}
-                            <span className={`${sectionLabel} text-blue-700`}>
-                              {isTransferring ? 'Importing orders' : 'Import complete'}
-                            </span>
-                          </div>
-                          <motion.span
-                            key={Math.floor(elapsedMs / 1000)}
-                            initial={{ opacity: 0.5, y: -4 }}
-                            animate={{ opacity: 1, y: 0 }}
-                            className="text-caption font-mono font-bold text-blue-500 tabular-nums"
-                          >
-                            {(elapsedMs / 1000).toFixed(1)}s
-                          </motion.span>
+                      <button
+                        type="button"
+                        onClick={() => setIsSyncDialogOpen(true)}
+                        className="flex w-full items-center justify-between gap-3 rounded-xl border border-blue-100 bg-blue-50/60 px-3 py-2.5 text-left transition hover:bg-blue-100/60"
+                      >
+                        <div className="flex items-center gap-2 min-w-0">
+                          {isTransferring ? (
+                            <Loader2 className="w-3.5 h-3.5 text-blue-600 animate-spin" />
+                          ) : (
+                            <Check className="w-3.5 h-3.5 text-blue-600" />
+                          )}
+                          <span className={`${sectionLabel} text-blue-700`}>
+                            {isTransferring ? 'Importing orders…' : 'Import complete'}
+                          </span>
+                          <span className="text-eyebrow text-blue-400">View details</span>
                         </div>
-
-                        {/* Task rows */}
-                        <div className="space-y-1.5">
-                          {([
-                            { label: 'Google Sheets import', task: sheetsTask },
-                            { label: 'Ecwid direct orders', task: ecwidTask },
-                            { label: 'Resolve exceptions', task: exceptionsTask },
-                          ] as const).map(({ label, task }) => (
-                            <motion.div
-                              key={label}
-                              initial={{ opacity: 0, x: -6 }}
-                              animate={{ opacity: 1, x: 0 }}
-                              transition={PANEL_TASK_ROW_SPRING}
-                              className="flex items-center gap-2"
-                            >
-                              <div className="w-4 h-4 flex items-center justify-center shrink-0">
-                                {task.status === 'done' ? (
-                                  <motion.div
-                                    initial={{ scale: 0 }}
-                                    animate={{ scale: 1 }}
-                                    transition={PANEL_ICON_POP_SPRING}
-                                  >
-                                    <Check className="w-3 h-3 text-blue-600" />
-                                  </motion.div>
-                                ) : task.status === 'error' ? (
-                                  <motion.div
-                                    initial={{ scale: 0 }}
-                                    animate={{ scale: 1 }}
-                                    transition={PANEL_ICON_POP_SPRING}
-                                  >
-                                    <AlertTriangle className="w-3 h-3 text-red-500" />
-                                  </motion.div>
-                                ) : task.status === 'running' ? (
-                                  <Loader2 className="w-3 h-3 text-blue-600 animate-spin" />
-                                ) : (
-                                  <span className="w-1.5 h-1.5 rounded-full bg-gray-300" />
-                                )}
-                              </div>
-                              <span className={`text-micro font-semibold ${
-                                task.status === 'running' ? 'text-blue-700'
-                                  : task.status === 'done' ? 'text-blue-500'
-                                  : task.status === 'error' ? 'text-red-500'
-                                  : 'text-gray-400'
-                              }`}>
-                                {label}
-                              </span>
-                              {task.summary && task.status !== 'running' && (
-                                <span
-                                  title={task.status === 'error' ? task.summary : undefined}
-                                  className={`text-eyebrow font-medium ml-auto ${
-                                    task.status === 'error'
-                                      ? 'max-w-[min(260px,50vw)] text-red-600 whitespace-normal leading-snug text-right'
-                                      : 'max-w-[120px] truncate text-gray-400'
-                                  }`}
-                                >
-                                  {task.summary}
-                                </span>
-                              )}
-                            </motion.div>
-                          ))}
-                        </div>
-
-                        {/* Progress bar */}
-                        <div className="h-1 rounded-full bg-blue-100 overflow-hidden">
-                          <motion.div
-                            className="h-full rounded-full bg-blue-500"
-                            initial={{ width: '0%' }}
-                            animate={{
-                              width: `${Math.round(
-                                ([sheetsTask, ecwidTask, exceptionsTask].filter(
-                                  (t) => t.status === 'done' || t.status === 'error',
-                                ).length / 3) * 100,
-                              )}%`,
-                            }}
-                            transition={{ ease: 'easeOut', duration: 0.3 }}
-                          />
-                        </div>
-                      </div>
+                        <motion.span
+                          key={Math.floor(elapsedMs / 1000)}
+                          initial={{ opacity: 0.5, y: -4 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          className="text-caption font-mono font-bold text-blue-500 tabular-nums"
+                        >
+                          {(elapsedMs / 1000).toFixed(1)}s
+                        </motion.span>
+                      </button>
                     </motion.div>
                   ) : null}
                 </AnimatePresence>
@@ -797,6 +749,17 @@ export function DashboardManagementPanel({
         </AnimatePresence>,
         document.body
       )}
+
+      <OrderSyncDialog
+        open={isSyncDialogOpen}
+        onClose={() => setIsSyncDialogOpen(false)}
+        isRunning={isTransferring}
+        elapsedMs={elapsedMs}
+        onCancel={handleCancelTransfer}
+        sheets={sheetsTask}
+        ecwid={ecwidTask}
+        exceptions={exceptionsTask}
+      />
     </>
   );
 }

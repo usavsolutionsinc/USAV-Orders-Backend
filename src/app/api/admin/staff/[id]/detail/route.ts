@@ -56,7 +56,7 @@ export const GET = withAuth(async (req: NextRequest) => {
     [id],
   );
   const auditQ = pool.query(
-    `SELECT id, event, result, ip::text AS ip, sid, detail, created_at
+    `SELECT id, event, result, ip::text AS ip, sid, user_agent, detail, created_at
        FROM auth_audit
       WHERE staff_id = $1
       ORDER BY created_at DESC

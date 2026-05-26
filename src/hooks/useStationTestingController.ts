@@ -12,6 +12,7 @@ import { handleSkuScan } from './station/handleSkuScan';
 import { handleSerialScan } from './station/handleSerialScan';
 import { handleRepairScan } from './station/handleRepairScan';
 import { handleCommand } from './station/handleCommand';
+import { normalizeTrackingKey } from '@/lib/tracking-format';
 
 // Re-export types consumed by external components — import paths unchanged.
 export { getStationInputMode } from '@/lib/station-scan-routing';
@@ -255,11 +256,24 @@ export function useStationTestingController({
 
   useEffect(() => {
     const handleUndoApplied = (e: any) => {
-      const tracking = String(e?.detail?.tracking || '');
+      const detailSal = e?.detail?.salId != null ? Number(e.detail.salId) : NaN;
+      const activeSal = activeOrder?.salId != null ? Number(activeOrder.salId) : NaN;
+      const salMatch =
+        Number.isFinite(detailSal) &&
+        detailSal > 0 &&
+        Number.isFinite(activeSal) &&
+        activeSal > 0 &&
+        detailSal === activeSal;
+
+      const eventKey = normalizeTrackingKey(String(e?.detail?.tracking || ''));
+      const activeKey = normalizeTrackingKey(String(activeOrder?.tracking || ''));
+      const trackingMatch =
+        eventKey.length > 0 && activeKey.length > 0 && eventKey === activeKey;
+
       const serialNumbers = Array.isArray(e?.detail?.serialNumbers) ? e.detail.serialNumbers : [];
       const removedSerial = e?.detail?.removedSerial;
       if (!activeOrder) return;
-      if (String(activeOrder.tracking || '') !== tracking) return;
+      if (!salMatch && !trackingMatch) return;
       syncActiveOrderState({ ...activeOrder, serialNumbers }, { preserveHidden: true });
       if (removedSerial) {
         setSuccessMessage(`Undo successful: removed ${removedSerial}`);

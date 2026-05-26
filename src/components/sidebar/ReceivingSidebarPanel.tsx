@@ -12,7 +12,6 @@ import {
   type ReturnEvent,
 } from '@/components/sidebar/ReceivingReturnBanner';
 import { ReceivingScanBar } from '@/components/sidebar/receiving/ReceivingScanBar';
-import { ReceivingScanStatusList } from '@/components/sidebar/receiving/ReceivingScanStatusList';
 import { ReceivingLinePicker } from '@/components/sidebar/receiving/ReceivingLinePicker';
 import { ReceivingRecentRail } from '@/components/sidebar/receiving/ReceivingRecentRail';
 import { RecentSearchesRail } from '@/components/sidebar/receiving/RecentSearchesRail';
@@ -43,7 +42,6 @@ import {
   type PoLineSummary,
   type ReceivingPackageMeta,
   type PoContext,
-  type PendingScan,
   type OpenException,
   type ReceivingSelectLineDetail,
 } from '@/components/sidebar/receiving/receiving-sidebar-shared';
@@ -159,12 +157,19 @@ export function ReceivingSidebarPanel() {
     if (mode === 'pickup') {
       window.dispatchEvent(new CustomEvent('receiving-clear-line'));
     }
+    // Returning to the Receive tab from History / Pickup / Unfound — focus
+    // the tracking field (`ReceivingScanBar` listens for this event).
+    if (mode === 'receive') {
+      requestAnimationFrame(() => {
+        window.dispatchEvent(new CustomEvent('receiving-focus-scan'));
+      });
+    }
   }, [mode]);
 
   const [bulkTracking, setBulkTracking] = useState('');
   const [scanBarKey, setScanBarKey] = useState(0);
-  const [pendingScans, setPendingScans] = useState<PendingScan[]>([]);
-  const anyScanChecking = pendingScans.some((s) => s.status === 'checking');
+  /** Spin the scan-field loader while `/api/receiving/lookup-po` is in flight */
+  const [trackingLookupInFlight, setTrackingLookupInFlight] = useState(0);
   const [openExceptions, setOpenExceptions] = useState<OpenException[]>([]);
   const [refreshingExceptionIds, setRefreshingExceptionIds] = useState<Set<number>>(new Set());
 
@@ -545,23 +550,10 @@ export function ReceivingSidebarPanel() {
     const trackingNumber = (rawTracking ?? bulkTracking).trim();
     if (!trackingNumber) return;
 
-    // 1. Clear the input immediately + insert a "checking" chip. Never blocks.
     setBulkTracking('');
     setScanBarKey((k) => k + 1); // force remount so SearchField's internal draft resets
-    const scanUiId = randomId();
     const scanStartedAt = Date.now();
-    setPendingScans((prev) => {
-      const fresh: PendingScan = {
-        id: scanUiId,
-        tracking: trackingNumber,
-        status: 'checking',
-        startedAt: scanStartedAt,
-      };
-      return [
-        fresh,
-        ...prev.filter((s) => s.tracking !== trackingNumber || s.status !== 'checking'),
-      ].slice(0, 10);
-    });
+    setTrackingLookupInFlight((n) => n + 1);
 
     // Tell the right pane to show the "Opening your PO" skeleton loader
     // while the Zoho lookup is in flight. ReceivingDashboard listens for
@@ -572,8 +564,6 @@ export function ReceivingSidebarPanel() {
       }),
     );
 
-    // 2. Fire-and-forget. Closure captures scanUiId so concurrent scans
-    //    update their own chip independently.
     void (async () => {
       try {
         const res = await fetch('/api/receiving/lookup-po', {
@@ -663,24 +653,6 @@ export function ReceivingSidebarPanel() {
           void publishPhotoRequestFor(ctx.receiving_id, trackingNumber);
           setTimeout(() => serialInputRef.current?.focus(), 60);
 
-          setPendingScans((prev) =>
-            prev.map((s) =>
-              s.id === scanUiId
-                ? {
-                    ...s,
-                    status: 'matched',
-                    receiving_id: Number(data.receiving_id),
-                    po_ids: Array.isArray(data.po_ids) ? data.po_ids : [],
-                    scan_id: typeof data.scan_id === 'number' ? data.scan_id : undefined,
-                  }
-                : s,
-            ),
-          );
-
-          // Auto-fade matched chip after 2s so the panel stays calm.
-          setTimeout(() => {
-            setPendingScans((prev) => prev.filter((s) => s.id !== scanUiId));
-          }, 2000);
           // Matched path may have resolved a prior open exception; refresh list.
           void fetchOpenExceptions();
           // Tell the right-pane loader we're done — workspace open will
@@ -697,20 +669,6 @@ export function ReceivingSidebarPanel() {
             exception_id: exceptionId,
             exception_reason: exceptionReason,
           });
-          setPendingScans((prev) =>
-            prev.map((s) =>
-              s.id === scanUiId
-                ? {
-                    ...s,
-                    status: 'unmatched',
-                    receiving_id: typeof data.receiving_id === 'number' ? data.receiving_id : undefined,
-                    scan_id: typeof data.scan_id === 'number' ? data.scan_id : undefined,
-                    exception_id: exceptionId,
-                    exception_reason: exceptionReason,
-                  }
-                : s,
-            ),
-          );
           window.dispatchEvent(
             new CustomEvent('receiving-entry-added', {
               detail: { id: String(data.receiving_id), tracking: trackingNumber },
@@ -759,13 +717,10 @@ export function ReceivingSidebarPanel() {
       } catch (err) {
         const message = err instanceof Error ? err.message : 'Network error';
         opts?.onResult?.({ tracking: trackingNumber, matched: false, po_ids: [], error: message });
-        // Clear the right-pane skeleton; chip surfaces the error inline.
         window.dispatchEvent(new CustomEvent('receiving-scan-resolved'));
-        setPendingScans((prev) =>
-          prev.map((s) =>
-            s.id === scanUiId ? { ...s, status: 'error', errorMessage: message } : s,
-          ),
-        );
+        toast.error(message);
+      } finally {
+        setTrackingLookupInFlight((n) => Math.max(0, n - 1));
       }
     })();
   }, [bulkTracking, staffId, fetchOpenExceptions]);
@@ -897,30 +852,10 @@ export function ReceivingSidebarPanel() {
     [bulkTracking, staffId],
   );
 
-  const retryPendingScan = useCallback((tracking: string, id: string) => {
-    setPendingScans((prev) => prev.filter((s) => s.id !== id));
-    submitTrackingScan(tracking);
-  }, [submitTrackingScan]);
-
-  // Re-run the lookup on an existing scan chip: flip its status back to
-  // 'checking', re-submit the tracking, and let the normal result handler
-  // update the chip in place. Same flow as a fresh scan but without
-  // re-inserting the chip.
-  const refetchPendingScan = useCallback((tracking: string, id: string) => {
-    setPendingScans((prev) => prev.map((s) =>
-      s.id === id ? { ...s, status: 'checking', errorMessage: undefined } : s,
-    ));
-    submitTrackingScan(tracking);
-  }, [submitTrackingScan]);
-
-  const dismissPendingScan = useCallback((id: string) => {
-    setPendingScans((prev) => prev.filter((s) => s.id !== id));
-  }, []);
-
   // Phone-paired scans: incoming `phone_scan` messages route straight through
   // the same submitTrackingScan flow as if the desktop scanner had fired it.
   // After the lookup, echo the result back on the station channel so the
-  // phone's chip can show matched/unmatched without a round-trip DB query.
+  // phone's result UI can show matched/unmatched without a round-trip DB query.
   // (phoneChannelName / stationChannelName / getAblyClient are hoisted to
   //  the top of this component so the photo-request publisher can use them.)
 
@@ -1233,14 +1168,14 @@ export function ReceivingSidebarPanel() {
         value={bulkTracking}
         onChange={setBulkTracking}
         onSubmit={() => (mode === 'history' ? searchTracking() : submitTrackingScan())}
-        isSearching={anyScanChecking}
+        isSearching={trackingLookupInFlight > 0}
         searchMode={mode === 'history'}
       />
 
       <ReceivingReturnBanner returns={returns} onDismiss={dismissReturn} />
 
-      {/* Scrollable body — picker + scan chips. Editor lives in the right
-          pane; closing the workspace clears selectedLine via the
+      {/* Scrollable body — picker + rails. Editor lives in the right pane;
+          closing the workspace clears selectedLine via the
           `receiving-workspace-close` listener above. */}
       <div className="min-h-0 flex-1 overflow-auto">
 
@@ -1260,15 +1195,6 @@ export function ReceivingSidebarPanel() {
           }}
         />
       )}
-
-      {/* Scan status chips — one per in-flight or terminal scan */}
-      <ReceivingScanStatusList
-        pendingScans={pendingScans}
-        onClear={() => setPendingScans([])}
-        onRetry={(scan) => retryPendingScan(scan.tracking, scan.id)}
-        onRefetch={(scan) => refetchPendingScan(scan.tracking, scan.id)}
-        onDismiss={(id) => dismissPendingScan(id)}
-      />
 
       {/* Sidebar body rail — mode-branched.
           • Receive  → live recent activity (last ~10 lines, ambient feed).

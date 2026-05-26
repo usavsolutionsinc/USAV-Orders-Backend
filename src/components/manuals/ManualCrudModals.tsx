@@ -5,6 +5,7 @@ import { createPortal } from 'react-dom';
 import { AlertCircle, Check, Loader2, X } from '@/components/Icons';
 import { toast } from '@/lib/toast';
 import { FolderPathPicker } from './FolderPathPicker';
+import { generatePdfThumbnail } from '@/lib/manuals/pdfThumbnail';
 
 /**
  * CRUD modal set for the manuals library.
@@ -243,6 +244,16 @@ export function UploadManualModal({
       if (sku.trim()) form.append('sku', sku.trim());
       if (itemNumber.trim()) form.append('itemNumber', itemNumber.trim());
       if (!replaceTarget) form.append('status', status);
+
+      // Generate a thumbnail in parallel — best-effort. If pdfjs fails (the
+      // PDF is encrypted, the source isn't actually a PDF, etc.), we just
+      // ship the upload without one and the sidebar shows the generic icon.
+      if (file.type === 'application/pdf' || /\.pdf$/i.test(file.name)) {
+        const thumb = await generatePdfThumbnail(file);
+        if (thumb) {
+          form.append('thumbnail', new File([thumb.blob], 'thumb.jpg', { type: 'image/jpeg' }));
+        }
+      }
 
       const res = await fetch('/api/product-manuals/upload', { method: 'POST', body: form });
       const data = await res.json().catch(() => ({}));

@@ -40,6 +40,10 @@ export class GoogleSheetsTransferOrdersJobError extends Error {
   }
 }
 
+import type { TransferOrderDetail, TransferOrderDetails } from '@/lib/orders-sync/types';
+
+export type { TransferOrderDetail, TransferOrderDetails } from '@/lib/orders-sync/types';
+
 export interface GoogleSheetsTransferOrdersJobResult {
   success: true;
   rowCount: number;
@@ -54,6 +58,7 @@ export interface GoogleSheetsTransferOrdersJobResult {
   ecwidApiRows?: number;
   skippedRows?: number;
   durationMs: number;
+  details: TransferOrderDetails;
 }
 
 function fail(status: number, error: string): never {
@@ -340,6 +345,7 @@ export async function runGoogleSheetsTransferOrders(
         ecwidApiRows,
         skippedRows: sheetTotalRows,
         durationMs: Date.now() - startedAt,
+        details: { inserted: [], updated: [], deleted: [], unknownTitle: [] },
       };
     }
 
@@ -543,19 +549,89 @@ export async function runGoogleSheetsTransferOrders(
       groupedSourceByOrderId.set(orderId, current);
     });
 
+    // Hydrate blank product titles from sku_catalog so newly-inserted orders
+    // don't display "Unknown Product" in the dashboard. We look up by USAV SKU
+    // first (sheet col 5), then fall back to platform SKU mappings keyed by
+    // item_number (sheet col 2) — Ecwid item_id often lives there.
+    const titleBySku = new Map<string, string>();
+    {
+      const lookupSkus = new Set<string>();
+      const lookupItemNumbers = new Set<string>();
+      eligibleSourceRows.forEach((row) => {
+        const itemTitle = String(row[colIndices.itemTitle] || '').trim();
+        if (itemTitle) return;
+        const sku = String(row[colIndices.usavSku] || '').trim();
+        const itemNumber = String(row[colIndices.itemNumber] || '').trim();
+        if (sku) lookupSkus.add(sku);
+        if (itemNumber) lookupItemNumbers.add(itemNumber);
+      });
+
+      if (lookupSkus.size > 0) {
+        const result = await pool.query(
+          `SELECT sku, product_title
+             FROM sku_catalog
+            WHERE sku = ANY($1::text[]) AND product_title IS NOT NULL AND product_title <> ''`,
+          [Array.from(lookupSkus)],
+        );
+        for (const row of result.rows) {
+          const sku = String(row.sku || '').trim();
+          const title = String(row.product_title || '').trim();
+          if (sku && title) titleBySku.set(sku, title);
+        }
+      }
+
+      if (lookupItemNumbers.size > 0) {
+        const result = await pool.query(
+          `SELECT spi.platform_sku, spi.platform_item_id, sc.product_title, sc.sku
+             FROM sku_platform_ids spi
+             JOIN sku_catalog sc ON sc.id = spi.sku_catalog_id
+            WHERE (spi.platform_sku = ANY($1::text[]) OR spi.platform_item_id = ANY($1::text[]))
+              AND sc.product_title IS NOT NULL AND sc.product_title <> ''`,
+          [Array.from(lookupItemNumbers)],
+        );
+        for (const row of result.rows) {
+          const title = String(row.product_title || '').trim();
+          if (!title) continue;
+          const platformSku = String(row.platform_sku || '').trim();
+          const platformItemId = String(row.platform_item_id || '').trim();
+          if (platformSku && !titleBySku.has(platformSku)) titleBySku.set(platformSku, title);
+          if (platformItemId && !titleBySku.has(platformItemId)) titleBySku.set(platformItemId, title);
+        }
+      }
+    }
+    const resolveProductTitle = (
+      sheetTitle: string,
+      sku: string,
+      itemNumber: string,
+    ): { title: string; source: TransferOrderDetail['titleSource'] } => {
+      const cleaned = sheetTitle.trim();
+      if (cleaned) return { title: cleaned, source: 'sheet' };
+      const bySku = sku && titleBySku.get(sku);
+      if (bySku) return { title: bySku, source: 'sku_catalog' };
+      const byItem = itemNumber && titleBySku.get(itemNumber);
+      if (byItem) return { title: byItem, source: 'platform_lookup' };
+      return { title: '', source: 'none' };
+    };
+
     const ordersToInsert: Array<{
       orderId: string;
       values: Record<string, unknown>;
       shipByDate: Date | null;
       shipmentIds: number[];
+      detail: TransferOrderDetail;
     }> = [];
-    const ordersToBackfill: Array<{ id: number; values: Record<string, unknown> }> = [];
-    const ordersToDelete: number[] = [];
+    const ordersToBackfill: Array<{
+      id: number;
+      values: Record<string, unknown>;
+      detail: TransferOrderDetail;
+    }> = [];
+    const ordersToDelete: Array<{ id: number; detail: TransferOrderDetail }> = [];
     const shipmentLinksToUpsert = new Map<number, { primaryShipmentId: number | null; shipmentIds: number[] }>();
     const orderDeadlinesToUpsert: Array<{ id: number; shipByDate: Date | null }> = [];
     let updatedOrdersTracking = 0;
     let matchedCustomers = 0;
     let unmatchedCustomers = 0;
+    const detailsUnknownTitle: TransferOrderDetail[] = [];
 
     for (const [orderId, group] of Array.from(groupedSourceByOrderId.entries())) {
       const row = group.row;
@@ -565,12 +641,25 @@ export async function runGoogleSheetsTransferOrders(
       const sheetShipByDate = parsedShipByDate && !Number.isNaN(parsedShipByDate.getTime()) ? parsedShipByDate : null;
       const effectiveShipByDate = sheetShipByDate ?? getTodayDate();
       const sheetItemNumber = String(row[colIndices.itemNumber] || '').trim();
-      const sheetProductTitle = String(row[colIndices.itemTitle] || '').trim();
+      const rawSheetTitle = String(row[colIndices.itemTitle] || '').trim();
       const sheetQuantity = String(row[colIndices.quantity] || '').trim() || '1';
       const sheetSku = String(row[colIndices.usavSku] || '').trim();
+      const resolvedTitle = resolveProductTitle(rawSheetTitle, sheetSku, sheetItemNumber);
+      const sheetProductTitle = resolvedTitle.title;
+      const titleSource = resolvedTitle.source;
       const sheetCondition = String(row[colIndices.condition] || '').trim();
       const sheetNotes = String(row[colIndices.note] || '').trim();
       const sheetPlatform = String(row[colIndices.platform] || '').trim();
+      const primaryTracking = Array.from(group.trackings.values())[0] || '';
+      const detailRow: TransferOrderDetail = {
+        orderId,
+        productTitle: sheetProductTitle,
+        sku: sheetSku,
+        itemNumber: sheetItemNumber,
+        tracking: primaryTracking,
+        titleSource,
+      };
+      if (titleSource === 'none') detailsUnknownTitle.push(detailRow);
       const matchedCustomer = orderId ? latestCustomerByOrderId.get(orderId) : undefined;
       const matchedCustomerId = matchedCustomer ? Number(matchedCustomer.id) : Number.NaN;
       const customerId = Number.isFinite(matchedCustomerId) ? matchedCustomerId : null;
@@ -622,7 +711,7 @@ export async function runGoogleSheetsTransferOrders(
           orderToKeep = sorted[0];
           sorted.slice(1).forEach((order) => {
             if (order.shipmentId != null) shipmentIds.add(Number(order.shipmentId));
-            ordersToDelete.push(order.id);
+            ordersToDelete.push({ id: order.id, detail: detailRow });
           });
         } else {
           orderToKeep = candidateList[0];
@@ -650,7 +739,7 @@ export async function runGoogleSheetsTransferOrders(
 
         const compactedUpdateValues = compactUpdateValues(updateValues);
         if (Object.keys(compactedUpdateValues).length > 0) {
-          ordersToBackfill.push({ id: orderToKeep.id, values: compactedUpdateValues });
+          ordersToBackfill.push({ id: orderToKeep.id, values: compactedUpdateValues, detail: detailRow });
         }
         if (shipmentIdList.length > 0) {
           shipmentLinksToUpsert.set(orderToKeep.id, {
@@ -666,6 +755,7 @@ export async function runGoogleSheetsTransferOrders(
           orderId,
           shipByDate: effectiveShipByDate,
           shipmentIds: shipmentIdList,
+          detail: detailRow,
           values: {
             // Tenant scope: this is a cron-triggered job with no user
             // session, so we stamp the canonical USAV org explicitly. When
@@ -693,7 +783,7 @@ export async function runGoogleSheetsTransferOrders(
     }
 
     if (ordersToDelete.length > 0) {
-      await db.delete(ordersTable).where(inArray(ordersTable.id, ordersToDelete));
+      await db.delete(ordersTable).where(inArray(ordersTable.id, ordersToDelete.map((e) => e.id)));
     }
 
     if (ordersToBackfill.length > 0) {
@@ -752,7 +842,7 @@ export async function runGoogleSheetsTransferOrders(
     const affectedOrderIds = [
       ...insertedOrderIds,
       ...ordersToBackfill.map((e) => e.id),
-      ...ordersToDelete,
+      ...ordersToDelete.map((e) => e.id),
     ];
 
     // Collect all processed order DB IDs (including unchanged ones) so we can
@@ -786,6 +876,12 @@ export async function runGoogleSheetsTransferOrders(
       tabName: targetTabName,
       ecwidApiRows,
       durationMs: Date.now() - startedAt,
+      details: {
+        inserted: ordersToInsert.map((e) => e.detail),
+        updated: ordersToBackfill.map((e) => e.detail),
+        deleted: ordersToDelete.map((e) => e.detail),
+        unknownTitle: detailsUnknownTitle,
+      },
     };
   } catch (error: any) {
     if (error instanceof GoogleSheetsTransferOrdersJobError) {

@@ -31,6 +31,12 @@ interface BottomSheetProps {
   maxWidth?: string;
   /** Force a specific variant regardless of viewport. */
   forceVariant?: Variant;
+  /**
+   * Stacking level. 0 = base (z-index 200). Each level adds 10 so a
+   * confirmation sheet can sit cleanly on top of an action sheet. The scrim
+   * is also slightly darker per level so the parent sheet visibly recedes.
+   */
+  level?: number;
   children: React.ReactNode;
 }
 
@@ -43,6 +49,7 @@ export function BottomSheet({
   dragDisabled = false,
   maxWidth = '28rem',
   forceVariant = 'auto',
+  level = 0,
   children,
 }: BottomSheetProps) {
   const reduceMotion = useReducedMotion();
@@ -73,18 +80,22 @@ export function BottomSheet({
 
   if (!portalNode) return null;
 
+  const zIndex = 200 + (level * 10);
+  const scrimOpacity = Math.min(0.4 + (level * 0.1), 0.7);
+
   const overlay = (
     <AnimatePresence>
       {open && (
-        <div className="fixed inset-0 z-[200]">
-          {/* Scrim */}
+        <div className="fixed inset-0" style={{ zIndex }}>
+          {/* Scrim — darker on stacked levels so the parent sheet recedes. */}
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             transition={{ duration: reduceMotion ? 0 : 0.18 }}
             onClick={onClose}
-            className="absolute inset-0 bg-black/40 backdrop-blur-sm"
+            className="absolute inset-0 backdrop-blur-sm"
+            style={{ backgroundColor: `rgba(0,0,0,${scrimOpacity})` }}
           />
 
           {variant === 'sheet' ? (

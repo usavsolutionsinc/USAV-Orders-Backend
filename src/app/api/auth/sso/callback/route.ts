@@ -13,7 +13,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import pool from '@/lib/db';
 import { withAuth } from '@/lib/auth/withAuth';
 import {
-  createSession, SESSION_COOKIE_NAME, getCookieMaxAgeSeconds,
+  createSession, SESSION_COOKIE_NAME, cookieMaxAgeForSession,
 } from '@/lib/auth/session';
 import {
   decodeIdTokenClaimsUnsafe, exchangeCode, fetchUserInfo, resolveEndpoints,
@@ -187,7 +187,7 @@ export const GET = withAuth(async (req) => {
     secure: process.env.NODE_ENV === 'production',
     sameSite: 'lax',
     path: '/',
-    maxAge: getCookieMaxAgeSeconds('personal'),
+    maxAge: cookieMaxAgeForSession(session),
   });
   return res;
 }, { allowAnonymous: true });

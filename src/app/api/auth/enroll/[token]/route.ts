@@ -15,7 +15,7 @@ import { consumeEnrollment, loadEnrollment } from '@/lib/auth/enrollment';
 import { setStaffPin, PinError, hashPin } from '@/lib/auth/pin';
 import {
   createSession,
-  getCookieMaxAgeSeconds,
+  cookieMaxAgeForSession,
   SESSION_COOKIE_NAME,
 } from '@/lib/auth/session';
 import { audit } from '@/lib/auth/audit';
@@ -89,7 +89,7 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ token: str
     });
     res.cookies.set(SESSION_COOKIE_NAME, session.sid, {
       httpOnly: true, secure: process.env.NODE_ENV === 'production',
-      sameSite: 'lax', path: '/', maxAge: getCookieMaxAgeSeconds('phone'),
+      sameSite: 'lax', path: '/', maxAge: cookieMaxAgeForSession(session),
     });
     return res;
   } catch (err) {

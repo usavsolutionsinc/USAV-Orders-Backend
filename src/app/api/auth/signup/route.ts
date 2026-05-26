@@ -21,7 +21,7 @@ import { z } from 'zod';
 import pool from '@/lib/db';
 import { withAuth } from '@/lib/auth/withAuth';
 import { checkRateLimitAsync } from '@/lib/api-guard';
-import { createSession, SESSION_COOKIE_NAME, getCookieMaxAgeSeconds } from '@/lib/auth/session';
+import { createSession, SESSION_COOKIE_NAME, cookieMaxAgeForSession } from '@/lib/auth/session';
 import { hashPin, isObviousPin } from '@/lib/auth/pin';
 import { createOrganization, getOrganizationBySlug } from '@/lib/tenancy/organizations';
 import { sendEmailBestEffort } from '@/lib/email/send';
@@ -182,7 +182,7 @@ export const POST = withAuth(async (req: NextRequest) => {
     secure: process.env.NODE_ENV === 'production',
     sameSite: 'lax',
     path: '/',
-    maxAge: getCookieMaxAgeSeconds('personal'),
+    maxAge: cookieMaxAgeForSession(session),
   });
   return res;
 }, { allowAnonymous: true });
