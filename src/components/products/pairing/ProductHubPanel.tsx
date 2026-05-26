@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import {
   Check,
   X,
@@ -15,6 +15,8 @@ import { PRODUCT_HUB_PLATFORMS, platformStyle } from './platform-style';
 import { useProductHub } from './useProductHub';
 import type { HubCandidate, HubConfirmed } from './types';
 import { StickyActionBar } from '@/design-system/components/StickyActionBar';
+import { ListingResizePanel } from '@/components/listing/ListingResizePanel';
+import { isElectron } from '@/utils/isElectron';
 
 interface ProductHubPanelProps {
   skuCatalogId: number;
@@ -31,6 +33,14 @@ interface ProductHubPanelProps {
 export function ProductHubPanel({ skuCatalogId }: ProductHubPanelProps) {
   const hub = useProductHub(skuCatalogId);
   const snapshot = hub.snapshot;
+
+  // Preview pane state: a row's external-link button selects its URL; the
+  // ListingResizePanel mounts the URL inside an embedded Electron webview.
+  const [preview, setPreview] = useState<{ url: string; label: string } | null>(null);
+  const canEmbedListing = isElectron();
+  const openPreview = useCallback((url: string, label: string) => {
+    setPreview({ url, label });
+  }, []);
 
   // All hooks must run on every render — compute totals up-front and let the
   // JSX branches consume them. Returning early before useMemo trips React's
@@ -101,6 +111,8 @@ export function ProductHubPanel({ skuCatalogId }: ProductHubPanelProps) {
                 onAccept={hub.toggleAccept}
                 onReject={hub.toggleReject}
                 onUnpair={hub.toggleUnpair}
+                onPreview={openPreview}
+                activePreviewUrl={preview?.url ?? null}
               />
             ))}
           </div>
@@ -116,6 +128,16 @@ export function ProductHubPanel({ skuCatalogId }: ProductHubPanelProps) {
         onSave={hub.commit}
         onDiscard={hub.clearPending}
       />
+
+      {preview ? (
+        <ListingResizePanel
+          key={preview.url}
+          url={preview.url}
+          canEmbed={canEmbedListing}
+          title={preview.label}
+          storageNamespace="productsPairing"
+        />
+      ) : null}
     </div>
   );
 }
@@ -164,6 +186,8 @@ function ChannelSection({
   onAccept,
   onReject,
   onUnpair,
+  onPreview,
+  activePreviewUrl,
 }: {
   platform: string;
   confirmed: HubConfirmed[];
@@ -172,6 +196,8 @@ function ChannelSection({
   onAccept: (c: HubCandidate) => void;
   onReject: (c: HubCandidate) => void;
   onUnpair: (c: HubConfirmed) => void;
+  onPreview: (url: string, label: string) => void;
+  activePreviewUrl: string | null;
 }) {
   const style = platformStyle(platform);
   const [showAll, setShowAll] = useState(false);
@@ -211,6 +237,8 @@ function ChannelSection({
             confirmed={c}
             pending={pendingByRowId.get(c.platformIdRowId)?.kind}
             onUnpair={onUnpair}
+            onPreview={onPreview}
+            isPreviewing={!!c.listingUrl && c.listingUrl === activePreviewUrl}
           />
         ))}
         {visibleSuggestions.map((c) => (
@@ -220,6 +248,8 @@ function ChannelSection({
             pending={pendingByRowId.get(c.platformIdRowId)?.kind}
             onAccept={onAccept}
             onReject={onReject}
+            onPreview={onPreview}
+            isPreviewing={!!c.listingUrl && c.listingUrl === activePreviewUrl}
           />
         ))}
       </div>
@@ -243,10 +273,14 @@ function ConfirmedRow({
   confirmed,
   pending,
   onUnpair,
+  onPreview,
+  isPreviewing,
 }: {
   confirmed: HubConfirmed;
   pending: 'accept' | 'reject' | 'unpair' | undefined;
   onUnpair: (c: HubConfirmed) => void;
+  onPreview: (url: string, label: string) => void;
+  isPreviewing: boolean;
 }) {
   const willUnpair = pending === 'unpair';
   const value =
@@ -274,15 +308,20 @@ function ConfirmedRow({
         )}
       </div>
       {confirmed.listingUrl && (
-        <a
-          href={confirmed.listingUrl}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="shrink-0 rounded p-1 text-gray-400 hover:bg-white hover:text-blue-600"
-          title="Open listing"
+        <button
+          type="button"
+          onClick={() => onPreview(confirmed.listingUrl!, confirmed.listingTitle || value)}
+          className={`shrink-0 rounded p-1 transition-colors ${
+            isPreviewing
+              ? 'bg-blue-600 text-white hover:bg-blue-700'
+              : 'text-gray-400 hover:bg-white hover:text-blue-600'
+          }`}
+          title={isPreviewing ? 'Showing in preview pane' : 'Preview listing below'}
+          aria-label="Preview listing"
+          aria-pressed={isPreviewing}
         >
           <ExternalLink className="h-3.5 w-3.5" />
-        </a>
+        </button>
       )}
       <button
         type="button"
@@ -306,11 +345,15 @@ function SuggestionRow({
   pending,
   onAccept,
   onReject,
+  onPreview,
+  isPreviewing,
 }: {
   candidate: HubCandidate;
   pending: 'accept' | 'reject' | 'unpair' | undefined;
   onAccept: (c: HubCandidate) => void;
   onReject: (c: HubCandidate) => void;
+  onPreview: (url: string, label: string) => void;
+  isPreviewing: boolean;
 }) {
   const value =
     candidate.platformSku?.trim() || candidate.platformItemId?.trim() || '—';
@@ -355,6 +398,22 @@ function SuggestionRow({
           </p>
         </div>
         <div className="flex shrink-0 items-center gap-1">
+          {candidate.listingUrl && (
+            <button
+              type="button"
+              onClick={() => onPreview(candidate.listingUrl!, candidate.listingTitle || value)}
+              className={`rounded p-1 transition-colors ${
+                isPreviewing
+                  ? 'bg-blue-600 text-white hover:bg-blue-700'
+                  : 'text-gray-400 hover:bg-white hover:text-blue-600'
+              }`}
+              title={isPreviewing ? 'Showing in preview pane' : 'Preview listing below'}
+              aria-label="Preview listing"
+              aria-pressed={isPreviewing}
+            >
+              <ExternalLink className="h-3.5 w-3.5" />
+            </button>
+          )}
           <button
             type="button"
             onClick={() => onAccept(candidate)}

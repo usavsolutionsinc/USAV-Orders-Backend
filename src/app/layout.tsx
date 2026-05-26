@@ -1,5 +1,3 @@
-'use client';
-
 import "./globals.css";
 import Providers from "../components/Providers";
 import { ResponsiveLayout } from "../components/layout/ResponsiveLayout";
@@ -15,12 +13,14 @@ import { OfflineBanner } from "../components/station/OfflineBanner";
 import { InstallPrompt } from "../components/station/InstallPrompt";
 import { AppearanceApplier } from "../components/settings/AppearanceApplier";
 import { ElectronDragStrip } from "../components/electron/ElectronDragStrip";
+import { getInitialAuthUser } from "@/lib/auth/server-session";
 
-export default function RootLayout({
+export default async function RootLayout({
     children,
 }: Readonly<{
     children: React.ReactNode;
 }>) {
+    const initialUser = await getInitialAuthUser();
 
     return (
         <html lang="en">
@@ -44,7 +44,7 @@ export default function RootLayout({
                 <ElectronDragStrip />
                 <OfflineBanner />
                 <Providers>
-                    <AuthProvider>
+                    <AuthProvider initial={initialUser}>
                         <ActivityInboxProvider>
                         <StaffColorsProvider>
                         <StaffSwitcherProvider>

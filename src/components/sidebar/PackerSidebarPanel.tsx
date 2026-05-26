@@ -1,7 +1,6 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { useRouter } from 'next/navigation';
 import StationPacking from '@/components/station/StationPacking';
 import { getCurrentPSTDateKey, toPSTDateKey } from '@/utils/date';
 import { getStaffGoalById } from '@/lib/staffGoalsCache';
@@ -9,9 +8,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useActiveStaffDirectory } from './hooks';
 
 export function PackerSidebarPanel() {
-  const router = useRouter();
   const [history, setHistory] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
   const [dailyGoal, setDailyGoal] = useState(50);
   const { user } = useAuth();
   const staffIdNum = user?.staffId ?? 0;
@@ -20,24 +17,27 @@ export function PackerSidebarPanel() {
 
   const packerMember = staffDirectory.find((m) => String(m.id) === packerId);
   const packerName = packerMember?.name || 'Packer';
+
   useEffect(() => {
+    if (staffIdNum <= 0) return;
+
+    let cancelled = false;
     const fetchHistory = async () => {
-      setLoading(true);
       try {
-        const res = await fetch(`/api/packerlogs?packerId=${packerId}&limit=500`);
-        if (!res.ok) return;
+        const res = await fetch(`/api/packerlogs?packerId=${packerId}&limit=100`);
+        if (!res.ok || cancelled) return;
         const data = await res.json();
-        if (Array.isArray(data)) setHistory(data);
+        if (!cancelled && Array.isArray(data)) setHistory(data);
       } catch {
         // no-op
-      } finally {
-        setLoading(false);
       }
     };
 
-    getStaffGoalById(packerId).then(setDailyGoal).catch(() => {});
+    getStaffGoalById(packerId).then((g) => { if (!cancelled) setDailyGoal(g); }).catch(() => {});
     fetchHistory();
-  }, [packerId]);
+
+    return () => { cancelled = true; };
+  }, [packerId, staffIdNum]);
 
   const todayCount = useMemo(() => {
     if (history.length === 0) return 0;
@@ -48,8 +48,9 @@ export function PackerSidebarPanel() {
   }, [history]);
 
   const refreshHistory = async () => {
+    if (staffIdNum <= 0) return;
     try {
-      const res = await fetch(`/api/packerlogs?packerId=${packerId}&limit=500`);
+      const res = await fetch(`/api/packerlogs?packerId=${packerId}&limit=100`);
       if (!res.ok) return;
       const data = await res.json();
       if (Array.isArray(data)) setHistory(data);
@@ -57,24 +58,6 @@ export function PackerSidebarPanel() {
       // no-op
     }
   };
-
-  if (loading && history.length === 0) {
-    return (
-      <div className="h-full flex flex-col overflow-hidden bg-white">
-        <div className="flex-1 p-4 space-y-4">
-          <div className="h-24 w-full rounded-2xl bg-zinc-100 animate-pulse" />
-          <div className="space-y-2">
-            <div className="h-4 w-24 bg-zinc-100 rounded animate-pulse" />
-            <div className="h-10 w-full rounded-xl bg-zinc-100 animate-pulse" />
-          </div>
-          <div className="space-y-2">
-            <div className="h-4 w-32 bg-zinc-100 rounded animate-pulse" />
-            <div className="h-32 w-full rounded-2xl bg-zinc-100 animate-pulse" />
-          </div>
-        </div>
-      </div>
-    );
-  }
 
   return (
     <div className="h-full flex flex-col overflow-hidden">
