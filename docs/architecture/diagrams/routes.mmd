@@ -197,6 +197,9 @@ flowchart LR
   api_admin_roles__id__duplicate["duplicate"]
   api_admin_roles__id --> api_admin_roles__id__duplicate
   click api_admin_roles__id__duplicate "src/app/api/admin/roles/[id]/duplicate/route.ts" "route: src/app/api/admin/roles/[id]/duplicate/route.ts"
+  api_admin_roles__id__mobile_defaults["mobile-defaults"]
+  api_admin_roles__id --> api_admin_roles__id__mobile_defaults
+  click api_admin_roles__id__mobile_defaults "src/app/api/admin/roles/[id]/mobile-defaults/route.ts" "route: src/app/api/admin/roles/[id]/mobile-defaults/route.ts"
   api_admin_roles_reorder["reorder"]
   api_admin_roles --> api_admin_roles_reorder
   click api_admin_roles_reorder "src/app/api/admin/roles/reorder/route.ts" "route: src/app/api/admin/roles/reorder/route.ts"
@@ -209,6 +212,3 @@ flowchart LR
   api_admin_staff["staff"]
   api_admin --> api_admin_staff
   click api_admin_staff "src/app/api/admin/staff/route.ts" "route: src/app/api/admin/staff/route.ts"
-  api_admin_staff__id["[id]"]
-  api_admin_staff --> api_admin_staff__id
-  click api_admin_staff__id "src/app/api/admin/staff/[id]/route.ts" "route: src/app/api/admin/staff/[id]/route.ts"

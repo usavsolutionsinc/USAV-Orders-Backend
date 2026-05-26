@@ -8,6 +8,7 @@ import {
   type StationThemeColors,
   type StationInputThemeClasses,
 } from '@/utils/staff-colors';
+import { useStaffColorVersion } from '@/contexts/StaffColorsProvider';
 
 export type { StationTheme, StationThemeColors, StationInputThemeClasses };
 
@@ -38,6 +39,9 @@ interface StaffInput {
  *   const { theme, colors, inputBorder } = useStationTheme({ staffId: 3 });
  */
 export function useStationTheme(input: StationTheme | StaffInput): ResolvedTheme {
+  // Re-resolve when the module-level color cache flips (localStorage hydration
+  // on cold boot + the fresh /api/staff fetch from StaffColorsProvider).
+  const colorVersion = useStaffColorVersion();
   return useMemo(() => {
     const theme: StationTheme =
       typeof input === 'string'
@@ -52,5 +56,6 @@ export function useStationTheme(input: StationTheme | StaffInput): ResolvedTheme
     };
   }, [
     typeof input === 'string' ? input : input.staffId,
+    colorVersion,
   ]);
 }

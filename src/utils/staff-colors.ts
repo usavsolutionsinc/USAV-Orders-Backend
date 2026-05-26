@@ -220,6 +220,49 @@ const _staffColorCache = new Map<number, string>();
 let _staffColorVersion = 0;
 const _staffColorSubscribers = new Set<() => void>();
 
+/**
+ * Persists the cache between page loads so themed chrome (packer scan-bar
+ * border, FBA sidebar gradients, etc.) paints with the right hue immediately
+ * on cold boot instead of flashing the emerald default until
+ * <StaffColorsProvider>'s /api/staff fetch resolves.
+ */
+const STORAGE_KEY = 'usav_staff_colors_v1';
+
+function persistStaffColorCache(): void {
+  if (typeof window === 'undefined') return;
+  try {
+    const out: Array<[number, string]> = [];
+    for (const [id, hex] of _staffColorCache) out.push([id, hex]);
+    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(out));
+  } catch {
+    // quota / privacy mode — silently drop
+  }
+}
+
+function hydrateStaffColorCacheFromStorage(): void {
+  if (typeof window === 'undefined') return;
+  try {
+    const raw = window.localStorage.getItem(STORAGE_KEY);
+    if (!raw) return;
+    const parsed = JSON.parse(raw) as unknown;
+    if (!Array.isArray(parsed)) return;
+    for (const entry of parsed) {
+      if (!Array.isArray(entry) || entry.length !== 2) continue;
+      const [id, hex] = entry;
+      if (typeof id !== 'number' || typeof hex !== 'string') continue;
+      if (!/^#[0-9a-fA-F]{6}$/.test(hex)) continue;
+      _staffColorCache.set(id, hex.toLowerCase());
+    }
+    if (_staffColorCache.size > 0) _staffColorVersion += 1;
+  } catch {
+    // corrupt JSON — ignore; next setStaffColorCache will overwrite
+  }
+}
+
+// Runs once on first client import, before any React render. Safe on the
+// server because the typeof window guard short-circuits.
+hydrateStaffColorCacheFromStorage();
+
 export function setStaffColorCache(entries: Array<{ id: number; color_hex?: string | null }>): void {
   _staffColorCache.clear();
   for (const e of entries) {
@@ -228,6 +271,7 @@ export function setStaffColorCache(entries: Array<{ id: number; color_hex?: stri
     }
   }
   _staffColorVersion += 1;
+  persistStaffColorCache();
   _staffColorSubscribers.forEach((fn) => fn());
 }
 
