@@ -25,7 +25,7 @@ import { ConditionPills } from '@/components/receiving/workspace/ConditionPills'
 import { markConditionSet } from '@/components/receiving/workspace/ReceivingProgressStepper';
 import { SkuScanRefChip, getLast4 } from '@/components/ui/CopyChip';
 
-interface UnfoundLine {
+export interface UnfoundLine {
   id: number;
   sku: string | null;
   item_name: string | null;
@@ -36,6 +36,16 @@ interface UnfoundLine {
   listing_reference: string | null;
   location_code: string | null;
   image_url?: string | null;
+  /** `/api/receiving/[id]` populates this when the carton has serials saved against any line. */
+  serials?: Array<{ id: number; serial_number: string }>;
+}
+
+/** Helpers passed to a custom {@link UnmatchedItemsSectionProps.renderLineActions}. */
+export interface UnmatchedLineRenderHelpers {
+  /** Update condition_grade via /api/receiving/lines/[id]/condition. */
+  onConditionChange: (next: string) => void;
+  /** Optimistic-set + refresh trigger so the parent can know to refetch. */
+  refresh: () => void;
 }
 
 export interface UnmatchedItemsSectionProps {
@@ -43,6 +53,14 @@ export interface UnmatchedItemsSectionProps {
   sourcePlatformHint?: string;
   receivingTypeHint?: string;
   listingUrlHint?: string;
+  /**
+   * Optional render override for the per-line action area (replaces the
+   * default `ConditionPills`). Use this from the testing workspace to drop
+   * in `TestingStatusPills` + `InlineSerialAdder` per line so an unmatched
+   * carton's items can be tested without round-tripping through receiving.
+   * When omitted, the section keeps its default receiving behavior.
+   */
+  renderLineActions?: (line: UnfoundLine, helpers: UnmatchedLineRenderHelpers) => React.ReactNode;
 }
 
 interface CartonResponse {
@@ -56,6 +74,7 @@ export function UnmatchedItemsSection({
   sourcePlatformHint,
   receivingTypeHint = 'PO',
   listingUrlHint,
+  renderLineActions,
 }: UnmatchedItemsSectionProps) {
   const [lines, setLines] = useState<UnfoundLine[]>([]);
   const [loading, setLoading] = useState(false);
@@ -86,7 +105,7 @@ export function UnmatchedItemsSection({
 
   const handleAddLine = useCallback(
     async (selection: {
-      sku_platform_id_row: number;
+      sku_platform_id_row: number | null;
       sku_catalog_id: number | null;
       sku: string;
       item_name: string;
@@ -118,9 +137,11 @@ export function UnmatchedItemsSection({
         },
         body: JSON.stringify({
           receiving_id: receivingId,
-          sku_platform_id_row: selection.sku_platform_id_row,
+          ...(selection.sku_platform_id_row != null
+            ? { sku_platform_id_row: selection.sku_platform_id_row }
+            : {}),
           sku_catalog_id: selection.sku_catalog_id,
-          sku: selection.sku,
+          sku: selection.sku || undefined,
           item_name: selection.item_name,
           source_platform_pill: effectiveSourcePlatformPill,
           intake_type: receivingTypeHint.toLowerCase(),
@@ -290,6 +311,12 @@ export function UnmatchedItemsSection({
             line={line}
             onConditionChange={handleConditionChange}
             onRemove={handleRemoveLine}
+            renderActions={
+              renderLineActions
+                ? (helpers) => renderLineActions(line, helpers)
+                : undefined
+            }
+            refresh={refreshLines}
           />
         ))}
       </div>
@@ -310,12 +337,21 @@ interface UnmatchedLineRowProps {
   line: UnfoundLine;
   onConditionChange: (lineId: number, condition: string) => Promise<void>;
   onRemove: (lineId: number) => Promise<void>;
+  /**
+   * When provided, replaces the default ConditionPills with a caller-rendered
+   * action area. Receives the same helpers the default renderer uses so the
+   * caller can still trigger condition changes from inside its custom UI.
+   */
+  renderActions?: (helpers: UnmatchedLineRenderHelpers) => React.ReactNode;
+  refresh: () => void;
 }
 
 function UnmatchedLineRow({
   line,
   onConditionChange,
   onRemove,
+  renderActions,
+  refresh,
 }: UnmatchedLineRowProps) {
   const [updating, setUpdating] = useState(false);
   const handleCondition = useCallback(
@@ -379,13 +415,23 @@ function UnmatchedLineRow({
           className={updating ? 'pointer-events-none opacity-60' : undefined}
           aria-busy={updating || undefined}
         >
-          <ConditionPills
-            value={line.condition_grade}
-            onChange={(next) => {
-              markConditionSet(line.id);
-              void handleCondition(next);
-            }}
-          />
+          {renderActions ? (
+            renderActions({
+              onConditionChange: (next) => {
+                markConditionSet(line.id);
+                void handleCondition(next);
+              },
+              refresh,
+            })
+          ) : (
+            <ConditionPills
+              value={line.condition_grade}
+              onChange={(next) => {
+                markConditionSet(line.id);
+                void handleCondition(next);
+              }}
+            />
+          )}
         </div>
       </div>
     </div>

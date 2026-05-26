@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { Check, Loader2, Package, X } from '@/components/Icons';
 import { type ZohoPO, CONDITION_OPTIONS, CHANNEL_OPTIONS, statusColor, fmtDate } from './zoho-po-types';
+import { randomId } from '@/components/sidebar/receiving/receiving-sidebar-shared';
 
 interface LineFormState {
   quantity_received: string;
@@ -30,6 +31,7 @@ export function PODetailPanel({ po, onClose, onReceived }: PODetailPanelProps) {
   const [needsTest, setNeedsTest]         = useState(false);
   const [submitting, setSubmitting]       = useState(false);
   const [successId, setSuccessId]         = useState<number | null>(null);
+  const [successPending, setSuccessPending] = useState(false);
   const [error, setError]                 = useState<string | null>(null);
 
   const updateLine = (id: string, field: keyof LineFormState, value: string) =>
@@ -54,20 +56,34 @@ export function PODetailPanel({ po, onClose, onReceived }: PODetailPanelProps) {
     }
 
     setSubmitting(true);
+    // Stable per-click id used as both Idempotency-Key header and
+    // client_event_id in body so api_idempotency_responses replays the
+    // cached response on retry / double-click — the route already commits
+    // local rows and pushes Zoho into after(), so retry is safe.
+    const clientEventId = randomId();
     try {
       const res = await fetch('/api/zoho/purchase-orders/receive', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'Idempotency-Key': clientEventId,
+        },
         body: JSON.stringify({
           purchaseorder_id: po.purchaseorder_id,
           warehouse_id: po.warehouse_id || undefined,
           line_items: submitLines,
           target_channel: targetChannel || undefined,
           needs_test: needsTest,
+          client_event_id: clientEventId,
         }),
+        // Hard ceiling — local insert returns in seconds; anything longer
+        // is a real server problem and the operator should see an error.
+        signal: AbortSignal.timeout(30_000),
       });
       const json = await res.json();
       if (!res.ok || !json.success) throw new Error(json.error || 'Receive failed');
+      const zoho = json?.zoho as { pending?: boolean } | undefined;
+      setSuccessPending(Boolean(zoho?.pending));
       setSuccessId(Number(json.receiving_id));
       onReceived(Number(json.receiving_id));
     } catch (e: unknown) {
@@ -83,9 +99,14 @@ export function PODetailPanel({ po, onClose, onReceived }: PODetailPanelProps) {
         <div className="h-14 w-14 rounded-full bg-green-100 flex items-center justify-center">
           <Check className="h-7 w-7 text-green-600" />
         </div>
-        <p className="text-sm font-black text-gray-800 uppercase tracking-wide">Items Received</p>
+        <p className="text-sm font-black text-gray-800 uppercase tracking-wide">
+          {successPending ? 'Saved Locally' : 'Items Received'}
+        </p>
         <p className="text-caption text-gray-500">
-          Receiving record #{successId} created and saved to Zoho Inventory.
+          Receiving record #{successId}{' '}
+          {successPending
+            ? 'created. Zoho sync running in the background — the dashboard updates when it finishes.'
+            : 'created and saved to Zoho Inventory.'}
         </p>
         <button
           onClick={onClose}

@@ -53,41 +53,6 @@ export interface ReceiveLineUnitsInput {
 
   // Optional raw scan token for audit (e.g. the URL the tech scanned).
   scan_token?: string | null;
-
-  /**
-   * Permit `quantity_received + units > quantity_expected`. Default false:
-   * callers must opt in to over-receive (e.g. an admin override path). The
-   * UI prompts the operator on OVER_RECEIVE and re-submits with this flag
-   * set when they confirm.
-   */
-  allow_over_receive?: boolean;
-}
-
-/**
- * Sentinel error thrown when an incoming receive would push quantity_received
- * past quantity_expected. Carries enough context for the API layer to return
- * a structured 409 the UI can react to.
- */
-export class OverReceiveError extends Error {
-  readonly code = 'OVER_RECEIVE' as const;
-  readonly receiving_line_id: number;
-  readonly prior_received: number;
-  readonly attempted_units: number;
-  readonly quantity_expected: number;
-  constructor(args: {
-    receiving_line_id: number;
-    prior_received: number;
-    attempted_units: number;
-    quantity_expected: number;
-  }) {
-    super(
-      `OVER_RECEIVE: line ${args.receiving_line_id} already has ${args.prior_received} of ${args.quantity_expected}; refusing +${args.attempted_units}.`,
-    );
-    this.receiving_line_id = args.receiving_line_id;
-    this.prior_received = args.prior_received;
-    this.attempted_units = args.attempted_units;
-    this.quantity_expected = args.quantity_expected;
-  }
 }
 
 export interface ReceivedSerialResult {
@@ -110,6 +75,20 @@ export interface ReceiveLineUnitsResult {
    * and surface an "already received" message rather than an error.
    */
   already_received?: boolean;
+  /**
+   * True when quantity_expected is set and quantity_received already met it:
+   * this call did not bump qty / ledger — UI should toast "already received"
+   * without pretending the line progressed.
+   */
+  already_complete?: boolean;
+  /**
+   * True when one or more serials were logged AFTER quantity_received had
+   * already met quantity_expected. The serial is still recorded in both
+   * `serial_units` and `tech_serial_numbers` so a tech can keep scanning
+   * extras for a PO line without the count or stock ledger changing.
+   * Receiving / Testing UIs use this to render a "supplemental" toast.
+   */
+  supplemental?: boolean;
   line_state: {
     id: number;
     sku: string | null;
@@ -137,10 +116,8 @@ interface LineTarget {
 
 /**
  * Load the line under a row-level lock inside the provided transaction. Used
- * by receiveLineUnits to serialize concurrent scans — without this, two
- * scan-serial requests can both pass the OverReceive guard on a stale read of
- * quantity_received and end up over-receiving by one. The lock is released on
- * COMMIT/ROLLBACK.
+ * by receiveLineUnits to serialize concurrent scans so quantity_received and
+ * serial writes stay consistent. The lock is released on COMMIT/ROLLBACK.
  */
 async function loadLineForUpdate(
   client: import('pg').PoolClient,
@@ -182,24 +159,34 @@ function dedupeSerials(input: ReceiveLineUnitsInput): string[] {
  *   1. upsertSerialUnit() — only when a serial is present for that unit
  *   2. tech_serial_numbers audit row — only for serialized units
  *   3. sku_stock_ledger delta = +1 (reason=RECEIVED, dimension=WAREHOUSE)
- *      → trigger updates sku_stock.stock
+ *      → trigger updates sku_stock.stock        — SKIPPED for supplemental
  *   4. inventory_events RECEIVED row (joins to ledger via stock_ledger_id)
  *
  * Then once:
  *   5. UPDATE receiving_lines with QA/disp/cond/notes/workflow_status
- *      and quantity_received += units
+ *      and quantity_received += effectiveUnits  (effectiveUnits=0 for supplemental)
+ *
+ * Supplemental serials: PO lines are NOT hard-capped at quantity_expected.
+ * A tech can keep scanning extras for a line; each extra still lands in
+ * serial_units + tech_serial_numbers (so /testing chip lists + master
+ * registry stay honest), but the sku_stock_ledger and the line's qty
+ * counter both stop at expected so received-vs-actual ratios don't drift.
+ * Result.supplemental=true flags the call so the UI can toast accordingly.
  *
  * Bug A is fixed: every serial path now goes through upsertSerialUnit().
  * Bug B is fixed: non-serialized units also emit a ledger row.
+ *
+ * upsertSerialUnit() MUST run on this same PoolClient (`{ dbClient: client }`).
+ * A second pooled connection would block on the receiving_lines row locked by
+ * FOR UPDATE (FK check on origin_receiving_line_id) until Neon times out.
  */
 export async function receiveLineUnits(
   input: ReceiveLineUnitsInput,
 ): Promise<ReceiveLineUnitsResult> {
   // Acquire a dedicated connection + open a transaction so the SELECT ... FOR
   // UPDATE on receiving_lines holds for the lifetime of this call. Concurrent
-  // scan-serial requests on the same line will block on this lock, then re-read
-  // the post-commit quantity_received — eliminating the snapshot-isolation
-  // race that previously let two scans both pass the OverReceive guard.
+  // scan-serial requests on the same line block on this lock so reads and
+  // writes serialize correctly.
   const client = await pool.connect();
   let committed = false;
   try {
@@ -220,19 +207,14 @@ export async function receiveLineUnits(
       );
     }
 
-    // Guard against over-receive: read is now under the row lock so it sees
-    // committed state, not a stale snapshot. Override path still available via
-    // allow_over_receive for admin flows.
     const priorReceivedForGuard = Number(line.quantity_received ?? 0);
     const expectedForGuard =
       line.quantity_expected != null ? Number(line.quantity_expected) : null;
 
-    // Idempotent re-scan: if the caller is sending exactly one serial and that
-    // serial is already recorded against this line, treat it as a no-op success
-    // instead of bubbling OVER_RECEIVE. Operator scanning the same barcode twice
-    // (or a flaky-network retry) should see "already received," not an error.
-    // Only triggers when the line is already at/over capacity — otherwise the
-    // serial would normally upsert and bump the counter.
+    // Idempotent re-scan: if the caller sends exactly one serial and that SN is
+    // already on this line, return success without mutating qty. Same-barcode or
+    // retry UX should stay friendly. Only triggers when receiving would exceed
+    // capacity — otherwise the serial path below upserts and bumps the counter.
     if (
       units === 1 &&
       serials.length === 1 &&
@@ -272,23 +254,20 @@ export async function receiveLineUnits(
       }
     }
 
-    if (
-      !input.allow_over_receive &&
+    // Over-cap supplemental scan. PO lines are never hard-capped at the
+    // expected qty — a tech can keep scanning extras and they still land in
+    // serial_units + tech_serial_numbers. The qty counter and the
+    // sku_stock_ledger DO stop at expected so receiving-vs-actual numbers
+    // stay honest; the audit + chip strip do NOT. `supplemental: true`
+    // flows up to the UI so it can toast "Extra serial logged" instead of
+    // a misleading "fully received" message.
+    const isOverCap =
       units > 0 &&
       expectedForGuard != null &&
-      priorReceivedForGuard + units > expectedForGuard
-    ) {
-      await client.query('ROLLBACK');
-      throw new OverReceiveError({
-        receiving_line_id: line.id,
-        prior_received: priorReceivedForGuard,
-        attempted_units: units,
-        quantity_expected: expectedForGuard,
-      });
-    }
+      priorReceivedForGuard + units > expectedForGuard;
 
     const station: InventoryEventStation = input.station ?? 'RECEIVING';
-  const catalog = line.sku ? await getSkuCatalogBySku(line.sku) : null;
+    const catalog = line.sku ? await getSkuCatalogBySku(line.sku) : null;
 
   const serialsRecorded: ReceivedSerialResult[] = [];
   const ledgerEventIds: number[] = [];
@@ -303,17 +282,20 @@ export async function receiveLineUnits(
     const serial = serials[i];
     const ordinal = priorReceived + i + 1;
 
-    const upserted = await upsertSerialUnit({
-      serial_number: serial,
-      sku: line.sku,
-      sku_catalog_id: catalog?.id ?? null,
-      zoho_item_id: line.zoho_item_id,
-      origin_source: 'receiving',
-      origin_receiving_line_id: line.id,
-      actor_id: input.staff_id ?? null,
-      condition_grade: input.condition_grade ?? null,
-      target_status: 'RECEIVED',
-    });
+    const upserted = await upsertSerialUnit(
+      {
+        serial_number: serial,
+        sku: line.sku,
+        sku_catalog_id: catalog?.id ?? null,
+        zoho_item_id: line.zoho_item_id,
+        origin_source: 'receiving',
+        origin_receiving_line_id: line.id,
+        actor_id: input.staff_id ?? null,
+        condition_grade: input.condition_grade ?? null,
+        target_status: 'RECEIVED',
+      },
+      { dbClient: client },
+    );
     if (!upserted) continue; // invalid serial — skip
 
     serialsRecorded.push({
@@ -348,9 +330,12 @@ export async function receiveLineUnits(
       console.warn('receiveLineUnits: tsn audit insert failed (non-fatal)', err);
     }
 
-    // Ledger delta — only on truly new serials. Re-scans of an already-known
-    // serial don't double-count.
-    if (upserted.is_new && line.sku) {
+    // Ledger delta — only on truly new serials AND only when this scan is
+    // still counted against the PO line's expected qty. Re-scans of an
+    // already-known serial don't double-count, and over-cap supplemental
+    // scans still record the serial but never bump the stock ledger (so
+    // received-vs-actual ratios stay honest).
+    if (upserted.is_new && line.sku && !isOverCap) {
       const ledger = await client.query<{ id: number }>(
         `INSERT INTO sku_stock_ledger
            (sku, delta, reason, dimension, staff_id,
@@ -408,6 +393,34 @@ export async function receiveLineUnits(
         },
       }, client);
       inventoryEventIds.push(event.id);
+    } else if (upserted.is_new && line.sku && isOverCap) {
+      // Supplemental serial logged after the line was already at expected
+      // qty. Skip the ledger delta (no stock change), but still emit a
+      // RECEIVED inventory event with `supplemental: true` so the audit
+      // timeline records the touch.
+      const event = await recordInventoryEvent({
+        event_type: 'RECEIVED',
+        actor_staff_id: input.staff_id ?? null,
+        station,
+        receiving_id: line.receiving_id,
+        receiving_line_id: line.id,
+        serial_unit_id: upserted.unit.id,
+        sku: line.sku,
+        next_status: 'RECEIVED',
+        stock_ledger_id: null,
+        scan_token: input.scan_token ?? null,
+        client_event_id: input.client_event_id
+          ? `${input.client_event_id}:unit-${ordinal}-supplemental`
+          : null,
+        notes: `Supplemental serial ${serial.toUpperCase()} (beyond expected qty)`,
+        payload: {
+          unit_ordinal: ordinal,
+          supplemental: true,
+          is_return: upserted.is_return,
+          warnings: upserted.warnings,
+        },
+      }, client);
+      inventoryEventIds.push(event.id);
     } else if (line.sku) {
       // Already known serial (re-scan). Still emit an event so the timeline
       // shows the touch — but skip the ledger delta.
@@ -438,8 +451,11 @@ export async function receiveLineUnits(
 
   // 2. Non-serialized remainder. One ledger row per unit so the audit stays
   //    per-unit; per-line bulk inserts would lose the unit_ordinal mapping.
+  //    Skipped entirely when the call is over cap — non-serialized units
+  //    can't be "supplemental" because there's no serial to keep beyond
+  //    the qty; we would just be inflating the ledger.
   const remainderQty = units - serials.length;
-  if (remainderQty > 0 && line.sku) {
+  if (remainderQty > 0 && line.sku && !isOverCap) {
     for (let j = 0; j < remainderQty; j++) {
       const ordinal = priorReceived + serials.length + j + 1;
 
@@ -499,7 +515,10 @@ export async function receiveLineUnits(
   // 3. Update the line in one shot — runs on the SAME client as the SELECT
   //    FOR UPDATE so it inherits the row lock. quantity_received += units;
   //    flip workflow based on caller intent + computed completeness.
+  //    Over-cap scans pass effectiveUnits=0 so the counter never goes above
+  //    quantity_expected even when extras were logged as supplemental.
   const explicitWorkflow = input.set_workflow_status ?? null;
+  const effectiveUnits = isOverCap ? 0 : units;
   const update = await client.query<{
     id: number;
     sku: string | null;
@@ -532,7 +551,7 @@ export async function receiveLineUnits(
                quantity_expected, workflow_status::text AS workflow_status`,
     [
       line.id,
-      units,
+      effectiveUnits,
       input.qa_status ?? null,
       input.disposition_code ?? null,
       input.condition_grade ?? null,
@@ -545,7 +564,7 @@ export async function receiveLineUnits(
     id: line.id,
     sku: line.sku,
     item_name: line.item_name,
-    quantity_received: priorReceived + units,
+    quantity_received: priorReceived + effectiveUnits,
     quantity_expected: line.quantity_expected,
     workflow_status: line.workflow_status,
   };
@@ -555,10 +574,13 @@ export async function receiveLineUnits(
 
     return {
       line_id: line.id,
-      units_added: units,
+      units_added: effectiveUnits,
       serials_recorded: serialsRecorded,
       ledger_event_ids: ledgerEventIds,
       inventory_event_ids: inventoryEventIds,
+      // `supplemental` flows up so receivers/testers can show "Extra serial
+      // logged" rather than the misleading "already received" message.
+      supplemental: isOverCap || undefined,
       line_state: {
         id: Number(updated.id),
         sku: updated.sku,

@@ -68,6 +68,11 @@ export interface SearchFieldProps {
    * Use with {@link rightElement} when paste/clear should sit outside the form (e.g. row remove X left of paste).
    */
   customTrailingSlot?: ReactNode;
+  /**
+   * Renders immediately before the default trailing control (inside the search field row).
+   * Use for compact actions that should sit left of paste (e.g. “product not in catalog”).
+   */
+  trailingPrefix?: ReactNode;
   /** When true, trailing slot shows only paste (clipboard); never the clear (X) button when the field has text. */
   pasteOnlyTrailing?: boolean;
 }
@@ -102,6 +107,7 @@ export function SearchField({
   hideUnderline = false,
   hideClear = false,
   customTrailingSlot,
+  trailingPrefix,
   pasteOnlyTrailing = false,
 }: SearchFieldProps) {
   // Internal draft — avoid churn from async parent updates during typing.
@@ -231,8 +237,15 @@ export function SearchField({
           className={`w-full border-0 bg-transparent px-0 font-bold text-gray-900 outline-none placeholder:font-medium placeholder:text-gray-400 ${sizeClasses.input}`.trim()}
         />
 
-        {/* Right-slot: spinner > pending > clear > paste — or custom (e.g. row remove X before paste in rightElement). */}
-        <span className="flex h-[14px] w-[14px] shrink-0 items-center justify-center">
+        {/* Right-slot: optional prefix, then spinner > pending > clear > paste — or fully custom slot. */}
+        <span
+          className={`flex shrink-0 items-center justify-end ${
+            trailingPrefix != null
+              ? 'min-h-[14px] gap-2'
+              : 'h-[14px] w-[14px] justify-center'
+          }`}
+        >
+          {trailingPrefix}
           {customTrailingSlot !== undefined ? (
             customTrailingSlot
           ) : isSearching ? (

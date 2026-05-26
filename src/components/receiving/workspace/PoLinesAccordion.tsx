@@ -16,16 +16,31 @@ interface ApiResponse {
   receiving_lines: ReceivingLineRow[];
 }
 
+type ActiveRowSerial = { id: number; serial_number: string };
+
+interface ActiveRowSlotContext {
+  /**
+   * Authoritative list of saved serials for the active line, sourced from
+   * this accordion's own query. Pass this into the inline serial adder so
+   * the chip list below the input always matches the chip shown in the row
+   * header — otherwise the two surfaces drift (the parent's `row.serials`
+   * is fed from a different fetch cadence).
+   */
+  serials: ActiveRowSerial[];
+}
+
 interface Props {
   receivingId: number;
   activeLineId: number;
   /**
-   * Optional condition-pills slot — rendered inside the active row's bubble
-   * so the pill selector reads as part of the selected PO item rather than
-   * as a separate "CONDITION" card. The parent owns the cond state +
-   * change handler.
+   * Optional slot rendered inside the active row's bubble — condition pills,
+   * inline serial adder, etc. Receives the active line's serials so children
+   * can consume the accordion's authoritative data rather than re-fetching
+   * or relying on parent state.
    */
-  activeRowSlot?: React.ReactNode;
+  activeRowSlot?:
+    | React.ReactNode
+    | ((ctx: ActiveRowSlotContext) => React.ReactNode);
 }
 
 /**
@@ -83,15 +98,11 @@ export function PoLinesAccordion({ receivingId, activeLineId, activeRowSlot }: P
     return () => window.removeEventListener('usav-refresh-data', handler);
   }, [queryClient, queryKey]);
 
-  // Sort: non-active rows first, active row last. Sibling switching becomes
-  // a "row trades places with the bottom" interaction — the bottom slot is
-  // always the operator's current selection, sitting adjacent to the
-  // workspace body below.
-  const rows = useMemo(() => {
-    const nonActive = localRows.filter((r) => r.id !== activeLineId);
-    const active = localRows.filter((r) => r.id === activeLineId);
-    return [...nonActive, ...active];
-  }, [localRows, activeLineId]);
+  // Keep rows in their original order from the API so clicking a sibling
+  // feels like a local expand/collapse, not a "row jumps to the bottom"
+  // switch. The active row still highlights + shows its slot in place; the
+  // collapsed siblings stay anchored where they were.
+  const rows = localRows;
   // Always render — even for single-line POs the row layout (title, qty,
   // condition, sku, serial chip) is the canonical context display the
   // workspace expects above the body.
@@ -193,10 +204,15 @@ export function PoLinesAccordion({ receivingId, activeLineId, activeRowSlot }: P
                   </div>
                 </div>
               </div>
-              {/* Active row only — slot for condition pills, etc. */}
+              {/* Active row only — slot for condition pills, serial adder,
+                  etc. Passes the line's own serials (from this accordion's
+                  query) so the inline adder shows the same chips the row
+                  header shows. */}
               {isActive && activeRowSlot ? (
                 <div className="border-t border-blue-200/60 px-3 py-3">
-                  {activeRowSlot}
+                  {typeof activeRowSlot === 'function'
+                    ? activeRowSlot({ serials: line.serials ?? [] })
+                    : activeRowSlot}
                 </div>
               ) : null}
             </motion.li>

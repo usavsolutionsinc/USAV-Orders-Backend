@@ -4,13 +4,21 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useQueryClient } from '@tanstack/react-query';
 import { sidebarHeaderBandClass } from '@/components/layout/header-shell';
-import { HorizontalButtonSlider, type HorizontalSliderItem } from '@/components/ui/HorizontalButtonSlider';
 import StationTesting from '@/components/station/StationTesting';
+import { TestingSidebarPanel } from '@/components/sidebar/TestingSidebarPanel';
 import { getCurrentPSTDateKey, toPSTDateKey } from '@/utils/date';
 import { getStaffGoalById } from '@/lib/staffGoalsCache';
 import { useTechLogs, type TechRecord } from '@/hooks/useTechLogs';
-import { ChevronLeft, Clock, Edit, FileText, History, PackageCheck } from '@/components/Icons';
+import { ChevronLeft } from '@/components/Icons';
+import { HorizontalButtonSlider } from '@/components/ui/HorizontalButtonSlider';
 import { useActiveStaffDirectory } from './hooks';
+import {
+  TECH_STATION_VIEW_ITEMS,
+  TECH_STATION_VIEW_SLIDER_NONE,
+  TECH_TOP_MODE_ITEMS,
+  type TechStationViewMode,
+  type TechSidebarTopMode,
+} from './tech-station-view-config';
 
 function computeCurrentWeekRange() {
   const todayPst = getCurrentPSTDateKey();
@@ -59,15 +67,7 @@ function deduplicateByTracking(records: TechRecord[]): TechRecord[] {
   return unique;
 }
 
-const TECH_VIEW_ITEMS: HorizontalSliderItem[] = [
-  { id: 'history',        label: 'History',        icon: History },
-  { id: 'shipped',        label: 'Shipped',        icon: PackageCheck },
-  { id: 'pending',        label: 'Pending',        icon: Clock },
-  { id: 'manual',         label: 'Manual',         icon: FileText },
-  { id: 'update-manuals', label: 'Update Manuals', icon: Edit },
-];
-
-type TechViewMode = 'history' | 'shipped' | 'pending' | 'manual' | 'update-manuals';
+type TechViewMode = TechStationViewMode;
 
 interface TechSidebarPanelProps {
   techId: string;
@@ -86,17 +86,31 @@ export function TechSidebarPanel({ techId, onBackToAppNav, contextNavTitle = 'Te
 
   const techMember = staffDirectory.find((m) => String(m.id) === String(techId));
   const techName = techMember?.name || 'Technician';
-  const rawView = searchParams.get('view');
+  const viewParam = searchParams.get('view');
+  /**
+   * `view=testing` flips the entire sidebar (and right pane) into the
+   * Testing top-mode; everything else stays in Shipping with `viewMode`
+   * driving which right-panel table renders.
+   */
+  const topMode: TechSidebarTopMode = viewParam === 'testing' ? 'testing' : 'shipping';
+  /** Shipped is the default; history/pending require explicit `?view=`. Only used in Shipping mode. */
   const viewMode: TechViewMode =
-    rawView === 'pending'
+    viewParam === 'pending'
       ? 'pending'
-      : rawView === 'shipped'
-        ? 'shipped'
-        : rawView === 'manual'
-          ? 'manual'
-          : rawView === 'update-manuals'
-            ? 'update-manuals'
-            : 'history';
+      : viewParam === 'history'
+        ? 'history'
+        : 'shipped';
+
+  // Normalize legacy / removed query values on `view`.
+  useEffect(() => {
+    const v = searchParams.get('view');
+    if (v !== 'manual' && v !== 'update-manuals') return;
+    const nextParams = new URLSearchParams(searchParams.toString());
+    nextParams.delete('view');
+    nextParams.set('staffId', techId);
+    const nextSearch = nextParams.toString();
+    router.replace(nextSearch ? `/tech?${nextSearch}` : '/tech');
+  }, [searchParams, router, techId]);
 
   // Fetch goal on mount / when techId changes
   useEffect(() => {
@@ -118,7 +132,7 @@ export function TechSidebarPanel({ techId, onBackToAppNav, contextNavTitle = 'Te
   const updateViewMode = (nextView: TechViewMode) => {
     const nextParams = new URLSearchParams(searchParams.toString());
     nextParams.set('staffId', techId);
-    if (nextView === 'history') {
+    if (nextView === 'shipped') {
       nextParams.delete('view');
     } else {
       nextParams.set('view', nextView);
@@ -126,6 +140,27 @@ export function TechSidebarPanel({ techId, onBackToAppNav, contextNavTitle = 'Te
     if (nextView !== 'pending' && nextView !== 'shipped') {
       nextParams.delete('search');
       nextParams.delete('searchOpen');
+    }
+    const nextSearch = nextParams.toString();
+    router.replace(nextSearch ? `/tech?${nextSearch}` : '/tech');
+  };
+
+  /**
+   * Switch the top-level mode. `shipping` clears `view=testing` and lets
+   * the default (shipped) reassert; `testing` sets `view=testing` which is
+   * the same param `TechDashboard` already branches on.
+   */
+  const updateTopMode = (next: TechSidebarTopMode) => {
+    const nextParams = new URLSearchParams(searchParams.toString());
+    nextParams.set('staffId', techId);
+    if (next === 'testing') {
+      nextParams.set('view', 'testing');
+      nextParams.delete('search');
+      nextParams.delete('searchOpen');
+    } else {
+      // Drop `view=testing`; keep history/pending/shipped untouched so the
+      // tech doesn't lose their sub-mode when bouncing between top modes.
+      if (nextParams.get('view') === 'testing') nextParams.delete('view');
     }
     const nextSearch = nextParams.toString();
     router.replace(nextSearch ? `/tech?${nextSearch}` : '/tech');
@@ -142,10 +177,6 @@ export function TechSidebarPanel({ techId, onBackToAppNav, contextNavTitle = 'Te
           {onBackToAppNav ? (
             <div className="flex min-h-[44px] w-full border-b border-gray-200 bg-zinc-50 animate-pulse" />
           ) : null}
-          <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)] divide-x divide-gray-200">
-            <div className="h-11 bg-zinc-50 animate-pulse" />
-            <div className="h-11 bg-zinc-50 animate-pulse" />
-          </div>
         </div>
         <div className="flex-1 p-4 space-y-4">
           <div className="h-24 w-full rounded-2xl bg-zinc-100 animate-pulse" />
@@ -164,6 +195,7 @@ export function TechSidebarPanel({ techId, onBackToAppNav, contextNavTitle = 'Te
 
   return (
     <div className="relative flex h-full w-full flex-col overflow-hidden bg-white">
+      {/* Band 1: optional back chevron + section label (mobile context nav) */}
       <div className={sidebarHeaderBandClass}>
         {onBackToAppNav ? (
           <button
@@ -176,32 +208,53 @@ export function TechSidebarPanel({ techId, onBackToAppNav, contextNavTitle = 'Te
               <ChevronLeft className="h-5 w-5" />
             </div>
             <div className="min-w-0">
-              <p className="truncate text-sm font-black tracking-tight text-gray-900">{contextNavTitle}</p>
+              <p className="truncate text-sm font-black tracking-tight text-gray-900">
+                {contextNavTitle}
+              </p>
             </div>
           </button>
         ) : null}
-        <div className="px-3">
-          <HorizontalButtonSlider
-            items={TECH_VIEW_ITEMS}
-            value={viewMode}
-            onChange={(next) => updateViewMode(next as TechViewMode)}
-            variant="nav"
-            aria-label="Technician view"
-          />
-        </div>
       </div>
-      <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-        <StationTesting
-          embedded
-          userId={techId}
-          userName={techName}
-          staffId={techId}
-          onTrackingScan={() => updateViewMode('history')}
-          onViewManual={() => updateViewMode('manual')}
-          todayCount={todayCount}
-          goal={dailyGoal}
-          onComplete={refreshHistory}
+
+      {/* Band 2: top mode pills [Shipping | Testing]. Mirrors the receiving
+          sidebar's mode-row above the scan bar so the tech's primary mode
+          switch lives in the exact same visual location as receiving's. */}
+      <div className={`${sidebarHeaderBandClass} px-3`}>
+        <HorizontalButtonSlider
+          items={TECH_TOP_MODE_ITEMS}
+          value={topMode}
+          onChange={(next) => updateTopMode(next as TechSidebarTopMode)}
+          variant="nav"
+          aria-label="Tech sidebar mode"
         />
+      </div>
+
+      {/* Body — Testing top mode owns a lean scan-bar + recent rail shell;
+          Shipping mode keeps the full StationTesting welcome/goal/queue
+          surface plus its icon-only sub-mode switcher (history/shipped/
+          pending). The parent owns chrome (bands 1 + 2); child renders
+          only the body. */}
+      <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+        {topMode === 'testing' ? (
+          <TestingSidebarPanel staffId={techId} />
+        ) : (
+          <StationTesting
+            embedded
+            userId={techId}
+            userName={techName}
+            staffId={techId}
+            onTrackingScan={() => updateViewMode('history')}
+            techViewSwitcher={{
+              items: TECH_STATION_VIEW_ITEMS,
+              value:
+                viewParam === 'receiving' ? TECH_STATION_VIEW_SLIDER_NONE : viewMode,
+              onChange: updateViewMode,
+            }}
+            todayCount={todayCount}
+            goal={dailyGoal}
+            onComplete={refreshHistory}
+          />
+        )}
       </div>
     </div>
   );

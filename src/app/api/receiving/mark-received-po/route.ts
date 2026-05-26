@@ -16,7 +16,7 @@ import {
   sumWarehouseReceivedByPoLineItem,
   updatePurchaseOrder,
 } from '@/lib/zoho';
-import { receiveLineUnits, OverReceiveError } from '@/lib/receiving/receive-line';
+import { receiveLineUnits } from '@/lib/receiving/receive-line';
 import {
   getApiIdempotencyResponse,
   readIdempotencyKey,
@@ -190,8 +190,8 @@ export const POST = withAuth(async (request, ctx) => {
     // Idempotency: long-running Zoho-sync routes are exactly the place a
     // network blip + client retry can fire the same request twice. Replay the
     // prior response when we recognize the key, instead of running the full
-    // receive flow again (which would 409 OVER_RECEIVE on the lines we just
-    // committed and double-call Zoho).
+    // receive flow again (which could no-op on lines we just committed and
+    // double-call Zoho).
     const idempotencyKey = readIdempotencyKey(request, clientEventId);
     if (idempotencyKey) {
       const cached = await getApiIdempotencyResponse(
@@ -325,27 +325,40 @@ export const POST = withAuth(async (request, ctx) => {
 
     if (openForReceive.length > 0) {
       for (const lineRow of openForReceive) {
-      // Force-complete semantics: bump to at least expected (or 1 when
-      // expected is unknown). Already-received units are not double-counted.
       const currentQty = Number(lineRow.quantity_received ?? 0);
+      const lineExpectedRaw = lineRow.quantity_expected ?? null;
+      const lineExpected =
+        lineExpectedRaw != null ? Number(lineExpectedRaw) : null;
+      const atQtyCap =
+        lineExpected != null &&
+        Number.isFinite(lineExpected) &&
+        currentQty >= lineExpected;
+
+      const serialsForLine =
+        serialNumber &&
+        lineRow.id === serialOwnerLineId &&
+        !atQtyCap
+          ? [serialNumber]
+          : [];
+
+      // Force-complete: bump qty to expected (or 1 when unknown). Already-received
+      // units are not double-counted.
       const targetQty = Math.max(
         currentQty,
         Number(lineRow.quantity_expected ?? 1),
       );
       const unitsToAdd = Math.max(0, targetQty - currentQty);
-
-      const serialsForLine =
-        serialNumber && lineRow.id === serialOwnerLineId ? [serialNumber] : [];
-
-      // Even when unitsToAdd is 0 (line already fully scanned via /scan-serial)
-      // we still call the helper so QA/disp/cond/workflow_status get set.
       const lineClientEventId = clientEventId
         ? `${clientEventId}:line-${lineRow.id}`
         : null;
 
+      const unitsToReceive = Math.max(unitsToAdd, serialsForLine.length);
+
+      // Even when unitsToAdd is 0 (line already fully scanned via /scan-serial)
+      // we still call the helper so QA/disp/cond/workflow_status get set.
       const result = await receiveLineUnits({
         receiving_line_id: lineRow.id,
-        units: Math.max(unitsToAdd, serialsForLine.length),
+        units: unitsToReceive,
         serials: serialsForLine,
         qa_status: qaStatus,
         disposition_code: dispositionCode,
@@ -451,25 +464,18 @@ export const POST = withAuth(async (request, ctx) => {
       /* silent */
     }
 
-    const zohoPoDetailCache = new Map<string, { purchaseorder?: { line_items?: unknown[] } } | null>();
-    async function getCachedPoForResolve(poId: string) {
-      if (zohoPoDetailCache.has(poId)) return zohoPoDetailCache.get(poId) ?? null;
-      try {
-        const detail = await getPurchaseOrderById(poId);
-        const typed = detail as { purchaseorder?: { line_items?: unknown[] } };
-        zohoPoDetailCache.set(poId, typed);
-        return typed;
-      } catch (err) {
-        console.warn('mark-received-po: PO fetch for line resolve failed', poId, err);
-        zohoPoDetailCache.set(poId, null);
-        return null;
-      }
-    }
-
+    // Sync part: fill missing PO id from the package-level link (no Zoho
+    // call — pure DB lookup we already did above into packageZohoPoId).
+    // line_item_id resolution requires getPurchaseOrderById which is a
+    // synchronous Zoho roundtrip; that work moved into after() below so
+    // the receive click never waits on Zoho for any reason. The matcher
+    // (zoho-receiving-sync.syncPurchaseOrderLines) already fills
+    // zoho_line_item_id for lines imported via the normal PO sync path —
+    // after()'s resolve only fires for stragglers (manually-added lines
+    // promoted later) and no longer blocks the request.
     for (const l of updatedLines) {
-      let poId = String(l.zoho_purchaseorder_id || '').trim();
+      const poId = String(l.zoho_purchaseorder_id || '').trim();
       if (!poId && packageZohoPoId) {
-        poId = packageZohoPoId;
         l.zoho_purchaseorder_id = packageZohoPoId;
         try {
           await pool.query(
@@ -480,60 +486,16 @@ export const POST = withAuth(async (request, ctx) => {
           /* silent */
         }
       }
-      let liId = String(l.zoho_line_item_id || '').trim();
-      if (!liId && poId && (l.sku || l.item_name)) {
-        const detail = await getCachedPoForResolve(poId);
-        const rawItems = detail?.purchaseorder?.line_items;
-        const items = Array.isArray(rawItems) ? rawItems : [];
-        const resolved = findZohoLineItemIdFromPoLines(items, l.sku, l.item_name);
-        if (resolved) {
-          liId = resolved;
-          l.zoho_line_item_id = resolved;
-          try {
-            await pool.query(
-              `UPDATE receiving_lines SET zoho_line_item_id = $1, updated_at = $2 WHERE id = $3`,
-              [resolved, now, l.id],
-            );
-          } catch {
-            /* silent */
-          }
-        }
-      }
     }
 
-    /** Per Zoho PO id → line_item_id → description snippet (serial) for PUT /purchaseorders. */
-    const serialNotesByPo = new Map<string, Record<string, string>>();
-    const serialMergeScratch = new Map<string, Map<string, string[]>>();
+    // Optimistic-view PO set for the response — every PO id touched by
+    // any updated line, regardless of whether its lines have a resolved
+    // line_item_id yet. after() resolves stragglers and then calls Zoho
+    // for the subset that resolves successfully.
+    const attemptedPoIds = new Set<string>();
     for (const l of updatedLines) {
       const poId = String(l.zoho_purchaseorder_id || '').trim();
-      const liId = String(l.zoho_line_item_id || '').trim();
-      if (!poId || !liId) continue;
-      const lineSerials = serialsByReceivingLineId.get(l.id) || [];
-      if (lineSerials.length === 0) continue;
-      if (!serialMergeScratch.has(poId)) serialMergeScratch.set(poId, new Map());
-      const liMap = serialMergeScratch.get(poId)!;
-      const cur = liMap.get(liId) ? [...liMap.get(liId)!] : [];
-      for (const sn of lineSerials) {
-        if (!cur.some((x) => x.toUpperCase() === sn.toUpperCase())) cur.push(sn);
-      }
-      liMap.set(liId, cur);
-    }
-    for (const [poId, liMap] of serialMergeScratch) {
-      const rec: Record<string, string> = {};
-      for (const [liId, serials] of liMap) {
-        rec[liId] =
-          serials.length === 1 ? `SN: ${serials[0]}` : `SNs: ${serials.join(', ')}`;
-      }
-      serialNotesByPo.set(poId, rec);
-    }
-
-    const byPo = new Map<string, Set<string>>();
-    for (const l of updatedLines) {
-      const poId = String(l.zoho_purchaseorder_id || '').trim();
-      const liId = String(l.zoho_line_item_id || '').trim();
-      if (!poId || !liId) continue;
-      if (!byPo.has(poId)) byPo.set(poId, new Set());
-      byPo.get(poId)!.add(liId);
+      if (poId) attemptedPoIds.add(poId);
     }
 
     // Optimistic receive (SoT is local, not Zoho): promote every locally-
@@ -565,6 +527,93 @@ export const POST = withAuth(async (request, ctx) => {
       Boolean(notes) || aggregatedSerials.length > 0 || Boolean(serialNumber);
 
     after(async () => {
+      // Line-item id resolution (was synchronous; moved here so receive
+      // click never waits on Zoho). For lines that already came through
+      // the matcher (zoho-receiving-sync), zoho_line_item_id is already
+      // set and this loop is a no-op.
+      const zohoPoDetailCache = new Map<
+        string,
+        { purchaseorder?: { line_items?: unknown[] } } | null
+      >();
+      const getCachedPoForResolve = async (poId: string) => {
+        if (zohoPoDetailCache.has(poId)) return zohoPoDetailCache.get(poId) ?? null;
+        try {
+          const detail = await getPurchaseOrderById(poId);
+          const typed = detail as { purchaseorder?: { line_items?: unknown[] } };
+          zohoPoDetailCache.set(poId, typed);
+          return typed;
+        } catch (err) {
+          console.warn(
+            'mark-received-po: PO fetch for line resolve failed (background)',
+            poId,
+            err,
+          );
+          zohoPoDetailCache.set(poId, null);
+          return null;
+        }
+      };
+
+      for (const l of updatedLines) {
+        const poId = String(l.zoho_purchaseorder_id || '').trim();
+        let liId = String(l.zoho_line_item_id || '').trim();
+        if (!liId && poId && (l.sku || l.item_name)) {
+          const detail = await getCachedPoForResolve(poId);
+          const rawItems = detail?.purchaseorder?.line_items;
+          const items = Array.isArray(rawItems) ? rawItems : [];
+          const resolved = findZohoLineItemIdFromPoLines(items, l.sku, l.item_name);
+          if (resolved) {
+            liId = resolved;
+            l.zoho_line_item_id = resolved;
+            try {
+              await pool.query(
+                `UPDATE receiving_lines SET zoho_line_item_id = $1, updated_at = $2 WHERE id = $3`,
+                [resolved, formatPSTTimestamp(), l.id],
+              );
+            } catch {
+              /* silent */
+            }
+          }
+        }
+      }
+
+      // Per Zoho PO id → line_item_id → description snippet (serial) for
+      // PUT /purchaseorders. Built post-resolution.
+      const serialNotesByPo = new Map<string, Record<string, string>>();
+      {
+        const serialMergeScratch = new Map<string, Map<string, string[]>>();
+        for (const l of updatedLines) {
+          const poId = String(l.zoho_purchaseorder_id || '').trim();
+          const liId = String(l.zoho_line_item_id || '').trim();
+          if (!poId || !liId) continue;
+          const lineSerials = serialsByReceivingLineId.get(l.id) || [];
+          if (lineSerials.length === 0) continue;
+          if (!serialMergeScratch.has(poId)) serialMergeScratch.set(poId, new Map());
+          const liMap = serialMergeScratch.get(poId)!;
+          const cur = liMap.get(liId) ? [...liMap.get(liId)!] : [];
+          for (const sn of lineSerials) {
+            if (!cur.some((x) => x.toUpperCase() === sn.toUpperCase())) cur.push(sn);
+          }
+          liMap.set(liId, cur);
+        }
+        for (const [poId, liMap] of serialMergeScratch) {
+          const rec: Record<string, string> = {};
+          for (const [liId, serials] of liMap) {
+            rec[liId] =
+              serials.length === 1 ? `SN: ${serials[0]}` : `SNs: ${serials.join(', ')}`;
+          }
+          serialNotesByPo.set(poId, rec);
+        }
+      }
+
+      const byPo = new Map<string, Set<string>>();
+      for (const l of updatedLines) {
+        const poId = String(l.zoho_purchaseorder_id || '').trim();
+        const liId = String(l.zoho_line_item_id || '').trim();
+        if (!poId || !liId) continue;
+        if (!byPo.has(poId)) byPo.set(poId, new Set());
+        byPo.get(poId)!.add(liId);
+      }
+
       const poZohoReceiveSucceeded = new Map<string, boolean>();
       try {
         if (skipZohoReceive) {
@@ -782,11 +831,11 @@ export const POST = withAuth(async (request, ctx) => {
     let skipReason: string | null = null;
     if (skipZohoReceive) {
       skipReason = 'scan_only';
-    } else if (byPo.size === 0 && updatedLines.length > 0) {
+    } else if (attemptedPoIds.size === 0 && updatedLines.length > 0) {
       skipReason = 'no_zoho_link';
     }
 
-    const zohoPending = !skipReason && byPo.size > 0;
+    const zohoPending = !skipReason && attemptedPoIds.size > 0;
 
     return respond({
       success: true,
@@ -795,7 +844,7 @@ export const POST = withAuth(async (request, ctx) => {
       receiving_lines: updatedLines,
       receiving_id: receivingId,
       zoho: {
-        attempted: byPo.size,
+        attempted: attemptedPoIds.size,
         ok: true, // local SoT — pending state is informational only
         pending: zohoPending,
         rate_limited: false,
@@ -805,24 +854,6 @@ export const POST = withAuth(async (request, ctx) => {
       },
     });
   } catch (error) {
-    // OVER_RECEIVE bubbles up from receiveLineUnits when a line is already at
-    // capacity and we'd push past it. Surface the structured 409 the rest of
-    // the receiving API uses (matches scan-serial:149-162) instead of leaking
-    // the raw "OVER_RECEIVE: line X already has Y of Z" message at a 500.
-    if (error instanceof OverReceiveError) {
-      return NextResponse.json(
-        {
-          success: false,
-          error: 'OVER_RECEIVE',
-          receiving_line_id: error.receiving_line_id,
-          prior_received: error.prior_received,
-          attempted_units: error.attempted_units,
-          quantity_expected: error.quantity_expected,
-          hint: 're-submit with allow_over_receive:true to force',
-        },
-        { status: 409 },
-      );
-    }
     const message = error instanceof Error ? error.message : 'Failed to mark PO as received';
     console.error('receiving/mark-received-po POST failed:', error);
     return NextResponse.json({ success: false, error: message }, { status: 500 });

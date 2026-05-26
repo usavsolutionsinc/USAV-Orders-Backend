@@ -25,6 +25,8 @@ export interface SearchBarProps {
   hideClear?: boolean;
   /** Passed through to {@link SearchField}; pairs with {@link rightElement} for paste-after-remove rows. */
   customTrailingSlot?: React.ReactNode;
+  /** Icons / actions rendered just left of paste inside the field (passed to SearchField). */
+  trailingPrefix?: React.ReactNode;
   /** Trailing slot shows clipboard paste only (no clear X when filled). */
   pasteOnlyTrailing?: boolean;
 }
@@ -69,6 +71,7 @@ export function SearchBar({
   hideUnderline = false,
   hideClear = false,
   customTrailingSlot,
+  trailingPrefix,
   pasteOnlyTrailing,
 }: SearchBarProps) {
   const isMobile = useIsMobile();
@@ -107,6 +110,7 @@ export function SearchBar({
         hideUnderline={hideUnderline}
         hideClear={hideClear}
         customTrailingSlot={customTrailingSlot}
+        trailingPrefix={trailingPrefix}
         pasteOnlyTrailing={pasteOnlyTrailing}
       />
     </div>

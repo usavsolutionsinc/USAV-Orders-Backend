@@ -1,19 +1,18 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useSearchParams } from 'next/navigation';
 import { useQueryClient } from '@tanstack/react-query';
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
 import { TechTable } from './TechTable';
 import PendingOrdersTable from './PendingOrdersTable';
 import { DashboardShippedTable } from './shipped';
-import UpdateManualsView from './UpdateManualsView';
 import { StationDetailsHandler } from './station/StationDetailsHandler';
-import ProductManualViewer from './station/ProductManualViewer';
 import { ReceivingInboundFeed } from './station/ReceivingInboundFeed';
 import { ReceivingDetailsStack, type ReceivingDetailsLog } from './station/ReceivingDetailsStack';
 import { RepairDetailsPanel } from './repair/RepairDetailsPanel';
 import { ActiveOrderWorkspace } from './tech/ActiveOrderWorkspace';
+import { TechTestingWorkspace } from './tech/TechTestingWorkspace';
 import type { RSRecord } from '@/lib/neon/repair-service-queries';
 import type { ActiveStationOrder, ResolvedProductManual } from '@/hooks/useStationTestingController';
 import type { Order } from '@/components/station/upnext/upnext-types';
@@ -57,7 +56,6 @@ interface TechDashboardProps {
 }
 
 export default function TechDashboard({ techId }: TechDashboardProps) {
-    const router = useRouter();
     const searchParams = useSearchParams();
     const queryClient = useQueryClient();
     const prefersReducedMotion = useReducedMotion();
@@ -65,17 +63,13 @@ export default function TechDashboard({ techId }: TechDashboardProps) {
     const rawView = searchParams.get('view');
     const rightViewMode = rawView === 'pending'
         ? 'pending'
-        : rawView === 'shipped'
-            ? 'shipped'
-            : rawView === 'manual'
-                ? 'manual'
-                : rawView === 'update-manuals'
-                    ? 'update-manuals'
-                    : rawView === 'receiving'
-                        ? 'receiving'
-                        : 'history';
-
-    const [lastManuals, setLastManuals] = useState<ResolvedProductManual[]>([]);
+        : rawView === 'receiving'
+            ? 'receiving'
+            : rawView === 'history'
+                ? 'history'
+                : rawView === 'testing'
+                    ? 'testing'
+                    : 'shipped';
     const [selectedLog, setSelectedLog] = useState<ReceivingDetailsLog | null>(null);
     const [repairPanel, setRepairPanel] = useState<{
         record: RSRecord;
@@ -95,27 +89,10 @@ export default function TechDashboard({ techId }: TechDashboardProps) {
     // when a tech clicks an Up Next card). Lower priority than the active
     // order: if both are set, active wins.
     const [previewOrder, setPreviewOrder] = useState<Order | null>(null);
-
-    useEffect(() => {
-        const storageKey = `usav:last-manual:tech:${techId}`;
-        try {
-            const raw = window.localStorage.getItem(storageKey);
-            if (!raw) { setLastManuals([]); return; }
-            const parsed = JSON.parse(raw);
-            setLastManuals(Array.isArray(parsed) ? parsed : [parsed]);
-        } catch {
-            setLastManuals([]);
-        }
-
-        const handleManualUpdate = (event: Event) => {
-            const custom = event as CustomEvent<{ techId?: string; manuals?: ResolvedProductManual[] }>;
-            if (String(custom?.detail?.techId || '') !== String(techId)) return;
-            setLastManuals(Array.isArray(custom?.detail?.manuals) ? custom.detail.manuals : []);
-        };
-
-        window.addEventListener('tech-last-manual-updated', handleManualUpdate as EventListener);
-        return () => window.removeEventListener('tech-last-manual-updated', handleManualUpdate as EventListener);
-    }, [techId]);
+    // Currently-selected receiving line id for the testing pane. Lives at
+    // dashboard level so the sidebar's recent rail (rendered separately in
+    // TechSidebarPanel) can highlight the same row the workspace shows.
+    const [testingLineId, setTestingLineId] = useState<number | null>(null);
 
     // Listen for repair card clicks dispatched by RepairCard (inside sidebar)
     useEffect(() => {
@@ -194,75 +171,75 @@ export default function TechDashboard({ techId }: TechDashboardProps) {
         queryClient.invalidateQueries({ queryKey: ['receiving-pending-unboxing'] });
     };
 
+    /** Right pane swaps by sidebar mode; history uses AnimatePresence for workspace crossfade. */
+    let rightPane: React.ReactNode;
+    if (rightViewMode === 'pending') {
+        rightPane = <PendingOrdersTable />;
+    } else if (rightViewMode === 'shipped') {
+        rightPane = <DashboardShippedTable testedBy={parseInt(techId)} />;
+    } else if (rightViewMode === 'receiving') {
+        rightPane = <ReceivingInboundFeed onSelectLog={setSelectedLog} />;
+    } else if (rightViewMode === 'testing') {
+        // Testing sub-page — composes receiving form primitives with the
+        // Pass/Test Again/Testing Failed verdict pills and a unit-label print path.
+        rightPane = (
+            <TechTestingWorkspace
+                staffId={techId}
+                selectedLineId={testingLineId}
+                onSelectedLineChange={setTestingLineId}
+            />
+        );
+    } else {
+        // History: crossfades to active-order workspace after a scan resolves,
+        // falls back to Up Next preview when a tech clicks a card, else global history.
+        // Scan input stays in the sidebar — no route change, no focus loss.
+        rightPane = (
+            <AnimatePresence initial={false} mode="wait">
+                {activeOrderPane ? (
+                    <ActiveOrderWorkspace
+                        key={`workspace-active-${activeOrderPane.activeOrder.tracking || activeOrderPane.activeOrder.orderId}`}
+                        activeOrder={activeOrderPane.activeOrder}
+                        onClose={() => setActiveOrderPane(null)}
+                    />
+                ) : previewOrder ? (
+                    <ActiveOrderWorkspace
+                        key={`workspace-preview-${previewOrder.id}`}
+                        activeOrder={previewOrderToActiveShape(previewOrder)}
+                        mode="preview"
+                        previewOrder={previewOrder}
+                        onClose={() => setPreviewOrder(null)}
+                    />
+                ) : (
+                    <motion.div
+                        key="tech-history"
+                        initial={prefersReducedMotion ? { opacity: 1 } : { opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        transition={{ duration: 0.16 }}
+                        className="h-full w-full"
+                    >
+                        <TechTable testedBy={parseInt(techId)} />
+                    </motion.div>
+                )}
+            </AnimatePresence>
+        );
+    }
 
     return (
         <div className="relative flex h-full w-full flex-col">
             <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden">
                 <div className="relative min-h-0 flex-1 overflow-hidden">
-                {rightViewMode === 'manual' ? (
-                    <div className="h-full w-full bg-gray-50 p-4">
-                        <ProductManualViewer manuals={lastManuals} className="h-full" />
-                    </div>
-                ) : rightViewMode === 'pending' ? (
-                    <PendingOrdersTable />
-                ) : rightViewMode === 'shipped' ? (
-                    <DashboardShippedTable testedBy={parseInt(techId)} />
-                ) : rightViewMode === 'update-manuals' ? (
-                    <UpdateManualsView techId={techId} days={30} />
-                ) : rightViewMode === 'receiving' ? (
-                    <ReceivingInboundFeed onSelectLog={setSelectedLog} />
-                ) : (
-                    // History view: crossfades to the active-order workspace when
-                    // a scan resolves, falls back to the Up Next preview when a
-                    // tech clicks a card, and back to the global history when
-                    // nothing is selected. Scan input stays mounted in the
-                    // sidebar — no route change, no focus loss.
-                    <AnimatePresence initial={false} mode="wait">
-                        {activeOrderPane ? (
-                            <ActiveOrderWorkspace
-                                key={`workspace-active-${activeOrderPane.activeOrder.tracking || activeOrderPane.activeOrder.orderId}`}
-                                activeOrder={activeOrderPane.activeOrder}
-                                manuals={activeOrderPane.manuals}
-                                isManualLoading={activeOrderPane.isManualLoading}
-                                techId={techId}
-                                onClose={() => setActiveOrderPane(null)}
-                                onViewManual={() => {
-                                    const nextParams = new URLSearchParams(searchParams.toString());
-                                    nextParams.set('staffId', techId);
-                                    nextParams.set('view', 'manual');
-                                    router.replace(`/tech?${nextParams.toString()}`);
-                                }}
-                            />
-                        ) : previewOrder ? (
-                            <ActiveOrderWorkspace
-                                key={`workspace-preview-${previewOrder.id}`}
-                                activeOrder={previewOrderToActiveShape(previewOrder)}
-                                manuals={[]}
-                                isManualLoading={false}
-                                techId={techId}
-                                mode="preview"
-                                previewOrder={previewOrder}
-                                onClose={() => setPreviewOrder(null)}
-                            />
-                        ) : (
-                            <motion.div
-                                key="tech-history"
-                                initial={prefersReducedMotion ? { opacity: 1 } : { opacity: 0 }}
-                                animate={{ opacity: 1 }}
-                                exit={{ opacity: 0 }}
-                                transition={{ duration: 0.16 }}
-                                className="h-full w-full"
-                            >
-                                <TechTable testedBy={parseInt(techId)} />
-                            </motion.div>
-                        )}
-                    </AnimatePresence>
-                )}
-
+                    {rightPane}
                 </div>
             </div>
 
-            <StationDetailsHandler viewMode={rightViewMode === 'update-manuals' || rightViewMode === 'receiving' ? 'history' : rightViewMode} />
+            <StationDetailsHandler
+                viewMode={
+                    rightViewMode === 'receiving' || rightViewMode === 'testing'
+                        ? 'history'
+                        : rightViewMode
+                }
+            />
 
             {/* ReceivingDetailsStack — shown when a receiving log is selected from the inbound feed */}
             <AnimatePresence>

@@ -10,10 +10,7 @@ import {
   PaneHeaderLabel,
   PaneHeaderCloseButton,
 } from '@/components/ui/pane-header';
-import type {
-  ActiveStationOrder,
-  ResolvedProductManual,
-} from '@/hooks/useStationTestingController';
+import type { ActiveStationOrder } from '@/hooks/useStationTestingController';
 import type { Order } from '@/components/station/upnext/upnext-types';
 import { getExternalUrlByItemNumber } from '@/hooks/useExternalItemUrl';
 import { isElectron } from '@/utils/isElectron';
@@ -24,11 +21,7 @@ import { ActiveOrderBody } from './ActiveOrderBody';
 
 interface ActiveOrderWorkspaceProps {
   activeOrder: ActiveStationOrder;
-  manuals: ResolvedProductManual[];
-  isManualLoading: boolean;
-  techId: string;
   onClose: () => void;
-  onViewManual?: () => void;
   onRemoveSerial?: (serial: string, index: number) => Promise<void> | void;
   /**
    * `active` — order has been scanned and is in progress (default).
@@ -87,11 +80,7 @@ function getListingUrl(activeOrder: ActiveStationOrder): string | null {
  */
 export function ActiveOrderWorkspace({
   activeOrder,
-  manuals,
-  isManualLoading,
-  techId,
   onClose,
-  onViewManual,
   onRemoveSerial,
   mode = 'active',
   previewOrder,

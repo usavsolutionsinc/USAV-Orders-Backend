@@ -91,6 +91,11 @@ export type HorizontalButtonSliderProps = {
   size?: 'md' | 'lg';
   className?: string;
   legend?: string;
+  /**
+   * When `variant` is `nav`, render icon-only tabs (labels still drive
+   * `aria-label` / `title`). Compact square-ish hit targets for tight headers.
+   */
+  navIconOnly?: boolean;
   'aria-label'?: string;
 };
 
@@ -102,6 +107,7 @@ export function HorizontalButtonSlider({
   size = 'md',
   className = '',
   legend,
+  navIconOnly = false,
   'aria-label': ariaLabel,
 }: HorizontalButtonSliderProps) {
   const scrollerRef = useRef<HTMLDivElement | null>(null);
@@ -151,8 +157,9 @@ export function HorizontalButtonSlider({
             if (variant === 'nav') {
               const Icon = item.icon;
               const isDisabled = !!item.disabled;
-              // Only indent the label when an icon is present — otherwise text
-              // would sit off-center (empty space reserved for a missing icon).
+              const navSizeCls = navIconOnly
+                ? 'h-8 w-8 min-w-8 shrink-0 justify-center p-0'
+                : sizeCls;
               const labelClass = Icon ? 'ml-1.5 max-w-[160px]' : 'max-w-[160px]';
               const stateClass = isDisabled
                 ? 'cursor-not-allowed bg-gray-50 text-gray-400 ring-gray-200'
@@ -173,13 +180,15 @@ export function HorizontalButtonSlider({
                   transition={framerTransition.sliderIndicator}
                   whileTap={isDisabled ? undefined : { scale: 0.96 }}
                   onClick={isDisabled ? undefined : () => onChange(item.id)}
-                  className={`group relative inline-flex snap-start items-center whitespace-nowrap rounded-full font-black uppercase transition-colors ring-1 ring-inset ${sizeCls} ${stateClass}`}
+                  className={`group relative inline-flex snap-start items-center whitespace-nowrap rounded-full font-black uppercase transition-colors ring-1 ring-inset ${navSizeCls} ${stateClass}`}
                 >
-                  {Icon ? <Icon className="h-3.5 w-3.5 shrink-0" /> : null}
-                  <span className={`inline-block whitespace-nowrap ${labelClass}`}>
-                    {item.label}
-                  </span>
-                  {item.count != null && item.count > 0 ? (
+                  {Icon ? (
+                    <Icon className={`shrink-0 ${navIconOnly ? 'h-3 w-3' : 'h-3.5 w-3.5'}`} />
+                  ) : null}
+                  {navIconOnly ? null : (
+                    <span className={`inline-block whitespace-nowrap ${labelClass}`}>{item.label}</span>
+                  )}
+                  {!navIconOnly && item.count != null && item.count > 0 ? (
                     <span className={`ml-1.5 shrink-0 tabular-nums ${isActive ? 'opacity-90' : 'opacity-70'}`}>{item.count}</span>
                   ) : null}
                   {item.badge === 'dot' ? (

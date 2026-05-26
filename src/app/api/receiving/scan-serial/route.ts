@@ -3,7 +3,8 @@ import pool from '@/lib/db';
 import { invalidateCacheTags } from '@/lib/cache/upstash-cache';
 import { publishReceivingLogChanged } from '@/lib/realtime/publish';
 import { enrichSerialUnitCatalog } from '@/lib/neon/serial-units-queries';
-import { receiveLineUnits, OverReceiveError } from '@/lib/receiving/receive-line';
+import { receiveLineUnits } from '@/lib/receiving/receive-line';
+import { syncSerialToZohoPo } from '@/lib/receiving/zoho-serial-sync';
 import { withAuth } from '@/lib/auth/withAuth';
 import { AUDIT_ACTION, AUDIT_ENTITY } from '@/lib/audit-logs';
 import {
@@ -74,9 +75,8 @@ export const POST = withAuth(async (request: NextRequest, ctx) => {
         : null;
 
     // Idempotency: replay a prior cached response when the same Idempotency-Key
-    // (or body client_event_id) is seen again. Lets a flaky-network retry land
-    // on the same answer — including OVER_RECEIVE / already_received — instead
-    // of running the scan twice and tripping the line capacity guard.
+    // (or body client_event_id) is seen again. Retries land on the same answer
+    // (already_received / already_complete / success) without re-running the scan.
     const idempotencyKey = readIdempotencyKey(request, clientEventId);
     if (idempotencyKey) {
       const cached = await getApiIdempotencyResponse(
@@ -137,31 +137,43 @@ export const POST = withAuth(async (request: NextRequest, ctx) => {
       }
       const picked = pickAutoLine(candidates);
       if (picked === null) {
-        return NextResponse.json(
-          { success: false, error: 'all lines already at full quantity' },
-          { status: 409 },
-        );
-      }
-      if (picked === 'ambiguous') {
-        return NextResponse.json({
-          success: false,
-          needs_line_selection: true,
-          candidate_lines: candidates
-            .filter(
-              (l) =>
-                l.quantity_expected == null ||
-                l.quantity_received < (l.quantity_expected ?? 0),
-            )
-            .map((l) => ({
+        if (candidates.length === 1) {
+          receivingLineId = candidates[0].id;
+          targetReceivingId = candidates[0].receiving_id;
+        } else {
+          return NextResponse.json({
+            success: false,
+            needs_line_selection: true,
+            carton_fully_received: true,
+            candidate_lines: candidates.map((l) => ({
               id: l.id,
               sku: l.sku,
               quantity_expected: l.quantity_expected,
               quantity_received: l.quantity_received,
             })),
+          });
+        }
+      } else if (picked === 'ambiguous') {
+        const openLines = candidates.filter(
+          (l) =>
+            l.quantity_expected == null ||
+            l.quantity_received < (l.quantity_expected ?? 0),
+        );
+        const list = openLines.length > 0 ? openLines : candidates;
+        return NextResponse.json({
+          success: false,
+          needs_line_selection: true,
+          candidate_lines: list.map((l) => ({
+            id: l.id,
+            sku: l.sku,
+            quantity_expected: l.quantity_expected,
+            quantity_received: l.quantity_received,
+          })),
         });
+      } else {
+        receivingLineId = picked.id;
+        targetReceivingId = picked.receiving_id;
       }
-      receivingLineId = picked.id;
-      targetReceivingId = picked.receiving_id;
     }
 
     if (!receivingLineId) {
@@ -171,43 +183,17 @@ export const POST = withAuth(async (request: NextRequest, ctx) => {
       );
     }
 
-    // Optional admin override — UI re-submits with this flag after the
-    // operator confirms they really want to receive past the expected qty.
-    const allowOverReceive = Boolean(
-      body?.allow_over_receive ?? body?.allowOverReceive,
-    );
-
     // ─── Single writer ──────────────────────────────────────────────────────
-    let result: Awaited<ReturnType<typeof receiveLineUnits>>;
-    try {
-      result = await receiveLineUnits({
-        receiving_line_id: receivingLineId,
-        units: 1,
-        serials: [serialNumber],
-        condition_grade: conditionGrade,
-        staff_id: staffId,
-        station,
-        client_event_id: clientEventId,
-        scan_token: scanToken,
-        allow_over_receive: allowOverReceive,
-      });
-    } catch (err) {
-      if (err instanceof OverReceiveError) {
-        return respond(
-          {
-            success: false,
-            error: 'OVER_RECEIVE',
-            receiving_line_id: err.receiving_line_id,
-            prior_received: err.prior_received,
-            attempted_units: err.attempted_units,
-            quantity_expected: err.quantity_expected,
-            hint: 're-submit with allow_over_receive:true to force',
-          },
-          { status: 409 },
-        );
-      }
-      throw err;
-    }
+    const result = await receiveLineUnits({
+      receiving_line_id: receivingLineId,
+      units: 1,
+      serials: [serialNumber],
+      condition_grade: conditionGrade,
+      staff_id: staffId,
+      station,
+      client_event_id: clientEventId,
+      scan_token: scanToken,
+    });
 
     // Idempotent re-scan: receiveLineUnits already detected this serial is on
     // the line. Return success with already_received:true so the UI can show
@@ -217,6 +203,15 @@ export const POST = withAuth(async (request: NextRequest, ctx) => {
       return respond({
         success: true,
         already_received: true,
+        line_state: result.line_state,
+      });
+    }
+
+    // Line qty already satisfies PO expected — intentional no-op; UI shows a toast only.
+    if (result.already_complete) {
+      return respond({
+        success: true,
+        already_complete: true,
         line_state: result.line_state,
       });
     }
@@ -245,6 +240,20 @@ export const POST = withAuth(async (request: NextRequest, ctx) => {
           console.warn('scan-serial: enrichSerialUnitCatalog failed', err);
         });
       }
+
+      // Push the serial up to Zoho — append to the matching PO line item's
+      // description AND the PO header notes. Fire-and-forget; the helper is
+      // idempotent so re-scans / supplemental scans won't double-append. No
+      // toast on failure: per-scan Zoho sync is best-effort; the canonical
+      // truth lives in serial_units + tech_serial_numbers locally.
+      void syncSerialToZohoPo({
+        receivingLineId,
+        serial: serialResult.serial_unit.serial_number,
+        staffId,
+      }).catch((err) => {
+        console.warn('scan-serial: syncSerialToZohoPo threw', err);
+      });
+
       try {
         await invalidateCacheTags([
           'receiving-lines',
@@ -270,6 +279,10 @@ export const POST = withAuth(async (request: NextRequest, ctx) => {
       prior_status: serialResult.prior_status,
       is_return: serialResult.is_return,
       warnings: serialResult.warnings,
+      // True when this serial was logged beyond the line's expected qty.
+      // Receiving / Testing UIs use this flag to show "Extra serial logged"
+      // instead of the misleading "already received / fully received" copy.
+      supplemental: result.supplemental ?? false,
       line_state: result.line_state,
       inventory_event_ids: result.inventory_event_ids,
     });

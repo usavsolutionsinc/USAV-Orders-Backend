@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
 import ReceivingLinesTable from './station/ReceivingLinesTable';
@@ -11,8 +11,21 @@ import { ReceivingDetailsStack, type ReceivingDetailsLog } from './station/Recei
 import { useRealtimeInvalidation } from '@/hooks/useRealtimeInvalidation';
 import { useRealtimeToasts } from '@/hooks/useRealtimeToasts';
 import { useAuth } from '@/contexts/AuthContext';
-import { dispatchReceivingWorkspaceClose } from '@/utils/events';
+import {
+  dispatchReceivingWorkspaceClose,
+  dispatchReceivingWorkspaceOpen,
+} from '@/utils/events';
 import type { ReceivingLineRow } from './station/ReceivingLinesTable';
+
+/**
+ * Remembers the last line the operator had open so a hard refresh lands
+ * them back in the same workspace instead of an empty pane. localStorage
+ * (vs sessionStorage / URL / server pref) keeps the read synchronous so
+ * the restore can fire from a single mount effect, survives crashes and
+ * closed tabs, and stays per-device — operators sharing a login on
+ * different stations don't pull each other's last view.
+ */
+const LAST_RECEIVING_LINE_KEY = 'usav:receiving:last-line-id';
 
 interface WorkspaceState {
   row: ReceivingLineRow;
@@ -69,6 +82,14 @@ export default function ReceivingDashboard() {
       const detail = (e as CustomEvent<WorkspaceState | null>).detail;
       if (!detail || !detail.row) return;
       setWorkspace(detail);
+      try {
+        window.localStorage.setItem(
+          LAST_RECEIVING_LINE_KEY,
+          String(detail.row.id),
+        );
+      } catch {
+        /* private mode / quota — non-fatal */
+      }
     };
     const handleClose = () => {
       setWorkspace(null);
@@ -128,6 +149,55 @@ export default function ReceivingDashboard() {
     return () => window.removeEventListener('receiving-workspace-nav-state', handler);
   }, []);
 
+  // Restore the last opened line on mount. Ref-guards against racing with a
+  // scan-driven open that beats us to the workspace (we'd otherwise overwrite
+  // the fresher row with a stale restore).
+  const workspaceRef = useRef<WorkspaceState | null>(null);
+  workspaceRef.current = workspace;
+  useEffect(() => {
+    let raw: string | null = null;
+    try {
+      raw = window.localStorage.getItem(LAST_RECEIVING_LINE_KEY);
+    } catch {
+      return;
+    }
+    const id = Number(raw);
+    if (!Number.isFinite(id) || id <= 0) return;
+
+    let cancelled = false;
+    void (async () => {
+      try {
+        const res = await fetch(
+          `/api/receiving-lines?id=${id}&include=serials`,
+          { cache: 'no-store' },
+        );
+        const data = await res.json().catch(() => null);
+        if (cancelled) return;
+        if (!data?.success || !data.receiving_line) {
+          // Line was deleted or no longer accessible — drop the stale key so
+          // we don't spin on every refresh.
+          try {
+            window.localStorage.removeItem(LAST_RECEIVING_LINE_KEY);
+          } catch {
+            /* non-fatal */
+          }
+          return;
+        }
+        if (workspaceRef.current) return;
+        dispatchReceivingWorkspaceOpen({
+          row: data.receiving_line as ReceivingLineRow,
+          accordionBootstrap: 'default',
+          scanDriven: false,
+        });
+      } catch {
+        /* network blip — try again on next refresh */
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   useEffect(() => {
     const handler = (e: Event) => {
       const detail = (e as CustomEvent<{ receivingId: number }>).detail;
@@ -168,12 +238,11 @@ export default function ReceivingDashboard() {
   //                             match opens ReceivingDetailsStack as a
   //                             right-side overlay (below).
   const showWorkspace = !!workspace && !isHistoryMode;
-  // Scan loader has priority over the empty prompt — the operator just
-  // scanned, the workspace is the active surface, the prompt is stale.
-  // Once the workspace mounts it covers both; resolved-but-no-workspace
-  // (e.g. unmatched without auto-open) drops back to the prompt.
+  // Scan loader covers the gap between the operator's scan and the
+  // workspace mounting. There's no longer a separate "scan to start"
+  // placeholder — on mount we restore the last opened line from
+  // localStorage, so a fresh load lands directly in the workspace.
   const showScanLoader = !!scanInFlight && !workspace && !isHistoryMode;
-  const showReceivePrompt = !workspace && !isHistoryMode && !showScanLoader;
 
   return (
     <div className="flex h-full w-full overflow-hidden bg-[linear-gradient(180deg,#f8fbfb_0%,#ffffff_16%)]">
@@ -199,14 +268,6 @@ export default function ReceivingDashboard() {
               tracking={scanInFlight!.tracking}
               startedAt={scanInFlight!.startedAt}
             />
-          </div>
-        ) : null}
-
-        {/* Receiving empty-state — deliberate "scan to start" landing so the
-            operator knows the tab is for adding new events, not browsing. */}
-        {showReceivePrompt ? (
-          <div className="absolute inset-0 overflow-hidden">
-            <ReceiveEmptyState />
           </div>
         ) : null}
 
@@ -266,37 +327,6 @@ export default function ReceivingDashboard() {
           />
         ) : null}
       </AnimatePresence>
-    </div>
-  );
-}
-
-/**
- * Receiving-tab empty state: deliberate "scan to start" prompt so the
- * operator's first impression of the tab matches its purpose (adding new
- * receiving events). Sidebar contains the scan input + the Recent rail —
- * this surface just frames the next-step instruction.
- */
-function ReceiveEmptyState() {
-  return (
-    <div className="flex h-full w-full items-center justify-center bg-gray-50/60 px-6">
-      <div className="max-w-md rounded-2xl border border-dashed border-gray-200 bg-white px-6 py-7 text-center shadow-sm">
-        <div className="mx-auto mb-3 flex h-10 w-10 items-center justify-center rounded-xl bg-blue-50 text-blue-600">
-          <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden>
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4h4v4H4V4zm6 0h1v4h-1V4zm3 0h1v4h-1V4zm3 0h1v4h-1V4zm3 0h1v4h-1V4zM4 16h4v4H4v-4zm6 0h1v4h-1v-4zm3 0h1v4h-1v-4zm3 0h1v4h-1v-4zm3 0h1v4h-1v-4z" />
-          </svg>
-        </div>
-        <p className="text-micro font-black uppercase tracking-[0.18em] text-gray-400">
-          Ready to receive
-        </p>
-        <h2 className="mt-1 text-base font-extrabold tracking-tight text-gray-900">
-          Scan a new tracking number to start
-        </h2>
-        <p className="mt-2 text-label font-semibold leading-snug text-gray-600">
-          Or pick a recent PO from the sidebar to update it. Flip to{' '}
-          <span className="font-black text-gray-900">History</span> from the
-          sidebar to browse and search past entries.
-        </p>
-      </div>
     </div>
   );
 }

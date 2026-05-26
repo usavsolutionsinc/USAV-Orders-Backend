@@ -215,6 +215,11 @@ export const GET = withAuth(async (request: NextRequest) => {
 
     if (search) {
       const p = `%${search}%`;
+      // Carton/handle QR payloads are `R-<id>` (see src/lib/barcode-routing.ts).
+      // Treat that as an explicit receiving_id equality so scanning a label
+      // narrows the list to that package.
+      const rcvIdMatch = /^R-(\d+)$/i.exec(search);
+      const rcvIdEq = rcvIdMatch ? Number(rcvIdMatch[1]) : NaN;
       switch (searchField) {
         case 'po':
           conditions.push(
@@ -259,24 +264,33 @@ export const GET = withAuth(async (request: NextRequest) => {
           idx++;
           break;
         default: {
-          conditions.push(
-            `(COALESCE(rl.item_name, '') ILIKE $${idx}
-           OR COALESCE(rl.sku, '') ILIKE $${idx}
-           OR COALESCE(rl.zoho_purchaseorder_id::text, '') ILIKE $${idx}
-           OR COALESCE(rl.zoho_purchaseorder_number, '') ILIKE $${idx}
-           OR COALESCE(rl.zoho_item_id, '') ILIKE $${idx}
-           OR COALESCE(r.zoho_purchaseorder_number, '') ILIKE $${idx}
-           OR COALESCE(r.receiving_tracking_number, '') ILIKE $${idx}
-           OR COALESCE(stn.tracking_number_raw, '') ILIKE $${idx}
-           OR COALESCE(stn.tracking_number_normalized, '') ILIKE $${idx}
-           OR EXISTS (
-                SELECT 1 FROM serial_units su_all
-                WHERE su_all.origin_receiving_line_id = rl.id
-                  AND COALESCE(su_all.serial_number, '') ILIKE $${idx}
-              ))`,
-          );
+          const patternIdx = idx;
+          const orClauses = [
+            `COALESCE(rl.item_name, '') ILIKE $${patternIdx}`,
+            `COALESCE(rl.sku, '') ILIKE $${patternIdx}`,
+            `COALESCE(rl.zoho_purchaseorder_id::text, '') ILIKE $${patternIdx}`,
+            `COALESCE(rl.zoho_purchaseorder_number, '') ILIKE $${patternIdx}`,
+            `COALESCE(rl.zoho_item_id, '') ILIKE $${patternIdx}`,
+            `COALESCE(r.zoho_purchaseorder_number, '') ILIKE $${patternIdx}`,
+            `COALESCE(r.receiving_tracking_number, '') ILIKE $${patternIdx}`,
+            `COALESCE(stn.tracking_number_raw, '') ILIKE $${patternIdx}`,
+            `COALESCE(stn.tracking_number_normalized, '') ILIKE $${patternIdx}`,
+            `EXISTS (
+               SELECT 1 FROM serial_units su_all
+               WHERE su_all.origin_receiving_line_id = rl.id
+                 AND COALESCE(su_all.serial_number, '') ILIKE $${patternIdx}
+             )`,
+          ];
           values.push(p);
           idx++;
+
+          if (Number.isFinite(rcvIdEq)) {
+            orClauses.push(`rl.receiving_id = $${idx}`);
+            values.push(rcvIdEq);
+            idx++;
+          }
+
+          conditions.push(`(${orClauses.join(' OR ')})`);
           break;
         }
       }
@@ -649,44 +663,6 @@ export const PATCH = withAuth(async (request: NextRequest) => {
       const raw = Number(body?.quantity_received ?? body?.quantity ?? 0);
       const nextReceived =
         Number.isFinite(raw) && raw >= 0 ? Math.floor(raw) : 0;
-      // Reject over-receive PATCH unless explicitly overridden. Mirrors the
-      // OVER_RECEIVE guard in receiveLineUnits so manual qty edits can't
-      // bypass the cap. quantity_expected may be in the same PATCH or already
-      // on the row — fall back to the DB value when not provided.
-      const allowOverReceive = Boolean(
-        body?.allow_over_receive ?? body?.allowOverReceive,
-      );
-      if (!allowOverReceive) {
-        const expectedFromBody =
-          body?.quantity_expected !== undefined
-            ? (() => {
-                const n = Number(body.quantity_expected);
-                return Number.isFinite(n) && n > 0 ? Math.floor(n) : null;
-              })()
-            : undefined;
-        const expected = expectedFromBody !== undefined
-          ? expectedFromBody
-          : await pool
-              .query<{ quantity_expected: number | null }>(
-                `SELECT quantity_expected FROM receiving_lines WHERE id = $1 LIMIT 1`,
-                [id],
-              )
-              .then((r) => r.rows[0]?.quantity_expected ?? null)
-              .catch(() => null);
-        if (expected != null && nextReceived > expected) {
-          return NextResponse.json(
-            {
-              success: false,
-              error: 'OVER_RECEIVE',
-              receiving_line_id: id,
-              attempted_quantity_received: nextReceived,
-              quantity_expected: expected,
-              hint: 're-submit with allow_over_receive:true to force',
-            },
-            { status: 409 },
-          );
-        }
-      }
       updates.push(`quantity_received = $${idx++}`);
       values.push(nextReceived);
     }

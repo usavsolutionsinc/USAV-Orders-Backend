@@ -8,7 +8,7 @@ import { ModeSelector, BarcodeMode } from './barcode/ModeSelector';
 import { SkuInput } from './barcode/SkuInput';
 import { SerialNumberInput } from './barcode/SerialNumberInput';
 import { BarcodePreview } from './barcode/BarcodePreview';
-import { Gs1DataMatrix } from './barcode/Gs1DataMatrix';
+import { LabelPreviewCard } from '@/components/labels/LabelPreviewCard';
 import { RecentsStrip } from './barcode/RecentsStrip';
 
 // Import utilities
@@ -157,45 +157,70 @@ export default function MultiSkuSnBarcode({ layout = 'vertical' }: MultiSkuSnBar
         // Give React one tick to flush state, then kick off the lookup
         await new Promise(r => setTimeout(r, 0));
 
-        // Inline the same logic as handleNextStepSku but with the fresh value
-        let catalogIdHint: number | null = null;
-        setIsLoadingTitle(true);
-        try {
-            const baseSku = trimmed.includes(':') ? trimmed.split(':')[0] : trimmed;
-            const res = await fetch(`/api/get-title-by-sku?sku=${encodeURIComponent(normalizeSku(baseSku))}`);
-            const data = await res.json();
-            setTitle(data.title || "Not found");
-            setStock(data.stock || "0");
-            setCurrentLocation(data.location || "");
-            setLocation(data.location || "");
-            setImageUrl(data.imageUrl || "");
-            catalogIdHint = typeof data.skuCatalogId === 'number' ? data.skuCatalogId : null;
-            setSkuCatalogId(catalogIdHint);
-        } catch {
-            setTitle("Error loading info");
-        } finally {
-            setIsLoadingTitle(false);
-        }
-
         if (mode === 'reprint') {
+            // Reprint doesn't allocate a new unit id; only fetch product info.
+            setIsLoadingTitle(true);
+            try {
+                const baseSku = trimmed.includes(':') ? trimmed.split(':')[0] : trimmed;
+                const res = await fetch(`/api/get-title-by-sku?sku=${encodeURIComponent(normalizeSku(baseSku))}`);
+                const data = await res.json();
+                setTitle(data.title || "Not found");
+                setStock(data.stock || "0");
+                setCurrentLocation(data.location || "");
+                setLocation(data.location || "");
+                setImageUrl(data.imageUrl || "");
+                setSkuCatalogId(typeof data.skuCatalogId === 'number' ? data.skuCatalogId : null);
+            } catch {
+                setTitle("Error loading info");
+            } finally {
+                setIsLoadingTitle(false);
+            }
             setUniqueSku(trimmed);
             setStep(3);
             return;
         }
 
-        if (mode === 'print') {
-            // Eager pre-allocation so the preview QR appears immediately.
-            // Failure here is *not* user-visible: the workspace still shows
-            // the product details, and the real print click (handleNextStepSn
-            // → fetchNextUnitId) will retry and surface a proper toast then.
-            // Suppressing here avoids spurious "can't print label" toasts on
-            // every sidebar pick of an Ecwid SKU not linked to a sku_catalog row.
+        // Parallelize product-info lookup and next-unit-id allocation. The
+        // sequential await chain (title → next-id) used to add 400-900ms to
+        // first preview on station devices; running them concurrently gives
+        // back the slower of the two. /api/units/next-id resolves the
+        // sku_catalog row itself when no catalogIdHint is passed (see
+        // route.ts:70-93), so we don't need the title call to finish first.
+        const baseSku = trimmed.includes(':') ? trimmed.split(':')[0] : trimmed;
+        setIsLoadingTitle(true);
+
+        const titlePromise = (async () => {
             try {
-                await fetchNextUnitId(trimmed, catalogIdHint);
-            } catch (err) {
-                console.warn('Pre-allocation skipped:', err);
+                const res = await fetch(`/api/get-title-by-sku?sku=${encodeURIComponent(normalizeSku(baseSku))}`);
+                const data = await res.json();
+                setTitle(data.title || "Not found");
+                setStock(data.stock || "0");
+                setCurrentLocation(data.location || "");
+                setLocation(data.location || "");
+                setImageUrl(data.imageUrl || "");
+                const hint = typeof data.skuCatalogId === 'number' ? data.skuCatalogId : null;
+                setSkuCatalogId(hint);
+                return hint;
+            } catch {
+                setTitle("Error loading info");
+                return null;
+            } finally {
+                setIsLoadingTitle(false);
             }
-        }
+        })();
+
+        const unitIdPromise: Promise<unknown> = mode === 'print'
+            ? fetchNextUnitId(trimmed).catch((err) => {
+                // Pre-allocation failure is not user-visible here — the click
+                // path retries via handleNextStepSn and surfaces a toast then.
+                // Suppressing avoids spurious errors on Ecwid SKUs not linked
+                // to a sku_catalog row.
+                console.warn('Pre-allocation skipped:', err);
+                return null;
+              })
+            : Promise.resolve(null);
+
+        await Promise.all([titlePromise, unitIdPromise]);
 
         setStep(2);
         setTimeout(() => snInputRef.current?.focus(), 100);
@@ -545,7 +570,16 @@ export default function MultiSkuSnBarcode({ layout = 'vertical' }: MultiSkuSnBar
                 return next;
             });
 
-        const primaryDisabled = isPosting || !previewIsReady;
+        // Print/log is allowed as soon as the user has a SKU and at least one
+        // serial. When previewIsReady is false (eager pre-allocation failed
+        // or hasn't returned yet), `primaryAction` falls through to
+        // handleNextStepSn which allocates on demand and surfaces a toast on
+        // failure — so we don't want to leave the button disabled forever.
+        const hasRequiredInputs =
+            mode === 'reprint'
+                ? !!sku.trim()
+                : !!sku.trim() && serialNumbers.length > 0;
+        const primaryDisabled = isPosting || isGenerating || !hasRequiredInputs;
 
         const primaryLabel = isPosting
             ? mode === 'print'
@@ -639,6 +673,26 @@ export default function MultiSkuSnBarcode({ layout = 'vertical' }: MultiSkuSnBar
                         ) : (
                             <PreviewPlaceholder mode={mode} sku={sku} />
                         )}
+
+                        {/* Inline primary CTA. Mirrors the sticky bar so the
+                         * action is always reachable even when the viewport
+                         * crops the sticky footer (short desktop windows,
+                         * iPad split-view, browser zoom). Disabled state is
+                         * intentionally bold so packers can see *why* they
+                         * can't click. */}
+                        <button
+                            type="button"
+                            onClick={primaryAction}
+                            disabled={primaryDisabled}
+                            className={`flex w-full items-center justify-center gap-2 rounded-xl px-6 py-3 text-sm font-bold text-white shadow-sm transition-colors ${
+                                primaryDisabled
+                                    ? 'cursor-not-allowed bg-gray-300'
+                                    : `${accent.ctaBg} ${accent.ctaHover}`
+                            }`}
+                        >
+                            <Check className="h-4 w-4" />
+                            {primaryLabel}
+                        </button>
                     </div>
                 </div>
 
@@ -1076,66 +1130,47 @@ function PreviewCardModern({
 }: PreviewCardModernProps) {
     const isPrintMode = mode === 'print' || mode === 'reprint';
 
+    if (isPrintMode) {
+        return (
+            <LabelPreviewCard
+                sku={uniqueSku}
+                itemName={title}
+                dataMatrixValue={dataMatrixValue}
+                dataMatrixSymbology={dataMatrixSymbology}
+                showReady={mode === 'print'}
+                readyBadgeClassName={accent.chip}
+                eyebrowLabel={mode === 'reprint' ? 'Reprinting existing unit ID' : undefined}
+            />
+        );
+    }
+
     return (
         <section className="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-gray-200/60">
             <div className="mb-3 flex items-center justify-between">
                 <h3 className="text-xs font-semibold uppercase tracking-[0.14em] text-gray-500">
-                    {mode === 'sn-to-sku' ? 'Review' : 'Live preview'}
+                    Review
                 </h3>
-                {!isPrintMode || mode === 'reprint' ? null : (
-                    <span className={`rounded-md px-2 py-0.5 text-micro font-bold uppercase tracking-wider ${accent.chip}`}>
-                        Ready
-                    </span>
+            </div>
+            <div className="space-y-2 rounded-xl bg-gray-50 p-5 ring-1 ring-gray-200/50">
+                <div>
+                    <p className="text-micro font-semibold uppercase tracking-[0.14em] text-gray-500">SKU</p>
+                    <p className="font-mono text-base font-bold text-gray-900">{uniqueSku}</p>
+                </div>
+                <div>
+                    <p className="text-micro font-semibold uppercase tracking-[0.14em] text-gray-500">
+                        Serials ({serialNumbers.length})
+                    </p>
+                    <p className="break-all font-mono text-xs text-gray-700">
+                        {serialNumbers.join(', ') || '—'}
+                    </p>
+                </div>
+                {location && (
+                    <div>
+                        <p className="text-micro font-semibold uppercase tracking-[0.14em] text-gray-500">Location</p>
+                        <p className="font-mono text-xs text-gray-700">{location}</p>
+                    </div>
                 )}
             </div>
-
-            {isPrintMode ? (
-                // 2×1" thermal label preview. Matches ReceivingCartonLabel
-                // exactly so receiving and product labels print at the same
-                // physical size. Product title is intentionally omitted —
-                // these labels live on the outer carton and any descriptive
-                // text raises theft risk on electronics (see comments in
-                // printProductLabel.buildLabelHtml). Payload uses the same
-                // buildUnitPayload as the print path so preview ↔ print stay
-                // in sync; never a URL on the wire.
-                <div className="w-full rounded border border-gray-200 bg-white px-2 py-2 shadow-sm">
-                    <div className="flex flex-nowrap items-stretch gap-3 min-h-[5rem]">
-                        <div className="min-w-0 flex-1 flex flex-col justify-center py-0.5">
-                            <p className="font-mono text-sm font-bold tracking-tight text-gray-900 break-all">{uniqueSku}</p>
-                        </div>
-                        <div className="shrink-0 flex items-center">
-                            {dataMatrixValue ? (
-                                <Gs1DataMatrix
-                                    value={dataMatrixValue}
-                                    symbology={dataMatrixSymbology}
-                                    size={80}
-                                />
-                            ) : null}
-                        </div>
-                    </div>
-                </div>
-            ) : (
-                <div className="space-y-2 rounded-xl bg-gray-50 p-5 ring-1 ring-gray-200/50">
-                    <div>
-                        <p className="text-micro font-semibold uppercase tracking-[0.14em] text-gray-500">SKU</p>
-                        <p className="font-mono text-base font-bold text-gray-900">{uniqueSku}</p>
-                    </div>
-                    <div>
-                        <p className="text-micro font-semibold uppercase tracking-[0.14em] text-gray-500">
-                            Serials ({serialNumbers.length})
-                        </p>
-                        <p className="break-all font-mono text-xs text-gray-700">
-                            {serialNumbers.join(', ') || '—'}
-                        </p>
-                    </div>
-                    {location && (
-                        <div>
-                            <p className="text-micro font-semibold uppercase tracking-[0.14em] text-gray-500">Location</p>
-                            <p className="font-mono text-xs text-gray-700">{location}</p>
-                        </div>
-                    )}
-                </div>
-            )}
         </section>
     );
 }

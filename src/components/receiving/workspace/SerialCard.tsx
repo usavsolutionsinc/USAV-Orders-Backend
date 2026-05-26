@@ -68,6 +68,8 @@ export function SerialCard({
   const showNotes = typeof notes === 'string' && typeof onNotesChange === 'function';
   const [scan, setScan] = useState('');
   const [editing, setEditing] = useState<SavedSerial | null>(null);
+  /** Avoid flashing “Saving…” on fast round-trips; only shown if submit hangs ~400ms+ */
+  const [showSavingLabel, setShowSavingLabel] = useState(false);
   const inputRef = useRef<HTMLInputElement | null>(null);
   const count = saved.length;
   const target = expected ?? 0;
@@ -82,6 +84,15 @@ export function SerialCard({
       setScan('');
     }
   }, [saved, editing]);
+
+  useEffect(() => {
+    if (!isSubmitting) {
+      setShowSavingLabel(false);
+      return;
+    }
+    const t = window.setTimeout(() => setShowSavingLabel(true), 420);
+    return () => window.clearTimeout(t);
+  }, [isSubmitting]);
 
   const tally = target > 0
     ? `${count}/${target} scanned`
@@ -210,7 +221,7 @@ export function SerialCard({
               : 'bg-blue-600 hover:bg-blue-700'
           }`}
         >
-          {isSubmitting ? 'Saving…' : editing ? 'Save' : 'Add'}
+          {showSavingLabel && isSubmitting ? 'Saving…' : editing ? 'Save' : 'Add'}
         </button>
       </div>
 
@@ -267,8 +278,12 @@ export function SerialCard({
  * SerialChip wrapped with a hover dropdown menu (Edit / Delete). Click the
  * chip body to copy — same as a bare SerialChip — but hovering reveals a
  * small floating menu with two rows of actions.
+ *
+ * Exported so the receiving + testing inline adders can render the exact
+ * same chip affordance (edit + delete dropdown) the standalone SerialCard
+ * uses. Keeps copy + edit + delete behavior identical across surfaces.
  */
-function SerialChipWithMenu({
+export function SerialChipWithMenu({
   serial,
   isEditing,
   onEdit,

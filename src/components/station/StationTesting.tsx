@@ -11,6 +11,11 @@ import { getStationInputMode, type StationInputMode, useStationTestingController
 import { looksLikeFnsku } from '@/lib/scan-resolver';
 import { useStationTheme } from '@/hooks/useStationTheme';
 import { useIsMobile } from '@/hooks';
+import { HorizontalButtonSlider, type HorizontalSliderItem } from '@/components/ui/HorizontalButtonSlider';
+import {
+  TECH_STATION_VIEW_SLIDER_NONE,
+  type TechStationViewMode,
+} from '@/components/sidebar/tech-station-view-config';
 
 const STATION_EASE_OUT = [0.22, 1, 0.36, 1] as const;
 const STATION_EASE_HEIGHT = [0.25, 0.1, 0.25, 1] as const;
@@ -26,7 +31,12 @@ interface StationTestingProps {
   goal?: number;
   onComplete?: () => void;
   embedded?: boolean;
-  onViewManual?: () => void;
+  /** Embedded tech panel: compact icon tabs for History / Shipped / Pending (right pane). */
+  techViewSwitcher?: {
+    items: HorizontalSliderItem[];
+    value: TechStationViewMode | typeof TECH_STATION_VIEW_SLIDER_NONE;
+    onChange: (next: TechStationViewMode) => void;
+  };
 }
 
 export default function StationTesting({
@@ -38,7 +48,7 @@ export default function StationTesting({
   goal = 50,
   onComplete,
   embedded = false,
-  onViewManual,
+  techViewSwitcher,
 }: StationTestingProps) {
   const { theme: themeColor, inputBorder } = useStationTheme({ staffId });
   const [manualMode, setManualMode] = useState<StationInputMode | null>(null);
@@ -337,8 +347,23 @@ export default function StationTesting({
         {/* ── Header (always top) ── */}
         <div className={`space-y-2 px-5 pb-1 pt-4 ${isMobile ? 'pt-3 pb-0' : ''}`}>
           <div className="space-y-0.5">
-            <div className="flex items-center justify-between gap-2">
-              <h2 className={`font-black text-gray-900 tracking-tighter ${isMobile ? 'text-lg' : 'text-xl'}`}>Welcome, {userName}</h2>
+            <div className="flex min-w-0 flex-1 flex-wrap items-center justify-between gap-x-2 gap-y-1">
+              <h2 className={`min-w-0 font-black tracking-tighter text-gray-900 ${isMobile ? 'text-lg' : 'text-xl'}`}>
+                Welcome, {userName}
+              </h2>
+              {techViewSwitcher ? (
+                <div className="shrink-0">
+                  <HorizontalButtonSlider
+                    items={techViewSwitcher.items}
+                    value={techViewSwitcher.value}
+                    onChange={(id) => techViewSwitcher.onChange(id as TechStationViewMode)}
+                    variant="nav"
+                    navIconOnly
+                    className="-mr-1"
+                    aria-label="Technician view"
+                  />
+                </div>
+              ) : null}
             </div>
           </div>
 

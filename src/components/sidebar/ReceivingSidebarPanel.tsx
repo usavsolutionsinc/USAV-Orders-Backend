@@ -837,27 +837,22 @@ export function ReceivingSidebarPanel() {
         }
 
         if (!data?.success) {
-          if (res.status === 409 && data?.error === 'OVER_RECEIVE') {
-            const expected = data.quantity_expected ?? '?';
-            const prior = data.prior_received ?? 0;
-            toast.info(`Line at capacity (${prior}/${expected}) — scan ignored`);
-          }
+          toast.error(data?.error || `Scan failed (${res.status})`);
           return;
         }
 
-        // Idempotent re-scan — same serial is already on this line. Skip the
-        // label print + downstream broadcasts, but keep local state in sync.
-        if (data.already_received) {
-          toast.success(`Already received — ${serial}`);
+        if (data.already_complete) {
+          toast.info('This order has already been fully received.', {
+            description: serial ? `Barcode: ${serial}` : undefined,
+          });
           setSerialInput('');
-          if (data.line_state?.id) {
-            dispatchLineUpdated({
-              id: data.line_state.id,
-              quantity_received: data.line_state.quantity_received,
-              quantity_expected: data.line_state.quantity_expected,
-              workflow_status: data.line_state.workflow_status ?? undefined,
-            });
-          }
+          setTimeout(() => serialInputRef.current?.focus(), 40);
+          return;
+        }
+
+        if (data.already_received) {
+          toast.info(`Already received — ${serial}`);
+          setSerialInput('');
           setTimeout(() => serialInputRef.current?.focus(), 40);
           return;
         }

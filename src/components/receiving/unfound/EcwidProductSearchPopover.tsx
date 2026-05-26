@@ -3,7 +3,7 @@
 /**
  * Ecwid product search popover.
  *
- * Used by UnfoundLineEditPanel when the operator clicks [+ Add item] on an
+ * Used by UnmatchedItemsSection when the operator clicks [+ Add item] on an
  * unmatched receiving. Searches /api/sku-catalog/search which already covers
  * both Ecwid product titles and platform SKUs via sku_platform_ids.
  *
@@ -17,11 +17,13 @@
  *     platform_ids: [{ platform, platform_sku, platform_item_id, account_name }]
  *   }
  *
- * On select, the popover fires onSelect with the catalog identifiers needed
- * to call POST /api/receiving/add-unmatched-line. We resolve sku_catalog_id
- * by re-querying the search endpoint with searchField=zoho_sku — the platform
- * search returns the joined catalog sku but not its primary key, so the parent
- * passes the receiving_id to a second endpoint call that joins it back.
+ * On select from catalog/repair lists, fires onSelect with platform + catalog identifiers
+ * needed for POST /api/receiving/add-unmatched-line. Operators may use
+ * “Product not added yet?” for a title-only line when Ecwid has no SKU (server
+ * stores sku_platform_id_row NULL; PO Items hides the SKU chip until paired).
+ * For catalog picks we resolve sku_catalog_id by re-querying /api/sku-catalog/search
+ * with searchField=zoho_sku — the platform search returns the joined catalog SKU
+ * but not its primary key, so the parent passes receiving_id into a flow that joins it back.
  *
  * Alternative considered: have /api/sku-catalog/search return sc.id directly
  * for platform searches. That's a one-line server change but would touch a
@@ -36,11 +38,11 @@ import { SearchBar } from '@/components/ui/SearchBar';
 import { microBadge } from '@/design-system/tokens/typography/presets';
 
 export interface EcwidProductSelection {
-  /** sku_platform_ids.id — the specific Ecwid listing row */
-  sku_platform_id_row: number;
+  /** sku_platform_ids.id — the specific Ecwid listing row; null when the operator enters a title only (not in Ecwid). */
+  sku_platform_id_row: number | null;
   /** sku_catalog.id — the canonical SKU (may be null if catalog row not paired yet) */
   sku_catalog_id: number | null;
-  /** Display SKU shown to the operator (Ecwid platform SKU or Zoho catalog SKU) */
+  /** Display SKU shown to the operator (Ecwid platform SKU or Zoho catalog SKU); empty when title-only manual line */
   sku: string;
   item_name: string;
   image_url: string | null;
@@ -111,10 +113,24 @@ export function EcwidProductSearchPopover({
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [submittingId, setSubmittingId] = useState<number | null>(null);
+  /** Operator-entered title when the product is not in Ecwid (search mode only). */
+  const [manualTitleMode, setManualTitleMode] = useState(false);
+  const [manualTitle, setManualTitle] = useState('');
+  const [manualSubmitting, setManualSubmitting] = useState(false);
 
   const listboxId = useId();
   const abortRef = useRef<AbortController | null>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  /** Prevents double-submit while POST /api/receiving/add-unmatched-line runs. */
+  const manualSubmitLockRef = useRef(false);
+
+  // Reset manual-entry UI when switching between catalog search and repair list.
+  useEffect(() => {
+    setManualTitleMode(false);
+    setManualTitle('');
+    setManualSubmitting(false);
+    manualSubmitLockRef.current = false;
+  }, [popoverMode]);
 
   // ─── Recent repair-service orders (Ecwid `-RS` SKUs) ─────────────────────────
   useEffect(() => {
@@ -149,7 +165,7 @@ export function EcwidProductSearchPopover({
 
   // ─── Catalog search with debounce + abort ───────────────────────────────────
   useEffect(() => {
-    if (popoverMode !== 'search') return;
+    if (popoverMode !== 'search' || manualTitleMode) return;
 
     if (debounceRef.current) clearTimeout(debounceRef.current);
 
@@ -195,7 +211,7 @@ export function EcwidProductSearchPopover({
     return () => {
       if (debounceRef.current) clearTimeout(debounceRef.current);
     };
-  }, [popoverMode, query, searchField]);
+  }, [popoverMode, query, searchField, manualTitleMode]);
 
   // Cleanup on unmount
   useEffect(() => () => abortRef.current?.abort(), []);
@@ -240,6 +256,26 @@ export function EcwidProductSearchPopover({
     [onSelect, popoverMode],
   );
 
+  const handleManualTitleSubmit = useCallback(async () => {
+    const trimmed = manualTitle.trim();
+    if (!trimmed) return;
+    if (manualSubmitLockRef.current) return;
+    manualSubmitLockRef.current = true;
+    setManualSubmitting(true);
+    try {
+      await onSelect({
+        sku_platform_id_row: null,
+        sku_catalog_id: null,
+        sku: '',
+        item_name: trimmed,
+        image_url: null,
+      });
+    } finally {
+      manualSubmitLockRef.current = false;
+      setManualSubmitting(false);
+    }
+  }, [manualTitle, onSelect]);
+
   const placeholder = useMemo(
     () =>
       searchField === 'title'
@@ -251,7 +287,9 @@ export function EcwidProductSearchPopover({
   const dialogAria =
     popoverMode === 'repair_service'
       ? 'Recent Ecwid repair-service orders'
-      : 'Search Ecwid products';
+      : manualTitleMode
+        ? 'Enter product title manually'
+        : 'Search Ecwid products';
 
   if (typeof window === 'undefined') return null;
 
@@ -285,7 +323,7 @@ export function EcwidProductSearchPopover({
         >
       {/* Header: catalog toggle + close (repair mode is a fixed list) */}
       <div className="flex items-center justify-between border-b border-gray-100 px-3 py-2">
-        {popoverMode === 'search' ? (
+        {popoverMode === 'search' && !manualTitleMode ? (
           <div className="flex gap-1">
             <ModeButton
               active={searchField === 'title'}
@@ -298,6 +336,17 @@ export function EcwidProductSearchPopover({
               label="By SKU"
             />
           </div>
+        ) : popoverMode === 'search' && manualTitleMode ? (
+          <button
+            type="button"
+            onClick={() => {
+              setManualTitleMode(false);
+              setManualTitle('');
+            }}
+            className={`${microBadge} rounded px-2 py-1 text-blue-700 transition-colors hover:bg-blue-50`}
+          >
+            ← Back to Ecwid search
+          </button>
         ) : (
           <span className={`${microBadge} text-gray-700`}>
             Recent -RS Ecwid orders
@@ -314,7 +363,7 @@ export function EcwidProductSearchPopover({
       </div>
 
       {/* Search input — catalog flow only */}
-      {popoverMode === 'search' ? (
+      {popoverMode === 'search' && !manualTitleMode ? (
         <div className="px-2 pt-2">
           <SearchBar
             value={query}
@@ -325,7 +374,50 @@ export function EcwidProductSearchPopover({
             variant="blue"
             size="compact"
             hideUnderline
+            trailingPrefix={
+              <button
+                type="button"
+                onClick={() => {
+                  setManualTitleMode(true);
+                  setManualTitle('');
+                  setQuery('');
+                  setItems([]);
+                  setError(null);
+                  abortRef.current?.abort();
+                  setIsLoading(false);
+                }}
+                className="max-w-[min(11rem,calc(100vw-200px))] shrink-0 truncate rounded-md border border-blue-200 bg-blue-50/80 px-1.5 py-0.5 text-left text-[10px] font-semibold text-blue-800 hover:bg-blue-100 sm:max-w-[14rem] sm:text-caption sm:leading-tight"
+                title="Product not added yet?"
+              >
+                Product not added yet?
+              </button>
+            }
           />
+        </div>
+      ) : popoverMode === 'search' && manualTitleMode ? (
+        <div className="space-y-2 px-2 pt-2">
+          <SearchBar
+            value={manualTitle}
+            onChange={setManualTitle}
+            placeholder="Enter Product Title to add"
+            autoFocus
+            variant="blue"
+            size="compact"
+            hideUnderline
+            onSearch={(v) => {
+              if (v.trim()) void handleManualTitleSubmit();
+            }}
+          />
+          <button
+            type="button"
+            disabled={
+              manualSubmitting || submittingId != null || !manualTitle.trim()
+            }
+            onClick={() => void handleManualTitleSubmit()}
+            className="w-full rounded-lg bg-blue-600 py-2.5 text-caption font-bold uppercase tracking-wider text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-gray-300"
+          >
+            {manualSubmitting ? 'Adding…' : 'Add to carton'}
+          </button>
         </div>
       ) : (
         <p className="px-3 pt-2 text-micro text-gray-500">
@@ -352,10 +444,12 @@ export function EcwidProductSearchPopover({
         {!error &&
           !isLoading &&
           popoverMode === 'search' &&
+          !manualTitleMode &&
           query.trim() &&
           items.length === 0 && (
           <li className="px-3 py-3 text-label text-gray-500">
-            No matches. Try the other mode or refine the query.
+            No matches. Try the other mode, refine the query, or use &ldquo;Product not added yet?&rdquo; for a
+            manual title.
           </li>
         )}
 

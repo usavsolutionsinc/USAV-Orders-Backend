@@ -161,8 +161,20 @@ export async function countByReceivingLine(
  * Relaxed: never throws on valid input. Missing origin context is fine.
  * Returns null only if the serial number is empty.
  */
+export interface UpsertSerialUnitOptions {
+  /**
+   * Run on an existing pooled connection that's already inside an explicit txn
+   * (caller issued BEGIN). Omit to acquire a dedicated client + BEGIN/COMMIT.
+   * Required when callers hold locks (e.g. receiving_lines FOR UPDATE) that FK
+   * checks must see — opening a second connection would self-block waiting on
+   * the first txn and hit Neon "Query read timeout".
+   */
+  dbClient?: import('pg').PoolClient;
+}
+
 export async function upsertSerialUnit(
   input: UpsertSerialUnitInput,
+  options?: UpsertSerialUnitOptions,
 ): Promise<UpsertSerialUnitResult | null> {
   const normalized = normalizeSerial(input.serial_number);
   if (!normalized) return null;
@@ -178,9 +190,13 @@ export async function upsertSerialUnit(
   const nowIso = new Date().toISOString();
   const isReceivingTouch = input.origin_source === 'receiving';
 
-  const client = await pool.connect();
+  const externalClient = options?.dbClient;
+  const ownsTxn = externalClient == null;
+  const client = externalClient ?? (await pool.connect());
   try {
-    await client.query('BEGIN');
+    if (ownsTxn) {
+      await client.query('BEGIN');
+    }
 
     const existing = await client.query<SerialUnitRow>(
       `SELECT * FROM serial_units
@@ -227,7 +243,9 @@ export async function upsertSerialUnit(
         ],
       );
 
-      await client.query('COMMIT');
+      if (ownsTxn) {
+        await client.query('COMMIT');
+      }
       return {
         unit: inserted.rows[0],
         is_new: true,
@@ -291,7 +309,9 @@ export async function upsertSerialUnit(
       ],
     );
 
-    await client.query('COMMIT');
+    if (ownsTxn) {
+      await client.query('COMMIT');
+    }
     return {
       unit: updated.rows[0],
       is_new: false,
@@ -300,10 +320,14 @@ export async function upsertSerialUnit(
       warnings,
     };
   } catch (err) {
-    await client.query('ROLLBACK').catch(() => {});
+    if (ownsTxn) {
+      await client.query('ROLLBACK').catch(() => {});
+    }
     throw err;
   } finally {
-    client.release();
+    if (ownsTxn) {
+      client.release();
+    }
   }
 }
 

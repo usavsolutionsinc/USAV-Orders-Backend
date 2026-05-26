@@ -57,7 +57,7 @@ import { ReceiveResponsePanel } from './ReceiveResponsePanel';
 import { ReceivingAuditModal } from './ReceivingAuditModal';
 import { ConditionPills } from './ConditionPills';
 import { markConditionSet } from './ReceivingProgressStepper';
-import { SerialCard } from './SerialCard';
+import { InlineSerialAdder } from './InlineSerialAdder';
 import { PoLinesAccordion } from './PoLinesAccordion';
 import { UnmatchedItemsSection } from './UnmatchedItemsSection';
 import { ReceivingClaimModal } from './ReceivingClaimModal';
@@ -156,6 +156,28 @@ function ReceiveProgressToast({ startedAt, intent }: { startedAt: number; intent
       </div>
     </div>
   );
+}
+
+/** Append a serial_units row to the line's `serials` snapshot (deduped by id + normalized sn). */
+function mergeSerialIntoLineSerials(
+  prev: ReceivingLineRow['serials'] | undefined,
+  serialUnit: { id?: number; serial_number?: string | null } | null | undefined,
+): NonNullable<ReceivingLineRow['serials']> {
+  if (!serialUnit?.id) return [...(prev ?? [])];
+  const sn = String(serialUnit.serial_number ?? '').trim();
+  if (!sn) return [...(prev ?? [])];
+  const norm = sn.toUpperCase();
+  const list = [...(prev ?? [])];
+  if (
+    list.some(
+      (s) =>
+        s.id === serialUnit.id ||
+        String(s.serial_number || '').trim().toUpperCase() === norm,
+    )
+  ) {
+    return list;
+  }
+  return [...list, { id: serialUnit.id, serial_number: sn }];
 }
 
 export function LineEditPanel({
@@ -646,7 +668,13 @@ export function LineEditPanel({
     if (!serial || !row.receiving_id || serialSubmitting) return;
     setSerialSubmitting(true);
     try {
-      const postScan = async (allowOverReceive: boolean) => {
+      // PO lines are unlimited — `receiveLineUnits` writes any scan beyond
+      // expected qty as a supplemental serial (skips ledger + qty bump,
+      // still upserts serial_units + tech_serial_numbers + emits a
+      // RECEIVED inventory event). The `supplemental: true` flag in the
+      // response below switches the toast copy.
+
+      const postScan = async () => {
         const res = await fetch('/api/receiving/scan-serial', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -655,52 +683,22 @@ export function LineEditPanel({
             receiving_line_id: row.id,
             serial_number: serial,
             staff_id: Number(staffId),
-            ...(allowOverReceive ? { allow_over_receive: true } : {}),
           }),
         });
         const json = await res.json().catch(() => null);
         return { res, data: json };
       };
 
-      let { res, data } = await postScan(false);
-
-      // Server refuses to over-receive by default — prompt for confirm and
-      // retry with the override flag. Operators are responsible for tracking
-      // the surplus reason (extra unit, manual sample, mis-counted PO).
-      if (res.status === 409 && data?.error === 'OVER_RECEIVE') {
-        const expected = data.quantity_expected ?? row.quantity_expected ?? '?';
-        const prior = data.prior_received ?? row.quantity_received ?? 0;
-        const confirmMsg = `Line is at ${prior}/${expected}. Scan ${serial} anyway and over-receive?`;
-        if (window.confirm(confirmMsg)) {
-          ({ res, data } = await postScan(true));
-        } else {
-          toast.info('Scan cancelled — line at capacity');
-          return;
-        }
-      }
+      const { res, data } = await postScan();
 
       if (!res.ok || !data?.success) {
         toast.error(data?.error || `Scan failed (${res.status})`);
         return;
       }
 
-      // Server short-circuited an idempotent re-scan: same serial already on
-      // this line. Treat as success — refresh the line so chips/qty stay in
-      // sync, clear the input, and show an informational toast.
+      // Duplicate serial on this line — do not reshuffle optimistic UI.
       if (data.already_received) {
-        toast.success(`Already received — ${serial}`);
-        setSerialInput('');
-        if (data.line_state && typeof data.line_state.id === 'number') {
-          const ls = data.line_state;
-          dispatchLineUpdated({
-            id: ls.id,
-            quantity_received: ls.quantity_received,
-            quantity_expected: ls.quantity_expected,
-            workflow_status: ls.workflow_status ?? undefined,
-          });
-        }
-        setTimeout(() => serialRef.current?.focus(), 40);
-        void refreshLineWithSerials();
+        toast.info(`Already received — ${serial}`);
         return;
       }
 
@@ -712,7 +710,15 @@ export function LineEditPanel({
           quantity_received: ls.quantity_received,
           quantity_expected: ls.quantity_expected,
           workflow_status: ls.workflow_status ?? undefined,
+          serials: mergeSerialIntoLineSerials(row.serials, data.serial_unit),
         });
+        if (data.supplemental) {
+          // Over-cap extra — serial was logged to serial_units + TSN but the
+          // line's qty + stock ledger did NOT move. Toast says so plainly.
+          toast.success(`Extra serial logged — ${serial}`, {
+            description: 'Beyond expected qty: no stock change.',
+          });
+        }
         window.dispatchEvent(new CustomEvent('receiving-serial-scanned', {
           detail: {
             line_id: row.id,
@@ -720,6 +726,7 @@ export function LineEditPanel({
             serial_unit: data.serial_unit,
             is_return: !!data.is_return,
             is_complete: !!ls.is_complete,
+            supplemental: !!data.supplemental,
           },
         }));
         setTimeout(() => serialRef.current?.focus(), 40);
@@ -730,7 +737,17 @@ export function LineEditPanel({
     } finally {
       setSerialSubmitting(false);
     }
-  }, [serialInput, row.receiving_id, row.id, staffId, serialSubmitting, refreshLineWithSerials]);
+  }, [
+    serialInput,
+    row.receiving_id,
+    row.id,
+    row.quantity_expected,
+    row.quantity_received,
+    staffId,
+    serialSubmitting,
+    refreshLineWithSerials,
+    row.serials,
+  ]);
 
   const submitExtraSerial = useCallback(async (idx: number) => {
     const serial = (extraSerials[idx] ?? '').trim();
@@ -751,6 +768,11 @@ export function LineEditPanel({
       }
       receiveInFlightRef.current = true;
       const startedAt = Date.now();
+      // Stable per-click id used as both the Idempotency-Key header and the
+      // body's client_event_id so api_idempotency_responses replays the
+      // cached response on retry / double-click instead of re-running the
+      // receive flow (which would double-call Zoho).
+      const clientEventId = randomId();
       // Sticky progress toast (bottom-right via the global <Toaster>). Same
       // id is reused on settle so success/error replaces the loading card
       // in place instead of stacking another card on top.
@@ -764,11 +786,52 @@ export function LineEditPanel({
       // before we got here, so no await blocks it.
       void (async () => {
         try {
+          // Circuit-breaker pre-check: if Zoho is in cooldown, bail with a
+          // specific "retry in Ns" message instead of firing the receive
+          // (which would either skip Zoho silently or wait for the
+          // background after() to fail). Only relevant for the zoho_receive
+          // intent — scan_only doesn't touch Zoho. The check is best-effort
+          // and never blocks the receive on its own failure.
+          if (receiveIntent === 'zoho_receive') {
+            try {
+              const healthRes = await fetch('/api/zoho/health', {
+                signal: AbortSignal.timeout(3_000),
+              });
+              const healthData = await healthRes.json().catch(() => null);
+              const circuit = healthData?.zoho?.circuit as
+                | { isOpen?: boolean; retryAfterMs?: number; consecutiveFailures?: number }
+                | undefined;
+              if (circuit?.isOpen) {
+                const secs = Math.max(1, Math.ceil((circuit.retryAfterMs ?? 0) / 1000));
+                toast.error(`Zoho cooldown — retry in ~${secs}s.`, {
+                  id: toastId,
+                  description: `Circuit breaker open after ${circuit.consecutiveFailures ?? 0} recent Zoho failures. The PO will NOT be marked received until Zoho recovers.`,
+                  duration: 7000,
+                });
+                setLastReceiveResponse({
+                  at: Date.now(),
+                  durationMs: Date.now() - startedAt,
+                  httpStatus: 0,
+                  ok: false,
+                  body: { skip_reason: 'zoho_circuit_open', circuit },
+                });
+                setResponseExpanded(true);
+                return;
+              }
+            } catch {
+              /* health check itself failed — fall through; the real
+                 receive call below surfaces any genuine error */
+            }
+          }
+
           const perLineNotes = notes.trim() || null;
 
           const markRes = await fetch('/api/receiving/mark-received-po', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: {
+              'Content-Type': 'application/json',
+              'Idempotency-Key': clientEventId,
+            },
             body: JSON.stringify({
               receiving_id: row.receiving_id,
               receiving_line_id: row.id,
@@ -781,7 +844,14 @@ export function LineEditPanel({
               listing_link: listingLink.trim() || undefined,
               notes: perLineNotes || undefined,
               staff_id: Number(staffId),
+              client_event_id: clientEventId,
             }),
+            // Hard ceiling so a server-side hang can never re-pin the
+            // loading toast. The handler returns optimistically within a
+            // few seconds; anything past 30s is a real failure and the
+            // operator should retry — the same Idempotency-Key replays
+            // the cached response if the server actually did complete.
+            signal: AbortSignal.timeout(30_000),
           });
           const markData = await markRes.json().catch(() => null);
 
@@ -793,17 +863,6 @@ export function LineEditPanel({
             body: markData,
           };
           setLastReceiveResponse(respRecord);
-
-          if (markRes.ok) {
-            try {
-              const linesRes = await fetch(`/api/receiving-lines?receiving_id=${row.receiving_id}`);
-              const lineData = await linesRes.json();
-              const rows = Array.isArray(lineData?.receiving_lines) ? lineData.receiving_lines : [];
-              for (const r of rows) {
-                dispatchLineUpdated(r as ReceivingLineRow);
-              }
-            } catch { /* table may still reflect partial state */ }
-          }
 
           if (!markRes.ok || !markData?.success) {
             console.error('receiving/mark-received-po failed', { status: markRes.status, error: markData?.error });
@@ -910,6 +969,29 @@ export function LineEditPanel({
 
           window.dispatchEvent(new CustomEvent('receiving-entry-added'));
           window.dispatchEvent(new CustomEvent('usav-refresh-data'));
+
+          // Fire-and-forget refresh AFTER the toast has settled. The
+          // /api/receiving-lines query can run 10–30s under load and used
+          // to be awaited inline, which pinned "Receiving in Zoho…" on
+          // screen for the full statement_timeout window even when the
+          // receive itself had already succeeded. The receiving-logs
+          // realtime channel and the usav-refresh-data event above
+          // reconcile the row independently if this refresh is slow.
+          if (markRes.ok) {
+            void (async () => {
+              try {
+                const linesRes = await fetch(
+                  `/api/receiving-lines?receiving_id=${row.receiving_id}&include=serials`,
+                  { signal: AbortSignal.timeout(15_000) },
+                );
+                const lineData = await linesRes.json();
+                const rows = Array.isArray(lineData?.receiving_lines) ? lineData.receiving_lines : [];
+                for (const r of rows) {
+                  dispatchLineUpdated(r as ReceivingLineRow);
+                }
+              } catch { /* table may still reflect partial state — realtime channel reconciles */ }
+            })();
+          }
         } catch (err) {
           console.error('receiving/mark-received-po threw', err);
           const message = err instanceof Error ? err.message : 'Receive failed';
@@ -1315,24 +1397,18 @@ export function LineEditPanel({
             nextTitle="Next recent line"
           />
 
-          {/* Staff · Scanned · Received — sits below the toolbar so the
-              operator's first content read is "who did what, when" plus
-              the carton's photos + claim trigger. */}
+          {/* Photos + Claim + shipment context (listing, PO#, tracking,
+              platform + type pills) share one WorkspaceCard so the operator
+              sees a single bordered surface. */}
           <WorkspaceCard bodyClassName="px-0 py-0">
             <ReceivingCartonStaffDropdown
               receivingId={row.receiving_id}
               staffId={staffId}
               onMakeClaim={() => setClaimModalOpen(true)}
             />
-          </WorkspaceCard>
-
-          {/* Shipment PO — flat WorkspaceCard (no accordion, no left rail).
-              Sits ABOVE the item title so tracking + platform + type are
-              the operator's first context check. */}
-          {/* Body padding bumped (py-4) so the selected pill's outline +
-              focus ring aren't clipped by a too-tight card body. */}
-          <WorkspaceCard bodyClassName="px-4 pt-3 pb-4">
-          <div className="space-y-2.5">
+            {/* Padding + top rule separate the photo strip from chips; keeps
+                pill focus rings from clipping vs a tight body. */}
+            <div className="space-y-2.5 border-t border-gray-100 px-4 pt-3 pb-4">
             <div className="flex min-w-0 flex-col gap-y-1">
               {/* Chip row uses items-center so listing URL chip, PO chip,
                   and tracking chip share the same vertical baseline
@@ -1681,81 +1757,108 @@ export function LineEditPanel({
               <PoLinesAccordion
                 receivingId={row.receiving_id}
                 activeLineId={row.id}
-                activeRowSlot={
-                  <ConditionPills
-                    value={cond}
-                    onChange={(next) => {
-                      setCond(next);
-                      markConditionSet(row.id);
-                      void patch({ condition_grade: next });
-                    }}
-                  />
-                }
+                activeRowSlot={({ serials }) => (
+                  <div className="space-y-3">
+                    <ConditionPills
+                      value={cond}
+                      onChange={(next) => {
+                        setCond(next);
+                        markConditionSet(row.id);
+                        void patch({ condition_grade: next });
+                      }}
+                    />
+                    {/* Serial scan input lives inside the active PO item row
+                        — same place ConditionPills lives — so switching to a
+                        sibling PO item smoothly relocates the input without
+                        a jump. `serials` comes from the accordion's own
+                        query so the chip list below the input always agrees
+                        with the chip in the row header — `row.serials` is
+                        fed by a different fetch cadence and can lag/be
+                        cleared on a sibling switch. */}
+                    <InlineSerialAdder
+                      key={`adder-${row.id}`}
+                      lineId={row.id}
+                      saved={serials}
+                      expected={row.quantity_expected ?? null}
+                      isSubmitting={serialSubmitting}
+                      disabled={!row.receiving_id}
+                      onAdd={(_lineId, sn) => submitSerial(sn)}
+                      onReplaceSerial={(_lineId, original, nextSerial) => {
+                        void (async () => {
+                          const res = await fetch('/api/receiving/scan-serial', {
+                            method: 'DELETE',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                              serial_unit_id: original.id,
+                              receiving_line_id: row.id,
+                            }),
+                          });
+                          const data = await res.json().catch(() => null);
+                          if (!res.ok || !data?.success) {
+                            toast.error(data?.error || 'Could not replace serial');
+                            return;
+                          }
+                          await submitSerial(nextSerial);
+                        })();
+                      }}
+                      onDelete={(_lineId, s) => {
+                        if (s.id == null) return;
+                        if (!window.confirm(`Remove serial ${s.serial_number}?`)) return;
+                        void (async () => {
+                          const res = await fetch('/api/receiving/scan-serial', {
+                            method: 'DELETE',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                              serial_unit_id: s.id,
+                              receiving_line_id: row.id,
+                            }),
+                          });
+                          const data = await res.json().catch(() => null);
+                          if (!res.ok || !data?.success) {
+                            toast.error(data?.error || 'Could not remove serial');
+                            return;
+                          }
+                          toast.success('Serial removed');
+                          if (data.line_state?.id != null) {
+                            dispatchLineUpdated({
+                              id: data.line_state.id,
+                              quantity_received: data.line_state.quantity_received,
+                              quantity_expected: data.line_state.quantity_expected,
+                              workflow_status: data.line_state.workflow_status ?? undefined,
+                            });
+                          }
+                          await refreshLineWithSerials();
+                        })();
+                      }}
+                    />
+                  </div>
+                )}
               />
             )
           ) : null}
 
-          {/* Serial scan + notes — co-located so the operator can leave a
-              note without leaving the scan path. */}
-          <SerialCard
-            saved={row.serials ?? []}
-            expected={row.quantity_expected ?? null}
-            isSubmitting={serialSubmitting}
-            disabled={!row.receiving_id}
-            onAdd={(sn) => submitSerial(sn)}
-            onReplaceSerial={(original, nextSerial) => {
-              void (async () => {
-                const res = await fetch('/api/receiving/scan-serial', {
-                  method: 'DELETE',
-                  headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify({
-                    serial_unit_id: original.id,
-                    receiving_line_id: row.id,
-                  }),
-                });
-                const data = await res.json().catch(() => null);
-                if (!res.ok || !data?.success) {
-                  toast.error(data?.error || 'Could not replace serial');
-                  return;
-                }
-                await submitSerial(nextSerial);
-              })();
-            }}
-            onDeleteSerial={(s) => {
-              if (!window.confirm(`Remove serial ${s.serial_number}?`)) return;
-              void (async () => {
-                const res = await fetch('/api/receiving/scan-serial', {
-                  method: 'DELETE',
-                  headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify({
-                    serial_unit_id: s.id,
-                    receiving_line_id: row.id,
-                  }),
-                });
-                const data = await res.json().catch(() => null);
-                if (!res.ok || !data?.success) {
-                  toast.error(data?.error || 'Could not remove serial');
-                  return;
-                }
-                toast.success('Serial removed');
-                if (data.line_state?.id != null) {
-                  dispatchLineUpdated({
-                    id: data.line_state.id,
-                    quantity_received: data.line_state.quantity_received,
-                    quantity_expected: data.line_state.quantity_expected,
-                    workflow_status: data.line_state.workflow_status ?? undefined,
-                  });
-                }
-                await refreshLineWithSerials();
-              })();
-            }}
-            notes={notes}
-            onNotesChange={setNotes}
-            onNotesBlur={() => {
-              if (notes !== (row.notes || '')) void patch({ notes });
-            }}
-            notesId={`po-item-notes-${row.id}`}
-          />
+          {/* Notes card — standalone so the operator can leave context next
+              to the photos + chips without it nesting inside the active PO
+              row. Saves on blur (same contract SerialCard used). */}
+          <section className="rounded-2xl bg-white p-4 shadow-sm ring-1 ring-gray-200/60">
+            <label
+              htmlFor={`po-item-notes-${row.id}`}
+              className="block text-eyebrow font-black uppercase tracking-widest text-gray-500"
+            >
+              Notes
+            </label>
+            <textarea
+              id={`po-item-notes-${row.id}`}
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+              onBlur={() => {
+                if (notes !== (row.notes || '')) void patch({ notes });
+              }}
+              rows={2}
+              placeholder="PO-line notes (saved on off click)"
+              className="mt-1.5 w-full resize-none rounded-md border border-gray-200 bg-white px-2 py-1.5 text-caption font-medium leading-snug text-gray-900 placeholder:text-gray-400 focus:border-blue-300 focus:outline-none focus:ring-2 focus:ring-blue-500/10"
+            />
+          </section>
 
           {/* Photos + Make a Claim are co-located inside the Staff card
               above — no standalone PhotosCard is needed in the column. */}

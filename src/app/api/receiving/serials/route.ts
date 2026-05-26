@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse, after } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import pool from '@/lib/db';
 import { invalidateCacheTags } from '@/lib/cache/upstash-cache';
 import { publishReceivingLogChanged } from '@/lib/realtime/publish';
@@ -132,14 +132,15 @@ export const POST = withAuth(async (request: NextRequest, ctx) => {
     // FK back. Background — the TSN insert has already committed and the
     // response doesn't need to wait.
     const tsnRow = inserted.rows[0];
-    after(async () => {
-      await syncTsnToSerialUnit({
-        id: Number(tsnRow.id),
-        serial_number: tsnRow.serial_number,
-        station_source: tsnRow.station_source,
-        tested_by: tsnRow.tested_by,
-        receiving_line_id: tsnRow.receiving_line_id,
-      });
+    // Synchronous sync so the next GET (include=serials) always sees a
+    // serial_units row — operators were racing the old `after()` job and
+    // getting empty chip lists right after logging a supplemental SN.
+    await syncTsnToSerialUnit({
+      id: Number(tsnRow.id),
+      serial_number: tsnRow.serial_number,
+      station_source: tsnRow.station_source,
+      tested_by: tsnRow.tested_by,
+      receiving_line_id: tsnRow.receiving_line_id,
     });
 
     return NextResponse.json(

@@ -483,16 +483,24 @@ function RailRow({
               {title}
             </p>
             {showInlinePkgChip ? (
-              <button
-                type="button"
+              <span
+                role="button"
+                tabIndex={0}
                 onClick={(e) => {
                   e.stopPropagation();
                   onToggleGroup?.();
                 }}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    onToggleGroup?.();
+                  }
+                }}
                 title={`Expand — show ${groupSize - 1} more in this package`}
                 aria-expanded={false}
                 aria-label="Expand package"
-                className="inline-flex shrink-0 items-center gap-0.5 rounded bg-indigo-100 px-1 py-px text-[8.5px] font-black uppercase tracking-widest text-indigo-700 transition-colors hover:bg-indigo-200"
+                className="inline-flex shrink-0 cursor-pointer items-center gap-0.5 rounded bg-indigo-100 px-1 py-px text-[8.5px] font-black uppercase tracking-widest text-indigo-700 transition-colors hover:bg-indigo-200"
               >
                 <motion.span
                   animate={{ rotate: -90 }}
@@ -504,7 +512,7 @@ function RailRow({
                 PKG · {groupSize}
                 <span className="ml-0.5 text-indigo-500/80">·</span>
                 <span className="text-indigo-500/80">+{groupSize - 1}</span>
-              </button>
+              </span>
             ) : null}
           </div>
           <p className="truncate text-eyebrow font-semibold uppercase tracking-widest text-gray-500">
