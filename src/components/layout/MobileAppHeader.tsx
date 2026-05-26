@@ -3,11 +3,34 @@
 import { usePathname } from 'next/navigation';
 import { Menu } from '@/components/Icons';
 import { sidebarHeaderBandClass } from '@/components/layout/header-shell';
-import { mobileBoxedNavButtonClass } from '@/design-system/components/mobile/MobileBoxedNavButton';
+import {
+  mobileBoxedNavButtonClass,
+  mobileBoxedNavCellClass,
+} from '@/design-system/components/mobile/MobileBoxedNavButton';
+import { QuickAccessButton } from '@/components/layout/QuickAccessButton';
 import { useMobileAppNavigation } from '@/hooks/useMobileAppNavigation';
 import { getMobileAppTitle } from '@/lib/mobile-context-navigation';
 import { HorizontalButtonSlider, type HorizontalSliderItem } from '@/components/ui/HorizontalButtonSlider';
 import { cn } from '@/utils/_cn';
+
+function MobileCockpitHubHeaderRow({ appTitle }: { appTitle: string }) {
+  return (
+    <div className="grid w-full min-h-[44px] grid-cols-[minmax(0,1fr)_44px] items-stretch bg-white">
+      <div className="flex min-w-0 items-center px-3">
+        <span className="truncate text-micro font-black uppercase tracking-[0.18em] text-gray-700">
+          {appTitle}
+        </span>
+      </div>
+      <div className={cn(mobileBoxedNavCellClass, 'min-w-[44px] justify-center')}>
+        <QuickAccessButton placement="down" compact />
+      </div>
+    </div>
+  );
+}
+
+function isMobileCockpitHubPath(pathname: string | null): boolean {
+  return pathname === '/m/home' || pathname === '/m/home/';
+}
 
 export interface MobileAppHeaderProps {
   onOpenAppNav: () => void;
@@ -21,6 +44,7 @@ export function MobileAppHeaderFallback({
 }: MobileAppHeaderProps) {
   const pathname = usePathname();
   const appTitle = getMobileAppTitle(pathname);
+  const hubHome = isMobileCockpitHubPath(pathname);
 
   return (
     <header
@@ -30,34 +54,40 @@ export function MobileAppHeaderFallback({
         className,
       )}
     >
-      <div className="grid w-full min-h-[44px] grid-cols-[44px_minmax(0,1fr)] items-stretch">
-        <button
-          type="button"
-          onClick={onOpenAppNav}
-          aria-label="Open app navigation"
-          className={mobileBoxedNavButtonClass}
-        >
-          <Menu className="h-5 w-5" />
-        </button>
+      {hubHome ? (
+        <MobileCockpitHubHeaderRow appTitle={appTitle} />
+      ) : (
+        <div className="grid w-full min-h-[44px] grid-cols-[44px_minmax(0,1fr)] items-stretch">
+          <button
+            type="button"
+            onClick={onOpenAppNav}
+            aria-label="Open app navigation"
+            className={mobileBoxedNavButtonClass}
+          >
+            <Menu className="h-5 w-5" />
+          </button>
 
-        <div className="flex min-w-0 items-center bg-white px-3">
-          <span className="truncate text-micro font-black uppercase tracking-[0.18em] text-gray-700">
-            {appTitle}
-          </span>
+          <div className="flex min-w-0 items-center bg-white px-3">
+            <span className="truncate text-micro font-black uppercase tracking-[0.18em] text-gray-700">
+              {appTitle}
+            </span>
+          </div>
         </div>
-      </div>
+      )}
     </header>
   );
 }
 
 /**
  * Mobile chrome for contextual-sidebar apps:
- * - Row 1: hamburger + current app title
- * - Row 2: always-visible section pills (HorizontalButtonSlider, nav variant).
- *   Replaces the previous "Sections" dropdown + bottom-sheet picker so the
- *   current section and all peers are visible without an extra tap.
+ * - `/m/home`: row 1 shows the current hub label (`Home`) and Quick Access on
+ *   the right — no hamburger (full drawer is intentionally unavailable here).
+ * - Other routes: row 1 is hamburger + current app title.
+ * - Row 2 (when applicable): section pills via {@link HorizontalButtonSlider}.
  */
 export function MobileAppHeader({ onOpenAppNav, className }: MobileAppHeaderProps) {
+  const pathname = usePathname();
+  const hubHome = isMobileCockpitHubPath(pathname);
   const {
     appTitle,
     contextRow,
@@ -82,23 +112,27 @@ export function MobileAppHeader({ onOpenAppNav, className }: MobileAppHeaderProp
         className,
       )}
     >
-      {/* Row 1 — fixed 44px nav column (w-full on the button collapses flex siblings) */}
-      <div className="grid w-full min-h-[44px] grid-cols-[44px_minmax(0,1fr)] items-stretch">
-        <button
-          type="button"
-          onClick={onOpenAppNav}
-          aria-label="Open app navigation"
-          className={mobileBoxedNavButtonClass}
-        >
-          <Menu className="h-5 w-5" />
-        </button>
+      {/* Row 1 — mobile hub: current page label + quick access only (no drawer). */}
+      {hubHome ? (
+        <MobileCockpitHubHeaderRow appTitle={appTitle} />
+      ) : (
+        <div className="grid w-full min-h-[44px] grid-cols-[44px_minmax(0,1fr)] items-stretch">
+          <button
+            type="button"
+            onClick={onOpenAppNav}
+            aria-label="Open app navigation"
+            className={mobileBoxedNavButtonClass}
+          >
+            <Menu className="h-5 w-5" />
+          </button>
 
-        <div className="flex min-w-0 items-center bg-white px-3">
-          <span className="truncate text-micro font-black uppercase tracking-[0.18em] text-gray-700">
-            {appTitle}
-          </span>
+          <div className="flex min-w-0 items-center bg-white px-3">
+            <span className="truncate text-micro font-black uppercase tracking-[0.18em] text-gray-700">
+              {appTitle}
+            </span>
+          </div>
         </div>
-      </div>
+      )}
 
       {/* Row 2 — inline pill row for the section switcher */}
       {showContextRow && contextRow && sectionItems ? (

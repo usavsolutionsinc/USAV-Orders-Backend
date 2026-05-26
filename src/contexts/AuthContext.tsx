@@ -14,6 +14,10 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import { flushSync } from 'react-dom';
 import { usePathname, useRouter } from 'next/navigation';
+import {
+  DEFAULT_MOBILE_DISPLAY_CONFIG,
+  type MobileDisplayConfig,
+} from '@/lib/auth/mobile-display-config';
 
 // Mirror of PUBLIC_PATHS in src/proxy.ts. Kept in sync by hand — small and
 // stable. Used by the client-side guard below to avoid bouncing the user
@@ -41,6 +45,7 @@ export interface AuthSessionUser {
   staffId: number;
   role: string;
   permissions: string[];
+  mobileDisplayConfig?: MobileDisplayConfig;
   session: {
     sid: string;
     deviceKind: 'station' | 'personal' | 'phone';
@@ -53,6 +58,8 @@ export interface AuthContextValue {
   user: AuthSessionUser | null;
   isLoaded: boolean;
   has: (perm: string) => boolean;
+  /** Resolved per-staff mobile UI config. Falls back to defaults when no user. */
+  mobileDisplayConfig: MobileDisplayConfig;
   refresh: () => Promise<void>;
   signOut: () => Promise<void>;
 }
@@ -61,6 +68,7 @@ const AuthCtx = createContext<AuthContextValue>({
   user: null,
   isLoaded: false,
   has: () => false,
+  mobileDisplayConfig: DEFAULT_MOBILE_DISPLAY_CONFIG,
   refresh: async () => {},
   signOut: async () => {},
 });
@@ -143,6 +151,7 @@ export function AuthProvider({ initial = null, children }: ProviderProps) {
       user,
       isLoaded,
       has: (perm: string) => perms.has(perm),
+      mobileDisplayConfig: user?.mobileDisplayConfig ?? DEFAULT_MOBILE_DISPLAY_CONFIG,
       refresh,
       signOut,
     };

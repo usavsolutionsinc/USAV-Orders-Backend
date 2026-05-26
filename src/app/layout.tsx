@@ -31,9 +31,8 @@ export default function RootLayout({
                 {/* PWA */}
                 <link rel="manifest" href="/manifest.json" />
                 <meta name="application-name" content="USAV Solutions" />
-                {/* NOTE: apple-mobile-web-app-capable removed — iOS standalone mode blocks getUserMedia (camera).
-                    Using minimal-ui in manifest.json instead so camera/barcode scanning works. */}
-                <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+                <meta name="apple-mobile-web-app-capable" content="yes" />
+                <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
                 <meta name="apple-mobile-web-app-title" content="USAV" />
                 <meta name="theme-color" content="#ffffff" />
                 <meta name="mobile-web-app-capable" content="yes" />
@@ -41,7 +40,7 @@ export default function RootLayout({
                 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1" />
                 <style id="app-design-tokens">{designTokenStyleText}</style>
             </head>
-            <body className="antialiased" style={{ margin: 0, padding: 0, overflow: 'hidden', height: '100vh' }}>
+            <body className="antialiased" style={{ margin: 0, padding: 0, overflow: 'hidden', height: '100dvh', minHeight: '100vh', paddingTop: 'env(safe-area-inset-top)', paddingBottom: 'env(safe-area-inset-bottom)' }}>
                 <ElectronDragStrip />
                 <OfflineBanner />
                 <Providers>

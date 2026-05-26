@@ -30,7 +30,7 @@ function escapeHtml(str: string): string {
  * No URL, no host, no protocol on the wire. Consumer phone cameras see
  * opaque text; the internal app's scanner decodes via `routeScan()`.
  */
-function buildUnitPayload(args: {
+export function buildUnitPayload(args: {
   sku: string;
   serialNumber: string | null;
   qrPayload?: string | null;

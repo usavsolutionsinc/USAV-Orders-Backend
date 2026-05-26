@@ -3,6 +3,7 @@
 import React from 'react';
 import { sectionLabel } from '@/design-system/tokens/typography/presets';
 import { Check } from '../Icons';
+import { Gs1DataMatrix, type Gs1DataMatrixSymbology } from '@/components/barcode/Gs1DataMatrix';
 export type BarcodeDensity = 'comfortable' | 'compact';
 
 interface BarcodePreviewProps {
@@ -14,7 +15,9 @@ interface BarcodePreviewProps {
     notes: string;
     location: string;
     showNotes: boolean;
-    barcodeCanvasRef?: React.RefObject<HTMLCanvasElement>;
+    /** DataMatrix payload — same value/symbology that the printed label will encode. */
+    dataMatrixValue?: string;
+    dataMatrixSymbology?: Gs1DataMatrixSymbology;
     isPosting: boolean;
     isActive: boolean;
     density?: BarcodeDensity;
@@ -33,7 +36,8 @@ export function BarcodePreview({
     notes,
     location,
     showNotes,
-    barcodeCanvasRef,
+    dataMatrixValue,
+    dataMatrixSymbology = 'datamatrix',
     isPosting,
     isActive,
     density = 'compact',
@@ -68,10 +72,10 @@ export function BarcodePreview({
             {/* Preview area — edge-to-edge */}
             <div className="border-t border-gray-200">
                 {isPrintMode ? (
-                    // QR-only label preview. Title + identifier column on
-                    // the left, QR canvas on the right — mirrors the
-                    // printed thermal-label layout. The QR encodes the GS1
-                    // Digital Link URL returned by /api/units/next-id.
+                    // DataMatrix label preview. Title + identifier column on
+                    // the left, DataMatrix on the right — mirrors the
+                    // printed thermal-label layout. Payload mirrors what
+                    // printProductLabel encodes (built via buildUnitPayload).
                     <div className={`flex items-center bg-gray-50 ${comfy ? 'px-7 py-7 gap-5' : 'px-5 py-5 gap-4'}`}>
                         <div className="min-w-0 flex-1 space-y-1">
                             <p className={`leading-snug text-gray-700 ${comfy ? 'text-xs' : 'text-caption'}`}>{title}</p>
@@ -86,7 +90,13 @@ export function BarcodePreview({
                             )}
                         </div>
                         <div className={`shrink-0 bg-white border border-gray-200 flex items-center justify-center ${comfy ? 'h-32 w-32 p-2' : 'h-24 w-24 p-1.5'}`}>
-                            <canvas ref={barcodeCanvasRef} className="h-full w-full" />
+                            {dataMatrixValue ? (
+                                <Gs1DataMatrix
+                                    value={dataMatrixValue}
+                                    symbology={dataMatrixSymbology}
+                                    size={comfy ? 112 : 84}
+                                />
+                            ) : null}
                         </div>
                     </div>
                 ) : (

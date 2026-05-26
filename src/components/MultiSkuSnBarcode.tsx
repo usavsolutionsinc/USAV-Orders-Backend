@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useRef, useState, useCallback } from "react";
+import React, { useEffect, useRef, useState, useCallback, useMemo } from "react";
 import { toast } from 'sonner';
 
 // Import refactored sub-components
@@ -8,12 +8,12 @@ import { ModeSelector, BarcodeMode } from './barcode/ModeSelector';
 import { SkuInput } from './barcode/SkuInput';
 import { SerialNumberInput } from './barcode/SerialNumberInput';
 import { BarcodePreview } from './barcode/BarcodePreview';
+import { Gs1DataMatrix } from './barcode/Gs1DataMatrix';
 import { RecentsStrip } from './barcode/RecentsStrip';
 
 // Import utilities
 import { normalizeSku, getSerialLast6 } from '@/utils/sku';
-import { loadQrLibrary, renderQr } from '@/utils/barcode';
-import { printProductLabels } from '@/lib/print/printProductLabel';
+import { printProductLabels, buildUnitPayload } from '@/lib/print/printProductLabel';
 import { useLabelRecents } from '@/hooks/useLabelRecents';
 import { useBarcodeMode } from '@/hooks/useBarcodeMode';
 import { CONDITION_OPTIONS } from '@/components/receiving/zoho-po-types';
@@ -50,7 +50,6 @@ export default function MultiSkuSnBarcode({ layout = 'vertical' }: MultiSkuSnBar
     const [qrUrl, setQrUrl] = useState<string>("");
     const [title, setTitle] = useState<string>("");
     const [stock, setStock] = useState<string>("");
-    const [isLibraryLoaded, setIsLibraryLoaded] = useState<boolean>(false);
     const [error, setError] = useState<string>("");
     const [isPosting, setIsPosting] = useState<boolean>(false);
     const [isGenerating, setIsGenerating] = useState<boolean>(false);
@@ -63,19 +62,12 @@ export default function MultiSkuSnBarcode({ layout = 'vertical' }: MultiSkuSnBar
     const [skuCatalogId, setSkuCatalogId] = useState<number | null>(null);
     const [condition, setCondition] = useState<ConditionGrade>('BRAND_NEW');
 
-    const barcodeCanvasRef = useRef<HTMLCanvasElement>(null);
     const printRef = useRef<HTMLDivElement>(null);
     const skuInputRef = useRef<HTMLInputElement>(null);
     const snInputRef = useRef<HTMLInputElement>(null);
     const bottomAnchorRef = useRef<HTMLDivElement>(null);
 
     const { recents, push: pushRecent, clear: clearRecents } = useLabelRecents();
-
-    useEffect(() => {
-        loadQrLibrary()
-            .then(() => setIsLibraryLoaded(true))
-            .catch(err => console.error('Failed to load QR library:', err));
-    }, []);
 
     // Surface validation/fetch errors via the global toast system instead of
     // the fixed-position pill. State stays as a one-shot trigger.
@@ -85,24 +77,18 @@ export default function MultiSkuSnBarcode({ layout = 'vertical' }: MultiSkuSnBar
         setError("");
     }, [error]);
 
-    // QR payload is the GS1 Digital Link URL from /api/units/next-id; fall
-    // back to the raw unit id when the URL isn't available yet so the
-    // canvas still renders something during the brief loading window.
-    const renderQrCanvas = useCallback(async (canvas: HTMLCanvasElement | null, payload: string) => {
-        if (!canvas || !isLibraryLoaded || !payload.trim()) return;
-        // GS1 production guidance: error correction Q (25%) survives warehouse
-        // damage; quiet zone ≥4 modules is the GS1 minimum.
-        await renderQr(canvas, payload, { width: 200, margin: 4, errorCorrectionLevel: 'Q' });
-    }, [isLibraryLoaded]);
-
-    useEffect(() => {
-        // In horizontal mode the preview is always mounted next to the inputs,
-        // so re-render as soon as we have a payload — not just at step 3.
-        const isPrintLike = mode === 'print' || mode === 'reprint';
-        if (isPrintLike && (isHorizontal ? !!uniqueSku : step === 3)) {
-            void renderQrCanvas(barcodeCanvasRef.current, qrUrl || uniqueSku);
-        }
-    }, [uniqueSku, qrUrl, step, mode, renderQrCanvas, isHorizontal, isLibraryLoaded]);
+    // DataMatrix payload for the live preview — reuses the same builder the
+    // printed label uses so what you see matches what gets printed exactly.
+    const previewPayload = useMemo(
+        () =>
+            buildUnitPayload({
+                sku: uniqueSku || sku,
+                serialNumber: serialNumbers[0] ?? null,
+                qrPayload: qrUrl || null,
+                gtin: gtin || null,
+            }),
+        [uniqueSku, sku, serialNumbers, qrUrl, gtin],
+    );
 
     // Scroll the parent scroll container to reveal the newly added step.
     // scrollIntoView walks up to the nearest scroll ancestor, so this works
@@ -524,7 +510,8 @@ export default function MultiSkuSnBarcode({ layout = 'vertical' }: MultiSkuSnBar
                 notes={notes}
                 location={location}
                 showNotes={showNotes}
-                barcodeCanvasRef={barcodeCanvasRef}
+                dataMatrixValue={previewPayload.value}
+                dataMatrixSymbology={previewPayload.symbology}
                 isPosting={isPosting}
                 isActive={isHorizontal ? previewIsReady : step >= 3}
                 density={density}
@@ -636,7 +623,8 @@ export default function MultiSkuSnBarcode({ layout = 'vertical' }: MultiSkuSnBar
                                 serialNumbers={serialNumbers}
                                 location={location}
                                 accent={accent}
-                                barcodeCanvasRef={barcodeCanvasRef}
+                                dataMatrixValue={previewPayload.value}
+                                dataMatrixSymbology={previewPayload.symbology}
                             />
                         ) : (
                             <PreviewPlaceholder mode={mode} sku={sku} />
@@ -1061,7 +1049,9 @@ interface PreviewCardModernProps {
     serialNumbers: string[];
     location: string;
     accent: ModeAccent;
-    barcodeCanvasRef: React.RefObject<HTMLCanvasElement>;
+    /** DataMatrix payload — same value/symbology the printed label will encode. */
+    dataMatrixValue: string;
+    dataMatrixSymbology: 'gs1datamatrix' | 'datamatrix';
 }
 
 function PreviewCardModern({
@@ -1071,7 +1061,8 @@ function PreviewCardModern({
     serialNumbers,
     location,
     accent,
-    barcodeCanvasRef,
+    dataMatrixValue,
+    dataMatrixSymbology,
 }: PreviewCardModernProps) {
     const isPrintMode = mode === 'print' || mode === 'reprint';
 
@@ -1089,10 +1080,10 @@ function PreviewCardModern({
             </div>
 
             {isPrintMode ? (
-                // QR-only label preview. Title + ids on the left, QR canvas
-                // on the right — mirrors the printed thermal-label layout
-                // (see context/inventory_system_upgrade_plan.md §7.5 and
-                // src/lib/print/zpl-templates.ts buildUnitZpl).
+                // DataMatrix label preview. Title + ids on the left,
+                // DataMatrix on the right — mirrors the printed thermal-label
+                // layout. Payload comes from the same buildUnitPayload helper
+                // the print path uses, so preview ↔ print stay in sync.
                 <div className="mx-auto flex aspect-[2/1] w-full max-w-[420px] items-start gap-3 rounded-xl bg-white p-3 ring-1 ring-gray-200/50">
                     <div className="flex min-w-0 flex-1 flex-col justify-start gap-1">
                         {title ? (
@@ -1101,12 +1092,13 @@ function PreviewCardModern({
                         <p className="font-mono text-sm font-bold tracking-tight text-gray-900 break-all">{uniqueSku}</p>
                     </div>
                     <div className="flex aspect-square h-full shrink-0 items-center justify-center self-stretch">
-                        <canvas
-                            ref={barcodeCanvasRef}
-                            width={200}
-                            height={200}
-                            className="h-full w-full"
-                        />
+                        {dataMatrixValue ? (
+                            <Gs1DataMatrix
+                                value={dataMatrixValue}
+                                symbology={dataMatrixSymbology}
+                                size={200}
+                            />
+                        ) : null}
                     </div>
                 </div>
             ) : (

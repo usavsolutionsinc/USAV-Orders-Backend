@@ -19,6 +19,7 @@ export interface MobileContextOption {
 
 /** Row-1 app title from the current pathname (matches sidebar nav labels). */
 export function getMobileAppTitle(pathname: string | null): string {
+  if (pathname === '/m/home' || pathname?.startsWith('/m/home/')) return 'Home';
   const key = getSidebarRouteKey(pathname);
   const nav = APP_SIDEBAR_NAV.find((item) => item.id === key);
   return nav?.label || 'USAV';

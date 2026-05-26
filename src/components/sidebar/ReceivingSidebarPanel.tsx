@@ -14,7 +14,6 @@ import {
 import { ReceivingScanBar } from '@/components/sidebar/receiving/ReceivingScanBar';
 import { ReceivingScanStatusList } from '@/components/sidebar/receiving/ReceivingScanStatusList';
 import { ReceivingLinePicker } from '@/components/sidebar/receiving/ReceivingLinePicker';
-import { ActiveCartonFeedback } from '@/components/sidebar/receiving/ActiveCartonFeedback';
 import { ReceivingRecentRail } from '@/components/sidebar/receiving/ReceivingRecentRail';
 import { RecentSearchesRail } from '@/components/sidebar/receiving/RecentSearchesRail';
 import {
@@ -404,25 +403,6 @@ export function ReceivingSidebarPanel() {
   // History-mode row clicks route through the `receiving-select-line` listener
   // below — they fire `receiving-open-details-overlay` directly instead of
   // touching `selectedLine`, so no mode-bounce effect is needed here.
-
-  // Last-serial flash for the sidebar feedback strip. Auto-clears so the
-  // chip appears for ~1.8s after each successful serial scan.
-  const [lastSerialFlash, setLastSerialFlash] = useState<string | null>(null);
-  useEffect(() => {
-    const handler = (e: Event) => {
-      const detail = (e as CustomEvent<{ serial_number?: string }>).detail;
-      const sn = String(detail?.serial_number || '').trim();
-      if (!sn) return;
-      setLastSerialFlash(sn);
-    };
-    window.addEventListener('receiving-serial-scanned', handler);
-    return () => window.removeEventListener('receiving-serial-scanned', handler);
-  }, []);
-  useEffect(() => {
-    if (!lastSerialFlash) return;
-    const t = window.setTimeout(() => setLastSerialFlash(null), 1800);
-    return () => window.clearTimeout(t);
-  }, [lastSerialFlash]);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -1258,15 +1238,6 @@ export function ReceivingSidebarPanel() {
       />
 
       <ReceivingReturnBanner returns={returns} onDismiss={dismissReturn} />
-
-      {/* Slim sidebar feedback strip — carton identity + qty progress + last
-          serial flash. The full editor moved to the right-pane workspace via
-          `receiving-workspace-open` dispatch (see useEffect above). */}
-      <ActiveCartonFeedback
-        poContext={poContext}
-        selectedLine={selectedLine}
-        lastSerialFlash={lastSerialFlash}
-      />
 
       {/* Scrollable body — picker + scan chips. Editor lives in the right
           pane; closing the workspace clears selectedLine via the

@@ -244,6 +244,142 @@ export function buildInternalEntityUrl(
   return base ? `${base}${path}` : path;
 }
 
+// ─── MULTI-AI DATA MATRIX PARSER ──────────────────────────────────────────────
+//
+// Real Data Matrix codes from carrier shipping labels, pharma, and consumer
+// electronics packaging encode multiple GS1 Application Identifiers in one
+// payload. Two transmission forms in the wild:
+//
+//   1. FNC1-prefixed, GS-separated:
+//        <FNC1>0101234567890128<GS>21SERIAL123<GS>17251231<GS>10LOT1
+//      `<FNC1>` is typically transmitted as ASCII 0x1D ("]C1" symbology
+//      identifier prefix may also appear and is stripped by ZXing).
+//
+//   2. Human-readable, parenthesized:
+//        (01)01234567890128(21)SERIAL123(17)251231(10)LOT1
+//
+// Fixed-length AIs (01, 11, 13, 15, 17, 20, ...) terminate by length.
+// Variable-length AIs (10, 21, 240, 400, 420, ...) terminate at the next FS
+// (0x1D) or at end-of-string.
+
+/** GS1 Application Identifier dictionary (only the ones we route on). */
+const GS1_AI_FIXED_LEN: Record<string, number> = {
+  '00': 18, // SSCC
+  '01': 14, // GTIN
+  '02': 14, // GTIN of contained trade items
+  '11': 6,  // production date YYMMDD
+  '13': 6,  // packaging date
+  '15': 6,  // best-before
+  '17': 6,  // expiration date
+  '20': 2,  // variant
+};
+
+/** Variable-length AIs we recognize (max length). Any AI not listed is parsed greedily up to FS or end. */
+const GS1_AI_VAR_MAX: Record<string, number> = {
+  '10': 20,  // batch / lot
+  '21': 20,  // serial
+  '22': 20,  // additional product id
+  '30': 8,   // count
+  '37': 8,   // count of trade items in a logistic unit
+  '240': 30, // additional product identification
+  '400': 30, // customer's PO number
+  '420': 20, // ship-to postal code
+  '421': 12, // ship-to postal code w/ ISO country
+};
+
+const FNC1 = ''; // ASCII GS
+
+export type Gs1AiTree = {
+  /** Original raw payload (with FNC1 / parentheses removed for analysis). */
+  raw: string;
+  ais: Record<string, string>;
+};
+
+/** Strip ZXing symbology identifiers like `]C1`, `]d2`, `]Q1` that may prefix scans. */
+function stripSymbologyId(raw: string): string {
+  return raw.replace(/^\][A-Za-z][0-9]/, '');
+}
+
+/**
+ * Parse a GS1 AI payload from either FNC1-separated or parenthesized form.
+ * Returns null when the input is clearly not an AI-encoded payload.
+ */
+export function parseGs1AiPayload(raw: string): Gs1AiTree | null {
+  if (!raw) return null;
+  const cleaned = stripSymbologyId(raw.trim());
+  if (!cleaned) return null;
+
+  // Parenthesized form: (01)...(21)...
+  if (cleaned.includes('(') && /\((\d{2,4})\)/.test(cleaned)) {
+    const ais: Record<string, string> = {};
+    const re = /\((\d{2,4})\)([^(]*)/g;
+    let m: RegExpExecArray | null;
+    while ((m = re.exec(cleaned)) !== null) {
+      const ai = m[1];
+      const value = m[2].trim();
+      if (value) ais[ai] = value;
+    }
+    return Object.keys(ais).length > 0 ? { raw: cleaned, ais } : null;
+  }
+
+  // FNC1 / fixed-length form. Must start with a recognized 2-4 digit AI.
+  // Tolerate a leading FNC1.
+  const stripped = cleaned.replace(/^/, '');
+  if (!/^\d{2}/.test(stripped)) return null;
+
+  const ais: Record<string, string> = {};
+  let i = 0;
+  let parsedAny = false;
+  while (i < stripped.length) {
+    // Choose AI length: 4-digit AIs exist (240, 250, 310x, 400, 420…). Try 4, then 3, then 2.
+    let ai = '';
+    let aiLen = 0;
+    for (const tryLen of [4, 3, 2]) {
+      const candidate = stripped.slice(i, i + tryLen);
+      if (/^\d+$/.test(candidate) && (GS1_AI_FIXED_LEN[candidate] !== undefined || GS1_AI_VAR_MAX[candidate] !== undefined)) {
+        ai = candidate;
+        aiLen = tryLen;
+        break;
+      }
+    }
+    if (!ai) break;
+
+    i += aiLen;
+    const fixedLen = GS1_AI_FIXED_LEN[ai];
+    let value: string;
+    if (fixedLen !== undefined) {
+      value = stripped.slice(i, i + fixedLen);
+      i += fixedLen;
+    } else {
+      const maxLen = GS1_AI_VAR_MAX[ai] ?? 30;
+      const fs = stripped.indexOf(FNC1, i);
+      const end = fs === -1 ? Math.min(stripped.length, i + maxLen) : Math.min(fs, i + maxLen);
+      value = stripped.slice(i, end);
+      i = end;
+      if (stripped[i] === FNC1) i += 1;
+    }
+
+    if (value) {
+      ais[ai] = value;
+      parsedAny = true;
+    }
+  }
+
+  return parsedAny ? { raw: stripped, ais } : null;
+}
+
+/** Convenience: collapse a parsed AI tree to the highest-priority single value for routing. */
+export function pickAiRoutingValue(tree: Gs1AiTree): { kind: 'serial' | 'tracking' | 'lot' | 'gtin' | 'expiry'; value: string } | null {
+  // Priority: serial (21) > tracking (00/420) > lot (10) > GTIN (01) > expiry (17).
+  if (tree.ais['21']) return { kind: 'serial', value: tree.ais['21'] };
+  if (tree.ais['00']) return { kind: 'tracking', value: tree.ais['00'] };
+  if (tree.ais['420']) return { kind: 'tracking', value: tree.ais['420'] };
+  if (tree.ais['10']) return { kind: 'lot', value: tree.ais['10'] };
+  if (tree.ais['01']) return { kind: 'gtin', value: tree.ais['01'] };
+  if (tree.ais['17']) return { kind: 'expiry', value: tree.ais['17'] };
+  return null;
+}
+
 // ─── SERIAL MATCHER ───────────────────────────────────────────────────────────
 
 /**

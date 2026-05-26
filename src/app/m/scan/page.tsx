@@ -1,12 +1,14 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { Suspense, useCallback, useEffect, useRef, useState } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
+import { X } from '@/components/Icons';
 import { getStaffThemeById, stationThemeColors } from '@/utils/staff-colors';
 import { useBarcodeScanner } from '@/hooks/useBarcodeScanner';
 import { useFeedback } from '@/hooks/useFeedback';
 import { useAblyClient } from '@/contexts/AblyContext';
 import { useAuth } from '@/contexts/AuthContext';
+import { cn } from '@/utils/_cn';
 
 type ScanStatus = 'pending' | 'sent' | 'matched' | 'unmatched' | 'error';
 
@@ -22,28 +24,43 @@ type PhoneScan = {
 
 const DUP_WINDOW_MS = 2000;
 
+/** `?cam=off` hides preview and stops the camera; omit for preview on. */
+const CAM_OFF = 'off';
+
 function randomId(): string {
   if (typeof crypto !== 'undefined' && 'randomUUID' in crypto) return crypto.randomUUID();
   return `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 }
 
 export default function MobileScanPage() {
+  return (
+    <Suspense fallback={<div className="min-h-dvh w-full bg-white" aria-hidden />}>
+      <MobileScanPageInner />
+    </Suspense>
+  );
+}
+
+function MobileScanPageInner() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { user, isLoaded } = useAuth();
   const { getClient } = useAblyClient();
   const staffId = user?.staffId ?? 0;
-  const staffName = (user as { name?: string } | null)?.name ?? null;
+  const cameraPreviewOpen = searchParams.get('cam') !== CAM_OFF;
 
   const phoneChannelRef = useRef<any>(null);
   const stationChannelRef = useRef<any>(null);
 
-  const [connState, setConnState] = useState<string>('connecting');
   const [scans, setScans] = useState<PhoneScan[]>([]);
   const [input, setInput] = useState('');
   const [autoSend, setAutoSend] = useState(true);
 
   const scanner = useBarcodeScanner({ dedupMs: DUP_WINDOW_MS });
   const feedback = useFeedback();
+
+  const closeCameraPreview = useCallback(() => {
+    router.replace(`/m/scan?cam=${CAM_OFF}`);
+  }, [router]);
 
   // 1. Bounce to signin if no session.
   useEffect(() => {
@@ -68,10 +85,6 @@ export default function MobileScanPage() {
       const stationChannel = client.channels.get(`station:${staffId}`);
       stationChannelRef.current = stationChannel;
 
-      const onState = (change: { current: string }) => setConnState(change.current);
-      client.connection.on(onState);
-      setConnState(client.connection.state);
-
       const onResult = (msg: { data?: { tracking?: string; matched?: boolean; po_ids?: string[]; error?: string } }) => {
         const data = msg.data;
         const tracking = (data?.tracking || '').trim();
@@ -92,7 +105,6 @@ export default function MobileScanPage() {
       stationChannel.subscribe('phone_scan_result', onResult);
 
       return () => {
-        client.connection.off(onState);
         try { stationChannel.unsubscribe('phone_scan_result', onResult); } catch { /* noop */ }
         try { phoneChannel.detach(); } catch { /* noop */ }
         try { stationChannel.detach(); } catch { /* noop */ }
@@ -137,18 +149,23 @@ export default function MobileScanPage() {
     setInput('');
   }, [feedback]);
 
-  // 4. Start/stop camera with the signed-in session.
+  // 4. Start/stop camera with session + preview flag.
   useEffect(() => {
     if (staffId <= 0) return;
+    if (!cameraPreviewOpen) {
+      void scanner.stopScanning();
+      return;
+    }
     void scanner.startScanning();
     return () => {
       void scanner.stopScanning();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [staffId]);
+  }, [staffId, cameraPreviewOpen]);
 
-  // React to decodes from the scanner.
+  // React to decodes from the scanner (only meaningful while preview active).
   useEffect(() => {
+    if (!cameraPreviewOpen) return;
     const value = scanner.lastScannedValue;
     if (!value) return;
     if (autoSend) {
@@ -161,7 +178,7 @@ export default function MobileScanPage() {
       scanner.acceptScan();
       scanner.resetLastScan();
     }
-  }, [scanner.lastScannedValue, autoSend, sendScan, scanner, feedback]);
+  }, [cameraPreviewOpen, scanner.lastScannedValue, autoSend, sendScan, scanner, feedback]);
 
   if (!isLoaded || !user) return null;
 
@@ -170,53 +187,70 @@ export default function MobileScanPage() {
 
   return (
     <div className="min-h-dvh w-full bg-white text-gray-900 flex flex-col">
-      <div className="relative flex-1 min-h-[55vh] overflow-hidden bg-gray-900">
-        <video
-          ref={scanner.videoRef as React.RefObject<HTMLVideoElement>}
-          autoPlay
-          playsInline
-          muted
-          className="absolute inset-0 h-full w-full object-cover"
-        />
-        <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
-          <div className={`h-56 w-56 rounded-2xl border-2 shadow-[0_0_0_9999px_rgba(0,0,0,0.35)] ${themeColors.border.replace('border-', 'border-')}`} style={{ borderColor: 'currentColor' }} />
-        </div>
-        <div className="absolute top-3 left-3 right-3 flex items-center justify-between text-xs font-black uppercase tracking-widest">
-          <span className={`rounded-full px-2 py-1 text-white ${themeColors.bg}`}>
-            {staffName || `Staff #${staffId}`}
-          </span>
-          <div className="flex items-center gap-2">
-            {scanner.isScanning && (
+      <div
+        className={cn(
+          'relative shrink-0 overflow-hidden bg-gray-900 transition-[min-height] duration-200',
+          cameraPreviewOpen ? 'min-h-[55vh] flex-1' : 'min-h-[6.5rem]',
+        )}
+      >
+        {cameraPreviewOpen ? (
+          <>
+            <video
+              ref={scanner.videoRef as React.RefObject<HTMLVideoElement>}
+              autoPlay
+              playsInline
+              muted
+              className="absolute inset-0 h-full w-full object-cover"
+            />
+            <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
+              <div className={`h-56 w-56 rounded-2xl border-2 shadow-[0_0_0_9999px_rgba(0,0,0,0.35)] ${themeColors.border.replace('border-', 'border-')}`} style={{ borderColor: 'currentColor' }} />
+            </div>
+
+            <div className="absolute inset-x-0 top-3 flex justify-between gap-2 px-3">
               <button
                 type="button"
-                onClick={scanner.toggleTorch}
-                className={`rounded-full px-2 py-1 ${scanner.torchOn ? 'bg-yellow-400/80 text-black' : 'bg-white/10 text-white/80'}`}
-                aria-label="Toggle flashlight"
+                onClick={closeCameraPreview}
+                className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-black/45 text-white backdrop-blur-sm transition-colors hover:bg-black/55 active:bg-black/65"
+                aria-label="Close camera preview"
               >
-                ⚡
+                <X className="h-5 w-5" />
               </button>
+
+              <div className="ml-auto flex items-start gap-2">
+                {scanner.isScanning && (
+                  <button
+                    type="button"
+                    onClick={scanner.toggleTorch}
+                    className={`rounded-full px-2 py-1 text-xs font-black uppercase tracking-widest ${scanner.torchOn ? 'bg-yellow-400/80 text-black' : 'bg-white/10 text-white/80'}`}
+                    aria-label="Toggle flashlight"
+                  >
+                    ⚡
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {scanner.scanStatus === 'error' && (
+              <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/80 p-6 text-center gap-3">
+                <p className="text-sm text-red-300 max-w-[280px]">
+                  {scanner.error || 'Camera unavailable. Check browser permissions and reload.'}
+                </p>
+                <button
+                  type="button"
+                  onClick={() => void scanner.startScanning()}
+                  className="rounded-lg bg-white/10 px-4 py-2 text-caption font-black uppercase tracking-widest text-white hover:bg-white/20"
+                >
+                  Try Again
+                </button>
+              </div>
             )}
-            <span
-              className={`rounded-full px-2 py-1 ${
-                connState === 'connected' ? 'bg-emerald-500/80' : 'bg-amber-500/80'
-              }`}
-            >
-              {connState}
-            </span>
-          </div>
-        </div>
-        {scanner.scanStatus === 'error' && (
-          <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/80 p-6 text-center gap-3">
-            <p className="text-sm text-red-300 max-w-[280px]">
-              {scanner.error || 'Camera unavailable. Check browser permissions and reload.'}
+          </>
+        ) : (
+          <div className="flex h-full min-h-[6.5rem] flex-col items-center justify-center gap-1 px-5 py-6 text-center">
+            <p className="text-sm font-bold text-white/85">Camera preview off</p>
+            <p className="max-w-[20rem] text-[11px] font-semibold uppercase tracking-wider text-white/45">
+              Tap the Scan tab to turn it back on
             </p>
-            <button
-              type="button"
-              onClick={() => void scanner.startScanning()}
-              className="rounded-lg bg-white/10 px-4 py-2 text-caption font-black uppercase tracking-widest text-white hover:bg-white/20"
-            >
-              Try Again
-            </button>
           </div>
         )}
       </div>

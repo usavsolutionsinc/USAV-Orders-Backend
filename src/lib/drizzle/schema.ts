@@ -56,6 +56,10 @@ export const staff = pgTable('staff', {
   sortOrder: integer('sort_order').notNull().default(0),
   colorHex: varchar('color_hex', { length: 7 }).notNull().default('#10b981'),
   defaultHomePath: text('default_home_path'),
+  // Per-staff mobile UI override. JSON shape lives in
+  // src/lib/auth/mobile-display-config.ts (MobileDisplayConfig). Layers on
+  // top of roles.mobile_defaults; null means "fully inherit from role".
+  mobileDisplayConfig: jsonb('mobile_display_config'),
   // Tenant attachment (2026-05-22_organizations_tenancy.sql). NOT NULL after
   // backfill; USAV staff carry the well-known USAV org id.
   organizationId: uuid('organization_id').notNull(),
@@ -71,6 +75,9 @@ export const roles = pgTable('roles', {
   position: integer('position').notNull().default(100),
   permissions: text('permissions').array().notNull().default([]),
   isSystem: boolean('is_system').notNull().default(false),
+  // Per-role mobile UI defaults (MobileDisplayConfig). Inherited by every
+  // staff in the role unless they have their own per-row override.
+  mobileDefaults: jsonb('mobile_defaults'),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 }, (table) => ({

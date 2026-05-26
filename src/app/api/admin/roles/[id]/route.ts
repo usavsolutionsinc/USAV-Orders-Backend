@@ -41,6 +41,7 @@ export const GET = withAuth(async (req: NextRequest) => {
   if (!id) return NextResponse.json({ error: 'INVALID_ID' }, { status: 400 });
   const roleQ = pool.query(
     `SELECT r.id, r.key, r.label, r.color, r.position, r.permissions, r.is_system,
+            r.mobile_defaults,
             r.created_at, r.updated_at,
             COALESCE(c.cnt, 0)::INT AS member_count
        FROM roles r

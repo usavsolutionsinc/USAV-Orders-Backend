@@ -61,8 +61,8 @@ export function ProductsSidebarPanel() {
 
   const viewItems = useMemo<HorizontalSliderItem[]>(
     () => [
-      { id: 'manuals', label: 'Manuals',       icon: FileText },
       { id: 'labels',  label: 'Label Printer', icon: Printer },
+      { id: 'manuals', label: 'Manuals',       icon: FileText },
       { id: 'pairing', label: 'Pairing',       icon: Link2 },
       { id: 'qc',      label: 'QC Checklist',  icon: Check },
     ],

@@ -1,9 +1,17 @@
 'use client';
 
-import { useEffect, useState } from 'react';
-import { useSearchParams } from 'next/navigation';
-import { FileText, Loader2, ExternalLink } from '@/components/Icons';
+import { useCallback, useEffect, useState } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
+import { FileText, Loader2, ExternalLink, Pencil, Trash2, Plus } from '@/components/Icons';
 import { microBadge, tableHeader } from '@/design-system/tokens/typography/presets';
+import { toast } from '@/lib/toast';
+import {
+  EditManualModal,
+  UploadManualModal,
+  dispatchManualsUpdated,
+  type EditManualTarget,
+  type ReplaceTarget,
+} from './ManualCrudModals';
 
 interface ManualDetail {
   id: number;
@@ -18,12 +26,26 @@ interface ManualDetail {
   file_name: string | null;
   status: string;
   type: string | null;
+  updated_at: string | null;
 }
 
 function manualHref(m: Pick<ManualDetail, 'source_url' | 'google_file_id'>): string | null {
   if (m.source_url) return m.source_url;
   if (m.google_file_id) return `https://docs.google.com/document/d/${m.google_file_id}`;
   return null;
+}
+
+/**
+ * Add a cache-bust query param + reattach the PDF viewer hash so an edit-only
+ * change (where source_url stays the same but the row's `updated_at` advances)
+ * still defeats the browser's iframe cache. Splits on `#` because hash params
+ * don't reach the network, so we have to inject the buster before it.
+ */
+function appendCacheBust(href: string, version: string | number): string {
+  const [base, hash] = href.split('#');
+  const sep = base.includes('?') ? '&' : '?';
+  const next = `${base}${sep}v=${encodeURIComponent(String(version))}`;
+  return hash ? `${next}#${hash}` : `${next}#toolbar=1&navpanes=0`;
 }
 
 function statusBadgeClass(status: string): string {
@@ -37,12 +59,10 @@ function statusBadgeClass(status: string): string {
 
 function typeBadgeClass(type: string | null): string {
   switch ((type || '').toLowerCase()) {
-    case 'manual':          return 'bg-blue-50 text-blue-700 border-blue-200';
-    case 'troubleshooting': return 'bg-red-50 text-red-700 border-red-200';
-    case 'installation':    return 'bg-emerald-50 text-emerald-700 border-emerald-200';
-    case 'quick-start':     return 'bg-amber-50 text-amber-700 border-amber-200';
-    case 'safety':          return 'bg-orange-50 text-orange-700 border-orange-200';
-    default:                return 'bg-gray-50 text-gray-600 border-gray-200';
+    case 'manual':       return 'bg-blue-50 text-blue-700 border-blue-200';
+    case 'packing-list': return 'bg-emerald-50 text-emerald-700 border-emerald-200';
+    case 'pl-plus-m':    return 'bg-violet-50 text-violet-700 border-violet-200';
+    default:             return 'bg-gray-50 text-gray-600 border-gray-200';
   }
 }
 
@@ -52,6 +72,7 @@ export function ManualLibrary() {
   const id = idParam ? Number(idParam) : null;
   const [manual, setManual] = useState<ManualDetail | null>(null);
   const [loading, setLoading] = useState(false);
+  const [reloadToken, setReloadToken] = useState(0);
 
   useEffect(() => {
     if (!id) {
@@ -78,7 +99,15 @@ export function ManualLibrary() {
     return () => {
       cancelled = true;
     };
-  }, [id]);
+  }, [id, reloadToken]);
+
+  // Re-fetch when ANY modal fires a manuals-update event — covers edits to
+  // this manual + replaces (new source_url to swap into the iframe).
+  useEffect(() => {
+    const onUpdated = () => setReloadToken((n) => n + 1);
+    window.addEventListener('manuals-updated', onUpdated);
+    return () => window.removeEventListener('manuals-updated', onUpdated);
+  }, []);
 
   if (!id) return <EmptyViewer />;
   if (loading && !manual) {
@@ -102,6 +131,80 @@ export function ManualLibrary() {
 function ManualViewer({ manual }: { manual: ManualDetail }) {
   const href = manualHref(manual);
   const isBlobPdf = !!manual.source_url;
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const [editOpen, setEditOpen] = useState(false);
+  const [replaceOpen, setReplaceOpen] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+
+  const editTarget: EditManualTarget = {
+    id: manual.id,
+    displayName: manual.display_name,
+    folderPath: manual.folder_path,
+    type: manual.type,
+    status: manual.status,
+    sku: manual.sku,
+    itemNumber: manual.item_number,
+  };
+  const replaceTarget: ReplaceTarget = {
+    id: manual.id,
+    displayName: manual.display_name,
+    folderPath: manual.folder_path,
+  };
+
+  const handleDelete = useCallback(async () => {
+    // No confirm dialog — the toast's Undo button is the safety net.
+    // Internal-tool ergonomic: destructive actions feel cheap, but a
+    // 10-second window to take it back means accidents don't bite.
+    setDeleting(true);
+    setDeleteError(null);
+    try {
+      const res = await fetch(`/api/product-manuals?id=${manual.id}`, { method: 'DELETE' });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data?.error || `HTTP ${res.status}`);
+      }
+      dispatchManualsUpdated();
+      // Clear the ?id= so the viewer falls back to its empty state.
+      const params = new URLSearchParams(searchParams.toString());
+      params.delete('id');
+      const qs = params.toString();
+      router.replace(qs ? `?${qs}` : window.location.pathname);
+
+      const label = manual.display_name || `Manual #${manual.id}`;
+      toast.success(`Deleted “${label}”`, {
+        duration: 10_000,
+        action: {
+          label: 'Undo',
+          onClick: async () => {
+            try {
+              const restoreRes = await fetch('/api/product-manuals', {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ id: manual.id, isActive: true }),
+              });
+              if (!restoreRes.ok) throw new Error(`HTTP ${restoreRes.status}`);
+              dispatchManualsUpdated();
+              toast.success(`Restored “${label}”`);
+              // Re-open the manual in the viewer.
+              const next = new URLSearchParams(searchParams.toString());
+              next.set('id', String(manual.id));
+              router.replace(`?${next.toString()}`);
+            } catch (err) {
+              toast.error(err instanceof Error ? err.message : 'Restore failed');
+            }
+          },
+        },
+      });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Delete failed';
+      setDeleteError(message);
+      toast.error(message);
+    } finally {
+      setDeleting(false);
+    }
+  }, [manual.id, manual.display_name, router, searchParams]);
 
   return (
     <div className="flex h-full w-full flex-col bg-gray-50">
@@ -115,8 +218,11 @@ function ManualViewer({ manual }: { manual: ManualDetail }) {
               {manual.product_title}
             </p>
           )}
-          {manual.relative_path && (
-            <p className="mt-1 truncate font-mono text-micro text-gray-400">{manual.relative_path}</p>
+          {manual.folder_path && (
+            <p className="mt-1 truncate font-mono text-micro text-gray-400">{manual.folder_path}</p>
+          )}
+          {deleteError && (
+            <p className="mt-1 text-micro font-semibold text-red-600">{deleteError}</p>
           )}
         </div>
         <div className="flex shrink-0 items-center gap-2">
@@ -128,6 +234,34 @@ function ManualViewer({ manual }: { manual: ManualDetail }) {
               {manual.type}
             </span>
           )}
+          <button
+            type="button"
+            onClick={() => setEditOpen(true)}
+            className="inline-flex items-center gap-1.5 rounded-lg border border-zinc-200 bg-white px-3 py-1.5 text-micro font-black uppercase tracking-wider text-zinc-700 transition-colors hover:border-zinc-300 hover:bg-zinc-50"
+            title="Edit manual metadata"
+          >
+            <Pencil className="h-3 w-3" />
+            Edit
+          </button>
+          <button
+            type="button"
+            onClick={() => setReplaceOpen(true)}
+            className="inline-flex items-center gap-1.5 rounded-lg border border-zinc-200 bg-white px-3 py-1.5 text-micro font-black uppercase tracking-wider text-zinc-700 transition-colors hover:border-zinc-300 hover:bg-zinc-50"
+            title="Replace the underlying file"
+          >
+            <Plus className="h-3 w-3" />
+            Replace
+          </button>
+          <button
+            type="button"
+            onClick={handleDelete}
+            disabled={deleting}
+            className="inline-flex items-center gap-1.5 rounded-lg border border-red-200 bg-white px-3 py-1.5 text-micro font-black uppercase tracking-wider text-red-700 transition-colors hover:border-red-300 hover:bg-red-50 disabled:opacity-50"
+            title="Soft-delete this manual"
+          >
+            {deleting ? <Loader2 className="h-3 w-3 animate-spin" /> : <Trash2 className="h-3 w-3" />}
+            Delete
+          </button>
           {href && (
             <a
               href={href}
@@ -142,11 +276,23 @@ function ManualViewer({ manual }: { manual: ManualDetail }) {
         </div>
       </div>
 
+      <EditManualModal open={editOpen} onClose={() => setEditOpen(false)} target={editTarget} />
+      <UploadManualModal
+        open={replaceOpen}
+        onClose={() => setReplaceOpen(false)}
+        replaceTarget={replaceTarget}
+      />
+
       <div className="min-h-0 flex-1 overflow-hidden bg-gray-100">
         {isBlobPdf && href ? (
+          // Key on id + source_url so a Replace (new URL) forces a fresh mount.
+          // The cache-bust param on the URL itself handles the Edit-only case
+          // where the server renamed the blob to match a new display name —
+          // browsers cache iframes aggressively, so just changing the src
+          // attribute isn't always enough.
           <iframe
-            key={manual.id}
-            src={`${href}#toolbar=1&navpanes=0`}
+            key={`${manual.id}::${manual.source_url || ''}`}
+            src={appendCacheBust(href, manual.updated_at || String(manual.id))}
             title={manual.display_name || `Manual ${manual.id}`}
             className="h-full w-full border-0 bg-white"
           />

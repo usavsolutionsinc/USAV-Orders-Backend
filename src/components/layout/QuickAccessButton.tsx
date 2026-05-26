@@ -17,13 +17,20 @@ interface QuickAccessButtonProps {
   className?: string;
   buttonClassName?: string;
   placement?: 'down' | 'up';
+  /** 36×36 circular control for 44px app bars (e.g. mobile hub header). */
+  compact?: boolean;
 }
 
 /**
  * Reusable Quick Access button. Can be mounted in a header or as a FAB.
  * Handles its own popover state and hotkeys.
  */
-export function QuickAccessButton({ className, buttonClassName, placement = 'down' }: QuickAccessButtonProps) {
+export function QuickAccessButton({
+  className,
+  buttonClassName,
+  placement = 'down',
+  compact = false,
+}: QuickAccessButtonProps) {
   const pathname = usePathname();
   const { settings, recordVisit } = useQuickAccess();
   const { user: authUser } = useAuth();
@@ -142,7 +149,10 @@ export function QuickAccessButton({ className, buttonClassName, placement = 'dow
         aria-expanded={menuOpen}
         title={menuOpen ? 'Close' : staffChipActive && staffName ? `${staffName} — Quick access (⌘K)` : 'Quick access (⌘K)'}
         className={cn(
-          "relative flex h-10 w-10 items-center justify-center rounded-xl transition-all active:scale-95 text-white shadow-sm",
+          'relative flex items-center justify-center transition-all active:scale-95 text-white shadow-sm',
+          compact
+            ? 'h-9 w-9 min-h-0 min-w-0 shrink-0 rounded-full ring-1 ring-gray-200/90'
+            : 'h-10 w-10 rounded-xl',
           menuOpen
             ? 'bg-gray-700 hover:bg-gray-600'
             : staffChipActive && staffColorHex
@@ -156,7 +166,11 @@ export function QuickAccessButton({ className, buttonClassName, placement = 'dow
             : undefined
         }
       >
-        {menuOpen ? <X className="h-5 w-5" /> : <Search className="h-5 w-5" />}
+        {menuOpen ? (
+          <X className={compact ? 'h-4 w-4' : 'h-5 w-5'} />
+        ) : (
+          <Search className={compact ? 'h-4 w-4' : 'h-5 w-5'} />
+        )}
       </button>
     </div>
   );

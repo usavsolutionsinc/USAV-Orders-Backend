@@ -79,6 +79,7 @@ export async function GET() {
         staffId: user.staffId,
         role: user.role,
         permissions: Array.from(user.permissions),
+        mobileDisplayConfig: user.mobileDisplayConfig,
         session: {
           sid: session.sid,
           deviceKind: session.deviceKind,

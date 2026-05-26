@@ -31,6 +31,7 @@ export const GET = withAuth(async (req: NextRequest) => {
   const staffQ = pool.query(
     `SELECT id, name, role, status, active, employee_id, employee_code,
             permissions_added, permissions_removed,
+            mobile_display_config,
             (pin_hash IS NOT NULL) AS has_pin,
             pin_set_at, pin_locked_until,
             last_login_at, created_at
@@ -64,6 +65,7 @@ export const GET = withAuth(async (req: NextRequest) => {
   );
   const rolesQ = pool.query(
     `SELECT r.id, r.key, r.label, r.color, r.position, r.permissions, r.is_system,
+            r.mobile_defaults,
             sr.granted_at, sr.granted_by
        FROM staff_roles sr
        JOIN roles r ON r.id = sr.role_id
@@ -72,7 +74,7 @@ export const GET = withAuth(async (req: NextRequest) => {
     [id],
   );
   const allRolesQ = pool.query(
-    `SELECT id, key, label, color, position, permissions, is_system
+    `SELECT id, key, label, color, position, permissions, is_system, mobile_defaults
        FROM roles
       ORDER BY position ASC, id ASC`,
   );

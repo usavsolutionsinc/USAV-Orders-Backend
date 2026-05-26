@@ -8,6 +8,7 @@ export interface ProductManual {
   display_name: string | null;
   google_file_id: string | null;
   source_url: string | null;
+  thumbnail_url: string | null;
   relative_path: string | null;
   folder_path: string | null;
   file_name: string | null;
@@ -27,6 +28,7 @@ export interface UpsertProductManualParams {
   displayName?: string | null;
   googleDocIdOrUrl?: string | null;
   sourceUrl?: string | null;
+  thumbnailUrl?: string | null;
   relativePath?: string | null;
   folderPath?: string | null;
   fileName?: string | null;
@@ -43,6 +45,7 @@ export interface UpdateProductManualParams {
   displayName?: string | null;
   googleDocIdOrUrl?: string | null;
   sourceUrl?: string | null;
+  thumbnailUrl?: string | null;
   relativePath?: string | null;
   folderPath?: string | null;
   fileName?: string | null;
@@ -86,7 +89,7 @@ export async function getAllProductManuals(options?: {
     : null;
   const relativePath = String(options?.relativePath || '').trim() || null;
   const result = await pool.query(
-    `SELECT id, sku, item_number, product_title, display_name, google_file_id, source_url, relative_path, folder_path, file_name, status, assigned_at, assigned_by, type, is_active, updated_at, created_at
+    `SELECT id, sku, item_number, product_title, display_name, google_file_id, source_url, thumbnail_url, relative_path, folder_path, file_name, status, assigned_at, assigned_by, type, is_active, updated_at, created_at
      FROM product_manuals
      WHERE is_active = TRUE
        AND ($3::text IS NULL OR status = $3)
@@ -136,7 +139,7 @@ export async function searchProductManuals(
 ): Promise<ProductManual[]> {
   const normalizedStatus = status ? normalizeManualStatus(status) : null;
   const result = await pool.query(
-    `SELECT id, sku, item_number, product_title, display_name, google_file_id, source_url, relative_path, folder_path, file_name, status, assigned_at, assigned_by, type, is_active, updated_at
+    `SELECT id, sku, item_number, product_title, display_name, google_file_id, source_url, thumbnail_url, relative_path, folder_path, file_name, status, assigned_at, assigned_by, type, is_active, updated_at
      FROM product_manuals
      WHERE is_active = TRUE
        AND ($4::text IS NULL OR status = $4)
@@ -162,7 +165,7 @@ export async function searchProductManuals(
  */
 export async function getProductManualsByCategory(category: string, limit = 100): Promise<ProductManual[]> {
   const result = await pool.query(
-    `SELECT id, sku, item_number, product_title, display_name, google_file_id, source_url, relative_path, folder_path, file_name, status, assigned_at, assigned_by, type, updated_at
+    `SELECT id, sku, item_number, product_title, display_name, google_file_id, source_url, thumbnail_url, relative_path, folder_path, file_name, status, assigned_at, assigned_by, type, updated_at
      FROM product_manuals
      WHERE is_active = TRUE AND type ILIKE $1
      ORDER BY product_title ASC
@@ -177,7 +180,7 @@ export async function getProductManualsByCategory(category: string, limit = 100)
  */
 export async function getRecentProductManuals(limit = 10): Promise<ProductManual[]> {
   const result = await pool.query(
-    `SELECT id, sku, item_number, product_title, display_name, google_file_id, source_url, relative_path, folder_path, file_name, status, assigned_at, assigned_by, type, updated_at
+    `SELECT id, sku, item_number, product_title, display_name, google_file_id, source_url, thumbnail_url, relative_path, folder_path, file_name, status, assigned_at, assigned_by, type, updated_at
      FROM product_manuals
      WHERE is_active = TRUE
      ORDER BY updated_at DESC NULLS LAST, id DESC
@@ -192,7 +195,7 @@ export async function getRecentProductManuals(limit = 10): Promise<ProductManual
  */
 export async function resolveManualByOrderId(orderId: string): Promise<ProductManual | null> {
   const result = await pool.query(
-     `SELECT pm.id, pm.sku, pm.item_number, pm.product_title, pm.display_name, pm.google_file_id, pm.source_url, pm.relative_path, pm.folder_path, pm.file_name, pm.status, pm.assigned_at, pm.assigned_by, pm.type, pm.updated_at
+     `SELECT pm.id, pm.sku, pm.item_number, pm.product_title, pm.display_name, pm.google_file_id, pm.source_url, pm.thumbnail_url, pm.relative_path, pm.folder_path, pm.file_name, pm.status, pm.assigned_at, pm.assigned_by, pm.type, pm.updated_at
      FROM product_manuals pm
      JOIN orders o ON (
        (o.item_number IS NOT NULL AND o.item_number != ''
@@ -221,12 +224,14 @@ export async function upsertProductManual(params: UpsertProductManualParams): Pr
   const hasFileName = Object.prototype.hasOwnProperty.call(params, 'fileName');
   const hasAssignedBy = Object.prototype.hasOwnProperty.call(params, 'assignedBy');
   const hasType = Object.prototype.hasOwnProperty.call(params, 'type');
+  const hasThumbnailUrl = Object.prototype.hasOwnProperty.call(params, 'thumbnailUrl');
   const normalizedItemNumber = params.itemNumber
     ? params.itemNumber.trim().toUpperCase().replace(/[^A-Z0-9]/g, '').replace(/^0+/, '')
     : null;
   const relativePath = String(params.relativePath || '').trim() || null;
   const fileName = String(params.fileName || '').trim() || (relativePath ? relativePath.split('/').pop() || null : null);
   const sourceUrl = String(params.sourceUrl || '').trim() || null;
+  const thumbnailUrl = String(params.thumbnailUrl || '').trim() || null;
   const status = normalizeManualStatus(params.status);
   const folderPath = String(params.folderPath || '').trim()
     || (status === 'assigned' && normalizedItemNumber ? `assigned/${normalizedItemNumber}` : null);
@@ -286,6 +291,7 @@ export async function upsertProductManual(params: UpsertProductManualParams): Pr
              assigned_at = CASE WHEN $11 = 'assigned' THEN COALESCE(assigned_at, $12::timestamptz) ELSE NULL END,
              assigned_by = CASE WHEN $21 THEN $13 ELSE assigned_by END,
              type = CASE WHEN $22 THEN $14 ELSE type END,
+             thumbnail_url = CASE WHEN $24 THEN $23 ELSE thumbnail_url END,
              is_active = TRUE,
              updated_at = NOW()
          WHERE id = $1
@@ -313,6 +319,8 @@ export async function upsertProductManual(params: UpsertProductManualParams): Pr
           hasFileName,
           hasAssignedBy,
           hasType,
+          thumbnailUrl,     // $23
+          hasThumbnailUrl,  // $24 — explicit-set flag
         ],
       );
 
@@ -323,8 +331,8 @@ export async function upsertProductManual(params: UpsertProductManualParams): Pr
     // Insert new active record
     const insertResult = await client.query(
       `INSERT INTO product_manuals
-         (sku, item_number, product_title, display_name, google_file_id, source_url, relative_path, folder_path, file_name, status, assigned_at, assigned_by, type, is_active, updated_at)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11::timestamptz, $12, $13, TRUE, NOW())
+         (sku, item_number, product_title, display_name, google_file_id, source_url, thumbnail_url, relative_path, folder_path, file_name, status, assigned_at, assigned_by, type, is_active, updated_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12::timestamptz, $13, $14, TRUE, NOW())
        RETURNING *`,
       [
         null,
@@ -333,6 +341,7 @@ export async function upsertProductManual(params: UpsertProductManualParams): Pr
         displayName,
         googleDocId,
         sourceUrl,
+        thumbnailUrl,         // $7 — new
         relativePath,
         folderPath,
         fileName,
@@ -384,25 +393,30 @@ export async function updateProductManual(params: UpdateProductManualParams): Pr
     ? undefined
     : (String(params.folderPath || '').trim() || null);
 
+  // $15-$21 are boolean flags that distinguish "caller didn't send the field"
+  // (keep existing value) from "caller sent the field as null" (clear it).
+  // Renumbered from a prior $16-$22 layout that left $15 unbound — PostgreSQL
+  // rejected the statement with "could not determine data type of parameter $15"
+  // because nothing in the SQL constrained the gap parameter.
   const result = await pool.query(
     `UPDATE product_manuals
      SET sku = COALESCE($2, sku),
          item_number = COALESCE($3, item_number),
          product_title = COALESCE($4, product_title),
          display_name = COALESCE($5, display_name),
-         google_file_id = CASE WHEN $6::text IS NULL AND $16 THEN NULL ELSE COALESCE($6, google_file_id) END,
-         source_url = CASE WHEN $7::text IS NULL AND $17 THEN NULL ELSE COALESCE($7, source_url) END,
-         relative_path = CASE WHEN $8::text IS NULL AND $18 THEN NULL ELSE COALESCE($8, relative_path) END,
-         folder_path = CASE WHEN $9::text IS NULL AND $19 THEN NULL ELSE COALESCE($9, folder_path) END,
-         file_name = CASE WHEN $10::text IS NULL AND $20 THEN NULL ELSE COALESCE($10, file_name) END,
+         google_file_id = CASE WHEN $6::text IS NULL AND $15 THEN NULL ELSE COALESCE($6, google_file_id) END,
+         source_url = CASE WHEN $7::text IS NULL AND $16 THEN NULL ELSE COALESCE($7, source_url) END,
+         relative_path = CASE WHEN $8::text IS NULL AND $17 THEN NULL ELSE COALESCE($8, relative_path) END,
+         folder_path = CASE WHEN $9::text IS NULL AND $18 THEN NULL ELSE COALESCE($9, folder_path) END,
+         file_name = CASE WHEN $10::text IS NULL AND $19 THEN NULL ELSE COALESCE($10, file_name) END,
          status = COALESCE($11, status),
          assigned_at = CASE
            WHEN COALESCE($11, status) = 'assigned' THEN COALESCE(assigned_at, NOW())
            WHEN COALESCE($11, status) != 'assigned' THEN NULL
            ELSE assigned_at
          END,
-         assigned_by = CASE WHEN $12::text IS NULL AND $21 THEN NULL ELSE COALESCE($12, assigned_by) END,
-         type = CASE WHEN $13::text IS NULL AND $22 THEN NULL ELSE COALESCE($13, type) END,
+         assigned_by = CASE WHEN $12::text IS NULL AND $20 THEN NULL ELSE COALESCE($12, assigned_by) END,
+         type = CASE WHEN $13::text IS NULL AND $21 THEN NULL ELSE COALESCE($13, type) END,
          is_active = COALESCE($14, is_active),
          updated_at = NOW()
      WHERE id = $1
@@ -422,7 +436,6 @@ export async function updateProductManual(params: UpdateProductManualParams): Pr
       params.assignedBy ?? null,
       params.type ?? null,
       params.isActive ?? null,
-      0,
       params.googleDocIdOrUrl !== undefined && !googleDocId,
       params.sourceUrl !== undefined && !params.sourceUrl,
       params.relativePath !== undefined && !relativePath,

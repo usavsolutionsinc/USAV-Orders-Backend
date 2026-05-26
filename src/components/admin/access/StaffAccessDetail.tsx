@@ -48,6 +48,13 @@ function classifyPermissionSource(
 }
 import { APP_SIDEBAR_NAV } from '@/lib/sidebar-navigation';
 import { getStaffThemeById, stationThemeColors } from '@/utils/staff-colors';
+import {
+  MOBILE_NAV_TAB_IDS,
+  resolveMobileDisplayConfig,
+  sanitizeMobileDisplayConfig,
+  type MobileDisplayConfig,
+  type MobileNavTabId,
+} from '@/lib/auth/mobile-display-config';
 import { PageAccessSwitch } from './PageAccessSwitch';
 import { SetPinDialog } from './SetPinDialog';
 import { AddRolePopover } from './AddRolePopover';
@@ -63,6 +70,7 @@ interface DetailEnvelope {
     employee_code: string | null;
     permissions_added: string[];
     permissions_removed: string[];
+    mobile_display_config: unknown;
     has_pin: boolean;
     pin_set_at: string | null;
     pin_locked_until: string | null;
@@ -105,6 +113,7 @@ interface RoleSlim {
   position: number;
   permissions: string[];
   is_system: boolean;
+  mobile_defaults?: unknown;
 }
 
 const STATUS_OPTIONS = ['active', 'invited', 'suspended', 'disabled'] as const;
@@ -264,6 +273,25 @@ export function StaffAccessDetail({ staffId }: StaffAccessDetailProps) {
     setBusy('ses:all');
     try {
       await fetch(`/api/admin/staff/${staffId}/sessions`, { method: 'DELETE', credentials: 'include' });
+      await refresh();
+    } finally {
+      setBusy(null);
+    }
+  }, [staffId, refresh]);
+
+  const patchMobileConfig = useCallback(async (config: unknown) => {
+    setBusy('mobile');
+    try {
+      const r = await fetch(`/api/admin/staff/${staffId}/mobile-display-config`, {
+        method: 'PATCH', credentials: 'include',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ config }),
+      });
+      if (!r.ok) {
+        const data = await r.json().catch(() => ({}));
+        setErr(String((data as { error?: string }).error || 'Mobile save failed.'));
+        return;
+      }
       await refresh();
     } finally {
       setBusy(null);
@@ -611,6 +639,16 @@ export function StaffAccessDetail({ staffId }: StaffAccessDetailProps) {
         </div>
       </section>
 
+      {/* Card C.5 — Mobile display */}
+      <MobileDisplayCard
+        sc={sc}
+        rolesForResolve={envelope.roles}
+        staffOverride={staff.mobile_display_config}
+        busy={busy === 'mobile'}
+        onSave={(config) => void patchMobileConfig(config)}
+        onReset={() => void patchMobileConfig(null)}
+      />
+
       {/* Card D — Audit */}
       <section className={`overflow-hidden rounded-2xl border ${sc.border} bg-white shadow-sm`}>
         <header className="flex items-center justify-between border-b border-gray-100 px-5 py-3">
@@ -718,5 +756,178 @@ function InlineNameAndCode({ name, code, onSave }: {
         Cancel
       </button>
     </div>
+  );
+}
+
+// ─── Mobile display card ────────────────────────────────────────────────
+//
+// Lets an admin override the mobile UI for one staff. Two controls today:
+// (1) bottom-nav enabled toggle, (2) which tabs render (Home, Picks, Sign
+// out — Scan stays centred and is always available when present in the
+// tab list). The card always shows the *effective* state (role default +
+// override) so the admin sees what the staff will actually experience.
+//
+// "Reset to role default" clears the override entirely; the resolver then
+// falls back to roles.mobile_defaults, which is itself editable from
+// /admin?section=roles.
+
+interface MobileCardProps {
+  sc: { border: string };
+  rolesForResolve: ReadonlyArray<RoleSlim>;
+  staffOverride: unknown;
+  busy: boolean;
+  onSave: (config: unknown) => void;
+  onReset: () => void;
+}
+
+const TAB_LABELS: Record<MobileNavTabId, string> = {
+  home: 'Home',
+  scan: 'Scan (centre)',
+  picks: 'Picks',
+  signout: 'Sign out',
+};
+
+function MobileDisplayCard({ sc, rolesForResolve, staffOverride, busy, onSave, onReset }: MobileCardProps) {
+  // The override starts out as whatever the DB has. The form mutates a
+  // local draft; "Save" PATCHes the override blob.
+  const initialOverride = useMemo(
+    () => sanitizeMobileDisplayConfig(staffOverride),
+    [staffOverride],
+  );
+
+  // Resolved (inherited + override) — what the staff actually sees today.
+  const resolved: MobileDisplayConfig = useMemo(
+    () => resolveMobileDisplayConfig({
+      roles: rolesForResolve.map((r) => ({ key: r.key, mobile_defaults: r.mobile_defaults })),
+      staffOverride,
+    }),
+    [rolesForResolve, staffOverride],
+  );
+
+  const hasOverride = initialOverride !== null;
+  const [draftEnabled, setDraftEnabled] = useState<boolean>(resolved.bottomNav.enabled);
+  const [draftTabs, setDraftTabs] = useState<MobileNavTabId[]>([...resolved.bottomNav.tabs]);
+
+  // Resync the draft when the underlying staff/role data changes (e.g. after a save).
+  useEffect(() => {
+    setDraftEnabled(resolved.bottomNav.enabled);
+    setDraftTabs([...resolved.bottomNav.tabs]);
+  }, [resolved]);
+
+  const toggleTab = (id: MobileNavTabId) => {
+    setDraftTabs((prev) => prev.includes(id) ? prev.filter((t) => t !== id) : [...prev, id]);
+  };
+
+  const dirty =
+    draftEnabled !== resolved.bottomNav.enabled ||
+    draftTabs.length !== resolved.bottomNav.tabs.length ||
+    draftTabs.some((t, i) => t !== resolved.bottomNav.tabs[i]);
+
+  const save = () => {
+    onSave({
+      bottomNav: {
+        enabled: draftEnabled,
+        tabs: draftTabs.length > 0 ? draftTabs : ['scan'],
+      },
+    });
+  };
+
+  // Primary role label for the "inherited" hint.
+  const primaryRoleLabel = rolesForResolve[0]?.label ?? '—';
+
+  return (
+    <section className={`overflow-hidden rounded-2xl border ${sc.border} bg-white shadow-sm`}>
+      <header className="flex items-center justify-between border-b border-gray-100 px-5 py-3">
+        <div>
+          <h2 className="text-sm font-semibold text-gray-900">Mobile display</h2>
+          <p className="mt-0.5 text-caption text-gray-500">
+            Controls what this staff sees on their phone. Defaults inherit from <b>{primaryRoleLabel}</b>.
+            Edit role defaults in <a href="/admin?section=roles" className="text-blue-600 hover:underline">Roles</a>.
+          </p>
+        </div>
+        {hasOverride && (
+          <button
+            type="button"
+            onClick={onReset}
+            disabled={busy}
+            className="rounded-md border border-gray-200 bg-white px-2.5 py-1 text-caption font-semibold uppercase tracking-wider text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+            title="Clear per-staff override; fall back to role default"
+          >
+            Reset to role
+          </button>
+        )}
+      </header>
+
+      <div className="space-y-4 px-5 py-4">
+        {/* Bottom nav enabled */}
+        <label className="flex items-center justify-between gap-4">
+          <div>
+            <div className="text-sm font-semibold text-gray-900">Bottom navigation bar</div>
+            <p className="mt-0.5 text-caption text-gray-500">
+              When off, the phone is locked to a single page — no tabs to wander into other sections.
+            </p>
+          </div>
+          <button
+            type="button"
+            role="switch"
+            aria-checked={draftEnabled}
+            onClick={() => setDraftEnabled((v) => !v)}
+            disabled={busy}
+            className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 focus:outline-none ${
+              draftEnabled ? 'bg-blue-600' : 'bg-gray-200'
+            }`}
+          >
+            <span
+              className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ${
+                draftEnabled ? 'translate-x-5' : 'translate-x-0'
+              }`}
+            />
+          </button>
+        </label>
+
+        {/* Tabs */}
+        <div>
+          <div className="text-sm font-semibold text-gray-900">Tabs</div>
+          <p className="mb-2 mt-0.5 text-caption text-gray-500">
+            Tap to toggle. Scan stays centre and raised when included.
+          </p>
+          <div className="flex flex-wrap gap-1.5">
+            {MOBILE_NAV_TAB_IDS.map((id) => {
+              const on = draftTabs.includes(id);
+              return (
+                <button
+                  key={id}
+                  type="button"
+                  onClick={() => toggleTab(id)}
+                  disabled={busy || !draftEnabled}
+                  className={`rounded-full px-2.5 py-1 text-caption font-semibold ring-1 ring-inset transition ${
+                    on
+                      ? 'bg-blue-100 text-blue-800 ring-blue-300'
+                      : 'bg-gray-50 text-gray-500 ring-gray-200 hover:bg-gray-100'
+                  } disabled:cursor-not-allowed disabled:opacity-50`}
+                >
+                  {TAB_LABELS[id]}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Save row */}
+        <div className="flex items-center justify-between gap-3 border-t border-gray-100 pt-3">
+          <div className="text-micro text-gray-500">
+            {hasOverride ? 'Per-staff override active.' : 'Inheriting role default.'}
+          </div>
+          <button
+            type="button"
+            onClick={save}
+            disabled={busy || !dirty}
+            className="rounded-md bg-gray-900 px-3 py-1.5 text-caption font-semibold uppercase tracking-wider text-white hover:bg-black disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {busy ? 'Saving…' : dirty ? 'Save override' : 'Saved'}
+          </button>
+        </div>
+      </div>
+    </section>
   );
 }

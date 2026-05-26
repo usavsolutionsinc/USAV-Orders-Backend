@@ -3,23 +3,27 @@
 /**
  * Bottom tab bar for the mobile cockpit.
  *
- * The mobile device is locked to a tight allowlist (see
- * `isMobileAllowedPath` in `sidebar-navigation.ts`) — receiving, packing,
- * testing, picks, and the scan-first /m/home cockpit. Almost everything
- * else redirects to /m/home. So the nav surfaces only what's genuinely
- * navigable from anywhere:
+ * Visibility is admin-gated per staff. /m/layout.tsx renders this only when
+ * `mobileDisplayConfig.bottomNav.enabled` is true for the signed-in staff
+ * (see resolveMobileDisplayConfig). Default seed: the 'technician', 'picker',
+ * and 'admin' roles have it on; everyone else is locked to a single page
+ * until an admin opts them in from /admin?section=access.
  *
- *   • Home     — back to the cockpit
- *   • Scan     — raised centre button, opens /m/scan (the headline action)
- *   • Picks    — picker queue at /m/pick
- *   • Sign out — exits the session
+ * The tab set is also per-staff configurable. Available tab IDs:
+ *
+ *   • home    — back to the /m/home cockpit (recent scans)
+ *   • scan    — raised centre: opens `/m/scan`; on that route toggles camera
+ *     preview (`/m/scan` vs `/m/scan?cam=off`). Always rendered centre when
+ *     present in the list, regardless of its position in the array.
+ *   • picks   — picker queue at /m/pick
+ *   • signout — exits the session
  *
  * Stations (Receiving / Testing) are reached from tiles on /m/home —
  * they're role-gated and the cockpit is the right place to choose.
  */
 
-import { useCallback } from 'react';
-import { usePathname, useRouter } from 'next/navigation';
+import { Suspense, useCallback } from 'react';
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { toast } from 'sonner';
 import {
   Barcode,
@@ -28,6 +32,7 @@ import {
   ShoppingCart,
 } from '@/components/Icons';
 import { useAuth } from '@/contexts/AuthContext';
+import type { MobileNavTabId } from '@/lib/auth/mobile-display-config';
 
 const HIDDEN_PREFIXES = [
   '/m/signin',
@@ -62,10 +67,19 @@ export function shouldShowMobileNav(pathname: string | null): boolean {
   );
 }
 
-export function MobileBottomNav() {
+interface MobileBottomNavProps {
+  /** Tab IDs to render in display order. Scan stays centred when present. */
+  tabs?: ReadonlyArray<MobileNavTabId>;
+}
+
+const DEFAULT_TABS: ReadonlyArray<MobileNavTabId> = ['home', 'scan', 'picks', 'signout'];
+
+function MobileBottomNavInner({ tabs }: { tabs: ReadonlyArray<MobileNavTabId> }) {
   const router = useRouter();
   const pathname = usePathname();
+  const searchParams = useSearchParams();
   const { signOut } = useAuth();
+  const scanCamOff = searchParams.get('cam') === 'off';
 
   const isActive = useCallback(
     (target: string) => pathname === target || pathname?.startsWith(`${target}/`),
@@ -82,6 +96,63 @@ export function MobileBottomNav() {
     router.replace('/signin');
   }, [signOut, router]);
 
+  // Scan owns the centre slot regardless of order; everything else fills
+  // around it. Five-column grid: [left] [left] [scan] [right] [right].
+  const nonScan = tabs.filter((t) => t !== 'scan');
+  const showScan = tabs.includes('scan');
+  const leftTabs = nonScan.slice(0, Math.min(2, Math.ceil(nonScan.length / 2)));
+  const rightTabs = nonScan.slice(leftTabs.length, leftTabs.length + 2);
+
+  const renderTab = (id: MobileNavTabId, key: string) => {
+    switch (id) {
+      case 'home':
+        return (
+          <NavTab
+            key={key}
+            label="Home"
+            icon={LayoutDashboard}
+            active={isActive('/m/home')}
+            onClick={() => router.push('/m/home')}
+          />
+        );
+      case 'picks':
+        return (
+          <NavTab
+            key={key}
+            label="Picks"
+            icon={ShoppingCart}
+            active={isActive('/m/pick')}
+            onClick={() => router.push('/m/pick')}
+          />
+        );
+      case 'signout':
+        return (
+          <NavTab
+            key={key}
+            label="Sign out"
+            icon={Lock}
+            active={false}
+            onClick={handleSignOut}
+          />
+        );
+      default:
+        return <span key={key} aria-hidden />;
+    }
+  };
+
+  // Pad with spacers so the 5-column grid stays aligned even when fewer
+  // tabs are configured (e.g. just Home + Scan).
+  const leftCells: React.ReactNode[] = [];
+  for (let i = 0; i < 2; i++) {
+    const id = leftTabs[i];
+    leftCells.push(id ? renderTab(id, `l-${i}`) : <span key={`ls-${i}`} aria-hidden />);
+  }
+  const rightCells: React.ReactNode[] = [];
+  for (let i = 0; i < 2; i++) {
+    const id = rightTabs[i];
+    rightCells.push(id ? renderTab(id, `r-${i}`) : <span key={`rs-${i}`} aria-hidden />);
+  }
+
   return (
     <nav
       role="navigation"
@@ -89,60 +160,72 @@ export function MobileBottomNav() {
       className="relative shrink-0 border-t border-gray-200 bg-white pb-[max(0.5rem,env(safe-area-inset-bottom))]"
     >
       <div className="grid grid-cols-5 items-end px-1 pt-1.5">
-        {/* Home */}
-        <NavTab
-          label="Home"
-          icon={LayoutDashboard}
-          active={isActive('/m/home')}
-          onClick={() => router.push('/m/home')}
-        />
-
-        {/* Spacer (keeps the centre tab visually isolated from Home) */}
-        <span aria-hidden />
+        {leftCells}
 
         {/* Raised centre — Scan */}
-        <div className="relative flex items-end justify-center">
-          <button
-            type="button"
-            onClick={() => router.push('/m/scan')}
-            aria-current={isActive('/m/scan') ? 'page' : undefined}
-            aria-label="Open scanner"
-            className={`
-              -mt-7 flex h-16 w-16 items-center justify-center rounded-full
-              bg-gradient-to-br from-blue-500 to-blue-700 text-white
-              shadow-[0_8px_24px_rgba(37,99,235,0.45)] ring-4 ring-white
-              transition-transform active:scale-95
-              ${isActive('/m/scan') ? 'scale-[1.04]' : ''}
-            `.trim()}
-          >
-            <Barcode className="h-7 w-7" />
-          </button>
-          <span
-            className={`absolute -bottom-0.5 text-eyebrow font-black uppercase tracking-[0.14em] leading-none ${
-              isActive('/m/scan') ? 'text-blue-600' : 'text-gray-500'
-            }`}
-          >
-            Scan
-          </span>
-        </div>
+        {showScan ? (
+          <div className="relative flex items-end justify-center">
+            <button
+              type="button"
+              onClick={() => {
+                if (pathname === '/m/scan') {
+                  router.replace(scanCamOff ? '/m/scan' : '/m/scan?cam=off');
+                  return;
+                }
+                router.push('/m/scan');
+              }}
+              aria-current={isActive('/m/scan') ? 'page' : undefined}
+              aria-label={
+                pathname === '/m/scan'
+                  ? scanCamOff
+                    ? 'Turn camera preview on'
+                    : 'Turn camera preview off'
+                  : 'Open scanner'
+              }
+              className={`
+                -mt-7 flex h-16 w-16 items-center justify-center rounded-full
+                bg-gradient-to-br from-blue-500 to-blue-700 text-white
+                shadow-[0_8px_24px_rgba(37,99,235,0.45)] ring-4 ring-white
+                transition-transform active:scale-95
+                ${isActive('/m/scan') ? 'scale-[1.04]' : ''}
+              `.trim()}
+            >
+              <Barcode className="h-7 w-7" />
+            </button>
+            <span
+              className={`absolute -bottom-0.5 text-eyebrow font-black uppercase tracking-[0.14em] leading-none ${
+                isActive('/m/scan') ? 'text-blue-600' : 'text-gray-500'
+              }`}
+            >
+              Scan
+            </span>
+          </div>
+        ) : (
+          <span aria-hidden />
+        )}
 
-        {/* Picks — bottom-right of nav per request. Sits next to Sign out. */}
-        <NavTab
-          label="Picks"
-          icon={ShoppingCart}
-          active={isActive('/m/pick')}
-          onClick={() => router.push('/m/pick')}
-        />
-
-        {/* Sign out */}
-        <NavTab
-          label="Sign out"
-          icon={Lock}
-          active={false}
-          onClick={handleSignOut}
-        />
+        {rightCells}
       </div>
     </nav>
+  );
+}
+
+/** Bottom nav reads `cam=off` on `/m/scan` to toggle preview — suspense for `useSearchParams`. */
+export function MobileBottomNav({ tabs = DEFAULT_TABS }: MobileBottomNavProps = {}) {
+  return (
+    <Suspense
+      fallback={(
+        <nav
+          className="relative shrink-0 border-t border-gray-200 bg-white pb-[max(0.5rem,env(safe-area-inset-bottom))]"
+          aria-label="Mobile main navigation"
+          aria-hidden
+        >
+          <div className="h-[4.75rem]" />
+        </nav>
+      )}
+    >
+      <MobileBottomNavInner tabs={tabs} />
+    </Suspense>
   );
 }
 

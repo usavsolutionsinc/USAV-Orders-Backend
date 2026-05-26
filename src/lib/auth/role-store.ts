@@ -24,6 +24,8 @@ export interface RoleRow {
   position: number;
   permissions: ReadonlyArray<string>;
   isSystem: boolean;
+  /** Raw JSONB blob — shape validated lazily by mobile-display-config.ts. */
+  mobileDefaults: unknown;
 }
 
 const ROLE_TTL_MS = 60_000;
@@ -44,13 +46,14 @@ let inflightRoles: Promise<RolesSnapshot> | null = null;
  */
 async function fetchRoles(): Promise<RolesSnapshot> {
   const r = await pool.query(
-    `SELECT id, key, label, color, position, permissions, is_system
+    `SELECT id, key, label, color, position, permissions, is_system, mobile_defaults
        FROM roles
       ORDER BY position ASC, id ASC`,
   );
   const rows: RoleRow[] = (r.rows as Array<{
     id: number; key: string; label: string; color: string;
     position: number; permissions: string[]; is_system: boolean;
+    mobile_defaults: unknown;
   }>).map((row) => ({
     id: row.id,
     key: row.key,
@@ -59,6 +62,7 @@ async function fetchRoles(): Promise<RolesSnapshot> {
     position: row.position,
     permissions: row.permissions || [],
     isSystem: row.is_system,
+    mobileDefaults: row.mobile_defaults ?? null,
   }));
 
   const byId = new Map<number, RoleRow>();

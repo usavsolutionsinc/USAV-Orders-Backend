@@ -20,6 +20,10 @@ import pool from '@/lib/db';
 import { loadSession, SESSION_COOKIE_NAME, type SessionRow } from './session';
 import { computeEffectivePermissions, type PermissionString, type StaffRole } from './permissions-shared';
 import { loadRolesForStaff, type RoleRow } from './role-store';
+import {
+  resolveMobileDisplayConfig,
+  type MobileDisplayConfig,
+} from './mobile-display-config';
 
 export interface CurrentUser {
   session: SessionRow;
@@ -33,18 +37,21 @@ export interface CurrentUser {
   permissions: Set<PermissionString>;
   permissionsAdded: ReadonlyArray<string>;
   permissionsRemoved: ReadonlyArray<string>;
+  /** Resolved mobile UI config (role defaults + per-staff override). */
+  mobileDisplayConfig: MobileDisplayConfig;
 }
 
 interface StaffOverrideRow {
   role: string | null;
   permissions_added: string[] | null;
   permissions_removed: string[] | null;
+  mobile_display_config: unknown;
 }
 
 async function loadStaffOverrides(staffId: number): Promise<StaffOverrideRow | null> {
   try {
     const r = await pool.query(
-      `SELECT role, permissions_added, permissions_removed
+      `SELECT role, permissions_added, permissions_removed, mobile_display_config
          FROM staff
         WHERE id = $1
         LIMIT 1`,
@@ -89,6 +96,11 @@ async function buildCurrentUser(session: SessionRow | null): Promise<CurrentUser
   const added = overrides?.permissions_added ?? [];
   const removed = overrides?.permissions_removed ?? [];
 
+  const mobileDisplayConfig = resolveMobileDisplayConfig({
+    roles: roles.map((r) => ({ key: r.key, mobile_defaults: r.mobileDefaults })),
+    staffOverride: overrides?.mobile_display_config ?? null,
+  });
+
   return {
     session,
     staffId: session.staffId,
@@ -98,6 +110,7 @@ async function buildCurrentUser(session: SessionRow | null): Promise<CurrentUser
     permissions: mergePermissions(roles, added, removed),
     permissionsAdded: added,
     permissionsRemoved: removed,
+    mobileDisplayConfig,
   };
 }
 
