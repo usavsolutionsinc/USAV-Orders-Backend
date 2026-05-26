@@ -18,6 +18,8 @@ export type InventoryEventType =
   | 'SCRAPPED'
   | 'LISTED'
   | 'LABELED'
+  | 'ALLOCATED'
+  | 'RELEASED'
   | 'NOTE';
 
 export type InventoryEventStation =

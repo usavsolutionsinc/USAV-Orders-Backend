@@ -23,38 +23,31 @@ const ProductsPairingShell = dynamic(
   },
 );
 
+// Lazy-load the unit history viewer — only mounts when labelsView=history.
+const UnitHistoryWorkspace = dynamic(
+  () => import('@/components/labels/UnitHistoryWorkspace').then((m) => m.UnitHistoryWorkspace),
+  {
+    ssr: false,
+    loading: () => <div className="p-6 text-sm text-gray-400">Loading unit history…</div>,
+  },
+);
+
 export function ProductsWorkspace() {
   const searchParams = useSearchParams();
   const view = searchParams.get('view');
   const labelsView = parseLabelsView(searchParams.get('labelsView'));
 
   if (view === 'labels') {
-    // History sub-view will get its own dedicated workspace (unit timeline
-    // + pairing context) in the next phase. Until then, the empty-state
-    // mirrors the sidebar placeholder so the URL is reachable. Print and
-    // Recent both keep the same workspace — Recent's interactions land
-    // back in the Print workflow via the existing `sku:fill` event.
-    if (labelsView === 'history') return <UnitHistoryPlaceholder />;
+    // History sub-view has its own workspace fed by `?historyId=` (written
+    // by the sidebar's UnitHistoryFinder). Print and Recent share the
+    // labels workspace — Recent's row click prefills it via `sku:fill`.
+    if (labelsView === 'history') return <UnitHistoryWorkspace />;
     return <MultiSkuSnBarcode layout="horizontal" />;
   }
   if (view === 'pairing') return <ProductsPairingShell />;
   // Manuals (default) + QC both render the PDF viewer in the main pane —
   // selection comes from the sidebar's LibraryBrowser (`?id=`).
   return <ManualLibrary />;
-}
-
-function UnitHistoryPlaceholder() {
-  return (
-    <div className="flex h-full flex-col items-center justify-center px-6 py-12 text-center">
-      <p className="text-eyebrow font-black uppercase tracking-[0.18em] text-gray-400">
-        Unit history
-      </p>
-      <p className="mt-3 max-w-[420px] text-sm font-medium text-gray-500">
-        Scan a DataMatrix from the sidebar to load a unit's full audit trail —
-        every receive, move, allocation, and ship event in one timeline.
-      </p>
-    </div>
-  );
 }
 
 export default ProductsWorkspace;

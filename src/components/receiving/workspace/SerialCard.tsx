@@ -36,7 +36,7 @@ interface Props {
   notes?: string;
   /** Notes change handler (controlled). */
   onNotesChange?: (next: string) => void;
-  /** Persist notes on blur. */
+  /** Persist notes when focus leaves (e.g. clicking outside the field). */
   onNotesBlur?: () => void;
   /** DOM id for the notes textarea (used by label). */
   notesId?: string;
@@ -254,7 +254,7 @@ export function SerialCard({
             onChange={(e) => onNotesChange?.(e.target.value)}
             onBlur={onNotesBlur}
             rows={2}
-            placeholder="PO-line notes (saved on blur)"
+            placeholder="PO-line notes (saved on off click)"
             className="mt-1 w-full resize-none rounded-xl border border-gray-200 bg-white px-3 py-2 text-label font-medium leading-snug text-gray-900 placeholder:text-gray-400 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
           />
         </div>

@@ -15,6 +15,7 @@ import { PairingQueueList } from '@/components/products/pairing/PairingQueueList
 import type { PairingQueueItem, PairingSort } from '@/components/products/pairing/types';
 import { LibraryBrowser } from '@/components/manuals/LibraryBrowser';
 import { RecentlyPrintedList } from '@/components/labels/RecentlyPrintedList';
+import { UnitHistoryFinder } from '@/components/labels/UnitHistoryFinder';
 
 const PAIRING_SORT_ITEMS: HorizontalSliderItem[] = [
   { id: 'volume',     label: 'Most ordered' },
@@ -245,10 +246,7 @@ export function ProductsSidebarPanel() {
         labelsView === 'recent' ? (
           <RecentlyPrintedList onPick={handleProductPick} />
         ) : labelsView === 'history' ? (
-          <LabelsSubViewPlaceholder
-            title="History log"
-            body="Scan a DataMatrix to load a unit's full audit trail — receive, move, pair, pack, ship. Coming online with the mobile pairing flow."
-          />
+          <UnitHistoryFinder />
         ) : (
           <ProductPickerList
             query={searchInput}
