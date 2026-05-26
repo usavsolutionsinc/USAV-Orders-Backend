@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useMemo, type ReactNode } from 'react';
+import { motion } from 'framer-motion';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useUIModeOptional } from '@/design-system/providers/UIModeProvider';
 import {
@@ -73,7 +74,14 @@ export function RouteShell({
   if (!isMobile) {
     return (
       <div className={cn('flex min-h-0 w-full flex-1 flex-col overflow-hidden', className)}>
-        <div className="flex min-h-0 flex-1 flex-col overflow-hidden">{history}</div>
+        <motion.div 
+          initial={{ opacity: 0, x: -20 }}
+          animate={{ opacity: 1, x: 0 }}
+          transition={{ type: 'spring', damping: 25, stiffness: 120 }}
+          className="flex min-h-0 flex-1 flex-col overflow-hidden"
+        >
+          {history}
+        </motion.div>
         {bottomDock ? <div className="shrink-0 border-t border-gray-100 bg-white">{bottomDock}</div> : null}
       </div>
     );
@@ -94,9 +102,25 @@ export function RouteShell({
 
       <div className="flex min-h-0 flex-1 overflow-hidden">
         {activeView === 'actions' ? (
-          <div className="flex min-h-0 w-full flex-1 flex-col overflow-y-auto">{actions}</div>
+          <motion.div 
+            key="actions-pane"
+            initial={{ opacity: 0, x: -20 }}
+            animate={{ opacity: 1, x: 0 }}
+            transition={{ type: 'spring', damping: 25, stiffness: 120 }}
+            className="flex min-h-0 w-full flex-1 flex-col overflow-y-auto"
+          >
+            {actions}
+          </motion.div>
         ) : (
-          <div className="flex min-h-0 w-full flex-1 flex-col overflow-hidden">{history}</div>
+          <motion.div 
+            key="history-pane"
+            initial={{ opacity: 0, x: -20 }}
+            animate={{ opacity: 1, x: 0 }}
+            transition={{ type: 'spring', damping: 25, stiffness: 120 }}
+            className="flex min-h-0 w-full flex-1 flex-col overflow-hidden"
+          >
+            {history}
+          </motion.div>
         )}
       </div>
 

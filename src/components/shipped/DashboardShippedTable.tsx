@@ -259,7 +259,12 @@ export function DashboardShippedTable({
 
   const toSearchResultRecord = useCallback((record: ShippedOrder): PackerRecord => ({
     id: Number(record.id),
-    created_at: record.created_at || record.packed_at || null,
+    // The shipped table groups by pack scan time, not DB-insert time. orders.created_at
+    // can lag the pack event when an order row is inserted by a later sheet sync, which
+    // makes the panel timestamp appear "after" the pack itself. Prefer the actual pack
+    // activity (SAL.created_at), then packer_logs.created_at, then fall back to the
+    // order's created_at only when neither pack-event timestamp is available.
+    created_at: record.pack_activity_at || record.packed_at || record.created_at || null,
     scan_ref: record.shipping_tracking_number || '',
     shipping_tracking_number: record.shipping_tracking_number || '',
     tracking_numbers: Array.isArray((record as any).tracking_numbers) ? (record as any).tracking_numbers : [],

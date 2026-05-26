@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
+import { motion } from 'framer-motion';
 import { useAuth } from '@/contexts/AuthContext';
 import { fbaPaths } from '@/lib/fba/api-paths';
 import { FBA_BOARD_INJECT_ITEM, FBA_SELECTION_ADJUSTED, FBA_SCAN_STATUS } from '@/lib/fba/events';
@@ -942,49 +943,55 @@ export default function StationFbaInput({
         </>
       ) : null}
 
-      <StationScanBar
-        value={inputValue}
-        onChange={handleInputChange}
-        onSubmit={handleFormSubmit}
-        inputRef={inputRef}
-        inputBorderClassName={scanOutlineClass}
-        placeholder={fbaScanOnly ? 'FNSKU (X00\u2026) or ASIN (B0\u2026)' : 'FNSKU, ASIN, tracking, RS-, serial'}
-        autoFocus={false}
-        hasRightContent={fbaScanOnly || busy}
-        onPaste={fbaScanOnly ? handleInputChange : undefined}
-        icon={
-          <Package
-            className={`h-4 w-4 ${fbaScanOnly ? workspaceChrome.fnskuScanIconClass : 'text-violet-600'}`}
-          />
-        }
-        iconClassName=""
-        inputClassName={
-          fbaScanOnly
-            ? `!py-2.5 !text-sm !rounded-xl !font-bold ${workspaceChrome.fnskuScanInputClass}`
-            : '!py-2.5 !text-sm !rounded-xl focus:border-violet-400 focus:ring-2 focus:ring-violet-500/20'
-        }
-        rightContentClassName="right-2"
-        showModeButtons={fbaScanOnly}
-        activeMode={fbaMode}
-        onPlanMode={() => {
-          setFbaMode('plan');
-          setSelectResult(null);
-        }}
-        onSelectMode={() => {
-          setFbaMode('select');
-          setPlanHint(null);
-          setFbaError(null);
-          setPlanPreviewLines([]);
-          clearPendingTodayPlan();
-        }}
-        rightContent={
-          busy ? (
-            <Loader2
-              className={`h-4 w-4 shrink-0 animate-spin ${fbaScanOnly ? workspaceChrome.savingSpinner : 'text-zinc-600'}`}
+      <motion.div
+        initial={{ opacity: 0, x: -20 }}
+        animate={{ opacity: 1, x: 0 }}
+        transition={{ type: 'spring', damping: 25, stiffness: 120 }}
+      >
+        <StationScanBar
+          value={inputValue}
+          onChange={handleInputChange}
+          onSubmit={handleFormSubmit}
+          inputRef={inputRef}
+          inputBorderClassName={scanOutlineClass}
+          placeholder={fbaScanOnly ? 'FNSKU (X00\u2026) or ASIN (B0\u2026)' : 'FNSKU, ASIN, tracking, RS-, serial'}
+          autoFocus={false}
+          hasRightContent={fbaScanOnly || busy}
+          onPaste={fbaScanOnly ? handleInputChange : undefined}
+          icon={
+            <Package
+              className={`h-4 w-4 ${fbaScanOnly ? workspaceChrome.fnskuScanIconClass : 'text-violet-600'}`}
             />
-          ) : null
-        }
-      />
+          }
+          iconClassName=""
+          inputClassName={
+            fbaScanOnly
+              ? `!py-2.5 !text-sm !rounded-xl !font-bold ${workspaceChrome.fnskuScanInputClass}`
+              : '!py-2.5 !text-sm !rounded-xl focus:border-violet-400 focus:ring-2 focus:ring-violet-500/20'
+          }
+          rightContentClassName="right-2"
+          showModeButtons={fbaScanOnly}
+          activeMode={fbaMode}
+          onPlanMode={() => {
+            setFbaMode('plan');
+            setSelectResult(null);
+          }}
+          onSelectMode={() => {
+            setFbaMode('select');
+            setPlanHint(null);
+            setFbaError(null);
+            setPlanPreviewLines([]);
+            clearPendingTodayPlan();
+          }}
+          rightContent={
+            busy ? (
+              <Loader2
+                className={`h-4 w-4 shrink-0 animate-spin ${fbaScanOnly ? workspaceChrome.savingSpinner : 'text-zinc-600'}`}
+              />
+            ) : null
+          }
+        />
+      </motion.div>
 
       {fbaScanOnly ? (
         <div className="flex items-center gap-1.5">

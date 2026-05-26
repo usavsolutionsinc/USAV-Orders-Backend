@@ -1126,10 +1126,10 @@ export function ShippingInformationSection({
       : daysLate === 1
         ? 'text-micro font-black uppercase tracking-wide text-yellow-600'
         : 'text-micro font-black uppercase tracking-wide text-gray-500';
-  const shippedAtDisplay =
-    shipped.packed_at && shipped.packed_at !== '1'
-      ? formatDateTimePST(shipped.packed_at)
-      : 'N/A';
+  const packedAtSource =
+    (shipped.pack_activity_at && shipped.pack_activity_at !== '1' ? shipped.pack_activity_at : null)
+    ?? (shipped.packed_at && shipped.packed_at !== '1' ? shipped.packed_at : null);
+  const shippedAtDisplay = packedAtSource ? formatDateTimePST(packedAtSource) : 'N/A';
   const testedAtDateTimeDisplay = shipped.test_date_time
     ? formatDateTimePST(shipped.test_date_time)
     : 'N/A';
@@ -1144,7 +1144,7 @@ export function ShippingInformationSection({
     || (shipped as any).tested_by_name
     || getStaffName((shipped as any).tested_by ?? (shipped as any).tester_id ?? null)
   ).trim() || 'Not specified';
-  const packedByTimeRight = formatTime12hPST(shipped.packed_at ?? null);
+  const packedByTimeRight = formatTime12hPST(packedAtSource);
   const testedByTimeRight = formatTime12hPST(shipped.test_date_time ?? null);
   const serialNumberRows = parseSerialRows(shipped.serial_number)
     .map((row) => row.trim())
@@ -1588,9 +1588,7 @@ export function ShippingInformationSection({
           {showShippingTimestamp && (
             <DetailsPanelRow label="Shipped">
               <p className="text-sm font-bold text-gray-900">
-                {shipped.packed_at && shipped.packed_at !== '1'
-                  ? formatDateTimePST(shipped.packed_at)
-                  : 'N/A'}
+                {packedAtSource ? formatDateTimePST(packedAtSource) : 'N/A'}
               </p>
             </DetailsPanelRow>
           )}

@@ -20,7 +20,10 @@ import {
 } from '@/utils/events';
 import { readDetailsOpenBehaviorPreference } from '@/utils/dashboard-preferences';
 
-const SELECTED_ORDER_SNAPSHOT_KEY = 'dashboard:selected-order';
+// Bumped to v2 to invalidate stale snapshots that stored a corrupted packed_at
+// (filled from orders.created_at by an older round-trip path). v1 entries are
+// silently ignored on read; new writes use v2.
+const SELECTED_ORDER_SNAPSHOT_KEY = 'dashboard:selected-order:v2';
 
 function readStoredSelection(orderId: number): DashboardSelectionSnapshot | null {
   if (typeof window === 'undefined') return null;

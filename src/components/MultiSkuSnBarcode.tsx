@@ -1090,25 +1090,28 @@ function PreviewCardModern({
             </div>
 
             {isPrintMode ? (
-                // DataMatrix label preview. Title + ids on the left,
-                // DataMatrix on the right — mirrors the printed thermal-label
-                // layout. Payload comes from the same buildUnitPayload helper
-                // the print path uses, so preview ↔ print stay in sync.
-                <div className="mx-auto flex aspect-[2/1] w-full max-w-[420px] items-start gap-3 rounded-xl bg-white p-3 ring-1 ring-gray-200/50">
-                    <div className="flex min-w-0 flex-1 flex-col justify-start gap-1">
-                        {title ? (
-                            <p className="line-clamp-2 text-caption font-bold leading-tight text-gray-900">{title}</p>
-                        ) : null}
-                        <p className="font-mono text-sm font-bold tracking-tight text-gray-900 break-all">{uniqueSku}</p>
-                    </div>
-                    <div className="flex aspect-square h-full shrink-0 items-center justify-center self-stretch">
-                        {dataMatrixValue ? (
-                            <Gs1DataMatrix
-                                value={dataMatrixValue}
-                                symbology={dataMatrixSymbology}
-                                size={200}
-                            />
-                        ) : null}
+                // 2×1" thermal label preview. Matches ReceivingCartonLabel
+                // exactly so receiving and product labels print at the same
+                // physical size. Product title is intentionally omitted —
+                // these labels live on the outer carton and any descriptive
+                // text raises theft risk on electronics (see comments in
+                // printProductLabel.buildLabelHtml). Payload uses the same
+                // buildUnitPayload as the print path so preview ↔ print stay
+                // in sync; never a URL on the wire.
+                <div className="w-full rounded border border-gray-200 bg-white px-2 py-2 shadow-sm">
+                    <div className="flex flex-nowrap items-stretch gap-3 min-h-[5rem]">
+                        <div className="min-w-0 flex-1 flex flex-col justify-center py-0.5">
+                            <p className="font-mono text-sm font-bold tracking-tight text-gray-900 break-all">{uniqueSku}</p>
+                        </div>
+                        <div className="shrink-0 flex items-center">
+                            {dataMatrixValue ? (
+                                <Gs1DataMatrix
+                                    value={dataMatrixValue}
+                                    symbology={dataMatrixSymbology}
+                                    size={80}
+                                />
+                            ) : null}
+                        </div>
                     </div>
                 </div>
             ) : (

@@ -1,17 +1,18 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { motion } from 'framer-motion';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { toast } from '@/lib/toast';
 import { sidebarHeaderBandClass } from '@/components/layout/header-shell';
-import { X } from '@/components/Icons';
+import { Barcode, Loader2, X } from '@/components/Icons';
 import { useUIModeOptional } from '@/design-system/providers/UIModeProvider';
 import { HorizontalButtonSlider } from '@/components/ui/HorizontalButtonSlider';
 import {
   ReceivingReturnBanner,
   type ReturnEvent,
 } from '@/components/sidebar/ReceivingReturnBanner';
-import { ReceivingScanBar } from '@/components/sidebar/receiving/ReceivingScanBar';
+import { StationScanBar } from '@/components/station/StationScanBar';
 import { ReceivingHistorySearchSection } from '@/components/sidebar/receiving/ReceivingHistorySearchSection';
 import { ReceivingLinePicker } from '@/components/sidebar/receiving/ReceivingLinePicker';
 import { ReceivingRecentRail } from '@/components/sidebar/receiving/ReceivingRecentRail';
@@ -45,6 +46,7 @@ import {
   type ReceivingSelectLineDetail,
 } from '@/components/sidebar/receiving/receiving-sidebar-shared';
 import { clearReceivingHistoryUrlParams } from '@/lib/receiving-history-search';
+import { useStationTheme } from '@/hooks/useStationTheme';
 
 
 /**
@@ -120,6 +122,40 @@ export function ReceivingSidebarPanel() {
   const { user } = useAuth();
   const staffIdNum = user?.staffId ?? 0;
   const staffId = String(staffIdNum);
+  const { theme: themeColor, inputBorder } = useStationTheme({ staffId: staffIdNum });
+  const focusRingClass: Record<typeof themeColor, string> = {
+    green: 'focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-500',
+    blue: 'focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500',
+    purple: 'focus:ring-4 focus:ring-purple-500/10 focus:border-purple-500',
+    yellow: 'focus:ring-4 focus:ring-amber-500/10 focus:border-amber-500',
+    black: 'focus:ring-4 focus:ring-slate-700/10 focus:border-slate-700',
+    red: 'focus:ring-4 focus:ring-red-500/10 focus:border-red-500',
+    lightblue: 'focus:ring-4 focus:ring-sky-500/10 focus:border-sky-500',
+    pink: 'focus:ring-4 focus:ring-pink-500/10 focus:border-pink-500',
+  };
+  const scanIconColorClass: Record<typeof themeColor, string> = {
+    green: 'text-emerald-600',
+    blue: 'text-blue-600',
+    purple: 'text-purple-600',
+    yellow: 'text-amber-600',
+    black: 'text-slate-700',
+    red: 'text-red-600',
+    lightblue: 'text-sky-600',
+    pink: 'text-pink-600',
+  };
+  // Soft centered halo behind the scan input — staff-tint fades in toward
+  // the middle of the band and back to white on the edges, instead of a
+  // flat-fill block. Keeps the bar feeling light/airy.
+  const bandHaloClass: Record<typeof themeColor, string> = {
+    green: 'bg-gradient-to-r from-white via-emerald-50 to-white',
+    blue: 'bg-gradient-to-r from-white via-blue-50 to-white',
+    purple: 'bg-gradient-to-r from-white via-purple-50 to-white',
+    yellow: 'bg-gradient-to-r from-white via-amber-50 to-white',
+    black: 'bg-gradient-to-r from-white via-slate-50 to-white',
+    red: 'bg-gradient-to-r from-white via-red-50 to-white',
+    lightblue: 'bg-gradient-to-r from-white via-sky-50 to-white',
+    pink: 'bg-gradient-to-r from-white via-pink-50 to-white',
+  };
 
   // Ably handles are needed both for the existing phone-scan bridge (later in
   // this file) and the new photo-request publisher below. Hoisting the client
@@ -158,7 +194,7 @@ export function ReceivingSidebarPanel() {
       window.dispatchEvent(new CustomEvent('receiving-clear-line'));
     }
     // Returning to the Receive tab from History / Pickup / Unfound — focus
-    // the tracking field (`ReceivingScanBar` listens for this event).
+    // the tracking field (the scan-bar effect above listens for this event).
     if (mode === 'receive') {
       requestAnimationFrame(() => {
         window.dispatchEvent(new CustomEvent('receiving-focus-scan'));
@@ -167,7 +203,17 @@ export function ReceivingSidebarPanel() {
   }, [mode]);
 
   const [bulkTracking, setBulkTracking] = useState('');
-  const [scanBarKey, setScanBarKey] = useState(0);
+  const scanInputRef = useRef<HTMLInputElement>(null);
+
+  // External focus trigger — Quick Access chips (`Search Receiving`,
+  // `Receiving`) dispatch `receiving-focus-scan` after navigating so the
+  // input is hot even when the panel was already mounted.
+  useEffect(() => {
+    const handler = () =>
+      requestAnimationFrame(() => scanInputRef.current?.focus());
+    window.addEventListener('receiving-focus-scan', handler);
+    return () => window.removeEventListener('receiving-focus-scan', handler);
+  }, []);
   /** Spin the scan-field loader while `/api/receiving/lookup-po` is in flight */
   const [trackingLookupInFlight, setTrackingLookupInFlight] = useState(0);
   const [openExceptions, setOpenExceptions] = useState<OpenException[]>([]);
@@ -551,7 +597,6 @@ export function ReceivingSidebarPanel() {
     if (!trackingNumber) return;
 
     setBulkTracking('');
-    setScanBarKey((k) => k + 1); // force remount so SearchField's internal draft resets
     const scanStartedAt = Date.now();
     setTrackingLookupInFlight((n) => n + 1);
 
@@ -1041,14 +1086,39 @@ export function ReceivingSidebarPanel() {
           onSwitchToReceiving={() => updateMode('receive')}
         />
       ) : (
-      <ReceivingScanBar
-        scanBarKey={scanBarKey}
-        value={bulkTracking}
-        onChange={setBulkTracking}
-        onSubmit={() => submitTrackingScan()}
-        isSearching={trackingLookupInFlight > 0}
-        searchMode={false}
-      />
+      <motion.div
+        // Soft staff-color tint hints at the active operator's theme without
+        // shouting. Entrance is a snappy fade + slide-in from left so a mode
+        // flip (history → receive) feels like the bar is *arriving*.
+        initial={{ opacity: 0, x: -20 }}
+        animate={{ opacity: 1, x: 0 }}
+        transition={{ type: 'spring', damping: 25, stiffness: 120 }}
+        className={`shrink-0 border-b border-gray-300 ${bandHaloClass[themeColor]} flex min-h-[44px] items-center px-3 py-1`}
+      >
+        <StationScanBar
+          value={bulkTracking}
+          onChange={setBulkTracking}
+          onSubmit={() => submitTrackingScan()}
+          inputRef={scanInputRef}
+          placeholder="Tracking, PO #"
+          icon={<Barcode className={`h-[17px] w-[17px] ${scanIconColorClass[themeColor]}`} />}
+          iconClassName=""
+          inputBorderClassName={inputBorder}
+          inputClassName={`pl-[2.2rem] ${focusRingClass[themeColor]}`}
+          autoFocus
+          className="w-full"
+          rightContentClassName="right-1.5 gap-0.5"
+          rightContent={
+            trackingLookupInFlight > 0 ? (
+              <Loader2 className="h-4 w-4 animate-spin text-gray-700" />
+            ) : (
+              <div className="h-6 min-w-6 px-1 bg-white rounded border border-gray-100 shadow-sm flex items-center justify-center">
+                <span className="text-mini font-black text-gray-400">ENTER</span>
+              </div>
+            )
+          }
+        />
+      </motion.div>
       )}
 
       <ReceivingReturnBanner returns={returns} onDismiss={dismissReturn} />

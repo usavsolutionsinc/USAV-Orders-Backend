@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback } from 'react';
+import { motion } from 'framer-motion';
 import PackerDashboard from '@/components/PackerDashboard';
 import { MobilePackingList } from '@/components/mobile/packer/MobilePackingList';
 import { Menu } from '@/components/Icons';
@@ -32,7 +33,12 @@ export function PackerPageContent({ packerId }: PackerPageContentProps) {
   return (
     <>
       {/* Mobile (<768px) — recent-packs feed with sheet + photos CTA. */}
-      <div className="flex h-full w-full flex-col overflow-hidden bg-white md:hidden">
+      <motion.div 
+        initial={{ opacity: 0, x: -20 }}
+        animate={{ opacity: 1, x: 0 }}
+        transition={{ type: 'spring', damping: 25, stiffness: 120 }}
+        className="flex h-full w-full flex-col overflow-hidden bg-white md:hidden"
+      >
         <header className="sticky top-0 z-40 flex min-h-14 items-center gap-3 border-b border-gray-100 bg-white px-3 pt-[env(safe-area-inset-top)]">
           <button
             type="button"
@@ -53,12 +59,17 @@ export function PackerPageContent({ packerId }: PackerPageContentProps) {
         <div className="min-h-0 flex-1">
           <MobilePackingList packerId={packerId} />
         </div>
-      </div>
+      </motion.div>
 
       {/* Desktop (≥768px) — table + details + scan flow. */}
-      <div className="hidden h-full w-full md:flex">
+      <motion.div 
+        initial={{ opacity: 0, x: -20 }}
+        animate={{ opacity: 1, x: 0 }}
+        transition={{ type: 'spring', damping: 25, stiffness: 120 }}
+        className="hidden h-full w-full md:flex"
+      >
         <PackerDashboard packerId={packerId} />
-      </div>
+      </motion.div>
     </>
   );
 }

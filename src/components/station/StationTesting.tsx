@@ -221,9 +221,9 @@ export default function StationTesting({
   /* ── Scan bar block (shared between desktop-top and mobile-bottom) ── */
   const scanBarBlock = (
     <motion.div
-      initial={{ opacity: 0, y: isMobile ? 4 : -4 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={stationTween}
+      initial={{ opacity: 0, x: -20 }}
+      animate={{ opacity: 1, x: 0 }}
+      transition={{ type: 'spring', damping: 25, stiffness: 120 }}
       className="space-y-2"
     >
       <StationScanBar

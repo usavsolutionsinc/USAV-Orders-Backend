@@ -179,29 +179,35 @@ export default function StationPacking({
             theme={themeColor}
           />
 
-          <StationScanBar
-            value={inputValue}
-            onChange={setInputValue}
-            onSubmit={handleSubmit}
-            inputRef={inputRef}
-            placeholder="Scan Tracking, FNSKU, FBA, or SKU..."
-            icon={<Barcode className="w-4 h-4" />}
-            iconClassName={activeColor.text}
-            inputBorderClassName={inputBorder}
-            inputClassName={activeColor.ring}
-            autoFocus
-            rightContent={(
-              <>
-                {isLoading ? (
-                  <Loader2 className={`w-4 h-4 animate-spin ${activeColor.text}`} />
-                ) : (
-                  <div className="h-6 min-w-6 px-1 bg-white rounded border border-gray-100 shadow-sm flex items-center justify-center">
-                    <span className="text-mini font-black text-gray-400">ENTER</span>
-                  </div>
-                )}
-              </>
-            )}
-          />
+          <motion.div
+            initial={{ opacity: 0, x: -20 }}
+            animate={{ opacity: 1, x: 0 }}
+            transition={{ type: 'spring', damping: 25, stiffness: 120 }}
+          >
+            <StationScanBar
+              value={inputValue}
+              onChange={setInputValue}
+              onSubmit={handleSubmit}
+              inputRef={inputRef}
+              placeholder="Scan Tracking, FNSKU, FBA, or SKU..."
+              icon={<Barcode className="w-4 h-4" />}
+              iconClassName={activeColor.text}
+              inputBorderClassName={inputBorder}
+              inputClassName={activeColor.ring}
+              autoFocus
+              rightContent={(
+                <>
+                  {isLoading ? (
+                    <Loader2 className={`w-4 h-4 animate-spin ${activeColor.text}`} />
+                  ) : (
+                    <div className="h-6 min-w-6 px-1 bg-white rounded border border-gray-100 shadow-sm flex items-center justify-center">
+                      <span className="text-mini font-black text-gray-400">ENTER</span>
+                    </div>
+                  )}
+                </>
+              )}
+            />
+          </motion.div>
 
           <p className="text-micro font-bold text-gray-400 px-1">
             Supports tracking, FNSKU/ASIN (10 chars: <code className="font-mono">X00</code> or <code className="font-mono">B0</code> prefix), FBA, and{' '}

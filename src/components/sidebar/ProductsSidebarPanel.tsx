@@ -9,6 +9,7 @@ import { BARCODE_MODES, type BarcodeMode } from '@/components/barcode/ModeSelect
 import { useBarcodeMode } from '@/hooks/useBarcodeMode';
 import { useLabelRecents } from '@/hooks/useLabelRecents';
 import { useSkuCatalogSearch, type SkuCatalogItem } from '@/hooks/useSkuCatalogSearch';
+import { detectSkuCatalogSearchField } from '@/lib/detectSearchField';
 import { ChevronDown, Printer, FileText, Link2, Check, Clock, History, Package } from '@/components/Icons';
 import { successFeedback } from '@/lib/feedback/confirm';
 import { PairingQueueList } from '@/components/products/pairing/PairingQueueList';
@@ -410,11 +411,15 @@ interface ProductPickerListProps {
 function ProductPickerList({ query, recents, onPick }: ProductPickerListProps) {
   // Pulls from sku_platform_ids (platform = 'ecwid') via the catalog search
   // API. allowEmpty fetches the top page when the user hasn't typed yet so
-  // there's always something to click.
+  // there's always something to click. searchField switches between
+  // platform_sku and display_name based on the shape of the query — typing a
+  // product title like "bose speaker" now matches by name instead of failing
+  // silently against the SKU column.
+  const searchField = detectSkuCatalogSearchField(query);
   const { data, isLoading, isError } = useSkuCatalogSearch(query, {
     limit: 50,
     allowEmpty: true,
-    searchField: 'ecwid_sku',
+    searchField,
   });
 
   const items = data ?? [];

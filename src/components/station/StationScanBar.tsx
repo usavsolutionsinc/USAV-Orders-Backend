@@ -1,6 +1,7 @@
 'use client';
 
-import { useCallback, type FormEvent, type ReactNode, type Ref } from 'react';
+import { useCallback, useState, type FormEvent, type ReactNode, type Ref } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
 import { Barcode, Clipboard, ClipboardList, Pencil } from '../Icons';
 
 interface StationScanBarProps {
@@ -56,6 +57,15 @@ export function StationScanBar({
   onPlanMode,
   onSelectMode,
 }: StationScanBarProps) {
+  const [scanKey, setScanKey] = useState(0);
+
+  const handleInternalSubmit = useCallback((e?: FormEvent<HTMLFormElement>) => {
+    e?.preventDefault();
+    // Trigger the sweep animation by updating the key
+    setScanKey(prev => prev + 1);
+    onSubmit(e);
+  }, [onSubmit]);
+
   const handlePasteClick = useCallback(async () => {
     if (!onPaste) return;
     try {
@@ -71,10 +81,47 @@ export function StationScanBar({
   const padRight = showRight ? (showModeButtons ? 'pr-40' : 'pr-28') : 'pr-4';
 
   return (
-    <form onSubmit={onSubmit} className={`relative group ${className}`.trim()}>
-      <div className="relative">
+    <motion.form
+      initial={{ opacity: 0, x: -20 }}
+      animate={{ opacity: 1, x: 0 }}
+      transition={{ 
+        type: 'spring', 
+        damping: 25, 
+        stiffness: 120,
+        opacity: { duration: 0.2 }
+      }}
+      onSubmit={handleInternalSubmit} 
+      className={`relative group ${className}`.trim()}
+    >
+      <div className="relative overflow-hidden rounded-2xl">
+        {/* Scan Sweep Animation */}
+        <AnimatePresence>
+          {scanKey > 0 && (
+            <motion.div
+              key={scanKey}
+              initial={{ x: '-20%', opacity: 0, scaleX: 0.5 }}
+              animate={{ 
+                x: '130%', 
+                opacity: [0, 1, 1, 0],
+                scaleX: [0.8, 1, 1, 0.8]
+              }}
+              exit={{ opacity: 0 }}
+              transition={{ 
+                duration: 0.45, 
+                ease: [0.22, 1, 0.36, 1] 
+              }}
+              className="absolute inset-y-0 w-48 pointer-events-none z-20"
+              style={{
+                background: 'linear-gradient(90deg, transparent, rgba(59, 130, 246, 0.4), rgba(168, 85, 247, 0.5), rgba(59, 130, 246, 0.4), transparent)',
+                skewX: '-25deg',
+                filter: 'blur(8px)',
+              }}
+            />
+          )}
+        </AnimatePresence>
+
         {leadingIcon ? (
-          <div className={`absolute left-4 top-1/2 -translate-y-1/2 ${iconClassName}`}>
+          <div className={`absolute left-4 top-1/2 -translate-y-1/2 z-10 ${iconClassName}`}>
             {icon ?? <Barcode className="h-4 w-4" />}
           </div>
         ) : null}
@@ -96,7 +143,7 @@ export function StationScanBar({
           ].join(' ').trim()}
         />
         {showRight ? (
-          <div className={`absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-1.5 ${rightContentClassName}`.trim()}>
+          <div className={`absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-1.5 z-10 ${rightContentClassName}`.trim()}>
             {showModeButtons ? (
               <div className="flex items-center gap-0">
                 <button
@@ -144,6 +191,6 @@ export function StationScanBar({
           </div>
         ) : null}
       </div>
-    </form>
+    </motion.form>
   );
 }
