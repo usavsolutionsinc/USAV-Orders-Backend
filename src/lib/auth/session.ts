@@ -108,11 +108,17 @@ export async function createSession(opts: CreateSessionOpts): Promise<SessionRow
   const sid = newSid();
 
   // Read the staff's current session policy so we apply the right window.
-  const policyR = await pool.query(
-    `SELECT COALESCE(session_policy, 'default') AS policy FROM staff WHERE id = $1`,
-    [opts.staffId],
-  );
-  const policy = ((policyR.rows[0]?.policy ?? 'default') as SessionPolicy);
+  // Falls back to 'default' if the session_policy column isn't deployed yet.
+  let policy: SessionPolicy = 'default';
+  try {
+    const policyR = await pool.query(
+      `SELECT COALESCE(session_policy, 'default') AS policy FROM staff WHERE id = $1`,
+      [opts.staffId],
+    );
+    policy = (policyR.rows[0]?.policy ?? 'default') as SessionPolicy;
+  } catch {
+    policy = 'default';
+  }
   const window = resolveSessionWindow(opts.deviceKind, policy);
 
   const defaultExpiresAt = new Date(Date.now() + window.absoluteMs);

@@ -74,7 +74,7 @@ interface Props {
 
 /**
  * Sidebar "Recent activity" rail — shares the exact data source the History
- * table uses (`view=all`, queryKey `['receiving-lines-table', 'all']`) so
+ * table uses (`view=all`, queryKey `['receiving-lines-table', 'all', 'receive']`) so
  * both surfaces stay in lockstep without a second fetch. Renders the first
  * `limit` rows of the same dataset; clicking a row dispatches
  * `receiving-select-line` → opens it in the workspace.
@@ -87,7 +87,7 @@ export function ReceivingRecentRail({ selectedLineId, limit = 20 }: Props) {
   const queryClient = useQueryClient();
   // Match `ReceivingLinesTable`'s queryKey + queryFn exactly so react-query
   // dedupes the fetch — the rail rides on the table's cache.
-  const queryKey = useMemo(() => ['receiving-lines-table', 'all'] as const, []);
+  const queryKey = useMemo(() => ['receiving-lines-table', 'all', 'receive'] as const, []);
 
   const { data, isLoading } = useQuery<ApiResponse>({
     queryKey,

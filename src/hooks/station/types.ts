@@ -22,7 +22,8 @@ export interface ActiveStationOrder {
   shipByDate?: string | null;
   createdAt?: string | null;
   orderFound?: boolean;
-  sourceType?: 'order' | 'fba' | 'repair';
+  /** Session flavor for station UI routing (fba/repair/order vs orders_exceptions path). */
+  sourceType?: 'order' | 'fba' | 'repair' | 'exception';
   /** Server-issued anchor for serial/SKU scans (tracking / exception / FNSKU / repair session). */
   scanSessionId?: string | null;
   /** Friendly inline UX copy rendered inside the active order card. */

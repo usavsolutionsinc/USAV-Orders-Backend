@@ -5,6 +5,13 @@ import { invalidateCacheTags } from '@/lib/cache/upstash-cache';
 import type { SerialUnitRow } from '@/lib/neon/serial-units-queries';
 import { registerShipmentPermissive } from '@/lib/shipping/sync-shipment';
 import { withAuth } from '@/lib/auth/withAuth';
+import {
+  normalizeReceivingHistorySearchField,
+  normalizeReceivingHistorySearchScope,
+  receivingHistorySkipsUnmatchedPlaceholders,
+  type ReceivingHistorySearchField,
+  type ReceivingHistorySearchScope,
+} from '@/lib/receiving-history-search';
 
 type LineSerial = {
   id: number;
@@ -72,6 +79,10 @@ export const GET = withAuth(async (request: NextRequest) => {
     const limit       = Math.min(Number(searchParams.get('limit') || 200), 500);
     const offset      = Math.max(Number(searchParams.get('offset') || 0), 0);
     const search      = String(searchParams.get('search') || '').trim();
+    const searchField: ReceivingHistorySearchField =
+      normalizeReceivingHistorySearchField(searchParams.get('search_field'));
+    const searchScope: ReceivingHistorySearchScope =
+      normalizeReceivingHistorySearchScope(searchParams.get('search_scope'));
     const qaFilter    = String(searchParams.get('qa_status') || '').trim().toUpperCase();
     const dispFilter  = String(searchParams.get('disposition') || '').trim().toUpperCase();
     const workflowFilter = String(searchParams.get('workflow_status') || '').trim().toUpperCase();
@@ -203,24 +214,80 @@ export const GET = withAuth(async (request: NextRequest) => {
     let idx = 1;
 
     if (search) {
-      // History search bar lets operators type a tracking, PO #, SKU, or item
-      // name. Match against every visible identifier so a single field works
-      // for all of them. `r.zoho_purchaseorder_number` covers the human-
-      // readable "PO-1234" style; `rl.zoho_purchaseorder_id` covers the
-      // internal numeric Zoho id; `r.receiving_tracking_number` /
-      // `stn.tracking_number_raw` cover carrier trackings.
-      conditions.push(
-        `(rl.item_name ILIKE $${idx}
-          OR rl.sku ILIKE $${idx}
-          OR rl.zoho_purchaseorder_id ILIKE $${idx}
-          OR rl.zoho_purchaseorder_number ILIKE $${idx}
-          OR rl.zoho_item_id ILIKE $${idx}
-          OR r.zoho_purchaseorder_number ILIKE $${idx}
-          OR r.receiving_tracking_number ILIKE $${idx}
-          OR stn.tracking_number_raw ILIKE $${idx}
-          OR stn.tracking_number_normalized ILIKE $${idx})`,
-      );
-      values.push(`%${search}%`);
+      const p = `%${search}%`;
+      switch (searchField) {
+        case 'po':
+          conditions.push(
+            `(COALESCE(rl.zoho_purchaseorder_id::text, '') ILIKE $${idx}
+             OR COALESCE(rl.zoho_purchaseorder_number, '') ILIKE $${idx}
+             OR COALESCE(r.zoho_purchaseorder_number, '') ILIKE $${idx})`,
+          );
+          values.push(p);
+          idx++;
+          break;
+        case 'tracking':
+          conditions.push(
+            `(COALESCE(r.receiving_tracking_number, '') ILIKE $${idx}
+             OR COALESCE(stn.tracking_number_raw, '') ILIKE $${idx}
+             OR COALESCE(stn.tracking_number_normalized, '') ILIKE $${idx})`,
+          );
+          values.push(p);
+          idx++;
+          break;
+        case 'sku':
+          conditions.push(
+            `(COALESCE(rl.sku, '') ILIKE $${idx}
+             OR COALESCE(rl.zoho_item_id, '') ILIKE $${idx})`,
+          );
+          values.push(p);
+          idx++;
+          break;
+        case 'product':
+          conditions.push(`COALESCE(rl.item_name, '') ILIKE $${idx}`);
+          values.push(p);
+          idx++;
+          break;
+        case 'serial':
+          conditions.push(
+            `EXISTS (
+               SELECT 1 FROM serial_units su_hist
+               WHERE su_hist.origin_receiving_line_id = rl.id
+                 AND COALESCE(su_hist.serial_number, '') ILIKE $${idx}
+             )`,
+          );
+          values.push(p);
+          idx++;
+          break;
+        default: {
+          conditions.push(
+            `(COALESCE(rl.item_name, '') ILIKE $${idx}
+           OR COALESCE(rl.sku, '') ILIKE $${idx}
+           OR COALESCE(rl.zoho_purchaseorder_id::text, '') ILIKE $${idx}
+           OR COALESCE(rl.zoho_purchaseorder_number, '') ILIKE $${idx}
+           OR COALESCE(rl.zoho_item_id, '') ILIKE $${idx}
+           OR COALESCE(r.zoho_purchaseorder_number, '') ILIKE $${idx}
+           OR COALESCE(r.receiving_tracking_number, '') ILIKE $${idx}
+           OR COALESCE(stn.tracking_number_raw, '') ILIKE $${idx}
+           OR COALESCE(stn.tracking_number_normalized, '') ILIKE $${idx}
+           OR EXISTS (
+                SELECT 1 FROM serial_units su_all
+                WHERE su_all.origin_receiving_line_id = rl.id
+                  AND COALESCE(su_all.serial_number, '') ILIKE $${idx}
+              ))`,
+          );
+          values.push(p);
+          idx++;
+          break;
+        }
+      }
+    }
+    if (searchScope === 'zoho_po') {
+      conditions.push(`r.source = $${idx}`);
+      values.push('zoho_po');
+      idx++;
+    } else if (searchScope === 'unmatched') {
+      conditions.push(`r.source = $${idx}`);
+      values.push('unmatched');
       idx++;
     }
     if (qaFilter && QA_STATUSES.has(qaFilter)) {
@@ -353,18 +420,33 @@ export const GET = withAuth(async (request: NextRequest) => {
       }
     }
 
-    // `receiving.source = 'unmatched'` with zero lines never appears in FROM
-    // receiving_lines — synthesize one row per package so Recent rail + History match.
-    if (view === 'all') {
+    const includeUnmatchedPlaceholders =
+      view === 'all' &&
+      searchScope !== 'zoho_po' &&
+      !receivingHistorySkipsUnmatchedPlaceholders(searchField);
+
+    if (includeUnmatchedPlaceholders) {
       const unmatchedSearchVals: unknown[] = [];
       let unmatchedSearchSql = '';
       if (search) {
-        unmatchedSearchSql = ` AND (
-             COALESCE(r.receiving_tracking_number, '') ILIKE $1
-          OR COALESCE(stn.tracking_number_raw, '') ILIKE $1
-          OR COALESCE(stn.tracking_number_normalized, '') ILIKE $1
-        )`;
         unmatchedSearchVals.push(`%${search}%`);
+        if (searchField === 'po') {
+          unmatchedSearchSql =
+            ` AND COALESCE(r.zoho_purchaseorder_number, '') ILIKE $1`;
+        } else if (searchField === 'tracking') {
+          unmatchedSearchSql = ` AND (
+               COALESCE(r.receiving_tracking_number, '') ILIKE $1
+            OR COALESCE(stn.tracking_number_raw, '') ILIKE $1
+            OR COALESCE(stn.tracking_number_normalized, '') ILIKE $1
+          )`;
+        } else {
+          unmatchedSearchSql = ` AND (
+               COALESCE(r.receiving_tracking_number, '') ILIKE $1
+            OR COALESCE(stn.tracking_number_raw, '') ILIKE $1
+            OR COALESCE(stn.tracking_number_normalized, '') ILIKE $1
+            OR COALESCE(r.zoho_purchaseorder_number, '') ILIKE $1
+          )`;
+        }
       }
       const [unmatchedPkgsRes, unmatchedCntRes] = await Promise.all([
         pool.query(

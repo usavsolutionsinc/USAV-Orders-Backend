@@ -114,9 +114,13 @@ export default function SignInPage() {
   /**
    * Resolves the landing route. Four-step chain (first match wins):
    *   1. ?next= query param (came from a deep link — keep them there)
-   *   2. defaultHomePath returned by the API (per-staff override)
-   *   3. ROLE_HOME[role] (per-role default)
-   *   4. /dashboard (final fallback)
+   *   2. Per-staff override:
+   *        - on mobile devices → defaultHomePathMobile
+   *        - on desktop        → defaultHomePath
+   *      Each is independent: a staffer can have a desktop override and no
+   *      mobile override (or vice-versa).
+   *   3. ROLE_HOME[role] (desktop) / MOBILE_ROLE_HOME[role] (mobile)
+   *   4. /dashboard or /m/home (final fallback)
    *
    * We use window.location.assign instead of router.replace as the final
    * step. router.replace is an SPA navigation that re-uses the existing
@@ -131,16 +135,12 @@ export default function SignInPage() {
     staffId: number,
     role: string | null | undefined,
     defaultHomePath: string | null | undefined,
+    defaultHomePathMobile: string | null | undefined,
   ) => {
     writeRecent(staffId);
     // Hydrate AuthContext synchronously (flushSync inside refresh) so any
     // micro-task scheduled before the hard navigation sees the new user.
     await refreshAuth();
-    // Mobile vs. desktop landing: on mobile, receivers/packers go to their
-    // /m/* single-purpose flow; everyone else lands on the /m/home hub.
-    // On desktop, the existing ROLE_HOME map drives the destination. The
-    // per-staff defaultHomePath and the ?next= deep link still override
-    // both — same precedence as before.
     const onMobile = isMobileDevice();
     const normalizedRole = role ? role.toLowerCase() : '';
     const roleHome = normalizedRole
@@ -149,7 +149,8 @@ export default function SignInPage() {
         : ROLE_HOME[normalizedRole]
       : null;
     const fallback = onMobile ? '/m/home' : '/dashboard';
-    const target = next || defaultHomePath || roleHome || fallback;
+    const override = onMobile ? defaultHomePathMobile : defaultHomePath;
+    const target = next || override || roleHome || fallback;
     if (typeof window !== 'undefined') {
       window.location.assign(target);
     } else {
@@ -175,7 +176,8 @@ export default function SignInPage() {
       return { ok: false as const, error: humanError((data as { error?: string }).error) };
     }
     const data = await r.json().catch(() => ({}));
-    await finish(picked.id, picked.role, (data as { defaultHomePath?: string | null }).defaultHomePath);
+    const d = data as { defaultHomePath?: string | null; defaultHomePathMobile?: string | null };
+    await finish(picked.id, picked.role, d.defaultHomePath, d.defaultHomePathMobile);
     return { ok: true as const };
   }, [picked, finish, rememberMe]);
 
@@ -197,7 +199,8 @@ export default function SignInPage() {
       setPickerMessage(humanError((data as { error?: string }).error));
       return;
     }
-    await finish(row.id, row.role, (data as { defaultHomePath?: string | null }).defaultHomePath);
+    const d = data as { defaultHomePath?: string | null; defaultHomePathMobile?: string | null };
+    await finish(row.id, row.role, d.defaultHomePath, d.defaultHomePathMobile);
   }, [finish, rememberMe]);
 
   const handlePick = useCallback((row: StaffPickerRow) => {
@@ -225,7 +228,8 @@ export default function SignInPage() {
       return { ok: false as const, error: humanError((data as { error?: string }).error) };
     }
     const data = await r.json().catch(() => ({}));
-    await finish(picked.id, picked.role, (data as { defaultHomePath?: string | null }).defaultHomePath);
+    const d = data as { defaultHomePath?: string | null; defaultHomePathMobile?: string | null };
+    await finish(picked.id, picked.role, d.defaultHomePath, d.defaultHomePathMobile);
     return { ok: true as const };
   }, [picked, finish, rememberMe]);
 
@@ -249,7 +253,8 @@ export default function SignInPage() {
       throw new Error(humanError((data as { error?: string }).error));
     }
     const data = await finishRes.json().catch(() => ({}));
-    await finish(picked.id, picked.role, (data as { defaultHomePath?: string | null }).defaultHomePath);
+    const d = data as { defaultHomePath?: string | null; defaultHomePathMobile?: string | null };
+    await finish(picked.id, picked.role, d.defaultHomePath, d.defaultHomePathMobile);
   }, [picked, finish]);
 
   return (

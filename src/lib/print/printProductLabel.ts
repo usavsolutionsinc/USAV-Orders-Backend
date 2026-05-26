@@ -56,19 +56,21 @@ export function buildUnitPayload(args: {
 }
 
 /**
- * Render the label HTML. QR-only layout: product title + identifier
- * column on the left, QR on the right. The 1D barcode that used to sit
- * under the SKU is intentionally gone — see [[project-qr-label-format]].
+ * Render the label HTML. DataMatrix-only layout: SKU/unit-id column on
+ * the left, DataMatrix on the right. Product title is intentionally
+ * absent — this label rides on the outer shipping carton, and any
+ * descriptive text raises theft risk on electronics. Operator-facing
+ * title still shows in the on-screen live preview.
  */
 function buildLabelHtml(args: {
   sku: string;
-  title: string;
+  /** Accepted for API compatibility but no longer printed. */
+  title?: string;
   serialNumber: string;
   qrPayload?: string | null;
   gtin?: string | null;
 }): string {
   const safeSku = escapeHtml(args.sku);
-  const safeTitle = escapeHtml(args.title);
   const { value, symbology } = buildUnitPayload({
     sku: args.sku,
     serialNumber: args.serialNumber || null,
@@ -93,8 +95,7 @@ function buildLabelHtml(args: {
       body { font-family: Arial, sans-serif; padding: 0; margin: 0; }
       .wrap { display:flex; align-items:stretch; gap:8px; padding:6px 8px; height:1in; }
       .info { flex:1 1 auto; min-width:0; display:flex; flex-direction:column; justify-content:center; gap:3px; }
-      .title { font-size: 11px; font-weight: 700; line-height:1.15; margin:0; overflow:hidden; text-overflow:ellipsis; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; }
-      .sku { font-size: 14px; color: #111; margin:0; font-family: monospace; font-weight: 700; word-break: break-all; }
+      .sku { font-size: 16px; color: #111; margin:0; font-family: monospace; font-weight: 700; word-break: break-all; line-height:1.2; }
       .qr { flex:0 0 auto; width:0.88in; height:0.88in; display:flex; align-items:center; justify-content:center; align-self:center; }
       .qr svg { width:100%; height:100%; display:block; }
     </style>
@@ -102,7 +103,6 @@ function buildLabelHtml(args: {
   <body>
     <div class="wrap">
       <div class="info">
-        ${safeTitle ? `<div class="title">${safeTitle}</div>` : ''}
         <div class="sku">${safeSku}</div>
       </div>
       <div class="qr">${qrSvg}</div>

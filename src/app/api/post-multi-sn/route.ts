@@ -1,82 +1,227 @@
 import { NextRequest, NextResponse } from 'next/server';
 import pool from '@/lib/db';
-import { formatPSTTimestamp } from '@/utils/date';
-import { getSkuCatalogBySku } from '@/lib/neon/sku-catalog-queries';
 import { withAuth } from '@/lib/auth/withAuth';
+import { getSkuCatalogBySku } from '@/lib/neon/sku-catalog-queries';
+import { upsertSerialUnit } from '@/lib/neon/serial-units-queries';
+import { recordInventoryEvent } from '@/lib/inventory/events';
 
-export const POST = withAuth(async (request: NextRequest) => {
-    const client = await pool.connect();
+/**
+ * POST /api/post-multi-sn — issue label(s) for a SKU + record the audit trail.
+ *
+ * Modernized writer for the `MultiSkuSnBarcode` workspace. Replaces the
+ * legacy raw INSERT into `serial_units.legacy_*` columns (a holdover from
+ * the retired `sku` table backfill — see migration 2026-04-15) with the
+ * canonical pipeline:
+ *
+ *   1. `upsertSerialUnit()` — single writer for serial_units, handles
+ *      status transitions, return detection, idempotent upsert.
+ *   2. `station_activity_logs` — one row per print batch, records who
+ *      issued labels for which SKU + carries the DataMatrix payload.
+ *   3. `tech_serial_numbers` — one row per unit, the canonical SKU↔serial
+ *      acknowledgment table. Cross-refs the station_activity_logs row.
+ *   4. `recordInventoryEvent()` — LABELED event per unit, station=SYSTEM.
+ *      This is what powers the future Recently Printed + Unit History
+ *      views — both read from `inventory_events` and
+ *      `station_activity_logs`.
+ *
+ * Request body (legacy `productTitle` and `shippingTrackingNumber` fields
+ * are now ignored; legacy `sku` field is accepted as an alias for `unitId`
+ * so older clients keep working until they switch to the new shape):
+ *
+ *   {
+ *     sku: string;             // product SKU, e.g. "00804"
+ *     unitId?: string;         // minted unit id, e.g. "00098-2026-000010"
+ *     gtin?: string;           // internal GTIN from /api/units/next-id
+ *     qrPayload?: string;      // the DataMatrix payload printed on the label
+ *     symbology?: 'gs1datamatrix' | 'datamatrix';
+ *     serialNumbers: string[]; // raw serials — for auto-issue this is [unitId]
+ *     notes?: string;
+ *     location?: string;
+ *     condition?: ConditionGrade;
+ *     printClass?: 'print' | 'sn-to-sku';
+ *   }
+ */
+
+const VALID_CONDITIONS = ['BRAND_NEW', 'USED_A', 'USED_B', 'USED_C', 'PARTS'] as const;
+type ConditionGrade = (typeof VALID_CONDITIONS)[number];
+
+export const POST = withAuth(
+  async (request: NextRequest, ctx) => {
+    let body: Record<string, unknown>;
     try {
-        const body = await request.json();
-        const { sku, serialNumbers, notes, productTitle: _productTitle, location, shippingTrackingNumber, condition } = body;
-
-        if (!sku || !serialNumbers || !Array.isArray(serialNumbers) || serialNumbers.length === 0) {
-            return NextResponse.json({ error: 'Missing required fields: sku and serialNumbers[]' }, { status: 400 });
-        }
-
-        const timestamp = formatPSTTimestamp(new Date());
-        const skuStr = String(sku).trim();
-        const baseSku = skuStr.includes(':') ? skuStr.split(':')[0].trim() : skuStr;
-        const trackingStr = shippingTrackingNumber ? String(shippingTrackingNumber).trim() : null;
-        const notesStr = notes ? String(notes) : null;
-        const locationStr = location ? String(location).trim() : null;
-
-        const VALID_CONDITIONS = ['BRAND_NEW', 'USED_A', 'USED_B', 'USED_C', 'PARTS'] as const;
-        type ConditionGrade = (typeof VALID_CONDITIONS)[number];
-        const conditionStr: ConditionGrade =
-            typeof condition === 'string' && (VALID_CONDITIONS as readonly string[]).includes(condition)
-                ? (condition as ConditionGrade)
-                : 'BRAND_NEW';
-
-        const catalog = await getSkuCatalogBySku(baseSku) ?? await getSkuCatalogBySku(skuStr);
-        const catalogId = catalog?.id ?? null;
-
-        await client.query('BEGIN');
-
-        const insertedIds: number[] = [];
-        for (const raw of serialNumbers) {
-            const serial = String(raw || '').trim();
-            if (!serial) continue;
-            const normalized = serial.toUpperCase();
-
-            const result = await client.query<{ id: number }>(
-                `INSERT INTO serial_units (
-                    serial_number, normalized_serial, sku, sku_catalog_id,
-                    current_status, current_location, condition_grade,
-                    origin_source, shipping_tracking_number,
-                    legacy_notes, legacy_date_time
-                 )
-                 VALUES ($1, $2, $3, $4, 'UNKNOWN'::serial_status_enum, $5, $9::condition_grade_enum, 'sku', $6, $7, $8)
-                 ON CONFLICT (normalized_serial) DO UPDATE SET
-                    sku                      = COALESCE(serial_units.sku, EXCLUDED.sku),
-                    sku_catalog_id           = COALESCE(serial_units.sku_catalog_id, EXCLUDED.sku_catalog_id),
-                    current_location         = COALESCE(EXCLUDED.current_location, serial_units.current_location),
-                    condition_grade          = EXCLUDED.condition_grade,
-                    shipping_tracking_number = COALESCE(EXCLUDED.shipping_tracking_number, serial_units.shipping_tracking_number),
-                    legacy_notes             = COALESCE(EXCLUDED.legacy_notes, serial_units.legacy_notes),
-                    legacy_date_time         = COALESCE(serial_units.legacy_date_time, EXCLUDED.legacy_date_time),
-                    updated_at               = NOW()
-                 RETURNING id`,
-                [serial, normalized, skuStr, catalogId, locationStr, trackingStr, notesStr, timestamp, conditionStr],
-            );
-            if (result.rows[0]?.id) insertedIds.push(result.rows[0].id);
-        }
-
-        await client.query('COMMIT');
-
-        return NextResponse.json({
-            success: true,
-            serialUnitIds: insertedIds,
-            id: insertedIds[0] ?? null,
-        });
-    } catch (error: any) {
-        await client.query('ROLLBACK').catch(() => {});
-        console.error('[post-multi-sn] DB error:', error);
-        return NextResponse.json(
-            { error: 'Internal Server Error', details: error.message },
-            { status: 500 }
-        );
-    } finally {
-        client.release();
+      body = (await request.json()) as Record<string, unknown>;
+    } catch {
+      return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 });
     }
-}, { permission: 'tech.scan_serial' });
+
+    // Accept the legacy contract (sku = unitId) and the new contract
+    // (sku = real SKU, unitId = minted id) simultaneously. When only
+    // `sku` is sent, treat it as the unit id so existing clients keep
+    // working; the catalog lookup falls through to the base form.
+    const sku = typeof body.sku === 'string' ? body.sku.trim() : '';
+    const unitId =
+      typeof body.unitId === 'string' && body.unitId.trim()
+        ? body.unitId.trim()
+        : sku;
+    const productSku =
+      typeof body.productSku === 'string' && body.productSku.trim()
+        ? body.productSku.trim()
+        : sku;
+
+    const serialNumbers = Array.isArray(body.serialNumbers)
+      ? (body.serialNumbers as unknown[]).map((s) => String(s ?? '').trim()).filter(Boolean)
+      : [];
+
+    if (!sku || serialNumbers.length === 0) {
+      return NextResponse.json(
+        { error: 'Missing required fields: sku and serialNumbers[]' },
+        { status: 400 },
+      );
+    }
+
+    const notes = typeof body.notes === 'string' ? body.notes : null;
+    const location = typeof body.location === 'string' ? body.location.trim() || null : null;
+    const conditionRaw = typeof body.condition === 'string' ? body.condition : '';
+    const condition: ConditionGrade = (VALID_CONDITIONS as readonly string[]).includes(conditionRaw)
+      ? (conditionRaw as ConditionGrade)
+      : 'BRAND_NEW';
+    const gtin = typeof body.gtin === 'string' ? body.gtin.trim() || null : null;
+    const qrPayload = typeof body.qrPayload === 'string' ? body.qrPayload.trim() || null : null;
+    const symbology =
+      body.symbology === 'gs1datamatrix' || body.symbology === 'datamatrix'
+        ? (body.symbology as 'gs1datamatrix' | 'datamatrix')
+        : null;
+    const printClass =
+      body.printClass === 'sn-to-sku' || body.printClass === 'print'
+        ? (body.printClass as 'print' | 'sn-to-sku')
+        : 'print';
+
+    // Resolve catalog from the real SKU first; fall back to the unit-id form
+    // for old clients that only sent `sku`. The base form strips any `:`
+    // suffix used by composite SKUs.
+    const baseProductSku = productSku.includes(':') ? productSku.split(':')[0].trim() : productSku;
+    const catalog =
+      (await getSkuCatalogBySku(baseProductSku)) ?? (await getSkuCatalogBySku(productSku));
+    const catalogId = catalog?.id ?? null;
+    const skuForStorage = catalog?.sku || baseProductSku || productSku;
+
+    const actorId = ctx.staffId ?? null;
+
+    // 1. One station_activity_logs row covering the whole batch. Carries
+    //    the print payload + metadata so the future Recently Printed view
+    //    can render rich rows without rejoining inventory_events.
+    let stationActivityLogId: number | null = null;
+    try {
+      const logRes = await pool.query<{ id: number }>(
+        `INSERT INTO station_activity_logs
+           (station, activity_type, staff_id, scan_ref, notes, metadata)
+         VALUES ('LABELS', 'LABEL_PRINTED', $1, $2, $3, $4::jsonb)
+         RETURNING id`,
+        [
+          actorId,
+          qrPayload,
+          notes,
+          JSON.stringify({
+            unit_id: unitId,
+            sku: skuForStorage,
+            sku_catalog_id: catalogId,
+            gtin,
+            symbology,
+            print_class: printClass,
+            serial_count: serialNumbers.length,
+            condition,
+          }),
+        ],
+      );
+      stationActivityLogId = logRes.rows[0]?.id ?? null;
+    } catch (err) {
+      console.warn('[post-multi-sn] station_activity_logs insert failed (non-fatal)', err);
+    }
+
+    const serialUnitIds: number[] = [];
+    for (const serial of serialNumbers) {
+      // 2. Canonical upsert — handles status transitions, return detection,
+      //    metadata patching. Origin is 'manual' (operator-triggered print);
+      //    status lands at UNKNOWN by default, then the LABELED event below
+      //    documents the lifecycle marker without claiming physical custody.
+      let upserted;
+      try {
+        upserted = await upsertSerialUnit({
+          serial_number: serial,
+          sku: skuForStorage,
+          sku_catalog_id: catalogId,
+          origin_source: 'manual',
+          actor_id: actorId,
+          condition_grade: condition,
+          location,
+          target_status: 'LABELED',
+        });
+      } catch (err) {
+        console.error('[post-multi-sn] upsertSerialUnit failed', { serial, err });
+        continue;
+      }
+      if (!upserted) continue;
+
+      const serialUnitId = upserted.unit.id;
+      serialUnitIds.push(serialUnitId);
+
+      // 3. Canonical SKU↔serial acknowledgment row. ADMIN is the only
+      //    station_source the CHECK constraint accepts for non-receiving/
+      //    non-tech/non-pack writes (see 2026-03-31_tsn_add_station_source).
+      try {
+        await pool.query(
+          `INSERT INTO tech_serial_numbers
+             (serial_number, serial_type, tested_by, station_source,
+              receiving_line_id, shipment_id, scan_ref,
+              serial_unit_id, source_sku_id, context_station_activity_log_id)
+           VALUES ($1, 'SERIAL', $2, 'ADMIN', NULL, NULL, $3, $4, $5, $6)
+           ON CONFLICT DO NOTHING`,
+          [
+            serial.toUpperCase(),
+            actorId,
+            qrPayload,
+            serialUnitId,
+            catalogId,
+            stationActivityLogId,
+          ],
+        );
+      } catch (err) {
+        console.warn('[post-multi-sn] tech_serial_numbers insert failed (non-fatal)', err);
+      }
+
+      // 4. Lifecycle event — what the Unit History view reads. station=
+      //    SYSTEM because the print is operator-triggered but not tied to
+      //    a physical station scan.
+      try {
+        await recordInventoryEvent({
+          event_type: 'LABELED',
+          actor_staff_id: actorId,
+          station: 'SYSTEM',
+          serial_unit_id: serialUnitId,
+          sku: skuForStorage,
+          prev_status: upserted.prior_status,
+          next_status: 'LABELED',
+          scan_token: qrPayload ?? unitId,
+          notes,
+          payload: {
+            unit_id: unitId,
+            gtin,
+            symbology,
+            print_class: printClass,
+            station_activity_log_id: stationActivityLogId,
+          },
+        });
+      } catch (err) {
+        console.warn('[post-multi-sn] recordInventoryEvent failed (non-fatal)', err);
+      }
+    }
+
+    return NextResponse.json({
+      success: true,
+      serialUnitIds,
+      id: serialUnitIds[0] ?? null,
+      stationActivityLogId,
+    });
+  },
+  { permission: 'print.label' },
+);

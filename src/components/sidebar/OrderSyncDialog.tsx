@@ -90,6 +90,22 @@ function TransferTab({ tab, label }: { tab: TransferTabState; label: string }) {
     totalInserted === 0 && totalUpdated === 0 && totalDeleted === 0
   );
 
+  // Rollup: when updates dominate, show *where* those existing orders
+  // originally came from. Answers "why is everything updated instead of
+  // inserted?" — usually it's because Ecwid or a prior sheet run already
+  // brought them in.
+  const updateProvenance = (() => {
+    const updated = details?.updated ?? [];
+    if (updated.length === 0 || totalInserted >= updated.length) return null;
+    const bySource = new Map<string, number>();
+    for (const row of updated) {
+      const key = (row.existingAccountSource || 'unknown').toLowerCase();
+      bySource.set(key, (bySource.get(key) ?? 0) + 1);
+    }
+    const sorted = Array.from(bySource.entries()).sort((a, b) => b[1] - a[1]);
+    return sorted;
+  })();
+
   return (
     <div className="flex flex-col gap-4">
       <div className="grid grid-cols-3 gap-2">
@@ -97,6 +113,22 @@ function TransferTab({ tab, label }: { tab: TransferTabState; label: string }) {
         <SummaryStat label="Updated" value={totalUpdated} tone="blue" />
         <SummaryStat label="Removed duplicates" value={totalDeleted} tone="gray" />
       </div>
+
+      {updateProvenance && updateProvenance.length > 0 && (
+        <div className="rounded-xl border border-blue-200 bg-blue-50/60 px-3 py-2.5">
+          <p className={`${microBadge} text-blue-700`}>Why so many updates?</p>
+          <p className={`${fieldLabel} text-blue-700 mt-0.5 normal-case tracking-normal`}>
+            These orders already existed in the database — the sheet only filled in blanks. Originally inserted by:{' '}
+            {updateProvenance.map(([src, n], i) => (
+              <span key={src}>
+                {i > 0 ? ', ' : ''}
+                <span className="font-semibold">{src}</span> ({n})
+              </span>
+            ))}
+            .
+          </p>
+        </div>
+      )}
 
       {unknownTitles.length > 0 && (
         <div className="rounded-xl border border-amber-200 bg-amber-50/60 px-3 py-2.5">
@@ -187,6 +219,18 @@ function SummaryStat({ label, value, tone }: { label: string; value: number; ton
   );
 }
 
+function formatExistingProvenance(row: TransferOrderDetail): string | null {
+  const src = row.existingAccountSource?.trim();
+  const at = row.existingCreatedAt ? new Date(row.existingCreatedAt) : null;
+  const datePart = at && !Number.isNaN(at.getTime())
+    ? at.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })
+    : null;
+  if (src && datePart) return `from ${src} · ${datePart}`;
+  if (src) return `from ${src}`;
+  if (datePart) return `first seen ${datePart}`;
+  return null;
+}
+
 function DetailTable({
   rows,
 }: {
@@ -206,26 +250,34 @@ function DetailTable({
           </tr>
         </thead>
         <tbody className="divide-y divide-gray-100">
-          {rows.map(({ kind, row }, i) => (
-            <tr key={`${kind}:${row.orderId}:${i}`} className="hover:bg-gray-50/60">
-              <td className="px-3 py-2 font-mono text-xs text-gray-900">{row.orderId || '—'}</td>
-              <td className="px-3 py-2 text-gray-700">
-                {row.productTitle || (
-                  <span className="text-amber-700">Unknown Product</span>
-                )}
-                {row.titleSource && row.titleSource !== 'sheet' && row.productTitle ? (
-                  <span className="ml-1 text-[10px] uppercase tracking-wide text-gray-400">
-                    · {row.titleSource.replace('_', ' ')}
-                  </span>
-                ) : null}
-              </td>
-              <td className="px-3 py-2 font-mono text-xs text-gray-600">{row.sku || row.itemNumber || '—'}</td>
-              <td className="px-3 py-2 font-mono text-xs text-gray-500">{row.tracking || '—'}</td>
-              <td className="px-3 py-2 text-right">
-                <span className={badge(kind)}>{kind}</span>
-              </td>
-            </tr>
-          ))}
+          {rows.map(({ kind, row }, i) => {
+            const provenance = kind !== 'inserted' ? formatExistingProvenance(row) : null;
+            return (
+              <tr key={`${kind}:${row.orderId}:${i}`} className="hover:bg-gray-50/60">
+                <td className="px-3 py-2 font-mono text-xs text-gray-900 align-top">
+                  <div>{row.orderId || '—'}</div>
+                  {provenance ? (
+                    <div className="mt-0.5 text-[10px] font-normal text-gray-400">{provenance}</div>
+                  ) : null}
+                </td>
+                <td className="px-3 py-2 text-gray-700 align-top">
+                  {row.productTitle || (
+                    <span className="text-amber-700">Unknown Product</span>
+                  )}
+                  {row.titleSource && row.titleSource !== 'sheet' && row.productTitle ? (
+                    <span className="ml-1 text-[10px] uppercase tracking-wide text-gray-400">
+                      · {row.titleSource.replace('_', ' ')}
+                    </span>
+                  ) : null}
+                </td>
+                <td className="px-3 py-2 font-mono text-xs text-gray-600 align-top">{row.sku || row.itemNumber || '—'}</td>
+                <td className="px-3 py-2 font-mono text-xs text-gray-500 align-top">{row.tracking || '—'}</td>
+                <td className="px-3 py-2 text-right align-top">
+                  <span className={badge(kind)}>{kind}</span>
+                </td>
+              </tr>
+            );
+          })}
         </tbody>
       </table>
     </div>
@@ -318,31 +370,30 @@ export function OrderSyncDialog({
     },
   }), [sheets, ecwid, exceptions]);
 
-  if (!portalNode) return null;
+  // Render nothing at all when closed — avoids AnimatePresence + layoutId
+  // edge cases that left orphaned DOM nodes blocking scroll inside the page's
+  // inner scroll containers. We trade a fade-out for reliability.
+  if (!portalNode || !open) return null;
 
   const overlay = (
-    <AnimatePresence>
-      {open ? (
-        <motion.div
-          key="order-sync-overlay"
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          exit={{ opacity: 0 }}
-          transition={framerTransition.overlayScrim}
-          className="fixed inset-0 z-[120] flex items-center justify-center bg-gray-950/40 px-4 py-6"
-          onClick={() => {
-            if (!isRunning) onClose();
-          }}
-        >
-          <motion.div
-            key="order-sync-card"
-            initial={{ opacity: 0, scale: 0.96, y: 12 }}
-            animate={{ opacity: 1, scale: 1, y: 0 }}
-            exit={{ opacity: 0, scale: 0.97, y: 6 }}
-            transition={{ type: 'spring', damping: 26, stiffness: 320, mass: 0.55 }}
-            onClick={(e) => e.stopPropagation()}
-            className="relative flex w-full max-w-3xl flex-col overflow-hidden rounded-2xl bg-white shadow-[0_24px_80px_-20px_rgba(15,23,42,0.35)] ring-1 ring-gray-200"
-          >
+    <motion.div
+      key="order-sync-overlay"
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      transition={framerTransition.overlayScrim}
+      className="fixed inset-0 z-[120] flex items-center justify-center bg-gray-950/40 px-4 py-6"
+      onClick={() => {
+        if (!isRunning) onClose();
+      }}
+    >
+      <motion.div
+        key="order-sync-card"
+        initial={{ opacity: 0, scale: 0.96, y: 12 }}
+        animate={{ opacity: 1, scale: 1, y: 0 }}
+        transition={{ type: 'spring', damping: 26, stiffness: 320, mass: 0.55 }}
+        onClick={(e) => e.stopPropagation()}
+        className="relative flex w-full max-w-3xl flex-col overflow-hidden rounded-2xl bg-white shadow-[0_24px_80px_-20px_rgba(15,23,42,0.35)] ring-1 ring-gray-200"
+      >
             <header className="flex items-start gap-3 border-b border-gray-200 px-5 py-3.5">
               <div className="flex-1 min-w-0">
                 <p className={`${microBadge} text-gray-500`}>Order Sync</p>
@@ -457,10 +508,8 @@ export function OrderSyncDialog({
                 {isRunning ? 'Running…' : 'Close'}
               </button>
             </footer>
-          </motion.div>
-        </motion.div>
-      ) : null}
-    </AnimatePresence>
+      </motion.div>
+    </motion.div>
   );
 
   return createPortal(overlay, portalNode);

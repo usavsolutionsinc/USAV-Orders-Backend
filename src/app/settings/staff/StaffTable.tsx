@@ -26,7 +26,10 @@ interface StaffTableProps {
   initialStaff: StaffRow[];
 }
 
-const ROLE_OPTIONS = [
+// Initial role for the invite modal. Editing existing staff happens in
+// Admin → Access (which writes to staff_roles); this list is only used to
+// seed the very first role on a newly invited staffer.
+const ROLE_OPTIONS: ReadonlyArray<string> = [
   'admin', 'receiver', 'packer', 'technician', 'shipper',
   'inventory_manager', 'sales', 'viewer',
 ];
@@ -49,26 +52,6 @@ export function StaffTable({ initialStaff }: StaffTableProps) {
       setStaff(data.staff);
     }
   }, []);
-
-  const updateRole = useCallback(async (id: number, role: string) => {
-    setBusy(id);
-    try {
-      const r = await fetch('/api/admin/staff/update', {
-        method: 'POST',
-        credentials: 'include',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ id, role }),
-      });
-      if (!r.ok) {
-        const data = await r.json().catch(() => ({}));
-        alert(`Couldn't change role: ${data.error || r.status}`);
-        return;
-      }
-      await refresh();
-    } finally {
-      setBusy(null);
-    }
-  }, [refresh]);
 
   const deactivate = useCallback(async (id: number, name: string) => {
     if (!confirm(`Deactivate ${name}? Their active sessions will be revoked immediately.`)) return;
@@ -143,15 +126,17 @@ export function StaffTable({ initialStaff }: StaffTableProps) {
                   </div>
                 </td>
                 <td className="px-4 py-2">
-                  <select
-                    value={s.role}
-                    onChange={(e) => updateRole(s.id, e.target.value)}
-                    disabled={!s.active || busy === s.id}
-                    className="rounded-lg border border-gray-200 bg-white px-2 py-1 text-[12px] focus:border-slate-400 focus:outline-none focus:ring-1 focus:ring-slate-200 disabled:cursor-not-allowed disabled:bg-gray-50"
+                  {/* Role is derived from staff_roles[0]. To edit, jump to
+                      the access detail page where the Roles card is the
+                      authoritative editor. */}
+                  <a
+                    href={`/admin?section=access&staffId=${s.id}`}
+                    className="inline-flex items-center gap-1 rounded-lg border border-transparent px-2 py-0.5 text-[12px] font-medium text-gray-700 hover:border-gray-200 hover:bg-gray-50 hover:text-gray-900"
+                    title="Edit roles in Admin → Access"
                   >
-                    {ROLE_OPTIONS.map((r) => <option key={r} value={r}>{r}</option>)}
-                    {!ROLE_OPTIONS.includes(s.role) && <option value={s.role}>{s.role}</option>}
-                  </select>
+                    {s.role}
+                    <span className="text-gray-400">›</span>
+                  </a>
                 </td>
                 <td className="px-4 py-2">
                   <StatusPill status={s.status} active={s.active} />

@@ -26,6 +26,7 @@ type OrderProjection = {
   notes: string | null;
   customerId: number | null;
   shipmentId: number | null;
+  accountSource: string | null;
   createdAt?: Date | null;
 };
 
@@ -40,9 +41,12 @@ export class GoogleSheetsTransferOrdersJobError extends Error {
   }
 }
 
-import type { TransferOrderDetail, TransferOrderDetails } from '@/lib/orders-sync/types';
+import type { SyncProgress, TransferOrderDetail, TransferOrderDetails } from '@/lib/orders-sync/types';
 
 export type { TransferOrderDetail, TransferOrderDetails } from '@/lib/orders-sync/types';
+
+/** No-op progress callback used when streaming isn't needed. */
+const noopProgress: SyncProgress = () => {};
 
 export interface GoogleSheetsTransferOrdersJobResult {
   success: true;
@@ -214,8 +218,11 @@ export type TransferOrdersSource = 'sheets' | 'ecwid' | 'all';
 export async function runGoogleSheetsTransferOrders(
   manualSheetName?: string,
   source: TransferOrdersSource = 'all',
+  progress: SyncProgress = noopProgress,
 ): Promise<GoogleSheetsTransferOrdersJobResult> {
   const startedAt = Date.now();
+
+  progress({ type: 'phase', phase: 'starting' });
 
   try {
     // ─── Source-aware data fetching ────────────────────────────────────
@@ -228,6 +235,7 @@ export async function runGoogleSheetsTransferOrders(
 
     // ─── Google Sheets fetch (source: 'sheets' | 'all') ──────────────
     if (source !== 'ecwid') {
+      progress({ type: 'phase', phase: 'fetching_sheet' });
       const auth = getGoogleAuth();
       const sheets = googleSheets({ version: 'v4', auth });
       const sourceSpreadsheet = await sheets.spreadsheets.get({ spreadsheetId: SOURCE_SPREADSHEET_ID });
@@ -318,6 +326,7 @@ export async function runGoogleSheetsTransferOrders(
 
     // ─── Ecwid API fetch (source: 'ecwid' | 'all') ───────────────────
     if (source !== 'sheets') {
+      progress({ type: 'phase', phase: 'fetching_ecwid' });
       try {
         const ecwidRows = await fetchEcwidTransferRows(colIndices);
         ecwidApiRows = ecwidRows.length;
@@ -331,6 +340,7 @@ export async function runGoogleSheetsTransferOrders(
     }
 
     if (eligibleSourceRows.length === 0) {
+      progress({ type: 'phase', phase: 'done' });
       return {
         success: true,
         rowCount: 0,
@@ -406,9 +416,11 @@ export async function runGoogleSheetsTransferOrders(
     };
 
     // Resolve all tracking numbers in parallel (batches of 10 to avoid overwhelming the DB)
+    progress({ type: 'phase', phase: 'resolving_tracking', count: sourceTrackings.length });
     for (let i = 0; i < sourceTrackings.length; i += 10) {
       await Promise.all(sourceTrackings.slice(i, i + 10).map(ensureShipmentId));
     }
+    progress({ type: 'phase', phase: 'matching_orders' });
 
     const resolvedShipmentIds = Array.from(
       new Set(
@@ -453,6 +465,7 @@ export async function runGoogleSheetsTransferOrders(
             notes: ordersTable.notes,
             customerId: ordersTable.customerId,
             shipmentId: ordersTable.shipmentId,
+            accountSource: ordersTable.accountSource,
             createdAt: ordersTable.createdAt,
           })
           .from(ordersTable)
@@ -473,6 +486,7 @@ export async function runGoogleSheetsTransferOrders(
             notes: ordersTable.notes,
             customerId: ordersTable.customerId,
             shipmentId: ordersTable.shipmentId,
+            accountSource: ordersTable.accountSource,
             createdAt: ordersTable.createdAt,
           })
           .from(ordersTable)
@@ -510,6 +524,8 @@ export async function runGoogleSheetsTransferOrders(
         notes: order.notes,
         customerId: order.customerId,
         shipmentId: order.shipmentId ?? null,
+        accountSource: (order as any).accountSource ?? null,
+        createdAt: (order as any).createdAt ?? null,
       });
     });
 
@@ -528,6 +544,8 @@ export async function runGoogleSheetsTransferOrders(
         notes: order.notes,
         customerId: order.customerId,
         shipmentId: order.shipmentId ?? null,
+        accountSource: (order as any).accountSource ?? null,
+        createdAt: (order as any).createdAt ?? null,
       };
       const rows = allOrdersByOrderId.get(key) ?? [];
       rows.push(record);
@@ -651,6 +669,7 @@ export async function runGoogleSheetsTransferOrders(
       const sheetNotes = String(row[colIndices.note] || '').trim();
       const sheetPlatform = String(row[colIndices.platform] || '').trim();
       const primaryTracking = Array.from(group.trackings.values())[0] || '';
+      const existing = latestOrderByOrderId.get(orderId);
       const detailRow: TransferOrderDetail = {
         orderId,
         productTitle: sheetProductTitle,
@@ -658,6 +677,10 @@ export async function runGoogleSheetsTransferOrders(
         itemNumber: sheetItemNumber,
         tracking: primaryTracking,
         titleSource,
+        existingAccountSource: existing?.accountSource ?? null,
+        existingCreatedAt: existing?.createdAt instanceof Date
+          ? existing.createdAt.toISOString()
+          : (typeof existing?.createdAt === 'string' ? existing.createdAt : null),
       };
       if (titleSource === 'none') detailsUnknownTitle.push(detailRow);
       const matchedCustomer = orderId ? latestCustomerByOrderId.get(orderId) : undefined;
@@ -698,6 +721,8 @@ export async function runGoogleSheetsTransferOrders(
             notes: existingOrder.notes,
             customerId: existingOrder.customerId,
             shipmentId: existingOrder.shipmentId ?? null,
+            accountSource: existingOrder.accountSource ?? null,
+            createdAt: existingOrder.createdAt ?? null,
           });
         }
 
@@ -783,10 +808,13 @@ export async function runGoogleSheetsTransferOrders(
     }
 
     if (ordersToDelete.length > 0) {
+      progress({ type: 'phase', phase: 'updating', count: ordersToDelete.length });
       await db.delete(ordersTable).where(inArray(ordersTable.id, ordersToDelete.map((e) => e.id)));
+      for (const entry of ordersToDelete) progress({ type: 'detail', kind: 'deleted', row: entry.detail });
     }
 
     if (ordersToBackfill.length > 0) {
+      progress({ type: 'phase', phase: 'updating', count: ordersToBackfill.length });
       await Promise.all(
         ordersToBackfill.map((entry) => {
           const compacted = compactUpdateValues(entry.values);
@@ -794,14 +822,17 @@ export async function runGoogleSheetsTransferOrders(
           return db.update(ordersTable).set(compacted).where(eq(ordersTable.id, entry.id));
         })
       );
+      for (const entry of ordersToBackfill) progress({ type: 'detail', kind: 'updated', row: entry.detail });
     }
 
     let insertedOrderIds: number[] = [];
     if (ordersToInsert.length > 0) {
+      progress({ type: 'phase', phase: 'inserting', count: ordersToInsert.length });
       const insertedOrders = await db
         .insert(ordersTable)
         .values(ordersToInsert.map((entry) => entry.values))
         .returning({ id: ordersTable.id });
+      for (const entry of ordersToInsert) progress({ type: 'detail', kind: 'inserted', row: entry.detail });
 
       insertedOrderIds = insertedOrders.map((o) => o.id);
       insertedOrders.forEach((order, index) => {
@@ -855,13 +886,19 @@ export async function runGoogleSheetsTransferOrders(
       new Set(allProcessedOrderIds.filter((id) => Number.isFinite(id) && id > 0))
     );
 
+    // Bust the server-side cache *before* signalling the client to refetch,
+    // otherwise the client's GET /api/orders can race ahead and get a stale
+    // cache hit. Sequence matters: invalidate → publishing event → publish.
     await invalidateAllOrdersApiCaches();
+    progress({ type: 'phase', phase: 'publishing' });
     if (uniqueProcessedIds.length > 0) {
       await publishOrderChanged({
         orderIds: uniqueProcessedIds,
         source: 'google-sheets-transfer-orders',
       });
     }
+    for (const detail of detailsUnknownTitle) progress({ type: 'detail', kind: 'unknownTitle', row: detail });
+    progress({ type: 'phase', phase: 'done' });
 
     return {
       success: true,

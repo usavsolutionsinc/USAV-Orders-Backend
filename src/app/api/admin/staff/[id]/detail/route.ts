@@ -32,6 +32,8 @@ export const GET = withAuth(async (req: NextRequest) => {
     `SELECT id, name, role, status, active, employee_id, employee_code,
             permissions_added, permissions_removed,
             mobile_display_config,
+            default_home_path, default_home_path_mobile,
+            COALESCE(session_policy, 'default') AS session_policy,
             (pin_hash IS NOT NULL) AS has_pin,
             pin_set_at, pin_locked_until,
             last_login_at, created_at

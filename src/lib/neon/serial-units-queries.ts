@@ -11,7 +11,8 @@ export type SerialStatus =
   | 'SHIPPED'
   | 'RETURNED'
   | 'RMA'
-  | 'SCRAPPED';
+  | 'SCRAPPED'
+  | 'LABELED';
 
 export type SerialOriginSource =
   | 'receiving'

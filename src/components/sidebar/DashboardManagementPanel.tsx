@@ -1,7 +1,6 @@
 'use client';
 
 import { ReactNode, useCallback, useEffect, useRef, useState } from 'react';
-import { createPortal } from 'react-dom';
 import { useQueryClient } from '@tanstack/react-query';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { AnimatePresence, motion, type Transition } from 'framer-motion';
@@ -27,16 +26,18 @@ import { RecentSearchesList } from '@/components/sidebar/RecentSearchesList';
 import { SearchBar } from '@/components/ui/SearchBar';
 import { HorizontalButtonSlider, type HorizontalSliderItem } from '@/components/ui/HorizontalButtonSlider';
 import { ShippedIntakeForm, type ShippedFormData } from '@/components/shipped';
-import { WorkOrderAssignmentCard, type AssignmentConfirmPayload } from '@/components/work-orders/WorkOrderAssignmentCard';
-import type { WorkOrderRow } from '@/components/work-orders/types';
-import { getPresentStaffForToday } from '@/lib/staffCache';
-import { saveWorkOrder } from '@/lib/work-orders/saveWorkOrder';
-import { SIDEBAR_GRAY_ASSIGN_BUTTON_CLASS } from '@/components/ui/sidebarPrimaryButtons';
 import { sectionLabel, fieldLabel, microBadge } from '@/design-system/tokens/typography/presets';
 import { dispatchUsavRefreshData, invalidateDashboardOrderQueries } from '@/lib/dashboard-query-invalidation';
 import { useAuth } from '@/contexts/AuthContext';
 import { OrderSyncDialog } from '@/components/sidebar/OrderSyncDialog';
-import type { ExceptionsTabState, TransferTabState } from '@/lib/orders-sync/types';
+import type {
+  ExceptionsTabState,
+  OrderExceptionResolutionDetail,
+  SyncPhase,
+  TransferOrderDetails,
+  TransferTabState,
+} from '@/lib/orders-sync/types';
+import { streamNdjson } from '@/lib/orders-sync/client';
 
 type PendingStockFilter = 'all' | 'pending' | 'stock';
 
@@ -51,7 +52,6 @@ interface DashboardManagementPanelProps {
   onCloseForm?: () => void;
   onFormSubmit?: (data: ShippedFormData) => void;
   filterControl?: ReactNode;
-  showNextUnassignedButton?: boolean;
   searchValue?: string;
   onSearchChange?: (value: string) => void;
   onOpenShippedMatches?: (searchQuery: string) => void;
@@ -99,12 +99,40 @@ const itemVariants = {
   },
 };
 
+function emptyTransferDetails(): TransferOrderDetails {
+  return { inserted: [], updated: [], deleted: [], unknownTitle: [] };
+}
+
+function cloneDetails(d: TransferOrderDetails): TransferOrderDetails {
+  return {
+    inserted: [...d.inserted],
+    updated: [...d.updated],
+    deleted: [...d.deleted],
+    unknownTitle: [...d.unknownTitle],
+  };
+}
+
+function phaseSummary(phase: SyncPhase, count?: number): string {
+  switch (phase) {
+    case 'starting': return 'Starting…';
+    case 'fetching_sheet': return 'Fetching sheet…';
+    case 'fetching_ecwid': return 'Fetching Ecwid orders…';
+    case 'resolving_tracking': return count ? `Resolving ${count} tracking number${count === 1 ? '' : 's'}…` : 'Resolving tracking…';
+    case 'matching_orders': return 'Matching orders…';
+    case 'inserting': return count ? `Inserting ${count} order${count === 1 ? '' : 's'}…` : 'Inserting…';
+    case 'updating': return count ? `Updating ${count} order${count === 1 ? '' : 's'}…` : 'Updating…';
+    case 'publishing': return 'Publishing changes…';
+    case 'scanning_exceptions': return count ? `Scanning ${count} open exception${count === 1 ? '' : 's'}…` : 'Scanning exceptions…';
+    case 'done': return 'Done';
+    default: return 'Working…';
+  }
+}
+
 export function DashboardManagementPanel({
   showIntakeForm = false,
   onCloseForm,
   onFormSubmit,
   filterControl,
-  showNextUnassignedButton = false,
   searchValue = '',
   onSearchChange,
   onOpenShippedMatches,
@@ -150,71 +178,6 @@ export function DashboardManagementPanel({
   const [searchHistory, setSearchHistory] = useState<SearchHistory[]>([]);
   const [showAllSearchHistory, setShowAllSearchHistory] = useState(false);
   const searchInputRef = useRef<HTMLInputElement | null>(null);
-  const [assigningState, setAssigningState] = useState<{ rows: WorkOrderRow[]; startIndex: number } | null>(null);
-  const [isLoadingAssignment, setIsLoadingAssignment] = useState(false);
-  const [isMounted, setIsMounted] = useState(false);
-  const [technicianOptions, setTechnicianOptions] = useState<{ id: number; name: string }[]>([]);
-  const [packerOptions, setPackerOptions] = useState<{ id: number; name: string }[]>([]);
-
-  useEffect(() => { setIsMounted(true); }, []);
-
-  const handleOpenNextUnassigned = useCallback(async () => {
-    setIsLoadingAssignment(true);
-    setStatus(null);
-    try {
-      const [workRes, staffMembers] = await Promise.all([
-        fetch('/api/work-orders?queue=all_unassigned'),
-        getPresentStaffForToday(),
-      ]);
-      const workJson = workRes.ok ? await workRes.json() : {};
-      const rows: WorkOrderRow[] = Array.isArray(workJson?.rows)
-        ? workJson.rows.filter((row: WorkOrderRow) => row.entityType === 'ORDER')
-        : [];
-
-      if (!rows.length) {
-        setStatus({ type: 'success', message: 'No unassigned orders found.' });
-        return;
-      }
-      const techs = staffMembers
-        .filter((member) => member.role === 'technician')
-        .map((member) => ({ id: Number(member.id), name: member.name }))
-        .sort((a, b) => a.name.localeCompare(b.name));
-      const packers = staffMembers
-        .filter((member) => member.role === 'packer')
-        .map((member) => ({ id: Number(member.id), name: member.name }));
-      setTechnicianOptions(techs);
-      setPackerOptions(packers);
-      setAssigningState({ rows, startIndex: 0 });
-    } catch {
-      setStatus({ type: 'error', message: 'Failed to load unassigned orders.' });
-    } finally {
-      setIsLoadingAssignment(false);
-    }
-  }, []);
-
-  const handleAssignConfirm = useCallback(async (row: WorkOrderRow, payload: AssignmentConfirmPayload) => {
-    const { techId: newTechId, packerId: newPackerId, deadline, status: statusOverride } = payload;
-    const newStatus =
-      statusOverride ??
-      (newTechId && newPackerId && row.status === 'OPEN' ? 'ASSIGNED' : row.status);
-    try {
-      await saveWorkOrder({
-        entityType: row.entityType,
-        entityId: row.entityId,
-        assignedTechId: newTechId,
-        assignedPackerId: newPackerId,
-        status: newStatus,
-        priority: row.priority,
-        deadlineAt: deadline,
-        notes: row.notes,
-      });
-      await invalidateDashboardOrderQueries(queryClient);
-      dispatchUsavRefreshData();
-    } catch {
-      // Silent — the card already optimistically updated; a full refresh will reconcile.
-    }
-  }, [queryClient]);
-
   useEffect(() => {
     setSearchQuery(searchValue);
   }, [searchValue]);
@@ -314,8 +277,8 @@ export function DashboardManagementPanel({
   const handleTransfer = async () => {
     const controller = new AbortController();
     abortRef.current = controller;
-    setSheetsTask({ status: 'running' });
-    setEcwidTask({ status: 'running' });
+    setSheetsTask({ status: 'running', details: emptyTransferDetails() });
+    setEcwidTask({ status: 'running', details: emptyTransferDetails() });
     // Exceptions sync runs AFTER sheets+ecwid finish so that rows just inserted
     // are visible to the matcher. Keep it idle/queued until then.
     setExceptionsTask({ status: 'idle', summary: 'Queued' });
@@ -325,98 +288,195 @@ export function DashboardManagementPanel({
     const t0 = Date.now();
     elapsedRef.current = setInterval(() => setElapsedMs(Date.now() - t0), 100);
 
+    let sheetsResultPayload: Record<string, unknown> | null = null;
+    let ecwidResultPayload: Record<string, unknown> | null = null;
+    let exceptionsResultPayload: Record<string, unknown> | null = null;
+
+    // Fires React Query invalidate + global refresh event so the dashboard
+    // tables refetch *as soon as* a stream produces real changes. Without this
+    // the dashboard only refreshed on `order.changed` from Ably — which
+    // silently no-ops when the API key is missing — or at the very end of all
+    // three streams.
+    const refreshDashboard = async () => {
+      await invalidateDashboardOrderQueries(queryClient);
+      dispatchUsavRefreshData();
+    };
+
+    const consumeTransferStream = async (
+      url: string,
+      init: RequestInit,
+      setter: typeof setSheetsTask,
+    ): Promise<{ payload: Record<string, unknown> | null; error?: string }> => {
+      // Local accumulator. We mutate this in-place and hand a fresh object to
+      // the setter on each event so React renders the latest snapshot.
+      const acc: TransferOrderDetails = emptyTransferDetails();
+      let payload: Record<string, unknown> | null = null;
+      let lastError: string | undefined;
+      let hasWrites = false;
+
+      try {
+        await streamNdjson(url, init, (event) => {
+          if (event.type === 'phase') {
+            // The `publishing` phase fires right after the job's inserts/
+            // updates land in the DB and before publish to Ably. Refresh the
+            // dashboard tables immediately so users see new rows even if Ably
+            // is misconfigured or the publish event is dropped in transit.
+            if (event.phase === 'publishing' && hasWrites) void refreshDashboard();
+            setter((prev) => ({
+              ...prev,
+              status: 'running',
+              summary: phaseSummary(event.phase, event.count),
+              phase: event.phase,
+              details: cloneDetails(acc),
+            } as TransferTabState));
+          } else if (event.type === 'detail') {
+            acc[event.kind].push(event.row);
+            if (event.kind === 'inserted' || event.kind === 'updated' || event.kind === 'deleted') {
+              hasWrites = true;
+            }
+            setter((prev) => ({
+              ...prev,
+              details: cloneDetails(acc),
+              inserted: acc.inserted.length,
+              updated: acc.updated.length,
+              deleted: acc.deleted.length,
+            } as TransferTabState));
+          } else if (event.type === 'result') {
+            payload = event.result;
+            if (hasWrites) void refreshDashboard();
+          } else if (event.type === 'error') {
+            lastError = event.error;
+          }
+        });
+      } catch (err: any) {
+        lastError = err?.name === 'AbortError' ? 'Cancelled' : (err?.message || 'Network error');
+      }
+
+      const data = payload ?? {};
+      const success = !lastError && (data as any).success !== false;
+      const ins = Number((data as any).insertedOrders ?? acc.inserted.length);
+      const upd = Number((data as any).updatedOrdersFields ?? acc.updated.length);
+      const parts = [ins && `${ins} inserted`, upd && `${upd} updated`].filter(Boolean);
+      setter({
+        status: success ? 'done' : 'error',
+        summary: success
+          ? (parts.length > 0 ? (parts.join(', ') as string) : 'Up to date')
+          : (lastError || (data as any).error || 'Failed'),
+        error: success ? undefined : (lastError || (data as any).error || 'Failed'),
+        details: cloneDetails(acc),
+        inserted: ins,
+        updated: upd,
+        deleted: Number((data as any).deletedDuplicateOrders ?? acc.deleted.length),
+        processedRows: Number((data as any).processedRows || 0),
+        tabName: (data as any).tabName,
+        phase: 'done',
+      } as TransferTabState);
+      return { payload: data, error: lastError };
+    };
+
+    const consumeExceptionsStream = async (
+      url: string,
+      init: RequestInit,
+    ): Promise<{ payload: Record<string, unknown> | null; error?: string }> => {
+      const resolved: OrderExceptionResolutionDetail[] = [];
+      const stillOpen: OrderExceptionResolutionDetail[] = [];
+      let payload: Record<string, unknown> | null = null;
+      let lastError: string | undefined;
+
+      try {
+        await streamNdjson(url, init, (event) => {
+          if (event.type === 'phase') {
+            setExceptionsTask((prev) => ({
+              ...prev,
+              status: 'running',
+              summary: phaseSummary(event.phase, event.count),
+              phase: event.phase,
+              resolved: [...resolved],
+              stillOpen: [...stillOpen],
+            }));
+          } else if (event.type === 'exception') {
+            if (event.kind === 'resolved') {
+              resolved.push(event.row);
+            } else {
+              stillOpen.push(event.row);
+            }
+            setExceptionsTask((prev) => ({
+              ...prev,
+              resolved: [...resolved],
+              stillOpen: [...stillOpen],
+              matched: resolved.length,
+              scanned: resolved.length + stillOpen.length,
+            }));
+          } else if (event.type === 'result') {
+            payload = event.result;
+            // Exception resolution can flip orders to 'shipped' — refresh the
+            // dashboard so those status changes appear immediately.
+            if (resolved.length > 0) void refreshDashboard();
+          } else if (event.type === 'error') {
+            lastError = event.error;
+          }
+        });
+      } catch (err: any) {
+        lastError = err?.name === 'AbortError' ? 'Cancelled' : (err?.message || 'Network error');
+      }
+
+      const data = payload ?? {};
+      const success = !lastError && (data as any).success !== false;
+      const matched = Number((data as any).matched ?? resolved.length);
+      setExceptionsTask({
+        status: success ? 'done' : 'error',
+        summary: success
+          ? (matched > 0 ? `${matched} resolved` : 'None pending')
+          : (lastError || (data as any).error || 'Failed'),
+        error: success ? undefined : (lastError || (data as any).error || 'Failed'),
+        resolved: [...resolved],
+        stillOpen: [...stillOpen],
+        scanned: Number((data as any).scanned ?? (resolved.length + stillOpen.length)),
+        matched,
+        phase: 'done',
+      });
+      return { payload: data, error: lastError };
+    };
+
     try {
-      const [sheetsResult, ecwidResult] = await Promise.allSettled([
-        // Google Sheets (non-ecwid platforms)
-        fetch('/api/google-sheets/transfer-orders', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ manualSheetName: manualSheetName.trim() || undefined }),
-          signal: controller.signal,
-        }).then((r) => r.json()).then((data) => {
-          const ins = Number(data.insertedOrders || 0);
-          const upd = Number(data.updatedOrdersFields || 0);
-          const parts = [ins && `${ins} inserted`, upd && `${upd} updated`].filter(Boolean);
-          setSheetsTask({
-            status: data.success ? 'done' : 'error',
-            summary: data.success
-              ? (parts.length > 0 ? parts.join(', ') : 'Up to date')
-              : (data.error || 'Failed'),
-            error: data.success ? undefined : (data.error || 'Failed'),
-            details: data.details ?? null,
-            inserted: ins,
-            updated: upd,
-            deleted: Number(data.deletedDuplicateOrders || 0),
-            processedRows: Number(data.processedRows || 0),
-            tabName: data.tabName,
-          });
-          return data;
-        }),
-        // Ecwid direct API
-        fetch('/api/ecwid/transfer-orders', {
-          method: 'POST',
-          signal: controller.signal,
-        }).then((r) => r.json()).then((data) => {
-          const ins = Number(data.insertedOrders || 0);
-          const upd = Number(data.updatedOrdersFields || 0);
-          const parts = [ins && `${ins} inserted`, upd && `${upd} updated`].filter(Boolean);
-          setEcwidTask({
-            status: data.success ? 'done' : 'error',
-            summary: data.success
-              ? (parts.length > 0 ? parts.join(', ') : 'Up to date')
-              : (data.error || 'Failed'),
-            error: data.success ? undefined : (data.error || 'Failed'),
-            details: data.details ?? null,
-            inserted: ins,
-            updated: upd,
-            deleted: Number(data.deletedDuplicateOrders || 0),
-            processedRows: Number(data.processedRows || 0),
-          });
-          return data;
-        }),
+      const [sheetsR, ecwidR] = await Promise.all([
+        consumeTransferStream(
+          '/api/google-sheets/transfer-orders',
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ manualSheetName: manualSheetName.trim() || undefined }),
+            signal: controller.signal,
+          },
+          setSheetsTask,
+        ),
+        consumeTransferStream(
+          '/api/ecwid/transfer-orders',
+          { method: 'POST', signal: controller.signal },
+          setEcwidTask,
+        ),
       ]);
+      sheetsResultPayload = sheetsR.payload;
+      ecwidResultPayload = ecwidR.payload;
 
-      setExceptionsTask({ status: 'running' });
-      const exceptionsResult = await Promise.allSettled([
-        fetch('/api/orders-exceptions/sync', {
-          method: 'POST',
-          signal: controller.signal,
-        }).then((r) => r.json()).then((data) => {
-          const matched = Number(data.matched || 0);
-          setExceptionsTask({
-            status: data.success ? 'done' : 'error',
-            summary: data.success
-              ? (matched > 0 ? `${matched} resolved` : 'None pending')
-              : (data.error || 'Failed'),
-            error: data.success ? undefined : (data.error || 'Failed'),
-            resolved: data.resolved ?? [],
-            stillOpen: data.stillOpen ?? [],
-            scanned: Number(data.scanned || 0),
-            matched,
-          });
-          return data;
-        }),
-      ]).then((arr) => arr[0]);
+      setExceptionsTask({ status: 'running', phase: 'starting' });
+      const exceptionsR = await consumeExceptionsStream('/api/orders-exceptions/sync', {
+        method: 'POST',
+        signal: controller.signal,
+      });
+      exceptionsResultPayload = exceptionsR.payload;
 
-      // Aggregate results for the status banner
-      const sheetsData = sheetsResult.status === 'fulfilled' ? sheetsResult.value : null;
-      const ecwidData = ecwidResult.status === 'fulfilled' ? ecwidResult.value : null;
-      const exceptionsData = exceptionsResult.status === 'fulfilled' ? exceptionsResult.value : null;
-
-      const totalInserted = Number(sheetsData?.insertedOrders || 0) + Number(ecwidData?.insertedOrders || 0);
-      const totalUpdated = Number(sheetsData?.updatedOrdersFields || 0) + Number(ecwidData?.updatedOrdersFields || 0);
-      const exceptionsResolved = Number(exceptionsData?.matched || 0);
-
-      // Handle task-level errors from rejected promises
-      if (sheetsResult.status === 'rejected') setSheetsTask({ status: 'error', summary: 'Network error' });
-      if (ecwidResult.status === 'rejected') setEcwidTask({ status: 'error', summary: 'Network error' });
-      if (exceptionsResult.status === 'rejected') setExceptionsTask({ status: 'error', summary: 'Network error' });
+      const totalInserted = Number(sheetsResultPayload?.insertedOrders || 0)
+        + Number(ecwidResultPayload?.insertedOrders || 0);
+      const totalUpdated = Number(sheetsResultPayload?.updatedOrdersFields || 0)
+        + Number(ecwidResultPayload?.updatedOrdersFields || 0);
+      const exceptionsResolved = Number(exceptionsResultPayload?.matched || 0);
 
       await invalidateDashboardOrderQueries(queryClient);
       dispatchUsavRefreshData();
 
-      const anyFailed = [sheetsResult, ecwidResult, exceptionsResult].some(
-        (r) => r.status === 'rejected' || (r.status === 'fulfilled' && !r.value?.success),
+      const anyFailed = [sheetsR, ecwidR, exceptionsR].some(
+        (r) => Boolean(r.error) || (r.payload && (r.payload as any).success === false),
       );
       const parts = [];
       if (totalInserted > 0) parts.push(`${totalInserted} inserted`);
@@ -426,12 +486,13 @@ export function DashboardManagementPanel({
         type: anyFailed ? 'error' : 'success',
         message: parts.length > 0 ? `Orders synced: ${parts.join(', ')}` : 'Orders already up to date',
         details: {
-          tabName: sheetsData?.tabName,
+          tabName: sheetsResultPayload?.tabName as string | undefined,
           inserted: totalInserted,
           updated: totalUpdated,
-          processedRows: Number(sheetsData?.processedRows || 0) + Number(ecwidData?.processedRows || 0),
+          processedRows: Number(sheetsResultPayload?.processedRows || 0)
+            + Number(ecwidResultPayload?.processedRows || 0),
           exceptionsResolved,
-          ecwidInserted: Number(ecwidData?.insertedOrders || 0),
+          ecwidInserted: Number(ecwidResultPayload?.insertedOrders || 0),
           durationMs: Date.now() - t0,
         },
       });
@@ -610,18 +671,6 @@ export function DashboardManagementPanel({
                 </>
                 ) : null}
 
-                {showNextUnassignedButton ? (
-                  <button
-                    type="button"
-                    onClick={handleOpenNextUnassigned}
-                    disabled={isLoadingAssignment}
-                    className={SIDEBAR_GRAY_ASSIGN_BUTTON_CLASS}
-                  >
-                    {isLoadingAssignment && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
-                    Next Unassigned Order
-                  </button>
-                ) : null}
-
               </div>
             </motion.div>
 
@@ -735,20 +784,6 @@ export function DashboardManagementPanel({
 
         </div>
       </motion.div>
-
-      {isMounted && assigningState && createPortal(
-        <AnimatePresence>
-          <WorkOrderAssignmentCard
-            rows={assigningState.rows}
-            startIndex={assigningState.startIndex}
-            technicianOptions={technicianOptions}
-            packerOptions={packerOptions}
-            onConfirm={handleAssignConfirm}
-            onClose={() => setAssigningState(null)}
-          />
-        </AnimatePresence>,
-        document.body
-      )}
 
       <OrderSyncDialog
         open={isSyncDialogOpen}

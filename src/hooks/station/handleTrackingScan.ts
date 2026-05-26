@@ -63,6 +63,8 @@ export async function handleTrackingScan(
       shipByDate: data.order.shipByDate || null,
       createdAt: data.order.createdAt || null,
       orderFound: data.orderFound !== false,
+      /** Tracks `orders_exceptions` flow — Undo + UI use same SAL as matched orders; label differs. */
+      sourceType: data.orderFound === false ? 'exception' : undefined,
       scanSessionId: typeof data.scanSessionId === 'string' ? data.scanSessionId : null,
       inlineMicrocopy: trackingMicrocopy,
     });

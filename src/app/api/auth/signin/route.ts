@@ -66,10 +66,10 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'INVALID_REQUEST', field: 'pin' }, { status: 400 });
     }
 
-    let row: { name: string; role: string; status: string; default_home_path: string | null };
+    let row: { name: string; role: string; status: string; default_home_path: string | null; default_home_path_mobile: string | null };
     if (pinless) {
-      const lookup = await pool.query<{ name: string; role: string; status: string; default_home_path: string | null }>(
-        `SELECT name, role, COALESCE(status, 'active') AS status, default_home_path
+      const lookup = await pool.query<{ name: string; role: string; status: string; default_home_path: string | null; default_home_path_mobile: string | null }>(
+        `SELECT name, role, COALESCE(status, 'active') AS status, default_home_path, default_home_path_mobile
            FROM staff
           WHERE id = $1
             AND COALESCE(active, true) = true
@@ -134,6 +134,7 @@ export async function POST(req: NextRequest) {
       role: row.role,
       name: row.name,
       defaultHomePath: row.default_home_path,
+      defaultHomePathMobile: row.default_home_path_mobile,
       session: {
         sid: session.sid,
         deviceKind: session.deviceKind,

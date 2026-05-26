@@ -16,7 +16,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { verifyStaffPin, PinError } from '@/lib/auth/pin';
 import {
   createSession,
-  getCookieMaxAgeSeconds,
+  cookieMaxAgeForSession,
   loadSession,
   revokeSession,
   SESSION_COOKIE_NAME,
@@ -109,7 +109,7 @@ export async function POST(req: NextRequest) {
       secure: process.env.NODE_ENV === 'production',
       sameSite: 'lax',
       path: '/',
-      maxAge: getCookieMaxAgeSeconds(deviceKind),
+      maxAge: cookieMaxAgeForSession(session),
     });
     return res;
   } catch (err) {

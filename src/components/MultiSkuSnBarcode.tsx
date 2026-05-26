@@ -335,7 +335,12 @@ export default function MultiSkuSnBarcode({ layout = 'vertical' }: MultiSkuSnBar
         });
     };
 
-    const postToSheets = async () => {
+    // Issues the labels to the canonical pipeline. Writes serial_units +
+    // station_activity_logs + tech_serial_numbers + a LABELED inventory_event
+    // per unit, which is what powers the Recently Printed + Unit History
+    // views. `sku` is sent as the minted unit id for back-compat; the route
+    // resolves the actual product SKU from `productSku`.
+    const issueLabels = async () => {
         setIsPosting(true);
         try {
             const res = await fetch('/api/post-multi-sn', {
@@ -343,11 +348,16 @@ export default function MultiSkuSnBarcode({ layout = 'vertical' }: MultiSkuSnBar
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     sku: uniqueSku,
+                    productSku: sku,
+                    unitId: uniqueSku,
+                    gtin: gtin || undefined,
+                    qrPayload: previewPayload.value,
+                    symbology: previewPayload.symbology,
                     serialNumbers,
                     notes,
-                    productTitle: title,
                     location,
                     condition,
+                    printClass: mode === 'sn-to-sku' ? 'sn-to-sku' : 'print',
                 }),
             });
             const data = await res.json();
@@ -376,7 +386,7 @@ export default function MultiSkuSnBarcode({ layout = 'vertical' }: MultiSkuSnBar
             return;
         }
 
-        const success = await postToSheets();
+        const success = await issueLabels();
         if (success) {
             if (mode === 'print') {
                 // Print the current label. GTIN + qrUrl come from the

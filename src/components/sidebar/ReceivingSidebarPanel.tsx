@@ -12,16 +12,15 @@ import {
   type ReturnEvent,
 } from '@/components/sidebar/ReceivingReturnBanner';
 import { ReceivingScanBar } from '@/components/sidebar/receiving/ReceivingScanBar';
+import { ReceivingHistorySearchSection } from '@/components/sidebar/receiving/ReceivingHistorySearchSection';
 import { ReceivingLinePicker } from '@/components/sidebar/receiving/ReceivingLinePicker';
 import { ReceivingRecentRail } from '@/components/sidebar/receiving/ReceivingRecentRail';
-import { RecentSearchesRail } from '@/components/sidebar/receiving/RecentSearchesRail';
 import {
   dispatchReceivingWorkspaceOpen,
   dispatchReceivingWorkspaceClose,
   dispatchReceivingWorkspaceNavState,
   dispatchReceivingDetailsOverlay,
 } from '@/utils/events';
-import { pushReceivingSearchHistory } from '@/utils/receiving-search-history';
 import { useAblyChannel } from '@/hooks/useAblyChannel';
 import { useAblyClient } from '@/contexts/AblyContext';
 import { useAuth } from '@/contexts/AuthContext';
@@ -45,6 +44,7 @@ import {
   type OpenException,
   type ReceivingSelectLineDetail,
 } from '@/components/sidebar/receiving/receiving-sidebar-shared';
+import { clearReceivingHistoryUrlParams } from '@/lib/receiving-history-search';
 
 
 /**
@@ -725,133 +725,6 @@ export function ReceivingSidebarPanel() {
     })();
   }, [bulkTracking, staffId, fetchOpenExceptions]);
 
-  // ── History-mode search ──────────────────────────────────────────────────
-  //
-  // In Receiving mode the scan bar ADDS receiving events (`submitTrackingScan`
-  // hits `/api/receiving/lookup-po`, creates/matches the PO, opens the
-  // workspace). In History mode the same input becomes a SEARCH bar: the
-  // operator can paste/scan a tracking OR type a PO # — we resolve it,
-  // prepend matched lines into the table for context, and open the
-  // `ReceivingDetailsStack` overlay so the audit-log view is one keystroke
-  // away.
-  //
-  // Heuristic: if the input is 8+ digits with no letters/dashes, treat it as
-  // a tracking number and use `/api/receiving/lookup-po` (uses last-8
-  // matching, also touches Zoho). Otherwise treat it as a PO #/identifier
-  // and use the receiving-lines search (matches PO#, PO number, SKU, item
-  // name, and tracking columns — all the visible identifiers).
-  const searchTracking = useCallback(
-    async (rawTracking?: string) => {
-      const trimmed = (rawTracking ?? bulkTracking).trim();
-      if (!trimmed) return;
-      // Clear input immediately so a scanner can fire the next pulse without
-      // a manual reset.
-      setBulkTracking('');
-      setScanBarKey((k) => k + 1);
-
-      const digitsOnly = trimmed.replace(/\D/g, '');
-      const looksLikeTracking =
-        digitsOnly.length >= 8 && /^[\d\s-]+$/.test(trimmed);
-
-      try {
-        if (looksLikeTracking) {
-          const res = await fetch('/api/receiving/lookup-po', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ trackingNumber: trimmed, staffId: Number(staffId) }),
-          });
-          const data = await res.json();
-          if (!res.ok || !data?.success) {
-            throw new Error(data?.error || 'Search failed');
-          }
-          if (!data.matched) {
-            toast.error(`No receiving entry for "${trimmed}"`);
-            return;
-          }
-          const receivingId = Number(data.receiving_id);
-          if (!Number.isFinite(receivingId) || receivingId <= 0) {
-            toast.error('Match returned without a receiving id');
-            return;
-          }
-          // Fetch full ReceivingLineRow[] so the table renders the matched
-          // rows with the same joined fields as native results.
-          const linesRes = await fetch(`/api/receiving-lines?receiving_id=${receivingId}`);
-          const linesData = await linesRes.json();
-          const rows = Array.isArray(linesData?.receiving_lines)
-            ? (linesData.receiving_lines as ReceivingLineRow[])
-            : [];
-          if (rows.length === 0) {
-            toast.error('Tracking found but no lines yet');
-            return;
-          }
-          // Prepend rows into the table (in-week matches surface there) and
-          // open the details overlay so the operator goes from "found it" →
-          // "read it" with no extra click. Past-week matches live in the
-          // sidebar's RecentSearchesRail rather than the right-pane table.
-          window.dispatchEvent(
-            new CustomEvent('receiving-lines-prepended', {
-              detail: { rows, source: 'search' },
-            }),
-          );
-          window.dispatchEvent(
-            new CustomEvent('receiving-highlight-line', { detail: rows[0].id }),
-          );
-          dispatchReceivingDetailsOverlay(receivingId);
-          pushReceivingSearchHistory({
-            tracking: trimmed,
-            receivingId,
-            lineCount: rows.length,
-          });
-          toast.success(`Found ${rows.length} line${rows.length === 1 ? '' : 's'} · #${trimmed.slice(-4)}`);
-          return;
-        }
-
-        // PO# / identifier path — search receiving_lines directly. Returns
-        // every line that matches the term across PO#, PO number, SKU,
-        // item name, and tracking columns (server-side ILIKE).
-        const url = `/api/receiving-lines?search=${encodeURIComponent(trimmed)}&limit=50`;
-        const res = await fetch(url);
-        const data = await res.json();
-        if (!res.ok || !data?.success) {
-          throw new Error(data?.error || 'Search failed');
-        }
-        const rows = Array.isArray(data.receiving_lines)
-          ? (data.receiving_lines as ReceivingLineRow[])
-          : [];
-        if (rows.length === 0) {
-          toast.error(`No matches for "${trimmed}"`);
-          return;
-        }
-        // Same prepend path as the tracking branch — in-week matches show
-        // up at the top of the table; the sidebar's RecentSearchesRail is
-        // the canonical record of past searches.
-        window.dispatchEvent(
-          new CustomEvent('receiving-lines-prepended', {
-            detail: { rows, source: 'search' },
-          }),
-        );
-        window.dispatchEvent(
-          new CustomEvent('receiving-highlight-line', { detail: rows[0].id }),
-        );
-        // PO# search may span multiple POs — surface the first match's
-        // details stack as a starting point; the rest are in the table.
-        const firstReceivingId = Number(rows[0].receiving_id ?? 0);
-        if (Number.isFinite(firstReceivingId) && firstReceivingId > 0) {
-          dispatchReceivingDetailsOverlay(firstReceivingId);
-          pushReceivingSearchHistory({
-            tracking: trimmed,
-            receivingId: firstReceivingId,
-            lineCount: rows.length,
-          });
-        }
-        toast.success(`Found ${rows.length} line${rows.length === 1 ? '' : 's'} · ${trimmed}`);
-      } catch (err) {
-        toast.error(err instanceof Error ? err.message : 'Search failed');
-      }
-    },
-    [bulkTracking, staffId],
-  );
-
   // Phone-paired scans: incoming `phone_scan` messages route straight through
   // the same submitTrackingScan flow as if the desktop scanner had fired it.
   // After the lookup, echo the result back on the station channel so the
@@ -1116,9 +989,11 @@ export function ReceivingSidebarPanel() {
     }
     const nextParams = new URLSearchParams(searchParams.toString());
     nextParams.set('mode', nextMode);
+    const finalParams =
+      nextMode !== 'history' ? clearReceivingHistoryUrlParams(nextParams) : nextParams;
     // Coming back from /receiving/unfound — push to /receiving so the
     // workspace mounts; for in-section mode flips, replace preserves history.
-    const target = `/receiving?${nextParams.toString()}`;
+    const target = `/receiving?${finalParams.toString()}`;
     if (isUnfoundRoute) router.push(target);
     else router.replace(target);
   };
@@ -1159,18 +1034,22 @@ export function ReceivingSidebarPanel() {
         </div>
       ) : (
         <>
-      {/* Tracking scan bar — header band.
-          Receiving mode: adds the scanned tracking → opens the workspace.
-          History mode:   searches existing POs → highlights the row, leaves
-                          the workspace closed. Same input, two intents. */}
+      {/* History: dashboard-style search + scope/field pills + green + to Receive.
+          Receive: tracking scan bar opens the workspace. */}
+      {mode === 'history' ? (
+        <ReceivingHistorySearchSection
+          onSwitchToReceiving={() => updateMode('receive')}
+        />
+      ) : (
       <ReceivingScanBar
         scanBarKey={scanBarKey}
         value={bulkTracking}
         onChange={setBulkTracking}
-        onSubmit={() => (mode === 'history' ? searchTracking() : submitTrackingScan())}
+        onSubmit={() => submitTrackingScan()}
         isSearching={trackingLookupInFlight > 0}
-        searchMode={mode === 'history'}
+        searchMode={false}
       />
+      )}
 
       <ReceivingReturnBanner returns={returns} onDismiss={dismissReturn} />
 
@@ -1196,15 +1075,10 @@ export function ReceivingSidebarPanel() {
         />
       )}
 
-      {/* Sidebar body rail — mode-branched.
-          • Receive  → live recent activity (last ~10 lines, ambient feed).
-          • History  → recent tracking searches (localStorage-backed). Click
-            opens ReceivingDetailsStack for that PO directly. */}
-      {mode === 'history' ? (
-        <RecentSearchesRail />
-      ) : (
+      {/* Receive tab: live recent rail. History relies on URL-driven table filtering. */}
+      {mode !== 'history' ? (
         <ReceivingRecentRail selectedLineId={selectedLine?.id ?? null} />
-      )}
+      ) : null}
 
       </div>{/* /scrollable body */}
         </>

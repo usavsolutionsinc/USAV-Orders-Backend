@@ -188,7 +188,6 @@ function SidebarContextPanel({ onBackToAppNav }: { onBackToAppNav?: () => void }
         onCloseForm={closeIntakeForm}
         onFormSubmit={submitShippedForm}
         filterControl={filterControl}
-        showNextUnassignedButton={dashboardSearch.orderView === 'pending'}
         searchValue={dashboardSearch.searchQuery}
         onSearchChange={dashboardSearch.setSearch}
         onOpenShippedMatches={dashboardSearch.openShippedMatches}

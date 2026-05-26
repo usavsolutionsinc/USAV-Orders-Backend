@@ -390,8 +390,8 @@ export default function StationTesting({
             strip sits just above the scan bar so it remains in the tech's
             line of sight after a scan. */}
         {isMobile && (
-          <div className="flex-shrink-0 space-y-2 border-t border-gray-100 bg-white px-5 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
-            <div className="min-w-0 space-y-2 px-1.5">
+          <div className="flex-shrink-0 space-y-2 border-t border-gray-100 bg-white px-5 pb-[max(1.125rem,env(safe-area-inset-bottom))] pt-3">
+            <div className="min-w-0 space-y-2 px-1.5 pb-2 sm:pb-0">
               <ActiveOrderScanFeedback activeOrder={activeOrder} />
               {scanBarBlock}
             </div>

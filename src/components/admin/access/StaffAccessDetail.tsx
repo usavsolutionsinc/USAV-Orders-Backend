@@ -17,7 +17,6 @@
 import { Fragment, useCallback, useEffect, useMemo, useState } from 'react';
 import QRCode from 'react-qr-code';
 import {
-  ALL_ROLES,
   isAdminRoleKey,
   type PermissionString,
   type StaffRole,
@@ -71,6 +70,9 @@ interface DetailEnvelope {
     permissions_added: string[];
     permissions_removed: string[];
     mobile_display_config: unknown;
+    default_home_path: string | null;
+    default_home_path_mobile: string | null;
+    session_policy: 'default' | 'extended' | 'persistent';
     has_pin: boolean;
     pin_set_at: string | null;
     pin_locked_until: string | null;
@@ -306,9 +308,11 @@ export function StaffAccessDetail({ staffId }: StaffAccessDetailProps) {
   const { staff, passkeys, sessions, audit } = envelope;
   const theme = getStaffThemeById(staff.id);
   const sc = stationThemeColors[theme];
-  const role = staff.role as StaffRole;
-  // Admin short-circuit covers both the legacy single-role column AND any
-  // assigned role with key='admin' (multi-role staff).
+  // Primary role = first assigned role by position; legacy staff.role is a
+  // mirror kept in sync by /api/admin/staff/[id]/roles and only used as a
+  // fallback for staff with no assignments yet.
+  const primaryRole = envelope.roles[0];
+  const role = (primaryRole?.key ?? staff.role) as StaffRole;
   const isAdmin = isAdminRoleKey(role) || envelope.roles.some((r) => isAdminRoleKey(r.key));
   const added = staff.permissions_added ?? [];
   const removed = staff.permissions_removed ?? [];
@@ -322,6 +326,20 @@ export function StaffAccessDetail({ staffId }: StaffAccessDetailProps) {
   }
 
   const pagePerms = APP_SIDEBAR_NAV.filter((item) => item.requires);
+
+  // Effective permission set for this staff: role union, plus added, minus
+  // removed. Admin short-circuits to "everything". Used by the Landing Page
+  // card to filter the desktop dropdown to pages the staff can actually open.
+  const effectivePermissions = new Set<string>();
+  if (isAdmin) {
+    for (const item of APP_SIDEBAR_NAV) {
+      if (item.requires) effectivePermissions.add(item.requires);
+    }
+  } else {
+    for (const p of roleDbPermissions) effectivePermissions.add(p);
+    for (const p of added) effectivePermissions.add(p);
+    for (const p of removed) effectivePermissions.delete(p);
+  }
 
   return (
     <div className="mx-auto max-w-3xl space-y-4 px-6 py-6">
@@ -354,20 +372,28 @@ export function StaffAccessDetail({ staffId }: StaffAccessDetailProps) {
               )}
             </div>
             <div className="mt-3 flex flex-wrap items-center gap-3">
-              <label className="inline-flex items-center gap-2">
-                <span className="text-micro font-semibold uppercase tracking-wider text-gray-500">Role</span>
-                <select
-                  value={ALL_ROLES.includes(role as typeof ALL_ROLES[number]) ? role : ALL_ROLES[0]}
-                  onChange={(e) => void patchBasic({ role: e.target.value })}
-                  disabled={busy === 'basic'}
-                  className={`h-8 rounded-lg border ${sc.border} ${sc.light} px-2 text-label font-semibold ${sc.text} outline-none transition hover:bg-white focus:border-gray-300 focus:bg-white`}
-                >
-                  {ALL_ROLES.map((r) => <option key={r} value={r}>{r}</option>)}
-                  {!ALL_ROLES.includes(role as typeof ALL_ROLES[number]) && (
-                    <option value={role}>{role} (legacy)</option>
-                  )}
-                </select>
-              </label>
+              {/* Primary role — read-only chip. The Roles section is the single
+                  editor; staff.role is auto-mirrored from staff_roles[0] when
+                  assignments change. */}
+              <div className="inline-flex items-center gap-2">
+                <span className="text-micro font-semibold uppercase tracking-wider text-gray-500">Primary</span>
+                {primaryRole ? (
+                  <span
+                    className="inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-caption font-semibold ring-1 ring-inset"
+                    style={{
+                      backgroundColor: `${primaryRole.color}1A`,
+                      color: primaryRole.color,
+                      borderColor: `${primaryRole.color}33`,
+                    }}
+                    title="Determined by the highest-position assigned role. Edit under Roles."
+                  >
+                    <span className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: primaryRole.color }} aria-hidden />
+                    {primaryRole.label}
+                  </span>
+                ) : (
+                  <span className="text-caption italic text-gray-400">no roles</span>
+                )}
+              </div>
               <label className="inline-flex items-center gap-2">
                 <span className="text-micro font-semibold uppercase tracking-wider text-gray-500">Status</span>
                 <select
@@ -400,7 +426,7 @@ export function StaffAccessDetail({ staffId }: StaffAccessDetailProps) {
             </div>
           </header>
           <div className="flex flex-wrap items-center gap-1.5 px-5 py-3">
-            {envelope.roles.map((r) => (
+            {envelope.roles.map((r, idx) => (
               <span
                 key={r.id}
                 className="group inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-caption font-semibold ring-1 ring-inset"
@@ -412,6 +438,15 @@ export function StaffAccessDetail({ staffId }: StaffAccessDetailProps) {
               >
                 <span className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: r.color }} aria-hidden />
                 {r.label}
+                {idx === 0 && envelope.roles.length > 1 && (
+                  <span
+                    className="ml-0.5 rounded-sm px-1 py-px text-eyebrow font-bold uppercase tracking-wider opacity-70"
+                    style={{ backgroundColor: `${r.color}26` }}
+                    title="Primary role (highest position). Shown in the Identity card."
+                  >
+                    primary
+                  </span>
+                )}
                 {!r.is_system || envelope.roles.length > 1 ? (
                   <button
                     type="button"
@@ -442,6 +477,17 @@ export function StaffAccessDetail({ staffId }: StaffAccessDetailProps) {
           </div>
         </section>
       )}
+
+      {/* Card A.25 — Landing page (desktop + mobile) */}
+      <LandingPageCard
+        sc={sc}
+        permissions={effectivePermissions}
+        desktopPath={staff.default_home_path}
+        mobilePath={staff.default_home_path_mobile}
+        primaryRoleKey={role}
+        busy={busy === 'basic'}
+        onSave={(patch) => void patchBasic(patch)}
+      />
 
       {/* Card B — .access */}
       <section className={`overflow-hidden rounded-2xl border ${sc.border} bg-white shadow-sm`}>
@@ -591,8 +637,37 @@ export function StaffAccessDetail({ staffId }: StaffAccessDetailProps) {
             )}
           </div>
 
+          {/* Session policy */}
+          <div className="border-t border-gray-100 px-5 py-3">
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <div className="text-sm font-semibold text-gray-900">Session length</div>
+                <p className="mt-0.5 text-caption text-gray-500">
+                  How long this staff stays signed in before being asked again.
+                </p>
+              </div>
+              <div className="flex items-center gap-2">
+                <select
+                  value={staff.session_policy}
+                  onChange={(e) => void patchBasic({ sessionPolicy: e.target.value })}
+                  disabled={busy === 'basic'}
+                  className="rounded-md border border-gray-300 bg-white px-2 py-1 text-xs font-medium text-gray-800 focus:outline-none focus:ring-1 focus:ring-gray-400"
+                >
+                  <option value="default">Default</option>
+                  <option value="extended">Extended</option>
+                  <option value="persistent">Persistent</option>
+                </select>
+              </div>
+            </div>
+            <p className="mt-2 text-micro text-gray-500">
+              {staff.session_policy === 'default' && '8h station · 30d personal · 4h phone (with idle timeouts).'}
+              {staff.session_policy === 'extended' && 'Personal devices: 7d idle / 90d absolute. Station and phone unchanged.'}
+              {staff.session_policy === 'persistent' && 'No idle timeout. Session refreshed on every use — stays signed in indefinitely.'}
+            </p>
+          </div>
+
           {/* Sessions */}
-          <div className="px-5 py-3">
+          <div className="border-t border-gray-100 px-5 py-3">
             <div className="flex items-center justify-between">
               <div className="text-sm font-semibold text-gray-900">Active sessions</div>
               <div className="flex items-center gap-2">
@@ -1017,6 +1092,131 @@ function MobileDisplayCard({ sc, rolesForResolve, staffOverride, busy, onSave, o
             {busy ? 'Saving…' : dirty ? 'Save override' : 'Saved'}
           </button>
         </div>
+      </div>
+    </section>
+  );
+}
+
+// ─── Landing page card ──────────────────────────────────────────────────
+//
+// Placed after Identity and (for non-admins) the Roles card. Two dropdowns,
+// one for desktop, one for mobile, each independent. NULL means "fall back
+// to ROLE_HOME[role]" (or MOBILE_ROLE_HOME[role] on the mobile side); the
+// resolver lives in /signin/page.tsx and is mirrored in the dropdown
+// placeholder text.
+
+// Hard-coded list of mobile destinations. Mirrors the pages that actually
+// exist under src/app/m/ — keep in sync if new mobile pages are added.
+const MOBILE_LANDING_OPTIONS: Array<{ value: string; label: string }> = [
+  { value: '/m/home',      label: 'Home (hub)' },
+  { value: '/m/scan',      label: 'Scan' },
+  { value: '/m/receiving', label: 'Receiving' },
+  { value: '/m/pick',      label: 'Pick' },
+];
+
+// Desktop default landing for a given primary role — used only as the
+// placeholder hint inside the "Use role default" option. Authoritative copy
+// lives in /signin/page.tsx (ROLE_HOME).
+const DESKTOP_ROLE_DEFAULTS: Record<string, string> = {
+  admin: '/dashboard', receiver: '/receiving', receiving: '/receiving',
+  packer: '/packer', technician: '/tech', shipper: '/dashboard',
+  inventory_manager: '/inventory', sales: '/dashboard',
+  viewer: '/dashboard', readonly: '/dashboard',
+};
+const MOBILE_ROLE_DEFAULTS: Record<string, string> = {
+  receiver: '/m/receiving', receiving: '/m/receiving', packer: '/m/pick',
+};
+
+interface LandingCardProps {
+  sc: { border: string };
+  permissions: ReadonlySet<string>;
+  desktopPath: string | null;
+  mobilePath: string | null;
+  primaryRoleKey: string | null;
+  busy: boolean;
+  onSave: (patch: { defaultHomePath?: string | null; defaultHomePathMobile?: string | null }) => void;
+}
+
+function LandingPageCard({
+  sc, permissions, desktopPath, mobilePath, primaryRoleKey, busy, onSave,
+}: LandingCardProps) {
+  // Desktop options = sidebar pages the staff can actually open. Sorted to
+  // match the sidebar order so the dropdown feels familiar.
+  const desktopOptions = APP_SIDEBAR_NAV
+    .filter((item) => !item.requires || permissions.has(item.requires))
+    .map((item) => ({ value: item.href, label: item.label }));
+
+  // If the current saved override points somewhere not in the filtered list
+  // (e.g. permission was just removed), keep it as a "legacy" option so the
+  // admin sees what's stored and can clear it.
+  if (desktopPath && !desktopOptions.some((o) => o.value === desktopPath)) {
+    desktopOptions.push({ value: desktopPath, label: `${desktopPath} (legacy)` });
+  }
+  if (mobilePath && !MOBILE_LANDING_OPTIONS.some((o) => o.value === mobilePath)) {
+    MOBILE_LANDING_OPTIONS.push({ value: mobilePath, label: `${mobilePath} (legacy)` });
+  }
+
+  const desktopDefault = primaryRoleKey ? DESKTOP_ROLE_DEFAULTS[primaryRoleKey.toLowerCase()] ?? '/dashboard' : '/dashboard';
+  const mobileDefault = primaryRoleKey ? MOBILE_ROLE_DEFAULTS[primaryRoleKey.toLowerCase()] ?? '/m/home' : '/m/home';
+
+  const onDesktopChange = (v: string) => {
+    onSave({ defaultHomePath: v === '' ? null : v });
+  };
+  const onMobileChange = (v: string) => {
+    onSave({ defaultHomePathMobile: v === '' ? null : v });
+  };
+
+  return (
+    <section className={`overflow-hidden rounded-2xl border ${sc.border} bg-white shadow-sm`}>
+      <header className="border-b border-gray-100 px-5 py-3">
+        <h2 className="text-sm font-semibold text-gray-900">Landing page</h2>
+        <p className="mt-0.5 text-caption text-gray-500">
+          Where this staff lands right after signing in. Desktop and mobile are independent —
+          leave either on <i>“Use role default”</i> to fall back to the role&apos;s built-in destination.
+        </p>
+      </header>
+      <div className="grid grid-cols-1 gap-4 px-5 py-4 sm:grid-cols-2">
+        {/* Desktop */}
+        <label className="flex flex-col gap-1.5">
+          <span className="text-micro font-semibold uppercase tracking-wider text-gray-500">
+            Desktop
+          </span>
+          <select
+            value={desktopPath ?? ''}
+            onChange={(e) => onDesktopChange(e.target.value)}
+            disabled={busy}
+            className="h-9 rounded-lg border border-gray-200 bg-white px-2 text-sm text-gray-800 outline-none transition focus:border-blue-400 focus:ring-2 focus:ring-blue-500/15 disabled:opacity-60"
+          >
+            <option value="">Use role default ({desktopDefault})</option>
+            {desktopOptions.map((o) => (
+              <option key={o.value} value={o.value}>{o.label} — {o.value}</option>
+            ))}
+          </select>
+          <span className="text-micro text-gray-400">
+            {desktopPath ? <>Override active: <span className="font-mono text-gray-600">{desktopPath}</span></> : <>Inheriting <span className="font-mono">{desktopDefault}</span></>}
+          </span>
+        </label>
+
+        {/* Mobile */}
+        <label className="flex flex-col gap-1.5">
+          <span className="text-micro font-semibold uppercase tracking-wider text-gray-500">
+            Mobile
+          </span>
+          <select
+            value={mobilePath ?? ''}
+            onChange={(e) => onMobileChange(e.target.value)}
+            disabled={busy}
+            className="h-9 rounded-lg border border-gray-200 bg-white px-2 text-sm text-gray-800 outline-none transition focus:border-blue-400 focus:ring-2 focus:ring-blue-500/15 disabled:opacity-60"
+          >
+            <option value="">Use role default ({mobileDefault})</option>
+            {MOBILE_LANDING_OPTIONS.map((o) => (
+              <option key={o.value} value={o.value}>{o.label} — {o.value}</option>
+            ))}
+          </select>
+          <span className="text-micro text-gray-400">
+            {mobilePath ? <>Override active: <span className="font-mono text-gray-600">{mobilePath}</span></> : <>Inheriting <span className="font-mono">{mobileDefault}</span></>}
+          </span>
+        </label>
       </div>
     </section>
   );

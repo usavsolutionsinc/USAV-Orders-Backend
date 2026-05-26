@@ -9,11 +9,12 @@ import { BARCODE_MODES, type BarcodeMode } from '@/components/barcode/ModeSelect
 import { useBarcodeMode } from '@/hooks/useBarcodeMode';
 import { useLabelRecents } from '@/hooks/useLabelRecents';
 import { useSkuCatalogSearch, type SkuCatalogItem } from '@/hooks/useSkuCatalogSearch';
-import { ChevronDown, Printer, FileText, Link2, Check } from '@/components/Icons';
+import { ChevronDown, Printer, FileText, Link2, Check, Clock, History, Package } from '@/components/Icons';
 import { successFeedback } from '@/lib/feedback/confirm';
 import { PairingQueueList } from '@/components/products/pairing/PairingQueueList';
 import type { PairingQueueItem, PairingSort } from '@/components/products/pairing/types';
 import { LibraryBrowser } from '@/components/manuals/LibraryBrowser';
+import { RecentlyPrintedList } from '@/components/labels/RecentlyPrintedList';
 
 const PAIRING_SORT_ITEMS: HorizontalSliderItem[] = [
   { id: 'volume',     label: 'Most ordered' },
@@ -36,13 +37,48 @@ function parseView(raw: string | null): View {
   return 'manuals';
 }
 
+// Sub-tabs under the Labels view. `print` is the default and stays out of
+// the URL to keep deep links clean; `recent` and `history` are explicit.
+export type LabelsSubView = 'print' | 'recent' | 'history';
+export function parseLabelsView(raw: string | null): LabelsSubView {
+  if (raw === 'recent') return 'recent';
+  if (raw === 'history') return 'history';
+  return 'print';
+}
+
+const LABELS_SUB_VIEW_ITEMS: HorizontalSliderItem[] = [
+  { id: 'print',   label: 'Products', icon: Package },
+  { id: 'recent',  label: 'Recent',   icon: Clock },
+  { id: 'history', label: 'History',  icon: History },
+];
+
+// Light scaffolding for the Recent and History sub-views while their data
+// paths land in follow-up phases. Defined at module-top (before the main
+// component) so the function declaration is reliably available when the
+// JSX above evaluates — Turbopack's HMR has been seen to hand back stale
+// builds where a function declaration further down the file is missing
+// from the hoisted set, producing a ReferenceError at use sites.
+function LabelsSubViewPlaceholder({ title, body }: { title: string; body: string }) {
+  return (
+    <div className="flex flex-1 flex-col items-center justify-center px-6 py-12 text-center">
+      <p className="text-eyebrow font-black uppercase tracking-[0.18em] text-gray-400">
+        {title}
+      </p>
+      <p className="mt-3 max-w-[260px] text-caption font-medium text-gray-500">{body}</p>
+    </div>
+  );
+}
+
 /**
  * Sidebar surface for `/products`. Hosts:
- *   - View toggle — Manuals (default) · Label Printer · Pairing. Writes `?view=`.
+ *   - View toggle — Manuals (default) · Labels · Pairing · QC. Writes `?view=`.
  *   - Manuals view (default): renders <SkuCatalogSidebar> which owns its own
  *     search + sort + mode pills + selected-product accordion sections.
- *   - Labels view: mode dropdown + SearchBar + Ecwid product picker list.
- *     Picking a row dispatches `sku:fill` for the MultiSkuSnBarcode workspace.
+ *   - Labels view: second pill row (Print · Recent · History) writes
+ *     `?labelsView=`. Print is the default sub-view and shows the mode
+ *     dropdown + SearchBar + Ecwid product picker list; picking a row
+ *     dispatches `sku:fill` for the MultiSkuSnBarcode workspace. Recent
+ *     and History sub-views host their own bodies (no shared search bar).
  *   - Pairing view: PairingQueueList; selection writes ?sku=.
  *
  * Mounted by DashboardSidebar when routeKey === 'products'. The right-pane
@@ -53,6 +89,7 @@ export function ProductsSidebarPanel() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const view = parseView(searchParams.get('view'));
+  const labelsView = parseLabelsView(searchParams.get('labelsView'));
   const currentQuery = searchParams.get('q') || '';
   const pairingSort = parsePairingSort(searchParams.get('sort'));
 
@@ -61,7 +98,7 @@ export function ProductsSidebarPanel() {
 
   const viewItems = useMemo<HorizontalSliderItem[]>(
     () => [
-      { id: 'labels',  label: 'Label Printer', icon: Printer },
+      { id: 'labels',  label: 'Labels', icon: Printer },
       { id: 'manuals', label: 'Manuals',       icon: FileText },
       { id: 'pairing', label: 'Pairing',       icon: Link2 },
       { id: 'qc',      label: 'QC Checklist',  icon: Check },
@@ -108,6 +145,12 @@ export function ProductsSidebarPanel() {
     [updateParams],
   );
 
+  const handleLabelsSubViewChange = useCallback(
+    // 'print' is the default — drop the param when selected so the URL stays clean.
+    (id: string) => updateParams({ labelsView: id === 'print' ? null : id }),
+    [updateParams],
+  );
+
   const handleProductPick = useCallback((sku: string) => {
     window.dispatchEvent(new CustomEvent('sku:fill', { detail: { sku } }));
   }, []);
@@ -131,36 +174,55 @@ export function ProductsSidebarPanel() {
         />
       </div>
 
-      {/* Label-printer mode dropdown — pinned at the top of the labels stack
-          above the search bar so the operator can switch flows without
-          scrolling past the product list. */}
+      {/* Labels sub-tab row — Print / Recent / History. Sits directly under
+          the top-level view pills so the operator can switch contexts inside
+          Labels without leaving the workspace. URL-backed via ?labelsView=. */}
       {isLabels && (
+        <div className="shrink-0 border-b border-gray-100 bg-white px-3 py-1.5">
+          <HorizontalButtonSlider
+            items={LABELS_SUB_VIEW_ITEMS}
+            value={labelsView}
+            onChange={handleLabelsSubViewChange}
+            variant="nav"
+            size="md"
+            aria-label="Labels sub-view"
+          />
+        </div>
+      )}
+
+      {/* Label-printer mode dropdown — only shown on the Print sub-view, where
+          the operator chooses between Print / Log SN / Reprint. Recent and
+          History sub-views don't need it. */}
+      {isLabels && labelsView === 'print' && (
         <div className="shrink-0 border-b border-gray-100 bg-white px-3 py-2">
           <ModeDropdown mode={mode} onChange={setMode} />
         </div>
       )}
 
-      {/* Shared search bar — drives the Labels picker, the Pairing queue, and
-          the Library file tree off the same `?q=` URL param. Each consumer
-          debounces internally as needed. */}
-      <div className={sidebarHeaderRowClass}>
-        <SearchBar
-          value={searchInput}
-          onChange={handleSearchChange}
-          onClear={() => handleSearchChange('')}
-          placeholder={
-            isLabels
-              ? 'Search SKU, title…'
-              : isPairing
-                ? 'Search pairing queue…'
-                : isManuals
-                  ? 'Fuzzy search folders & manuals…'
-                  : 'Search products…'
-          }
-          variant={isLabels ? 'blue' : 'gray'}
-          size="compact"
-        />
-      </div>
+      {/* Shared search bar — drives the Labels picker (Print sub-view), the
+          Pairing queue, and the Library file tree off the same `?q=` URL
+          param. Recent and History sub-views handle their own input shapes
+          (recent is a fixed list; history takes a DataMatrix scan). */}
+      {!(isLabels && labelsView !== 'print') && (
+        <div className={sidebarHeaderRowClass}>
+          <SearchBar
+            value={searchInput}
+            onChange={handleSearchChange}
+            onClear={() => handleSearchChange('')}
+            placeholder={
+              isLabels
+                ? 'Search SKU, title…'
+                : isPairing
+                  ? 'Search pairing queue…'
+                  : isManuals
+                    ? 'Fuzzy search folders & manuals…'
+                    : 'Search products…'
+            }
+            variant={isLabels ? 'blue' : 'gray'}
+            size="compact"
+          />
+        </div>
+      )}
 
       {/* Pairing sort pills — second row of the sidebar, matches the top-level
           view-pill style (same HorizontalButtonSlider, `nav` variant). Default
@@ -180,11 +242,20 @@ export function ProductsSidebarPanel() {
       )}
 
       {isLabels ? (
-        <ProductPickerList
-          query={searchInput}
-          recents={recents.map((r) => r.sku)}
-          onPick={handleProductPick}
-        />
+        labelsView === 'recent' ? (
+          <RecentlyPrintedList onPick={handleProductPick} />
+        ) : labelsView === 'history' ? (
+          <LabelsSubViewPlaceholder
+            title="History log"
+            body="Scan a DataMatrix to load a unit's full audit trail — receive, move, pair, pack, ship. Coming online with the mobile pairing flow."
+          />
+        ) : (
+          <ProductPickerList
+            query={searchInput}
+            recents={recents.map((r) => r.sku)}
+            onPick={handleProductPick}
+          />
+        )
       ) : isPairing ? (
         <PairingSidebarQueue query={searchInput} sort={pairingSort} />
       ) : isManuals ? (

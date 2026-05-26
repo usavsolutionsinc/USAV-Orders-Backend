@@ -7,8 +7,10 @@ import {
 } from '@/lib/jobs/google-sheets-transfer-orders';
 import { logRouteMetric } from '@/lib/route-metrics';
 import { withAuth } from '@/lib/auth/withAuth';
+import { createNdjsonStream, ndjsonResponseHeaders } from '@/lib/orders-sync/streaming';
 
 export const dynamic = 'force-dynamic';
+export const runtime = 'nodejs';
 
 export const POST = withAuth(async (req: NextRequest) => {
     const startedAt = Date.now();
@@ -32,31 +34,33 @@ export const POST = withAuth(async (req: NextRequest) => {
             messageId: getQStashResultIdentifier(result),
         });
     }
-    try {
-        const result = await runGoogleSheetsTransferOrders(manualSheetName, 'sheets');
 
-        ok = true;
-        return NextResponse.json(result);
-    } catch (error: any) {
-        if (error instanceof GoogleSheetsTransferOrdersJobError) {
-            return NextResponse.json(error.body, { status: error.status });
+    // Streaming NDJSON response — UI consumes events row-by-row.
+    const stream = createNdjsonStream();
+    (async () => {
+        try {
+            const result = await runGoogleSheetsTransferOrders(manualSheetName, 'sheets', stream.emit);
+            stream.emit({ type: 'result', result: result as unknown as Record<string, unknown> });
+            ok = true;
+        } catch (error: any) {
+            if (error instanceof GoogleSheetsTransferOrdersJobError) {
+                stream.emit({ type: 'result', result: error.body as Record<string, unknown> });
+            } else {
+                stream.emit({ type: 'error', error: error?.message || 'Internal Server Error' });
+            }
+        } finally {
+            stream.finish();
+            logRouteMetric({
+                route: '/api/google-sheets/transfer-orders',
+                method: 'POST',
+                startedAt,
+                ok,
+                details: { queued, manualSheet: Boolean(manualSheetName) },
+            });
         }
-        return NextResponse.json(
-            { success: false, error: error?.message || 'Internal Server Error' },
-            { status: 500 }
-        );
-    } finally {
-        logRouteMetric({
-            route: '/api/google-sheets/transfer-orders',
-            method: 'POST',
-            startedAt,
-            ok,
-            details: {
-                queued,
-                manualSheet: Boolean(manualSheetName),
-            },
-        });
-    }
+    })();
+
+    return new Response(stream.body, { headers: ndjsonResponseHeaders() });
 }, { permission: 'orders.import' });
 
 export const GET = withAuth(async (req: NextRequest) => {

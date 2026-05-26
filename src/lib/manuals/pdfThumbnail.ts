@@ -35,14 +35,15 @@ async function loadPdfjs() {
   if (!pdfjsModulePromise) {
     pdfjsModulePromise = (async () => {
       const mod = await import('pdfjs-dist');
-      // Point the worker at the bundled file. `new URL(..., import.meta.url)`
-      // is the web-standard pattern Webpack/Turbopack rewrite at build time
-      // to a hashed asset URL — works in both Next.js dev and production
-      // without needing a custom loader.
-      mod.GlobalWorkerOptions.workerSrc = new URL(
-        'pdfjs-dist/build/pdf.worker.mjs',
-        import.meta.url,
-      ).toString();
+      // Worker source: pin to the matching pdfjs-dist version on a public
+      // CDN. We tried `new URL(..., import.meta.url)` first but that pattern
+      // is bundler-specific — it works under Next.js webpack, breaks under
+      // Turbopack and dev-mode HMR, and silently 404s the worker (which
+      // then makes every render fail with no UI signal). The CDN URL is
+      // immutable per version, cached aggressively, and version-matched
+      // to whatever pdfjs we resolved at runtime — so library upgrades
+      // can't cause silent worker drift.
+      mod.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${mod.version}/pdf.worker.min.mjs`;
       return mod;
     })();
   }

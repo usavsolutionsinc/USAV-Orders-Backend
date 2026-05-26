@@ -19,6 +19,11 @@ import {
   dashboardOrderRowChipsClass,
   dashboardOrderRowShellClass,
 } from '@/lib/dashboard-order-row-layout';
+import {
+  RECEIVING_HISTORY_URL_PARAMS,
+  normalizeReceivingHistorySearchField,
+  normalizeReceivingHistorySearchScope,
+} from '@/lib/receiving-history-search';
 
 /** Passed to `/api/receiving-lines` as `view`. The station dashboard uses a single full list. */
 export type ReceivingView = 'all' | 'recent' | 'received';
@@ -205,6 +210,21 @@ export default function ReceivingLinesTable() {
   const searchParams = useSearchParams();
   const { isMobile } = useUIModeOptional();
   const view: ReceivingView = 'all';
+  const pageMode = searchParams.get('mode') ?? 'receive';
+  const isHistoryMode = pageMode === 'history';
+
+  const historySearch = searchParams.get(RECEIVING_HISTORY_URL_PARAMS.q)?.trim() ?? '';
+  const historySearchField = normalizeReceivingHistorySearchField(
+    searchParams.get(RECEIVING_HISTORY_URL_PARAMS.field),
+  );
+  const historySearchScope = normalizeReceivingHistorySearchScope(
+    searchParams.get(RECEIVING_HISTORY_URL_PARAMS.scope),
+  );
+
+  /** History: text or source scope narrows globally — bypass PST week slicing so matches stay visible. */
+  const skipWeekFilter =
+    isHistoryMode &&
+    (historySearch.length > 0 || historySearchScope !== 'all');
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [localRows, setLocalRows] = useState<ReceivingLineRow[]>([]);
   const [weekOffset, setWeekOffset] = useState(0);
@@ -219,10 +239,19 @@ export default function ReceivingLinesTable() {
     const p = new URLSearchParams({ limit: String(LIMIT), offset: '0' });
     p.set('include', 'serials');
     p.set('view', view);
+    if (isHistoryMode) {
+      if (historySearch) {
+        p.set('search', historySearch);
+      }
+      p.set('search_field', historySearchField);
+      p.set('search_scope', historySearchScope);
+    }
     return p.toString();
-  }, [view]);
+  }, [view, isHistoryMode, historySearch, historySearchField, historySearchScope]);
 
-  const queryKey = ['receiving-lines-table', view] as const;
+  const queryKey = isHistoryMode
+    ? (['receiving-lines-table', view, 'history', historySearch, historySearchField, historySearchScope] as const)
+    : (['receiving-lines-table', view, 'receive'] as const);
   const { data, isLoading } = useQuery<ApiResponse>({
     queryKey,
     queryFn: async () => {
@@ -282,14 +311,8 @@ export default function ReceivingLinesTable() {
     return () => window.removeEventListener('receiving-clear-line', handler);
   }, []);
 
-  // Tracking scan/search match → prepend every matched line to the top of the
-  // table. Dedupe by id so a re-scan moves the existing row up instead of
-  // duplicating. Accepts two payload shapes:
-  //   • `ReceivingLineRow[]`                   — legacy / active scan flow
-  //   • `{ rows, source: 'search' | 'scan' }`  — explicit discriminator
-  // Search results that fall outside the current week are not surfaced in
-  // the right-pane table — the sidebar's RecentSearchesRail is the canonical
-  // place to revisit a past search, and the details overlay opens directly.
+  // Tracking scan/search match → prepend matched lines at the top (dedupe by id).
+  // Receive flow and other tools dispatch this; History mode primarily uses URL-driven API fetch.
   useEffect(() => {
     const handler = (event: Event) => {
       const raw = (event as CustomEvent<unknown>).detail;
@@ -417,15 +440,14 @@ export default function ReceivingLinesTable() {
     return groups;
   }, [localRows]);
 
-  const filteredGroupedRecords = useMemo(
-    () =>
-      Object.fromEntries(
-        Object.entries(groupedRecords).filter(
-          ([date]) => date >= weekRange.startStr && date <= weekRange.endStr,
-        ),
+  const filteredGroupedRecords = useMemo(() => {
+    if (skipWeekFilter) return groupedRecords;
+    return Object.fromEntries(
+      Object.entries(groupedRecords).filter(
+        ([date]) => date >= weekRange.startStr && date <= weekRange.endStr,
       ),
-    [groupedRecords, weekRange.startStr, weekRange.endStr],
-  );
+    );
+  }, [groupedRecords, weekRange.startStr, weekRange.endStr, skipWeekFilter]);
 
   /** Flat list in render order — newest day → newest row. */
   const orderedVisibleRows = useMemo(
@@ -544,7 +566,12 @@ export default function ReceivingLinesTable() {
 
   const formatHeaderDate = () => formatDateWithOrdinal(getCurrentPSTDateKey());
 
-  const emptyMessage = 'No lines yet — start scanning to populate.';
+  const emptyMessage = useMemo(() => {
+    if (isHistoryMode && (historySearch || historySearchScope !== 'all')) {
+      return 'No lines match — try different text or widen source (All).';
+    }
+    return 'No lines yet — start scanning to populate.';
+  }, [isHistoryMode, historySearch, historySearchScope]);
 
   return (
     <div className="flex h-full min-w-0 overflow-hidden bg-white">

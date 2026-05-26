@@ -77,10 +77,11 @@ export async function POST(req: NextRequest) {
 
     // Make sure the row is still active before issuing a session.
     const s = await pool.query(
-      `SELECT id, name, role, status, default_home_path FROM staff WHERE id = $1 LIMIT 1`,
+      `SELECT id, name, role, status, default_home_path, default_home_path_mobile
+         FROM staff WHERE id = $1 LIMIT 1`,
       [result.passkey.staff_id],
     );
-    const staffRow = s.rows[0] as { id: number; name: string; role: string; status: string; default_home_path: string | null } | undefined;
+    const staffRow = s.rows[0] as { id: number; name: string; role: string; status: string; default_home_path: string | null; default_home_path_mobile: string | null } | undefined;
     if (!staffRow || (staffRow.status && staffRow.status !== 'active')) {
       await audit({
         staffId: result.passkey.staff_id, event: 'signin.passkey', result: 'denied',
@@ -126,6 +127,7 @@ export async function POST(req: NextRequest) {
       role,
       name: staffRow.name,
       defaultHomePath: staffRow.default_home_path,
+      defaultHomePathMobile: staffRow.default_home_path_mobile,
       session: { sid: session.sid, deviceKind, expiresAt: session.expiresAt },
     });
     res.cookies.set(SESSION_COOKIE_NAME, session.sid, {

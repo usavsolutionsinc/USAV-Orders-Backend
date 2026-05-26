@@ -3,6 +3,10 @@ import { isQStashOrigin } from '@/lib/qstash';
 import { invalidateAllOrdersApiCaches } from '@/lib/orders/invalidation';
 import { syncOrderExceptionsToOrders } from '@/lib/orders-exceptions';
 import { formatPSTTimestamp } from '@/utils/date';
+import { createNdjsonStream, ndjsonResponseHeaders } from '@/lib/orders-sync/streaming';
+
+export const dynamic = 'force-dynamic';
+export const runtime = 'nodejs';
 
 function isTrustedAppOrigin(request: NextRequest): boolean {
   const origin = request.headers.get('origin') || '';
@@ -27,24 +31,31 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  try {
-    const result = await syncOrderExceptionsToOrders();
-    if (result.matched > 0) {
-      await invalidateAllOrdersApiCaches();
-    }
-    return NextResponse.json({
-      success: true,
-      ...result,
-      timestamp: formatPSTTimestamp(),
-    });
-  } catch (error: any) {
-    console.error('Error syncing orders_exceptions:', error);
-    return NextResponse.json(
-      {
-        success: false,
+  const stream = createNdjsonStream();
+  (async () => {
+    try {
+      const result = await syncOrderExceptionsToOrders(stream.emit);
+      if (result.matched > 0) {
+        await invalidateAllOrdersApiCaches();
+      }
+      stream.emit({
+        type: 'result',
+        result: {
+          success: true,
+          ...result,
+          timestamp: formatPSTTimestamp(),
+        },
+      });
+    } catch (error: any) {
+      console.error('Error syncing orders_exceptions:', error);
+      stream.emit({
+        type: 'error',
         error: error?.message || 'Failed to sync orders_exceptions',
-      },
-      { status: 500 }
-    );
-  }
+      });
+    } finally {
+      stream.finish();
+    }
+  })();
+
+  return new Response(stream.body, { headers: ndjsonResponseHeaders() });
 }

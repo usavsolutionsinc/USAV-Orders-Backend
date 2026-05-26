@@ -56,6 +56,7 @@ export const staff = pgTable('staff', {
   sortOrder: integer('sort_order').notNull().default(0),
   colorHex: varchar('color_hex', { length: 7 }).notNull().default('#10b981'),
   defaultHomePath: text('default_home_path'),
+  defaultHomePathMobile: text('default_home_path_mobile'),
   // Per-staff mobile UI override. JSON shape lives in
   // src/lib/auth/mobile-display-config.ts (MobileDisplayConfig). Layers on
   // top of roles.mobile_defaults; null means "fully inherit from role".

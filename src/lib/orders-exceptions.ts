@@ -174,9 +174,13 @@ export async function upsertOpenOrderException(params: {
 }
 
 export type { OrderExceptionResolutionDetail } from '@/lib/orders-sync/types';
-import type { OrderExceptionResolutionDetail } from '@/lib/orders-sync/types';
+import type { OrderExceptionResolutionDetail, SyncProgress } from '@/lib/orders-sync/types';
 
-export async function syncOrderExceptionsToOrders(): Promise<{
+const noopProgress: SyncProgress = () => {};
+
+export async function syncOrderExceptionsToOrders(
+  progress: SyncProgress = noopProgress,
+): Promise<{
   scanned: number;
   matched: number;
   deleted: number;
@@ -185,11 +189,16 @@ export async function syncOrderExceptionsToOrders(): Promise<{
 }> {
   tableEnsured = true;
 
+  // Hard cap so a single sync doesn't churn through thousands of stale rows.
+  // Older exceptions get processed on subsequent runs.
+  const EXCEPTIONS_SYNC_BATCH_LIMIT = 100;
   const openExceptions = await pool.query(
     `SELECT id, shipping_tracking_number, source_station
      FROM orders_exceptions
      WHERE status = 'open'
-     ORDER BY id ASC`
+     ORDER BY id DESC
+     LIMIT $1`,
+    [EXCEPTIONS_SYNC_BATCH_LIMIT]
   );
 
   let matched = 0;
@@ -197,15 +206,19 @@ export async function syncOrderExceptionsToOrders(): Promise<{
   const resolved: OrderExceptionResolutionDetail[] = [];
   const stillOpen: OrderExceptionResolutionDetail[] = [];
 
+  progress({ type: 'phase', phase: 'scanning_exceptions', count: openExceptions.rows.length });
+
   for (const row of openExceptions.rows) {
     const rawTracking = String(row.shipping_tracking_number || '');
     const trackingKey18 = normalizeTrackingKey18(rawTracking);
     if (!trackingKey18) {
-      stillOpen.push({
-        exceptionId: row.id,
+      const detail = {
+        exceptionId: row.id as number,
         tracking: rawTracking,
         sourceStation: row.source_station ?? null,
-      });
+      };
+      stillOpen.push(detail);
+      progress({ type: 'exception', kind: 'open', row: detail });
       continue;
     }
 
@@ -215,21 +228,25 @@ export async function syncOrderExceptionsToOrders(): Promise<{
     // row (e.g. extra prefix chars trimmed by the tracking normalizer).
     const order = await findOrderByTrackingKey(rawTracking);
     if (!order) {
-      stillOpen.push({
-        exceptionId: row.id,
+      const detail = {
+        exceptionId: row.id as number,
         tracking: rawTracking,
         sourceStation: row.source_station ?? null,
-      });
+      };
+      stillOpen.push(detail);
+      progress({ type: 'exception', kind: 'open', row: detail });
       continue;
     }
 
     matched += 1;
-    resolved.push({
-      exceptionId: row.id,
+    const detail = {
+      exceptionId: row.id as number,
       tracking: rawTracking,
       matchedOrderId: order.id,
       sourceStation: row.source_station ?? null,
-    });
+    };
+    resolved.push(detail);
+    progress({ type: 'exception', kind: 'resolved', row: detail });
 
     // Update status only — shipped state is derived from shipping_tracking_numbers
     await pool.query(
@@ -257,6 +274,8 @@ export async function syncOrderExceptionsToOrders(): Promise<{
 
     deleted += resolvedResult.rowCount || 0;
   }
+
+  progress({ type: 'phase', phase: 'done' });
 
   return {
     scanned: openExceptions.rows.length,

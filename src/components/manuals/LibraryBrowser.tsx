@@ -1,12 +1,14 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { FileText, Loader2, Search, ChevronLeft, Plus, Pencil, Check, X, Trash2 } from '@/components/Icons';
 import { microBadge, tableHeader } from '@/design-system/tokens/typography/presets';
 import { toast } from '@/lib/toast';
 import { UploadManualModal, RenameFolderModal, dispatchManualsUpdated } from './ManualCrudModals';
 import { FolderPathPicker } from './FolderPathPicker';
+import { generatePdfThumbnail } from '@/lib/manuals/pdfThumbnail';
 
 /**
  * Body-only manuals/library file browser. Headers, mode pills, and the search
@@ -262,6 +264,15 @@ export function LibraryBrowser({ query, basePath }: LibraryBrowserProps) {
     return () => window.removeEventListener('manuals-updated', onUpdated);
   }, []);
 
+  // Track which manual ids we've already tried to backfill in this session.
+  // Without this, a render that updates after the upload finishes would
+  // re-queue every successful row again. Module-scope set would persist
+  // across re-mounts; instance ref scopes it to the lifetime of this
+  // component which is appropriate (a navigation away genuinely wants to
+  // forget — the next mount can retry any thumbnails the server saved
+  // since but the local row hasn't refreshed).
+  const backfillAttemptedRef = useRef<Set<number>>(new Set());
+
   const tree = useMemo(() => buildTree(manuals), [manuals]);
   const currentNode = useMemo(
     () => getNodeAtPath(tree, currentPath) ?? tree,
@@ -348,6 +359,54 @@ export function LibraryBrowser({ query, basePath }: LibraryBrowserProps) {
     (path: string, count: number) => setRenameFolder({ path, count }),
     [],
   );
+
+  // ─── Background thumbnail backfill ──────────────────────────────────────
+  //
+  // Walk the files in the current folder and queue any without a thumbnail
+  // for client-side generation. Sequential (one at a time) so we don't peg
+  // CPU rendering 50 PDFs at once; the loop yields between each file so the
+  // UI stays responsive. Skips files we've already attempted in this
+  // session (prevents re-queueing on every reload) and bails early if the
+  // user navigates to a different folder.
+  useEffect(() => {
+    if (debouncedQuery) return;                       // search view has different files
+    const targets = filesHere.filter(
+      (f) => f.source_url && !f.thumbnail_url && !backfillAttemptedRef.current.has(f.id),
+    );
+    if (targets.length === 0) return;
+    let cancelled = false;
+    (async () => {
+      for (const file of targets) {
+        if (cancelled) return;
+        backfillAttemptedRef.current.add(file.id);
+        try {
+          const thumb = await generatePdfThumbnail(file.source_url!);
+          if (cancelled || !thumb) continue;
+          const form = new FormData();
+          form.append('id', String(file.id));
+          form.append('thumbnail', new File([thumb.blob], 'thumb.jpg', { type: 'image/jpeg' }));
+          const res = await fetch('/api/product-manuals/thumbnail', { method: 'POST', body: form });
+          if (cancelled) return;
+          if (res.ok) {
+            // Optimistically patch the in-memory row so the UI flips to
+            // the image without waiting for the next refetch. The next
+            // refetch (via manuals-updated) confirms it.
+            const json = await res.json().catch(() => ({}));
+            if (json?.success && json?.thumbnailUrl) {
+              setManuals((prev) =>
+                prev.map((m) => (m.id === file.id ? { ...m, thumbnail_url: json.thumbnailUrl } : m)),
+              );
+            }
+          }
+        } catch {
+          // Best-effort. A failure here means the file stays icon-only
+          // until the next session retries it. Worst case the operator
+          // opens the manual and the viewer-side backfill kicks in.
+        }
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [filesHere, debouncedQuery]);
 
   // ─── Drag-and-drop helpers ──────────────────────────────────────────────
   //
@@ -910,22 +969,23 @@ function FileButton({
             : 'border-gray-200 bg-white shadow-sm hover:-translate-y-px hover:border-blue-200 hover:bg-blue-50/30 hover:shadow-md active:translate-y-0 active:shadow-sm'
       }`}
     >
-      <button
-        type="button"
-        onClick={(e) => {
-          e.stopPropagation();
-          onToggleCheck(e.metaKey || e.ctrlKey || e.shiftKey);
-        }}
-        className={`relative z-10 mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded border transition-all ${
-          isChecked
-            ? 'border-indigo-500 bg-indigo-500 text-white opacity-100'
-            : 'border-zinc-300 bg-white text-transparent opacity-0 hover:border-indigo-400 group-hover:opacity-100'
-        }`}
-        title={isChecked ? 'Deselect' : 'Select for bulk action'}
-        aria-label={isChecked ? `Deselect ${title}` : `Select ${title}`}
-      >
-        <Check className="h-3 w-3" />
-      </button>
+      {/* Checkbox on the left — only rendered when the row is in the
+          selection set. Entering selection is the pencil's job (right side);
+          clicking the checkbox while visible deselects the row. */}
+      {isChecked && (
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            onToggleCheck(e.metaKey || e.ctrlKey || e.shiftKey);
+          }}
+          className="relative z-10 mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded border border-indigo-500 bg-indigo-500 text-white transition-all"
+          title="Deselect"
+          aria-label={`Deselect ${title}`}
+        >
+          <Check className="h-3 w-3" />
+        </button>
+      )}
       <button type="button" onClick={onClick} className="absolute inset-0 rounded-2xl" aria-label={`Open ${title}`} />
       {/* Thumbnail (first page of the PDF) when available, fallback to the
           file-icon glyph for legacy rows that haven't been backfilled yet. */}
@@ -964,6 +1024,22 @@ function FileButton({
           )}
         </div>
       </div>
+      {/* Selection pencil — the only way into bulk-select. Clicking it adds
+          this row to the selection set, which then reveals the checkbox on
+          the left (and surfaces the bulk-actions bar at the bottom). Held
+          modifiers act additively to mirror normal multi-select semantics. */}
+      <button
+        type="button"
+        onClick={(e) => {
+          e.stopPropagation();
+          onToggleCheck(e.metaKey || e.ctrlKey || e.shiftKey);
+        }}
+        className="relative inline-flex h-7 w-7 shrink-0 items-center justify-center self-center rounded-lg text-zinc-400 opacity-0 transition-opacity hover:bg-zinc-100 hover:text-zinc-700 group-hover:opacity-100 focus:opacity-100"
+        title="Select for bulk action"
+        aria-label={`Select ${title} for bulk action`}
+      >
+        <Pencil className="h-3.5 w-3.5" />
+      </button>
     </div>
   );
 }
@@ -972,6 +1048,9 @@ function FileButton({
  * Bulk-move sheet — opens when the operator clicks "Move" in the bulk
  * action bar. Body is just the FolderPathPicker so we get the search +
  * drill-down + new-folder UI for free.
+ *
+ * Portals to document.body so the overlay covers the whole viewport (not
+ * just the sidebar), matching the Edit / Upload / Rename modals.
  */
 function BulkMoveSheet({
   count, target, onTargetChange, busy, onCancel, onConfirm,
@@ -983,33 +1062,54 @@ function BulkMoveSheet({
   onCancel: () => void;
   onConfirm: () => void;
 }) {
-  return (
-    <div className="absolute inset-0 z-30 flex items-end justify-center bg-black/30 p-3">
-      <button type="button" onClick={busy ? undefined : onCancel} className="absolute inset-0" aria-label="Close" />
-      <div className="relative z-10 w-full overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-xl">
-        <div className="flex items-center justify-between border-b border-zinc-100 px-3 py-2">
-          <p className="text-micro font-black uppercase tracking-[0.16em] text-zinc-500">
-            Move {count} {count === 1 ? 'manual' : 'manuals'}
-          </p>
+  // Gate portal until first client render — `document.body` doesn't exist
+  // during SSR.
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => { setMounted(true); }, []);
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && !busy) onCancel();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [busy, onCancel]);
+  if (!mounted) return null;
+
+  return createPortal(
+    <div className="fixed inset-0 z-[110] flex items-center justify-center p-4">
+      <button
+        type="button"
+        onClick={busy ? undefined : onCancel}
+        className="absolute inset-0 bg-black/40"
+        aria-label="Close"
+      />
+      <div className="relative z-[111] w-full max-w-lg overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-2xl shadow-zinc-900/20">
+        <div className="flex items-center justify-between border-b border-zinc-200 px-4 py-3">
+          <div>
+            <p className="text-micro font-black uppercase tracking-[0.16em] text-zinc-500">Bulk Move</p>
+            <h2 className="mt-1 text-sm font-black text-zinc-900">
+              Move {count} {count === 1 ? 'manual' : 'manuals'}
+            </h2>
+          </div>
           <button
             type="button"
             onClick={onCancel}
             disabled={busy}
-            className="rounded p-1 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-700 disabled:opacity-40"
+            className="rounded-full border border-zinc-200 bg-white p-2 text-zinc-500 transition-colors hover:border-zinc-300 hover:bg-zinc-50 hover:text-zinc-800 disabled:opacity-40"
             aria-label="Close"
           >
-            <X className="h-3.5 w-3.5" />
+            <X className="h-4 w-4" />
           </button>
         </div>
-        <div className="p-3">
+        <div className="space-y-4 px-4 py-4">
           <FolderPathPicker value={target} onChange={onTargetChange} />
         </div>
-        <div className="flex items-center justify-end gap-2 border-t border-zinc-100 bg-zinc-50/60 px-3 py-2">
+        <div className="flex items-center justify-end gap-2 border-t border-zinc-100 bg-zinc-50/60 px-4 py-3">
           <button
             type="button"
             onClick={onCancel}
             disabled={busy}
-            className="inline-flex items-center gap-1 rounded-md border border-zinc-200 bg-white px-2 py-1 text-micro font-black uppercase tracking-wider text-zinc-600 hover:border-zinc-300 hover:bg-zinc-50 disabled:opacity-50"
+            className="inline-flex items-center gap-1.5 rounded-lg border border-zinc-200 bg-white px-3 py-1.5 text-micro font-black uppercase tracking-[0.14em] text-zinc-600 transition-colors hover:border-zinc-300 hover:bg-zinc-50 disabled:opacity-50"
           >
             Cancel
           </button>
@@ -1017,14 +1117,15 @@ function BulkMoveSheet({
             type="button"
             onClick={onConfirm}
             disabled={busy}
-            className="inline-flex items-center gap-1 rounded-md bg-zinc-900 px-2 py-1 text-micro font-black uppercase tracking-wider text-white hover:bg-zinc-800 disabled:opacity-50"
+            className="inline-flex items-center gap-1.5 rounded-lg bg-gray-900 px-3 py-1.5 text-micro font-black uppercase tracking-[0.14em] text-white transition-colors hover:bg-gray-800 disabled:opacity-50"
           >
-            {busy ? <Loader2 className="h-3 w-3 animate-spin" /> : <Check className="h-3 w-3" />}
+            {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />}
             Move
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
 
