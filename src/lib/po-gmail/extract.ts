@@ -71,6 +71,53 @@ export interface ExtractedOrderNumbers {
   all: string[];
 }
 
+// ─── Tracking number extraction ───────────────────────────────────────────
+// Closes the "vendor emailed tracking before / instead of Zoho `reference_number`
+// getting populated" gap. The Incoming view's `AWAITING_TRACKING` bucket
+// drains as soon as these stamp shipment_id on the matched receiving row.
+//
+// Patterns are deliberately conservative — false positives create phantom
+// shipments and pollute the carrier-poll queue. Each pattern matches a
+// carrier-specific format with explicit length + character constraints:
+//
+//   UPS:    1Z + 16 alphanumerics                                  (18 total)
+//   FedEx:  12, 14, 15, 20, or 22 digits (multiple service types)
+//   USPS:   20-22 digits, optionally prefixed by 92/93/94/95
+//   DHL:    10 digits OR JD + 10 digits
+const TRACKING_PATTERNS: ReadonlyArray<{ carrier: string; re: RegExp }> = [
+  { carrier: 'UPS',   re: /\b(1Z[0-9A-Z]{16})\b/g },
+  // FedEx 12-digit + 14/15/20/22 digit variants. Anchored on word boundary
+  // to avoid grabbing the tail of a long PO# that happens to be digits.
+  { carrier: 'FEDEX', re: /\b(\d{12}|\d{15}|\d{20}|\d{22})\b/g },
+  // USPS 22-digit IMpb (most common). Other forms (LX/RA/EA international)
+  // omitted — they're rare in vendor receive emails and easy to add later.
+  { carrier: 'USPS',  re: /\b(9[2-5]\d{20})\b/g },
+  // DHL Express airwaybill — 10-digit numeric. Looser pattern; let the
+  // carrier-detect step in registerShipmentPermissive reject false positives.
+  { carrier: 'DHL',   re: /\b(JD\d{10}|\d{10})\b/g },
+];
+
+/**
+ * Pull carrier tracking numbers out of a vendor email body. Dedupes across
+ * patterns (UPS first because it's the most distinctive). Returns the raw
+ * extracted strings — `registerShipmentPermissive` will normalize and
+ * carrier-detect them downstream.
+ */
+export function extractTrackingNumbers(text: string): string[] {
+  if (!text) return [];
+  const seen = new Set<string>();
+  for (const { re } of TRACKING_PATTERNS) {
+    re.lastIndex = 0;
+    let match: RegExpExecArray | null;
+    while ((match = re.exec(text))) {
+      const raw = match[1].trim();
+      if (raw.length < 8) continue;
+      seen.add(raw);
+    }
+  }
+  return Array.from(seen);
+}
+
 export function extractOrderNumbers(text: string): ExtractedOrderNumbers {
   if (!text) return { labeled: [], unlabeled: [], all: [] };
 

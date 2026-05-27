@@ -16,6 +16,7 @@ import { StationScanBar } from '@/components/station/StationScanBar';
 import { ReceivingHistorySearchSection } from '@/components/sidebar/receiving/ReceivingHistorySearchSection';
 import { ReceivingLinePicker } from '@/components/sidebar/receiving/ReceivingLinePicker';
 import { ReceivingRecentRail } from '@/components/sidebar/receiving/ReceivingRecentRail';
+import { IncomingSidebarPanel } from '@/components/sidebar/receiving/IncomingSidebarPanel';
 import {
   dispatchReceivingWorkspaceOpen,
   dispatchReceivingWorkspaceClose,
@@ -115,7 +116,9 @@ export function ReceivingSidebarPanel() {
       ? 'pickup'
       : rawMode === 'history'
         ? 'history'
-        : 'receive';
+        : rawMode === 'incoming'
+          ? 'incoming'
+          : 'receive';
   // Identity is server-derived. The proxy redirects unauthenticated traffic
   // to /signin, so `user` is non-null whenever this sidebar renders. The
   // optional-chain is a TS-narrowing nicety, not a runtime fallback.
@@ -1086,6 +1089,14 @@ export function ReceivingSidebarPanel() {
         <div className="min-h-0 flex-1 overflow-y-auto">
           <UnfoundQueueSidebarToolbar />
         </div>
+      ) : mode === 'incoming' ? (
+        // Incoming = Zoho-sourced expected work. Sidebar owns the search +
+        // facet controls; the right-pane table renders the rows only (no
+        // duplicate header). Scan-bar is intentionally omitted — Incoming
+        // is a browse/triage surface, not a scan surface.
+        <div className="min-h-0 flex-1 overflow-hidden">
+          <IncomingSidebarPanel />
+        </div>
       ) : (
         <>
       {/* History: dashboard-style search + scope/field pills + green + to Receive.
@@ -1154,13 +1165,15 @@ export function ReceivingSidebarPanel() {
         />
       )}
 
-      {/* Receive tab: live recent rail. History relies on URL-driven table filtering. */}
-      {mode !== 'history' ? (
+      {/* Receive tab: live recent rail. History narrows the right-pane
+          table via URL params and doesn't need the rail. Incoming has its
+          own dedicated sidebar (IncomingSidebarPanel) above this branch. */}
+      {mode === 'history' ? null : (
         <ReceivingRecentRail
           selectedLineId={selectedLine?.id ?? null}
           selectedRow={selectedLine ?? null}
         />
-      ) : null}
+      )}
 
       </div>{/* /scrollable body */}
         </>

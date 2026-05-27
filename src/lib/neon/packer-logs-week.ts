@@ -172,7 +172,16 @@ export async function fetchPackerLogRows(
         tested_staff.name AS tested_by_name,
         tester_staff.name AS tester_name,
         sal.fnsku,
-        (NULLIF(TRIM(sal.metadata->>'fnsku_log_id'), ''))::bigint AS fnsku_log_id
+        (NULLIF(TRIM(sal.metadata->>'fnsku_log_id'), ''))::bigint AS fnsku_log_id,
+        stn.carrier                            AS carrier,
+        stn.latest_status_code                 AS latest_status_code,
+        stn.latest_status_label                AS latest_status_label,
+        stn.latest_status_description          AS latest_status_description,
+        stn.latest_status_category             AS latest_status_category,
+        stn.latest_event_at::text              AS latest_event_at,
+        stn.has_exception                      AS has_exception,
+        stn.exception_at::text                 AS exception_at,
+        stn.is_terminal                        AS is_terminal
     FROM station_activity_logs sal
     LEFT JOIN packer_logs pl ON pl.id = sal.packer_log_id
     LEFT JOIN LATERAL (

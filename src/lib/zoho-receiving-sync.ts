@@ -240,6 +240,45 @@ async function syncPurchaseOrderLines(
     shipmentId = shipment?.id ?? null;
   }
 
+  // Make sure a parent `receiving` row exists for this PO with the
+  // shipment_id stamped, so the soft JOIN in /api/receiving-lines can find
+  // the carrier status without requiring an operator scan first. Two paths:
+  //
+  //   1) options.receivingId is provided (scan-driven path) — stamp on that
+  //      row, never create a sibling.
+  //   2) options.receivingId is null (cron sync path) — upsert the canonical
+  //      zoho_po receiving row (idempotent via ux_receiving_zoho_po_matched).
+  //
+  // When `shipmentId` is null (reference# missing / unregisterable), we still
+  // upsert the receiving row so the carrier-sync cron can attach a shipment
+  // later via the existing soft JOIN. shipment_id stays NULL until then.
+  if (options.receivingId) {
+    if (shipmentId != null) {
+      await client.query(
+        `UPDATE receiving
+            SET shipment_id = $1,
+                updated_at  = NOW()
+          WHERE id = $2
+            AND (shipment_id IS NULL OR shipment_id <> $1)`,
+        [shipmentId, options.receivingId],
+      );
+    }
+  } else {
+    await client.query(
+      `INSERT INTO receiving
+         (source, zoho_purchaseorder_id, zoho_purchaseorder_number,
+          shipment_id, created_at, updated_at)
+       VALUES ('zoho_po', $1, $2, $3, NOW(), NOW())
+       ON CONFLICT (zoho_purchaseorder_id)
+         WHERE source = 'zoho_po' AND zoho_purchaseorder_id IS NOT NULL
+       DO UPDATE SET
+         zoho_purchaseorder_number = COALESCE(EXCLUDED.zoho_purchaseorder_number, receiving.zoho_purchaseorder_number),
+         shipment_id               = COALESCE(receiving.shipment_id, EXCLUDED.shipment_id),
+         updated_at                = NOW()`,
+      [normalizedPoId, poNumber, shipmentId],
+    );
+  }
+
   let synced = 0;
   let skipped = 0;
   let linked = 0;
@@ -412,6 +451,13 @@ export type BulkSyncOptions = {
   per_page?: number;
   max_pages?: number;
   max_items?: number;
+  /**
+   * ISO date `YYYY-MM-DD`. POs with `po.date < po_date_floor` are skipped
+   * client-side (Zoho's REST list filter doesn't expose a po_date range,
+   * only `last_modified_time`). The incoming-po-sync cron sets this so
+   * pre-cutover POs never re-enter `receiving_lines`.
+   */
+  po_date_floor?: string;
 };
 
 export type BulkSyncSummary = {
@@ -421,6 +467,8 @@ export type BulkSyncSummary = {
   failed: number;
   linked: number;
   line_items_synced: number;
+  /** How many POs were skipped because po.date < po_date_floor. */
+  skipped_pre_floor: number;
   errors: Array<{ purchaseorder_id: string; error: string }>;
 };
 
@@ -443,6 +491,13 @@ export async function syncZohoPurchaseOrdersToReceiving(
     }
   }
 
+  // Defensive normalize: only accept exact YYYY-MM-DD. Anything else (empty,
+  // bad format) → no floor. Comparison is lexical against po.date which Zoho
+  // returns as `YYYY-MM-DD`, so string compare is correct here.
+  const poDateFloor = /^\d{4}-\d{2}-\d{2}$/.test(String(opts.po_date_floor || '').trim())
+    ? String(opts.po_date_floor).trim()
+    : '';
+
   const summary: BulkSyncSummary = {
     processed: 0,
     created: 0,
@@ -450,6 +505,7 @@ export async function syncZohoPurchaseOrdersToReceiving(
     failed: 0,
     linked: 0,
     line_items_synced: 0,
+    skipped_pre_floor: 0,
     errors: [],
   };
 
@@ -471,6 +527,16 @@ export async function syncZohoPurchaseOrdersToReceiving(
       summary.processed++;
 
       const poRow = po as AnyRow;
+
+      // Skip POs authored before the configured floor. Zoho returns
+      // `date` as `YYYY-MM-DD`; string compare is fine on that format.
+      if (poDateFloor) {
+        const poDate = String(poRow.date ?? poRow.po_date ?? '').trim();
+        if (poDate && poDate < poDateFloor) {
+          summary.skipped_pre_floor++;
+          continue;
+        }
+      }
       const zohoId =
         asString(poRow.purchaseorder_id, poRow.purchase_order_id, poRow.id) ?? 'unknown';
 

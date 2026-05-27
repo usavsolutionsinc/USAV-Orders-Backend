@@ -9,6 +9,11 @@ import { TrackingChip, OrderIdChip, SkuScanRefChip, SerialChip, getLast4, getLas
 import { conditionGradeTableLabel, workflowStatusTableLabel } from '@/components/station/receiving-constants';
 import WeekHeader from '@/components/ui/WeekHeader';
 import { DesktopDateGroupHeader } from '@/components/ui/DesktopDateGroupHeader';
+import type { IncomingDeliveryState } from '@/components/sidebar/receiving/IncomingSidebarPanel';
+import {
+  IncomingPaneHeader,
+  INCOMING_PAGE_SIZE,
+} from '@/components/sidebar/receiving/IncomingPaneHeader';
 import {
   computeWeekRange,
   formatDateWithOrdinal,
@@ -26,7 +31,7 @@ import {
 } from '@/lib/receiving-history-search';
 
 /** Passed to `/api/receiving-lines` as `view`. The station dashboard uses a single full list. */
-export type ReceivingView = 'all' | 'recent' | 'received';
+export type ReceivingView = 'all' | 'recent' | 'received' | 'incoming';
 
 export interface ReceivingLineRow {
   id: number;
@@ -62,6 +67,26 @@ export interface ReceivingLineRow {
   receiving_support_notes?: string | null;
   /** Carton-level listing URL from `receiving.listing_url` (same for all lines on the package). */
   receiving_listing_url?: string | null;
+  /**
+   * Derived faceted bucket for `view=incoming` — computed on read from the
+   * carrier status on shipping_tracking_numbers (DELIVERED_UNOPENED,
+   * ARRIVING_TODAY, STALLED, IN_TRANSIT, AWAITING_TRACKING). Null on other views.
+   */
+  delivery_state?:
+    | 'DELIVERED_UNOPENED'
+    | 'ARRIVING_TODAY'
+    | 'STALLED'
+    | 'IN_TRANSIT'
+    | 'AWAITING_TRACKING'
+    | 'RECEIVED'
+    | 'UNKNOWN'
+    | null;
+  /** Zoho PO date (`zoho_po_mirror.po_date`) — when the buyer authored the PO upstream (Incoming view only). */
+  po_date?: string | null;
+  /** Vendor-promised delivery date from zoho_po_mirror (Incoming view only). */
+  expected_delivery_date?: string | null;
+  /** Vendor name from zoho_po_mirror (Incoming view only). */
+  vendor_name?: string | null;
   created_at: string | null;
   /** Most-recent scan/receive time. Server sorts view=recent/all by this. */
   last_activity_at?: string | null;
@@ -147,6 +172,25 @@ export function ReceivingLineOrderRow({
   const trackingValue = (row.tracking_number || '').trim();
   const skuValue = (row.sku || '').trim();
   const poValue = (row.zoho_purchaseorder_number || row.zoho_purchaseorder_id || '').trim();
+  // Derived faceted state from /api/receiving-lines?view=incoming. Suffix-text
+  // chips (matching the NEEDS TEST pattern) — keeps the row compact while
+  // making the "delivered, nobody opened it" case visually shout.
+  const deliveryStateMeta: { label: string; tone: string } | null = (() => {
+    switch (row.delivery_state) {
+      case 'DELIVERED_UNOPENED':
+        return { label: 'DELIVERED · NOT SCANNED', tone: 'text-rose-600 font-black' };
+      case 'ARRIVING_TODAY':
+        return { label: 'ARRIVING TODAY', tone: 'text-amber-700 font-black' };
+      case 'STALLED':
+        return { label: 'STALLED', tone: 'text-orange-700 font-black' };
+      case 'IN_TRANSIT':
+        return { label: 'IN TRANSIT', tone: 'text-blue-700' };
+      case 'AWAITING_TRACKING':
+        return { label: 'NO TRACKING', tone: 'text-gray-500' };
+      default:
+        return null;
+    }
+  })();
   // Join all serials so SerialChip's CSV-aware helper picks the most recent and
   // shows its last 6 chars. Clipboard carries the full list for traceability.
   const serialsCsv = (row.serials ?? [])
@@ -192,6 +236,9 @@ export function ReceivingLineOrderRow({
             {' • '}
             {workflowLabel}
             {row.needs_test ? <span className="text-orange-600">{' • NEEDS TEST'}</span> : null}
+            {deliveryStateMeta ? (
+              <span className={deliveryStateMeta.tone}>{' • ' + deliveryStateMeta.label}</span>
+            ) : null}
           </div>
         </div>
       </div>
@@ -211,9 +258,13 @@ export default function ReceivingLinesTable() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { isMobile } = useUIModeOptional();
-  const view: ReceivingView = 'all';
   const pageMode = searchParams.get('mode') ?? 'receive';
   const isHistoryMode = pageMode === 'history';
+  const isIncomingMode = pageMode === 'incoming';
+  // Mode-driven view: Incoming filters server-side to EXPECTED Zoho POs
+  // with zero received. Other modes share the existing 'all' bucket which
+  // unions recent + received so the existing date grouping keeps working.
+  const view: ReceivingView = isIncomingMode ? 'incoming' : 'all';
 
   const historySearch = searchParams.get(RECEIVING_HISTORY_URL_PARAMS.q)?.trim() ?? '';
   const historySearchField = normalizeReceivingHistorySearchField(
@@ -223,10 +274,46 @@ export default function ReceivingLinesTable() {
     searchParams.get(RECEIVING_HISTORY_URL_PARAMS.scope),
   );
 
-  /** History: text or source scope narrows globally — bypass PST week slicing so matches stay visible. */
+  // Incoming-only URL params: shares `?q=` with history's search box (free
+  // text), adds `?state=` for the delivery_state facet. Keeping `q` on the
+  // same key means the search bar value survives a mode flip from Incoming
+  // → History without surprising the operator.
+  const incomingSearch = isIncomingMode
+    ? (searchParams.get(RECEIVING_HISTORY_URL_PARAMS.q)?.trim() ?? '')
+    : '';
+  const incomingStateRaw = (searchParams.get('state') || '').trim().toUpperCase();
+  const incomingState: IncomingDeliveryState | null =
+    incomingStateRaw === 'DELIVERED_UNOPENED'
+      || incomingStateRaw === 'ARRIVING_TODAY'
+      || incomingStateRaw === 'STALLED'
+      || incomingStateRaw === 'IN_TRANSIT'
+      || incomingStateRaw === 'AWAITING_TRACKING'
+      ? (incomingStateRaw as IncomingDeliveryState)
+      : null;
+  // Sort axis + PO date range — driven by IncomingPaneHeader (sort) and
+  // IncomingSidebarPanel (date range). All three values flow straight into
+  // the API query string below; no client-side filtering of date range
+  // because the server already narrows results.
+  const incomingSort = isIncomingMode ? (searchParams.get('sort') || '').trim() : '';
+  const incomingPoFrom = isIncomingMode ? (searchParams.get('po_from') || '').trim() : '';
+  const incomingPoTo = isIncomingMode ? (searchParams.get('po_to') || '').trim() : '';
+  // Pagination — server-side LIMIT 25 + page offset. Page numbers are
+  // 1-based in the URL ("?page=2" = second page). Anything malformed or
+  // missing falls back to 1.
+  const incomingPageRaw = isIncomingMode ? Number(searchParams.get('page') || '1') : 1;
+  const incomingPage =
+    Number.isFinite(incomingPageRaw) && incomingPageRaw >= 1 ? Math.floor(incomingPageRaw) : 1;
+
+  /**
+   * History: text or source scope narrows globally — bypass PST week slicing
+   * so matches stay visible.
+   * Incoming: server-side filter already narrows to unreceived Zoho POs;
+   * client-side week slicing would hide POs issued more than a week ago.
+   */
   const skipWeekFilter =
-    isHistoryMode &&
-    (historySearch.length > 0 || historySearchScope !== 'all');
+    isIncomingMode ||
+    (isHistoryMode &&
+      (historySearch.length > 0 || historySearchScope !== 'all'));
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [localRows, setLocalRows] = useState<ReceivingLineRow[]>([]);
   const [weekOffset, setWeekOffset] = useState(0);
@@ -238,7 +325,11 @@ export default function ReceivingLinesTable() {
   const weekRange = computeWeekRange(weekOffset);
 
   const buildParams = useCallback(() => {
-    const p = new URLSearchParams({ limit: String(LIMIT), offset: '0' });
+    // Incoming paginates server-side at INCOMING_PAGE_SIZE; other modes
+    // keep the long 500-row scroll the historical tabs were tuned for.
+    const limit = isIncomingMode ? INCOMING_PAGE_SIZE : LIMIT;
+    const offset = isIncomingMode ? (incomingPage - 1) * INCOMING_PAGE_SIZE : 0;
+    const p = new URLSearchParams({ limit: String(limit), offset: String(offset) });
     p.set('include', 'serials');
     p.set('view', view);
     if (isHistoryMode) {
@@ -247,13 +338,42 @@ export default function ReceivingLinesTable() {
       }
       p.set('search_field', historySearchField);
       p.set('search_scope', historySearchScope);
+    } else if (isIncomingMode) {
+      // Incoming reuses the same `?search=` / `?search_field=` machinery the
+      // server has for History — defaults to PO# matching, which matches
+      // Zoho's PO list search UX. `delivery_state` is incoming-only.
+      if (incomingSearch) {
+        p.set('search', incomingSearch);
+        p.set('search_field', 'po');
+      }
+      if (incomingState) {
+        p.set('delivery_state', incomingState);
+      }
+      if (incomingSort) p.set('sort', incomingSort);
+      if (incomingPoFrom) p.set('po_from', incomingPoFrom);
+      if (incomingPoTo) p.set('po_to', incomingPoTo);
     }
     return p.toString();
-  }, [view, isHistoryMode, historySearch, historySearchField, historySearchScope]);
+  }, [
+    view,
+    isHistoryMode,
+    historySearch,
+    historySearchField,
+    historySearchScope,
+    isIncomingMode,
+    incomingSearch,
+    incomingState,
+    incomingSort,
+    incomingPoFrom,
+    incomingPoTo,
+    incomingPage,
+  ]);
 
   const queryKey = isHistoryMode
     ? (['receiving-lines-table', view, 'history', historySearch, historySearchField, historySearchScope] as const)
-    : (['receiving-lines-table', view, 'receive'] as const);
+    : isIncomingMode
+      ? (['receiving-lines-table', view, 'incoming', incomingSearch, incomingState ?? '', incomingSort, incomingPoFrom, incomingPoTo, incomingPage] as const)
+      : (['receiving-lines-table', view, 'receive'] as const);
   const { data, isLoading } = useQuery<ApiResponse>({
     queryKey,
     queryFn: async () => {
@@ -265,9 +385,29 @@ export default function ReceivingLinesTable() {
     refetchOnWindowFocus: true,
   });
 
+  // IncomingSidebarPanel owns the search + facet controls; the table just
+  // reads the URL params it writes. Summary polling lives in the sidebar so
+  // the count rendering doesn't unmount on a right-pane row click.
+
   useEffect(() => {
     if (data?.receiving_lines) setLocalRows(data.receiving_lines);
   }, [data]);
+
+  // Incoming: if `?page` is past the end of the filtered result set (e.g.
+  // operator was on page 7 with 175+ rows, then filtered to 18 → page 7
+  // requests offset 150 → server returns 0 rows), drop the bad page param
+  // so the table re-fetches page 1 instead of stranding on an empty pane.
+  useEffect(() => {
+    if (!isIncomingMode) return;
+    const total = Number(data?.total ?? 0);
+    if (total === 0) return;
+    const maxPage = Math.max(1, Math.ceil(total / INCOMING_PAGE_SIZE));
+    if (incomingPage > maxPage) {
+      const params = new URLSearchParams(searchParams.toString());
+      params.delete('page');
+      router.replace(`/receiving?${params.toString()}`);
+    }
+  }, [isIncomingMode, data?.total, incomingPage, router, searchParams]);
 
   useEffect(() => {
     if (!selectedId) return;
@@ -427,12 +567,16 @@ export default function ReceivingLinesTable() {
   }, []);
 
   // ── Day grouping (PST) ────────────────────────────────────────────────────
+  // Incoming groups by the Zoho PO date (`po_date` from zoho_po_mirror) so
+  // the day band reflects when the buyer authored the PO upstream — not when
+  // we synced it locally. Other modes keep the legacy created_at grouping.
   const groupedRecords = useMemo(() => {
     const groups: Record<string, ReceivingLineRow[]> = {};
     for (const row of localRows) {
+      const sourceTs = isIncomingMode ? (row.po_date ?? row.created_at) : row.created_at;
       let date = 'Unknown';
       try {
-        date = toPSTDateKey(row.created_at) || 'Unknown';
+        date = toPSTDateKey(sourceTs) || 'Unknown';
       } catch {
         date = 'Unknown';
       }
@@ -440,7 +584,7 @@ export default function ReceivingLinesTable() {
       groups[date].push(row);
     }
     return groups;
-  }, [localRows]);
+  }, [localRows, isIncomingMode]);
 
   const filteredGroupedRecords = useMemo(() => {
     if (skipWeekFilter) return groupedRecords;
@@ -451,19 +595,23 @@ export default function ReceivingLinesTable() {
     );
   }, [groupedRecords, weekRange.startStr, weekRange.endStr, skipWeekFilter]);
 
-  /** Flat list in render order — newest day → newest row. */
+  /** Flat list in render order — newest day → newest row.
+   *  Incoming defers to the API's server-side ORDER BY (driven by the Sort
+   *  control); other modes re-sort by created_at DESC within each day. */
   const orderedVisibleRows = useMemo(
     () =>
       Object.entries(filteredGroupedRecords)
         .sort((a, b) => b[0].localeCompare(a[0]))
         .flatMap(([, dateRows]) =>
-          [...dateRows].sort((a, b) => {
-            const tA = new Date(a.created_at || 0).getTime();
-            const tB = new Date(b.created_at || 0).getTime();
-            return tB - tA;
-          }),
+          isIncomingMode
+            ? dateRows
+            : [...dateRows].sort((a, b) => {
+                const tA = new Date(a.created_at || 0).getTime();
+                const tB = new Date(b.created_at || 0).getTime();
+                return tB - tA;
+              }),
         ),
-    [filteredGroupedRecords],
+    [filteredGroupedRecords, isIncomingMode],
   );
 
   // Sidebar chevrons / arrow keys dispatch receiving-navigate-table.
@@ -572,21 +720,37 @@ export default function ReceivingLinesTable() {
     if (isHistoryMode && (historySearch || historySearchScope !== 'all')) {
       return 'No lines match — try different text or widen source (All).';
     }
+    if (isIncomingMode) {
+      return 'No incoming POs — Zoho says everything issued is already received.';
+    }
     return 'No lines yet — start scanning to populate.';
-  }, [isHistoryMode, historySearch, historySearchScope]);
+  }, [isHistoryMode, isIncomingMode, historySearch, historySearchScope]);
 
   return (
     <div className="flex h-full min-w-0 overflow-hidden bg-white">
       <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
-        <WeekHeader
-          stickyDate={stickyDate}
-          fallbackDate={formatHeaderDate()}
-          count={currentCount || getWeekCount()}
-          weekRange={weekRange}
-          weekOffset={weekOffset}
-          onPrevWeek={() => setWeekOffset(weekOffset + 1)}
-          onNextWeek={() => setWeekOffset(Math.max(0, weekOffset - 1))}
-        />
+        {isIncomingMode ? (
+          // Incoming gets its own purpose-built header — title + count +
+          // pagination. The sidebar (IncomingSidebarPanel) owns search +
+          // facet chips + PO date range + Sort. `total` comes straight
+          // from the API response so the "N of M" label stays in sync
+          // with whatever filter is applied.
+          <IncomingPaneHeader
+            count={localRows.length}
+            total={Number(data?.total ?? 0)}
+            page={incomingPage}
+          />
+        ) : (
+          <WeekHeader
+            stickyDate={stickyDate}
+            fallbackDate={formatHeaderDate()}
+            count={currentCount || getWeekCount()}
+            weekRange={weekRange}
+            weekOffset={weekOffset}
+            onPrevWeek={() => setWeekOffset(weekOffset + 1)}
+            onNextWeek={() => setWeekOffset(Math.max(0, weekOffset - 1))}
+          />
+        )}
         <div ref={scrollRef} className="min-h-0 flex-1 overflow-auto">
           {isLoading && localRows.length === 0 ? (
             <div className="p-3">
@@ -601,11 +765,15 @@ export default function ReceivingLinesTable() {
               {Object.entries(filteredGroupedRecords)
                 .sort((a, b) => b[0].localeCompare(a[0]))
                 .map(([date, dateRows]) => {
-                  const sortedRows = [...dateRows].sort((a, b) => {
-                    const tA = new Date(a.created_at || 0).getTime();
-                    const tB = new Date(b.created_at || 0).getTime();
-                    return tB - tA;
-                  });
+                  // Preserve server ORDER BY for incoming (the Sort control
+                  // already drives it); other modes re-sort by local created_at.
+                  const sortedRows = isIncomingMode
+                    ? dateRows
+                    : [...dateRows].sort((a, b) => {
+                        const tA = new Date(a.created_at || 0).getTime();
+                        const tB = new Date(b.created_at || 0).getTime();
+                        return tB - tA;
+                      });
                   return (
                     <div key={date} className="flex flex-col">
                       <DesktopDateGroupHeader date={date} total={dateRows.length} />

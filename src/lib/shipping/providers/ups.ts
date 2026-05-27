@@ -10,17 +10,16 @@ interface TokenCache {
 }
 
 let tokenCache: TokenCache | null = null;
+// Single in-flight token request shared across concurrent callers — prevents
+// N parallel OAuth fan-out during cron sync from triggering UPS rate-limit / 401s.
+let tokenInFlight: Promise<string> | null = null;
 
-async function getAccessToken(): Promise<string> {
+async function fetchFreshToken(): Promise<string> {
   const clientId = process.env.UPS_CLIENT_ID;
   const clientSecret = process.env.UPS_CLIENT_SECRET;
 
   if (!clientId || !clientSecret) {
     throw new Error('UPS_CLIENT_ID and UPS_CLIENT_SECRET are required');
-  }
-
-  if (tokenCache && tokenCache.expiresAt > Date.now() + 60_000) {
-    return tokenCache.token;
   }
 
   const credentials = Buffer.from(`${clientId}:${clientSecret}`).toString('base64');
@@ -44,6 +43,20 @@ async function getAccessToken(): Promise<string> {
     expiresAt: Date.now() + (data.expires_in ?? 14400) * 1000,
   };
   return tokenCache.token;
+}
+
+async function getAccessToken(forceRefresh = false): Promise<string> {
+  if (!forceRefresh && tokenCache && tokenCache.expiresAt > Date.now() + 60_000) {
+    return tokenCache.token;
+  }
+  if (forceRefresh) {
+    tokenCache = null;
+    tokenInFlight = null;
+  }
+  if (!tokenInFlight) {
+    tokenInFlight = fetchFreshToken().finally(() => { tokenInFlight = null; });
+  }
+  return tokenInFlight;
 }
 
 function parseUPSDate(date: string, time: string): string | null {
@@ -187,18 +200,27 @@ export function parseUPSTrackingPayload(payload: any): CarrierTrackingResult | n
   return buildUPSResultFromPayload(payload, shipment, pkg);
 }
 
-export async function trackByNumber(trackingNumber: string): Promise<CarrierTrackingResult> {
-  const normalized = normalizeTrackingNumber(trackingNumber);
-  const token = await getAccessToken();
-
+async function callUpsTrack(normalized: string, token: string): Promise<Response> {
   const transId = crypto.randomUUID();
-  const res = await fetch(`${UPS_TRACK_URL}/${encodeURIComponent(normalized)}?locale=en_US&returnSignature=false`, {
+  return fetch(`${UPS_TRACK_URL}/${encodeURIComponent(normalized)}?locale=en_US&returnSignature=false`, {
     headers: {
       Authorization: `Bearer ${token}`,
       transId,
       transactionSrc: 'usav-orders',
     },
   });
+}
+
+export async function trackByNumber(trackingNumber: string): Promise<CarrierTrackingResult> {
+  const normalized = normalizeTrackingNumber(trackingNumber);
+  let token = await getAccessToken();
+  let res = await callUpsTrack(normalized, token);
+
+  // Bust cache + retry once on 401 (token may be revoked earlier than UPS promised).
+  if (res.status === 401) {
+    token = await getAccessToken(true);
+    res = await callUpsTrack(normalized, token);
+  }
 
   if (res.status === 429) {
     const retryAfter = res.headers.get('Retry-After');

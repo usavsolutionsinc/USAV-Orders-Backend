@@ -10,8 +10,10 @@ interface TokenCache {
 }
 
 let tokenCache: TokenCache | null = null;
+// Single in-flight token request shared across concurrent callers.
+let tokenInFlight: Promise<string> | null = null;
 
-async function getAccessToken(): Promise<string> {
+async function fetchFreshToken(): Promise<string> {
   const clientId =
     process.env.CONSUMER_KEY ||
     process.env.USPS_CONSUMER_KEY ||
@@ -25,10 +27,6 @@ async function getAccessToken(): Promise<string> {
     throw new Error(
       'USPS credentials are required. Set CONSUMER_KEY and CONSUMER_SECRET.'
     );
-  }
-
-  if (tokenCache && tokenCache.expiresAt > Date.now() + 60_000) {
-    return tokenCache.token;
   }
 
   const res = await fetch(USPS_AUTH_URL, {
@@ -52,6 +50,20 @@ async function getAccessToken(): Promise<string> {
     expiresAt: Date.now() + (data.expires_in ?? 3600) * 1000,
   };
   return tokenCache.token;
+}
+
+async function getAccessToken(forceRefresh = false): Promise<string> {
+  if (!forceRefresh && tokenCache && tokenCache.expiresAt > Date.now() + 60_000) {
+    return tokenCache.token;
+  }
+  if (forceRefresh) {
+    tokenCache = null;
+    tokenInFlight = null;
+  }
+  if (!tokenInFlight) {
+    tokenInFlight = fetchFreshToken().finally(() => { tokenInFlight = null; });
+  }
+  return tokenInFlight;
 }
 
 function parseUSPSDate(eventDate: string, eventTime: string): string | null {
@@ -122,11 +134,8 @@ function extractUSPSMetadata(payload: any, summary: any, events: CarrierTracking
   };
 }
 
-export async function trackByNumber(trackingNumber: string): Promise<CarrierTrackingResult> {
-  const normalized = normalizeTrackingNumber(trackingNumber);
-  const token = await getAccessToken();
-
-  const res = await fetch(
+async function callUspsTrack(normalized: string, token: string): Promise<Response> {
+  return fetch(
     `${USPS_TRACK_URL}/${encodeURIComponent(normalized)}?expand=DETAIL`,
     {
       headers: {
@@ -135,6 +144,18 @@ export async function trackByNumber(trackingNumber: string): Promise<CarrierTrac
       },
     }
   );
+}
+
+export async function trackByNumber(trackingNumber: string): Promise<CarrierTrackingResult> {
+  const normalized = normalizeTrackingNumber(trackingNumber);
+  let token = await getAccessToken();
+  let res = await callUspsTrack(normalized, token);
+
+  // Bust cache + retry once on 401.
+  if (res.status === 401) {
+    token = await getAccessToken(true);
+    res = await callUspsTrack(normalized, token);
+  }
 
   if (res.status === 429) {
     throw Object.assign(new Error('USPS rate limit exceeded'), { code: 'RATE_LIMIT' });

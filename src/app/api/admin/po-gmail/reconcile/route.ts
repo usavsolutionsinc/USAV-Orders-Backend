@@ -19,7 +19,7 @@ import pool from '@/lib/db';
 import { withAuth } from '@/lib/auth/withAuth';
 import { errorResponse } from '@/lib/api';
 import { listMessageIds, fetchMessagesByIds } from '@/lib/po-gmail/messages';
-import { extractOrderNumbers } from '@/lib/po-gmail/extract';
+import { extractOrderNumbers, extractTrackingNumbers } from '@/lib/po-gmail/extract';
 import {
   fetchMatchesByNormalizedPoNumbers,
   classifyMatches,
@@ -27,6 +27,7 @@ import {
   type MatchRow,
   type ReconciledStatus,
 } from '@/lib/po-gmail/reconcile';
+import { linkTrackingToPo } from '@/lib/po-gmail/link-tracking';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 60;
@@ -52,6 +53,8 @@ interface ReconcileItem {
   bodyTruncated: boolean;
   bodyLength: number;
   extracted: { all: string[]; labeled: string[]; unlabeled: string[] };
+  /** Carrier tracking#s pulled from the body (closes the AWAITING_TRACKING gap). */
+  trackingCandidates: string[];
   matches: MatchRow[];
   matchedPoNumbers: string[];
   status: ReconciledStatus;
@@ -73,10 +76,15 @@ export const GET = withAuth(async (req: NextRequest) => {
 
     // Build the union of normalized candidates across all messages, so we
     // can do one ANY($1) query against receiving_lines regardless of N.
+    // Tracking# extraction runs alongside PO extraction so the same email
+    // body is parsed once. Tracking-link writes only happen below for emails
+    // whose POs actually match (status='in_zoho' / 'received').
     const perMessageExtracted = messages.map((m) => {
-      const e = extractOrderNumbers(`${m.subject}\n${m.bodyText}`);
+      const body = `${m.subject}\n${m.bodyText}`;
+      const e = extractOrderNumbers(body);
+      const t = extractTrackingNumbers(body);
       const norm = Array.from(new Set(e.all.map(normalizeOrderNumber).filter(Boolean)));
-      return { message: m, extracted: e, norm };
+      return { message: m, extracted: e, tracking: t, norm };
     });
     const allNorm = Array.from(
       new Set(perMessageExtracted.flatMap((r) => r.norm)),
@@ -86,7 +94,7 @@ export const GET = withAuth(async (req: NextRequest) => {
 
     // Counts for UI summary
     const counts = { missing: 0, in_zoho: 0, received: 0, no_match: 0 };
-    const items: ReconcileItem[] = perMessageExtracted.map(({ message: m, extracted, norm }) => {
+    const items: ReconcileItem[] = perMessageExtracted.map(({ message: m, extracted, tracking, norm }) => {
       const matches: MatchRow[] = [];
       const matchedPoNumbers = new Set<string>();
       for (const n of norm) {
@@ -114,6 +122,7 @@ export const GET = withAuth(async (req: NextRequest) => {
         bodyTruncated: m.bodyText.length > BODY_PREVIEW_CHARS,
         bodyLength: m.bodyText.length,
         extracted: { all: extracted.all, labeled: extracted.labeled, unlabeled: extracted.unlabeled },
+        trackingCandidates: tracking,
         matches,
         matchedPoNumbers: Array.from(matchedPoNumbers),
         status,
@@ -124,6 +133,11 @@ export const GET = withAuth(async (req: NextRequest) => {
     // any existing pending row for the same gmail_msg_id to resolved.
     let upserted = 0;
     let resolved = 0;
+    // Aggregate Gmail-leg tracking-link counts so the response surfaces
+    // exactly how many shipment_id stamps this run produced.
+    let trackingLinked = 0;
+    let trackingAlreadyLinked = 0;
+    let trackingRejected = 0;
     if (persist && items.length > 0) {
       const client = await pool.connect();
       try {
@@ -171,6 +185,33 @@ export const GET = withAuth(async (req: NextRequest) => {
               [item.id],
             );
             resolved += rowCount ?? 0;
+
+            // Gmail leg: when the email body carries a carrier tracking#
+            // AND the matched Zoho PO's receiving row has no shipment_id
+            // yet, stamp it. Drains the AWAITING_TRACKING bucket on the
+            // Incoming pill for POs purchasing never put a `reference_number`
+            // on. linkTrackingToPo runs outside the transaction so a slow
+            // upsertShipment call doesn't keep the worklist lock open.
+            if (item.trackingCandidates.length > 0) {
+              for (const match of item.matches) {
+                if (!match.zoho_purchaseorder_id) continue;
+                try {
+                  const r = await linkTrackingToPo({
+                    zoho_purchaseorder_id: match.zoho_purchaseorder_id,
+                    trackingCandidates: item.trackingCandidates,
+                    sourceSystem: 'po-gmail.reconcile',
+                  });
+                  trackingLinked += r.linked;
+                  trackingAlreadyLinked += r.alreadyLinked;
+                  trackingRejected += r.rejectedCandidates;
+                } catch (err) {
+                  console.warn(
+                    'po-gmail.reconcile: linkTrackingToPo failed (non-fatal)',
+                    { po_id: match.zoho_purchaseorder_id, err: err instanceof Error ? err.message : err },
+                  );
+                }
+              }
+            }
           }
         }
 
@@ -202,7 +243,15 @@ export const GET = withAuth(async (req: NextRequest) => {
       query,
       limit,
       counts,
-      persisted: persist ? { upserted, resolved } : null,
+      persisted: persist
+        ? {
+            upserted,
+            resolved,
+            tracking_linked: trackingLinked,
+            tracking_already_linked: trackingAlreadyLinked,
+            tracking_rejected: trackingRejected,
+          }
+        : null,
       elapsedMs: Date.now() - startedAt,
       items,
     });

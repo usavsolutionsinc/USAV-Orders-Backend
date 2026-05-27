@@ -10,6 +10,7 @@ import { SerialNumberInput } from './barcode/SerialNumberInput';
 import { BarcodePreview } from './barcode/BarcodePreview';
 import { LabelPreviewCard } from '@/components/labels/LabelPreviewCard';
 import { RecentsStrip } from './barcode/RecentsStrip';
+import { InlineSerialAdder } from '@/components/receiving/workspace/InlineSerialAdder';
 
 // Import utilities
 import { normalizeSku, getSerialLast6 } from '@/utils/sku';
@@ -18,7 +19,7 @@ import { useLabelRecents } from '@/hooks/useLabelRecents';
 import { useBarcodeMode } from '@/hooks/useBarcodeMode';
 import { CONDITION_OPTIONS } from '@/components/receiving/zoho-po-types';
 import { ConditionPills } from '@/components/receiving/workspace/ConditionPills';
-import { Search, Clipboard, Check, X, Printer, Plus } from './Icons';
+import { Search, Clipboard, Check, Printer } from './Icons';
 import { StickyActionBar } from '@/design-system/components/StickyActionBar';
 
 
@@ -977,26 +978,27 @@ interface SerialScanCardProps {
     accent: ModeAccent;
     onAdd: (sn: string) => void;
     onRemove: (sn: string) => void;
-    onPasteList: (list: string[]) => void;
+    /** Kept for source-compat with the caller; comma-paste is handled inside InlineSerialAdder. */
+    onPasteList?: (list: string[]) => void;
 }
 
+/**
+ * Serial-number scan section for the products workspace. Delegates the
+ * input + chip rendering to {@link InlineSerialAdder} so this surface shares
+ * the same UX (last-4 chip + hover Edit/Delete menu, "Scan Serial #"
+ * placeholder, barcode icon) used by receiving + tech testing. Local-only
+ * `string[]` state is adapted to InlineSerialAdder's `SavedSerial` shape via
+ * a stable synthetic id (array index) — the products page never persists
+ * these serials by row id; identity is the SN string.
+ */
 function SerialScanCard({
-    snInputRef,
+    snInputRef: _snInputRef,
     serialNumbers,
     accent,
     onAdd,
     onRemove,
-    onPasteList,
 }: SerialScanCardProps) {
-    const [scanValue, setScanValue] = useState('');
-
-    const submitScan = () => {
-        const trimmed = scanValue.trim();
-        if (!trimmed) return;
-        onAdd(trimmed);
-        setScanValue('');
-        snInputRef.current?.focus();
-    };
+    const saved = serialNumbers.map((sn, idx) => ({ id: idx, serial_number: sn }));
 
     return (
         <section className="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-gray-200/60">
@@ -1011,65 +1013,19 @@ function SerialScanCard({
                 )}
             </div>
 
-            <div className="flex items-stretch gap-2">
-                <input
-                    ref={snInputRef}
-                    value={scanValue}
-                    onChange={(e) => {
-                        const v = e.target.value;
-                        if (v.includes(',')) {
-                            const parts = v.split(',').map((s) => s.trim()).filter(Boolean);
-                            onPasteList(parts);
-                            setScanValue('');
-                        } else {
-                            setScanValue(v);
-                        }
-                    }}
-                    onKeyDown={(e) => {
-                        if (e.key === 'Enter') {
-                            e.preventDefault();
-                            submitScan();
-                        }
-                    }}
-                    placeholder="Scan or type a serial → ⏎"
-                    autoComplete="off"
-                    spellCheck={false}
-                    className={`block h-12 flex-1 rounded-xl border border-gray-200 bg-white px-4 font-mono text-base text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 ${accent.focusRing}`}
-                />
-                <button
-                    type="button"
-                    onClick={submitScan}
-                    disabled={!scanValue.trim()}
-                    title="Add another serial"
-                    className={`inline-flex h-12 items-center justify-center gap-1.5 rounded-xl px-4 text-sm font-semibold text-white shadow-sm transition-colors ${
-                        scanValue.trim() ? `${accent.ctaBg} ${accent.ctaHover}` : 'cursor-not-allowed bg-gray-300'
-                    }`}
-                >
-                    <Plus className="h-4 w-4" />
-                    <span>Add</span>
-                </button>
-            </div>
-
-            {serialNumbers.length > 0 && (
-                <div className="mt-3 flex flex-wrap gap-1.5">
-                    {serialNumbers.map((sn, idx) => (
-                        <span
-                            key={sn + idx}
-                            className="inline-flex items-center gap-1.5 rounded-lg bg-gray-100 px-2.5 py-1 font-mono text-label font-semibold text-gray-700"
-                        >
-                            <span className="truncate max-w-[180px]">{sn}</span>
-                            <button
-                                type="button"
-                                onClick={() => onRemove(sn)}
-                                className="text-gray-400 hover:text-red-600"
-                                title="Remove"
-                            >
-                                <X className="h-3 w-3" />
-                            </button>
-                        </span>
-                    ))}
-                </div>
-            )}
+            <InlineSerialAdder
+                lineId={0}
+                saved={saved}
+                expected={null}
+                isSubmitting={false}
+                autoFocus
+                onAdd={(_lineId, sn) => onAdd(sn)}
+                onDelete={(_lineId, s) => onRemove(s.serial_number)}
+                onReplaceSerial={(_lineId, original, nextSerial) => {
+                    onRemove(original.serial_number);
+                    onAdd(nextSerial);
+                }}
+            />
         </section>
     );
 }

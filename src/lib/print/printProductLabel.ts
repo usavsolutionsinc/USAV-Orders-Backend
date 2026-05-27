@@ -57,10 +57,8 @@ export function buildUnitPayload(args: {
 
 /**
  * Render the label HTML. DataMatrix-only layout: SKU/unit-id column on
- * the left, DataMatrix on the right. Product title is intentionally
- * absent — this label rides on the outer shipping carton, and any
- * descriptive text raises theft risk on electronics. Operator-facing
- * title still shows in the on-screen live preview.
+ * the left, DataMatrix on the right. Only the unit id is printed — no
+ * product title or helper copy (matches the on-screen live preview).
  */
 function buildLabelHtml(args: {
   sku: string;
@@ -93,10 +91,10 @@ function buildLabelHtml(args: {
     <style>
       *,*::before,*::after{box-sizing:border-box}
       body { font-family: Arial, sans-serif; padding: 0; margin: 0; }
-      .wrap { display:flex; align-items:stretch; gap:8px; padding:6px 8px; height:1in; }
-      .info { flex:1 1 auto; min-width:0; display:flex; flex-direction:column; justify-content:center; gap:3px; }
-      .sku { font-size: 16px; color: #111; margin:0; font-family: monospace; font-weight: 700; word-break: break-all; line-height:1.2; }
-      .qr { flex:0 0 auto; width:0.88in; height:0.88in; display:flex; align-items:center; justify-content:center; align-self:center; }
+      .wrap { display:flex; align-items:flex-start; gap:8px; padding:6px 8px; height:1in; }
+      .info { flex:1 1 auto; min-width:0; display:flex; flex-direction:column; justify-content:flex-start; gap:3px; }
+      .sku { font-size: 16px; color: #111; margin:0; font-family: monospace; font-weight: 700; word-break: break-all; line-height:1.2; text-align:left; }
+      .qr { flex:0 0 auto; width:0.88in; height:0.88in; display:flex; align-items:flex-start; justify-content:flex-end; align-self:flex-start; }
       .qr svg { width:100%; height:100%; display:block; }
     </style>
   </head>

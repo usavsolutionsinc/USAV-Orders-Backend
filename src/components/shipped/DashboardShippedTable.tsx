@@ -19,6 +19,13 @@ import {
   getLast4,
   getLast6Serial,
 } from '@/components/ui/CopyChip';
+import { ShipmentStatusBadge, isStalled } from '@/components/shipping/ShipmentStatusBadge';
+import {
+  ShippedFilterToolbar,
+  readShippedCarrierFilter,
+  readShippedExceptionsFilter,
+  readShippedStatusFilter,
+} from '@/components/shipping/ShippedFilterToolbar';
 import WeekHeader from '@/components/ui/WeekHeader';
 import { formatDateWithOrdinal, getCurrentPSTDateKey, toPSTDateKey } from '@/utils/date';
 import { ShippedOrder } from '@/lib/neon/orders-queries';
@@ -253,6 +260,15 @@ export function DashboardShippedTable({
     exception_status: (record as any).exception_status || null,
     fnsku: record.fnsku || null,
     fnsku_log_id: record.fnsku_log_id ?? null,
+    carrier: record.carrier ?? null,
+    latest_status_code: record.latest_status_code ?? null,
+    latest_status_label: record.latest_status_label ?? null,
+    latest_status_description: record.latest_status_description ?? null,
+    latest_status_category: record.latest_status_category ?? null,
+    latest_event_at: record.latest_event_at ?? null,
+    has_exception: record.has_exception ?? null,
+    exception_at: record.exception_at ?? null,
+    is_terminal: record.is_terminal ?? null,
   } as ShippedOrder), []);
 
   const getDetailId = useCallback((record: PackerRecord) => Number(record.order_row_id || record.id), []);
@@ -295,6 +311,15 @@ export function DashboardShippedTable({
     exception_status: (record as any).exception_status || null,
     fnsku: record.fnsku ?? null,
     fnsku_log_id: record.fnsku_log_id ?? null,
+    carrier: record.carrier ?? null,
+    latest_status_code: record.latest_status_code ?? null,
+    latest_status_label: record.latest_status_label ?? null,
+    latest_status_description: record.latest_status_description ?? null,
+    latest_status_category: record.latest_status_category ?? null,
+    latest_event_at: record.latest_event_at ?? null,
+    has_exception: record.has_exception ?? null,
+    exception_at: record.exception_at ?? null,
+    is_terminal: record.is_terminal ?? null,
   } as PackerRecord), []);
 
   const dedupedRecords = useMemo(() => {
@@ -326,17 +351,59 @@ export function DashboardShippedTable({
     [dedupedRecords, shippedFilter],
   );
 
+  // Carrier-status overlay filters (URL-driven via ShippedFilterToolbar).
+  // Applied client-side because the source is /api/packerlogs (week-scoped,
+  // limit=1000) — within bounded sets, in-memory filter beats round-trips.
+  const exceptionsOnly = readShippedExceptionsFilter(searchParams);
+  const carrierFilter = readShippedCarrierFilter(searchParams);
+  const statusFilter = readShippedStatusFilter(searchParams);
+
+  const carrierFilteredRecords = useMemo(() => {
+    if (!exceptionsOnly && !carrierFilter && !statusFilter) return typeFilteredRecords;
+    return typeFilteredRecords.filter((r) => {
+      if (carrierFilter && String(r.carrier ?? '').toUpperCase() !== carrierFilter) return false;
+      if (statusFilter && String(r.latest_status_category ?? '').toUpperCase() !== statusFilter) return false;
+      if (exceptionsOnly) {
+        const hasEx = Boolean(r.has_exception);
+        const stalled = isStalled({
+          isTerminal: r.is_terminal ?? null,
+          category: r.latest_status_category ?? null,
+          latestEventAt: r.latest_event_at ?? null,
+        });
+        if (!hasEx && !stalled) return false;
+      }
+      return true;
+    });
+  }, [typeFilteredRecords, exceptionsOnly, carrierFilter, statusFilter]);
+
   // Single source of truth for what the table renders.
   //   - Searching: render the universal hook's `/api/shipped` result, mapped into the table's
   //     PackerRecord shape. Same cache key as ShippedSidebar = identical rows, one fetch.
-  //   - Not searching: show this week's packer_logs scoped by shippedFilter.
+  //   - Not searching: show this week's packer_logs scoped by shippedFilter + carrier filters.
   const searchRecords = useMemo<PackerRecord[]>(
     () => (searchResult.data?.records ?? []).map(toSearchResultRecord),
     [searchResult.data, toSearchResultRecord],
   );
+  const searchFilteredRecords = useMemo(() => {
+    if (!exceptionsOnly && !carrierFilter && !statusFilter) return searchRecords;
+    return searchRecords.filter((r) => {
+      if (carrierFilter && String(r.carrier ?? '').toUpperCase() !== carrierFilter) return false;
+      if (statusFilter && String(r.latest_status_category ?? '').toUpperCase() !== statusFilter) return false;
+      if (exceptionsOnly) {
+        const hasEx = Boolean(r.has_exception);
+        const stalled = isStalled({
+          isTerminal: r.is_terminal ?? null,
+          category: r.latest_status_category ?? null,
+          latestEventAt: r.latest_event_at ?? null,
+        });
+        if (!hasEx && !stalled) return false;
+      }
+      return true;
+    });
+  }, [searchRecords, exceptionsOnly, carrierFilter, statusFilter]);
   const records = useMemo(
-    () => (normalizedSearch ? searchRecords : typeFilteredRecords),
-    [normalizedSearch, searchRecords, typeFilteredRecords],
+    () => (normalizedSearch ? searchFilteredRecords : carrierFilteredRecords),
+    [normalizedSearch, searchFilteredRecords, carrierFilteredRecords],
   );
   const searchMeta = searchResult.data?.meta ?? null;
   const isResolvingSearch = searchResult.isFetching && normalizedSearch.length > 0;
@@ -519,6 +586,10 @@ export function DashboardShippedTable({
               onNextWeek={() => setWeekOffsetInUrl(Math.max(0, weekOffset - 1))}
             />
           )}
+
+          <div className="shrink-0 border-b border-gray-100 bg-white px-3 py-2">
+            <ShippedFilterToolbar />
+          </div>
 
           <div ref={scrollRef} className="flex-1 min-h-0 overflow-x-auto overflow-y-auto no-scrollbar w-full">
             {Object.keys(groupedRecords).length === 0 ? (
@@ -713,6 +784,16 @@ export function DashboardShippedTable({
                                       <OrderIdChipPlaceholder />
                                     )}
                                     <TrackingOrSkuScanChip value={record.shipping_tracking_number || ''} />
+                                    {record.shipment_id != null && (record.latest_status_category || record.has_exception) ? (
+                                      <ShipmentStatusBadge
+                                        carrier={record.carrier ?? null}
+                                        category={record.latest_status_category ?? null}
+                                        description={record.latest_status_description ?? null}
+                                        latestEventAt={record.latest_event_at ?? null}
+                                        hasException={record.has_exception ?? null}
+                                        isTerminal={record.is_terminal ?? null}
+                                      />
+                                    ) : null}
                                     <SerialChip
                                       value={serialValue}
                                       display={serialDisplay}

@@ -50,6 +50,16 @@ export interface PackerRecord {
   orders_exception_id?: number | null;
   exception_reason?: string | null;
   exception_status?: string | null;
+  /** Carrier columns sourced from `shipping_tracking_numbers stn` via sal.shipment_id. */
+  carrier?: string | null;
+  latest_status_code?: string | null;
+  latest_status_label?: string | null;
+  latest_status_description?: string | null;
+  latest_status_category?: string | null;
+  latest_event_at?: string | null;
+  has_exception?: boolean | null;
+  exception_at?: string | null;
+  is_terminal?: boolean | null;
 }
 
 export interface UsePackerLogsOptions {

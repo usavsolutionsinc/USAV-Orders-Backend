@@ -835,7 +835,6 @@ export function TechTestingWorkspace({ staffId, selectedLineId, onSelectedLineCh
             {previewPayload && row.sku ? (
               <LabelPreviewCard
                 sku={row.sku}
-                itemName={row.item_name}
                 dataMatrixValue={previewPayload.value}
                 dataMatrixSymbology={previewPayload.symbology}
                 showReady={verdict === 'PASS'}

@@ -13,6 +13,7 @@ import {
   AlertTriangle,
   ClipboardList,
   List,
+  Package,
   ShoppingCart,
 } from '@/components/Icons';
 import type { HorizontalSliderItem } from '@/components/ui/HorizontalButtonSlider';
@@ -20,18 +21,24 @@ import type { ReceivingLineRow } from '@/components/station/ReceivingLinesTable'
 
 // ── Sidebar mode switcher ───────────────────────────────────────────────────
 
-export type ReceivingMode = 'receive' | 'history' | 'pickup' | 'unfound';
+export type ReceivingMode = 'receive' | 'incoming' | 'history' | 'pickup' | 'unfound';
 
-// Sidebar order: Receiving → History → Unfound → Local Pickup.
+// Sidebar order: Receiving → Incoming → History → Unfound → Local Pickup.
 // `unfound` is a route-switch (navigates to /receiving/unfound and mounts
-// UnfoundQueueTable as the workspace surface); the other three flip the
+// UnfoundQueueTable as the workspace surface); the other four flip the
 // `?mode=` URL param. updateMode in ReceivingSidebarPanel handles the
 // routing branch so the pill UX stays continuous across the section.
+//
+// `incoming` is fed by the /api/cron/zoho/incoming-po-sync delta poller —
+// PO lines Zoho says are issued but not yet received locally. Rows drop
+// off automatically when the operator scans / marks-received (workflow
+// advances past EXPECTED or quantity_received goes positive).
 export const RECEIVING_MODE_ITEMS: HorizontalSliderItem[] = [
-  { id: 'receive', label: 'Receiving',    icon: ClipboardList },
-  { id: 'history', label: 'History',      icon: List },
-  { id: 'unfound', label: 'Unfound',      icon: AlertTriangle },
-  { id: 'pickup',  label: 'Local Pickup', icon: ShoppingCart },
+  { id: 'receive',  label: 'Receiving',    icon: ClipboardList },
+  { id: 'incoming', label: 'Incoming',     icon: Package },
+  { id: 'history',  label: 'History',      icon: List },
+  { id: 'unfound',  label: 'Unfound',      icon: AlertTriangle },
+  { id: 'pickup',   label: 'Local Pickup', icon: ShoppingCart },
 ];
 
 // ── Carton scratch (localStorage) ───────────────────────────────────────────

@@ -54,6 +54,10 @@ export interface ShippedOrder {
   latest_status_category?: string | null;
   is_delivered?: boolean;
   carrier?: string | null;
+  latest_event_at?: string | null;
+  has_exception?: boolean | null;
+  exception_at?: string | null;
+  is_terminal?: boolean | null;
   created_at: string | null;
   tested_by_name?: string | null;
   packed_by_name?: string | null;
@@ -169,6 +173,14 @@ const ORDER_SERIALS_CTE = `
       COALESCE(stn.is_carrier_accepted OR stn.is_in_transit
         OR stn.is_out_for_delivery OR stn.is_delivered, false) AS is_shipped,
       stn.latest_status_category AS shipment_status,
+      stn.latest_status_category,
+      stn.latest_status_code,
+      stn.latest_status_label,
+      stn.latest_status_description,
+      stn.latest_event_at::text AS latest_event_at,
+      stn.has_exception,
+      stn.exception_at::text AS exception_at,
+      stn.is_terminal,
       stn.is_delivered,
       stn.carrier,
       to_char(o.created_at, 'YYYY-MM-DD HH24:MI:SS') AS created_at,
@@ -293,7 +305,9 @@ const ORDER_SERIALS_CTE = `
              o.condition, o.item_number, stn.tracking_number_raw, order_trackings.tracking_numbers, order_trackings.tracking_number_rows, o.sku,
              o.account_source, o.notes, o.status_history::jsonb,
              stn.is_carrier_accepted, stn.is_in_transit, stn.is_out_for_delivery, stn.is_delivered,
-             stn.latest_status_category, stn.carrier,
+             stn.latest_status_category, stn.latest_status_code, stn.latest_status_label, stn.latest_status_description,
+             stn.latest_event_at, stn.has_exception, stn.exception_at, stn.is_terminal,
+             stn.carrier,
              wa_t.assigned_tech_id, wa_p.assigned_packer_id,
              pl.packed_by, pl.packed_at, pl.packer_photos_url, pl.tracking_type,
              pack_sal.created_at, test_sal.created_at
@@ -519,6 +533,14 @@ export async function getShippedOrderById(id: number): Promise<ShippedOrder | nu
           COALESCE(stn.is_carrier_accepted OR stn.is_in_transit
             OR stn.is_out_for_delivery OR stn.is_delivered, false) AS is_shipped,
           stn.latest_status_category AS shipment_status,
+          stn.latest_status_category,
+          stn.latest_status_code,
+          stn.latest_status_label,
+          stn.latest_status_description,
+          stn.latest_event_at::text AS latest_event_at,
+          stn.has_exception,
+          stn.exception_at::text AS exception_at,
+          stn.is_terminal,
           stn.is_delivered,
           stn.carrier,
           to_char(o.created_at, 'YYYY-MM-DD HH24:MI:SS') AS created_at,
@@ -641,7 +663,9 @@ export async function getShippedOrderById(id: number): Promise<ShippedOrder | nu
                  o.condition, o.item_number, stn.tracking_number_raw, order_trackings.tracking_numbers, order_trackings.tracking_number_rows, o.sku,
                  o.account_source, o.notes, o.status_history::jsonb,
                  stn.is_carrier_accepted, stn.is_in_transit, stn.is_out_for_delivery, stn.is_delivered,
-                 stn.latest_status_category, stn.carrier,
+                 stn.latest_status_category, stn.latest_status_code, stn.latest_status_label, stn.latest_status_description,
+                 stn.latest_event_at, stn.has_exception, stn.exception_at, stn.is_terminal,
+                 stn.carrier,
                  wa_t.assigned_tech_id, wa_p.assigned_packer_id,
                  pl.packed_by, pl.packed_at, pl.packer_photos_url, pl.tracking_type,
                  pack_sal.created_at, test_sal.created_at

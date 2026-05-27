@@ -7,6 +7,7 @@ import { AnimatePresence, motion } from 'framer-motion';
 import { Check, Clipboard, Copy, ExternalLink, Image as ImageIcon, Pencil, Plus, Trash2, X } from '@/components/Icons';
 import { ShippedOrder } from '@/lib/neon/orders-queries';
 import { getAccountSourceLabel, getOrderIdUrl, getTrackingUrl } from '@/utils/order-links';
+import { ShipmentStatusBadge } from '@/components/shipping/ShipmentStatusBadge';
 import {
   formatDateTimePST,
   formatTime12hPST,
@@ -1592,6 +1593,19 @@ export function ShippingInformationSection({
               </p>
             </DetailsPanelRow>
           )}
+
+          {(shipped.latest_status_category || shipped.has_exception) && shipped.shipment_id != null ? (
+            <DetailsPanelRow label="Carrier Status">
+              <ShipmentStatusBadge
+                carrier={shipped.carrier ?? null}
+                category={shipped.latest_status_category ?? null}
+                description={shipped.latest_status_description ?? null}
+                latestEventAt={shipped.latest_event_at ?? null}
+                hasException={shipped.has_exception ?? null}
+                isTerminal={shipped.is_terminal ?? null}
+              />
+            </DetailsPanelRow>
+          ) : null}
 
           <ShippingEditableRow
             label="Ship By Date"

@@ -403,6 +403,10 @@ function RailRow({
     ? stationThemeColors[getStaffThemeById(techId)].text
     : 'text-gray-400';
   const activityAt = row.last_activity_at ?? row.created_at;
+  const qtyComplete =
+    row.quantity_expected != null &&
+    row.quantity_expected > 0 &&
+    row.quantity_received >= row.quantity_expected;
 
   return (
     <motion.li
@@ -436,22 +440,18 @@ function RailRow({
         data-rail-row
         tabIndex={-1}
         onClick={onClick}
-        className={`relative flex w-full items-center gap-2 rounded-md py-1.5 text-left transition-colors ${
+        className={`relative flex w-full gap-2.5 text-left transition-colors ${
           isGrouped ? 'pl-3 pr-2' : 'px-2'
         } ${
           isSelected
-            ? 'bg-blue-100/80 ring-2 ring-inset ring-blue-500/60 shadow-sm'
-            : isFocused
-              ? 'bg-gray-50 ring-1 ring-inset ring-gray-200'
-              : 'hover:bg-gray-50'
+            ? 'items-center rounded-xl border border-blue-400 bg-blue-50 py-2.5'
+            : `items-center rounded-md py-1.5 ${
+                isFocused
+                  ? 'bg-gray-50 ring-1 ring-inset ring-gray-200'
+                  : 'hover:bg-gray-50'
+              }`
         }`}
       >
-        {isSelected ? (
-          <span
-            aria-hidden
-            className="pointer-events-none absolute inset-y-1 left-0 z-20 w-[3px] rounded-full bg-blue-600"
-          />
-        ) : null}
         <span
           className={`h-2 w-2 shrink-0 rounded-full ${getStatusDot(row)}`}
           aria-hidden
@@ -460,14 +460,12 @@ function RailRow({
         <div className="min-w-0 flex-1">
           <div className="flex min-w-0 items-center gap-1.5">
             <p
-              className={`truncate text-caption font-bold ${
-                isSelected ? 'text-blue-900' : 'text-gray-900'
-              }`}
+              className="truncate text-caption font-bold text-gray-900"
               title={title}
             >
               {title}
             </p>
-            {showInlinePkgChip ? (
+            {!isSelected && showInlinePkgChip ? (
               <span
                 role="button"
                 tabIndex={0}
@@ -500,16 +498,26 @@ function RailRow({
               </span>
             ) : null}
           </div>
-          <p className="truncate text-eyebrow font-semibold uppercase tracking-widest text-gray-500">
-            {renderQuantity(row)}
-            {techId ? (
-              <span className={`ml-1 ${techColor}`}>
-                · {getStaffName(techId)}
-              </span>
-            ) : null}
-          </p>
+          {isSelected ? (
+            <p
+              className={`mt-0.5 text-micro font-semibold tabular-nums ${
+                qtyComplete ? 'text-emerald-600' : 'text-gray-600'
+              }`}
+            >
+              {row.quantity_received}/{row.quantity_expected ?? '?'}
+            </p>
+          ) : (
+            <p className="truncate text-eyebrow font-semibold uppercase tracking-widest text-gray-500">
+              {renderQuantity(row)}
+              {techId ? (
+                <span className={`ml-1 ${techColor}`}>
+                  · {getStaffName(techId)}
+                </span>
+              ) : null}
+            </p>
+          )}
         </div>
-        <span className="shrink-0 tabular-nums text-eyebrow font-bold text-gray-400">
+        <span className="shrink-0 self-center tabular-nums text-micro font-medium text-gray-400">
           {relativeTime(activityAt)}
         </span>
       </button>

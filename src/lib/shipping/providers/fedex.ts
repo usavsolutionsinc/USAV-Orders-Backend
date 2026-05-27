@@ -14,17 +14,17 @@ interface TokenCache {
 }
 
 let tokenCache: TokenCache | null = null;
+// In-flight token request shared across concurrent callers. Without this, a
+// fan-out cron polling N FedEx shipments fires N parallel OAuth requests when
+// the cache is cold, and FedEx may reject the surplus with 401.
+let tokenInFlight: Promise<string> | null = null;
 
-async function getAccessToken(): Promise<string> {
+async function fetchFreshToken(): Promise<string> {
   const clientId = process.env.FEDEX_CLIENT_ID;
   const clientSecret = process.env.FEDEX_CLIENT_SECRET;
 
   if (!clientId || !clientSecret) {
     throw new Error('FEDEX_CLIENT_ID and FEDEX_CLIENT_SECRET are required');
-  }
-
-  if (tokenCache && tokenCache.expiresAt > Date.now() + 60_000) {
-    return tokenCache.token;
   }
 
   const body = new URLSearchParams({
@@ -52,12 +52,23 @@ async function getAccessToken(): Promise<string> {
   return tokenCache.token;
 }
 
-export async function trackByNumber(trackingNumber: string): Promise<CarrierTrackingResult> {
-  const normalized = normalizeTrackingNumber(trackingNumber);
-  const token = await getAccessToken();
+async function getAccessToken(forceRefresh = false): Promise<string> {
+  if (!forceRefresh && tokenCache && tokenCache.expiresAt > Date.now() + 60_000) {
+    return tokenCache.token;
+  }
+  if (forceRefresh) {
+    tokenCache = null;
+    tokenInFlight = null;
+  }
+  if (!tokenInFlight) {
+    tokenInFlight = fetchFreshToken().finally(() => { tokenInFlight = null; });
+  }
+  return tokenInFlight;
+}
 
+async function callFedExTrack(trackingNumberNormalized: string, token: string): Promise<Response> {
   const transactionId = crypto.randomUUID();
-  const res = await fetch(FEDEX_TRACK_URL, {
+  return fetch(FEDEX_TRACK_URL, {
     method: 'POST',
     headers: {
       Authorization: `Bearer ${token}`,
@@ -70,12 +81,25 @@ export async function trackByNumber(trackingNumber: string): Promise<CarrierTrac
       trackingInfo: [
         {
           trackingNumberInfo: {
-            trackingNumber: normalized,
+            trackingNumber: trackingNumberNormalized,
           },
         },
       ],
     }),
   });
+}
+
+export async function trackByNumber(trackingNumber: string): Promise<CarrierTrackingResult> {
+  const normalized = normalizeTrackingNumber(trackingNumber);
+  let token = await getAccessToken();
+  let res = await callFedExTrack(normalized, token);
+
+  // On 401, the cached token may be revoked/expired earlier than FedEx claimed.
+  // Bust the cache and try exactly once with a fresh token before giving up.
+  if (res.status === 401) {
+    token = await getAccessToken(true);
+    res = await callFedExTrack(normalized, token);
+  }
 
   if (res.status === 429) {
     throw Object.assign(new Error('FedEx rate limit exceeded'), { code: 'RATE_LIMIT' });

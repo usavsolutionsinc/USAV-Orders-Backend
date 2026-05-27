@@ -80,6 +80,21 @@ export const GET = withAuth(async (req: NextRequest, ctx) => {
     const excludePacked      = searchParams.get('excludePacked') === 'true';
     /** awaitingOnly=true → only orders without shipment_id (Awaiting tab: no tracking yet) */
     const awaitingOnly       = searchParams.get('awaitingOnly') === 'true';
+    /** exceptionsOnly=true → only orders whose shipment has an exception or has been stalled (no carrier scan in >stallHours, default 72h) */
+    const exceptionsOnly     = searchParams.get('exceptions') === '1' || searchParams.get('exceptions') === 'true';
+    const stallHoursRaw      = Number(searchParams.get('stallHours'));
+    const stallHours         = Number.isFinite(stallHoursRaw) && stallHoursRaw > 0 && stallHoursRaw <= 720
+      ? Math.floor(stallHoursRaw)
+      : 72;
+    /** carrier filter — restricts results to a single carrier via stn.carrier */
+    const carrierRaw         = String(searchParams.get('carrier') || '').toUpperCase();
+    const carrierFilter      = carrierRaw === 'UPS' || carrierRaw === 'USPS' || carrierRaw === 'FEDEX' ? carrierRaw : '';
+    /** shipment status category filter — restricts to a single normalized category */
+    const statusCategoryRaw  = String(searchParams.get('statusCategory') || '').toUpperCase();
+    const SHIPMENT_STATUS_CATEGORIES = ['LABEL_CREATED','ACCEPTED','IN_TRANSIT','OUT_FOR_DELIVERY','DELIVERED','EXCEPTION','RETURNED','UNKNOWN'] as const;
+    const statusCategoryFilter = (SHIPMENT_STATUS_CATEGORIES as readonly string[]).includes(statusCategoryRaw)
+      ? statusCategoryRaw
+      : '';
     const shippedByCarrierOrLatestStatusSql = SHIPPED_BY_CARRIER_SQL;
 
     const cacheLookup = createCacheLookupKey({
@@ -98,6 +113,10 @@ export const GET = withAuth(async (req: NextRequest, ctx) => {
       packedOnly,
       excludePacked,
       awaitingOnly,
+      exceptionsOnly,
+      stallHours,
+      carrierFilter,
+      statusCategoryFilter,
       shipmentStatusRuleVersion: 'latest_status_relaxed_v2',
     });
 
@@ -356,6 +375,11 @@ export const GET = withAuth(async (req: NextRequest, ctx) => {
         stn.latest_status_label,
         stn.latest_status_description,
         stn.latest_status_category,
+        stn.carrier,
+        stn.latest_event_at::text AS latest_event_at,
+        stn.has_exception,
+        stn.exception_at::text AS exception_at,
+        stn.is_terminal,
         ${shippedByCarrierOrLatestStatusSql} AS is_shipped,
         to_char(timezone('America/Los_Angeles', o.created_at), 'YYYY-MM-DD HH24:MI:SS') AS created_at,
         wa_t.assigned_tech_id   AS tester_id,
@@ -477,6 +501,32 @@ export const GET = withAuth(async (req: NextRequest, ctx) => {
 
     if (awaitingOnly) {
       sql += ` AND o.shipment_id IS NULL`;
+    }
+
+    if (carrierFilter) {
+      sql += ` AND stn.carrier = $${paramCount++}`;
+      params.push(carrierFilter);
+    }
+
+    if (statusCategoryFilter) {
+      sql += ` AND stn.latest_status_category = $${paramCount++}`;
+      params.push(statusCategoryFilter);
+    }
+
+    if (exceptionsOnly) {
+      sql += ` AND (
+        stn.has_exception = true
+        OR (
+          stn.is_terminal = false
+          AND stn.latest_status_category IN ('IN_TRANSIT','OUT_FOR_DELIVERY','EXCEPTION','RETURNED')
+          AND (
+            stn.latest_event_at IS NULL
+            OR stn.latest_event_at < (NOW() - ($${paramCount} || ' hours')::interval)
+          )
+        )
+      )`;
+      params.push(String(stallHours));
+      paramCount++;
     }
 
     if (status) {

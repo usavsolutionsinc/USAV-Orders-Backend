@@ -89,10 +89,38 @@ export const GET = withAuth(async (request: NextRequest) => {
     const weekStart = String(searchParams.get('week_start') || '').trim();
     const weekEnd   = String(searchParams.get('week_end') || '').trim();
     const viewRaw   = String(searchParams.get('view') || '').trim().toLowerCase();
-    const view: 'all' | 'recent' | 'received' | null =
+    // Incoming-only: filters by the computed delivery_state bucket
+    // (DELIVERED_UNOPENED, ARRIVING_TODAY, STALLED, IN_TRANSIT, AWAITING_TRACKING).
+    // Mirrors the stat-tile click semantics on IncomingSidebarPanel.
+    const deliveryStateFilter = String(searchParams.get('delivery_state') || '')
+      .trim()
+      .toUpperCase();
+    // Incoming-only: optional PO purchase-date range. ISO YYYY-MM-DD;
+    // anything malformed silently no-ops so bookmarks survive.
+    const isISODate = (s: string) => /^\d{4}-\d{2}-\d{2}$/.test(s);
+    const poFromRaw = String(searchParams.get('po_from') || '').trim();
+    const poToRaw = String(searchParams.get('po_to') || '').trim();
+    const poFrom = isISODate(poFromRaw) ? poFromRaw : '';
+    const poTo = isISODate(poToRaw) ? poToRaw : '';
+    // Incoming-only: sort axis. Defaults to most-recently-issued-in-Zoho.
+    const sortRaw = String(searchParams.get('sort') || '').trim().toLowerCase();
+    const incomingSort:
+      | 'zoho_newest'
+      | 'zoho_oldest'
+      | 'expected_soonest'
+      | 'recently_added' =
+      sortRaw === 'zoho_oldest'
+        ? 'zoho_oldest'
+        : sortRaw === 'expected_soonest'
+          ? 'expected_soonest'
+          : sortRaw === 'recently_added'
+            ? 'recently_added'
+            : 'zoho_newest';
+    const view: 'all' | 'recent' | 'received' | 'incoming' | null =
       viewRaw === 'recent' ? 'recent'
         : viewRaw === 'received' ? 'received'
         : viewRaw === 'all' ? 'all'
+        : viewRaw === 'incoming' ? 'incoming'
         : null;
     const include     = String(searchParams.get('include') || '').trim().toLowerCase();
     const includeSerials = include.split(',').map((s) => s.trim()).includes('serials');
@@ -340,6 +368,78 @@ export const GET = withAuth(async (request: NextRequest) => {
       conditions.push(
         `(rl.workflow_status IS NULL OR rl.workflow_status IN ('EXPECTED','ARRIVED','MATCHED','UNBOXED','AWAITING_TEST','IN_TEST','PASSED','DONE'))`,
       );
+    } else if (view === 'incoming') {
+      // "Incoming" = on a Zoho PO, vendor has issued it, warehouse hasn't
+      // touched it yet. Backed by the /api/cron/zoho/incoming-po-sync delta
+      // poller. A row drops off this view the instant the operator scans
+      // or marks-received against it (workflow advances past EXPECTED OR
+      // quantity_received goes positive). Unmatched cartons stay in their
+      // own pill — this view is strictly Zoho-sourced expected work.
+      conditions.push(
+        `rl.workflow_status = 'EXPECTED'
+         AND COALESCE(rl.quantity_received, 0) = 0
+         AND rl.zoho_purchaseorder_id IS NOT NULL`,
+      );
+
+      // Optional delivery_state facet filter. Each bucket is the exact same
+      // predicate the CASE expression in the SELECT below uses so the chip
+      // counts in IncomingSidebarPanel stay consistent with the rendered rows.
+      if (deliveryStateFilter === 'DELIVERED_UNOPENED') {
+        // Carrier delivered the box AND no operator scan happened yet at the
+        // receiving station. `receiving_scans` is written by /lookup-po the
+        // moment someone scans the tracking#, so its absence is the precise
+        // "this box is here but nobody has touched it" signal.
+        conditions.push(
+          `stn.is_delivered = true
+           AND NOT EXISTS (
+             SELECT 1 FROM receiving_scans rs WHERE rs.receiving_id = r.id
+           )`,
+        );
+      } else if (deliveryStateFilter === 'ARRIVING_TODAY') {
+        conditions.push(`stn.latest_status_category = 'OUT_FOR_DELIVERY'`);
+      } else if (deliveryStateFilter === 'STALLED') {
+        // Shipment is alive (not terminal, not delivered) but either the carrier
+        // flagged an exception or no new scan has landed in >72h. This is the
+        // "vendor said it shipped but it isn't actually moving" bucket — the
+        // single highest-value receiving signal to surface ahead of the day.
+        conditions.push(
+          `stn.id IS NOT NULL
+           AND COALESCE(stn.is_terminal, false) = false
+           AND COALESCE(stn.is_delivered, false) = false
+           AND (
+             stn.has_exception = true
+             OR (
+               stn.latest_event_at IS NOT NULL
+               AND stn.latest_event_at < (NOW() - interval '72 hours')
+             )
+           )`,
+        );
+      } else if (deliveryStateFilter === 'IN_TRANSIT') {
+        conditions.push(
+          `stn.latest_status_category IN ('IN_TRANSIT','ACCEPTED','LABEL_CREATED')`,
+        );
+      } else if (deliveryStateFilter === 'AWAITING_TRACKING') {
+        conditions.push(
+          `(stn.id IS NULL OR stn.latest_status_category = 'UNKNOWN' OR stn.latest_status_category IS NULL)`,
+        );
+      }
+
+      // PO purchase-date range filter. Joins zoho_po_mirror (already joined
+      // via incomingExtrasJoin) so we use its `po_date` (Zoho's PO date).
+      // Falls back to local created_at when the mirror doesn't have the PO
+      // yet (rare — happens only between cron tick + receive).
+      if (poFrom) {
+        conditions.push(
+          `COALESCE(mirror.po_date::text, rl.created_at::date::text) >= $${idx++}`,
+        );
+        values.push(poFrom);
+      }
+      if (poTo) {
+        conditions.push(
+          `COALESCE(mirror.po_date::text, rl.created_at::date::text) <= $${idx++}`,
+        );
+        values.push(poTo);
+      }
     } else if (/^\d{4}-\d{2}-\d{2}$/.test(weekStart) && /^\d{4}-\d{2}-\d{2}$/.test(weekEnd)) {
       conditions.push(`rl.created_at >= $${idx++}::date AND rl.created_at < ($${idx++}::date + INTERVAL '1 day')`);
       values.push(weekStart, weekEnd);
@@ -352,12 +452,28 @@ export const GET = withAuth(async (request: NextRequest) => {
     // to the top. Falls back to receiving.received_at, then rl.created_at.
     // view=received sorts by updated_at (when the line was last touched).
     // Default mirrors the prior behavior.
+    // Incoming uses its own sort axis driven by `?sort=`:
+    //   zoho_newest     — Zoho PO date DESC (most recently issued first)
+    //   zoho_oldest     — Zoho PO date ASC (clear oldest backlog first)
+    //   expected_soonest — vendor-promised delivery date ASC (today first)
+    //   recently_added  — local created_at DESC (most recent sync hit)
+    // NULL po_date values sort last in either direction.
+    const incomingOrderBy =
+      incomingSort === 'zoho_oldest'
+        ? `ORDER BY mirror.po_date ASC NULLS LAST, rl.id ASC`
+        : incomingSort === 'expected_soonest'
+          ? `ORDER BY mirror.expected_delivery_date ASC NULLS LAST, rl.id ASC`
+          : incomingSort === 'recently_added'
+            ? `ORDER BY rl.created_at DESC, rl.id DESC`
+            : `ORDER BY mirror.po_date DESC NULLS LAST, rl.id DESC`;
     const orderBy =
-      view === 'recent' || view === 'all'
-        ? `ORDER BY COALESCE(rs_agg.last_scan::text, r.received_at::text, rl.created_at::text) DESC, rl.id DESC`
-        : view === 'received'
-        ? `ORDER BY COALESCE(rl.updated_at::text, rl.created_at::text) DESC, rl.id DESC`
-        : `ORDER BY COALESCE(rl.zoho_last_modified_time, rl.created_at::text) DESC, rl.id DESC`;
+      view === 'incoming'
+        ? incomingOrderBy
+        : view === 'recent' || view === 'all'
+          ? `ORDER BY COALESCE(rs_agg.last_scan::text, r.received_at::text, rl.created_at::text) DESC, rl.id DESC`
+          : view === 'received'
+            ? `ORDER BY COALESCE(rl.updated_at::text, rl.created_at::text) DESC, rl.id DESC`
+            : `ORDER BY COALESCE(rl.zoho_last_modified_time, rl.created_at::text) DESC, rl.id DESC`;
     // The lateral aggregate is needed for view=recent and view=all so the
     // most recently paired cartons bubble up. Cheap at this scale.
     const recentScansJoin = view === 'recent' || view === 'all'
@@ -376,6 +492,51 @@ export const GET = withAuth(async (request: NextRequest) => {
     const lastScanSelect = view === 'recent' || view === 'all'
       ? `, rs_agg.last_scan::text AS last_scan_at`
       : '';
+
+    // Incoming-only extras: derived delivery_state bucket + expected_delivery_date
+    // from zoho_po_mirror. delivery_state is computed on read (CQRS-style) so a
+    // carrier status flip (IN_TRANSIT → DELIVERED) shows the right bucket on
+    // the next page load with no sync write. zoho_po_mirror JOIN is constrained
+    // by the unique zoho_purchaseorder_id key so it stays 1:1.
+    const incomingExtrasSelect =
+      view === 'incoming'
+        ? `,
+                CASE
+                  WHEN COALESCE(rl.quantity_received, 0) > 0 OR rl.workflow_status <> 'EXPECTED'
+                    THEN 'RECEIVED'
+                  WHEN stn.is_delivered = true
+                       AND NOT EXISTS (
+                         SELECT 1 FROM receiving_scans rs WHERE rs.receiving_id = r.id
+                       )
+                    THEN 'DELIVERED_UNOPENED'
+                  WHEN stn.latest_status_category = 'OUT_FOR_DELIVERY'
+                    THEN 'ARRIVING_TODAY'
+                  WHEN stn.id IS NOT NULL
+                       AND COALESCE(stn.is_terminal, false) = false
+                       AND COALESCE(stn.is_delivered, false) = false
+                       AND (
+                         stn.has_exception = true
+                         OR (stn.latest_event_at IS NOT NULL
+                             AND stn.latest_event_at < (NOW() - interval '72 hours'))
+                       )
+                    THEN 'STALLED'
+                  WHEN stn.latest_status_category IN ('IN_TRANSIT','ACCEPTED','LABEL_CREATED')
+                    THEN 'IN_TRANSIT'
+                  WHEN stn.id IS NULL OR stn.latest_status_category = 'UNKNOWN' OR stn.latest_status_category IS NULL
+                    THEN 'AWAITING_TRACKING'
+                  ELSE 'UNKNOWN'
+                END AS delivery_state,
+                stn.has_exception                    AS shipment_has_exception,
+                stn.latest_event_at::text            AS shipment_latest_event_at,
+                stn.is_terminal                      AS shipment_is_terminal,
+                mirror.po_date::text                 AS po_date,
+                mirror.expected_delivery_date::text  AS expected_delivery_date,
+                mirror.vendor_name::text             AS vendor_name`
+        : '';
+    const incomingExtrasJoin =
+      view === 'incoming'
+        ? `LEFT JOIN zoho_po_mirror mirror ON mirror.zoho_purchaseorder_id = rl.zoho_purchaseorder_id`
+        : '';
 
     const [rowsRes, countRes] = await Promise.all([
       pool.query(
@@ -398,6 +559,7 @@ export const GET = withAuth(async (request: NextRequest) => {
                   WHERE p.entity_type = 'RECEIVING'
                     AND p.entity_id = rl.receiving_id) AS photo_count
                 ${lastScanSelect}
+                ${incomingExtrasSelect}
          FROM receiving_lines rl
          -- Soft JOIN: direct FK when set, else PO#-based fallback (see note above).
          LEFT JOIN receiving r ON (
@@ -409,6 +571,7 @@ export const GET = withAuth(async (request: NextRequest) => {
          LEFT JOIN shipping_tracking_numbers stn ON stn.id = r.shipment_id
          LEFT JOIN sku_catalog sc                ON sc.sku = rl.sku
          ${recentScansJoin}
+         ${incomingExtrasJoin}
          ${where}
          ${orderBy}
          LIMIT $${idx} OFFSET $${idx + 1}`,
@@ -423,6 +586,7 @@ export const GET = withAuth(async (request: NextRequest) => {
                AND r.zoho_purchaseorder_id = rl.zoho_purchaseorder_id)
          )
          LEFT JOIN shipping_tracking_numbers stn ON stn.id = r.shipment_id
+         ${incomingExtrasJoin}
          ${where}`,
         values.slice(0, -2),
       ),
@@ -985,6 +1149,14 @@ function normalizeRow(row: Record<string, unknown>) {
     notes:                    (row.notes as string | null) ?? null,
     receiving_support_notes:  (row.receiving_support_notes as string | null) ?? null,
     receiving_listing_url:    (row.receiving_listing_url as string | null) ?? null,
+    // Incoming-view only; null on other views (SELECT omits the columns).
+    delivery_state:           (row.delivery_state as string | null) ?? null,
+    po_date:                  (row.po_date as string | null) ?? null,
+    expected_delivery_date:   (row.expected_delivery_date as string | null) ?? null,
+    vendor_name:              (row.vendor_name as string | null) ?? null,
+    shipment_has_exception:   row.shipment_has_exception == null ? null : !!row.shipment_has_exception,
+    shipment_latest_event_at: (row.shipment_latest_event_at as string | null) ?? null,
+    shipment_is_terminal:     row.shipment_is_terminal == null ? null : !!row.shipment_is_terminal,
     receiving_type:            (row.receiving_type as string | null) ?? 'PO',
     created_at:               (row.created_at as string | null) ?? null,
     // Most-recent activity timestamp matching the server's sort order for

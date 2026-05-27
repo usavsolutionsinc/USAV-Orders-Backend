@@ -8,6 +8,7 @@ import { LocalPickupCatalogPanel } from './work-orders/LocalPickupCatalogPanel';
 import { ReceivingLineWorkspace } from './receiving/workspace/ReceivingLineWorkspace';
 import { ReceivingScanLoader } from './receiving/workspace/ReceivingScanLoader';
 import { ReceivingDetailsStack, type ReceivingDetailsLog } from './station/ReceivingDetailsStack';
+import { IncomingDetailsPanel } from './sidebar/receiving/IncomingDetailsPanel';
 import { useRealtimeInvalidation } from '@/hooks/useRealtimeInvalidation';
 import { useRealtimeToasts } from '@/hooks/useRealtimeToasts';
 import { useAuth } from '@/contexts/AuthContext';
@@ -58,11 +59,13 @@ export default function ReceivingDashboard() {
   const searchParams = useSearchParams();
   const mode = searchParams.get('mode') ?? 'receive';
   const isPickupMode = mode === 'pickup';
-  // History mode forces the table view regardless of whether a workspace
-  // happens to be open in component state — switching back to Receiving
-  // restores the workspace, so unfinished edits survive a quick peek at
-  // history.
+  // History + Incoming both force the table view (hide the workspace
+  // overlay) regardless of whether a workspace happens to be open in
+  // component state — switching back to Receiving restores the
+  // workspace, so unfinished edits survive a quick peek at either tab.
   const isHistoryMode = mode === 'history';
+  const isIncomingMode = mode === 'incoming';
+  const isTableOnlyMode = isHistoryMode || isIncomingMode;
   const prefersReducedMotion = useReducedMotion();
   const { user } = useAuth();
   const staffId = String(user?.staffId ?? '');
@@ -70,6 +73,12 @@ export default function ReceivingDashboard() {
   const [workspace, setWorkspace] = useState<WorkspaceState | null>(null);
   const [nav, setNav] = useState<NavState | null>(null);
   const [overlayLog, setOverlayLog] = useState<ReceivingDetailsLog | null>(null);
+  // Incoming-mode details panel — populated when a row is selected in
+  // mode=incoming. Stored as {po_id, po_number} so the panel can render its
+  // header label immediately, then re-key its details query on po_id change.
+  const [incomingDetails, setIncomingDetails] = useState<
+    { poId: string; poNumber: string | null } | null
+  >(null);
   // Scan-in-flight loader state. Populated by 'receiving-scan-in-flight' and
   // cleared 500ms after 'receiving-scan-resolved' to give the workspace open
   // animation a moment to land (avoids a flash of the empty state).
@@ -148,6 +157,42 @@ export default function ReceivingDashboard() {
     window.addEventListener('receiving-workspace-nav-state', handler);
     return () => window.removeEventListener('receiving-workspace-nav-state', handler);
   }, []);
+
+  // Incoming-mode row select → open the IncomingDetailsPanel overlay.
+  // Listens on the same `receiving-select-line` event the table dispatches;
+  // the mode check gates so a select in Receiving keeps opening the workspace.
+  useEffect(() => {
+    if (!isIncomingMode) return;
+    const handler = (event: Event) => {
+      const detail = (event as CustomEvent<unknown>).detail;
+      const row =
+        detail && typeof detail === 'object' && 'row' in detail
+          ? ((detail as { row: ReceivingLineRow | null }).row)
+          : (detail as ReceivingLineRow | null);
+      if (!row) {
+        setIncomingDetails(null);
+        return;
+      }
+      const poId = (row.zoho_purchaseorder_id || '').trim();
+      if (!poId) {
+        // Unmatched rows live in their own pill; skip rather than open a
+        // broken panel.
+        setIncomingDetails(null);
+        return;
+      }
+      setIncomingDetails({
+        poId,
+        poNumber: row.zoho_purchaseorder_number ?? null,
+      });
+    };
+    window.addEventListener('receiving-select-line', handler);
+    return () => window.removeEventListener('receiving-select-line', handler);
+  }, [isIncomingMode]);
+
+  // Mode flip → close any open incoming panel so it doesn't leak into Receiving.
+  useEffect(() => {
+    if (!isIncomingMode) setIncomingDetails(null);
+  }, [isIncomingMode]);
 
   // Restore the last opened line on mount. Two-tier fallback so the right
   // pane is never blank on a fresh visit:
@@ -269,12 +314,12 @@ export default function ReceivingDashboard() {
   //   - History               → recent-scans table visible; a tracking/PO
   //                             match opens ReceivingDetailsStack as a
   //                             right-side overlay (below).
-  const showWorkspace = !!workspace && !isHistoryMode;
+  const showWorkspace = !!workspace && !isTableOnlyMode;
   // Scan loader covers the gap between the operator's scan and the
   // workspace mounting. There's no longer a separate "scan to start"
   // placeholder — on mount we restore the last opened line from
   // localStorage, so a fresh load lands directly in the workspace.
-  const showScanLoader = !!scanInFlight && !workspace && !isHistoryMode;
+  const showScanLoader = !!scanInFlight && !workspace && !isTableOnlyMode;
 
   return (
     <div className="flex h-full w-full overflow-hidden bg-[linear-gradient(180deg,#f8fbfb_0%,#ffffff_16%)]">
@@ -286,8 +331,8 @@ export default function ReceivingDashboard() {
             don't re-fire on every close. */}
         <div
           className="absolute inset-0 overflow-hidden"
-          style={{ display: isHistoryMode ? 'block' : 'none' }}
-          aria-hidden={!isHistoryMode}
+          style={{ display: isTableOnlyMode ? 'block' : 'none' }}
+          aria-hidden={!isTableOnlyMode}
         >
           <ReceivingLinesTable />
         </div>
@@ -342,6 +387,32 @@ export default function ReceivingDashboard() {
                   const params = new URLSearchParams(searchParams.toString());
                   params.set('mode', 'history');
                   router.replace(`/receiving?${params.toString()}`);
+                }}
+              />
+            </motion.div>
+          ) : null}
+        </AnimatePresence>
+
+        {/* Incoming details panel — slides in from the right when an incoming
+            row is selected. Keyed on PO id so flipping between rows feels
+            like the panel is staying put while the contents swap. Closing
+            dispatches `receiving-clear-line` so the table row deselects. */}
+        <AnimatePresence initial={false}>
+          {isIncomingMode && incomingDetails ? (
+            <motion.div
+              key={`incoming-details-${incomingDetails.poId}`}
+              initial={prefersReducedMotion ? { opacity: 1 } : { opacity: 0, x: 24 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={prefersReducedMotion ? { opacity: 0 } : { opacity: 0, x: 24 }}
+              transition={{ duration: 0.18, ease: [0.22, 1, 0.36, 1] }}
+              className="absolute inset-0 z-10 border-l border-gray-200 bg-white shadow-xl md:left-auto md:w-[min(640px,70%)]"
+            >
+              <IncomingDetailsPanel
+                zohoPurchaseOrderId={incomingDetails.poId}
+                poNumberHint={incomingDetails.poNumber}
+                onClose={() => {
+                  setIncomingDetails(null);
+                  window.dispatchEvent(new CustomEvent('receiving-clear-line'));
                 }}
               />
             </motion.div>
