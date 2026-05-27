@@ -16,7 +16,7 @@ interface Props {
 
 /**
  * Testing-only variant of {@link StationScanBar}. Same chrome the shipping
- * scan bar uses — same height, theme-tinted border, ORDERS placeholder — but
+ * scan bar uses — same height, theme-tinted border — but
  * with one fixed left icon (Package) and no right-side mode toggles. Testing
  * accepts a single input shape (receiving QR / PO# / RCV-id / unit-id / tracking)
  * which is fully handled by `resolveTestingScan`, so the multi-mode arming
@@ -47,7 +47,7 @@ export function TestingScanBar({
         onSubmit={handleSubmit}
         inputRef={inputRef}
         inputBorderClassName={inputBorder}
-        placeholder="ORDERS, FNSKU, RS, SN"
+        placeholder="Receiving POs, LCPU"
         autoFocus
         icon={
           <span

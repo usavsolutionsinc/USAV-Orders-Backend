@@ -526,13 +526,27 @@ export function ReceivingSidebarPanel() {
         rows.map((r) => (r.receiving_id === rid ? { ...r, receiving_support_notes: sn } : r)),
       );
     };
+    // Mirror selectedLine from workspace-open events so the rail highlights
+    // restored lines (localStorage + most-recent fallback in
+    // ReceivingDashboard go directly through dispatchReceivingWorkspaceOpen,
+    // bypassing handleSelect). Id-compare guards the setState→workspace-open
+    // useEffect from looping.
+    const handleWorkspaceOpen = (e: Event) => {
+      const detail = (e as CustomEvent<{ row?: ReceivingLineRow } | null>)
+        .detail;
+      const row = detail?.row;
+      if (!row || typeof row.id !== 'number') return;
+      setSelectedLine((prev) => (prev?.id === row.id ? prev : row));
+    };
     window.addEventListener('receiving-select-line', handleSelect);
     window.addEventListener('receiving-line-updated', handleUpdated);
     window.addEventListener('receiving-package-updated', handlePackageMeta);
+    window.addEventListener('receiving-workspace-open', handleWorkspaceOpen);
     return () => {
       window.removeEventListener('receiving-select-line', handleSelect);
       window.removeEventListener('receiving-line-updated', handleUpdated);
       window.removeEventListener('receiving-package-updated', handlePackageMeta);
+      window.removeEventListener('receiving-workspace-open', handleWorkspaceOpen);
     };
   }, []);
 
@@ -1142,7 +1156,10 @@ export function ReceivingSidebarPanel() {
 
       {/* Receive tab: live recent rail. History relies on URL-driven table filtering. */}
       {mode !== 'history' ? (
-        <ReceivingRecentRail selectedLineId={selectedLine?.id ?? null} />
+        <ReceivingRecentRail
+          selectedLineId={selectedLine?.id ?? null}
+          selectedRow={selectedLine ?? null}
+        />
       ) : null}
 
       </div>{/* /scrollable body */}

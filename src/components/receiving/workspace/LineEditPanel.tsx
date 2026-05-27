@@ -20,6 +20,7 @@ import {
   useRef,
   useState,
   type ReactNode,
+  type WheelEvent,
 } from 'react';
 import { createPortal } from 'react-dom';
 import { renderToStaticMarkup } from 'react-dom/server';
@@ -275,6 +276,14 @@ export function LineEditPanel({
     useState<ReceiveResponseRecord | null>(null);
   const [responseExpanded, setResponseExpanded] = useState(false);
   const serialRef = useRef<HTMLInputElement>(null);
+  const platformScrollerRef = useRef<HTMLDivElement | null>(null);
+  const onPlatformPillsWheel = useCallback((e: WheelEvent<HTMLDivElement>) => {
+    const el = platformScrollerRef.current;
+    if (!el) return;
+    if (Math.abs(e.deltaY) <= Math.abs(e.deltaX)) return;
+    el.scrollLeft += e.deltaY;
+    e.preventDefault();
+  }, []);
   const listingRef = useRef<HTMLInputElement>(null);
   /** Tracking inline editor — collapsed by default; pencil expands. Chip alone owns the visible display. */
   const [trackingEditorsOpen, setTrackingEditorsOpen] = useState(false);
@@ -423,7 +432,10 @@ export function LineEditPanel({
     }
     const d = readReceivingLineDetailsScratch(row.receiving_id);
     setZendesk(d.zendesk);
-    setListingLink(d.listing);
+    // DB-persisted listing URL wins over the per-browser scratch when present
+    // (added 2026-05-27). Scratch remains the fallback for cartons that
+    // pre-date the column being populated.
+    setListingLink((row.receiving_listing_url || '').trim() || d.listing);
     const extras = d.extra_trackings.length > 0 ? d.extra_trackings : [];
     setExtraTrackings(extras);
     // Tracking editor stays collapsed across row changes — chip + pencil
@@ -478,7 +490,14 @@ export function LineEditPanel({
         const scratch = readReceivingLineDetailsScratch(rid);
         const { zendesk: zPo, listing: lPo } = parseZendeskListingFromPoNotes(po.notes ?? '');
         if (!scratch.zendesk.trim() && zPo) setZendesk(zPo);
-        if (!scratch.listing.trim() && lPo) setListingLink(lPo);
+        // Listing URL: DB column (`receiving.listing_url`) is the source of
+        // truth — never overwrite an existing DB value or a per-browser
+        // scratch override with the Zoho-parsed value. When both are empty
+        // and Zoho has one, set it locally and the debounced PATCH effect
+        // will persist it to the DB.
+        const currentListing =
+          (row.receiving_listing_url || '').trim() || scratch.listing.trim();
+        if (!currentListing && lPo) setListingLink(lPo);
 
         const lineItemId = (row.zoho_line_item_id || '').trim();
         if (!lineItemId || !Array.isArray(po.line_items)) return;
@@ -604,6 +623,38 @@ export function LineEditPanel({
     }
   }, [row.receiving_id, row.receiving_support_notes, supportNotes]);
 
+  // Persist the listing URL to the carton (`receiving.listing_url`) so other
+  // surfaces — notably the tech testing workspace running in another browser
+  // — see it without re-parsing Zoho PO notes. Debounced so paste-then-type
+  // doesn't thrash PATCH. Guard against round-tripping the same value we just
+  // hydrated from the DB.
+  useEffect(() => {
+    if (row.receiving_id == null) return;
+    const trimmed = listingLink.trim();
+    const dbValue = (row.receiving_listing_url || '').trim();
+    if (trimmed === dbValue) return;
+    const rid = row.receiving_id;
+    const t = window.setTimeout(() => {
+      void fetch(`/api/receiving/${rid}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ listing_url: trimmed || null }),
+      }).then(async (res) => {
+        const data = await res.json().catch(() => ({}));
+        if (!data?.success) return;
+        window.dispatchEvent(new CustomEvent('receiving-package-updated', {
+          detail: {
+            receiving_id: rid,
+            listing_url: (data.receiving?.listing_url as string | null) ?? null,
+          },
+        }));
+      }).catch(() => {
+        /* silent — scratch keeps the value locally until next attempt */
+      });
+    }, 450);
+    return () => window.clearTimeout(t);
+  }, [listingLink, row.receiving_id, row.receiving_listing_url]);
+
   // Keep this inspector in sync when the platform is changed elsewhere
   // (top PO card, another open inspector for the same receiving row).
   useEffect(() => {
@@ -613,6 +664,7 @@ export function LineEditPanel({
         receiving_id?: number;
         source_platform?: string | null;
         support_notes?: string | null;
+        listing_url?: string | null;
       }>).detail;
       if (!detail || detail.receiving_id !== row.receiving_id) return;
       if (detail.source_platform !== undefined) {
@@ -620,6 +672,9 @@ export function LineEditPanel({
       }
       if (detail.support_notes !== undefined) {
         setSupportNotes(detail.support_notes || '');
+      }
+      if (detail.listing_url !== undefined) {
+        setListingLink(detail.listing_url || '');
       }
     };
     window.addEventListener('receiving-package-updated', handler);
@@ -1632,19 +1687,20 @@ export function LineEditPanel({
               ) : null}
             </div>
 
-            {/* Platform (left, flexes) + Type (right). Inline pill row —
-                no HorizontalButtonSlider so there's no overflow-x-auto
-                clipping the active pill's outline at the top/bottom. */}
-            <div className="flex flex-wrap items-start gap-x-4 gap-y-3">
+            {/* Platform (left, scrolls) + Type (right). */}
+            <div className="flex min-w-0 flex-nowrap items-center gap-3">
               <div
                 aria-disabled={row.receiving_id == null || undefined}
-                className={`min-w-0 flex-1 ${row.receiving_id == null ? 'pointer-events-none opacity-50' : ''}`}
+                className={`min-w-0 flex-1 overflow-hidden ${row.receiving_id == null ? 'pointer-events-none opacity-50' : ''}`}
               >
                 <div
+                  ref={platformScrollerRef}
+                  onWheel={onPlatformPillsWheel}
                   role="radiogroup"
                   aria-label="Source platform"
-                  className="flex flex-nowrap items-center gap-1.5 overflow-x-auto pb-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+                  className="-mx-1 overflow-x-auto overscroll-x-contain px-1 py-1 [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden"
                 >
+                  <div className="flex w-max items-center gap-1.5">
                   {/* Synthesized 'Unfound' pill — only for unmatched cartons,
                       auto-active until the operator picks a real platform.
                       Front-end only: never written to source_platform. */}
@@ -1661,7 +1717,7 @@ export function LineEditPanel({
                           void savePlatform('');
                         }}
                         title="No Zoho PO matched this carton"
-                        className={`inline-flex h-8 items-center whitespace-nowrap rounded-full border px-3 text-micro font-black uppercase tracking-wide transition-colors ${
+                        className={`inline-flex h-8 shrink-0 snap-start items-center whitespace-nowrap rounded-full border px-3 text-micro font-black uppercase tracking-wide transition-colors ${
                           isActive
                             ? 'border-amber-600 bg-amber-500 text-white'
                             : 'border-amber-200 bg-amber-50 text-amber-700 hover:border-amber-300 hover:bg-amber-100'
@@ -1686,7 +1742,7 @@ export function LineEditPanel({
                             setSourcePlatform(opt.value);
                             void savePlatform(opt.value);
                           }}
-                          className={`inline-flex h-8 items-center whitespace-nowrap rounded-full border px-3 text-micro font-black uppercase tracking-wide transition-colors ${
+                          className={`inline-flex h-8 shrink-0 snap-start items-center whitespace-nowrap rounded-full border px-3 text-micro font-black uppercase tracking-wide transition-colors ${
                             isActive
                               ? 'border-blue-600 bg-blue-600 text-white'
                               : 'border-gray-200 bg-white text-gray-600 hover:border-gray-300 hover:bg-gray-50'
@@ -1696,10 +1752,11 @@ export function LineEditPanel({
                         </button>
                       );
                     })}
+                  </div>
                 </div>
               </div>
               <span className="h-6 w-px shrink-0 self-center bg-slate-200" aria-hidden />
-              <div className="min-w-0 shrink-0 ml-auto text-right">
+              <div className="shrink-0 text-right">
                 <div
                   role="radiogroup"
                   aria-label="Receiving type"

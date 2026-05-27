@@ -61,7 +61,6 @@ interface Props {
 export function InlineSerialAdder({
   lineId,
   saved,
-  expected,
   isSubmitting,
   onAdd,
   onDelete,
@@ -73,8 +72,6 @@ export function InlineSerialAdder({
   const [editing, setEditing] = useState<SavedSerial | null>(null);
   const inputRef = useRef<HTMLInputElement | null>(null);
   const count = saved.length;
-  const target = expected ?? 0;
-  const isAtCap = target > 0 && count >= target;
 
   useEffect(() => {
     if (!autoFocus) return;
@@ -165,9 +162,7 @@ export function InlineSerialAdder({
             placeholder={
               editing
                 ? 'Editing serial — press Enter to save, Esc to cancel'
-                : isAtCap
-                  ? 'Expected qty reached — keep scanning to log extras'
-                  : 'Scan or type a serial → ⏎'
+                : 'Scan Serial #'
             }
             autoComplete="off"
             spellCheck={false}

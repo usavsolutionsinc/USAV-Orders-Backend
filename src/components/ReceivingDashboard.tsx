@@ -149,50 +149,82 @@ export default function ReceivingDashboard() {
     return () => window.removeEventListener('receiving-workspace-nav-state', handler);
   }, []);
 
-  // Restore the last opened line on mount. Ref-guards against racing with a
-  // scan-driven open that beats us to the workspace (we'd otherwise overwrite
-  // the fresher row with a stale restore).
+  // Restore the last opened line on mount. Two-tier fallback so the right
+  // pane is never blank on a fresh visit:
+  //   1. localStorage `LAST_RECEIVING_LINE_KEY` — the line the operator was
+  //      last on (preferred so a refresh feels like nothing happened).
+  //   2. Most-recent line from the same `view=all` query the rail uses —
+  //      first-ever visit, cleared storage, or a deleted line.
+  // Ref-guards against a scan-driven open beating us to the workspace
+  // (we'd otherwise overwrite the fresher row with a stale restore).
   const workspaceRef = useRef<WorkspaceState | null>(null);
   workspaceRef.current = workspace;
   useEffect(() => {
-    let raw: string | null = null;
-    try {
-      raw = window.localStorage.getItem(LAST_RECEIVING_LINE_KEY);
-    } catch {
-      return;
-    }
-    const id = Number(raw);
-    if (!Number.isFinite(id) || id <= 0) return;
-
     let cancelled = false;
-    void (async () => {
+
+    const openRow = (row: ReceivingLineRow) => {
+      if (workspaceRef.current) return;
+      dispatchReceivingWorkspaceOpen({
+        row,
+        accordionBootstrap: 'default',
+        scanDriven: false,
+      });
+    };
+
+    const fetchMostRecent = async (): Promise<ReceivingLineRow | null> => {
       try {
         const res = await fetch(
-          `/api/receiving-lines?id=${id}&include=serials`,
+          `/api/receiving-lines?limit=1&offset=0&view=all&include=serials`,
           { cache: 'no-store' },
         );
         const data = await res.json().catch(() => null);
-        if (cancelled) return;
-        if (!data?.success || !data.receiving_line) {
-          // Line was deleted or no longer accessible — drop the stale key so
-          // we don't spin on every refresh.
+        const rows = Array.isArray(data?.receiving_lines)
+          ? (data.receiving_lines as ReceivingLineRow[])
+          : [];
+        return rows[0] ?? null;
+      } catch {
+        return null;
+      }
+    };
+
+    void (async () => {
+      let stored: string | null = null;
+      try {
+        stored = window.localStorage.getItem(LAST_RECEIVING_LINE_KEY);
+      } catch {
+        /* private mode — fall through to recent */
+      }
+      const storedId = Number(stored);
+      if (Number.isFinite(storedId) && storedId > 0) {
+        try {
+          const res = await fetch(
+            `/api/receiving-lines?id=${storedId}&include=serials`,
+            { cache: 'no-store' },
+          );
+          const data = await res.json().catch(() => null);
+          if (cancelled) return;
+          if (data?.success && data.receiving_line) {
+            openRow(data.receiving_line as ReceivingLineRow);
+            return;
+          }
+          // Line was deleted or no longer accessible — drop the stale key
+          // and fall through to the most-recent fallback.
           try {
             window.localStorage.removeItem(LAST_RECEIVING_LINE_KEY);
           } catch {
             /* non-fatal */
           }
-          return;
+        } catch {
+          /* network blip — try the recent fallback before giving up */
         }
-        if (workspaceRef.current) return;
-        dispatchReceivingWorkspaceOpen({
-          row: data.receiving_line as ReceivingLineRow,
-          accordionBootstrap: 'default',
-          scanDriven: false,
-        });
-      } catch {
-        /* network blip — try again on next refresh */
       }
+
+      if (cancelled || workspaceRef.current) return;
+      const recent = await fetchMostRecent();
+      if (cancelled || !recent || workspaceRef.current) return;
+      openRow(recent);
     })();
+
     return () => {
       cancelled = true;
     };

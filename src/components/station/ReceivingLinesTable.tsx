@@ -60,6 +60,8 @@ export interface ReceivingLineRow {
   notes: string | null;
   /** Carton-level support notes from `receiving.support_notes` (same for all lines on the package). */
   receiving_support_notes?: string | null;
+  /** Carton-level listing URL from `receiving.listing_url` (same for all lines on the package). */
+  receiving_listing_url?: string | null;
   created_at: string | null;
   /** Most-recent scan/receive time. Server sorts view=recent/all by this. */
   last_activity_at?: string | null;

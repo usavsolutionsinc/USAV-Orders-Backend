@@ -1,0 +1,35 @@
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Edit|Write|MultiEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "FP=$(jq -r '.tool_input.file_path // empty'); case \"$FP\" in *.env|*.env.*|*/certificates/*|*.pem|*.key|*/localhost+*.pem|*/localhost+*-key.pem) printf 'Blocked: %s is a secret/credential path. Edit it manually outside Claude.\\n' \"$FP\" >&2; exit 2 ;; esac"
+          }
+        ]
+      },
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "CMD=$(jq -r '.tool_input.command // empty'); if printf %s \"$CMD\" | grep -qE 'drizzle-kit[[:space:]]+push|(npm|pnpm|yarn)[[:space:]]+run[[:space:]]+db:push'; then printf 'Blocked: %s\\nUse /db-migrate (db:migrate:dry -> confirm -> db:migrate) instead. db:push bypasses migration files.\\n' \"$CMD\" >&2; exit 2; fi; if printf %s \"$CMD\" | grep -qE 'git[[:space:]]+push([[:space:]]|$).*--force([[:space:]]|$)'; then printf 'Blocked: %s\\nForce-push requires manual action. Run it yourself, or use --force-with-lease.\\n' \"$CMD\" >&2; exit 2; fi; if printf %s \"$CMD\" | grep -qE 'git[[:space:]]+push([[:space:]]|$).*[[:space:]]-f([[:space:]]|$)'; then printf 'Blocked: %s\\nForce-push requires manual action. Run it yourself, or use --force-with-lease.\\n' \"$CMD\" >&2; exit 2; fi"
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write|MultiEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "FP=$(jq -r '.tool_input.file_path // empty'); case \"$FP\" in *.ts|*.tsx) cd /Users/salessupport/Desktop/my-express-app/USAV-Orders-Backend && REL=${FP#/Users/salessupport/Desktop/my-express-app/USAV-Orders-Backend/} && npx --no-install next lint --file \"$REL\" 2>&1 | tail -60 ;; esac"
+          }
+        ]
+      }
+    ]
+  }
+}

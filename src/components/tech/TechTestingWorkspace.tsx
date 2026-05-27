@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { toast } from '@/lib/toast';
-import { Loader2, Printer, ShieldCheck } from '@/components/Icons';
+import { Loader2, Printer } from '@/components/Icons';
 import { StickyActionBar } from '@/design-system/components/StickyActionBar';
 import { OrderIdChip, TrackingChip, ListingUrlChip, getLast4 } from '@/components/ui/CopyChip';
 import { PoLinesAccordion } from '@/components/receiving/workspace/PoLinesAccordion';
@@ -55,6 +55,13 @@ interface NextIdResponse {
 const PRINT_QTY_OPTIONS = [1, 2, 3, 4, 5] as const;
 
 /**
+ * Mirrors the receiving page's restore key but on its own namespace — testers
+ * and receivers often work different lines at once on the same browser, so
+ * sharing the key would yank one role's view into the other's.
+ */
+const LAST_TESTING_LINE_KEY = 'usav:testing:last-line-id';
+
+/**
  * Right-pane workspace for the Testing sub-page.
  *
  * Composition mirrors {@link LineEditPanel} but with the testing flow swapped
@@ -95,6 +102,11 @@ export function TechTestingWorkspace({ staffId, selectedLineId, onSelectedLineCh
         setRow(next);
         onSelectedLineChange(next.id);
         lastSelectedRef.current = next.id;
+        try {
+          window.localStorage.setItem(LAST_TESTING_LINE_KEY, String(next.id));
+        } catch {
+          /* private mode / quota — non-fatal */
+        }
       } else {
         setRow(null);
         onSelectedLineChange(null);
@@ -104,6 +116,80 @@ export function TechTestingWorkspace({ staffId, selectedLineId, onSelectedLineCh
     window.addEventListener('receiving-select-line', handler);
     return () => window.removeEventListener('receiving-select-line', handler);
   }, [onSelectedLineChange]);
+
+  // Restore the last opened testing line on mount. Same two-tier fallback as
+  // the receiving page: localStorage first, then the most-recent line from
+  // the rail's dataset. Dispatched through `receiving-select-line` so the
+  // existing handler above + the sidebar's rail highlight both pick it up.
+  const rowRef = useRef<ReceivingLineRow | null>(null);
+  rowRef.current = row;
+  useEffect(() => {
+    let cancelled = false;
+
+    const fetchById = async (id: number): Promise<ReceivingLineRow | null> => {
+      try {
+        const res = await fetch(
+          `/api/receiving-lines?id=${id}&include=serials`,
+          { cache: 'no-store' },
+        );
+        const data = await res.json().catch(() => null);
+        if (data?.success && data.receiving_line) {
+          return data.receiving_line as ReceivingLineRow;
+        }
+        return null;
+      } catch {
+        return null;
+      }
+    };
+
+    const fetchMostRecent = async (): Promise<ReceivingLineRow | null> => {
+      try {
+        const res = await fetch(
+          `/api/receiving-lines?limit=1&offset=0&view=all&include=serials`,
+          { cache: 'no-store' },
+        );
+        const data = await res.json().catch(() => null);
+        const rows = Array.isArray(data?.receiving_lines)
+          ? (data.receiving_lines as ReceivingLineRow[])
+          : [];
+        return rows[0] ?? null;
+      } catch {
+        return null;
+      }
+    };
+
+    void (async () => {
+      let stored: string | null = null;
+      try {
+        stored = window.localStorage.getItem(LAST_TESTING_LINE_KEY);
+      } catch {
+        /* private mode — fall through to recent */
+      }
+      const storedId = Number(stored);
+      if (Number.isFinite(storedId) && storedId > 0) {
+        const restored = await fetchById(storedId);
+        if (cancelled) return;
+        if (restored) {
+          if (rowRef.current) return;
+          dispatchSelectLine(restored);
+          return;
+        }
+        try {
+          window.localStorage.removeItem(LAST_TESTING_LINE_KEY);
+        } catch {
+          /* non-fatal */
+        }
+      }
+      if (cancelled || rowRef.current) return;
+      const recent = await fetchMostRecent();
+      if (cancelled || !recent || rowRef.current) return;
+      dispatchSelectLine(recent);
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   // Optimistic updates from elsewhere (rail patches, sibling switch, etc.)
   useEffect(() => {
@@ -274,6 +360,33 @@ export function TechTestingWorkspace({ staffId, selectedLineId, onSelectedLineCh
       }
     },
     [row, refreshLineWithSerials],
+  );
+
+  // Replace a saved serial in-place — DELETE the old row, POST the new one.
+  // Mirrors LineEditPanel's contract so the SerialChipWithMenu Edit menu
+  // behaves identically across receiving + testing.
+  const replaceSerial = useCallback(
+    async (lineId: number, originalSerialUnitId: number, nextSerial: string) => {
+      try {
+        const res = await fetch('/api/receiving/scan-serial', {
+          method: 'DELETE',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            serial_unit_id: originalSerialUnitId,
+            receiving_line_id: lineId,
+          }),
+        });
+        const data = await res.json().catch(() => null);
+        if (!res.ok || !data?.success) {
+          toast.error(data?.error || 'Could not replace serial');
+          return;
+        }
+        await submitSerial(lineId, nextSerial);
+      } catch (err) {
+        toast.error(err instanceof Error ? err.message : 'Replace failed');
+      }
+    },
+    [submitSerial],
   );
 
   // ── Pass + Print ───────────────────────────────────────────────────────────
@@ -487,31 +600,24 @@ export function TechTestingWorkspace({ staffId, selectedLineId, onSelectedLineCh
     });
   }, [row?.sku, row?.serials]);
 
-  // ── Empty state ───────────────────────────────────────────────────────────
+  // Mount-time restore handles the no-row case (localStorage → most-recent),
+  // so there's no operator-facing empty prompt — just a quiet holding area
+  // until the restored row lands. Operator can use the sidebar rail at any
+  // time to pick a different line.
   if (!row) {
-    return (
-      <div className="flex h-full w-full items-center justify-center bg-gray-50 px-6">
-        <div className="max-w-sm text-center">
-          <div className="mx-auto mb-4 inline-flex h-12 w-12 items-center justify-center rounded-2xl bg-white shadow-sm ring-1 ring-gray-200">
-            <ShieldCheck className="h-5 w-5 text-emerald-600" />
-          </div>
-          <h2 className="text-lg font-black tracking-tight text-gray-900">Scan a receiving QR</h2>
-          <p className="mt-1 text-sm text-gray-500">
-            Use the scan bar to pull up a PO item for testing. You can also click any line in
-            the recent rail.
-          </p>
-        </div>
-      </div>
-    );
+    return <div className="h-full w-full bg-gray-50" aria-hidden />;
   }
 
   // ── Workspace ─────────────────────────────────────────────────────────────
   const poNumber = (row.zoho_purchaseorder_number || row.zoho_purchaseorder_id || '').trim();
   const tracking = (row.tracking_number || '').trim();
-  // Listing URL comes from the same per-carton localStorage scratch the
-  // receiving page writes (`readReceivingLineDetailsScratch`). Same browser
-  // session → same URL. No edit affordance here — receiving owns the write.
-  const listingUrl = (readReceivingLineDetailsScratch(row.receiving_id).listing || '').trim();
+  // Listing URL: prefer the DB-persisted carton column (`receiving.listing_url`)
+  // so the URL surfaces across browsers/devices without re-pinging Zoho. Fall
+  // back to the per-browser localStorage scratch for cartons that pre-date the
+  // column being populated. Receiving owns the write.
+  const listingUrl =
+    (row.receiving_listing_url || '').trim() ||
+    (readReceivingLineDetailsScratch(row.receiving_id).listing || '').trim();
   const listingOpenHref = listingUrlForOpen(listingUrl);
   const listingPreview = listingUrl
     ? listingLinkPreview(listingUrl)
@@ -570,35 +676,34 @@ export function TechTestingWorkspace({ staffId, selectedLineId, onSelectedLineCh
               status={saving ? 'Saving' : undefined}
             />
 
-            {/* ── DIV 1 — photos + carton chips ─────────────────────────── */}
+            {/* Carton header — photos + claim + listing/PO/tracking chips */}
             <section className="overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-gray-200/60">
-              <ReceivingCartonStaffDropdown
-                receivingId={row.receiving_id}
-                staffId={staffId}
-                onMakeClaim={() => setClaimOpen(true)}
-              />
-            </section>
-
-            <section className="rounded-2xl bg-white p-4 shadow-sm ring-1 ring-gray-200/60">
-              {/* Read-only listing/PO/tracking chip row — no pencils per spec.
-                  Item title is omitted here on purpose — it already shows in
-                  the PO Items accordion row below; duplicating it on the
-                  carton card was noise. */}
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <div className="flex min-w-0 items-center gap-2">
-                  <ListingUrlChip
-                    rawUrl={listingUrl}
-                    openHref={listingOpenHref}
-                    previewDisplay={listingPreview}
-                  />
-                </div>
-                <div className="flex shrink-0 items-center gap-2">
-                  <OrderIdChip value={poNumber} display={poNumber ? getLast4(poNumber) : '----'} />
-                  <TrackingChip
-                    value={tracking}
-                    display={tracking ? getLast4(tracking) : '----'}
-                    disableCopy={!tracking}
-                  />
+              {row.receiving_id != null ? (
+                <ReceivingCartonStaffDropdown
+                  receivingId={row.receiving_id}
+                  staffId={staffId}
+                  onMakeClaim={() => setClaimOpen(true)}
+                />
+              ) : null}
+              <div
+                className={`px-4 py-3 ${row.receiving_id != null ? 'border-t border-gray-100' : ''}`}
+              >
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div className="flex min-w-0 items-center gap-2">
+                    <ListingUrlChip
+                      rawUrl={listingUrl}
+                      openHref={listingOpenHref}
+                      previewDisplay={listingPreview}
+                    />
+                  </div>
+                  <div className="flex shrink-0 items-center gap-2">
+                    <OrderIdChip value={poNumber} display={poNumber ? getLast4(poNumber) : '----'} />
+                    <TrackingChip
+                      value={tracking}
+                      display={tracking ? getLast4(tracking) : '----'}
+                      disableCopy={!tracking}
+                    />
+                  </div>
                 </div>
               </div>
             </section>
@@ -646,6 +751,10 @@ export function TechTestingWorkspace({ staffId, selectedLineId, onSelectedLineCh
                           expected={line.quantity_expected ?? null}
                           isSubmitting={serialSubmitting}
                           onAdd={(lineId, sn) => submitSerial(lineId, sn)}
+                          onReplaceSerial={(lineId, original, nextSerial) => {
+                            if (original.id == null) return;
+                            void replaceSerial(lineId, original.id, nextSerial);
+                          }}
                           onDelete={(lineId, s) => {
                             if (s.id == null) return;
                             if (!window.confirm(`Remove serial ${s.serial_number}?`)) return;
@@ -683,6 +792,10 @@ export function TechTestingWorkspace({ staffId, selectedLineId, onSelectedLineCh
                         disabled={!row.receiving_id}
                         autoFocus
                         onAdd={(lineId, sn) => submitSerial(lineId, sn)}
+                        onReplaceSerial={(lineId, original, nextSerial) => {
+                          if (original.id == null) return;
+                          void replaceSerial(lineId, original.id, nextSerial);
+                        }}
                         onDelete={(lineId, s) => {
                           if (s.id == null) return;
                           if (!window.confirm(`Remove serial ${s.serial_number}?`)) return;

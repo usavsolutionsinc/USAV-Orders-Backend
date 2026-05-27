@@ -67,6 +67,7 @@ export async function GET(
          r.zoho_purchaseorder_number,
          r.zoho_warehouse_id,
          r.support_notes,
+         r.listing_url,
          to_char(r.received_at::timestamp, 'YYYY-MM-DD HH24:MI:SS')  AS received_at,
          r.received_by,
          to_char(r.unboxed_at::timestamp, 'YYYY-MM-DD HH24:MI:SS')   AS unboxed_at,
@@ -301,7 +302,7 @@ export async function PATCH(
     // Snapshot the row before the update so the audit row carries a real diff.
     const beforeRow = await pool.query(
       `SELECT id, source_platform, zoho_purchaseorder_id, zoho_purchaseorder_number,
-              shipment_id, support_notes, source, receiving_tracking_number
+              shipment_id, support_notes, listing_url, source, receiving_tracking_number
        FROM receiving WHERE id = $1 LIMIT 1`,
       [id],
     );
@@ -346,6 +347,16 @@ export async function PATCH(
       const raw = body.support_notes;
       const next = raw == null || raw === '' ? null : String(raw).trim() || null;
       updates.push(`support_notes = $${idx++}`);
+      values.push(next);
+    }
+
+    // Carton-level listing URL (sourced from Zoho PO parse or operator input
+    // on the receiving page). Same trim+nullify pattern as support_notes so
+    // explicit clears land as NULL rather than empty strings.
+    if (Object.prototype.hasOwnProperty.call(body, 'listing_url')) {
+      const raw = body.listing_url;
+      const next = raw == null || raw === '' ? null : String(raw).trim() || null;
+      updates.push(`listing_url = $${idx++}`);
       values.push(next);
     }
 
@@ -423,9 +434,10 @@ export async function PATCH(
       zoho_purchaseorder_number: string | null;
       shipment_id: number | null;
       support_notes: string | null;
+      listing_url: string | null;
     }>(
       `UPDATE receiving SET ${updates.join(', ')} WHERE id = $${values.length}
-       RETURNING id, source_platform, zoho_purchaseorder_id, zoho_purchaseorder_number, shipment_id, support_notes`,
+       RETURNING id, source_platform, zoho_purchaseorder_id, zoho_purchaseorder_number, shipment_id, support_notes, listing_url`,
       values,
     );
 

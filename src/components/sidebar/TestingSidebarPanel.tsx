@@ -3,12 +3,15 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { toast } from '@/lib/toast';
 import { TestingScanBar } from '@/components/sidebar/receiving/TestingScanBar';
-import { ReceivingRecentRail } from '@/components/sidebar/receiving/ReceivingRecentRail';
+import { TestingRecentRail } from '@/components/sidebar/receiving/TestingRecentRail';
 import {
   resolveTestingScan,
   type ResolvedTestingScan,
 } from '@/lib/testing/resolve-testing-scan';
-import { dispatchSelectLine } from '@/components/station/ReceivingLinesTable';
+import {
+  dispatchSelectLine,
+  type ReceivingLineRow,
+} from '@/components/station/ReceivingLinesTable';
 import {
   readSelectLineDetail,
   type ReceivingSelectLineDetail,
@@ -49,8 +52,12 @@ export function TestingSidebarPanel({
   const [picker, setPicker] = useState<ResolvedTestingScan & { kind: 'multi' } | null>(null);
   // Self-track the selection when the parent doesn't pass one down — keeps
   // the rail highlight in lockstep with whichever line is open in the
-  // workspace without prop drilling through RouteShell.
-  const [internalSelectedId, setInternalSelectedId] = useState<number | null>(null);
+  // workspace without prop drilling through RouteShell. Also caches the
+  // full row so the rail can pin it (visible) even when it's older than
+  // the top `limit` rows (e.g. a localStorage restore of an old line).
+  const [internalSelectedRow, setInternalSelectedRow] =
+    useState<ReceivingLineRow | null>(null);
+  const internalSelectedId = internalSelectedRow?.id ?? null;
   const selectedLineId = selectedLineIdProp ?? internalSelectedId;
 
   useEffect(() => {
@@ -58,7 +65,7 @@ export function TestingSidebarPanel({
     const handler = (event: Event) => {
       const detail = (event as CustomEvent<ReceivingSelectLineDetail>).detail;
       const { row } = readSelectLineDetail(detail);
-      setInternalSelectedId(row?.id ?? null);
+      setInternalSelectedRow(row ?? null);
     };
     window.addEventListener('receiving-select-line', handler);
     return () => window.removeEventListener('receiving-select-line', handler);
@@ -171,7 +178,10 @@ export function TestingSidebarPanel({
 
       {/* Scrollable recent rail */}
       <div className="min-h-0 flex-1 overflow-y-auto">
-        <ReceivingRecentRail selectedLineId={selectedLineId} />
+        <TestingRecentRail
+          selectedLineId={selectedLineId}
+          selectedRow={internalSelectedRow}
+        />
       </div>
     </div>
   );

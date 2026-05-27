@@ -1,7 +1,7 @@
 'use client';
 
-import { useCallback, useRef, type WheelEvent } from 'react';
-import { CONDITION_OPTS } from '@/components/station/receiving-constants';
+import { useCallback, useRef, type WheelEvent, useState, useEffect } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
 
 interface Props {
   value: string | null | undefined;
@@ -9,8 +9,6 @@ interface Props {
 }
 
 // Per-grade visual tone — selected = filled, unselected = soft outline.
-// Yellow for new (factory-fresh), green for top used, blue for solid used,
-// slate for cosmetic-only, amber for parts-only — deliberate hierarchy by tone.
 const TONE: Record<string, { active: string; inactive: string }> = {
   BRAND_NEW: {
     active: 'bg-yellow-500 text-white shadow-sm shadow-yellow-200 ring-yellow-600',
@@ -34,23 +32,30 @@ const TONE: Record<string, { active: string; inactive: string }> = {
   },
 };
 
+const USED_GRADES = [
+  { value: 'USED_A', label: 'A' },
+  { value: 'USED_B', label: 'B' },
+  { value: 'USED_C', label: 'C' },
+];
+
 /**
- * Bare, mobile-first condition picker. Renders the 5 grades as a single
- * horizontally-scrolling row of ring-bordered pills. No card wrapper, no
- * internal header — callers own the label and surrounding layout.
- *
- * Used by every interactive condition picker in the app so the colour
- * vocabulary (yellow=new, green=A, blue=B, slate=C, amber=parts) stays
- * consistent across the receiving workspace, label printer, shipped
- * details panel, and intake forms.
+ * Bare, mobile-first condition picker. Renders grades as a horizontally-scrolling
+ * row of pills. "USED" options are nested: selecting USED expands sub-grades
+ * (A, B, C) with a smooth animation.
  */
 export function ConditionPills({ value, onChange }: Props) {
   const selected = String(value || '').trim().toUpperCase();
   const scrollerRef = useRef<HTMLDivElement | null>(null);
+  const [isExpanded, setIsExpanded] = useState(false);
 
-  // Translate vertical wheel input to horizontal scroll while the pointer
-  // is over the row — mouse users on desktop have no other way to reach
-  // overflowed pills without a visible scrollbar.
+  const isUsed = selected.startsWith('USED_');
+  const usedGrade = isUsed ? selected.split('_')[1] : null;
+
+  // Collapse if we switch away from USED via external props
+  useEffect(() => {
+    if (!isUsed) setIsExpanded(false);
+  }, [isUsed]);
+
   const onWheel = useCallback((e: WheelEvent<HTMLDivElement>) => {
     const el = scrollerRef.current;
     if (!el) return;
@@ -59,32 +64,101 @@ export function ConditionPills({ value, onChange }: Props) {
     e.preventDefault();
   }, []);
 
+  const handleUsedMainClick = () => {
+    if (!isUsed) {
+      onChange('USED_B');
+      setIsExpanded(true);
+    } else {
+      setIsExpanded(!isExpanded);
+    }
+  };
+
+  const Pill = ({ 
+    label, 
+    isActive, 
+    onClick, 
+    toneKey, 
+    className = '' 
+  }: { 
+    label: string; 
+    isActive: boolean; 
+    onClick: () => void; 
+    toneKey: string;
+    className?: string;
+  }) => {
+    const tone = TONE[toneKey] ?? TONE.USED_C;
+    return (
+      <button
+        type="button"
+        role="radio"
+        aria-checked={isActive}
+        onClick={onClick}
+        className={`inline-flex h-9 shrink-0 snap-start items-center whitespace-nowrap rounded-full px-4 text-caption font-black uppercase tracking-[0.1em] ring-1 ring-inset transition-all active:scale-[0.98] ${
+          isActive ? tone.active : tone.inactive
+        } ${className}`}
+      >
+        {label}
+      </button>
+    );
+  };
+
   return (
     <div
       ref={scrollerRef}
       onWheel={onWheel}
       role="radiogroup"
       aria-label="Condition grade"
-      className="-mx-1 flex gap-1.5 overflow-x-auto overscroll-x-contain px-1 py-1 [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden"
+      className="-mx-1 flex items-center gap-1.5 overflow-x-auto overscroll-x-contain px-1 py-1 [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden"
     >
-      {CONDITION_OPTS.map((opt) => {
-        const isActive = selected === opt.value;
-        const tone = TONE[opt.value] ?? TONE.USED_C;
-        return (
-          <button
-            key={opt.value}
-            type="button"
-            role="radio"
-            aria-checked={isActive}
-            onClick={() => onChange(opt.value)}
-            className={`inline-flex h-9 shrink-0 snap-start items-center whitespace-nowrap rounded-full px-4 text-caption font-black uppercase tracking-[0.1em] ring-1 ring-inset transition-all active:scale-[0.98] ${
-              isActive ? tone.active : tone.inactive
-            }`}
-          >
-            {opt.label}
-          </button>
-        );
-      })}
+      {/* BRAND NEW */}
+      <Pill
+        label="NEW"
+        isActive={selected === 'BRAND_NEW'}
+        toneKey="BRAND_NEW"
+        onClick={() => onChange('BRAND_NEW')}
+      />
+
+      {/* USED GROUP */}
+      <div className="flex shrink-0 items-center gap-1.5">
+        <Pill
+          label={isUsed && !isExpanded ? `USED ${usedGrade}` : 'USED'}
+          isActive={isUsed}
+          toneKey={isUsed ? selected : 'USED_B'}
+          onClick={handleUsedMainClick}
+        />
+
+        <AnimatePresence initial={false}>
+          {isExpanded && (
+            <motion.div
+              initial={{ width: 0, opacity: 0, x: -10 }}
+              animate={{ width: 'auto', opacity: 1, x: 0 }}
+              exit={{ width: 0, opacity: 0, x: -10 }}
+              className="flex gap-1.5 overflow-hidden"
+            >
+              {USED_GRADES.map((g) => (
+                <Pill
+                  key={g.value}
+                  label={g.label}
+                  isActive={selected === g.value}
+                  toneKey={g.value}
+                  onClick={() => {
+                    onChange(g.value);
+                    setIsExpanded(false);
+                  }}
+                />
+              ))}
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </div>
+
+      {/* PARTS */}
+      <Pill
+        label="PARTS"
+        isActive={selected === 'PARTS'}
+        toneKey="PARTS"
+        onClick={() => onChange('PARTS')}
+      />
     </div>
   );
 }
