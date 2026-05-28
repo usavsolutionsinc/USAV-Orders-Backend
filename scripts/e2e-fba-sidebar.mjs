@@ -74,7 +74,7 @@ function buildState() {
 function buildShipmentsSummary(state) {
   const totalItems = state.items.length;
   const totalExpectedQty = state.items.reduce((sum, item) => sum + Number(item.expected_qty || 0), 0);
-  const readyItemCount = state.items.filter((item) => item.status === 'READY_TO_GO').length;
+  const readyItemCount = state.items.filter((item) => item.status === 'TESTED').length;
   const shippedItemCount = state.items.filter((item) => item.status === 'SHIPPED').length;
   return {
     id: state.shipmentId,
@@ -118,7 +118,7 @@ async function installApiMocks(page, state) {
 
     if (pathname === '/api/fba/shipments' && method === 'GET') {
       const status = searchParams.get('status');
-      if (status === 'PLANNED' || status === 'PLANNED,PACKING,READY_TO_GO,OUT_OF_STOCK,LABEL_ASSIGNED') {
+      if (status === 'PLANNED' || status === 'PLANNED,TESTED,PACKED,OUT_OF_STOCK,LABEL_ASSIGNED') {
         return json(route, 200, { shipments: [buildShipmentsSummary(state)] });
       }
     }

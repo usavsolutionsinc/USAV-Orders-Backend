@@ -65,11 +65,11 @@ async function installApiMocks(page) {
     const url = new URL(request.url());
     const method = request.method().toUpperCase();
 
-    if (url.pathname === '/api/ai/tunnel-session' && method === 'POST') {
+    if (url.pathname === '/api/ai/session' && method === 'POST') {
       return json(route, 200, { session_id: 'e2e-session' });
     }
 
-    if (url.pathname === '/api/ai/tunnel-health' && method === 'GET') {
+    if (url.pathname === '/api/ai/chat-health' && method === 'GET') {
       return json(route, 503, {
         ok: false,
         local_ops: true,
@@ -77,7 +77,7 @@ async function installApiMocks(page) {
       });
     }
 
-    if (url.pathname === '/api/ai/tunnel-chat' && method === 'POST') {
+    if (url.pathname === '/api/ai/chat' && method === 'POST') {
       const body = JSON.parse(request.postData() || '{}');
       const message = String(body.message || '');
       chatCount += 1;

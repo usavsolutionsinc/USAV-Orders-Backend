@@ -133,10 +133,53 @@ export function InlineSerialAdder({
 
   return (
     <div className="space-y-2">
-      <div className="flex items-center justify-between gap-2">
-        <span className="text-eyebrow font-black uppercase tracking-widest text-gray-500">
+      <div className="flex items-start justify-between gap-2">
+        <span className="shrink-0 pt-0.5 text-eyebrow font-black uppercase tracking-widest text-gray-500">
           Serial numbers
         </span>
+        {count > 0 ? (
+          <div className="flex min-w-0 flex-1 flex-wrap items-center justify-end gap-1.5">
+            {saved.map((s, idx) => {
+              const sn = (s.serial_number || '').trim();
+              if (!sn) return null;
+              const isEditingThis = editing?.id === s.id;
+              return onReplaceSerial ? (
+                // Receiving + testing parity: same hover Edit/Delete menu
+                // SerialCard ships, rendered straight in the row.
+                <SerialChipWithMenu
+                  key={s.id ?? `${sn}-${idx}`}
+                  serial={s}
+                  isEditing={isEditingThis}
+                  onEdit={beginEdit}
+                  onDelete={onDelete ? (target) => onDelete(lineId, target) : undefined}
+                />
+              ) : (
+                // Adder without an edit handler — bare emerald chip with an X
+                // delete affordance, matching the original testing layout.
+                <span
+                  key={s.id ?? `${sn}-${idx}`}
+                  className="inline-flex items-center gap-1.5 rounded-md bg-emerald-50 px-2 py-0.5 font-mono text-caption font-bold text-emerald-800 ring-1 ring-inset ring-emerald-200"
+                  title={sn}
+                >
+                  <span className="truncate max-w-[160px]">
+                    {sn.length > 14 ? `…${sn.slice(-12)}` : sn}
+                  </span>
+                  {onDelete ? (
+                    <button
+                      type="button"
+                      onClick={() => onDelete(lineId, s)}
+                      aria-label={`Remove serial ${sn}`}
+                      title="Remove"
+                      className="rounded text-emerald-500 transition-colors hover:bg-emerald-100 hover:text-rose-600"
+                    >
+                      <X className="h-3 w-3" />
+                    </button>
+                  ) : null}
+                </span>
+              );
+            })}
+          </div>
+        ) : null}
       </div>
 
       <div className="flex items-stretch gap-2">
@@ -194,50 +237,6 @@ export function InlineSerialAdder({
           {isSubmitting ? 'Saving…' : editing ? 'Save' : 'Add'}
         </button>
       </div>
-
-      {count > 0 ? (
-        <div className="flex flex-wrap items-center gap-1.5">
-          {saved.map((s, idx) => {
-            const sn = (s.serial_number || '').trim();
-            if (!sn) return null;
-            const isEditingThis = editing?.id === s.id;
-            return onReplaceSerial ? (
-              // Receiving + testing parity: same hover Edit/Delete menu
-              // SerialCard ships, rendered straight in the row.
-              <SerialChipWithMenu
-                key={s.id ?? `${sn}-${idx}`}
-                serial={s}
-                isEditing={isEditingThis}
-                onEdit={beginEdit}
-                onDelete={onDelete ? (target) => onDelete(lineId, target) : undefined}
-              />
-            ) : (
-              // Adder without an edit handler — bare emerald chip with an X
-              // delete affordance, matching the original testing layout.
-              <span
-                key={s.id ?? `${sn}-${idx}`}
-                className="inline-flex items-center gap-1.5 rounded-md bg-emerald-50 px-2 py-0.5 font-mono text-caption font-bold text-emerald-800 ring-1 ring-inset ring-emerald-200"
-                title={sn}
-              >
-                <span className="truncate max-w-[160px]">
-                  {sn.length > 14 ? `…${sn.slice(-12)}` : sn}
-                </span>
-                {onDelete ? (
-                  <button
-                    type="button"
-                    onClick={() => onDelete(lineId, s)}
-                    aria-label={`Remove serial ${sn}`}
-                    title="Remove"
-                    className="rounded text-emerald-500 transition-colors hover:bg-emerald-100 hover:text-rose-600"
-                  >
-                    <X className="h-3 w-3" />
-                  </button>
-                ) : null}
-              </span>
-            );
-          })}
-        </div>
-      ) : null}
     </div>
   );
 }

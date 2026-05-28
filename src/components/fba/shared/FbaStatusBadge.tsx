@@ -1,20 +1,22 @@
 import type { ReactNode } from 'react';
-import { Barcode, Check, ClipboardList, Lock, PackageCheck } from '@/components/Icons';
+import { Barcode, Check, ClipboardList, Lock, PackageCheck, Truck } from '@/components/Icons';
 
 /**
- * Single source of truth for FBA status display. Replaces ad-hoc STATUS_STYLES
- * maps scattered through the dashboard table and card surfaces.
+ * Single source of truth for FBA status display. Labels + vocabulary mirror
+ * src/lib/fba/status.ts (the framework-agnostic canonical module).
  *
  * Status vocabulary (shared by shipment-level and item-level):
- *   PLANNED        — queued, not yet picked
- *   READY_TO_GO    — prepped and allocated to a tracking bundle
- *   LABEL_ASSIGNED — carrier label applied
- *   SHIPPED        — handed to carrier
+ *   PLANNED        — planning acknowledged today's FBA items
+ *   TESTED         — technician scanned the FNSKU; passed, ready to be packed
+ *   PACKED         — packer scanned the FNSKU; ready to combine
+ *   LABEL_ASSIGNED — combined under one FBA shipment ID (shown as "Combined")
+ *   SHIPPED        — UPS tracking scanned; handed to carrier
  *   CLOSED         — plan/shipment archived
  */
 export type FbaStatus =
   | 'PLANNED'
-  | 'READY_TO_GO'
+  | 'TESTED'
+  | 'PACKED'
   | 'LABEL_ASSIGNED'
   | 'SHIPPED'
   | 'CLOSED';
@@ -35,21 +37,27 @@ const TOKENS: Record<FbaStatus, StatusToken> = {
     pill: 'bg-gray-100 text-gray-600 border-gray-200',
     icon_tone: 'text-gray-500',
   },
-  READY_TO_GO: {
-    label: 'Ready',
+  TESTED: {
+    label: 'Tested',
     icon: Check,
     pill: 'bg-emerald-100 text-emerald-700 border-emerald-200',
     icon_tone: 'text-emerald-600',
   },
+  PACKED: {
+    label: 'Packed',
+    icon: PackageCheck,
+    pill: 'bg-amber-100 text-amber-700 border-amber-200',
+    icon_tone: 'text-amber-600',
+  },
   LABEL_ASSIGNED: {
-    label: 'Labeled',
+    label: 'Combined',
     icon: Barcode,
     pill: 'bg-blue-100 text-blue-700 border-blue-200',
     icon_tone: 'text-blue-600',
   },
   SHIPPED: {
     label: 'Shipped',
-    icon: PackageCheck,
+    icon: Truck,
     pill: 'bg-purple-100 text-purple-700 border-purple-200',
     icon_tone: 'text-purple-600',
   },

@@ -243,7 +243,9 @@ export function TechSidebarPanel({ techId, onBackToAppNav, contextNavTitle = 'Te
             userId={techId}
             userName={techName}
             staffId={techId}
-            onTrackingScan={() => updateViewMode('history')}
+            // No tab switch on scan: the active-order workspace now crossfades
+            // over whichever shipping tab is showing (handled in TechDashboard),
+            // so the tech stays on — and returns to — their current tab.
             techViewSwitcher={{
               items: TECH_STATION_VIEW_ITEMS,
               value:

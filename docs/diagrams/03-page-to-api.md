@@ -52,7 +52,7 @@ graph LR
     CFBA --> AF3[/api/fba/items/* · /api/fba/labels/bind]
     CFBA --> AF4[/api/assignments · /api/assignments/sku-search]
 
-    CAI --> AA1[/api/ai/openclaw-health · session · chat]
+    CAI --> AA1[/api/ai/chat-health · session · chat]
     CAI --> AA2[/api/ai/chat-sessions + /messages]
 
     CRECV --> AR1[/api/receiving-lines · entry · logs · photos]

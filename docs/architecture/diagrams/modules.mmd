@@ -5,20 +5,20 @@ flowchart LR
   click hooks "src/hooks/_lifecycle.ts" "Open src/hooks/_lifecycle.ts"
   utils["utils"]
   click utils "src/utils/upnext-shared.ts" "Open src/utils/upnext-shared.ts"
-  design_system["design-system"]
-  click design_system "src/design-system/index.ts" "Open src/design-system/index.ts"
-  components_Icons_tsx["components/Icons.tsx"]
-  click components_Icons_tsx "src/components/Icons.tsx" "Open src/components/Icons.tsx"
   components_sidebar["components/sidebar"]
   click components_sidebar "src/components/sidebar/DeviceModeToggle.tsx" "Open src/components/sidebar/DeviceModeToggle.tsx"
+  components_Icons_tsx["components/Icons.tsx"]
+  click components_Icons_tsx "src/components/Icons.tsx" "Open src/components/Icons.tsx"
+  design_system["design-system"]
+  click design_system "src/design-system/index.ts" "Open src/design-system/index.ts"
   components_ui["components/ui"]
   click components_ui "src/components/ui/DeleteButton.tsx" "Open src/components/ui/DeleteButton.tsx"
   lib_db_ts["lib/db.ts"]
   click lib_db_ts "src/lib/db.ts" "Open src/lib/db.ts"
-  components_shipped["components/shipped"]
-  click components_shipped "src/components/shipped/DateGroupHeader.tsx" "Open src/components/shipped/DateGroupHeader.tsx"
   components_station["components/station"]
   click components_station "src/components/station/BarcodeScanner.tsx" "Open src/components/station/BarcodeScanner.tsx"
+  components_shipped["components/shipped"]
+  click components_shipped "src/components/shipped/DateGroupHeader.tsx" "Open src/components/shipped/DateGroupHeader.tsx"
   components_layout["components/layout"]
   click components_layout "src/components/layout/OfflineBanner.tsx" "Open src/components/layout/OfflineBanner.tsx"
   lib_neon["lib/neon"]
@@ -87,6 +87,8 @@ flowchart LR
   click components_quick_access "src/components/quick-access/RecentSection.tsx" "Open src/components/quick-access/RecentSection.tsx"
   components_sku["components/sku"]
   click components_sku "src/components/sku/BinRowDetailsSheet.tsx" "Open src/components/sku/BinRowDetailsSheet.tsx"
+  lib_shipping["lib/shipping"]
+  click lib_shipping "src/lib/shipping/repository.ts" "Open src/lib/shipping/repository.ts"
   lib_ebay["lib/ebay"]
   click lib_ebay "src/lib/ebay/token-refresh.ts" "Open src/lib/ebay/token-refresh.ts"
   lib_ai["lib/ai"]
@@ -107,8 +109,6 @@ flowchart LR
   click lib_barcode_routing_ts "src/lib/barcode-routing.ts" "Open src/lib/barcode-routing.ts"
   lib_zoho["lib/zoho"]
   click lib_zoho "src/lib/zoho/mock.ts" "Open src/lib/zoho/mock.ts"
-  lib_shipping["lib/shipping"]
-  click lib_shipping "src/lib/shipping/repository.ts" "Open src/lib/shipping/repository.ts"
   lib_inventory["lib/inventory"]
   click lib_inventory "src/lib/inventory/internal-gtin.ts" "Open src/lib/inventory/internal-gtin.ts"
   app_settings["app/settings"]
@@ -400,6 +400,7 @@ flowchart LR
   components_station --> components_fba
   components_station --> components_layout
   components_station --> components_shipped
+  components_station --> components_sidebar
   components_station --> components_ui
   components_station --> components_work_orders
   components_station --> design_system

@@ -5,11 +5,11 @@ import { withAuth } from '@/lib/auth/withAuth';
 /**
  * GET /api/fba/shipments/active-with-details
  *
- * Returns ALL non-archived shipments (PLANNED, READY_TO_GO, LABEL_ASSIGNED)
+ * Returns ALL non-archived shipments (PLANNED, TESTED, PACKED, LABEL_ASSIGNED)
  * plus recently shipped ones — each with nested items + tracking + allocations.
  *
  * This consolidates what previously required 2 + 2N API calls:
- *   - GET /api/fba/shipments?status=PLANNED,READY_TO_GO,LABEL_ASSIGNED
+ *   - GET /api/fba/shipments?status=PLANNED,TESTED,PACKED,LABEL_ASSIGNED
  *   - GET /api/fba/shipments?status=SHIPPED&limit=10
  *   - For each shipment with tracking: GET /api/fba/shipments/[id]/items
  *   - For each shipment with tracking: GET /api/fba/shipments/[id]/tracking
@@ -26,7 +26,7 @@ export const GET = withAuth(async (request: NextRequest) => {
       WITH target_shipments AS (
         -- All active (non-shipped) shipments
         SELECT id, 0 AS sort_bucket FROM fba_shipments
-        WHERE status IN ('PLANNED', 'READY_TO_GO', 'LABEL_ASSIGNED')
+        WHERE status IN ('PLANNED', 'TESTED', 'PACKED', 'LABEL_ASSIGNED')
         UNION ALL
         -- Recently shipped (limited)
         SELECT id, 1 AS sort_bucket FROM (
@@ -78,7 +78,7 @@ export const GET = withAuth(async (request: NextRequest) => {
       LEFT JOIN LATERAL (
         SELECT
           COUNT(*)::int                                                     AS total_items,
-          COUNT(*) FILTER (WHERE fsi.status = 'READY_TO_GO')::int           AS ready_items,
+          COUNT(*) FILTER (WHERE fsi.status = 'TESTED')::int               AS ready_items,
           COUNT(*) FILTER (WHERE fsi.status = 'LABEL_ASSIGNED')::int        AS labeled_items,
           COUNT(*) FILTER (WHERE fsi.status = 'SHIPPED')::int               AS shipped_items,
           COALESCE(SUM(fsi.expected_qty), 0)::int                           AS total_expected_qty,

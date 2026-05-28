@@ -102,7 +102,7 @@ export const GET = withAuth(async (request: NextRequest) => {
          tech.name     AS assigned_tech_name,
          packer.name   AS assigned_packer_name,
          COUNT(fsi.id)                                               AS total_items,
-         COUNT(fsi.id) FILTER (WHERE fsi.status = 'READY_TO_GO')    AS ready_items,
+         COUNT(fsi.id) FILTER (WHERE fsi.status = 'TESTED')    AS ready_items,
          COUNT(fsi.id) FILTER (WHERE fsi.status = 'LABEL_ASSIGNED') AS labeled_items,
          COUNT(fsi.id) FILTER (WHERE fsi.status = 'SHIPPED')        AS shipped_items,
          COALESCE(SUM(fsi.expected_qty), 0)                          AS total_expected_qty,

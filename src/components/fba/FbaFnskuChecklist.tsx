@@ -28,6 +28,7 @@ import { PrintTableCheckbox } from '@/components/fba/table/Checkbox';
 import { enrichFromApi } from '@/components/fba/table/utils';
 import type { EnrichedItem, PrintSelectionPayload, ShipmentTrackingEntry } from '@/components/fba/table/types';
 import { fbaPaths } from '@/lib/fba/api-paths';
+import { FBA_STATUS_LABEL } from '@/lib/fba/status';
 
 
 function planItemToSidebarEnriched(
@@ -65,7 +66,7 @@ interface Props {
   fnskus?: string[];
   /** Internal `fba_shipments.id` (URL `plan=`). Not the plan code string (`shipment_ref`). */
   planId?: number;
-  /** Filter by item status: ALL | PACKING | OUT_OF_STOCK */
+  /** Filter by item status: ALL | TESTED | PACKED | OUT_OF_STOCK */
   statusFilter?: string;
   /** Today mode — neither prop → auto-loads today's plan */
   onClear?: () => void;
@@ -123,9 +124,9 @@ function ShimmerRows({ count = 4 }: { count?: number }) {
 // ─── Status badge ─────────────────────────────────────────────────────────────
 const STATUS_CFG: Record<string, string> = {
   PLANNED:      'bg-zinc-100 text-zinc-500',
-  PACKING:      'bg-amber-100 text-amber-700',
+  TESTED:       'bg-emerald-100 text-emerald-700',
+  PACKED:       'bg-amber-100 text-amber-700',
   OUT_OF_STOCK: 'bg-red-100 text-red-600',
-  READY_TO_GO:  'bg-emerald-100 text-emerald-700',
   SHIPPED:      'bg-blue-100 text-blue-700',
 };
 
@@ -133,16 +134,16 @@ function StatusBadge({ status }: { status: string }) {
   const cls = STATUS_CFG[status] ?? 'bg-zinc-100 text-zinc-500';
   return (
     <span className={`shrink-0 rounded px-1.5 py-0.5 ${microBadge} ${cls}`}>
-      {status.replace(/_/g, ' ')}
+      {FBA_STATUS_LABEL[status] ?? status.replace(/_/g, ' ')}
     </span>
   );
 }
 
 // ─── Status dot / icon (left of title, like OrdersQueueTable) ─────────────────
 function StatusDot({ status }: { status: string }) {
-  if (status === 'READY_TO_GO' || status === 'SHIPPED') {
+  if (status === 'TESTED' || status === 'SHIPPED') {
     return (
-      <span className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-emerald-100" title="Ready to print">
+      <span className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-emerald-100" title="Tested">
         <Check className="h-2.5 w-2.5 text-emerald-600" />
       </span>
     );
@@ -150,8 +151,8 @@ function StatusDot({ status }: { status: string }) {
   if (status === 'OUT_OF_STOCK') {
     return <span className="h-2.5 w-2.5 shrink-0 rounded-full bg-red-500" title="Out of stock" />;
   }
-  if (status === 'PACKING') {
-    return <span className="h-2.5 w-2.5 shrink-0 rounded-full bg-sky-500" title="Packing" />;
+  if (status === 'PACKED') {
+    return <span className="h-2.5 w-2.5 shrink-0 rounded-full bg-sky-500" title="Packed" />;
   }
   // PLANNED / default
   return <span className="h-2.5 w-2.5 shrink-0 rounded-full bg-amber-400" title="Planned" />;
@@ -617,7 +618,7 @@ export function FbaFnskuChecklist({
 
               {/* ── PLAN / TODAY ROWS ── */}
               {isViewMode && filteredPlanItems.map((item, idx) => {
-                const isCompleted  = item.status === 'READY_TO_GO' || item.status === 'SHIPPED';
+                const isCompleted  = item.status === 'TESTED' || item.status === 'PACKED' || item.status === 'SHIPPED';
                 const isCycling    = cyclingItemId === item.id;
                 const noteOpen     = expandedNoteId === item.id;
                 const isSidebarSelected = sidebarSelectionIds.has(item.id);

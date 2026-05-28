@@ -4,7 +4,7 @@ import { withAuth } from '@/lib/auth/withAuth';
 
 export const runtime = 'nodejs';
 
-// Simple liveness probe. Prefer /api/ai/openclaw-health for the richer shape
+// Simple liveness probe. Prefer /api/ai/chat-health for the richer shape
 // used by AiChatPanel.tsx; this route stays for any legacy consumers.
 const HERMES_API_URL = process.env.HERMES_API_URL || 'http://127.0.0.1:8642/v1';
 

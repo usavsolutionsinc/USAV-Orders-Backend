@@ -419,8 +419,18 @@ export const GET = withAuth(async (request: NextRequest) => {
           `stn.latest_status_category IN ('IN_TRANSIT','ACCEPTED','LABEL_CREATED')`,
         );
       } else if (deliveryStateFilter === 'AWAITING_TRACKING') {
+        // Strictly: no carrier tracking# registered. Distinct from
+        // PENDING_CARRIER (tracking# exists, no status pulled yet).
+        conditions.push(`stn.id IS NULL`);
+      } else if (deliveryStateFilter === 'PENDING_CARRIER') {
+        // Tracking# is registered with a known carrier but the carrier sync
+        // hasn't returned a useful status (NULL / UNKNOWN). Common right
+        // after registration; also catches USPS shipments where the sync
+        // adapter isn't returning a category. Different from AWAITING_TRACKING
+        // because the tracking chip on the row is real and clickable.
         conditions.push(
-          `(stn.id IS NULL OR stn.latest_status_category = 'UNKNOWN' OR stn.latest_status_category IS NULL)`,
+          `stn.id IS NOT NULL
+            AND (stn.latest_status_category IS NULL OR stn.latest_status_category = 'UNKNOWN')`,
         );
       }
 
@@ -522,8 +532,10 @@ export const GET = withAuth(async (request: NextRequest) => {
                     THEN 'STALLED'
                   WHEN stn.latest_status_category IN ('IN_TRANSIT','ACCEPTED','LABEL_CREATED')
                     THEN 'IN_TRANSIT'
-                  WHEN stn.id IS NULL OR stn.latest_status_category = 'UNKNOWN' OR stn.latest_status_category IS NULL
+                  WHEN stn.id IS NULL
                     THEN 'AWAITING_TRACKING'
+                  WHEN stn.latest_status_category IS NULL OR stn.latest_status_category = 'UNKNOWN'
+                    THEN 'PENDING_CARRIER'
                   ELSE 'UNKNOWN'
                 END AS delivery_state,
                 stn.has_exception                    AS shipment_has_exception,

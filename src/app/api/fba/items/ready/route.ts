@@ -6,8 +6,8 @@ import { invalidateCacheTags } from '@/lib/cache/upstash-cache';
 import { withAuth } from '@/lib/auth/withAuth';
 
 // ── POST /api/fba/items/ready ─────────────────────────────────────────────────
-// Tech marks an FNSKU item as READY_TO_GO after testing/validation.
-// Increments actual_qty and transitions status PLANNED → READY_TO_GO.
+// Tech marks an FNSKU item as TESTED after testing/validation.
+// Increments actual_qty and transitions status PLANNED → TESTED.
 // Writes to fba_fnsku_logs in the same transaction.
 //
 // Body: { shipment_id, fnsku, station? } — actor is from the verified session.
@@ -50,14 +50,14 @@ export const POST = withAuth(async (request: NextRequest, ctx) => {
     }
 
     // Upsert the item (create if first scan, update if already exists)
-    // Increment actual_qty and promote to READY_TO_GO
+    // Increment actual_qty and promote to TESTED
     const itemRes = await client.query(
       `INSERT INTO fba_shipment_items (shipment_id, fnsku, status, actual_qty, ready_by_staff_id, ready_at)
-       VALUES ($1, $2, 'READY_TO_GO', 1, $3, NOW())
+       VALUES ($1, $2, 'TESTED', 1, $3, NOW())
        ON CONFLICT (shipment_id, fnsku) DO UPDATE
          SET actual_qty         = fba_shipment_items.actual_qty + 1,
              status             = CASE
-                                    WHEN fba_shipment_items.status = 'PLANNED' THEN 'READY_TO_GO'::fba_shipment_status_enum
+                                    WHEN fba_shipment_items.status = 'PLANNED' THEN 'TESTED'::fba_shipment_status_enum
                                     ELSE fba_shipment_items.status
                                   END,
              ready_by_staff_id  = COALESCE(fba_shipment_items.ready_by_staff_id, $3),
@@ -104,14 +104,14 @@ export const POST = withAuth(async (request: NextRequest, ctx) => {
       },
     });
 
-    // Auto-advance shipment PLANNED→READY_TO_GO when no planned items remain.
+    // Auto-advance shipment PLANNED→TESTED when no planned items remain.
     await client.query(
       `UPDATE fba_shipments
        SET status = CASE
                       WHEN status = 'PLANNED' AND NOT EXISTS (
                         SELECT 1 FROM fba_shipment_items
                         WHERE shipment_id = $1 AND status = 'PLANNED'
-                      ) THEN 'READY_TO_GO'::fba_shipment_status_enum
+                      ) THEN 'TESTED'::fba_shipment_status_enum
                       ELSE status
                     END,
            updated_at = NOW()

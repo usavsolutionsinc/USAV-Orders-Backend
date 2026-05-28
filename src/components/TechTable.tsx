@@ -11,7 +11,7 @@ import {
   SerialChip,
   PlatformChip,
   getLast4,
-  getLast6Serial,
+  getLast4Serial,
 } from './ui/CopyChip';
 import { DesktopDateGroupHeader } from './ui/DesktopDateGroupHeader';
 import { getOrderPlatformLabel, getOrderPlatformColor, getOrderPlatformBorderColor } from '@/utils/order-platform';
@@ -256,7 +256,7 @@ export function TechTable({ testedBy }: TechTableProps) {
                         const fnskuValue = String(record.fnsku || '').trim();
                         const isFnskuRow = Boolean(fnskuValue);
                         const serialChipDisplay = record.serial_number
-                          ? getLast6Serial(record.serial_number)
+                          ? getLast4Serial(record.serial_number)
                           : record.source_kind === 'fba_scan' || record.source_kind === 'tech_scan'
                             ? 'SERIAL'
                             : '---';

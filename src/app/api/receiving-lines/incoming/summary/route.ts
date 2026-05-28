@@ -16,7 +16,8 @@
  *   arriving_today: number,      // + carrier=OUT_FOR_DELIVERY
  *   stalled: number,             // alive shipment with carrier exception OR no scan in >72h
  *   in_transit: number,          // + carrier=IN_TRANSIT/ACCEPTED/LABEL_CREATED
- *   awaiting_tracking: number,   // no carrier signal yet
+ *   pending_carrier: number,     // tracking# registered, carrier sync returned no status yet
+ *   awaiting_tracking: number,   // no tracking# registered at all
  *   expected_today: number,      // joined zoho_po_mirror.expected_delivery_date = today (PST)
  * }
  *
@@ -37,6 +38,7 @@ export const GET = withAuth(async (_request: NextRequest) => {
       arriving_today: number;
       stalled: number;
       in_transit: number;
+      pending_carrier: number;
       awaiting_tracking: number;
       expected_today: number;
     }>(
@@ -65,9 +67,11 @@ export const GET = withAuth(async (_request: NextRequest) => {
            WHERE stn.latest_status_category IN ('IN_TRANSIT','ACCEPTED','LABEL_CREATED')
          )::int AS in_transit,
          COUNT(DISTINCT rl.zoho_purchaseorder_id) FILTER (
+           WHERE stn.id IS NOT NULL
+             AND (stn.latest_status_category IS NULL OR stn.latest_status_category = 'UNKNOWN')
+         )::int AS pending_carrier,
+         COUNT(DISTINCT rl.zoho_purchaseorder_id) FILTER (
            WHERE stn.id IS NULL
-              OR stn.latest_status_category IS NULL
-              OR stn.latest_status_category = 'UNKNOWN'
          )::int AS awaiting_tracking,
          COUNT(DISTINCT rl.zoho_purchaseorder_id) FILTER (
            WHERE mirror.expected_delivery_date = (NOW() AT TIME ZONE 'America/Los_Angeles')::date
@@ -92,6 +96,7 @@ export const GET = withAuth(async (_request: NextRequest) => {
       arriving_today: 0,
       stalled: 0,
       in_transit: 0,
+      pending_carrier: 0,
       awaiting_tracking: 0,
       expected_today: 0,
     };

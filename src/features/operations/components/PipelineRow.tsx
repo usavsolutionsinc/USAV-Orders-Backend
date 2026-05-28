@@ -9,9 +9,10 @@ interface FbaStageCountsResponse {
   success?: boolean;
   counts?: {
     PLANNED?: number;
-    PACKING?: number;
+    TESTED?: number;
+    PACKED?: number;
     OUT_OF_STOCK?: number;
-    READY_TO_GO?: number;
+    LABEL_ASSIGNED?: number;
   };
 }
 
@@ -114,9 +115,9 @@ export function PipelineRow() {
   const fbaCounts = fba.data?.counts ?? {};
   const fbaStages = [
     { label: 'Planned',      count: fbaCounts.PLANNED       ?? 0, color: 'bg-[#C4BAA8]' },
-    { label: 'Packing',      count: fbaCounts.PACKING       ?? 0, color: 'bg-amber-500' },
+    { label: 'Tested',       count: fbaCounts.TESTED        ?? 0, color: 'bg-emerald-500' },
+    { label: 'Packed',       count: fbaCounts.PACKED        ?? 0, color: 'bg-amber-500' },
     { label: 'Out of stock', count: fbaCounts.OUT_OF_STOCK  ?? 0, color: 'bg-rose-500' },
-    { label: 'Ready to go',  count: fbaCounts.READY_TO_GO   ?? 0, color: 'bg-emerald-500' },
   ];
 
   const rmaList = rma.data?.authorizations ?? [];

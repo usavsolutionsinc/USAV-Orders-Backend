@@ -19,6 +19,7 @@ export type IncomingDeliveryState =
   | 'ARRIVING_TODAY'
   | 'STALLED'
   | 'IN_TRANSIT'
+  | 'PENDING_CARRIER'
   | 'AWAITING_TRACKING';
 
 export interface IncomingSummary {
@@ -27,6 +28,7 @@ export interface IncomingSummary {
   arriving_today: number;
   stalled: number;
   in_transit: number;
+  pending_carrier: number;
   awaiting_tracking: number;
   expected_today: number;
 }
@@ -85,13 +87,22 @@ const TILES: TileSpec[] = [
     title: 'Label created, accepted, or in transit (carrier-side).',
   },
   {
+    state: 'PENDING_CARRIER',
+    label: 'Pending carrier',
+    key: 'pending_carrier',
+    tone: 'gray',
+    icon: Clock,
+    title:
+      'Tracking# is registered with a known carrier, but the carrier sync has not returned a status yet (UNKNOWN / NULL). USPS shipments often land here while the sync adapter is rate-limited.',
+  },
+  {
     state: 'AWAITING_TRACKING',
-    label: 'Awaiting tracking',
+    label: 'Awaiting tracking #',
     key: 'awaiting_tracking',
     tone: 'gray',
     icon: Clock,
     title:
-      'Zoho PO exists, no carrier signal yet — vendor may not have shipped or tracking# never landed.',
+      'No tracking# registered at all — vendor has not shipped, or the PO `reference_number` field on Zoho is empty.',
   },
 ];
 
@@ -290,6 +301,7 @@ export function IncomingSidebarPanel() {
         arriving_today: summaryData.arriving_today,
         stalled: summaryData.stalled ?? 0,
         in_transit: summaryData.in_transit,
+        pending_carrier: summaryData.pending_carrier ?? 0,
         awaiting_tracking: summaryData.awaiting_tracking,
         expected_today: summaryData.expected_today,
       }

@@ -89,42 +89,11 @@ async function callFedExTrack(trackingNumberNormalized: string, token: string): 
   });
 }
 
-export async function trackByNumber(trackingNumber: string): Promise<CarrierTrackingResult> {
-  const normalized = normalizeTrackingNumber(trackingNumber);
-  let token = await getAccessToken();
-  let res = await callFedExTrack(normalized, token);
-
-  // On 401, the cached token may be revoked/expired earlier than FedEx claimed.
-  // Bust the cache and try exactly once with a fresh token before giving up.
-  if (res.status === 401) {
-    token = await getAccessToken(true);
-    res = await callFedExTrack(normalized, token);
-  }
-
-  if (res.status === 429) {
-    throw Object.assign(new Error('FedEx rate limit exceeded'), { code: 'RATE_LIMIT' });
-  }
-  if (!res.ok) {
-    const body = await res.text().catch(() => '');
-    throw Object.assign(new Error(`FedEx track failed: ${res.status} ${body}`), {
-      code: res.status === 404 ? 'NOT_FOUND' : 'HTTP_ERROR',
-    });
-  }
-
-  const payload = await res.json();
-  const trackResult =
-    payload?.output?.completeTrackResults?.[0]?.trackResults?.[0];
-
-  if (!trackResult) {
-    return {
-      carrier: 'FEDEX',
-      trackingNumberNormalized: normalized,
-      latestStatusCategory: 'UNKNOWN',
-      events: [],
-      payload,
-    };
-  }
-
+function buildFedExResultFromTrackResult(
+  normalized: string,
+  trackResult: any,
+  payload: unknown,
+): CarrierTrackingResult {
   const latestStatus = trackResult.latestStatusDetail ?? {};
   const latestCategory = normalizeFedExStatus(
     latestStatus.code ?? latestStatus.derivedCode,
@@ -161,7 +130,6 @@ export async function trackByNumber(trackingNumber: string): Promise<CarrierTrac
     };
   });
 
-  // delivered_at from dateAndTimes array
   const dateAndTimes: unknown[] = Array.isArray(trackResult.dateAndTimes)
     ? trackResult.dateAndTimes
     : [];
@@ -204,4 +172,61 @@ export async function trackByNumber(trackingNumber: string): Promise<CarrierTrac
     events,
     payload,
   };
+}
+
+// Walks a FedEx Track API or Track Notifications payload down to the first
+// `trackResults` entry. Returns null if the payload doesn't contain a
+// recognisable result block (e.g. shape mismatch, empty notification).
+export function parseFedExTrackingPayload(payload: any): CarrierTrackingResult | null {
+  const trackResult =
+    payload?.output?.completeTrackResults?.[0]?.trackResults?.[0];
+  if (!trackResult) return null;
+
+  const rawTracking =
+    trackResult?.trackingNumberInfo?.trackingNumber ??
+    payload?.output?.completeTrackResults?.[0]?.trackingNumber ??
+    '';
+  const normalized = normalizeTrackingNumber(String(rawTracking));
+  if (!normalized) return null;
+
+  return buildFedExResultFromTrackResult(normalized, trackResult, payload);
+}
+
+export async function trackByNumber(trackingNumber: string): Promise<CarrierTrackingResult> {
+  const normalized = normalizeTrackingNumber(trackingNumber);
+  let token = await getAccessToken();
+  let res = await callFedExTrack(normalized, token);
+
+  // On 401, the cached token may be revoked/expired earlier than FedEx claimed.
+  // Bust the cache and try exactly once with a fresh token before giving up.
+  if (res.status === 401) {
+    token = await getAccessToken(true);
+    res = await callFedExTrack(normalized, token);
+  }
+
+  if (res.status === 429) {
+    throw Object.assign(new Error('FedEx rate limit exceeded'), { code: 'RATE_LIMIT' });
+  }
+  if (!res.ok) {
+    const body = await res.text().catch(() => '');
+    throw Object.assign(new Error(`FedEx track failed: ${res.status} ${body}`), {
+      code: res.status === 404 ? 'NOT_FOUND' : 'HTTP_ERROR',
+    });
+  }
+
+  const payload = await res.json();
+  const trackResult =
+    payload?.output?.completeTrackResults?.[0]?.trackResults?.[0];
+
+  if (!trackResult) {
+    return {
+      carrier: 'FEDEX',
+      trackingNumberNormalized: normalized,
+      latestStatusCategory: 'UNKNOWN',
+      events: [],
+      payload,
+    };
+  }
+
+  return buildFedExResultFromTrackResult(normalized, trackResult, payload);
 }

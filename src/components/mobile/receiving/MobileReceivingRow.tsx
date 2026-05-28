@@ -7,7 +7,7 @@ import {
   TrackingChip,
   SerialChip,
   getLast4,
-  getLast6Serial,
+  getLast4Serial,
 } from '@/components/ui/CopyChip';
 import { Camera, Check, Package, PackageCheck, Box, AlertCircle, Loader2 } from '@/components/Icons';
 import { conditionGradeTableLabel, workflowStatusTableLabel } from '@/components/station/receiving-constants';
@@ -177,7 +177,7 @@ export function MobileReceivingRow({ row, variant, fresh = false, onTap, photosH
           <div className="ml-auto flex min-w-0 items-center gap-2 pointer-events-auto">
             {poValue && <OrderIdChip value={poValue} display={getLast4(poValue)} />}
             {trackingValue && <TrackingChip value={trackingValue} display={getLast4(trackingValue)} />}
-            <SerialChip value={serialsCsv} display={getLast6Serial(serialsCsv)} />
+            <SerialChip value={serialsCsv} display={getLast4Serial(serialsCsv)} />
           </div>
 
           {!isExpanded && (

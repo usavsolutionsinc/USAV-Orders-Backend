@@ -16,9 +16,11 @@ import { useFbaRealtimeInvalidation } from '@/hooks/useFbaRealtimeInvalidation';
 import { getCurrentPSTDateKey, toPSTDateKey } from '@/utils/date';
 import { USAV_REFRESH_DATA, FBA_PRINT_SHIPPED, FBA_BOARD_INJECT_ITEM, FBA_BOARD_REMOVE_ITEMS } from '@/lib/fba/events';
 import { FbaSidebarPanel } from '@/components/fba/sidebar';
+import { FbaPairedReviewPanel } from '@/components/fba/sidebar/FbaPairedReviewPanel';
+import { FbaActiveShipments } from '@/components/fba/sidebar/FbaActiveShipments';
+import { useFbaBoardSelection } from '@/components/fba/hooks/useFbaBoardSelection';
 import { RouteShell } from '@/design-system/components/RouteShell';
-
-type Tab = 'combine' | 'shipped';
+import { resolveFbaMode } from '@/lib/fba/fba-modes';
 
 /** Compute Monday–Sunday YYYY-MM-DD range for the week containing today shifted by `weekOffset`. */
 function getWeekRange(todayKey: string, weekOffset: number): { startStr: string; endStr: string } {
@@ -41,11 +43,6 @@ function isItemInWeek(item: FbaBoardItem, start: string, end: string): boolean {
   return key >= start && key <= end;
 }
 
-function resolveActiveTab(rawTab: string | null): Tab {
-  if (rawTab === 'shipped') return 'shipped';
-  return 'combine';
-}
-
 interface CombineData {
   pending: FbaBoardItem[];
 }
@@ -55,7 +52,7 @@ function FbaPageContent() {
   useFbaRealtimeInvalidation();
 
   const refreshTrigger = Number(searchParams.get('r') || 0);
-  const activeTab = resolveActiveTab(searchParams.get('tab'));
+  const activeMode = resolveFbaMode(searchParams.get('mode'));
 
   const { user } = useAuth();
   const staffId = user?.staffId ?? 0;
@@ -130,7 +127,22 @@ function FbaPageContent() {
     [board.pending, weekRange],
   );
 
-  const filteredPendingItems = combineItemsForWeek;
+  // Each mode scopes the board to its worklist:
+  //   plan    → PLANNED  (still being planned)
+  //   combine → PACKED   (packed and ready to combine under one FBA shipment ID)
+  const filteredPendingItems = useMemo(() => {
+    if (activeMode === 'plan') return combineItemsForWeek.filter((i) => i.item_status === 'PLANNED');
+    if (activeMode === 'combine') return combineItemsForWeek.filter((i) => i.item_status === 'PACKED');
+    return combineItemsForWeek;
+  }, [combineItemsForWeek, activeMode]);
+
+  const boardEmptyMessage =
+    activeMode === 'plan' ? 'No items in planning' : 'No packed items to combine';
+
+  // ── Combine workspace (center-right): board selection drives the combine
+  //    review form; active shipments edit inline beneath it. ──────────────
+  const boardSelection = useFbaBoardSelection({ includePairedSelection: true });
+  const [pairedExpanded, setPairedExpanded] = useState(true);
 
   // ── Detail panel ────────────────────────────────────────────────────────
   const [detailItem, setDetailItem] = useState<FbaBoardItem | null>(null);
@@ -154,20 +166,21 @@ function FbaPageContent() {
             <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-white">
               {error ? (
                 <FbaErrorState message={error} onRetry={fetchBoard} theme={stationTheme} />
-              ) : activeTab === 'shipped' ? (
+              ) : activeMode === 'shipped' ? (
                 <div className="flex h-full flex-1 items-center justify-center px-5 text-center">
                   <p className="max-w-sm text-caption font-black uppercase tracking-widest text-gray-400">
                     Shipped mode is managed from the sidebar table.
                   </p>
                 </div>
               ) : (
-                <>
-                  <div className="relative min-h-0 flex-1 overflow-hidden">
+                <div className="flex min-h-0 min-w-0 flex-1 overflow-hidden">
+                  {/* Center: the board (PLANNED in plan mode, PACKED queue in combine) */}
+                  <div className="relative min-h-0 min-w-0 flex-1 overflow-hidden">
                     <FbaBoardTable
                       items={filteredPendingItems}
                       loading={loading && !board.pending.length}
                       stationTheme={stationTheme}
-                      emptyMessage="No pending FBA items"
+                      emptyMessage={boardEmptyMessage}
                       onDetailOpen={setDetailItem}
                       weekRange={weekRange}
                       weekOffset={weekOffset}
@@ -175,7 +188,21 @@ function FbaPageContent() {
                       onNextWeek={() => setWeekOffset((o) => Math.min(0, o + 1))}
                     />
                   </div>
-                </>
+
+                  {/* Right fill-out (combine only): combine-review form + active
+                      shipment editing — the receiving-style center+right pattern. */}
+                  {activeMode === 'combine' && (
+                    <aside className="hidden w-[384px] shrink-0 flex-col overflow-y-auto border-l border-zinc-200/80 bg-white scrollbar-hide lg:flex">
+                      <FbaPairedReviewPanel
+                        selectedItems={boardSelection}
+                        stationTheme={stationTheme}
+                        expanded={pairedExpanded}
+                        onToggleExpanded={() => setPairedExpanded((v) => !v)}
+                      />
+                      <FbaActiveShipments stationTheme={stationTheme} />
+                    </aside>
+                  )}
+                </div>
               )}
             </div>
           </div>

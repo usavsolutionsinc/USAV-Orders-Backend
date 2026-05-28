@@ -9,16 +9,23 @@ import { AUDIT_ENTITY } from '@/lib/audit-logs';
 /**
  * POST /api/fba/shipments/mark-shipped
  *
- * Bulk-marks selected READY_TO_GO items as SHIPPED, links a UPS tracking
- * number to each affected shipment, and optionally stamps the Amazon
- * shipment ID on each parent fba_shipments row.
+ * Marks combined items (PACKED / LABEL_ASSIGNED) as SHIPPED, optionally links a
+ * UPS tracking number, and optionally stamps the Amazon shipment ID.
+ *
+ * Two ways to target the items:
+ *  - item_ids[]  — explicit (from the combine UI), requires tracking_number.
+ *  - scan        — a packer scans EITHER a UPS tracking number OR the FBA
+ *                  shipment ID; both resolve to the same shipment and ship all
+ *                  of its packed/combined items (tracking already attached at
+ *                  combine time, so tracking_number is optional here).
  *
  * Body:
  * {
- *   item_ids:           number[],  // fba_shipment_items.id[]
- *   tracking_number:    string,    // UPS / carrier tracking number
- *   amazon_shipment_id?: string,   // optional Amazon FBA shipment ID
- *   carrier?:           string,    // auto-detected if omitted
+ *   item_ids?:           number[],  // fba_shipment_items.id[]
+ *   scan?:               string,    // UPS tracking number OR FBA shipment ID
+ *   tracking_number?:    string,    // UPS / carrier tracking number to link
+ *   amazon_shipment_id?: string,    // optional Amazon FBA shipment ID
+ *   carrier?:            string,    // auto-detected from tracking if omitted
  * }
  *
  * After marking shipped:
@@ -29,20 +36,71 @@ export const POST = withAuth(async (request: NextRequest) => {
   const client = await pool.connect();
   try {
     const body = await request.json();
-    const itemIds: number[] = Array.isArray(body.item_ids) ? body.item_ids.map(Number) : [];
+    let itemIds: number[] = Array.isArray(body.item_ids)
+      ? body.item_ids.map(Number).filter((n: number) => Number.isFinite(n))
+      : [];
     const rawTracking = String(body.tracking_number || '').trim().toUpperCase();
     const amazonShipmentId = body.amazon_shipment_id ? String(body.amazon_shipment_id).trim() : null;
+    // Scan-to-ship: a packer can scan EITHER a UPS tracking number OR the FBA
+    // shipment ID — both resolve to the same shipment and ship the whole package.
+    const scan = String(body.scan || body.code || '').trim().toUpperCase();
 
-    if (itemIds.length === 0) {
-      return NextResponse.json({ success: false, error: 'item_ids is required' }, { status: 400 });
-    }
-    if (!rawTracking) {
-      return NextResponse.json({ success: false, error: 'tracking_number is required' }, { status: 400 });
+    if (itemIds.length === 0 && !scan) {
+      return NextResponse.json(
+        { success: false, error: 'Provide item_ids or a scan (UPS tracking number or FBA shipment ID)' },
+        { status: 400 }
+      );
     }
 
-    const carrier = String(body.carrier || detectCarrier(rawTracking)).toUpperCase();
+    const carrier = String(body.carrier || (rawTracking ? detectCarrier(rawTracking) : '') || '').toUpperCase();
 
     await client.query('BEGIN');
+
+    // ── 0. Scan-to-ship: resolve the shipment from a scanned UPS tracking number
+    //       or FBA shipment ID (treated identically), then target its
+    //       packed/combined items. ──
+    if (itemIds.length === 0 && scan) {
+      let shipmentId: number | null = null;
+      const byTracking = await client.query(
+        `SELECT fst.shipment_id
+           FROM fba_shipment_tracking fst
+           JOIN shipping_tracking_numbers stn ON stn.id = fst.tracking_id
+          WHERE stn.tracking_number_normalized = $1
+          LIMIT 1`,
+        [scan]
+      );
+      if (byTracking.rows[0]) {
+        shipmentId = Number(byTracking.rows[0].shipment_id);
+      } else {
+        const byFbaId = await client.query(
+          `SELECT id FROM fba_shipments
+            WHERE UPPER(amazon_shipment_id) = $1 OR UPPER(shipment_ref) = $1
+            ORDER BY created_at DESC LIMIT 1`,
+          [scan]
+        );
+        if (byFbaId.rows[0]) shipmentId = Number(byFbaId.rows[0].id);
+      }
+      if (shipmentId == null) {
+        await client.query('ROLLBACK');
+        return NextResponse.json(
+          { success: false, error: `No shipment found for "${scan}" (UPS tracking or FBA shipment ID)` },
+          { status: 404 }
+        );
+      }
+      const idsRes = await client.query(
+        `SELECT id FROM fba_shipment_items
+          WHERE shipment_id = $1 AND status IN ('PACKED', 'LABEL_ASSIGNED')`,
+        [shipmentId]
+      );
+      itemIds = idsRes.rows.map((r) => Number(r.id));
+      if (itemIds.length === 0) {
+        await client.query('ROLLBACK');
+        return NextResponse.json(
+          { success: false, error: `Nothing to ship for "${scan}" — items are not yet packed/combined` },
+          { status: 409 }
+        );
+      }
+    }
 
     // ── 1. Fetch items to know which shipments are affected ───────────────────
     const itemsRes = await client.query(
@@ -65,31 +123,35 @@ export const POST = withAuth(async (request: NextRequest) => {
            actual_qty    = expected_qty,
            shipped_at    = NOW(),
            updated_at    = NOW()
-       WHERE id = ANY($1::int[]) AND status = 'READY_TO_GO'`,
+       WHERE id = ANY($1::int[]) AND status IN ('PACKED', 'LABEL_ASSIGNED')`,
       [itemIds]
     );
 
-    // ── 3. Upsert tracking number ─────────────────────────────────────────────
-    const trackRes = await client.query(
-      `INSERT INTO shipping_tracking_numbers
-         (tracking_number_raw, tracking_number_normalized, carrier, source_system)
-       VALUES ($1, $2, $3, 'fba')
-       ON CONFLICT (tracking_number_normalized) DO UPDATE
-         SET source_system = COALESCE(shipping_tracking_numbers.source_system, EXCLUDED.source_system),
-             updated_at    = NOW()
-       RETURNING id, tracking_number_raw, carrier`,
-      [rawTracking, rawTracking, carrier]
-    );
-    const trackingId = trackRes.rows[0].id as number;
-
-    // ── 4. Link tracking to each affected shipment ────────────────────────────
-    for (const shipId of shipmentIds) {
-      await client.query(
-        `INSERT INTO fba_shipment_tracking (shipment_id, tracking_id, label)
-         VALUES ($1, $2, $3)
-         ON CONFLICT (shipment_id, tracking_id) DO NOTHING`,
-        [shipId, trackingId, 'UPS']
+    // ── 3-4. Upsert + link a tracking number when one was supplied. When the
+    //         packer scanned the FBA shipment ID (or a tracking already linked
+    //         at combine time), no new tracking is provided — skip this. ──
+    let trackingId: number | null = null;
+    if (rawTracking) {
+      const trackRes = await client.query(
+        `INSERT INTO shipping_tracking_numbers
+           (tracking_number_raw, tracking_number_normalized, carrier, source_system)
+         VALUES ($1, $2, $3, 'fba')
+         ON CONFLICT (tracking_number_normalized) DO UPDATE
+           SET source_system = COALESCE(shipping_tracking_numbers.source_system, EXCLUDED.source_system),
+               updated_at    = NOW()
+         RETURNING id, tracking_number_raw, carrier`,
+        [rawTracking, rawTracking, carrier]
       );
+      trackingId = trackRes.rows[0].id as number;
+
+      for (const shipId of shipmentIds) {
+        await client.query(
+          `INSERT INTO fba_shipment_tracking (shipment_id, tracking_id, label)
+           VALUES ($1, $2, $3)
+           ON CONFLICT (shipment_id, tracking_id) DO NOTHING`,
+          [shipId, trackingId, 'UPS']
+        );
+      }
     }
 
     // ── 5. Optionally stamp amazon_shipment_id ────────────────────────────────
@@ -139,7 +201,7 @@ export const POST = withAuth(async (request: NextRequest) => {
       {
         success: true,
         marked_shipped: itemsRes.rows.length,
-        tracking_number: rawTracking,
+        tracking_number: rawTracking || null,
         tracking_id: trackingId,
         carrier,
         affected_shipments: shipmentIds,

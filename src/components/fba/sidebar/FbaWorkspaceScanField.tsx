@@ -5,8 +5,6 @@ import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
 import { AlertCircle, Loader2 } from '@/components/Icons';
 import StationFbaInput from '@/components/fba/StationFbaInput';
 import { useFbaWorkspace } from '@/contexts/FbaWorkspaceContext';
-import StationGoalBar from '@/components/station/StationGoalBar';
-import { getStaffGoalById } from '@/lib/staffGoalsCache';
 import {
   FBA_ID_RE,
   UPS_RE,
@@ -57,23 +55,8 @@ export function FbaWorkspaceScanField({
 
   const { theme: stationTheme, colors: themeColors } = useStationTheme({ staffId: effectiveStaffId });
 
-  const [fbaGoal, setFbaGoal] = useState(50);
-  const [fbaTodayCount, setFbaTodayCount] = useState(0);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
-
-  // Fetch goal + today count for this staff member's station
-  useEffect(() => {
-    if (effectiveStaffId == null) return;
-    const sid = String(effectiveStaffId);
-    getStaffGoalById(sid, 'FBA').then(setFbaGoal).catch(() => {});
-    fetch(`/api/staff-goals?staffId=${sid}&station=FBA`)
-      .then((r) => (r.ok ? r.json() : null))
-      .then((d) => {
-        if (d?.today_count != null) setFbaTodayCount(Number(d.today_count) || 0);
-      })
-      .catch(() => {});
-  }, [effectiveStaffId]);
   const reduceMotion = useReducedMotion();
 
   const trackingTransition = useMemo(
@@ -208,15 +191,6 @@ export function FbaWorkspaceScanField({
 
   return (
     <div className="min-h-0 space-y-2">
-      <div className="space-y-2 pb-1">
-        <div className="space-y-0.5">
-          <div className="flex items-center justify-between gap-2">
-            <h2 className="text-xl font-black tracking-tighter text-gray-900">Welcome, {staffName}</h2>
-          </div>
-        </div>
-        <StationGoalBar count={fbaTodayCount} goal={fbaGoal} label="- FBA GOAL" theme={stationTheme} />
-      </div>
-
       {scanEnabled ? (
         <div className="min-w-0">
           <StationFbaInput

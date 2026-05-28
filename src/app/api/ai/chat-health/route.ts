@@ -1,6 +1,6 @@
 /**
- * @deprecated The `openclaw-` name is retained only for URL compatibility.
- * Health now pings the local Hermes gateway on 127.0.0.1:8642.
+ * AI Chat health probe — pings the local Hermes gateway on 127.0.0.1:8642
+ * (reached from Vercel via Cloudflare tunnel) and reports the live model list.
  */
 import { NextResponse } from 'next/server';
 import { formatPSTTimestamp } from '@/utils/date';

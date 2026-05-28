@@ -48,8 +48,8 @@ export const GET = withAuth(async (_request: NextRequest) => {
            SUM(COALESCE(pr.expected_qty, 0))::int AS expected_qty,
            SUM(COALESCE(pr.actual_qty, 0))::int AS actual_qty,
            CASE
-             WHEN BOOL_OR(pr.item_status = 'READY_TO_GO') THEN 'READY_TO_GO'
-             WHEN BOOL_OR(pr.item_status = 'PACKING') THEN 'PACKING'
+             WHEN BOOL_OR(pr.item_status = 'PACKED') THEN 'PACKED'
+             WHEN BOOL_OR(pr.item_status = 'TESTED') THEN 'TESTED'
              ELSE 'PLANNED'
            END AS item_status,
            ARRAY_AGG(DISTINCT pr.shipment_id ORDER BY pr.shipment_id) AS shipment_ids,
@@ -64,8 +64,8 @@ export const GET = withAuth(async (_request: NextRequest) => {
              PARTITION BY UPPER(TRIM(pr.fnsku))
              ORDER BY
                CASE pr.item_status
-                 WHEN 'READY_TO_GO' THEN 0
-                 WHEN 'PACKING' THEN 1
+                 WHEN 'PACKED' THEN 0
+                 WHEN 'TESTED' THEN 1
                  WHEN 'PLANNED' THEN 2
                  ELSE 9
                END ASC,
@@ -114,8 +114,8 @@ export const GET = withAuth(async (_request: NextRequest) => {
        JOIN canonical c ON UPPER(TRIM(c.fnsku)) = g.fnsku_key AND c.rn = 1
        ORDER BY
          CASE g.item_status
-           WHEN 'READY_TO_GO' THEN 0
-           WHEN 'PACKING' THEN 1
+           WHEN 'PACKED' THEN 0
+           WHEN 'TESTED' THEN 1
            WHEN 'PLANNED' THEN 2
            ELSE 9
          END ASC,

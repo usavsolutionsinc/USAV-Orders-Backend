@@ -26,13 +26,13 @@ export function getLast4(value: string | null | undefined): string {
 
 /**
  * serial_number may be a CSV string aggregated via STRING_AGG (e.g. "SN1, SN2").
- * Parses it, takes the last individual serial, then returns its last 6 chars.
+ * Parses it, takes the last individual serial, then returns its last 4 chars.
  */
-export function getLast6Serial(value: string | null | undefined): string {
+export function getLast4Serial(value: string | null | undefined): string {
   const raw = normalizeCopyText(value);
   const parts = raw.split(',').map((s) => s.trim()).filter(Boolean);
   const last = parts.length > 0 ? parts[parts.length - 1] : '';
-  return last.length > 6 ? last.slice(-6) : last || '---';
+  return last.length > 4 ? last.slice(-4) : last || '---';
 }
 
 /**
@@ -375,13 +375,13 @@ export const SerialChip = ({
   value: string;
   display: string;
   /** Tailwind width utilities on the wrapper; default is a fixed width sized
-   *  for the Barcode icon + 6-char mono value so every row aligns identically
+   *  for the Barcode icon + 4-char mono value so every row aligns identically
    *  across all tables (tech / packer / shipped / receiving). */
   width?: string;
 }) => (
   <CopyChip
     value={value}
-    display={isEmptyDisplayValue(display) ? 'SERIAL' : getLast6Serial(display)}
+    display={isEmptyDisplayValue(display) ? 'SERIAL' : getLast4Serial(display)}
     icon={<Barcode className="h-4 w-4 shrink-0" />}
     underlineClass="border-emerald-500"
     iconClass="inline-flex items-center justify-center text-emerald-500"
@@ -406,7 +406,7 @@ export const SkuSerialChip = ({
 }) => (
   <CopyChip
     value={value}
-    display={isEmptyDisplayValue(display) ? 'SKU' : getLast6Serial(display)}
+    display={isEmptyDisplayValue(display) ? 'SKU' : getLast4Serial(display)}
     icon={<Pencil className="h-4 w-4 shrink-0" />}
     underlineClass="border-yellow-500"
     iconClass="inline-flex items-center justify-center text-yellow-600"

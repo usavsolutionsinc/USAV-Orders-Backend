@@ -9,7 +9,10 @@ function isAuthorized(req: NextRequest): boolean {
     process.env.UPS_WEBHOOK_SECRET ||
     '';
 
-  if (!secret) return true;
+  // Fail closed in production when no secret is configured. Permissive in
+  // development/preview so local replay scripts and previews keep working
+  // without forcing every dev to set the env var.
+  if (!secret) return process.env.NODE_ENV !== 'production';
 
   const authHeader = req.headers.get('authorization');
   if (authHeader === `Bearer ${secret}`) return true;

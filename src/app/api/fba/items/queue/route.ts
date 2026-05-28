@@ -6,11 +6,11 @@ import { withAuth } from '@/lib/auth/withAuth';
 // ── GET /api/fba/items/queue ──────────────────────────────────────────────────
 // Returns individual FNSKU items from all active (non-SHIPPED) FBA shipments,
 // joined with their shipment context. Used by UpNextOrder FBA tab.
-// Query params: status (comma-sep, default PLANNED,READY_TO_GO,LABEL_ASSIGNED), limit
+// Query params: status (comma-sep, default PLANNED,TESTED,PACKED,LABEL_ASSIGNED), limit
 export const GET = withAuth(async (request: NextRequest) => {
   try {
     const { searchParams } = new URL(request.url);
-    const statusParam = searchParams.get('status') || 'PLANNED,READY_TO_GO,LABEL_ASSIGNED';
+    const statusParam = searchParams.get('status') || 'PLANNED,TESTED,PACKED,LABEL_ASSIGNED';
     const limitRaw = Number(searchParams.get('limit') || 100);
     const limit = Number.isFinite(limitRaw) && limitRaw > 0 ? Math.min(limitRaw, 500) : 100;
 
@@ -49,10 +49,11 @@ export const GET = withAuth(async (request: NextRequest) => {
            AND fs.status != 'SHIPPED'
          ORDER BY
            CASE fsi.status
-             WHEN 'READY_TO_GO'    THEN 1
-             WHEN 'PLANNED'        THEN 2
-             WHEN 'LABEL_ASSIGNED' THEN 3
-             ELSE 4
+             WHEN 'PACKED'         THEN 1
+             WHEN 'TESTED'         THEN 2
+             WHEN 'PLANNED'        THEN 3
+             WHEN 'LABEL_ASSIGNED' THEN 4
+             ELSE 5
            END,
            fs.due_date ASC NULLS LAST,
            fsi.fnsku

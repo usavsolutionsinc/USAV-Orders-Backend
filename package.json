@@ -36,6 +36,7 @@
     "test:e2e:station-serial": "node scripts/e2e-station-serial.mjs",
     "test:e2e:station-sku-pull": "node scripts/e2e-station-sku-pull.mjs",
     "test:e2e:sal-tsn-fba": "node scripts/e2e-sal-tsn-fba.mjs",
+    "test:e2e:ai-chat": "node scripts/e2e-ai-chat-panel.mjs",
     "db:studio": "drizzle-kit studio",
     "db:generate": "drizzle-kit generate",
     "db:push": "drizzle-kit push",

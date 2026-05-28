@@ -5,7 +5,8 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useUIModeOptional } from '@/design-system/providers/UIModeProvider';
 import { SkeletonList } from '@/design-system/components/Skeletons';
-import { TrackingChip, OrderIdChip, SkuScanRefChip, SerialChip, getLast4, getLast6Serial } from '@/components/ui/CopyChip';
+import { TrackingChip, OrderIdChip, SkuScanRefChip, SerialChip, getLast4, getLast4Serial } from '@/components/ui/CopyChip';
+import { CarrierBadge } from '@/components/ui/CarrierBadge';
 import { conditionGradeTableLabel, workflowStatusTableLabel } from '@/components/station/receiving-constants';
 import WeekHeader from '@/components/ui/WeekHeader';
 import { DesktopDateGroupHeader } from '@/components/ui/DesktopDateGroupHeader';
@@ -70,13 +71,15 @@ export interface ReceivingLineRow {
   /**
    * Derived faceted bucket for `view=incoming` — computed on read from the
    * carrier status on shipping_tracking_numbers (DELIVERED_UNOPENED,
-   * ARRIVING_TODAY, STALLED, IN_TRANSIT, AWAITING_TRACKING). Null on other views.
+   * ARRIVING_TODAY, STALLED, IN_TRANSIT, PENDING_CARRIER, AWAITING_TRACKING).
+   * Null on other views.
    */
   delivery_state?:
     | 'DELIVERED_UNOPENED'
     | 'ARRIVING_TODAY'
     | 'STALLED'
     | 'IN_TRANSIT'
+    | 'PENDING_CARRIER'
     | 'AWAITING_TRACKING'
     | 'RECEIVED'
     | 'UNKNOWN'
@@ -98,7 +101,17 @@ export interface ReceivingLineRow {
    * Optional so callers that don't fetch from /api/receiving-lines still typecheck.
    */
   receiving_source?: string | null;
-  serials?: Array<{ id: number; serial_number: string }> | null;
+  /**
+   * Saved serial_units for this line. `current_status` reflects the
+   * unit's lifecycle position (RECEIVED → IN_TEST → TESTED / ON_HOLD …)
+   * and drives the per-unit testing verdict pills in the tech workspace.
+   */
+  serials?: Array<{
+    id: number;
+    serial_number: string;
+    current_status?: string;
+    condition_grade?: string | null;
+  }> | null;
   /** Count of photos attached to this line's carton (from photos table, entity_type='RECEIVING'). */
   photo_count?: number;
 }
@@ -148,12 +161,16 @@ export function ReceivingLineOrderRow({
   onSelect,
   index,
   isMobile,
+  isIncoming = false,
 }: {
   row: ReceivingLineRow;
   isSelected: boolean;
   onSelect: () => void;
   index: number;
   isMobile: boolean;
+  /** Incoming view: serials aren't assigned until unboxing and the carrier /
+   *  "EXPECTED" status are redundant, so we drop those chips/labels. */
+  isIncoming?: boolean;
 }) {
   const productTitle = row.item_name || row.zoho_item_id || 'Unnamed inbound line';
   const quantityText = `${row.quantity_received}/${row.quantity_expected ?? '?'}`;
@@ -185,8 +202,10 @@ export function ReceivingLineOrderRow({
         return { label: 'STALLED', tone: 'text-orange-700 font-black' };
       case 'IN_TRANSIT':
         return { label: 'IN TRANSIT', tone: 'text-blue-700' };
+      case 'PENDING_CARRIER':
+        return { label: 'PENDING CARRIER', tone: 'text-gray-500' };
       case 'AWAITING_TRACKING':
-        return { label: 'NO TRACKING', tone: 'text-gray-500' };
+        return { label: 'NO TRACKING #', tone: 'text-gray-500' };
       default:
         return null;
     }
@@ -233,8 +252,12 @@ export function ReceivingLineOrderRow({
             </span>
             {' • '}
             <span className={conditionColor}>{conditionLabel}</span>
-            {' • '}
-            {workflowLabel}
+            {isIncoming ? null : (
+              <>
+                {' • '}
+                {workflowLabel}
+              </>
+            )}
             {row.needs_test ? <span className="text-orange-600">{' • NEEDS TEST'}</span> : null}
             {deliveryStateMeta ? (
               <span className={deliveryStateMeta.tone}>{' • ' + deliveryStateMeta.label}</span>
@@ -246,8 +269,9 @@ export function ReceivingLineOrderRow({
       <div className={dashboardOrderRowChipsClass(isMobile)}>
         <OrderIdChip value={poValue} display={getLast4(poValue)} />
         <SkuScanRefChip value={skuValue} display={getLast4(skuValue)} />
+        {isIncoming ? null : <CarrierBadge carrier={row.carrier} trackingNumber={trackingValue} />}
         <TrackingChip value={trackingValue} display={getLast4(trackingValue)} />
-        <SerialChip value={serialsCsv} display={getLast6Serial(serialsCsv)} />
+        {isIncoming ? null : <SerialChip value={serialsCsv} display={getLast4Serial(serialsCsv)} />}
       </div>
     </div>
   );
@@ -287,6 +311,7 @@ export default function ReceivingLinesTable() {
       || incomingStateRaw === 'ARRIVING_TODAY'
       || incomingStateRaw === 'STALLED'
       || incomingStateRaw === 'IN_TRANSIT'
+      || incomingStateRaw === 'PENDING_CARRIER'
       || incomingStateRaw === 'AWAITING_TRACKING'
       ? (incomingStateRaw as IncomingDeliveryState)
       : null;
@@ -783,6 +808,7 @@ export default function ReceivingLinesTable() {
                           row={row}
                           index={index}
                           isMobile={isMobile}
+                          isIncoming={isIncomingMode}
                           isSelected={selectedId === row.id}
                           onSelect={() => handleSelectRow(row)}
                         />

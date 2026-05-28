@@ -393,29 +393,22 @@ export default function ReceivingDashboard() {
           ) : null}
         </AnimatePresence>
 
-        {/* Incoming details panel — slides in from the right when an incoming
-            row is selected. Keyed on PO id so flipping between rows feels
-            like the panel is staying put while the contents swap. Closing
-            dispatches `receiving-clear-line` so the table row deselects. */}
+        {/* Incoming details panel — right slide-over matching the shipped / FBA
+            detail panels (fixed 420px + dimmed backdrop, chrome owned by the
+            panel itself). A stable key keeps the panel mounted as rows are
+            flipped so only the contents swap. Closing dispatches
+            `receiving-clear-line` so the table row deselects. */}
         <AnimatePresence initial={false}>
           {isIncomingMode && incomingDetails ? (
-            <motion.div
-              key={`incoming-details-${incomingDetails.poId}`}
-              initial={prefersReducedMotion ? { opacity: 1 } : { opacity: 0, x: 24 }}
-              animate={{ opacity: 1, x: 0 }}
-              exit={prefersReducedMotion ? { opacity: 0 } : { opacity: 0, x: 24 }}
-              transition={{ duration: 0.18, ease: [0.22, 1, 0.36, 1] }}
-              className="absolute inset-0 z-10 border-l border-gray-200 bg-white shadow-xl md:left-auto md:w-[min(640px,70%)]"
-            >
-              <IncomingDetailsPanel
-                zohoPurchaseOrderId={incomingDetails.poId}
-                poNumberHint={incomingDetails.poNumber}
-                onClose={() => {
-                  setIncomingDetails(null);
-                  window.dispatchEvent(new CustomEvent('receiving-clear-line'));
-                }}
-              />
-            </motion.div>
+            <IncomingDetailsPanel
+              key="incoming-details-panel"
+              zohoPurchaseOrderId={incomingDetails.poId}
+              poNumberHint={incomingDetails.poNumber}
+              onClose={() => {
+                setIncomingDetails(null);
+                window.dispatchEvent(new CustomEvent('receiving-clear-line'));
+              }}
+            />
           ) : null}
         </AnimatePresence>
       </div>

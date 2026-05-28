@@ -8,7 +8,7 @@ import {
   TrackingChip,
   SerialChip,
   getLast4,
-  getLast6Serial,
+  getLast4Serial,
 } from '@/components/ui/CopyChip';
 import { Camera, Check } from '@/components/Icons';
 import type { PackerLogRow } from '@/components/mobile/packer/types';
@@ -123,7 +123,7 @@ export function MobilePackingRow({ row, variant, fresh = false, onTap, photosHre
             {orderId && <OrderIdChip value={orderId} display={getLast4(orderId)} />}
             {skuValue && <SkuScanRefChip value={skuValue} display={getLast4(skuValue)} />}
             {trackingValue && <TrackingChip value={trackingValue} display={getLast4(trackingValue)} />}
-            <SerialChip value={serialValue} display={getLast6Serial(serialValue)} />
+            <SerialChip value={serialValue} display={getLast4Serial(serialValue)} />
           </div>
 
           <Link

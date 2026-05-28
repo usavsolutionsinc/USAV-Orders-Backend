@@ -102,7 +102,7 @@ export async function performTechFnskuScan(
      ORDER BY
        CASE fsi.status
          WHEN 'PLANNED' THEN 1
-         WHEN 'READY_TO_GO' THEN 2
+         WHEN 'TESTED' THEN 2
          WHEN 'LABEL_ASSIGNED' THEN 3
          ELSE 4
        END,
@@ -115,9 +115,10 @@ export async function performTechFnskuScan(
   let lifecycleItem = openItem;
 
   if (openItem && String(openItem.status) === 'PLANNED') {
-    const bumpToPacking = await client.query(
+    // Tech FNSKU scan = "tested": passed and ready to be packed (PLANNED → TESTED).
+    const bumpToTested = await client.query(
       `UPDATE fba_shipment_items
-       SET status = 'PACKING'::fba_shipment_status_enum,
+       SET status = 'TESTED'::fba_shipment_status_enum,
            ready_by_staff_id = COALESCE(ready_by_staff_id, $1),
            ready_at = COALESCE(ready_at, NOW()),
            updated_at = NOW()
@@ -125,10 +126,10 @@ export async function performTechFnskuScan(
        RETURNING id, shipment_id, expected_qty, actual_qty, status`,
       [testedBy, openItem.id]
     );
-    if (bumpToPacking.rows[0]) {
+    if (bumpToTested.rows[0]) {
       lifecycleItem = {
         ...openItem,
-        ...bumpToPacking.rows[0],
+        ...bumpToTested.rows[0],
       };
     }
   }

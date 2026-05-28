@@ -10,9 +10,9 @@ type Params = Promise<{ id: string; itemId: string }>;
 
 const STATUS_ORDER: Record<string, number> = {
   PLANNED: 0,
-  PACKING: 1,
-  OUT_OF_STOCK: 1, // same level as PACKING â€” sideways transition
-  READY_TO_GO: 2,
+  TESTED: 1,
+  OUT_OF_STOCK: 1, // same level as TESTED — sideways transition
+  PACKED: 2,
   LABEL_ASSIGNED: 3,
   SHIPPED: 4,
 };
@@ -190,10 +190,10 @@ export async function PATCH(
     if (body.status) {
       setField('status', body.status);
       const staffId = body.staff_id || null;
-      if (body.status === 'PACKING') {
+      if (body.status === 'TESTED') {
         setField('ready_by_staff_id', staffId);
         setField('ready_at', formatPSTTimestamp());
-      } else if (body.status === 'READY_TO_GO') {
+      } else if (body.status === 'PACKED') {
         setField('verified_by_staff_id', staffId);
         setField('verified_at', formatPSTTimestamp());
       } else if (body.status === 'LABEL_ASSIGNED') {
@@ -221,10 +221,10 @@ export async function PATCH(
       values
     );
 
-    // When manually marked READY_TO_GO (status cycle) with actual_qty=0,
+    // When manually marked TESTED/PACKED (status cycle) with actual_qty=0,
     // backfill actual_qty = expected_qty so it isn't shown as 0 scanned.
     const row = result.rows[0];
-    if (row?.status === 'READY_TO_GO' && Number(row.actual_qty) === 0 && Number(row.expected_qty) > 0) {
+    if ((row?.status === 'TESTED' || row?.status === 'PACKED') && Number(row.actual_qty) === 0 && Number(row.expected_qty) > 0) {
       const fixRes = await client.query(
         `UPDATE fba_shipment_items SET actual_qty = expected_qty, updated_at = NOW()
          WHERE id = $1 RETURNING *`,

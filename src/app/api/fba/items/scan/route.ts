@@ -7,9 +7,10 @@ import { buildFbaPlanRefFromIsoDate } from '@/lib/fba/plan-ref';
 import { upsertFnskuCatalogRow } from '@/lib/fba/upsert-fnsku-catalog';
 import { withAuth } from '@/lib/auth/withAuth';
 
-// Pack-station FNSKU scan.
+// Pack-station FNSKU scan (the packer's scan).
 // Writes into the shared fba_fnsku_logs ledger and, when an open shipment item
-// exists, increments the shipment item's actual_qty and advances it to READY_TO_GO.
+// exists, increments the shipment item's actual_qty and advances it to PACKED
+// (ready to combine). Tech testing is a prior step (PLANNED → TESTED).
 export const POST = withAuth(async (request: NextRequest, ctx) => {
   const client = await pool.connect();
   try {
@@ -53,9 +54,9 @@ export const POST = withAuth(async (request: NextRequest, ctx) => {
          AND fsi.status != 'SHIPPED'
        ORDER BY
          CASE fsi.status
-           WHEN 'PACKING' THEN 1
-           WHEN 'PLANNED' THEN 2
-           WHEN 'READY_TO_GO' THEN 3
+           WHEN 'PLANNED' THEN 1
+           WHEN 'TESTED' THEN 2
+           WHEN 'PACKED' THEN 3
            WHEN 'LABEL_ASSIGNED' THEN 4
            ELSE 4
          END,
@@ -75,7 +76,7 @@ export const POST = withAuth(async (request: NextRequest, ctx) => {
         `UPDATE fba_shipment_items
          SET actual_qty = actual_qty + 1,
              status = CASE
-                        WHEN status IN ('PLANNED', 'PACKING') THEN 'READY_TO_GO'::fba_shipment_status_enum
+                        WHEN status IN ('PLANNED', 'TESTED') THEN 'PACKED'::fba_shipment_status_enum
                         ELSE status
                       END,
              verified_by_staff_id = COALESCE(verified_by_staff_id, $1),
@@ -116,7 +117,7 @@ export const POST = withAuth(async (request: NextRequest, ctx) => {
            (shipment_id, fnsku, product_title, asin, sku,
             expected_qty, actual_qty, status,
             verified_by_staff_id, verified_at)
-         VALUES ($1, $2, $3, $4, $5, 1, 1, 'READY_TO_GO', $6, NOW())
+         VALUES ($1, $2, $3, $4, $5, 1, 1, 'PACKED', $6, NOW())
          RETURNING *`,
         [todayPlanId, resolvedFnsku, meta.product_title, meta.asin, meta.sku, staff_id],
       );
@@ -125,15 +126,20 @@ export const POST = withAuth(async (request: NextRequest, ctx) => {
       openItem = { ...updatedItem, shipment_ref: todayPlanRes.rows[0]?.shipment_ref ?? null };
     }
 
-    // ── Auto-advance shipment PLANNED→READY_TO_GO when no planned items remain ──
+    // ── Auto-advance shipment as items pack. Forward-only: advances from
+    //    PLANNED/TESTED → PACKED (or → TESTED) and never regresses a shipment
+    //    that is already PACKED/LABEL_ASSIGNED/SHIPPED. ──
     if (updatedItem?.shipment_id) {
       await client.query(
         `UPDATE fba_shipments fs
          SET status = CASE
-                        WHEN fs.status = 'PLANNED' AND NOT EXISTS (
-                          SELECT 1 FROM fba_shipment_items
-                          WHERE shipment_id = $1 AND status = 'PLANNED'
-                        ) THEN 'READY_TO_GO'::fba_shipment_status_enum
+                        WHEN fs.status IN ('PLANNED', 'TESTED')
+                          AND NOT EXISTS (SELECT 1 FROM fba_shipment_items WHERE shipment_id = $1 AND status = 'PLANNED')
+                          AND NOT EXISTS (SELECT 1 FROM fba_shipment_items WHERE shipment_id = $1 AND status = 'TESTED')
+                          THEN 'PACKED'::fba_shipment_status_enum
+                        WHEN fs.status = 'PLANNED'
+                          AND NOT EXISTS (SELECT 1 FROM fba_shipment_items WHERE shipment_id = $1 AND status = 'PLANNED')
+                          THEN 'TESTED'::fba_shipment_status_enum
                         ELSE fs.status
                       END,
              updated_at = NOW()
@@ -257,7 +263,7 @@ export const POST = withAuth(async (request: NextRequest, ctx) => {
       expected_qty: updatedItem?.expected_qty ?? 0,
       planned_qty: plannedQty,
       combined_pack_scanned_qty: combinedPackScannedQty,
-      status: updatedItem?.status || 'READY_TO_GO',
+      status: updatedItem?.status || 'PACKED',
       is_new: autoCreatedPlan,
       auto_added_to_plan: true,
       summary: {

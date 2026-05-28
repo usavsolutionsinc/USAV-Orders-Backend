@@ -47,7 +47,7 @@ graph TB
     end
 
     subgraph AI[AI 8]
-        AA[/"/api/ai/openclaw-{chat,session,health}"/]
+        AA[/"/api/ai/{chat,session,chat-health}"/]
         AB[/"chat-sessions + /messages"/]
         AC[/"search · tunnel-session · health"/]
     end

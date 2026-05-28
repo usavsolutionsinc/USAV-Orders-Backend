@@ -102,16 +102,16 @@ function SidebarIcon({ className = 'w-4 h-4' }: { className?: string }) {
 }
 
 function statusLabel(status: ConnectionStatus) {
-  if (status === 'online') return 'OpenClaw Connected';
-  if (status === 'offline') return 'OpenClaw Offline';
-  return 'Checking Gateway';
+  if (status === 'online') return 'AI Chat Connected';
+  if (status === 'offline') return 'AI Chat Offline';
+  return 'Checking AI Chat';
 }
 
 function modeLabel(mode: AiChatMode | undefined) {
   if (mode === 'local_ops') return 'Local Ops Query';
   if (mode === 'rag') return 'Bose Manual RAG';
   if (mode === 'hybrid') return 'Hybrid';
-  return 'OpenClaw';
+  return 'Assistant';
 }
 
 function formatRelativeDate(dateStr: string): string {
@@ -147,7 +147,7 @@ export default function AiChatTab() {
 
   const checkHealth = useCallback(async () => {
     try {
-      const res = await fetch('/api/ai/openclaw-chat', {
+      const res = await fetch('/api/ai/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ sessionId: 'health-check', message: 'ping' }),
@@ -256,7 +256,7 @@ export default function AiChatTab() {
     setIsLoading(true);
 
     try {
-      const res = await fetch('/api/ai/openclaw-chat', {
+      const res = await fetch('/api/ai/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ sessionId, message: text }),
@@ -409,9 +409,9 @@ export default function AiChatTab() {
                 <BotIcon className="h-4 w-4" />
               </div>
               <div className="min-w-0">
-                <p className={sectionLabel}>USAV Ops Assistant</p>
+                <p className={sectionLabel}>AI Chat</p>
                 <p className="truncate text-sm font-medium text-gray-700">
-                  Powered by OpenClaw Gateway
+                  USAV-scoped warehouse assistant
                 </p>
               </div>
             </div>
@@ -448,7 +448,7 @@ export default function AiChatTab() {
             </div>
             <div className="flex items-center gap-2 bg-[#fbfbfa] px-3 py-2 text-caption text-gray-600">
               <Clock className="h-4 w-4 text-gray-500" />
-              <span>Routes through OpenClaw Gateway with USAV scope</span>
+              <span>Routes through the AI backend with USAV scope</span>
             </div>
           </div>
         </div>
@@ -466,7 +466,7 @@ export default function AiChatTab() {
                     Ask about orders, shipping, staff, FBA, repairs, inventory, or Bose service manuals.
                   </h1>
                   <p className="max-w-2xl text-sm leading-7 text-gray-600">
-                    This assistant routes through the OpenClaw Gateway with strict USAV scope.
+                    This assistant routes through the AI backend with strict USAV scope.
                     Shipped-count summaries resolve locally. Bose manual queries go through
                     NemoClaw RAG for service manual lookup.
                   </p>
@@ -556,7 +556,7 @@ export default function AiChatTab() {
                     <div>
                       <p className={sectionLabel}>Working</p>
                       <p className="mt-1 text-label text-gray-600">
-                        Routing through OpenClaw Gateway
+                        Routing through the AI backend
                       </p>
                     </div>
                   </div>
@@ -595,7 +595,7 @@ export default function AiChatTab() {
 
             <div className="mt-2 flex flex-wrap items-center justify-between gap-2 text-micro text-gray-500">
               <span>Shift+Enter for new line. USAV-scoped queries only.</span>
-              <span>Powered by OpenClaw</span>
+              <span>AI Chat</span>
             </div>
           </div>
         </div>

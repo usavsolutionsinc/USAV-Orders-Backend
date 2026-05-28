@@ -93,7 +93,7 @@ export default function AiChatPanel() {
   const createSession = useCallback(async () => {
     setSessionId(null);
     try {
-      const res = await fetch('/api/ai/openclaw-session', { method: 'POST' });
+      const res = await fetch('/api/ai/session', { method: 'POST' });
       const data = await res.json();
       if (res.ok && data.session_id) {
         setSessionId(data.session_id);
@@ -107,7 +107,7 @@ export default function AiChatPanel() {
 
   const checkHealth = useCallback(async () => {
     try {
-      const res = await fetch('/api/ai/openclaw-health');
+      const res = await fetch('/api/ai/chat-health');
       const data = await res.json();
       setConnectionStatus(data.ok ? 'online' : 'offline');
     } catch {
@@ -164,7 +164,7 @@ export default function AiChatPanel() {
     setIsLoading(true);
 
     try {
-      const res = await fetch('/api/ai/openclaw-chat', {
+      const res = await fetch('/api/ai/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ sessionId, message: text }),
@@ -237,7 +237,7 @@ export default function AiChatPanel() {
               <BotIcon className="h-4 w-4" />
             </div>
             <div className="min-w-0">
-              <p className={sectionLabel}>USAV Ops Assistant</p>
+              <p className={sectionLabel}>AI Chat</p>
               <p className="truncate text-sm font-medium text-gray-700">
                 Deterministic shipped-order summaries plus general AI responses
               </p>

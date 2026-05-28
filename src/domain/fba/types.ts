@@ -22,7 +22,7 @@
 
 // ── Plan ────────────────────────────────────────────────────────────────────
 
-export type FbaPlanStatus = 'PLANNED' | 'READY_TO_GO' | 'LABEL_ASSIGNED' | 'SHIPPED';
+export type FbaPlanStatus = 'PLANNED' | 'TESTED' | 'PACKED' | 'LABEL_ASSIGNED' | 'SHIPPED';
 
 /** Internal plan — typically one per day. `label` is purely for human readability. */
 export interface FbaPlan {

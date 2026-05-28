@@ -43,7 +43,7 @@ export async function GET(
          fs.assigned_tech_id,
          fs.assigned_packer_id,
          COUNT(DISTINCT fsi.id)                                               AS total_items,
-         COUNT(DISTINCT fsi.id) FILTER (WHERE fsi.status = 'READY_TO_GO')    AS ready_items,
+         COUNT(DISTINCT fsi.id) FILTER (WHERE fsi.status = 'TESTED')    AS ready_items,
          COUNT(DISTINCT fsi.id) FILTER (WHERE fsi.status = 'LABEL_ASSIGNED') AS labeled_items,
          COUNT(DISTINCT fsi.id) FILTER (WHERE fsi.status = 'SHIPPED')        AS shipped_items,
          COALESCE(SUM(DISTINCT fsi.expected_qty), 0)                          AS total_expected_qty,
@@ -120,7 +120,7 @@ export async function PATCH(
 
     const body = await request.json();
 
-    const allowedStatuses = ['PLANNED', 'READY_TO_GO', 'LABEL_ASSIGNED', 'SHIPPED'];
+    const allowedStatuses = ['PLANNED', 'TESTED', 'PACKED', 'OUT_OF_STOCK', 'LABEL_ASSIGNED', 'SHIPPED'];
     if (body.status && !allowedStatuses.includes(body.status)) {
       return NextResponse.json(
         { success: false, error: `status must be one of: ${allowedStatuses.join(', ')}` },

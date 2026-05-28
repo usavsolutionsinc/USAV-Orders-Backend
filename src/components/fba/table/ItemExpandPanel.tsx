@@ -67,12 +67,12 @@ export function ItemExpandPanel({
   const commitStatus = async (next: ItemStatus) => {
     setLocalStatus(next);
     if (next === 'ready_to_print') {
-      await savePatch({ status: 'READY_TO_GO', notes: null }, { status: 'ready_to_print', pending_reason: null, pending_reason_note: undefined });
+      await savePatch({ status: 'TESTED', notes: null }, { status: 'ready_to_print', pending_reason: null, pending_reason_note: undefined });
       setLocalNote('');
       return;
     }
     if (next === 'needs_print') {
-      await savePatch({ status: 'PACKING' }, { status: 'needs_print', pending_reason: null });
+      await savePatch({ status: 'PACKED' }, { status: 'needs_print', pending_reason: null });
       return;
     }
     if (next === 'pending_out_of_stock') {

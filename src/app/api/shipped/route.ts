@@ -37,9 +37,10 @@ export const GET = withAuth(async (req: NextRequest, ctx) => {
       : rawShippedFilter === 'sku' ? 'sku'
       : 'all';
     const searchField = normalizeShippedSearchField(searchParams.get('searchField'));
-    // Cache namespace bumped to v2 — the search SQL now uses ORDER_SERIALS_CTE_ALL
-    // and a demoted numeric-pk score. Serving v1 entries would mask the fix.
-    const CACHE_NS = 'api:shipped:v2';
+    // Cache namespace bumped to v3 — the search CTE now gates on a packer scan
+    // (pack_sal / packer_logs) instead of just a shipment assignment. Serving v2
+    // entries would keep surfacing never-shipped rows with order-created_at dates.
+    const CACHE_NS = 'api:shipped:v3';
     const cacheLookup = createCacheLookupKey({
       organizationId: ctx.organizationId,
       query: query || '',

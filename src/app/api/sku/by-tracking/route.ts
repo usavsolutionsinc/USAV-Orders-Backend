@@ -33,6 +33,10 @@ export const GET = withAuth(async (req: NextRequest) => {
       product_title: string | null;
       photos: Array<{ id: number; url: string }>;
     }>(
+      // `s` is the v_sku VIEW, so Postgres can't treat s.id as a unique key for
+      // GROUP BY functional-dependency. Rather than enumerate every column, the
+      // photos are aggregated in a correlated subquery — no GROUP BY, and it also
+      // avoids photo duplication when the sku_stock join fans out to >1 row.
       `SELECT
          s.id,
          s.static_sku,
@@ -45,21 +49,24 @@ export const GET = withAuth(async (req: NextRequest) => {
          s.updated_at,
          ss.product_title,
          COALESCE(
-           JSONB_AGG(
-             JSONB_BUILD_OBJECT('id', p.id, 'url', p.url)
-             ORDER BY p.created_at ASC
-           ) FILTER (WHERE p.url IS NOT NULL),
+           (
+             SELECT JSONB_AGG(
+                      JSONB_BUILD_OBJECT('id', p.id, 'url', p.url)
+                      ORDER BY p.created_at ASC
+                    )
+             FROM photos p
+             WHERE p.entity_type = 'SKU'
+               AND p.entity_id = s.id
+               AND p.url IS NOT NULL
+           ),
            '[]'::jsonb
          ) AS photos
        FROM v_sku s
        LEFT JOIN sku_stock ss
          ON regexp_replace(UPPER(TRIM(COALESCE(ss.sku, ''))), '^0+', '') =
             regexp_replace(UPPER(TRIM(split_part(COALESCE(s.static_sku, ''), ':', 1))), '^0+', '')
-       LEFT JOIN photos p
-         ON p.entity_type = 'SKU' AND p.entity_id = s.id
        WHERE ($1::bigint IS NOT NULL AND s.shipment_id = $1)
           OR BTRIM(COALESCE(s.shipping_tracking_number, '')) = BTRIM($2)
-       GROUP BY s.id, ss.product_title
        ORDER BY
          CASE
            WHEN $1::bigint IS NOT NULL AND s.shipment_id = $1 THEN 0
@@ -107,3 +114,71 @@ export const GET = withAuth(async (req: NextRequest) => {
     );
   }
 }, { permission: 'sku_stock.view' });
+
+/**
+ * Post-retirement v_sku rows synthesize their id as `serial_units.id + 1e9`
+ * (see 2026-04-15_retire_sku_table.sql). Legacy rows keep `origin_sku_id`.
+ */
+const POST_RETIREMENT_ID_OFFSET = 1_000_000_000;
+
+/**
+ * DELETE /api/sku/by-tracking?id=123
+ *
+ * Removes a scanned SKU record — the `id` is the value returned by GET above.
+ * `v_sku` is a read-only view, so the delete targets the underlying
+ * `serial_units` row(s):
+ *   - id >= 1e9 → a single post-retirement unit (serial_units.id = id - 1e9)
+ *   - otherwise → a legacy group keyed by serial_units.origin_sku_id = id
+ *
+ * SKU-typed integrity photos are keyed by the v_sku id (entity_type = 'SKU',
+ * entity_id = id), which the serial_units delete trigger does NOT reach (it
+ * only cascades SERIAL_UNIT photos), so they're cleared in the same transaction.
+ */
+export const DELETE = withAuth(async (req: NextRequest) => {
+  const { searchParams } = new URL(req.url);
+  const idRaw = searchParams.get('id');
+  const id = Number(idRaw);
+
+  if (!idRaw || !Number.isInteger(id) || id <= 0) {
+    return NextResponse.json({ error: 'Valid id is required' }, { status: 400 });
+  }
+
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+
+    const unitDelete = id >= POST_RETIREMENT_ID_OFFSET
+      ? await client.query(
+          `DELETE FROM serial_units WHERE id = $1 RETURNING id`,
+          [id - POST_RETIREMENT_ID_OFFSET],
+        )
+      : await client.query(
+          `DELETE FROM serial_units WHERE origin_sku_id = $1 RETURNING id`,
+          [id],
+        );
+
+    if (unitDelete.rowCount === 0) {
+      await client.query('ROLLBACK');
+      return NextResponse.json({ error: 'SKU not found' }, { status: 404 });
+    }
+
+    const photoDelete = await client.query(
+      `DELETE FROM photos WHERE entity_type = 'SKU' AND entity_id = $1 RETURNING id`,
+      [id],
+    );
+
+    await client.query('COMMIT');
+    return NextResponse.json({
+      success: true,
+      id,
+      deletedUnits: unitDelete.rowCount ?? 0,
+      deletedPhotos: photoDelete.rowCount ?? 0,
+    });
+  } catch (err: any) {
+    await client.query('ROLLBACK').catch(() => {});
+    console.error('[sku/by-tracking] delete error:', err);
+    return NextResponse.json({ error: 'Failed to delete SKU' }, { status: 500 });
+  } finally {
+    client.release();
+  }
+}, { permission: 'sku_stock.manage' });

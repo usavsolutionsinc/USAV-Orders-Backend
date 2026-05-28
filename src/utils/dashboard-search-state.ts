@@ -4,6 +4,12 @@ import type { ShippedOrder } from '@/lib/neon/orders-queries';
 import type { ShippedDetailsContext } from '@/utils/events';
 
 export type DashboardOrderView = 'pending' | 'unshipped' | 'shipped' | 'fba';
+/**
+ * UI grouping for the dashboard view pills. Pending / Shipped / Awaiting are all
+ * the same underlying orders data, so they collapse under a single "Shipping"
+ * group; FBA is a distinct data source and stays its own group.
+ */
+export type DashboardViewGroup = 'orders' | 'fba';
 export type DashboardCacheEntry = readonly [unknown, unknown];
 
 export interface DashboardSelectionSnapshot {
@@ -32,6 +38,10 @@ export function getDashboardOrderViewFromSearch(
   if (searchParams.has('pending')) return 'pending';
   if (searchParams.has('fba')) return 'fba';
   return 'pending';
+}
+
+export function getDashboardViewGroup(view: DashboardOrderView): DashboardViewGroup {
+  return view === 'fba' ? 'fba' : 'orders';
 }
 
 export function normalizeDashboardOrderViewParams(

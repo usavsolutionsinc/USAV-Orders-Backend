@@ -82,9 +82,10 @@ export const GET = withAuth(async (request: NextRequest) => {
             fsi.fnsku,
             CASE fsi.status
               WHEN 'PLANNED' THEN 1
-              WHEN 'READY_TO_GO' THEN 2
-              WHEN 'LABEL_ASSIGNED' THEN 3
-              ELSE 4
+              WHEN 'TESTED' THEN 2
+              WHEN 'PACKED' THEN 3
+              WHEN 'LABEL_ASSIGNED' THEN 4
+              ELSE 5
             END,
             fs.created_at ASC,
             fsi.id ASC

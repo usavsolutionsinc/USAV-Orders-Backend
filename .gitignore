@@ -33,6 +33,7 @@ firebase-debug.*.log
 snapshot*.txt
 *.bak.*
 .env.bak*
+.env*.tmp
 receiving_lines_cleanup_backup_*.json
 
 # vercel

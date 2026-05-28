@@ -171,13 +171,17 @@ export default function TechDashboard({ techId }: TechDashboardProps) {
         queryClient.invalidateQueries({ queryKey: ['receiving-pending-unboxing'] });
     };
 
-    /** Right pane swaps by sidebar mode; history uses AnimatePresence for workspace crossfade. */
+    /**
+     * Right pane swaps by sidebar mode. The shipping sub-page tabs
+     * (shipped / pending / history) share ONE AnimatePresence so a scanned /
+     * active order — or an Up Next preview — crossfades OVER whichever tab table
+     * is showing, then crossfades back to that same tab when the order clears.
+     * Because scanning no longer changes the tab, "back" is always the tab the
+     * tech was on before the order took over. Receiving and testing modes own
+     * their own surfaces and never take an order overlay.
+     */
     let rightPane: React.ReactNode;
-    if (rightViewMode === 'pending') {
-        rightPane = <PendingOrdersTable />;
-    } else if (rightViewMode === 'shipped') {
-        rightPane = <DashboardShippedTable testedBy={parseInt(techId)} />;
-    } else if (rightViewMode === 'receiving') {
+    if (rightViewMode === 'receiving') {
         rightPane = <ReceivingInboundFeed onSelectLog={setSelectedLog} />;
     } else if (rightViewMode === 'testing') {
         // Testing sub-page — composes receiving form primitives with the
@@ -190,9 +194,16 @@ export default function TechDashboard({ techId }: TechDashboardProps) {
             />
         );
     } else {
-        // History: crossfades to active-order workspace after a scan resolves,
-        // falls back to Up Next preview when a tech clicks a card, else global history.
-        // Scan input stays in the sidebar — no route change, no focus loss.
+        // Shipping sub-page: shipped | pending | history. Keyed by tab so tab
+        // switches also crossfade; the active/preview order overlays them all.
+        const tabTable =
+            rightViewMode === 'pending' ? (
+                <PendingOrdersTable />
+            ) : rightViewMode === 'shipped' ? (
+                <DashboardShippedTable testedBy={parseInt(techId)} />
+            ) : (
+                <TechTable testedBy={parseInt(techId)} />
+            );
         rightPane = (
             <AnimatePresence initial={false} mode="wait">
                 {activeOrderPane ? (
@@ -211,14 +222,14 @@ export default function TechDashboard({ techId }: TechDashboardProps) {
                     />
                 ) : (
                     <motion.div
-                        key="tech-history"
+                        key={`tech-tab-${rightViewMode}`}
                         initial={prefersReducedMotion ? { opacity: 1 } : { opacity: 0 }}
                         animate={{ opacity: 1 }}
                         exit={{ opacity: 0 }}
                         transition={{ duration: 0.16 }}
                         className="h-full w-full"
                     >
-                        <TechTable testedBy={parseInt(techId)} />
+                        {tabTable}
                     </motion.div>
                 )}
             </AnimatePresence>

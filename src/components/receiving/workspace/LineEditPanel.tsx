@@ -59,6 +59,7 @@ import { ReceivingAuditModal } from './ReceivingAuditModal';
 import { ConditionPills } from './ConditionPills';
 import { markConditionSet } from './ReceivingProgressStepper';
 import { InlineSerialAdder } from './InlineSerialAdder';
+import { ReceivingUnitRows, type UnitSerial } from './ReceivingUnitRows';
 import { PoLinesAccordion } from './PoLinesAccordion';
 import { UnmatchedItemsSection } from './UnmatchedItemsSection';
 import { ReceivingClaimModal } from './ReceivingClaimModal';
@@ -289,8 +290,16 @@ export function LineEditPanel({
   const [trackingEditorsOpen, setTrackingEditorsOpen] = useState(false);
   /** Full listing SearchBar — collapsed by default; pencil expands to paste/edit. */
   const [listingEditorOpen, setListingEditorOpen] = useState(false);
-  /** PO# inline editor — collapsed by default; pencil expands. */
-  const [poEditorOpen, setPoEditorOpen] = useState(false);
+  /**
+   * PO# inline editor. Defaults open for unmatched cartons or any row
+   * without a PO# yet — those are exactly the cases where binding a PO
+   * is the operator's most likely next action. Matched cartons keep the
+   * compact chip + pencil affordance until the operator opts in.
+   */
+  const [poEditorOpen, setPoEditorOpen] = useState(() => {
+    const poVal = (row.zoho_purchaseorder_number || row.zoho_purchaseorder_id || '').trim();
+    return row.receiving_source === 'unmatched' || !poVal;
+  });
   const [poNumberEdit, setPoNumberEdit] = useState(
     (row.zoho_purchaseorder_number || row.zoho_purchaseorder_id || '').trim(),
   );
@@ -326,7 +335,14 @@ export function LineEditPanel({
     // Reset Support visibility when the operator switches lines — the new
     // line's own zendesk/notes will re-reveal it if needed.
     setShowSupportOverride(false);
-  }, [compact, row.id, accordionBootstrap]);
+    // Re-arm the PO# editor for unmatched / un-bound rows so the operator
+    // doesn't have to click the pencil after each switch. Don't auto-close
+    // for matched rows — the operator may have deliberately opened it.
+    const poVal = (row.zoho_purchaseorder_number || row.zoho_purchaseorder_id || '').trim();
+    if (row.receiving_source === 'unmatched' || !poVal) {
+      setPoEditorOpen(true);
+    }
+  }, [compact, row.id, accordionBootstrap, row.receiving_source, row.zoho_purchaseorder_number, row.zoho_purchaseorder_id]);
 
   useEffect(() => {
     setReceivingType(row.receiving_type || 'PO');
@@ -718,7 +734,7 @@ export function LineEditPanel({
     void refreshLineWithSerials();
   }, [refreshLineWithSerials]);
 
-  const submitSerial = useCallback(async (raw?: string) => {
+  const submitSerial = useCallback(async (raw?: string, conditionGrade?: string | null) => {
     const serial = (raw ?? serialInput).trim();
     if (!serial || !row.receiving_id || serialSubmitting) return;
     setSerialSubmitting(true);
@@ -738,6 +754,9 @@ export function LineEditPanel({
             receiving_line_id: row.id,
             serial_number: serial,
             staff_id: Number(staffId),
+            // Per-unit grade (multi-qty rows stamp each scan with the grade
+            // chosen for that slot). Omitted for the single-block path.
+            condition_grade: conditionGrade ?? undefined,
           }),
         });
         const json = await res.json().catch(() => null);
@@ -810,6 +829,88 @@ export function LineEditPanel({
     await submitSerial(serial);
     setExtraSerials((xs) => xs.filter((_, j) => j !== idx));
   }, [extraSerials, submitSerial]);
+
+  // Remove a single serial_unit from the line (X / Delete on a chip or unit
+  // row). Shared by the single-block adder and the multi-qty unit rows.
+  const deleteSerialUnit = useCallback(
+    async (serialUnitId: number) => {
+      if (serialUnitId == null) return;
+      const res = await fetch('/api/receiving/scan-serial', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          serial_unit_id: serialUnitId,
+          receiving_line_id: row.id,
+        }),
+      });
+      const data = await res.json().catch(() => null);
+      if (!res.ok || !data?.success) {
+        toast.error(data?.error || 'Could not remove serial');
+        return;
+      }
+      toast.success('Serial removed');
+      if (data.line_state?.id != null) {
+        dispatchLineUpdated({
+          id: data.line_state.id,
+          quantity_received: data.line_state.quantity_received,
+          quantity_expected: data.line_state.quantity_expected,
+          workflow_status: data.line_state.workflow_status ?? undefined,
+        });
+      }
+      await refreshLineWithSerials();
+    },
+    [row.id, refreshLineWithSerials],
+  );
+
+  // Replace a serial in place (typo fix): delete then re-scan, preserving the
+  // unit's condition grade so the corrected serial keeps its grade.
+  const replaceSerialUnit = useCallback(
+    async (original: { id: number; serial_number: string; condition_grade?: string | null }, nextSerial: string) => {
+      if (original.id == null) return;
+      const next = (nextSerial ?? '').trim();
+      if (!next || next === original.serial_number) return;
+      const res = await fetch('/api/receiving/scan-serial', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          serial_unit_id: original.id,
+          receiving_line_id: row.id,
+        }),
+      });
+      const data = await res.json().catch(() => null);
+      if (!res.ok || !data?.success) {
+        toast.error(data?.error || 'Could not replace serial');
+        return;
+      }
+      await submitSerial(next, original.condition_grade ?? null);
+    },
+    [row.id, submitSerial],
+  );
+
+  // Persist a per-unit condition grade on an already-scanned serial_unit via
+  // the dedicated grade endpoint (writes serial_units.condition_grade +
+  // GRADED audit). 409 means "no change" — silently ignored.
+  const setUnitGrade = useCallback(
+    async (serialUnitId: number, grade: string) => {
+      try {
+        const res = await fetch(`/api/serial-units/${serialUnitId}/grade`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ new_grade: grade }),
+        });
+        if (res.status === 409) return;
+        const data = await res.json().catch(() => null);
+        if (!res.ok || !data?.ok) {
+          toast.error(data?.error || 'Could not set unit condition');
+          return;
+        }
+        await refreshLineWithSerials();
+      } catch (err) {
+        toast.error(err instanceof Error ? err.message : 'Condition save failed');
+      }
+    },
+    [refreshLineWithSerials],
+  );
 
   const handleReceive = useCallback(
     (receiveIntent: 'zoho_receive' | 'scan_only' = 'zoho_receive') => {
@@ -1467,119 +1568,167 @@ export function LineEditPanel({
             <div className="flex min-w-0 flex-col gap-y-1">
               {/* Chip row uses items-center so listing URL chip, PO chip,
                   and tracking chip share the same vertical baseline
-                  regardless of their internal height differences. */}
-              <div className="flex min-w-0 items-center gap-2">
-                <div className="flex min-w-0 flex-1 basis-0 items-center gap-1">
-                  <ListingUrlChip
-                    rawUrl={listingLink}
-                    openHref={listingOpenHref}
-                    previewDisplay={listingPreviewLabel}
-                  />
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setListingEditorOpen((v) => {
-                        const next = !v;
-                        if (next) queueMicrotask(() => listingRef.current?.focus());
-                        return next;
-                      });
-                    }}
-                    aria-expanded={listingEditorOpen}
-                    aria-label={listingEditorOpen ? 'Collapse listing URL editor' : 'Edit listing URL'}
-                    title={listingEditorOpen ? 'Done editing listing' : 'Edit listing URL'}
-                    className={RECEIVING_CHIP_EDIT_BTN_CLASS}
-                  >
-                    <Pencil className="h-3 w-3" />
-                  </button>
-                </div>
-                {/* PO# copy chip — always rendered (even when no PO is
-                    linked yet) so the edit pencil is reachable on
-                    unmatched cartons. Chip shows last-4 when present, a
-                    placeholder dash otherwise. */}
-                {(() => {
-                  const poVal = (row.zoho_purchaseorder_number || row.zoho_purchaseorder_id || '').trim();
-                  return (
-                    <div className="flex shrink-0 items-center gap-1">
-                      <OrderIdChip
-                        value={poVal}
-                        display={poVal ? getLast4(poVal) : '----'}
-                      />
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setPoEditorOpen((v) => {
-                            const next = !v;
-                            if (next) queueMicrotask(() => poInputRef.current?.focus());
-                            return next;
-                          });
-                        }}
-                        aria-expanded={poEditorOpen}
-                        aria-label={poEditorOpen ? 'Collapse PO# editor' : 'Edit PO#'}
-                        title={poEditorOpen ? 'Done editing PO#' : 'Edit PO#'}
-                        className={RECEIVING_CHIP_EDIT_BTN_CLASS}
-                      >
-                        <Pencil className="h-3 w-3" />
-                      </button>
-                    </div>
-                  );
-                })()}
-                <div className="flex shrink-0 items-center gap-1">
-                  <div className="flex items-center gap-1">
-                    <div className="min-w-0 max-w-full [&_.relative]:max-w-full">
-                      <TrackingChip
-                        value={primaryTrackingTrimmed}
-                        display={getLast4(primaryTrackingTrimmed)}
-                        disableCopy={!primaryTrackingTrimmed}
-                        width="min-w-0 max-w-full"
-                      />
-                    </div>
-                    {filledExtraTrackingsCount > 0 ? (
-                      <span className="shrink-0 rounded bg-slate-200/90 px-1 py-px text-eyebrow font-black tabular-nums text-slate-700">
-                        +{filledExtraTrackingsCount}
-                      </span>
-                    ) : null}
-                    <button
-                      type="button"
-                      onClick={toggleTrackingEditors}
-                      aria-expanded={trackingEditorsOpen}
-                      aria-label={trackingEditorsOpen ? 'Collapse tracking editors' : 'Edit tracking numbers'}
-                      title={trackingEditorsOpen ? 'Done editing tracking' : 'Edit tracking'}
-                      className={RECEIVING_CHIP_EDIT_BTN_CLASS}
-                    >
-                      <Pencil className="h-3 w-3" />
-                    </button>
-                  </div>
-                </div>
-              </div>
+                  regardless of their internal height differences.
 
-              {(trackingEditorsOpen || listingEditorOpen || poEditorOpen) ? (
-                <div className="mt-2 space-y-2.5 border-t border-slate-100 pt-2">
-                  {poEditorOpen ? (
-                    <div>
-                      <span className={`${FLOW_SECTION_LABEL} mb-1 leading-none`}>PO number</span>
-                      <div className="group">
-                        <SearchBar
-                          value={poNumberEdit}
-                          onChange={setPoNumberEdit}
-                          onSearch={(v) => {
-                            const trimmed = v.trim();
-                            const current = (row.zoho_purchaseorder_number || row.zoho_purchaseorder_id || '').trim();
-                            if (trimmed !== current) {
-                              void persistPoNumber(trimmed);
-                            }
-                          }}
-                          inputRef={poInputRef}
-                          placeholder="PO-1234"
-                          variant="blue"
-                          size="compact"
-                          hideUnderline
-                          pasteOnlyTrailing
-                          className="w-full"
+                  Layout decisions:
+                  - Listing chip is hidden when the URL is empty AND the
+                    editor isn't open — unmatched cartons have no listing
+                    until a PO# binds them, so the empty chip is just
+                    noise.
+                  - When PO# editor is open AND the listing chip is gone,
+                    the PO# input promotes from a compact chip+pencil to
+                    a full-width inline `SearchBar` that fills the freed
+                    flex slot. That's the "scan/type a PO#" call-to-action
+                    for unmatched cartons. The below-row PO# editor is
+                    skipped in that case (avoids the duplicate input). */}
+              {(() => {
+                const poVal = (row.zoho_purchaseorder_number || row.zoho_purchaseorder_id || '').trim();
+                const showListing = listingLink.trim().length > 0 || listingEditorOpen;
+                const inlinePoInput = poEditorOpen && !showListing;
+                return (
+                  <div className="flex min-w-0 items-center gap-2">
+                    {showListing ? (
+                      <div className="flex min-w-0 flex-1 basis-0 items-center gap-1">
+                        <ListingUrlChip
+                          rawUrl={listingLink}
+                          openHref={listingOpenHref}
+                          previewDisplay={listingPreviewLabel}
                         />
-                        <div className={RECEIVING_SCAN_RULE_LINE_CLASS} aria-hidden />
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setListingEditorOpen((v) => {
+                              const next = !v;
+                              if (next) queueMicrotask(() => listingRef.current?.focus());
+                              return next;
+                            });
+                          }}
+                          aria-expanded={listingEditorOpen}
+                          aria-label={listingEditorOpen ? 'Collapse listing URL editor' : 'Edit listing URL'}
+                          title={listingEditorOpen ? 'Done editing listing' : 'Edit listing URL'}
+                          className={RECEIVING_CHIP_EDIT_BTN_CLASS}
+                        >
+                          <Pencil className="h-3 w-3" />
+                        </button>
+                      </div>
+                    ) : null}
+                    {inlinePoInput ? (
+                      <div className="flex min-w-0 flex-1 basis-0 items-center gap-1">
+                        <div className="group min-w-0 flex-1">
+                          <SearchBar
+                            value={poNumberEdit}
+                            onChange={setPoNumberEdit}
+                            onSearch={(v) => {
+                              const trimmed = v.trim();
+                              const current = (row.zoho_purchaseorder_number || row.zoho_purchaseorder_id || '').trim();
+                              if (trimmed !== current) {
+                                void persistPoNumber(trimmed);
+                              }
+                            }}
+                            inputRef={poInputRef}
+                            placeholder="Enter PO# to bind this carton (e.g. PO-1234)"
+                            variant="blue"
+                            size="compact"
+                            hideUnderline
+                            pasteOnlyTrailing
+                            className="w-full"
+                          />
+                          <div className={RECEIVING_SCAN_RULE_LINE_CLASS} aria-hidden />
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="flex shrink-0 items-center gap-1">
+                        <OrderIdChip
+                          value={poVal}
+                          display={poVal ? getLast4(poVal) : '----'}
+                        />
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setPoEditorOpen((v) => {
+                              const next = !v;
+                              if (next) queueMicrotask(() => poInputRef.current?.focus());
+                              return next;
+                            });
+                          }}
+                          aria-expanded={poEditorOpen}
+                          aria-label={poEditorOpen ? 'Collapse PO# editor' : 'Edit PO#'}
+                          title={poEditorOpen ? 'Done editing PO#' : 'Edit PO#'}
+                          className={RECEIVING_CHIP_EDIT_BTN_CLASS}
+                        >
+                          <Pencil className="h-3 w-3" />
+                        </button>
+                      </div>
+                    )}
+                    <div className="flex shrink-0 items-center gap-1">
+                      <div className="flex items-center gap-1">
+                        <div className="min-w-0 max-w-full [&_.relative]:max-w-full">
+                          <TrackingChip
+                            value={primaryTrackingTrimmed}
+                            display={getLast4(primaryTrackingTrimmed)}
+                            disableCopy={!primaryTrackingTrimmed}
+                            width="min-w-0 max-w-full"
+                          />
+                        </div>
+                        {filledExtraTrackingsCount > 0 ? (
+                          <span className="shrink-0 rounded bg-slate-200/90 px-1 py-px text-eyebrow font-black tabular-nums text-slate-700">
+                            +{filledExtraTrackingsCount}
+                          </span>
+                        ) : null}
+                        <button
+                          type="button"
+                          onClick={toggleTrackingEditors}
+                          aria-expanded={trackingEditorsOpen}
+                          aria-label={trackingEditorsOpen ? 'Collapse tracking editors' : 'Edit tracking numbers'}
+                          title={trackingEditorsOpen ? 'Done editing tracking' : 'Edit tracking'}
+                          className={RECEIVING_CHIP_EDIT_BTN_CLASS}
+                        >
+                          <Pencil className="h-3 w-3" />
+                        </button>
                       </div>
                     </div>
-                  ) : null}
+                  </div>
+                );
+              })()}
+
+              {(() => {
+                // The PO# editor is rendered inline in the chip row above
+                // when the listing slot is free — so this below-row block
+                // would render a duplicate input. Skip the PO# block (and
+                // the whole wrapper, if nothing else is open) in that case.
+                const poBelow =
+                  poEditorOpen &&
+                  (listingLink.trim().length > 0 || listingEditorOpen);
+                const anyBelow = trackingEditorsOpen || listingEditorOpen || poBelow;
+                if (!anyBelow) return null;
+                return (
+                  <div className="mt-2 space-y-2.5 border-t border-slate-100 pt-2">
+                    {poBelow ? (
+                      <div>
+                        <span className={`${FLOW_SECTION_LABEL} mb-1 leading-none`}>PO number</span>
+                        <div className="group">
+                          <SearchBar
+                            value={poNumberEdit}
+                            onChange={setPoNumberEdit}
+                            onSearch={(v) => {
+                              const trimmed = v.trim();
+                              const current = (row.zoho_purchaseorder_number || row.zoho_purchaseorder_id || '').trim();
+                              if (trimmed !== current) {
+                                void persistPoNumber(trimmed);
+                              }
+                            }}
+                            inputRef={poInputRef}
+                            placeholder="PO-1234"
+                            variant="blue"
+                            size="compact"
+                            hideUnderline
+                            pasteOnlyTrailing
+                            className="w-full"
+                          />
+                          <div className={RECEIVING_SCAN_RULE_LINE_CLASS} aria-hidden />
+                        </div>
+                      </div>
+                    ) : null}
                   {trackingEditorsOpen ? (
                     <>
                       <div className="flex items-center justify-between gap-2">
@@ -1683,8 +1832,9 @@ export function LineEditPanel({
                       </div>
                     </>
                   ) : null}
-                </div>
-              ) : null}
+                  </div>
+                );
+              })()}
             </div>
 
             {/* Platform (left, scrolls) + Type (right). */}
@@ -1816,78 +1966,68 @@ export function LineEditPanel({
                 activeLineId={row.id}
                 activeRowSlot={({ serials }) => (
                   <div className="space-y-3">
-                    <ConditionPills
-                      value={cond}
-                      onChange={(next) => {
-                        setCond(next);
-                        markConditionSet(row.id);
-                        void patch({ condition_grade: next });
-                      }}
-                    />
-                    {/* Serial scan input lives inside the active PO item row
-                        — same place ConditionPills lives — so switching to a
-                        sibling PO item smoothly relocates the input without
-                        a jump. `serials` comes from the accordion's own
-                        query so the chip list below the input always agrees
-                        with the chip in the row header — `row.serials` is
-                        fed by a different fetch cadence and can lag/be
-                        cleared on a sibling switch. */}
-                    <InlineSerialAdder
-                      key={`adder-${row.id}`}
-                      lineId={row.id}
-                      saved={serials}
-                      expected={row.quantity_expected ?? null}
-                      isSubmitting={serialSubmitting}
-                      disabled={!row.receiving_id}
-                      onAdd={(_lineId, sn) => submitSerial(sn)}
-                      onReplaceSerial={(_lineId, original, nextSerial) => {
-                        void (async () => {
-                          const res = await fetch('/api/receiving/scan-serial', {
-                            method: 'DELETE',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({
-                              serial_unit_id: original.id,
-                              receiving_line_id: row.id,
-                            }),
-                          });
-                          const data = await res.json().catch(() => null);
-                          if (!res.ok || !data?.success) {
-                            toast.error(data?.error || 'Could not replace serial');
-                            return;
-                          }
-                          await submitSerial(nextSerial);
-                        })();
-                      }}
-                      onDelete={(_lineId, s) => {
-                        if (s.id == null) return;
-                        if (!window.confirm(`Remove serial ${s.serial_number}?`)) return;
-                        void (async () => {
-                          const res = await fetch('/api/receiving/scan-serial', {
-                            method: 'DELETE',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({
-                              serial_unit_id: s.id,
-                              receiving_line_id: row.id,
-                            }),
-                          });
-                          const data = await res.json().catch(() => null);
-                          if (!res.ok || !data?.success) {
-                            toast.error(data?.error || 'Could not remove serial');
-                            return;
-                          }
-                          toast.success('Serial removed');
-                          if (data.line_state?.id != null) {
-                            dispatchLineUpdated({
-                              id: data.line_state.id,
-                              quantity_received: data.line_state.quantity_received,
-                              quantity_expected: data.line_state.quantity_expected,
-                              workflow_status: data.line_state.workflow_status ?? undefined,
-                            });
-                          }
-                          await refreshLineWithSerials();
-                        })();
-                      }}
-                    />
+                    {/* Multi-qty same-product lines split into one row per unit
+                        (own condition + own serial, divided by a thin line).
+                        Single-qty lines — including a PARTS product carrying
+                        several part-serials under one unit — keep the single
+                        condition + serial block. */}
+                    {(row.quantity_expected ?? 0) > 1 ? (
+                      <ReceivingUnitRows
+                        lineId={row.id}
+                        saved={serials as UnitSerial[]}
+                        quantityExpected={row.quantity_expected ?? 1}
+                        lineCondition={cond}
+                        disabled={!row.receiving_id}
+                        isSubmitting={serialSubmitting}
+                        onAddSerial={(sn, grade) => submitSerial(sn, grade)}
+                        onDeleteSerial={(id) => {
+                          if (!window.confirm('Remove this serial?')) return;
+                          void deleteSerialUnit(id);
+                        }}
+                        onReplaceSerial={(original, next) =>
+                          void replaceSerialUnit(original, next)
+                        }
+                        onSetUnitGrade={(id, grade) => setUnitGrade(id, grade)}
+                      />
+                    ) : (
+                      <>
+                        <ConditionPills
+                          value={cond}
+                          onChange={(next) => {
+                            setCond(next);
+                            markConditionSet(row.id);
+                            void patch({ condition_grade: next });
+                          }}
+                        />
+                        {/* Serial scan input lives inside the active PO item
+                            row — same place ConditionPills lives — so switching
+                            to a sibling PO item smoothly relocates the input
+                            without a jump. `serials` comes from the accordion's
+                            own query so the chips always agree with the row
+                            header. */}
+                        <InlineSerialAdder
+                          key={`adder-${row.id}`}
+                          lineId={row.id}
+                          saved={serials}
+                          expected={row.quantity_expected ?? null}
+                          isSubmitting={serialSubmitting}
+                          disabled={!row.receiving_id}
+                          onAdd={(_lineId, sn) => submitSerial(sn)}
+                          onReplaceSerial={(_lineId, original, nextSerial) => {
+                            if (original.id == null) return;
+                            void replaceSerialUnit(
+                              { id: original.id, serial_number: original.serial_number },
+                              nextSerial,
+                            );
+                          }}
+                          onDelete={(_lineId, s) => {
+                            if (s.id == null) return;
+                            if (!window.confirm(`Remove serial ${s.serial_number}?`)) return;
+                            void deleteSerialUnit(s.id);
+                          }}
+                        />
+                      </>
+                    )}
                   </div>
                 )}
               />

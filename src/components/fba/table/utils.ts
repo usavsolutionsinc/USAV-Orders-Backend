@@ -83,7 +83,7 @@ export function deriveItemStatus(row: PrintQueueItem): {
       pending_reason_note: row.pending_reason_note || row.item_notes || undefined,
     };
   }
-  if (s === 'PACKING') {
+  if (s === 'PACKED') {
     return { status: 'needs_print', pending_reason: null };
   }
   return { status: 'ready_to_print', pending_reason: null };
@@ -119,7 +119,7 @@ export function enrichFromApi(row: PrintQueueItem & { status?: string; notes?: s
 export function canRemoveFbaPrintQueueLine(item: EnrichedItem): boolean {
   if (Number(item.expected_qty) !== 1 || Number(item.actual_qty) !== 0) return false;
   const s = String(item.item_status || '').toUpperCase();
-  return s === 'PLANNED' || s === 'READY_TO_GO';
+  return s === 'PLANNED' || s === 'TESTED';
 }
 
 export function dayKeyFromDue(iso: string | null): string {

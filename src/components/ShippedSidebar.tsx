@@ -11,9 +11,6 @@ import {
     AlertTriangle,
     Plus,
     Barcode,
-    ClipboardList,
-    Layout,
-    Package,
     Layers,
     FileText,
     Hash,
@@ -39,6 +36,7 @@ import {
     SHIPPED_SEARCH_FIELDS,
     type ShippedSearchField,
 } from '@/lib/shipped-search';
+import { ShippedCarrierFilters } from '@/components/shipping/ShippedFilterToolbar';
 
 interface SearchHistory {
     query: string;
@@ -66,13 +64,6 @@ interface ShippedSidebarProps {
     autoFocusSearch?: boolean;
 }
 
-
-const SHIPPED_FILTER_ITEMS: HorizontalSliderItem[] = [
-    { id: 'orders', label: 'Orders', icon: ClipboardList },
-    { id: 'all',    label: 'All',    icon: Layout },
-    { id: 'sku',    label: 'SKU',    icon: Barcode },
-    { id: 'fba',    label: 'FBA',    icon: Package },
-];
 
 const SHIPPED_SEARCH_FIELD_ICONS: Record<
     ShippedSearchField,
@@ -115,10 +106,15 @@ export default function ShippedSidebar({
     const [inputValue, setInputValue] = useState(searchValue);
     const debouncedQuery = useDebounce(inputValue, 250);
     const trimmedQuery = debouncedQuery.trim();
+    // The "search by" field pills are hidden until the search bar is focused.
+    const [searchFocused, setSearchFocused] = useState(false);
 
     const searchResult = useShippedSearch({
         query: trimmedQuery,
-        shippedFilter,
+        // The Shipped tab now shows only order-type records; SKU / FBA get their
+        // own sub-pages, so the type-filter pills were removed and the slice is
+        // fixed to orders.
+        shippedFilter: 'orders',
         searchField: shippedSearchField,
     });
     const results: ShippedOrder[] = searchResult.data?.records ?? [];
@@ -314,61 +310,79 @@ Shipped: ${result.packed_at ? formatDateTimePST(result.packed_at) : 'Not Shipped
                     ) : null}
 
                     <motion.div variants={itemVariants} className="space-y-4">
-                        {/* Search Bar */}
-                        <SearchBar
-                            value={inputValue}
-                            onChange={setInputValue}
-                            placeholder={getShippedSearchPlaceholder(shippedSearchField)}
-                            isSearching={isSearching}
-                            variant="blue"
-                            autoFocus={Boolean(embedded && autoFocusSearch)}
-                            rightElement={
-                                <button
-                                    type="button"
-                                    onClick={() => {
-                                        const params = new URLSearchParams(searchParams.toString());
-                                        params.set('new', 'true');
-                                        const nextSearch = params.toString();
-                                        router.replace(nextSearch ? `${pathname || '/dashboard'}?${nextSearch}` : pathname || '/dashboard');
-                                    }}
-                                    className="rounded-xl bg-emerald-500 p-2.5 text-white transition-colors hover:bg-emerald-600 disabled:bg-gray-300"
-                                    title="New Order Entry"
-                                    aria-label="Open new order entry form"
-                                >
-                                    <Plus className="h-5 w-5" />
-                                </button>
-                            }
-                        />
-
-                        {/* Type filter — nav pills */}
-                        {onShippedFilterChange && (
-                            <HorizontalButtonSlider
-                                items={SHIPPED_FILTER_ITEMS}
-                                value={shippedFilter}
-                                onChange={(id) => onShippedFilterChange(id as ShippedTypeFilter)}
-                                variant="nav"
-                                aria-label="Shipped type filter"
+                        {/* Search bar + the "search by" field pills it reveals.
+                            Focus events bubble to this wrapper, so the panel stays
+                            open while focus moves between the input and a pill. */}
+                        <div
+                            onFocus={() => setSearchFocused(true)}
+                            onBlur={(e) => {
+                                if (!e.currentTarget.contains(e.relatedTarget as Node | null)) {
+                                    setSearchFocused(false);
+                                }
+                            }}
+                        >
+                            <SearchBar
+                                value={inputValue}
+                                onChange={setInputValue}
+                                placeholder={getShippedSearchPlaceholder(shippedSearchField)}
+                                isSearching={isSearching}
+                                variant="blue"
+                                autoFocus={Boolean(embedded && autoFocusSearch)}
+                                rightElement={
+                                    <button
+                                        type="button"
+                                        onClick={() => {
+                                            const params = new URLSearchParams(searchParams.toString());
+                                            params.set('new', 'true');
+                                            const nextSearch = params.toString();
+                                            router.replace(nextSearch ? `${pathname || '/dashboard'}?${nextSearch}` : pathname || '/dashboard');
+                                        }}
+                                        className="rounded-xl bg-emerald-500 p-2.5 text-white transition-colors hover:bg-emerald-600 disabled:bg-gray-300"
+                                        title="New Order Entry"
+                                        aria-label="Open new order entry form"
+                                    >
+                                        <Plus className="h-5 w-5" />
+                                    </button>
+                                }
                             />
-                        )}
 
-                        {onShippedSearchFieldChange && (
-                            <HorizontalButtonSlider
-                                items={SHIPPED_SEARCH_FIELDS.map((field) => ({
-                                    id: field.id,
-                                    label: field.label,
-                                    icon: SHIPPED_SEARCH_FIELD_ICONS[field.id],
-                                }))}
-                                value={shippedSearchField}
-                                onChange={(id) => onShippedSearchFieldChange(id as ShippedSearchField)}
-                                variant="nav"
-                                size="md"
-                                aria-label="Shipped search field"
-                            />
-                        )}
+                            {/* "Search by" field pills — hidden until the search bar is
+                                focused, then they slide down into view from the top. */}
+                            <AnimatePresence initial={false}>
+                                {onShippedSearchFieldChange && searchFocused ? (
+                                    <motion.div
+                                        key="shipped-search-by"
+                                        initial={{ height: 0, opacity: 0, y: -8 }}
+                                        animate={{ height: 'auto', opacity: 1, y: 0 }}
+                                        exit={{ height: 0, opacity: 0, y: -8 }}
+                                        transition={{ duration: 0.2, ease: 'easeOut' }}
+                                        className="overflow-hidden"
+                                    >
+                                        <div className="space-y-2 pt-3">
+                                            <HorizontalButtonSlider
+                                                items={SHIPPED_SEARCH_FIELDS.map((field) => ({
+                                                    id: field.id,
+                                                    label: field.label,
+                                                    icon: SHIPPED_SEARCH_FIELD_ICONS[field.id],
+                                                }))}
+                                                value={shippedSearchField}
+                                                onChange={(id) => onShippedSearchFieldChange(id as ShippedSearchField)}
+                                                variant="nav"
+                                                size="md"
+                                                aria-label="Shipped search field"
+                                                // Left inset so the first pill isn't flush to the edge at min scroll.
+                                                className="pl-3"
+                                            />
+                                            <p className={`${microBadge} text-gray-500 px-1`}>
+                                                {getShippedSearchHelperText(shippedSearchField)}
+                                            </p>
+                                        </div>
+                                    </motion.div>
+                                ) : null}
+                            </AnimatePresence>
+                        </div>
 
-                        <p className={`${microBadge} text-gray-500 px-1`}>
-                            {getShippedSearchHelperText(shippedSearchField)}
-                        </p>
+                        <ShippedCarrierFilters layout="sidebar" />
 
                         {/* Search Results */}
                         {results.length > 0 && (

@@ -1,10 +1,130 @@
 {
-  "generatedAt": "2026-05-25T22:43:19.011Z",
+  "generatedAt": "2026-05-28T21:37:27.549Z",
   "count": 199,
   "commits": [
     {
+      "sha": "38623bc3d612a1843cd3b3fe2caf6631369c3daa",
+      "shortSha": "38623bc3",
+      "date": "2026-05-27T16:59:45-07:00",
+      "author": "usavsolutionsinc",
+      "subject": "shipping updates and receiving incoming page",
+      "body": "",
+      "type": "other",
+      "title": "shipping updates and receiving incoming page"
+    },
+    {
+      "sha": "6e75b78bc3a8307866602bb9fd96af9c21e1823b",
+      "shortSha": "6e75b78b",
+      "date": "2026-05-27T10:36:25-07:00",
+      "author": "usavsolutionsinc",
+      "subject": "receiving udpate adn the testing sub page update",
+      "body": "",
+      "type": "other",
+      "title": "receiving udpate adn the testing sub page update"
+    },
+    {
+      "sha": "55fd66e4bad66d32c4a0c2c0e20e70e34ef3f5e7",
+      "shortSha": "55fd66e4",
+      "date": "2026-05-26T16:59:57-07:00",
+      "author": "usavsolutionsinc",
+      "subject": "added a testing pipeline to the testing page and updated the receiving pipeline",
+      "body": "",
+      "type": "other",
+      "title": "added a testing pipeline to the testing page and updated the receiving pipeline"
+    },
+    {
+      "sha": "2d3c2f037f3639dd25dc87610ec4d53a65d427b3",
+      "shortSha": "2d3c2f03",
+      "date": "2026-05-26T12:32:47-07:00",
+      "author": "usavsolutionsinc",
+      "subject": "station scan bar updates and dashboard order created at bug from search",
+      "body": "",
+      "type": "other",
+      "title": "station scan bar updates and dashboard order created at bug from search"
+    },
+    {
+      "sha": "f2736f95508575742d87ccf2dcbf469b7164c5ce",
+      "shortSha": "f2736f95",
+      "date": "2026-05-26T10:36:29-07:00",
+      "author": "usavsolutionsinc",
+      "subject": "updated the staff colors",
+      "body": "",
+      "type": "other",
+      "title": "updated the staff colors"
+    },
+    {
+      "sha": "401c0c8eec34ca176094f373ae1dc0527a5948fb",
+      "shortSha": "401c0c8e",
+      "date": "2026-05-26T09:43:51-07:00",
+      "author": "usavsolutionsinc",
+      "subject": "updated the packer to be more supportive of older devices",
+      "body": "",
+      "type": "other",
+      "title": "updated the packer to be more supportive of older devices"
+    },
+    {
+      "sha": "272c0b1387c65895909b0b4c8d5631dee0530ab0",
+      "shortSha": "272c0b13",
+      "date": "2026-05-26T08:48:22-07:00",
+      "author": "DENSENSE8",
+      "subject": " updated the inventory, multi number of barcode data, matrix printing out, and the overall UI of the receiving and the products page",
+      "body": "",
+      "type": "other",
+      "title": " updated the inventory, multi number of barcode data, matrix printing out, and the overall UI of the receiving and the products page"
+    },
+    {
+      "sha": "0bf84c1f9c664edde138d1ff623b086d3f1a5fb9",
+      "shortSha": "0bf84c1f",
+      "date": "2026-05-26T01:40:38-07:00",
+      "author": "DENSENSE8",
+      "subject": " updated the dashboard region import logic, and the cashing dashboard table, logic products page to be more ease of use receiving pair recent orders, exceptions, and multi serial number barcode component",
+      "body": "",
+      "type": "other",
+      "title": " updated the dashboard region import logic, and the cashing dashboard table, logic products page to be more ease of use receiving pair recent orders, exceptions, and multi serial number barcode component"
+    },
+    {
+      "sha": "7a12428b30ce0c8750dd92d6eec63f44b463122f",
+      "shortSha": "7a12428b",
+      "date": "2026-05-26T00:27:07-07:00",
+      "author": "DENSENSE8",
+      "subject": " updated the receiving side bar for a better display overall and manuals and staff display and sessions staff access",
+      "body": "",
+      "type": "other",
+      "title": " updated the receiving side bar for a better display overall and manuals and staff display and sessions staff access"
+    },
+    {
+      "sha": "0cc4ac89ed663d467b46323a8411b73c7a2d4613",
+      "shortSha": "0cc4ac89",
+      "date": "2026-05-25T23:48:01-07:00",
+      "author": "DENSENSE8",
+      "subject": "update in the mobile page resolver to resolve two data matrix instead of posting to the receiving table and small edits to the manual routes",
+      "body": "",
+      "type": "other",
+      "title": "update in the mobile page resolver to resolve two data matrix instead of posting to the receiving table and small edits to the manual routes"
+    },
+    {
+      "sha": "4fad25cd814541cabf1693e3d35ef7930c9227c3",
+      "shortSha": "4fad25cd",
+      "date": "2026-05-25T22:26:10-07:00",
+      "author": "DENSENSE8",
+      "subject": "Updated the usability of the FBA page and the products page to be easier to use an easier to find items that we need",
+      "body": "",
+      "type": "other",
+      "title": "Updated the usability of the FBA page and the products page to be easier to use an easier to find items that we need"
+    },
+    {
+      "sha": "064d0e764c2d8560e07da8f0ac9048736b4bf828",
+      "shortSha": "064d0e76",
+      "date": "2026-05-25T15:56:22-07:00",
+      "author": "usavsolutionsinc",
+      "subject": "updates to the PO main receiving",
+      "body": "",
+      "type": "other",
+      "title": "updates to the PO main receiving"
+    },
+    {
       "sha": "846ef0c1074d8fdf46175017915a290e30cc0110",
-      "shortSha": "846ef0c",
+      "shortSha": "846ef0c1",
       "date": "2026-05-25T14:48:25-07:00",
       "author": "usavsolutionsinc",
       "subject": "ai extract and updates to the unfound receiving orders list",
@@ -14,7 +134,7 @@
     },
     {
       "sha": "23f6295a708c574e3a29a8027e7a18c0a37c0e05",
-      "shortSha": "23f6295",
+      "shortSha": "23f6295a",
       "date": "2026-05-25T09:08:30-07:00",
       "author": "usavsolutionsinc",
       "subject": "updated the TS error fixed and should deploy now",
@@ -24,7 +144,7 @@
     },
     {
       "sha": "4815e12266583da23d63d23f5441957dc9424086",
-      "shortSha": "4815e12",
+      "shortSha": "4815e122",
       "date": "2026-05-25T01:23:38-07:00",
       "author": "DENSENSE8",
       "subject": "chore: rollup of in-flight receiving, repair, operations, and FBA work",
@@ -34,7 +154,7 @@
     },
     {
       "sha": "84ed2cce32d6c7ae1f8544d963daacd0cf56dff4",
-      "shortSha": "84ed2cc",
+      "shortSha": "84ed2cce",
       "date": "2026-05-25T01:21:51-07:00",
       "author": "DENSENSE8",
       "subject": "feat(inventory): tabbed sidebar overhaul + activity inbox in FAB popover",
@@ -44,7 +164,7 @@
     },
     {
       "sha": "1ac48ae07402b9ef692e5b21e66af81105053141",
-      "shortSha": "1ac48ae",
+      "shortSha": "1ac48ae0",
       "date": "2026-05-24T13:26:30-07:00",
       "author": "DENSENSE8",
       "subject": "updated the main interface and design system, tech pages to be very simple",
@@ -54,7 +174,7 @@
     },
     {
       "sha": "0f309dafb0fed78f6edb88a661a18a776705de6e",
-      "shortSha": "0f309da",
+      "shortSha": "0f309daf",
       "date": "2026-05-22T17:04:20-07:00",
       "author": "usavsolutionsinc",
       "subject": "updated a lot",
@@ -64,7 +184,7 @@
     },
     {
       "sha": "11476f0c26b9a1cb444061a1bfd1cd9cccd5a7ac",
-      "shortSha": "11476f0",
+      "shortSha": "11476f0c",
       "date": "2026-05-22T11:59:04-07:00",
       "author": "usavsolutionsinc",
       "subject": "feat(electron): Edit menu + draggable top strip",
@@ -74,7 +194,7 @@
     },
     {
       "sha": "c4452a12e09dbb383d45288af7357ef76201b55d",
-      "shortSha": "c4452a1",
+      "shortSha": "c4452a12",
       "date": "2026-05-22T11:26:23-07:00",
       "author": "usavsolutionsinc",
       "subject": "feat(receiving): optimistic receive, idempotent rescans, Zoho slide-in pane",
@@ -84,7 +204,7 @@
     },
     {
       "sha": "5e19cd9197b8ace5573b5c262dd56988fdced00e",
-      "shortSha": "5e19cd9",
+      "shortSha": "5e19cd91",
       "date": "2026-05-22T10:18:21-07:00",
       "author": "usavsolutionsinc",
       "subject": "fixed ts error",
@@ -94,7 +214,7 @@
     },
     {
       "sha": "5e9208c97d7143c48c2b3fcd53bbc503842f2569",
-      "shortSha": "5e9208c",
+      "shortSha": "5e9208c9",
       "date": "2026-05-22T08:49:21-07:00",
       "author": "DENSENSE8",
       "subject": "feat: receiving workflow overhaul, SKU pairing hub, PO mailbox triage, and warehouse/label improvements",
@@ -104,7 +224,7 @@
     },
     {
       "sha": "dac10049ce9d7d40b18d879bfe7c99c1c981c139",
-      "shortSha": "dac1004",
+      "shortSha": "dac10049",
       "date": "2026-05-21T17:00:21-07:00",
       "author": "usavsolutionsinc",
       "subject": "sku and receiving and products mutlisku component",
@@ -114,7 +234,7 @@
     },
     {
       "sha": "7a7b8108393066d8537b9249fc8dbf53a10b76cd",
-      "shortSha": "7a7b810",
+      "shortSha": "7a7b8108",
       "date": "2026-05-21T13:48:15-07:00",
       "author": "usavsolutionsinc",
       "subject": "updated picker and receiving mobile display",
@@ -124,7 +244,7 @@
     },
     {
       "sha": "5884266918d534731142c2c64246a217e7f2bcfd",
-      "shortSha": "5884266",
+      "shortSha": "58842669",
       "date": "2026-05-21T12:13:19-07:00",
       "author": "usavsolutionsinc",
       "subject": "updated the receiving display for the mobile view",
@@ -134,7 +254,7 @@
     },
     {
       "sha": "914779ede2725eaafe0a70db213ab31839cd57f0",
-      "shortSha": "914779e",
+      "shortSha": "914779ed",
       "date": "2026-05-21T11:14:43-07:00",
       "author": "usavsolutionsinc",
       "subject": "bug fix for tech and packer org id",
@@ -144,7 +264,7 @@
     },
     {
       "sha": "a03598e71c21e430a958e79700a826c8dbf86e1e",
-      "shortSha": "a03598e",
+      "shortSha": "a03598e7",
       "date": "2026-05-21T15:12:40+07:00",
       "author": "IT-USAV",
       "subject": "chore: remove .env from github",
@@ -154,7 +274,7 @@
     },
     {
       "sha": "21b9ab08abec6d513c3beb1f3057fc62f5d15d9e",
-      "shortSha": "21b9ab0",
+      "shortSha": "21b9ab08",
       "date": "2026-05-20T16:11:47-07:00",
       "author": "usavsolutionsinc",
       "subject": "updated silent printing for macos intel support",
@@ -164,7 +284,7 @@
     },
     {
       "sha": "cfe69d23ea5e3a36863c8e66b4640e062a52cbef",
-      "shortSha": "cfe69d2",
+      "shortSha": "cfe69d23",
       "date": "2026-05-20T13:27:30-07:00",
       "author": "usavsolutionsinc",
       "subject": "updated ZD updates from receiving and zoho submit via async functions, permissions update,",
@@ -174,7 +294,7 @@
     },
     {
       "sha": "0349c92339216fdafdc59bedfc31302738a38654",
-      "shortSha": "0349c92",
+      "shortSha": "0349c923",
       "date": "2026-05-20T12:58:31-07:00",
       "author": "DENSENSE8",
       "subject": "updated global staff and org and move resolver qr code",
@@ -184,7 +304,7 @@
     },
     {
       "sha": "908fc1ae39780f4767d197236d654f7251048a68",
-      "shortSha": "908fc1a",
+      "shortSha": "908fc1ae",
       "date": "2026-05-19T16:54:50-07:00",
       "author": "usavsolutionsinc",
       "subject": "fixed some bugs causing errors in the system like role picker for staff and packing website problems",
@@ -194,7 +314,7 @@
     },
     {
       "sha": "9ec76f3843e4d55ae869019755b0c854d03e5885",
-      "shortSha": "9ec76f3",
+      "shortSha": "9ec76f38",
       "date": "2026-05-19T15:13:55-07:00",
       "author": "usavsolutionsinc",
       "subject": "products: restore SKU label printer workspace on /products",
@@ -204,7 +324,7 @@
     },
     {
       "sha": "216e036fe1e3874449d7a486477ed221c7702863",
-      "shortSha": "216e036",
+      "shortSha": "216e036f",
       "date": "2026-05-19T14:40:42-07:00",
       "author": "usavsolutionsinc",
       "subject": "New manuals blob and printing page, new photos backup button to gemini for hunting down for evidence and updated warehouse and inventory changes",
@@ -214,7 +334,7 @@
     },
     {
       "sha": "48506e38eadf55193dae69483467bdcafcf8243e",
-      "shortSha": "48506e3",
+      "shortSha": "48506e38",
       "date": "2026-05-19T14:31:29-07:00",
       "author": "usavsolutionsinc",
       "subject": "manuals: convert .docx → PDF, host in Vercel Blob, add /manuals/library",
@@ -224,7 +344,7 @@
     },
     {
       "sha": "2abe07fcdbfa69d3b24856b61f0de0de99cafd1e",
-      "shortSha": "2abe07f",
+      "shortSha": "2abe07fc",
       "date": "2026-05-19T02:06:59-07:00",
       "author": "DENSENSE8",
       "subject": "ware house printer, repair page, tech page, fully updated the receiving pipeline, improve mobile app for pills display not dropdowns,",
@@ -234,7 +354,7 @@
     },
     {
       "sha": "2ad4f44515f6251a083365e53f6c0c203496a085",
-      "shortSha": "2ad4f44",
+      "shortSha": "2ad4f445",
       "date": "2026-05-18T16:52:07-07:00",
       "author": "usavsolutionsinc",
       "subject": "inventory: ByFilter view + State/Condition chips",
@@ -244,7 +364,7 @@
     },
     {
       "sha": "b158976f49247c610acfa5dcc06724c3e4c7b895",
-      "shortSha": "b158976",
+      "shortSha": "b158976f",
       "date": "2026-05-18T16:47:02-07:00",
       "author": "usavsolutionsinc",
       "subject": "inventory rename Phase D + ByUnit view + empty-bin toggle",
@@ -254,7 +374,7 @@
     },
     {
       "sha": "a418c2cd8a9af467443602e8e642e9b8d298eaea",
-      "shortSha": "a418c2c",
+      "shortSha": "a418c2cd",
       "date": "2026-05-18T16:40:50-07:00",
       "author": "usavsolutionsinc",
       "subject": "inventory/warehouse rename Phase B/C + pinless signin",
@@ -264,7 +384,7 @@
     },
     {
       "sha": "03c06df08c26bc90512e72c6da3d657e81fc81d0",
-      "shortSha": "03c06df",
+      "shortSha": "03c06df0",
       "date": "2026-05-18T16:40:47-07:00",
       "author": "usavsolutionsinc",
       "subject": "desktop app: install page with OS detection + Vercel Blob installer hosting",
@@ -274,7 +394,7 @@
     },
     {
       "sha": "b822685c8908bd175d4e3c3a98dca0db0af1cfb6",
-      "shortSha": "b822685",
+      "shortSha": "b822685c",
       "date": "2026-05-18T12:47:24-07:00",
       "author": "DENSENSE8",
       "subject": "auth: admin perms no step-up; sidebar avatar uses DB color_hex",
@@ -284,7 +404,7 @@
     },
     {
       "sha": "3d8b201e3a5846e170728696dacafe1912bf7101",
-      "shortSha": "3d8b201",
+      "shortSha": "3d8b201e",
       "date": "2026-05-18T08:40:24-07:00",
       "author": "DENSENSE8",
       "subject": "plan: Products / Inventory / Warehouse rename + modernization",
@@ -294,7 +414,7 @@
     },
     {
       "sha": "735375c2bf8f76f2a6d614c557f9132491bf9aba",
-      "shortSha": "735375c",
+      "shortSha": "735375c2",
       "date": "2026-05-18T08:01:05-07:00",
       "author": "DENSENSE8",
       "subject": "inventory v2 #4: Zoho order-intake webhook + auto-allocation",
@@ -304,7 +424,7 @@
     },
     {
       "sha": "35ff10b04eb50d5f39b9d8b5f297a860cd3be69b",
-      "shortSha": "35ff10b",
+      "shortSha": "35ff10b0",
       "date": "2026-05-18T07:58:02-07:00",
       "author": "DENSENSE8",
       "subject": "inventory v2 #2: cycle count admin UI",
@@ -314,7 +434,7 @@
     },
     {
       "sha": "c90635eaae4afa42b8ca03a31103a5263825c0ec",
-      "shortSha": "c90635e",
+      "shortSha": "c90635ea",
       "date": "2026-05-18T07:53:09-07:00",
       "author": "DENSENSE8",
       "subject": "inventory v2 #3: throughput dashboard",
@@ -324,7 +444,7 @@
     },
     {
       "sha": "4d69d80d9891d4eb5f695ba2694f2c20ad66299a",
-      "shortSha": "4d69d80",
+      "shortSha": "4d69d80d",
       "date": "2026-05-18T07:50:54-07:00",
       "author": "DENSENSE8",
       "subject": "inventory v2 #1: returns intake admin tool + shared helper",
@@ -334,7 +454,7 @@
     },
     {
       "sha": "e18cb4d292b21971a71883de489ae8f9fa6b117e",
-      "shortSha": "e18cb4d",
+      "shortSha": "e18cb4d2",
       "date": "2026-05-18T07:47:09-07:00",
       "author": "DENSENSE8",
       "subject": "QR label UI surgery on MultiSkuSnBarcode + BarcodePreview",
@@ -344,7 +464,7 @@
     },
     {
       "sha": "91169695c8714654dbe06daa3aa025f9713d701a",
-      "shortSha": "9116969",
+      "shortSha": "91169695",
       "date": "2026-05-18T01:06:18-07:00",
       "author": "DENSENSE8",
       "subject": "inventory v2: hold/release helpers + admin page",
@@ -354,7 +474,7 @@
     },
     {
       "sha": "ccc06043b9aa9a51a86ff8301838c0fe02e34d90",
-      "shortSha": "ccc0604",
+      "shortSha": "ccc06043",
       "date": "2026-05-18T01:01:45-07:00",
       "author": "DENSENSE8",
       "subject": "inventory v2: bulk-allocate admin page + shared allocation helper",
@@ -364,7 +484,7 @@
     },
     {
       "sha": "85cca78f8183c64bbb0f57a2d3a6449453cf5700",
-      "shortSha": "85cca78",
+      "shortSha": "85cca78f",
       "date": "2026-05-18T00:56:18-07:00",
       "author": "DENSENSE8",
       "subject": "inventory v2 admin: events explorer page + dashboard link",
@@ -374,7 +494,7 @@
     },
     {
       "sha": "6ad1979408590e112d167a37da79561f27f37178",
-      "shortSha": "6ad1979",
+      "shortSha": "6ad19794",
       "date": "2026-05-18T00:52:18-07:00",
       "author": "DENSENSE8",
       "subject": "inventory v2 admin: preflight panel + open DRIFT alerts surface",
@@ -384,7 +504,7 @@
     },
     {
       "sha": "c040e55107f3a2212f2fd5871e1c0b63d862e458",
-      "shortSha": "c040e55",
+      "shortSha": "c040e551",
       "date": "2026-05-18T00:44:43-07:00",
       "author": "DENSENSE8",
       "subject": "inventory v2: drift-check cron + DRIFT stock-alert type",
@@ -394,7 +514,7 @@
     },
     {
       "sha": "86e6d3b9dde0951f41ddf54ca809a6cbcc1fb20d",
-      "shortSha": "86e6d3b",
+      "shortSha": "86e6d3b9",
       "date": "2026-05-18T00:37:49-07:00",
       "author": "DENSENSE8",
       "subject": "QR label migration: QR-only print template + GTIN backfill ran",
@@ -404,7 +524,7 @@
     },
     {
       "sha": "d6e7326df6a8e8615d6ff695fe344055ac90a9fa",
-      "shortSha": "d6e7326",
+      "shortSha": "d6e7326d",
       "date": "2026-05-18T00:30:16-07:00",
       "author": "DENSENSE8",
       "subject": "QR label migration: internal-GTIN + unit-ID + /api/units/next-id (infra)",
@@ -414,7 +534,7 @@
     },
     {
       "sha": "f9005d2331082aacc63794e04dff5bd96e7c4b87",
-      "shortSha": "f9005d2",
+      "shortSha": "f9005d23",
       "date": "2026-05-17T23:57:58-07:00",
       "author": "DENSENSE8",
       "subject": "QStash: bootstrap script + sync replenishment entry back to config",
@@ -424,7 +544,7 @@
     },
     {
       "sha": "8085f0bed3d41d9b7d89037add424e55bf18d993",
-      "shortSha": "8085f0b",
+      "shortSha": "8085f0be",
       "date": "2026-05-17T23:40:43-07:00",
       "author": "DENSENSE8",
       "subject": "Move Vercel crons to QStash (zero Vercel cron billing)",
@@ -434,7 +554,7 @@
     },
     {
       "sha": "058b7771599626782667d077e27508904cefa82f",
-      "shortSha": "058b777",
+      "shortSha": "058b7771",
       "date": "2026-05-17T23:31:15-07:00",
       "author": "DENSENSE8",
       "subject": "inventory v2 Phase 8.4: SKU detail page + cross-links",
@@ -444,7 +564,7 @@
     },
     {
       "sha": "b04c75a7eb67639ecd3699f7c5f537cccf4fd01f",
-      "shortSha": "b04c75a",
+      "shortSha": "b04c75a7",
       "date": "2026-05-17T23:17:24-07:00",
       "author": "DENSENSE8",
       "subject": "inventory v2 Phase 8.2/8.3: per-unit timeline + lookup form",
@@ -454,7 +574,7 @@
     },
     {
       "sha": "b4b01225206c70ba17465f90988fcc2f376617a3",
-      "shortSha": "b4b0122",
+      "shortSha": "b4b01225",
       "date": "2026-05-17T23:14:05-07:00",
       "author": "DENSENSE8",
       "subject": "inventory v2 Phase 8.1: admin status page + backfill fix",
@@ -464,7 +584,7 @@
     },
     {
       "sha": "caadad3c4530b39d67e804dabd304924dd9119fd",
-      "shortSha": "caadad3",
+      "shortSha": "caadad3c",
       "date": "2026-05-17T22:59:17-07:00",
       "author": "DENSENSE8",
       "subject": "inventory v2 Phase 7: returns intake + hold/release (flagged)",
@@ -474,7 +594,7 @@
     },
     {
       "sha": "426ff893817e7df650b401e7704c79fc17dde01b",
-      "shortSha": "426ff89",
+      "shortSha": "426ff893",
       "date": "2026-05-17T22:57:08-07:00",
       "author": "DENSENSE8",
       "subject": "inventory v2 Phase 6: FBA serial linkage + per-unit decrement (flagged)",
@@ -484,7 +604,7 @@
     },
     {
       "sha": "24a7e4f58b441b4c8bb62b96ca4f92c653c4b3eb",
-      "shortSha": "24a7e4f",
+      "shortSha": "24a7e4f5",
       "date": "2026-05-17T22:55:03-07:00",
       "author": "DENSENSE8",
       "subject": "inventory v2 Phase 5: pack/ship single-decrement transaction (flagged)",
@@ -494,7 +614,7 @@
     },
     {
       "sha": "1735fec158d97427f4dc930840143b8903afd9a0",
-      "shortSha": "1735fec",
+      "shortSha": "1735fec1",
       "date": "2026-05-17T22:53:00-07:00",
       "author": "DENSENSE8",
       "subject": "inventory v2 Phase 4: order allocation + pick scan (flagged)",
@@ -504,7 +624,7 @@
     },
     {
       "sha": "19f7154524a23b79a5cfcc6ce07794b9fd73a0bd",
-      "shortSha": "19f7154",
+      "shortSha": "19f71545",
       "date": "2026-05-17T22:49:30-07:00",
       "author": "DENSENSE8",
       "subject": "inventory v2 Phase 3: tech-station lifecycle wiring (flagged)",
@@ -514,7 +634,7 @@
     },
     {
       "sha": "14ebb811e2e037994c42ccb40d2fd8a9db75ffd7",
-      "shortSha": "14ebb81",
+      "shortSha": "14ebb811",
       "date": "2026-05-17T22:33:10-07:00",
       "author": "DENSENSE8",
       "subject": "inventory v2 Phase 2: receive + putaway in one transaction (flagged)",
@@ -524,7 +644,7 @@
     },
     {
       "sha": "4fdada3d0f3d47e1ceba083b8659c7adbfc754ba",
-      "shortSha": "4fdada3",
+      "shortSha": "4fdada3d",
       "date": "2026-05-17T22:28:29-07:00",
       "author": "DENSENSE8",
       "subject": "inventory v2 Phase 1: GS1 Digital Link scan resolver + unit labels + scan routes",
@@ -534,7 +654,7 @@
     },
     {
       "sha": "2a8fc962147ddea5d3ab6c077e065e985a52d966",
-      "shortSha": "2a8fc96",
+      "shortSha": "2a8fc962",
       "date": "2026-05-17T11:20:14-07:00",
       "author": "DENSENSE8",
       "subject": "inventory v2 Phase 0: schema declarations + migration + repositories",
@@ -544,7 +664,7 @@
     },
     {
       "sha": "b8dc5725016aac60a3f7d142209e5d72d7641a7d",
-      "shortSha": "b8dc572",
+      "shortSha": "b8dc5725",
       "date": "2026-05-17T00:38:43-07:00",
       "author": "DENSENSE8",
       "subject": "auth system + sidebar nav pills redesign",
@@ -554,7 +674,7 @@
     },
     {
       "sha": "64072679780411d302725476086f8b6b2afcc94d",
-      "shortSha": "6407267",
+      "shortSha": "64072679",
       "date": "2026-05-15T17:01:00-07:00",
       "author": "usavsolutionsinc",
       "subject": "updated the receiving pipeline for photos and the inventory bin creation",
@@ -564,7 +684,7 @@
     },
     {
       "sha": "900993ece57d1b799150749923a4eee41fba3907",
-      "shortSha": "900993e",
+      "shortSha": "900993ec",
       "date": "2026-05-14T17:00:37-07:00",
       "author": "usavsolutionsinc",
       "subject": "updated the architecture",
@@ -574,7 +694,7 @@
     },
     {
       "sha": "209791d6310d5b18b9120f4f88754268c1e79edf",
-      "shortSha": "209791d",
+      "shortSha": "209791d6",
       "date": "2026-05-14T17:00:22-07:00",
       "author": "usavsolutionsinc",
       "subject": "updated the sku stock for QR Code acknowledgement and different printing of labels and editing of location and stock via bin# to sku and mermaid and HTML process flows",
@@ -584,7 +704,7 @@
     },
     {
       "sha": "b680dbdfc9c1e09db8e567db969ad5d3ac991bf3",
-      "shortSha": "b680dbd",
+      "shortSha": "b680dbdf",
       "date": "2026-05-14T13:28:28-07:00",
       "author": "usavsolutionsinc",
       "subject": "updated the proxy problem",
@@ -594,7 +714,7 @@
     },
     {
       "sha": "433578b0df63ddf857a8d7ea090ab8b27560ba78",
-      "shortSha": "433578b",
+      "shortSha": "433578b0",
       "date": "2026-05-13T17:00:28-07:00",
       "author": "usavsolutionsinc",
       "subject": "updated the whole receiving pipeline",
@@ -604,7 +724,7 @@
     },
     {
       "sha": "7ae98020d827673d9331466b5e987e88eea147f5",
-      "shortSha": "7ae9802",
+      "shortSha": "7ae98020",
       "date": "2026-05-13T08:45:08-07:00",
       "author": "DENSENSE8",
       "subject": "udpated the receiving side bar to be more modern",
@@ -614,7 +734,7 @@
     },
     {
       "sha": "b4c236d99cf9daf908cf8671a0dc292315c4d400",
-      "shortSha": "b4c236d",
+      "shortSha": "b4c236d9",
       "date": "2026-05-11T16:07:27-07:00",
       "author": "usavsolutionsinc",
       "subject": "updated the print window sizing for the receiving side bar",
@@ -624,7 +744,7 @@
     },
     {
       "sha": "f87910d902c7ac3a084ea1fff7a3fb0aa2800f50",
-      "shortSha": "f87910d",
+      "shortSha": "f87910d9",
       "date": "2026-05-11T15:39:35-07:00",
       "author": "usavsolutionsinc",
       "subject": "updated the unique key bug in packer table",
@@ -634,7 +754,7 @@
     },
     {
       "sha": "c955543d918895847b32736883661d587d39caae",
-      "shortSha": "c955543",
+      "shortSha": "c955543d",
       "date": "2026-05-11T15:30:54-07:00",
       "author": "usavsolutionsinc",
       "subject": "udpated the packer flow to included the photos in mobile mode",
@@ -644,7 +764,7 @@
     },
     {
       "sha": "dc87e8b9148a48aa36cb3c6bde9e244387890e43",
-      "shortSha": "dc87e8b",
+      "shortSha": "dc87e8b9",
       "date": "2026-05-11T14:46:56-07:00",
       "author": "usavsolutionsinc",
       "subject": "updates to websocket for packers for photo uploads and tech displaying for time and global short cuts for searching and more",
@@ -654,7 +774,7 @@
     },
     {
       "sha": "cdc71016fa809430953ef82e9bab2880999681f8",
-      "shortSha": "cdc7101",
+      "shortSha": "cdc71016",
       "date": "2026-04-15T16:55:14-07:00",
       "author": "usavsolutionsinc",
       "subject": "tracking excetpions table and zoho addition",
@@ -664,7 +784,7 @@
     },
     {
       "sha": "ec81f15ba54763e98090c51cabc9d28e400dad5c",
-      "shortSha": "ec81f15",
+      "shortSha": "ec81f15b",
       "date": "2026-04-15T13:31:52-07:00",
       "author": "usavsolutionsinc",
       "subject": "updated the safari qrcode check and scanning",
@@ -674,7 +794,7 @@
     },
     {
       "sha": "c25d2afcc6b50a97455fd5a9fc76187413f809f5",
-      "shortSha": "c25d2af",
+      "shortSha": "c25d2afc",
       "date": "2026-04-15T13:17:13-07:00",
       "author": "usavsolutionsinc",
       "subject": "updated the receiving pipeline and the tech pipeline a lot",
@@ -684,7 +804,7 @@
     },
     {
       "sha": "76fff128fc5a3b97ebd15ab7dbf012bd8ff28a4e",
-      "shortSha": "76fff12",
+      "shortSha": "76fff128",
       "date": "2026-04-14T17:02:08-07:00",
       "author": "usavsolutionsinc",
       "subject": "updated the notes display",
@@ -694,7 +814,7 @@
     },
     {
       "sha": "0fc12ce1c3b7ab72125d6857cab506f3124fab6f",
-      "shortSha": "0fc12ce",
+      "shortSha": "0fc12ce1",
       "date": "2026-04-14T16:52:44-07:00",
       "author": "usavsolutionsinc",
       "subject": "updated the current receiving pipeline",
@@ -704,7 +824,7 @@
     },
     {
       "sha": "1bbf52e9b2354d273dad9d80604c48e5bd7b06e2",
-      "shortSha": "1bbf52e",
+      "shortSha": "1bbf52e9",
       "date": "2026-04-13T16:25:41-07:00",
       "author": "usavsolutionsinc",
       "subject": "updated receiving flow UX & UI and FBA stability",
@@ -714,7 +834,7 @@
     },
     {
       "sha": "b37f303a711860868e83dbc53337ce369b6350e7",
-      "shortSha": "b37f303",
+      "shortSha": "b37f303a",
       "date": "2026-04-10T17:01:18-07:00",
       "author": "usavsolutionsinc",
       "subject": "big updates to the current receiving pipeline and more",
@@ -724,7 +844,7 @@
     },
     {
       "sha": "348ab20d62f3f4d3638a66c133eb12d59adda8ed",
-      "shortSha": "348ab20",
+      "shortSha": "348ab20d",
       "date": "2026-04-08T21:26:14-07:00",
       "author": "DENSENSE8",
       "subject": "upgraded the main nemoclaw to USAV build AI chat bot for RAG fetch",
@@ -734,7 +854,7 @@
     },
     {
       "sha": "5fdff86261417133bc5b4beeef7061307ce23652",
-      "shortSha": "5fdff86",
+      "shortSha": "5fdff862",
       "date": "2026-04-08T21:24:07-07:00",
       "author": "DENSENSE8",
       "subject": "updated the chat and FBA flow",
@@ -744,7 +864,7 @@
     },
     {
       "sha": "9231dd18d7e7b90353b11e760ad57c54d6b7bde7",
-      "shortSha": "9231dd1",
+      "shortSha": "9231dd18",
       "date": "2026-04-08T16:55:06-07:00",
       "author": "usavsolutionsinc",
       "subject": "updated the api hammering and qstash jobs and sku table display in sku stock",
@@ -754,7 +874,7 @@
     },
     {
       "sha": "6fdd92a115c802c1e5bdc60e585ba89b2bfef632",
-      "shortSha": "6fdd92a",
+      "shortSha": "6fdd92a1",
       "date": "2026-04-08T16:19:38-07:00",
       "author": "usavsolutionsinc",
       "subject": "more consistency and receiving zoho api calls lessened",
@@ -764,7 +884,7 @@
     },
     {
       "sha": "b717215bb92f4505bec82b4458088881b3c53797",
-      "shortSha": "b717215",
+      "shortSha": "b717215b",
       "date": "2026-04-07T16:58:42-07:00",
       "author": "usavsolutionsinc",
       "subject": "ton of updates to the repair page to walk in page and forms",
@@ -774,7 +894,7 @@
     },
     {
       "sha": "def5e0072732c08a9c2f52e005bccd3079bf886f",
-      "shortSha": "def5e00",
+      "shortSha": "def5e007",
       "date": "2026-04-07T07:48:09-07:00",
       "author": "DENSENSE8",
       "subject": "open claw router RAG & bose manual and troubleshooting",
@@ -784,7 +904,7 @@
     },
     {
       "sha": "3dbe4c08150cb76884cb8a251e53b48a49e0725e",
-      "shortSha": "3dbe4c0",
+      "shortSha": "3dbe4c08",
       "date": "2026-04-06T21:05:13-07:00",
       "author": "DENSENSE8",
       "subject": "open claw router RAG & bose manual and troubleshooting",
@@ -794,7 +914,7 @@
     },
     {
       "sha": "35c6a5dd47be5d2e45632136dde04350f373e042",
-      "shortSha": "35c6a5d",
+      "shortSha": "35c6a5dd",
       "date": "2026-04-06T16:59:53-07:00",
       "author": "usavsolutionsinc",
       "subject": "udpated the overall consistency and improved code base and added replenish page",
@@ -804,7 +924,7 @@
     },
     {
       "sha": "c4f61ba51d5dacbb3fbe9ab974c00acd103822cb",
-      "shortSha": "c4f61ba",
+      "shortSha": "c4f61ba5",
       "date": "2026-04-06T11:40:50-07:00",
       "author": "usavsolutionsinc",
       "subject": "feat: show transfer + exceptions stats in sidebar, remove redundant schedule",
@@ -814,7 +934,7 @@
     },
     {
       "sha": "188bc31a3a2c3e747cfdc636ba0de6b23dc20e78",
-      "shortSha": "188bc31",
+      "shortSha": "188bc31a",
       "date": "2026-04-06T10:45:48-07:00",
       "author": "usavsolutionsinc",
       "subject": "fix: resolve FK violation in orders-exceptions sync by marking resolved instead of deleting",
@@ -824,7 +944,7 @@
     },
     {
       "sha": "8f59de2f6347bc761511d489d65f922266ce7974",
-      "shortSha": "8f59de2",
+      "shortSha": "8f59de2f",
       "date": "2026-04-06T10:16:45-07:00",
       "author": "usavsolutionsinc",
       "subject": "fix: replace verifySignatureAppRouter with shared isQStashOrigin across all QStash routes",
@@ -834,7 +954,7 @@
     },
     {
       "sha": "0e771c45700304a489a72b23055b9ae5fc5afb6e",
-      "shortSha": "0e771c4",
+      "shortSha": "0e771c45",
       "date": "2026-04-06T10:03:39-07:00",
       "author": "usavsolutionsinc",
       "subject": "fix: replace broken QStash signature verification with origin check",
@@ -844,7 +964,7 @@
     },
     {
       "sha": "4d4618f3186a193cd331e050de70c1252ddf7684",
-      "shortSha": "4d4618f",
+      "shortSha": "4d4618f3",
       "date": "2026-04-03T17:01:36-07:00",
       "author": "usavsolutionsinc",
       "subject": "updated tons for the mobile mode of the app",
@@ -854,7 +974,7 @@
     },
     {
       "sha": "95c78e9e297079485babfe9509243176a7319070",
-      "shortSha": "95c78e9",
+      "shortSha": "95c78e9e",
       "date": "2026-04-03T09:46:48-07:00",
       "author": "usavsolutionsinc",
       "subject": "USPS tracking number improvement and FBA additions including FBA SHIPMENT ID to UPS tracking number",
@@ -864,7 +984,7 @@
     },
     {
       "sha": "662998cebc1faf6e793726a805d0c8d88e81faaa",
-      "shortSha": "662998c",
+      "shortSha": "662998ce",
       "date": "2026-04-02T09:12:31-07:00",
       "author": "usavsolutionsinc",
       "subject": "updated the TS error",
@@ -874,7 +994,7 @@
     },
     {
       "sha": "63a0a8abb1f29f6b03e72652c99886ed65c762cf",
-      "shortSha": "63a0a8a",
+      "shortSha": "63a0a8ab",
       "date": "2026-04-01T16:51:49-07:00",
       "author": "usavsolutionsinc",
       "subject": "FBA Updates, Mobile PWA updates, added operation page update with work order dashboard, improved overall DB integrity",
@@ -884,7 +1004,7 @@
     },
     {
       "sha": "5e9a2faa187beeb0347d35bd7c0dd5788ab70435",
-      "shortSha": "5e9a2fa",
+      "shortSha": "5e9a2faa",
       "date": "2026-03-30T12:18:15-07:00",
       "author": "usavsolutionsinc",
       "subject": "websocket support and dynamic goals and history reports",
@@ -894,7 +1014,7 @@
     },
     {
       "sha": "3d57366e0e849c4095baf94f815f1ca234c3ef85",
-      "shortSha": "3d57366",
+      "shortSha": "3d57366e",
       "date": "2026-03-29T23:59:30-07:00",
       "author": "DENSENSE8",
       "subject": "added mobile mode support PWA and components, design system desktop and mobile, upgraded context files for better overall flow for updating website in the future + hard rules for agentic awareness",
@@ -904,7 +1024,7 @@
     },
     {
       "sha": "87070a102e4a14aeca156d700bb761f90f4cd007",
-      "shortSha": "87070a1",
+      "shortSha": "87070a10",
       "date": "2026-03-27T16:59:30-07:00",
       "author": "usavsolutionsinc",
       "subject": "updated the FBA logic and other items as well",
@@ -914,7 +1034,7 @@
     },
     {
       "sha": "c282cfe26f1079d31d2dd00ce30fc911cf445634",
-      "shortSha": "c282cfe",
+      "shortSha": "c282cfe2",
       "date": "2026-03-27T01:54:31-07:00",
       "author": "DENSENSE8",
       "subject": "updated the fba logic",
@@ -924,7 +1044,7 @@
     },
     {
       "sha": "cf23b41842592036ae76a143986ae78fddc9dd97",
-      "shortSha": "cf23b41",
+      "shortSha": "cf23b418",
       "date": "2026-03-26T17:04:09-07:00",
       "author": "usavsolutionsinc",
       "subject": "updated the FBA page and side logic",
@@ -934,7 +1054,7 @@
     },
     {
       "sha": "1d015c949f4dcc833b3d129c20beb3cdf71eb0b1",
-      "shortSha": "1d015c9",
+      "shortSha": "1d015c94",
       "date": "2026-03-26T16:50:55-07:00",
       "author": "usavsolutionsinc",
       "subject": "cleaned up most of the code base via NEON and added more to the FBA page made it cleaner and user friendly, cleaned",
@@ -944,7 +1064,7 @@
     },
     {
       "sha": "b02dffe47b960cf86a532d977381c26ba5f7dce9",
-      "shortSha": "b02dffe",
+      "shortSha": "b02dffe4",
       "date": "2026-03-26T09:02:26-07:00",
       "author": "usavsolutionsinc",
       "subject": "FBA aand tech scan improved endpoints",
@@ -954,7 +1074,7 @@
     },
     {
       "sha": "4a4ccbaa6704c532327e3215636bbd0b61a64307",
-      "shortSha": "4a4ccba",
+      "shortSha": "4a4ccbaa",
       "date": "2026-03-25T12:24:05-07:00",
       "author": "usavsolutionsinc",
       "subject": "updating the station trakcing number for fba fnskus",
@@ -964,7 +1084,7 @@
     },
     {
       "sha": "d829ae84ec43e85f70f54cc70e6a99c33c7e5280",
-      "shortSha": "d829ae8",
+      "shortSha": "d829ae84",
       "date": "2026-03-25T11:53:00-07:00",
       "author": "usavsolutionsinc",
       "subject": "fba update and testing station update",
@@ -974,7 +1094,7 @@
     },
     {
       "sha": "333e580ba3f9516445f099f67498d812f2f51a40",
-      "shortSha": "333e580",
+      "shortSha": "333e580b",
       "date": "2026-03-24T17:02:10-07:00",
       "author": "usavsolutionsinc",
       "subject": "fba",
@@ -984,7 +1104,7 @@
     },
     {
       "sha": "4cf8377ab529cdb9ed60957b4beacfcac9b1ad98",
-      "shortSha": "4cf8377",
+      "shortSha": "4cf8377a",
       "date": "2026-03-24T13:37:54-07:00",
       "author": "usavsolutionsinc",
       "subject": "updated the FBA and other pages including the fba logic for stationtesting",
@@ -994,7 +1114,7 @@
     },
     {
       "sha": "9d2a9584cf004ad09ffd0c234b28966ce0db6654",
-      "shortSha": "9d2a958",
+      "shortSha": "9d2a9584",
       "date": "2026-03-23T11:50:15-07:00",
       "author": "usavsolutionsinc",
       "subject": "updated the use proper tracking number regex and serial number identifier and better formatting for upnextorders",
@@ -1004,7 +1124,7 @@
     },
     {
       "sha": "fdd7fd36ec12df962bef80b8438c4d5de0c6050e",
-      "shortSha": "fdd7fd3",
+      "shortSha": "fdd7fd36",
       "date": "2026-03-23T09:48:28-07:00",
       "author": "usavsolutionsinc",
       "subject": "updated the work order and the techstation",
@@ -1014,7 +1134,7 @@
     },
     {
       "sha": "fe16ebcbaa7bd49ff6cdf2116b7ff051c23990c5",
-      "shortSha": "fe16ebc",
+      "shortSha": "fe16ebcb",
       "date": "2026-03-23T09:29:43-07:00",
       "author": "usavsolutionsinc",
       "subject": "updated the FBA page work orders and repair to square",
@@ -1024,7 +1144,7 @@
     },
     {
       "sha": "116e09ca531bf4cd3b8a27e97dcbd8fce08594c4",
-      "shortSha": "116e09c",
+      "shortSha": "116e09ca",
       "date": "2026-03-20T09:45:04-07:00",
       "author": "usavsolutionsinc",
       "subject": "updated the FBA page and the tech station",
@@ -1034,7 +1154,7 @@
     },
     {
       "sha": "afbdf888332856af70178b443e5656291bc173fa",
-      "shortSha": "afbdf88",
+      "shortSha": "afbdf888",
       "date": "2026-03-19T09:39:58-07:00",
       "author": "usavsolutionsinc",
       "subject": "updated ecwid to include incoming repair service orders",
@@ -1044,7 +1164,7 @@
     },
     {
       "sha": "fea729bd70bfb13d882936f4347d97fb009e45c5",
-      "shortSha": "fea729b",
+      "shortSha": "fea729bd",
       "date": "2026-03-18T16:59:16-07:00",
       "author": "usavsolutionsinc",
       "subject": "improved the overall code base to be leaner",
@@ -1054,7 +1174,7 @@
     },
     {
       "sha": "231127046a959864ae0676b198644da3e7b91131",
-      "shortSha": "2311270",
+      "shortSha": "23112704",
       "date": "2026-03-18T13:16:48-07:00",
       "author": "usavsolutionsinc",
       "subject": "removed cron jobs",
@@ -1064,7 +1184,7 @@
     },
     {
       "sha": "3112d5e6040419bda3c1d854974fd2725be2f0e9",
-      "shortSha": "3112d5e",
+      "shortSha": "3112d5e6",
       "date": "2026-03-18T13:12:04-07:00",
       "author": "usavsolutionsinc",
       "subject": "updated Zoho and station testing",
@@ -1074,7 +1194,7 @@
     },
     {
       "sha": "094f66cd355790d9eaacafd4f295296607a37ab4",
-      "shortSha": "094f66c",
+      "shortSha": "094f66cd",
       "date": "2026-03-17T13:44:11-07:00",
       "author": "usavsolutionsinc",
       "subject": "changed cron jobs to qstash jobs and updated the ECWID to RS Table",
@@ -1084,7 +1204,7 @@
     },
     {
       "sha": "a31697ec698e03e5239e57d9787dc632c66c6fcb",
-      "shortSha": "a31697e",
+      "shortSha": "a31697ec",
       "date": "2026-03-17T11:47:35-07:00",
       "author": "usavsolutionsinc",
       "subject": "added cron jobs fixed bugs",
@@ -1094,7 +1214,7 @@
     },
     {
       "sha": "b236ef7010b0262d08426b479651499abae5b235",
-      "shortSha": "b236ef7",
+      "shortSha": "b236ef70",
       "date": "2026-03-17T09:16:26-07:00",
       "author": "usavsolutionsinc",
       "subject": "updated ably and details panel to include better styling",
@@ -1104,7 +1224,7 @@
     },
     {
       "sha": "f480274cb50fa7c689c6844fdc9785e520a1bb9c",
-      "shortSha": "f480274",
+      "shortSha": "f480274c",
       "date": "2026-03-16T15:10:12-07:00",
       "author": "usavsolutionsinc",
       "subject": "fixed the tech station",
@@ -1114,7 +1234,7 @@
     },
     {
       "sha": "ceb53d15801915767b09415cd523bfe3bf3083df",
-      "shortSha": "ceb53d1",
+      "shortSha": "ceb53d15",
       "date": "2026-03-16T13:09:25-07:00",
       "author": "usavsolutionsinc",
       "subject": "tech history fix",
@@ -1124,7 +1244,7 @@
     },
     {
       "sha": "b4f1abb33a2e28b5a066d7a85b36b6b14976e12f",
-      "shortSha": "b4f1abb",
+      "shortSha": "b4f1abb3",
       "date": "2026-03-16T12:05:16-07:00",
       "author": "usavsolutionsinc",
       "subject": "added ably websocket support and updated the @upnext orders display a ton",
@@ -1134,7 +1254,7 @@
     },
     {
       "sha": "80df8ae20dc2be0012606c57537f96fd884f1908",
-      "shortSha": "80df8ae",
+      "shortSha": "80df8ae2",
       "date": "2026-03-16T09:02:59-07:00",
       "author": "usavsolutionsinc",
       "subject": "updated the work flow for up next orders and pages",
@@ -1144,7 +1264,7 @@
     },
     {
       "sha": "a1e771b346337c4bb20e1f839a31d146482ed9f5",
-      "shortSha": "a1e771b",
+      "shortSha": "a1e771b3",
       "date": "2026-03-13T17:02:01-07:00",
       "author": "usavsolutionsinc",
       "subject": "Refine work order details panel workflow",
@@ -1154,7 +1274,7 @@
     },
     {
       "sha": "a26d55ed35db49169b537f23bb1f35fecb048842",
-      "shortSha": "a26d55e",
+      "shortSha": "a26d55ed",
       "date": "2026-03-13T09:06:05-07:00",
       "author": "usavsolutionsinc",
       "subject": "overall consistence UX and UI",
@@ -1164,7 +1284,7 @@
     },
     {
       "sha": "3d571af5d69d3b4dcc790d525ba2f03d7e9cc03a",
-      "shortSha": "3d571af",
+      "shortSha": "3d571af5",
       "date": "2026-03-12T13:41:13-07:00",
       "author": "usavsolutionsinc",
       "subject": "all the same time zone formatting across all api points",
@@ -1174,7 +1294,7 @@
     },
     {
       "sha": "5fa64b65203dac3c230de817458fb9b65d19db8b",
-      "shortSha": "5fa64b6",
+      "shortSha": "5fa64b65",
       "date": "2026-03-12T10:21:13-07:00",
       "author": "usavsolutionsinc",
       "subject": "updated all endpoints and tables tech packer and receiving for better integrity updated_at and created_at",
@@ -1184,7 +1304,7 @@
     },
     {
       "sha": "91d9d64890d1b287eafe9520945f7408c61bc1b5",
-      "shortSha": "91d9d64",
+      "shortSha": "91d9d648",
       "date": "2026-03-12T09:13:34-07:00",
       "author": "usavsolutionsinc",
       "subject": "updated the packer table and the station testing upnext orders",
@@ -1194,7 +1314,7 @@
     },
     {
       "sha": "1711049b83c0af63c335da04b9cc6e3aa1f3312c",
-      "shortSha": "1711049",
+      "shortSha": "1711049b",
       "date": "2026-03-12T09:06:43-07:00",
       "author": "usavsolutionsinc",
       "subject": "updated tons of data management endpoints to only be lean in terms of DB table design",
@@ -1204,7 +1324,7 @@
     },
     {
       "sha": "64a33b8af9b7b2e26527ca91145925d6ed3f8cde",
-      "shortSha": "64a33b8",
+      "shortSha": "64a33b8a",
       "date": "2026-03-11T17:01:45-07:00",
       "author": "usavsolutionsinc",
       "subject": "fix TS build error in FbaLabelQueue by replacing Set spread with Array.from",
@@ -1214,7 +1334,7 @@
     },
     {
       "sha": "a2215394e6caddef4bd5168a735c53fc4458d045",
-      "shortSha": "a221539",
+      "shortSha": "a2215394",
       "date": "2026-03-11T10:56:52-07:00",
       "author": "usavsolutionsinc",
       "subject": "fixed the tech station errors and updated the work orders assignments",
@@ -1224,7 +1344,7 @@
     },
     {
       "sha": "cc8d5db8f2bbde558062c811d8329567a7f5cdc4",
-      "shortSha": "cc8d5db",
+      "shortSha": "cc8d5db8",
       "date": "2026-03-11T09:50:55-07:00",
       "author": "usavsolutionsinc",
       "subject": "search bar fixed and added work_assignments page",
@@ -1234,7 +1354,7 @@
     },
     {
       "sha": "754d95590661f75d19cade2b3c81247dd680d115",
-      "shortSha": "754d955",
+      "shortSha": "754d9559",
       "date": "2026-03-10T15:33:15-07:00",
       "author": "usavsolutionsinc",
       "subject": "adding a unified shipping_tracking_numbers table",
@@ -1244,7 +1364,7 @@
     },
     {
       "sha": "5ca7616d1308b8cc8f16eb1cc20ec360cecfc2bf",
-      "shortSha": "5ca7616",
+      "shortSha": "5ca7616d",
       "date": "2026-03-10T13:55:00-07:00",
       "author": "usavsolutionsinc",
       "subject": "updated wa table to include a deadline_at column for better work orders trackign number and the up next orders component for better edge to edge and order display",
@@ -1254,7 +1374,7 @@
     },
     {
       "sha": "432cb9bf8db4b0b2a3cd3db04de9b73d34509617",
-      "shortSha": "432cb9b",
+      "shortSha": "432cb9bf",
       "date": "2026-03-10T12:21:18-07:00",
       "author": "usavsolutionsinc",
       "subject": "updated the upnext order to include dismiss and fixed the stuck logic for active order and shipped orders display",
@@ -1264,7 +1384,7 @@
     },
     {
       "sha": "aa7f7f12956ffd3fcf884fcabe298635bad632b2",
-      "shortSha": "aa7f7f1",
+      "shortSha": "aa7f7f12",
       "date": "2026-03-10T11:14:45-07:00",
       "author": "usavsolutionsinc",
       "subject": "filter logic is all good.",
@@ -1274,7 +1394,7 @@
     },
     {
       "sha": "280506c152c5790a96f840ae78fc61a5b1804e8c",
-      "shortSha": "280506c",
+      "shortSha": "280506c1",
       "date": "2026-03-10T10:53:51-07:00",
       "author": "usavsolutionsinc",
       "subject": "fix: correct file casing for Linux case-sensitive filesystem",
@@ -1284,7 +1404,7 @@
     },
     {
       "sha": "ccf87a6b34ef8645b03657f3e87bc88f958aa2fe",
-      "shortSha": "ccf87a6",
+      "shortSha": "ccf87a6b",
       "date": "2026-03-10T10:49:53-07:00",
       "author": "usavsolutionsinc",
       "subject": "added a ton of changes, across zoho, tech orders and fba updates and upnext orders",
@@ -1294,7 +1414,7 @@
     },
     {
       "sha": "7945c405966ee2dc18ccdff16a199e64d1211838",
-      "shortSha": "7945c40",
+      "shortSha": "7945c405",
       "date": "2026-03-09T13:08:50-07:00",
       "author": "usavsolutionsinc",
       "subject": "updated zoho endpoints to match docs",
@@ -1304,7 +1424,7 @@
     },
     {
       "sha": "b02816d62d7843086a253175b1c45d7cbe6a5ca4",
-      "shortSha": "b02816d",
+      "shortSha": "b02816d6",
       "date": "2026-03-09T12:12:23-07:00",
       "author": "usavsolutionsinc",
       "subject": "improved zoho, station testing, station packing, order filtering in the dashboard pages",
@@ -1314,7 +1434,7 @@
     },
     {
       "sha": "75ef301840d870501127fcf253b2b6d329bbf90d",
-      "shortSha": "75ef301",
+      "shortSha": "75ef3018",
       "date": "2026-03-09T10:08:42-07:00",
       "author": "usavsolutionsinc",
       "subject": "api domain name for zoho inventory pull",
@@ -1324,7 +1444,7 @@
     },
     {
       "sha": "954c5d2bec30318df7fca24180b55138ee12099b",
-      "shortSha": "954c5d2",
+      "shortSha": "954c5d2b",
       "date": "2026-03-09T09:52:18-07:00",
       "author": "usavsolutionsinc",
       "subject": "fixed ts errors",
@@ -1334,7 +1454,7 @@
     },
     {
       "sha": "6bbacde26c8e845e71aa7dca01b538d3ab01e8d2",
-      "shortSha": "6bbacde",
+      "shortSha": "6bbacde2",
       "date": "2026-03-09T09:45:19-07:00",
       "author": "usavsolutionsinc",
       "subject": "updated the connections for zoho and double tab slider in station testing and sku generator sn fix",
@@ -1344,7 +1464,7 @@
     },
     {
       "sha": "91fb693ca2996412a7e40a1655acf4f38d13dabd",
-      "shortSha": "91fb693",
+      "shortSha": "91fb693c",
       "date": "2026-03-06T16:40:56-08:00",
       "author": "usavsolutionsinc",
       "subject": "added a mark as shipped date",
@@ -1354,7 +1474,7 @@
     },
     {
       "sha": "591eda80bd3d951410f893ee6754cc04e4098939",
-      "shortSha": "591eda8",
+      "shortSha": "591eda80",
       "date": "2026-03-06T16:33:16-08:00",
       "author": "usavsolutionsinc",
       "subject": "updated the product_manuals CRUD and fixed ts errors",
@@ -1364,7 +1484,7 @@
     },
     {
       "sha": "477031b706df4eab33304c28317378dcecedf8e1",
-      "shortSha": "477031b",
+      "shortSha": "477031b7",
       "date": "2026-03-06T16:17:12-08:00",
       "author": "usavsolutionsinc",
       "subject": "added zoho integration",
@@ -1374,7 +1494,7 @@
     },
     {
       "sha": "906fa0931c8ce25dcd07a5768adbc52d9d2c7d00",
-      "shortSha": "906fa09",
+      "shortSha": "906fa093",
       "date": "2026-03-06T15:06:51-08:00",
       "author": "usavsolutionsinc",
       "subject": "updated ably, created a FBA page, updated the multisku form",
@@ -1384,7 +1504,7 @@
     },
     {
       "sha": "c8c9cb54795f111fd2ebff63f8322c613dcf8293",
-      "shortSha": "c8c9cb5",
+      "shortSha": "c8c9cb54",
       "date": "2026-03-06T13:20:47-08:00",
       "author": "usavsolutionsinc",
       "subject": "updated the up next order and receiving",
@@ -1394,7 +1514,7 @@
     },
     {
       "sha": "ec9359f9cfdc0172c2a014aacecb130d8520c4cf",
-      "shortSha": "ec9359f",
+      "shortSha": "ec9359f9",
       "date": "2026-03-06T12:30:39-08:00",
       "author": "usavsolutionsinc",
       "subject": "add a photos table for receiving and packers",
@@ -1404,7 +1524,7 @@
     },
     {
       "sha": "3eb60ea46df8ae8355c21d52aaf894ac5229077d",
-      "shortSha": "3eb60ea",
+      "shortSha": "3eb60ea4",
       "date": "2026-03-06T12:12:54-08:00",
       "author": "usavsolutionsinc",
       "subject": "updated the staff and staff colors",
@@ -1414,7 +1534,7 @@
     },
     {
       "sha": "4f80c5946a99658e546f447df6af8e389f7fff8f",
-      "shortSha": "4f80c59",
+      "shortSha": "4f80c594",
       "date": "2026-03-06T11:24:04-08:00",
       "author": "usavsolutionsinc",
       "subject": "fixed the ts errors",
@@ -1424,7 +1544,7 @@
     },
     {
       "sha": "c7e30d119c0ecf3bbee5073b42d3ca71fb0c4603",
-      "shortSha": "c7e30d1",
+      "shortSha": "c7e30d11",
       "date": "2026-03-06T11:16:45-08:00",
       "author": "usavsolutionsinc",
       "subject": "updated the receiving table and the manuals to item number to all be industry standard",
@@ -1434,7 +1554,7 @@
     },
     {
       "sha": "7f34615e8c9611bebb5db224916dc8c1ed00bae4",
-      "shortSha": "7f34615",
+      "shortSha": "7f34615e",
       "date": "2026-03-05T13:07:58-08:00",
       "author": "usavsolutionsinc",
       "subject": "add to receiving table and made work_assigments table and added ably websocket for client updates google like behavior",
@@ -1444,7 +1564,7 @@
     },
     {
       "sha": "300a6f8b04508b692cbd267a8a47be43d10a9c52",
-      "shortSha": "300a6f8",
+      "shortSha": "300a6f8b",
       "date": "2026-03-04T15:28:06-08:00",
       "author": "usavsolutionsinc",
       "subject": "updated the ebay sync and integrity logic",
@@ -1454,7 +1574,7 @@
     },
     {
       "sha": "af38b7b7f0d85b7e949775e4e614c2950e2ebbaa",
-      "shortSha": "af38b7b",
+      "shortSha": "af38b7b7",
       "date": "2026-03-04T14:55:12-08:00",
       "author": "usavsolutionsinc",
       "subject": "added manual and tighten up the logic for stationtesting",
@@ -1464,7 +1584,7 @@
     },
     {
       "sha": "b354bbba3c1ae5adeb46af8a5c26192febb843bc",
-      "shortSha": "b354bbb",
+      "shortSha": "b354bbba",
       "date": "2026-03-04T13:08:52-08:00",
       "author": "usavsolutionsinc",
       "subject": "updated the code base to include manuals for tech scans, better caching weekly from server side architecture, improved receiving table,",
@@ -1474,7 +1594,7 @@
     },
     {
       "sha": "4e864d4377727e59c270cdc51a04a09a21b714b7",
-      "shortSha": "4e864d4",
+      "shortSha": "4e864d43",
       "date": "2026-03-04T09:46:04-08:00",
       "author": "usavsolutionsinc",
       "subject": "updated the drizzle schema",
@@ -1484,7 +1604,7 @@
     },
     {
       "sha": "348f7022ac95941cbcedf6766a7c963ff1aa40aa",
-      "shortSha": "348f702",
+      "shortSha": "348f7022",
       "date": "2026-03-04T09:02:16-08:00",
       "author": "usavsolutionsinc",
       "subject": "updated the repair service cache issue",
@@ -1494,7 +1614,7 @@
     },
     {
       "sha": "19172e317891abc30e4d7a3a8c6998727a2b4493",
-      "shortSha": "19172e3",
+      "shortSha": "19172e31",
       "date": "2026-03-03T15:54:46-08:00",
       "author": "usavsolutionsinc",
       "subject": "improved overall code base, implemented vercel KV caching",
@@ -1504,7 +1624,7 @@
     },
     {
       "sha": "adc594186b1f1a888b7087254ac04edaaa3e642d",
-      "shortSha": "adc5941",
+      "shortSha": "adc59418",
       "date": "2026-03-03T09:34:43-08:00",
       "author": "usavsolutionsinc",
       "subject": "search params ts error fix",
@@ -1514,7 +1634,7 @@
     },
     {
       "sha": "1a946f58ed0a3fb28de78556606749d0750cccad",
-      "shortSha": "1a946f5",
+      "shortSha": "1a946f58",
       "date": "2026-03-03T09:26:31-08:00",
       "author": "usavsolutionsinc",
       "subject": "updated the connections tab, dashbord tab and fitlering x10",
@@ -1524,7 +1644,7 @@
     },
     {
       "sha": "14fcaa367c4ad1bb884ff4fced5b27401c82079a",
-      "shortSha": "14fcaa3",
+      "shortSha": "14fcaa36",
       "date": "2026-03-02T11:28:08-08:00",
       "author": "usavsolutionsinc",
       "subject": "updated the whole flow, removed google sheet support for the sync and scripts logic",
@@ -1534,7 +1654,7 @@
     },
     {
       "sha": "0751763ff3bf5a5c2d9aa7ef0e490ab6ba93844d",
-      "shortSha": "0751763",
+      "shortSha": "0751763f",
       "date": "2026-02-27T16:56:10-08:00",
       "author": "usavsolutionsinc",
       "subject": "bug fix",
@@ -1544,7 +1664,7 @@
     },
     {
       "sha": "dc18727b52fd61230d2ce7e669d989ec766b69e1",
-      "shortSha": "dc18727",
+      "shortSha": "dc18727b",
       "date": "2026-02-27T16:38:47-08:00",
       "author": "usavsolutionsinc",
       "subject": "ts fix",
@@ -1554,7 +1674,7 @@
     },
     {
       "sha": "cea3e6961a0d0b64092e4292b1c0c53bc17cf524",
-      "shortSha": "cea3e69",
+      "shortSha": "cea3e696",
       "date": "2026-02-27T16:23:29-08:00",
       "author": "usavsolutionsinc",
       "subject": "ts fix",
@@ -1564,7 +1684,7 @@
     },
     {
       "sha": "332b3d1342cf7f66a43f25537ba5732ec6f109ac",
-      "shortSha": "332b3d1",
+      "shortSha": "332b3d13",
       "date": "2026-02-27T16:13:26-08:00",
       "author": "usavsolutionsinc",
       "subject": "updated the serach bar crash",
@@ -1574,7 +1694,7 @@
     },
     {
       "sha": "00d72ba202129e6f1c6dd545366176f13614b461",
-      "shortSha": "00d72ba",
+      "shortSha": "00d72ba2",
       "date": "2026-02-27T16:04:48-08:00",
       "author": "usavsolutionsinc",
       "subject": "one single side bar",
@@ -1584,7 +1704,7 @@
     },
     {
       "sha": "c2245f0c2a67811b1041e0a98564ff6b47c82c72",
-      "shortSha": "c2245f0",
+      "shortSha": "c2245f0c",
       "date": "2026-02-27T12:31:13-08:00",
       "author": "usavsolutionsinc",
       "subject": "updated the packer logs and the receiving table tech table X/shipped",
@@ -1594,7 +1714,7 @@
     },
     {
       "sha": "2f81edfb70d806d4b97339402e2af7bd6dcabf83",
-      "shortSha": "2f81edf",
+      "shortSha": "2f81edfb",
       "date": "2026-02-27T12:07:27-08:00",
       "author": "usavsolutionsinc",
       "subject": "perfected moved entirely away from google sheets",
@@ -1604,7 +1724,7 @@
     },
     {
       "sha": "bcb9527b87f0b1a47c622a528b9754b9cab80aab",
-      "shortSha": "bcb9527",
+      "shortSha": "bcb9527b",
       "date": "2026-02-26T16:44:33-08:00",
       "author": "usavsolutionsinc",
       "subject": "updated and started on the manuals",
@@ -1614,7 +1734,7 @@
     },
     {
       "sha": "952197a20e8e0138a8af3eab71d1e081abe4738f",
-      "shortSha": "952197a",
+      "shortSha": "952197a2",
       "date": "2026-02-26T13:32:18-08:00",
       "author": "usavsolutionsinc",
       "subject": "removed the assigment page and just updated the dashboarddetailsstack to include the selections of tester id and packer id",
@@ -1624,7 +1744,7 @@
     },
     {
       "sha": "93bd52b9d3d272331bc5552d563e13fb07bf3ed5",
-      "shortSha": "93bd52b",
+      "shortSha": "93bd52b9",
       "date": "2026-02-26T10:28:10-08:00",
       "author": "usavsolutionsinc",
       "subject": "backend caching upstash KV and qstash for api timer",
@@ -1634,7 +1754,7 @@
     },
     {
       "sha": "f804d3e539ef149dd5d01689f895f16413a87518",
-      "shortSha": "f804d3e",
+      "shortSha": "f804d3e5",
       "date": "2026-02-26T10:02:01-08:00",
       "author": "usavsolutionsinc",
       "subject": "updated to include filtered tested by dashboard shipping in station stesting",
@@ -1644,7 +1764,7 @@
     },
     {
       "sha": "28580984a4826871231db518f3e3f491a416e538",
-      "shortSha": "2858098",
+      "shortSha": "28580984",
       "date": "2026-02-26T09:05:37-08:00",
       "author": "usavsolutionsinc",
       "subject": "restructured and improved the general code base",
@@ -1654,7 +1774,7 @@
     },
     {
       "sha": "22d8f711a644a0810592229dead34f1064dada7e",
-      "shortSha": "22d8f71",
+      "shortSha": "22d8f711",
       "date": "2026-02-25T12:24:19-08:00",
       "author": "usavsolutionsinc",
       "subject": "improved the overall flow",
@@ -1664,7 +1784,7 @@
     },
     {
       "sha": "ed2faf4998488f614afdef6cdef8e64b04cb23f1",
-      "shortSha": "ed2faf4",
+      "shortSha": "ed2faf49",
       "date": "2026-02-24T16:31:37-08:00",
       "author": "usavsolutionsinc",
       "subject": "updated the display of the shipped table",
@@ -1674,7 +1794,7 @@
     },
     {
       "sha": "1f7a9561a401d3e788860c24af32b819ab0d155c",
-      "shortSha": "1f7a956",
+      "shortSha": "1f7a9561",
       "date": "2026-02-24T16:25:47-08:00",
       "author": "usavsolutionsinc",
       "subject": "updated the display and add FBA suppoort to the station testing",
@@ -1684,7 +1804,7 @@
     },
     {
       "sha": "23b8272144a79d927e040acd70efa08b460e124f",
-      "shortSha": "23b8272",
+      "shortSha": "23b82721",
       "date": "2026-02-24T16:11:11-08:00",
       "author": "usavsolutionsinc",
       "subject": "updated the dashboard dispplay",
@@ -1694,7 +1814,7 @@
     },
     {
       "sha": "2ed9ce40aa6e0f3a2bb35e6448542299e9428d68",
-      "shortSha": "2ed9ce4",
+      "shortSha": "2ed9ce40",
       "date": "2026-02-24T15:25:43-08:00",
       "author": "usavsolutionsinc",
       "subject": "updated receiving and tech add serial number to be used by mobile as well",
@@ -1704,7 +1824,7 @@
     },
     {
       "sha": "e110d4f683f54cba96458b6d8f126d14fb78f224",
-      "shortSha": "e110d4f",
+      "shortSha": "e110d4f6",
       "date": "2026-02-24T12:19:10-08:00",
       "author": "usavsolutionsinc",
       "subject": "PST time stamp in receiving",
@@ -1714,7 +1834,7 @@
     },
     {
       "sha": "a7435744ca93d64c3217ada6d889977e9dba8dab",
-      "shortSha": "a743574",
+      "shortSha": "a7435744",
       "date": "2026-02-24T10:59:31-08:00",
       "author": "usavsolutionsinc",
       "subject": "allowed connections prod url support and updated the tech details stack",
@@ -1724,7 +1844,7 @@
     },
     {
       "sha": "7fd8d76ff49cd817dfb083af46b814ccda1809f1",
-      "shortSha": "7fd8d76",
+      "shortSha": "7fd8d76f",
       "date": "2026-02-24T10:27:11-08:00",
       "author": "usavsolutionsinc",
       "subject": "updated the SN post to tech_serial_numbers table with out finding order",
@@ -1734,7 +1854,7 @@
     },
     {
       "sha": "df43a304af20bcc2702204197157caf170ae726b",
-      "shortSha": "df43a30",
+      "shortSha": "df43a304",
       "date": "2026-02-24T09:29:17-08:00",
       "author": "usavsolutionsinc",
       "subject": "updated the post and upsert to the order_exceptions and the tech_serial_numbers table",
@@ -1744,7 +1864,7 @@
     },
     {
       "sha": "248de1c53178a09086787b4481683b32223b109c",
-      "shortSha": "248de1c",
+      "shortSha": "248de1c5",
       "date": "2026-02-23T16:58:57-08:00",
       "author": "usavsolutionsinc",
       "subject": "updated the display of the tech table and upnextorder,",
@@ -1754,7 +1874,7 @@
     },
     {
       "sha": "fbe31e470c120bc6dc9087e20163263ec0461100",
-      "shortSha": "fbe31e4",
+      "shortSha": "fbe31e47",
       "date": "2026-02-23T15:42:37-08:00",
       "author": "usavsolutionsinc",
       "subject": "added days late and more back fill for orders and cleaned up UI",
@@ -1764,7 +1884,7 @@
     },
     {
       "sha": "79c3c1ebdfcb0e3b7c2330f49c2c9b035a32412b",
-      "shortSha": "79c3c1e",
+      "shortSha": "79c3c1eb",
       "date": "2026-02-23T10:59:19-08:00",
       "author": "usavsolutionsinc",
       "subject": "CRUD Update to import latest orders",
@@ -1774,7 +1894,7 @@
     },
     {
       "sha": "23af556c4b671891428d0b8873c6a54f6b3c1afa",
-      "shortSha": "23af556",
+      "shortSha": "23af556c",
       "date": "2026-02-23T10:18:08-08:00",
       "author": "usavsolutionsinc",
       "subject": "updated the shipstation endpint",
@@ -1784,7 +1904,7 @@
     },
     {
       "sha": "9de2d840c096bcc42bb567cacc291a1f211f64a1",
-      "shortSha": "9de2d84",
+      "shortSha": "9de2d840",
       "date": "2026-02-23T10:10:02-08:00",
       "author": "usavsolutionsinc",
       "subject": "allowed orders without matches to the system and updated the shipstation records",
@@ -1794,7 +1914,7 @@
     },
     {
       "sha": "f3188594a83017985d85de43fcc9a08b61eeea59",
-      "shortSha": "f318859",
+      "shortSha": "f3188594",
       "date": "2026-02-18T09:47:37-08:00",
       "author": "usavsolutionsinc",
       "subject": "updated the serial number post from stationtesting",
@@ -1804,7 +1924,7 @@
     },
     {
       "sha": "022606847adc4f7f640cde721cbd33f7ce4b7a3c",
-      "shortSha": "0226068",
+      "shortSha": "02260684",
       "date": "2026-02-16T16:51:16-08:00",
       "author": "usavsolutionsinc",
       "subject": "updated the tech scanning insert endpoints to tech_serial_numbers table",
@@ -1814,7 +1934,7 @@
     },
     {
       "sha": "816d85d839f6a8a6104f23a34dc1a16936d7be2c",
-      "shortSha": "816d85d",
+      "shortSha": "816d85d8",
       "date": "2026-02-16T14:56:25-08:00",
       "author": "usavsolutionsinc",
       "subject": "updated the tech_serial_number sheet schema",
@@ -1824,7 +1944,7 @@
     },
     {
       "sha": "9774011165df82e1031189fb48e952b9047be871",
-      "shortSha": "9774011",
+      "shortSha": "97740111",
       "date": "2026-02-16T14:25:11-08:00",
       "author": "usavsolutionsinc",
       "subject": "added qty condition and order_id support",
@@ -1834,7 +1954,7 @@
     },
     {
       "sha": "f70d4ee8359a045c98efdf86bb6a798bb155233e",
-      "shortSha": "f70d4ee",
+      "shortSha": "f70d4ee8",
       "date": "2026-02-16T14:19:07-08:00",
       "author": "usavsolutionsinc",
       "subject": "updated the upnextorder styling for the tech statiosn",
@@ -1844,7 +1964,7 @@
     },
     {
       "sha": "468869e035d5c55c255827a73759cd77edec70c3",
-      "shortSha": "468869e",
+      "shortSha": "468869e0",
       "date": "2026-02-16T13:41:12-08:00",
       "author": "usavsolutionsinc",
       "subject": "updated the repair table and the details panel to handle copy and paste",
@@ -1854,7 +1974,7 @@
     },
     {
       "sha": "87e2960119056cee013a302c6dc7f006853348b0",
-      "shortSha": "87e2960",
+      "shortSha": "87e29601",
       "date": "2026-02-16T13:10:46-08:00",
       "author": "usavsolutionsinc",
       "subject": "added qty counter",
@@ -1864,133 +1984,13 @@
     },
     {
       "sha": "64413eeee7fc5e60574839ab683f68657d12a0fa",
-      "shortSha": "64413ee",
+      "shortSha": "64413eee",
       "date": "2026-02-16T11:45:41-08:00",
       "author": "usavsolutionsinc",
       "subject": "updated the orders and tech details,",
       "body": "",
       "type": "other",
       "title": "updated the orders and tech details,"
-    },
-    {
-      "sha": "36b67bcf9f7002710b6e2816cbf20d0ad4b6d979",
-      "shortSha": "36b67bc",
-      "date": "2026-02-16T09:54:29-08:00",
-      "author": "usavsolutionsinc",
-      "subject": "fixed the sku-stock columns",
-      "body": "",
-      "type": "fix",
-      "title": "fixed the sku-stock columns"
-    },
-    {
-      "sha": "b3ce108a74962c0054e3a5db7a09fbb5c2437f9a",
-      "shortSha": "b3ce108",
-      "date": "2026-02-16T09:45:16-08:00",
-      "author": "usavsolutionsinc",
-      "subject": "updated the display of ship by date",
-      "body": "",
-      "type": "other",
-      "title": "updated the display of ship by date"
-    },
-    {
-      "sha": "e752bcc34a884fc3c685fc482d36cbd8ca9374ad",
-      "shortSha": "e752bcc",
-      "date": "2026-02-16T09:32:32-08:00",
-      "author": "usavsolutionsinc",
-      "subject": "updated the title fetch for the sku-stock mutlisn sku gen and all time zones to use PST instead of local",
-      "body": "",
-      "type": "other",
-      "title": "updated the title fetch for the sku-stock mutlisn sku gen and all time zones to use PST instead of local"
-    },
-    {
-      "sha": "5b53979c2d44f86bfdd645282839e4e6d9c1d609",
-      "shortSha": "5b53979",
-      "date": "2026-02-13T16:36:54-08:00",
-      "author": "usavsolutionsinc",
-      "subject": "fixed the column gaps in all tables and repair table sorting",
-      "body": "",
-      "type": "fix",
-      "title": "fixed the column gaps in all tables and repair table sorting"
-    },
-    {
-      "sha": "737ec1728e0648b01c87dad85abf4768d3ac0f8a",
-      "shortSha": "737ec17",
-      "date": "2026-02-13T16:16:05-08:00",
-      "author": "usavsolutionsinc",
-      "subject": "updated the display for the dashboard",
-      "body": "",
-      "type": "other",
-      "title": "updated the display for the dashboard"
-    },
-    {
-      "sha": "5f08492e1422514d5622f488946e9700735a5d6f",
-      "shortSha": "5f08492",
-      "date": "2026-02-13T15:14:37-08:00",
-      "author": "usavsolutionsinc",
-      "subject": "added update shipping label",
-      "body": "",
-      "type": "other",
-      "title": "added update shipping label"
-    },
-    {
-      "sha": "34269c3e7ad7883df06063cfab05d529fff4f0ba",
-      "shortSha": "34269c3",
-      "date": "2026-02-13T13:26:48-08:00",
-      "author": "usavsolutionsinc",
-      "subject": "updated the shippedintakeform",
-      "body": "",
-      "type": "other",
-      "title": "updated the shippedintakeform"
-    },
-    {
-      "sha": "6af6104c99c1523ac89b35ccc8b1c99c7864610d",
-      "shortSha": "6af6104",
-      "date": "2026-02-13T11:01:09-08:00",
-      "author": "usavsolutionsinc",
-      "subject": "admin page",
-      "body": "",
-      "type": "other",
-      "title": "admin page"
-    },
-    {
-      "sha": "84c778fd479a694ca6c3deb0d4ecee6862fad9f0",
-      "shortSha": "84c778f",
-      "date": "2026-02-13T10:10:09-08:00",
-      "author": "usavsolutionsinc",
-      "subject": "updated the dashboarddetailsstack to have delete order button.",
-      "body": "",
-      "type": "other",
-      "title": "updated the dashboarddetailsstack to have delete order button."
-    },
-    {
-      "sha": "49d4ba82af8809bc96a63ce54ca350dbe6696428",
-      "shortSha": "49d4ba8",
-      "date": "2026-02-12T14:44:48-08:00",
-      "author": "usavsolutionsinc",
-      "subject": "updated the dashboard to include editable ship by date and shipped details update",
-      "body": "",
-      "type": "other",
-      "title": "updated the dashboard to include editable ship by date and shipped details update"
-    },
-    {
-      "sha": "103f619110e96e7ddbeee19625e045fb0d6e9489",
-      "shortSha": "103f619",
-      "date": "2026-02-12T13:23:24-08:00",
-      "author": "usavsolutionsinc",
-      "subject": "updated the receiving display and packer from mobile shipped table display logic",
-      "body": "",
-      "type": "other",
-      "title": "updated the receiving display and packer from mobile shipped table display logic"
-    },
-    {
-      "sha": "a4307f6fe2266bccaffc800654c0f63ac769dceb",
-      "shortSha": "a4307f6",
-      "date": "2026-02-12T10:10:52-08:00",
-      "author": "usavsolutionsinc",
-      "subject": "updated the table and the endpoints for mobile app",
-      "body": "",
-      "type": "other",
-      "title": "updated the table and the endpoints for mobile app"
     }
   ]
 }

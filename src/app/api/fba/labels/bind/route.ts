@@ -5,9 +5,10 @@ import { invalidateCacheTags } from '@/lib/cache/upstash-cache';
 import { withAuth } from '@/lib/auth/withAuth';
 
 // ── POST /api/fba/labels/bind ─────────────────────────────────────────────────
-// Packer scans a shipping label barcode, then binds one or more FNSKUs to it.
-// Transitions bound items from READY_TO_GO → LABEL_ASSIGNED and records
-// immutable events in fba_fnsku_logs. All operations run in one transaction.
+// Combiner scans a shipping label barcode, then binds one or more FNSKUs to it.
+// Transitions bound items from PACKED → LABEL_ASSIGNED (combined under one FBA
+// shipment ID) and records immutable events in fba_fnsku_logs. All operations
+// run in one transaction.
 //
 // Body: { shipment_id, label_barcode, fnskus: string[], station? } — actor from session.
 export const POST = withAuth(async (request: NextRequest, ctx) => {
@@ -64,7 +65,7 @@ export const POST = withAuth(async (request: NextRequest, ctx) => {
     const errors: string[] = [];
 
     for (const fnsku of normalizedFnskus) {
-      // Find the item — must exist and be READY_TO_GO (or already LABEL_ASSIGNED for re-bind)
+      // Find the item — must be PACKED (or already LABEL_ASSIGNED for re-bind)
       const itemRes = await client.query(
         `SELECT * FROM fba_shipment_items WHERE shipment_id = $1 AND fnsku = $2`,
         [shipment_id, fnsku]
@@ -78,6 +79,10 @@ export const POST = withAuth(async (request: NextRequest, ctx) => {
       const item = itemRes.rows[0];
       if (item.status === 'PLANNED') {
         errors.push(`FNSKU ${fnsku} is not yet ready (still PLANNED)`);
+        continue;
+      }
+      if (item.status === 'TESTED') {
+        errors.push(`FNSKU ${fnsku} is not yet packed (still TESTED)`);
         continue;
       }
       if (item.status === 'SHIPPED') {
@@ -129,10 +134,14 @@ export const POST = withAuth(async (request: NextRequest, ctx) => {
       `UPDATE fba_shipments
        SET status = CASE
                       WHEN NOT EXISTS (SELECT 1 FROM fba_shipment_items WHERE shipment_id = $1 AND status = 'PLANNED')
-                        AND NOT EXISTS (SELECT 1 FROM fba_shipment_items WHERE shipment_id = $1 AND status = 'READY_TO_GO')
+                        AND NOT EXISTS (SELECT 1 FROM fba_shipment_items WHERE shipment_id = $1 AND status = 'TESTED')
+                        AND NOT EXISTS (SELECT 1 FROM fba_shipment_items WHERE shipment_id = $1 AND status = 'PACKED')
                         THEN 'LABEL_ASSIGNED'::fba_shipment_status_enum
                       WHEN NOT EXISTS (SELECT 1 FROM fba_shipment_items WHERE shipment_id = $1 AND status = 'PLANNED')
-                        THEN 'READY_TO_GO'::fba_shipment_status_enum
+                        AND NOT EXISTS (SELECT 1 FROM fba_shipment_items WHERE shipment_id = $1 AND status = 'TESTED')
+                        THEN 'PACKED'::fba_shipment_status_enum
+                      WHEN NOT EXISTS (SELECT 1 FROM fba_shipment_items WHERE shipment_id = $1 AND status = 'PLANNED')
+                        THEN 'TESTED'::fba_shipment_status_enum
                       ELSE status
                     END,
            updated_at = NOW()

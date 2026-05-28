@@ -6,7 +6,6 @@ import { Loader2, Printer } from '@/components/Icons';
 import { StickyActionBar } from '@/design-system/components/StickyActionBar';
 import { OrderIdChip, TrackingChip, ListingUrlChip, getLast4 } from '@/components/ui/CopyChip';
 import { PoLinesAccordion } from '@/components/receiving/workspace/PoLinesAccordion';
-import { InlineSerialAdder } from '@/components/receiving/workspace/InlineSerialAdder';
 import { UnmatchedItemsSection } from '@/components/receiving/workspace/UnmatchedItemsSection';
 import { ReceivingClaimModal } from '@/components/receiving/workspace/ReceivingClaimModal';
 import { ReceivingAuditModal } from '@/components/receiving/workspace/ReceivingAuditModal';
@@ -16,10 +15,9 @@ import { buildReceivingCopyInfo } from '@/utils/copy-all-receiving';
 import { copyToClipboard } from '@/utils/_dom';
 import { ReceivingCartonStaffDropdown } from '@/components/sidebar/receiving/ReceivingCartonStaffDropdown';
 import { LabelPreviewCard } from '@/components/labels/LabelPreviewCard';
+import { TestingLinePanel, type UnitSlotSerial } from '@/components/tech/TestingUnitSlots';
 import {
-  TestingStatusPills,
-  verdictToReceivingLinePatch,
-  workflowToVerdict,
+  unitStatusToVerdict,
   type TestingVerdict,
 } from '@/components/receiving/workspace/TestingStatusPills';
 import {
@@ -34,7 +32,7 @@ import {
   listingLinkPreview,
   type ReceivingSelectLineDetail,
 } from '@/components/sidebar/receiving/receiving-sidebar-shared';
-import { buildUnitPayload, printProductLabels } from '@/lib/print/printProductLabel';
+import { buildUnitPayload, printProductLabel } from '@/lib/print/printProductLabel';
 import { normalizeSku } from '@/utils/sku';
 
 interface Props {
@@ -72,9 +70,14 @@ const LAST_TESTING_LINE_KEY = 'usav:testing:last-line-id';
  * action is "Print · receive", we ship "Pass + Print" — print N tested-OK
  * labels and patch the line `workflow_status='PASSED'`.
  */
+interface AllocatedUnit {
+  unitId: string;
+  gtin: string | null;
+  qrUrl: string | null;
+}
+
 export function TechTestingWorkspace({ staffId, selectedLineId, onSelectedLineChange }: Props) {
   const [row, setRow] = useState<ReceivingLineRow | null>(null);
-  const [verdict, setVerdict] = useState<TestingVerdict | null>(null);
   const [serialSubmitting, setSerialSubmitting] = useState(false);
   const [printQty, setPrintQty] = useState<number>(1);
   const [notes, setNotes] = useState<string>('');
@@ -82,11 +85,20 @@ export function TechTestingWorkspace({ staffId, selectedLineId, onSelectedLineCh
   const [isPrinting, setIsPrinting] = useState(false);
   const [claimOpen, setClaimOpen] = useState(false);
   /**
-   * Per-line verdict state for unmatched cartons (no single "active line").
-   * Keyed by receiving_lines.id; falls back to {@link verdict} only for the
-   * matched-PO path where the workspace owns the active line directly.
+   * Which unit slot the tech is focused on, keyed by receiving_lines.id.
+   * Drives the global LabelPreviewCard + sticky Pass/Print. Mirrors the
+   * `activeLineId` pattern at the line level but applied at the unit level
+   * so a 6/6 line renders six addressable rows.
    */
-  const [verdictByLine, setVerdictByLine] = useState<Record<number, TestingVerdict>>({});
+  const [activeSlotByLine, setActiveSlotByLine] = useState<Record<number, number>>({});
+  /**
+   * Per-unit (`serial_units.id`) cache of the pre-allocated `{SKU}-{YEAR}-{SEQ6}`
+   * value for the live preview + label print. Lazy: a slot doesn't burn an
+   * id until the operator selects it. Cleared on row switch so siblings'
+   * allocations don't leak into the new line's preview.
+   */
+  const [previewBySerialUnit, setPreviewBySerialUnit] = useState<Record<number, AllocatedUnit>>({});
+  const [isMutating, setIsMutating] = useState(false);
   const [auditOpen, setAuditOpen] = useState(false);
   const [copyingAll, setCopyingAll] = useState(false);
 
@@ -206,18 +218,16 @@ export function TechTestingWorkspace({ staffId, selectedLineId, onSelectedLineCh
     return () => window.removeEventListener('receiving-line-updated', handler);
   }, []);
 
-  // Bootstrap verdict + notes from the row each time it changes.
+  // Bootstrap notes from the row each time it changes.
   useEffect(() => {
     if (!row) {
-      setVerdict(null);
       setNotes('');
       setPrintQty(1);
       return;
     }
-    setVerdict(workflowToVerdict(row.workflow_status));
     setNotes(row.notes ?? '');
     setPrintQty(1);
-  }, [row?.id, row?.workflow_status, row?.notes]);
+  }, [row?.id, row?.notes]);
 
   // Refresh row's serials whenever it changes — table-side caches are slower.
   const refreshLineWithSerials = useCallback(async (id: number) => {
@@ -272,17 +282,75 @@ export function TechTestingWorkspace({ staffId, selectedLineId, onSelectedLineCh
     [row],
   );
 
-  // ── Verdict change ────────────────────────────────────────────────────────
-  // Verdict change only patches the line. Filing a claim is a deliberate
-  // separate action via the carton-level Claim button, not an automatic
-  // side-effect of picking Testing Failed.
-  const handleVerdictChange = useCallback(
-    (next: TestingVerdict) => {
-      setVerdict(next);
-      const patch = verdictToReceivingLinePatch(next);
-      void patchLine(patch);
+  // ── Per-unit verdict ──────────────────────────────────────────────────────
+  /**
+   * Record a verdict against a single `serial_units` row. The server flips
+   * the unit's `current_status` and rolls up the line's
+   * `workflow_status` + `qa_status` across all sibling units in the same
+   * transaction (see /api/serial-units/[id]/test). The response carries both
+   * so we can update local state without an extra round-trip.
+   *
+   * Filing a claim is still a deliberate carton-level action via the Claim
+   * button — picking "Testing Failed" only flags the unit as ON_HOLD.
+   */
+  const handleSlotVerdict = useCallback(
+    async (lineId: number, serial: UnitSlotSerial, next: TestingVerdict) => {
+      setIsMutating(true);
+      try {
+        const res = await fetch(`/api/serial-units/${serial.id}/test`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            verdict: next,
+            notes: notes.trim() || null,
+            client_event_id: `testing-verdict-${serial.id}-${next}`,
+          }),
+        });
+        const data = await res.json().catch(() => null);
+        if (!res.ok || !data?.ok) {
+          toast.error(data?.error || `Verdict save failed (${res.status})`);
+          return;
+        }
+
+        // Patch the local row's serial entry with the unit's new
+        // current_status so the pills re-render without a refetch.
+        setRow((current) => {
+          if (!current || current.id !== lineId) return current;
+          const nextSerials = (current.serials ?? []).map((s) =>
+            s.id === serial.id
+              ? { ...s, current_status: data.unit?.current_status ?? s.current_status }
+              : s,
+          );
+          return { ...current, serials: nextSerials };
+        });
+
+        // Apply the server-computed line rollup so the rail + accordion
+        // siblings live-update.
+        if (data.line) {
+          dispatchLineUpdated({
+            id: lineId,
+            workflow_status: data.line.workflow_status,
+            qa_status: data.line.qa_status,
+            disposition_code: data.line.disposition_code,
+          });
+          setRow((current) =>
+            current && current.id === lineId
+              ? ({
+                  ...current,
+                  workflow_status: data.line.workflow_status,
+                  qa_status: data.line.qa_status,
+                  disposition_code: data.line.disposition_code,
+                } as ReceivingLineRow)
+              : current,
+          );
+        }
+      } catch (err) {
+        toast.error(err instanceof Error ? err.message : 'Verdict request failed');
+      } finally {
+        setIsMutating(false);
+      }
     },
-    [patchLine],
+    [notes],
   );
 
   // ── Per-line serial mgmt ─────────────────────────────────────────────────
@@ -362,17 +430,20 @@ export function TechTestingWorkspace({ staffId, selectedLineId, onSelectedLineCh
     [row, refreshLineWithSerials],
   );
 
-  // Replace a saved serial in-place — DELETE the old row, POST the new one.
-  // Mirrors LineEditPanel's contract so the SerialChipWithMenu Edit menu
-  // behaves identically across receiving + testing.
+  // Replace a saved serial in place (typo fix): delete the old serial_unit
+  // then re-scan the corrected value. Mirrors the receiving adder's
+  // `onReplaceSerial` contract so editing behaves identically on both pages.
   const replaceSerial = useCallback(
-    async (lineId: number, originalSerialUnitId: number, nextSerial: string) => {
+    async (lineId: number, original: UnitSlotSerial, nextSerial: string) => {
+      if (original.id == null) return;
+      const next = (nextSerial ?? '').trim();
+      if (!next || next === original.serial_number) return;
       try {
         const res = await fetch('/api/receiving/scan-serial', {
           method: 'DELETE',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            serial_unit_id: originalSerialUnitId,
+            serial_unit_id: original.id,
             receiving_line_id: lineId,
           }),
         });
@@ -381,12 +452,44 @@ export function TechTestingWorkspace({ staffId, selectedLineId, onSelectedLineCh
           toast.error(data?.error || 'Could not replace serial');
           return;
         }
-        await submitSerial(lineId, nextSerial);
+        await submitSerial(lineId, next);
       } catch (err) {
         toast.error(err instanceof Error ? err.message : 'Replace failed');
       }
     },
     [submitSerial],
+  );
+
+  // One verdict per unit / PO line: collapse the line's serial statuses into a
+  // single pill state. Any failure dominates, then any re-test, else a clean
+  // PASS only when every saved serial passed. Empty → no verdict yet.
+  const deriveLineVerdict = useCallback(
+    (serials: ReadonlyArray<UnitSlotSerial>): TestingVerdict | null => {
+      const verdicts = serials.map((s) => unitStatusToVerdict(s.current_status));
+      if (verdicts.length === 0) return null;
+      if (verdicts.some((v) => v === 'TESTING_FAILED')) return 'TESTING_FAILED';
+      if (verdicts.some((v) => v === 'TEST_AGAIN')) return 'TEST_AGAIN';
+      if (verdicts.every((v) => v === 'PASS')) return 'PASS';
+      return null;
+    },
+    [],
+  );
+
+  // Apply one verdict across every serial on the line so the server-side line
+  // rollup (workflow_status / qa_status) resolves cleanly. Sequential because
+  // `/api/serial-units/[id]/test` recomputes the rollup on each call.
+  const applyLineVerdict = useCallback(
+    async (lineId: number, serials: ReadonlyArray<UnitSlotSerial>, next: TestingVerdict) => {
+      const targets = serials.filter((s) => s.id != null);
+      if (targets.length === 0) {
+        toast.info('Scan a serial first, then set a verdict.');
+        return;
+      }
+      for (const s of targets) {
+        await handleSlotVerdict(lineId, s, next);
+      }
+    },
+    [handleSlotVerdict],
   );
 
   // ── Pass + Print ───────────────────────────────────────────────────────────
@@ -413,77 +516,163 @@ export function TechTestingWorkspace({ staffId, selectedLineId, onSelectedLineCh
     }
   }, []);
 
-  /** Issue tested-OK labels: mints one unit id per label, writes serial_units + LABELED events, prints. */
+  // Default to the first un-tested slot when the line first lands. "First
+  // un-tested" = the earliest slot whose unit hasn't been verdicted, falling
+  // through to the first empty slot, then 0 if every slot is already done.
+  const defaultActiveSlot = useCallback((line: ReceivingLineRow): number => {
+    const serials = line.serials ?? [];
+    const expected = line.quantity_expected ?? serials.length;
+    for (let i = 0; i < serials.length; i++) {
+      if (unitStatusToVerdict(serials[i].current_status) == null) return i;
+    }
+    if (serials.length < expected) return serials.length;
+    return 0;
+  }, []);
+
+  const activeSlot = useMemo(() => {
+    if (!row) return 0;
+    return activeSlotByLine[row.id] ?? defaultActiveSlot(row);
+  }, [row, activeSlotByLine, defaultActiveSlot]);
+
+  const activeSerial: UnitSlotSerial | null = useMemo(() => {
+    if (!row) return null;
+    return (row.serials ?? [])[activeSlot] ?? null;
+  }, [row, activeSlot]);
+
+  // Allocate a unit id for the active slot lazily. The first time the
+  // operator focuses a slot whose unit doesn't have an allocation yet, we
+  // mint one — so empty slots and unfocused slots don't burn ids.
+  useEffect(() => {
+    if (!row?.sku || !activeSerial) return;
+    if (previewBySerialUnit[activeSerial.id]) return;
+    let cancelled = false;
+    void (async () => {
+      const allocation = await allocateUnitId(row.sku!);
+      if (cancelled || !allocation) return;
+      setPreviewBySerialUnit((m) => ({
+        ...m,
+        [activeSerial.id]: {
+          unitId: allocation.unitId,
+          gtin: allocation.gtin,
+          qrUrl: allocation.qrUrl,
+        },
+      }));
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [row?.sku, activeSerial, previewBySerialUnit, allocateUnitId]);
+
+  // Wipe the per-slot allocation cache when the line changes so a stale
+  // id minted for the prior carton's serials never leaks into the new
+  // preview.
+  useEffect(() => {
+    setPreviewBySerialUnit({});
+  }, [row?.id]);
+
+  // Live preview payload — encodes the active slot's allocated unit id +
+  // its physical serial in the DataMatrix, so the on-screen preview
+  // matches the printed label exactly.
+  const previewPayload = useMemo(() => {
+    if (!row?.sku) return null;
+    const allocation = activeSerial ? previewBySerialUnit[activeSerial.id] : undefined;
+    return buildUnitPayload({
+      sku: allocation?.unitId || row.sku,
+      serialNumber: activeSerial?.serial_number ?? null,
+      qrPayload: allocation?.qrUrl ?? null,
+      gtin: allocation?.gtin ?? null,
+    });
+  }, [row?.sku, activeSerial, previewBySerialUnit]);
+
+  const activeAllocation = activeSerial
+    ? previewBySerialUnit[activeSerial.id]
+    : undefined;
+
+  /**
+   * Print the active slot's tested-OK label. `count` is the number of
+   * duplicate copies (warehouse stickers want N stickers per unit), not the
+   * number of distinct unit ids — under the per-unit model each row owns
+   * exactly one unit id. The pre-allocated id is reused; a fresh one is
+   * minted only if the cache is empty (e.g., reload mid-flow).
+   *
+   * Also writes the unit through the canonical post-multi-sn pipeline so
+   * it surfaces in Recently Printed + tech_serial_numbers + inventory_events
+   * — same audit trail the products page leaves behind.
+   */
   const issueAndPrintLabels = useCallback(
     async (count: number): Promise<boolean> => {
       if (!row || !row.sku) {
         toast.error('Line has no SKU — cannot issue label');
         return false;
       }
-      // Round-robin over saved physical serials so multi-serial lines get a
-      // distinct physical SN baked into each label. If a line has 3 serials
-      // and the tech prints 5, the last 2 cycle back to serial #1 and #2.
-      // If the line has no serials at all, every label just encodes the
-      // unit id (label still prints, but DataMatrix carries only the SKU).
-      const physicalSerials = (row.serials ?? [])
-        .map((s) => (s.serial_number || '').trim())
-        .filter(Boolean);
-
-      const unitIds: string[] = [];
-      const qrPayloads: Array<string | null> = [];
-      let gtin: string | null = null;
-
-      for (let i = 0; i < count; i++) {
-        const allocation = await allocateUnitId(row.sku);
-        if (!allocation) return false;
-        unitIds.push(allocation.unitId);
-        qrPayloads.push(allocation.qrUrl);
-        gtin = allocation.gtin ?? gtin;
-
-        const serialForThisLabel =
-          physicalSerials.length > 0 ? physicalSerials[i % physicalSerials.length] : null;
-
-        // Persist this unit to the canonical pipeline so it shows up in
-        // Recently Printed, tech_serial_numbers, and inventory_events
-        // (same call MultiSkuSnBarcode makes on click — keeps audit honest).
-        const payload = buildUnitPayload({
-          sku: allocation.unitId,
-          serialNumber: serialForThisLabel,
-          qrPayload: allocation.qrUrl,
-          gtin: allocation.gtin,
-        });
-        try {
-          await fetch('/api/post-multi-sn', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              sku: allocation.unitId,
-              productSku: row.sku,
-              unitId: allocation.unitId,
-              gtin: allocation.gtin ?? undefined,
-              qrPayload: payload.value,
-              symbology: payload.symbology,
-              serialNumbers: serialForThisLabel ? [serialForThisLabel] : [],
-              notes,
-              condition: row.condition_grade || 'USED_A',
-              printClass: 'print',
-            }),
-          });
-        } catch (err) {
-          console.warn('post-multi-sn failed (label still prints):', err);
-        }
+      if (!activeSerial) {
+        toast.error('No serial on this slot — scan one first');
+        return false;
       }
 
-      printProductLabels({
-        sku: row.sku,
-        title: row.item_name ?? undefined,
-        serialNumbers: unitIds,
-        gtin: gtin ?? undefined,
-        qrPayloads,
+      let allocation = previewBySerialUnit[activeSerial.id];
+      if (!allocation) {
+        const next = await allocateUnitId(row.sku);
+        if (!next) return false;
+        allocation = {
+          unitId: next.unitId,
+          gtin: next.gtin,
+          qrUrl: next.qrUrl,
+        };
+      }
+
+      const payload = buildUnitPayload({
+        sku: allocation.unitId,
+        serialNumber: activeSerial.serial_number,
+        qrPayload: allocation.qrUrl,
+        gtin: allocation.gtin,
+      });
+      try {
+        await fetch('/api/post-multi-sn', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            sku: allocation.unitId,
+            productSku: row.sku,
+            unitId: allocation.unitId,
+            gtin: allocation.gtin ?? undefined,
+            qrPayload: payload.value,
+            symbology: payload.symbology,
+            serialNumbers: [activeSerial.serial_number],
+            notes,
+            condition: row.condition_grade || 'USED_A',
+            printClass: 'print',
+          }),
+        });
+      } catch (err) {
+        console.warn('post-multi-sn failed (label still prints):', err);
+      }
+
+      // Print N duplicate copies of the same label. Stagger so the silent
+      // print pipeline or browser print dialog doesn't drop jobs.
+      const stagger = 200;
+      for (let i = 0; i < count; i++) {
+        window.setTimeout(() => {
+          printProductLabel({
+            sku: allocation!.unitId,
+            title: row.item_name ?? undefined,
+            serialNumber: activeSerial.serial_number,
+            gtin: allocation!.gtin ?? undefined,
+            qrPayload: allocation!.qrUrl ?? undefined,
+          });
+        }, i * stagger);
+      }
+
+      // Burn the allocation — this slot just printed. Selecting it again
+      // (rare — the operator usually moves on) will mint a fresh id.
+      setPreviewBySerialUnit((m) => {
+        const next = { ...m };
+        delete next[activeSerial.id];
+        return next;
       });
       return true;
     },
-    [row, allocateUnitId, notes],
+    [row, activeSerial, previewBySerialUnit, allocateUnitId, notes],
   );
 
   // ── Copy all ──────────────────────────────────────────────────────────────
@@ -547,13 +736,19 @@ export function TechTestingWorkspace({ staffId, selectedLineId, onSelectedLineCh
 
   const handlePrimary = useCallback(async () => {
     if (!row) return;
-    // Only Pass prints. Test Again + Testing Failed never print — the
-    // pill change has already patched the line. Print is a one-tap finalizer.
+    // Only PASS prints. TEST_AGAIN + TESTING_FAILED never print — the verdict
+    // pill already flipped the unit's status server-side. Print finalizes
+    // PASS by minting + spitting out the sticker.
+    if (!activeSerial) {
+      toast.info('Scan a serial for this slot before printing.');
+      return;
+    }
+    const verdict = unitStatusToVerdict(activeSerial.current_status);
     if (verdict !== 'PASS') {
       toast.info(
         verdict === 'TESTING_FAILED'
           ? 'Use the Claim button to file a ticket. No label will print on Fail.'
-          : 'Mark Pass to print a tested-OK label.',
+          : 'Mark this unit Pass before printing.',
       );
       return;
     }
@@ -561,44 +756,49 @@ export function TechTestingWorkspace({ staffId, selectedLineId, onSelectedLineCh
     try {
       const ok = await issueAndPrintLabels(printQty);
       if (!ok) return;
-      // Final receiving-line state: PASSED + DONE so it falls off the testing
-      // queue and into the packer queue (workflow_status DONE is the v1 signal).
-      await patchLine({
-        workflow_status: 'DONE',
-        qa_status: 'PASSED',
-        disposition_code: 'ACCEPT',
-        notes: notes.trim() || null,
-      });
-      toast.success(`Printed ${printQty} tested-OK label${printQty === 1 ? '' : 's'}`);
+      toast.success(`Printed ${printQty}× label${printQty === 1 ? '' : 's'}`);
 
-      // Auto-advance to the next open sibling on the same carton. The rail
-      // + PO Items accordion both react to receiving-select-line, so this
-      // keeps the tech's scan flow rolling without an explicit click.
+      // Auto-advance within the line first — only fall through to the next
+      // open sibling carton-line if every unit on this line is done.
+      const serials = row.serials ?? [];
+      const expected = row.quantity_expected ?? serials.length;
+      const cap = Math.max(serials.length, expected);
+      let nextSlot: number | null = null;
+      for (let i = activeSlot + 1; i < cap; i++) {
+        const s = serials[i];
+        if (!s || unitStatusToVerdict(s.current_status) !== 'PASS') {
+          nextSlot = i;
+          break;
+        }
+      }
+      if (nextSlot == null) {
+        for (let i = 0; i <= activeSlot; i++) {
+          const s = serials[i];
+          if (!s || unitStatusToVerdict(s.current_status) !== 'PASS') {
+            // Skip the slot we just printed unless it was an empty slot
+            // (shouldn't happen — print requires a serial).
+            if (i === activeSlot && s) continue;
+            nextSlot = i;
+            break;
+          }
+        }
+      }
+
+      if (nextSlot != null) {
+        setActiveSlotByLine((m) => ({ ...m, [row.id]: nextSlot! }));
+        return;
+      }
+
       const next = await findNextOpenSibling(row);
       if (next) {
         dispatchSelectLine(next);
       } else {
-        toast.success('Carton complete — all items tested', { duration: 2500 });
+        toast.success('Carton complete — all units tested', { duration: 2500 });
       }
     } finally {
       setIsPrinting(false);
     }
-  }, [row, verdict, printQty, notes, issueAndPrintLabels, patchLine, findNextOpenSibling]);
-
-  // Memoize the live preview payload so the DataMatrix only re-renders
-  // when something it actually encodes changes.
-  const previewPayload = useMemo(() => {
-    if (!row?.sku) return null;
-    const physicalSerial = (row.serials ?? [])
-      .map((s) => (s.serial_number || '').trim())
-      .find(Boolean) ?? null;
-    return buildUnitPayload({
-      sku: row.sku,
-      serialNumber: physicalSerial,
-      qrPayload: null,
-      gtin: null,
-    });
-  }, [row?.sku, row?.serials]);
+  }, [row, activeSerial, activeSlot, printQty, issueAndPrintLabels, findNextOpenSibling]);
 
   // Mount-time restore handles the no-row case (localStorage → most-recent),
   // so there's no operator-facing empty prompt — just a quiet holding area
@@ -622,26 +822,37 @@ export function TechTestingWorkspace({ staffId, selectedLineId, onSelectedLineCh
   const listingPreview = listingUrl
     ? listingLinkPreview(listingUrl)
     : (row.source_platform || 'no listing').toUpperCase();
-  const recordedSerials = row.serials ?? [];
-  const verdictPicked = verdict !== null;
+  const activeVerdict = unitStatusToVerdict(activeSerial?.current_status);
+  const verdictPicked = activeVerdict !== null;
   const hasSku = Boolean((row.sku || '').trim());
   const hasReceivingId = row.receiving_id != null;
+  const hasActiveSerial = activeSerial != null;
   const primaryDisabled =
-    !verdictPicked || verdict !== 'PASS' || isPrinting || saving || !hasSku || !hasReceivingId;
+    !hasActiveSerial ||
+    !verdictPicked ||
+    activeVerdict !== 'PASS' ||
+    isPrinting ||
+    saving ||
+    !hasSku ||
+    !hasReceivingId;
   const primaryTitle = !hasReceivingId
     ? 'Line is not linked to a carton'
     : !hasSku
       ? 'Line has no SKU — link a product before printing'
-      : !verdictPicked
-        ? 'Pick a testing verdict first'
-        : verdict !== 'PASS'
-          ? 'Only Pass produces a label — Test Again re-queues; Testing Failed opens claim'
-          : `Print ${printQty} tested-OK label${printQty === 1 ? '' : 's'} for this line`;
+      : !hasActiveSerial
+        ? 'Scan a serial for this slot before printing'
+        : !verdictPicked
+          ? 'Pick a testing verdict for this unit first'
+          : activeVerdict !== 'PASS'
+            ? 'Only Pass produces a label — Test Again re-queues; Testing Failed opens claim'
+            : `Print ${printQty}× tested-OK label${printQty === 1 ? '' : 's'} for this unit`;
   const primaryLabel = isPrinting
     ? `Printing ${printQty}×…`
     : !hasSku
       ? 'Pass · No SKU'
-      : `Pass · Print ${printQty}× Label${printQty === 1 ? '' : 's'}`;
+      : !hasActiveSerial
+        ? 'Pass · No Serial'
+        : `Pass · Print ${printQty}× Label${printQty === 1 ? '' : 's'}`;
 
   return (
     <>
@@ -717,51 +928,31 @@ export function TechTestingWorkspace({ staffId, selectedLineId, onSelectedLineCh
                 <UnmatchedItemsSection
                   receivingId={row.receiving_id}
                   renderLineActions={(line) => {
-                    const lineVerdict = verdictByLine[line.id] ?? null;
+                    const lineSerials = (line.serials ?? []) as UnitSlotSerial[];
                     return (
-                      <div className="space-y-3">
-                        <div className="min-w-0">
-                          <TestingStatusPills
-                            value={lineVerdict}
-                            onChange={(next) => {
-                              setVerdictByLine((prev) => ({ ...prev, [line.id]: next }));
-                              // Patch THIS line's workflow_status — the
-                              // shared patchLine helper writes to row.id
-                              // (active line), so we hit the API directly
-                              // for unmatched siblings.
-                              const patch = verdictToReceivingLinePatch(next);
-                              void fetch('/api/receiving-lines', {
-                                method: 'PATCH',
-                                headers: { 'Content-Type': 'application/json' },
-                                body: JSON.stringify({ id: line.id, ...patch }),
-                              }).then(async (res) => {
-                                const data = await res.json().catch(() => null);
-                                if (data?.success && data.receiving_line) {
-                                  dispatchLineUpdated(data.receiving_line);
-                                }
-                              });
-                            }}
-                            disabled={saving}
-                          />
-                        </div>
-                        <InlineSerialAdder
-                          key={`unmatched-adder-${line.id}`}
-                          lineId={line.id}
-                          saved={line.serials ?? []}
-                          expected={line.quantity_expected ?? null}
-                          isSubmitting={serialSubmitting}
-                          onAdd={(lineId, sn) => submitSerial(lineId, sn)}
-                          onReplaceSerial={(lineId, original, nextSerial) => {
-                            if (original.id == null) return;
-                            void replaceSerial(lineId, original.id, nextSerial);
-                          }}
-                          onDelete={(lineId, s) => {
-                            if (s.id == null) return;
-                            if (!window.confirm(`Remove serial ${s.serial_number}?`)) return;
-                            void deleteSerial(lineId, s.id);
-                          }}
-                        />
-                      </div>
+                      <TestingLinePanel
+                        lineId={line.id}
+                        saved={lineSerials}
+                        expected={line.quantity_expected ?? null}
+                        verdict={deriveLineVerdict(lineSerials)}
+                        isMutating={isMutating}
+                        isSubmitting={serialSubmitting}
+                        disabled={saving}
+                        selectedIndex={activeSlotByLine[line.id] ?? 0}
+                        onSelectIndex={(i) =>
+                          setActiveSlotByLine((m) => ({ ...m, [line.id]: i }))
+                        }
+                        onSetVerdict={(next) => void applyLineVerdict(line.id, lineSerials, next)}
+                        onAddSerial={(sn) => submitSerial(line.id, sn)}
+                        onDeleteSerial={(s) => {
+                          if (s.id == null) return;
+                          if (!window.confirm(`Remove serial ${s.serial_number}?`)) return;
+                          void deleteSerial(line.id, s.id);
+                        }}
+                        onReplaceSerial={(original, next) =>
+                          void replaceSerial(line.id, original, next)
+                        }
+                      />
                     );
                   }}
                 />
@@ -769,41 +960,35 @@ export function TechTestingWorkspace({ staffId, selectedLineId, onSelectedLineCh
                 <PoLinesAccordion
                   receivingId={row.receiving_id}
                   activeLineId={row.id}
-                  activeRowSlot={({ serials }) => (
-                    <div className="space-y-3">
-                      <div className="min-w-0">
-                        <TestingStatusPills
-                          value={verdict}
-                          onChange={handleVerdictChange}
-                          disabled={saving}
-                        />
-                      </div>
-                      {/* Per-PO-item serial input — scans route to THIS line's
-                          id. `serials` comes from the accordion's own query
-                          so the chip list below the input always matches the
-                          chip shown in the row header (the parent's
-                          `recordedSerials` lags on sibling switches). */}
-                      <InlineSerialAdder
-                        key={`adder-${row.id}`}
+                  activeRowSlot={({ serials }) => {
+                    const lineSerials = serials as UnitSlotSerial[];
+                    return (
+                      <TestingLinePanel
                         lineId={row.id}
-                        saved={serials}
+                        saved={lineSerials}
                         expected={row.quantity_expected ?? null}
+                        verdict={deriveLineVerdict(lineSerials)}
+                        isMutating={isMutating}
                         isSubmitting={serialSubmitting}
-                        disabled={!row.receiving_id}
+                        disabled={!row.receiving_id || saving}
                         autoFocus
-                        onAdd={(lineId, sn) => submitSerial(lineId, sn)}
-                        onReplaceSerial={(lineId, original, nextSerial) => {
-                          if (original.id == null) return;
-                          void replaceSerial(lineId, original.id, nextSerial);
-                        }}
-                        onDelete={(lineId, s) => {
+                        selectedIndex={activeSlot}
+                        onSelectIndex={(i) =>
+                          setActiveSlotByLine((m) => ({ ...m, [row.id]: i }))
+                        }
+                        onSetVerdict={(next) => void applyLineVerdict(row.id, lineSerials, next)}
+                        onAddSerial={(sn) => submitSerial(row.id, sn)}
+                        onDeleteSerial={(s) => {
                           if (s.id == null) return;
                           if (!window.confirm(`Remove serial ${s.serial_number}?`)) return;
-                          void deleteSerial(lineId, s.id);
+                          void deleteSerial(row.id, s.id);
                         }}
+                        onReplaceSerial={(original, next) =>
+                          void replaceSerial(row.id, original, next)
+                        }
                       />
-                    </div>
-                  )}
+                    );
+                  }}
                 />
               )
             ) : null}
@@ -834,10 +1019,10 @@ export function TechTestingWorkspace({ staffId, selectedLineId, onSelectedLineCh
 
             {previewPayload && row.sku ? (
               <LabelPreviewCard
-                sku={row.sku}
+                sku={activeAllocation?.unitId || row.sku}
                 dataMatrixValue={previewPayload.value}
                 dataMatrixSymbology={previewPayload.symbology}
-                showReady={verdict === 'PASS'}
+                showReady={activeVerdict === 'PASS' && hasActiveSerial}
               />
             ) : null}
           </div>
@@ -865,10 +1050,11 @@ export function TechTestingWorkspace({ staffId, selectedLineId, onSelectedLineCh
             title: primaryTitle,
           }}
           hints={[
-            { key: '⏎', label: 'Add serial' },
-            verdictPicked
-              ? { key: 'Qty', label: `${printQty}× labels` }
-              : { key: '◉', label: 'Pick a verdict' },
+            !hasActiveSerial
+              ? { key: '⏎', label: 'Scan slot serial' }
+              : verdictPicked
+                ? { key: 'Qty', label: `${printQty}× copies` }
+                : { key: '◉', label: 'Pick a verdict' },
           ]}
         />
       </div>

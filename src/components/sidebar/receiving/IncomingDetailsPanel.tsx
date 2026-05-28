@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
+import { motion } from 'framer-motion';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { format, parseISO } from 'date-fns';
 import {
@@ -9,6 +10,7 @@ import {
   Copy as CopyIcon,
 } from '@/components/Icons';
 import { PaneHeaderTabs } from '@/components/ui/pane-header';
+import { SlideOverBackdrop } from '@/components/ui/SlideOverBackdrop';
 import { copyToClipboard } from '@/utils/_dom';
 import { toast } from '@/lib/toast';
 
@@ -176,7 +178,15 @@ export function IncomingDetailsPanel({ zohoPurchaseOrderId, poNumberHint, onClos
   });
 
   return (
-    <div className="flex h-full min-h-0 flex-col bg-white">
+    <>
+      <SlideOverBackdrop onClose={onClose} />
+      <motion.div
+        initial={{ x: '100%' }}
+        animate={{ x: 0 }}
+        exit={{ x: '100%' }}
+        transition={{ type: 'spring', damping: 25, stiffness: 350, mass: 0.5 }}
+        className="fixed right-0 top-0 z-[100] flex h-screen w-[420px] flex-col overflow-hidden border-l border-gray-200 bg-white shadow-[-20px_0_50px_rgba(0,0,0,0.05)]"
+      >
       {/* Header — PO badge + close. */}
       <div className="shrink-0 border-b border-gray-200 bg-white px-4 py-2.5">
         <div className="flex items-center justify-between gap-3">
@@ -239,7 +249,8 @@ export function IncomingDetailsPanel({ zohoPurchaseOrderId, poNumberHint, onClos
           </div>
         )}
       </div>
-    </div>
+      </motion.div>
+    </>
   );
 }
 
@@ -325,12 +336,56 @@ function ItemsTab({ data }: { data: DetailsResponse }) {
 
 function ShipmentTab({ data }: { data: DetailsResponse }) {
   const s = data.shipment;
+  const queryClient = useQueryClient();
+  const [repolling, setRepolling] = useState(false);
+
+  const repoll = useCallback(async () => {
+    if (!s) return;
+    setRepolling(true);
+    try {
+      const res = await fetch('/api/shipping/track/sync-one', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ shipmentId: s.shipment_id }),
+      });
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        toast.error(body?.error || `Re-poll failed (${res.status})`);
+        return;
+      }
+      toast.success(`Refreshed · ${body.status ?? 'updated'}`);
+      // Refresh both the panel data and the row list / summary tiles so
+      // any status change is reflected end-to-end.
+      queryClient.invalidateQueries({ queryKey: ['incoming-details'] });
+      queryClient.invalidateQueries({ queryKey: ['receiving-lines-table'] });
+      queryClient.invalidateQueries({ queryKey: ['receiving-lines-incoming-summary'] });
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Re-poll failed');
+    } finally {
+      setRepolling(false);
+    }
+  }, [s, queryClient]);
+
   if (!s)
     return (
       <Empty msg="No shipment linked yet — Zoho PO reference# is empty or hasn't resolved to a tracking number. The next sync run will retry." />
     );
   return (
     <div>
+      <div className="mb-2 flex items-center justify-between">
+        <span className="text-eyebrow font-black uppercase tracking-wider text-gray-500">
+          Carrier-side state
+        </span>
+        <button
+          type="button"
+          onClick={() => void repoll()}
+          disabled={repolling}
+          className="inline-flex h-7 items-center gap-1 rounded-md bg-gray-900 px-2 text-eyebrow font-black uppercase tracking-wider text-white hover:bg-gray-800 disabled:opacity-50"
+          title="Force a fresh poll against the carrier API"
+        >
+          {repolling ? 'Polling…' : 'Re-poll'}
+        </button>
+      </div>
       <div className="space-y-0 pb-3">
         <Row label="Tracking #" value={s.tracking_number ?? '—'} copyValue={s.tracking_number} />
         <Row label="Carrier" value={s.carrier ?? '—'} />

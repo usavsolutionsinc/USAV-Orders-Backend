@@ -313,14 +313,18 @@ const ORDER_SERIALS_CTE = `
              pack_sal.created_at, test_sal.created_at
   )`;
 
-// Search path variant: drops the carrier-accepted gate so orders with a shipment
-// assigned but not yet scanned by the carrier are still discoverable by order_id /
-// tracking / SKU. The is_shipped column remains populated so the client can badge
-// the row as "pending carrier scan."
+// Search path variant: swaps the carrier-accepted gate for a packer-scan gate.
+// A row counts as "shipped" for search only when a packer actually scanned it out —
+// either a PACK-station scan (pack_sal) or an ORDERS packer_log (pl.packed_by). This
+// keeps packed-but-not-yet-carrier-scanned orders discoverable (the original reason
+// the carrier gate was dropped) while excluding orders that merely have a shipment_id
+// assigned but were never packed/shipped. Those un-shipped rows used to leak into
+// shipped search with the order's created_at timestamp and a "Not specified" packer —
+// if there's no packer scan, it was never shipped, so it must not appear here.
 const ORDER_SERIALS_CTE_ALL = ORDER_SERIALS_CTE.replace(
   `WHERE COALESCE(stn.is_carrier_accepted OR stn.is_in_transit
             OR stn.is_out_for_delivery OR stn.is_delivered, false)`,
-  ''
+  `WHERE (pack_sal.created_at IS NOT NULL OR pl.packed_by IS NOT NULL)`
 );
 
 // ─── Shipped Orders (Read) ────────────────────────────────────────────────────

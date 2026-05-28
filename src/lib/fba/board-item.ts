@@ -18,7 +18,7 @@ export function shipmentItemToBoardItem(
     fnsku: item.fnsku,
     expected_qty: item.expected_qty,
     actual_qty: item.actual_qty,
-    item_status: overrides?.item_status ?? 'READY_TO_GO',
+    item_status: overrides?.item_status ?? 'TESTED',
     display_title: item.display_title,
     asin: null,
     sku: null,

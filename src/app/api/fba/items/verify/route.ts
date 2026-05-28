@@ -5,10 +5,10 @@ import { invalidateCacheTags } from '@/lib/cache/upstash-cache';
 import { withAuth } from '@/lib/auth/withAuth';
 
 // ── POST /api/fba/items/verify ────────────────────────────────────────────────
-// Packer confirms a READY_TO_GO item is physically present (PACKER_VERIFIED).
-// Records verified_by_staff_id + verified_at without changing the status enum
-// (status transitions to LABEL_ASSIGNED only when a label is bound).
-// Writes to fba_fnsku_logs in the same transaction.
+// Packer scans a TESTED item to mark it physically packed (TESTED → PACKED).
+// PACKED items form the combiner's queue on the Combine sub-page. Records
+// verified_by_staff_id + verified_at and writes to fba_fnsku_logs in the same
+// transaction. (Combining under a label is a later step: PACKED → LABEL_ASSIGNED.)
 //
 // Body: { shipment_id, fnsku, station? } — actor is from the verified session.
 export const POST = withAuth(async (request: NextRequest, ctx) => {
@@ -35,7 +35,7 @@ export const POST = withAuth(async (request: NextRequest, ctx) => {
       return NextResponse.json({ success: false, error: 'Staff not found' }, { status: 404 });
     }
 
-    // Find the item — must be READY_TO_GO or LABEL_ASSIGNED
+    // Find the item — must be TESTED (or already PACKED/LABEL_ASSIGNED for re-scan)
     const itemRes = await client.query(
       `SELECT * FROM fba_shipment_items
        WHERE shipment_id = $1 AND fnsku = $2`,
@@ -54,7 +54,7 @@ export const POST = withAuth(async (request: NextRequest, ctx) => {
     if (item.status === 'PLANNED') {
       await client.query('ROLLBACK');
       return NextResponse.json(
-        { success: false, error: 'Item must be READY_TO_GO before packer verification' },
+        { success: false, error: 'Item must be TESTED before the packer can pack it' },
         { status: 409 }
       );
     }
@@ -63,10 +63,13 @@ export const POST = withAuth(async (request: NextRequest, ctx) => {
       return NextResponse.json({ success: false, error: 'Item is already shipped' }, { status: 409 });
     }
 
-    // Record verification (idempotent — only set if not already set)
+    // Advance TESTED → PACKED (idempotent — leaves already-packed/combined items as-is).
     const updatedRes = await client.query(
       `UPDATE fba_shipment_items
-       SET verified_by_staff_id = COALESCE(verified_by_staff_id, $1),
+       SET status               = CASE WHEN status = 'TESTED'
+                                       THEN 'PACKED'::fba_shipment_status_enum
+                                       ELSE status END,
+           verified_by_staff_id = COALESCE(verified_by_staff_id, $1),
            verified_at          = COALESCE(verified_at, NOW()),
            updated_at           = NOW()
        WHERE id = $2

@@ -254,7 +254,7 @@ export function FbaShipmentCard({
                 status={shipment.status}
                 size="xs"
                 iconOnly={
-                  shipment.status === 'PLANNED' || shipment.status === 'READY_TO_GO'
+                  shipment.status === 'PLANNED' || shipment.status === 'TESTED' || shipment.status === 'PACKED'
                 }
               />
             </div>

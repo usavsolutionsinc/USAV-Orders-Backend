@@ -10,7 +10,7 @@ import {
   TrackingChip,
   SerialChip,
   getLast4,
-  getLast6Serial,
+  getLast4Serial,
 } from '@/components/ui/CopyChip';
 import type { PackerLogRow } from '@/components/mobile/packer/types';
 
@@ -70,7 +70,7 @@ export function MobilePackingSheet({ row, open, onClose }: MobilePackingSheetPro
               <OrderIdChip value={orderId} display={getLast4(orderId)} />
               <SkuScanRefChip value={skuValue} display={getLast4(skuValue)} />
               <TrackingChip value={trackingValue} display={getLast4(trackingValue)} />
-              <SerialChip value={serialValue} display={getLast6Serial(serialValue)} />
+              <SerialChip value={serialValue} display={getLast4Serial(serialValue)} />
             </div>
           </div>
         </div>

@@ -141,3 +141,24 @@ export function workflowToVerdict(
   if (v === 'FAILED' || v.startsWith('FAILED_')) return 'TESTING_FAILED';
   return null;
 }
+
+/**
+ * Derive the per-unit verdict from a `serial_units.current_status` value.
+ *
+ * The /api/serial-units/[id]/test endpoint writes these transitions:
+ *   PASS         → 'TESTED'
+ *   TEST_AGAIN   → 'IN_TEST'
+ *   TESTING_FAIL → 'ON_HOLD'
+ *
+ * Everything else (RECEIVED, GRADED, UNKNOWN, etc.) reads as "no verdict
+ * picked yet" so the pills render unselected.
+ */
+export function unitStatusToVerdict(
+  status: string | null | undefined,
+): TestingVerdict | null {
+  const s = String(status ?? '').trim().toUpperCase();
+  if (s === 'TESTED') return 'PASS';
+  if (s === 'IN_TEST') return 'TEST_AGAIN';
+  if (s === 'ON_HOLD') return 'TESTING_FAILED';
+  return null;
+}

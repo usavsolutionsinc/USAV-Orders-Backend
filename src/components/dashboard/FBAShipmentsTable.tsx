@@ -14,7 +14,7 @@ interface FBAShipmentLifecycleRow {
   shipment_ref: string;
   destination_fc: string | null;
   due_date: string | null;
-  status: 'PLANNED' | 'READY_TO_GO' | 'LABEL_ASSIGNED' | 'SHIPPED';
+  status: 'PLANNED' | 'TESTED' | 'PACKED' | 'LABEL_ASSIGNED' | 'SHIPPED';
   notes: string | null;
   shipped_at: string | null;
   created_at: string;

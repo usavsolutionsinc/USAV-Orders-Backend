@@ -160,6 +160,8 @@ export function ReceivingHistorySearchSection({ onSwitchToReceiving }: Props) {
           variant="nav"
           size="md"
           aria-label="Receiving history search field"
+          // Left inset so the first pill isn't flush to the edge at min scroll.
+          className="pl-3"
         />
 
         <p className={`${microBadge} text-gray-500 px-0.5`}>

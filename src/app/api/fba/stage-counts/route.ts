@@ -12,10 +12,11 @@ import { withAuth } from '@/lib/auth/withAuth';
  * {
  *   success: true,
  *   counts: {
- *     PLANNED:       number,
- *     PACKING:       number,
- *     OUT_OF_STOCK:  number,
- *     READY_TO_GO:   number,
+ *     PLANNED:        number,
+ *     TESTED:         number,
+ *     PACKED:         number,
+ *     OUT_OF_STOCK:   number,
+ *     LABEL_ASSIGNED: number,
  *   }
  * }
  */
@@ -24,15 +25,16 @@ export const GET = withAuth(async () => {
     const result = await pool.query(`
       SELECT status, COUNT(*) AS cnt
       FROM fba_shipment_items
-      WHERE status IN ('PLANNED', 'PACKING', 'OUT_OF_STOCK', 'READY_TO_GO')
+      WHERE status IN ('PLANNED', 'TESTED', 'PACKED', 'OUT_OF_STOCK', 'LABEL_ASSIGNED')
       GROUP BY status
     `);
 
     const counts: Record<string, number> = {
-      PLANNED:      0,
-      PACKING:      0,
-      OUT_OF_STOCK: 0,
-      READY_TO_GO:  0,
+      PLANNED:        0,
+      TESTED:         0,
+      PACKED:         0,
+      OUT_OF_STOCK:   0,
+      LABEL_ASSIGNED: 0,
     };
 
     for (const row of result.rows) {

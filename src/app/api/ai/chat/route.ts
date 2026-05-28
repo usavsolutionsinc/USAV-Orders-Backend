@@ -1,8 +1,7 @@
 /**
- * @deprecated The `openclaw-` name is retained only for URL compatibility with
- * AiChatPanel.tsx and admin/AiChatTab.tsx. The backend is now the local Hermes
- * gateway on 127.0.0.1:8642 (NousResearch/hermes-agent). OpenClaw is no longer
- * called. See /Users/salessupport/.claude/plans/fizzy-conjuring-knuth.md.
+ * AI Chat — POST endpoint backing AiChatPanel.tsx and admin/AiChatTab.tsx.
+ * The backend is the local Hermes gateway on 127.0.0.1:8642
+ * (NousResearch/hermes-agent), reached from Vercel via Cloudflare tunnel.
  */
 import { NextRequest, NextResponse } from 'next/server';
 import { buildContextBlock } from '@/lib/ai/context-fetchers';
@@ -16,7 +15,7 @@ import { withAuth } from '@/lib/auth/withAuth';
 
 export const runtime = 'nodejs';
 
-type OpenClawChatBody = {
+type AiChatBody = {
   sessionId?: string;
   message?: string;
 };
@@ -45,7 +44,7 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
   }
 
   try {
-    const body = (await req.json().catch(() => ({}))) as OpenClawChatBody;
+    const body = (await req.json().catch(() => ({}))) as AiChatBody;
     const { sessionId, message } = body;
 
     if (!sessionId || typeof sessionId !== 'string') {
@@ -64,7 +63,7 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
     const localResolution = await resolveLocalAiAnswer(trimmedMessage);
 
     if (localResolution?.mode === 'local_ops') {
-      console.info('[openclaw-chat] local ops answer', {
+      console.info('[ai-chat] local ops answer', {
         kind: localResolution.analysis.kind,
         title: localResolution.analysis.title,
         confidence: localResolution.analysis.confidence,
@@ -115,7 +114,7 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
             ],
           };
 
-          console.info('[openclaw-chat] Bose RAG answer', {
+          console.info('[ai-chat] Bose RAG answer', {
             sources: ragResult.sources.length,
             chunks: ragResult.chunks.length,
             confidence,
@@ -131,7 +130,7 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
           return NextResponse.json(ragPayload);
         }
       } catch (ragErr: any) {
-        console.warn('[openclaw-chat] NemoClaw RAG failed (non-fatal), falling through to OpenClaw:', ragErr?.message);
+        console.warn('[ai-chat] NemoClaw RAG failed (non-fatal), falling through to Hermes:', ragErr?.message);
       }
     }
 
@@ -150,7 +149,7 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
             `\n\nUser question: ${trimmedMessage}`;
         }
       } catch (err) {
-        console.error('[openclaw-chat] context fetch error (non-fatal):', err);
+        console.error('[ai-chat] context fetch error (non-fatal):', err);
       }
     }
 
@@ -191,7 +190,7 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
 
     if (!hermesRes.ok) {
       const errBody = await hermesRes.text().catch(() => '');
-      console.error('[openclaw-chat] Hermes gateway error:', hermesRes.status, errBody.slice(0, 300));
+      console.error('[ai-chat] Hermes gateway error:', hermesRes.status, errBody.slice(0, 300));
       return NextResponse.json(
         { error: `Local AI returned ${hermesRes.status}. Is the hermes-gateway PM2 app running?` },
         { status: 502 },
@@ -207,7 +206,7 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
     // Strip <think>...</think> reasoning blocks if model includes them
     const reply = rawReply.replace(/<think>[\s\S]*?<\/think>/g, '').trim() || rawReply;
 
-    console.info('[openclaw-chat] Hermes answered', {
+    console.info('[ai-chat] Hermes answered', {
       model: data?.model ?? 'hermes-agent',
       chars: reply.length,
     });
@@ -222,7 +221,7 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
     void persistChatMessage({ organizationId: ctx.organizationId, sessionId, role: 'assistant', content: String(reply).trim(), mode: finalMode, analysis: localResolution?.analysis });
     return NextResponse.json(payload);
   } catch (err: any) {
-    console.error('[openclaw-chat] Error:', err?.message);
+    console.error('[ai-chat] Error:', err?.message);
     return NextResponse.json(
       { error: err?.message ?? 'Chat request failed' },
       { status: 503 },

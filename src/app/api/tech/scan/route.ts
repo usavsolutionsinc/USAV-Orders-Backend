@@ -13,6 +13,7 @@ import { createStationActivityLog } from '@/lib/station-activity';
 import { looksLikeFnsku } from '@/lib/scan-resolver';
 import { mergeSerialsFromTsnRows } from '@/lib/tech/serialFields';
 import { createFbaLog } from '@/lib/fba/createFbaLog';
+import { buildFbaPlanRefFromIsoDate } from '@/lib/fba/plan-ref';
 import { withAuth } from '@/lib/auth/withAuth';
 
 const ROUTE = 'tech.scan';
@@ -162,7 +163,7 @@ async function findOpenFbaItem(db: typeof pool, fnsku: string) {
             fs.shipment_ref, si.expected_qty, si.actual_qty, si.status
      FROM fba_shipment_items si
      JOIN fba_shipments fs ON fs.id = si.shipment_id
-     WHERE si.fnsku = $1 AND fs.status IN ('PLANNED','READY_TO_GO','LABEL_ASSIGNED')
+     WHERE si.fnsku = $1 AND fs.status IN ('PLANNED','TESTED','PACKED','LABEL_ASSIGNED')
      ORDER BY fs.created_at DESC, si.id DESC LIMIT 1`,
     [fnsku.toUpperCase().trim()],
   );
@@ -260,7 +261,75 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
         const { catalog, catalogCreated } = await ensureFnskuCatalog(client as any, fnsku);
 
         const testDateTime = formatPSTTimestamp();
-        const fbaItem = await findOpenFbaItem(client as any, fnsku);
+        let fbaItem = await findOpenFbaItem(client as any, fnsku);
+
+        // Testing station: a tech FNSKU scan means "tested". Advance an open
+        // PLANNED item to TESTED, or add the FNSKU to today's plan as TESTED
+        // when none exists ("add or update"). FBA-workspace/plan scans use a
+        // different endpoint and intentionally stay PLANNED.
+        if (!isFbaSource) {
+          if (fbaItem && String(fbaItem.status) === 'PLANNED') {
+            const upd = await client.query(
+              `UPDATE fba_shipment_items
+                 SET status = 'TESTED'::fba_shipment_status_enum,
+                     ready_by_staff_id = COALESCE(ready_by_staff_id, $1),
+                     ready_at = COALESCE(ready_at, NOW()),
+                     updated_at = NOW()
+               WHERE id = $2
+               RETURNING id, shipment_id, expected_qty, actual_qty, status`,
+              [testedBy, fbaItem.item_id],
+            );
+            if (upd.rows[0]) {
+              fbaItem = {
+                ...fbaItem,
+                item_id: Number(upd.rows[0].id),
+                shipment_id: Number(upd.rows[0].shipment_id),
+                expected_qty: Number(upd.rows[0].expected_qty),
+                actual_qty: Number(upd.rows[0].actual_qty),
+                status: String(upd.rows[0].status),
+              };
+            }
+          } else if (!fbaItem) {
+            let plan = await client.query(
+              `SELECT id, shipment_ref FROM fba_shipments
+                WHERE due_date = CURRENT_DATE AND status = 'PLANNED'
+                ORDER BY created_at DESC LIMIT 1`,
+            );
+            let planId: number; let planRef: string | null;
+            if (plan.rows.length === 0) {
+              const d = await client.query<{ d: string }>(`SELECT CURRENT_DATE::text AS d`);
+              const ref = buildFbaPlanRefFromIsoDate(String(d.rows[0]?.d || ''));
+              const np = await client.query(
+                `INSERT INTO fba_shipments (shipment_ref, due_date, status)
+                 VALUES ($1, CURRENT_DATE, 'PLANNED') RETURNING id, shipment_ref`,
+                [ref],
+              );
+              planId = Number(np.rows[0].id); planRef = np.rows[0].shipment_ref;
+            } else {
+              planId = Number(plan.rows[0].id); planRef = plan.rows[0].shipment_ref;
+            }
+            const ni = await client.query(
+              `INSERT INTO fba_shipment_items
+                 (shipment_id, fnsku, product_title, asin, sku, expected_qty, actual_qty, status, ready_by_staff_id, ready_at)
+               VALUES ($1, $2, $3, $4, $5, 1, 1, 'TESTED', $6, NOW())
+               ON CONFLICT (shipment_id, fnsku) DO UPDATE
+                 SET status = CASE WHEN fba_shipment_items.status = 'PLANNED'
+                                   THEN 'TESTED'::fba_shipment_status_enum
+                                   ELSE fba_shipment_items.status END,
+                     updated_at = NOW()
+               RETURNING id, shipment_id, expected_qty, actual_qty, status`,
+              [planId, fnsku, catalog.product_title, catalog.asin, catalog.sku, testedBy],
+            );
+            fbaItem = {
+              item_id: Number(ni.rows[0].id),
+              shipment_id: planId,
+              shipment_ref: planRef,
+              expected_qty: Number(ni.rows[0].expected_qty),
+              actual_qty: Number(ni.rows[0].actual_qty),
+              status: String(ni.rows[0].status),
+            };
+          }
+        }
 
         // 1. SAL row (SoT)
         const salId = await createStationActivityLog(client, {

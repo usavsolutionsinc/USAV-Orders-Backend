@@ -40,6 +40,28 @@ interface PlanEntry {
   tracking_numbers: { tracking_number: string; carrier: string; label: string }[];
 }
 
+interface ScanLog {
+  id: number;
+  source_stage: string;
+  event_type: string;
+  staff_name: string | null;
+  station: string | null;
+  quantity: number;
+  created_at: string;
+}
+
+/** Friendly label for a scan log row (who-did-what). */
+function scanActionLabel(stage: string, event: string): string {
+  const s = (stage || '').toUpperCase();
+  const e = (event || '').toUpperCase();
+  if (e === 'SHIPPED') return 'Shipped';
+  if (e === 'ASSIGNED') return 'Combined';
+  if (s === 'TECH') return 'Tested';
+  if (s === 'PACK') return 'Packed';
+  if (s === 'ADMIN') return 'Admin';
+  return e ? e.charAt(0) + e.slice(1).toLowerCase() : 'Scanned';
+}
+
 /* ── Props ─────────────────────────────────────────────────────────── */
 
 interface FbaBoardDetailPanelProps {
@@ -345,6 +367,7 @@ export function FbaBoardDetailPanel({
   disableMoveDown = false,
 }: FbaBoardDetailPanelProps) {
   const [entries, setEntries] = useState<PlanEntry[]>([]);
+  const [scanLogs, setScanLogs] = useState<ScanLog[]>([]);
   const [loading, setLoading] = useState(true);
   const [catalogSnapshot, setCatalogSnapshot] = useState<FnskuCatalogMeta | null>(null);
 
@@ -354,10 +377,16 @@ export function FbaBoardDetailPanel({
 
   const fetchEntries = useCallback(async () => {
     setLoading(true);
+    const fnsku = encodeURIComponent(item.fnsku.trim().toUpperCase());
     try {
-      const res = await fetch(`/api/fba/board/${encodeURIComponent(item.fnsku.trim().toUpperCase())}/entries`);
-      const data = await res.json();
-      if (data.success) setEntries(data.entries ?? []);
+      const [entriesRes, logsRes] = await Promise.all([
+        fetch(`/api/fba/board/${fnsku}/entries`),
+        fetch(`/api/fba/logs?fnsku=${fnsku}&limit=50`),
+      ]);
+      const entriesData = await entriesRes.json();
+      if (entriesData.success) setEntries(entriesData.entries ?? []);
+      const logsData = await logsRes.json().catch(() => null);
+      if (logsData?.success) setScanLogs(logsData.logs ?? []);
     } catch {
       // silently fall back to empty
     } finally {
@@ -493,6 +522,40 @@ export function FbaBoardDetailPanel({
                     onQtySaved={handleEntryChange}
                     onDeleted={handleEntryChange}
                   />
+                ))}
+              </div>
+            )}
+          </section>
+
+          {/* Scan activity — who scanned this FNSKU and when */}
+          <div className="h-px bg-gray-100" />
+          <section className="py-4">
+            <p className={`mb-3 ${sectionLabel}`}>Scan Activity ({scanLogs.length})</p>
+            {loading ? (
+              <div className="flex items-center justify-center py-4">
+                <Loader2 className="h-4 w-4 animate-spin text-gray-400" />
+              </div>
+            ) : scanLogs.length === 0 ? (
+              <p className="py-2 text-center text-caption font-bold text-gray-400">No scans yet</p>
+            ) : (
+              <div className="space-y-1.5">
+                {scanLogs.map((log) => (
+                  <div
+                    key={log.id}
+                    className="flex items-center justify-between gap-3 rounded-lg border border-gray-100 bg-gray-50/60 px-2.5 py-1.5"
+                  >
+                    <div className="flex min-w-0 items-center gap-2">
+                      <span className="shrink-0 rounded px-1.5 py-0.5 text-eyebrow font-black uppercase tracking-wider bg-purple-100 text-purple-700">
+                        {scanActionLabel(log.source_stage, log.event_type)}
+                      </span>
+                      <span className="truncate text-caption font-bold text-gray-700">
+                        {log.staff_name || 'Unknown'}
+                      </span>
+                    </div>
+                    <span className="shrink-0 text-micro font-semibold tabular-nums text-gray-400">
+                      {formatCreatedAt(log.created_at)}
+                    </span>
+                  </div>
                 ))}
               </div>
             )}

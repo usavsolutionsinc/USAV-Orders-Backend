@@ -54,7 +54,7 @@ graph TB
         E_UPS[UPS]
         E_SHEETS[Google Sheets]
         E_QSTASH[Upstash QStash]
-        E_AI[OpenClaw / AI providers]
+        E_AI[Hermes / AI providers]
     end
 
     P_DASH --> A_ORD

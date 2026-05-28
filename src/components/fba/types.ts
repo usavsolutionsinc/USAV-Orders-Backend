@@ -1,8 +1,8 @@
 /**
- * Canonical workflow modes derived from fba_fnsku_logs quantity rules.
- * PRINT_READY replaces the legacy READY_TO_GO alias used in older API responses.
- * Note: READY_TO_GO is still the DB enum for fba_shipment_items.status — this
- * type is only for the derived planning workflow state.
+ * Workflow modes derived from fba_fnsku_logs quantity rules. This is a separate
+ * concept from the fba_shipment_items.status enum (PLANNED/TESTED/PACKED/
+ * LABEL_ASSIGNED/SHIPPED — see src/lib/fba/status.ts); it expresses where the
+ * scanned quantities sit, not the item's canonical lifecycle status.
  */
 export type FbaWorkflowMode = 'PLAN' | 'PACKING' | 'PRINT_READY' | 'NONE';
 
@@ -48,9 +48,9 @@ export function deriveFbaWorkflowMode(row: FbaSummaryRow): FbaWorkflowMode {
     return fromApi as FbaWorkflowMode;
   }
 
-  // Backward-compatible aliases from legacy API responses.
-  if (fromApi === 'TESTED' || fromApi === 'PLANNED') return 'PLAN';
-  if (fromApi === 'READY_TO_GO' || fromApi === 'READY_TO_PRINT') return 'PRINT_READY';
+  // Map a raw item-status enum value (when passed through as workflow_mode).
+  if (fromApi === 'PLANNED' || fromApi === 'TESTED') return 'PLAN';
+  if (fromApi === 'PACKED' || fromApi === 'READY_TO_PRINT') return 'PRINT_READY';
   if (fromApi === 'LABEL_ASSIGNED' || fromApi === 'SHIPPED') return 'PRINT_READY';
 
   // Fallback: derive from quantity fields when workflow_mode is absent.

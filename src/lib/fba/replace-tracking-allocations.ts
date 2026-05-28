@@ -118,7 +118,7 @@ export async function replaceTrackingAllocations(
            updated_at = NOW()
        WHERE shipment_id = $1
          AND id = ANY($3::int[])
-         AND status IN ('PLANNED', 'PACKING', 'READY_TO_GO')`,
+         AND status IN ('PLANNED', 'TESTED', 'PACKED')`,
       [shipmentId, staffId, shipmentItemIds],
     );
   }

@@ -2,15 +2,15 @@ import { NextRequest, NextResponse } from 'next/server';
 import pool from '@/lib/db';
 import { withAuth } from '@/lib/auth/withAuth';
 
-const ALLOWED_STATUSES = ['READY_TO_GO', 'OUT_OF_STOCK', 'PACKING', 'PLANNED', 'LABEL_ASSIGNED'] as const;
+const ALLOWED_STATUSES = ['TESTED', 'OUT_OF_STOCK', 'PACKED', 'PLANNED', 'LABEL_ASSIGNED'] as const;
 type AllowedStatus = typeof ALLOWED_STATUSES[number];
 
-const DEFAULT_PRINT_STATUSES: AllowedStatus[] = ['READY_TO_GO', 'OUT_OF_STOCK', 'PACKING'];
+const DEFAULT_PRINT_STATUSES: AllowedStatus[] = ['TESTED', 'OUT_OF_STOCK', 'PACKED'];
 
 /**
  * GET /api/fba/print-queue
  *
- * Returns fba_shipment_items for print prep (default: READY_TO_GO + OUT_OF_STOCK + PACKING),
+ * Returns fba_shipment_items for print prep (default: TESTED + OUT_OF_STOCK + PACKED),
  * joined with parent fba_shipments and fba_fnskus catalog metadata.
  *
  * Query params:

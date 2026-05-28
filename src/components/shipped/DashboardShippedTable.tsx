@@ -17,11 +17,10 @@ import {
   SerialChip,
   PlatformChip,
   getLast4,
-  getLast6Serial,
+  getLast4Serial,
 } from '@/components/ui/CopyChip';
-import { ShipmentStatusBadge, isStalled } from '@/components/shipping/ShipmentStatusBadge';
+import { isStalled } from '@/components/shipping/ShipmentStatusBadge';
 import {
-  ShippedFilterToolbar,
   readShippedCarrierFilter,
   readShippedExceptionsFilter,
   readShippedStatusFilter,
@@ -587,10 +586,6 @@ export function DashboardShippedTable({
             />
           )}
 
-          <div className="shrink-0 border-b border-gray-100 bg-white px-3 py-2">
-            <ShippedFilterToolbar />
-          </div>
-
           <div ref={scrollRef} className="flex-1 min-h-0 overflow-x-auto overflow-y-auto no-scrollbar w-full">
             {Object.keys(groupedRecords).length === 0 ? (
               <div className="flex flex-col items-center justify-center py-40 text-center">
@@ -688,7 +683,7 @@ export function DashboardShippedTable({
                           const serialDisplay =
                             isEmptyDisplayValue(serialValue) || serialValue === '---'
                               ? 'SERIAL'
-                              : getLast6Serial(serialValue);
+                              : getLast4Serial(serialValue);
                           const platformLabel = getOrderPlatformLabel(record.order_id || '', record.account_source);
                           const orderIsFbaMeta = isFbaOrder(record.order_id, record.account_source);
                           const platformColor = platformLabel ? getOrderPlatformColor(platformLabel) : '';
@@ -784,16 +779,6 @@ export function DashboardShippedTable({
                                       <OrderIdChipPlaceholder />
                                     )}
                                     <TrackingOrSkuScanChip value={record.shipping_tracking_number || ''} />
-                                    {record.shipment_id != null && (record.latest_status_category || record.has_exception) ? (
-                                      <ShipmentStatusBadge
-                                        carrier={record.carrier ?? null}
-                                        category={record.latest_status_category ?? null}
-                                        description={record.latest_status_description ?? null}
-                                        latestEventAt={record.latest_event_at ?? null}
-                                        hasException={record.has_exception ?? null}
-                                        isTerminal={record.is_terminal ?? null}
-                                      />
-                                    ) : null}
                                     <SerialChip
                                       value={serialValue}
                                       display={serialDisplay}

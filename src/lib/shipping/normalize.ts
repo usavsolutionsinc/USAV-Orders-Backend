@@ -151,16 +151,30 @@ function normalizeUSPSByText(event: string): NormalizedShipmentStatus {
 // FedEx scan event types from track/v1 API
 
 const FEDEX_EVENT_TYPE_MAP: Record<string, NormalizedShipmentStatus> = {
+  // Pre-shipment
   OC: 'LABEL_CREATED',    // Order created / shipment info sent to FedEx
+  IN: 'LABEL_CREATED',    // Initiated
+  // Pickup
   PU: 'ACCEPTED',         // Picked up
   AO: 'ACCEPTED',         // Arrived at FedEx origin facility
+  // In transit / movement
   AR: 'IN_TRANSIT',       // Arrived at FedEx facility
   AF: 'IN_TRANSIT',       // At FedEx destination facility
-  IT: 'IN_TRANSIT',
+  IT: 'IN_TRANSIT',       // In transit
+  DP: 'IN_TRANSIT',       // Departed FedEx location ← was missing
+  OW: 'IN_TRANSIT',       // On the way (derivedCode) ← was missing
+  DF: 'IN_TRANSIT',       // Delivery info updated (derivedCode) ← was missing
+  // Out for delivery
   OD: 'OUT_FOR_DELIVERY', // On FedEx vehicle for delivery
+  // Delivered
   DL: 'DELIVERED',
+  DT: 'DELIVERED',        // Delivered Trailer
+  // Exception / delay
   DE: 'EXCEPTION',        // Delivery exception
+  DD: 'EXCEPTION',        // Delivery delay
+  DR: 'EXCEPTION',        // Delivery returned to station
   HL: 'EXCEPTION',        // Hold at location
+  // Returned / cancelled
   RS: 'RETURNED',         // Return to shipper
   CA: 'RETURNED',         // Cancelled
 };
@@ -184,8 +198,19 @@ function normalizeFedExByText(description: string): NormalizedShipmentStatus {
   if (text.includes('PICKED UP') || text.includes('ACCEPTED')) return 'ACCEPTED';
   if (text.includes('RETURN')) return 'RETURNED';
   if (text.includes('EXCEPTION') || text.includes('DELAY') || text.includes('HELD')) return 'EXCEPTION';
-  if (text.includes('IN TRANSIT') || text.includes('AT LOCAL FEDEX FACILITY') || text.includes('ARRIVED')) return 'IN_TRANSIT';
-  if (text.includes('LABEL CREATED') || text.includes('SHIPMENT INFORMATION SENT')) return 'LABEL_CREATED';
+  // IN_TRANSIT cluster — added: ON THE WAY, DEPARTED, DELIVERY UPDATED.
+  // Empirically the FedEx track API returns these as latestStatusDetail
+  // .statusByLocale + .description when packages are mid-route. Missing
+  // these labels was sending 11+ active FedEx shipments to UNKNOWN.
+  if (
+    text.includes('IN TRANSIT') ||
+    text.includes('AT LOCAL FEDEX FACILITY') ||
+    text.includes('ARRIVED') ||
+    text.includes('ON THE WAY') ||
+    text.includes('DEPARTED') ||
+    text.includes('DELIVERY UPDATED')
+  ) return 'IN_TRANSIT';
+  if (text.includes('LABEL CREATED') || text.includes('SHIPMENT INFORMATION SENT') || text.includes('INITIATED')) return 'LABEL_CREATED';
   return 'UNKNOWN';
 }
 

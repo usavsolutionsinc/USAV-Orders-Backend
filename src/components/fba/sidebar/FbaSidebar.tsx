@@ -4,12 +4,11 @@ import { Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, use
 import { fbaPaths } from '@/lib/fba/api-paths';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { Package, PackageCheck, Plus, X } from '@/components/Icons';
+import { Plus, X } from '@/components/Icons';
 import { FbaFnskuScanToast } from '@/components/fba/sidebar/FbaFnskuScanToast';
 import { SearchBar } from '@/components/ui/SearchBar';
-import { PrintTableCheckbox } from '@/components/fba/table/Checkbox';
 import { sidebarHeaderBandClass } from '@/components/layout/header-shell';
-import { HorizontalButtonSlider, type HorizontalSliderItem } from '@/components/ui/HorizontalButtonSlider';
+import { HorizontalButtonSlider } from '@/components/ui/HorizontalButtonSlider';
 import { useAblyChannel } from '@/hooks/useAblyChannel';
 import { getDbTableChannelName } from '@/lib/realtime/channels';
 import type { FbaPlanQueueItem } from '@/components/station/upnext/upnext-types';
@@ -17,9 +16,8 @@ import { FbaWorkspaceScanField } from '@/components/fba/sidebar/FbaWorkspaceScan
 import { useActiveStaffDirectory } from '@/components/sidebar/hooks';
 import { useStationTheme } from '@/hooks/useStationTheme';
 import { useAuth } from '@/contexts/AuthContext';
-import { FbaPairedReviewPanel } from '@/components/fba/sidebar/FbaPairedReviewPanel';
 import { FbaShippedTable } from '@/components/fba/FbaShippedTable';
-import { FbaActiveShipments } from '@/components/fba/sidebar/FbaActiveShipments';
+import { FbaPlanRail, FbaCombineRail } from '@/components/fba/sidebar/FbaSidebarRails';
 import type { FbaBoardItem } from '@/components/fba/FbaBoardTable';
 import { useFbaBoardSelection } from '@/components/fba/hooks/useFbaBoardSelection';
 import {
@@ -28,6 +26,7 @@ import {
   FBA_SEND_SHIPMENT_TO_PAIRED_REVIEW,
   FBA_SHIPMENT_EDITOR_ACTIVE,
 } from '@/lib/fba/events';
+import { FBA_MODE_ITEMS, resolveFbaMode, type FbaMode } from '@/lib/fba/fba-modes';
 
 // Match TechSidebarPanel secondary bands (header-shell uses border-gray-100)
 const sidebarSubBandClass = 'shrink-0 border-b border-gray-100 bg-white';
@@ -35,12 +34,7 @@ const FBA_SHIPMENTS_DB_CHANNEL = getDbTableChannelName('public', 'fba_shipments'
 const FBA_SHIPMENT_ITEMS_DB_CHANNEL = getDbTableChannelName('public', 'fba_shipment_items');
 const FBA_SHIPMENT_TRACKING_DB_CHANNEL = getDbTableChannelName('public', 'fba_shipment_tracking');
 
-type FbaTab = 'combine' | 'shipped';
 type PendingPlan = FbaPlanQueueItem;
-const FBA_VIEW_ITEMS: HorizontalSliderItem[] = [
-  { id: 'combine', label: 'Combine', icon: Package },
-  { id: 'shipped', label: 'Shipped', icon: PackageCheck },
-];
 
 function emitOpenAddFba() {
   window.dispatchEvent(new CustomEvent('admin-fba-open-add'));
@@ -204,18 +198,17 @@ function FbaWorkspaceSidebarInner() {
   const searchParams = useSearchParams();
   const staffDirectory = useActiveStaffDirectory();
 
-  const rawTab = searchParams.get('tab');
-  const activeTab: FbaTab = rawTab === 'shipped' ? 'shipped' : 'combine';
+  const activeMode: FbaMode = resolveFbaMode(searchParams.get('mode'));
 
   // Board selection from table/select-mode pairing events.
   const boardSelection = useFbaBoardSelection({ includePairedSelection: true });
 
   // Clear selection when switching to shipped — also reset board checkboxes
   useEffect(() => {
-    if (activeTab === 'shipped') {
+    if (activeMode === 'shipped') {
       window.dispatchEvent(new CustomEvent('fba-board-toggle-all', { detail: 'none' }));
     }
-  }, [activeTab]);
+  }, [activeMode]);
 
   // Board emits raw counts; paired panel emits adjusted counts (qty steppers).
   const [boardSelectionCount, setBoardSelectionCount] = useState({ selected: 0, total: 0, selectedQty: 0, totalQty: 0 });
@@ -275,6 +268,8 @@ function FbaWorkspaceSidebarInner() {
 
   const [pendingPlans, setPendingPlans] = useState<PendingPlan[]>([]);
   const [plansError, setPlansError] = useState<string | null>(null);
+  // Live per-stage item counts → mode pill badges (Plan = PLANNED, Combine = PACKED).
+  const [modeCounts, setModeCounts] = useState<Record<string, number>>({});
 
   const refreshToken = Number(searchParams.get('r') || 0);
 
@@ -282,7 +277,7 @@ function FbaWorkspaceSidebarInner() {
     (patch: {
       q?: string;
       r?: string;
-      tab?: FbaTab;
+      mode?: FbaMode;
       draft?: string | null;
       plan?: number | null;
       main?: 'print' | 'plan' | null;
@@ -293,9 +288,9 @@ function FbaWorkspaceSidebarInner() {
         if (patch.q.trim()) params.set('q', patch.q.trim());
         else params.delete('q');
       }
-      if (patch.tab !== undefined) {
-        if (patch.tab === 'combine') params.delete('tab');
-        else params.set('tab', patch.tab);
+      if (patch.mode !== undefined) {
+        if (patch.mode === 'combine') params.delete('mode');
+        else params.set('mode', patch.mode);
       }
       if (patch.r !== undefined) params.set('r', patch.r);
       if (patch.draft !== undefined) {
@@ -338,7 +333,7 @@ function FbaWorkspaceSidebarInner() {
 
   useEffect(() => {
     if (!urlHydratedRef.current) return;
-    if (activeTab !== 'shipped') return;
+    if (activeMode !== 'shipped') return;
     const t = setTimeout(() => {
       const next = localSearch.trim();
       const cur = (searchParams.get('q') || '').trim();
@@ -347,10 +342,10 @@ function FbaWorkspaceSidebarInner() {
     }, 350);
     return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [localSearch, activeTab]);
+  }, [localSearch, activeMode]);
 
   const loadPendingPlans = useCallback(async () => {
-    if (activeTab === 'shipped') return;
+    if (activeMode === 'shipped') return;
     setPlansError(null);
     try {
       const res = await fetch(fbaPaths.activeWithDetails(), { cache: 'no-store' });
@@ -389,14 +384,26 @@ function FbaWorkspaceSidebarInner() {
     } catch (err: any) {
       setPlansError(err?.message || 'Could not load plans');
     }
-  }, [activeTab]);
+  }, [activeMode]);
+
+  const loadStageCounts = useCallback(async () => {
+    try {
+      const res = await fetch('/api/fba/stage-counts', { cache: 'no-store' });
+      const data = await res.json();
+      if (res.ok && data?.counts) setModeCounts(data.counts as Record<string, number>);
+    } catch {
+      /* non-fatal: pills just omit the badge */
+    }
+  }, []);
 
   useEffect(() => {
     void loadPendingPlans();
-  }, [refreshToken, loadPendingPlans]);
+    void loadStageCounts();
+  }, [refreshToken, loadPendingPlans, loadStageCounts]);
 
   useAblyChannel(FBA_SHIPMENT_ITEMS_DB_CHANNEL, 'db.row.changed', () => {
     void loadPendingPlans();
+    void loadStageCounts();
   });
 
   useAblyChannel(FBA_SHIPMENTS_DB_CHANNEL, 'db.row.changed', () => {
@@ -408,10 +415,10 @@ function FbaWorkspaceSidebarInner() {
   });
 
   useEffect(() => {
-    if (activeTab === 'shipped') return;
+    if (activeMode === 'shipped') return;
     const interval = setInterval(() => loadPendingPlans(), 60_000);
     return () => clearInterval(interval);
-  }, [activeTab, loadPendingPlans]);
+  }, [activeMode, loadPendingPlans]);
 
   useEffect(() => {
     const h = () => loadPendingPlans();
@@ -437,7 +444,23 @@ function FbaWorkspaceSidebarInner() {
     return () => window.removeEventListener(FBA_SHIPMENT_EDITOR_ACTIVE, handler);
   }, []);
 
-  const isBoard = activeTab === 'combine';
+  const isBoard = activeMode === 'combine' || activeMode === 'plan';
+  // Combine-only panels (selection + tracking pairing + active shipments) are
+  // hidden in plan mode, which is just scan-to-add + the recent rail.
+  const isCombine = activeMode === 'combine';
+
+  // Mode pills with live stage-count badges: Plan = PLANNED, Combine = PACKED.
+  const modeItems = useMemo(
+    () =>
+      FBA_MODE_ITEMS.map((it) =>
+        it.id === 'plan'
+          ? { ...it, count: modeCounts.PLANNED || 0 }
+          : it.id === 'combine'
+            ? { ...it, count: modeCounts.PACKED || 0 }
+            : it,
+      ),
+    [modeCounts],
+  );
   const allBoardSelected =
     boardSelectionCount.total > 0 && boardSelectionCount.selected === boardSelectionCount.total;
   const someBoardSelected = boardSelectionCount.selected > 0;
@@ -447,11 +470,11 @@ function FbaWorkspaceSidebarInner() {
       {/* View pills (2nd row) */}
       <div className={`${sidebarHeaderBandClass} px-3`}>
         <HorizontalButtonSlider
-          items={FBA_VIEW_ITEMS}
-          value={activeTab}
-          onChange={(next) => updateFbaParams({ tab: next as FbaTab })}
+          items={modeItems}
+          value={activeMode}
+          onChange={(next) => updateFbaParams({ mode: next as FbaMode })}
           variant="nav"
-          aria-label="FBA view"
+          aria-label="FBA mode"
         />
       </div>
 
@@ -472,8 +495,14 @@ function FbaWorkspaceSidebarInner() {
           </div>
         )}
 
+        {/* Plan: Planned/Testing pills + recent rail under the scan bar */}
+        {activeMode === 'plan' && !editorActive && <FbaPlanRail />}
+
+        {/* Combine: Recent/Packed pills + recent rails under the scan bar */}
+        {isCombine && !editorActive && <FbaCombineRail />}
+
         {/* Shipped: search filter */}
-        {activeTab === 'shipped' && (
+        {activeMode === 'shipped' && (
           <div className={`${sidebarSubBandClass} px-3 py-2.5`}>
             <p className="mb-2 text-micro font-semibold uppercase tracking-widest text-gray-500">
               Filter shipped list
@@ -489,45 +518,11 @@ function FbaWorkspaceSidebarInner() {
           </div>
         )}
 
-        {/* Select all row — hidden when editor is active */}
-        {isBoard && !editorActive && boardSelectionCount.total > 0 && (
-          <div className="sticky top-0 z-20 flex items-center gap-2.5 border-b border-gray-100 bg-white px-3 py-2">
-            <PrintTableCheckbox
-              checked={allBoardSelected}
-              indeterminate={someBoardSelected && !allBoardSelected}
-              onChange={handleSelectAll}
-              stationTheme={stationTheme}
-              label={allBoardSelected ? 'Deselect all' : 'Select all'}
-            />
-            <button
-              type="button"
-              onClick={handleSelectAll}
-              className="text-micro font-black uppercase tracking-widest text-gray-600 hover:text-gray-900"
-            >
-              {allBoardSelected ? 'Deselect all' : 'Select all'}
-            </button>
-            {someBoardSelected && (
-              <span className="ml-auto text-micro font-bold tabular-nums text-gray-400">
-                {boardSelectionCount.selectedQty}
-              </span>
-            )}
-          </div>
-        )}
+        {/* Combine review + tracking pairing + active shipments now live in the
+            center-right combine workspace on /fba?mode=combine (see fba/page.tsx).
+            The sidebar keeps just the scan bar + Recent/Packed rails. */}
 
-        {/* Selection review + tracking pairing card — hidden when editor is active */}
-        {isBoard && !editorActive && (
-          <FbaPairedReviewPanel
-            selectedItems={boardSelection}
-            stationTheme={stationTheme}
-            expanded={pairedReviewExpanded}
-            onToggleExpanded={() => setPairedReviewExpanded((v) => !v)}
-          />
-        )}
-
-        {/* Active shipments */}
-        {isBoard && <FbaActiveShipments stationTheme={stationTheme} />}
-
-        {activeTab === 'shipped' ? (
+        {activeMode === 'shipped' ? (
           <FbaShippedTable
             stationTheme={stationTheme}
             searchQuery={localSearch}

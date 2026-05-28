@@ -115,7 +115,7 @@ export const GET = withAuth(async (request: NextRequest) => {
         fs.assigned_packer_id,
         -- Item aggregates
         COUNT(DISTINCT fsi.id)                                                   AS total_items,
-        COUNT(DISTINCT fsi.id) FILTER (WHERE fsi.status = 'READY_TO_GO')        AS ready_items,
+        COUNT(DISTINCT fsi.id) FILTER (WHERE fsi.status = 'TESTED')        AS ready_items,
         COUNT(DISTINCT fsi.id) FILTER (WHERE fsi.status = 'LABEL_ASSIGNED')     AS labeled_items,
         COUNT(DISTINCT fsi.id) FILTER (WHERE fsi.status = 'SHIPPED')            AS shipped_items,
         COALESCE(SUM(DISTINCT fsi.expected_qty), 0)                              AS total_expected_qty,

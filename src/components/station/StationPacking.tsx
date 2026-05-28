@@ -101,6 +101,40 @@ export default function StationPacking({
         // Pre-normalize: strip USPS IMpb routing prefix (420+ZIP) for tracking inputs.
         // SKU (has `:`) and special commands (clean/FBA-) pass through raw.
         const isTrackingInput = !scan.includes(':') && !/^(clean|fba-)/i.test(scan);
+
+        // FBA combined-shipment ship-on-scan: a UPS tracking number OR an FBA
+        // shipment ID resolves to the same combined (LABEL_ASSIGNED) shipment
+        // and marks the whole package SHIPPED. A 404 means it isn't an FBA
+        // shipment, so fall through to the regular orders packing flow.
+        if (isTrackingInput) {
+          const shipRes = await fetch('/api/fba/shipments/mark-shipped', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ scan }),
+          });
+          if (shipRes.status !== 404) {
+            const shipData = await shipRes.json().catch(() => ({} as any));
+            if (!shipRes.ok || !shipData?.success) {
+              throw new Error(shipData?.error || 'FBA ship-on-scan failed');
+            }
+            const shippedRef =
+              shipData.affected_shipments?.[0] != null
+                ? `#${shipData.affected_shipments[0]}`
+                : String(shipData.tracking_number || scan);
+            setActiveFba({
+              fnsku: '',
+              productTitle: 'FBA Shipment — Shipped',
+              shipmentRef: shippedRef,
+              plannedQty: Number(shipData.marked_shipped ?? 0),
+              combinedPackScannedQty: Number(shipData.marked_shipped ?? 0),
+              isNew: false,
+            });
+            onComplete?.();
+            window.dispatchEvent(new CustomEvent('usav-refresh-data'));
+            return;
+          }
+        }
+
         const normalizedScan = isTrackingInput ? normalizeTracking(scan) : scan;
         const res = await fetch('/api/packing-logs', {
           method: 'POST',

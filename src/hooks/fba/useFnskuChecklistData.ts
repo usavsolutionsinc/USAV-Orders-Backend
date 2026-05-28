@@ -30,7 +30,7 @@ export interface PlanItem {
   verified_by_name: string | null;
 }
 
-const PRINT_QUEUE_STATUSES = new Set(['PACKING', 'READY_TO_GO', 'OUT_OF_STOCK', 'LABEL_ASSIGNED', 'SHIPPED']);
+const PRINT_QUEUE_STATUSES = new Set(['TESTED', 'PACKED', 'OUT_OF_STOCK', 'LABEL_ASSIGNED', 'SHIPPED']);
 
 function normalizePlanItemStatus(status: string | null | undefined) {
   return String(status || '').trim().toUpperCase();
@@ -83,10 +83,10 @@ export function writeStoredPlanSelection(planId: number, entries: StoredPlanSele
 // ─── Status cycling ─────────────────────────────────────────────────────────
 
 const STATUS_CYCLE: Record<string, string> = {
-  PLANNED:      'PACKING',
-  PACKING:      'READY_TO_GO',
+  PLANNED:      'TESTED',
+  TESTED:       'PACKED',
   OUT_OF_STOCK: 'PLANNED',
-  READY_TO_GO:  'PLANNED',
+  PACKED:       'PLANNED',
 };
 
 // ─── Hook options ───────────────────────────────────────────────────────────
@@ -349,7 +349,7 @@ export function useFnskuChecklistData({
     if (!isViewMode) return planItems;
     if (normalizedFilter === 'ALL') return visiblePlanItems;
     return visiblePlanItems.filter((i) => {
-      if (normalizedFilter === 'READY_TO_GO') return i.status === 'READY_TO_GO' || i.status === 'SHIPPED';
+      if (normalizedFilter === 'TESTED') return i.status === 'TESTED' || i.status === 'SHIPPED';
       return i.status === normalizedFilter;
     });
   }, [isDraftMode, planItems, normalizedFilter, visiblePlanItems]);
@@ -368,7 +368,7 @@ export function useFnskuChecklistData({
       try {
         await fetch(fbaPaths.planItem(activePlanId, itemId), {
           method: 'PATCH', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ status: 'READY_TO_GO' }),
+          body: JSON.stringify({ status: 'TESTED' }),
         });
         window.dispatchEvent(new Event('fba-plan-created'));
       } catch {

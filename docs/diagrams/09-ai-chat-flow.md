@@ -8,8 +8,8 @@ The `/ai` page talks to a local Hermes gateway at `127.0.0.1:8642`. Three resolu
 sequenceDiagram
     autonumber
     participant U as /ai page
-    participant S as POST /api/ai/openclaw-session
-    participant C as POST /api/ai/openclaw-chat
+    participant S as POST /api/ai/session
+    participant C as POST /api/ai/chat
     participant DB as Neon<br/>ai_chat_sessions<br/>ai_chat_messages
     participant LO as resolveLocalAiAnswer()
     participant RAG as queryNemoClawRag()
@@ -95,14 +95,14 @@ graph LR
 
 ## Deprecated
 
-`POST /api/ai/tunnel-session` — route retained for compatibility only. Hermes replaced the tunnel model. Comment: `src/app/api/ai/openclaw-chat/route.ts:1-5`.
+`POST /api/ai/tunnel-session` — route retained for compatibility only. Hermes replaced the tunnel model. Comment: `src/app/api/ai/chat/route.ts:1-5`.
 
 ## Key files
 
 | Area | File |
 |---|---|
-| Chat orchestrator | `src/app/api/ai/openclaw-chat/route.ts:27-229` |
-| Session create | `src/app/api/ai/openclaw-session/route.ts:11-13` |
+| Chat orchestrator | `src/app/api/ai/chat/route.ts:27-229` |
+| Session create | `src/app/api/ai/session/route.ts:11-13` |
 | Schema | `src/lib/drizzle/schema.ts:1278-1298` |
 | Session list/delete | `src/app/api/ai/chat-sessions/route.ts` |
 | Session messages | `src/app/api/ai/chat-sessions/[sessionId]/messages/route.ts` |

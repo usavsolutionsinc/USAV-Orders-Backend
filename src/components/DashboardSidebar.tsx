@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { motion } from 'framer-motion';
-import { AlertCircle, ChevronLeft, Clock, LayoutDashboard, Menu, Package, PackageCheck, X, Zap } from '@/components/Icons';
+import { AlertCircle, ChevronLeft, Clock, LayoutDashboard, Menu, Package, PackageCheck, X } from '@/components/Icons';
 import { sidebarHeaderBandClass } from '@/components/layout/header-shell';
 import { HorizontalButtonSlider, type HorizontalSliderItem } from '@/components/ui/HorizontalButtonSlider';
 import { sectionLabel } from '@/design-system/tokens/typography/presets';
@@ -39,15 +39,22 @@ import {
 } from '@/lib/sidebar-navigation';
 import type { ShippedFormData } from '@/components/shipped';
 import { dispatchCloseShippedDetails, DASHBOARD_SHIPPED_FOCUS_SEARCH_PARAM } from '@/utils/events';
-import { getDashboardOrderViewFromSearch, parseDashboardOpenOrderId } from '@/utils/dashboard-search-state';
+import { getDashboardOrderViewFromSearch, getDashboardViewGroup, parseDashboardOpenOrderId } from '@/utils/dashboard-search-state';
 import { useDashboardSearchController } from '@/hooks/useDashboardSearchController';
 const MOBILE_SIDEBAR_MIN_WIDTH = 420;
 
-const DASHBOARD_VIEW_ITEMS: HorizontalSliderItem[] = [
+// Top-level groups. Pending / Shipped / Awaiting are all orders data, so they
+// collapse under one "Shipping" pill; FBA is a separate data source.
+const DASHBOARD_GROUP_ITEMS: HorizontalSliderItem[] = [
+  { id: 'orders', label: 'Shipping', icon: PackageCheck },
+  { id: 'fba',    label: 'FBA',      icon: Package },
+];
+
+// Sub-views shown above the search bar when the "Shipping" group is active.
+const DASHBOARD_ORDERS_SUBVIEW_ITEMS: HorizontalSliderItem[] = [
   { id: 'pending',   label: 'Pending',  icon: Clock },
   { id: 'shipped',   label: 'Shipped',  icon: PackageCheck },
   { id: 'unshipped', label: 'Awaiting', icon: AlertCircle },
-  { id: 'fba',       label: 'FBA',      icon: Package },
 ];
 
 function getSidebarTitle(pathname: string | null) {
@@ -131,17 +138,35 @@ function SidebarContextPanel({ onBackToAppNav }: { onBackToAppNav?: () => void }
   };
 
   if (routeKey === 'dashboard') {
-    const activeTabId: string = dashboardSearch.orderView;
+    const activeGroup = getDashboardViewGroup(dashboardSearch.orderView);
     const focusShippedSearch = searchParams.get(DASHBOARD_SHIPPED_FOCUS_SEARCH_PARAM) === '1';
     const filterControl = (
       <div className={`${sidebarHeaderBandClass} px-3`}>
-        <HorizontalButtonSlider
-          items={DASHBOARD_VIEW_ITEMS}
-          value={activeTabId}
-          onChange={(tab) => dashboardSearch.setOrderView(tab as typeof dashboardSearch.orderView)}
-          variant="nav"
-          aria-label="Dashboard view"
-        />
+        <div className="py-2">
+          <HorizontalButtonSlider
+            items={DASHBOARD_GROUP_ITEMS}
+            value={activeGroup}
+            onChange={(group) => dashboardSearch.setOrderView(group === 'fba' ? 'fba' : 'pending')}
+            variant="nav"
+            aria-label="Dashboard view"
+          />
+        </div>
+        {activeGroup === 'orders' ? (
+          <>
+            {/* Full-width rule, with matched padding above and below so both
+                pill rows sit at the same distance from the divider. */}
+            <div className="-mx-3 border-t border-gray-200" />
+            <div className="py-2">
+              <HorizontalButtonSlider
+                items={DASHBOARD_ORDERS_SUBVIEW_ITEMS}
+                value={dashboardSearch.orderView}
+                onChange={(view) => dashboardSearch.setOrderView(view as typeof dashboardSearch.orderView)}
+                variant="nav"
+                aria-label="Orders view"
+              />
+            </div>
+          </>
+        ) : null}
       </div>
     );
 

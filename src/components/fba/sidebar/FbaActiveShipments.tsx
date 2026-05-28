@@ -71,7 +71,7 @@ function TrackingGroup({
         amazon_shipment_id: amazonShipmentId,
       });
       window.dispatchEvent(new CustomEvent(FBA_BOARD_INJECT_ITEM, { detail: boardItem }));
-      patchFbaItem(shipmentId, item.item_id, { status: 'READY_TO_GO' }).catch(() => {});
+      patchFbaItem(shipmentId, item.item_id, { status: 'PACKED' }).catch(() => {});
       setQtyOverrides((prev) => {
         const c = { ...prev };
         delete c[item.item_id];
@@ -235,7 +235,7 @@ function ActiveShipmentCard({
       amazon_shipment_id: shipment.amazon_shipment_id,
     });
     window.dispatchEvent(new CustomEvent(FBA_BOARD_INJECT_ITEM, { detail: boardItem }));
-    patchFbaItem(shipment.id, item.item_id, { status: 'READY_TO_GO' }).catch(() => {});
+    patchFbaItem(shipment.id, item.item_id, { status: 'PACKED' }).catch(() => {});
     onChanged?.();
   };
 
@@ -286,7 +286,7 @@ function ActiveShipmentCard({
                 status={shipment.status}
                 size="xs"
                 iconOnly={
-                  shipment.status === 'PLANNED' || shipment.status === 'READY_TO_GO'
+                  shipment.status === 'PLANNED' || shipment.status === 'TESTED' || shipment.status === 'PACKED'
                 }
               />
             </div>
