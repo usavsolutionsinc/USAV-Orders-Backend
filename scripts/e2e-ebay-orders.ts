@@ -137,7 +137,7 @@ async function main() {
       } else {
         console.log(
           `  ✅ ${account}: ${withLegacy}/${orders.length} orders carry legacyItemId ` +
-            `(${rows.filter((r) => r.itemNumber).length}/${orders.length} resolve an item_number)\n`,
+            `(${rows.filter((r: ReturnType<typeof summarizeOrder>) => r.itemNumber).length}/${orders.length} resolve an item_number)\n`,
         );
       }
     } catch (err: any) {
