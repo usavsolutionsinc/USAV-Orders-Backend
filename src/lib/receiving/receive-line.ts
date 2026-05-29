@@ -9,6 +9,7 @@ import {
   recordInventoryEvent,
   type InventoryEventStation,
 } from '@/lib/inventory/events';
+import { workflowStageLabel } from '@/lib/receiving/workflow-stages';
 import { publishStockLedgerEvent } from '@/lib/realtime/publish';
 
 // ── Types ──────────────────────────────────────────────────────────────────
@@ -568,6 +569,40 @@ export async function receiveLineUnits(
     quantity_expected: line.quantity_expected,
     workflow_status: line.workflow_status,
   };
+
+  // 4. Workflow-stage transition audit. The per-unit RECEIVED events above
+  //    capture stock movement, but the line's workflow_status advance
+  //    (EXPECTED → MATCHED / UNBOXED / DONE, whether explicit or auto on
+  //    qty-completion) was previously invisible to the audit timeline. Emit one
+  //    NOTE event carrying prev/next so the receiving half of the trail shows
+  //    stage changes the same way the testing half (status/route.ts) already
+  //    does. Fires only on a real change; idempotent via the client_event_id
+  //    suffix so retries don't duplicate.
+  const prevWorkflow = line.workflow_status ?? null;
+  const nextWorkflow = updated.workflow_status ?? null;
+  if (nextWorkflow && nextWorkflow !== prevWorkflow) {
+    const transition = await recordInventoryEvent({
+      event_type: 'NOTE',
+      actor_staff_id: input.staff_id ?? null,
+      station,
+      receiving_id: line.receiving_id,
+      receiving_line_id: line.id,
+      sku: updated.sku,
+      prev_status: prevWorkflow,
+      next_status: nextWorkflow,
+      scan_token: input.scan_token ?? null,
+      client_event_id: input.client_event_id
+        ? `${input.client_event_id}:workflow-${nextWorkflow}`
+        : null,
+      notes: `Stage ${workflowStageLabel(prevWorkflow)} → ${workflowStageLabel(nextWorkflow)}`,
+      payload: {
+        workflow_transition: true,
+        from: prevWorkflow,
+        to: nextWorkflow,
+      },
+    }, client);
+    inventoryEventIds.push(transition.id);
+  }
 
     await client.query('COMMIT');
     committed = true;

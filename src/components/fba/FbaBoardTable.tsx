@@ -80,6 +80,16 @@ export function FbaBoardTable({
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
   /** Index in `sortedItems` for the last plain click — shift-click selects the inclusive range from here. */
   const anchorIndexRef = useRef<number | null>(null);
+  /**
+   * Mirror of `selectedIds` so window-event handlers (and the pruning effect) can read the
+   * latest set without re-subscribing — and so we never call `emitSelection` from inside a
+   * `setSelectedIds` updater, which runs during render and would trigger a setState in the
+   * listening components (StationFbaInput / FbaSidebar) mid-render.
+   */
+  const selectedIdsRef = useRef(selectedIds);
+  useEffect(() => {
+    selectedIdsRef.current = selectedIds;
+  }, [selectedIds]);
 
   const emitSelection = useCallback(
     (nextIds: Set<number>) => {
@@ -95,17 +105,16 @@ export function FbaBoardTable({
 
   useEffect(() => {
     // Keep checkbox state aligned with the current table slice (filters/week changes).
-    setSelectedIds((prev) => {
-      if (prev.size === 0) return prev;
-      const visibleIds = new Set(sortedItems.map((item) => item.item_id));
-      const next = new Set<number>();
-      for (const id of prev) {
-        if (visibleIds.has(id)) next.add(id);
-      }
-      if (next.size === prev.size) return prev;
-      emitSelection(next);
-      return next;
-    });
+    const prev = selectedIdsRef.current;
+    if (prev.size === 0) return;
+    const visibleIds = new Set(sortedItems.map((item) => item.item_id));
+    const next = new Set<number>();
+    for (const id of prev) {
+      if (visibleIds.has(id)) next.add(id);
+    }
+    if (next.size === prev.size) return;
+    setSelectedIds(next);
+    emitSelection(next);
   }, [sortedItems, emitSelection]);
 
   useEffect(() => {
@@ -138,13 +147,11 @@ export function FbaBoardTable({
 
   const toggleItem = useCallback(
     (id: number) => {
-      setSelectedIds((prev) => {
-        const next = new Set(prev);
-        if (next.has(id)) next.delete(id);
-        else next.add(id);
-        emitSelection(next);
-        return next;
-      });
+      const next = new Set(selectedIdsRef.current);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      setSelectedIds(next);
+      emitSelection(next);
     },
     [emitSelection],
   );
@@ -202,42 +209,45 @@ export function FbaBoardTable({
         return itemDay === dueDate;
       });
       if (dayItems.length === 0) return;
-      setSelectedIds((prev) => {
-        const next = new Set(prev);
-        for (const i of dayItems) next.add(i.item_id);
-        emitSelection(next);
-        return next;
-      });
+      const next = new Set(selectedIdsRef.current);
+      for (const i of dayItems) next.add(i.item_id);
+      setSelectedIds(next);
+      emitSelection(next);
     };
     window.addEventListener(FBA_BOARD_SELECT_BY_DAY, selectByDayHandler);
 
     const deselectByDayHandler = (e: Event) => {
       const dueDate = (e as CustomEvent<string>).detail;
-      setSelectedIds((prev) => {
-        const next = new Set(prev);
-        for (const i of sortedItems) {
-          const itemDay = i.due_date ? String(i.due_date).slice(0, 10) : '';
-          if (itemDay === dueDate) next.delete(i.item_id);
-        }
-        emitSelection(next);
-        return next;
-      });
+      const next = new Set(selectedIdsRef.current);
+      for (const i of sortedItems) {
+        const itemDay = i.due_date ? String(i.due_date).slice(0, 10) : '';
+        if (itemDay === dueDate) next.delete(i.item_id);
+      }
+      setSelectedIds(next);
+      emitSelection(next);
     };
     window.addEventListener(FBA_BOARD_DESELECT_BY_DAY, deselectByDayHandler);
 
     const deselectHandler = (e: Event) => {
       const itemId = (e as CustomEvent<number>).detail;
-      setSelectedIds((prev) => {
-        const next = new Set(prev);
-        next.delete(itemId);
-        emitSelection(next);
-        return next;
-      });
+      const next = new Set(selectedIdsRef.current);
+      next.delete(itemId);
+      setSelectedIds(next);
+      emitSelection(next);
     };
     window.addEventListener(FBA_BOARD_DESELECT_ITEM, deselectHandler);
 
     const selectByFnskuHandler = (e: Event) => {
-      const fnsku = String((e as CustomEvent<string>).detail || '').toUpperCase();
+      // Accept either a raw fnsku string or a { fnsku } payload — never let an
+      // object coerce to the literal "[object Object]".
+      const raw = (e as CustomEvent<unknown>).detail;
+      const value =
+        typeof raw === 'string'
+          ? raw
+          : raw && typeof raw === 'object'
+            ? String((raw as { fnsku?: unknown }).fnsku ?? '')
+            : '';
+      const fnsku = value.toUpperCase();
       if (!fnsku) return;
       // Match by FNSKU or ASIN — a B0 ASIN scan should select items that have that ASIN.
       const matching = sortedItems.filter(
@@ -251,12 +261,10 @@ export function FbaBoardTable({
         );
         return;
       }
-      setSelectedIds((prev) => {
-        const next = new Set(prev);
-        for (const i of matching) next.add(i.item_id);
-        emitSelection(next);
-        return next;
-      });
+      const next = new Set(selectedIdsRef.current);
+      for (const i of matching) next.add(i.item_id);
+      setSelectedIds(next);
+      emitSelection(next);
       window.dispatchEvent(
         new CustomEvent(FBA_BOARD_FNSKU_SELECT_RESULT, {
           detail: { fnsku, found: true, count: matching.length, title: matching[0].display_title },
@@ -341,7 +349,7 @@ export function FbaBoardTable({
               ].join(' ')}
             >
               {/* Left: theme-aware checkbox — design system PrintTableCheckbox */}
-              <div className="flex items-center justify-center pl-0.5">
+              <div key="check" className="flex items-center justify-center pl-0.5">
                 <PrintTableCheckbox
                   checked={isSelected}
                   onChange={() => toggleItem(item.item_id)}
@@ -352,7 +360,7 @@ export function FbaBoardTable({
               </div>
 
               {/* Center: title + qty/status row */}
-              <div className="flex min-w-0 flex-col gap-0.5">
+              <div key="center" className="flex min-w-0 flex-col gap-0.5">
                 <p className="whitespace-normal break-words text-sm font-bold leading-snug text-gray-900">
                   {item.display_title}
                 </p>
@@ -373,7 +381,7 @@ export function FbaBoardTable({
               </div>
 
               {/* Right: fnsku chip + details button */}
-              <div className="flex shrink-0 items-center gap-1.5">
+              <div key="actions" className="flex shrink-0 items-center gap-1.5">
                 <FnskuChip value={item.fnsku} />
                 {onDetailOpen && (
                   <button

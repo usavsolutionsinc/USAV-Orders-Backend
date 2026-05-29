@@ -205,15 +205,24 @@ async function run() {
       await waitForServer(`${BASE_URL}/ai`);
     }
 
+    // Authenticate via the project's one-click dev sign-in — same approach as
+    // tests/e2e/global-setup.ts. The page/layout gates content behind a real
+    // session cookie, so without this the panel body never renders. The API
+    // mocks only intercept /api/ai/**, so /api/auth/* sign-in runs for real.
+    const staffName = process.env.PW_STAFF_NAME || 'Michael';
+    await page.goto(`${BASE_URL}/signin?next=/ai`, { waitUntil: 'domcontentloaded' });
+    await page.getByRole('button', { name: new RegExp(`Sign in as ${staffName}`, 'i') }).click();
+    await page.waitForURL((url) => !url.pathname.startsWith('/signin'), { timeout: 20_000 });
+
     await page.goto(`${BASE_URL}/ai`, { waitUntil: 'networkidle' });
 
     await page.getByText('Ask shipped-count questions in plain English', { exact: false }).waitFor();
     await page.getByRole('button', { name: /How many orders were shipped last week and by who\?/i }).click();
 
-    await page.getByText('Shipped Orders By Packer').waitFor();
-    await page.getByText('12 shipped orders were recorded for March 16, 2026 to March 20, 2026 PST.').waitFor();
-    await page.getByText('Tuan').waitFor();
-    await page.getByRole('link', { name: 'Open shipped table' }).waitFor();
+    await page.getByText('Shipped Orders By Packer').first().waitFor();
+    await page.getByText('12 shipped orders were recorded for March 16, 2026 to March 20, 2026 PST.').first().waitFor();
+    await page.getByText('Tuan').first().waitFor();
+    await page.getByRole('link', { name: 'Open shipped table' }).first().waitFor();
 
     const shippedLink = page.getByRole('link', { name: 'Open shipped table' }).first();
     await assert.doesNotReject(async () => {
@@ -222,7 +231,7 @@ async function run() {
     });
 
     await page.getByRole('button', { name: /Which shipped orders last week are missing a tester\?/i }).click();
-    await page.getByText('Shipped Orders Missing Tester').waitFor();
+    await page.getByText('Shipped Orders Missing Tester').first().waitFor();
 
     assert.equal(getChatCount(), 2, 'expected exactly two mocked chat requests');
     console.log('AI chat panel E2E passed');

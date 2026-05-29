@@ -2,11 +2,9 @@
 
 import {
   TestingStatusPills,
-  unitStatusToVerdict,
   type TestingVerdict,
 } from '@/components/receiving/workspace/TestingStatusPills';
 import { InlineSerialAdder } from '@/components/receiving/workspace/InlineSerialAdder';
-import { UnitSlotList } from '@/components/receiving/workspace/UnitSlotList';
 
 export interface UnitSlotSerial {
   id: number;
@@ -36,7 +34,11 @@ interface Props {
   disabled?: boolean;
   /** Autofocus the serial input when the line becomes active. */
   autoFocus?: boolean;
-  /** Selected (expanded) unit index for multi-qty lines — drives the print preview. */
+  /**
+   * Accepted but unused — the testing panel renders one entry per line
+   * regardless of qty, so there is no per-unit selection. Kept so existing
+   * call sites in the workspace need no change.
+   */
   selectedIndex?: number;
   onSelectIndex?: (index: number) => void;
   /** Apply one verdict to the whole unit / PO line. */
@@ -51,11 +53,11 @@ interface Props {
  * row of {@link PoLinesAccordion} (matched cartons) or each line of
  * {@link UnmatchedItemsSection}. One verdict covers the whole unit / PO line.
  *
- * - qty ≤ 1 (incl. a PARTS product with several part-serials under one unit):
- *   verdict pills + the shared {@link InlineSerialAdder}.
- * - qty > 1 (e.g. 6 of the same product): verdict pills on top, then a
- *   selectable per-unit list. The selected unit expands its serial entry and
- *   becomes the print target (SKU + serial) in the workspace's label preview.
+ * Regardless of qty, a line is ONE entry: verdict pills on top, then a single
+ * {@link InlineSerialAdder}. A line's serials — whether several part-serials of
+ * one product or several of the same product — all list as chips above the
+ * input, never as separate rows below it. (Per-unit condition/serial breakdown
+ * is a receiving concern, not testing, where the verdict is line-wide.)
  *
  * No nested card — the host accordion row's border is the only container.
  */
@@ -68,16 +70,11 @@ export function TestingLinePanel({
   isSubmitting = false,
   disabled = false,
   autoFocus = false,
-  selectedIndex = 0,
-  onSelectIndex,
   onSetVerdict,
   onAddSerial,
   onDeleteSerial,
   onReplaceSerial,
 }: Props) {
-  const total = Math.max(expected ?? saved.length, saved.length, 1);
-  const multi = total > 1;
-
   return (
     <div className="space-y-3">
       <TestingStatusPills
@@ -85,45 +82,20 @@ export function TestingLinePanel({
         onChange={onSetVerdict}
         disabled={disabled || isMutating || saved.length === 0}
       />
-      {multi ? (
-        <UnitSlotList
-          total={total}
-          saved={saved}
-          selectedIndex={selectedIndex}
-          onSelect={onSelectIndex ?? (() => {})}
-          disabled={disabled}
-          isSubmitting={isSubmitting}
-          renderCollapsedMeta={(serial) => (
-            <VerdictGlyph verdict={unitStatusToVerdict(serial?.current_status)} />
-          )}
-          onAddSerial={(_index, sn) => onAddSerial(sn)}
-          onDeleteSerial={(s) => onDeleteSerial(s as UnitSlotSerial)}
-          onReplaceSerial={(original, next) => onReplaceSerial(original as UnitSlotSerial, next)}
-        />
-      ) : (
-        <InlineSerialAdder
-          key={`tech-adder-${lineId}`}
-          lineId={lineId}
-          saved={saved}
-          expected={expected}
-          isSubmitting={isSubmitting}
-          disabled={disabled}
-          autoFocus={autoFocus}
-          onAdd={(_lineId, sn) => onAddSerial(sn)}
-          onDelete={(_lineId, s) => onDeleteSerial(s as UnitSlotSerial)}
-          onReplaceSerial={(_lineId, original, next) =>
-            onReplaceSerial(original as UnitSlotSerial, next)
-          }
-        />
-      )}
+      <InlineSerialAdder
+        key={`tech-adder-${lineId}`}
+        lineId={lineId}
+        saved={saved}
+        expected={expected}
+        isSubmitting={isSubmitting}
+        disabled={disabled}
+        autoFocus={autoFocus}
+        onAdd={(_lineId, sn) => onAddSerial(sn)}
+        onDelete={(_lineId, s) => onDeleteSerial(s as UnitSlotSerial)}
+        onReplaceSerial={(_lineId, original, next) =>
+          onReplaceSerial(original as UnitSlotSerial, next)
+        }
+      />
     </div>
   );
-}
-
-function VerdictGlyph({ verdict }: { verdict: TestingVerdict | null }) {
-  const cls = 'text-micro font-bold uppercase tracking-widest';
-  if (verdict === 'PASS') return <span className={`${cls} text-emerald-700`}>Pass</span>;
-  if (verdict === 'TEST_AGAIN') return <span className={`${cls} text-amber-700`}>Re-test</span>;
-  if (verdict === 'TESTING_FAILED') return <span className={`${cls} text-rose-700`}>Failed</span>;
-  return <span className={`${cls} text-gray-400`}>No verdict</span>;
 }

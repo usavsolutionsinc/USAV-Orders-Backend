@@ -478,28 +478,34 @@ function FbaWorkspaceSidebarInner() {
         />
       </div>
 
+      {/* Scan bar — pinned at the top of the working area so it never scrolls
+          away. The mode is locked per page: Plan on the plan page (FNSKU adds to
+          today's plan, Plan button only) and Select on combine (FNSKU selects
+          packed items, Select button only). */}
+      {isBoard && !editorActive && (
+        <div className={`${sidebarSubBandClass} px-3 py-2.5`}>
+          <FbaWorkspaceScanField
+            staffName={staffName}
+            staffId={staffIdNum}
+            showTrackingCard={false}
+            scanMode={activeMode === 'plan' ? 'plan' : 'select'}
+          />
+        </div>
+      )}
+
       {/* Single scroll container */}
       <div
         data-testid="fba-sidebar-scroll"
         className="min-h-0 flex-1 overflow-y-auto scrollbar-hide bg-white"
         style={{ ['--fba-sticky-top' as any]: '38px' }}
       >
-        {/* Welcome + goal + scan — hidden in shipped mode and when editor is active */}
-        {isBoard && !editorActive && (
-          <div className={`${sidebarSubBandClass} px-3 py-2.5`}>
-            <FbaWorkspaceScanField
-              staffName={staffName}
-              staffId={staffIdNum}
-              showTrackingCard={false}
-            />
-          </div>
-        )}
-
         {/* Plan: Planned/Testing pills + recent rail under the scan bar */}
         {activeMode === 'plan' && !editorActive && <FbaPlanRail />}
 
-        {/* Combine: Recent/Packed pills + recent rails under the scan bar */}
-        {isCombine && !editorActive && <FbaCombineRail />}
+        {/* Combine: Recent/Packed pills under the scan bar. Recent = active /
+            combined shipments (FbaActiveShipments, with its inline editor), so
+            it stays mounted while editing — only the scan bar hides. */}
+        {isCombine && <FbaCombineRail stationTheme={stationTheme} />}
 
         {/* Shipped: search filter */}
         {activeMode === 'shipped' && (

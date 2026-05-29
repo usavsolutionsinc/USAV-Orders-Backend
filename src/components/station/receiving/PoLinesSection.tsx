@@ -12,6 +12,7 @@ import {
 import {
   conditionGradeTableLabel,
   workflowStatusTableLabel,
+  WORKFLOW_BADGE,
 } from '@/components/station/receiving-constants';
 
 interface ReceivingLine {
@@ -35,18 +36,6 @@ interface PoLinesSectionProps {
   receivingId: string;
   trackingNumber?: string;
 }
-
-const WORKFLOW_BADGE: Record<string, string> = {
-  EXPECTED:      'bg-gray-100 text-gray-500',
-  ARRIVED:       'bg-blue-100 text-blue-600',
-  MATCHED:       'bg-indigo-100 text-indigo-700',
-  UNBOXED:       'bg-yellow-100 text-yellow-700',
-  AWAITING_TEST: 'bg-orange-100 text-orange-700',
-  IN_TEST:       'bg-teal-100 text-teal-700',
-  PASSED:        'bg-emerald-100 text-emerald-700',
-  FAILED:        'bg-red-100 text-red-600',
-  DONE:          'bg-emerald-100 text-emerald-700',
-};
 
 /**
  * Per-line row in the PO LINES details card. Two-row stacked layout to fit

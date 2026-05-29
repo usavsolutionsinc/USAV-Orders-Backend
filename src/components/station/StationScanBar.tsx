@@ -31,6 +31,9 @@ interface StationScanBarProps {
   activeMode?: 'plan' | 'select';
   onPlanMode?: () => void;
   onSelectMode?: () => void;
+  /** Which mode buttons to render — defaults to both. Pass a single mode to
+   *  pin the bar to one page (Plan-only on the plan page, Select-only on combine). */
+  visibleModes?: Array<'plan' | 'select'>;
 }
 
 export function StationScanBar({
@@ -56,6 +59,7 @@ export function StationScanBar({
   activeMode = 'plan',
   onPlanMode,
   onSelectMode,
+  visibleModes = ['plan', 'select'],
 }: StationScanBarProps) {
   const [scanKey, setScanKey] = useState(0);
 
@@ -75,10 +79,11 @@ export function StationScanBar({
   }, [onPaste]);
 
   const showPaste = !!onPaste;
-  const showRight = hasRightContent || showPaste || showModeButtons;
+  const modeButtonCount = showModeButtons ? visibleModes.length : 0;
+  const showRight = hasRightContent || showPaste || modeButtonCount > 0;
 
   const padLeft = leadingIcon ? 'pl-11' : 'pl-4';
-  const padRight = showRight ? (showModeButtons ? 'pr-40' : 'pr-28') : 'pr-4';
+  const padRight = showRight ? (modeButtonCount >= 2 ? 'pr-40' : 'pr-28') : 'pr-4';
 
   return (
     <motion.form
@@ -144,36 +149,40 @@ export function StationScanBar({
         />
         {showRight ? (
           <div className={`absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-1.5 z-10 ${rightContentClassName}`.trim()}>
-            {showModeButtons ? (
+            {modeButtonCount > 0 ? (
               <div className="flex items-center gap-0">
-                <button
-                  type="button"
-                  onClick={onPlanMode}
-                  aria-pressed={activeMode === 'plan'}
-                  title="Plan mode"
-                  aria-label={activeMode === 'plan' ? 'Plan mode active' : 'Switch to plan mode'}
-                  className={`flex h-6 w-6 items-center justify-center rounded-md transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gray-400/60 ${
-                    activeMode === 'plan'
-                      ? 'bg-purple-50 text-purple-700 hover:bg-purple-100'
-                      : 'text-gray-500 hover:bg-gray-100 hover:text-gray-700'
-                  }`}
-                >
-                  <ClipboardList className="h-3.5 w-3.5" />
-                </button>
-                <button
-                  type="button"
-                  onClick={onSelectMode}
-                  aria-pressed={activeMode === 'select'}
-                  title="Select mode"
-                  aria-label={activeMode === 'select' ? 'Select mode active' : 'Switch to select mode'}
-                  className={`flex h-6 w-6 items-center justify-center rounded-md transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gray-400/60 ${
-                    activeMode === 'select'
-                      ? 'bg-blue-50 text-blue-700 hover:bg-blue-100'
-                      : 'text-gray-500 hover:bg-gray-100 hover:text-gray-700'
-                  }`}
-                >
-                  <Pencil className="h-3.5 w-3.5" />
-                </button>
+                {visibleModes.includes('plan') ? (
+                  <button
+                    type="button"
+                    onClick={onPlanMode}
+                    aria-pressed={activeMode === 'plan'}
+                    title="Plan mode"
+                    aria-label={activeMode === 'plan' ? 'Plan mode active' : 'Switch to plan mode'}
+                    className={`flex h-6 w-6 items-center justify-center rounded-md transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gray-400/60 ${
+                      activeMode === 'plan'
+                        ? 'bg-purple-50 text-purple-700 hover:bg-purple-100'
+                        : 'text-gray-500 hover:bg-gray-100 hover:text-gray-700'
+                    }`}
+                  >
+                    <ClipboardList className="h-3.5 w-3.5" />
+                  </button>
+                ) : null}
+                {visibleModes.includes('select') ? (
+                  <button
+                    type="button"
+                    onClick={onSelectMode}
+                    aria-pressed={activeMode === 'select'}
+                    title="Select mode"
+                    aria-label={activeMode === 'select' ? 'Select mode active' : 'Switch to select mode'}
+                    className={`flex h-6 w-6 items-center justify-center rounded-md transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gray-400/60 ${
+                      activeMode === 'select'
+                        ? 'bg-blue-50 text-blue-700 hover:bg-blue-100'
+                        : 'text-gray-500 hover:bg-gray-100 hover:text-gray-700'
+                    }`}
+                  >
+                    <Pencil className="h-3.5 w-3.5" />
+                  </button>
+                ) : null}
               </div>
             ) : null}
             {hasRightContent && rightContent}

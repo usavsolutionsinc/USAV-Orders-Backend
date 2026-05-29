@@ -3,8 +3,8 @@
 import Link from 'next/link';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { motion } from 'framer-motion';
-import { AlertCircle, ChevronLeft, Clock, LayoutDashboard, Menu, Package, PackageCheck, X } from '@/components/Icons';
+import { AnimatePresence, motion } from 'framer-motion';
+import { AlertCircle, ChevronDown, ChevronLeft, ChevronUp, Clock, LayoutDashboard, Menu, Package, PackageCheck, X } from '@/components/Icons';
 import { sidebarHeaderBandClass } from '@/components/layout/header-shell';
 import { HorizontalButtonSlider, type HorizontalSliderItem } from '@/components/ui/HorizontalButtonSlider';
 import { sectionLabel } from '@/design-system/tokens/typography/presets';
@@ -36,6 +36,7 @@ import {
   getSidebarNavItems,
   isSidebarNavActive,
   type SidebarNavItem,
+  APP_SIDEBAR_NAV,
 } from '@/lib/sidebar-navigation';
 import type { ShippedFormData } from '@/components/shipped';
 import { dispatchCloseShippedDetails, DASHBOARD_SHIPPED_FOCUS_SEARCH_PARAM } from '@/utils/events';
@@ -306,14 +307,37 @@ function NavSection({
             href={href}
             onClick={onNavigate}
             prefetch={process.env.NODE_ENV === 'production'}
-            className={`group flex items-center gap-3 px-3 py-3 rounded-2xl transition-all duration-200 ${
-              isActive
-                ? 'bg-blue-600 text-white shadow-lg shadow-blue-600/20'
-                : 'text-gray-500 hover:bg-gray-50 hover:text-gray-900'
-            }`}
+            className="group block relative"
           >
-            <Icon className={`h-5 w-5 ${isActive ? 'text-white' : 'text-gray-500 group-hover:text-blue-500'}`} />
-            <span className="text-caption font-black uppercase tracking-wider">{item.label}</span>
+            {isActive && (
+              <motion.div
+                layoutId="active-sidebar-bar"
+                className="absolute inset-0 bg-blue-600 rounded-2xl shadow-lg shadow-blue-600/20"
+                transition={{ type: 'spring', damping: 30, stiffness: 350 }}
+              />
+            )}
+            <div
+              className={`relative flex items-center gap-3 px-3 py-3 rounded-2xl transition-all duration-200 ${
+                isActive ? 'text-white' : 'text-gray-500 hover:bg-gray-50 hover:text-gray-900'
+              }`}
+            >
+              <motion.div layoutId={isActive ? 'sidebar-icon' : undefined}>
+                <Icon className={`h-5 w-5 ${isActive ? 'text-white' : 'text-gray-500 group-hover:text-blue-500'}`} />
+              </motion.div>
+              <motion.span
+                layoutId={isActive ? 'sidebar-title' : undefined}
+                className="flex-1 text-caption font-black uppercase tracking-wider"
+              >
+                {item.label}
+              </motion.span>
+              <motion.div layoutId={isActive ? 'sidebar-arrow' : undefined} className="flex items-center">
+                {isActive ? (
+                  <ChevronDown className="h-4 w-4 opacity-0 group-hover:opacity-100 transition-opacity text-white/70" />
+                ) : (
+                  <ChevronUp className="h-4 w-4 opacity-0 group-hover:opacity-100 transition-opacity text-gray-400" />
+                )}
+              </motion.div>
+            </div>
           </Link>
         );
       })}
@@ -336,6 +360,17 @@ export default function DashboardSidebar({ inDrawer = false, onNavigate }: { inD
   const [isMobileOpen, setIsMobileOpen] = useState(false);
   const [canShowMobileSidebar, setCanShowMobileSidebar] = useState(false);
   const [showHomeNavigation, setShowHomeNavigation] = useState(false);
+  const [transitionDirection, setTransitionDirection] = useState<'up' | 'down'>('up');
+
+  const navigateToContext = useCallback(() => {
+    setTransitionDirection('up');
+    setShowHomeNavigation(false);
+  }, []);
+
+  const navigateToHome = useCallback(() => {
+    setTransitionDirection('down');
+    setShowHomeNavigation(true);
+  }, []);
 
   useEffect(() => {
     const syncMobileSidebarAvailability = () => {
@@ -431,68 +466,116 @@ export default function DashboardSidebar({ inDrawer = false, onNavigate }: { inD
 
   const containerVariants = {
     hidden: { opacity: 0 },
-    visible: { opacity: 1, transition: { staggerChildren: 0.05, delayChildren: 0.05 } },
+    visible: {
+      opacity: 1,
+      transition: {
+        staggerChildren: 0.1,
+        delayChildren: 0.1,
+      },
+    },
   };
   const itemVariants = {
-    hidden: { opacity: 0, x: -20, filter: 'blur(4px)' },
-    visible: { opacity: 1, x: 0, filter: 'blur(0px)', transition: { type: 'spring', damping: 25, stiffness: 350, mass: 0.5 } },
+    hidden: { opacity: 0, y: 15, filter: 'blur(4px)' },
+    visible: {
+      opacity: 1,
+      y: 0,
+      filter: 'blur(0px)',
+      transition: { type: 'spring', damping: 30, stiffness: 350, mass: 0.6 },
+    },
   };
+
+  const currentNavItem = APP_SIDEBAR_NAV.find((item) => item.id === routeKey);
+  const CurrentIcon = currentNavItem?.icon ?? LayoutDashboard;
 
   const shell = (
     <aside className="h-full w-full bg-white border-r border-gray-300 overflow-hidden shadow-xl shadow-gray-900/5 flex flex-col">
-      <div className="flex-1 overflow-hidden">
-        {inDrawer || showHomeNavigation || routeKey === 'unknown' ? (
-          <motion.div initial="hidden" animate="visible" variants={containerVariants} className="h-full flex flex-col bg-white">
-            <div
-              className={`flex-1 overflow-y-auto px-3 space-y-6 ${
-                inDrawer
-                  ? 'pt-[max(3.5rem,calc(env(safe-area-inset-top)+2.75rem))]'
-                  : 'pt-3'
-              } pb-3`}
+      <div className="flex-1 overflow-hidden relative">
+        <AnimatePresence initial={false} custom={transitionDirection}>
+          {inDrawer || showHomeNavigation || routeKey === 'unknown' ? (
+            <motion.div
+              key="navigation"
+              custom={transitionDirection}
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              variants={containerVariants}
+              className="h-full flex flex-col bg-white"
             >
-              {groupedNav.main.length > 0 && (
-                <motion.div variants={itemVariants}>
-                  <p className="px-1 pb-2 text-eyebrow font-black uppercase tracking-[0.25em] text-blue-600">Main</p>
-                  <NavSection items={groupedNav.main} pathname={pathname} resolveHref={resolveHref} onNavigate={() => { setShowHomeNavigation(false); onNavigate?.(); }} />
-                </motion.div>
-              )}
-              {groupedNav.station.length > 0 && (
-                <motion.div variants={itemVariants}>
-                  <p className="px-1 pb-2 text-eyebrow font-black uppercase tracking-[0.25em] text-gray-500">Stations</p>
-                  <NavSection items={groupedNav.station} pathname={pathname} resolveHref={resolveHref} onNavigate={() => { setShowHomeNavigation(false); onNavigate?.(); }} />
-                </motion.div>
-              )}
-              {groupedNav.bottom.length > 0 && (
-                <motion.div variants={itemVariants}>
-                  <p className="px-1 pb-2 text-eyebrow font-black uppercase tracking-[0.25em] text-gray-500">More</p>
-                  <NavSection items={groupedNav.bottom} pathname={pathname} resolveHref={resolveHref} onNavigate={() => { setShowHomeNavigation(false); onNavigate?.(); }} />
-                </motion.div>
-              )}
-            </div>
-          </motion.div>
-        ) : (
-          <motion.div initial="hidden" animate="visible" variants={containerVariants} className="h-full flex flex-col overflow-hidden bg-white">
-            {routeKey !== 'tech' && (
-              <motion.button
-                variants={itemVariants}
+              <div
+                className={`flex-1 overflow-y-auto px-3 space-y-6 ${
+                  inDrawer
+                    ? 'pt-[max(3.5rem,calc(env(safe-area-inset-top)+2.75rem))]'
+                    : 'pt-3'
+                } pb-3`}
+              >
+                {groupedNav.main.length > 0 && (
+                  <motion.div variants={itemVariants}>
+                    <p className="px-1 pb-2 text-eyebrow font-black uppercase tracking-[0.25em] text-blue-600">Main</p>
+                    <NavSection items={groupedNav.main} pathname={pathname} resolveHref={resolveHref} onNavigate={() => { navigateToContext(); onNavigate?.(); }} />
+                  </motion.div>
+                )}
+                {groupedNav.station.length > 0 && (
+                  <motion.div variants={itemVariants}>
+                    <p className="px-1 pb-2 text-eyebrow font-black uppercase tracking-[0.25em] text-gray-500">Stations</p>
+                    <NavSection items={groupedNav.station} pathname={pathname} resolveHref={resolveHref} onNavigate={() => { navigateToContext(); onNavigate?.(); }} />
+                  </motion.div>
+                )}
+                {groupedNav.bottom.length > 0 && (
+                  <motion.div variants={itemVariants}>
+                    <p className="px-1 pb-2 text-eyebrow font-black uppercase tracking-[0.25em] text-gray-500">More</p>
+                    <NavSection items={groupedNav.bottom} pathname={pathname} resolveHref={resolveHref} onNavigate={() => { navigateToContext(); onNavigate?.(); }} />
+                  </motion.div>
+                )}
+              </div>
+            </motion.div>
+          ) : (
+            <motion.div
+              key="context"
+              custom={transitionDirection}
+              initial="hidden"
+              animate="visible"
+              exit="hidden"
+              variants={containerVariants}
+              className="h-full flex flex-col overflow-hidden bg-white"
+            >
+              <button
                 type="button"
-                onClick={() => setShowHomeNavigation(true)}
-                className="w-full flex min-h-[44px] items-center gap-2 border-b border-gray-200 py-1 pl-1.5 pr-3 text-left transition-colors hover:bg-gray-50"
+                onClick={navigateToHome}
+                className="group relative w-full flex min-h-[44px] items-center text-left transition-colors hover:bg-gray-50 z-20"
                 aria-label="Back to navigation"
               >
-                <div className="h-9 w-7 flex items-center justify-start text-gray-500">
-                  <ChevronLeft className="h-5 w-5" />
+                <motion.div
+                  layoutId="active-sidebar-bar"
+                  className="absolute inset-0 border-b border-gray-200 bg-white"
+                  transition={{ type: 'spring', damping: 30, stiffness: 350 }}
+                />
+                <div className="relative flex w-full items-center gap-3 px-3 py-3 z-10">
+                  <motion.div layoutId="sidebar-icon">
+                    <CurrentIcon className="h-5 w-5 text-blue-600" />
+                  </motion.div>
+                  <div className="min-w-0 flex-1">
+                    <motion.p
+                      layoutId="sidebar-title"
+                      className="text-sm font-black tracking-tight text-gray-900 truncate uppercase tracking-wider"
+                    >
+                      {sidebarTitle}
+                    </motion.p>
+                  </div>
+                  <motion.div layoutId="sidebar-arrow">
+                    <ChevronDown className="h-4 w-4 opacity-0 group-hover:opacity-100 transition-opacity text-gray-400" />
+                  </motion.div>
                 </div>
-                <div className="min-w-0">
-                  <p className="text-sm font-black tracking-tight text-gray-900 truncate">{sidebarTitle}</p>
-                </div>
-              </motion.button>
-            )}
-            <motion.div variants={itemVariants} className="flex-1 overflow-hidden">
-              <SidebarContextPanel onBackToAppNav={() => setShowHomeNavigation(true)} />
+              </button>
+              <motion.div 
+                variants={itemVariants} 
+                className="flex-1 overflow-hidden"
+                transition={{ delay: 0.25 }}
+              >
+                <SidebarContextPanel onBackToAppNav={navigateToHome} />
+              </motion.div>
             </motion.div>
-          </motion.div>
-        )}
+          )}
+        </AnimatePresence>
       </div>
     </aside>
   );

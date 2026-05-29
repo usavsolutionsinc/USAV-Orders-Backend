@@ -9,7 +9,7 @@ import { TestingSidebarPanel } from '@/components/sidebar/TestingSidebarPanel';
 import { getCurrentPSTDateKey, toPSTDateKey } from '@/utils/date';
 import { getStaffGoalById } from '@/lib/staffGoalsCache';
 import { useTechLogs, type TechRecord } from '@/hooks/useTechLogs';
-import { ChevronLeft } from '@/components/Icons';
+import { ChevronDown, ChevronLeft, Wrench } from '@/components/Icons';
 import { HorizontalButtonSlider } from '@/components/ui/HorizontalButtonSlider';
 import { useActiveStaffDirectory } from './hooks';
 import {
@@ -195,28 +195,8 @@ export function TechSidebarPanel({ techId, onBackToAppNav, contextNavTitle = 'Te
 
   return (
     <div className="relative flex h-full w-full flex-col overflow-hidden bg-white">
-      {/* Band 1: optional back chevron + section label (mobile context nav) */}
-      <div className={sidebarHeaderBandClass}>
-        {onBackToAppNav ? (
-          <button
-            type="button"
-            onClick={onBackToAppNav}
-            className="flex w-full min-h-[44px] items-center gap-2 border-b border-gray-200 py-1 pl-1.5 pr-3 text-left transition-colors hover:bg-gray-50"
-            aria-label="Back to app navigation"
-          >
-            <div className="flex h-9 w-7 items-center justify-start text-gray-500">
-              <ChevronLeft className="h-5 w-5" />
-            </div>
-            <div className="min-w-0">
-              <p className="truncate text-sm font-black tracking-tight text-gray-900">
-                {contextNavTitle}
-              </p>
-            </div>
-          </button>
-        ) : null}
-      </div>
-
       {/* Band 2: top mode pills [Shipping | Testing]. Mirrors the receiving
+  ...
           sidebar's mode-row above the scan bar so the tech's primary mode
           switch lives in the exact same visual location as receiving's. */}
       <div className={`${sidebarHeaderBandClass} px-3`}>

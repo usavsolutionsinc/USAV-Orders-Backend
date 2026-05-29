@@ -23,6 +23,8 @@ export const FBA_BOARD_SELECT_BY_FNSKU = 'fba-board-select-by-fnsku' as const;
 export const FBA_BOARD_FNSKU_SELECT_RESULT = 'fba-board-fnsku-select-result' as const;
 /** Sidebar → FbaBoardTable: deselect one item_id */
 export const FBA_BOARD_DESELECT_ITEM = 'fba-board-deselect-item' as const;
+/** User pressed "Combine items": open the center workspace + flip the sidebar to the Packed tab. */
+export const FBA_COMBINE_STARTED = 'fba-combine-started' as const;
 
 // ── Paired / review tab ─────────────────────────────────────────────────────
 /** FbaPage → sidebar: paired-tab selection changed */

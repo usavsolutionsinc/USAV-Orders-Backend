@@ -102,25 +102,20 @@ function ReceivingRowMain({
   const title = row.item_name || row.sku || row.zoho_item_id || `Line #${row.id}`;
   const techId = row.assigned_tech_id ?? null;
   const techColor = techId ? stationThemeColors[getStaffThemeById(techId)].text : 'text-gray-400';
-  const qtyComplete =
-    row.quantity_expected != null && row.quantity_expected > 0 && row.quantity_received >= row.quantity_expected;
 
+  // Render identical content whether or not the row is selected — selection is
+  // a pure ring/background highlight (see SidebarRailShell). Any size/content
+  // difference here would change the row's height and shove its neighbors.
   return (
     <>
       <div className="flex min-w-0 items-center gap-1.5">
         <p className="truncate text-caption font-bold text-gray-900" title={title}>{title}</p>
-        {!ctx.isSelected ? ctx.pkgChip : null}
+        {ctx.pkgChip}
       </div>
-      {ctx.isSelected ? (
-        <p className={`mt-0.5 text-micro font-semibold tabular-nums ${qtyComplete ? 'text-emerald-600' : 'text-gray-600'}`}>
-          {row.quantity_received}/{row.quantity_expected ?? '?'}
-        </p>
-      ) : (
-        <p className="truncate text-eyebrow font-semibold uppercase tracking-widest text-gray-500">
-          {renderQuantity(row)}
-          {techId ? <span className={`ml-1 ${techColor}`}>· {getStaffName(techId)}</span> : null}
-        </p>
-      )}
+      <p className="truncate text-eyebrow font-semibold uppercase tracking-widest text-gray-500">
+        {renderQuantity(row)}
+        {techId ? <span className={`ml-1 ${techColor}`}>· {getStaffName(techId)}</span> : null}
+      </p>
     </>
   );
 }

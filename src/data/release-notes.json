@@ -1,7 +1,27 @@
 {
-  "generatedAt": "2026-05-28T21:37:27.549Z",
+  "generatedAt": "2026-05-29T18:09:44.274Z",
   "count": 199,
   "commits": [
+    {
+      "sha": "2214870b78c5c323c294eeef04614e3b95f83a54",
+      "shortSha": "2214870b",
+      "date": "2026-05-29T09:15:03-07:00",
+      "author": "usavsolutionsinc",
+      "subject": "fix(ebay-e2e-script): type the filter callback so prod build passes",
+      "body": "Implicit any in rows.filter((r) => r.itemNumber) was blocking the\nproduction Next.js build. Annotates with ReturnType<typeof summarizeOrder>\nmatching the forEach above.\n\nUnblocks shipping/sync-due Vercel cron + FedEx normalize fix from\nlanding in prod.\n\nCo-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>",
+      "type": "fix",
+      "title": "type the filter callback so prod build passes"
+    },
+    {
+      "sha": "bdb0d583efd5b05b1edf1d1e0c4333134dc4729f",
+      "shortSha": "bdb0d583",
+      "date": "2026-05-28T16:58:59-07:00",
+      "author": "usavsolutionsinc",
+      "subject": "FBA ai chat and recieving and testing updates to UI and flow - simpler and more robust",
+      "body": "",
+      "type": "other",
+      "title": "FBA ai chat and recieving and testing updates to UI and flow - simpler and more robust"
+    },
     {
       "sha": "38623bc3d612a1843cd3b3fe2caf6631369c3daa",
       "shortSha": "38623bc3",
@@ -1971,26 +1991,6 @@
       "body": "",
       "type": "other",
       "title": "updated the repair table and the details panel to handle copy and paste"
-    },
-    {
-      "sha": "87e2960119056cee013a302c6dc7f006853348b0",
-      "shortSha": "87e29601",
-      "date": "2026-02-16T13:10:46-08:00",
-      "author": "usavsolutionsinc",
-      "subject": "added qty counter",
-      "body": "",
-      "type": "other",
-      "title": "added qty counter"
-    },
-    {
-      "sha": "64413eeee7fc5e60574839ab683f68657d12a0fa",
-      "shortSha": "64413eee",
-      "date": "2026-02-16T11:45:41-08:00",
-      "author": "usavsolutionsinc",
-      "subject": "updated the orders and tech details,",
-      "body": "",
-      "type": "other",
-      "title": "updated the orders and tech details,"
     }
   ]
 }

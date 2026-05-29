@@ -3,11 +3,52 @@
  * Converts the Python script to TypeScript for reliable token refreshing
  */
 import { normalizeEnvValue } from '@/lib/env-utils';
+import {
+  decryptIntegrationPayload,
+  encryptIntegrationPayload,
+  isIntegrationKmsConfigured,
+} from '@/lib/integrations/crypto';
 
 interface TokenResponse {
   access_token: string;
   expires_in: number;
   token_type: string;
+}
+
+/**
+ * eBay OAuth access/refresh tokens are JWT-like strings that always begin with
+ * "v^". The AES-GCM envelope produced by encryptIntegrationPayload is base64,
+ * whose alphabet never contains "^", so the prefix is an unambiguous marker for
+ * "this is a plaintext eBay token" vs "this is an encrypted envelope".
+ */
+function isPlaintextEbayToken(value: string): boolean {
+  return value.startsWith('v^');
+}
+
+/**
+ * Read a stored eBay token that may be either a plaintext eBay token (written by
+ * the get-*-ebay-tokens.js helper scripts) or an encrypted integration envelope
+ * (written by /api/ebay/callback). Backward/forward compatible: returns plaintext
+ * as-is and decrypts envelopes. Throws only when a value is neither.
+ */
+export function readEbayToken(stored: string | null | undefined): string {
+  const raw = String(stored ?? '').trim();
+  if (!raw) throw new Error('eBay token is empty');
+  if (isPlaintextEbayToken(raw)) return raw;
+  try {
+    return decryptIntegrationPayload<string>(raw);
+  } catch (err: any) {
+    throw new Error(`eBay token is neither a plaintext token nor decryptable: ${err?.message || err}`);
+  }
+}
+
+/**
+ * Encode an eBay token for storage. Encrypts at rest when INTEGRATION_KMS_KEY is
+ * configured; otherwise stores plaintext so the integration keeps working until
+ * the key is provisioned. readEbayToken() reads either form transparently.
+ */
+export function writeEbayToken(plaintext: string): string {
+  return isIntegrationKmsConfigured() ? encryptIntegrationPayload(plaintext) : plaintext;
 }
 
 /**

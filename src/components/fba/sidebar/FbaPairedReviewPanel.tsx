@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { DndContext, DragOverlay, closestCenter } from '@dnd-kit/core';
 import { AnimatePresence } from 'framer-motion';
 import { Check, ChevronDown, ChevronUp, Loader2, Plus } from '@/components/Icons';
@@ -12,7 +12,8 @@ import { FbaQtySplitPopover } from '@/components/fba/sidebar/FbaQtySplitPopover'
 import { useFbaDragAndDrop } from '@/components/fba/sidebar/useFbaDragAndDrop';
 import { microBadge } from '@/design-system/tokens/typography/presets';
 import type { StationTheme } from '@/utils/staff-colors';
-import { fbaSidebarThemeChrome } from '@/utils/staff-colors';
+import { fbaSidebarThemeChrome, stationThemeColors } from '@/utils/staff-colors';
+import { StickyActionBar } from '@/design-system/components/StickyActionBar';
 import { getUniquePlanIds } from '@/lib/fba/pairing';
 import { fbaPaths } from '@/lib/fba/api-paths';
 import type { PanelAllocations, TrackingBucket as TrackingBucketType } from '@/lib/fba/types';
@@ -35,6 +36,12 @@ interface FbaPairedReviewPanelProps {
   stationTheme?: StationTheme;
   expanded?: boolean;
   onToggleExpanded?: () => void;
+  /**
+   * 'panel'     — narrow vertical stack for the sidebar (legacy).
+   * 'workspace' — wide horizontal kanban for the center crossfade: Unallocated
+   *               tray + one column per UPS box, FBA ID + Save in a top toolbar.
+   */
+  layout?: 'panel' | 'workspace';
 }
 
 export function FbaPairedReviewPanel({
@@ -42,8 +49,29 @@ export function FbaPairedReviewPanel({
   stationTheme = 'green',
   expanded = true,
   onToggleExpanded,
+  layout = 'panel',
 }: FbaPairedReviewPanelProps) {
   const chrome = fbaSidebarThemeChrome[stationTheme];
+  const themeColors = stationThemeColors[stationTheme];
+
+  // Kanban (workspace layout): translate a vertical scroll wheel into horizontal
+  // scroll so the UPS-box columns can be panned left/right with the mouse wheel.
+  const kanbanScrollRef = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    if (layout !== 'workspace') return;
+    const el = kanbanScrollRef.current;
+    if (!el) return;
+    const onWheel = (e: WheelEvent) => {
+      if (e.deltaY === 0) return;
+      // Let native horizontal gestures (trackpad) pass through untouched.
+      if (Math.abs(e.deltaX) > Math.abs(e.deltaY)) return;
+      if (el.scrollWidth <= el.clientWidth) return; // nothing to pan
+      el.scrollLeft += e.deltaY;
+      e.preventDefault();
+    };
+    el.addEventListener('wheel', onWheel, { passive: false });
+    return () => el.removeEventListener('wheel', onWheel);
+  }, [layout]);
 
   const [amazonShipmentId, setAmazonShipmentId] = useState('');
   const [lockedFbaId, setLockedFbaId] = useState<string | null>(null);
@@ -70,39 +98,46 @@ export function FbaPairedReviewPanel({
     [itemMap],
   );
 
-  // Sync selected items with allocations — add new items to unallocated, remove deselected items
+  // Sync selected items with allocations. Always keep at least one UPS box so
+  // there's somewhere to allocate; when it's the only box, newly-selected items
+  // drop straight into it (the common single-box case). Extra boxes still pull
+  // from Unallocated by dragging.
   useEffect(() => {
+    if (selectedItems.length === 0) return; // keep state (locked-FBA flow) when nothing selected
     const currentIds = new Set(selectedItems.map((i) => i.item_id));
 
     setAllocations((prev) => {
+      // Seed one UPS box if there are none yet.
+      const seededBuckets = prev.buckets.length > 0
+        ? prev.buckets
+        : [{ bucketId: crypto.randomUUID(), trackingNumber: '', carrier: 'UPS', allocations: [], collapsed: false }];
+
       // Collect all item IDs currently in allocations
       const allocatedIds = new Set<number>();
       for (const a of prev.unallocated) allocatedIds.add(a.item_id);
-      for (const b of prev.buckets) {
+      for (const b of seededBuckets) {
         for (const a of b.allocations) allocatedIds.add(a.item_id);
       }
 
-      // Find new items to add to unallocated
-      const newItems = selectedItems.filter((i) => !allocatedIds.has(i.item_id));
+      const newAllocs = selectedItems
+        .filter((i) => !allocatedIds.has(i.item_id))
+        .map((i) => ({ item_id: i.item_id, qty: Math.max(1, Number(i.actual_qty || 0)) }));
 
       // Remove items no longer in selection
       const filterAllocs = (list: { item_id: number; qty: number }[]) =>
         list.filter((a) => currentIds.has(a.item_id));
 
-      const nextUnallocated = [
-        ...filterAllocs(prev.unallocated),
-        ...newItems.map((i) => ({ item_id: i.item_id, qty: Math.max(1, Number(i.actual_qty || 0)) })),
-      ];
-      const nextBuckets = prev.buckets.map((b) => ({
+      const singleBox = seededBuckets.length === 1;
+      const nextUnallocated = singleBox
+        ? filterAllocs(prev.unallocated)
+        : [...filterAllocs(prev.unallocated), ...newAllocs];
+      const nextBuckets = seededBuckets.map((b, i) => ({
         ...b,
-        allocations: filterAllocs(b.allocations),
+        allocations: singleBox && i === 0
+          ? [...filterAllocs(b.allocations), ...newAllocs]
+          : filterAllocs(b.allocations),
       }));
 
-      // Only update if something changed
-      const unallocChanged = nextUnallocated.length !== prev.unallocated.length || newItems.length > 0;
-      const bucketsChanged = nextBuckets.some((b, i) => b.allocations.length !== prev.buckets[i]?.allocations.length);
-
-      if (!unallocChanged && !bucketsChanged) return prev;
       return { unallocated: nextUnallocated, buckets: nextBuckets };
     });
   }, [selectedItems]);
@@ -489,6 +524,162 @@ export function FbaPairedReviewPanel({
 
   const hasAllocatedItems = allocations.buckets.some((b) => b.allocations.length > 0);
   const hasItems = selectedItems.length > 0;
+
+  // ── Workspace layout: wide kanban for the center crossfade ──────────────
+  if (layout === 'workspace') {
+    return (
+      <div className="flex h-full min-h-0 flex-col bg-white">
+        {/* Toolbar: FBA Shipment ID + selection summary (Save lives in the
+            bottom action bar, like receiving / testing). */}
+        <div className="flex shrink-0 flex-wrap items-center gap-x-3 gap-y-2 border-b border-gray-100 px-4 py-3">
+          <div className="flex min-w-0 flex-1 items-center gap-2">
+            <p className="shrink-0 text-eyebrow font-black uppercase tracking-widest text-gray-500">
+              FBA Shipment ID
+            </p>
+            <input
+              value={lockedFbaId || amazonShipmentId}
+              onChange={(e) => {
+                if (lockedFbaId) return;
+                setAmazonShipmentId(e.target.value.toUpperCase());
+              }}
+              placeholder="FBA1234ABCD"
+              disabled={saving || Boolean(lockedFbaId)}
+              className={`${chrome.monoInput} max-w-[260px] min-w-0 flex-1 ${lockedFbaId ? '!bg-emerald-50 !border-emerald-200 !text-emerald-800' : ''}`}
+            />
+            {lockedFbaId && (
+              <button
+                type="button"
+                onClick={handleDismissFbaId}
+                className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-emerald-100 text-emerald-700 transition-colors hover:bg-emerald-200"
+                aria-label="Done — clear FBA Shipment ID"
+                title="Done with this FBA Shipment ID"
+              >
+                <Check className="h-3.5 w-3.5" />
+              </button>
+            )}
+          </div>
+
+          {hasItems ? (
+            <span className="shrink-0 text-micro font-bold uppercase tracking-wider tabular-nums text-gray-500">
+              {selectedItems.length} line{selectedItems.length === 1 ? '' : 's'} · {totalQty} units
+            </span>
+          ) : null}
+        </div>
+
+        {/* Inline guidance / status (errors render in the bottom action bar). */}
+        {(activeSplit || success) ? (
+          <div className="shrink-0 space-y-1 px-4 pt-2">
+            {activeSplit ? (
+              <p className="text-eyebrow font-semibold leading-snug text-amber-800">
+                If you change this FBA ID from the prefilled value, Save creates a new active shipment for these
+                FNSKUs with this Amazon ID and UPS; the original card keeps its FBA ID for remaining lines.
+              </p>
+            ) : null}
+            {success ? <p className={`${microBadge} tracking-wider text-emerald-600`}>{success}</p> : null}
+          </div>
+        ) : null}
+
+        {/* Kanban: Unallocated tray + one column per UPS box + add-box */}
+        <div ref={kanbanScrollRef} className="relative min-h-0 flex-1 overflow-auto">
+          {hasItems ? (
+            <DndContext
+              sensors={sensors}
+              collisionDetection={closestCenter}
+              onDragStart={handleDragStart}
+              onDragEnd={handleDragEnd}
+              onDragCancel={handleDragCancel}
+            >
+              <div className="flex h-full min-w-max items-start gap-3 p-4">
+                <div className="w-72 shrink-0">
+                  <FbaUnallocatedBucket
+                    allocations={allocations.unallocated}
+                    selectedItems={selectedItems}
+                    stationTheme={stationTheme}
+                    onQtyChange={handleQtyChange}
+                    onRemoveItem={removeSelectedItem}
+                  />
+                </div>
+
+                {allocations.buckets.map((bucket) => (
+                  <div key={bucket.bucketId} className="w-72 shrink-0">
+                    <FbaTrackingBucket
+                      bucket={bucket}
+                      selectedItems={selectedItems}
+                      stationTheme={stationTheme}
+                      saving={saving}
+                      onTrackingChange={handleTrackingChange}
+                      onQtyChange={handleQtyChange}
+                      onRemoveItem={removeSelectedItem}
+                      onToggleCollapse={handleToggleCollapse}
+                      onDelete={handleDeleteBucket}
+                    />
+                  </div>
+                ))}
+
+                <button
+                  type="button"
+                  onClick={addBucket}
+                  disabled={saving}
+                  className="flex w-44 shrink-0 flex-col items-center justify-center gap-1.5 self-stretch rounded-lg border border-dashed border-gray-300 py-6 text-micro font-bold uppercase tracking-wider text-gray-500 transition-colors hover:border-blue-400 hover:bg-blue-50/50 hover:text-blue-600 disabled:opacity-40"
+                >
+                  <Plus className="h-4 w-4" />
+                  Add UPS Box
+                </button>
+              </div>
+
+              <DragOverlay>
+                {activeItem ? (
+                  <div className="rounded-lg border border-blue-300 bg-white/95 shadow-lg">
+                    <FbaSelectedLineRow
+                      displayTitle={activeItem.display_title || 'No title'}
+                      fnsku={String(activeItem.fnsku || '').toUpperCase()}
+                      stationTheme={stationTheme}
+                      checked
+                      checkboxDisabled
+                      rightSlot={null}
+                    />
+                  </div>
+                ) : null}
+              </DragOverlay>
+            </DndContext>
+          ) : lockedFbaId ? (
+            <div className="flex h-full items-center justify-center px-6 text-center">
+              <p className={`${microBadge} tracking-wider text-emerald-600`}>
+                Select more packed items to add another UPS tracking to {lockedFbaId}
+              </p>
+            </div>
+          ) : null}
+
+          {/* Qty split popover */}
+          <AnimatePresence>
+            {splitState && (
+              <FbaQtySplitPopover
+                itemId={splitState.itemId}
+                fnsku={splitState.fnsku}
+                maxQty={splitState.maxQty}
+                onConfirm={confirmSplit}
+                onCancel={cancelSplit}
+              />
+            )}
+          </AnimatePresence>
+        </div>
+
+        {/* Bottom action bar — same StickyActionBar chrome as receiving / testing. */}
+        <StickyActionBar
+          primaryFullWidth
+          maxWidth="max-w-none"
+          error={error || undefined}
+          primary={{
+            label: lockedFbaId ? 'Save UPS Tracking' : 'Save Shipment + UPS',
+            onClick: () => void handleSaveAll(),
+            disabled: !hasAllocatedItems,
+            isLoading: saving,
+            toneClasses: { bg: themeColors.bg, hover: themeColors.hover },
+          }}
+        />
+      </div>
+    );
+  }
 
   return (
     <div className="border-b border-gray-100">

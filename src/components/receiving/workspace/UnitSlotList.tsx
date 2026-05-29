@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, type ReactNode } from 'react';
-import { Barcode, X } from '@/components/Icons';
+import { Barcode, Plus, X } from '@/components/Icons';
 import { SerialChipWithMenu } from '@/components/receiving/workspace/SerialCard';
 
 export interface UnitLike {
@@ -59,7 +59,7 @@ export function UnitSlotList({
   const rows = Array.from({ length: count }, (_, i) => ({ index: i, serial: saved[i] ?? null }));
 
   return (
-    <div className="flex flex-col gap-1">
+    <div className="flex flex-col divide-y divide-gray-200">
       {rows.map(({ index, serial }) =>
         index === selectedIndex ? (
           <ExpandedRow
@@ -113,7 +113,7 @@ function CollapsedRow({
           onSelect();
         }
       }}
-      className="flex w-full cursor-pointer items-center gap-2 rounded-lg border border-gray-200 bg-white px-3 py-2 text-left transition-colors hover:bg-gray-50"
+      className="flex w-full cursor-pointer items-center gap-2 px-1 py-2.5 text-left transition-colors hover:bg-gray-50"
     >
       <span className="shrink-0 font-mono text-micro font-black tabular-nums text-gray-500">
         {index + 1}/{total}
@@ -170,7 +170,7 @@ function ExpandedRow({
   };
 
   return (
-    <div className="rounded-xl border border-blue-300 bg-blue-50/50 px-3 py-3">
+    <div className="px-1 py-2.5">
       <div className="mb-2 flex items-center justify-between gap-2">
         <span className="font-mono text-micro font-black uppercase tracking-widest text-blue-700">
           Unit {index + 1}/{total}
@@ -239,11 +239,13 @@ function ExpandedRow({
           type="button"
           onClick={submit}
           disabled={!scan.trim() || isSubmitting || disabled}
-          className={`inline-flex h-10 shrink-0 items-center justify-center rounded-lg px-3.5 text-caption font-black uppercase tracking-wider text-white shadow-sm transition-colors disabled:cursor-not-allowed disabled:bg-gray-300 ${
+          aria-label={editing ? 'Save serial' : 'Add serial'}
+          title={editing ? 'Save serial' : 'Add serial'}
+          className={`inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-lg text-white shadow-sm transition-colors disabled:cursor-not-allowed disabled:bg-gray-300 ${
             editing ? 'bg-amber-500 hover:bg-amber-600' : 'bg-blue-600 hover:bg-blue-700'
           }`}
         >
-          {isSubmitting ? 'Saving…' : editing ? 'Save' : 'Add'}
+          <Plus className="h-4 w-4" />
         </button>
       </div>
     </div>

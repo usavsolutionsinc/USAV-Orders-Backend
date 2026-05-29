@@ -5,6 +5,7 @@ import { Toaster } from 'sonner';
 import { useState } from 'react';
 import { AblyProvider } from '@/contexts/AblyContext';
 import { SiteTooltipProvider } from '@/components/providers/SiteTooltipProvider';
+import { StepUpProvider } from '@/components/providers/StepUpProvider';
 import { UIModeProvider } from '@/design-system/providers/UIModeProvider';
 
 export default function Providers({ children }: { children: React.ReactNode }) {
@@ -25,7 +26,9 @@ export default function Providers({ children }: { children: React.ReactNode }) {
             <AblyProvider>
                 <UIModeProvider>
                     <SiteTooltipProvider>
-                        {children}
+                        <StepUpProvider>
+                            {children}
+                        </StepUpProvider>
                     </SiteTooltipProvider>
                 </UIModeProvider>
                 <Toaster position="bottom-right" richColors closeButton />

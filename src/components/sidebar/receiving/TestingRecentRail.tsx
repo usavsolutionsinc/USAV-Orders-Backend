@@ -2,26 +2,17 @@
 
 import { useMemo } from 'react';
 import { type ReceivingLineRow } from '@/components/station/ReceivingLinesTable';
+import { workflowStageDot } from '@/lib/receiving/workflow-stages';
 import { RecentActivityRailBase, type ApiResponse } from './RecentActivityRailBase';
 
-/** 
- * Color logic for the left status dot in Testing view. 
- * Prioritizes testing flow states over receipt states.
+/**
+ * Color logic for the left status dot in Testing view. Colors come straight
+ * from the shared lifecycle registry (workflow-stages.ts) so the testing flow
+ * (awaiting → in-test → passed/failed) reads with the same per-stage hues as
+ * everywhere else, rather than collapsing receipt states into one blue bucket.
  */
 export function getTestingStatusDot(row: ReceivingLineRow): string {
-  const v = String(row.workflow_status || '').trim().toUpperCase();
-  
-  // Terminal testing states
-  if (v === 'PASSED' || v === 'DONE') return 'bg-emerald-500';
-  if (v.startsWith('FAILED') || v === 'SCRAP' || v === 'RTV') return 'bg-rose-500';
-  
-  // Active testing states
-  if (v === 'AWAITING_TEST' || v === 'IN_TEST') return 'bg-violet-500';
-  
-  // Preliminary states (received but not yet testing)
-  if (v === 'MATCHED' || v === 'UNBOXED' || v === 'ARRIVED') return 'bg-blue-500';
-  
-  return 'bg-gray-400';
+  return workflowStageDot(row.workflow_status);
 }
 
 /** 
@@ -49,16 +40,21 @@ export function TestingRecentRail({
   selectedRow = null,
   limit = 25,
 }: Props) {
-  // Use a separate query key for testing to avoid cache collisions with receiving 
-  // if they use different views or params.
-  const queryKey = useMemo(() => ['receiving-lines-table', 'all', 'test'] as const, []);
+  // 'rail' segment keeps this DISTINCT from the main ReceivingLinesTable keys —
+  // the table caches the full ApiResponse object under
+  // ['receiving-lines-table', <view>, 'receive'|...], while the rail caches the
+  // bare receiving_lines array. Sharing a key feeds one query the other's shape
+  // (→ "allRows.slice is not a function"). Still under the
+  // ['receiving-lines-table'] prefix so broad invalidations refresh it.
+  const queryKey = useMemo(() => ['receiving-lines-table', 'rail', 'activity', 'test'] as const, []);
 
   const fetchFn = async (): Promise<ApiResponse> => {
     const params = new URLSearchParams({ limit: '500', offset: '0' });
     params.set('include', 'serials');
-    // For testing, we generally care about items that have at least been received.
-    // 'all' still works best as a fallback to ensure we see the full chronological feed.
-    params.set('view', 'all'); 
+    // For testing, we only care about items that have at least been received.
+    // 'activity' drops untouched-incoming (EXPECTED, nothing received) so the
+    // feed reflects what's been scanned/worked, not what's still en route.
+    params.set('view', 'activity');
     const res = await fetch(`/api/receiving-lines?${params.toString()}`);
     if (!res.ok) throw new Error('fetch failed');
     return res.json();

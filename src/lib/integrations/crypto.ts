@@ -38,6 +38,20 @@ function getKey(): Buffer {
   return key;
 }
 
+/**
+ * True when INTEGRATION_KMS_KEY is present and decodes to a valid 32-byte key,
+ * i.e. encrypt/decrypt will work. Lets callers choose encrypted-at-rest when a
+ * key is configured and fall back to plaintext when it isn't — without throwing.
+ */
+export function isIntegrationKmsConfigured(): boolean {
+  try {
+    getKey();
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 export function encryptIntegrationPayload(plaintext: unknown): string {
   const key = getKey();
   const iv = randomBytes(IV_BYTES);

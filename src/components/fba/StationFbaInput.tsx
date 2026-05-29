@@ -64,6 +64,13 @@ export interface StationFbaInputProps {
    * (sidebar scan should not POST directly to the URL plan).
    */
   ignoreUrlPlan?: boolean;
+  /**
+   * Locks the scan flow to one mode and shows only that mode's button:
+   *   'plan'   — plan page: FNSKU adds/updates today's plan.
+   *   'select' — combine page: FNSKU selects packed items for combining.
+   * When omitted, both buttons show and the user can toggle (legacy).
+   */
+  scanMode?: 'plan' | 'select';
 }
 
 
@@ -75,6 +82,7 @@ export default function StationFbaInput({
   workspaceTheme: workspaceThemeProp,
   techStaffIdOverride,
   ignoreUrlPlan = false,
+  scanMode,
 }: StationFbaInputProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -133,7 +141,11 @@ export default function StationFbaInput({
   const [fbaError, setFbaError] = useState<string | null>(null);
   const [planHint, setPlanHint] = useState<string | null>(null);
   const [isFbaLoading, setIsFbaLoading] = useState(false);
-  const [fbaMode, setFbaMode] = useState<'plan' | 'select'>('plan');
+  const [fbaMode, setFbaMode] = useState<'plan' | 'select'>(scanMode ?? 'plan');
+  // When the page locks the mode (plan vs combine), keep the flow pinned to it.
+  useEffect(() => {
+    if (scanMode) setFbaMode(scanMode);
+  }, [scanMode]);
   const [selectResult, setSelectResult] = useState<FnskuSelectResult | null>(null);
   const [selectModeItems, setSelectModeItems] = useState<FbaBoardItem[]>([]);
   /** Last line(s) successfully added in plan mode — shown under the scan bar. */
@@ -966,11 +978,12 @@ export default function StationFbaInput({
           iconClassName=""
           inputClassName={
             fbaScanOnly
-              ? `!py-2.5 !text-sm !rounded-xl !font-bold ${workspaceChrome.fnskuScanInputClass}`
-              : '!py-2.5 !text-sm !rounded-xl focus:border-violet-400 focus:ring-2 focus:ring-violet-500/20'
+              ? `!py-2.5 !text-sm !font-bold ${workspaceChrome.fnskuScanInputClass}`
+              : '!py-2.5 !text-sm focus:border-violet-400 focus:ring-2 focus:ring-violet-500/20'
           }
           rightContentClassName="right-2"
           showModeButtons={fbaScanOnly}
+          visibleModes={scanMode ? [scanMode] : ['plan', 'select']}
           activeMode={fbaMode}
           onPlanMode={() => {
             setFbaMode('plan');

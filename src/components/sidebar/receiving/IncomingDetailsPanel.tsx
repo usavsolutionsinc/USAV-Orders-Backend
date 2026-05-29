@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { motion } from 'framer-motion';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { format, parseISO } from 'date-fns';
@@ -15,14 +15,10 @@ import { copyToClipboard } from '@/utils/_dom';
 import { toast } from '@/lib/toast';
 
 // ── Tab spec ────────────────────────────────────────────────────────────────
-type TabId = 'po' | 'items' | 'shipment' | 'history' | 'gmail' | 'zoho' | 'notes';
+type TabId = 'po' | 'shipment' | 'notes';
 const TABS: Array<{ value: TabId; label: string }> = [
   { value: 'po',       label: 'PO' },
-  { value: 'items',    label: 'Items' },
   { value: 'shipment', label: 'Shipment' },
-  { value: 'history',  label: 'Receive' },
-  { value: 'gmail',    label: 'Gmail' },
-  { value: 'zoho',     label: 'Activity' },
   { value: 'notes',    label: 'Notes' },
 ];
 
@@ -235,11 +231,7 @@ export function IncomingDetailsPanel({ zohoPurchaseOrderId, poNumberHint, onClos
         ) : (
           <div className="p-4">
             {tab === 'po' && <PoTab data={data} />}
-            {tab === 'items' && <ItemsTab data={data} />}
             {tab === 'shipment' && <ShipmentTab data={data} />}
-            {tab === 'history' && <HistoryTab data={data} />}
-            {tab === 'gmail' && <GmailTab data={data} />}
-            {tab === 'zoho' && <ZohoTab data={data} />}
             {tab === 'notes' && (
               <NotesTab
                 receivingId={data.receiving?.id ?? null}
@@ -292,44 +284,6 @@ function PoTab({ data }: { data: DetailsResponse }) {
       <Row label="Total" value={fmtMoney(po.total, po.currency)} />
       <Row label="Modified in Zoho" value={fmtDateTime(po.last_modified_zoho)} />
       <Row label="Synced locally" value={fmtDateTime(po.last_synced_at)} />
-    </div>
-  );
-}
-
-function ItemsTab({ data }: { data: DetailsResponse }) {
-  if (data.line_items.length === 0)
-    return <Empty msg="No line items on this PO." />;
-  return (
-    <div className="space-y-2">
-      {data.line_items.map((it, i) => {
-        const complete = it.quantity_expected > 0 && it.quantity_received >= it.quantity_expected;
-        return (
-          <div key={it.line_item_id ?? i} className="rounded-lg border border-gray-200 bg-white p-3">
-            <div className="flex items-start justify-between gap-3">
-              <div className="min-w-0 flex-1">
-                <div className="font-semibold text-sm text-gray-900">
-                  {it.name || it.description || it.sku || '—'}
-                </div>
-                {it.sku ? (
-                  <div className="mt-0.5 font-mono text-eyebrow font-black uppercase tracking-wider text-gray-500">
-                    SKU {it.sku}
-                  </div>
-                ) : null}
-              </div>
-              <div className="shrink-0 text-right">
-                <div className={`tabular-nums text-sm font-black ${complete ? 'text-emerald-600' : 'text-amber-700'}`}>
-                  {it.quantity_received} / {it.quantity_expected}
-                </div>
-                {it.rate != null ? (
-                  <div className="mt-0.5 text-eyebrow font-semibold text-gray-500">
-                    @ {fmtMoney(it.rate, data.po?.currency ?? null)}
-                  </div>
-                ) : null}
-              </div>
-            </div>
-          </div>
-        );
-      })}
     </div>
   );
 }
@@ -438,90 +392,6 @@ function ShipmentTab({ data }: { data: DetailsResponse }) {
   );
 }
 
-function HistoryTab({ data }: { data: DetailsResponse }) {
-  if (data.receive_events.length === 0)
-    return <Empty msg="No receive activity logged yet — nothing's been scanned against this PO." />;
-  return (
-    <ol className="relative space-y-2 border-l border-gray-200 pl-3">
-      {data.receive_events.map((e) => (
-        <li key={e.id} className="relative">
-          <span className="absolute -left-[7px] top-1.5 h-2.5 w-2.5 rounded-full bg-emerald-500" />
-          <div className="text-caption font-semibold text-gray-900">{e.event_type}</div>
-          <div className="text-eyebrow font-semibold text-gray-500">
-            {fmtDateTime(e.occurred_at)}
-            {e.station ? ` · ${e.station}` : ''}
-            {e.sku ? ` · SKU ${e.sku}` : ''}
-          </div>
-          {e.notes ? (
-            <div className="mt-0.5 text-caption text-gray-600">{e.notes}</div>
-          ) : null}
-        </li>
-      ))}
-    </ol>
-  );
-}
-
-function GmailTab({ data }: { data: DetailsResponse }) {
-  if (data.gmail.length === 0)
-    return <Empty msg="No Gmail matches for this PO. Try the PO-Gmail reconciler at /admin/po-gmail." />;
-  return (
-    <div className="space-y-2">
-      {data.gmail.map((m) => (
-        <div key={m.id} className="rounded-lg border border-gray-200 bg-white p-3">
-          <div className="flex items-start justify-between gap-3">
-            <div className="min-w-0 flex-1">
-              <div className="truncate font-semibold text-sm text-gray-900">
-                {m.email_subject || '(no subject)'}
-              </div>
-              <div className="mt-0.5 truncate text-eyebrow font-semibold text-gray-500">
-                {m.email_from || '—'} · {fmtDateTime(m.email_received)}
-              </div>
-            </div>
-            {m.gmail_thread_id ? (
-              <a
-                href={`https://mail.google.com/mail/u/0/#all/${m.gmail_thread_id}`}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="shrink-0 rounded-md bg-blue-50 px-2 py-0.5 text-eyebrow font-black uppercase tracking-wider text-blue-700 hover:bg-blue-100"
-              >
-                Open
-              </a>
-            ) : null}
-          </div>
-          {m.status ? (
-            <span className="mt-1 inline-block rounded bg-gray-100 px-1.5 py-0.5 text-eyebrow font-black uppercase tracking-wider text-gray-600">
-              {m.status}
-            </span>
-          ) : null}
-        </div>
-      ))}
-    </div>
-  );
-}
-
-function ZohoTab({ data }: { data: DetailsResponse }) {
-  if (data.zoho_activity.length === 0)
-    return (
-      <Empty msg="Zoho's API didn't return an activity log for this PO. Modified-time is on the PO tab." />
-    );
-  return (
-    <ol className="relative space-y-2 border-l border-gray-200 pl-3">
-      {data.zoho_activity.map((e, i) => (
-        <li key={i} className="relative">
-          <span className="absolute -left-[7px] top-1.5 h-2.5 w-2.5 rounded-full bg-violet-500" />
-          <div className="text-caption font-semibold text-gray-900">{e.label}</div>
-          <div className="text-eyebrow font-semibold text-gray-500">
-            {fmtDateTime(e.timestamp)}
-          </div>
-          {e.description ? (
-            <div className="mt-0.5 text-caption text-gray-600">{e.description}</div>
-          ) : null}
-        </li>
-      ))}
-    </ol>
-  );
-}
-
 function NotesTab({
   receivingId,
   initialValue,
@@ -532,6 +402,7 @@ function NotesTab({
   const [value, setValue] = useState(initialValue);
   const [saving, setSaving] = useState(false);
   const queryClient = useQueryClient();
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   // Resync local draft when the panel reopens against a different PO whose
   // receiving row carries different support_notes.
@@ -562,6 +433,24 @@ function NotesTab({
     }
   }, [receivingId, value, initialValue, queryClient]);
 
+  // Save on click-off: any pointer-down outside the textarea commits the draft
+  // (no-ops when unchanged). Covers clicking elsewhere in the panel, another
+  // tab, or the close button/backdrop — more reliable than focus-blur, which
+  // can be skipped when the panel unmounts. Ref keeps the listener stable while
+  // always calling the latest `save`.
+  const saveRef = useRef(save);
+  useEffect(() => {
+    saveRef.current = save;
+  }, [save]);
+  useEffect(() => {
+    const onPointerDown = (e: PointerEvent) => {
+      const el = textareaRef.current;
+      if (el && !el.contains(e.target as Node)) void saveRef.current();
+    };
+    document.addEventListener('pointerdown', onPointerDown);
+    return () => document.removeEventListener('pointerdown', onPointerDown);
+  }, []);
+
   if (receivingId == null) {
     return (
       <Empty msg="No receiving row for this PO yet — notes will be available after the next Zoho sync." />
@@ -574,15 +463,15 @@ function NotesTab({
         Carton notes
       </label>
       <textarea
+        ref={textareaRef}
         value={value}
         onChange={(e) => setValue(e.target.value)}
-        onBlur={save}
         rows={6}
         placeholder="Vendor context, claim handoff, anything the receiver should see…"
         className="mt-1 w-full rounded-md border border-gray-200 bg-white px-2 py-1.5 text-caption font-medium leading-snug text-gray-900 placeholder:text-gray-400 focus:border-blue-300 focus:outline-none focus:ring-2 focus:ring-blue-500/10"
       />
       <div className="mt-2 text-eyebrow font-semibold text-gray-400">
-        {saving ? 'Saving…' : 'Saves on blur'}
+        {saving ? 'Saving…' : 'Saves when you click away'}
       </div>
     </div>
   );

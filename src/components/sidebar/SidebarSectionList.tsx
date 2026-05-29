@@ -1,5 +1,6 @@
 'use client';
 
+import { ChevronDown, ChevronUp } from '@/components/Icons';
 import type { ReactNode } from 'react';
 
 export interface SidebarSection<TId extends string = string> {
@@ -72,7 +73,7 @@ export function SidebarSectionList<TId extends string = string>({
             type="button"
             onClick={() => onSelect(s.id)}
             aria-current={isActive ? 'page' : undefined}
-            className={`flex w-full items-start gap-3 border-b border-gray-100 px-4 py-3 text-left transition ${
+            className={`group flex w-full items-start gap-3 border-b border-gray-100 px-4 py-3 text-left transition ${
               isActive ? 'bg-blue-50 text-blue-700' : 'text-gray-900 hover:bg-gray-50'
             }`}
           >
@@ -89,6 +90,11 @@ export function SidebarSectionList<TId extends string = string>({
                 </span>
               )}
             </span>
+            {isActive ? (
+              <ChevronDown className="h-4 w-4 opacity-0 group-hover:opacity-100 transition-opacity text-blue-400 mt-0.5" />
+            ) : (
+              <ChevronUp className="h-4 w-4 opacity-0 group-hover:opacity-100 transition-opacity text-gray-400 mt-0.5" />
+            )}
           </button>
         );
       })}

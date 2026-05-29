@@ -9,20 +9,25 @@
  * first line item carries `legacyItemId` (the external ref id the sync writes to
  * orders.item_number — see src/lib/ebay/sync.ts).
  *
- * READ-ONLY: no DB connection, no order creation, no eBay writes. The only
- * network calls are the OAuth token refresh (POST) and the order GET.
+ * READ-ONLY: no order creation, no eBay writes, no DB writes. Network calls are
+ * the OAuth token refresh (POST) and the order GET. A single read-only SELECT on
+ * ebay_accounts sources each account's refresh token the same place the real
+ * EbayClient does — the Neon DB — when it isn't supplied via env.
  *
- * It does NOT use EbayClient directly because that reads/decrypts tokens from
- * the Neon DB (needs INTEGRATION_KMS_KEY, which is not present in the Vercel
- * env). Accounts whose refresh token lives only in the DB are reported skipped.
+ * Token resolution per account: EBAY_REFRESH_TOKEN_<ACCT> env var first, else the
+ * ebay_accounts.refresh_token column. Plaintext tokens (eBay "v^..." format) are
+ * used directly; encrypted envelopes are decrypted via the repo's
+ * decryptIntegrationPayload (needs INTEGRATION_KMS_KEY).
  *
  * Usage:
  *   npx tsx scripts/e2e-ebay-orders.ts [envFile] [limit]
  *   # defaults: envFile=.env.e2e.tmp  limit=5
  */
 import { config as loadEnv } from 'dotenv';
+import pg from 'pg';
 import { refreshEbayAccessToken } from '@/lib/ebay/token-refresh';
 import { normalizeEnvValue } from '@/lib/env-utils';
+import { decryptIntegrationPayload } from '@/lib/integrations/crypto';
 
 const ENV_FILE = process.argv[2] || '.env.e2e.tmp';
 const LIMIT = Math.max(1, Math.min(Number(process.argv[3]) || 5, 50));
@@ -31,6 +36,42 @@ const DAYS_BACK = 30; // matches src/lib/ebay/sync.ts sinceIso window
 loadEnv({ path: ENV_FILE });
 
 const ACCOUNTS = ['USAV', 'DRAGON', 'MEKONG'] as const;
+
+/** Read active eBay accounts' refresh tokens from the DB (read-only). */
+async function loadDbRefreshTokens(): Promise<Map<string, string>> {
+  const out = new Map<string, string>();
+  const url =
+    process.env.DATABASE_URL_UNPOOLED || process.env.DATABASE_URL || process.env.POSTGRES_URL;
+  if (!url) return out;
+
+  const client = new pg.Client({ connectionString: url, ssl: { rejectUnauthorized: false } });
+  await client.connect();
+  try {
+    const res = await client.query(
+      `SELECT account_name, refresh_token FROM ebay_accounts
+       WHERE platform = 'EBAY' AND is_active = true`,
+    );
+    for (const row of res.rows) {
+      const acct = String(row.account_name || '').trim();
+      const raw = String(row.refresh_token || '').trim();
+      if (!acct || !raw) continue;
+      // eBay plaintext refresh tokens start with "v^"; anything else is an
+      // encrypted envelope we decrypt with the same helper the client uses.
+      let token = raw;
+      if (!raw.startsWith('v^')) {
+        try {
+          token = decryptIntegrationPayload<string>(raw);
+        } catch {
+          continue; // can't decrypt (no/invalid INTEGRATION_KMS_KEY) — leave unset
+        }
+      }
+      out.set(acct.toUpperCase(), token);
+    }
+  } finally {
+    await client.end();
+  }
+  return out;
+}
 
 function apiBase(): string {
   // EbayClient: sandbox = EBAY_ENVIRONMENT !== 'PRODUCTION'
@@ -97,18 +138,25 @@ async function main() {
     process.exit(1);
   }
 
+  const dbTokens = await loadDbRefreshTokens().catch((err) => {
+    console.log(`  (DB token lookup unavailable: ${err?.message || err})`);
+    return new Map<string, string>();
+  });
+
   let testedAny = false;
   let hadFailure = false;
 
   for (const account of ACCOUNTS) {
-    const refreshToken = normalizeEnvValue(process.env[`EBAY_REFRESH_TOKEN_${account}`]);
+    const envToken = normalizeEnvValue(process.env[`EBAY_REFRESH_TOKEN_${account}`]);
+    const dbToken = dbTokens.get(account);
+    const refreshToken = envToken || dbToken;
+    const source = envToken ? 'env' : dbToken ? 'db' : null;
     console.log(`──────── ${account} ────────`);
 
     if (!refreshToken) {
       console.log(
-        `  ⏭️  SKIPPED — no EBAY_REFRESH_TOKEN_${account} in env. ` +
-          `(Token likely lives only in the Neon ebay_accounts table, which needs ` +
-          `INTEGRATION_KMS_KEY to decrypt — not available via Vercel env.)\n`,
+        `  ⏭️  SKIPPED — no refresh token in env (EBAY_REFRESH_TOKEN_${account}) ` +
+          `or in ebay_accounts (active EBAY rows). Encrypted DB tokens need INTEGRATION_KMS_KEY.\n`,
       );
       continue;
     }
@@ -116,7 +164,7 @@ async function main() {
     testedAny = true;
     try {
       const { accessToken, expiresIn } = await refreshEbayAccessToken(clientId, clientSecret, refreshToken);
-      console.log(`  🔑 token refresh OK (expires in ${expiresIn}s)`);
+      console.log(`  🔑 token refresh OK via ${source} token (expires in ${expiresIn}s)`);
 
       const orders = await fetchOrdersFor(account, accessToken);
       console.log(`  📦 fetched ${orders.length} order(s)`);

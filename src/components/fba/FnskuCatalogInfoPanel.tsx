@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Copy, Pencil } from '@/components/Icons';
 import { DetailsPanelRow } from '@/design-system/components/DetailsPanelRow';
+import { FnskuChip } from '@/components/ui/CopyChip';
 import { sectionLabel } from '@/design-system/tokens/typography/presets';
 import { emitOpenQuickAddFnsku, FBA_FNSKU_SAVED_EVENT } from './FbaQuickAddFnskuModal';
 
@@ -148,21 +149,12 @@ export function FnskuCatalogInfoPanel({
             {condition || <span className="text-gray-400">—</span>}
           </p>
         </DetailsPanelRow>
-        <DetailsPanelRow
-          label="FNSKU"
-          actions={
-            <button
-              type="button"
-              onClick={() => navigator.clipboard.writeText(fnskuTrimmed)}
-              className="text-gray-400 transition-colors hover:text-gray-700"
-              aria-label="Copy FNSKU"
-              title="Copy FNSKU"
-            >
-              <Copy className="h-3.5 w-3.5" />
-            </button>
-          }
-        >
-          <p className="font-mono text-sm font-bold text-gray-900">{fnskuTrimmed}</p>
+        <DetailsPanelRow label="FNSKU">
+          {fnskuTrimmed ? (
+            <FnskuChip value={fnskuTrimmed} />
+          ) : (
+            <p className="font-mono text-sm font-bold text-gray-400">—</p>
+          )}
         </DetailsPanelRow>
         <DetailsPanelRow
           label="ASIN"

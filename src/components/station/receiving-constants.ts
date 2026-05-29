@@ -1,6 +1,8 @@
 // Shared constants for all receiving-related components.
 // Import from here instead of defining inline in each component.
 
+import { WORKFLOW_STAGES } from '@/lib/receiving/workflow-stages';
+
 // ─── Dropdown option arrays ───────────────────────────────────────────────────
 
 export const QA_OPTS = [
@@ -80,21 +82,13 @@ export const DISP_BADGE: Record<string, string> = {
   REWORK: 'bg-blue-50 text-blue-700 border-blue-200',
 };
 
-// Green family for the unboxed → passed → done progression so the lifecycle
-// reads as one continuous flow (light = early, dark = finalized). Scanned is
-// pulled out into blue so "scanned vs unboxed" is a clear hue switch, not
-// just a shade.
-export const WORKFLOW_BADGE: Record<string, string> = {
-  EXPECTED:      'bg-gray-100 text-gray-500',
-  ARRIVED:       'bg-sky-100 text-sky-700',
-  MATCHED:       'bg-blue-100 text-blue-700',
-  UNBOXED:       'bg-emerald-50 text-emerald-700',
-  AWAITING_TEST: 'bg-orange-100 text-orange-700',
-  IN_TEST:       'bg-teal-100 text-teal-700',
-  PASSED:        'bg-emerald-200 text-emerald-800',
-  FAILED:        'bg-red-100 text-red-600',
-  DONE:          'bg-emerald-600 text-white',
-};
+// Badge tone per workflow status, derived from the single lifecycle registry
+// (src/lib/receiving/workflow-stages.ts) so every surface — rails, tables,
+// side panels — renders the same color for the same status. Kept as a
+// Record<string,string> for the existing `WORKFLOW_BADGE[status]` callers.
+export const WORKFLOW_BADGE: Record<string, string> = Object.fromEntries(
+  Object.values(WORKFLOW_STAGES).map((s) => [s.status, s.badge]),
+);
 
 /** List-row / badge copy for inbound workflow; DB enums unchanged (`MATCHED`, `DONE`, …). */
 export function workflowStatusTableLabel(status: string | null | undefined): string {

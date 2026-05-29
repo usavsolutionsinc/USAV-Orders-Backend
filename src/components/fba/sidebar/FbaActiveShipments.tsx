@@ -251,10 +251,18 @@ function ActiveShipmentCard({
       className="[overflow:clip] border border-gray-200 bg-white transition-colors"
     >
       {/* ── Header (matches FbaShipmentCard layout) ── */}
-      <button
-        type="button"
+      {/* role="button" (not <button>) so the inline Edit/Return controls below remain valid — a <button> cannot nest a <button>. */}
+      <div
+        role="button"
+        tabIndex={0}
         onClick={onToggleExpand}
-        className="flex w-full items-center justify-between gap-2 bg-white px-3 py-2.5 text-left transition-colors hover:bg-gray-50"
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            onToggleExpand();
+          }
+        }}
+        className="flex w-full cursor-pointer items-center justify-between gap-2 bg-white px-3 py-2.5 text-left transition-colors hover:bg-gray-50"
       >
         <div className="flex min-w-0 flex-1 items-center gap-2">
           <Package className="h-4 w-4 shrink-0 text-purple-500" />
@@ -305,7 +313,7 @@ function ActiveShipmentCard({
           </div>
         </div>
         <ChevronToggle isExpanded={isExpanded} tone="purple" />
-      </button>
+      </div>
 
       {/* ── Expanded: Tracking Groups + Items ── */}
       <AnimatePresence initial={false}>

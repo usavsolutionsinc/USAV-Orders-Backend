@@ -1,6 +1,5 @@
 import pool from '@/lib/db';
-import { refreshEbayAccessToken } from '@/lib/ebay/token-refresh';
-import { decryptIntegrationPayload, encryptIntegrationPayload } from '@/lib/integrations/crypto';
+import { refreshEbayAccessToken, readEbayToken, writeEbayToken } from '@/lib/ebay/token-refresh';
 import { tenantQuery } from '@/lib/tenancy/db';
 
 export interface EbayRefreshTokensJobResult {
@@ -44,8 +43,8 @@ export async function runEbayRefreshTokensJob(): Promise<EbayRefreshTokensJobRes
 
   for (const { account_name, refresh_token, organization_id } of accounts) {
     try {
-      // Decrypt the integration refresh token
-      const decryptedRefreshToken = decryptIntegrationPayload<string>(refresh_token);
+      // Read the stored refresh token (plaintext or encrypted-at-rest)
+      const decryptedRefreshToken = readEbayToken(refresh_token);
 
       const { accessToken, expiresIn } = await refreshEbayAccessToken(
         clientId,
@@ -53,7 +52,7 @@ export async function runEbayRefreshTokensJob(): Promise<EbayRefreshTokensJobRes
         decryptedRefreshToken
       );
       const newExpiresAt = new Date(Date.now() + expiresIn * 1000);
-      const encryptedAccessToken = encryptIntegrationPayload(accessToken);
+      const encryptedAccessToken = writeEbayToken(accessToken);
 
       // Perform update scoped under tenantQuery for RLS policy compliance
       await tenantQuery(

@@ -192,6 +192,7 @@ export function IncomingSidebarPanel() {
       || stateRaw === 'ARRIVING_TODAY'
       || stateRaw === 'STALLED'
       || stateRaw === 'IN_TRANSIT'
+      || stateRaw === 'PENDING_CARRIER'
       || stateRaw === 'AWAITING_TRACKING'
       ? (stateRaw as IncomingDeliveryState)
       : null;

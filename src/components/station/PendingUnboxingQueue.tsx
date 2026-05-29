@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { ChevronRight, Loader2, Package, X } from '@/components/Icons';
-import { workflowStatusTableLabel } from '@/components/station/receiving-constants';
+import { workflowStatusTableLabel, WORKFLOW_BADGE } from '@/components/station/receiving-constants';
 import { TabSwitch } from '@/design-system/components';
 import { sectionLabel, chipText, dataValue, microBadge } from '@/design-system/tokens/typography/presets';
 import { framerTransition, framerPresence } from '@/design-system/foundations/motion-framer';
@@ -51,20 +51,6 @@ interface ReceivingSerial {
   created_at: string | null;
   updated_at: string | null;
 }
-
-const WORKFLOW_BADGE: Record<string, string> = {
-  EXPECTED:      'bg-gray-100 text-gray-500',
-  ARRIVED:       'bg-blue-100 text-blue-600',
-  MATCHED:       'bg-indigo-100 text-indigo-700',
-  UNBOXED:       'bg-yellow-100 text-yellow-700',
-  AWAITING_TEST: 'bg-orange-100 text-orange-700',
-  IN_TEST:       'bg-teal-100 text-teal-700',
-  PASSED:        'bg-emerald-100 text-emerald-700',
-  FAILED:        'bg-red-100 text-red-600',
-  RTV:           'bg-rose-100 text-rose-600',
-  SCRAP:         'bg-gray-200 text-gray-500',
-  DONE:          'bg-green-100 text-green-700',
-};
 
 function BoxRow({
   box,

@@ -2,28 +2,26 @@
 
 import { useMemo } from 'react';
 import { type ReceivingLineRow } from '@/components/station/ReceivingLinesTable';
+import { workflowStage, workflowStageDot } from '@/lib/receiving/workflow-stages';
 import { RecentActivityRailBase, type ApiResponse } from './RecentActivityRailBase';
 
-/** Color logic for the left status dot in Receiving view. */
+/**
+ * Color logic for the left status dot in Receiving view. Colors come from the
+ * shared lifecycle registry (workflow-stages.ts) so the dot, the badge, and
+ * every other surface agree. The one receiving-specific override: a line whose
+ * received qty has met expected reads green even if the workflow hasn't been
+ * advanced yet — "fully in" is the signal receivers scan for.
+ */
 export function getReceivingStatusDot(row: ReceivingLineRow): string {
   const { workflow_status: status, quantity_received: qtyReceived, quantity_expected: qtyExpected } = row;
-  
-  if (
-    qtyExpected != null &&
-    qtyExpected > 0 &&
-    qtyReceived != null &&
-    qtyReceived >= qtyExpected
-  ) {
-    return 'bg-emerald-500';
-  }
-  const v = String(status || '').trim().toUpperCase();
-  if (v === 'EXPECTED') return 'bg-amber-400';
-  if (v === 'ARRIVED' || v === 'MATCHED') return 'bg-blue-500';
-  if (v === 'UNBOXED') return 'bg-indigo-500';
-  if (v === 'AWAITING_TEST' || v === 'IN_TEST') return 'bg-violet-500';
-  if (v === 'PASSED' || v === 'DONE') return 'bg-emerald-500';
-  if (v.startsWith('FAILED') || v === 'SCRAP' || v === 'RTV') return 'bg-rose-500';
-  return 'bg-gray-400';
+
+  const stage = workflowStage(status);
+  const qtyComplete =
+    qtyExpected != null && qtyExpected > 0 && qtyReceived != null && qtyReceived >= qtyExpected;
+
+  // Fully received but not in a terminal-fail state → green completeness cue.
+  if (qtyComplete && stage.phase !== 'TERMINAL') return 'bg-emerald-500';
+  return workflowStageDot(status);
 }
 
 interface Props {
@@ -41,12 +39,20 @@ export function ReceivingRecentRail({
   selectedRow = null,
   limit = 25,
 }: Props) {
-  const queryKey = useMemo(() => ['receiving-lines-table', 'all', 'receive'] as const, []);
+  // 'rail' segment keeps this DISTINCT from ReceivingLinesTable's
+  // ['receiving-lines-table', 'all', 'receive'] key (which caches the full
+  // ApiResponse object, not the array) so the two queries can't share a cache
+  // entry and feed each other the wrong shape. Still under the
+  // ['receiving-lines-table'] prefix so broad invalidations refresh it.
+  const queryKey = useMemo(() => ['receiving-lines-table', 'rail', 'activity', 'receive'] as const, []);
 
   const fetchFn = async (): Promise<ApiResponse> => {
     const params = new URLSearchParams({ limit: '500', offset: '0' });
     params.set('include', 'serials');
-    params.set('view', 'all');
+    // 'activity' = lines that have actually been scanned/received. Excludes
+    // untouched-incoming (EXPECTED, nothing received) so the rail shows what's
+    // been worked, not what's still en route — those live in the Incoming view.
+    params.set('view', 'activity');
     const res = await fetch(`/api/receiving-lines?${params.toString()}`);
     if (!res.ok) throw new Error('fetch failed');
     return res.json();

@@ -5,10 +5,10 @@ flowchart LR
   click hooks "src/hooks/_lifecycle.ts" "Open src/hooks/_lifecycle.ts"
   utils["utils"]
   click utils "src/utils/upnext-shared.ts" "Open src/utils/upnext-shared.ts"
-  components_sidebar["components/sidebar"]
-  click components_sidebar "src/components/sidebar/DeviceModeToggle.tsx" "Open src/components/sidebar/DeviceModeToggle.tsx"
   components_Icons_tsx["components/Icons.tsx"]
   click components_Icons_tsx "src/components/Icons.tsx" "Open src/components/Icons.tsx"
+  components_sidebar["components/sidebar"]
+  click components_sidebar "src/components/sidebar/DeviceModeToggle.tsx" "Open src/components/sidebar/DeviceModeToggle.tsx"
   design_system["design-system"]
   click design_system "src/design-system/index.ts" "Open src/design-system/index.ts"
   components_ui["components/ui"]
@@ -63,6 +63,8 @@ flowchart LR
   click components_manuals "src/components/manuals/ManualsLibrarySidebar.tsx" "Open src/components/manuals/ManualsLibrarySidebar.tsx"
   components_inventory["components/inventory"]
   click components_inventory "src/components/inventory/InventoryShell.tsx" "Open src/components/inventory/InventoryShell.tsx"
+  lib_fba["lib/fba"]
+  click lib_fba "src/lib/fba/board-item.ts" "Open src/lib/fba/board-item.ts"
   app_receiving["app/receiving"]
   click app_receiving "src/app/receiving/page.tsx" "Open src/app/receiving/page.tsx"
   components_walk_in["components/walk-in"]
@@ -79,10 +81,10 @@ flowchart LR
   click lib_toast_ts "src/lib/toast.ts" "Open src/lib/toast.ts"
   lib_print["lib/print"]
   click lib_print "src/lib/print/printRepairLabel.ts" "Open src/lib/print/printRepairLabel.ts"
-  lib_fba["lib/fba"]
-  click lib_fba "src/lib/fba/board-item.ts" "Open src/lib/fba/board-item.ts"
   app_layout_tsx["app/layout.tsx"]
   click app_layout_tsx "src/app/layout.tsx" "Open src/app/layout.tsx"
+  components_ShippedSidebar_tsx["components/ShippedSidebar.t…"]
+  click components_ShippedSidebar_tsx "src/components/ShippedSidebar.tsx" "Open src/components/ShippedSidebar.tsx"
   components_quick_access["components/quick-access"]
   click components_quick_access "src/components/quick-access/RecentSection.tsx" "Open src/components/quick-access/RecentSection.tsx"
   components_sku["components/sku"]
@@ -99,8 +101,6 @@ flowchart LR
   click components_MultiSkuSnBarcode_tsx "src/components/MultiSkuSnBarcode.tsx" "Open src/components/MultiSkuSnBarcode.tsx"
   components_PendingOrdersTable_tsx["components/PendingOrdersTab…"]
   click components_PendingOrdersTable_tsx "src/components/PendingOrdersTable.tsx" "Open src/components/PendingOrdersTable.tsx"
-  components_ShippedSidebar_tsx["components/ShippedSidebar.t…"]
-  click components_ShippedSidebar_tsx "src/components/ShippedSidebar.tsx" "Open src/components/ShippedSidebar.tsx"
   components_products["components/products"]
   click components_products "src/components/products/types.ts" "Open src/components/products/types.ts"
   lib_dashboard_table_data_ts["lib/dashboard-table-data.ts"]
@@ -508,6 +508,8 @@ flowchart LR
   lib_ebay --> lib_tenancy
   lib_ebay --> lib_tracking_format_ts
   lib_ebay --> utils
+  lib_fba --> components_Icons_tsx
+  lib_fba --> components_ui
   lib_fba --> lib_scan_resolver_ts
   lib_fba --> lib_tracking_format_ts
   lib_inventory --> lib_db_ts
@@ -545,4 +547,4 @@ flowchart LR
   utils --> lib_neon
   utils --> lib_scan_resolver_ts
   utils --> lib_tracking_format_ts
-  %% truncated: 169 more groups not shown
+  %% truncated: 170 more groups not shown

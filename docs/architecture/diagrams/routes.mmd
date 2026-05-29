@@ -56,6 +56,9 @@ flowchart LR
   admin_inventory_units__ref(["[ref]"])
   admin_inventory_units --> admin_inventory_units__ref
   click admin_inventory_units__ref "src/app/admin/inventory/units/[ref]/page.tsx" "page: src/app/admin/inventory/units/[ref]/page.tsx"
+  ai(["ai"])
+  root --> ai
+  click ai "src/app/ai/page.tsx" "page: src/app/ai/page.tsx"
   api["api"]
   root --> api
   api_activity["activity"]
@@ -209,6 +212,3 @@ flowchart LR
   api_admin_sessions__sid["[sid]"]
   api_admin_sessions --> api_admin_sessions__sid
   click api_admin_sessions__sid "src/app/api/admin/sessions/[sid]/route.ts" "route: src/app/api/admin/sessions/[sid]/route.ts"
-  api_admin_staff["staff"]
-  api_admin --> api_admin_staff
-  click api_admin_staff "src/app/api/admin/staff/route.ts" "route: src/app/api/admin/staff/route.ts"

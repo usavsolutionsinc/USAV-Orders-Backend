@@ -1,7 +1,6 @@
 import { eBayApi } from 'ebay-api';
 import pool from '@/lib/db';
-import { refreshEbayAccessToken } from './token-refresh';
-import { decryptIntegrationPayload, encryptIntegrationPayload } from '@/lib/integrations/crypto';
+import { refreshEbayAccessToken, readEbayToken, writeEbayToken } from './token-refresh';
 import { tenantQuery } from '@/lib/tenancy/db';
 
 /**
@@ -163,9 +162,9 @@ export class EbayClient {
 
     const { access_token, token_expires_at, refresh_token } = result.rows[0];
 
-    // Decrypt the integration tokens symmetrically
-    const decryptedAccessToken = decryptIntegrationPayload<string>(access_token);
-    const decryptedRefreshToken = decryptIntegrationPayload<string>(refresh_token);
+    // Read tokens, tolerating both plaintext and encrypted-at-rest storage
+    const decryptedAccessToken = readEbayToken(access_token);
+    const decryptedRefreshToken = readEbayToken(refresh_token);
 
     // Check if token is expired or about to expire (within 5 minutes)
     const expiresAt = new Date(token_expires_at);
@@ -197,7 +196,7 @@ export class EbayClient {
       );
       
       const newExpiresAt = new Date(Date.now() + expiresIn * 1000);
-      const encryptedAccessToken = encryptIntegrationPayload(accessToken);
+      const encryptedAccessToken = writeEbayToken(accessToken);
       const orgId = await this.getOrganizationId();
 
       // Update database with new token using tenantQuery

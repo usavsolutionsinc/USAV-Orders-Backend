@@ -116,11 +116,12 @@ export const GET = withAuth(async (request: NextRequest) => {
           : sortRaw === 'recently_added'
             ? 'recently_added'
             : 'zoho_newest';
-    const view: 'all' | 'recent' | 'received' | 'incoming' | null =
+    const view: 'all' | 'recent' | 'received' | 'incoming' | 'activity' | null =
       viewRaw === 'recent' ? 'recent'
         : viewRaw === 'received' ? 'received'
         : viewRaw === 'all' ? 'all'
         : viewRaw === 'incoming' ? 'incoming'
+        : viewRaw === 'activity' ? 'activity'
         : null;
     const include     = String(searchParams.get('include') || '').trim().toLowerCase();
     const includeSerials = include.split(',').map((s) => s.trim()).includes('serials');
@@ -368,6 +369,17 @@ export const GET = withAuth(async (request: NextRequest) => {
       conditions.push(
         `(rl.workflow_status IS NULL OR rl.workflow_status IN ('EXPECTED','ARRIVED','MATCHED','UNBOXED','AWAITING_TEST','IN_TEST','PASSED','DONE'))`,
       );
+    } else if (view === 'activity') {
+      // "Activity" = the recent-activity rail feed: everything that has actually
+      // been physically touched. Identical to `view=all` EXCEPT it drops the
+      // untouched-incoming rows (EXPECTED with nothing received yet) that belong
+      // in the Incoming view — those leak into the rail under `all`. A line shows
+      // here once it has been scanned/received (quantity_received > 0) OR its
+      // workflow has advanced past EXPECTED.
+      conditions.push(
+        `(rl.workflow_status IS NULL OR rl.workflow_status IN ('EXPECTED','ARRIVED','MATCHED','UNBOXED','AWAITING_TEST','IN_TEST','PASSED','DONE'))
+         AND NOT (rl.workflow_status = 'EXPECTED' AND COALESCE(rl.quantity_received, 0) = 0)`,
+      );
     } else if (view === 'incoming') {
       // "Incoming" = on a Zoho PO, vendor has issued it, warehouse hasn't
       // touched it yet. Backed by the /api/cron/zoho/incoming-po-sync delta
@@ -479,14 +491,14 @@ export const GET = withAuth(async (request: NextRequest) => {
     const orderBy =
       view === 'incoming'
         ? incomingOrderBy
-        : view === 'recent' || view === 'all'
+        : view === 'recent' || view === 'all' || view === 'activity'
           ? `ORDER BY COALESCE(rs_agg.last_scan::text, r.received_at::text, rl.created_at::text) DESC, rl.id DESC`
           : view === 'received'
             ? `ORDER BY COALESCE(rl.updated_at::text, rl.created_at::text) DESC, rl.id DESC`
             : `ORDER BY COALESCE(rl.zoho_last_modified_time, rl.created_at::text) DESC, rl.id DESC`;
     // The lateral aggregate is needed for view=recent and view=all so the
     // most recently paired cartons bubble up. Cheap at this scale.
-    const recentScansJoin = view === 'recent' || view === 'all'
+    const recentScansJoin = view === 'recent' || view === 'all' || view === 'activity'
       ? `LEFT JOIN LATERAL (
             SELECT MAX(rs.scanned_at) AS last_scan
             FROM receiving_scans rs
@@ -499,7 +511,7 @@ export const GET = withAuth(async (request: NextRequest) => {
     const lineFetchLimit = view === 'all' ? Math.min(limit + 200, 600) : limit;
     values.push(lineFetchLimit, offset);
 
-    const lastScanSelect = view === 'recent' || view === 'all'
+    const lastScanSelect = view === 'recent' || view === 'all' || view === 'activity'
       ? `, rs_agg.last_scan::text AS last_scan_at`
       : '';
 

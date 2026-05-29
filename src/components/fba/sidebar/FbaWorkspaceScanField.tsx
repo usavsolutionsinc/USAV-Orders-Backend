@@ -34,6 +34,8 @@ export interface FbaWorkspaceScanFieldProps {
   staffId?: number | string | null;
   scanEnabled?: boolean;
   showTrackingCard?: boolean;
+  /** Locks the scan flow per page: 'plan' on the plan page, 'select' on combine. */
+  scanMode?: 'plan' | 'select';
 }
 
 /** Sidebar: Welcome + FBA goal + scan, plus guarded plan pairing for the active print selection. */
@@ -42,6 +44,7 @@ export function FbaWorkspaceScanField({
   staffId = null,
   scanEnabled = true,
   showTrackingCard = true,
+  scanMode,
 }: FbaWorkspaceScanFieldProps) {
   const { clearSelection, patchTracking, selection, trackingByPlan } = useFbaWorkspace();
 
@@ -197,6 +200,7 @@ export function FbaWorkspaceScanField({
             fbaScanOnly
             showLabels={false}
             ignoreUrlPlan
+            scanMode={scanMode}
             workspaceTheme={stationTheme}
             techStaffIdOverride={effectiveStaffId ?? undefined}
           />

@@ -2,8 +2,10 @@
 
 import { Suspense, useCallback, useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
-import { AnimatePresence } from 'framer-motion';
-import { Loader2 } from '@/components/Icons';
+import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
+import { Loader2, Package } from '@/components/Icons';
+import { StickyActionBar } from '@/design-system/components/StickyActionBar';
+import { stationThemeColors } from '@/utils/staff-colors';
 import { FbaQuickAddFnskuModal } from '@/components/fba/FbaQuickAddFnskuModal';
 import { FbaCreatePlanModal } from '@/components/fba/FbaCreatePlanModal';
 import { FbaErrorState } from '@/components/fba/FbaStateShells';
@@ -14,10 +16,9 @@ import { useStationTheme } from '@/hooks/useStationTheme';
 import { useAuth } from '@/contexts/AuthContext';
 import { useFbaRealtimeInvalidation } from '@/hooks/useFbaRealtimeInvalidation';
 import { getCurrentPSTDateKey, toPSTDateKey } from '@/utils/date';
-import { USAV_REFRESH_DATA, FBA_PRINT_SHIPPED, FBA_BOARD_INJECT_ITEM, FBA_BOARD_REMOVE_ITEMS } from '@/lib/fba/events';
+import { USAV_REFRESH_DATA, FBA_PRINT_SHIPPED, FBA_BOARD_INJECT_ITEM, FBA_BOARD_REMOVE_ITEMS, FBA_BOARD_TOGGLE_ALL, FBA_COMBINE_STARTED } from '@/lib/fba/events';
 import { FbaSidebarPanel } from '@/components/fba/sidebar';
-import { FbaPairedReviewPanel } from '@/components/fba/sidebar/FbaPairedReviewPanel';
-import { FbaActiveShipments } from '@/components/fba/sidebar/FbaActiveShipments';
+import { FbaCombineWorkspace } from '@/components/fba/sidebar/FbaCombineWorkspace';
 import { useFbaBoardSelection } from '@/components/fba/hooks/useFbaBoardSelection';
 import { RouteShell } from '@/design-system/components/RouteShell';
 import { resolveFbaMode } from '@/lib/fba/fba-modes';
@@ -139,10 +140,35 @@ function FbaPageContent() {
   const boardEmptyMessage =
     activeMode === 'plan' ? 'No items in planning' : 'No packed items to combine';
 
-  // ── Combine workspace (center-right): board selection drives the combine
-  //    review form; active shipments edit inline beneath it. ──────────────
+  // ── Combine workspace (center crossfade): board selection drives the kanban
+  //    builder; the workspace crossfades over the board, receiving-style.
+  //    Existing/combined shipments are browsed + edited from the sidebar Recent
+  //    tab, so the center is purely the build surface. ──────────────────────
   const boardSelection = useFbaBoardSelection({ includePairedSelection: true });
-  const [pairedExpanded, setPairedExpanded] = useState(true);
+  const prefersReducedMotion = useReducedMotion();
+
+  // The combine workspace opens only when the user presses "Combine items" — not
+  // on first selection — so they can multi-select packed items first. Leaving
+  // combine mode resets it.
+  const [combineOpen, setCombineOpen] = useState(false);
+  useEffect(() => {
+    if (activeMode !== 'combine') setCombineOpen(false);
+  }, [activeMode]);
+
+  const selectedUnits = useMemo(
+    () => boardSelection.reduce((sum, i) => sum + Math.max(1, Number(i.actual_qty || 0)), 0),
+    [boardSelection],
+  );
+  const workspaceActive = activeMode === 'combine' && combineOpen;
+  // Action bar shows once items are selected but the workspace isn't open yet.
+  const showCombineBar = activeMode === 'combine' && !combineOpen && boardSelection.length > 0;
+
+  const handleStartCombine = useCallback(() => {
+    setCombineOpen(true);
+    // Flip the sidebar Recent/Packed pills to Packed so more packed items are
+    // easy to select and add while combining.
+    window.dispatchEvent(new CustomEvent(FBA_COMBINE_STARTED));
+  }, []);
 
   // ── Detail panel ────────────────────────────────────────────────────────
   const [detailItem, setDetailItem] = useState<FbaBoardItem | null>(null);
@@ -173,9 +199,11 @@ function FbaPageContent() {
                   </p>
                 </div>
               ) : (
-                <div className="flex min-h-0 min-w-0 flex-1 overflow-hidden">
-                  {/* Center: the board (PLANNED in plan mode, PACKED queue in combine) */}
-                  <div className="relative min-h-0 min-w-0 flex-1 overflow-hidden">
+                <div className="relative flex min-h-0 min-w-0 flex-1 overflow-hidden">
+                  {/* Board (PLANNED in plan mode, PACKED queue in combine). Stays
+                      mounted under the combine workspace so the sidebar Packed
+                      rail can keep folding items into the selection. */}
+                  <div className="min-h-0 min-w-0 flex-1 overflow-hidden">
                     <FbaBoardTable
                       items={filteredPendingItems}
                       loading={loading && !board.pending.length}
@@ -189,18 +217,69 @@ function FbaPageContent() {
                     />
                   </div>
 
-                  {/* Right fill-out (combine only): combine-review form + active
-                      shipment editing — the receiving-style center+right pattern. */}
+                  {/* Selection action bar: floats over the board once packed
+                      items are selected. Pressing "Combine items" is what opens
+                      the workspace (not the first selection) so multiple items
+                      can be picked first. */}
+                  <AnimatePresence>
+                    {showCombineBar && (
+                      <motion.div
+                        key="fba-combine-bar"
+                        initial={prefersReducedMotion ? { opacity: 0 } : { opacity: 0, y: 16 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={prefersReducedMotion ? { opacity: 0 } : { opacity: 0, y: 16 }}
+                        transition={{ duration: 0.18, ease: [0.22, 1, 0.36, 1] }}
+                        className="absolute inset-x-0 bottom-0 z-20"
+                      >
+                        <StickyActionBar
+                          maxWidth="max-w-none"
+                          leading={
+                            <span className="text-micro font-black uppercase tracking-widest tabular-nums text-gray-500">
+                              {boardSelection.length} item{boardSelection.length === 1 ? '' : 's'} · {selectedUnits} unit{selectedUnits === 1 ? '' : 's'} selected
+                            </span>
+                          }
+                          secondary={{
+                            label: 'Clear',
+                            onClick: () =>
+                              window.dispatchEvent(new CustomEvent(FBA_BOARD_TOGGLE_ALL, { detail: 'none' })),
+                          }}
+                          primary={{
+                            label: 'Combine items',
+                            onClick: handleStartCombine,
+                            icon: <Package className="h-4 w-4 shrink-0" />,
+                            toneClasses: {
+                              bg: stationThemeColors[stationTheme].bg,
+                              hover: stationThemeColors[stationTheme].hover,
+                            },
+                          }}
+                        />
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+
+                  {/* Combine workspace (combine mode only): crossfades over the
+                      board after "Combine items" is pressed — the same in-region
+                      switch receiving uses. Always mounted (opacity-crossfaded)
+                      so FbaActiveShipments keeps listening for open-editor. */}
                   {activeMode === 'combine' && (
-                    <aside className="hidden w-[384px] shrink-0 flex-col overflow-y-auto border-l border-zinc-200/80 bg-white scrollbar-hide lg:flex">
-                      <FbaPairedReviewPanel
+                    <motion.div
+                      className="absolute inset-0 z-10 bg-white"
+                      initial={false}
+                      animate={
+                        prefersReducedMotion
+                          ? { opacity: workspaceActive ? 1 : 0 }
+                          : { opacity: workspaceActive ? 1 : 0, y: workspaceActive ? 0 : 6 }
+                      }
+                      transition={{ duration: 0.18, ease: [0.22, 1, 0.36, 1] }}
+                      style={{ pointerEvents: workspaceActive ? 'auto' : 'none' }}
+                      aria-hidden={!workspaceActive}
+                    >
+                      <FbaCombineWorkspace
                         selectedItems={boardSelection}
                         stationTheme={stationTheme}
-                        expanded={pairedExpanded}
-                        onToggleExpanded={() => setPairedExpanded((v) => !v)}
+                        onClose={() => setCombineOpen(false)}
                       />
-                      <FbaActiveShipments stationTheme={stationTheme} />
-                    </aside>
+                    </motion.div>
                   )}
                 </div>
               )}

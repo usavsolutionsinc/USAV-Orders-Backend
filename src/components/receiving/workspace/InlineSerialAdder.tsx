@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { Barcode, X } from '@/components/Icons';
+import { Barcode, Plus, X } from '@/components/Icons';
 import { SerialChipWithMenu } from '@/components/receiving/workspace/SerialCard';
 
 interface SavedSerial {
@@ -132,7 +132,10 @@ export function InlineSerialAdder({
   };
 
   return (
-    <div className="space-y-2">
+    // items-end: the +/save button bottom-aligns with the input only, so the
+    // serial chips sit above the input's right edge — never above the button.
+    <div className="flex items-end gap-2">
+      <div className="min-w-0 flex-1 space-y-2">
       <div className="flex items-start justify-between gap-2">
         <span className="shrink-0 pt-0.5 text-eyebrow font-black uppercase tracking-widest text-gray-500">
           Serial numbers
@@ -182,8 +185,7 @@ export function InlineSerialAdder({
         ) : null}
       </div>
 
-      <div className="flex items-stretch gap-2">
-        <div className="relative flex-1">
+        <div className="relative">
           <Barcode
             className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-gray-400"
             aria-hidden
@@ -226,17 +228,19 @@ export function InlineSerialAdder({
             </button>
           ) : null}
         </div>
-        <button
-          type="button"
-          onClick={() => void submit()}
-          disabled={!scan.trim() || isSubmitting || disabled}
-          className={`inline-flex h-10 shrink-0 items-center justify-center rounded-lg px-3.5 text-caption font-black uppercase tracking-wider text-white shadow-sm transition-colors disabled:cursor-not-allowed disabled:bg-gray-300 ${
-            editing ? 'bg-amber-500 hover:bg-amber-600' : 'bg-blue-600 hover:bg-blue-700'
-          }`}
-        >
-          {isSubmitting ? 'Saving…' : editing ? 'Save' : 'Add'}
-        </button>
       </div>
+      <button
+        type="button"
+        onClick={() => void submit()}
+        disabled={!scan.trim() || isSubmitting || disabled}
+        aria-label={editing ? 'Save serial' : 'Add serial'}
+        title={editing ? 'Save serial' : 'Add serial'}
+        className={`inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-lg text-white shadow-sm transition-colors disabled:cursor-not-allowed disabled:bg-gray-300 ${
+          editing ? 'bg-amber-500 hover:bg-amber-600' : 'bg-blue-600 hover:bg-blue-700'
+        }`}
+      >
+        <Plus className="h-4 w-4" />
+      </button>
     </div>
   );
 }

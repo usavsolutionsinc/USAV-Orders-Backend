@@ -2,6 +2,8 @@
 
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { dispatchCloseShippedDetails, dispatchDashboardAndStationRefresh } from '@/utils/events';
+import { fetchWithStepUp } from '@/components/auth/StepUpModal';
+import { useStepUp } from '@/components/providers/StepUpProvider';
 
 export type DeleteOrderRowPayload =
   | { rowSource?: 'order'; orderId?: number; orderIds?: number[] }
@@ -10,6 +12,9 @@ export type DeleteOrderRowPayload =
 
 export function useDeleteOrderRow() {
   const queryClient = useQueryClient();
+  // Deletes are step-up gated (orders.void). On a 403 STEPUP_REQUIRED this
+  // prompts for PIN / passkey and retries the request once.
+  const requestStepUp = useStepUp();
 
   return useMutation({
     mutationFn: async (payload: DeleteOrderRowPayload) => {
@@ -34,11 +39,15 @@ export function useDeleteOrderRow() {
           ? { exceptionId: payload.exceptionId, exceptionIds: payload.exceptionIds }
           : { orderId: payload.orderId, orderIds: payload.orderIds };
 
-      const res = await fetch(endpoint, {
-        method: isPackingLog ? 'DELETE' : 'POST',
-        headers: body ? { 'Content-Type': 'application/json' } : undefined,
-        body: body ? JSON.stringify(body) : undefined,
-      });
+      const res = await fetchWithStepUp(
+        endpoint,
+        {
+          method: isPackingLog ? 'DELETE' : 'POST',
+          headers: body ? { 'Content-Type': 'application/json' } : undefined,
+          body: body ? JSON.stringify(body) : undefined,
+        },
+        requestStepUp,
+      );
 
       const data = await res.json().catch(() => ({}));
       if (!res.ok || !data?.success) {

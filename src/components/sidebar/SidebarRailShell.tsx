@@ -90,7 +90,7 @@ export function SidebarRailShell<TRow>({
   });
 
   const [localRows, setLocalRows] = useState<TRow[] | null>(null);
-  useEffect(() => { if (data) setLocalRows(data); }, [data]);
+  useEffect(() => { if (Array.isArray(data)) setLocalRows(data); }, [data]);
 
   useEffect(() => {
     if (!updateEvent) return;
@@ -117,7 +117,10 @@ export function SidebarRailShell<TRow>({
     return () => { refreshEvents.forEach((ev) => window.removeEventListener(ev, handler)); };
   }, [queryClient, queryKey, refreshEvents]);
 
-  const allRows = localRows ?? [];
+  // Defensive: a queryKey collision (another useQuery caching a different shape
+  // under the same key) can hand us a non-array `data`. Never let that crash
+  // the whole sidebar — coerce to [] and render empty instead.
+  const allRows = Array.isArray(localRows) ? localRows : [];
   const rows = useMemo(() => {
     const top = allRows.slice(0, limit);
     if (selectedId == null) return top;
@@ -344,7 +347,7 @@ function RailRow<TRow>({
         onClick={onClick}
         className={`relative flex w-full gap-2.5 text-left transition-colors ${isGrouped ? 'pl-3 pr-2' : 'px-2'} ${
           isSelected
-            ? 'items-center rounded-xl border border-blue-400 bg-blue-50 py-2.5'
+            ? 'items-center rounded-md bg-blue-50 ring-1 ring-inset ring-blue-400 py-1.5'
             : `items-center rounded-md py-1.5 ${isFocused ? 'bg-gray-50 ring-1 ring-inset ring-gray-200' : 'hover:bg-gray-50'}`
         }`}
       >

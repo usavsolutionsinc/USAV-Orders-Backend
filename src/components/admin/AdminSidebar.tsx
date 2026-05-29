@@ -2,7 +2,7 @@
 
 import { useMemo } from 'react';
 import { sidebarHeaderBandClass } from '@/components/layout/header-shell';
-import { ChevronLeft } from '@/components/Icons';
+import { ChevronDown, ShieldCheck } from '@/components/Icons';
 import { SidebarSectionList, type SidebarSection } from '@/components/sidebar/SidebarSectionList';
 import { useAuth } from '@/contexts/AuthContext';
 import { ADMIN_SECTION_OPTIONS, type AdminSection } from './admin-sections';
@@ -87,17 +87,16 @@ export function AdminSidebar({ activeSection, onSectionChange }: AdminSidebarPro
             <button
               type="button"
               onClick={() => onSectionChange('overview')}
-              className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm font-medium text-slate-700 hover:bg-slate-100"
+              className="group flex w-full items-center gap-3 rounded-md px-3 py-2 text-left text-sm font-medium text-slate-700 hover:bg-slate-100 transition-colors"
               aria-label="Back to admin overview"
             >
-              <ChevronLeft className="h-4 w-4 text-slate-500" />
-              <span>Admin</span>
-              {sectionLabel && (
-                <>
-                  <span className="text-slate-400">·</span>
-                  <span className="text-slate-900">{sectionLabel}</span>
-                </>
-              )}
+              <ShieldCheck className="h-5 w-5 text-blue-600" />
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-sm font-black tracking-tight text-gray-900 uppercase tracking-wider">
+                  Admin{sectionLabel ? ` · ${sectionLabel}` : ''}
+                </p>
+              </div>
+              <ChevronDown className="h-4 w-4 opacity-0 group-hover:opacity-100 transition-opacity text-gray-400" />
             </button>
           </div>
           <div className="min-h-0 flex-1 overflow-hidden">{sectionPanel}</div>
