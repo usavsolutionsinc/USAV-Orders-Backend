@@ -5,10 +5,10 @@ flowchart LR
   click hooks "src/hooks/_lifecycle.ts" "Open src/hooks/_lifecycle.ts"
   utils["utils"]
   click utils "src/utils/upnext-shared.ts" "Open src/utils/upnext-shared.ts"
-  components_Icons_tsx["components/Icons.tsx"]
-  click components_Icons_tsx "src/components/Icons.tsx" "Open src/components/Icons.tsx"
   components_sidebar["components/sidebar"]
   click components_sidebar "src/components/sidebar/DeviceModeToggle.tsx" "Open src/components/sidebar/DeviceModeToggle.tsx"
+  components_Icons_tsx["components/Icons.tsx"]
+  click components_Icons_tsx "src/components/Icons.tsx" "Open src/components/Icons.tsx"
   design_system["design-system"]
   click design_system "src/design-system/index.ts" "Open src/design-system/index.ts"
   components_ui["components/ui"]
@@ -91,10 +91,10 @@ flowchart LR
   click components_sku "src/components/sku/BinRowDetailsSheet.tsx" "Open src/components/sku/BinRowDetailsSheet.tsx"
   lib_shipping["lib/shipping"]
   click lib_shipping "src/lib/shipping/repository.ts" "Open src/lib/shipping/repository.ts"
-  lib_ebay["lib/ebay"]
-  click lib_ebay "src/lib/ebay/token-refresh.ts" "Open src/lib/ebay/token-refresh.ts"
   lib_ai["lib/ai"]
   click lib_ai "src/lib/ai/date-range.test.ts" "Open src/lib/ai/date-range.test.ts"
+  lib_receiving["lib/receiving"]
+  click lib_receiving "src/lib/receiving/zoho-serial-sync.ts" "Open src/lib/receiving/zoho-serial-sync.ts"
   app_fba["app/fba"]
   click app_fba "src/app/fba/page.tsx" "Open src/app/fba/page.tsx"
   components_MultiSkuSnBarcode_tsx["components/MultiSkuSnBarcod…"]
@@ -103,22 +103,22 @@ flowchart LR
   click components_PendingOrdersTable_tsx "src/components/PendingOrdersTable.tsx" "Open src/components/PendingOrdersTable.tsx"
   components_products["components/products"]
   click components_products "src/components/products/types.ts" "Open src/components/products/types.ts"
+  components_auth["components/auth"]
+  click components_auth "src/components/auth/StepUpModal.tsx" "Open src/components/auth/StepUpModal.tsx"
   lib_dashboard_table_data_ts["lib/dashboard-table-data.ts"]
   click lib_dashboard_table_data_ts "src/lib/dashboard-table-data.ts" "Open src/lib/dashboard-table-data.ts"
   lib_barcode_routing_ts["lib/barcode-routing.ts"]
   click lib_barcode_routing_ts "src/lib/barcode-routing.ts" "Open src/lib/barcode-routing.ts"
   lib_zoho["lib/zoho"]
   click lib_zoho "src/lib/zoho/mock.ts" "Open src/lib/zoho/mock.ts"
+  lib_ebay["lib/ebay"]
+  click lib_ebay "src/lib/ebay/token-refresh.ts" "Open src/lib/ebay/token-refresh.ts"
   lib_inventory["lib/inventory"]
   click lib_inventory "src/lib/inventory/internal-gtin.ts" "Open src/lib/inventory/internal-gtin.ts"
   app_settings["app/settings"]
   click app_settings "src/app/settings/page.tsx" "Open src/app/settings/page.tsx"
   app_admin["app/admin"]
   click app_admin "src/app/admin/page.tsx" "Open src/app/admin/page.tsx"
-  features["features"]
-  click features "src/features/operations/operations-data-sources.ts" "Open src/features/operations/operations-data-sources.ts"
-  components_UpNextOrder_tsx["components/UpNextOrder.tsx"]
-  click components_UpNextOrder_tsx "src/components/UpNextOrder.tsx" "Open src/components/UpNextOrder.tsx"
   app_admin --> components_admin
   app_admin --> components_ui
   app_admin --> lib_auth
@@ -135,6 +135,7 @@ flowchart LR
   app_api --> lib_jobs
   app_api --> lib_neon
   app_api --> lib_realtime
+  app_api --> lib_receiving
   app_api --> lib_scan_resolver_ts
   app_api --> lib_shipping
   app_api --> lib_tenancy
@@ -149,6 +150,7 @@ flowchart LR
   app_fba --> hooks
   app_fba --> lib_fba
   app_fba --> utils
+  app_layout_tsx --> components_auth
   app_layout_tsx --> components_layout
   app_layout_tsx --> components_station
   app_layout_tsx --> contexts
@@ -221,12 +223,6 @@ flowchart LR
   components_TechDashboard_tsx --> hooks
   components_TechDashboard_tsx --> lib_neon
   components_TechDashboard_tsx --> utils
-  components_UpNextOrder_tsx --> components_Icons_tsx
-  components_UpNextOrder_tsx --> components_station
-  components_UpNextOrder_tsx --> components_ui
-  components_UpNextOrder_tsx --> design_system
-  components_UpNextOrder_tsx --> hooks
-  components_UpNextOrder_tsx --> utils
   components_admin --> components_Icons_tsx
   components_admin --> components_layout
   components_admin --> components_receiving
@@ -243,6 +239,9 @@ flowchart LR
   components_admin --> lib_tenancy
   components_admin --> lib_toast_ts
   components_admin --> utils
+  components_auth --> contexts
+  components_auth --> design_system
+  components_auth --> utils
   components_barcode --> components_Icons_tsx
   components_barcode --> components_ui
   components_barcode --> components_warehouse
@@ -304,6 +303,7 @@ flowchart LR
   components_manuals --> lib_toast_ts
   components_manuals --> utils
   components_mobile --> components_Icons_tsx
+  components_mobile --> components_auth
   components_mobile --> components_layout
   components_mobile --> components_shipped
   components_mobile --> components_sidebar
@@ -388,6 +388,7 @@ flowchart LR
   components_sidebar --> lib_fba
   components_sidebar --> lib_neon
   components_sidebar --> lib_print
+  components_sidebar --> lib_receiving
   components_sidebar --> lib_toast_ts
   components_sidebar --> utils
   components_sku --> components_Icons_tsx
@@ -396,7 +397,6 @@ flowchart LR
   components_sku --> hooks
   components_sku --> lib_realtime
   components_station --> components_Icons_tsx
-  components_station --> components_UpNextOrder_tsx
   components_station --> components_fba
   components_station --> components_layout
   components_station --> components_shipped
@@ -408,6 +408,7 @@ flowchart LR
   components_station --> lib_fba
   components_station --> lib_neon
   components_station --> lib_realtime
+  components_station --> lib_receiving
   components_station --> lib_scan_resolver_ts
   components_station --> lib_toast_ts
   components_station --> lib_tracking_format_ts
@@ -471,13 +472,8 @@ flowchart LR
   design_system --> hooks
   design_system --> lib_scan_resolver_ts
   design_system --> utils
-  features --> components_Icons_tsx
-  features --> components_PendingOrdersTable_tsx
-  features --> contexts
-  features --> design_system
-  features --> hooks
-  features --> utils
   hooks --> components_admin
+  hooks --> components_auth
   hooks --> components_barcode
   hooks --> components_fba
   hooks --> components_inventory
@@ -531,6 +527,10 @@ flowchart LR
   lib_realtime --> lib_db_ts
   lib_realtime --> lib_tenancy
   lib_realtime --> utils
+  lib_receiving --> lib_db_ts
+  lib_receiving --> lib_neon
+  lib_receiving --> lib_realtime
+  lib_receiving --> utils
   lib_scan_resolver_ts --> lib_tracking_format_ts
   lib_scan_resolver_ts --> utils
   lib_shipping --> lib_db_ts

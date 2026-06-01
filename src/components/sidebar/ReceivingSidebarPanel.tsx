@@ -47,6 +47,7 @@ import {
   type ReceivingSelectLineDetail,
 } from '@/components/sidebar/receiving/receiving-sidebar-shared';
 import { clearReceivingHistoryUrlParams } from '@/lib/receiving-history-search';
+import { resolveReceivingCodeToLine } from '@/lib/testing/resolve-testing-scan';
 import { useStationTheme } from '@/hooks/useStationTheme';
 
 
@@ -628,6 +629,44 @@ export function ReceivingSidebarPanel() {
 
     void (async () => {
       try {
+        // Serial / unit / carton-handle / receiving-id scan → jump straight to
+        // the PO line it belongs to, bypassing carrier tracking intake. Only
+        // short-circuits on a hit; tracking numbers and anything unrecognised
+        // fall through to the normal lookup-po flow below untouched.
+        try {
+          const code = await resolveReceivingCodeToLine(trackingNumber);
+          if (code && (code.kind === 'line' || code.kind === 'multi')) {
+            const rows = code.kind === 'line' ? [code.row] : code.rows;
+            if (rows.length > 0) {
+              window.dispatchEvent(
+                new CustomEvent('receiving-lines-prepended', { detail: rows }),
+              );
+            }
+            const openRows = rows.filter(
+              (r) => r.quantity_expected == null || r.quantity_received < (r.quantity_expected ?? 0),
+            );
+            const pick =
+              code.kind === 'line'
+                ? code.row
+                : openRows.length === 1
+                  ? openRows[0]
+                  : openRows[0] ?? rows[0] ?? null;
+            setScanMatchedRows(rows);
+            setLineAccordionBootstrap('default');
+            setSelectedLine(pick);
+            setScanDriven(true);
+            if (code.via === 'serial') {
+              toast.success('Found via serial number', {
+                description: 'Jumped to the PO that received this unit.',
+              });
+            }
+            window.dispatchEvent(new CustomEvent('receiving-scan-resolved'));
+            return;
+          }
+        } catch {
+          /* fall through to carrier tracking intake */
+        }
+
         const res = await fetch('/api/receiving/lookup-po', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },

@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { toast } from '@/lib/toast';
 import { Loader2, Printer } from '@/components/Icons';
 import { StickyActionBar } from '@/design-system/components/StickyActionBar';
@@ -16,8 +17,10 @@ import { copyToClipboard } from '@/utils/_dom';
 import { ReceivingCartonStaffDropdown } from '@/components/sidebar/receiving/ReceivingCartonStaffDropdown';
 import { LabelPreviewCard } from '@/components/labels/LabelPreviewCard';
 import { TestingLinePanel, type UnitSlotSerial } from '@/components/tech/TestingUnitSlots';
+import { TestingChecklistCard } from '@/components/tech/TestingChecklistCard';
 import {
   unitStatusToVerdict,
+  workflowToVerdict,
   type TestingVerdict,
 } from '@/components/receiving/workspace/TestingStatusPills';
 import {
@@ -103,6 +106,40 @@ export function TechTestingWorkspace({ staffId, selectedLineId, onSelectedLineCh
   const [copyingAll, setCopyingAll] = useState(false);
 
   const lastSelectedRef = useRef<number | null>(null);
+  const queryClient = useQueryClient();
+
+  /**
+   * Write a unit's new `current_status` straight into the accordion's
+   * `['receiving-siblings', receivingId]` query cache — the same cache the
+   * verdict pills render from. This keeps the optimistic verdict in the
+   * authoritative store (instead of a separate event-bus copy that can drift),
+   * so the highlight reflects the click immediately and isn't lost when an
+   * unrelated refetch settles.
+   */
+  const patchSiblingUnitStatus = useCallback(
+    (receivingId: number, lineId: number, serialId: number, status: string) => {
+      queryClient.setQueryData(
+        ['receiving-siblings', receivingId],
+        (prev: { success?: boolean; receiving_lines?: ReceivingLineRow[] } | undefined) => {
+          if (!prev?.receiving_lines) return prev;
+          return {
+            ...prev,
+            receiving_lines: prev.receiving_lines.map((ln) =>
+              ln.id === lineId
+                ? {
+                    ...ln,
+                    serials: (ln.serials ?? []).map((s) =>
+                      s.id === serialId ? { ...s, current_status: status } : s,
+                    ),
+                  }
+                : ln,
+            ),
+          };
+        },
+      );
+    },
+    [queryClient],
+  );
 
   // Listen for `receiving-select-line` — same event the rail + scan resolver
   // fire. Mirrors the contract LineEditPanel observes from the receiving page.
@@ -313,7 +350,8 @@ export function TechTestingWorkspace({ staffId, selectedLineId, onSelectedLineCh
         }
 
         // Patch the local row's serial entry with the unit's new
-        // current_status so the pills re-render without a refetch.
+        // current_status so the workspace's print/slot logic (which reads
+        // `row.serials`) sees the verdict without a refetch.
         setRow((current) => {
           if (!current || current.id !== lineId) return current;
           const nextSerials = (current.serials ?? []).map((s) =>
@@ -323,6 +361,19 @@ export function TechTestingWorkspace({ staffId, selectedLineId, onSelectedLineCh
           );
           return { ...current, serials: nextSerials };
         });
+
+        // Mirror the same status into the accordion's query cache — the pills'
+        // actual source of truth — so the verdict highlight holds immediately
+        // and survives an unrelated refetch settling.
+        const nextStatus: string | undefined = data.unit?.current_status;
+        const receivingId = rowRef.current?.receiving_id;
+        if (nextStatus && typeof receivingId === 'number') {
+          patchSiblingUnitStatus(receivingId, lineId, serial.id, nextStatus);
+        }
+
+        // A verdict was just recorded → refresh the "You Tested" rail so a
+        // newly-tested line appears in this staff's recent feed.
+        window.dispatchEvent(new CustomEvent('testing-result-recorded'));
 
         // Apply the server-computed line rollup so the rail + accordion
         // siblings live-update.
@@ -350,7 +401,7 @@ export function TechTestingWorkspace({ staffId, selectedLineId, onSelectedLineCh
         setIsMutating(false);
       }
     },
-    [notes],
+    [notes, patchSiblingUnitStatus],
   );
 
   // ── Per-line serial mgmt ─────────────────────────────────────────────────
@@ -488,8 +539,16 @@ export function TechTestingWorkspace({ staffId, selectedLineId, onSelectedLineCh
       for (const s of targets) {
         await handleSlotVerdict(lineId, s, next);
       }
+      // The verdict pills + serial chips render off the PoLinesAccordion's
+      // own serial cache, which only live-updates from `receiving-line-updated`
+      // patches that carry a fresh `serials` array. handleSlotVerdict's rollup
+      // dispatch omits the per-unit `current_status`, so without this the pill
+      // highlight stays on the previous verdict until the next full refetch.
+      // Re-fetch once (not per-unit) so the accordion sees every unit's new
+      // status and `deriveLineVerdict` resolves to the verdict just applied.
+      await refreshLineWithSerials(lineId);
     },
-    [handleSlotVerdict],
+    [handleSlotVerdict, refreshLineWithSerials],
   );
 
   // ── Pass + Print ───────────────────────────────────────────────────────────
@@ -934,7 +993,7 @@ export function TechTestingWorkspace({ staffId, selectedLineId, onSelectedLineCh
                         lineId={line.id}
                         saved={lineSerials}
                         expected={line.quantity_expected ?? null}
-                        verdict={deriveLineVerdict(lineSerials)}
+                        verdict={deriveLineVerdict(lineSerials) ?? workflowToVerdict(line.workflow_status)}
                         isMutating={isMutating}
                         isSubmitting={serialSubmitting}
                         disabled={saving}
@@ -967,7 +1026,7 @@ export function TechTestingWorkspace({ staffId, selectedLineId, onSelectedLineCh
                         lineId={row.id}
                         saved={lineSerials}
                         expected={row.quantity_expected ?? null}
-                        verdict={deriveLineVerdict(lineSerials)}
+                        verdict={deriveLineVerdict(lineSerials) ?? workflowToVerdict(row.workflow_status)}
                         isMutating={isMutating}
                         isSubmitting={serialSubmitting}
                         disabled={!row.receiving_id || saving}
@@ -1016,6 +1075,10 @@ export function TechTestingWorkspace({ staffId, selectedLineId, onSelectedLineCh
                 className="mt-1.5 w-full resize-none rounded-md border border-gray-200 bg-white px-2 py-1.5 text-caption font-medium leading-snug text-gray-900 placeholder:text-gray-400 focus:border-blue-300 focus:outline-none focus:ring-2 focus:ring-blue-500/10"
               />
             </section>
+
+            {activeSerial ? (
+              <TestingChecklistCard serialUnitId={activeSerial.id} />
+            ) : null}
 
             {previewPayload && row.sku ? (
               <LabelPreviewCard

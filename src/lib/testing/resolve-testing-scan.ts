@@ -16,9 +16,19 @@ const UNIT_ID_RE = /^[A-Z0-9](?:[A-Z0-9-]{0,19})-\d{4}-\d{6}$/i;
 /** Zoho PO number, format `PO-1234` (case-insensitive). */
 const PO_NUMBER_RE = /^PO-?\d+$/i;
 
+/** How a scan was matched — lets the UI tell the operator what it recognised. */
+export type ResolvedVia = 'handle' | 'unit_id' | 'serial' | 'receiving_id' | 'po' | 'tracking';
+
+/**
+ * Explicit search type the operator armed via the scan-bar mode buttons. When
+ * set, auto-detection is bypassed and ONLY this type is searched — matching the
+ * shipping station's "arm a mode, next scan is forced" behaviour.
+ */
+export type ForcedTestingType = 'tracking' | 'po' | 'serial';
+
 export type ResolvedTestingScan =
-  | { kind: 'line'; row: ReceivingLineRow }
-  | { kind: 'multi'; rows: ReceivingLineRow[]; receivingId: number }
+  | { kind: 'line'; row: ReceivingLineRow; via?: ResolvedVia }
+  | { kind: 'multi'; rows: ReceivingLineRow[]; receivingId: number; via?: ResolvedVia }
   | { kind: 'not_found'; query: string }
   | { kind: 'error'; message: string };
 
@@ -47,16 +57,82 @@ async function fetchLinesByReceivingId(receivingId: number) {
 }
 
 async function fetchLinesByPoNumber(poNumber: string) {
+  // The route filters by `search` + `searchField`, NOT a bare
+  // `zoho_purchaseorder_number` param — `searchField=po` matches the scan
+  // against rl.zoho_purchaseorder_id / rl.zoho_purchaseorder_number /
+  // r.zoho_purchaseorder_number. `view=all` widens the scope to the full
+  // dataset (not just the current week).
   const params = new URLSearchParams({
     limit: '50',
     offset: '0',
     include: 'serials',
-    zoho_purchaseorder_number: poNumber,
+    view: 'all',
+    search_field: 'po',
+    search: poNumber,
   });
   const res = await fetch(`/api/receiving-lines?${params.toString()}`);
   if (!res.ok) throw new Error(`receiving-lines fetch failed (${res.status})`);
   const data = await res.json();
-  return (data?.receiving_lines ?? []) as ReceivingLineRow[];
+  const all = (data?.receiving_lines ?? []) as ReceivingLineRow[];
+  // ILIKE `%po%` can hit superstrings; keep only rows whose PO actually equals
+  // the scan (case-insensitive) so "PO-12" can't drag in "PO-1234".
+  const want = poNumber.trim().toUpperCase();
+  const exact = all.filter((row) => {
+    const candidates = [
+      row.zoho_purchaseorder_number,
+      (row as { receiving_zoho_purchaseorder_number?: string | null }).receiving_zoho_purchaseorder_number,
+      row.zoho_purchaseorder_id != null ? String(row.zoho_purchaseorder_id) : null,
+    ];
+    return candidates.some((c) => String(c ?? '').trim().toUpperCase() === want);
+  });
+  // Fall back to the ILIKE results if nothing matched exactly (e.g. the scan
+  // was a partial PO the operator expects to fuzzy-match).
+  return exact.length > 0 ? exact : all;
+}
+
+/**
+ * Find receiving lines whose serial ENDS WITH the scanned value — the
+ * "last 4 of the serial / PO" quick lookup. Uses the receiving-lines default
+ * search (ILIKE `%value%` across PO#, serial, sku, tracking) once, then splits
+ * the hits into true SUFFIX matches on a serial vs. on the PO number/id — so a
+ * short code behaves like "ends with", matching the last-4 chips elsewhere.
+ *
+ * Returns the two buckets separately so the caller can apply the precedence
+ * "serial first, then PO".
+ */
+async function fetchLinesByPartial(
+  value: string,
+): Promise<{ serialRows: ReceivingLineRow[]; poRows: ReceivingLineRow[] }> {
+  const params = new URLSearchParams({
+    limit: '25',
+    offset: '0',
+    include: 'serials',
+    view: 'all',
+    search: value,
+  });
+  const res = await fetch(`/api/receiving-lines?${params.toString()}`);
+  if (!res.ok) throw new Error(`receiving-lines fetch failed (${res.status})`);
+  const data = await res.json();
+  const all = (data?.receiving_lines ?? []) as ReceivingLineRow[];
+  const want = value.trim().toUpperCase();
+
+  const serialRows = all.filter((row) =>
+    (row.serials ?? []).some((s) =>
+      String(s.serial_number || '').trim().toUpperCase().endsWith(want),
+    ),
+  );
+  const poRows = all.filter((row) =>
+    [
+      row.zoho_purchaseorder_number,
+      (row as { receiving_zoho_purchaseorder_number?: string | null })
+        .receiving_zoho_purchaseorder_number,
+      row.zoho_purchaseorder_id != null ? String(row.zoho_purchaseorder_id) : null,
+    ]
+      .map((v) => String(v ?? '').trim().toUpperCase())
+      .some((v) => v.length > 0 && v.endsWith(want)),
+  );
+
+  return { serialRows, poRows };
 }
 
 async function fetchLinesByTracking(tracking: string) {
@@ -104,6 +180,34 @@ async function fetchLineById(lineId: number): Promise<ReceivingLineRow | null> {
 }
 
 /**
+ * Find the receiving line(s) that received a given physical serial number.
+ * Uses the receiving-lines `serial` search (which joins serial_units on
+ * origin_receiving_line_id) and then filters to an EXACT serial match so a
+ * short/partial scan can't drag in unrelated rows. This is the path for
+ * "scan the bare serial printed on the unit → jump to its PO".
+ */
+async function fetchLinesBySerial(serial: string): Promise<ReceivingLineRow[]> {
+  const params = new URLSearchParams({
+    limit: '10',
+    offset: '0',
+    include: 'serials',
+    view: 'all',
+    search_field: 'serial',
+    search: serial,
+  });
+  const res = await fetch(`/api/receiving-lines?${params.toString()}`);
+  if (!res.ok) throw new Error(`receiving-lines fetch failed (${res.status})`);
+  const data = await res.json();
+  const all = (data?.receiving_lines ?? []) as ReceivingLineRow[];
+  const want = serial.trim().toUpperCase();
+  return all.filter((row) =>
+    (row.serials ?? []).some(
+      (s) => String(s.serial_number || '').trim().toUpperCase() === want,
+    ),
+  );
+}
+
+/**
  * Resolve a tech-testing scan to one or more receiving lines. Accepted shapes:
  *
  *   • GS1 Digital Link URL (`/01/{gtin}/21/{serial}`) — printed unit QR
@@ -114,89 +218,185 @@ async function fetchLineById(lineId: number): Promise<ReceivingLineRow | null> {
  * Returns `multi` when a carton has >1 receiving_line so the workspace can
  * mount a picker; `line` when there is exactly one match.
  */
-export async function resolveTestingScan(raw: string): Promise<ResolvedTestingScan> {
+export async function resolveTestingScan(
+  raw: string,
+  opts?: { forcedType?: ForcedTestingType | null },
+): Promise<ResolvedTestingScan> {
   const value = (raw ?? '').trim();
   if (!value) return { kind: 'not_found', query: '' };
 
   try {
-    // 1. Canonical handle parsing via `routeScan` — same parser used app-wide
-    //    for receiving (`R-{id}`), receiving-line (`L-{id}`), serial-unit
-    //    (`U-{id}`), legacy `RCV-{id}`, and GS1 Digital Link URLs. Anything
-    //    `routeScan` knows about wins over the loose regexes below.
-    const routed = routeScan(value);
-    if (routed) {
-      if (routed.type === 'receiving') {
-        // `R-{id}` or legacy `RCV-{id}` — redirect path is /m/r/{id}.
-        const idMatch = routed.redirect?.match(/\/m\/r\/(\d+)$/);
-        const id = idMatch ? Number(idMatch[1]) : NaN;
-        if (Number.isFinite(id)) {
-          const rows = await fetchLinesByReceivingId(id);
-          if (rows.length === 0) return { kind: 'not_found', query: value };
-          if (rows.length === 1) return { kind: 'line', row: rows[0] };
-          return { kind: 'multi', rows, receivingId: id };
-        }
-      }
-      if (routed.type === 'receiving-line') {
-        // `L-{id}` — direct lookup by receiving_lines.id.
-        const idMatch = routed.redirect?.match(/\/m\/l\/(\d+)$/);
-        const id = idMatch ? Number(idMatch[1]) : NaN;
-        if (Number.isFinite(id)) {
-          const row = await fetchLineById(id);
-          if (row) return { kind: 'line', row };
-          return { kind: 'not_found', query: value };
-        }
-      }
-      if (routed.type === 'serial-unit') {
-        // `U-{id}` or GS1 `/01/{gtin}/21/{serial}` → originating line.
-        const idMatch = routed.redirect?.match(/\/m\/u\/(.+)$/);
-        const ref = idMatch ? decodeURIComponent(idMatch[1]) : '';
-        if (ref) {
-          const row = await fetchLineByUnitId(ref);
-          if (row) return { kind: 'line', row };
-          return { kind: 'not_found', query: ref };
-        }
-      }
+    // Armed mode — the operator picked a specific search type in the scan bar.
+    // Skip auto-detection and search only that type (full value or last-4).
+    if (opts?.forcedType) {
+      return resolveForcedTestingScan(value, opts.forcedType);
     }
 
-    // 2. GS1 Digital Link URL parsed by `parseScannedUrl` — kept as a
-    //    direct path for clarity (routeScan also handles this above but
-    //    falling through to scan-resolver gives us the unit-serial cleanly).
-    const parsedUrl = parseScannedUrl(value);
-    if (parsedUrl?.type === 'unit') {
-      const row = await fetchLineByUnitId(parsedUrl.unitSerial);
-      if (row) return { kind: 'line', row };
-      return { kind: 'not_found', query: parsedUrl.unitSerial };
-    }
+    // Codes first — handle / unit-id / raw serial / receiving id. Returns null
+    // only when the value isn't a code we recognise, so we can fall through to
+    // the PO# and tracking branches below.
+    const code = await resolveReceivingCodeToLine(value);
+    if (code) return code;
 
-    // 3. Unit ID typed directly (no handle prefix).
-    if (UNIT_ID_RE.test(value)) {
-      const row = await fetchLineByUnitId(value);
-      if (row) return { kind: 'line', row };
-      return { kind: 'not_found', query: value };
-    }
-
-    // 4. PO number
+    // PO number (PO-1234).
     if (PO_NUMBER_RE.test(value)) {
       const rows = await fetchLinesByPoNumber(value.toUpperCase());
       if (rows.length === 0) return { kind: 'not_found', query: value };
-      if (rows.length === 1) return { kind: 'line', row: rows[0] };
+      if (rows.length === 1) return { kind: 'line', row: rows[0], via: 'po' };
       const receivingId = rows.find((r) => r.receiving_id != null)?.receiving_id ?? 0;
-      return { kind: 'multi', rows, receivingId };
+      return { kind: 'multi', rows, receivingId, via: 'po' };
     }
 
-    // 5. Tracking number — `classifyInput` recognises every carrier in
-    //    TRACKING_PATTERNS. Same regex set the receiving sidebar uses, so
-    //    parity is automatic when carriers are added there.
+    // Tracking number — `classifyInput` recognises every carrier in
+    // TRACKING_PATTERNS. Same regex set the receiving sidebar uses.
     const classified = classifyInput(value);
     if (classified.type === 'tracking') {
       const rows = await fetchLinesByTracking(value);
       if (rows.length === 0) return { kind: 'not_found', query: value };
-      if (rows.length === 1) return { kind: 'line', row: rows[0] };
+      if (rows.length === 1) return { kind: 'line', row: rows[0], via: 'tracking' };
       const receivingId = rows.find((r) => r.receiving_id != null)?.receiving_id ?? 0;
-      return { kind: 'multi', rows, receivingId };
+      return { kind: 'multi', rows, receivingId, via: 'tracking' };
+    }
+
+    // Partial scan — the "last 4" quick lookup. Restricted to short alphanumeric
+    // scans (3–24 chars) so it can't swallow long codes. Precedence: serial
+    // first, then PO. >1 hit in a bucket → picker so the tech chooses the line.
+    if (/^[A-Za-z0-9-]{3,24}$/.test(value)) {
+      const { serialRows, poRows } = await fetchLinesByPartial(value);
+      // Serial suffix wins.
+      if (serialRows.length === 1) return { kind: 'line', row: serialRows[0], via: 'serial' };
+      if (serialRows.length > 1) {
+        const receivingId = serialRows.find((r) => r.receiving_id != null)?.receiving_id ?? 0;
+        return { kind: 'multi', rows: serialRows, receivingId, via: 'serial' };
+      }
+      // No serial match → fall back to PO suffix.
+      if (poRows.length === 1) return { kind: 'line', row: poRows[0], via: 'po' };
+      if (poRows.length > 1) {
+        const receivingId = poRows.find((r) => r.receiving_id != null)?.receiving_id ?? 0;
+        return { kind: 'multi', rows: poRows, receivingId, via: 'po' };
+      }
     }
 
     return { kind: 'not_found', query: value };
+  } catch (err) {
+    return {
+      kind: 'error',
+      message: err instanceof Error ? err.message : 'Scan resolution failed',
+    };
+  }
+}
+
+/** Shape a list of matched lines into a line / multi / not_found result. */
+function linesToResult(
+  rows: ReceivingLineRow[],
+  via: ResolvedVia,
+  query: string,
+): ResolvedTestingScan {
+  if (rows.length === 1) return { kind: 'line', row: rows[0], via };
+  if (rows.length > 1) {
+    const receivingId = rows.find((r) => r.receiving_id != null)?.receiving_id ?? 0;
+    return { kind: 'multi', rows, receivingId, via };
+  }
+  return { kind: 'not_found', query };
+}
+
+/**
+ * Forced single-type resolution for the scan-bar mode buttons. Searches ONLY
+ * the armed type — tracking, PO#, or serial — accepting either the full value
+ * or the last-4 (suffix). No auto-detection fallthrough.
+ */
+async function resolveForcedTestingScan(
+  value: string,
+  type: ForcedTestingType,
+): Promise<ResolvedTestingScan> {
+  if (type === 'tracking') {
+    return linesToResult(await fetchLinesByTracking(value), 'tracking', value);
+  }
+  // serial + PO share one search; pick the matching bucket (full or last-4).
+  const { serialRows, poRows } = await fetchLinesByPartial(value);
+  return type === 'serial'
+    ? linesToResult(serialRows, 'serial', value)
+    : linesToResult(poRows, 'po', value);
+}
+
+/**
+ * Resolve a scan that is a *code* — a carton/line/unit handle, a printed
+ * unit-id, a GS1 unit URL, a bare physical serial number, or a bare receiving
+ * (carton) id — to its receiving line. Deliberately excludes tracking numbers
+ * and PO numbers: returns `null` for those (and for anything unrecognised) so
+ * the receiving sidebar can fall through to its tracking-intake flow instead
+ * of mis-routing a carton scan.
+ *
+ * Shared by the testing sidebar ({@link resolveTestingScan}) and the receiving
+ * sidebar so "scan the serial / receiving id → jump to the PO" behaves
+ * identically on both pages.
+ */
+export async function resolveReceivingCodeToLine(
+  raw: string,
+): Promise<ResolvedTestingScan | null> {
+  const value = (raw ?? '').trim();
+  if (!value) return null;
+
+  try {
+    // 1. Canonical handles via `routeScan` — `R-{id}` carton, `L-{id}` line,
+    //    `U-{id}` unit, legacy `RCV-{id}`, and GS1 Digital Link URLs.
+    const routed = routeScan(value);
+    if (routed) {
+      if (routed.type === 'receiving') {
+        const id = Number(routed.redirect?.match(/\/m\/r\/(\d+)$/)?.[1]);
+        if (Number.isFinite(id)) {
+          const rows = await fetchLinesByReceivingId(id);
+          if (rows.length === 0) return { kind: 'not_found', query: value };
+          if (rows.length === 1) return { kind: 'line', row: rows[0], via: 'handle' };
+          return { kind: 'multi', rows, receivingId: id, via: 'handle' };
+        }
+      }
+      if (routed.type === 'receiving-line') {
+        const id = Number(routed.redirect?.match(/\/m\/l\/(\d+)$/)?.[1]);
+        if (Number.isFinite(id)) {
+          const row = await fetchLineById(id);
+          return row ? { kind: 'line', row, via: 'handle' } : { kind: 'not_found', query: value };
+        }
+      }
+      if (routed.type === 'serial-unit') {
+        const ref = routed.redirect?.match(/\/m\/u\/(.+)$/)?.[1];
+        if (ref) {
+          const row = await fetchLineByUnitId(decodeURIComponent(ref));
+          return row ? { kind: 'line', row, via: 'unit_id' } : { kind: 'not_found', query: value };
+        }
+      }
+    }
+
+    // 2. GS1 Digital Link URL (unit) parsed directly for the clean serial.
+    const parsedUrl = parseScannedUrl(value);
+    if (parsedUrl?.type === 'unit') {
+      const row = await fetchLineByUnitId(parsedUrl.unitSerial);
+      return row ? { kind: 'line', row, via: 'unit_id' } : { kind: 'not_found', query: parsedUrl.unitSerial };
+    }
+
+    // 3. Printed unit id typed directly (no handle prefix).
+    if (UNIT_ID_RE.test(value)) {
+      const row = await fetchLineByUnitId(value);
+      return row ? { kind: 'line', row, via: 'unit_id' } : { kind: 'not_found', query: value };
+    }
+
+    // Don't treat a tracking number as a serial — let the caller's tracking
+    // flow own it.
+    if (classifyInput(value).type === 'tracking') return null;
+
+    // 4. Bare physical serial number printed on the unit → its receiving line.
+    const bySerial = await fetchLinesBySerial(value);
+    if (bySerial.length === 1) return { kind: 'line', row: bySerial[0], via: 'serial' };
+    if (bySerial.length > 1) {
+      const receivingId = bySerial.find((r) => r.receiving_id != null)?.receiving_id ?? 0;
+      return { kind: 'multi', rows: bySerial, receivingId, via: 'serial' };
+    }
+
+    // A bare number is NOT treated as a carton id — cartons are only ever
+    // referenced by their `R-{id}` handle (resolved by routeScan above). Bare
+    // short codes fall through to the serial-then-PO partial match instead, so
+    // "last 4 of the PO" (e.g. 7001) isn't shadowed by a carton-id guess.
+    return null;
   } catch (err) {
     return {
       kind: 'error',

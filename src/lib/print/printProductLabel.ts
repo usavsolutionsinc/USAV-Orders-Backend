@@ -1,18 +1,10 @@
 import { gs1UnitAi, serialUnitHandle } from '@/lib/barcode-routing';
-import { renderDataMatrixSvg } from '@/lib/barcode/dataMatrixSvg';
-import { printHtmlSilent } from '@/lib/print/silentPrint';
+import { escapeLabelHtml, printLabel } from '@/lib/print/printLabel';
 
-// Same 2in × 1in stock as the receiving label.
-const PRODUCT_PAGE_SIZE = { width: 50800, height: 25400 } as const;
-
-function escapeHtml(str: string): string {
-  return str
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;');
-}
+// Product/testing labels print only the unit id, so they vertically center the
+// single line next to the DataMatrix.
+const PRODUCT_INFO_CSS =
+  '.sku{font-family:monospace;font-weight:700;font-size:12px;line-height:1.15;color:#111;word-break:break-all;text-align:left}';
 
 /**
  * Build the DataMatrix payload embedded in a printed unit label.
@@ -55,67 +47,9 @@ export function buildUnitPayload(args: {
   return { value: args.sku, symbology: 'datamatrix' };
 }
 
-/**
- * Render the label HTML. DataMatrix-only layout: SKU/unit-id column on
- * the left, DataMatrix on the right. Only the unit id is printed — no
- * product title or helper copy (matches the on-screen live preview).
- */
-function buildLabelHtml(args: {
-  sku: string;
-  /** Accepted for API compatibility but no longer printed. */
-  title?: string;
-  serialNumber: string;
-  qrPayload?: string | null;
-  gtin?: string | null;
-}): string {
-  const safeSku = escapeHtml(args.sku);
-  const { value, symbology } = buildUnitPayload({
-    sku: args.sku,
-    serialNumber: args.serialNumber || null,
-    qrPayload: args.qrPayload,
-    gtin: args.gtin,
-  });
-
-  // GS1 DataMatrix replaces the old QR Digital Link form — denser (~40%
-  // smaller mark), better ECC, FNC1-native AI parsing on industrial
-  // scanners, and no consumer-readable URL on the sticker. bwip-js
-  // renders it as inline SVG so the popup window doesn't need any
-  // remote script before printing.
-  const qrSvg = renderDataMatrixSvg({ value, symbology, scale: 6 });
-
-  return `<!doctype html>
-<html>
-  <head>
-    <meta charset="utf-8" />
-    <title>Label ${safeSku}</title>
-    <style>
-      *,*::before,*::after{box-sizing:border-box}
-      body { font-family: Arial, sans-serif; padding: 0; margin: 0; }
-      .wrap { display:flex; align-items:flex-start; gap:8px; padding:6px 8px; height:1in; }
-      .info { flex:1 1 auto; min-width:0; display:flex; flex-direction:column; justify-content:flex-start; gap:3px; }
-      .sku { font-size: 16px; color: #111; margin:0; font-family: monospace; font-weight: 700; word-break: break-all; line-height:1.2; text-align:left; }
-      .qr { flex:0 0 auto; width:0.88in; height:0.88in; display:flex; align-items:flex-start; justify-content:flex-end; align-self:flex-start; }
-      .qr svg { width:100%; height:100%; display:block; }
-    </style>
-  </head>
-  <body>
-    <div class="wrap">
-      <div class="info">
-        <div class="sku">${safeSku}</div>
-      </div>
-      <div class="qr">${qrSvg}</div>
-    </div>
-    <script>
-      window.onload = function() {
-        setTimeout(function() { window.print(); window.close(); }, 200);
-      };
-    </script>
-  </body>
-</html>`;
-}
-
 export type PrintProductLabelInput = {
   sku: string;
+  /** Accepted for API compatibility but no longer printed (unit-id only). */
   title?: string;
   /** Per-unit identifier. Under the new format this is the {SKU}-{YEAR}-{SEQ6} value. */
   serialNumber?: string;
@@ -125,29 +59,32 @@ export type PrintProductLabelInput = {
   gtin?: string;
 };
 
+/**
+ * Print a product/testing unit label via the shared {@link printLabel} shell —
+ * the same 2×1" sticker the receiving label uses, just with a single unit-id
+ * line instead of carton metadata. DataMatrix-only layout: unit id on the left,
+ * DataMatrix on the right (matches the on-screen live preview). The encoded
+ * value is built by {@link buildUnitPayload}; no consumer-readable URL.
+ */
 export function printProductLabel(input: PrintProductLabelInput): void {
   if (typeof window === 'undefined') return;
 
   const sku = input.sku?.trim();
   if (!sku) return;
 
-  const serialNumber = input.serialNumber?.trim() ?? '';
-  const title = input.title?.trim() ?? '';
-  const qrPayload = input.qrPayload?.trim() || null;
-  const gtin = input.gtin?.trim() || null;
-  const html = buildLabelHtml({ sku, title, serialNumber, qrPayload, gtin });
+  const { value, symbology } = buildUnitPayload({
+    sku,
+    serialNumber: input.serialNumber?.trim() || null,
+    qrPayload: input.qrPayload?.trim() || null,
+    gtin: input.gtin?.trim() || null,
+  });
 
-  void printHtmlSilent(html, {
-    pageSize: PRODUCT_PAGE_SIZE,
-    margins: { marginType: 'none' },
-    // QR is pre-rendered as inline SVG, so the popup needs much less warm-up.
-    waitMs: 200,
-  }).then((handled) => {
-    if (handled) return;
-    const printWindow = window.open('', '', 'width=420,height=320');
-    if (!printWindow) return;
-    printWindow.document.write(html);
-    printWindow.document.close();
+  printLabel({
+    name: `Label ${sku}`,
+    infoHtml: `<div class="sku">${escapeLabelHtml(sku)}</div>`,
+    infoCss: PRODUCT_INFO_CSS,
+    infoAlign: 'center',
+    dataMatrix: { value, symbology, scale: 4 },
   });
 }
 

@@ -70,6 +70,12 @@ export function PoLinesAccordion({ receivingId, activeLineId, activeRowSlot }: P
     },
     enabled: Number.isFinite(receivingId) && receivingId > 0,
     staleTime: 15_000,
+    // Do NOT refetch on window focus. The Pass+Print flow opens a print
+    // popup / silent-print window, which bounces focus and would otherwise
+    // refetch and wipe the optimistic verdict the operator just set. The
+    // global QueryClient default is `refetchOnWindowFocus: 'always'`, so this
+    // override is load-bearing for the testing workspace.
+    refetchOnWindowFocus: false,
   });
 
   // Local optimistic mirror — receives line-updated patches so progress
