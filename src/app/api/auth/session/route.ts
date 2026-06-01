@@ -18,6 +18,7 @@ import {
   loadSessionWithReason,
   SESSION_COOKIE_NAME,
   touchSession,
+  cookieMaxAgeForSession,
 } from '@/lib/auth/session';
 import { getCurrentUserBySid } from '@/lib/auth/current-user';
 
@@ -69,11 +70,12 @@ export async function GET() {
     );
   }
 
-  // Bump last_seen_at so the idle window slides forward on each request.
-  // Best-effort; intentionally not awaited's failure modes mirror loadSession.
-  void touchSession(session.sid);
+  // Bump last_seen_at so the idle window slides forward on each request, and
+  // pick up the (possibly slid) expires_at — for persistent staff touchSession
+  // pushes it forward ~1 year on every heartbeat.
+  const slidExpiresAt = (await touchSession(session.sid)) ?? session.expiresAt;
 
-  return NextResponse.json(
+  const res = NextResponse.json(
     {
       user: {
         staffId: user.staffId,
@@ -84,10 +86,25 @@ export async function GET() {
           sid: session.sid,
           deviceKind: session.deviceKind,
           deviceLabel: session.deviceLabel,
-          expiresAt: session.expiresAt,
+          expiresAt: slidExpiresAt,
         },
       },
     },
     { headers: { 'cache-control': 'no-store', 'x-auth-debug': 'ok' } },
   );
+
+  // Re-issue the cookie so the browser's max-age tracks the live session
+  // expiry. Without this the cookie's expiry is frozen at sign-in, so a
+  // persistent (sliding) session still gets dropped by the browser when the
+  // original max-age elapses — the "have to sign back in every day / after
+  // closing the lid" symptom. Setting it every heartbeat keeps the two in sync.
+  res.cookies.set(SESSION_COOKIE_NAME, session.sid, {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === 'production',
+    sameSite: 'lax',
+    path: '/',
+    maxAge: cookieMaxAgeForSession({ expiresAt: slidExpiresAt }),
+  });
+
+  return res;
 }

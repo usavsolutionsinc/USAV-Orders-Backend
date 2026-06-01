@@ -18,6 +18,8 @@ import { withAuth } from '@/lib/auth/withAuth';
 import { withTenantTransaction } from '@/lib/tenancy/db';
 import { sendEmailBestEffort } from '@/lib/email/send';
 import { getOrganization } from '@/lib/tenancy/organizations';
+import { canonicalRole, ALL_ROLES, type StaffRole } from '@/lib/auth/permissions';
+import { invalidateStaffRolesCache } from '@/lib/auth/role-store';
 
 const Body = z.object({
   name: z.string().trim().min(1).max(120),
@@ -40,15 +42,33 @@ export const POST = withAuth(async (req, ctx) => {
     );
   }
 
+  // Normalize the requested role to a canonical key so it matches a row in
+  // `roles` (rejects e.g. typos and aliases that wouldn't resolve).
+  const canonical = canonicalRole(parsed.role.toLowerCase() as StaffRole);
+  if (canonical === 'unknown' || !ALL_ROLES.includes(canonical)) {
+    return NextResponse.json({ error: 'INVALID_ROLE', allowed: ALL_ROLES }, { status: 400 });
+  }
+
   const token = makeToken();
   const newStaffId = await withTenantTransaction(ctx.organizationId, async (client) => {
     const staffRes = await client.query<{ id: number }>(
       `INSERT INTO staff (name, role, organization_id, active, status, default_home_path)
        VALUES ($1, $2, $3, true, 'invited', '/dashboard')
        RETURNING id`,
-      [parsed.name, parsed.role, ctx.organizationId],
+      [parsed.name, canonical, ctx.organizationId],
     );
     const id = staffRes.rows[0]!.id;
+
+    // Assign the matching role in `staff_roles` — effective permissions are
+    // resolved from this junction, not the `staff.role` column. Without it the
+    // invited staff would enroll into an account with zero permissions and 403
+    // on every gated route.
+    await client.query(
+      `INSERT INTO staff_roles (staff_id, role_id, granted_at, granted_by)
+       SELECT $1, r.id, NOW(), $3 FROM roles r WHERE r.key = $2
+       ON CONFLICT (staff_id, role_id) DO NOTHING`,
+      [id, canonical, ctx.staffId ?? null],
+    );
 
     await client.query(
       `INSERT INTO staff_enrollments (token, staff_id, created_by, expires_at)
@@ -58,6 +78,7 @@ export const POST = withAuth(async (req, ctx) => {
 
     return id;
   });
+  invalidateStaffRolesCache(newStaffId);
 
   const origin = process.env.NEXT_PUBLIC_APP_URL || process.env.APP_URL ||
     (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 'http://localhost:3000');
