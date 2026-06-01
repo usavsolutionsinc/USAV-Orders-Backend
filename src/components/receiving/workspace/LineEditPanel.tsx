@@ -1976,6 +1976,7 @@ export function LineEditPanel({
               <PoLinesAccordion
                 receivingId={row.receiving_id}
                 activeLineId={row.id}
+                activeConditionOverride={isMultiQtyLine ? unitLabelCondition : null}
                 activeRowSlot={({ serials }) => (
                   <div className="space-y-3">
                     {/* Multi-qty same-product lines split into one row per unit

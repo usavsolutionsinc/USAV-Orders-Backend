@@ -118,16 +118,19 @@ function CollapsedRow({
       <span className="shrink-0 font-mono text-micro font-black tabular-nums text-gray-500">
         {index + 1}/{total}
       </span>
+      {/* Condition on the left, serial pushed to the right — keeps the
+          collapsed rows visually consistent with the expanded row's
+          condition-first layout. */}
+      {meta ? <span className="inline-flex items-center">{meta}</span> : null}
       {serial ? (
-        <span className="font-mono text-sm font-bold tracking-tight text-gray-900 underline decoration-emerald-500 decoration-2 underline-offset-2">
+        <span className="ml-auto font-mono text-sm font-bold tracking-tight text-gray-900 underline decoration-emerald-500 decoration-2 underline-offset-2">
           {last4(serial.serial_number)}
         </span>
       ) : (
-        <span className="text-caption font-semibold uppercase tracking-widest text-gray-400">
+        <span className="ml-auto text-caption font-semibold uppercase tracking-widest text-gray-400">
           Empty · tap to scan
         </span>
       )}
-      {meta ? <span className="ml-auto inline-flex items-center">{meta}</span> : null}
     </div>
   );
 }
