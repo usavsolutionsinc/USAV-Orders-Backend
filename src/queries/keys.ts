@@ -33,4 +33,9 @@ export const qk = {
   shippedTable: ['shipped-table'] as const,
   dashboardStockZoho: ['dashboard-stock-zoho'] as const,
   dashboardFbaShipments: ['dashboard-fba-shipments'] as const,
+  adminFeatures: {
+    all: ['admin-features'] as const,
+    list: (search: string, featureType: string, featureStatus: string, featureActive: string) =>
+      ['admin-features', search, featureType, featureStatus, featureActive] as const,
+  },
 } as const;

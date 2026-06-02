@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { qk } from '@/queries/keys';
 import { Edit, Plus, Trash2, X } from '@/components/Icons';
 import { mainStickyHeaderClass, mainStickyHeaderShellRowClass } from '@/components/layout/header-shell';
 import { toast } from '@/lib/toast';
@@ -88,7 +89,7 @@ export function FeaturesManagementTab() {
   const featureActive = (searchParams.get('featureActive') || '').trim();
 
   const { data: featureResponse, isLoading } = useQuery<{ rows: AdminFeatureRecord[] }>({
-    queryKey: ['admin-features', search, featureType, featureStatus, featureActive],
+    queryKey: qk.adminFeatures.list(search, featureType, featureStatus, featureActive),
     queryFn: async () => {
       const params = new URLSearchParams();
       if (search) params.set('q', search);
@@ -132,7 +133,7 @@ export function FeaturesManagementTab() {
       return data;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['admin-features'] });
+      queryClient.invalidateQueries({ queryKey: qk.adminFeatures.all });
       toast.success('Feature item created');
       closeForm();
     },
@@ -163,7 +164,7 @@ export function FeaturesManagementTab() {
       return data;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['admin-features'] });
+      queryClient.invalidateQueries({ queryKey: qk.adminFeatures.all });
       toast.success('Feature item updated');
       closeForm();
     },
@@ -180,7 +181,7 @@ export function FeaturesManagementTab() {
       return data;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['admin-features'] });
+      queryClient.invalidateQueries({ queryKey: qk.adminFeatures.all });
       toast.success('Feature item deleted');
     },
     onError: (error: Error) => {
