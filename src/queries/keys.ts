@@ -38,4 +38,12 @@ export const qk = {
     list: (search: string, featureType: string, featureStatus: string, featureActive: string) =>
       ['admin-features', search, featureType, featureStatus, featureActive] as const,
   },
+  fba: {
+    board: ['fba-board'] as const,
+    stageCounts: ['fba-stage-counts'] as const,
+    queue: ['fba-queue'] as const,
+    logs: ['fba-logs'] as const,
+    shipments: ['fba-shipments'] as const,
+    fnskus: ['fba-fnskus'] as const,
+  },
 } as const;
