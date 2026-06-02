@@ -40,12 +40,26 @@ export interface NasEntry {
   url: string;
 }
 
-// Shape of one nginx `autoindex_format json` element.
+// One directory entry from the NAS file server. We accept either format:
+//   • Caddy `file_server browse` (Accept: application/json): { name, size,
+//     is_dir, mod_time, ... }  — what the Ugreen NAS runs today.
+//   • nginx `autoindex_format json`: { name, type, size, mtime }.
 interface RawEntry {
   name: string;
-  type: string; // "file" | "directory"
   size?: number;
+  // nginx
+  type?: string; // "file" | "directory"
   mtime?: string;
+  // Caddy
+  is_dir?: boolean;
+  mod_time?: string;
+}
+
+function rawIsDir(e: RawEntry): boolean {
+  return e.is_dir === true || e.type === 'directory';
+}
+function rawMtime(e: RawEntry): string | undefined {
+  return e.mod_time ?? e.mtime;
 }
 
 function joinUrl(relPath: string): string {
@@ -86,14 +100,14 @@ export async function listNasDir(relDir: string): Promise<NasEntry[]> {
   if (!Array.isArray(raw)) return [];
 
   return raw
-    .filter((e) => e && (e.type === 'directory' || IMAGE_RE.test(e.name)))
+    .filter((e) => e && (rawIsDir(e) || IMAGE_RE.test(e.name)))
     .map<NasEntry>((e) => {
       const rel = clean ? `${clean}/${e.name}` : e.name;
       return {
         name: e.name,
-        type: e.type === 'directory' ? 'directory' : 'file',
+        type: rawIsDir(e) ? 'directory' : 'file',
         size: e.size,
-        mtime: e.mtime,
+        mtime: rawMtime(e),
         relPath: rel,
         url: joinUrl(rel),
       };

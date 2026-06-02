@@ -1,9 +1,59 @@
 # NAS Photo Server — "Select from NAS" picker
 
-A tiny **read-only** nginx container that serves your synced photo folder to the
+A tiny **read-only** file server that serves your synced photo folder to the
 receiving app's "Select from NAS" picker. Photos taken on phones sync to the NAS
 as usual; receivers then pick the right shots from a PO/item screen instead of
 re-taking them in the app.
+
+Two server options are documented here:
+- **Caddy (no Docker)** — ✅ *the method actually deployed* on the Ugreen DH2300.
+- **nginx in Docker** — for any NAS where Docker is available (see further down).
+
+---
+
+## Caddy (no Docker) — DEPLOYED
+
+### Why Caddy and not Docker
+The Ugreen **DH2300** is an **ARM (RK3576)** model: UGOS doesn't offer the Docker
+app for it, and its Debian package system was in a broken state (held base
+packages + corrupted `-dev` package metadata on an overlay root), so an
+`apt`-based Docker install fails. A single static **Caddy** binary sidesteps all
+of that — no Docker, no apt, no sudo.
+
+### Setup (runs as your NAS user, no root)
+```sh
+# 1) Download the static arm64 binary into your home dir
+curl -fsSL "https://caddyserver.com/api/download?os=linux&arch=arm64" -o ~/caddy
+chmod +x ~/caddy
+
+# 2) Put the Caddyfile from this folder at ~/nas-photos.Caddyfile
+#    (adjust the `root` path if your photos live elsewhere)
+
+# 3) Run it
+~/caddy run --config ~/nas-photos.Caddyfile --adapter caddyfile
+```
+Sanity check from a LAN machine:
+```sh
+curl -H "Accept: application/json" http://<nas-ip>:8088/      # JSON listing
+curl -I http://<nas-ip>:8088/<some-photo>.jpg                 # 200, image/*
+```
+
+### Keep it running after a reboot
+This user's `crontab` is locked down, so use one of:
+- **UGOS Task Scheduler** (web UI → Tasks) → add a **boot-up** task running:
+  `"$HOME/caddy" run --config "$HOME/nas-photos.Caddyfile" --adapter caddyfile`
+- **systemd unit** (needs sudo once) — a standard `/etc/systemd/system/nas-photos.service`
+  that `ExecStart`s the same command, then `systemctl enable --now nas-photos`.
+
+The picker (`src/lib/nas-photos.ts`) understands **both** Caddy's JSON shape
+(`is_dir`/`mod_time`) and nginx's (`type`/`mtime`), so either server works.
+
+---
+
+## nginx in Docker (alternative)
+
+A tiny **read-only** nginx container that serves the photo folder. Use this on a
+NAS that has Docker.
 
 ## How it fits together
 

@@ -1,0 +1,30 @@
+# Caddy config for the receiving "Select from NAS" picker — the method
+# actually deployed on the Ugreen DH2300 (which can't run Docker easily; see
+# README.md "Why Caddy and not Docker").
+#
+# Single static binary, no root needed:
+#   curl -fsSL "https://caddyserver.com/api/download?os=linux&arch=arm64" -o ~/caddy && chmod +x ~/caddy
+#   ~/caddy run --config ~/nas-photos.Caddyfile --adapter caddyfile
+#
+# Serves ONE sandboxed folder, read-only, with a JSON directory listing
+# (returned when the client sends `Accept: application/json`) and CORS so the
+# Vercel-hosted app can read the listing from the browser.
+
+:8088 {
+	# The photos folder ONLY. Never point this at the home root (secrets live
+	# there). Path quoted because it contains a space.
+	root * "/volume1/@home/Michael Garisek/Photos"
+
+	# CORS — the picker fetches this listing cross-origin from the app's domain.
+	# A simple no-credentials GET, so "*" exposes nothing beyond filenames.
+	header {
+		Access-Control-Allow-Origin "*"
+		Access-Control-Allow-Methods "GET, HEAD, OPTIONS"
+		Vary Origin
+	}
+	@opt method OPTIONS
+	respond @opt 204
+
+	# `browse` returns a JSON array on `Accept: application/json`, else HTML.
+	file_server browse
+}
