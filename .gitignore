@@ -55,3 +55,8 @@ certificates
 /converted-manuals/
 
 docker-compose.db.yml
+
+# Playwright E2E artifacts + saved auth storage state
+/playwright-report/
+/test-results/
+/tests/.auth/
