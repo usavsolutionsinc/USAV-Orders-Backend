@@ -4,7 +4,6 @@ import { useEffect, useRef, useState } from 'react';
 import { Barcode, X } from '@/components/Icons';
 import { SerialChip } from '@/components/ui/CopyChip';
 import { ConditionPills } from './ConditionPills';
-import { conditionGradeTableLabel } from '@/components/station/receiving-constants';
 
 interface SavedSerial {
   id?: number;
@@ -301,7 +300,6 @@ export function SerialChipWithMenu({
   onSetCondition?: (s: SavedSerial, grade: string) => void;
 }) {
   const sn = serial.serial_number;
-  const grade = String(serial.condition_grade || '').trim().toUpperCase();
   const hasActions = !!(onEdit || onDelete || onSetCondition);
 
   return (
@@ -316,11 +314,6 @@ export function SerialChipWithMenu({
           display={sn.length > 4 ? sn.slice(-4) : sn}
           width="w-fit max-w-full"
         />
-        {grade && grade !== 'PENDING' ? (
-          <span className="text-micro font-bold uppercase tracking-wider text-gray-400">
-            {conditionGradeTableLabel(grade)}
-          </span>
-        ) : null}
       </div>
       {hasActions ? (
         // Outer wrapper holds the chip-to-menu gap as transparent padding so

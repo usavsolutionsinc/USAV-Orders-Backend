@@ -281,6 +281,8 @@ export function resolvePoScanValue(
 export function conditionShort(code: string | null | undefined): string {
   const c = String(code || 'BRAND_NEW').trim().toUpperCase();
   if (c === 'BRAND_NEW') return 'New';
+  if (c === 'LIKE_NEW') return 'Like New';
+  if (c === 'REFURBISHED') return 'Refurb';
   if (c === 'PARTS') return 'Parts';
   if (c.startsWith('USED_')) {
     const letter = COND_LABEL[c] || c.replace('USED_', '');

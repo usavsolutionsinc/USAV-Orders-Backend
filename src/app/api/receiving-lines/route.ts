@@ -61,7 +61,7 @@ const WORKFLOW_STATUSES = new Set([
   'EXPECTED', 'ARRIVED', 'MATCHED', 'UNBOXED', 'AWAITING_TEST',
   'IN_TEST', 'PASSED', 'FAILED', 'RTV', 'SCRAP', 'DONE',
 ]);
-const CONDITIONS   = new Set(['BRAND_NEW', 'USED_A', 'USED_B', 'USED_C', 'PARTS']);
+const CONDITIONS   = new Set(['BRAND_NEW', 'LIKE_NEW', 'REFURBISHED', 'USED_A', 'USED_B', 'USED_C', 'PARTS']);
 
 function parsePositiveTechId(value: unknown): number | null {
   const parsed = Number(value);

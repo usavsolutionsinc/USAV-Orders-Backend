@@ -2,15 +2,20 @@
 
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import rehypeHighlight from 'rehype-highlight';
+import CodeBlock from '@/components/ai/CodeBlock';
 
 /**
  * Renders AI response markdown with correct bold, italic, lists, code,
- * and table formatting for employee-facing chat.
+ * and table formatting for employee-facing chat. Fenced code blocks are
+ * syntax-highlighted (rehype-highlight) and wrapped in CodeBlock chrome
+ * (language label + copy). The light highlight.js theme lives in globals.css.
  */
 export default function MarkdownRenderer({ content }: { content: string }) {
   return (
     <ReactMarkdown
       remarkPlugins={[remarkGfm]}
+      rehypePlugins={[[rehypeHighlight, { detect: true, ignoreMissing: true }]]}
       components={{
         h1: ({ children }) => (
           <h1 className="mb-2 mt-4 text-base font-bold text-gray-900">{children}</h1>
@@ -40,16 +45,13 @@ export default function MarkdownRenderer({ content }: { content: string }) {
           <li className="pl-1">{children}</li>
         ),
         code: ({ className, children, ...props }) => {
-          const isBlock = className?.includes('language-');
+          const cls = className ?? '';
+          // rehype-highlight tags fenced blocks with `hljs` + `language-x`;
+          // inline code (single backticks) carries neither.
+          const isBlock = /(^|\s)(hljs|language-)/.test(cls);
           if (isBlock) {
-            return (
-              <code
-                className={`block overflow-x-auto rounded bg-gray-900 px-3 py-2 text-caption leading-5 text-gray-100 ${className ?? ''}`}
-                {...props}
-              >
-                {children}
-              </code>
-            );
+            const language = /language-([\w-]+)/.exec(cls)?.[1] ?? '';
+            return <CodeBlock language={language}>{children}</CodeBlock>;
           }
           return (
             <code className="rounded bg-gray-100 px-1.5 py-0.5 text-caption font-mono text-gray-800" {...props}>
@@ -57,11 +59,8 @@ export default function MarkdownRenderer({ content }: { content: string }) {
             </code>
           );
         },
-        pre: ({ children }) => (
-          <pre className="mb-2 mt-1 overflow-x-auto rounded border border-gray-200 bg-gray-900">
-            {children}
-          </pre>
-        ),
+        // CodeBlock renders its own <pre>; pass through so we don't double-wrap.
+        pre: ({ children }) => <>{children}</>,
         blockquote: ({ children }) => (
           <blockquote className="mb-2 border-l-2 border-gray-300 pl-3 text-label italic text-gray-600">
             {children}

@@ -6,6 +6,7 @@ import {
   FileText,
   LayoutDashboard,
   MapPin,
+  MessageSquare,
   Monitor,
   Package,
   Settings,
@@ -29,6 +30,7 @@ export type SidebarRouteKey =
   | 'tech'
   | 'packer'
   | 'support'
+  | 'ai-chat'
   | 'previous-quarters'
   | 'admin'
   | 'audit-log'
@@ -90,6 +92,7 @@ export const APP_SIDEBAR_NAV: SidebarNavItem[] = [
   { id: 'tech',              label: 'Testing',     href: '/tech',               icon: Wrench,          kind: 'station', requires: 'tech.view' },
   { id: 'packer',            label: 'Packing',     href: '/packer',             icon: User,            kind: 'station', requires: 'packing.view' },
   { id: 'support',           label: 'Support',     href: '/support',            icon: AlertCircle,     kind: 'station', requires: 'integrations.zendesk' },
+  { id: 'ai-chat',           label: 'AI Chat',     href: '/ai-chat',            icon: MessageSquare,   kind: 'bottom',  requires: 'dashboard.view' },
   { id: 'previous-quarters', label: 'Quarters',    href: '/previous-quarters',  icon: Calendar,        kind: 'bottom', requires: 'reports.view' },
   { id: 'audit-log',         label: 'Audit Log',   href: '/settings/audit',     icon: FileText,        kind: 'bottom', requires: 'admin.view_logs' },
   { id: 'admin',             label: 'Admin',       href: '/admin',              icon: ShieldCheck,     kind: 'bottom', requires: 'admin.view' },
@@ -136,6 +139,7 @@ export function getSidebarRouteKey(pathname: string | null): SidebarRouteKey {
   if (pathname === '/warehouse' || pathname.startsWith('/warehouse/')) return 'warehouse';
   if (pathname === '/inventory' || pathname.startsWith('/inventory/')) return 'inventory';
   if (pathname === '/support' || pathname.startsWith('/support/')) return 'support';
+  if (pathname === '/ai-chat' || pathname.startsWith('/ai-chat/')) return 'ai-chat';
   if (pathname === '/previous-quarters' || pathname.startsWith('/previous-quarters/')) return 'previous-quarters';
   if (pathname === '/admin' || pathname.startsWith('/admin/')) return 'admin';
   if (pathname === '/audit-log' || pathname.startsWith('/audit-log/')) return 'audit-log';
@@ -194,6 +198,7 @@ export const ROUTE_PERMISSIONS: ReadonlyArray<{ prefix: string; permission: stri
   // /support is the native Zendesk ticket console — gated by the same
   // permission as the /api/zendesk/* routes it calls.
   { prefix: '/support',            permission: 'integrations.zendesk' },
+  { prefix: '/ai-chat',            permission: 'dashboard.view' },
   // /settings is intentionally NOT gated — every signed-in user can manage
   // their own workstation/appearance settings; admin tabs gate themselves.
   // (/manuals now redirects into /products)

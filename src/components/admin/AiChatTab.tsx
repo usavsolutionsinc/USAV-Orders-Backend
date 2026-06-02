@@ -146,14 +146,12 @@ export default function AiChatTab() {
   const healthIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const checkHealth = useCallback(async () => {
+    // Liveness via the cheap GET probe — never POST a real message to /api/ai/chat
+    // for a health check (that runs the agent + burns model quota every interval).
     try {
-      const res = await fetch('/api/ai/chat', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ sessionId: 'health-check', message: 'ping' }),
-        signal: AbortSignal.timeout(5_000),
-      });
-      setConnectionStatus(res.ok || res.status === 400 ? 'online' : 'offline');
+      const res = await fetch('/api/ai/chat-health', { signal: AbortSignal.timeout(5_000) });
+      const data = await res.json().catch(() => ({ ok: false }));
+      setConnectionStatus(data.ok ? 'online' : 'offline');
     } catch {
       setConnectionStatus('offline');
     }

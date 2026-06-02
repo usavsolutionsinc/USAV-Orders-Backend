@@ -42,7 +42,7 @@ import { recordInventoryEvent } from '@/lib/inventory/events';
  *   }
  */
 
-const VALID_CONDITIONS = ['BRAND_NEW', 'USED_A', 'USED_B', 'USED_C', 'PARTS'] as const;
+const VALID_CONDITIONS = ['BRAND_NEW', 'LIKE_NEW', 'REFURBISHED', 'USED_A', 'USED_B', 'USED_C', 'PARTS'] as const;
 type ConditionGrade = (typeof VALID_CONDITIONS)[number];
 
 export const POST = withAuth(

@@ -42,7 +42,7 @@ import {
 } from '@/components/Icons';
 import { toast } from '@/lib/toast';
 import { receivingLabelPoCornerDisplay } from '@/lib/print/printReceivingLabel';
-import { ListingUrlChip, TrackingChip, OrderIdChip, getLast4 } from '@/components/ui/CopyChip';
+import { ListingUrlChip, TrackingChip, OrderIdChip, TicketChip, getLast4 } from '@/components/ui/CopyChip';
 import { SearchBar } from '@/components/ui/SearchBar';
 import { HorizontalButtonSlider, type HorizontalSliderItem } from '@/components/ui/HorizontalButtonSlider';
 import { ReceivingPhotoStrip } from '@/components/sidebar/ReceivingPhotoStrip';
@@ -59,6 +59,7 @@ import { ReceivingAuditModal } from './ReceivingAuditModal';
 import { ConditionPills } from './ConditionPills';
 import { markConditionSet } from './ReceivingProgressStepper';
 import { InlineSerialAdder } from './InlineSerialAdder';
+import { ReceivingUnitRows, type UnitSerial } from './ReceivingUnitRows';
 import { PoLinesAccordion } from './PoLinesAccordion';
 import { UnmatchedItemsSection } from './UnmatchedItemsSection';
 import { ReceivingClaimModal } from './ReceivingClaimModal';
@@ -1290,6 +1291,17 @@ export function LineEditPanel({
   const recordedSerials = row.serials ?? [];
 
   const listingOpenHref = listingUrlForOpen(listingLink);
+  // Zendesk ticket chip — surfaced inline in the chip row (between the listing
+  // link and the PO#) whenever a ticket is on file. Display strips a leading
+  // '#' and pulls the numeric id out of a pasted ticket URL.
+  const zendeskTrimmed = zendesk.trim();
+  const zendeskHref = zendeskTicketUrl(zendeskTrimmed);
+  const zendeskChipDisplay = (() => {
+    const raw = zendeskTrimmed.replace(/^#/, '').trim();
+    const fromUrl = raw.match(/tickets\/(\d+)/);
+    if (fromUrl) return fromUrl[1];
+    return raw.length > 12 ? raw.slice(0, 12) : raw;
+  })();
   const primaryTrackingTrimmed = trackingEdit.trim();
   const filledExtraTrackingsCount = extraTrackings.filter((t) => t.trim().length > 0).length;
   const listingPreviewLabel = listingLinkPreview(listingLink);
@@ -1624,6 +1636,23 @@ export function LineEditPanel({
                         >
                           <Pencil className="h-3 w-3" />
                         </button>
+                      </div>
+                    ) : null}
+                    {zendeskTrimmed ? (
+                      <div className="flex shrink-0 items-center gap-1">
+                        <TicketChip value={zendeskTrimmed} display={zendeskChipDisplay} />
+                        {zendeskHref ? (
+                          <a
+                            href={zendeskHref}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            aria-label="Open Zendesk ticket"
+                            title="Open in Zendesk"
+                            className={RECEIVING_CHIP_EDIT_BTN_CLASS}
+                          >
+                            <ExternalLink className="h-3 w-3" />
+                          </a>
+                        ) : null}
                       </div>
                     ) : null}
                     {inlinePoInput ? (
@@ -1978,57 +2007,79 @@ export function LineEditPanel({
               <PoLinesAccordion
                 receivingId={row.receiving_id}
                 activeLineId={row.id}
-                activeConditionOverride={null}
+                activeConditionOverride={isMultiQtyLine ? (unitLabelCondition ?? cond) : cond}
                 activeRowSlot={({ serials }) => (
                   <div className="space-y-3">
-                    {/* Serials are a flat, unlimited sidecar list per line —
-                        a unit may carry several serials (a pair, part-serials,
-                        multi-component). Condition lives on each serial (set via
-                        the chip menu); the picker below sets the line default
-                        that new scans are stamped with. Quantity is owned by the
-                        PO line item via the Receive action — independent of how
-                        many serials are attached. */}
-                    <div>
-                      <p className="mb-1 text-micro font-bold uppercase tracking-[0.14em] text-gray-500">
-                        Condition
-                      </p>
-                      <ConditionPills
-                        value={cond}
-                        onChange={(next) => {
-                          setCond(next);
-                          markConditionSet(row.id);
-                          void patch({ condition_grade: next });
+                    {(row.quantity_expected ?? 0) > 1 ? (
+                      // Multi-qty same-product line: split into one selectable
+                      // row per physical unit, each with its own condition grade
+                      // and serial (divided by a thin line). The selected unit's
+                      // grade is reported up via onActiveConditionChange so the
+                      // header badge + label preview track that unit.
+                      <ReceivingUnitRows
+                        lineId={row.id}
+                        saved={serials as UnitSerial[]}
+                        quantityExpected={row.quantity_expected ?? 1}
+                        lineCondition={cond}
+                        disabled={!row.receiving_id}
+                        isSubmitting={serialSubmitting}
+                        onAddSerial={(sn, grade) => submitSerial(sn, grade)}
+                        onDeleteSerial={(id) => {
+                          if (!window.confirm('Remove this serial?')) return;
+                          void deleteSerialUnit(id);
                         }}
+                        onReplaceSerial={(original, next) => void replaceSerialUnit(original, next)}
+                        onSetUnitGrade={(id, grade) => setUnitGrade(id, grade)}
+                        onActiveConditionChange={setUnitLabelCondition}
                       />
-                    </div>
-                    <InlineSerialAdder
-                      key={`adder-${row.id}`}
-                      lineId={row.id}
-                      saved={serials}
-                      expected={row.quantity_expected ?? null}
-                      isSubmitting={serialSubmitting}
-                      disabled={!row.receiving_id}
-                      onAdd={(_lineId, sn) => submitSerial(sn, cond)}
-                      onReplaceSerial={(_lineId, original, nextSerial) => {
-                        if (original.id == null) return;
-                        void replaceSerialUnit(
-                          {
-                            id: original.id,
-                            serial_number: original.serial_number,
-                            condition_grade: original.condition_grade,
-                          },
-                          nextSerial,
-                        );
-                      }}
-                      onDelete={(_lineId, s) => {
-                        if (s.id == null) return;
-                        if (!window.confirm(`Remove serial ${s.serial_number}?`)) return;
-                        void deleteSerialUnit(s.id);
-                      }}
-                      onSetCondition={(_lineId, s, grade) => {
-                        if (s.id != null) void setUnitGrade(s.id, grade);
-                      }}
-                    />
+                    ) : (
+                      // Single-qty line (incl. a PARTS product carrying several
+                      // part-serials under one unit): one condition picker + a
+                      // flat serial list.
+                      <>
+                        <div>
+                          <p className="mb-1 text-micro font-bold uppercase tracking-[0.14em] text-gray-500">
+                            Condition
+                          </p>
+                          <ConditionPills
+                            value={cond}
+                            onChange={(next) => {
+                              setCond(next);
+                              markConditionSet(row.id);
+                              void patch({ condition_grade: next });
+                            }}
+                          />
+                        </div>
+                        <InlineSerialAdder
+                          key={`adder-${row.id}`}
+                          lineId={row.id}
+                          saved={serials}
+                          expected={row.quantity_expected ?? null}
+                          isSubmitting={serialSubmitting}
+                          disabled={!row.receiving_id}
+                          onAdd={(_lineId, sn) => submitSerial(sn, cond)}
+                          onReplaceSerial={(_lineId, original, nextSerial) => {
+                            if (original.id == null) return;
+                            void replaceSerialUnit(
+                              {
+                                id: original.id,
+                                serial_number: original.serial_number,
+                                condition_grade: original.condition_grade,
+                              },
+                              nextSerial,
+                            );
+                          }}
+                          onDelete={(_lineId, s) => {
+                            if (s.id == null) return;
+                            if (!window.confirm(`Remove serial ${s.serial_number}?`)) return;
+                            void deleteSerialUnit(s.id);
+                          }}
+                          onSetCondition={(_lineId, s, grade) => {
+                            if (s.id != null) void setUnitGrade(s.id, grade);
+                          }}
+                        />
+                      </>
+                    )}
                   </div>
                 )}
               />

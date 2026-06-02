@@ -24,6 +24,7 @@ import { ReceivingSidebarPanel } from '@/components/sidebar/ReceivingSidebarPane
 import { InventorySidebarPanel } from '@/components/sidebar/InventorySidebarPanel';
 import { FbaSidebarPanel } from '@/components/fba/sidebar';
 import { SupportSidebarPanel } from '@/components/sidebar/SupportSidebarPanel';
+import { AiChatSidebarPanel } from '@/components/sidebar/AiChatSidebarPanel';
 import { SettingsSidebarPanel } from '@/components/sidebar/SettingsSidebarPanel';
 import { AuditLogSidebarPanel } from '@/components/sidebar/AuditLogSidebarPanel';
 import { useUIMode } from '@/design-system/providers/UIModeProvider';
@@ -66,6 +67,7 @@ function getSidebarTitle(pathname: string | null) {
     tech: 'Testing',
     packer: 'Packing',
     support: 'Support',
+    'ai-chat': 'AI Chat',
     'previous-quarters': 'Quarters',
     admin: 'Admin',
     'audit-log': 'Audit Log',
@@ -226,6 +228,7 @@ function SidebarContextPanel({ onBackToAppNav }: { onBackToAppNav?: () => void }
   }
 
   if (routeKey === 'support') return <SupportSidebarPanel />;
+  if (routeKey === 'ai-chat') return <AiChatSidebarPanel />;
   if (routeKey === 'settings') return <SettingsSidebarPanel />;
   if (routeKey === 'audit-log') return <AuditLogSidebarPanel />;
   if (routeKey === 'receiving') return <ReceivingSidebarPanel />;

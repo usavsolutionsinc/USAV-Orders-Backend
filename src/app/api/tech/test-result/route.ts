@@ -64,7 +64,7 @@ export const POST = withAuth(async (request, ctx) => {
       { status: 400 },
     );
   }
-  const validGrades = ['BRAND_NEW', 'USED_A', 'USED_B', 'USED_C', 'PARTS'];
+  const validGrades = ['BRAND_NEW', 'LIKE_NEW', 'REFURBISHED', 'USED_A', 'USED_B', 'USED_C', 'PARTS'];
   if (conditionGradeInput && !validGrades.includes(conditionGradeInput)) {
     return NextResponse.json(
       { ok: false, error: `condition_grade must be one of ${validGrades.join(', ')}` },

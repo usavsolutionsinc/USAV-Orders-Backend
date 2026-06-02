@@ -79,6 +79,8 @@ export const SERIAL_STATUS_VALUES = [
 
 export const CONDITION_GRADE_VALUES = [
     'BRAND_NEW',
+    'LIKE_NEW',
+    'REFURBISHED',
     'USED_A',
     'USED_B',
     'USED_C',

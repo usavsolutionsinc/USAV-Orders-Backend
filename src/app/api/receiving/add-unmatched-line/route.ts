@@ -35,7 +35,7 @@ import {
 
 const IDEMPOTENCY_ROUTE = 'receiving.add-unmatched-line';
 
-const CONDITION_GRADES = ['BRAND_NEW', 'USED_A', 'USED_B', 'USED_C', 'PARTS'] as const;
+const CONDITION_GRADES = ['BRAND_NEW', 'LIKE_NEW', 'REFURBISHED', 'USED_A', 'USED_B', 'USED_C', 'PARTS'] as const;
 type ConditionGrade = (typeof CONDITION_GRADES)[number];
 
 const PLATFORM_PILLS = ['ebay', 'goodwill', 'amazon', 'aliexp', 'walmart', 'other'] as const;

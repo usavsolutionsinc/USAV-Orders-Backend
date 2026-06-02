@@ -14,6 +14,14 @@ const TONE: Record<string, { active: string; inactive: string }> = {
     active: 'bg-yellow-500 text-white shadow-sm shadow-yellow-200 ring-yellow-600',
     inactive: 'bg-white text-yellow-800 ring-yellow-200 hover:bg-yellow-50',
   },
+  LIKE_NEW: {
+    active: 'bg-teal-600 text-white shadow-sm shadow-teal-200 ring-teal-700',
+    inactive: 'bg-white text-teal-800 ring-teal-200 hover:bg-teal-50',
+  },
+  REFURBISHED: {
+    active: 'bg-indigo-600 text-white shadow-sm shadow-indigo-200 ring-indigo-700',
+    inactive: 'bg-white text-indigo-800 ring-indigo-200 hover:bg-indigo-50',
+  },
   USED_A: {
     active: 'bg-emerald-600 text-white shadow-sm shadow-emerald-200 ring-emerald-700',
     inactive: 'bg-white text-emerald-800 ring-emerald-200 hover:bg-emerald-50',
@@ -116,6 +124,22 @@ export function ConditionPills({ value, onChange }: Props) {
         isActive={selected === 'BRAND_NEW'}
         toneKey="BRAND_NEW"
         onClick={() => onChange('BRAND_NEW')}
+      />
+
+      {/* LIKE NEW */}
+      <Pill
+        label="LIKE NEW"
+        isActive={selected === 'LIKE_NEW'}
+        toneKey="LIKE_NEW"
+        onClick={() => onChange('LIKE_NEW')}
+      />
+
+      {/* REFURBISHED */}
+      <Pill
+        label="REFURB"
+        isActive={selected === 'REFURBISHED'}
+        toneKey="REFURBISHED"
+        onClick={() => onChange('REFURBISHED')}
       />
 
       {/* USED GROUP */}

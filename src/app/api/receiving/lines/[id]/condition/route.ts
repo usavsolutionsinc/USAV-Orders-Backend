@@ -15,7 +15,7 @@ import { publishReceivingLogChanged } from '@/lib/realtime/publish';
 import { after } from 'next/server';
 import { withAuth } from '@/lib/auth/withAuth';
 
-const ALLOWED_GRADES = ['BRAND_NEW', 'USED_A', 'USED_B', 'USED_C', 'PARTS'] as const;
+const ALLOWED_GRADES = ['BRAND_NEW', 'LIKE_NEW', 'REFURBISHED', 'USED_A', 'USED_B', 'USED_C', 'PARTS'] as const;
 type Grade = (typeof ALLOWED_GRADES)[number];
 
 function normalizeGrade(raw: unknown): Grade | null {

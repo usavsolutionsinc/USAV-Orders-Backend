@@ -1,5 +1,12 @@
 # NAS Photos → Production Plan
 
+> **Decisions resolved (2026-06-02):** the environment-specific, decided plan
+> (Synology DSM 7 @ `192.168.254.14` + Container Manager/Docker + a dedicated
+> Cloudflare Tunnel on `nas-photos.michaelgarisek.com`) lives in
+> [`nas-photos-website-setup.md`](./nas-photos-website-setup.md), with runnable
+> artifacts in [`deploy/nas-photo-server/synology/`](../deploy/nas-photo-server/synology/).
+> This document remains the generic rationale / options reference.
+
 **Feature:** Receiving (and later packing) staff attach insurance photos to a PO# by
 selecting them from a self-hosted NAS file server, instead of capturing them through
 an in-app camera pipeline. Photos live on **our own server** (free, self-hosted) and

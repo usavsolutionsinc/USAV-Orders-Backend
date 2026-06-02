@@ -22,7 +22,7 @@ import { publishReceivingLogChanged } from '@/lib/realtime/publish';
 export const dynamic = 'force-dynamic';
 
 const IDEMPOTENCY_ROUTE = 'zoho.purchase-orders.receive';
-const VALID_CONDITIONS = new Set(['BRAND_NEW', 'USED_A', 'USED_B', 'USED_C', 'PARTS']);
+const VALID_CONDITIONS = new Set(['BRAND_NEW', 'LIKE_NEW', 'REFURBISHED', 'USED_A', 'USED_B', 'USED_C', 'PARTS']);
 
 /**
  * POST /api/zoho/purchase-orders/receive

@@ -310,6 +310,8 @@ export const dispositionEnum = pgEnum('disposition_enum', [
 
 export const conditionGradeEnum = pgEnum('condition_grade_enum', [
   'BRAND_NEW',
+  'LIKE_NEW',
+  'REFURBISHED',
   'USED_A',
   'USED_B',
   'USED_C',

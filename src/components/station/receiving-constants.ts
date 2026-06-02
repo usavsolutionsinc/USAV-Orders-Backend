@@ -39,7 +39,7 @@ export const RECEIVING_CARRIERS = [
   { value: 'ALIEXPRESS', label: 'AliEx' },
 ];
 
-export const CONDITION_OPTS = ['BRAND_NEW', 'USED_A', 'USED_B', 'USED_C', 'PARTS'].map((v) => ({
+export const CONDITION_OPTS = ['BRAND_NEW', 'LIKE_NEW', 'REFURBISHED', 'USED_A', 'USED_B', 'USED_C', 'PARTS'].map((v) => ({
   value: v,
   label: v.replace(/_/g, ' '),
 }));
@@ -100,11 +100,13 @@ export function workflowStatusTableLabel(status: string | null | undefined): str
 }
 
 export const COND_LABEL: Record<string, string> = {
-  BRAND_NEW: 'New',
-  USED_A:    'A',
-  USED_B:    'B',
-  USED_C:    'C',
-  PARTS:     'Parts',
+  BRAND_NEW:   'New',
+  LIKE_NEW:    'Like New',
+  REFURBISHED: 'Refurb',
+  USED_A:      'A',
+  USED_B:      'B',
+  USED_C:      'C',
+  PARTS:       'Parts',
 };
 
 /** Compact label for list rows — matches sidebar / label copy (USED-A, NEW, …). */
@@ -112,6 +114,8 @@ export function conditionGradeTableLabel(code: string | null | undefined): strin
   const c = String(code || '').trim().toUpperCase();
   if (!c) return 'N/A';
   if (c === 'BRAND_NEW') return 'NEW';
+  if (c === 'LIKE_NEW') return 'LIKE-NEW';
+  if (c === 'REFURBISHED') return 'REFURB';
   if (c === 'PARTS') return 'PARTS';
   if (c === 'USED_A') return 'USED-A';
   if (c === 'USED_B') return 'USED-B';

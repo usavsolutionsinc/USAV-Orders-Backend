@@ -14,7 +14,7 @@ import { CopyChip } from '@/components/ui/CopyChip';
 import { ShippingEditableRow, type EditableShippingFields } from '@/components/shipped/details-panel/ShippingInformationSection';
 import { useExternalItemUrl } from '@/hooks/useExternalItemUrl';
 
-type ConditionGrade = 'BRAND_NEW' | 'USED_A' | 'USED_B' | 'USED_C' | 'PARTS';
+type ConditionGrade = 'BRAND_NEW' | 'LIKE_NEW' | 'REFURBISHED' | 'USED_A' | 'USED_B' | 'USED_C' | 'PARTS';
 
 // Shipped orders historically stored the coarse 3-grade scale (NEW / USED /
 // PARTS); receiving switched to the 5-grade BRAND_NEW / USED_A/B/C / PARTS
@@ -24,6 +24,8 @@ type ConditionGrade = 'BRAND_NEW' | 'USED_A' | 'USED_B' | 'USED_C' | 'PARTS';
 function normalizeCondition(value: string | null | undefined): ConditionGrade {
   const normalized = String(value || '').trim().toUpperCase().replace(/[\s-]+/g, '_');
   if (normalized === 'BRAND_NEW' || normalized === 'NEW') return 'BRAND_NEW';
+  if (normalized === 'LIKE_NEW') return 'LIKE_NEW';
+  if (normalized === 'REFURBISHED' || normalized === 'REFURB') return 'REFURBISHED';
   if (normalized === 'USED_A') return 'USED_A';
   if (normalized === 'USED_B' || normalized === 'USED') return 'USED_B';
   if (normalized === 'USED_C') return 'USED_C';
