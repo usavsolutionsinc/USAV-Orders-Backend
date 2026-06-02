@@ -5,6 +5,7 @@ import { invalidateCacheTags } from '@/lib/cache/upstash-cache';
 import type { SerialUnitRow } from '@/lib/neon/serial-units-queries';
 import { registerShipmentPermissive } from '@/lib/shipping/sync-shipment';
 import { withAuth } from '@/lib/auth/withAuth';
+import { sortSerialUnitToParts } from '@/lib/inventory/parts-sort';
 import {
   normalizeReceivingHistorySearchField,
   normalizeReceivingHistorySearchScope,
@@ -829,7 +830,7 @@ export const POST = withAuth(async (request: NextRequest) => {
 }, { permission: 'receiving.mark_received' });
 
 // ─── PATCH ────────────────────────────────────────────────────────────────────
-export const PATCH = withAuth(async (request: NextRequest) => {
+export const PATCH = withAuth(async (request: NextRequest, ctx) => {
   try {
     const body = await request.json();
     const id   = Number(body?.id);
@@ -905,6 +906,7 @@ export const PATCH = withAuth(async (request: NextRequest) => {
       values.push(d);
     }
 
+    let isPartsCondition = false;
     if (body?.condition_grade !== undefined) {
       const c = String(body.condition_grade || '').trim().toUpperCase();
       if (!CONDITIONS.has(c)) {
@@ -912,6 +914,7 @@ export const PATCH = withAuth(async (request: NextRequest) => {
       }
       updates.push(`condition_grade = $${idx++}`);
       values.push(c);
+      isPartsCondition = c === 'PARTS';
     }
 
     if (body?.disposition_audit !== undefined) {
@@ -946,6 +949,12 @@ export const PATCH = withAuth(async (request: NextRequest) => {
       }
       updates.push(`needs_test = $${idx++}`);
       values.push(nextNeedsTest);
+    } else if (isPartsCondition) {
+      // A "For Parts" line skips testing entirely — clear needs_test so it
+      // drops out of the test queue. Parts don't require a tech assignment,
+      // so this bypasses the tech-assignment guard above.
+      updates.push(`needs_test = $${idx++}`);
+      values.push(false);
     }
 
     const hasTrackingEdit = body?.zoho_reference_number !== undefined;
@@ -968,6 +977,27 @@ export const PATCH = withAuth(async (request: NextRequest) => {
         return NextResponse.json({ success: false, error: 'receiving_line not found' }, { status: 404 });
       }
       updatedRow = result.rows[0];
+    }
+
+    // "For Parts" line → sort every serial already attached to this line into
+    // the Technical Room parts bin (STOCKED, pickable). Best-effort: a sort
+    // failure must not fail the PATCH.
+    if (isPartsCondition) {
+      try {
+        const serials = await pool.query<{ id: number }>(
+          `SELECT id FROM serial_units WHERE origin_receiving_line_id = $1`,
+          [id],
+        );
+        for (const s of serials.rows) {
+          await sortSerialUnitToParts({
+            serialUnitId: s.id,
+            staffId: ctx.staffId ?? null,
+            station: 'RECEIVING',
+          });
+        }
+      } catch (sortErr) {
+        console.warn('[receiving-lines PATCH] parts auto-sort failed (non-fatal)', sortErr);
+      }
     }
 
     // Canonical tracking path: a manual tracking submission registers the

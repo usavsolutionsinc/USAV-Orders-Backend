@@ -5,6 +5,7 @@ import { ByUnitView } from '@/components/inventory/ByUnitView';
 import { Check, Loader2, ShieldCheck } from '@/components/Icons';
 import { microBadge, sectionLabel } from '@/design-system/tokens/typography/presets';
 import { CONDITION_GRADE_VALUES } from '@/components/inventory/types';
+import { toast } from '@/lib/toast';
 import { InventoryDetailPanelShell } from './InventoryDetailPanelShell';
 
 export interface UnitDetailsPanelProps {
@@ -62,6 +63,11 @@ export function UnitDetailsPanel({ ref, onClose }: UnitDetailsPanelProps) {
         >
             {summary ? (
                 <div className="border-b border-gray-200 bg-gray-50 px-5 py-4 space-y-4">
+                    {summary.condition_grade === 'PARTS' ? (
+                        <span className="inline-flex items-center gap-1.5 rounded-md bg-amber-50 px-2 py-1 text-eyebrow font-bold uppercase tracking-wide text-amber-800 ring-1 ring-inset ring-amber-200">
+                            Parts · Tech Room
+                        </span>
+                    ) : null}
                     <GradeActionCard
                         unitId={summary.id}
                         currentGrade={summary.condition_grade}
@@ -109,12 +115,15 @@ function GradeActionCard({ unitId, currentGrade, onMutated }: GradeActionCardPro
                     functional_notes: functional.trim() || undefined,
                 }),
             });
+            const data = await res.json().catch(() => null);
             if (!res.ok) {
-                const data = await res.json().catch(() => null);
                 throw new Error(data?.error || `grade ${res.status}`);
             }
             setCosmetic('');
             setFunctional('');
+            if (data?.parts_sorted) {
+                toast.success('Sorted to Tech Room parts bin — no testing or claim needed');
+            }
             onMutated();
         } catch (err: unknown) {
             setError(err instanceof Error ? err.message : 'Failed to grade');

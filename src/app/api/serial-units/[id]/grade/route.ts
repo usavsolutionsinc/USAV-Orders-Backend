@@ -5,6 +5,7 @@ import { db } from '@/lib/drizzle/db';
 import { appendInventoryEvent } from '@/lib/repositories/inventory/inventoryEvents';
 import { recordChange } from '@/lib/repositories/inventory/conditionHistory';
 import { CONDITION_GRADE_VALUES } from '@/components/inventory/types';
+import { sortSerialUnitToParts } from '@/lib/inventory/parts-sort';
 
 /**
  * POST /api/serial-units/[id]/grade
@@ -107,10 +108,29 @@ export const POST = withAuth(async (request, ctx) => {
             inventoryEventId: event.id,
         });
 
+        // Auto-sort: a unit graded "For Parts" needs no testing or claim — it's
+        // routed straight into the Technical Room parts bin (STOCKED, pickable).
+        // Best-effort: a sort failure never fails the grade write.
+        let partsSort: Awaited<ReturnType<typeof sortSerialUnitToParts>> | null = null;
+        if (newGrade === 'PARTS') {
+            try {
+                partsSort = await sortSerialUnitToParts({
+                    serialUnitId,
+                    staffId: actorStaffId,
+                    station: 'TECH',
+                    clientEventId,
+                });
+            } catch (sortErr) {
+                console.warn('[grade] parts auto-sort failed (non-fatal)', sortErr);
+            }
+        }
+
         return NextResponse.json({
             ok: true,
             unit: updated.rows[0],
             event_id: event.id,
+            parts_sorted: partsSort?.sorted === true,
+            parts_bin: partsSort?.sorted === true ? partsSort.bin : null,
         });
     } catch (err) {
         const message = err instanceof Error ? err.message : 'grade failed';
