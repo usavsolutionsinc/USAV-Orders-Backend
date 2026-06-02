@@ -2,6 +2,7 @@
 
 import { useEffect } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { qk } from '@/queries/keys';
 import { RSRecord, type RepairTab } from '@/lib/neon/repair-service-queries';
 import { useAblyChannel } from './useAblyChannel';
 import { getDbTableChannelName, getRepairsChannelName } from '@/lib/realtime/channels';
@@ -31,16 +32,16 @@ export function useRepairsTable(search?: string | null, tab: RepairTab = 'active
 
   // Live invalidation via Ably whenever any repair row changes.
   useAblyChannel(REPAIRS_CHANNEL, 'repair.changed', () => {
-    queryClient.invalidateQueries({ queryKey: ['repairs'] });
+    queryClient.invalidateQueries({ queryKey: qk.repairs.all });
   });
 
   useAblyChannel(REPAIR_DB_CHANNEL, 'db.row.changed', () => {
-    queryClient.invalidateQueries({ queryKey: ['repairs'] });
+    queryClient.invalidateQueries({ queryKey: qk.repairs.all });
   });
 
   useEffect(() => {
     const handleRefresh = () => {
-      queryClient.invalidateQueries({ queryKey: ['repairs'] });
+      queryClient.invalidateQueries({ queryKey: qk.repairs.all });
     };
     window.addEventListener('usav-refresh-data', handleRefresh);
     return () => window.removeEventListener('usav-refresh-data', handleRefresh);

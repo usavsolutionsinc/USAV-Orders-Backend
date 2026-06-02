@@ -57,4 +57,8 @@ export const qk = {
     week: (weekStart: string) => ['staff-schedule', 'week', weekStart] as const,
   },
   staffAvailabilityRules: ['staff-availability-rules'] as const,
+  repairs: {
+    all: ['repairs'] as const,
+    list: (page: number, limit: number) => ['repairs', page, limit] as const,
+  },
 } as const;

@@ -106,7 +106,7 @@ export function useRealtimeInvalidation({
     REPAIRS_CHANNEL,
     'repair.changed',
     () => {
-      queryClient.invalidateQueries({ queryKey: ['repairs'] });
+      queryClient.invalidateQueries({ queryKey: qk.repairs.all });
     },
     repair,
   );
@@ -175,7 +175,7 @@ export function useRealtimeInvalidation({
             queryClient.invalidateQueries({ queryKey: ['shipped-table-fba'] });
             queryClient.invalidateQueries({ queryKey: ['fba-board'] });
             queryClient.invalidateQueries({ queryKey: ['fba-shipments'] });
-            queryClient.invalidateQueries({ queryKey: ['repairs'] });
+            queryClient.invalidateQueries({ queryKey: qk.repairs.all });
             queryClient.invalidateQueries({ queryKey: ['receiving'] });
             queryClient.invalidateQueries({ queryKey: ['receiving-pending-unboxing'] });
             queryClient.invalidateQueries({ queryKey: ['receiving-lines-table'] });

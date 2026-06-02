@@ -15,6 +15,7 @@ import React, {
   useState,
 } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
+import { qk } from '@/queries/keys';
 import { useAuth } from '@/contexts/AuthContext';
 import { toast } from '@/lib/toast';
 
@@ -140,7 +141,7 @@ export function ActivityInboxProvider({
         }
         toast.success('Change reverted');
         await Promise.all([
-          queryClient.invalidateQueries({ queryKey: ['repairs'] }),
+          queryClient.invalidateQueries({ queryKey: qk.repairs.all }),
           queryClient.invalidateQueries({
             queryKey: ['repair', item.repairId],
           }),

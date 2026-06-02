@@ -1,4 +1,5 @@
 import { useQuery, useMutation, useQueryClient, type QueryClient } from '@tanstack/react-query';
+import { qk } from '@/queries/keys';
 import { toast } from '@/lib/toast';
 import { RSRecord } from '@/lib/neon/repair-service-queries';
 import { useActivityInboxOptional } from '@/contexts/ActivityInboxContext';
@@ -47,7 +48,7 @@ function readRepairPreviousStatus(
   }
 
   const bundles = queryClient.getQueriesData<unknown>({
-    queryKey: ['repairs'],
+    queryKey: qk.repairs.all,
   });
 
   for (const [, data] of bundles) {
@@ -83,7 +84,7 @@ function readRepairPreviousStatus(
  */
 export function useRepairs(page = 1, limit = 50) {
   return useQuery({
-    queryKey: ['repairs', page, limit],
+    queryKey: qk.repairs.list(page, limit),
     queryFn: async () => {
       const res = await fetch(`/api/repair-service?page=${page}&limit=${limit}`);
       if (!res.ok) throw new Error('Failed to fetch repairs');
@@ -127,7 +128,7 @@ export function useUpdateRepairStatus() {
       return res.json();
     },
     onMutate: async ({ id, status }) => {
-      await queryClient.cancelQueries({ queryKey: ['repairs'] });
+      await queryClient.cancelQueries({ queryKey: qk.repairs.all });
       await queryClient.cancelQueries({ queryKey: ['repair', id] });
 
       const { found, status: prevStatus } = readRepairPreviousStatus(
@@ -135,14 +136,14 @@ export function useUpdateRepairStatus() {
         id,
       );
 
-      const listSnapshots = queryClient.getQueriesData({ queryKey: ['repairs'] });
+      const listSnapshots = queryClient.getQueriesData({ queryKey: qk.repairs.all });
       const detailSnapshot = queryClient.getQueryData<RSRecord | undefined>([
         'repair',
         id,
       ]);
 
       queryClient.setQueriesData<unknown>(
-        { queryKey: ['repairs'] },
+        { queryKey: qk.repairs.all },
         (old: unknown) => mapRepairListCaches(old, id, status),
       );
 
@@ -185,7 +186,7 @@ export function useUpdateRepairStatus() {
           nextStatus: variables.status,
         });
       }
-      queryClient.invalidateQueries({ queryKey: ['repairs'] });
+      queryClient.invalidateQueries({ queryKey: qk.repairs.all });
       void queryClient.invalidateQueries({ queryKey: ['repair', variables.id] });
     },
   });
@@ -209,7 +210,7 @@ export function useUpdateRepairNotes() {
     },
     onSuccess: () => {
       toast.success('Notes saved');
-      queryClient.invalidateQueries({ queryKey: ['repairs'] });
+      queryClient.invalidateQueries({ queryKey: qk.repairs.all });
     },
     onError: (err) => {
       toast.error('Failed to save notes');
@@ -235,7 +236,7 @@ export function useUpdateRepairField() {
       return res.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['repairs'] });
+      queryClient.invalidateQueries({ queryKey: qk.repairs.all });
     },
     onError: (err) => {
       toast.error('Failed to update field');
