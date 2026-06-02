@@ -46,7 +46,9 @@ export function GlobalHeader({
           aria-label={sidebarCollapsed ? 'Show sidebar' : 'Hide sidebar'}
           aria-pressed={!sidebarCollapsed}
           title={sidebarCollapsed ? 'Show sidebar' : 'Hide sidebar'}
-          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-gray-600 transition-colors hover:bg-gray-100 active:bg-gray-200"
+          /* Pull flush to the content edge so the centered icon lines up with
+             the table's status-dot column (dot center ≈16px in). */
+          className="-ml-3 flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-gray-600 transition-colors hover:bg-gray-100 active:bg-gray-200 sm:-ml-4"
         >
           <svg
             viewBox="0 0 24 24"

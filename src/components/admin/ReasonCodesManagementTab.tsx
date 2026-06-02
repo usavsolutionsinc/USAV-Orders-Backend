@@ -28,6 +28,12 @@ const DIRECTION_OPTIONS: Array<{ value: Direction; label: string }> = [
   { value: 'out', label: 'Out' },
 ];
 
+/**
+ * User-selectable categories. Must stay within the DB `reason_codes_category_chk`
+ * set; `initial` is system-only (seed balances) so it's omitted from the picker.
+ */
+const CATEGORY_OPTIONS = ['movement', 'adjustment', 'shrinkage', 'sale', 'return'] as const;
+
 interface ReasonCodeFormState {
   code: string;
   label: string;
@@ -41,7 +47,7 @@ interface ReasonCodeFormState {
 const DEFAULT_FORM_STATE: ReasonCodeFormState = {
   code: '',
   label: '',
-  category: '',
+  category: 'adjustment',
   direction: 'either',
   requiresNote: false,
   requiresPhoto: false,
@@ -329,13 +335,15 @@ export function ReasonCodesManagementTab() {
 
               <label className="space-y-1">
                 <span className={`block ${sectionLabel}`}>Category</span>
-                <input
-                  type="text"
+                <select
                   value={form.category}
                   onChange={(e) => setForm((c) => ({ ...c, category: e.target.value }))}
-                  placeholder="shrinkage, cycle_count..."
                   className={inputClass}
-                />
+                >
+                  {CATEGORY_OPTIONS.map((c) => (
+                    <option key={c} value={c}>{c}</option>
+                  ))}
+                </select>
               </label>
 
               <label className="space-y-1 md:col-span-2">

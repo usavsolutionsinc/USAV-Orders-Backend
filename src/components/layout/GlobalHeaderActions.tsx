@@ -1,20 +1,27 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { usePathname } from 'next/navigation';
-import { Search, Bell, X } from '@/components/Icons';
+import { Search, Inbox, Pencil } from '@/components/Icons';
 import { cn } from '@/utils/_cn';
 import { useAuth } from '@/contexts/AuthContext';
+import { useHeader } from '@/contexts/HeaderContext';
 import { useActivityInboxOptional } from '@/contexts/ActivityInboxContext';
-import { useQuickAccess } from '@/lib/quick-access/use-quick-access';
-import { useQuickAccessHotkey } from '@/lib/quick-access/use-hotkey';
 import { QuickAccessPopover } from '@/components/quick-access/QuickAccessPopover';
 import { PhoneHistoryPopover } from '@/components/quick-access/PhoneHistoryPopover';
 import { ActivityInboxPopover } from '@/components/quick-access/ActivityInboxPopover';
-import { ActiveStaffChip } from '@/components/auth/ActiveStaffChip';
-import { UserMenu } from './UserMenu';
+import { getStaffThemeById, stationThemeColors } from '@/utils/staff-colors';
 
-type OpenPopover = 'none' | 'search' | 'history' | 'inbox';
+type OpenPopover = 'none' | 'history' | 'inbox' | 'account';
+
+function initials(name: string): string {
+  return name
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((p) => p[0]?.toUpperCase() ?? '')
+    .join('');
+}
 
 /**
  * Persistent right zone of the {@link GlobalHeader}.
@@ -28,12 +35,33 @@ type OpenPopover = 'none' | 'search' | 'history' | 'inbox';
 export function GlobalHeaderActions() {
   const pathname = usePathname();
   const { user } = useAuth();
-  const { settings } = useQuickAccess();
+  const { selection } = useHeader();
   const inbox = useActivityInboxOptional();
   const inboxCount = inbox?.items.length ?? 0;
 
   const [popover, setPopover] = useState<OpenPopover>('none');
+  const [staffName, setStaffName] = useState('');
   const wrapperRef = useRef<HTMLDivElement>(null);
+
+  // Staff name for the account avatar's initials (same source as the popover).
+  useEffect(() => {
+    if (!user) {
+      setStaffName('');
+      return;
+    }
+    let cancelled = false;
+    fetch(`/api/staff?id=${user.staffId}`, { cache: 'no-store' })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data: { staff?: { name?: string } } | null) => {
+        if (!cancelled && data?.staff?.name) setStaffName(data.staff.name);
+      })
+      .catch(() => {
+        /* fall back to the dot glyph */
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [user]);
 
   // Close everything on navigation.
   useEffect(() => {
@@ -52,52 +80,45 @@ export function GlobalHeaderActions() {
     return () => document.removeEventListener('mousedown', handler);
   }, [popover]);
 
-  const toggleSearch = useCallback(
-    () => setPopover((p) => (p === 'search' ? 'none' : 'search')),
-    [],
-  );
-  useQuickAccessHotkey(settings.hotkey === 'cmdk' && settings.enabled, toggleSearch);
-
   if (!user) return null;
 
-  const searchOpen = popover === 'search';
   const inboxOpen = popover === 'inbox';
+  const accountOpen = popover === 'account';
   const popoverPos = 'absolute right-0 top-full mt-1 z-50';
+
+  const sc = stationThemeColors[getStaffThemeById(user.staffId)];
 
   return (
     <div ref={wrapperRef} className="flex items-center gap-2">
-      {/* Search / quick-access launcher */}
-      {settings.enabled && (
-        <div className="relative">
-          <button
-            type="button"
-            onClick={toggleSearch}
-            aria-label={searchOpen ? 'Close quick access' : 'Open quick access'}
-            aria-expanded={searchOpen}
-            title="Quick access (⌘K)"
-            className={cn(
-              'flex h-9 w-9 items-center justify-center rounded-full text-gray-600 transition-colors hover:bg-gray-100 active:scale-95',
-              searchOpen && 'bg-gray-900 text-white hover:bg-gray-800',
-            )}
-          >
-            {searchOpen ? <X className="h-4 w-4" /> : <Search className="h-4 w-4" />}
-          </button>
-          {searchOpen && (
-            <div className={popoverPos}>
-              <QuickAccessPopover
-                onClose={() => setPopover('none')}
-                onOpenHistoryPopover={() => setPopover('history')}
-                onOpenInboxPopover={() => setPopover('inbox')}
-              />
-            </div>
+      {/* Selection toggle — registered per page via usePageSelection(). A
+          pencil that flips the active surface into select mode. */}
+      {selection && (
+        <button
+          type="button"
+          onClick={selection.onToggle}
+          aria-pressed={selection.active}
+          aria-label={selection.active ? 'Done selecting' : 'Select'}
+          title={selection.active ? 'Done selecting' : 'Select'}
+          className={cn(
+            'flex h-9 w-9 items-center justify-center rounded-full text-gray-600 transition-colors hover:bg-gray-100 active:scale-95',
+            selection.active && 'bg-gray-900 text-white hover:bg-gray-800',
           )}
-          {popover === 'history' && (
-            <div className={popoverPos}>
-              <PhoneHistoryPopover onClose={() => setPopover('none')} />
-            </div>
-          )}
-        </div>
+        >
+          <Pencil className="h-4 w-4" />
+        </button>
       )}
+
+      {/* Search — opens the ⌘K command bar (same as the keyboard shortcut),
+          not the quick-access surface. */}
+      <button
+        type="button"
+        onClick={() => window.dispatchEvent(new CustomEvent('usav-command-bar-open'))}
+        aria-label="Open command bar"
+        title="Search (⌘K)"
+        className="flex h-9 w-9 items-center justify-center rounded-full text-gray-600 transition-colors hover:bg-gray-100 active:scale-95"
+      >
+        <Search className="h-4 w-4" />
+      </button>
 
       {/* Notifications */}
       <div className="relative">
@@ -112,7 +133,7 @@ export function GlobalHeaderActions() {
             inboxOpen && 'bg-gray-100',
           )}
         >
-          <Bell className="h-4 w-4" />
+          <Inbox className="h-4 w-4" />
           {inboxCount > 0 && (
             <span className="absolute -right-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-rose-500 px-1 text-eyebrow font-bold tabular-nums text-white">
               {inboxCount > 9 ? '9+' : inboxCount}
@@ -126,11 +147,40 @@ export function GlobalHeaderActions() {
         )}
       </div>
 
-      {/* Staff switcher */}
-      <ActiveStaffChip variant="inline" />
-
-      {/* Account menu */}
-      <UserMenu />
+      {/* Account avatar — staff initial. Condenses the old staff switcher +
+          account menu into one control that opens the quick-access surface
+          (which already holds the staff card, switch-staff, settings + sign
+          out). */}
+      <div className="relative">
+        <button
+          type="button"
+          onClick={() => setPopover((p) => (p === 'account' ? 'none' : 'account'))}
+          aria-label="Account & quick access"
+          aria-expanded={accountOpen}
+          title={staffName || `Staff #${user.staffId}`}
+          className={cn(
+            'flex h-8 w-8 items-center justify-center rounded-full text-eyebrow font-bold text-white transition-transform active:scale-95',
+            sc.bg,
+            accountOpen && 'ring-2 ring-gray-300 ring-offset-1',
+          )}
+        >
+          {staffName ? initials(staffName) : '·'}
+        </button>
+        {accountOpen && (
+          <div className={popoverPos}>
+            <QuickAccessPopover
+              onClose={() => setPopover('none')}
+              onOpenHistoryPopover={() => setPopover('history')}
+              onOpenInboxPopover={() => setPopover('inbox')}
+            />
+          </div>
+        )}
+        {popover === 'history' && (
+          <div className={popoverPos}>
+            <PhoneHistoryPopover onClose={() => setPopover('none')} />
+          </div>
+        )}
+      </div>
     </div>
   );
 }
