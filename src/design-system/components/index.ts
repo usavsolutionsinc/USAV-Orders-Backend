@@ -1,4 +1,3 @@
-export * from './DetailLineRow';
 export * from './DetailsPanelRow';
 export * from './PanelSection';
 export * from './InlineSaveIndicator';
