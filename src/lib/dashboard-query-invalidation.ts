@@ -1,13 +1,14 @@
 import type { QueryClient } from '@tanstack/react-query';
+import { qk } from '@/queries/keys';
 
 const DASHBOARD_TABLE_KEYS = [
-  ['dashboard-table', 'pending'],
-  ['dashboard-table', 'unshipped'],
-  ['dashboard-table', 'shipped'],
-  ['dashboard-table', 'shipped-fba'],
-  ['shipped-table'],
-  ['dashboard-stock-zoho'],
-  ['dashboard-fba-shipments'],
+  qk.dashboardTable.pending,
+  qk.dashboardTable.unshipped,
+  qk.dashboardTable.shipped,
+  qk.dashboardTable.shippedFba,
+  qk.shippedTable,
+  qk.dashboardStockZoho,
+  qk.dashboardFbaShipments,
 ];
 
 /**

@@ -23,4 +23,14 @@ export const qk = {
     all: ['admin-fba-fnskus'] as const,
     list: (search: string) => ['admin-fba-fnskus', search] as const,
   },
+  dashboardTable: {
+    all: ['dashboard-table'] as const,
+    pending: ['dashboard-table', 'pending'] as const,
+    unshipped: ['dashboard-table', 'unshipped'] as const,
+    shipped: ['dashboard-table', 'shipped'] as const,
+    shippedFba: ['dashboard-table', 'shipped-fba'] as const,
+  },
+  shippedTable: ['shipped-table'] as const,
+  dashboardStockZoho: ['dashboard-stock-zoho'] as const,
+  dashboardFbaShipments: ['dashboard-fba-shipments'] as const,
 } as const;
