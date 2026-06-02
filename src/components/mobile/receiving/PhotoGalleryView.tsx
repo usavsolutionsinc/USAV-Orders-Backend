@@ -5,6 +5,8 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { MobileTopBar } from '@/components/mobile/receiving/MobileTopBar';
 import { useUploadQueue, photoUploadQueue, type PhotoScope } from '@/components/mobile/receiving/PhotoUploadQueue';
+import { NasPhotoPicker } from '@/components/mobile/receiving/NasPhotoPicker';
+import { nasConfigured } from '@/lib/nas-photos';
 import { useRealtimeInvalidation } from '@/hooks/useRealtimeInvalidation';
 
 interface PhotoRow {
@@ -35,6 +37,7 @@ export function PhotoGalleryView({ title, subtitle, backHref, scope, captureHref
   const queryKey = ['receiving-photos', scope.receivingId, scope.receivingLineId ?? 'po'];
   const queueEntries = useUploadQueue(scope);
   const [zoom, setZoom] = useState<string | null>(null);
+  const [nasOpen, setNasOpen] = useState(false);
   // Refresh the photo grid when another station uploads or a desktop QA action
   // fires on the receiving-log channel.
   useRealtimeInvalidation({ receiving: true });
@@ -78,12 +81,23 @@ export function PhotoGalleryView({ title, subtitle, backHref, scope, captureHref
         subtitle={subtitle}
         backHref={backHref}
         right={
-          <a
-            href={captureHref}
-            className="rounded-full bg-blue-600 px-3.5 py-2 text-caption font-black uppercase tracking-widest text-white active:bg-blue-700"
-          >
-            + Photo
-          </a>
+          <div className="flex items-center gap-2">
+            {nasConfigured() ? (
+              <button
+                type="button"
+                onClick={() => setNasOpen(true)}
+                className="rounded-full bg-white/10 px-3.5 py-2 text-caption font-black uppercase tracking-widest text-white active:bg-white/20"
+              >
+                NAS
+              </button>
+            ) : null}
+            <a
+              href={captureHref}
+              className="rounded-full bg-blue-600 px-3.5 py-2 text-caption font-black uppercase tracking-widest text-white active:bg-blue-700"
+            >
+              + Photo
+            </a>
+          </div>
         }
       />
 
@@ -157,6 +171,14 @@ export function PhotoGalleryView({ title, subtitle, backHref, scope, captureHref
             Delete
           </button>
         </div>
+      ) : null}
+
+      {nasOpen ? (
+        <NasPhotoPicker
+          scope={scope}
+          onClose={() => setNasOpen(false)}
+          onAttached={() => qc.invalidateQueries({ queryKey })}
+        />
       ) : null}
     </div>
   );

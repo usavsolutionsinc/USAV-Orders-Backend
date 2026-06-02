@@ -1,0 +1,26 @@
+# Small read-only file server for the receiving "Select from NAS" picker.
+# Runs on the Ugreen NAS (UGOS Pro → Docker / Container Station). See README.md.
+#
+#   docker compose up -d
+#
+services:
+  nas-photos:
+    image: nginx:alpine
+    container_name: usav-nas-photos
+    restart: unless-stopped
+    ports:
+      # Host:Container. Browse http://<nas-lan-ip>:8088/ to sanity-check.
+      - "8088:80"
+    volumes:
+      # ── The photos folder, mounted READ-ONLY (:ro) ───────────────────────
+      # LEFT side = the real path ON THE NAS host. Adjust to your share.
+      # On Ugreen UGOS this is usually /volume1/<share>/... — confirm with
+      # `ls /volume1` over SSH, or check the share's path in the UGOS UI.
+      # NEVER mount a parent folder that also contains secrets/keys.
+      - /volume1/personal_folder/Photos:/srv/photos:ro
+      - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro
+    # Defense in depth: the container itself can't write the volume either.
+    read_only: true
+    tmpfs:
+      - /var/cache/nginx
+      - /var/run
