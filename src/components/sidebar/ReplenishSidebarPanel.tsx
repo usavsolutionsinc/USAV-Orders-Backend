@@ -6,9 +6,9 @@ import { sidebarHeaderBandClass, sidebarHeaderRowClass } from '@/components/layo
 import { SearchBar } from '@/components/ui/SearchBar';
 import { HorizontalButtonSlider, type HorizontalSliderItem } from '@/components/ui/HorizontalButtonSlider';
 import { sectionLabel, fieldLabel } from '@/design-system/tokens/typography/presets';
-import { AlertTriangle, Loader2, Package, RefreshCw } from '@/components/Icons';
+import { AlertTriangle, Loader2, RefreshCw } from '@/components/Icons';
 
-type ReplenishTab = 'need' | 'incoming' | 'fifo';
+type ReplenishTab = 'need' | 'fifo';
 
 interface StatusCounts {
   detected: number;
@@ -29,9 +29,8 @@ const EMPTY_COUNTS: StatusCounts = {
 };
 
 const TAB_ITEMS: HorizontalSliderItem[] = [
-  { id: 'need',     label: 'Need to Order', icon: AlertTriangle },
-  { id: 'incoming', label: 'Incoming',      icon: Package },
-  { id: 'fifo',     label: 'FIFO Restock',  icon: RefreshCw },
+  { id: 'need', label: 'Need to Order', icon: AlertTriangle },
+  { id: 'fifo', label: 'FIFO Restock',  icon: RefreshCw },
 ];
 
 const PIPELINE_ITEMS: Array<{ key: keyof Omit<StatusCounts, 'total_active'>; label: string; tone: 'red' | 'orange' | 'yellow' | 'purple' | 'blue' }> = [
@@ -39,14 +38,14 @@ const PIPELINE_ITEMS: Array<{ key: keyof Omit<StatusCounts, 'total_active'>; lab
   { key: 'pending_review', label: 'Review', tone: 'orange' },
   { key: 'planned_for_po', label: 'Plan PO', tone: 'yellow' },
   { key: 'po_created', label: 'PO Sent', tone: 'purple' },
-  { key: 'waiting_for_receipt', label: 'Incoming', tone: 'blue' },
+  { key: 'waiting_for_receipt', label: 'Awaiting Receipt', tone: 'blue' },
 ];
 
 export function ReplenishSidebarPanel() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const activeTab = (searchParams.get('tab') as ReplenishTab) || 'need';
-  const [localSearch, setLocalSearch] = useState(searchParams.get('sku') || '');
+  const activeTab = (searchParams.get('rtab') as ReplenishTab) || 'need';
+  const [localSearch, setLocalSearch] = useState(searchParams.get('rsku') || '');
   const [counts, setCounts] = useState<StatusCounts>(EMPTY_COUNTS);
   const [urgentOrdersWaiting, setUrgentOrdersWaiting] = useState(0);
   const [syncing, setSyncing] = useState(false);
@@ -97,31 +96,31 @@ export function ReplenishSidebarPanel() {
   useEffect(() => {
     const timer = window.setTimeout(() => {
       const params = new URLSearchParams(searchParams.toString());
-      if (localSearch.trim()) params.set('sku', localSearch.trim());
-      else params.delete('sku');
-      router.replace(`/replenish?${params.toString()}`, { scroll: false });
+      if (localSearch.trim()) params.set('rsku', localSearch.trim());
+      else params.delete('rsku');
+      router.replace(`/inventory?${params.toString()}`, { scroll: false });
     }, 300);
     return () => window.clearTimeout(timer);
   }, [localSearch, router, searchParams]);
 
   const updateTab = (tab: ReplenishTab) => {
     const params = new URLSearchParams(searchParams.toString());
-    params.set('tab', tab);
-    params.delete('status');
-    router.replace(`/replenish?${params.toString()}`, { scroll: false });
+    params.set('rtab', tab);
+    params.delete('rstatus');
+    router.replace(`/inventory?${params.toString()}`, { scroll: false });
   };
 
-  const activeStatus = searchParams.get('status') || 'all';
+  const activeStatus = searchParams.get('rstatus') || 'all';
 
   const handlePipelineChange = (id: string) => {
     const params = new URLSearchParams(searchParams.toString());
     if (id === 'all' || id === activeStatus) {
-      params.delete('status');
+      params.delete('rstatus');
     } else {
-      params.set('status', id);
-      params.set('tab', 'need');
+      params.set('rstatus', id);
+      params.set('rtab', 'need');
     }
-    router.replace(`/replenish?${params.toString()}`, { scroll: false });
+    router.replace(`/inventory?${params.toString()}`, { scroll: false });
   };
 
   const triggerSync = async () => {

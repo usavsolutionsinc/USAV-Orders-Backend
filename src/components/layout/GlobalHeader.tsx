@@ -32,7 +32,7 @@ export function GlobalHeader() {
   if (!user) return null;
 
   return (
-    <header className="sticky top-0 z-40 flex h-12 w-full shrink-0 select-none items-center gap-3 border-b border-gray-200 bg-white/90 px-3 backdrop-blur-md sm:px-4">
+    <header className="sticky top-0 z-40 flex h-[40px] w-full shrink-0 select-none items-center gap-3 border-b border-gray-300 bg-white/90 px-3 backdrop-blur-md sm:px-4">
       {showMenuButton && (
         <button
           type="button"

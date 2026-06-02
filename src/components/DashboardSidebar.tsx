@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
-import { AlertCircle, Check, ChevronDown, Clock, LayoutDashboard, Menu, Package, PackageCheck, X } from '@/components/Icons';
+import { AlertCircle, Check, ChevronDown, Clock, LayoutDashboard, Menu, PackageCheck, X } from '@/components/Icons';
 import { sidebarHeaderBandClass } from '@/components/layout/header-shell';
 import { HorizontalButtonSlider, type HorizontalSliderItem } from '@/components/ui/HorizontalButtonSlider';
 import { sectionLabel } from '@/design-system/tokens/typography/presets';
@@ -26,7 +26,6 @@ import { InventorySidebarPanel } from '@/components/sidebar/InventorySidebarPane
 import { FbaSidebarPanel } from '@/components/fba/sidebar';
 import { SupportSidebarPanel } from '@/components/sidebar/SupportSidebarPanel';
 import { SettingsSidebarPanel } from '@/components/sidebar/SettingsSidebarPanel';
-import { ReplenishSidebarPanel } from '@/components/sidebar/ReplenishSidebarPanel';
 import { AuditLogSidebarPanel } from '@/components/sidebar/AuditLogSidebarPanel';
 import { useUIMode } from '@/design-system/providers/UIModeProvider';
 import { useAuth } from '@/contexts/AuthContext';
@@ -39,22 +38,25 @@ import {
 } from '@/lib/sidebar-navigation';
 import type { ShippedFormData } from '@/components/shipped';
 import { dispatchCloseShippedDetails, DASHBOARD_SHIPPED_FOCUS_SEARCH_PARAM } from '@/utils/events';
-import { getDashboardOrderViewFromSearch, getDashboardViewGroup, parseDashboardOpenOrderId } from '@/utils/dashboard-search-state';
+import { getDashboardOrderViewFromSearch, parseDashboardOpenOrderId } from '@/utils/dashboard-search-state';
 import { useDashboardSearchController } from '@/hooks/useDashboardSearchController';
 const MOBILE_SIDEBAR_MIN_WIDTH = 420;
 
-// Top-level groups. Pending / Shipped / Awaiting are all orders data, so they
-// collapse under one "Shipping" pill; FBA is a separate data source.
-const DASHBOARD_GROUP_ITEMS: HorizontalSliderItem[] = [
-  { id: 'orders', label: 'Shipping', icon: PackageCheck },
-  { id: 'fba',    label: 'FBA',      icon: Package },
-];
-
-// Sub-views shown above the search bar when the "Shipping" group is active.
+// Sub-views shown above the search bar.
 const DASHBOARD_ORDERS_SUBVIEW_ITEMS: HorizontalSliderItem[] = [
   { id: 'pending',   label: 'Pending',  icon: Clock },
   { id: 'shipped',   label: 'Shipped',  icon: PackageCheck },
   { id: 'unshipped', label: 'Awaiting', icon: AlertCircle },
+];
+
+// Type filter shown only on the Shipped sub-view. FBA lives here now (it used
+// to be a top-level group pill) — the shipped table already filters its records
+// by this value (see DashboardShippedTable `shippedFilter`).
+const DASHBOARD_SHIPPED_TYPE_ITEMS: HorizontalSliderItem[] = [
+  { id: 'all',    label: 'All' },
+  { id: 'orders', label: 'Orders' },
+  { id: 'sku',    label: 'SKU' },
+  { id: 'fba',    label: 'FBA' },
 ];
 
 function getSidebarTitle(pathname: string | null) {
@@ -138,31 +140,35 @@ function SidebarContextPanel({ onBackToAppNav }: { onBackToAppNav?: () => void }
   };
 
   if (routeKey === 'dashboard') {
-    const activeGroup = getDashboardViewGroup(dashboardSearch.orderView);
     const focusShippedSearch = searchParams.get(DASHBOARD_SHIPPED_FOCUS_SEARCH_PARAM) === '1';
     const filterControl = (
       <div className={`${sidebarHeaderBandClass} px-3`}>
-        <div className="py-2">
+        <div className="flex h-[40px] items-center">
           <HorizontalButtonSlider
-            items={DASHBOARD_GROUP_ITEMS}
-            value={activeGroup}
-            onChange={(group) => dashboardSearch.setOrderView(group === 'fba' ? 'fba' : 'pending')}
+            items={DASHBOARD_ORDERS_SUBVIEW_ITEMS}
+            value={dashboardSearch.orderView}
+            onChange={(view) => dashboardSearch.setOrderView(view as typeof dashboardSearch.orderView)}
             variant="nav"
-            aria-label="Dashboard view"
+            dense
+            aria-label="Orders view"
+            className="w-full"
           />
         </div>
-        {activeGroup === 'orders' ? (
+        {dashboardSearch.orderView === 'shipped' ? (
           <>
-            {/* Full-width rule, with matched padding above and below so both
-                pill rows sit at the same distance from the divider. */}
-            <div className="-mx-3 border-t border-gray-200" />
-            <div className="py-2">
+            {/* Type filter for the Shipped tab (All / Orders / SKU / FBA). */}
+            <div className="-mx-3 border-t border-gray-300" />
+            <div className="flex h-[40px] items-center">
               <HorizontalButtonSlider
-                items={DASHBOARD_ORDERS_SUBVIEW_ITEMS}
-                value={dashboardSearch.orderView}
-                onChange={(view) => dashboardSearch.setOrderView(view as typeof dashboardSearch.orderView)}
+                items={DASHBOARD_SHIPPED_TYPE_ITEMS}
+                value={dashboardSearch.shippedFilter}
+                onChange={(value) =>
+                  dashboardSearch.setShippedFilter(value as typeof dashboardSearch.shippedFilter)
+                }
                 variant="nav"
-                aria-label="Orders view"
+                dense
+                aria-label="Shipped type filter"
+                className="w-full"
               />
             </div>
           </>
@@ -250,11 +256,9 @@ function SidebarContextPanel({ onBackToAppNav }: { onBackToAppNav?: () => void }
   if (routeKey === 'audit-log') return <AuditLogSidebarPanel />;
   if (routeKey === 'receiving') return <ReceivingSidebarPanel />;
   if (routeKey === 'fba') return <FbaSidebarPanel />;
-  if (routeKey === 'replenish') return <ReplenishSidebarPanel />;
-  // /inventory's main shell owns its own header search + filter chips, but
-  // we still mount a small sidebar panel here so the section nav pills
-  // (Inventory ↔ PO Mailbox) live in the standard sidebar slot like every
-  // other section.
+  // /inventory's main shell owns its own header search + filter chips; the
+  // panel here carries the section toggle (Inventory ↔ Replenish) plus the
+  // tabbed inventory / replenish sidebars.
   if (routeKey === 'inventory') return <InventorySidebarPanel />;
   if (routeKey === 'products') return <ProductsSidebarPanel />;
   if (routeKey === 'warehouse') return <WarehouseSidebarPanel />;
@@ -453,8 +457,8 @@ export default function DashboardSidebar({ inDrawer = false, onNavigate }: { inD
         onClick={toggleNav}
         aria-expanded={isOpen}
         aria-label={isOpen ? 'Close navigation menu' : 'Open navigation menu'}
-        className={`group w-full flex min-h-[44px] items-center gap-3 px-3 py-3 text-left border-b border-gray-200 transition-colors hover:bg-gray-50 ${
-          inDrawer ? 'pt-[max(3.5rem,calc(env(safe-area-inset-top)+2.75rem))]' : ''
+        className={`group w-full flex h-[40px] items-center gap-3 px-3 py-2 text-left border-b border-gray-300 transition-colors hover:bg-gray-50 ${
+          inDrawer ? 'h-auto pt-[max(3.5rem,calc(env(safe-area-inset-top)+2.75rem))] pb-2' : ''
         }`}
       >
         <CurrentIcon className="h-5 w-5 shrink-0 text-blue-600" />

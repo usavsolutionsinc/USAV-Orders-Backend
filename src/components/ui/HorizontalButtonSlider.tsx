@@ -89,6 +89,12 @@ export type HorizontalButtonSliderProps = {
    */
   variant?: 'fba' | 'slate' | 'nav' | 'floating';
   size?: 'md' | 'lg';
+  /**
+   * Tighter vertical rhythm for the `nav` variant — drops the scroller's
+   * vertical padding from `py-2` to `py-1` so the row fits a 40px band exactly
+   * (32px pill + 8px). Used by header bands that must align on a 40px grid.
+   */
+  dense?: boolean;
   className?: string;
   legend?: string;
   /**
@@ -105,6 +111,7 @@ export function HorizontalButtonSlider({
   onChange,
   variant = 'fba',
   size = 'md',
+  dense = false,
   className = '',
   legend,
   navIconOnly = false,
@@ -121,7 +128,7 @@ export function HorizontalButtonSlider({
   // The `nav` variant uses scale-up + shadow on the active pill; the
   // overflow-x-auto would clip those on the Y axis too (browser quirk),
   // so we give the scroller vertical breathing room.
-  const scrollerPadY = variant === 'nav' ? 'py-2' : 'pb-0.5';
+  const scrollerPadY = variant === 'nav' ? (dense ? 'py-1' : 'py-2') : 'pb-0.5';
 
   // `floating` pills always fit on a phone — skip the scroller entirely so
   // the pill drop shadows aren't clipped by overflow-x-auto's implicit
@@ -157,9 +164,13 @@ export function HorizontalButtonSlider({
             if (variant === 'nav') {
               const Icon = item.icon;
               const isDisabled = !!item.disabled;
+              // `dense` pills lock to a flat 32px (h-8) with no active scale-up
+              // so they sit cleanly inside a 40px grid row (32 + py-1*2).
               const navSizeCls = navIconOnly
                 ? 'h-8 w-8 min-w-8 shrink-0 justify-center p-0'
-                : sizeCls;
+                : dense
+                  ? 'h-8 shrink-0 px-3 text-eyebrow tracking-wide'
+                  : sizeCls;
               const labelClass = Icon ? 'ml-1.5 max-w-[160px]' : 'max-w-[160px]';
               const stateClass = isDisabled
                 ? 'cursor-not-allowed bg-gray-50 text-gray-400 ring-gray-200'
@@ -176,7 +187,7 @@ export function HorizontalButtonSlider({
                   aria-label={isDisabled ? `${item.label} (coming soon)` : item.label}
                   title={isDisabled ? `${item.label} (coming soon)` : item.label}
                   disabled={isDisabled}
-                  animate={{ scale: isActive && !isDisabled ? 1.04 : 1 }}
+                  animate={{ scale: isActive && !isDisabled && !dense ? 1.04 : 1 }}
                   transition={framerTransition.sliderIndicator}
                   whileTap={isDisabled ? undefined : { scale: 0.96 }}
                   onClick={isDisabled ? undefined : () => onChange(item.id)}

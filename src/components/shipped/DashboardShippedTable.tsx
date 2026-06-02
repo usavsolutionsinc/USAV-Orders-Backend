@@ -741,9 +741,9 @@ export function DashboardShippedTable({
                                       {parseInt(String(record.quantity || '1'), 10) || 1}
                                     </span>
                                     {' • '}
-                                    {displayValues.condition || 'No Condition'}
+                                    {displayValues.condition || 'N/A'}
                                     {' • '}
-                                    {displayValues.sku || 'No SKU'}
+                                    {displayValues.sku || 'N/A'}
                                     {' • '}
                                     <span className={techColorClass}>{techDisplay}</span>
                                     {' • '}

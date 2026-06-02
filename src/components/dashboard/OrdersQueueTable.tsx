@@ -139,7 +139,7 @@ const OrdersQueueTableRow = memo(function OrdersQueueTableRow({
             <span className={qtyClass}>{qty}</span>
             {' • '}
             <span className={String(record.condition || '').trim().toLowerCase() === 'new' ? 'text-yellow-600' : undefined}>
-              {record.condition || 'No Condition'}
+              {record.condition || 'N/A'}
             </span>
             {' • '}
             <span className={testerColorClass}>{testerDisplay}</span>

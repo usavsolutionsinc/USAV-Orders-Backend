@@ -12,7 +12,7 @@ export function zendeskTicketUrl(
   ticketId: string | number | null | undefined,
 ): string | null {
   if (ticketId == null) return null;
-  const id = String(ticketId).replace(/^#/, '').trim();
+  const id = String(ticketId).trim().replace(/^#/, '').trim();
   if (!id) return null;
 
   // If the value is already a full URL (operators sometimes paste one), use it.

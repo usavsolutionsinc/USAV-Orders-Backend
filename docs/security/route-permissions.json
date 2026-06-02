@@ -1,9 +1,9 @@
 {
   "version": 1,
-  "generatedAt": "2026-06-01T23:03:30Z",
-  "totalRoutes": 480,
+  "generatedAt": "2026-06-02T03:38:01Z",
+  "totalRoutes": 481,
   "summary": {
-    "permissionGated": 404,
+    "permissionGated": 405,
     "authenticatedNoPermission": 15,
     "anonymousIntentional": 39,
     "serviceToService": 3,
@@ -1935,7 +1935,7 @@
         "GET"
       ],
       "gate": "withAuth",
-      "permission": "replenish.view",
+      "permission": "sku_stock.view",
       "exemptReason": null
     },
     {
@@ -3116,21 +3116,12 @@
       "exemptReason": null
     },
     {
-      "path": "/api/replenish/receiving-lines/route.ts",
-      "methods": [
-        "GET"
-      ],
-      "gate": "withAuth",
-      "permission": "replenish.view",
-      "exemptReason": null
-    },
-    {
       "path": "/api/replenish/shipped-fifo/route.ts",
       "methods": [
         "GET"
       ],
       "gate": "withAuth",
-      "permission": "replenish.view",
+      "permission": "sku_stock.view",
       "exemptReason": null
     },
     {
@@ -4280,10 +4271,28 @@
       "exemptReason": null
     },
     {
+      "path": "/api/zendesk/agents/route.ts",
+      "methods": [
+        "GET"
+      ],
+      "gate": "withAuth",
+      "permission": "integrations.zendesk",
+      "exemptReason": null
+    },
+    {
       "path": "/api/zendesk/tickets/[id]/comments/route.ts",
       "methods": [
         "GET",
         "POST"
+      ],
+      "gate": "withAuth",
+      "permission": "integrations.zendesk",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/zendesk/tickets/[id]/photos/route.ts",
+      "methods": [
+        "GET"
       ],
       "gate": "withAuth",
       "permission": "integrations.zendesk",

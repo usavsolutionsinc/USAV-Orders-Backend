@@ -56,7 +56,8 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
     if (!(severity in CLAIM_SEVERITY_LABEL)) {
       throw ApiError.badRequest('Invalid severity');
     }
-    const lineId = body.lineId != null ? Number(body.lineId) : null;
+    const lineIdRaw = body.lineId != null ? Number(body.lineId) : null;
+    const lineId = lineIdRaw != null && Number.isFinite(lineIdRaw) ? lineIdRaw : null;
 
     const editedSubject = typeof body.subject === 'string' ? body.subject.trim() : '';
     const editedDescription = typeof body.description === 'string' ? body.description.trim() : '';

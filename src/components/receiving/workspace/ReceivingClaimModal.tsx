@@ -339,7 +339,7 @@ export function ReceivingClaimModal({ open, row, onClose, onTicketCreated }: Pro
               {draftBody ? (
                 <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2">
                   <p className="text-micro font-black uppercase tracking-widest text-amber-700">
-                    Bridge unreachable — copy this body to Zendesk
+                    Zendesk unreachable — copy this body to Zendesk
                   </p>
                   <textarea
                     readOnly

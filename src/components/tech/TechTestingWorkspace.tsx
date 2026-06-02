@@ -55,6 +55,18 @@ interface NextIdResponse {
 
 const PRINT_QTY_OPTIONS = [1, 2, 3, 4, 5] as const;
 
+// ── Design-system surface tokens ───────────────────────────────────────────
+// One source of truth for card geometry so every panel on the page stays
+// consistent. `SECTION` is a flat hairline card; `SECTION_HERO` is the single
+// elevated surface (the carton header) that's allowed to float. `EYEBROW` is
+// the minimal section-label treatment (soft weight, muted, no uppercase)
+// shared across the page. See /design-demo for the full menu of variants
+// these were picked from.
+const SECTION = 'rounded-2xl bg-white p-4 ring-1 ring-gray-200/70';
+const SECTION_HERO =
+  'overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-gray-200/70';
+const EYEBROW = 'text-caption font-semibold text-gray-400';
+
 /**
  * Mirrors the receiving page's restore key but on its own namespace — testers
  * and receivers often work different lines at once on the same browser, so
@@ -432,17 +444,9 @@ export function TechTestingWorkspace({ staffId, selectedLineId, onSelectedLineCh
           toast.error(data?.error || `Scan failed (${res.status})`);
           return;
         }
-        if (data.already_received) {
-          toast.info(`Already received — ${serial}`);
+        if (data.already_attached) {
+          toast.info(`Already added — ${serial}`);
           return;
-        }
-        if (data.supplemental) {
-          // PO line was already at expected qty — the serial is still saved
-          // (serial_units + tech_serial_numbers) but the count / ledger don't
-          // move. Receiving and testing share this behavior.
-          toast.success(`Extra serial logged — ${serial}`, {
-            description: 'Beyond expected qty: no stock change.',
-          });
         }
         // Refresh the active row only when it matches; sibling rows pick the
         // update up via the `receiving-line-updated` event the API emits.
@@ -917,7 +921,7 @@ export function TechTestingWorkspace({ staffId, selectedLineId, onSelectedLineCh
     <>
       <div className="flex h-full min-h-0 flex-col bg-gray-50">
         <div className="min-h-0 flex-1 overflow-y-auto">
-          <div className="mx-auto w-full max-w-3xl space-y-4 px-4 py-5 pb-32 sm:px-6">
+          <div className="mx-auto w-full max-w-3xl space-y-3 px-4 py-5 pb-8 sm:px-6">
             {/* Toolbar — Audit + Copy. Mirrors LineEditPanel's header bar but
                 trimmed to the two actions a tech actually needs. Refresh/
                 Share/Zoho are receiver concerns and stay on the receiving
@@ -946,8 +950,10 @@ export function TechTestingWorkspace({ staffId, selectedLineId, onSelectedLineCh
               status={saving ? 'Saving' : undefined}
             />
 
-            {/* Carton header — photos + claim + listing/PO/tracking chips */}
-            <section className="overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-gray-200/60">
+            {/* Carton header — photos + claim + listing/PO/tracking chips.
+                The ONE elevated surface on the page (SECTION_HERO) so the eye
+                anchors here first. */}
+            <section className={SECTION_HERO}>
               {row.receiving_id != null ? (
                 <ReceivingCartonStaffDropdown
                   receivingId={row.receiving_id}
@@ -956,7 +962,7 @@ export function TechTestingWorkspace({ staffId, selectedLineId, onSelectedLineCh
                 />
               ) : null}
               <div
-                className={`px-4 py-3 ${row.receiving_id != null ? 'border-t border-gray-100' : ''}`}
+                className={`px-4 py-3 ${row.receiving_id != null ? 'border-t border-gray-200/70' : ''}`}
               >
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <div className="flex min-w-0 items-center gap-2">
@@ -1066,10 +1072,10 @@ export function TechTestingWorkspace({ staffId, selectedLineId, onSelectedLineCh
             ) : null}
 
             {/* ── DIV 4 — Notes (per-line) ────────────────────────────────── */}
-            <section className="rounded-2xl bg-white p-4 shadow-sm ring-1 ring-gray-200/60">
+            <section className={SECTION}>
               <label
                 htmlFor={`testing-notes-${row.id}`}
-                className="block text-eyebrow font-black uppercase tracking-widest text-gray-500"
+                className={`block ${EYEBROW}`}
               >
                 Notes
               </label>
@@ -1100,9 +1106,10 @@ export function TechTestingWorkspace({ staffId, selectedLineId, onSelectedLineCh
           </div>
         </div>
 
-        {/* Sticky bar — left split menu = quantity picker; primary = Pass + Print */}
+        {/* Floating pill — centered at the bottom, just the Pass + Print CTA.
+            The chevron split-menu still drives the print-quantity picker. */}
         <StickyActionBar
-          primaryFullWidth
+          floating
           primary={{
             label: primaryLabel,
             onClick: () => void handlePrimary(),
@@ -1121,13 +1128,6 @@ export function TechTestingWorkspace({ staffId, selectedLineId, onSelectedLineCh
             })),
             title: primaryTitle,
           }}
-          hints={[
-            !hasActiveSerial
-              ? { key: '⏎', label: 'Scan slot serial' }
-              : verdictPicked
-                ? { key: 'Qty', label: `${printQty}× copies` }
-                : { key: '◉', label: 'Pick a verdict' },
-          ]}
         />
       </div>
 

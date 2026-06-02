@@ -84,7 +84,7 @@ export function ExceptionsRow() {
       sub: oldestReplenHours != null ? `Oldest: ${oldestReplenHours}h ago` : 'No open tasks',
       Icon: Package,
       tone: { ring: 'bg-amber-50', text: 'text-amber-700', accent: 'bg-amber-500' },
-      href: '/replenish',
+      href: '/inventory?section=replenish',
       disabled: replen.data === null,
     },
     {

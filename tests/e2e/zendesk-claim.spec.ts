@@ -71,7 +71,7 @@ test.describe('Zendesk claim — receiving workspace', () => {
       expect(body.draftBody).toContain('Severity: High');
       expect(body.draftBody).toContain('Receiving Notes:');
       expect(body.draftBody).toContain('Crushed corner, screen cracked');
-      await expect(page.getByText(/Bridge unreachable/i)).toBeVisible();
+      await expect(page.getByText(/Zendesk unreachable/i)).toBeVisible();
     }
   });
 });

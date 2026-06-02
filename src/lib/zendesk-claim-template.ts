@@ -95,9 +95,12 @@ export async function buildReceivingClaimTemplate(
   }
 
   const photoResult = await pool.query(
+    // Cap the read — a claim body doesn't benefit from dozens of URLs, and this
+    // query runs on every debounced preview keystroke.
     `SELECT url FROM photos
      WHERE entity_type = 'RECEIVING' AND entity_id = $1
-     ORDER BY created_at ASC`,
+     ORDER BY created_at ASC
+     LIMIT 20`,
     [receivingId],
   );
   const photoUrls = (photoResult.rows as Array<{ url: string | null }>)

@@ -30,7 +30,6 @@ import { printProductLabel } from '@/lib/print/printProductLabel';
 import { LocalPickupIntakeForm } from '@/components/work-orders/LocalPickupIntakeForm';
 import { UnfoundQueueSidebarToolbar } from '@/components/receiving/unfound/UnfoundQueueSidebarToolbar';
 import {
-  dispatchLineUpdated,
   type ReceivingLineRow,
 } from '@/components/station/ReceivingLinesTable';
 import {
@@ -897,17 +896,10 @@ export function ReceivingSidebarPanel() {
           return;
         }
 
-        if (data.already_complete) {
-          toast.info('This order has already been fully received.', {
-            description: serial ? `Barcode: ${serial}` : undefined,
-          });
-          setSerialInput('');
-          setTimeout(() => serialInputRef.current?.focus(), 40);
-          return;
-        }
-
-        if (data.already_received) {
-          toast.info(`Already received — ${serial}`);
+        // Same serial already on this line — friendly no-op. Serials are
+        // sidecar metadata, so this never affects quantity.
+        if (data.already_attached) {
+          toast.info(`Already added — ${serial}`);
           setSerialInput('');
           setTimeout(() => serialInputRef.current?.focus(), 40);
           return;
@@ -925,39 +917,6 @@ export function ReceivingSidebarPanel() {
 
         // Clear input immediately for the next scan
         setSerialInput('');
-
-        dispatchLineUpdated({
-          id: state.id,
-          quantity_received: state.quantity_received,
-          quantity_expected: state.quantity_expected,
-          workflow_status: state.workflow_status ?? undefined,
-        });
-
-        // Optimistic local update
-        setPoContext((prev) => {
-          if (!prev) return prev;
-          const nextLines = prev.lines.map((l) =>
-            l.id === state.id
-              ? { ...l, quantity_received: state.quantity_received }
-              : l,
-          );
-          return { ...prev, lines: nextLines };
-        });
-
-        // Auto-advance arming when the armed line is complete
-        if (state.is_complete && armedLineId === state.id) {
-          setPoContext((prev) => {
-            if (!prev) return prev;
-            const remainingOpen = prev.lines.filter(
-              (l) =>
-                l.id !== state.id &&
-                (l.quantity_expected == null ||
-                  l.quantity_received < (l.quantity_expected ?? 0)),
-            );
-            setArmedLineId(remainingOpen.length === 1 ? remainingOpen[0].id : null);
-            return prev;
-          });
-        }
 
         // Return detection banner
         if (data.is_return) {
@@ -985,26 +944,17 @@ export function ReceivingSidebarPanel() {
           });
         }
 
-        // Broadcast to main panel
+        // Broadcast to main panel so the chip list refreshes. Quantity is
+        // unchanged by a serial scan — no qty payload here.
         window.dispatchEvent(
           new CustomEvent('receiving-serial-scanned', {
             detail: {
               line_id: state.id,
-              new_qty: state.quantity_received,
               serial_unit: data.serial_unit,
               is_return: !!data.is_return,
-              is_complete: !!state.is_complete,
             },
           }),
         );
-
-        if (state.is_complete) {
-          window.dispatchEvent(
-            new CustomEvent('receiving-line-complete', {
-              detail: { line_id: state.id },
-            }),
-          );
-        }
 
         setTimeout(() => serialInputRef.current?.focus(), 40);
       } catch {

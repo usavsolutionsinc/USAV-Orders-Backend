@@ -49,7 +49,7 @@ const ROLE_PERMISSION_SETS = {
     'sku_stock.view', 'sku_stock.adjust', 'sku_stock.manage',
     'bin.adjust', 'bin.set', 'bin.rename', 'bin.swap', 'bin.remove', 'bin.add_sku',
     'cycle_count.view', 'cycle_count.approve',
-    'replenish.view', 'replenish.create_po', 'replenish.approve_po',
+    'replenish.create_po', 'replenish.approve_po',
     'fba.view', 'reports.view', 'operations.view',
     'stock_alerts.ack',
     'admin.view_logs',
@@ -62,7 +62,7 @@ const ROLE_PERMISSION_SETS = {
   viewer: [
     'dashboard.view', 'operations.view', 'receiving.view', 'packing.view',
     'tech.view', 'shipping.view', 'fba.view', 'sku_stock.view',
-    'cycle_count.view', 'replenish.view', 'work_orders.view',
+    'cycle_count.view', 'work_orders.view',
     'walk_in.view', 'repair.view', 'orders.view', 'reports.view',
   ],
 };

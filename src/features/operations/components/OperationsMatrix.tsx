@@ -70,7 +70,7 @@ const DOMAINS: Domain[] = [
     tone: TONE_SAGE,
     links: [
       { name: 'Receiving Dock', href: '/receiving', active: true },
-      { name: 'Replenishment', href: '/replenish' },
+      { name: 'Replenishment', href: '/inventory?section=replenish' },
       { name: 'Warehouse Locations', href: '/warehouse' },
       { name: 'SKU Catalog', href: '/products' },
     ],

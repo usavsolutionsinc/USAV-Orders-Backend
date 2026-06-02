@@ -96,6 +96,11 @@ export default function WeekHeader({
 
   return (
     <PaneHeader
+      // Draw the divider as an inner line on the row (gray-300, matching the
+      // sidebar bands + day-group rows) instead of the faint outer border on
+      // the translucent sticky shell — keeps it aligned across columns.
+      className="border-b-0"
+      rowClassName="border-b border-gray-300"
       leftSlot={
         <>
           {leftSlot ? <div className="shrink-0">{leftSlot}</div> : null}

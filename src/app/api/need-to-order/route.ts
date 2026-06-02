@@ -22,4 +22,4 @@ export const GET = withAuth(async (req: NextRequest) => {
       { status: 500 }
     );
   }
-}, { permission: 'replenish.view' });
+}, { permission: 'sku_stock.view' });

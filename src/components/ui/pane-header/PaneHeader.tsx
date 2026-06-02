@@ -4,9 +4,9 @@ import type { ReactNode } from 'react';
 import { mainStickyHeaderClass } from '@/components/layout/header-shell';
 import { cn } from '@/utils/_cn';
 
-/** Inner row class — 44px target height, left/right justification, matches the existing WeekHeader shape. */
+/** Inner row class — 40px target height, left/right justification, matches the existing WeekHeader shape. */
 export const paneHeaderRowClass =
-  'flex min-h-[44px] items-center justify-between gap-4 px-3 py-1.5';
+  'flex h-[40px] items-center justify-between gap-4 px-3 py-1';
 
 interface PaneHeaderProps {
   /** Left side — typically icon badge + label/title block. Always laid out with `flex-1 min-w-0` so it truncates. */

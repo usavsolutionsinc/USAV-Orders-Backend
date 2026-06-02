@@ -1,5 +1,6 @@
 'use client';
 
+import { useSearchParams } from 'next/navigation';
 import { PulseView } from './PulseView';
 import { BySkuView } from './BySkuView';
 import { ByBinView } from './ByBinView';
@@ -7,10 +8,24 @@ import { ByUnitView } from './ByUnitView';
 import { ByFilterResultList } from './ByFilterResultList';
 import { useInventoryUrlState } from './useInventoryUrlState';
 import { InventoryDetailsOverlay } from './panels/InventoryDetailsOverlay';
+import { ReplenishWorkspace } from '@/components/replenish/ReplenishWorkspace';
 import { PageHeader } from '@/components/ui/pane-header';
 
 export function InventoryShell() {
     const { state, sidebar, clearAll } = useInventoryUrlState();
+    const searchParams = useSearchParams();
+
+    // `?section=replenish` swaps the whole right pane over to the replenish
+    // workspace (Need to Order / FIFO). The replenish controls live in the
+    // sidebar (ReplenishSidebarPanel), mounted by InventorySidebarPanel for
+    // the same section. Default/absent section = the inventory views below.
+    if (searchParams.get('section') === 'replenish') {
+        return (
+            <div className="flex h-full min-h-0 flex-col bg-gray-50">
+                <ReplenishWorkspace />
+            </div>
+        );
+    }
 
     const hasNonFilterTarget =
         state.view === 'by-sku' || state.view === 'by-bin' || state.view === 'by-unit';

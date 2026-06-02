@@ -169,7 +169,7 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
         'X-Source': 'usav',
       },
       body: JSON.stringify({
-        model: 'hermes-agent',
+        model: process.env.HERMES_MODEL || 'hermes-agent',
         messages: [
           {
             role: 'system',

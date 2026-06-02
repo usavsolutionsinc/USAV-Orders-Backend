@@ -64,8 +64,10 @@ interface Props {
   serialUnitId?: number | null;
 }
 
-const SECTION = 'rounded-2xl bg-white p-4 shadow-sm ring-1 ring-gray-200/60';
-const EYEBROW = 'text-eyebrow font-black uppercase tracking-widest text-gray-500';
+// Mirrors the surface tokens in TechTestingWorkspace — flat hairline card +
+// quieted section label. Keep these in sync (see /design-demo).
+const SECTION = 'rounded-2xl bg-white p-4 ring-1 ring-gray-200/70';
+const EYEBROW = 'text-caption font-semibold text-gray-400';
 
 export function SkuTestingPanel({ receivingLineId, sku, title, serialUnitId }: Props) {
   const [bundle, setBundle] = useState<Bundle | null>(null);
@@ -298,7 +300,7 @@ function ChecklistSection({
               setAdding((v) => !v);
               setDraft('');
             }}
-            className="flex items-center gap-1 rounded-md px-2 py-1 text-micro font-bold uppercase tracking-wider text-blue-600 hover:bg-blue-50"
+            className="flex items-center gap-1 rounded-md px-2 py-1 text-micro font-bold uppercase tracking-wider text-blue-600 transition-colors duration-150 hover:bg-blue-50"
           >
             <Plus className="h-3.5 w-3.5" /> Add
           </button>
@@ -317,8 +319,8 @@ function ChecklistSection({
           return (
             <li
               key={step.step_id}
-              className={`flex items-start gap-2 rounded-xl border px-3 py-2 ${
-                checked ? 'border-emerald-200 bg-emerald-50/60' : 'border-gray-200 bg-white'
+              className={`flex items-start gap-2 rounded-lg border px-3 py-2 transition-colors duration-150 ${
+                checked ? 'border-emerald-200 bg-emerald-50/60' : 'border-gray-200/70 bg-white'
               }`}
             >
               <button
@@ -327,7 +329,7 @@ function ChecklistSection({
                 disabled={!canRecord || recording || isEditing}
                 aria-pressed={checked}
                 title={canRecord ? 'Mark for this unit' : 'Scan a serial to record results'}
-                className={`mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-md border text-xs font-black ${
+                className={`mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-md border text-xs font-black transition-all duration-150 active:scale-95 ${
                   checked ? 'border-emerald-600 bg-emerald-600 text-white' : 'border-gray-300 bg-white text-transparent'
                 } ${!canRecord ? 'cursor-default opacity-90' : ''}`}
               >
@@ -376,7 +378,7 @@ function ChecklistSection({
                       setEditingId(step.step_id);
                       setEditLabel(step.step_label);
                     }}
-                    className="rounded-md p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-700"
+                    className="rounded-md p-1 text-gray-400 transition-colors duration-150 hover:bg-gray-100 hover:text-gray-700"
                     title="Edit step"
                   >
                     <Pencil className="h-3.5 w-3.5" />
@@ -384,7 +386,7 @@ function ChecklistSection({
                   <button
                     type="button"
                     onClick={() => void removeStep(step.step_id)}
-                    className="rounded-md p-1 text-gray-400 hover:bg-rose-50 hover:text-rose-600"
+                    className="rounded-md p-1 text-gray-400 transition-colors duration-150 hover:bg-rose-50 hover:text-rose-600"
                     title="Delete step"
                   >
                     <Trash2 className="h-3.5 w-3.5" />
@@ -460,7 +462,7 @@ function NoCatalogNotice({
   }, [receivingLineId, onCreated]);
 
   return (
-    <div className="mb-3 flex items-center justify-between gap-3 rounded-xl border border-amber-200 bg-amber-50/60 px-3 py-2">
+    <div className="mb-3 flex items-center justify-between gap-3 rounded-lg border border-amber-200 bg-amber-50/60 px-3 py-2">
       <span className="text-caption font-medium text-amber-800">
         No catalog entry for {sku || 'this SKU'} yet.
       </span>
@@ -515,7 +517,7 @@ function ManualsSection({
         <button
           type="button"
           onClick={() => setPairing((v) => !v)}
-          className="flex items-center gap-1 rounded-md px-2 py-1 text-micro font-bold uppercase tracking-wider text-blue-600 hover:bg-blue-50"
+          className="flex items-center gap-1 rounded-md px-2 py-1 text-micro font-bold uppercase tracking-wider text-blue-600 transition-colors duration-150 hover:bg-blue-50"
         >
           <Plus className="h-3.5 w-3.5" /> Pair
         </button>
@@ -540,7 +542,7 @@ function ManualsSection({
             return (
               <li
                 key={m.id}
-                className="flex items-center gap-3 rounded-xl border border-gray-200 bg-white px-3 py-2"
+                className="flex items-center gap-3 rounded-lg border border-gray-200/70 bg-white px-3 py-2"
               >
                 {m.thumbnail_url ? (
                   // eslint-disable-next-line @next/next/no-img-element
@@ -664,7 +666,7 @@ function ManualPicker({
   );
 
   return (
-    <div className="mb-3 rounded-xl border border-gray-200 bg-gray-50/60 p-2">
+    <div className="mb-3 rounded-lg border border-gray-200/70 bg-gray-50/60 p-2">
       <div className="flex items-center gap-2 rounded-md border border-gray-200 bg-white px-2 py-1.5">
         <Search className="h-4 w-4 shrink-0 text-gray-400" />
         <input

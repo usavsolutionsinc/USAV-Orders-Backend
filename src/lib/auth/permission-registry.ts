@@ -113,7 +113,8 @@ export const PERMISSIONS = [
   { id: 'bin.add_sku',              category: 'inventory', label: 'Add SKU to bin' },
   { id: 'cycle_count.view',         category: 'inventory', label: 'View cycle counts' },
   { id: 'cycle_count.approve',      category: 'inventory', label: 'Approve cycle count', destructive: true, stepUp: true },
-  { id: 'replenish.view',           category: 'inventory', label: 'View replenishment' },
+  // 'replenish.view' was collapsed into 'sku_stock.view' when replenish moved
+  // into the inventory page. The create/approve PO actions below stay distinct.
   { id: 'replenish.create_po',      category: 'inventory', label: 'Create replenishment PO' },
   { id: 'replenish.approve_po',     category: 'inventory', label: 'Approve replenishment PO', destructive: true, stepUp: true },
   { id: 'stock_alerts.ack',          category: 'inventory', label: 'Acknowledge stock alerts' },
