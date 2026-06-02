@@ -447,3 +447,24 @@ Migrated the **scroll-lock cluster** (9 of the 10 sites) onto `useBodyScrollLock
 `components/ui/BottomSheet.tsx` deliberately **not** migrated — it is the correct reference implementation (portal + scroll-lock + esc + drag-dismiss) others should eventually compose.
 
 **Deferred:** the ~28 standalone Escape-only sites are mostly popovers/dropdowns with intertwined click-outside logic, so `useEscapeClose` alone isn't the full story — they want a dedicated `Popover` / `useOnClickOutside` pass, not a blind swap.
+
+---
+
+## 8. Phase 3 progress — React Query key factory (`src/queries/keys.ts`, `qk`)
+
+**Decision:** React Query is the standard for shared server data. Cache keys were string literals duplicated across files (a typo silently breaks caching/invalidation), so `qk` is now the single source. Adoption is **incremental** — a query and its invalidations move together, with **identical key arrays** (zero behavior change), and only **uncontended** files are touched (a concurrent session has been editing receiving/tech/zendesk/sku-catalog/dashboard/sidebar/admin-staff).
+
+Migrated clusters (each its own commit, `tsc` 0 errors, pushed):
+| Cluster | `qk` entry | Files |
+|---|---|---|
+| walk-in-sales | `qk.walkInSales.{list,all}` | `useWalkInSales`, `useRealtimeInvalidation` |
+| ebay-accounts | `qk.ebayAccounts` | `AwaitingEbayPanel`, `OrdersIntegrityCard`, `ConnectionsSidebarPanel` |
+| admin-fba-fnskus | `qk.adminFbaFnskus.{list,all}` | `FbaCatalogSidebarPanel`, `FBAManagementTab`, `FbaFnskuDirectoryPanel` |
+| dashboard invalidation hub | `qk.dashboardTable.*`, `qk.shippedTable`, `qk.dashboardStockZoho`, `qk.dashboardFbaShipments` | `lib/dashboard-query-invalidation` |
+| admin-features | `qk.adminFeatures.{list,all}` | `FeaturesManagementTab` |
+| FBA realtime hub | `qk.fba.{board,stageCounts,queue,logs,shipments,fnskus}` | `useFbaRealtimeInvalidation` |
+
+**Remaining / blocked:**
+- The high-frequency multi-file clusters (`staff`×15, `repairs`×13, `staff-schedule`, `dashboard-table` *consumers*, `receiving-*`, `shipped-table` consumers) live in files the concurrent session is actively editing → **contended**, deferred.
+- Some literals (`tech-logs`, `receiving-logs`, `fba-board`) also appear in **API routes** where they are NOT query keys — those need per-site inspection, not a blind cluster swap.
+- ~20 keys are **single-file/single-use** (not cross-file duplication) — migrating them is low-value "convention centralization"; do opportunistically when touching those files.
