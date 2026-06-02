@@ -382,7 +382,7 @@ export async function createLocation(data: {
 
 export async function updateLocation(
   id: number,
-  data: Partial<{ name: string; room: string | null; description: string | null; barcode: string | null; isActive: boolean; sortOrder: number }>,
+  data: Partial<{ name: string; room: string | null; description: string | null; barcode: string | null; binType: string | null; capacity: number | null; isActive: boolean; sortOrder: number }>,
 ): Promise<Location | null> {
   const sets: string[] = ['updated_at = NOW()'];
   const params: unknown[] = [];
@@ -392,6 +392,8 @@ export async function updateLocation(
   if (data.room !== undefined) { sets.push(`room = $${idx++}`); params.push(data.room?.trim() || null); }
   if (data.description !== undefined) { sets.push(`description = $${idx++}`); params.push(data.description?.trim() || null); }
   if (data.barcode !== undefined) { sets.push(`barcode = $${idx++}`); params.push(data.barcode?.trim() || null); }
+  if (data.binType !== undefined) { sets.push(`bin_type = $${idx++}`); params.push(data.binType?.trim() || null); }
+  if (data.capacity !== undefined) { sets.push(`capacity = $${idx++}`); params.push(data.capacity); }
   if (data.isActive !== undefined) { sets.push(`is_active = $${idx++}`); params.push(data.isActive); }
   if (data.sortOrder !== undefined) { sets.push(`sort_order = $${idx++}`); params.push(data.sortOrder); }
 

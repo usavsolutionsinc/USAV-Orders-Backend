@@ -14,7 +14,9 @@
 --                            normal sellable stock (sellable + usable for repair).
 --   sort_order = 998       → sorts near the end of walking-path queues (just
 --                            ahead of UNSORTED=999) so pickers prefer real bins.
---   zone_letter = 'Z'      → keeps it visually last in supervisor views.
+--   zone_letter = NULL     → bins don't carry a zone letter (only parent room
+--                            rows do); a value would collide with the UNSORTED
+--                            bin under idx_locations_zone_letter_unique_active.
 --   room = 'Technical Room'→ physical home of the bin.
 --   is_active = true       → eligible for selection / scan.
 --   warehouse_id = 1       → matches the existing locations.
@@ -39,7 +41,7 @@ SELECT
   'RESERVE',
   FALSE,
   1,
-  'Z',
+  NULL,
   '00000000-0000-0000-0000-000000000001'::uuid
 WHERE NOT EXISTS (
   SELECT 1 FROM locations

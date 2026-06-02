@@ -99,6 +99,7 @@ export const AUDIT_ACTION = {
   RECEIVING_HEADER_UPDATE:   'receiving.header.update',
   // Bin / location
   BIN_CREATE: 'bin.create',
+  BIN_UPDATE: 'bin.update',
   BIN_RENAME: 'bin.rename',
   BIN_MOVE:   'bin.move',
   BIN_SWAP:   'bin.swap',

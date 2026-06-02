@@ -57,6 +57,27 @@ export const LocationsPatchBody = z.discriminatedUnion('action', [
 ]);
 export type LocationsPatchBody = z.infer<typeof LocationsPatchBody>;
 
+// ─── PATCH /api/locations/[barcode]/properties ──────────────────────────────
+
+/**
+ * Edit a bin's own metadata (name / barcode / type / capacity) after creation —
+ * distinct from the content-action PATCH on /[barcode] (take/put/set/count).
+ * `barcode` and `binType` may be cleared with null; at least one field required.
+ */
+export const LocationPropertiesPatchBody = z
+  .object({
+    name: trimmedStr.optional(),
+    barcode: z.string().trim().min(1).nullable().optional(),
+    binType: z.string().trim().min(1).nullable().optional(),
+    capacity: nonNegInt.nullable().optional(),
+    sortOrder: nonNegInt.optional(),
+  })
+  .strict()
+  .refine((b) => Object.keys(b).length > 0, {
+    message: 'At least one field must be provided',
+  });
+export type LocationPropertiesPatchBody = z.infer<typeof LocationPropertiesPatchBody>;
+
 // ─── POST /api/locations/[barcode]/swap ─────────────────────────────────────
 
 export const LocationsSwapBody = z.object({

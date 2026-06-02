@@ -8,6 +8,10 @@ import { FBAManagementTab } from '@/components/admin/FBAManagementTab';
 import { FeaturesManagementTab } from '@/components/admin/FeaturesManagementTab';
 import { ManualAssignmentTab } from '@/components/admin/ManualAssignmentTab';
 import { ReasonCodesManagementTab } from '@/components/admin/ReasonCodesManagementTab';
+import { SkuCatalogManagementTab } from '@/components/admin/SkuCatalogManagementTab';
+import { RepairIssuesManagementTab } from '@/components/admin/RepairIssuesManagementTab';
+import { FavoritesManagementTab } from '@/components/admin/FavoritesManagementTab';
+import { LocationsManagementTab } from '@/components/admin/LocationsManagementTab';
 import { AdminLogsTab } from '@/components/admin/AdminLogsTab';
 import { AdminJobsTab } from '@/components/admin/AdminJobsTab';
 import AiChatTab from '@/components/admin/AiChatTab';
@@ -49,6 +53,10 @@ function renderTab(
     case 'photo_backup': return <PhotoBackupTab />;
     case 'billing':      return <BillingTab />;
     case 'reason_codes': return <ReasonCodesManagementTab />;
+    case 'sku_catalog':  return <SkuCatalogManagementTab />;
+    case 'repair_issues': return <RepairIssuesManagementTab />;
+    case 'favorites':    return <FavoritesManagementTab />;
+    case 'locations':    return <LocationsManagementTab />;
     case 'manuals':
       return (
         <ManualAssignmentTab
