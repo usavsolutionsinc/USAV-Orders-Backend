@@ -152,7 +152,10 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
             }
         }
 
-        // Step 4: Create Zendesk ticket via the Zendesk REST API
+        // Step 4: Create Zendesk ticket via the Zendesk REST API.
+        // A client-supplied Idempotency-Key dedupes the ticket if the request is
+        // replayed (full route-level idempotency for the repair row is a follow-up).
+        const idempotencyKey = req.headers.get('Idempotency-Key')?.trim() || undefined;
         let zendeskTicketNumber: string | null = null;
         try {
             zendeskTicketNumber = await createZendeskTicket({
@@ -167,7 +170,7 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
                 serialNumber: normalizedSerialNumber,
                 price: normalizedPrice,
                 notes: normalizedNotes
-            });
+            }, { idempotencyKey });
             console.log('Zendesk ticket created:', zendeskTicketNumber ?? 'missing ticket number');
             if (zendeskTicketNumber) {
                 await updateRepairField(dbId, 'ticket_number', zendeskTicketNumber);

@@ -142,3 +142,31 @@ export async function buildReceivingClaimTemplate(
 
   return { subject, description: descriptionLines.join('\n') };
 }
+
+/**
+ * Render a plaintext claim/ticket body as Zendesk-safe HTML for `comment.html_body`:
+ * HTML-escapes the text, turns http(s) URLs into clickable links (so attached
+ * photo URLs are one click for agents), bolds "Label:" prefixes, and converts
+ * newlines to <br>. Works on both the generated template and operator-edited text.
+ */
+export function claimBodyToHtml(text: string): string {
+  const escape = (s: string) =>
+    s
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;');
+
+  const urlRe = /(https?:\/\/[^\s<]+)/g;
+
+  const lines = String(text ?? '').split('\n').map((line) => {
+    // Linkify URLs first (against the escaped line), then bold a leading "Label:".
+    let html = escape(line).replace(
+      urlRe,
+      (url) => `<a href="${url}" target="_blank" rel="noopener noreferrer">${url}</a>`,
+    );
+    html = html.replace(/^([A-Za-z][\w /-]{0,40}:)(\s)/, '<strong>$1</strong>$2');
+    return html;
+  });
+
+  return lines.join('<br>');
+}

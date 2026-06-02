@@ -1,8 +1,11 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { toast } from '@/lib/toast';
-import { Barcode, ClipboardList, MapPin, Package } from '@/components/Icons';
+import { Barcode, ClipboardList, Clock, History, MapPin, Package } from '@/components/Icons';
+import { HorizontalButtonSlider, type HorizontalSliderItem } from '@/components/ui/HorizontalButtonSlider';
+import { sidebarHeaderBandClass } from '@/components/layout/header-shell';
 import { TestingScanBar } from '@/components/sidebar/receiving/TestingScanBar';
 import { TestingRecentRail } from '@/components/sidebar/receiving/TestingRecentRail';
 import {
@@ -70,10 +73,29 @@ function viaAckMeta(via: ResolvedVia): { label: string; Icon: typeof MapPin; chi
   }
 }
 
+const TESTING_TAB_ITEMS: HorizontalSliderItem[] = [
+  { id: 'recent', label: 'Recent', icon: Clock },
+  { id: 'history', label: 'History', icon: History },
+];
+
 export function TestingSidebarPanel({
   selectedLineId: selectedLineIdProp,
   staffId,
 }: Props) {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  // Recent (scan + live rail, default) vs History (browse + bulk-select feed in
+  // the main pane). Mirrors the Receiving/FBA sidebar's mode pills.
+  const testingTab = searchParams.get('testingTab') === 'history' ? 'history' : 'recent';
+  const updateTestingTab = useCallback(
+    (next: string) => {
+      const params = new URLSearchParams(searchParams.toString());
+      if (next === 'history') params.set('testingTab', 'history');
+      else params.delete('testingTab');
+      router.replace(`/tech?${params.toString()}`);
+    },
+    [router, searchParams],
+  );
   const [scanValue, setScanValue] = useState('');
   const [isResolving, setIsResolving] = useState(false);
   /** Armed search route — forces the next scan's type. null = auto-detect. */
@@ -198,6 +220,27 @@ export function TestingSidebarPanel({
 
   return (
     <div className="relative flex h-full w-full flex-col overflow-hidden bg-white">
+      {/* Recent / History toggle — same pattern as the Receiving + FBA sidebars. */}
+      <div className={`${sidebarHeaderBandClass} px-3`}>
+        <HorizontalButtonSlider
+          items={TESTING_TAB_ITEMS}
+          value={testingTab}
+          onChange={updateTestingTab}
+          variant="nav"
+          aria-label="Testing view"
+        />
+      </div>
+
+      {testingTab === 'history' ? (
+        <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-2 px-6 text-center">
+          <History className="h-6 w-6 text-gray-300" />
+          <p className="text-sm font-semibold text-gray-500">Browsing your tested lines</p>
+          <p className="text-caption text-gray-400">
+            Use <span className="font-bold text-gray-600">Select</span> in the top bar to pick lines and act on them.
+          </p>
+        </div>
+      ) : (
+      <>
       {/* Scan bar — same chrome + mode toggles as the shipping StationScanBar.
           Tap Tracking / PO# / Serial to force the next scan's search type, or
           leave unarmed to auto-detect. */}
@@ -278,6 +321,8 @@ export function TestingSidebarPanel({
           testerId={staffId ? Number(staffId) : null}
         />
       </div>
+      </>
+      )}
     </div>
   );
 }

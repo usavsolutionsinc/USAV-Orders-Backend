@@ -51,6 +51,9 @@ export function ReceivingClaimModal({ open, row, onClose, onTicketCreated }: Pro
   const [previewLoading, setPreviewLoading] = useState(false);
   const subjectTouched = useRef(false);
   const descriptionTouched = useRef(false);
+  // Stable per-submission idempotency key — generated when the modal opens and
+  // reused across retries so a failed-then-retried submit never files two tickets.
+  const idempotencyKey = useRef('');
 
   // Reset transient state each time the modal opens so reopening on a
   // different row doesn't show stale template text.
@@ -65,6 +68,7 @@ export function ReceivingClaimModal({ open, row, onClose, onTicketCreated }: Pro
     );
     subjectTouched.current = false;
     descriptionTouched.current = false;
+    idempotencyKey.current = crypto.randomUUID();
   }, [open, row.receiving_id, row.id, row.receiving_source]);
 
   // Fetch the server-rendered template whenever inputs change. Debounced so
@@ -125,7 +129,10 @@ export function ReceivingClaimModal({ open, row, onClose, onTicketCreated }: Pro
     try {
       const res = await fetch('/api/receiving/zendesk-claim', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'Idempotency-Key': idempotencyKey.current,
+        },
         body: JSON.stringify({
           receivingId: row.receiving_id,
           lineId: row.id,

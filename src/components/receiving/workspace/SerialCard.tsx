@@ -3,10 +3,13 @@
 import { useEffect, useRef, useState } from 'react';
 import { Barcode, X } from '@/components/Icons';
 import { SerialChip } from '@/components/ui/CopyChip';
+import { ConditionPills } from './ConditionPills';
+import { conditionGradeTableLabel } from '@/components/station/receiving-constants';
 
 interface SavedSerial {
   id?: number;
   serial_number: string;
+  condition_grade?: string | null;
 }
 
 interface Props {
@@ -288,19 +291,23 @@ export function SerialChipWithMenu({
   isEditing,
   onEdit,
   onDelete,
+  onSetCondition,
 }: {
   serial: SavedSerial;
   isEditing: boolean;
   onEdit?: (s: SavedSerial) => void;
   onDelete?: (s: SavedSerial) => void;
+  /** When provided, the chip menu exposes a condition picker for this serial. */
+  onSetCondition?: (s: SavedSerial, grade: string) => void;
 }) {
   const sn = serial.serial_number;
-  const hasActions = !!(onEdit || onDelete);
+  const grade = String(serial.condition_grade || '').trim().toUpperCase();
+  const hasActions = !!(onEdit || onDelete || onSetCondition);
 
   return (
     <div className="group relative inline-flex">
       <div
-        className={`inline-flex rounded-md transition-colors ${
+        className={`inline-flex items-center gap-1 rounded-md transition-colors ${
           isEditing ? 'ring-2 ring-amber-400 ring-offset-1' : ''
         }`}
       >
@@ -309,6 +316,11 @@ export function SerialChipWithMenu({
           display={sn.length > 4 ? sn.slice(-4) : sn}
           width="w-fit max-w-full"
         />
+        {grade && grade !== 'PENDING' ? (
+          <span className="text-micro font-bold uppercase tracking-wider text-gray-400">
+            {conditionGradeTableLabel(grade)}
+          </span>
+        ) : null}
       </div>
       {hasActions ? (
         // Outer wrapper holds the chip-to-menu gap as transparent padding so
@@ -320,8 +332,19 @@ export function SerialChipWithMenu({
           <div
             role="menu"
             aria-label="Serial actions"
-            className="min-w-[112px] overflow-hidden rounded-lg border border-gray-200 bg-white shadow-lg"
+            className={`overflow-hidden rounded-lg border border-gray-200 bg-white shadow-lg ${onSetCondition ? 'min-w-[200px]' : 'min-w-[112px]'}`}
           >
+            {onSetCondition ? (
+              <div className="border-b border-gray-100 px-2 py-1.5">
+                <p className="mb-1 text-micro font-bold uppercase tracking-widest text-gray-400">
+                  Condition
+                </p>
+                <ConditionPills
+                  value={serial.condition_grade}
+                  onChange={(next) => onSetCondition(serial, next)}
+                />
+              </div>
+            ) : null}
             {onEdit ? (
               <button
                 type="button"

@@ -3,6 +3,7 @@ import { ApiError, errorResponse } from '@/lib/api';
 import { withAuth } from '@/lib/auth/withAuth';
 import {
   buildReceivingClaimTemplate,
+  claimBodyToHtml,
   CLAIM_SEVERITY_LABEL,
   CLAIM_TYPE_LABEL,
   type ClaimSeverity,
@@ -11,6 +12,8 @@ import {
 import { createTicket, ZendeskNotConfiguredError } from '@/lib/zendesk';
 import { buildExternalId, linkTicket } from '@/lib/zendesk-links';
 import { zendeskTicketUrl } from '@/lib/zendesk-ticket-url';
+import { readIdempotencyKey, withIdempotentResponse } from '@/lib/api-idempotency';
+import pool from '@/lib/db';
 
 export const dynamic = 'force-dynamic';
 
@@ -78,50 +81,64 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
     const entityType = lineId != null ? 'RECEIVING_LINE' : 'RECEIVING';
     const entityId = lineId != null ? lineId : receivingId;
 
-    // Create the ticket directly via the Zendesk REST API. external_id is set at
-    // creation time so the support workspace can resolve this claim's Blob photos.
-    let ticket;
-    try {
-      ticket = await createTicket({
-        subject,
-        comment: { body: description, public: false },
-        type: 'task',
-        tags: ['receiving_claim', `claim_${claimType}`],
-        external_id: buildExternalId(entityType, entityId),
-      });
-    } catch (err: unknown) {
-      if (err instanceof ZendeskNotConfiguredError) {
-        return NextResponse.json({
-          success: false,
-          error: 'Zendesk is not configured',
-          draftBody: description,
-        }, { status: 503 });
-      }
-      return NextResponse.json({
-        success: false,
-        error: err instanceof Error ? err.message : 'Zendesk request failed',
-        draftBody: description,
-      }, { status: 502 });
-    }
+    // Idempotency: a per-submit key (client UUID via Idempotency-Key header)
+    // dedupes double-clicks / network retries so we never file two tickets for
+    // the same submission. Cached responses are replayed verbatim.
+    const idempotencyKey = readIdempotencyKey(req);
+    const result = await withIdempotentResponse(
+      pool,
+      { idempotencyKey, route: 'POST /api/receiving/zendesk-claim', staffId: ctx.staffId },
+      async (): Promise<{ status: number; body: Record<string, unknown> }> => {
+        // Create the ticket directly via the Zendesk REST API. external_id is set
+        // at creation so the support workspace can resolve this claim's Blob photos;
+        // html_body makes the attached photo URLs clickable for agents.
+        let ticket;
+        try {
+          ticket = await createTicket(
+            {
+              subject,
+              comment: { body: description, html_body: claimBodyToHtml(description), public: false },
+              type: 'task',
+              tags: ['receiving_claim', `claim_${claimType}`],
+              external_id: buildExternalId(entityType, entityId),
+            },
+            { idempotencyKey: idempotencyKey ?? undefined },
+          );
+        } catch (err: unknown) {
+          if (err instanceof ZendeskNotConfiguredError) {
+            return { status: 503, body: { success: false, error: 'Zendesk is not configured', draftBody: description } };
+          }
+          return {
+            status: 502,
+            body: { success: false, error: err instanceof Error ? err.message : 'Zendesk request failed', draftBody: description },
+          };
+        }
 
-    const ticketNumber = `#${ticket.id}`;
+        const ticketNumber = `#${ticket.id}`;
 
-    // Write the ticket→entity link row (the support workspace prefers ticket_links
-    // over external_id). Best-effort: the ticket already exists, so a failure here
-    // must not turn a successful claim into an error.
-    try {
-      await linkTicket({
-        orgId: ctx.organizationId,
-        zendeskTicketId: ticket.id,
-        entityType,
-        entityId,
-        staffId: ctx.staffId,
-      });
-    } catch (linkErr) {
-      console.warn('[POST /api/receiving/zendesk-claim] ticket link backfill failed', linkErr);
-    }
+        // Write the ticket→entity link row (the support workspace prefers ticket_links
+        // over external_id). Best-effort: the ticket already exists, so a failure here
+        // must not turn a successful claim into an error.
+        try {
+          await linkTicket({
+            orgId: ctx.organizationId,
+            zendeskTicketId: ticket.id,
+            entityType,
+            entityId,
+            staffId: ctx.staffId,
+          });
+        } catch (linkErr) {
+          console.warn('[POST /api/receiving/zendesk-claim] ticket link backfill failed', linkErr);
+        }
 
-    return NextResponse.json({ success: true, ticketNumber, ticketUrl: zendeskTicketUrl(ticket.id) });
+        return {
+          status: 200,
+          body: { success: true, ticketNumber, ticketUrl: zendeskTicketUrl(ticket.id) },
+        };
+      },
+    );
+
+    return NextResponse.json(result.body, { status: result.status });
   } catch (error) {
     return errorResponse(error, 'POST /api/receiving/zendesk-claim');
   }

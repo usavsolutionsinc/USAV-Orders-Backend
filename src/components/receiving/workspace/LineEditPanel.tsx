@@ -59,7 +59,6 @@ import { ReceivingAuditModal } from './ReceivingAuditModal';
 import { ConditionPills } from './ConditionPills';
 import { markConditionSet } from './ReceivingProgressStepper';
 import { InlineSerialAdder } from './InlineSerialAdder';
-import { ReceivingUnitRows, type UnitSerial } from './ReceivingUnitRows';
 import { PoLinesAccordion } from './PoLinesAccordion';
 import { UnmatchedItemsSection } from './UnmatchedItemsSection';
 import { ReceivingClaimModal } from './ReceivingClaimModal';
@@ -72,6 +71,7 @@ import { loadBarcodeLibrary, renderBarcode } from '@/utils/barcode';
 import { formatDatePST, formatDateTimePST, formatTime12hPST } from '@/utils/date';
 import { buildReceivingCopyInfo } from '@/utils/copy-all-receiving';
 import { copyToClipboard } from '@/utils/_dom';
+import { zendeskTicketUrl } from '@/lib/zendesk-ticket-url';
 import { getStaffName } from '@/utils/staff';
 import { getStaffThemeById, stationThemeColors } from '@/utils/staff-colors';
 import {
@@ -746,11 +746,10 @@ export function LineEditPanel({
     if (!serial || !row.receiving_id || serialSubmitting) return;
     setSerialSubmitting(true);
     try {
-      // PO lines are unlimited — `receiveLineUnits` writes any scan beyond
-      // expected qty as a supplemental serial (skips ledger + qty bump,
-      // still upserts serial_units + tech_serial_numbers + emits a
-      // RECEIVED inventory event). The `supplemental: true` flag in the
-      // response below switches the toast copy.
+      // Serials are sidecar metadata: scanning attaches a serial_unit (the item
+      // identity + its condition) to the line. Unlimited per line — a unit may
+      // carry several serials. It does NOT change quantity_received or stock;
+      // those are owned by the PO line item via the Receive action.
 
       const postScan = async () => {
         const res = await fetch('/api/receiving/scan-serial', {
@@ -777,37 +776,23 @@ export function LineEditPanel({
         return;
       }
 
-      // Duplicate serial on this line — do not reshuffle optimistic UI.
-      if (data.already_received) {
-        toast.info(`Already received — ${serial}`);
+      // Same serial already on this line — friendly no-op.
+      if (data.already_attached) {
+        toast.info(`Already added — ${serial}`);
         return;
       }
 
       if (data.line_state && typeof data.line_state.id === 'number') {
         setSerialInput('');
-        const ls = data.line_state;
         dispatchLineUpdated({
-          id: ls.id,
-          quantity_received: ls.quantity_received,
-          quantity_expected: ls.quantity_expected,
-          workflow_status: ls.workflow_status ?? undefined,
+          id: data.line_state.id,
           serials: mergeSerialIntoLineSerials(row.serials, data.serial_unit),
         });
-        if (data.supplemental) {
-          // Over-cap extra — serial was logged to serial_units + TSN but the
-          // line's qty + stock ledger did NOT move. Toast says so plainly.
-          toast.success(`Extra serial logged — ${serial}`, {
-            description: 'Beyond expected qty: no stock change.',
-          });
-        }
         window.dispatchEvent(new CustomEvent('receiving-serial-scanned', {
           detail: {
             line_id: row.id,
-            new_qty: ls.quantity_received,
             serial_unit: data.serial_unit,
             is_return: !!data.is_return,
-            is_complete: !!ls.is_complete,
-            supplemental: !!data.supplemental,
           },
         }));
         setTimeout(() => serialRef.current?.focus(), 40);
@@ -856,14 +841,7 @@ export function LineEditPanel({
         return;
       }
       toast.success('Serial removed');
-      if (data.line_state?.id != null) {
-        dispatchLineUpdated({
-          id: data.line_state.id,
-          quantity_received: data.line_state.quantity_received,
-          quantity_expected: data.line_state.quantity_expected,
-          workflow_status: data.line_state.workflow_status ?? undefined,
-        });
-      }
+      // Removing a serial is metadata-only — quantity_received is unchanged.
       await refreshLineWithSerials();
     },
     [row.id, refreshLineWithSerials],
@@ -1976,72 +1954,57 @@ export function LineEditPanel({
               <PoLinesAccordion
                 receivingId={row.receiving_id}
                 activeLineId={row.id}
-                activeConditionOverride={isMultiQtyLine ? unitLabelCondition : null}
+                activeConditionOverride={null}
                 activeRowSlot={({ serials }) => (
                   <div className="space-y-3">
-                    {/* Multi-qty same-product lines split into one row per unit
-                        (own condition + own serial, divided by a thin line).
-                        Single-qty lines — including a PARTS product carrying
-                        several part-serials under one unit — keep the single
-                        condition + serial block. */}
-                    {(row.quantity_expected ?? 0) > 1 ? (
-                      <ReceivingUnitRows
-                        lineId={row.id}
-                        saved={serials as UnitSerial[]}
-                        quantityExpected={row.quantity_expected ?? 1}
-                        lineCondition={cond}
-                        disabled={!row.receiving_id}
-                        isSubmitting={serialSubmitting}
-                        onAddSerial={(sn, grade) => submitSerial(sn, grade)}
-                        onDeleteSerial={(id) => {
-                          if (!window.confirm('Remove this serial?')) return;
-                          void deleteSerialUnit(id);
+                    {/* Serials are a flat, unlimited sidecar list per line —
+                        a unit may carry several serials (a pair, part-serials,
+                        multi-component). Condition lives on each serial (set via
+                        the chip menu); the picker below sets the line default
+                        that new scans are stamped with. Quantity is owned by the
+                        PO line item via the Receive action — independent of how
+                        many serials are attached. */}
+                    <div>
+                      <p className="mb-1 text-micro font-bold uppercase tracking-[0.14em] text-gray-500">
+                        Default condition for new scans
+                      </p>
+                      <ConditionPills
+                        value={cond}
+                        onChange={(next) => {
+                          setCond(next);
+                          markConditionSet(row.id);
+                          void patch({ condition_grade: next });
                         }}
-                        onReplaceSerial={(original, next) =>
-                          void replaceSerialUnit(original, next)
-                        }
-                        onSetUnitGrade={(id, grade) => setUnitGrade(id, grade)}
-                        onActiveConditionChange={setUnitLabelCondition}
                       />
-                    ) : (
-                      <>
-                        <ConditionPills
-                          value={cond}
-                          onChange={(next) => {
-                            setCond(next);
-                            markConditionSet(row.id);
-                            void patch({ condition_grade: next });
-                          }}
-                        />
-                        {/* Serial scan input lives inside the active PO item
-                            row — same place ConditionPills lives — so switching
-                            to a sibling PO item smoothly relocates the input
-                            without a jump. `serials` comes from the accordion's
-                            own query so the chips always agree with the row
-                            header. */}
-                        <InlineSerialAdder
-                          key={`adder-${row.id}`}
-                          lineId={row.id}
-                          saved={serials}
-                          expected={row.quantity_expected ?? null}
-                          isSubmitting={serialSubmitting}
-                          disabled={!row.receiving_id}
-                          onAdd={(_lineId, sn) => submitSerial(sn)}
-                          onReplaceSerial={(_lineId, original, nextSerial) => {
-                            if (original.id == null) return;
-                            void replaceSerialUnit(
-                              { id: original.id, serial_number: original.serial_number },
-                              nextSerial,
-                            );
-                          }}
-                          onDelete={(_lineId, s) => {
-                            if (s.id == null) return;
-                            if (!window.confirm(`Remove serial ${s.serial_number}?`)) return;
-                            void deleteSerialUnit(s.id);
-                          }}
-                        />
-                      </>
-                    )}
+                    </div>
+                    <InlineSerialAdder
+                      key={`adder-${row.id}`}
+                      lineId={row.id}
+                      saved={serials}
+                      expected={row.quantity_expected ?? null}
+                      isSubmitting={serialSubmitting}
+                      disabled={!row.receiving_id}
+                      onAdd={(_lineId, sn) => submitSerial(sn, cond)}
+                      onReplaceSerial={(_lineId, original, nextSerial) => {
+                        if (original.id == null) return;
+                        void replaceSerialUnit(
+                          {
+                            id: original.id,
+                            serial_number: original.serial_number,
+                            condition_grade: original.condition_grade,
+                          },
+                          nextSerial,
+                        );
+                      }}
+                      onDelete={(_lineId, s) => {
+                        if (s.id == null) return;
+                        if (!window.confirm(`Remove serial ${s.serial_number}?`)) return;
+                        void deleteSerialUnit(s.id);
+                      }}
+                      onSetCondition={(_lineId, s, grade) => {
+                        if (s.id != null) void setUnitGrade(s.id, grade);
+                      }}
+                    />
                   </div>
                 )}
               />
@@ -2125,6 +2088,17 @@ export function LineEditPanel({
                 >
                   <Clipboard className="h-3 w-3" />
                 </button>
+                {zendeskTicketUrl(zendesk) ? (
+                  <a
+                    href={zendeskTicketUrl(zendesk)!}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    title="Open in Zendesk"
+                    className="shrink-0 border border-slate-200 bg-white px-1.5 py-0.5 text-blue-600 transition-colors hover:bg-blue-50"
+                  >
+                    <ExternalLink className="h-3 w-3" />
+                  </a>
+                ) : null}
               </div>
             </div>
             <div>

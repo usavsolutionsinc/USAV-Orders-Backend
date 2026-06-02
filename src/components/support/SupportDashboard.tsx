@@ -6,6 +6,7 @@ import { AlertCircle, ExternalLink, RefreshCw } from '@/components/Icons';
 import { mainStickyHeaderClass, mainStickyHeaderShellRowClass } from '@/components/layout/header-shell';
 import { formatMediumDateTime } from '@/utils/_date';
 import { sectionLabel, cardTitle, dataValue, microBadge, chipText } from '@/design-system/tokens/typography/presets';
+import { SkeletonBase } from '@/design-system/components/Skeletons';
 
 interface QueueItem {
   [key: string]: any;
@@ -107,9 +108,32 @@ export function SupportDashboard() {
 
   let content;
   if (isLoading) {
+    // Skeleton mirrors the loaded layout (4 summary cards + 2-column body) so
+    // the first paint doesn't shift when data arrives.
     content = (
-      <div className="flex h-full w-full items-center justify-center">
-        <RefreshCw className="h-8 w-8 animate-spin text-blue-600" />
+      <div className="space-y-4">
+        <div className="grid gap-4 md:grid-cols-4">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <div key={i} className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
+              <SkeletonBase width="50%" height="0.7rem" />
+              <SkeletonBase width="2.5rem" height="1.75rem" className="mt-3" />
+            </div>
+          ))}
+        </div>
+        <div className="grid gap-4 xl:grid-cols-[minmax(0,2fr)_minmax(320px,1fr)]">
+          <div className="space-y-3 rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
+            <SkeletonBase width="30%" height="0.875rem" />
+            {Array.from({ length: 3 }).map((_, i) => (
+              <SkeletonBase key={i} width="100%" height="3.5rem" />
+            ))}
+          </div>
+          <div className="space-y-3 rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
+            <SkeletonBase width="40%" height="0.875rem" />
+            {Array.from({ length: 4 }).map((_, i) => (
+              <SkeletonBase key={i} width="100%" height="3rem" />
+            ))}
+          </div>
+        </div>
       </div>
     );
   } else if (isError || !data) {
@@ -251,7 +275,7 @@ export function SupportDashboard() {
                   <p className={`${sectionLabel} text-emerald-700`}>Open tickets</p>
                   <p className="mt-2 text-2xl font-black tracking-tight text-emerald-700">{zendesk.count}</p>
                 </div>
-                <div className="rounded-xl bg-rose-50 p-3">
+                <div className={`rounded-xl bg-rose-50 p-3 ${zendesk.urgentCount > 0 ? 'ring-2 ring-rose-300' : ''}`}>
                   <p className={`${sectionLabel} text-rose-700`}>High priority</p>
                   <p className="mt-2 text-2xl font-black tracking-tight text-rose-700">{zendesk.urgentCount}</p>
                 </div>

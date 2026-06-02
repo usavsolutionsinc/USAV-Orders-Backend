@@ -1,12 +1,13 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { createPortal } from 'react-dom';
 import { Check, Clock, Loader2, Plus, Tool } from '@/components/Icons';
 import { SearchBar } from '@/components/ui/SearchBar';
 import { HorizontalButtonSlider, type HorizontalSliderItem } from '@/components/ui/HorizontalButtonSlider';
 import { useBodyScrollLock } from '@/design-system/hooks';
+import { toast } from '@/lib/toast';
 
 const REPAIR_TAB_ITEMS: HorizontalSliderItem[] = [
   { id: 'incoming', label: 'Incoming', icon: Clock },
@@ -66,6 +67,9 @@ export function RepairSidebarPanel({ embedded = false, hideSectionHeader = false
   const [searchValue, setSearchValue] = useState(searchParams.get('search') || '');
   const [intakeDraft, setIntakeDraft] = useState<Partial<RepairFormData> | undefined>(undefined);
   const [selectedFavoriteId, setSelectedFavoriteId] = useState<number | null>(null);
+  // Idempotency key for the in-flight intake submission. Persists across failed
+  // retries (so a replay dedupes the Zendesk ticket) and is cleared on success.
+  const repairIdemKey = useRef<string | null>(null);
 
   const rawTab = searchParams.get('tab');
   const activeTab: RepairTab = rawTab === 'incoming' ? 'incoming' : rawTab === 'done' ? 'done' : 'active';
@@ -109,12 +113,16 @@ export function RepairSidebarPanel({ embedded = false, hideSectionHeader = false
 
   const handleSubmitForm = async (data: RepairFormData) => {
     setIsSubmitting(true);
+    if (!repairIdemKey.current) repairIdemKey.current = crypto.randomUUID();
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 15000);
     try {
       const response = await fetch('/api/repair/submit', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'Idempotency-Key': repairIdemKey.current,
+        },
         body: JSON.stringify(data),
         signal: controller.signal,
       });
@@ -123,9 +131,20 @@ export function RepairSidebarPanel({ embedded = false, hideSectionHeader = false
       const result = await response.json();
 
       if (result.success) {
+        repairIdemKey.current = null;
         setShowIntakeForm(false);
         setIntakeDraft(undefined);
         setSelectedFavoriteId(null);
+        const ticketUrl: string | null =
+          typeof result.zendeskTicketUrl === 'string' ? result.zendeskTicketUrl : null;
+        const ticketSuffix = result.zendeskTicketNumber
+          ? ` — ticket ${result.zendeskTicketNumber}`
+          : '';
+        toast.success(`Repair ${result.rsNumber ?? ''} submitted${ticketSuffix}`.trim(), {
+          action: ticketUrl
+            ? { label: 'Open', onClick: () => window.open(ticketUrl, '_blank', 'noopener') }
+            : undefined,
+        });
         if (result.signatureWarning) {
           window.alert(`Repair submitted, but: ${result.signatureWarning}`);
         }

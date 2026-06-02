@@ -17,6 +17,7 @@ import {
   updatePurchaseOrder,
 } from '@/lib/zoho';
 import { receiveLineUnits } from '@/lib/receiving/receive-line';
+import { attachSerialToLine } from '@/lib/receiving/serial-attach';
 import {
   getApiIdempotencyResponse,
   readIdempotencyKey,
@@ -326,23 +327,10 @@ export const POST = withAuth(async (request, ctx) => {
     if (openForReceive.length > 0) {
       for (const lineRow of openForReceive) {
       const currentQty = Number(lineRow.quantity_received ?? 0);
-      const lineExpectedRaw = lineRow.quantity_expected ?? null;
-      const lineExpected =
-        lineExpectedRaw != null ? Number(lineExpectedRaw) : null;
-      const atQtyCap =
-        lineExpected != null &&
-        Number.isFinite(lineExpected) &&
-        currentQty >= lineExpected;
-
-      const serialsForLine =
-        serialNumber &&
-        lineRow.id === serialOwnerLineId &&
-        !atQtyCap
-          ? [serialNumber]
-          : [];
 
       // Force-complete: bump qty to expected (or 1 when unknown). Already-received
-      // units are not double-counted.
+      // units are not double-counted. Quantity/stock is driven solely by the PO
+      // line item here — serials are NOT counted against units.
       const targetQty = Math.max(
         currentQty,
         Number(lineRow.quantity_expected ?? 1),
@@ -352,14 +340,12 @@ export const POST = withAuth(async (request, ctx) => {
         ? `${clientEventId}:line-${lineRow.id}`
         : null;
 
-      const unitsToReceive = Math.max(unitsToAdd, serialsForLine.length);
-
-      // Even when unitsToAdd is 0 (line already fully scanned via /scan-serial)
-      // we still call the helper so QA/disp/cond/workflow_status get set.
+      // Even when unitsToAdd is 0 (line already complete) we still call the
+      // helper so QA/disp/cond/workflow_status get set.
       const result = await receiveLineUnits({
         receiving_line_id: lineRow.id,
-        units: unitsToReceive,
-        serials: serialsForLine,
+        units: unitsToAdd,
+        serials: [],
         qa_status: qaStatus,
         disposition_code: dispositionCode,
         condition_grade: conditionGrade,
@@ -369,6 +355,22 @@ export const POST = withAuth(async (request, ctx) => {
         station,
         client_event_id: lineClientEventId,
       });
+
+      // Attach the inline serial as sidecar metadata — no qty/ledger effect.
+      if (serialNumber && lineRow.id === serialOwnerLineId) {
+        try {
+          await attachSerialToLine({
+            receiving_line_id: lineRow.id,
+            serial_number: serialNumber,
+            condition_grade: conditionGrade,
+            staff_id: staffId,
+            station,
+            client_event_id: lineClientEventId,
+          });
+        } catch (err) {
+          console.warn('mark-received-po: attachSerialToLine failed (non-fatal)', err);
+        }
+      }
 
       updatedLines.push({
         id: result.line_state.id,

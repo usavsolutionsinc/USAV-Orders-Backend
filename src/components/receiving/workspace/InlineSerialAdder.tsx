@@ -7,6 +7,7 @@ import { SerialChipWithMenu } from '@/components/receiving/workspace/SerialCard'
 interface SavedSerial {
   id?: number;
   serial_number: string;
+  condition_grade?: string | null;
 }
 
 interface Props {
@@ -26,6 +27,12 @@ interface Props {
   onAdd: (lineId: number, serial: string) => void | Promise<void>;
   /** Remove a saved serial. Click target is the chip's Delete menu item / X icon. */
   onDelete?: (lineId: number, serial: SavedSerial) => void;
+  /**
+   * Set the condition grade on an already-saved serial. When provided, each
+   * chip exposes a condition picker in its hover menu — condition lives on the
+   * serial (the item), independent of quantity.
+   */
+  onSetCondition?: (lineId: number, serial: SavedSerial, grade: string) => void;
   /**
    * Replace a saved serial with a new value (typo fix). When provided, each
    * saved chip exposes an Edit affordance in a hover dropdown — clicking it
@@ -65,6 +72,7 @@ export function InlineSerialAdder({
   onAdd,
   onDelete,
   onReplaceSerial,
+  onSetCondition,
   disabled = false,
   autoFocus = false,
 }: Props) {
@@ -155,6 +163,11 @@ export function InlineSerialAdder({
                   isEditing={isEditingThis}
                   onEdit={beginEdit}
                   onDelete={onDelete ? (target) => onDelete(lineId, target) : undefined}
+                  onSetCondition={
+                    onSetCondition
+                      ? (target, grade) => onSetCondition(lineId, target, grade)
+                      : undefined
+                  }
                 />
               ) : (
                 // Adder without an edit handler — bare emerald chip with an X

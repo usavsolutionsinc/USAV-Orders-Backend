@@ -124,12 +124,17 @@ export const POST = withAuth(async (request: NextRequest, ctx) => {
   // Create the ticket directly via the Zendesk REST API.
   let ticket;
   try {
-    ticket = await createTicket({
-      subject,
-      comment: { body: description, public: false },
-      type: 'task',
-      tags: ['unfound_queue', `unfound_${kind}`],
-    });
+    ticket = await createTicket(
+      {
+        subject,
+        comment: { body: description, public: false },
+        type: 'task',
+        tags: ['unfound_queue', `unfound_${kind}`],
+      },
+      // Entity-derived key: the overlay zendesk_ticket_id check above already
+      // blocks a second push, so a stable per-row key is safe defense-in-depth.
+      { idempotencyKey: `unfound:${kind}:${sourceId}` },
+    );
   } catch (err: unknown) {
     if (err instanceof ZendeskNotConfiguredError) {
       // Surface the would-be ticket body so the operator can copy/paste while

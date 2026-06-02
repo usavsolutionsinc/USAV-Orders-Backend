@@ -167,7 +167,10 @@ function calculateDueDate(startDate: Date): string {
  * Returns the ticket number formatted as `#<id>` (e.g. `#12345`).
  * Throws ZendeskNotConfiguredError / ZendeskApiError on failure.
  */
-export async function createZendeskTicket(data: RepairTicketData): Promise<string | null> {
+export async function createZendeskTicket(
+    data: RepairTicketData,
+    opts: { idempotencyKey?: string } = {},
+): Promise<string | null> {
     const {
         repairServiceId,
         repairServiceNumber,
@@ -216,7 +219,7 @@ export async function createZendeskTicket(data: RepairTicketData): Promise<strin
         tags: ['repair_service', 'walk_in'],
         external_id: `repair:${repairServiceId}`,
         ...(customerEmail ? { requester: { name: customerName, email: customerEmail } } : {}),
-    });
+    }, opts);
 
     return `#${ticket.id}`;
 }
@@ -263,7 +266,7 @@ function requireZendeskConfig(): ZendeskAuthConfig {
 /** Generalized Zendesk REST call: any method, optional JSON body, typed result. */
 async function zendeskApiRequest<T = any>(
     path: string,
-    init: { method?: string; body?: unknown } = {},
+    init: { method?: string; body?: unknown; headers?: Record<string, string> } = {},
 ): Promise<T> {
     const config = requireZendeskConfig();
     const auth = Buffer.from(`${config.user}/token:${config.apiToken}`).toString('base64');
@@ -272,6 +275,7 @@ async function zendeskApiRequest<T = any>(
         headers: {
             'Content-Type': 'application/json',
             'Authorization': `Basic ${auth}`,
+            ...(init.headers ?? {}),
         },
         body: init.body != null ? JSON.stringify(init.body) : undefined,
         cache: 'no-store',
@@ -409,11 +413,21 @@ export interface CreateTicketInput {
     external_id?: string;
 }
 
-/** Create a ticket directly via the REST API. */
-export async function createTicket(input: CreateTicketInput): Promise<ZendeskTicket> {
+/**
+ * Create a ticket directly via the REST API.
+ *
+ * Pass `opts.idempotencyKey` to dedupe retries: Zendesk caches the result of an
+ * identical-key create for ~2h and returns the original ticket instead of making
+ * a duplicate. Use a per-submit UUID so distinct submissions still create distinct tickets.
+ */
+export async function createTicket(
+    input: CreateTicketInput,
+    opts: { idempotencyKey?: string } = {},
+): Promise<ZendeskTicket> {
     const data = await zendeskApiRequest<any>(`/api/v2/tickets.json`, {
         method: 'POST',
         body: { ticket: input },
+        headers: opts.idempotencyKey ? { 'Idempotency-Key': opts.idempotencyKey } : undefined,
     });
     return data.ticket;
 }

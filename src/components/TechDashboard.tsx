@@ -1,10 +1,18 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
-import { useSearchParams } from 'next/navigation';
+import React, { useCallback, useEffect, useState } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { useQueryClient } from '@tanstack/react-query';
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
 import { TechTable } from './TechTable';
+import { TestingHistoryList, TESTING_SELECTION_SCOPE } from './tech/TestingHistoryList';
+import { usePageHeader } from '@/hooks/usePageHeader';
+import { useTableSelection } from '@/hooks/useTableSelection';
+import { emitToggleAll } from '@/lib/selection/table-selection';
+import { SelectionActionBar } from '@/design-system/components/SelectionActionBar';
+import { Copy, Check, X } from '@/components/Icons';
+import { toast } from '@/lib/toast';
+import type { ReceivingLineRow } from './station/ReceivingLinesTable';
 import PendingOrdersTable from './PendingOrdersTable';
 import { DashboardShippedTable } from './shipped';
 import { StationDetailsHandler } from './station/StationDetailsHandler';
@@ -70,6 +78,80 @@ export default function TechDashboard({ techId }: TechDashboardProps) {
                 : rawView === 'testing'
                     ? 'testing'
                     : 'shipped';
+    const router = useRouter();
+    // Testing sub-tab — Recent (workspace, default) vs History (browse + bulk
+    // select). The sidebar's Recent/History pills drive `?testingTab`.
+    const testingTab = searchParams.get('testingTab') === 'history' ? 'history' : 'recent';
+    const isTestingHistory = rightViewMode === 'testing' && testingTab === 'history';
+
+    // ── Testing-history bulk selection ──────────────────────────────────────
+    const [testingSelectMode, setTestingSelectMode] = useState(false);
+    const testingSelectedRows = useTableSelection<ReceivingLineRow>(
+        TESTING_SELECTION_SCOPE,
+        (r) => r.id,
+    );
+
+    // Exit select mode whenever we leave the testing-history surface.
+    useEffect(() => {
+        if (!isTestingHistory && testingSelectMode) setTestingSelectMode(false);
+    }, [isTestingHistory, testingSelectMode]);
+
+    const exitTestingSelect = useCallback(() => {
+        emitToggleAll(TESTING_SELECTION_SCOPE, 'none');
+        setTestingSelectMode(false);
+    }, []);
+
+    const openTestingLine = useCallback(() => {
+        // Clicking a history row opens it in the workspace → flip back to Recent.
+        const params = new URLSearchParams(searchParams.toString());
+        params.delete('testingTab');
+        router.replace(`/tech?${params.toString()}`);
+    }, [router, searchParams]);
+
+    const handleCopyTestingDetails = useCallback((rows: ReceivingLineRow[]) => {
+        const text = rows
+            .map((r) => {
+                const sku = (r.sku || '').trim();
+                const serials = (r.serials ?? [])
+                    .map((s) => (s.serial_number || '').trim())
+                    .filter(Boolean)
+                    .join('/');
+                const po = (r.zoho_purchaseorder_number || r.zoho_purchaseorder_id || '').trim();
+                return [sku && `SKU ${sku}`, serials && `SN ${serials}`, po && `PO ${po}`]
+                    .filter(Boolean)
+                    .join(' • ');
+            })
+            .filter(Boolean)
+            .join('\n');
+        void navigator.clipboard?.writeText(text).then(
+            () => toast.success(`Copied ${rows.length} line${rows.length === 1 ? '' : 's'}`),
+            () => toast.error('Copy failed'),
+        );
+    }, []);
+
+    usePageHeader(
+        isTestingHistory ? (
+            <div className="flex items-center gap-2">
+                <span className="text-sm font-bold text-gray-900">
+                    {testingSelectMode ? `${testingSelectedRows.length} selected` : 'Testing history'}
+                </span>
+                <button
+                    type="button"
+                    onClick={() => (testingSelectMode ? exitTestingSelect() : setTestingSelectMode(true))}
+                    className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-caption font-semibold transition-colors ${
+                        testingSelectMode
+                            ? 'border-blue-600 bg-blue-600 text-white hover:bg-blue-700'
+                            : 'border-gray-200 bg-white text-gray-700 hover:bg-gray-50'
+                    }`}
+                >
+                    {testingSelectMode ? <X className="h-3.5 w-3.5" /> : <Check className="h-3.5 w-3.5" />}
+                    {testingSelectMode ? 'Cancel' : 'Select'}
+                </button>
+            </div>
+        ) : null,
+        [isTestingHistory, testingSelectMode, testingSelectedRows.length, exitTestingSelect],
+    );
+
     const [selectedLog, setSelectedLog] = useState<ReceivingDetailsLog | null>(null);
     const [repairPanel, setRepairPanel] = useState<{
         record: RSRecord;
@@ -184,9 +266,15 @@ export default function TechDashboard({ techId }: TechDashboardProps) {
     if (rightViewMode === 'receiving') {
         rightPane = <ReceivingInboundFeed onSelectLog={setSelectedLog} />;
     } else if (rightViewMode === 'testing') {
-        // Testing sub-page — composes receiving form primitives with the
-        // Pass/Test Again/Testing Failed verdict pills and a unit-label print path.
-        rightPane = (
+        // Testing sub-page. Recent → the Pass/Test-Again verdict workspace;
+        // History → the browse + bulk-select feed of this tech's tested lines.
+        rightPane = isTestingHistory ? (
+            <TestingHistoryList
+                staffId={techId}
+                selectMode={testingSelectMode}
+                onOpenLine={openTestingLine}
+            />
+        ) : (
             <TechTestingWorkspace
                 staffId={techId}
                 selectedLineId={testingLineId}
@@ -241,6 +329,15 @@ export default function TechDashboard({ techId }: TechDashboardProps) {
             <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden">
                 <div className="relative min-h-0 flex-1 overflow-hidden">
                     {rightPane}
+                    {isTestingHistory ? (
+                        <SelectionActionBar
+                            scope={TESTING_SELECTION_SCOPE}
+                            rows={testingSelectedRows}
+                            primaryLabel="Copy details"
+                            primaryIcon={<Copy className="h-4 w-4" />}
+                            onPrimary={handleCopyTestingDetails}
+                        />
+                    ) : null}
                 </div>
             </div>
 

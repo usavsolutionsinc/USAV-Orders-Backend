@@ -163,11 +163,10 @@ export const POST = withAuth(async (request: NextRequest, ctx) => {
       );
     }
 
-    // ─── Single writer ──────────────────────────────────────────────────────
-    const result = await receiveLineUnits({
+    // ─── Attach serial (sidecar metadata — no qty/ledger change) ────────────
+    const result = await attachSerialToLine({
       receiving_line_id: receivingLineId,
-      units: 1,
-      serials: [serialNumber],
+      serial_number: serialNumber,
       condition_grade: conditionGrade,
       staff_id: staffId,
       station,
@@ -175,34 +174,26 @@ export const POST = withAuth(async (request: NextRequest, ctx) => {
       scan_token: scanToken,
     });
 
-    // Idempotent re-scan: receiveLineUnits already detected this serial is on
-    // the line. Return success with already_received:true so the UI can show
-    // a friendly toast instead of an error. No background enrichment needed —
-    // the prior scan handled all of that.
-    if (result.already_received) {
-      return respond({
-        success: true,
-        already_received: true,
-        line_state: result.line_state,
-      });
-    }
-
-    // Line qty already satisfies PO expected — intentional no-op; UI shows a toast only.
-    if (result.already_complete) {
-      return respond({
-        success: true,
-        already_complete: true,
-        line_state: result.line_state,
-      });
-    }
-
-    const serialResult = result.serials_recorded[0];
-    if (!serialResult) {
+    if (!result) {
       return NextResponse.json(
         { success: false, error: 'invalid serial number' },
         { status: 400 },
       );
     }
+
+    // Idempotent re-scan: the same serial is already on this line. Return
+    // success so the UI shows a friendly toast instead of an error. No
+    // background enrichment needed — the prior scan handled it.
+    if (result.already_attached) {
+      return respond({
+        success: true,
+        already_attached: true,
+        serial_unit: result.serial_unit,
+        line_state: result.line_state,
+      });
+    }
+
+    const serialResult = result;
 
     // ─── Background: catalog enrichment + cache/realtime ────────────────────
     const serialUnitId = serialResult.serial_unit.id;
@@ -259,12 +250,8 @@ export const POST = withAuth(async (request: NextRequest, ctx) => {
       prior_status: serialResult.prior_status,
       is_return: serialResult.is_return,
       warnings: serialResult.warnings,
-      // True when this serial was logged beyond the line's expected qty.
-      // Receiving / Testing UIs use this flag to show "Extra serial logged"
-      // instead of the misleading "already received / fully received" copy.
-      supplemental: result.supplemental ?? false,
       line_state: result.line_state,
-      inventory_event_ids: result.inventory_event_ids,
+      inventory_event_id: result.inventory_event_id,
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Failed to scan serial';
@@ -301,15 +288,12 @@ export const POST = withAuth(async (request: NextRequest, ctx) => {
  *   - Deletes the matching `serial_units` row (only if it still points at the
  *     given receiving_line_id, so we never clobber a unit that's already moved
  *     beyond receiving).
- *   - Decrements `receiving_lines.quantity_received` by 1 (floored at 0).
- *   - Inserts a reversing `sku_stock_ledger` row (-1, dimension WAREHOUSE)
- *     when the original receive wrote one.
  *
- * Wrapped in a single transaction so partial failures don't leave the line
- * and the unit out of sync.
+ * Serials are sidecar metadata: removing one does NOT change
+ * `receiving_lines.quantity_received` and writes NO reversing stock-ledger row.
+ * Stock/quantity are owned by the PO line item via the Receive action.
  */
 export const DELETE = withAuth(async (request: NextRequest, ctx) => {
-  const client = await pool.connect();
   try {
     const body = await request.json().catch(() => ({}));
     const serialUnitIdRaw = Number(body?.serial_unit_id ?? body?.serialUnitId);
@@ -338,82 +322,23 @@ export const DELETE = withAuth(async (request: NextRequest, ctx) => {
       );
     }
 
-    await client.query('BEGIN');
+    const result = await detachSerialFromLine({
+      receiving_line_id: receivingLineId,
+      serial_unit_id: serialUnitId,
+      serial_number: serialNumberRaw || null,
+      staff_id: ctx.staffId ?? null,
+      station: 'RECEIVING',
+    });
 
-    // Resolve the serial_units row — scoped to the line so we can't delete a
-    // serial that's already moved on (origin_receiving_line_id is set to NULL
-    // on FK delete-cascade, so this guard also catches "already detached").
-    const lookup = await client.query<{
-      id: number;
-      sku: string | null;
-      serial_number: string;
-      origin_receiving_line_id: number | null;
-    }>(
-      serialUnitId
-        ? `SELECT id, sku, serial_number, origin_receiving_line_id
-             FROM serial_units
-            WHERE id = $1 AND origin_receiving_line_id = $2
-            LIMIT 1`
-        : `SELECT id, sku, serial_number, origin_receiving_line_id
-             FROM serial_units
-            WHERE normalized_serial = upper(trim($1))
-              AND origin_receiving_line_id = $2
-            LIMIT 1`,
-      serialUnitId ? [serialUnitId, receivingLineId] : [serialNumberRaw, receivingLineId],
-    );
-
-    const unit = lookup.rows[0];
-    if (!unit) {
-      await client.query('ROLLBACK');
+    if (!result.removed) {
       return NextResponse.json(
         { success: false, error: 'serial not found on this line' },
         { status: 404 },
       );
     }
 
-    // Delete the serial_units row. tech_serial_numbers + sku_stock_ledger
-    // references are FK ON DELETE SET NULL (per 2026-04-11 migration) so the
-    // audit lineage is preserved.
-    await client.query(`DELETE FROM serial_units WHERE id = $1`, [unit.id]);
-
-    // Decrement quantity_received on the line. Clamped at 0 so a manual
-    // backfill that double-deletes can't drive the count negative.
-    const lineUpdate = await client.query<{
-      id: number;
-      sku: string | null;
-      quantity_received: number;
-      quantity_expected: number | null;
-      workflow_status: string | null;
-    }>(
-      `UPDATE receiving_lines
-          SET quantity_received = GREATEST(0, COALESCE(quantity_received, 0) - 1)
-        WHERE id = $1
-        RETURNING id, sku, quantity_received, quantity_expected, workflow_status::text AS workflow_status`,
-      [receivingLineId],
-    );
-    const line = lineUpdate.rows[0];
-
-    // Reversing ledger row — keep the audit chain intact. Original receive
-    // path only writes a delta when the serial was newly created on receiving,
-    // so we mirror that: write -1 only if the line has a sku.
-    if (line?.sku) {
-      try {
-        await client.query(
-          `INSERT INTO sku_stock_ledger
-             (sku, delta, reason, dimension, staff_id, ref_serial_unit_id)
-           VALUES ($1, -1, 'RECEIVING_UNDO', 'WAREHOUSE', $2, NULL)`,
-          [line.sku, ctx.staffId ?? null],
-        );
-      } catch (err) {
-        // Non-fatal — receive path also tolerates ledger insert failure.
-        console.warn('scan-serial DELETE: ledger insert failed (non-fatal)', err);
-      }
-    }
-
-    await client.query('COMMIT');
-
     // Background: same cache + realtime fanout the POST path uses so the
-    // sidebar/accordion refetch and the UI reflects the new quantity.
+    // sidebar/accordion refetch and the UI reflects the change.
     after(async () => {
       try {
         await invalidateCacheTags([
@@ -433,21 +358,14 @@ export const DELETE = withAuth(async (request: NextRequest, ctx) => {
 
     return NextResponse.json({
       success: true,
-      removed_serial_unit_id: unit.id,
-      removed_serial_number: unit.serial_number,
-      line_state: line ?? null,
+      removed_serial_unit_id: result.removed_serial_unit_id,
+      removed_serial_number: result.removed_serial_number,
+      line_state: result.line_state,
     });
   } catch (error) {
-    try {
-      await client.query('ROLLBACK');
-    } catch {
-      /* ignore */
-    }
     const message = error instanceof Error ? error.message : 'Failed to remove serial';
     console.error('receiving/scan-serial DELETE failed:', error);
     return NextResponse.json({ success: false, error: message }, { status: 500 });
-  } finally {
-    client.release();
   }
 }, {
   permission: 'receiving.mark_received',
