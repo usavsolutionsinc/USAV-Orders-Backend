@@ -3,12 +3,19 @@
 import { useState } from 'react';
 import { motion } from 'framer-motion';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { Copy, Edit, Loader2, Package, RefreshCw, Trash2, X } from '@/components/Icons';
+import { Barcode, Copy, Edit, Loader2, Package, RefreshCw, Trash2, X } from '@/components/Icons';
 import { copyToClipboard } from '@/utils/_dom';
 import { formatDateTimePST } from '@/utils/date';
 import { ViewDropdown } from '@/components/ui/ViewDropdown';
 import { HorizontalButtonSlider, type HorizontalSliderItem } from '@/components/ui/HorizontalButtonSlider';
-import { OrderIdChip, TrackingChip, getLast4 } from '@/components/ui/CopyChip';
+import {
+  OrderIdChip,
+  TrackingChip,
+  ListingUrlChip,
+  getLast4,
+} from '@/components/ui/CopyChip';
+import { SearchBar } from '@/components/ui/SearchBar';
+import { listingLinkPreview, listingUrlForOpen } from '@/components/sidebar/receiving/receiving-sidebar-shared';
 import { getStaffThemeById, stationThemeColors } from '@/utils/staff-colors';
 import { toast } from '@/lib/toast';
 import { type ReceivingLineRow } from '@/components/station/ReceivingLinesTable';
@@ -52,6 +59,11 @@ export interface ReceivingDetailsLog {
   tracking_scanned_by?: number | null;
   zoho_purchase_receive_id?: string | null;
   zoho_warehouse_id?: string | null;
+  /** First-line Zoho PO linkage (merged in by receiving overlay fetch). */
+  zoho_purchaseorder_id?: string | null;
+  zoho_purchaseorder_number?: string | null;
+  /** First-line listing URL when present. */
+  listing_url?: string | null;
 }
 
 const CARRIER_OPTS = ['Unknown', 'UPS', 'FedEx', 'USPS', 'AMAZON', 'DHL', 'AliExpress', 'GoFo', 'UniUni', 'LOCAL'].map(
@@ -310,32 +322,64 @@ export function ReceivingDetailsStack({ log, onClose, onUpdated, onDeleted }: Re
 
           {activeTab === 'details' && (
             <>
-          {/* Tracking number row — no header, no rounded container. The
-              editable input flows full width; tracking + PO copy chips dock
-              to the far right so the operator can grab either with one tap. */}
-          <div className="flex items-center gap-3">
-            <input
-              type="text"
-              value={form.tracking}
-              onChange={(e) => form.setTracking(e.target.value)}
-              aria-label="Tracking number"
-              placeholder="Tracking number"
-              className="min-w-0 flex-1 bg-transparent text-sm font-mono font-bold text-gray-900 outline-none placeholder:text-gray-400"
-            />
-            <div className="flex shrink-0 items-center gap-1">
-              <TrackingChip
-                value={(form.tracking || '').trim()}
-                display={getLast4(form.tracking)}
-                disableCopy={!form.tracking?.trim()}
-              />
-              {log.zoho_purchase_receive_id ? (
-                <OrderIdChip
-                  value={log.zoho_purchase_receive_id}
-                  display={getLast4(log.zoho_purchase_receive_id)}
-                />
-              ) : null}
-            </div>
-          </div>
+          {/* Copy chips — same vocabulary as the PO workspace; right-aligned.
+              Editable tracking lives in the SearchBar below (no duplicate full
+              number beside the chip row). */}
+          {(() => {
+            const tr = (form.tracking || '').trim();
+            const listingRaw = String(log.listing_url || '').trim();
+            const poValue = String(
+              log.zoho_purchaseorder_number || log.zoho_purchaseorder_id || '',
+            ).trim();
+            return (
+              <>
+                <div className="flex w-full flex-wrap items-center justify-end gap-1.5">
+                  {listingRaw ? (
+                    <div className="min-w-0 max-w-[min(100%,220px)] shrink">
+                      <ListingUrlChip
+                        rawUrl={listingRaw}
+                        openHref={listingUrlForOpen(listingRaw)}
+                        previewDisplay={listingLinkPreview(listingRaw)}
+                      />
+                    </div>
+                  ) : null}
+                  {poValue ? (
+                    <OrderIdChip value={poValue} display={getLast4(poValue)} />
+                  ) : null}
+                  <TrackingChip
+                    value={tr}
+                    display={getLast4(tr)}
+                    disableCopy={!tr}
+                  />
+                  {log.zoho_purchase_receive_id ? (
+                    <OrderIdChip
+                      value={log.zoho_purchase_receive_id}
+                      display={getLast4(log.zoho_purchase_receive_id)}
+                    />
+                  ) : null}
+                  {log.zoho_warehouse_id ? (
+                    <OrderIdChip
+                      value={log.zoho_warehouse_id}
+                      display={getLast4(log.zoho_warehouse_id)}
+                    />
+                  ) : null}
+                </div>
+                <div className="group mt-3 min-w-0">
+                  <SearchBar
+                    value={form.tracking}
+                    onChange={form.setTracking}
+                    placeholder="Tracking number"
+                    variant="blue"
+                    size="compact"
+                    hideUnderline
+                    leadingIcon={<Barcode className="h-[14px] w-[14px]" />}
+                    className="w-full min-w-0"
+                    aria-label="Edit tracking number"
+                  />
+                </div>
+              </>
+            );
+          })()}
 
           {/* Channel slider — `nav` variant lights the active pill blue to
               match the global sidebar nav, replacing the prior black/slate

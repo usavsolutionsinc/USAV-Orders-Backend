@@ -18,6 +18,7 @@ import { withAuth } from '@/lib/auth/withAuth';
 import { invalidateCacheTags } from '@/lib/cache/upstash-cache';
 import { after } from 'next/server';
 import { createTicket, ZendeskNotConfiguredError } from '@/lib/zendesk';
+import { zendeskTicketUrl } from '@/lib/zendesk-ticket-url';
 
 const ALLOWED_KINDS = new Set(['email_po', 'unmatched_receiving', 'station_exception']);
 
@@ -112,6 +113,7 @@ export const POST = withAuth(async (request: NextRequest, ctx) => {
       success: true,
       already_synced: true,
       ticketNumber: row.zendesk_ticket_id,
+      ticketUrl: zendeskTicketUrl(row.zendesk_ticket_id),
     });
   }
 
@@ -175,5 +177,5 @@ export const POST = withAuth(async (request: NextRequest, ctx) => {
     }
   });
 
-  return NextResponse.json({ success: true, ticketNumber });
+  return NextResponse.json({ success: true, ticketNumber, ticketUrl: zendeskTicketUrl(ticket.id) });
 }, { permission: 'receiving.view' });

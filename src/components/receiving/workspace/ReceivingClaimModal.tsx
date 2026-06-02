@@ -24,7 +24,7 @@ interface Props {
 /**
  * Make-a-claim modal. Filed against the current receiving carton (and
  * optionally the active line). Posts to /api/receiving/zendesk-claim which
- * wraps the existing GAS bridge that creates Zendesk tickets via email.
+ * creates the ticket directly via the Zendesk REST API.
  *
  * On success, the ticket # is handed to `onTicketCreated`, which the parent
  * uses to auto-fill the existing `zendesk` field in the Support FlowSection.
@@ -43,7 +43,7 @@ export function ReceivingClaimModal({ open, row, onClose, onTicketCreated }: Pro
   const [draftBody, setDraftBody] = useState<string | null>(null);
 
   // Editable ticket template — populated from the server preview endpoint so
-  // it reflects exactly what the GAS bridge will receive (PO #, tracking,
+  // it reflects exactly what the ticket will contain (PO #, tracking,
   // photo URLs, line summary). The operator can edit either field before
   // posting; once they touch it we stop overwriting from the preview.
   const [subject, setSubject] = useState('');
@@ -143,10 +143,15 @@ export function ReceivingClaimModal({ open, row, onClose, onTicketCreated }: Pro
         return;
       }
       if (data.ticketNumber) {
-        toast.success(`Claim ${data.ticketNumber} created`);
+        const url = typeof data.ticketUrl === 'string' ? data.ticketUrl : null;
+        toast.success(`Claim ${data.ticketNumber} created`, {
+          action: url
+            ? { label: 'Open', onClick: () => window.open(url, '_blank', 'noopener') }
+            : undefined,
+        });
         onTicketCreated(String(data.ticketNumber));
       } else {
-        toast.success('Claim email sent — paste the Zendesk # back when assigned');
+        toast.success('Claim filed — paste the Zendesk # back when assigned');
       }
       onClose();
     } catch (err) {

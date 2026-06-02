@@ -498,8 +498,8 @@ export function RepairIntakeForm({ onClose, onSubmit, initialData, favoriteSkuId
                                         placeholder="Search by name, phone, or email..."
                                         className={orangeInputClass}
                                     />
-                                    <div className="overflow-hidden rounded-xl border border-orange-200 bg-white">
-                                        <div className="grid grid-cols-[1fr_1fr_0.6fr] gap-2 border-b border-orange-100 bg-orange-50 px-3 py-2 text-mini font-black uppercase tracking-wider text-orange-700">
+                                    <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">
+                                        <div className="grid grid-cols-[1fr_1fr_0.6fr] gap-2 border-b border-slate-100 bg-slate-50 px-3 py-2 text-mini font-black uppercase tracking-wider text-slate-600">
                                             <span>Name</span>
                                             <span>Phone</span>
                                             <span className="text-right">Action</span>
@@ -518,7 +518,7 @@ export function RepairIntakeForm({ onClose, onSubmit, initialData, favoriteSkuId
                                                 <div
                                                     key={customer.id}
                                                     className={`grid grid-cols-[1fr_1fr_0.6fr] gap-2 border-b border-gray-100 px-3 py-2 text-micro text-gray-700 ${
-                                                        selectedCustomerId === customer.id ? 'bg-orange-50' : 'bg-white'
+                                                        selectedCustomerId === customer.id ? 'bg-indigo-50' : 'bg-white'
                                                     }`}
                                                 >
                                                     <span className="truncate font-bold text-gray-900">{customer.name}</span>

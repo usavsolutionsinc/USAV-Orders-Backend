@@ -1,9 +1,15 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
-import ReceivingLinesTable from './station/ReceivingLinesTable';
+import ReceivingLinesTable, { RECEIVING_SELECTION_SCOPE } from './station/ReceivingLinesTable';
+import { usePageHeader } from '@/hooks/usePageHeader';
+import { useTableSelection } from '@/hooks/useTableSelection';
+import { emitToggleAll } from '@/lib/selection/table-selection';
+import { SelectionActionBar } from '@/design-system/components/SelectionActionBar';
+import { Copy, Check, X } from '@/components/Icons';
+import { toast } from '@/lib/toast';
 import { LocalPickupCatalogPanel } from './work-orders/LocalPickupCatalogPanel';
 import { ReceivingLineWorkspace } from './receiving/workspace/ReceivingLineWorkspace';
 import { ReceivingScanLoader } from './receiving/workspace/ReceivingScanLoader';
@@ -85,6 +91,66 @@ export default function ReceivingDashboard() {
   const [scanInFlight, setScanInFlight] = useState<
     { tracking: string; startedAt: number } | null
   >(null);
+
+  // ── Bulk select (History / Incoming list) ──────────────────────────────────
+  // The table list is only visible in table-only modes; selection lives there.
+  const [selectMode, setSelectMode] = useState(false);
+  const selectedRows = useTableSelection<ReceivingLineRow>(
+    RECEIVING_SELECTION_SCOPE,
+    (r) => r.id,
+  );
+
+  // Leaving the list (back to the receive workspace / pickup) exits select mode.
+  useEffect(() => {
+    if (!isTableOnlyMode && selectMode) setSelectMode(false);
+  }, [isTableOnlyMode, selectMode]);
+
+  const exitSelectMode = useCallback(() => {
+    emitToggleAll(RECEIVING_SELECTION_SCOPE, 'none');
+    setSelectMode(false);
+  }, []);
+
+  const handleCopyDetails = useCallback((rows: ReceivingLineRow[]) => {
+    const text = rows
+      .map((r) => {
+        const po = (r.zoho_purchaseorder_number || r.zoho_purchaseorder_id || '').trim();
+        const sku = (r.sku || '').trim();
+        const tracking = (r.tracking_number || '').trim();
+        return [po && `PO ${po}`, sku && `SKU ${sku}`, tracking && `TRK ${tracking}`]
+          .filter(Boolean)
+          .join(' • ');
+      })
+      .filter(Boolean)
+      .join('\n');
+    void navigator.clipboard?.writeText(text).then(
+      () => toast.success(`Copied ${rows.length} line${rows.length === 1 ? '' : 's'}`),
+      () => toast.error('Copy failed'),
+    );
+  }, []);
+
+  // Contextual header control: a Select toggle, shown only when the list is up.
+  usePageHeader(
+    isTableOnlyMode ? (
+      <div className="flex items-center gap-2">
+        <span className="text-sm font-bold text-gray-900">
+          {selectMode ? `${selectedRows.length} selected` : 'Receiving'}
+        </span>
+        <button
+          type="button"
+          onClick={() => (selectMode ? exitSelectMode() : setSelectMode(true))}
+          className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-caption font-semibold transition-colors ${
+            selectMode
+              ? 'border-blue-600 bg-blue-600 text-white hover:bg-blue-700'
+              : 'border-gray-200 bg-white text-gray-700 hover:bg-gray-50'
+          }`}
+        >
+          {selectMode ? <X className="h-3.5 w-3.5" /> : <Check className="h-3.5 w-3.5" />}
+          {selectMode ? 'Cancel' : 'Select'}
+        </button>
+      </div>
+    ) : null,
+    [isTableOnlyMode, selectMode, selectedRows.length, exitSelectMode],
+  );
 
   useEffect(() => {
     const handleOpen = (e: Event) => {
@@ -284,10 +350,40 @@ export default function ReceivingDashboard() {
         try {
           const res = await fetch(`/api/receiving/${receivingId}`, { cache: 'no-store' });
           const data = await res.json().catch(() => null);
-          const log = data?.success && data.receiving
-            ? (data.receiving as ReceivingDetailsLog)
-            : null;
-          setOverlayLog(log);
+          if (!data?.success || !data.receiving) {
+            setOverlayLog(null);
+            return;
+          }
+          const carton = data.receiving as ReceivingDetailsLog & {
+            id?: number | string;
+            receiving_tracking_number?: string | null;
+          };
+          const lines = Array.isArray(data.lines)
+            ? (data.lines as Array<{
+                zoho_purchaseorder_id?: string | null;
+                zoho_purchaseorder_number?: string | null;
+                listing_url?: string | null;
+              }>)
+            : [];
+          const first = lines[0];
+          const trackingRaw = String(carton.tracking ?? carton.receiving_tracking_number ?? '').trim();
+          setOverlayLog({
+            ...carton,
+            id: String(carton.id ?? receivingId),
+            tracking: trackingRaw || carton.tracking,
+            zoho_purchaseorder_id:
+              first?.zoho_purchaseorder_id != null && String(first.zoho_purchaseorder_id).trim()
+                ? String(first.zoho_purchaseorder_id).trim()
+                : carton.zoho_purchaseorder_id ?? null,
+            zoho_purchaseorder_number:
+              first?.zoho_purchaseorder_number != null && String(first.zoho_purchaseorder_number).trim()
+                ? String(first.zoho_purchaseorder_number).trim()
+                : carton.zoho_purchaseorder_number ?? null,
+            listing_url:
+              first?.listing_url != null && String(first.listing_url).trim()
+                ? String(first.listing_url).trim()
+                : carton.listing_url ?? null,
+          });
         } catch {
           setOverlayLog(null);
         }
@@ -334,7 +430,7 @@ export default function ReceivingDashboard() {
           style={{ display: isTableOnlyMode ? 'block' : 'none' }}
           aria-hidden={!isTableOnlyMode}
         >
-          <ReceivingLinesTable />
+          <ReceivingLinesTable selectMode={selectMode} />
         </div>
 
         {/* Scan-in-flight skeleton loader. Shown the moment the operator
@@ -411,6 +507,18 @@ export default function ReceivingDashboard() {
             />
           ) : null}
         </AnimatePresence>
+
+        {/* Bulk-selection action bar — pins to the bottom of the list region
+            when rows are selected in History / Incoming. */}
+        {isTableOnlyMode ? (
+          <SelectionActionBar
+            scope={RECEIVING_SELECTION_SCOPE}
+            rows={selectedRows}
+            primaryLabel="Copy details"
+            primaryIcon={<Copy className="h-4 w-4" />}
+            onPrimary={handleCopyDetails}
+          />
+        ) : null}
       </div>
 
       <AnimatePresence>

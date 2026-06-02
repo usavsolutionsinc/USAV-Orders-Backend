@@ -82,6 +82,10 @@ export interface CopyChipProps {
   fitDisplayWidth?: boolean;
   /** Called after a successful clipboard write. Use for side-effects (e.g. dispatch a custom event). */
   onCopy?: (value: string) => void;
+  /**
+   * Outer wrapper horizontal padding — `flush` aligns with sidebar grids where the chip icon lives in another column.
+   */
+  outerPad?: 'chip' | 'flush';
 }
 
 export function CopyChip({
@@ -95,6 +99,7 @@ export function CopyChip({
   truncateDisplay = true,
   fitDisplayWidth = false,
   onCopy,
+  outerPad = 'chip',
 }: CopyChipProps) {
   const anchorId = useId();
   const chipRef = useRef<HTMLDivElement | null>(null);
@@ -149,10 +154,12 @@ export function CopyChip({
     }
   };
 
+  const outerPx = outerPad === 'flush' ? 'px-0' : 'px-1.5';
+
   return (
     <div
       ref={chipRef}
-      className={`relative flex items-center justify-start px-1.5 ${width}`}
+      className={`relative flex items-center justify-start ${outerPx} ${width}`}
       onMouseEnter={openTooltip}
       onMouseLeave={closeTooltip}
     >
@@ -253,21 +260,34 @@ export const TrackingChip = ({
   display,
   disableCopy,
   width = 'w-fit max-w-full',
+  /** When false, renders copy label only — use with a separate leading icon column so rows align across the FBA sidebar. */
+  showIcon = true,
+  /**
+   * Default true — underline hugs the mono label (last-4 preview). Prevents full-width underline when the wrapper
+   * sits in a wide grid/flex slot (e.g. FBA tracking bundle header beside “N SKUs · M units”).
+   */
+  fitDisplayWidth = true,
 }: {
   value: string;
   display: string;
   disableCopy?: boolean;
   /** Tailwind width utilities on the wrapper (sidebar grids need `min-w-0 flex-1`). */
   width?: string;
+  showIcon?: boolean;
+  fitDisplayWidth?: boolean;
 }) => (
   <CopyChip
     value={value}
     display={isEmptyDisplayValue(display) || String(display || '').trim() === '---' ? '----' : display}
-    icon={<MapPin className="h-4 w-4 shrink-0" />}
+    icon={
+      showIcon ? <MapPin className="h-4 w-4 shrink-0" /> : undefined
+    }
     underlineClass="border-blue-500"
     iconClass="inline-flex items-center justify-center text-blue-500"
     width={width}
     disableCopy={disableCopy}
+    outerPad={showIcon ? 'chip' : 'flush'}
+    fitDisplayWidth={fitDisplayWidth}
   />
 );
 

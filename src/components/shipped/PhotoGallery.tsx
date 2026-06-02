@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { framerTransition } from '@/design-system/foundations/motion-framer';
+import { useBodyScrollLock } from '@/design-system/hooks';
 import {
   X,
   Download,
@@ -81,12 +82,10 @@ export function PhotoGallery({
 
   useEffect(() => {
     setMounted(true);
-    
-    // Cleanup on unmount
-    return () => {
-      document.body.style.overflow = '';
-    };
   }, []);
+
+  // Lock body scroll while the fullscreen viewer is open (restores prior overflow on close).
+  useBodyScrollLock(viewerOpen);
 
   // Parse and initialize photo items — skip resets when URL list is unchanged (avoids reload flicker when parents re-render with a new array reference).
   useEffect(() => {
@@ -159,7 +158,6 @@ export function PhotoGallery({
     resetZoom();
     setDeleteArmed(false);
     setDeleteError(null);
-    document.body.style.overflow = '';
   }, []);
 
   const openViewer = useCallback((index: number) => {
@@ -168,7 +166,6 @@ export function PhotoGallery({
     resetZoom();
     setDeleteArmed(false);
     setDeleteError(null);
-    document.body.style.overflow = 'hidden';
   }, []);
 
   // Keyboard navigation

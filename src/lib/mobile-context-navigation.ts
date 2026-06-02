@@ -1,5 +1,5 @@
 import type { ReadonlyURLSearchParams } from 'next/navigation';
-import { APP_SIDEBAR_NAV, getSidebarRouteKey } from '@/lib/sidebar-navigation';
+import { APP_SIDEBAR_NAV, getSidebarRouteKey, type SidebarRouteKey } from '@/lib/sidebar-navigation';
 import {
   getActiveSettingsSection,
   type SettingsSection,
@@ -9,7 +9,6 @@ import {
   normalizeDashboardOrderViewParams,
   type DashboardOrderView,
 } from '@/utils/dashboard-search-state';
-import type { SidebarRouteKey } from '@/lib/sidebar-navigation';
 
 export interface MobileContextOption {
   id: string;
@@ -42,7 +41,9 @@ const DASHBOARD_VIEW_OPTIONS: MobileContextOption[] = [
 
 const RECEIVING_MODE_OPTIONS: MobileContextOption[] = [
   { id: 'receive', label: 'Receiving' },
-  { id: 'pickup', label: 'Local Pickup' },
+  { id: 'history', label: 'History' },
+  { id: 'unfound', label: 'Unfound' },
+  { id: 'pickup', label: 'Local Pick Up' },
 ];
 
 const WALK_IN_MODE_OPTIONS: MobileContextOption[] = [
@@ -52,13 +53,11 @@ const WALK_IN_MODE_OPTIONS: MobileContextOption[] = [
 
 const SETTINGS_SECTION_OPTIONS: MobileContextOption[] = [
   { id: 'hardware', label: 'Hardware' },
-  { id: 'workstation', label: 'Workstation' },
   { id: 'quick-access', label: 'Quick Access' },
   { id: 'appearance', label: 'Appearance' },
   { id: 'security', label: 'Security' },
   { id: 'staff', label: 'Staff' },
   { id: 'sessions', label: 'Sessions' },
-  { id: 'audit', label: 'Audit log' },
   { id: 'operations-log', label: 'Operations log' },
   { id: 'about', label: 'About' },
 ];
@@ -66,7 +65,6 @@ const SETTINGS_SECTION_OPTIONS: MobileContextOption[] = [
 const SETTINGS_REQUIRES: Partial<Record<SettingsSection, string>> = {
   staff: 'admin.manage_staff',
   sessions: 'admin.view_sessions',
-  audit: 'admin.view_logs',
   'operations-log': 'admin.view_logs',
 };
 
@@ -77,6 +75,7 @@ export function getMobileContextRowConfig(
   hasPermission: (perm: string) => boolean,
   isAuthLoaded: boolean,
   isSignedIn: boolean,
+  pathname: string | null = null,
 ): MobileContextRowConfig | null {
   switch (routeKey) {
     case 'dashboard': {
@@ -116,15 +115,32 @@ export function getMobileContextRowConfig(
       };
     }
     case 'receiving': {
-      const activeId = searchParams.get('mode') === 'pickup' ? 'pickup' : 'receive';
+      const onUnfound =
+        pathname === '/receiving/unfound' || pathname?.startsWith('/receiving/unfound/');
+      const qsMode = searchParams.get('mode');
+      const activeId = onUnfound
+        ? 'unfound'
+        : qsMode === 'pickup'
+          ? 'pickup'
+          : qsMode === 'history'
+            ? 'history'
+            : 'receive';
       const active = RECEIVING_MODE_OPTIONS.find((o) => o.id === activeId);
       return {
         activeLabel: active?.label ?? 'Receiving',
         activeId,
         options: RECEIVING_MODE_OPTIONS,
         onSelect: (id) => {
+          if (id === 'unfound') {
+            navigate('/receiving/unfound');
+            return;
+          }
           const params = new URLSearchParams(searchParams.toString());
-          params.set('mode', id);
+          if (id === 'pickup') {
+            params.set('mode', 'pickup');
+          } else {
+            params.set('mode', id);
+          }
           navigate(`/receiving?${params.toString()}`);
         },
       };

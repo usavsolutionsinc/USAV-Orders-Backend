@@ -1,9 +1,10 @@
 'use client';
 
-import { useEffect, useMemo } from 'react';
+import { useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { AnimatePresence, motion } from 'framer-motion';
 import { X } from 'lucide-react';
+import { useBodyScrollLock, useEscapeClose } from '@/design-system/hooks';
 import { formatDistanceToNowStrict } from 'date-fns';
 import type { DashboardData } from '@/features/operations/types';
 import { useRepairsTable } from '@/hooks/useRepairs';
@@ -200,23 +201,8 @@ function RepairList({ emptyHint }: { emptyHint: string }) {
 }
 
 export function KpiDetailsModal({ kind, value, activityFeed, onClose }: KpiDetailsModalProps) {
-  useEffect(() => {
-    if (!kind) return;
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose();
-    };
-    document.addEventListener('keydown', onKey);
-    return () => document.removeEventListener('keydown', onKey);
-  }, [kind, onClose]);
-
-  useEffect(() => {
-    if (!kind) return;
-    const original = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
-    return () => {
-      document.body.style.overflow = original;
-    };
-  }, [kind]);
+  useEscapeClose(Boolean(kind), onClose);
+  useBodyScrollLock(Boolean(kind));
 
   if (typeof document === 'undefined') return null;
 

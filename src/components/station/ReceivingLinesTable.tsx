@@ -4,6 +4,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useUIModeOptional } from '@/design-system/providers/UIModeProvider';
+import { Check } from '@/components/Icons';
+import { emitSelection, onToggleAll } from '@/lib/selection/table-selection';
 import { SkeletonList } from '@/design-system/components/Skeletons';
 import { TrackingChip, OrderIdChip, SkuScanRefChip, SerialChip, getLast4, getLast4Serial } from '@/components/ui/CopyChip';
 import { CarrierBadge } from '@/components/ui/CarrierBadge';
@@ -128,6 +130,10 @@ export function dispatchSelectLine(row: ReceivingLineRow | null) {
   window.dispatchEvent(new CustomEvent('receiving-select-line', { detail: row }));
 }
 
+/** Selection scope shared by the table, its header Select toggle, and the
+ *  SelectionActionBar (see useTableSelection / SelectionActionBar). */
+export const RECEIVING_SELECTION_SCOPE = 'receiving' as const;
+
 export function dispatchLineUpdated(row: Partial<ReceivingLineRow> & { id: number }) {
   window.dispatchEvent(new CustomEvent('receiving-line-updated', { detail: row }));
 }
@@ -162,6 +168,7 @@ export function ReceivingLineOrderRow({
   index,
   isMobile,
   isIncoming = false,
+  selectMode = false,
 }: {
   row: ReceivingLineRow;
   isSelected: boolean;
@@ -171,6 +178,9 @@ export function ReceivingLineOrderRow({
   /** Incoming view: serials aren't assigned until unboxing and the carrier /
    *  "EXPECTED" status are redundant, so we drop those chips/labels. */
   isIncoming?: boolean;
+  /** Multi-select mode: render a checkbox and treat `isSelected` as "checked".
+   *  Click toggles membership instead of opening the workspace. */
+  selectMode?: boolean;
 }) {
   const productTitle = row.item_name || row.zoho_item_id || 'Unnamed inbound line';
   const quantityText = `${row.quantity_received}/${row.quantity_expected ?? '?'}`;
@@ -227,9 +237,10 @@ export function ReceivingLineOrderRow({
           onSelect();
         }
       }}
-      role="button"
+      role={selectMode ? 'checkbox' : 'button'}
       tabIndex={0}
-      aria-pressed={isSelected}
+      aria-checked={selectMode ? isSelected : undefined}
+      aria-pressed={selectMode ? undefined : isSelected}
       aria-label={`Select receiving line ${row.id}`}
       className={`${dashboardOrderRowShellClass(isMobile)} border-b border-gray-50 px-3 py-1.5 transition-colors cursor-pointer hover:bg-blue-50/50 ${
         isSelected ? 'bg-blue-50/80' : index % 2 === 0 ? 'bg-white' : 'bg-gray-50/10'
@@ -237,6 +248,15 @@ export function ReceivingLineOrderRow({
     >
       <div className="flex min-w-0 flex-col">
         <div className="flex min-w-0 items-center gap-2">
+          {selectMode && (
+            <span
+              className={`flex h-4 w-4 shrink-0 items-center justify-center rounded border transition-colors ${
+                isSelected ? 'border-blue-600 bg-blue-600 text-white' : 'border-gray-300 bg-white'
+              }`}
+            >
+              {isSelected && <Check className="h-3 w-3" />}
+            </span>
+          )}
           <span
             className={`h-2 w-2 shrink-0 rounded-full ${getStatusDotBg(row.workflow_status, row.quantity_received, row.quantity_expected)}`}
             title={workflowLabel}
@@ -277,7 +297,7 @@ export function ReceivingLineOrderRow({
   );
 }
 
-export default function ReceivingLinesTable() {
+export default function ReceivingLinesTable({ selectMode = false }: { selectMode?: boolean } = {}) {
   const queryClient = useQueryClient();
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -340,6 +360,10 @@ export default function ReceivingLinesTable() {
     (isHistoryMode &&
       (historySearch.length > 0 || historySearchScope !== 'all'));
   const [selectedId, setSelectedId] = useState<number | null>(null);
+  // Multi-select (bulk) state — only active when `selectMode` is on. Kept as a
+  // Set of row ids; the resolved rows are broadcast on RECEIVING_SELECTION_SCOPE
+  // for the SelectionActionBar.
+  const [selectedIds, setSelectedIds] = useState<Set<number>>(() => new Set());
   const [localRows, setLocalRows] = useState<ReceivingLineRow[]>([]);
   const [weekOffset, setWeekOffset] = useState(0);
   const [stickyDate, setStickyDate] = useState<string>('');
@@ -585,7 +609,21 @@ export default function ReceivingLinesTable() {
     initialAutoSelectRef.current = true;
   }, []);
 
+  // Read selectMode without re-creating handlers / re-subscribing listeners.
+  const selectModeRef = useRef(selectMode);
+  useEffect(() => { selectModeRef.current = selectMode; }, [selectMode]);
+
   const handleSelectRow = useCallback((row: ReceivingLineRow) => {
+    if (selectModeRef.current) {
+      // Bulk mode: toggle membership; never open the workspace.
+      setSelectedIds((prev) => {
+        const next = new Set(prev);
+        if (next.has(row.id)) next.delete(row.id);
+        else next.add(row.id);
+        return next;
+      });
+      return;
+    }
     const next = selectedIdRef.current === row.id ? null : row.id;
     setSelectedId(next);
     dispatchSelectLine(next ? row : null);
@@ -639,11 +677,40 @@ export default function ReceivingLinesTable() {
     [filteredGroupedRecords, isIncomingMode],
   );
 
+  // ── Bulk selection wiring ───────────────────────────────────────────────────
+  // Broadcast the resolved selected rows whenever the id set or the underlying
+  // rows change, so the SelectionActionBar count + payload stay in sync.
+  useEffect(() => {
+    if (!selectMode) return;
+    const byId = new Map(localRows.map((r) => [r.id, r]));
+    const rows: ReceivingLineRow[] = [];
+    for (const id of selectedIds) {
+      const row = byId.get(id);
+      if (row) rows.push(row);
+    }
+    emitSelection(RECEIVING_SELECTION_SCOPE, rows);
+  }, [selectMode, selectedIds, localRows]);
+
+  // Leaving select mode clears the selection (and notifies listeners).
+  useEffect(() => {
+    if (selectMode) return;
+    setSelectedIds((prev) => (prev.size ? new Set() : prev));
+    emitSelection(RECEIVING_SELECTION_SCOPE, []);
+  }, [selectMode]);
+
+  // Header "Select all" / "Clear" → toggle every currently-visible row.
+  useEffect(() => {
+    return onToggleAll(RECEIVING_SELECTION_SCOPE, (mode) => {
+      setSelectedIds(mode === 'all' ? new Set(orderedVisibleRows.map((r) => r.id)) : new Set());
+    });
+  }, [orderedVisibleRows]);
+
   // Sidebar chevrons / arrow keys dispatch receiving-navigate-table.
   useEffect(() => {
     const handler = (event: Event) => {
       const direction = (event as CustomEvent<'prev' | 'next'>).detail;
       if (direction !== 'prev' && direction !== 'next') return;
+      if (selectModeRef.current) return; // arrow-nav is for single-select only
       if (orderedVisibleRows.length === 0) return;
 
       const step = direction === 'prev' ? -1 : 1;
@@ -809,7 +876,8 @@ export default function ReceivingLinesTable() {
                           index={index}
                           isMobile={isMobile}
                           isIncoming={isIncomingMode}
-                          isSelected={selectedId === row.id}
+                          selectMode={selectMode}
+                          isSelected={selectMode ? selectedIds.has(row.id) : selectedId === row.id}
                           onSelect={() => handleSelectRow(row)}
                         />
                       ))}

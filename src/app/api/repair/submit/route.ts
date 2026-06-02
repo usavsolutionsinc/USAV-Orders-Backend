@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createRepair, updateRepairField } from '@/lib/neon/repair-service-queries';
 import { createAssignment } from '@/lib/neon/assignments-queries';
 import { addBusinessDays, createZendeskTicket } from '@/lib/zendesk';
+import { zendeskTicketUrl } from '@/lib/zendesk-ticket-url';
 import { invalidateCacheTags } from '@/lib/cache/upstash-cache';
 import { publishRepairChanged } from '@/lib/realtime/publish';
 import { formatPSTTimestamp } from '@/utils/date';
@@ -199,6 +200,7 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
             rsNumber: finalRSNumber,
             id: dbId,
             zendeskTicketNumber,
+            zendeskTicketUrl: zendeskTicketUrl(zendeskTicketNumber),
             customerId: customerRecord.id,
             documentId,
             signatureUrl,

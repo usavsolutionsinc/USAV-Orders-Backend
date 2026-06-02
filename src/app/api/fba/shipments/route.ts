@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import pool from '@/lib/db';
 import { buildFbaPlanRefFromIsoDate } from '@/lib/fba/plan-ref';
 import { upsertFnskuCatalogRow } from '@/lib/fba/upsert-fnsku-catalog';
+import { InvalidFbaCatalogKeyError } from '@/lib/fba/catalog-key-validation';
 import { publishFbaShipmentChanged } from '@/lib/realtime/publish';
 import { invalidateCacheTags } from '@/lib/cache/upstash-cache';
 import { withAuth } from '@/lib/auth/withAuth';
@@ -295,13 +296,14 @@ export const POST = withAuth(async (request: NextRequest, ctx) => {
       },
       { status: 201 }
     );
-  } catch (error: any) {
+  } catch (error: unknown) {
     await client.query('ROLLBACK');
     console.error('[POST /api/fba/shipments]', error);
-    return NextResponse.json(
-      { success: false, error: error?.message || 'Failed to create FBA shipment' },
-      { status: 500 }
-    );
+    if (error instanceof InvalidFbaCatalogKeyError) {
+      return NextResponse.json({ success: false, error: error.message }, { status: 400 });
+    }
+    const message = error instanceof Error ? error.message : 'Failed to create FBA shipment';
+    return NextResponse.json({ success: false, error: message }, { status: 500 });
   } finally {
     client.release();
   }

@@ -1,9 +1,10 @@
 'use client';
 
-import React, { useEffect } from 'react';
+import React from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X } from 'lucide-react';
 import { cn } from '@/utils/_cn';
+import { useBodyScrollLock, useEscapeClose } from '@/design-system/hooks';
 
 interface StationDrawerProps {
   isOpen: boolean;
@@ -25,19 +26,9 @@ export function StationDrawer({
   side = 'bottom',
   className,
 }: StationDrawerProps) {
-  // Close on Escape
-  useEffect(() => {
-    if (!isOpen) return;
-    const handler = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
-    document.addEventListener('keydown', handler);
-    return () => document.removeEventListener('keydown', handler);
-  }, [isOpen, onClose]);
-
-  // Prevent body scroll when open
-  useEffect(() => {
-    document.body.style.overflow = isOpen ? 'hidden' : '';
-    return () => { document.body.style.overflow = ''; };
-  }, [isOpen]);
+  // Close on Escape + lock body scroll while open (restores prior overflow on close).
+  useEscapeClose(isOpen, onClose);
+  useBodyScrollLock(isOpen);
 
   const panelVariants =
     side === 'bottom'

@@ -1,6 +1,7 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
+import { useBodyScrollLock } from '@/design-system/hooks';
 
 type ActionType = 'replaced' | 'repaired' | 'cleaned' | 'tested' | 'no_fix' | 'awaiting_part';
 
@@ -46,13 +47,7 @@ export function AddRepairActionSheet({ repairId, onClose, onSaved }: Props) {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    const prev = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
-    return () => {
-      document.body.style.overflow = prev;
-    };
-  }, []);
+  useBodyScrollLock(true);
 
   const pick = (t: ActionType) => {
     setActionType(t);

@@ -425,3 +425,25 @@ Status as of branch `refactor/dedup-phase-0-1` (2026-06-01). `npx tsc --noEmit` 
 - [x] Delete confirmed dead code: `CompactSearchInput`, `AlertLineRow` (+ barrel + `DESIGN_SYSTEM.md` references). **NOTE:** `DetailCell`/`DetailGrid` were NOT deleted — each is used in 5 station up-next card files (the audit miscounted barrel re-exports as the only reference).
 - [x] Dedupe the 3 inventory `STATUS_COLOR` maps → single source `src/components/inventory/status-classes.ts` (`inventoryStatusBadgeClass` / `inventoryStatusChipClass`). **Zero visual change** — exact prior classes preserved per variant (badge vs ring-chip, the `gray-500` null case, `gray-600` miss case, `red-100` SCRAPPED). **Refinement learned here:** a coarse 7-tone `StatusPill` would have visually regressed these (e.g. `STOCKED` green vs `TESTED` emerald both collapse to "success"). So the generalizable pattern is **colocated `status → {tone|classes}` table per domain**, feeding `StatusPill` only where its tones suffice. `StatusPill` itself is deferred to the next PR (to avoid shipping an unused primitive — the very anti-pattern we're fixing).
 - [x] Extract `useBodyScrollLock` + `useEscapeClose` (`src/design-system/hooks/`, exported from the DS barrel). **Additive only.** Migrating the 10 scroll-lock / 30 Escape sites onto them (and fixing the leak bugs) is intentionally a **separate PR** so this one stays mechanically safe and reviewable.
+
+---
+
+## 7. Phase 2 progress — overlay-hook adoption (branch `refactor/dedup-phase-2-overlay-hooks`)
+
+Migrated the **scroll-lock cluster** (9 of the 10 sites) onto `useBodyScrollLock`, plus the Escape handlers that lived in those same files onto `useEscapeClose`. `npx tsc --noEmit` → 0 errors.
+
+| File | Change | Bug fixed |
+|---|---|---|
+| `receiving/workspace/ReceivingAuditModal.tsx` | combined overflow+esc effect → both hooks | — |
+| `features/operations/components/KpiDetailsModal.tsx` | overflow+esc effects → hooks; dropped unused `useEffect` | — |
+| `sidebar/RepairSidebarPanel.tsx` | scroll-lock → hook | — |
+| `sidebar/SalesSidebarPanel.tsx` | scroll-lock → hook | — |
+| `repair/RepairPickupFlow.tsx` | scroll-lock → hook; dropped unused `useEffect` | — |
+| `repair/mobile/AddRepairActionSheet.tsx` | scroll-lock → hook; dropped unused `useEffect` | — |
+| `station/StationDrawer.tsx` | overflow+esc → hooks | **yes** — set `overflow` without capturing prior value |
+| `layout/ResponsiveLayout.tsx` | scroll-lock → hook | **yes** — restored to `''` instead of prior value |
+| `shipped/PhotoGallery.tsx` | 3 imperative `overflow` sets → one `useBodyScrollLock(viewerOpen)` | **yes** — restored to `''`; multi-key keydown effect left intact |
+
+`components/ui/BottomSheet.tsx` deliberately **not** migrated — it is the correct reference implementation (portal + scroll-lock + esc + drag-dismiss) others should eventually compose.
+
+**Deferred:** the ~28 standalone Escape-only sites are mostly popovers/dropdowns with intertwined click-outside logic, so `useEscapeClose` alone isn't the full story — they want a dedicated `Popover` / `useOnClickOutside` pass, not a blind swap.

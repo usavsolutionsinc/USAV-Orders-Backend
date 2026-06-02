@@ -3,7 +3,7 @@ import pool from '@/lib/db';
 import { invalidateCacheTags } from '@/lib/cache/upstash-cache';
 import { publishReceivingLogChanged } from '@/lib/realtime/publish';
 import { enrichSerialUnitCatalog } from '@/lib/neon/serial-units-queries';
-import { receiveLineUnits } from '@/lib/receiving/receive-line';
+import { attachSerialToLine, detachSerialFromLine } from '@/lib/receiving/serial-attach';
 import { syncSerialToZohoPo } from '@/lib/receiving/zoho-serial-sync';
 import { withAuth } from '@/lib/auth/withAuth';
 import { AUDIT_ACTION, AUDIT_ENTITY } from '@/lib/audit-logs';
@@ -37,14 +37,15 @@ async function loadCandidateLines(receivingId: number): Promise<ReceivingLineCan
   return r.rows;
 }
 
+// Serials are sidecar metadata, not stock — "open vs full" no longer applies to
+// where a scan lands. A single-line carton resolves automatically; anything
+// ambiguous asks the operator which line. The caller always wins when it passes
+// an explicit receiving_line_id.
 function pickAutoLine(
   lines: ReceivingLineCandidate[],
 ): ReceivingLineCandidate | 'ambiguous' | null {
-  const open = lines.filter(
-    (l) => l.quantity_expected == null || l.quantity_received < (l.quantity_expected ?? 0),
-  );
-  if (open.length === 0) return null;
-  if (open.length === 1) return open[0];
+  if (lines.length === 0) return null;
+  if (lines.length === 1) return lines[0];
   return 'ambiguous';
 }
 
@@ -136,41 +137,20 @@ export const POST = withAuth(async (request: NextRequest, ctx) => {
         );
       }
       const picked = pickAutoLine(candidates);
-      if (picked === null) {
-        if (candidates.length === 1) {
-          receivingLineId = candidates[0].id;
-          targetReceivingId = candidates[0].receiving_id;
-        } else {
-          return NextResponse.json({
-            success: false,
-            needs_line_selection: true,
-            carton_fully_received: true,
-            candidate_lines: candidates.map((l) => ({
-              id: l.id,
-              sku: l.sku,
-              quantity_expected: l.quantity_expected,
-              quantity_received: l.quantity_received,
-            })),
-          });
-        }
-      } else if (picked === 'ambiguous') {
-        const openLines = candidates.filter(
-          (l) =>
-            l.quantity_expected == null ||
-            l.quantity_received < (l.quantity_expected ?? 0),
-        );
-        const list = openLines.length > 0 ? openLines : candidates;
+      if (picked === 'ambiguous') {
+        // Multiple lines on the carton and no explicit target — ask the
+        // operator which product this serial belongs to.
         return NextResponse.json({
           success: false,
           needs_line_selection: true,
-          candidate_lines: list.map((l) => ({
+          candidate_lines: candidates.map((l) => ({
             id: l.id,
             sku: l.sku,
             quantity_expected: l.quantity_expected,
             quantity_received: l.quantity_received,
           })),
         });
-      } else {
+      } else if (picked) {
         receivingLineId = picked.id;
         targetReceivingId = picked.receiving_id;
       }

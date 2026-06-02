@@ -33,6 +33,7 @@ import {
   X,
 } from '@/components/Icons';
 import { toast } from '@/lib/toast';
+import { zendeskTicketUrl } from '@/lib/zendesk-ticket-url';
 import { copyToClipboard } from '@/utils/_dom';
 import { formatDateTimePST } from '@/utils/date';
 import { SlideOverBackdrop } from '@/components/ui/SlideOverBackdrop';
@@ -216,12 +217,18 @@ export function UnfoundQueueDetailsPanel({
       const body = (await res.json().catch(() => ({}))) as {
         success?: boolean;
         ticketNumber?: string;
+        ticketUrl?: string | null;
         error?: string;
       };
       if (!res.ok || !body.success || !body.ticketNumber) {
         throw new Error(body.error ?? `push failed (${res.status})`);
       }
-      toast.success(`Zendesk ticket ${body.ticketNumber} created`, { id: toastId });
+      toast.success(`Zendesk ticket ${body.ticketNumber} created`, {
+        id: toastId,
+        action: body.ticketUrl
+          ? { label: 'Open', onClick: () => window.open(body.ticketUrl!, '_blank', 'noopener') }
+          : undefined,
+      });
       onPushedToZendesk?.(row, body.ticketNumber);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Push failed', { id: toastId });
@@ -541,9 +548,24 @@ function OverviewTab({
       <Section title="Zendesk">
         {row.zendesk_ticket_id ? (
           <div className="space-y-0.5">
-            <p className="font-mono text-label font-bold text-emerald-700">
-              {row.zendesk_ticket_id}
-            </p>
+            {(() => {
+              const url = zendeskTicketUrl(row.zendesk_ticket_id);
+              return url ? (
+                <a
+                  href={url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1 font-mono text-label font-bold text-emerald-700 underline-offset-2 hover:underline"
+                >
+                  {row.zendesk_ticket_id}
+                  <ExternalLink className="h-3 w-3" />
+                </a>
+              ) : (
+                <p className="font-mono text-label font-bold text-emerald-700">
+                  {row.zendesk_ticket_id}
+                </p>
+              );
+            })()}
             {row.zendesk_synced_at && (
               <p className="text-micro text-gray-500">
                 synced {formatDateTimePST(row.zendesk_synced_at)}

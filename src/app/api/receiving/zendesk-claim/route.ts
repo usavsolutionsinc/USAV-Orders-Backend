@@ -10,6 +10,7 @@ import {
 } from '@/lib/zendesk-claim-template';
 import { createTicket, ZendeskNotConfiguredError } from '@/lib/zendesk';
 import { buildExternalId, linkTicket } from '@/lib/zendesk-links';
+import { zendeskTicketUrl } from '@/lib/zendesk-ticket-url';
 
 export const dynamic = 'force-dynamic';
 
@@ -120,7 +121,7 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
       console.warn('[POST /api/receiving/zendesk-claim] ticket link backfill failed', linkErr);
     }
 
-    return NextResponse.json({ success: true, ticketNumber });
+    return NextResponse.json({ success: true, ticketNumber, ticketUrl: zendeskTicketUrl(ticket.id) });
   } catch (error) {
     return errorResponse(error, 'POST /api/receiving/zendesk-claim');
   }

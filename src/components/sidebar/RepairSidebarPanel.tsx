@@ -6,6 +6,7 @@ import { createPortal } from 'react-dom';
 import { Check, Clock, Loader2, Plus, Tool } from '@/components/Icons';
 import { SearchBar } from '@/components/ui/SearchBar';
 import { HorizontalButtonSlider, type HorizontalSliderItem } from '@/components/ui/HorizontalButtonSlider';
+import { useBodyScrollLock } from '@/design-system/hooks';
 
 const REPAIR_TAB_ITEMS: HorizontalSliderItem[] = [
   { id: 'incoming', label: 'Incoming', icon: Clock },
@@ -84,14 +85,7 @@ export function RepairSidebarPanel({ embedded = false, hideSectionHeader = false
     }
   }, [pathname, router, searchParams]);
 
-  useEffect(() => {
-    if (!isMounted || !showIntakeForm) return;
-    const previousOverflow = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
-    return () => {
-      document.body.style.overflow = previousOverflow;
-    };
-  }, [isMounted, showIntakeForm]);
+  useBodyScrollLock(isMounted && showIntakeForm);
 
   const updateParams = (mutate: (params: URLSearchParams) => void) => {
     const nextParams = new URLSearchParams(searchParams.toString());

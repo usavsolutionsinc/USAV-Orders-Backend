@@ -7,6 +7,7 @@ import { usePathname, useRouter } from 'next/navigation';
 import DashboardSidebar from '@/components/DashboardSidebar';
 import { CommandBar } from '@/components/CommandBar';
 import { useUIMode } from '@/design-system/providers/UIModeProvider';
+import { useBodyScrollLock } from '@/design-system/hooks';
 import { X } from '@/components/Icons';
 import { getSidebarRouteKey, isMobileAllowedPath } from '@/lib/sidebar-navigation';
 import { QuickAccessFab } from '@/components/layout/QuickAccessFab';
@@ -130,13 +131,8 @@ export function ResponsiveLayout({ children }: ResponsiveLayoutProps) {
     router.replace('/m/home');
   }, [mobileRouteRestricted, router]);
 
-  // Lock body scroll when drawer is open
-  useEffect(() => {
-    if (drawerOpen) {
-      document.body.style.overflow = 'hidden';
-      return () => { document.body.style.overflow = ''; };
-    }
-  }, [drawerOpen]);
+  // Lock body scroll when drawer is open (restores prior overflow on close).
+  useBodyScrollLock(drawerOpen);
 
   if (!mounted) {
     return <div className="flex h-full w-full bg-white" aria-hidden="true" />;

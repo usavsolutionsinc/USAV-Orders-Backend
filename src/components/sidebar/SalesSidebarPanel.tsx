@@ -13,6 +13,7 @@ import { useWalkInSales } from '@/hooks/useWalkInSales';
 import { formatCentsToDollars } from '@/lib/square/client';
 import { getSalesWeekRange } from '@/lib/sales-week-range';
 import { sectionLabel } from '@/design-system/tokens/typography/presets';
+import { useBodyScrollLock } from '@/design-system/hooks';
 
 interface SalesSidebarPanelProps {
   embedded?: boolean;
@@ -65,12 +66,7 @@ export function SalesSidebarPanel({ embedded = false }: SalesSidebarPanelProps) 
 
   useEffect(() => { setIsMounted(true); }, []);
 
-  useEffect(() => {
-    if (!isMounted || !showIntakeForm) return;
-    const prev = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
-    return () => { document.body.style.overflow = prev; };
-  }, [isMounted, showIntakeForm]);
+  useBodyScrollLock(isMounted && showIntakeForm);
 
   const addToCart = (item: SquareCatalogItem) => {
     const v = item.item_data?.variations?.[0];

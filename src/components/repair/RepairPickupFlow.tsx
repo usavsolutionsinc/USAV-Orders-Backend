@@ -1,9 +1,10 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { ChevronLeft, Loader2, X, Camera } from '../Icons';
 import { SignaturePad, type SignatureData } from './SignaturePad';
 import { getSidebarIntakeSubmitButtonClass } from '@/design-system/components';
+import { useBodyScrollLock } from '@/design-system/hooks';
 import type { RSRecord } from '@/lib/neon/repair-service-queries';
 
 interface RepairPickupFlowProps {
@@ -42,13 +43,7 @@ export function RepairPickupFlow({ repair, onUpdate, onClose }: RepairPickupFlow
   const rsCode = `RS-${repair.id}`;
   const orangeSubmit = getSidebarIntakeSubmitButtonClass('orange');
 
-  useEffect(() => {
-    const prev = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
-    return () => {
-      document.body.style.overflow = prev;
-    };
-  }, []);
+  useBodyScrollLock(true);
 
   const submit = async (
     payload: { signature: SignatureData | null; declinedReason?: string },

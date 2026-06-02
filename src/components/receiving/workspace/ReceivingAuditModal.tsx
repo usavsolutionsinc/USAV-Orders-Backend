@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { X } from '@/components/Icons';
+import { useBodyScrollLock, useEscapeClose } from '@/design-system/hooks';
 import { formatDateTimePST } from '@/utils/date';
 
 type ReceivingAuditEvent = {
@@ -42,19 +43,8 @@ export function ReceivingAuditModal({ open, onClose, receivingId }: Props) {
   const [cartonLabel, setCartonLabel] = useState<string>('');
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    if (!open) return;
-    const prevOverflow = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
-    const onKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose();
-    };
-    window.addEventListener('keydown', onKeyDown);
-    return () => {
-      document.body.style.overflow = prevOverflow;
-      window.removeEventListener('keydown', onKeyDown);
-    };
-  }, [open, onClose]);
+  useBodyScrollLock(open);
+  useEscapeClose(open, onClose);
 
   useEffect(() => {
     if (!open || !Number.isFinite(receivingId) || receivingId <= 0) return;
