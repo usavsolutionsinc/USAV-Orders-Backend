@@ -5,7 +5,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { toast } from '@/lib/toast';
 import { Barcode, ClipboardList, Clock, History, MapPin, Package } from '@/components/Icons';
 import { HorizontalButtonSlider, type HorizontalSliderItem } from '@/components/ui/HorizontalButtonSlider';
-import { sidebarHeaderBandClass } from '@/components/layout/header-shell';
+import { sidebarHeaderBandClass, sidebarHeaderPillRowClass } from '@/components/layout/header-shell';
 import { TestingScanBar } from '@/components/sidebar/receiving/TestingScanBar';
 import { TestingRecentRail } from '@/components/sidebar/receiving/TestingRecentRail';
 import {
@@ -221,12 +221,14 @@ export function TestingSidebarPanel({
   return (
     <div className="relative flex h-full w-full flex-col overflow-hidden bg-white">
       {/* Recent / History toggle — same pattern as the Receiving + FBA sidebars. */}
-      <div className={`${sidebarHeaderBandClass} px-3`}>
+      <div className={sidebarHeaderPillRowClass}>
         <HorizontalButtonSlider
           items={TESTING_TAB_ITEMS}
           value={testingTab}
           onChange={updateTestingTab}
           variant="nav"
+          dense
+          className="w-full"
           aria-label="Testing view"
         />
       </div>

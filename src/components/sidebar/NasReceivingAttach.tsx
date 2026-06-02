@@ -38,7 +38,7 @@ export function NasReceivingAttach({ receivingId, onAttached, fullWidth = false,
         title="Pair photos from the NAS to this PO"
         className={
           fullWidth
-            ? 'flex w-full items-center justify-center gap-1.5 rounded-xl border border-dashed border-gray-300 bg-gray-50/60 px-4 py-6 text-caption font-bold uppercase tracking-widest text-gray-500 transition-colors hover:border-blue-300 hover:bg-blue-50/40 hover:text-blue-700'
+            ? 'flex h-9 w-full items-center justify-center gap-1.5 rounded-lg border border-dashed border-gray-300 bg-gray-50/60 px-3 text-micro font-bold uppercase tracking-widest text-gray-500 transition-colors hover:border-blue-300 hover:bg-blue-50/40 hover:text-blue-700'
             : 'inline-flex h-8 items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-2.5 text-micro font-black uppercase tracking-widest text-gray-700 transition-colors hover:bg-gray-50'
         }
       >

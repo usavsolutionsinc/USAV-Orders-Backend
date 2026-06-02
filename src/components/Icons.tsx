@@ -123,6 +123,35 @@ export const Printer = ({ className = "w-6 h-6" }: { className?: string }) => (
     </svg>
 );
 
+export const PrinterAlt = ({ className = "w-6 h-6" }: { className?: string }) => (
+    <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            strokeWidth={2}
+            d="M7 9V4h10v5"
+        />
+        <path
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            strokeWidth={2}
+            d="M6 18h12v-5H6v5z"
+        />
+        <path
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            strokeWidth={2}
+            d="M6 10H5a2 2 0 0 0-2 2v3a2 2 0 0 0 2 2h1"
+        />
+        <path
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            strokeWidth={2}
+            d="M18 10h1a2 2 0 0 1 2 2v3a2 2 0 0 1-2 2h-1"
+        />
+    </svg>
+);
+
 export const DollarSign = ({ className = "w-6 h-6" }: { className?: string }) => (
     <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 1v22M17 5.5c0-1.933-2.239-3.5-5-3.5S7 3.567 7 5.5 9.239 9 12 9s5 1.567 5 3.5-2.239 3.5-5 3.5-5-1.567-5-3.5" />

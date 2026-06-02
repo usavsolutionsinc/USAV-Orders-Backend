@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { Check } from '@/components/Icons';
+import { receivingScanBandClass } from '@/components/layout/header-shell';
 import type { ReceivingLineRow } from '@/components/station/ReceivingLinesTable';
 
 /**
@@ -116,14 +117,14 @@ export function ReceivingProgressStepper({ row, photoCount, serialCount, isCompl
   return (
     <nav
       aria-label="Receiving progress"
-      className="border-b border-gray-100 bg-white/70 px-4 py-3 backdrop-blur sm:px-6"
+      className={`${receivingScanBandClass} bg-white`}
     >
-      <ol className="mx-auto flex w-full max-w-3xl items-start justify-between gap-1">
+      <ol className="mx-auto flex w-full max-w-3xl items-center justify-between gap-0.5">
         {STEPS.map((step, idx) => {
           const s = states[step.key];
           const isLast = idx === STEPS.length - 1;
           return (
-            <li key={step.key} className="flex min-w-0 flex-1 flex-col items-center">
+            <li key={step.key} className="flex min-w-0 flex-1 flex-col items-center justify-center gap-0.5">
               <div className="flex w-full items-center">
                 <span className="flex-1" aria-hidden>
                   {idx === 0 ? null : (
@@ -146,7 +147,7 @@ export function ReceivingProgressStepper({ row, photoCount, serialCount, isCompl
                 </span>
               </div>
               <span
-                className={`mt-1.5 text-micro font-black uppercase tracking-[0.14em] ${
+                className={`text-[10px] font-black uppercase leading-none tracking-[0.12em] ${
                   s === 'done'
                     ? 'text-blue-600'
                     : s === 'active'
@@ -167,20 +168,20 @@ export function ReceivingProgressStepper({ row, photoCount, serialCount, isCompl
 function StepDot({ state, index }: { state: StepState; index: number }) {
   if (state === 'done') {
     return (
-      <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-blue-600 text-white shadow-sm shadow-blue-200">
-        <Check className="h-3.5 w-3.5" aria-hidden />
+      <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-blue-600 text-white shadow-sm shadow-blue-200">
+        <Check className="h-3 w-3" aria-hidden />
       </span>
     );
   }
   if (state === 'active') {
     return (
-      <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-white text-micro font-black text-blue-700 ring-2 ring-blue-500">
+      <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-white text-[10px] font-black text-blue-700 ring-2 ring-blue-500">
         {index}
       </span>
     );
   }
   return (
-    <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-white text-micro font-black text-gray-400 ring-2 ring-gray-200">
+    <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-white text-[10px] font-black text-gray-400 ring-2 ring-gray-200">
       {index}
     </span>
   );

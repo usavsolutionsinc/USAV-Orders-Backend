@@ -6,6 +6,7 @@ import { useMemo } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { Loader2, Minus, Plus, ShoppingCart, X } from '@/components/Icons';
 import { SearchBar } from '@/components/ui/SearchBar';
+import { sidebarHeaderPillRowClass, sidebarHeaderRowClass } from '@/components/layout/header-shell';
 import { SalesIntakeForm } from '@/components/walk-in/SalesIntakeForm';
 import { useSquareCatalog, type SquareCatalogItem } from '@/hooks/useSquareCatalog';
 import { useSquareCategories } from '@/hooks/useSquareCategories';
@@ -136,7 +137,7 @@ export function SalesSidebarPanel({ embedded = false }: SalesSidebarPanelProps) 
   const content = (
     <div className="flex h-full flex-col overflow-hidden bg-white">
       {/* Search bar + New Sale button */}
-      <div className="shrink-0 border-b border-gray-100 px-4 py-3">
+      <div className={sidebarHeaderRowClass}>
         <SearchBar
           value={searchValue}
           onChange={setSearchValue}
@@ -163,8 +164,8 @@ export function SalesSidebarPanel({ embedded = false }: SalesSidebarPanelProps) 
       {isSearchMode ? (
         <>
           {/* Category tabs */}
-          <div className="shrink-0 border-b border-gray-100 px-3 py-2">
-            <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar">
+          <div className={sidebarHeaderPillRowClass}>
+            <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar w-full">
               <button
                 onClick={() => setActiveCategoryId(null)}
                 className={`shrink-0 rounded-lg px-2.5 py-1.5 text-eyebrow font-black uppercase tracking-widest transition-colors ${

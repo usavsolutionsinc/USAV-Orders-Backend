@@ -19,7 +19,7 @@ export const weekHeaderInnerRowClass = paneHeaderRowClass;
  * Only the weekly {@link WeekHeader} should stick; these rows scroll normally beneath it.
  */
 export const weekDayGroupBandClass =
-  'border-y border-gray-200 bg-gray-50/95';
+  'border-y border-gray-300 bg-gray-50/95';
 
 /** Date label in a day-group row — matches mobile week tables + {@link DateGroupHeader}. */
 export const weekDayGroupDateClass =

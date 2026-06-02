@@ -4,17 +4,16 @@ import { useState, useEffect, useCallback, useRef, type KeyboardEvent } from 're
 import { AnimatePresence, motion } from 'framer-motion';
 import { framerPresence, framerTransition } from '@/design-system/foundations/motion-framer';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
-import { Search, X, Printer, DollarSign } from '../Icons';
+import { Search, X, PrinterAlt, DollarSign } from '../Icons';
 import { SourceOrderChip, TicketChip } from '../ui/CopyChip';
 import { RSRecord, type RepairTab } from '@/lib/neon/repair-service-queries';
 import { RepairDetailsPanel } from './RepairDetailsPanel';
-import { mainStickyHeaderClass } from '@/components/layout/header-shell';
-import { weekHeaderInnerRowClass } from '@/components/ui/WeekHeader';
+import WeekHeader from '@/components/ui/WeekHeader';
+import { DateGroupHeader } from '@/design-system/components/DateGroupHeader';
 import { LoadingSpinner } from '../ui/LoadingSpinner';
 import { useRepairsTable } from '@/hooks/useRepairs';
 import { formatPhoneNumber } from '@/utils/phone';
 import { formatDateWithOrdinal, getCurrentPSTDateKey, toPSTDateKey } from '@/utils/date';
-import { DesktopDateGroupHeader } from '../ui/DesktopDateGroupHeader';
 
 interface RepairTableProps {
   filter: RepairTab;
@@ -48,7 +47,7 @@ export function RepairTable({ filter }: RepairTableProps) {
         break;
       }
     }
-    if (activeDate) setStickyDate(formatDateWithOrdinal(activeDate));
+    if (activeDate) setStickyDate(activeDate);
     if (activeCount) setCurrentCount(activeCount);
   }, []);
 
@@ -218,42 +217,36 @@ export function RepairTable({ filter }: RepairTableProps) {
   return (
     <div className="flex h-full w-full bg-white relative">
       <div className="flex-1 flex flex-col overflow-hidden">
-        {/* Header */}
-        <div className={mainStickyHeaderClass}>
-          <div className={weekHeaderInnerRowClass}>
-          <div className="flex items-center gap-2">
-            <p className="min-w-0 truncate text-sm font-black uppercase tracking-widest text-gray-900">
-              {stickyDate || formatDateWithOrdinal(getCurrentPSTDateKey())}
-            </p>
-            <p className="shrink-0 font-dm-sans text-sm font-semibold tabular-nums text-blue-700">
-              {currentCount || getTodayCount()}
-            </p>
-          </div>
-          <div className="flex items-center gap-2">
-            {search && (
-              <div className="flex items-center gap-2 px-2 py-0.5 bg-orange-50 text-orange-700 rounded-lg border border-orange-100">
-                <Search className="w-3 h-3" />
-                <span className="text-eyebrow font-black uppercase tracking-widest">{search}</span>
+        <WeekHeader
+          stickyDate={stickyDate}
+          fallbackDate={getCurrentPSTDateKey()}
+          count={currentCount || getTodayCount()}
+          rightSlot={
+            <div className="flex items-center gap-2">
+              {search && (
+                <div className="flex items-center gap-2 px-2 py-0.5 bg-orange-50 text-orange-700 rounded-lg border border-orange-100">
+                  <Search className="w-3 h-3" />
+                  <span className="text-eyebrow font-black uppercase tracking-widest">{search}</span>
+                  <button
+                    onClick={clearSearch}
+                    className="hover:text-orange-900 transition-colors"
+                    aria-label="Clear search filter"
+                  >
+                    <X className="w-2.5 h-2.5" />
+                  </button>
+                </div>
+              )}
+              {selectedRepair && (
                 <button
-                  onClick={clearSearch}
-                  className="hover:text-orange-900 transition-colors"
-                  aria-label="Clear search filter"
+                  onClick={() => setSelectedRepair(null)}
+                  className="flex items-center gap-2 px-3 py-1 bg-blue-600 text-white rounded-lg text-eyebrow font-black uppercase tracking-widest hover:bg-blue-700 transition-all shadow-lg shadow-blue-600/20"
                 >
-                  <X className="w-2.5 h-2.5" />
+                  Close Panel
                 </button>
-              </div>
-            )}
-            {selectedRepair && (
-              <button
-                onClick={() => setSelectedRepair(null)}
-                className="flex items-center gap-2 px-3 py-1 bg-blue-600 text-white rounded-lg text-eyebrow font-black uppercase tracking-widest hover:bg-blue-700 transition-all shadow-lg shadow-blue-600/20"
-              >
-                Close Panel
-              </button>
-            )}
-          </div>
-          </div>
-        </div>
+              )}
+            </div>
+          }
+        />
 
         {/* Table Content */}
         <div ref={scrollRef} className="flex-1 overflow-x-auto overflow-y-auto no-scrollbar w-full">
@@ -284,7 +277,7 @@ export function RepairTable({ filter }: RepairTableProps) {
                 .sort((a, b) => a[0].localeCompare(b[0]))
                 .map(([date, records]) => (
                   <div key={date} className="flex flex-col">
-                    <DesktopDateGroupHeader date={date} total={records.length} />
+                    <DateGroupHeader date={date} count={records.length} formatDate={formatDateWithOrdinal} />
                     {records.map((repair, index) => (
                       <motion.div
                         {...framerPresence.tableRow}
@@ -359,7 +352,7 @@ export function RepairTable({ filter }: RepairTableProps) {
                             className="p-1.5 bg-gray-50 hover:bg-blue-50 text-gray-400 hover:text-blue-600 rounded-lg transition-all"
                             title="View Repair Document"
                           >
-                            <Printer className="w-3.5 h-3.5" />
+                            <PrinterAlt className="w-3.5 h-3.5" />
                           </button>
                           <button
                             onClick={() => void openSquarePayment(repair)}

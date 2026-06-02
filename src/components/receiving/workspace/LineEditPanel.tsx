@@ -1578,7 +1578,7 @@ export function LineEditPanel({
             />
             {/* Padding + top rule separate the photo strip from chips; keeps
                 pill focus rings from clipping vs a tight body. */}
-            <div className="space-y-2.5 border-t border-gray-100 px-4 pt-3 pb-4">
+            <div className="space-y-2 border-t border-gray-100 px-4 pt-2 pb-3">
             <div className="flex min-w-0 flex-col gap-y-1">
               {/* Chip row uses items-center so listing URL chip, PO chip,
                   and tracking chip share the same vertical baseline
@@ -1990,7 +1990,7 @@ export function LineEditPanel({
                         many serials are attached. */}
                     <div>
                       <p className="mb-1 text-micro font-bold uppercase tracking-[0.14em] text-gray-500">
-                        Default condition for new scans
+                        Condition
                       </p>
                       <ConditionPills
                         value={cond}

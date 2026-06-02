@@ -7,7 +7,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { Plus, X } from '@/components/Icons';
 import { FbaFnskuScanToast } from '@/components/fba/sidebar/FbaFnskuScanToast';
 import { SearchBar } from '@/components/ui/SearchBar';
-import { sidebarHeaderBandClass } from '@/components/layout/header-shell';
+import { sidebarHeaderBandClass, sidebarHeaderPillRowClass } from '@/components/layout/header-shell';
 import { HorizontalButtonSlider } from '@/components/ui/HorizontalButtonSlider';
 import { useAblyChannel } from '@/hooks/useAblyChannel';
 import { getDbTableChannelName } from '@/lib/realtime/channels';
@@ -468,12 +468,14 @@ function FbaWorkspaceSidebarInner() {
   return (
     <div className="relative flex h-full w-full flex-col overflow-hidden bg-white">
       {/* View pills (2nd row) */}
-      <div className={`${sidebarHeaderBandClass} px-3`}>
+      <div className={sidebarHeaderPillRowClass}>
         <HorizontalButtonSlider
           items={modeItems}
           value={activeMode}
           onChange={(next) => updateFbaParams({ mode: next as FbaMode })}
           variant="nav"
+          dense
+          className="w-full"
           aria-label="FBA mode"
         />
       </div>

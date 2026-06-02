@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { sidebarHeaderBandClass, sidebarHeaderRowClass } from '@/components/layout/header-shell';
+import { sidebarHeaderBandClass, sidebarHeaderPillRowClass, sidebarHeaderRowClass } from '@/components/layout/header-shell';
 import { SearchBar } from '@/components/ui/SearchBar';
 import { HorizontalButtonSlider, type HorizontalSliderItem } from '@/components/ui/HorizontalButtonSlider';
 import { sectionLabel, fieldLabel } from '@/design-system/tokens/typography/presets';
@@ -154,12 +154,14 @@ export function ReplenishSidebarPanel() {
   return (
     <div className="font-dm-sans flex h-full flex-col overflow-hidden bg-white">
       {/* Tab pills (2nd row) */}
-      <div className={`${sidebarHeaderBandClass} px-3`}>
+      <div className={sidebarHeaderPillRowClass}>
         <HorizontalButtonSlider
           items={TAB_ITEMS}
           value={activeTab}
           onChange={(id) => updateTab(id as ReplenishTab)}
           variant="nav"
+          dense
+          className="w-full"
           aria-label="Replenish view"
         />
       </div>

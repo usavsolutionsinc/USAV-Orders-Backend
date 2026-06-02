@@ -6,6 +6,7 @@ import { createPortal } from 'react-dom';
 import { Check, Clock, Loader2, Plus, Tool } from '@/components/Icons';
 import { SearchBar } from '@/components/ui/SearchBar';
 import { HorizontalButtonSlider, type HorizontalSliderItem } from '@/components/ui/HorizontalButtonSlider';
+import { sidebarHeaderPillRowClass, sidebarHeaderRowClass } from '@/components/layout/header-shell';
 import { useBodyScrollLock } from '@/design-system/hooks';
 import { toast } from '@/lib/toast';
 
@@ -206,7 +207,7 @@ export function RepairSidebarPanel({ embedded = false, hideSectionHeader = false
           </div>
         ) : null}
 
-        <div className="border-b border-gray-100 px-4 py-3">
+        <div className={sidebarHeaderRowClass}>
           <SearchBar
             value={searchValue}
             onChange={setSearchValue}
@@ -239,7 +240,7 @@ export function RepairSidebarPanel({ embedded = false, hideSectionHeader = false
           />
         </div>
 
-        <div className="px-3 py-1">
+        <div className={sidebarHeaderPillRowClass}>
           <HorizontalButtonSlider
             items={REPAIR_TAB_ITEMS}
             value={activeTab}
@@ -250,6 +251,8 @@ export function RepairSidebarPanel({ embedded = false, hideSectionHeader = false
               })
             }
             variant="nav"
+            dense
+            className="w-full"
             aria-label="Repair queue"
           />
         </div>

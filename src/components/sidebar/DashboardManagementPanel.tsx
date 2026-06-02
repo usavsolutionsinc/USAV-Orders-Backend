@@ -24,6 +24,7 @@ import {
 import { DashboardShippedSearchHandoffCard } from '@/components/dashboard/DashboardShippedSearchHandoffCard';
 import { RecentSearchesList } from '@/components/sidebar/RecentSearchesList';
 import { SearchBar } from '@/components/ui/SearchBar';
+import { sidebarHeaderPillRowClass, sidebarHeaderRowClass } from '@/components/layout/header-shell';
 import { HorizontalButtonSlider, type HorizontalSliderItem } from '@/components/ui/HorizontalButtonSlider';
 import { ShippedIntakeForm, type ShippedFormData } from '@/components/shipped';
 import { sectionLabel, fieldLabel, microBadge } from '@/design-system/tokens/typography/presets';
@@ -524,40 +525,42 @@ export function DashboardManagementPanel({
             {filterControl}
           </motion.div>
         ) : null}
-        <div className={`h-full flex flex-col space-y-6 overflow-y-auto scrollbar-hide px-6 pb-6 ${filterControl ? 'pt-4' : 'pt-6'}`}>
+        <div className={`${sidebarHeaderRowClass} shrink-0`}>
+          <SearchBar
+            value={searchQuery}
+            onChange={handleInputChange}
+            onClear={() => { setSearchQuery(''); handleSearch(''); }}
+            inputRef={searchInputRef}
+            placeholder="Search order ID, tracking, SKU, title, customer..."
+            variant="blue"
+            rightElement={
+              <button
+                type="button"
+                onClick={handleOpenIntakeForm}
+                className="rounded-xl bg-emerald-500 p-2.5 text-white transition-colors hover:bg-emerald-600 disabled:bg-gray-300"
+                title="New Order Entry"
+                aria-label="Open new order entry form"
+              >
+                <Plus className="h-5 w-5" />
+              </button>
+            }
+          />
+        </div>
+        {showPendingFilterControl ? (
+          <div className={sidebarHeaderPillRowClass}>
+            <HorizontalButtonSlider
+              items={PENDING_STOCK_FILTER_ITEMS}
+              value={pendingFilterValue ?? 'all'}
+              onChange={(tab) => onPendingFilterChange?.(tab === 'stock' ? 'stock' : tab === 'pending' ? 'pending' : 'all')}
+              variant="nav"
+              dense
+              className="w-full"
+              aria-label="Pending stock filter"
+            />
+          </div>
+        ) : null}
+        <div className="h-full flex flex-col space-y-6 overflow-y-auto scrollbar-hide px-6 pb-6 pt-4">
           <div className="space-y-4">
-            <motion.div variants={itemVariants}>
-              <SearchBar
-                value={searchQuery}
-                onChange={handleInputChange}
-                onClear={() => { setSearchQuery(''); handleSearch(''); }}
-                inputRef={searchInputRef}
-                placeholder="Search order ID, tracking, SKU, title, customer..."
-                variant="blue"
-                rightElement={
-                  <button
-                    type="button"
-                    onClick={handleOpenIntakeForm}
-                    className="rounded-xl bg-emerald-500 p-2.5 text-white transition-colors hover:bg-emerald-600 disabled:bg-gray-300"
-                    title="New Order Entry"
-                    aria-label="Open new order entry form"
-                  >
-                    <Plus className="h-5 w-5" />
-                  </button>
-                }
-              />
-            </motion.div>
-            {showPendingFilterControl ? (
-              <motion.div variants={itemVariants} className="-mt-2 px-1">
-                <HorizontalButtonSlider
-                  items={PENDING_STOCK_FILTER_ITEMS}
-                  value={pendingFilterValue ?? 'all'}
-                  onChange={(tab) => onPendingFilterChange?.(tab === 'stock' ? 'stock' : tab === 'pending' ? 'pending' : 'all')}
-                  variant="nav"
-                  aria-label="Pending stock filter"
-                />
-              </motion.div>
-            ) : null}
             <motion.div variants={itemVariants} className="-mt-2">
               <DashboardShippedSearchHandoffCard
                 searchQuery={searchQuery}

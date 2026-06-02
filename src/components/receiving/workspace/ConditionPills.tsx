@@ -121,7 +121,7 @@ export function ConditionPills({ value, onChange }: Props) {
       {/* USED GROUP */}
       <div className="flex shrink-0 items-center gap-1.5">
         <Pill
-          label={isUsed && !isExpanded ? `USED ${usedGrade}` : 'USED'}
+          label={isUsed && !isExpanded && usedGrade ? usedGrade : 'USED'}
           isActive={isUsed}
           toneKey={isUsed ? selected : 'USED_B'}
           onClick={handleUsedMainClick}

@@ -5,7 +5,6 @@ import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { qk } from '@/queries/keys';
-import { Search, X } from '@/components/Icons';
 import { ActionsSection } from './ActionsSection';
 import { CommonPagesBar } from './CommonPagesBar';
 import { DesktopAppInstallBanner } from './DesktopAppInstallBanner';
@@ -13,8 +12,6 @@ import { PinnedSection } from './PinnedSection';
 import { RecentSection } from './RecentSection';
 import { useQuickAccess } from '@/lib/quick-access/use-quick-access';
 import { useAuth } from '@/contexts/AuthContext';
-import { useStaffSwitcher } from '@/contexts/StaffSwitcherContext';
-import { useUIMode } from '@/design-system/providers/UIModeProvider';
 import { getStaffColorHex } from '@/utils/staff-colors';
 import { useStaffColorVersion } from '@/contexts/StaffColorsProvider';
 
@@ -29,19 +26,14 @@ interface QuickAccessPopoverProps {
 }
 
 /**
- * Top section: header with a ⌘K search button that opens the global
- * CommandBar via a `usav-command-bar-open` custom event.
  * Body order: common-pages chips → actions → pinned → recent.
- * The signed-in staff card now lives at the very bottom, just above the
- * "Manage in Settings" footer.
+ * The signed-in staff card lives at the very bottom, just above the
+ * "Manage in Settings" footer, with sign-out only (no staff switch).
  */
 export function QuickAccessPopover({ onClose, onOpenHistoryPopover, onOpenInboxPopover }: QuickAccessPopoverProps) {
   const { settings } = useQuickAccess();
   const router = useRouter();
   const { user, signOut } = useAuth();
-  const { openSwitcher } = useStaffSwitcher();
-  const { isMobile } = useUIMode();
-  const showSwitchStaff = settings.actions.switchStaff !== false; // default true
 
   const queryClient = useQueryClient();
   // Subscribes to the module-level color cache. When self or admin updates
@@ -83,47 +75,12 @@ export function QuickAccessPopover({ onClose, onOpenHistoryPopover, onOpenInboxP
     },
   });
 
-  const handleOpenCommandBar = () => {
-    onClose();
-    // CommandBar is mounted desktop-only; the event no-ops on mobile.
-    window.dispatchEvent(new CustomEvent('usav-command-bar-open'));
-  };
-
   return (
     <div
       role="dialog"
       aria-label="Quick access"
       className="flex max-h-[calc(100vh-6rem)] w-[340px] flex-col overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-xl"
     >
-      <header className="flex shrink-0 items-center justify-between gap-2 border-b border-gray-100 px-4 py-2">
-        <div className="flex items-center gap-2">
-          <p className="text-label font-bold text-gray-900">Quick access</p>
-        </div>
-        <div className="flex items-center gap-1.5">
-          {!isMobile && (
-            <button
-              type="button"
-              onClick={handleOpenCommandBar}
-              className="inline-flex items-center gap-1.5 rounded-md border border-gray-200 bg-gray-50 px-2 py-1 text-caption font-semibold text-gray-700 transition-colors hover:border-gray-300 hover:bg-white hover:text-gray-900"
-              aria-label="Open command bar"
-              title="Search the app (⌘K)"
-            >
-              <Search className="h-3 w-3" />
-              <span>Search</span>
-              <kbd className="rounded-sm bg-white px-1 font-mono text-eyebrow text-gray-500 border border-gray-200">⌘K</kbd>
-            </button>
-          )}
-          <button
-            type="button"
-            onClick={onClose}
-            aria-label="Close"
-            className="flex h-6 w-6 items-center justify-center rounded-md text-gray-400 hover:bg-gray-100 hover:text-gray-700"
-          >
-            <X className="h-3.5 w-3.5" />
-          </button>
-        </div>
-      </header>
-
       <CommonPagesBar onNavigate={onClose} />
 
       <div className="min-h-0 flex-1 divide-y divide-gray-100 overflow-y-auto overscroll-contain">
@@ -156,28 +113,15 @@ export function QuickAccessPopover({ onClose, onOpenHistoryPopover, onOpenInboxP
             <div className="truncate text-sm font-semibold text-gray-900">{staffName || `Staff #${user.staffId}`}</div>
             <div className="truncate text-micro font-medium uppercase tracking-[0.14em] text-gray-500">{user.role.replace(/_/g, ' ')}</div>
           </div>
-          <div className="flex shrink-0 items-center gap-1.5">
-            {showSwitchStaff && (
-              <button
-                type="button"
-                onClick={() => { onClose(); openSwitcher(); }}
-                className="inline-flex items-center gap-1 rounded-md border border-gray-200 bg-white px-2 py-1 text-micro font-semibold uppercase tracking-wider text-gray-700 transition hover:bg-gray-50 hover:text-gray-900"
-                title="Switch to another staff"
-              >
-                <svg className="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M16 3h5v5"/><path d="M21 3l-7 7"/><path d="M8 21H3v-5"/><path d="M3 21l7-7"/></svg>
-                Switch
-              </button>
-            )}
-            <button
-              type="button"
-              onClick={() => { void signOut(); }}
-              className="inline-flex h-7 w-7 items-center justify-center rounded-md text-gray-400 transition hover:bg-white hover:text-gray-900"
-              aria-label="Sign out"
-              title="Sign out"
-            >
-              <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
-            </button>
-          </div>
+          <button
+            type="button"
+            onClick={() => { void signOut(); }}
+            className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-gray-400 transition hover:bg-white hover:text-gray-900"
+            aria-label="Sign out"
+            title="Sign out"
+          >
+            <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+          </button>
         </div>
       ) : (
         <button

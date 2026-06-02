@@ -1,7 +1,7 @@
 'use client';
 
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
-import { sidebarHeaderBandClass } from '@/components/layout/header-shell';
+import { sidebarHeaderPillRowClass } from '@/components/layout/header-shell';
 import { HorizontalButtonSlider, type HorizontalSliderItem } from '@/components/ui/HorizontalButtonSlider';
 import { DollarSign, Tool } from '@/components/Icons';
 import { RepairSidebarPanel } from './RepairSidebarPanel';
@@ -43,12 +43,14 @@ export function WalkInSidebarPanel({ embedded = false, hideSectionHeader = false
   const content = (
     <div className="flex h-full flex-col overflow-hidden bg-white">
       {/* Mode pills (2nd row) */}
-      <div className={`${sidebarHeaderBandClass} px-3 shrink-0`}>
+      <div className={sidebarHeaderPillRowClass}>
         <HorizontalButtonSlider
           items={WALK_IN_MODE_ITEMS}
           value={mode}
           onChange={handleModeChange}
           variant="nav"
+          dense
+          className="w-full"
           aria-label="Walk-in mode"
         />
       </div>

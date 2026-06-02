@@ -33,7 +33,8 @@ export function InventorySidebarTabs({ value, onChange, badges }: InventorySideb
             value={value}
             onChange={(id) => onChange(id as InventoryTab)}
             variant="nav"
-            size="md"
+            dense
+            className="w-full"
             aria-label="Inventory tab"
         />
     );

@@ -26,7 +26,7 @@ import {
     type InventoryTab,
 } from '@/lib/inventory-search';
 
-const FIELD_ICON: Record<string, HorizontalSliderItem['icon']> = {
+export const FIELD_ICON: Record<string, HorizontalSliderItem['icon']> = {
     all: Layers,
     bin_barcode: Barcode,
     zone: MapPin,

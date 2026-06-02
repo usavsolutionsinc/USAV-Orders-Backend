@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { sidebarHeaderBandClass, sidebarHeaderRowClass } from '@/components/layout/header-shell';
+import { sidebarHeaderBandClass, sidebarHeaderPillRowClass, sidebarHeaderRowClass } from '@/components/layout/header-shell';
 import { SearchBar } from '@/components/ui/SearchBar';
 import { HorizontalButtonSlider, type HorizontalSliderItem } from '@/components/ui/HorizontalButtonSlider';
 import { BARCODE_MODES, type BarcodeMode } from '@/components/barcode/ModeSelector';
@@ -160,84 +160,94 @@ export function ProductsSidebarPanel() {
   const isManuals = view === 'manuals';
   const isLabels = view === 'labels';
   const isPairing = view === 'pairing';
+  // Labels → History sub-view: the top search bar doubles as the unit-history
+  // scan/paste input (Enter dispatches a lookup the History list resolves).
+  const isHistory = isLabels && labelsView === 'history';
 
   // Manuals view = the file-tree library browser (sidebar) + PDF viewer
   // (main pane). QC delegates to the main pane. Labels/Pairing have their
   // own sidebar bodies below.
   return (
     <div className="flex h-full flex-col overflow-hidden bg-white">
-      <div className={`${sidebarHeaderBandClass} px-3`}>
+      <div className={sidebarHeaderPillRowClass}>
         <HorizontalButtonSlider
           items={viewItems}
           value={view}
           onChange={handleViewChange}
           variant="nav"
+          dense
+          className="w-full"
           aria-label="Products view"
         />
       </div>
 
-      {/* Labels sub-tab row — Print / Recent / History. Sits directly under
-          the top-level view pills so the operator can switch contexts inside
-          Labels without leaving the workspace. URL-backed via ?labelsView=. */}
-      {isLabels && (
-        <div className="shrink-0 border-b border-gray-100 bg-white px-3 py-1.5">
-          <HorizontalButtonSlider
-            items={LABELS_SUB_VIEW_ITEMS}
-            value={labelsView}
-            onChange={handleLabelsSubViewChange}
-            variant="nav"
-            size="md"
-            aria-label="Labels sub-view"
-          />
-        </div>
-      )}
-
-      {/* Label-printer mode dropdown — only shown on the Print sub-view, where
-          the operator chooses between Print / Log SN / Reprint. Recent and
-          History sub-views don't need it. */}
-      {isLabels && labelsView === 'print' && (
-        <div className="shrink-0 border-b border-gray-100 bg-white px-3 py-2">
-          <ModeDropdown mode={mode} onChange={setMode} />
-        </div>
-      )}
-
-      {/* Shared search bar — drives the Labels picker (Print sub-view), the
-          Pairing queue, and the Library file tree off the same `?q=` URL
-          param. Recent and History sub-views handle their own input shapes
-          (recent is a fixed list; history takes a DataMatrix scan). */}
-      {!(isLabels && labelsView !== 'print') && (
-        <div className={sidebarHeaderRowClass}>
-          <SearchBar
-            value={searchInput}
-            onChange={handleSearchChange}
-            onClear={() => handleSearchChange('')}
-            placeholder={
-              isLabels
+      {/* Search bar — always mounted so it stays in position across all sub-views */}
+      <div className={sidebarHeaderRowClass}>
+        <SearchBar
+          value={searchInput}
+          onChange={isHistory ? setSearchInput : handleSearchChange}
+          onSearch={
+            isHistory
+              ? (raw) => {
+                  const value = raw.trim();
+                  if (value) {
+                    window.dispatchEvent(
+                      new CustomEvent('unit-history:lookup', { detail: { raw: value } }),
+                    );
+                  }
+                  setSearchInput('');
+                }
+              : undefined
+          }
+          onClear={() => (isHistory ? setSearchInput('') : handleSearchChange(''))}
+          placeholder={
+            isHistory
+              ? 'Scan or paste a DataMatrix…'
+              : isLabels
                 ? 'Search SKU, title…'
                 : isPairing
                   ? 'Search pairing queue…'
                   : isManuals
                     ? 'Fuzzy search folders & manuals…'
                     : 'Search products…'
-            }
-            variant={isLabels ? 'blue' : 'gray'}
-            size="compact"
+          }
+          variant={isLabels ? 'blue' : 'gray'}
+          size="compact"
+        />
+      </div>
+
+      {/* Labels sub-tab row — Print / Recent / History. */}
+      {isLabels && (
+        <div className={sidebarHeaderPillRowClass}>
+          <HorizontalButtonSlider
+            items={LABELS_SUB_VIEW_ITEMS}
+            value={labelsView}
+            onChange={handleLabelsSubViewChange}
+            variant="nav"
+            dense
+            className="w-full"
+            aria-label="Labels sub-view"
           />
         </div>
       )}
 
-      {/* Pairing sort pills — second row of the sidebar, matches the top-level
-          view-pill style (same HorizontalButtonSlider, `nav` variant). Default
-          'volume' surfaces the highest-order-volume SKUs first. URL-backed via
-          `?sort=` so deep links preserve the sort. */}
+      {/* Label-printer mode dropdown — only shown on the Print sub-view. */}
+      {isLabels && labelsView === 'print' && (
+        <div className="shrink-0 border-b border-gray-100 bg-white px-3 py-2">
+          <ModeDropdown mode={mode} onChange={setMode} />
+        </div>
+      )}
+
+      {/* Pairing sort pills — second row for the Pairing view. */}
       {isPairing && (
-        <div className="shrink-0 border-b border-gray-100 bg-white px-3 py-1.5">
+        <div className={sidebarHeaderPillRowClass}>
           <HorizontalButtonSlider
             items={PAIRING_SORT_ITEMS}
             value={pairingSort}
             onChange={handlePairingSortChange}
             variant="nav"
-            size="md"
+            dense
+            className="w-full"
             aria-label="Pairing queue sort"
           />
         </div>

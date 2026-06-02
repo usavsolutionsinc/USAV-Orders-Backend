@@ -3,7 +3,7 @@
 import { useRouter, useSearchParams } from 'next/navigation';
 import { InventorySidebar } from '@/components/inventory/sidebar/InventorySidebar';
 import { ReplenishSidebarPanel } from '@/components/sidebar/ReplenishSidebarPanel';
-import { sidebarHeaderBandClass } from '@/components/layout/header-shell';
+import { sidebarHeaderBandClass, sidebarHeaderPillRowClass } from '@/components/layout/header-shell';
 import { HorizontalButtonSlider, type HorizontalSliderItem } from '@/components/ui/HorizontalButtonSlider';
 import { Package, RefreshCw } from '@/components/Icons';
 
@@ -48,12 +48,14 @@ export function InventorySidebarPanel() {
 
     return (
         <div className="flex h-full flex-col overflow-hidden bg-white">
-            <div className={`${sidebarHeaderBandClass} px-3`}>
+            <div className={sidebarHeaderPillRowClass}>
                 <HorizontalButtonSlider
                     items={SECTION_ITEMS}
                     value={section}
                     onChange={(id) => setSection(id as InventorySection)}
                     variant="nav"
+                    dense
+                    className="w-full"
                     aria-label="Inventory section"
                 />
             </div>

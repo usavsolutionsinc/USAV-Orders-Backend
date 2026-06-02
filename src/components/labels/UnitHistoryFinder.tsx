@@ -1,8 +1,8 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { Search, X, Clock } from '@/components/Icons';
+import { Clock } from '@/components/Icons';
 import { routeScan } from '@/lib/barcode-routing';
 
 const RECENTS_KEY = 'labels:history-recents:v1';
@@ -74,30 +74,23 @@ function writeRecents(next: RecentEntry[]) {
 
 /**
  * Sidebar component for the Labels → History sub-view. Owns:
- *   - the scan/paste input
  *   - localStorage recents (last 10 lookups)
  *   - the URL state `?historyId=<key>` that the workspace pane reads
  *
- * USB DataMatrix scanners type into the focused input and end with Enter,
- * which submits the form. Pasted/typed values work the same way.
+ * The scan/paste input lives in the sidebar's shared top SearchBar; on
+ * Enter/scan it dispatches a `unit-history:lookup` event (raw value) that this
+ * component resolves. USB DataMatrix scanners type + Enter, same as paste/type.
  */
 export function UnitHistoryFinder() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const currentId = searchParams.get('historyId') || '';
-  const inputRef = useRef<HTMLInputElement>(null);
 
-  const [input, setInput] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [recents, setRecents] = useState<RecentEntry[]>([]);
 
   useEffect(() => {
     setRecents(readRecents());
-  }, []);
-
-  // Focus the input on first mount so a scanner can fire immediately.
-  useEffect(() => {
-    inputRef.current?.focus();
   }, []);
 
   const setHistoryId = useCallback(
@@ -119,7 +112,6 @@ export function UnitHistoryFinder() {
         return;
       }
       setError(null);
-      setInput('');
       setHistoryId(resolved.key);
 
       // Persist to recents (dedup by key, newest first).
@@ -135,6 +127,17 @@ export function UnitHistoryFinder() {
     [setHistoryId],
   );
 
+  // The scan/paste input now lives in the sidebar's top SearchBar; it fires a
+  // `unit-history:lookup` event (raw value) on Enter/scan that we resolve here.
+  useEffect(() => {
+    const handler = (event: Event) => {
+      const raw = (event as CustomEvent<{ raw?: string }>).detail?.raw;
+      if (raw) submit(raw);
+    };
+    window.addEventListener('unit-history:lookup', handler as EventListener);
+    return () => window.removeEventListener('unit-history:lookup', handler as EventListener);
+  }, [submit]);
+
   const clearRecents = useCallback(() => {
     writeRecents([]);
     setRecents([]);
@@ -148,48 +151,13 @@ export function UnitHistoryFinder() {
 
   return (
     <div className="flex flex-1 flex-col overflow-hidden">
-      {/* Input row — first thing under the sub-tab pills. Submit on Enter so
-          a USB scanner fires through automatically. */}
-      <form
-        className="shrink-0 border-b border-gray-100 bg-white px-3 py-2"
-        onSubmit={(e) => {
-          e.preventDefault();
-          submit(input);
-        }}
-      >
-        <label className="flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-3 py-2 focus-within:border-blue-500 focus-within:ring-2 focus-within:ring-blue-100">
-          <Search className="h-4 w-4 shrink-0 text-gray-400" />
-          <input
-            ref={inputRef}
-            type="text"
-            value={input}
-            onChange={(e) => {
-              setInput(e.target.value);
-              if (error) setError(null);
-            }}
-            placeholder="Scan or paste a DataMatrix…"
-            className="flex-1 bg-transparent text-sm text-gray-900 placeholder:text-gray-400 focus:outline-none"
-            autoComplete="off"
-            spellCheck={false}
-          />
-          {input && (
-            <button
-              type="button"
-              onClick={() => {
-                setInput('');
-                inputRef.current?.focus();
-              }}
-              className="rounded p-1 text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-600"
-              aria-label="Clear"
-            >
-              <X className="h-3.5 w-3.5" />
-            </button>
-          )}
-        </label>
-        {error && (
-          <p className="mt-2 text-micro font-semibold text-amber-600">{error}</p>
-        )}
-      </form>
+      {/* Scan/paste input lives in the sidebar's top SearchBar now; we only
+          surface lookup errors here. */}
+      {error && (
+        <div className="shrink-0 border-b border-gray-100 bg-amber-50 px-3 py-2">
+          <p className="text-micro font-semibold text-amber-700">{error}</p>
+        </div>
+      )}
 
       {/* Body — recents list. Each row jumps the workspace to that unit. */}
       <div className="flex-1 overflow-y-auto">

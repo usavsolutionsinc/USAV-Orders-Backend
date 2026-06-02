@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useQueryClient } from '@tanstack/react-query';
-import { sidebarHeaderBandClass } from '@/components/layout/header-shell';
+import { sidebarHeaderBandClass, sidebarHeaderPillRowClass } from '@/components/layout/header-shell';
 import StationTesting from '@/components/station/StationTesting';
 import { TestingSidebarPanel } from '@/components/sidebar/TestingSidebarPanel';
 import { getCurrentPSTDateKey, toPSTDateKey } from '@/utils/date';
@@ -199,12 +199,14 @@ export function TechSidebarPanel({ techId, onBackToAppNav, contextNavTitle = 'Te
   ...
           sidebar's mode-row above the scan bar so the tech's primary mode
           switch lives in the exact same visual location as receiving's. */}
-      <div className={`${sidebarHeaderBandClass} px-3`}>
+      <div className={sidebarHeaderPillRowClass}>
         <HorizontalButtonSlider
           items={TECH_TOP_MODE_ITEMS}
           value={topMode}
           onChange={(next) => updateTopMode(next as TechSidebarTopMode)}
           variant="nav"
+          dense
+          className="w-full"
           aria-label="Tech sidebar mode"
         />
       </div>

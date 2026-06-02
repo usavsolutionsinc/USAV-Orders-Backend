@@ -98,7 +98,7 @@ export function StationScanBar({
       onSubmit={handleInternalSubmit} 
       className={`relative group ${className}`.trim()}
     >
-      <div className="relative overflow-hidden rounded-2xl">
+      <div className="relative overflow-hidden rounded-xl">
         {/* Scan Sweep Animation */}
         <AnimatePresence>
           {scanKey > 0 && (
@@ -140,7 +140,7 @@ export function StationScanBar({
           autoFocus={autoFocus}
           disabled={disabled}
           className={[
-            'w-full bg-gray-50 rounded-2xl text-xs font-bold outline-none transition-all shadow-inner py-3.5',
+            'w-full bg-gray-50 rounded-xl text-xs font-bold outline-none transition-all shadow-inner py-1.5',
             padLeft,
             padRight,
             inputBorderClassName ?? 'border border-gray-100',

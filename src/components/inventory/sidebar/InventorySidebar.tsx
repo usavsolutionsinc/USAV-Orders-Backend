@@ -21,8 +21,16 @@ import {
     type NavigateInventoryDetailsPayload,
 } from '@/lib/inventory-events-channel';
 import { microBadge } from '@/design-system/tokens/typography/presets';
+import { SearchBar } from '@/components/ui/SearchBar';
+import { HorizontalButtonSlider, type HorizontalSliderItem } from '@/components/ui/HorizontalButtonSlider';
+import { sidebarHeaderRowClass, sidebarHeaderPillRowClass } from '@/components/layout/header-shell';
+import {
+    INVENTORY_SEARCH_FIELDS,
+    getInventorySearchPlaceholder,
+    getInventorySearchHelperText,
+} from '@/lib/inventory-search';
 import { InventorySidebarTabs } from './InventorySidebarTabs';
-import { InventoryScopedSearchBar } from './InventoryScopedSearchBar';
+import { FIELD_ICON } from './InventoryScopedSearchBar';
 import { InventoryBucketFilterChips } from './InventoryBucketFilterChips';
 import { InventoryCrossTabHandoffCard } from './InventoryCrossTabHandoffCard';
 import { InventoryResultList } from './InventoryResultList';
@@ -210,6 +218,12 @@ export function InventorySidebar({ embedded = true }: InventorySidebarProps) {
     const activeBucketCount = buckets.length;
     const hasBucketFilters = INVENTORY_BUCKETS[tab].length > 0;
 
+    const fieldItems: HorizontalSliderItem[] = INVENTORY_SEARCH_FIELDS[tab].map((f) => ({
+        id: f.id,
+        label: f.label,
+        icon: FIELD_ICON[f.id],
+    }));
+
     const panelContent = (
         <motion.div
             initial="hidden"
@@ -217,75 +231,91 @@ export function InventorySidebar({ embedded = true }: InventorySidebarProps) {
             variants={containerVariants}
             className="h-full flex flex-col overflow-hidden"
         >
-            <div className="h-full flex flex-col space-y-4 overflow-y-auto scrollbar-hide px-5 pt-5 pb-5">
-                <motion.div variants={itemVariants}>
-                    <InventorySidebarTabs value={tab} onChange={handleTabChange} />
-                </motion.div>
-
-                <motion.div variants={itemVariants}>
-                    <InventoryScopedSearchBar
-                        tab={tab}
-                        value={inputValue}
-                        onChange={setInputValue}
-                        field={field}
-                        onFieldChange={handleFieldChange}
-                        isSearching={search.isFetching}
-                    />
-                </motion.div>
-
-                {hasBucketFilters ? (
-                    <motion.div variants={itemVariants}>
-                        <InventoryBucketFilterChips
-                            tab={tab}
-                            value={buckets}
-                            onChange={handleBucketsChange}
-                            counts={search.counts}
-                        />
-                    </motion.div>
-                ) : null}
-
-                <motion.div variants={itemVariants} className="space-y-4">
-                    {trimmedQuery.length > 0 ? (
-                        <InventoryCrossTabHandoffCard
-                            currentTab={tab}
-                            currentCount={search.rows.length}
-                            counts={crossTab}
-                            onJump={(nextTab) => setSidebarUrl({ tab: nextTab })}
-                        />
-                    ) : null}
-                    <InventoryResultList
-                        rows={search.rows}
-                        isFetching={search.isFetching}
-                        hasQuery={trimmedQuery.length > 0}
-                        isRowActive={(row) => openKeyForRow(row) === openKey}
-                        onSelect={handleSelect}
-                        onClearQuery={() => setInputValue('')}
-                        label={
-                            search.rows.length > 0
-                                ? `${search.rows.length} Result${search.rows.length !== 1 ? 's' : ''}${activeBucketCount > 0 ? ` · ${activeBucketCount} filter${activeBucketCount !== 1 ? 's' : ''}` : ''}`
-                                : undefined
-                        }
-                        emptyPlaceholder={
-                            tab === 'alerts' || tab === 'counts' ? (
-                                <div className="rounded-xl border border-dashed border-gray-200 bg-gray-50 px-4 py-6 text-center">
-                                    <p className={`${microBadge} text-gray-500`}>
-                                        {tab === 'alerts'
-                                            ? 'No open alerts — pick a bucket above to view resolved ones'
-                                            : 'No cycle count campaigns yet'}
-                                    </p>
-                                </div>
-                            ) : undefined
-                        }
-                    />
-                    <InventoryRecentSearches
-                        tab={tab}
-                        show={search.rows.length === 0}
-                        onSelect={(q) => setInputValue(q)}
-                    />
-                </motion.div>
-
-                <InventorySidebarFooter />
+            {/* Row 2: search bar — always mounted above tabs */}
+            <div className={`${sidebarHeaderRowClass} shrink-0`}>
+                <SearchBar
+                    value={inputValue}
+                    onChange={setInputValue}
+                    placeholder={getInventorySearchPlaceholder(tab, field)}
+                    isSearching={search.isFetching}
+                    variant="blue"
+                />
             </div>
+
+            {/* Row 3: tab pills — ACTIVITY / BINS / SKUs / UNITS / … */}
+            <div className={sidebarHeaderPillRowClass}>
+                <InventorySidebarTabs value={tab} onChange={handleTabChange} />
+            </div>
+
+            {/* Row 4: field-scope pills — ALL / SKU / BIN / USER / … */}
+            <div className={sidebarHeaderPillRowClass}>
+                <HorizontalButtonSlider
+                    items={fieldItems}
+                    value={field}
+                    onChange={(id) => handleFieldChange(id as AnyInventorySearchField)}
+                    variant="nav"
+                    dense
+                    className="w-full"
+                    aria-label={`${tab} search field`}
+                />
+            </div>
+
+            {/* Row 5: bucket filter chips (conditional) */}
+            {hasBucketFilters ? (
+                <div className={sidebarHeaderPillRowClass}>
+                    <InventoryBucketFilterChips
+                        tab={tab}
+                        value={buckets}
+                        onChange={handleBucketsChange}
+                        counts={search.counts}
+                    />
+                </div>
+            ) : null}
+
+            {/* Scroll area: helper text + cross-tab + results + recent + footer */}
+            <motion.div variants={itemVariants} className="flex-1 overflow-y-auto scrollbar-hide px-5 pt-4 pb-5 space-y-4">
+                <p className={`${microBadge} text-gray-500 px-1`}>
+                    {getInventorySearchHelperText(tab, field)}
+                </p>
+                {trimmedQuery.length > 0 ? (
+                    <InventoryCrossTabHandoffCard
+                        currentTab={tab}
+                        currentCount={search.rows.length}
+                        counts={crossTab}
+                        onJump={(nextTab) => setSidebarUrl({ tab: nextTab })}
+                    />
+                ) : null}
+                <InventoryResultList
+                    rows={search.rows}
+                    isFetching={search.isFetching}
+                    hasQuery={trimmedQuery.length > 0}
+                    isRowActive={(row) => openKeyForRow(row) === openKey}
+                    onSelect={handleSelect}
+                    onClearQuery={() => setInputValue('')}
+                    label={
+                        search.rows.length > 0
+                            ? `${search.rows.length} Result${search.rows.length !== 1 ? 's' : ''}${activeBucketCount > 0 ? ` · ${activeBucketCount} filter${activeBucketCount !== 1 ? 's' : ''}` : ''}`
+                            : undefined
+                    }
+                    emptyPlaceholder={
+                        tab === 'alerts' || tab === 'counts' ? (
+                            <div className="rounded-xl border border-dashed border-gray-200 bg-gray-50 px-4 py-6 text-center">
+                                <p className={`${microBadge} text-gray-500`}>
+                                    {tab === 'alerts'
+                                        ? 'No open alerts — pick a bucket above to view resolved ones'
+                                        : 'No cycle count campaigns yet'}
+                                </p>
+                            </div>
+                        ) : undefined
+                    }
+                />
+                <InventoryRecentSearches
+                    tab={tab}
+                    show={search.rows.length === 0}
+                    onSelect={(q) => setInputValue(q)}
+                />
+                <InventorySidebarFooter />
+            </motion.div>
         </motion.div>
     );
 

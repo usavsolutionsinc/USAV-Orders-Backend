@@ -4,8 +4,12 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { motion } from 'framer-motion';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { toast } from '@/lib/toast';
-import { sidebarHeaderBandClass } from '@/components/layout/header-shell';
-import { Barcode, Loader2, X } from '@/components/Icons';
+import {
+  receivingScanBandClass,
+  sidebarHeaderBandClass,
+  sidebarHeaderPillRowClass,
+} from '@/components/layout/header-shell';
+import { Loader2, MapPin, X } from '@/components/Icons';
 import { useUIModeOptional } from '@/design-system/providers/UIModeProvider';
 import { HorizontalButtonSlider } from '@/components/ui/HorizontalButtonSlider';
 import {
@@ -1057,12 +1061,14 @@ export function ReceivingSidebarPanel() {
   return (
     <div className="h-full flex flex-col overflow-hidden">
       {/* Mode pills (2nd row) */}
-      <div className={`${sidebarHeaderBandClass} px-3`}>
+      <div className={sidebarHeaderPillRowClass}>
         <HorizontalButtonSlider
           items={RECEIVING_MODE_ITEMS}
           value={mode}
           onChange={(next) => updateMode(next as ReceivingMode)}
           variant="nav"
+          dense
+          className="w-full"
           aria-label="Receiving mode"
         />
       </div>
@@ -1102,7 +1108,7 @@ export function ReceivingSidebarPanel() {
         initial={{ opacity: 0, x: -20 }}
         animate={{ opacity: 1, x: 0 }}
         transition={{ type: 'spring', damping: 25, stiffness: 120 }}
-        className={`shrink-0 border-b border-gray-300 ${bandHaloClass[themeColor]} flex min-h-[44px] items-center px-3 py-1`}
+        className={`${receivingScanBandClass} ${bandHaloClass[themeColor]} py-1`}
       >
         <StationScanBar
           value={bulkTracking}
@@ -1110,7 +1116,7 @@ export function ReceivingSidebarPanel() {
           onSubmit={() => submitTrackingScan()}
           inputRef={scanInputRef}
           placeholder="Tracking, PO #"
-          icon={<Barcode className={`h-[17px] w-[17px] ${scanIconColorClass[themeColor]}`} />}
+          icon={<MapPin className={`h-[17px] w-[17px] ${scanIconColorClass[themeColor]}`} />}
           iconClassName=""
           inputBorderClassName={inputBorder}
           inputClassName={`pl-[2.2rem] ${focusRingClass[themeColor]}`}

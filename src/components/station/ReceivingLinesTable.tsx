@@ -8,7 +8,6 @@ import { Check } from '@/components/Icons';
 import { emitSelection, onToggleAll } from '@/lib/selection/table-selection';
 import { SkeletonList } from '@/design-system/components/Skeletons';
 import { TrackingChip, OrderIdChip, SkuScanRefChip, SerialChip, getLast4, getLast4Serial } from '@/components/ui/CopyChip';
-import { CarrierBadge } from '@/components/ui/CarrierBadge';
 import { conditionGradeTableLabel, workflowStatusTableLabel } from '@/components/station/receiving-constants';
 import WeekHeader from '@/components/ui/WeekHeader';
 import { DesktopDateGroupHeader } from '@/components/ui/DesktopDateGroupHeader';
@@ -291,7 +290,6 @@ export function ReceivingLineOrderRow({
       <div className={dashboardOrderRowChipsClass(isMobile)}>
         <OrderIdChip value={poValue} display={getLast4(poValue)} />
         <SkuScanRefChip value={skuValue} display={getLast4(skuValue)} />
-        {isIncoming ? null : <CarrierBadge carrier={row.carrier} trackingNumber={trackingValue} />}
         <TrackingChip value={trackingValue} display={getLast4(trackingValue)} />
         {isIncoming ? null : <SerialChip value={serialsCsv} display={getLast4Serial(serialsCsv)} />}
       </div>

@@ -48,15 +48,6 @@ const DASHBOARD_ORDERS_SUBVIEW_ITEMS: HorizontalSliderItem[] = [
   { id: 'unshipped', label: 'Awaiting', icon: AlertCircle },
 ];
 
-// Type filter shown only on the Shipped sub-view. FBA lives here now (it used
-// to be a top-level group pill) — the shipped table already filters its records
-// by this value (see DashboardShippedTable `shippedFilter`).
-const DASHBOARD_SHIPPED_TYPE_ITEMS: HorizontalSliderItem[] = [
-  { id: 'all',    label: 'All' },
-  { id: 'orders', label: 'Orders' },
-  { id: 'sku',    label: 'SKU' },
-  { id: 'fba',    label: 'FBA' },
-];
 
 function getSidebarTitle(pathname: string | null) {
   const routeKey = getSidebarRouteKey(pathname);
@@ -156,22 +147,6 @@ function SidebarContextPanel({ onBackToAppNav }: { onBackToAppNav?: () => void }
             className="w-full"
           />
         </div>
-        {dashboardSearch.orderView === 'shipped' ? (
-          // Type filter for the Shipped tab (All / Orders / SKU / FBA).
-          <div className="flex h-[40px] items-center border-b border-gray-300 px-3">
-            <HorizontalButtonSlider
-              items={DASHBOARD_SHIPPED_TYPE_ITEMS}
-              value={dashboardSearch.shippedFilter}
-              onChange={(value) =>
-                dashboardSearch.setShippedFilter(value as typeof dashboardSearch.shippedFilter)
-              }
-              variant="nav"
-              dense
-              aria-label="Shipped type filter"
-              className="w-full"
-            />
-          </div>
-        ) : null}
       </div>
     );
 

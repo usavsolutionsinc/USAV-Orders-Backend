@@ -131,7 +131,18 @@ export function DashboardShippedTable({
   const weekRange = getWeekRangeForOffset(weekOffset);
   const formatDate = useCallback((dateStr: string) => formatDateWithOrdinal(dateStr), []);
 
-  const queryKey = ['dashboard-table', 'shipped', { weekStart: weekRange.startStr, weekEnd: weekRange.endStr, packedBy, testedBy, shippedFilter }] as const;
+  // Read carrier/status/exception filters early so we can bypass the week scope when any is active.
+  const exceptionsOnly = readShippedExceptionsFilter(searchParams);
+  const carrierFilter = readShippedCarrierFilter(searchParams);
+  const statusFilter = readShippedStatusFilter(searchParams);
+  const anyCarrierFilter = exceptionsOnly || !!carrierFilter || !!statusFilter;
+
+  // When a filter is active, drop the week constraint so the full recent dataset
+  // is visible — not just this week's packer_logs slice.
+  const effectiveWeekStart = anyCarrierFilter ? '' : weekRange.startStr;
+  const effectiveWeekEnd   = anyCarrierFilter ? '' : weekRange.endStr;
+
+  const queryKey = ['dashboard-table', 'shipped', { weekStart: effectiveWeekStart, weekEnd: effectiveWeekEnd, packedBy, testedBy, shippedFilter }] as const;
 
   const search = searchParams.get('search') || '';
   const normalizedSearch = search.trim().toLowerCase();
@@ -142,11 +153,11 @@ export function DashboardShippedTable({
       fetchDashboardPackedRecords({
         packedBy,
         testedBy,
-        weekStart: weekRange.startStr,
-        weekEnd: weekRange.endStr,
+        weekStart: effectiveWeekStart,
+        weekEnd: effectiveWeekEnd,
         shippedFilter,
       }),
-    // When a search is active, packer_logs (week-scoped) is bypassed and we drive
+    // When a search is active, packer_logs is bypassed and we drive
     // from /api/shipped via the universal `useShippedSearch` hook — same TanStack
     // Query cache key as `ShippedSidebar`, so both views show identical results.
     enabled: !normalizedSearch,
@@ -349,13 +360,6 @@ export function DashboardShippedTable({
             }),
     [dedupedRecords, shippedFilter],
   );
-
-  // Carrier-status overlay filters (URL-driven via ShippedFilterToolbar).
-  // Applied client-side because the source is /api/packerlogs (week-scoped,
-  // limit=1000) — within bounded sets, in-memory filter beats round-trips.
-  const exceptionsOnly = readShippedExceptionsFilter(searchParams);
-  const carrierFilter = readShippedCarrierFilter(searchParams);
-  const statusFilter = readShippedStatusFilter(searchParams);
 
   const carrierFilteredRecords = useMemo(() => {
     if (!exceptionsOnly && !carrierFilter && !statusFilter) return typeFilteredRecords;
@@ -569,6 +573,18 @@ export function DashboardShippedTable({
                     <p className={`mt-0.5 ${fieldLabel}`}>{bannerSubtitle}</p>
                   ) : null}
                 </div>
+                <div className="min-w-[18px] flex items-center justify-end">
+                  {((query.isFetching && !query.isLoading) || isResolvingSearch) ? <Loader2 className="h-3.5 w-3.5 animate-spin text-blue-500" /> : null}
+                </div>
+              </div>
+            </div>
+          ) : anyCarrierFilter ? (
+            // Filter active — hide week nav, show a plain count header instead
+            <div className={mainStickyHeaderClass}>
+              <div className={mainStickyHeaderRowClass}>
+                <p className={`${sectionLabel} text-gray-700`}>
+                  {totalCount} result{totalCount !== 1 ? 's' : ''}
+                </p>
                 <div className="min-w-[18px] flex items-center justify-end">
                   {((query.isFetching && !query.isLoading) || isResolvingSearch) ? <Loader2 className="h-3.5 w-3.5 animate-spin text-blue-500" /> : null}
                 </div>

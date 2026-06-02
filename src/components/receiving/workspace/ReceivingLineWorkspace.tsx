@@ -25,6 +25,7 @@ function readLabelPrinted(lineId: number): boolean {
     return false;
   }
 }
+import { receivingIdentityBandClass } from '@/components/layout/header-shell';
 import {
   PaneHeader,
   PaneHeaderIconBadge,
@@ -133,8 +134,8 @@ export function ReceivingLineWorkspace({
           operator returns to history via the mode pill in the sidebar (or
           by clicking a different row), keeping the workspace persistent. */}
       <PaneHeader
-        className="z-20 shrink-0 border-b border-gray-200 bg-white shadow-[0_1px_0_rgba(15,23,42,0.04)]"
-        rowClassName="px-4 sm:px-6"
+        className={`z-20 border-b-0 bg-white backdrop-blur-none ${receivingIdentityBandClass}`}
+        rowClassName="w-full px-3"
         leftSlot={
           <>
             <PaneHeaderIconBadge Icon={Icon} bg={chipBg} tint={tint} />
