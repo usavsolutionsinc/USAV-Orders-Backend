@@ -259,3 +259,310 @@ export async function createZendeskTicket(data: RepairTicketData): Promise<strin
         throw new Error(error.message || 'The ticket could not be created due to a network error');
     }
 }
+
+/* ────────────────────────────────────────────────────────────────────────
+ * Direct Zendesk REST API client (tickets CRUD + comments)
+ *
+ * Unlike createZendeskTicket() above — which relays through the Google Apps
+ * Script bridge — these helpers talk to the Zendesk REST API directly using
+ * the same Basic-auth (email + API token) config as getZendeskSupportOverview.
+ *
+ * Credentials come from env (ZENDESK_SUBDOMAIN / ZENDESK_EMAIL /
+ * ZENDESK_API_TOKEN). To move to the per-org encrypted credential vault
+ * later, swap getZendeskAuthConfig() for getIntegrationCredentials(orgId,
+ * 'zendesk') — the call shapes below don't change.
+ * ──────────────────────────────────────────────────────────────────────── */
+
+/** Thrown when the Zendesk API credentials are not configured. Routes map this to 503. */
+export class ZendeskNotConfiguredError extends Error {
+    constructor(message = 'Zendesk API credentials are not configured') {
+        super(message);
+        this.name = 'ZendeskNotConfiguredError';
+    }
+}
+
+/** Thrown for non-2xx Zendesk API responses. `status` mirrors the HTTP status. */
+export class ZendeskApiError extends Error {
+    constructor(public readonly status: number, message: string) {
+        super(message);
+        this.name = 'ZendeskApiError';
+    }
+}
+
+export function isZendeskConfigured(): boolean {
+    return getZendeskAuthConfig() !== null;
+}
+
+function requireZendeskConfig(): ZendeskAuthConfig {
+    const config = getZendeskAuthConfig();
+    if (!config) throw new ZendeskNotConfiguredError();
+    return config;
+}
+
+/** Generalized Zendesk REST call: any method, optional JSON body, typed result. */
+async function zendeskApiRequest<T = any>(
+    path: string,
+    init: { method?: string; body?: unknown } = {},
+): Promise<T> {
+    const config = requireZendeskConfig();
+    const auth = Buffer.from(`${config.user}/token:${config.apiToken}`).toString('base64');
+    const response = await fetch(`https://${config.subdomain}.zendesk.com${path}`, {
+        method: init.method ?? 'GET',
+        headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Basic ${auth}`,
+        },
+        body: init.body != null ? JSON.stringify(init.body) : undefined,
+        cache: 'no-store',
+    });
+
+    if (!response.ok) {
+        const errorText = await response.text().catch(() => '');
+        throw new ZendeskApiError(
+            response.status,
+            `Zendesk request failed (${response.status})${errorText ? `: ${errorText}` : ''}`,
+        );
+    }
+
+    if (response.status === 204) return undefined as T;
+    return response.json().catch(() => ({} as T));
+}
+
+export type ZendeskTicketStatus = 'new' | 'open' | 'pending' | 'hold' | 'solved' | 'closed';
+export type ZendeskTicketPriority = 'low' | 'normal' | 'high' | 'urgent';
+export type ZendeskTicketType = 'problem' | 'incident' | 'question' | 'task';
+
+/** Raw Zendesk ticket object (subset of fields we rely on; extra keys preserved). */
+export interface ZendeskTicket {
+    id: number;
+    subject: string | null;
+    description?: string | null;
+    raw_subject?: string | null;
+    status: ZendeskTicketStatus | string;
+    priority: ZendeskTicketPriority | string | null;
+    type?: ZendeskTicketType | string | null;
+    requester_id?: number;
+    assignee_id?: number | null;
+    group_id?: number | null;
+    tags?: string[];
+    external_id?: string | null;
+    created_at: string;
+    updated_at: string;
+    url?: string;
+    [key: string]: unknown;
+}
+
+export interface ZendeskComment {
+    id: number;
+    author_id: number;
+    body: string;
+    html_body?: string;
+    public: boolean;
+    created_at: string;
+    [key: string]: unknown;
+}
+
+export interface ListTicketsParams {
+    page?: number;
+    perPage?: number;
+    sortBy?: 'created_at' | 'updated_at' | 'priority' | 'status' | 'id';
+    sortOrder?: 'asc' | 'desc';
+}
+
+export interface PaginatedTickets {
+    tickets: ZendeskTicket[];
+    count: number;
+    next_page: string | null;
+    previous_page: string | null;
+}
+
+function clampPage(page?: number): number {
+    return Math.max(1, Math.floor(Number(page) || 1));
+}
+function clampPerPage(perPage?: number): number {
+    return Math.min(100, Math.max(1, Math.floor(Number(perPage) || 25)));
+}
+
+/** List tickets, newest first by default. */
+export async function listTickets(params: ListTicketsParams = {}): Promise<PaginatedTickets> {
+    const qs = new URLSearchParams({
+        page: String(clampPage(params.page)),
+        per_page: String(clampPerPage(params.perPage)),
+        sort_by: params.sortBy ?? 'created_at',
+        sort_order: params.sortOrder ?? 'desc',
+    });
+    const data = await zendeskApiRequest<any>(`/api/v2/tickets.json?${qs.toString()}`);
+    return {
+        tickets: Array.isArray(data?.tickets) ? data.tickets : [],
+        count: Number.isFinite(Number(data?.count)) ? Number(data.count) : 0,
+        next_page: data?.next_page ?? null,
+        previous_page: data?.previous_page ?? null,
+    };
+}
+
+/** Search tickets via the Zendesk Search API. `type:ticket` is added if absent. */
+export async function searchTickets(
+    query: string,
+    params: { page?: number; perPage?: number } = {},
+): Promise<{ results: ZendeskTicket[]; count: number; next_page: string | null }> {
+    const fullQuery = /\btype:/.test(query) ? query : `type:ticket ${query}`.trim();
+    const qs = new URLSearchParams({
+        query: fullQuery,
+        sort_by: 'updated_at',
+        sort_order: 'desc',
+        page: String(clampPage(params.page)),
+        per_page: String(clampPerPage(params.perPage)),
+    });
+    const data = await zendeskApiRequest<any>(`/api/v2/search.json?${qs.toString()}`);
+    const results = (Array.isArray(data?.results) ? data.results : []).filter(
+        (r: any) => String(r?.result_type || 'ticket') === 'ticket',
+    );
+    return {
+        results,
+        count: Number.isFinite(Number(data?.count)) ? Number(data.count) : results.length,
+        next_page: data?.next_page ?? null,
+    };
+}
+
+/** Fetch a single ticket. Returns null on 404. */
+export async function getTicket(id: number): Promise<ZendeskTicket | null> {
+    try {
+        const data = await zendeskApiRequest<any>(`/api/v2/tickets/${id}.json`);
+        return data?.ticket ?? null;
+    } catch (err) {
+        if (err instanceof ZendeskApiError && err.status === 404) return null;
+        throw err;
+    }
+}
+
+export interface CreateTicketInput {
+    subject: string;
+    comment: { body: string; html_body?: string; public?: boolean };
+    priority?: ZendeskTicketPriority;
+    status?: ZendeskTicketStatus;
+    type?: ZendeskTicketType;
+    tags?: string[];
+    requester?: { name?: string; email?: string };
+    assignee_id?: number;
+    group_id?: number;
+    external_id?: string;
+}
+
+/** Create a ticket directly via the REST API. */
+export async function createTicket(input: CreateTicketInput): Promise<ZendeskTicket> {
+    const data = await zendeskApiRequest<any>(`/api/v2/tickets.json`, {
+        method: 'POST',
+        body: { ticket: input },
+    });
+    return data.ticket;
+}
+
+export interface UpdateTicketInput {
+    subject?: string;
+    /** Adding a comment is how Zendesk records ticket replies / internal notes. */
+    comment?: { body: string; html_body?: string; public?: boolean };
+    priority?: ZendeskTicketPriority;
+    status?: ZendeskTicketStatus;
+    type?: ZendeskTicketType;
+    tags?: string[];
+    assignee_id?: number | null;
+    group_id?: number | null;
+    external_id?: string | null;
+}
+
+/** Update a ticket. Returns null on 404. */
+export async function updateTicket(
+    id: number,
+    input: UpdateTicketInput,
+): Promise<ZendeskTicket | null> {
+    try {
+        const data = await zendeskApiRequest<any>(`/api/v2/tickets/${id}.json`, {
+            method: 'PUT',
+            body: { ticket: input },
+        });
+        return data?.ticket ?? null;
+    } catch (err) {
+        if (err instanceof ZendeskApiError && err.status === 404) return null;
+        throw err;
+    }
+}
+
+/** Soft-delete a ticket (Zendesk moves it to the deleted tickets view). Returns false on 404. */
+export async function deleteTicket(id: number): Promise<boolean> {
+    try {
+        await zendeskApiRequest<void>(`/api/v2/tickets/${id}.json`, { method: 'DELETE' });
+        return true;
+    } catch (err) {
+        if (err instanceof ZendeskApiError && err.status === 404) return false;
+        throw err;
+    }
+}
+
+/** List the comment thread (public replies + internal notes) for a ticket. */
+export async function listTicketComments(
+    id: number,
+    params: { page?: number; perPage?: number } = {},
+): Promise<{ comments: ZendeskComment[]; count: number; next_page: string | null }> {
+    const qs = new URLSearchParams({
+        page: String(clampPage(params.page)),
+        per_page: String(clampPerPage(params.perPage)),
+    });
+    const data = await zendeskApiRequest<any>(
+        `/api/v2/tickets/${id}/comments.json?${qs.toString()}`,
+    );
+    return {
+        comments: Array.isArray(data?.comments) ? data.comments : [],
+        count: Number.isFinite(Number(data?.count)) ? Number(data.count) : 0,
+        next_page: data?.next_page ?? null,
+    };
+}
+
+/**
+ * Add a comment to a ticket. In Zendesk a comment is applied via a ticket
+ * update, so this returns the updated ticket (or null if the ticket is gone).
+ * `public: false` posts an internal note.
+ */
+export async function addTicketComment(
+    id: number,
+    comment: { body: string; html_body?: string; public?: boolean },
+): Promise<ZendeskTicket | null> {
+    return updateTicket(id, { comment });
+}
+
+export interface ZendeskAgent {
+    id: number;
+    name: string;
+    email: string | null;
+    role: string;
+    photo: string | null;
+}
+
+/**
+ * List agents + admins (the people a ticket can be assigned to). Powers the
+ * assignee dropdown. Cached in-process for 5 min — the roster rarely changes.
+ */
+let agentCache: { at: number; agents: ZendeskAgent[] } | null = null;
+const AGENT_CACHE_MS = 5 * 60 * 1000;
+
+export async function listAgents(force = false): Promise<ZendeskAgent[]> {
+    requireZendeskConfig();
+    const now = Date.now();
+    if (!force && agentCache && now - agentCache.at < AGENT_CACHE_MS) {
+        return agentCache.agents;
+    }
+    // role[]=agent&role[]=admin returns assignable staff only.
+    const data = await zendeskApiRequest<any>(
+        `/api/v2/users.json?role[]=agent&role[]=admin&per_page=100`,
+    );
+    const agents: ZendeskAgent[] = (Array.isArray(data?.users) ? data.users : []).map(
+        (u: any) => ({
+            id: Number(u?.id),
+            name: String(u?.name || 'Agent'),
+            email: u?.email ?? null,
+            role: String(u?.role || 'agent'),
+            photo: u?.photo?.content_url ?? null,
+        }),
+    );
+    agentCache = { at: now, agents };
+    return agents;
+}

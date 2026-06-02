@@ -1,9 +1,9 @@
 {
   "version": 1,
-  "generatedAt": "2026-05-28T23:43:32Z",
-  "totalRoutes": 470,
+  "generatedAt": "2026-06-01T23:03:30Z",
+  "totalRoutes": 480,
   "summary": {
-    "permissionGated": 394,
+    "permissionGated": 404,
     "authenticatedNoPermission": 15,
     "anonymousIntentional": 39,
     "serviceToService": 3,
@@ -2633,9 +2633,57 @@
       "exemptReason": null
     },
     {
+      "path": "/api/receiving-lines/[id]/ensure-catalog/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "gate": "withAuth",
+      "permission": "tech.qc_pass",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/receiving-lines/[id]/manuals/route.ts",
+      "methods": [
+        "DELETE",
+        "POST"
+      ],
+      "gate": "withAuth",
+      "permission": "tech.qc_pass",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/receiving-lines/[id]/qc-checks/route.ts",
+      "methods": [
+        "DELETE",
+        "POST",
+        "PUT"
+      ],
+      "gate": "withAuth",
+      "permission": "tech.qc_pass",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/receiving-lines/[id]/testing-bundle/route.ts",
+      "methods": [
+        "GET"
+      ],
+      "gate": "withAuth",
+      "permission": "tech.qc_pass",
+      "exemptReason": null
+    },
+    {
       "path": "/api/receiving-lines/incoming/details/route.ts",
       "methods": [
         "GET"
+      ],
+      "gate": "withAuth",
+      "permission": "receiving.view",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/receiving-lines/incoming/refresh/route.ts",
+      "methods": [
+        "POST"
       ],
       "gate": "withAuth",
       "permission": "receiving.view",
@@ -3258,6 +3306,16 @@
       ],
       "gate": "withAuth",
       "permission": "tech.scan_serial",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/serial-units/[id]/checklist/route.ts",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "gate": "withAuth",
+      "permission": "tech.qc_pass",
       "exemptReason": null
     },
     {
@@ -4006,6 +4064,15 @@
       "exemptReason": null
     },
     {
+      "path": "/api/testing/recent/route.ts",
+      "methods": [
+        "GET"
+      ],
+      "gate": "withAuth",
+      "permission": "tech.qc_pass",
+      "exemptReason": null
+    },
+    {
       "path": "/api/tracking-exceptions/[id]/refresh/route.ts",
       "methods": [
         "POST"
@@ -4210,6 +4277,37 @@
       ],
       "gate": "withAuth",
       "permission": "work_orders.view",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/zendesk/tickets/[id]/comments/route.ts",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "gate": "withAuth",
+      "permission": "integrations.zendesk",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/zendesk/tickets/[id]/route.ts",
+      "methods": [
+        "DELETE",
+        "GET",
+        "PATCH"
+      ],
+      "gate": "withAuth",
+      "permission": "integrations.zendesk",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/zendesk/tickets/route.ts",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "gate": "withAuth",
+      "permission": "integrations.zendesk",
       "exemptReason": null
     },
     {

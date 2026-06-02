@@ -363,6 +363,28 @@ export async function upsertProductManual(params: UpsertProductManualParams): Pr
 }
 
 /**
+ * Pair (or unpair) a manual to a SKU catalog row. Pass `skuCatalogId = null`
+ * to unpair. Used by the tech testing panel to attach an existing library
+ * manual to the catalog entry resolved from a receiving line. Returns the
+ * updated row, or null if the manual id doesn't exist / is inactive.
+ */
+export async function setManualSkuCatalogId(
+  manualId: number,
+  skuCatalogId: number | null,
+): Promise<ProductManual | null> {
+  const result = await pool.query<ProductManual>(
+    `UPDATE product_manuals
+     SET sku_catalog_id = $2,
+         status = CASE WHEN $2 IS NOT NULL AND status = 'unassigned' THEN 'assigned' ELSE status END,
+         updated_at = NOW()
+     WHERE id = $1 AND is_active = TRUE
+     RETURNING *`,
+    [manualId, skuCatalogId],
+  );
+  return result.rows[0] ?? null;
+}
+
+/**
  * Deactivate (soft-delete) a product manual
  */
 export async function deactivateProductManual(id: number): Promise<boolean> {

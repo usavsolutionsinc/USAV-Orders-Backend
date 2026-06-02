@@ -17,7 +17,7 @@ import { copyToClipboard } from '@/utils/_dom';
 import { ReceivingCartonStaffDropdown } from '@/components/sidebar/receiving/ReceivingCartonStaffDropdown';
 import { LabelPreviewCard } from '@/components/labels/LabelPreviewCard';
 import { TestingLinePanel, type UnitSlotSerial } from '@/components/tech/TestingUnitSlots';
-import { TestingChecklistCard } from '@/components/tech/TestingChecklistCard';
+import { SkuTestingPanel } from '@/components/tech/SkuTestingPanel';
 import {
   unitStatusToVerdict,
   workflowToVerdict,
@@ -1052,7 +1052,20 @@ export function TechTestingWorkspace({ staffId, selectedLineId, onSelectedLineCh
               )
             ) : null}
 
-            {/* ── DIV 3 — Notes (per-line) ────────────────────────────────── */}
+            {/* ── DIV 3 — SKU testing panel (checklist edit + manuals) ────
+                Resolves the line's SKU catalog (scanned unit → SKU crosswalk)
+                so the checklist + manuals show before any serial is scanned;
+                steps become recordable once a serial is on the active slot. */}
+            {row.sku ? (
+              <SkuTestingPanel
+                receivingLineId={row.id}
+                sku={row.sku}
+                title={row.item_name ?? ''}
+                serialUnitId={activeSerial?.id ?? null}
+              />
+            ) : null}
+
+            {/* ── DIV 4 — Notes (per-line) ────────────────────────────────── */}
             <section className="rounded-2xl bg-white p-4 shadow-sm ring-1 ring-gray-200/60">
               <label
                 htmlFor={`testing-notes-${row.id}`}
@@ -1075,10 +1088,6 @@ export function TechTestingWorkspace({ staffId, selectedLineId, onSelectedLineCh
                 className="mt-1.5 w-full resize-none rounded-md border border-gray-200 bg-white px-2 py-1.5 text-caption font-medium leading-snug text-gray-900 placeholder:text-gray-400 focus:border-blue-300 focus:outline-none focus:ring-2 focus:ring-blue-500/10"
               />
             </section>
-
-            {activeSerial ? (
-              <TestingChecklistCard serialUnitId={activeSerial.id} />
-            ) : null}
 
             {previewPayload && row.sku ? (
               <LabelPreviewCard

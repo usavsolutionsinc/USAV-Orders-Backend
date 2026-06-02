@@ -1,12 +1,13 @@
 'use client';
 
-import { useCallback, useMemo } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import type { DateRange } from 'react-day-picker';
 import { SearchBar } from '@/components/ui/SearchBar';
 import { DateRangePickerField } from '@/design-system/components/DateRangePickerField';
-import { Package, Truck, AlertTriangle, Clock, ChevronDown } from '@/components/Icons';
+import { Package, Truck, AlertTriangle, Clock, ChevronDown, RefreshCw } from '@/components/Icons';
+import { toast } from '@/lib/toast';
 import { RECEIVING_HISTORY_URL_PARAMS } from '@/lib/receiving-history-search';
 import {
   INCOMING_SORT_LABELS,
@@ -184,6 +185,37 @@ const TONE: Record<
 export function IncomingSidebarPanel() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const queryClient = useQueryClient();
+  const [refreshing, setRefreshing] = useState(false);
+
+  // Re-poll carrier tracking for the incoming set, then refetch the tiles +
+  // row list so just-delivered packages stop showing a stale transit status.
+  const refreshTracking = useCallback(async () => {
+    if (refreshing) return;
+    setRefreshing(true);
+    try {
+      const res = await fetch('/api/receiving-lines/incoming/refresh', { method: 'POST' });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || data?.ok === false) {
+        toast.error(data?.error || `Refresh failed (${res.status})`);
+        return;
+      }
+      queryClient.invalidateQueries({ queryKey: ['receiving-lines-incoming-summary'] });
+      queryClient.invalidateQueries({ queryKey: ['receiving-lines-table'] });
+      if (data.throttled) {
+        toast.success('Just refreshed — showing the latest tracking');
+      } else {
+        const parts = [`${data.scanned ?? 0} polled`];
+        if (data.delivered) parts.push(`${data.delivered} delivered`);
+        if (data.errors) parts.push(`${data.errors} errors`);
+        toast.success(`Tracking refreshed · ${parts.join(' · ')}`);
+      }
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Refresh failed');
+    } finally {
+      setRefreshing(false);
+    }
+  }, [refreshing, queryClient]);
 
   const search = searchParams.get(RECEIVING_HISTORY_URL_PARAMS.q)?.trim() ?? '';
   const stateRaw = (searchParams.get('state') || '').trim().toUpperCase();
@@ -378,6 +410,18 @@ export function IncomingSidebarPanel() {
             Date in header = when Zoho PO was created
           </p>
         </div>
+        {/* Re-poll carrier tracking for incoming POs on demand — flips
+            just-delivered packages so the counts below are dependable. */}
+        <button
+          type="button"
+          onClick={() => void refreshTracking()}
+          disabled={refreshing}
+          title="Re-poll UPS / USPS / FedEx for all active tracking numbers"
+          className="flex w-full items-center justify-center gap-1.5 rounded-md border border-gray-200 bg-white px-2.5 py-1.5 text-caption font-bold text-gray-700 transition-colors hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-60"
+        >
+          <RefreshCw className={`h-3.5 w-3.5 ${refreshing ? 'animate-spin' : ''}`} />
+          {refreshing ? 'Refreshing tracking…' : 'Refresh tracking'}
+        </button>
       </div>
 
       <div className="min-h-0 flex-1 space-y-1.5 overflow-y-auto px-3 py-3">{tiles}</div>
