@@ -30,6 +30,10 @@ const ROLE_PERMISSION_SETS = {
   packer: [
     'packing.view', 'packing.start_session', 'packing.scan_order',
     'packing.print_label', 'packing.complete_order',
+    // The pack-station scan flow resolves FBA shipments (ship-on-scan) and
+    // FNSKU items before falling through to regular order packing, so packers
+    // need these to scan any tracking number / FNSKU. See StationPacking.tsx.
+    'shipping.mark_shipped', 'fba.stage_shipments',
     'sku_stock.view', 'bin.adjust', 'bin.set', 'bin.add_sku',
     'print.label', 'work_orders.view', 'work_orders.claim', 'work_orders.complete',
     'dashboard.view',
