@@ -5,6 +5,7 @@ import { useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { motion } from 'framer-motion';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { qk } from '@/queries/keys';
 import { RefreshCw } from '@/components/Icons';
 import { framerTransition } from '@/design-system/foundations/motion-framer';
 import { sectionLabel, dataValue, fieldLabel } from '@/design-system/tokens/typography/presets';
@@ -131,7 +132,7 @@ export function ConnectionsSidebarPanel() {
   const shipStationFileInputRef = useRef<HTMLInputElement>(null);
 
   const { data: accountsData } = useQuery({
-    queryKey: ['ebay-accounts'],
+    queryKey: qk.ebayAccounts,
     queryFn: async () => {
       const res = await fetch('/api/ebay/accounts');
       if (!res.ok) throw new Error('Failed to fetch accounts');
@@ -156,7 +157,7 @@ export function ConnectionsSidebarPanel() {
       return data;
     },
     onSuccess: (data) => {
-      queryClient.invalidateQueries({ queryKey: ['ebay-accounts'] });
+      queryClient.invalidateQueries({ queryKey: qk.ebayAccounts });
       logSuccess('Orders', 'eBay Sync', `Created ${data?.totals?.createdOrders || 0}, deleted exceptions ${data?.totals?.deletedExceptions || 0}.`);
     },
     onError: (error: any) => logError('Orders', 'eBay Sync', error?.message || 'eBay sync failed'),
@@ -174,7 +175,7 @@ export function ConnectionsSidebarPanel() {
       return { accountName, data };
     },
     onSuccess: ({ accountName, data }) => {
-      queryClient.invalidateQueries({ queryKey: ['ebay-accounts'] });
+      queryClient.invalidateQueries({ queryKey: qk.ebayAccounts });
       logSuccess('Orders', `Token Refresh: ${accountName}`, data?.message || 'Token refreshed.');
     },
     onError: (error: any, accountName) => logError('Orders', `Token Refresh: ${accountName}`, error?.message || 'Token refresh failed'),

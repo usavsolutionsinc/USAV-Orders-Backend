@@ -4,6 +4,7 @@ import { useEffect } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useAblyChannel } from './useAblyChannel';
 import { getWalkInChannelName } from '@/lib/realtime/channels';
+import { qk } from '@/queries/keys';
 import type { SquareTransactionRecord } from '@/lib/neon/square-transaction-queries';
 
 const WALKIN_CHANNEL = getWalkInChannelName();
@@ -20,7 +21,7 @@ export function useWalkInSales(
   const weekStart = options?.weekStart || '';
   const weekEnd = options?.weekEnd || '';
   const status = options?.status || '';
-  const queryKey = ['walk-in-sales', search || '', weekStart, weekEnd, status] as const;
+  const queryKey = qk.walkInSales.list(search || '', weekStart, weekEnd, status);
 
   const query = useQuery<SquareTransactionRecord[]>({
     queryKey,
@@ -43,12 +44,12 @@ export function useWalkInSales(
   });
 
   useAblyChannel(WALKIN_CHANNEL, 'sale.completed', () => {
-    queryClient.invalidateQueries({ queryKey: ['walk-in-sales'] });
+    queryClient.invalidateQueries({ queryKey: qk.walkInSales.all });
   });
 
   useEffect(() => {
     const handleRefresh = () => {
-      queryClient.invalidateQueries({ queryKey: ['walk-in-sales'] });
+      queryClient.invalidateQueries({ queryKey: qk.walkInSales.all });
     };
     window.addEventListener('usav-refresh-data', handleRefresh);
     return () => window.removeEventListener('usav-refresh-data', handleRefresh);

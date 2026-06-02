@@ -10,6 +10,7 @@ import {
 } from '@/lib/realtime/channels';
 import { useAblyClient } from '@/contexts/AblyContext';
 import { useAblyChannel } from './useAblyChannel';
+import { qk } from '@/queries/keys';
 
 const ORDERS_CHANNEL = getOrdersChannelName();
 const REPAIRS_CHANNEL = getRepairsChannelName();
@@ -138,7 +139,7 @@ export function useRealtimeInvalidation({
     WALKIN_CHANNEL,
     'sale.completed',
     () => {
-      queryClient.invalidateQueries({ queryKey: ['walk-in-sales'] });
+      queryClient.invalidateQueries({ queryKey: qk.walkInSales.all });
     },
     walkIn,
   );
@@ -181,7 +182,7 @@ export function useRealtimeInvalidation({
             queryClient.invalidateQueries({ queryKey: ['receiving-lines'] });
             queryClient.invalidateQueries({ queryKey: ['receiving-lines-with-serials'] });
             queryClient.invalidateQueries({ queryKey: ['receiving-line-serials'] });
-            queryClient.invalidateQueries({ queryKey: ['walk-in-sales'] });
+            queryClient.invalidateQueries({ queryKey: qk.walkInSales.all });
             queryClient.invalidateQueries({ queryKey: ['dashboard-operations'] });
           }
         };

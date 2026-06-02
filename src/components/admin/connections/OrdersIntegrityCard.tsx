@@ -2,6 +2,7 @@
 
 import { useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { qk } from '@/queries/keys';
 import { motion } from 'framer-motion';
 import { RefreshCw } from '@/components/Icons';
 
@@ -37,7 +38,7 @@ export function OrdersIntegrityCard({ embedded = false }: { embedded?: boolean }
   const shipStationFileInputRef = useRef<HTMLInputElement>(null);
 
   const { data: accountsData } = useQuery({
-    queryKey: ['ebay-accounts'],
+    queryKey: qk.ebayAccounts,
     queryFn: async () => {
       const res = await fetch('/api/ebay/accounts');
       if (!res.ok) throw new Error('Failed to fetch accounts');
@@ -52,7 +53,7 @@ export function OrdersIntegrityCard({ embedded = false }: { embedded?: boolean }
       if (!res.ok || !data?.success) throw new Error(data?.error || data?.message || `Sync failed (HTTP ${res.status})`);
       return data;
     },
-    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['ebay-accounts'] }); },
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: qk.ebayAccounts }); },
   });
 
   const refreshTokenMutation = useMutation({
@@ -66,7 +67,7 @@ export function OrdersIntegrityCard({ embedded = false }: { embedded?: boolean }
       if (!res.ok || !data?.success) throw new Error(data?.error || data?.message || `Refresh failed (HTTP ${res.status})`);
       return data;
     },
-    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['ebay-accounts'] }); },
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: qk.ebayAccounts }); },
   });
 
   const exceptionsSyncMutation = useMutation({

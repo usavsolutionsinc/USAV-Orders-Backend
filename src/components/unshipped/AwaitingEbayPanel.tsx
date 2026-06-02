@@ -2,6 +2,7 @@
 
 import { useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { qk } from '@/queries/keys';
 import { RefreshCw, ShieldCheck } from '@/components/Icons';
 import { sectionLabel, fieldLabel } from '@/design-system/tokens/typography/presets';
 
@@ -26,7 +27,7 @@ export function AwaitingEbayPanel({ onRefresh }: { onRefresh?: () => void }) {
   };
 
   const { data: accountsData } = useQuery({
-    queryKey: ['ebay-accounts'],
+    queryKey: qk.ebayAccounts,
     queryFn: async () => {
       const res = await fetch('/api/ebay/accounts');
       if (!res.ok) throw new Error('Failed to fetch accounts');
@@ -56,7 +57,7 @@ export function AwaitingEbayPanel({ onRefresh }: { onRefresh?: () => void }) {
       return { accountName, data };
     },
     onSuccess: ({ accountName }) => {
-      queryClient.invalidateQueries({ queryKey: ['ebay-accounts'] });
+      queryClient.invalidateQueries({ queryKey: qk.ebayAccounts });
       addLog(`Token refreshed: ${accountName}`, 'success');
       onRefresh?.();
     },
