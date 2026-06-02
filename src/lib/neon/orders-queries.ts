@@ -1484,6 +1484,12 @@ export async function deleteOrder(id: number): Promise<boolean> {
   return (result.rowCount ?? 0) > 0;
 }
 
+/** Fetch one raw `orders` row by id (record-route GET). */
+export async function getOrderById(id: number): Promise<Record<string, unknown> | null> {
+  const result = await pool.query('SELECT * FROM orders WHERE id = $1 LIMIT 1', [id]);
+  return result.rows[0] ?? null;
+}
+
 /**
  * Skip an order (mark with a skip status in status_history)
  */

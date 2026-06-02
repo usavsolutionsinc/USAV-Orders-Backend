@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { put, del } from '@vercel/blob';
 import { createCrudHandler, ApiError } from '@/lib/api';
+import { withAuth } from '@/lib/auth/withAuth';
 import {
   getAllProductManuals,
   getProductManualById,
@@ -184,4 +185,11 @@ const handler = createCrudHandler<ProductManual>({
   },
 });
 
-export const { GET, POST, PATCH, DELETE } = handler;
+// Gate every method — the bare `export const { ... } = handler` left these
+// ungated (and invisible to the route-permission audit). Reads need catalog
+// view; writes need product_manuals.manage, matching the sibling routes
+// (assign/bulk/upsert/sync/upload).
+export const GET = withAuth(handler.GET as any, { permission: 'sku_stock.view' });
+export const POST = withAuth(handler.POST as any, { permission: 'product_manuals.manage' });
+export const PATCH = withAuth(handler.PATCH as any, { permission: 'product_manuals.manage' });
+export const DELETE = withAuth(handler.DELETE as any, { permission: 'product_manuals.manage' });

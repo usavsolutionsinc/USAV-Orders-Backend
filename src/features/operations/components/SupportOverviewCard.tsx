@@ -9,12 +9,9 @@ import { sectionLabel } from '@/design-system/tokens/typography/presets';
 interface SupportOverviewResponse {
   success?: boolean;
   totals?: {
-    unreadMessages: number;
-    returnRequests: number;
     zendeskTickets: number;
     attentionItems: number;
   };
-  ebayAccounts?: { accountName: string; unreadMessages: { count: number }; returnRequests: { count: number } }[];
 }
 
 async function safeJson<T>(url: string): Promise<T | null> {
@@ -39,9 +36,7 @@ export function SupportOverviewCard() {
   const hasAttention = (totals?.attentionItems ?? 0) > 0;
 
   const tiles = [
-    { label: 'eBay messages',  value: totals?.unreadMessages ?? 0, tone: 'text-blue-700',  ring: 'bg-blue-50' },
-    { label: 'Open returns',   value: totals?.returnRequests ?? 0, tone: 'text-amber-700', ring: 'bg-amber-50' },
-    { label: 'Zendesk tickets',value: totals?.zendeskTickets ?? 0, tone: 'text-emerald-700', ring: 'bg-emerald-50' },
+    { label: 'Zendesk tickets', value: totals?.zendeskTickets ?? 0, tone: 'text-emerald-700', ring: 'bg-emerald-50' },
   ];
 
   return (
@@ -72,15 +67,15 @@ export function SupportOverviewCard() {
             <Headset className="w-5 h-5" />
           </div>
           <div className="flex-1">
-            <p className="text-[13px] font-extrabold text-[#2D2A26] tracking-tight">eBay + Zendesk</p>
-            <p className="text-[11px] font-medium text-[#A89F91]">Live across all active accounts</p>
+            <p className="text-[13px] font-extrabold text-[#2D2A26] tracking-tight">Zendesk tickets</p>
+            <p className="text-[11px] font-medium text-[#A89F91]">Open support queue</p>
           </div>
         </div>
 
         {data === null ? (
           <p className="text-[11px] text-[#A89F91]">Source unavailable.</p>
         ) : (
-          <div className="grid grid-cols-3 gap-3">
+          <div className="grid grid-cols-1 gap-3">
             {tiles.map((t) => (
               <div key={t.label} className={`rounded-xl p-3 ${t.ring}`}>
                 <div className="text-[24px] font-extrabold text-[#2D2A26] tabular-nums leading-none">
@@ -91,24 +86,6 @@ export function SupportOverviewCard() {
                 </p>
               </div>
             ))}
-          </div>
-        )}
-
-        {data?.ebayAccounts && data.ebayAccounts.length > 0 && (
-          <div className="mt-4 pt-4 border-t border-[#F5F3EF]">
-            <p className="text-[10px] font-black uppercase tracking-[0.14em] text-[#A89F91] mb-2">
-              By eBay account
-            </p>
-            <ul className="space-y-1.5">
-              {data.ebayAccounts.map((acc) => (
-                <li key={acc.accountName} className="flex items-center justify-between text-[11px]">
-                  <span className="font-bold text-[#2D2A26] truncate">{acc.accountName}</span>
-                  <span className="text-[#A89F91] tabular-nums">
-                    {acc.unreadMessages.count} msgs · {acc.returnRequests.count} returns
-                  </span>
-                </li>
-              ))}
-            </ul>
           </div>
         )}
       </motion.a>

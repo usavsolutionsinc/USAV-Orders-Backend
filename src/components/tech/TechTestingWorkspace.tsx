@@ -6,6 +6,7 @@ import { toast } from '@/lib/toast';
 import { Loader2, Printer } from '@/components/Icons';
 import { StickyActionBar } from '@/design-system/components/StickyActionBar';
 import { OrderIdChip, TrackingChip, ListingUrlChip, getLast4 } from '@/components/ui/CopyChip';
+import { zendeskTicketUrl } from '@/lib/zendesk-ticket-url';
 import { PoLinesAccordion } from '@/components/receiving/workspace/PoLinesAccordion';
 import { UnmatchedItemsSection } from '@/components/receiving/workspace/UnmatchedItemsSection';
 import { ReceivingClaimModal } from '@/components/receiving/workspace/ReceivingClaimModal';
@@ -971,6 +972,17 @@ export function TechTestingWorkspace({ staffId, selectedLineId, onSelectedLineCh
                       openHref={listingOpenHref}
                       previewDisplay={listingPreview}
                     />
+                    {row.zendesk_ticket?.trim() && zendeskTicketUrl(row.zendesk_ticket) ? (
+                      <a
+                        href={zendeskTicketUrl(row.zendesk_ticket)!}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        title="Open Zendesk ticket"
+                        className="inline-flex shrink-0 items-center gap-1 rounded-full bg-blue-50 px-2 py-1 text-caption font-bold text-blue-700 transition-colors hover:bg-blue-100"
+                      >
+                        {row.zendesk_ticket}
+                      </a>
+                    ) : null}
                   </div>
                   <div className="flex shrink-0 items-center gap-2">
                     <OrderIdChip value={poNumber} display={poNumber ? getLast4(poNumber) : '----'} />
@@ -1137,6 +1149,9 @@ export function TechTestingWorkspace({ staffId, selectedLineId, onSelectedLineCh
         onClose={() => setClaimOpen(false)}
         onTicketCreated={(tk) => {
           toast.success(`Claim filed — ${tk}`);
+          // Show it immediately on the carton header; the claim route also
+          // persisted it server-side so it survives reloads.
+          setRow((current) => (current ? { ...current, zendesk_ticket: tk } : current));
           dispatchLineUpdated({ id: row.id });
         }}
       />

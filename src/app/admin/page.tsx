@@ -7,6 +7,7 @@ import { GoalsAnalyticsTab } from '@/components/admin/GoalsAnalyticsTab';
 import { FBAManagementTab } from '@/components/admin/FBAManagementTab';
 import { FeaturesManagementTab } from '@/components/admin/FeaturesManagementTab';
 import { ManualAssignmentTab } from '@/components/admin/ManualAssignmentTab';
+import { ReasonCodesManagementTab } from '@/components/admin/ReasonCodesManagementTab';
 import { AdminLogsTab } from '@/components/admin/AdminLogsTab';
 import { AdminJobsTab } from '@/components/admin/AdminJobsTab';
 import AiChatTab from '@/components/admin/AiChatTab';
@@ -47,6 +48,7 @@ function renderTab(
     case 'architecture': return <ArchitectureTab />;
     case 'photo_backup': return <PhotoBackupTab />;
     case 'billing':      return <BillingTab />;
+    case 'reason_codes': return <ReasonCodesManagementTab />;
     case 'manuals':
       return (
         <ManualAssignmentTab

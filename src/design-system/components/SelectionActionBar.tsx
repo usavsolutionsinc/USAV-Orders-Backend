@@ -23,11 +23,20 @@ interface SelectionActionBarProps<T> {
   /** Override the primary tone with explicit Tailwind classes (e.g. station theme). */
   primaryToneClasses?: { bg: string; hover: string };
   /** Extra bulk actions surfaced in the split-button menu. */
-  actions?: Array<{ label: string; onClick: (rows: T[]) => void; icon?: ReactNode; disabled?: boolean }>;
+  actions?: Array<{
+    label: string;
+    onClick: (rows: T[]) => void;
+    icon?: ReactNode;
+    disabled?: boolean;
+    /** Tooltip (e.g. why the item is disabled). */
+    title?: string;
+  }>;
   /** Custom leading content; defaults to "N selected". */
   leading?: ReactNode;
   /** Disable the primary CTA (e.g. while a mutation is in flight). */
   primaryDisabled?: boolean;
+  /** Tooltip for the primary CTA (e.g. why it's disabled). */
+  primaryTitle?: string;
   primaryLoading?: boolean;
 }
 
@@ -52,6 +61,7 @@ export function SelectionActionBar<T>({
   actions,
   leading,
   primaryDisabled,
+  primaryTitle,
   primaryLoading,
 }: SelectionActionBarProps<T>) {
   const prefersReducedMotion = useReducedMotion();
@@ -61,6 +71,7 @@ export function SelectionActionBar<T>({
     label: a.label,
     icon: a.icon,
     disabled: a.disabled,
+    title: a.title,
     onClick: () => a.onClick(rows),
   }));
 
@@ -95,6 +106,7 @@ export function SelectionActionBar<T>({
               tone: primaryTone,
               toneClasses: primaryToneClasses,
               disabled: primaryDisabled,
+              title: primaryTitle,
               isLoading: primaryLoading,
               menu,
             }}

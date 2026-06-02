@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useQueryClient } from '@tanstack/react-query';
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
@@ -9,8 +9,11 @@ import { TestingHistoryList, TESTING_SELECTION_SCOPE } from './tech/TestingHisto
 import { usePageHeader } from '@/hooks/usePageHeader';
 import { useTableSelection } from '@/hooks/useTableSelection';
 import { emitToggleAll } from '@/lib/selection/table-selection';
-import { SelectionActionBar } from '@/design-system/components/SelectionActionBar';
-import { Copy, Check, X } from '@/components/Icons';
+import { ContextualSelectionBar } from '@/design-system/components/ContextualSelectionBar';
+import type { SelectionAction } from '@/lib/selection/selection-actions';
+import { ReceivingClaimModal } from './receiving/workspace/ReceivingClaimModal';
+import { printProductLabel, printProductLabels } from '@/lib/print/printProductLabel';
+import { Copy, Check, X, Printer, MessageSquare, User, Smartphone } from '@/components/Icons';
 import { toast } from '@/lib/toast';
 import type { ReceivingLineRow } from './station/ReceivingLinesTable';
 import PendingOrdersTable from './PendingOrdersTable';
@@ -90,6 +93,8 @@ export default function TechDashboard({ techId }: TechDashboardProps) {
         TESTING_SELECTION_SCOPE,
         (r) => r.id,
     );
+    // Single-line claim modal opened from the bulk bar's "Create support ticket".
+    const [testingClaimRow, setTestingClaimRow] = useState<ReceivingLineRow | null>(null);
 
     // Exit select mode whenever we leave the testing-history surface.
     useEffect(() => {
@@ -128,6 +133,77 @@ export default function TechDashboard({ techId }: TechDashboardProps) {
             () => toast.error('Copy failed'),
         );
     }, []);
+
+    // Print one tested-unit label per selected line — serial-level when serials
+    // are loaded, else a single SKU label. Same pipeline as Pass + Print.
+    const handlePrintTestingLabels = useCallback((rows: ReceivingLineRow[]) => {
+        let printed = 0;
+        for (const r of rows) {
+            const sku = (r.sku || '').trim();
+            if (!sku) continue;
+            const serials = (r.serials ?? [])
+                .map((s) => (s.serial_number || '').trim())
+                .filter(Boolean);
+            if (serials.length > 0) {
+                printProductLabels({ sku, serialNumbers: serials });
+                printed += serials.length;
+            } else {
+                printProductLabel({ sku });
+                printed += 1;
+            }
+        }
+        if (printed > 0) toast.success(`Printing ${printed} label${printed === 1 ? '' : 's'}`);
+        else toast.error('No SKU on the selected line(s)');
+    }, []);
+
+    // Contextual bulk actions for the testing-history selection. Mirrors the
+    // receiving-history set; declared as a SelectionAction[] so the bar derives
+    // the CTA + overflow menu + disabled states (see ContextualSelectionBar).
+    const testingBulkActions = useMemo<SelectionAction<ReceivingLineRow>[]>(
+        () => [
+            {
+                key: 'copy',
+                label: 'Copy details',
+                icon: <Copy className="h-4 w-4" />,
+                tone: 'blue',
+                primary: true,
+                run: handleCopyTestingDetails,
+            },
+            {
+                key: 'print',
+                label: 'Print labels',
+                icon: <Printer className="h-4 w-4" />,
+                run: handlePrintTestingLabels,
+            },
+            {
+                key: 'ticket',
+                label: 'Create support ticket',
+                icon: <MessageSquare className="h-4 w-4" />,
+                maxSelected: 1,
+                disabledReason: 'Select a single line to file a ticket',
+                run: (rows) => {
+                    if (rows[0]) setTestingClaimRow(rows[0]);
+                },
+            },
+            {
+                key: 'staff',
+                label: 'Send to staff',
+                icon: <User className="h-4 w-4" />,
+                enabled: () => false,
+                disabledReason: 'Coming next — needs assignment backend',
+                run: () => {},
+            },
+            {
+                key: 'phone',
+                label: 'Send to phone',
+                icon: <Smartphone className="h-4 w-4" />,
+                enabled: () => false,
+                disabledReason: 'Coming next — needs phone push channel',
+                run: () => {},
+            },
+        ],
+        [handleCopyTestingDetails, handlePrintTestingLabels],
+    );
 
     usePageHeader(
         isTestingHistory ? (
@@ -330,12 +406,10 @@ export default function TechDashboard({ techId }: TechDashboardProps) {
                 <div className="relative min-h-0 flex-1 overflow-hidden">
                     {rightPane}
                     {isTestingHistory ? (
-                        <SelectionActionBar
+                        <ContextualSelectionBar
                             scope={TESTING_SELECTION_SCOPE}
                             rows={testingSelectedRows}
-                            primaryLabel="Copy details"
-                            primaryIcon={<Copy className="h-4 w-4" />}
-                            onPrimary={handleCopyTestingDetails}
+                            actions={testingBulkActions}
                         />
                     ) : null}
                 </div>
@@ -378,6 +452,19 @@ export default function TechDashboard({ techId }: TechDashboardProps) {
                     />
                 )}
             </AnimatePresence>
+
+            {testingClaimRow ? (
+                <ReceivingClaimModal
+                    open
+                    row={testingClaimRow}
+                    onClose={() => setTestingClaimRow(null)}
+                    onTicketCreated={(tk) => {
+                        toast.success(`Claim filed — ${tk}`);
+                        setTestingClaimRow(null);
+                        exitTestingSelect();
+                    }}
+                />
+            ) : null}
         </div>
     );
 }

@@ -336,3 +336,90 @@ export async function listOpen(): Promise<RmaAuthorizationRow[]> {
   );
   return rows.map((r) => mapRow(r as never));
 }
+
+export async function findById(rmaId: number): Promise<RmaAuthorizationRow | null> {
+  const { rows } = await pool.query(
+    `SELECT id, rma_number, direction, order_id, customer_id,
+            authorized_at::text, expires_at::text, expected_carrier, status,
+            created_by_staff_id, closed_at::text, notes
+       FROM rma_authorizations
+      WHERE id = $1
+      LIMIT 1`,
+    [rmaId],
+  );
+  if (rows.length === 0) return null;
+  return mapRow(rows[0] as never);
+}
+
+// ─── Record-level update / cancel ─────────────────────────────────────────────
+//
+// These edit the RMA *record* (mutable metadata + a soft-cancel). Lifecycle
+// status transitions (AUTHORIZED→RECEIVED→DISPOSITIONED→CLOSED) stay in their
+// dedicated verb routes — PATCH here intentionally cannot move `status`.
+
+export interface UpdateAuthorizationInput {
+  rmaId: number;
+  expectedCarrier?: string | null;
+  expiresAt?: string | null;
+  notes?: string | null;
+}
+
+export type UpdateAuthorizationResult =
+  | { ok: true; rma: RmaAuthorizationRow }
+  | { ok: false; status: 404; error: string };
+
+/**
+ * Patch mutable metadata (carrier / expiry / notes). COALESCE semantics:
+ * `null`/omitted fields leave the column untouched.
+ */
+export async function updateAuthorization(
+  input: UpdateAuthorizationInput,
+): Promise<UpdateAuthorizationResult> {
+  const { rows } = await pool.query(
+    `UPDATE rma_authorizations SET
+        expected_carrier = COALESCE($2, expected_carrier),
+        expires_at       = COALESCE($3::timestamptz, expires_at),
+        notes            = COALESCE($4, notes)
+      WHERE id = $1
+      RETURNING id, rma_number, direction, order_id, customer_id,
+                authorized_at::text, expires_at::text, expected_carrier, status,
+                created_by_staff_id, closed_at::text, notes`,
+    [input.rmaId, input.expectedCarrier ?? null, input.expiresAt ?? null, input.notes ?? null],
+  );
+  if (rows.length === 0) return { ok: false, status: 404, error: 'rma not found' };
+  return { ok: true, rma: mapRow(rows[0] as never) };
+}
+
+export type CancelAuthorizationResult =
+  | { ok: true; rma: RmaAuthorizationRow }
+  | { ok: false; status: 404 | 409; error: string };
+
+/**
+ * Soft-cancel — AUTHORIZED → CANCELED. Only an RMA that hasn't yet received
+ * goods can be canceled; once it's RECEIVED/DISPOSITIONED it must be closed
+ * through the normal flow. We never hard-delete (units + dispositions FK here).
+ */
+export async function cancelAuthorization(input: { rmaId: number }): Promise<CancelAuthorizationResult> {
+  const { rows } = await pool.query(
+    `UPDATE rma_authorizations
+        SET status = 'CANCELED', closed_at = NOW()
+      WHERE id = $1 AND status = 'AUTHORIZED'
+      RETURNING id, rma_number, direction, order_id, customer_id,
+                authorized_at::text, expires_at::text, expected_carrier, status,
+                created_by_staff_id, closed_at::text, notes`,
+    [input.rmaId],
+  );
+  if (rows.length === 0) {
+    const check = await pool.query<{ status: RmaStatus }>(
+      `SELECT status FROM rma_authorizations WHERE id = $1`,
+      [input.rmaId],
+    );
+    if (check.rowCount === 0) return { ok: false, status: 404, error: 'rma not found' };
+    return {
+      ok: false,
+      status: 409,
+      error: `rma is ${check.rows[0].status}, only AUTHORIZED RMAs can be canceled`,
+    };
+  }
+  return { ok: true, rma: mapRow(rows[0] as never) };
+}

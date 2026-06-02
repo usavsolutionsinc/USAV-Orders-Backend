@@ -62,12 +62,23 @@ export const REPAIR_DONE_TAB_STATUSES = ['Done', 'Picked Up', 'Shipped'] as cons
 /** Walk-in repairs list — “Incoming” tab (inbound shipments not yet in active workflow). */
 export const REPAIR_INCOMING_TAB_STATUS = 'Incoming Shipment' as const;
 
+/**
+ * Soft-delete status. Cancelled repairs are hidden from every list tab (see
+ * buildRepairTabWhere) but the row + status_history survive for the audit
+ * trail. Stored in the free-text `status` column — no schema change needed.
+ */
+export const REPAIR_CANCELLED_STATUS = 'Cancelled' as const;
+
 function sqlStatusInTerminal(): string {
   return `(${REPAIR_DONE_TAB_STATUSES.map((s) => `'${s}'`).join(', ')})`;
 }
 
 function sqlIncomingTabStatus(): string {
   return `'${REPAIR_INCOMING_TAB_STATUS.replace(/'/g, "''")}'`;
+}
+
+function sqlCancelledStatus(): string {
+  return `'${REPAIR_CANCELLED_STATUS.replace(/'/g, "''")}'`;
 }
 
 function mapRepairRow(row: any): RSRecord {
@@ -156,6 +167,7 @@ function buildRepairTabWhere(tab: RepairTab) {
     return `WHERE rs.status IN ${terminalList}`;
   }
   return `WHERE rs.status != ${incomingSt}
+          AND rs.status != ${sqlCancelledStatus()}
           AND rs.status NOT IN ${terminalList}`;
 }
 
@@ -179,6 +191,7 @@ function buildRepairSearchWhere(idx: number, tab?: RepairTab) {
   if (tab === 'incoming') return `WHERE rs.status = ${incomingSt} AND ${base}`;
   if (tab === 'done') return `WHERE rs.status IN ${terminalList} AND ${base}`;
   return `WHERE rs.status != ${incomingSt}
+          AND rs.status != ${sqlCancelledStatus()}
           AND rs.status NOT IN ${terminalList}
           AND ${base}`;
 }
@@ -217,6 +230,39 @@ export async function getRepairById(id: number): Promise<RSRecord | null> {
     console.error('Error fetching repair by ID:', error);
     throw new Error('Failed to fetch repair');
   }
+}
+
+export type CancelRepairResult =
+  | { ok: true; repair: RSRecord; alreadyCancelled: boolean }
+  | { ok: false; status: 404 | 409; error: string };
+
+/**
+ * Soft-cancel a repair (status → 'Cancelled'). Hidden from all list tabs but
+ * the row survives. Refuses repairs already in a terminal/done state (those
+ * are finished, not cancellable). Idempotent: cancelling a cancelled repair
+ * is a no-op success.
+ */
+export async function cancelRepair(id: number, reason?: string | null): Promise<CancelRepairResult> {
+  const existing = await getRepairById(id);
+  if (!existing) return { ok: false, status: 404, error: 'Repair not found' };
+  if (existing.status === REPAIR_CANCELLED_STATUS) {
+    return { ok: true, repair: existing, alreadyCancelled: true };
+  }
+  if ((REPAIR_DONE_TAB_STATUSES as readonly string[]).includes(existing.status)) {
+    return { ok: false, status: 409, error: `Repair is ${existing.status} and cannot be cancelled` };
+  }
+
+  await updateRepairStatus(id, REPAIR_CANCELLED_STATUS);
+  if (reason && reason.trim()) {
+    await appendRepairStatusHistory(id, {
+      status: REPAIR_CANCELLED_STATUS,
+      previous_status: existing.status,
+      source: 'repair-service.cancel',
+      metadata: { reason: reason.trim() },
+    });
+  }
+  const repair = await getRepairById(id);
+  return { ok: true, repair: repair!, alreadyCancelled: false };
 }
 
 export async function updateRepairStatus(id: number, newStatus: string): Promise<void> {

@@ -558,6 +558,21 @@ export async function reorderRooms(order: string[]): Promise<{ updated: number }
   }
 }
 
+/**
+ * Soft-delete a single bin/location by id (is_active = false). Bin contents,
+ * inventory_events and audit rows reference it by id, so we never hard-delete.
+ * Returns true if a row was deactivated (false if not found / already inactive).
+ */
+export async function softDeleteLocation(id: number): Promise<boolean> {
+  const r = await pool.query(
+    `UPDATE locations
+        SET is_active = false, updated_at = NOW()
+      WHERE id = $1 AND is_active = true`,
+    [id],
+  );
+  return (r.rowCount ?? 0) > 0;
+}
+
 /** Soft-delete a room and every bin under it (sets is_active = false). */
 export async function softDeleteRoom(name: string): Promise<{ deactivated: number }> {
   const room = name.trim();

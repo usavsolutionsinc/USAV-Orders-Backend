@@ -1,14 +1,17 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
 import ReceivingLinesTable, { RECEIVING_SELECTION_SCOPE } from './station/ReceivingLinesTable';
 import { usePageHeader } from '@/hooks/usePageHeader';
 import { useTableSelection } from '@/hooks/useTableSelection';
 import { emitToggleAll } from '@/lib/selection/table-selection';
-import { SelectionActionBar } from '@/design-system/components/SelectionActionBar';
-import { Copy, Check, X } from '@/components/Icons';
+import { ContextualSelectionBar } from '@/design-system/components/ContextualSelectionBar';
+import type { SelectionAction } from '@/lib/selection/selection-actions';
+import { ReceivingClaimModal } from './receiving/workspace/ReceivingClaimModal';
+import { printProductLabel, printProductLabels } from '@/lib/print/printProductLabel';
+import { Copy, Check, X, Printer, MessageSquare, User, Smartphone } from '@/components/Icons';
 import { toast } from '@/lib/toast';
 import { LocalPickupCatalogPanel } from './work-orders/LocalPickupCatalogPanel';
 import { ReceivingLineWorkspace } from './receiving/workspace/ReceivingLineWorkspace';
@@ -99,6 +102,8 @@ export default function ReceivingDashboard() {
     RECEIVING_SELECTION_SCOPE,
     (r) => r.id,
   );
+  // Single-line claim modal opened from the bulk bar's "Create support ticket".
+  const [claimRow, setClaimRow] = useState<ReceivingLineRow | null>(null);
 
   // Leaving the list (back to the receive workspace / pickup) exits select mode.
   useEffect(() => {
@@ -127,6 +132,78 @@ export default function ReceivingDashboard() {
       () => toast.error('Copy failed'),
     );
   }, []);
+
+  // Print one product label per selected line — serial-level when serials are
+  // loaded on the row, else a single SKU label. Reuses the same print pipeline
+  // as the workspace's Pass + Print.
+  const handlePrintLabels = useCallback((rows: ReceivingLineRow[]) => {
+    let printed = 0;
+    for (const r of rows) {
+      const sku = (r.sku || '').trim();
+      if (!sku) continue;
+      const serials = (r.serials ?? [])
+        .map((s) => (s.serial_number || '').trim())
+        .filter(Boolean);
+      if (serials.length > 0) {
+        printProductLabels({ sku, serialNumbers: serials });
+        printed += serials.length;
+      } else {
+        printProductLabel({ sku });
+        printed += 1;
+      }
+    }
+    if (printed > 0) toast.success(`Printing ${printed} label${printed === 1 ? '' : 's'}`);
+    else toast.error('No SKU on the selected line(s)');
+  }, []);
+
+  // Contextual bulk actions for the receiving-history selection. Declared as a
+  // SelectionAction[] so the bar derives the CTA + overflow menu + disabled
+  // states from the constraints (see ContextualSelectionBar).
+  const receivingBulkActions = useMemo<SelectionAction<ReceivingLineRow>[]>(
+    () => [
+      {
+        key: 'copy',
+        label: 'Copy details',
+        icon: <Copy className="h-4 w-4" />,
+        tone: 'blue',
+        primary: true,
+        run: handleCopyDetails,
+      },
+      {
+        key: 'print',
+        label: 'Print labels',
+        icon: <Printer className="h-4 w-4" />,
+        run: handlePrintLabels,
+      },
+      {
+        key: 'ticket',
+        label: 'Create support ticket',
+        icon: <MessageSquare className="h-4 w-4" />,
+        maxSelected: 1,
+        disabledReason: 'Select a single line to file a ticket',
+        run: (rows) => {
+          if (rows[0]) setClaimRow(rows[0]);
+        },
+      },
+      {
+        key: 'staff',
+        label: 'Send to staff',
+        icon: <User className="h-4 w-4" />,
+        enabled: () => false,
+        disabledReason: 'Coming next — needs assignment backend',
+        run: () => {},
+      },
+      {
+        key: 'phone',
+        label: 'Send to phone',
+        icon: <Smartphone className="h-4 w-4" />,
+        enabled: () => false,
+        disabledReason: 'Coming next — needs phone push channel',
+        run: () => {},
+      },
+    ],
+    [handleCopyDetails, handlePrintLabels],
+  );
 
   // Contextual header control: a Select toggle, shown only when the list is up.
   usePageHeader(
@@ -511,12 +588,10 @@ export default function ReceivingDashboard() {
         {/* Bulk-selection action bar — pins to the bottom of the list region
             when rows are selected in History / Incoming. */}
         {isTableOnlyMode ? (
-          <SelectionActionBar
+          <ContextualSelectionBar
             scope={RECEIVING_SELECTION_SCOPE}
             rows={selectedRows}
-            primaryLabel="Copy details"
-            primaryIcon={<Copy className="h-4 w-4" />}
-            onPrimary={handleCopyDetails}
+            actions={receivingBulkActions}
           />
         ) : null}
       </div>
@@ -531,6 +606,19 @@ export default function ReceivingDashboard() {
           />
         ) : null}
       </AnimatePresence>
+
+      {claimRow ? (
+        <ReceivingClaimModal
+          open
+          row={claimRow}
+          onClose={() => setClaimRow(null)}
+          onTicketCreated={(tk) => {
+            toast.success(`Claim filed — ${tk}`);
+            setClaimRow(null);
+            exitSelectMode();
+          }}
+        />
+      ) : null}
     </div>
   );
 }

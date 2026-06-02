@@ -8,6 +8,7 @@ import { RSRecord } from '@/lib/neon/repair-service-queries';
 import { PanelActionBar } from '@/components/shipped/details-panel/PanelActionBar';
 import { usePanelActions } from '@/hooks/usePanelActions';
 import { formatPhoneNumber } from '@/utils/phone';
+import { zendeskTicketUrl as buildZendeskTicketUrl } from '@/lib/zendesk-ticket-url';
 import { printRepairLabel } from '@/lib/print/printRepairLabel';
 import { RepairPickupFlow } from '@/components/repair/RepairPickupFlow';
 import { useActivityInboxOptional } from '@/contexts/ActivityInboxContext';
@@ -116,10 +117,9 @@ export function RepairDetailsPanel({
     { entityType: 'repair', entityId: repair.id },
   );
 
-  const zendeskTicketUrl = ticketNumber.trim()
-    && !/^RS-\d+$/i.test(ticketNumber.trim())
-    ? `https://usav.zendesk.com/agent/tickets/${encodeURIComponent(ticketNumber.trim().replace(/^#/, ''))}`
-    : null;
+  // Shared helper already returns null for the `RS-<id>` fallback (non-numeric)
+  // and passes through full URLs an operator may have pasted.
+  const zendeskTicketUrl = buildZendeskTicketUrl(ticketNumber);
 
   const handleSaveNotes = async () => {
     if (notes === repair.notes) return;

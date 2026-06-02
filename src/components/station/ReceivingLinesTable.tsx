@@ -116,6 +116,8 @@ export interface ReceivingLineRow {
   }> | null;
   /** Count of photos attached to this line's carton (from photos table, entity_type='RECEIVING'). */
   photo_count?: number;
+  /** Filed Zendesk ticket # for this line (receiving_lines.zendesk_ticket), stored as "#<id>". */
+  zendesk_ticket?: string | null;
 }
 
 interface ApiResponse {

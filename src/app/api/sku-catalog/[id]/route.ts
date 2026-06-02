@@ -1,6 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getSkuCatalogDetail, upsertSkuCatalog } from '@/lib/neon/sku-catalog-queries';
+import {
+  getSkuCatalogById,
+  getSkuCatalogDetail,
+  softDeleteSkuCatalog,
+  upsertSkuCatalog,
+} from '@/lib/neon/sku-catalog-queries';
 import { requireRoutePerm } from '@/lib/auth/dynamic-route-guard';
+import { parseBody } from '@/lib/schemas/parse';
+import { SkuCatalogUpdateBody } from '@/lib/schemas/sku-catalog';
+import { recordAudit, AUDIT_ACTION, AUDIT_ENTITY } from '@/lib/audit-logs';
+import pool from '@/lib/db';
 
 /**
  * GET /api/sku-catalog/[id] — Full detail for a single SKU catalog entry.
@@ -35,6 +44,9 @@ export async function GET(
 
 /**
  * PATCH /api/sku-catalog/[id] — Update a SKU catalog entry.
+ *
+ * Body: { productTitle?, category?, upc?, ean?, imageUrl?, isActive? }
+ * `sku` is the natural key and is not editable here.
  */
 export async function PATCH(
   req: NextRequest,
@@ -49,21 +61,32 @@ export async function PATCH(
       return NextResponse.json({ success: false, error: 'Invalid ID' }, { status: 400 });
     }
 
-    const body = await req.json();
-    const { productTitle, category, upc, ean, imageUrl } = body;
+    const raw = await req.json().catch(() => ({}));
+    const parsed = parseBody(SkuCatalogUpdateBody, raw);
+    if (parsed instanceof NextResponse) return parsed;
 
-    const detail = await getSkuCatalogDetail(id);
-    if (!detail) {
+    const before = await getSkuCatalogById(id);
+    if (!before) {
       return NextResponse.json({ success: false, error: 'Not found' }, { status: 404 });
     }
 
     const updated = await upsertSkuCatalog({
-      sku: detail.catalog.sku,
-      productTitle: productTitle ?? detail.catalog.product_title,
-      category: category !== undefined ? category : detail.catalog.category,
-      upc: upc !== undefined ? upc : detail.catalog.upc,
-      ean: ean !== undefined ? ean : detail.catalog.ean,
-      imageUrl: imageUrl !== undefined ? imageUrl : detail.catalog.image_url,
+      sku: before.sku,
+      productTitle: parsed.productTitle ?? before.product_title,
+      category: parsed.category !== undefined ? parsed.category : before.category,
+      upc: parsed.upc !== undefined ? parsed.upc : before.upc,
+      ean: parsed.ean !== undefined ? parsed.ean : before.ean,
+      imageUrl: parsed.imageUrl !== undefined ? parsed.imageUrl : before.image_url,
+      isActive: parsed.isActive !== undefined ? parsed.isActive : before.is_active,
+    });
+
+    await recordAudit(pool, gate.ctx, req, {
+      source: 'sku-catalog-api',
+      action: AUDIT_ACTION.SKU_CATALOG_UPDATE,
+      entityType: AUDIT_ENTITY.SKU,
+      entityId: id,
+      before: { ...before },
+      after: { ...updated },
     });
 
     return NextResponse.json({ success: true, catalog: updated });
@@ -71,6 +94,55 @@ export async function PATCH(
     console.error('Error in PATCH /api/sku-catalog/[id]:', error);
     return NextResponse.json(
       { success: false, error: error.message || 'Failed to update' },
+      { status: 500 },
+    );
+  }
+}
+
+/**
+ * DELETE /api/sku-catalog/[id] — Soft-delete (is_active = false).
+ *
+ * We never hard-delete: platform ids, manuals, QC checks, stock ledger and
+ * audit rows all reference this id. The row simply drops out of active lists
+ * and can be revived by re-creating the same sku.
+ */
+export async function DELETE(
+  req: NextRequest,
+  { params }: { params: Promise<{ id: string }> },
+) {
+  try {
+    const gate = await requireRoutePerm(req, 'sku_stock.manage');
+    if (gate.denied) return gate.denied;
+    const { id: rawId } = await params;
+    const id = Number(rawId);
+    if (!Number.isFinite(id) || id <= 0) {
+      return NextResponse.json({ success: false, error: 'Invalid ID' }, { status: 400 });
+    }
+
+    const before = await getSkuCatalogById(id);
+    if (!before || !before.is_active) {
+      return NextResponse.json({ success: false, error: 'Not found' }, { status: 404 });
+    }
+
+    const deleted = await softDeleteSkuCatalog(id);
+    if (!deleted) {
+      return NextResponse.json({ success: false, error: 'Not found' }, { status: 404 });
+    }
+
+    await recordAudit(pool, gate.ctx, req, {
+      source: 'sku-catalog-api',
+      action: AUDIT_ACTION.SKU_CATALOG_DELETE,
+      entityType: AUDIT_ENTITY.SKU,
+      entityId: id,
+      before: { ...before },
+      after: { ...deleted },
+    });
+
+    return NextResponse.json({ success: true });
+  } catch (error: any) {
+    console.error('Error in DELETE /api/sku-catalog/[id]:', error);
+    return NextResponse.json(
+      { success: false, error: error.message || 'Failed to delete' },
       { status: 500 },
     );
   }

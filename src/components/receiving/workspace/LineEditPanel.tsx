@@ -454,7 +454,9 @@ export function LineEditPanel({
       return;
     }
     const d = readReceivingLineDetailsScratch(row.receiving_id);
-    setZendesk(d.zendesk);
+    // DB-persisted ticket # (receiving_lines.zendesk_ticket) wins over the
+    // per-browser scratch; scratch remains the fallback for older rows.
+    setZendesk((row.zendesk_ticket || '').trim() || d.zendesk);
     // DB-persisted listing URL wins over the per-browser scratch when present
     // (added 2026-05-27). Scratch remains the fallback for cartons that
     // pre-date the column being populated.
@@ -645,6 +647,28 @@ export function LineEditPanel({
       /* silent */
     }
   }, [row.receiving_id, row.receiving_support_notes, supportNotes]);
+
+  // Persist the Zendesk ticket # onto the line (`receiving_lines.zendesk_ticket`)
+  // so it survives reloads and shows on other surfaces (e.g. the tech workspace).
+  // Claims write this server-side too; this covers manual edits to the field.
+  const saveZendeskTicket = useCallback(async () => {
+    if (row.id == null) return;
+    const trimmed = zendesk.trim();
+    const prev = (row.zendesk_ticket || '').trim();
+    if (trimmed === prev) return;
+    try {
+      const res = await fetch('/api/receiving-lines', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: row.id, zendesk_ticket: trimmed || null }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!data?.success) return;
+      dispatchLineUpdated({ id: row.id, notes: row.notes });
+    } catch {
+      /* silent */
+    }
+  }, [row.id, row.zendesk_ticket, row.notes, zendesk]);
 
   // Persist the listing URL to the carton (`receiving.listing_url`) so other
   // surfaces — notably the tech testing workspace running in another browser
@@ -2072,6 +2096,7 @@ export function LineEditPanel({
                   type="text"
                   value={zendesk}
                   onChange={(e) => setZendesk(e.target.value)}
+                  onBlur={() => void saveZendeskTicket()}
                   placeholder="Ticket # or URL"
                   className={`${INPUT_CLASS} flex-1 min-w-0`}
                 />

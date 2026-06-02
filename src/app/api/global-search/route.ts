@@ -1,5 +1,6 @@
 import { createCrudHandler, ApiError } from '@/lib/api';
 import pool from '@/lib/db';
+import { withAuth } from '@/lib/auth/withAuth';
 
 /**
  * Global search across orders, repairs, FBA shipments, and receiving.
@@ -155,4 +156,7 @@ const handler = createCrudHandler<SearchResult>({
   },
 });
 
-export const { GET } = handler;
+// Cross-domain search used by the Cmd+K bar — require an authenticated session
+// (any staff role). Was previously exported bare (unauthenticated + invisible
+// to the route-permission audit).
+export const GET = withAuth(handler.GET as any);

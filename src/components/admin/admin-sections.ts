@@ -4,6 +4,7 @@ import {
   Box,
   Calendar,
   Camera,
+  ClipboardList,
   Database,
   FileText,
   LayoutDashboard,
@@ -18,7 +19,7 @@ import {
 export type AdminSection =
   | 'overview'
   | 'goals' | 'staff' | 'access' | 'roles' | 'connections' | 'integrations' | 'fba'
-  | 'manuals' | 'features' | 'logs' | 'jobs' | 'ai_chat' | 'architecture'
+  | 'manuals' | 'reason_codes' | 'features' | 'logs' | 'jobs' | 'ai_chat' | 'architecture'
   | 'photo_backup' | 'billing';
 
 export type AdminGroup = 'Performance' | 'People' | 'Data sources' | 'System' | 'Account';
@@ -48,6 +49,7 @@ export const ADMIN_SECTION_OPTIONS: AdminSectionOption[] = [
   { value: 'integrations', label: 'Integrations', description: 'Per-tenant credential vault and provider status',              group: 'Data sources', icon: Zap },
   { value: 'fba',          label: 'FBA',          description: 'FNSKU catalog rows and CSV imports',                           group: 'Data sources', icon: Package },
   { value: 'manuals',      label: 'Manuals',      description: 'Link product manuals to item numbers',                         group: 'Data sources', icon: FileText },
+  { value: 'reason_codes', label: 'Reason Codes', description: 'Inventory adjustment / bin-edit reason codes',                  group: 'Data sources', icon: ClipboardList, requires: 'sku_stock.manage' },
 
   { value: 'photo_backup', label: 'Photo Backup', description: 'Mirror Vercel Blob photos into Google Photos albums',          group: 'System',      icon: Camera },
   { value: 'jobs',         label: 'Jobs',         description: 'QStash scheduled jobs and execution logs',                     group: 'System',      icon: Calendar },

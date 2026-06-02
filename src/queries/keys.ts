@@ -38,6 +38,11 @@ export const qk = {
     list: (search: string, featureType: string, featureStatus: string, featureActive: string) =>
       ['admin-features', search, featureType, featureStatus, featureActive] as const,
   },
+  reasonCodes: {
+    /** Broad invalidation prefix — matches every reason-codes query. */
+    all: ['reason-codes'] as const,
+    list: () => ['reason-codes', 'list'] as const,
+  },
   fba: {
     board: ['fba-board'] as const,
     stageCounts: ['fba-stage-counts'] as const,

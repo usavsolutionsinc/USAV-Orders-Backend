@@ -5,7 +5,6 @@ import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { AlertCircle, Check, ChevronDown, Clock, LayoutDashboard, Menu, PackageCheck, X } from '@/components/Icons';
-import { sidebarHeaderBandClass } from '@/components/layout/header-shell';
 import { HorizontalButtonSlider, type HorizontalSliderItem } from '@/components/ui/HorizontalButtonSlider';
 import { sectionLabel } from '@/design-system/tokens/typography/presets';
 import { AdminSidebar } from '@/components/admin/AdminSidebar';
@@ -142,8 +141,11 @@ function SidebarContextPanel({ onBackToAppNav }: { onBackToAppNav?: () => void }
   if (routeKey === 'dashboard') {
     const focusShippedSearch = searchParams.get(DASHBOARD_SHIPPED_FOCUS_SEARCH_PARAM) === '1';
     const filterControl = (
-      <div className={`${sidebarHeaderBandClass} px-3`}>
-        <div className="flex h-[40px] items-center">
+      // Each pill row is its own 40px band — same pattern as the sidebar title
+      // header (h-[40px] + border-b, border-box) so the divider is INSIDE the
+      // 40px and the rows line up exactly with the rest of the 40px grid.
+      <div className="shrink-0 bg-white">
+        <div className="flex h-[40px] items-center border-b border-gray-300 px-3">
           <HorizontalButtonSlider
             items={DASHBOARD_ORDERS_SUBVIEW_ITEMS}
             value={dashboardSearch.orderView}
@@ -155,23 +157,20 @@ function SidebarContextPanel({ onBackToAppNav }: { onBackToAppNav?: () => void }
           />
         </div>
         {dashboardSearch.orderView === 'shipped' ? (
-          <>
-            {/* Type filter for the Shipped tab (All / Orders / SKU / FBA). */}
-            <div className="-mx-3 border-t border-gray-300" />
-            <div className="flex h-[40px] items-center">
-              <HorizontalButtonSlider
-                items={DASHBOARD_SHIPPED_TYPE_ITEMS}
-                value={dashboardSearch.shippedFilter}
-                onChange={(value) =>
-                  dashboardSearch.setShippedFilter(value as typeof dashboardSearch.shippedFilter)
-                }
-                variant="nav"
-                dense
-                aria-label="Shipped type filter"
-                className="w-full"
-              />
-            </div>
-          </>
+          // Type filter for the Shipped tab (All / Orders / SKU / FBA).
+          <div className="flex h-[40px] items-center border-b border-gray-300 px-3">
+            <HorizontalButtonSlider
+              items={DASHBOARD_SHIPPED_TYPE_ITEMS}
+              value={dashboardSearch.shippedFilter}
+              onChange={(value) =>
+                dashboardSearch.setShippedFilter(value as typeof dashboardSearch.shippedFilter)
+              }
+              variant="nav"
+              dense
+              aria-label="Shipped type filter"
+              className="w-full"
+            />
+          </div>
         ) : null}
       </div>
     );

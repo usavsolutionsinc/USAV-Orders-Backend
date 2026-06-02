@@ -81,15 +81,15 @@ export function isMobileAllowedPath(pathname: string | null | undefined): boolea
 export const APP_SIDEBAR_NAV: SidebarNavItem[] = [
   { id: 'operations',        label: 'Operations',  href: '/operations',         icon: Monitor,         kind: 'main',    requires: 'operations.view' },
   { id: 'dashboard',         label: 'Orders / Shipping', href: '/dashboard',    icon: LayoutDashboard, kind: 'main',    requires: 'dashboard.view' },
-  { id: 'fba',               label: 'Amazon FBA',  href: '/fba',                icon: Package,         kind: 'main',    requires: 'fba.view' },
   { id: 'walk-in',           label: 'Walk-In',     href: '/walk-in',            icon: ShoppingCart,    kind: 'main',    requires: 'walk_in.view' },
   { id: 'products',          label: 'Products',    href: '/products',           icon: Box,             kind: 'main',    requires: 'sku_stock.view' },
   { id: 'inventory',         label: 'Inventory',   href: '/inventory',          icon: Package,         kind: 'main',    requires: 'sku_stock.view' },
   { id: 'warehouse',         label: 'Warehouse',   href: '/warehouse',          icon: MapPin,          kind: 'main',    requires: 'sku_stock.view' },
   { id: 'receiving',         label: 'Receiving',   href: '/receiving',          icon: ClipboardList,   kind: 'station', requires: 'receiving.view' },
+  { id: 'fba',               label: 'Amazon FBA',  href: '/fba',                icon: Package,         kind: 'station', requires: 'fba.view' },
   { id: 'tech',              label: 'Testing',     href: '/tech',               icon: Wrench,          kind: 'station', requires: 'tech.view' },
   { id: 'packer',            label: 'Packing',     href: '/packer',             icon: User,            kind: 'station', requires: 'packing.view' },
-  { id: 'support',           label: 'Support',     href: '/support',            icon: AlertCircle,     kind: 'station' },
+  { id: 'support',           label: 'Support',     href: '/support',            icon: AlertCircle,     kind: 'station', requires: 'integrations.zendesk' },
   { id: 'previous-quarters', label: 'Quarters',    href: '/previous-quarters',  icon: Calendar,        kind: 'bottom', requires: 'reports.view' },
   { id: 'audit-log',         label: 'Audit Log',   href: '/settings/audit',     icon: FileText,        kind: 'bottom', requires: 'admin.view_logs' },
   { id: 'admin',             label: 'Admin',       href: '/admin',              icon: ShieldCheck,     kind: 'bottom', requires: 'admin.view' },
@@ -191,9 +191,12 @@ export const ROUTE_PERMISSIONS: ReadonlyArray<{ prefix: string; permission: stri
   { prefix: '/warehouse',          permission: 'sku_stock.view' },
   { prefix: '/inventory',          permission: 'sku_stock.view' },
   { prefix: '/previous-quarters',  permission: 'reports.view' },
+  // /support is the native Zendesk ticket console — gated by the same
+  // permission as the /api/zendesk/* routes it calls.
+  { prefix: '/support',            permission: 'integrations.zendesk' },
   // /settings is intentionally NOT gated — every signed-in user can manage
   // their own workstation/appearance settings; admin tabs gate themselves.
-  // /support is always visible. (/manuals now redirects into /products)
+  // (/manuals now redirects into /products)
 ];
 
 export function permissionForPath(pathname: string): string | null {

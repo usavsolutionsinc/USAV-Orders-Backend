@@ -7,7 +7,9 @@ import {
   upsertBinContent,
   upsertBinContentIfVersion,
   markBinCounted,
+  softDeleteLocation,
 } from '@/lib/neon/location-queries';
+import { requireRoutePerm } from '@/lib/auth/dynamic-route-guard';
 import {
   getApiIdempotencyResponse,
   readIdempotencyKey,
@@ -369,6 +371,68 @@ export async function PATCH(
     console.error('[PATCH /api/locations/[barcode]] error:', err);
     return NextResponse.json(
       { error: 'Failed to update bin', details: err?.message },
+      { status: 500 },
+    );
+  }
+}
+
+/**
+ * DELETE /api/locations/[barcode] — soft-delete a single bin (is_active=false).
+ *
+ * Uses session-derived auth (requireRoutePerm) rather than this file's legacy
+ * body.staffId gate. Refuses to delete a bin that still holds stock (409) so
+ * inventory can't silently vanish; empty it or move it first.
+ */
+export async function DELETE(
+  req: NextRequest,
+  { params }: { params: Promise<{ barcode: string }> },
+) {
+  const gate = await requireRoutePerm(req, 'bin.remove');
+  if (gate.denied) return gate.denied;
+
+  const { barcode } = await params;
+  const code = decodeURIComponent(barcode).trim();
+  if (!code) {
+    return NextResponse.json({ error: 'Barcode is required' }, { status: 400 });
+  }
+
+  try {
+    const bin = await getBinContentsByBarcode(code);
+    if (!bin || !bin.location.is_active) {
+      return NextResponse.json({ error: 'Bin not found' }, { status: 404 });
+    }
+
+    const remaining = bin.contents.filter((c) => Number(c.qty) > 0);
+    if (remaining.length > 0) {
+      return NextResponse.json(
+        {
+          error: 'Bin is not empty — move or remove its stock before deleting',
+          skus: remaining.map((c) => c.sku),
+        },
+        { status: 409 },
+      );
+    }
+
+    const deleted = await softDeleteLocation(bin.location.id);
+    if (!deleted) {
+      return NextResponse.json({ error: 'Bin not found' }, { status: 404 });
+    }
+
+    await recordAudit(pool, gate.ctx, req, {
+      source: 'settings.locations',
+      action: AUDIT_ACTION.BIN_DELETE,
+      entityType: AUDIT_ENTITY.BIN,
+      entityId: bin.location.id,
+      before: { ...bin.location },
+      binCode: bin.location.barcode ?? code,
+      locationCode: bin.location.name ?? null,
+    });
+
+    return NextResponse.json({ success: true });
+  } catch (err: any) {
+    console.error('[DELETE /api/locations/[barcode]] error:', err);
+    return NextResponse.json(
+      { error: 'Failed to delete bin', details: err?.message },
       { status: 500 },
     );
   }

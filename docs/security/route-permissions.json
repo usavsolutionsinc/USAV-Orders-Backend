@@ -1,13 +1,13 @@
 {
   "version": 1,
-  "generatedAt": "2026-06-02T03:38:01Z",
-  "totalRoutes": 481,
+  "generatedAt": "2026-06-02T06:51:09Z",
+  "totalRoutes": 486,
   "summary": {
-    "permissionGated": 405,
-    "authenticatedNoPermission": 15,
+    "permissionGated": 410,
+    "authenticatedNoPermission": 16,
     "anonymousIntentional": 39,
     "serviceToService": 3,
-    "ungatedRead": 19,
+    "ungatedRead": 18,
     "ungatedWrite": 0
   },
   "routes": [
@@ -1578,6 +1578,15 @@
       "exemptReason": null
     },
     {
+      "path": "/api/global-search/route.ts",
+      "methods": [
+        "GET"
+      ],
+      "gate": "withAuth (no permission)",
+      "permission": null,
+      "exemptReason": null
+    },
+    {
       "path": "/api/google-sheets/append/route.ts",
       "methods": [
         "POST"
@@ -1700,8 +1709,8 @@
       "methods": [
         "GET"
       ],
-      "gate": "NONE",
-      "permission": null,
+      "gate": "withAuth",
+      "permission": "sku_stock.view",
       "exemptReason": null
     },
     {
@@ -1785,6 +1794,7 @@
     {
       "path": "/api/locations/[barcode]/route.ts",
       "methods": [
+        "DELETE",
         "GET",
         "PATCH"
       ],
@@ -1989,6 +1999,17 @@
         "POST"
       ],
       "gate": "withAuth",
+      "permission": "orders.view",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/orders/[id]/route.ts",
+      "methods": [
+        "DELETE",
+        "GET",
+        "PATCH"
+      ],
+      "gate": "requireRoutePerm",
       "permission": "orders.view",
       "exemptReason": null
     },
@@ -2403,6 +2424,18 @@
       "exemptReason": null
     },
     {
+      "path": "/api/product-manuals/route.ts",
+      "methods": [
+        "DELETE",
+        "GET",
+        "PATCH",
+        "POST"
+      ],
+      "gate": "withAuth",
+      "permission": "sku_stock.view",
+      "exemptReason": null
+    },
+    {
       "path": "/api/product-manuals/search/route.ts",
       "methods": [
         "GET"
@@ -2614,9 +2647,21 @@
       "exemptReason": null
     },
     {
+      "path": "/api/reason-codes/[id]/route.ts",
+      "methods": [
+        "DELETE",
+        "GET",
+        "PATCH"
+      ],
+      "gate": "requireRoutePerm",
+      "permission": "sku_stock.view",
+      "exemptReason": null
+    },
+    {
       "path": "/api/reason-codes/route.ts",
       "methods": [
-        "GET"
+        "GET",
+        "POST"
       ],
       "gate": "withAuth",
       "permission": "sku_stock.view",
@@ -2951,6 +2996,7 @@
     {
       "path": "/api/repair-service/[id]/route.ts",
       "methods": [
+        "DELETE",
         "GET"
       ],
       "gate": "requireRoutePerm",
@@ -3220,6 +3266,17 @@
         "POST"
       ],
       "gate": "withAuth",
+      "permission": "orders.view",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/rma/[id]/route.ts",
+      "methods": [
+        "DELETE",
+        "GET",
+        "PATCH"
+      ],
+      "gate": "requireRoutePerm",
       "permission": "orders.view",
       "exemptReason": null
     },
@@ -3529,6 +3586,7 @@
     {
       "path": "/api/sku-catalog/[id]/route.ts",
       "methods": [
+        "DELETE",
         "GET",
         "PATCH"
       ],
@@ -3603,7 +3661,8 @@
     {
       "path": "/api/sku-catalog/route.ts",
       "methods": [
-        "GET"
+        "GET",
+        "POST"
       ],
       "gate": "withAuth",
       "permission": "sku_stock.view",

@@ -860,6 +860,8 @@ export const receiving = pgTable('receiving', {
   quantity: text('quantity'),
   /** Carton-level support / ops notes (not per receiving_lines row). */
   supportNotes: text('support_notes'),
+  /** Filed Zendesk ticket # for a package-level claim, stored as "#<id>". */
+  zendeskTicket: text('zendesk_ticket'),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 });
@@ -941,6 +943,8 @@ export const receivingLines = pgTable('receiving_lines', {
   zohoSyncedAt: timestamp('zoho_synced_at', { withTimezone: true }),
 
   notes: text('notes'),
+  /** Filed Zendesk ticket # for a line-level claim, stored as "#<id>". */
+  zendeskTicket: text('zendesk_ticket'),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 });

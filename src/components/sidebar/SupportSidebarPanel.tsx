@@ -10,8 +10,8 @@ export function SupportSidebarPanel() {
         <p className={`${sectionLabel} text-rose-600`}>Customer Support</p>
         <h3 className={`mt-2 ${cardTitle}`}>Operational queue</h3>
         <p className="mt-2 text-caption font-semibold leading-relaxed text-gray-600">
-          This page centralizes eBay unread conversations, eBay return requests, and Zendesk open tickets so support
-          work is triaged from one queue.
+          Manage Zendesk support tickets directly here — read the conversation, reply or add an internal note, and set
+          status, priority, and assignee without leaving the app.
         </p>
         <button
           type="button"

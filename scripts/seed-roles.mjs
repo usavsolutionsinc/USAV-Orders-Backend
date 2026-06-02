@@ -71,7 +71,7 @@ const ADMIN_ONLY = [
   'admin.view', 'admin.manage_staff', 'admin.manage_roles',
   'admin.manage_features', 'admin.view_logs', 'admin.view_sessions',
   'settings.workstation', 'settings.hardware',
-  'integrations.zoho', 'integrations.ebay', 'integrations.ecwid',
+  'integrations.zoho', 'integrations.ebay', 'integrations.ecwid', 'integrations.zendesk',
   'fba.manage_fnskus', 'fba.stage_shipments',
   'reports.export', 'print.silent',
 ];

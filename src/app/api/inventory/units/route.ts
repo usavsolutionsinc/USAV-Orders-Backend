@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import pool from '@/lib/db';
+import { withAuth } from '@/lib/auth/withAuth';
 
 // GET /api/inventory/units
 // Paginated serial_units list for the ByFilter view on /inventory.
@@ -15,7 +16,7 @@ import pool from '@/lib/db';
 //
 // Returns:
 //   { items: UnitRow[], total: number, limit, offset }
-export async function GET(req: NextRequest) {
+export const GET = withAuth(async (req: NextRequest) => {
     try {
         const { searchParams } = new URL(req.url);
         const states = readList(searchParams.getAll('state'));
@@ -104,7 +105,7 @@ export async function GET(req: NextRequest) {
         console.error('[api/inventory/units] Error:', error);
         return NextResponse.json({ success: false, error: message }, { status: 500 });
     }
-}
+}, { permission: 'sku_stock.view' });
 
 // Accept both repeated `?state=A&state=B` and comma-separated `?state=A,B`.
 function readList(rawValues: string[]): string[] {

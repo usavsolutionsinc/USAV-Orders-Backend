@@ -856,6 +856,7 @@ export const PATCH = withAuth(async (request: NextRequest) => {
       ['zoho_purchaseorder_number', String(body?.zoho_purchaseorder_number ?? '').trim() || null],
       ['notes',                     String(body?.notes ?? '').trim() || null],
       ['receiving_type',            String(body?.receiving_type ?? '').trim() || null],
+      ['zendesk_ticket',            String(body?.zendesk_ticket ?? '').trim() || null],
     ];
     for (const [col, val] of textFields) {
       if (Object.prototype.hasOwnProperty.call(body, col.replace('zoho_item_id', 'zoho_item_id'))) {
@@ -1216,5 +1217,6 @@ function normalizeRow(row: Record<string, unknown>) {
     /** receiving.source — 'zoho_po' | 'unmatched' | 'local_pickup'. Drives which workspace variant mounts. */
     receiving_source:         (row.receiving_source as string | null) ?? null,
     photo_count:              row.photo_count != null ? Number(row.photo_count) : 0,
+    zendesk_ticket:           (row.zendesk_ticket as string | null) ?? null,
   };
 }

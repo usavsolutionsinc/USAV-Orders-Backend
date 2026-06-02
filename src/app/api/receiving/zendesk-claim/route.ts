@@ -132,6 +132,18 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
           console.warn('[POST /api/receiving/zendesk-claim] ticket link backfill failed', linkErr);
         }
 
+        // Persist the human-visible ticket # onto the record so it shows back on
+        // the line (or carton for package-level claims). Best-effort.
+        try {
+          if (lineId != null) {
+            await pool.query(`UPDATE receiving_lines SET zendesk_ticket = $1 WHERE id = $2`, [ticketNumber, lineId]);
+          } else {
+            await pool.query(`UPDATE receiving SET zendesk_ticket = $1 WHERE id = $2`, [ticketNumber, receivingId]);
+          }
+        } catch (colErr) {
+          console.warn('[POST /api/receiving/zendesk-claim] zendesk_ticket column update failed', colErr);
+        }
+
         return {
           status: 200,
           body: { success: true, ticketNumber, ticketUrl: zendeskTicketUrl(ticket.id) },

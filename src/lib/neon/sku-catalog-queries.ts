@@ -180,6 +180,24 @@ export async function upsertSkuCatalog(params: {
   return result.rows[0];
 }
 
+/**
+ * Soft-delete a SKU catalog entry by flipping `is_active = false`. We never
+ * hard-delete: platform ids, manuals, QC checks, stock ledger rows and audit
+ * history all reference the catalog row by id, so removing it would orphan
+ * them. Returns the (now-inactive) row, or null if it doesn't exist or was
+ * already inactive — callers should pre-fetch for the audit before-state.
+ */
+export async function softDeleteSkuCatalog(id: number): Promise<SkuCatalogRow | null> {
+  const result = await pool.query<SkuCatalogRow>(
+    `UPDATE sku_catalog
+        SET is_active = false, updated_at = NOW()
+      WHERE id = $1 AND is_active = true
+      RETURNING *`,
+    [id],
+  );
+  return result.rows[0] ?? null;
+}
+
 // ─── Platform ID CRUD ────────────────────────────────────────────────────────
 
 export async function getSkuPlatformIds(skuCatalogId: number): Promise<SkuPlatformIdRow[]> {

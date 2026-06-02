@@ -1,0 +1,663 @@
+/**
+ * orders-tracking-queries.ts
+ * ─────────────────────────────────────────────────────────────────
+ * Shipment-backbone tracking writes for orders. The order's tracking
+ * number is NOT a column on `orders`; it lives in
+ * `shipping_tracking_numbers` (normalized + carrier-detected) and is
+ * reached via `orders.shipment_id` and the `order_shipment_links`
+ * table. These helpers own all of that reconciliation.
+ *
+ * The low-level helpers (`upsertOrderTracking`, `updateShipmentTrackingById`,
+ * `createAdditionalShipmentLink`, `deleteShipmentTrackingLink`) take an
+ * external pg client and run NO transaction of their own — the caller
+ * owns the BEGIN/COMMIT. They are shared between the legacy
+ * `/api/orders/assign` route (which owns a larger transaction) and the
+ * canonical `/api/orders/[id]/tracking` sub-resource.
+ *
+ * `applyOrderTrackingOps` is a self-managed wrapper that connects,
+ * opens its own transaction, runs a batch of ops, and commits — used by
+ * the sub-resource which has no surrounding transaction.
+ * ─────────────────────────────────────────────────────────────────
+ */
+import type { PoolClient } from 'pg';
+import pool from '@/lib/db';
+import { detectCarrier, normalizeTrackingNumber } from '@/lib/shipping/normalize';
+
+/** Minimal pg client surface the helpers need (a pool client mid-transaction). */
+type Tx = Pick<PoolClient, 'query'>;
+
+export function isMissingOrderShipmentLinksRelation(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error || '');
+  return /order_shipment_links/i.test(message) && /does not exist|undefined table/i.test(message);
+}
+
+export async function upsertOrderTracking(
+  orderIds: number[],
+  shippingTrackingNumber: string | null | undefined,
+  client: Tx,
+): Promise<void> {
+  const existingOrders = await client.query(
+    `SELECT id, shipment_id
+     FROM orders
+     WHERE id = ANY($1::int[])
+     ORDER BY id ASC`,
+    [orderIds]
+  );
+
+  const rawTracking = String(shippingTrackingNumber || '').trim();
+
+  if (!rawTracking) {
+    for (const row of existingOrders.rows) {
+      const orderId = Number(row?.id);
+      const shipmentId = Number(row?.shipment_id);
+      if (!Number.isFinite(orderId) || orderId <= 0) continue;
+
+      await client.query(
+        `UPDATE orders
+         SET shipment_id = NULL
+         WHERE id = $1`,
+        [orderId]
+      );
+
+      if (!Number.isFinite(shipmentId) || shipmentId <= 0) continue;
+
+      try {
+        await client.query(
+          `DELETE FROM order_shipment_links
+           WHERE order_row_id = $1
+             AND shipment_id = $2`,
+          [orderId, shipmentId]
+        );
+      } catch (error) {
+        if (!isMissingOrderShipmentLinksRelation(error)) throw error;
+      }
+    }
+    return;
+  }
+
+  const normalizedTracking = normalizeTrackingNumber(rawTracking);
+  if (!normalizedTracking) {
+    throw new Error('Tracking number is invalid');
+  }
+
+  const detectedCarrier = detectCarrier(normalizedTracking);
+  const carrierForStorage = detectedCarrier ?? 'UNKNOWN';
+  const isUnknownCarrier = !detectedCarrier;
+  const unknownCarrierMessage =
+    'Carrier detection unavailable for this tracking format; manual tracking only.';
+
+  // Gather ALL shipment IDs linked to this order — both from orders.shipment_id
+  // and order_shipment_links. This ensures the duplicate check excludes every
+  // shipment already owned by the order (e.g. pasting tracking 2 into slot 1).
+  const shipmentIdSet = new Set<number>(
+    existingOrders.rows
+      .map((row: any) => Number(row.shipment_id))
+      .filter((sid: number) => Number.isFinite(sid) && sid > 0)
+  );
+
+  try {
+    const allLinks = await client.query(
+      `SELECT DISTINCT shipment_id
+       FROM order_shipment_links
+       WHERE order_row_id = ANY($1::int[])`,
+      [orderIds]
+    );
+    for (const row of allLinks.rows) {
+      const sid = Number(row.shipment_id);
+      if (Number.isFinite(sid) && sid > 0) shipmentIdSet.add(sid);
+    }
+  } catch (error) {
+    if (!isMissingOrderShipmentLinksRelation(error)) throw error;
+  }
+
+  const currentShipmentIds: number[] = Array.from(shipmentIdSet);
+
+  // Check if this tracking number already exists in shipping_tracking_numbers.
+  const existingSTN = await client.query(
+    `SELECT id FROM shipping_tracking_numbers WHERE tracking_number_normalized = $1 LIMIT 1`,
+    [normalizedTracking]
+  );
+
+  let shipmentId: number | null = null;
+
+  if ((existingSTN.rowCount ?? 0) > 0) {
+    const existingId = Number(existingSTN.rows[0].id);
+    // Is the existing shipment owned by this order?
+    if (currentShipmentIds.includes(existingId)) {
+      // Already owned — just re-point orders.shipment_id to this shipment.
+      // No need to update the STN row; the tracking number is identical.
+      shipmentId = existingId;
+    } else {
+      throw new Error('Tracking number already exists on another shipment');
+    }
+  } else if (currentShipmentIds.length > 0) {
+    // Tracking doesn't exist yet — update the first owned shipment row
+    shipmentId = currentShipmentIds[0];
+    await client.query(
+      `UPDATE shipping_tracking_numbers
+       SET tracking_number_raw = $1,
+           tracking_number_normalized = $2,
+           carrier = $3,
+           latest_status_category = CASE
+             WHEN $4::boolean THEN 'UNKNOWN'
+             WHEN carrier = 'UNKNOWN' THEN NULL
+             ELSE latest_status_category
+           END,
+           is_terminal = CASE
+             WHEN $4::boolean THEN true
+             WHEN carrier = 'UNKNOWN' THEN false
+             ELSE is_terminal
+           END,
+           next_check_at = CASE
+             WHEN $4::boolean THEN NULL
+             WHEN carrier = 'UNKNOWN' THEN NOW()
+             ELSE next_check_at
+           END,
+           last_error_code = CASE
+             WHEN $4::boolean THEN 'UNKNOWN_CARRIER'
+             WHEN carrier = 'UNKNOWN' THEN NULL
+             ELSE last_error_code
+           END,
+           last_error_message = CASE
+             WHEN $4::boolean THEN $5
+             WHEN carrier = 'UNKNOWN' THEN NULL
+             ELSE last_error_message
+           END,
+           updated_at = NOW()
+       WHERE id = $6`,
+      [
+        rawTracking,
+        normalizedTracking,
+        carrierForStorage,
+        isUnknownCarrier,
+        unknownCarrierMessage,
+        shipmentId,
+      ]
+    );
+  } else {
+    const insertedShipment = await client.query(
+      `INSERT INTO shipping_tracking_numbers
+         (
+           tracking_number_raw,
+           tracking_number_normalized,
+           carrier,
+           source_system,
+           next_check_at,
+           latest_status_category,
+           is_terminal,
+           last_error_code,
+           last_error_message
+         )
+       VALUES ($1, $2, $3, 'MANUAL_PANEL_EDIT', $4, $5, $6, $7, $8)
+       ON CONFLICT (tracking_number_normalized) DO UPDATE
+         SET tracking_number_raw = EXCLUDED.tracking_number_raw,
+             carrier = EXCLUDED.carrier,
+             next_check_at = CASE
+               WHEN EXCLUDED.carrier = 'UNKNOWN' THEN NULL
+               WHEN shipping_tracking_numbers.carrier = 'UNKNOWN' THEN NOW()
+               ELSE shipping_tracking_numbers.next_check_at
+             END,
+             latest_status_category = CASE
+               WHEN EXCLUDED.carrier = 'UNKNOWN' THEN 'UNKNOWN'
+               WHEN shipping_tracking_numbers.carrier = 'UNKNOWN' THEN NULL
+               ELSE shipping_tracking_numbers.latest_status_category
+             END,
+             is_terminal = CASE
+               WHEN EXCLUDED.carrier = 'UNKNOWN' THEN true
+               WHEN shipping_tracking_numbers.carrier = 'UNKNOWN' THEN false
+               ELSE shipping_tracking_numbers.is_terminal
+             END,
+             last_error_code = CASE
+               WHEN EXCLUDED.carrier = 'UNKNOWN' THEN 'UNKNOWN_CARRIER'
+               WHEN shipping_tracking_numbers.carrier = 'UNKNOWN' THEN NULL
+               ELSE shipping_tracking_numbers.last_error_code
+             END,
+             last_error_message = CASE
+               WHEN EXCLUDED.carrier = 'UNKNOWN' THEN EXCLUDED.last_error_message
+               WHEN shipping_tracking_numbers.carrier = 'UNKNOWN' THEN NULL
+               ELSE shipping_tracking_numbers.last_error_message
+             END,
+             updated_at = NOW()
+       RETURNING id`,
+      [
+        rawTracking,
+        normalizedTracking,
+        carrierForStorage,
+        isUnknownCarrier ? null : new Date(),
+        isUnknownCarrier ? 'UNKNOWN' : null,
+        isUnknownCarrier,
+        isUnknownCarrier ? 'UNKNOWN_CARRIER' : null,
+        isUnknownCarrier ? unknownCarrierMessage : null,
+      ]
+    );
+    const insertedShipmentId = Number((insertedShipment.rows[0] as { id?: unknown } | undefined)?.id ?? 0);
+    shipmentId = insertedShipmentId > 0 ? insertedShipmentId : null;
+  }
+
+  await client.query(
+    `UPDATE orders
+     SET shipment_id = $1
+     WHERE id = ANY($2::int[])`,
+    [shipmentId, orderIds]
+  );
+
+  // Keep link table in sync with canonical orders.shipment_id and preserve
+  // additional shipment links for future multi-tracking compatibility.
+  if (shipmentId) {
+    try {
+      await client.query(
+        `UPDATE order_shipment_links
+         SET is_primary = false
+         WHERE order_row_id = ANY($1::int[])`,
+        [orderIds]
+      );
+      await client.query(
+        `INSERT INTO order_shipment_links (order_row_id, shipment_id, is_primary, source)
+         SELECT UNNEST($1::int[]), $2::bigint, true, 'orders.assign'
+         ON CONFLICT (order_row_id, shipment_id) DO UPDATE
+           SET is_primary = true,
+               source = EXCLUDED.source,
+               updated_at = NOW()`,
+        [orderIds, shipmentId]
+      );
+    } catch (error) {
+      if (!isMissingOrderShipmentLinksRelation(error)) throw error;
+    }
+  }
+}
+
+export async function updateShipmentTrackingById(
+  orderIds: number[],
+  shipmentId: number,
+  shippingTrackingNumber: string,
+  client: Tx,
+): Promise<void> {
+  const rawTracking = String(shippingTrackingNumber || '').trim();
+  if (!rawTracking) throw new Error('Tracking number is required');
+
+  const normalizedTracking = normalizeTrackingNumber(rawTracking);
+  if (!normalizedTracking) throw new Error('Tracking number is invalid');
+
+  const ownershipCheck = await client.query(
+    `SELECT 1
+     FROM orders o
+     LEFT JOIN order_shipment_links osl ON osl.order_row_id = o.id
+     WHERE o.id = ANY($1::int[])
+       AND (o.shipment_id = $2 OR osl.shipment_id = $2)
+     LIMIT 1`,
+    [orderIds, shipmentId],
+  );
+  if ((ownershipCheck.rowCount ?? 0) === 0) {
+    throw new Error('Shipment is not linked to this order');
+  }
+
+  // Gather all shipment IDs owned by this order so the duplicate check
+  // doesn't reject tracking numbers that already belong to the same order
+  // (e.g. consolidating tracking 2 into slot 1).
+  const ownedShipmentIds: number[] = [shipmentId];
+  try {
+    const allLinks = await client.query(
+      `SELECT DISTINCT shipment_id FROM order_shipment_links WHERE order_row_id = ANY($1::int[])`,
+      [orderIds],
+    );
+    for (const row of allLinks.rows) {
+      const sid = Number(row.shipment_id);
+      if (Number.isFinite(sid) && sid > 0 && sid !== shipmentId) ownedShipmentIds.push(sid);
+    }
+  } catch (error) {
+    if (!isMissingOrderShipmentLinksRelation(error)) throw error;
+  }
+  // Also include orders.shipment_id
+  try {
+    const primaryIds = await client.query(
+      `SELECT DISTINCT shipment_id FROM orders WHERE id = ANY($1::int[]) AND shipment_id IS NOT NULL`,
+      [orderIds],
+    );
+    for (const row of primaryIds.rows) {
+      const sid = Number(row.shipment_id);
+      if (Number.isFinite(sid) && sid > 0 && !ownedShipmentIds.includes(sid)) ownedShipmentIds.push(sid);
+    }
+  } catch { /* ok */ }
+
+  const duplicateShipment = await client.query(
+    `SELECT id
+     FROM shipping_tracking_numbers
+     WHERE tracking_number_normalized = $1
+       AND id <> ALL($2::bigint[])
+     LIMIT 1`,
+    [normalizedTracking, ownedShipmentIds],
+  );
+  if ((duplicateShipment.rowCount ?? 0) > 0) {
+    throw new Error('Tracking number already exists on another shipment');
+  }
+
+  const detectedCarrier = detectCarrier(normalizedTracking);
+  const carrierForStorage = detectedCarrier ?? 'UNKNOWN';
+  const isUnknownCarrier = !detectedCarrier;
+  const unknownCarrierMessage =
+    'Carrier detection unavailable for this tracking format; manual tracking only.';
+
+  await client.query(
+    `UPDATE shipping_tracking_numbers
+     SET tracking_number_raw = $1,
+         tracking_number_normalized = $2,
+         carrier = $3,
+         latest_status_category = CASE
+           WHEN $4::boolean THEN 'UNKNOWN'
+           WHEN carrier = 'UNKNOWN' THEN NULL
+           ELSE latest_status_category
+         END,
+         is_terminal = CASE
+           WHEN $4::boolean THEN true
+           WHEN carrier = 'UNKNOWN' THEN false
+           ELSE is_terminal
+         END,
+         next_check_at = CASE
+           WHEN $4::boolean THEN NULL
+           WHEN carrier = 'UNKNOWN' THEN NOW()
+           ELSE next_check_at
+         END,
+         last_error_code = CASE
+           WHEN $4::boolean THEN 'UNKNOWN_CARRIER'
+           WHEN carrier = 'UNKNOWN' THEN NULL
+           ELSE last_error_code
+         END,
+         last_error_message = CASE
+           WHEN $4::boolean THEN $5
+           WHEN carrier = 'UNKNOWN' THEN NULL
+           ELSE last_error_message
+         END,
+         updated_at = NOW()
+     WHERE id = $6`,
+    [
+      rawTracking,
+      normalizedTracking,
+      carrierForStorage,
+      isUnknownCarrier,
+      unknownCarrierMessage,
+      shipmentId,
+    ],
+  );
+}
+
+export async function createAdditionalShipmentLink(
+  orderIds: number[],
+  shippingTrackingNumber: string,
+  client: Tx,
+): Promise<number> {
+  const rawTracking = String(shippingTrackingNumber || '').trim();
+  if (!rawTracking) throw new Error('Tracking number is required');
+
+  const normalizedTracking = normalizeTrackingNumber(rawTracking);
+  if (!normalizedTracking) throw new Error('Tracking number is invalid');
+
+  const existingShipment = await client.query(
+    `SELECT id
+     FROM shipping_tracking_numbers
+     WHERE tracking_number_normalized = $1
+     LIMIT 1`,
+    [normalizedTracking],
+  );
+
+  let shipmentId: number | null = null;
+
+  if ((existingShipment.rowCount ?? 0) > 0) {
+    shipmentId = Number(existingShipment.rows[0]?.id ?? 0) || null;
+    if (shipmentId) {
+      const ownershipCheck = await client.query(
+        `SELECT 1
+         FROM orders o
+         LEFT JOIN order_shipment_links osl ON osl.order_row_id = o.id
+         WHERE o.id = ANY($1::int[])
+           AND (o.shipment_id = $2 OR osl.shipment_id = $2)
+         LIMIT 1`,
+        [orderIds, shipmentId],
+      );
+      if ((ownershipCheck.rowCount ?? 0) === 0) {
+        throw new Error('Tracking number already exists on another shipment');
+      }
+
+      await updateShipmentTrackingById(orderIds, shipmentId, rawTracking, client);
+    }
+  } else {
+    const detectedCarrier = detectCarrier(normalizedTracking);
+    const carrierForStorage = detectedCarrier ?? 'UNKNOWN';
+    const isUnknownCarrier = !detectedCarrier;
+    const unknownCarrierMessage =
+      'Carrier detection unavailable for this tracking format; manual tracking only.';
+
+    const insertedShipment = await client.query(
+      `INSERT INTO shipping_tracking_numbers
+         (
+           tracking_number_raw,
+           tracking_number_normalized,
+           carrier,
+           source_system,
+           next_check_at,
+           latest_status_category,
+           is_terminal,
+           last_error_code,
+           last_error_message
+         )
+       VALUES ($1, $2, $3, 'MANUAL_PANEL_EDIT', $4, $5, $6, $7, $8)
+       ON CONFLICT (tracking_number_normalized) DO UPDATE
+         SET tracking_number_raw = EXCLUDED.tracking_number_raw,
+             carrier = EXCLUDED.carrier,
+             next_check_at = CASE
+               WHEN EXCLUDED.carrier = 'UNKNOWN' THEN NULL
+               WHEN shipping_tracking_numbers.carrier = 'UNKNOWN' THEN NOW()
+               ELSE shipping_tracking_numbers.next_check_at
+             END,
+             latest_status_category = CASE
+               WHEN EXCLUDED.carrier = 'UNKNOWN' THEN 'UNKNOWN'
+               WHEN shipping_tracking_numbers.carrier = 'UNKNOWN' THEN NULL
+               ELSE shipping_tracking_numbers.latest_status_category
+             END,
+             is_terminal = CASE
+               WHEN EXCLUDED.carrier = 'UNKNOWN' THEN true
+               WHEN shipping_tracking_numbers.carrier = 'UNKNOWN' THEN false
+               ELSE shipping_tracking_numbers.is_terminal
+             END,
+             last_error_code = CASE
+               WHEN EXCLUDED.carrier = 'UNKNOWN' THEN 'UNKNOWN_CARRIER'
+               WHEN shipping_tracking_numbers.carrier = 'UNKNOWN' THEN NULL
+               ELSE shipping_tracking_numbers.last_error_code
+             END,
+             last_error_message = CASE
+               WHEN EXCLUDED.carrier = 'UNKNOWN' THEN EXCLUDED.last_error_message
+               WHEN shipping_tracking_numbers.carrier = 'UNKNOWN' THEN NULL
+               ELSE shipping_tracking_numbers.last_error_message
+             END,
+             updated_at = NOW()
+       RETURNING id`,
+      [
+        rawTracking,
+        normalizedTracking,
+        carrierForStorage,
+        isUnknownCarrier ? null : new Date(),
+        isUnknownCarrier ? 'UNKNOWN' : null,
+        isUnknownCarrier,
+        isUnknownCarrier ? 'UNKNOWN_CARRIER' : null,
+        isUnknownCarrier ? unknownCarrierMessage : null,
+      ]
+    );
+    shipmentId = Number(insertedShipment.rows[0]?.id ?? 0) || null;
+  }
+
+  if (!shipmentId) throw new Error('Failed to create tracking link');
+
+  try {
+    await client.query(
+      `INSERT INTO order_shipment_links (order_row_id, shipment_id, is_primary, source)
+       SELECT UNNEST($1::int[]), $2::bigint, false, 'orders.assign'
+       ON CONFLICT (order_row_id, shipment_id) DO UPDATE
+         SET is_primary = false,
+             source = EXCLUDED.source,
+             updated_at = NOW()`,
+      [orderIds, shipmentId],
+    );
+  } catch (error) {
+    if (!isMissingOrderShipmentLinksRelation(error)) throw error;
+  }
+
+  return shipmentId;
+}
+
+export async function deleteShipmentTrackingLink(
+  orderIds: number[],
+  shipmentId: number,
+  client: Tx,
+): Promise<void> {
+  if (!Number.isFinite(shipmentId) || shipmentId <= 0) {
+    throw new Error('Shipment id is required');
+  }
+
+  const primaryOrders = await client.query(
+    `SELECT id
+     FROM orders
+     WHERE id = ANY($1::int[])
+       AND shipment_id = $2`,
+    [orderIds, shipmentId],
+  );
+
+  let deletedLinks = 0;
+  try {
+    const result = await client.query(
+      `DELETE FROM order_shipment_links
+       WHERE order_row_id = ANY($1::int[])
+         AND shipment_id = $2`,
+      [orderIds, shipmentId],
+    );
+    deletedLinks = result.rowCount ?? 0;
+  } catch (error) {
+    if (!isMissingOrderShipmentLinksRelation(error)) throw error;
+  }
+
+  if ((primaryOrders.rowCount ?? 0) > 0) {
+    await client.query(
+      `UPDATE orders
+       SET shipment_id = NULL
+       WHERE id = ANY($1::int[])
+         AND shipment_id = $2`,
+      [orderIds, shipmentId],
+    );
+  }
+
+  if ((primaryOrders.rowCount ?? 0) === 0 && deletedLinks === 0) {
+    throw new Error('Shipment is not linked to this order');
+  }
+}
+
+// ─── Self-managed batch wrapper ──────────────────────────────────────────────
+
+export interface ApplyOrderTrackingOps {
+  orderIds: number[];
+  /** Primary tracking (slot 0). Routed through upsertOrderTracking; '' / null clears it. */
+  primaryTrackingNumber?: string | null;
+  /** Edit existing linked shipments by id. */
+  edits?: Array<{ shipmentId: number; trackingNumber: string }>;
+  /** Create additional (non-primary) tracking links. */
+  creates?: Array<{ trackingNumber: string }>;
+  /** Unlink shipments from the order. */
+  deletes?: Array<{ shipmentId: number }>;
+  /** Which shipment should become orders.shipment_id after the batch. */
+  setPrimaryShipmentId?: number | null;
+}
+
+export interface ApplyOrderTrackingResult {
+  createdShipmentIds: number[];
+  primaryShipmentId: number | null;
+}
+
+/**
+ * Runs a batch of tracking operations inside its own transaction. Mirrors the
+ * orchestration inlined in POST /api/orders/assign so the canonical
+ * `/api/orders/[id]/tracking` sub-resource reuses identical reconciliation.
+ */
+export async function applyOrderTrackingOps(
+  ops: ApplyOrderTrackingOps,
+): Promise<ApplyOrderTrackingResult> {
+  const { orderIds, primaryTrackingNumber, edits, creates, deletes, setPrimaryShipmentId } = ops;
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+
+    if (primaryTrackingNumber !== undefined) {
+      await upsertOrderTracking(orderIds, primaryTrackingNumber, client);
+    }
+
+    if (Array.isArray(edits) && edits.length > 0) {
+      for (const edit of edits) {
+        const shipmentId = Number(edit?.shipmentId);
+        const nextTracking = String(edit?.trackingNumber || '').trim();
+        if (!Number.isFinite(shipmentId) || shipmentId <= 0) continue;
+        if (!nextTracking) continue;
+        await updateShipmentTrackingById(orderIds, shipmentId, nextTracking, client);
+      }
+    }
+
+    const createdShipmentIds: number[] = [];
+    if (Array.isArray(creates) && creates.length > 0) {
+      for (const create of creates) {
+        const nextTracking = String(create?.trackingNumber || '').trim();
+        if (!nextTracking) continue;
+        const createdId = await createAdditionalShipmentLink(orderIds, nextTracking, client);
+        createdShipmentIds.push(createdId);
+      }
+    }
+
+    if (Array.isArray(deletes) && deletes.length > 0) {
+      for (const removal of deletes) {
+        const shipmentId = Number(removal?.shipmentId);
+        if (!Number.isFinite(shipmentId) || shipmentId <= 0) continue;
+        await deleteShipmentTrackingLink(orderIds, shipmentId, client);
+      }
+    }
+
+    // Resolve which shipment should be canonical: explicit from the caller, or
+    // the first newly-created one when the order had none.
+    let resolvedPrimaryId: number | null = null;
+    const explicitPrimary = Number(setPrimaryShipmentId);
+    if (Number.isFinite(explicitPrimary) && explicitPrimary > 0) {
+      resolvedPrimaryId = explicitPrimary;
+    } else if (createdShipmentIds.length > 0) {
+      const nullCheck = await client.query(
+        `SELECT id FROM orders WHERE id = ANY($1::int[]) AND shipment_id IS NULL LIMIT 1`,
+        [orderIds]
+      );
+      if ((nullCheck.rowCount ?? 0) > 0) {
+        resolvedPrimaryId = createdShipmentIds[0];
+      }
+    }
+
+    if (resolvedPrimaryId) {
+      await client.query(
+        `UPDATE orders SET shipment_id = $1 WHERE id = ANY($2::int[])`,
+        [resolvedPrimaryId, orderIds]
+      );
+      try {
+        await client.query(
+          `UPDATE order_shipment_links SET is_primary = false WHERE order_row_id = ANY($1::int[])`,
+          [orderIds]
+        );
+        await client.query(
+          `INSERT INTO order_shipment_links (order_row_id, shipment_id, is_primary, source)
+           SELECT UNNEST($1::int[]), $2::bigint, true, 'orders.tracking'
+           ON CONFLICT (order_row_id, shipment_id) DO UPDATE
+             SET is_primary = true, source = 'orders.tracking', updated_at = NOW()`,
+          [orderIds, resolvedPrimaryId]
+        );
+      } catch (error) {
+        if (!isMissingOrderShipmentLinksRelation(error)) throw error;
+      }
+    }
+
+    await client.query('COMMIT');
+    return { createdShipmentIds, primaryShipmentId: resolvedPrimaryId };
+  } catch (error) {
+    await client.query('ROLLBACK');
+    throw error;
+  } finally {
+    client.release();
+  }
+}

@@ -9,7 +9,7 @@ import { CommandBar } from '@/components/CommandBar';
 import { useUIMode } from '@/design-system/providers/UIModeProvider';
 import { useBodyScrollLock } from '@/design-system/hooks';
 import { X } from '@/components/Icons';
-import { getSidebarRouteKey, isMobileAllowedPath } from '@/lib/sidebar-navigation';
+import { isMobileAllowedPath } from '@/lib/sidebar-navigation';
 import { QuickAccessFab } from '@/components/layout/QuickAccessFab';
 import { GlobalHeader } from '@/components/layout/GlobalHeader';
 import { GlobalDesktopSkuScanner } from '@/components/layout/GlobalDesktopSkuScanner';
@@ -79,9 +79,10 @@ export function ResponsiveLayout({ children }: ResponsiveLayoutProps) {
   const router = useRouter();
   const [mounted, setMounted] = useState(false);
   const [drawerOpen, setDrawerOpen] = useState(false);
+  // Desktop-only: collapse the permanent left sidebar via the global header's
+  // top-left toggle so the main content can run full-width.
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const drawerRef = useRef<HTMLDivElement>(null);
-  // Global floating hamburger removed — each page provides its own back arrow via `open-mobile-drawer` event.
-  const routeKey = getSidebarRouteKey(pathname);
   // Mobile devices may only reach a narrow allowlist of routes (see
   // isMobileAllowedPath() in sidebar-navigation.ts). Any other path on a
   // phone bounces to /m/home — the scan-first cockpit — so the device
@@ -142,15 +143,12 @@ export function ResponsiveLayout({ children }: ResponsiveLayoutProps) {
   // that ship their own mobile UI (e.g. /receiving uses `md:hidden`) can still
   // open the side nav at narrow viewports — useUIMode can return `desktop`
   // when device detection misses and we'd otherwise leave the drawer
-  // unmounted. CSS-hides on real desktop widths.
-  // On /operations the desktop sidebar is hidden and the drawer is the only
-  // way into the app nav, so the overlay must render at every viewport (not
-  // md:hidden). Elsewhere it stays mobile-only.
-  const drawerVisibleOnDesktop = routeKey === 'operations';
+  // unmounted. CSS-hides on real desktop widths — every desktop route now has
+  // the permanent (collapsible) sidebar, so the drawer is mobile-only.
   const drawerOverlay = (
     <AnimatePresence>
       {drawerOpen && (
-        <div className={drawerVisibleOnDesktop ? '' : 'md:hidden'}>
+        <div className="md:hidden">
           <motion.div
             key="drawer-backdrop"
             variants={backdropVariants}
@@ -191,19 +189,22 @@ export function ResponsiveLayout({ children }: ResponsiveLayoutProps) {
 
   // ── Desktop layout ──
   if (!isMobile) {
-    const hideDesktopSidebar = routeKey === 'operations';
     return (
       <div className="flex h-full w-full overflow-hidden">
         <GlobalWedgeScannerMount />
         <PhoneScanBridgeMount />
         <OfflineBanner />
-        {!hideDesktopSidebar && (
+        {!sidebarCollapsed && (
           <Suspense fallback={null}>
             <DashboardSidebar />
           </Suspense>
         )}
         <div className="flex-1 flex flex-col min-w-0 h-full overflow-hidden relative">
-          <GlobalHeader />
+          <GlobalHeader
+            canCollapseSidebar
+            sidebarCollapsed={sidebarCollapsed}
+            onToggleSidebar={() => setSidebarCollapsed((v) => !v)}
+          />
           <main className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
             {children}
           </main>

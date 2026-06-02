@@ -84,6 +84,9 @@ export const AUDIT_ENTITY = {
   ORDER: 'order',
   PACKER_LOG: 'PACKER_LOG',
   STAFF: 'staff',
+  REASON_CODE: 'reason_code',
+  RMA: 'rma',
+  REPAIR_SERVICE: 'repair_service',
 } as const;
 
 export const AUDIT_ACTION = {
@@ -114,6 +117,21 @@ export const AUDIT_ACTION = {
   SKU_STOCK_BIN_ASSIGN:   'sku_stock.bin.assign',
   SKU_STOCK_BIN_UNASSIGN: 'sku_stock.bin.unassign',
   SKU_STOCK_LOCATION_SET: 'sku_stock.location.set',
+  // SKU catalog (CRUD)
+  SKU_CATALOG_CREATE: 'sku_catalog.create',
+  SKU_CATALOG_UPDATE: 'sku_catalog.update',
+  SKU_CATALOG_DELETE: 'sku_catalog.delete',
+  // Reason codes (CRUD)
+  REASON_CODE_CREATE: 'reason_code.create',
+  REASON_CODE_UPDATE: 'reason_code.update',
+  REASON_CODE_DELETE: 'reason_code.delete',
+  // RMA (record-level CRUD; lifecycle transitions live in verb routes)
+  RMA_UPDATE: 'rma.update',
+  RMA_CANCEL: 'rma.cancel',
+  // Order record edit (delete uses the legacy 'orders.delete' literal)
+  ORDER_UPDATE: 'orders.update',
+  // Repair service soft-cancel
+  REPAIR_CANCEL: 'repair_service.cancel',
   // Pack / order (existing callers — keep their literals stable)
   PACK_COMPLETED: 'PACK_COMPLETED',
 } as const;
