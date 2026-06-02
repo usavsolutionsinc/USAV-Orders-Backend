@@ -4,6 +4,7 @@ import { memo, useCallback, useMemo } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useAblyChannel } from '@/hooks/useAblyChannel';
 import { PhotoGallery } from '@/components/shipped/PhotoGallery';
+import { NasReceivingAttach } from '@/components/sidebar/NasReceivingAttach';
 
 interface PhotoRow {
   id: number;
@@ -82,12 +83,23 @@ export const ReceivingPhotoStrip = memo(function ReceivingPhotoStrip({
     );
   }
 
+  const refresh = () => queryClient.invalidateQueries({ queryKey });
+
   return (
-    <PhotoGallery
-      photos={galleryPhotos}
-      orderId={`RCV-${receivingId}`}
-      launcherLayout="toolbar"
-      onPhotoDeleted={() => queryClient.invalidateQueries({ queryKey })}
-    />
+    <div className="space-y-2">
+      <NasReceivingAttach receivingId={receivingId} onAttached={refresh} />
+      {galleryPhotos.length > 0 ? (
+        <PhotoGallery
+          photos={galleryPhotos}
+          orderId={`RCV-${receivingId}`}
+          launcherLayout="toolbar"
+          onPhotoDeleted={refresh}
+        />
+      ) : (
+        <p className="text-micro font-bold uppercase tracking-widest text-gray-400">
+          No photos yet — pair some from the NAS.
+        </p>
+      )}
+    </div>
   );
 });
