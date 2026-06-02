@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { getPresentStaffForToday } from '@/lib/staffCache';
+import { staffHasRole } from '@/utils/staff';
 import { saveWorkOrder } from '@/lib/work-orders/saveWorkOrder';
 import type { WorkOrderRow } from '@/components/work-orders/types';
 import type { AssignmentConfirmPayload } from '@/components/work-orders/WorkOrderAssignmentCard';
@@ -32,13 +33,13 @@ export function useWorkOrderAssignment(): UseWorkOrderAssignmentReturn {
       const members = await getPresentStaffForToday();
       setTechnicianOptions(
         members
-          .filter((m) => m.role === 'technician')
+          .filter((m) => staffHasRole(m, 'technician'))
           .map((m) => ({ id: Number(m.id), name: m.name }))
           .sort((a, b) => a.name.localeCompare(b.name)),
       );
       setPackerOptions(
         members
-          .filter((m) => m.role === 'packer')
+          .filter((m) => staffHasRole(m, 'packer'))
           .map((m) => ({ id: Number(m.id), name: m.name })),
       );
     } catch { /* proceed with empty lists */ }

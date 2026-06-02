@@ -1,9 +1,9 @@
 {
   "version": 1,
-  "generatedAt": "2026-06-02T07:14:16Z",
-  "totalRoutes": 487,
+  "generatedAt": "2026-06-02T16:34:32Z",
+  "totalRoutes": 489,
   "summary": {
-    "permissionGated": 411,
+    "permissionGated": 413,
     "authenticatedNoPermission": 16,
     "anonymousIntentional": 39,
     "serviceToService": 3,
@@ -1792,6 +1792,15 @@
       "exemptReason": null
     },
     {
+      "path": "/api/locations/[barcode]/properties/route.ts",
+      "methods": [
+        "PATCH"
+      ],
+      "gate": "requireRoutePerm",
+      "permission": "sku_stock.manage",
+      "exemptReason": null
+    },
+    {
       "path": "/api/locations/[barcode]/route.ts",
       "methods": [
         "DELETE",
@@ -3522,6 +3531,15 @@
       ],
       "gate": "withAuth",
       "permission": "shipping.mark_shipped",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/shipped/summary/route.ts",
+      "methods": [
+        "GET"
+      ],
+      "gate": "withAuth",
+      "permission": "shipping.view",
       "exemptReason": null
     },
     {

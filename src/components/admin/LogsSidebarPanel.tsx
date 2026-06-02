@@ -57,7 +57,7 @@ function asKind(raw: string | null): LogKind {
 function formatTime(value: string) {
   const d = new Date(value);
   if (Number.isNaN(d.getTime())) return '-';
-  return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  return d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', hour12: true });
 }
 
 function formatDateLabel(value: string) {

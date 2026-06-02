@@ -8,6 +8,7 @@ import {
   ExternalLink,
 } from '@/components/Icons';
 import { getPresentStaffForToday, type StaffMember } from '@/lib/staffCache';
+import { staffHasRole } from '@/utils/staff';
 import { PanelActionBar } from '@/components/shipped/details-panel/PanelActionBar';
 import { usePanelActions } from '@/hooks/usePanelActions';
 import { ShippingInformationSection } from '@/components/shipped/details-panel/ShippingInformationSection';
@@ -165,11 +166,11 @@ export function WorkOrderDetailsPanel({
   );
 
   const technicianOptions = staff
-    .filter((m) => m.role === 'technician')
+    .filter((m) => staffHasRole(m, 'technician'))
     .map((m) => ({ id: Number(m.id), name: m.name }))
     .sort((a, b) => a.name.localeCompare(b.name));
   const packerOptions = staff
-    .filter((m) => m.role === 'packer')
+    .filter((m) => staffHasRole(m, 'packer'))
     .map((m) => ({ id: Number(m.id), name: m.name }));
 
   const formRef = useRef(form);

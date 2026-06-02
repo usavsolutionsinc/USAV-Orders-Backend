@@ -372,28 +372,31 @@ export function StaffAccessDetail({ staffId }: StaffAccessDetailProps) {
               )}
             </div>
             <div className="mt-3 flex flex-wrap items-center gap-3">
-              {/* Primary role — read-only chip. The Roles section is the single
-                  editor; staff.role is auto-mirrored from staff_roles[0] when
-                  assignments change. */}
-              <div className="inline-flex items-center gap-2">
+              {/* Primary role — editable dropdown. Selecting a role REPLACES
+                  this staffer's entire role set with the chosen one (admin can
+                  be switched to any role). staff.role is mirrored server-side. */}
+              <label className="inline-flex items-center gap-2">
                 <span className="text-micro font-semibold uppercase tracking-wider text-gray-500">Primary</span>
-                {primaryRole ? (
-                  <span
-                    className="inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-caption font-semibold ring-1 ring-inset"
-                    style={{
-                      backgroundColor: `${primaryRole.color}1A`,
-                      color: primaryRole.color,
-                      borderColor: `${primaryRole.color}33`,
-                    }}
-                    title="Determined by the highest-position assigned role. Edit under Roles."
-                  >
-                    <span className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: primaryRole.color }} aria-hidden />
-                    {primaryRole.label}
-                  </span>
-                ) : (
-                  <span className="text-caption italic text-gray-400">no roles</span>
-                )}
-              </div>
+                <select
+                  value={primaryRole?.id ?? ''}
+                  onChange={(e) => {
+                    const id = Number(e.target.value);
+                    if (Number.isFinite(id) && id > 0) void setStaffRoles([id]);
+                  }}
+                  disabled={Boolean(busy?.startsWith('roles:'))}
+                  className="h-7 rounded-full bg-gray-100 px-2.5 text-micro font-bold uppercase tracking-wider text-gray-700 outline-none ring-1 ring-gray-200 transition disabled:opacity-60"
+                  style={primaryRole ? { color: primaryRole.color } : undefined}
+                  title="Replaces this staffer's roles with the selected one."
+                >
+                  {!primaryRole && <option value="">no roles</option>}
+                  {[...envelope.availableRoles, ...envelope.roles]
+                    .filter((r, i, arr) => arr.findIndex((x) => x.id === r.id) === i)
+                    .sort((a, b) => a.position - b.position)
+                    .map((r) => (
+                      <option key={r.id} value={r.id}>{r.label}</option>
+                    ))}
+                </select>
+              </label>
               <label className="inline-flex items-center gap-2">
                 <span className="text-micro font-semibold uppercase tracking-wider text-gray-500">Status</span>
                 <select
@@ -580,7 +583,7 @@ export function StaffAccessDetail({ staffId }: StaffAccessDetailProps) {
                 {staff.has_pin ? `Set ${staff.pin_set_at ? fmtRelative(staff.pin_set_at) : ''}` : 'Not set'}
                 {staff.pin_locked_until && new Date(staff.pin_locked_until).getTime() > Date.now() && (
                   <span className="ml-2 rounded-full bg-amber-100 px-1.5 py-0.5 text-micro font-bold uppercase tracking-wider text-amber-900">
-                    Locked until {new Date(staff.pin_locked_until).toLocaleTimeString()}
+                    Locked until {new Date(staff.pin_locked_until).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', hour12: true })}
                   </span>
                 )}
               </div>

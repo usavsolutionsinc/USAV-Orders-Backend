@@ -245,9 +245,10 @@ export function ReceiveResponsePanel({
   };
   const results = zoho.results ?? [];
   const timestamp = new Date(response.at).toLocaleTimeString([], {
-    hour: '2-digit',
+    hour: 'numeric',
     minute: '2-digit',
     second: '2-digit',
+    hour12: true,
   });
 
   return (

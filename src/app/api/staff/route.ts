@@ -126,15 +126,35 @@ async function handleGet(request: NextRequest) {
 
         if (role) {
             params.push(role);
-            conditions.push(`s.role = $${params.length}`);
+            const p = params.length;
+            // Match by RBAC assignment (staff_roles) OR the legacy staff.role
+            // column, so role membership tracks the source of truth.
+            conditions.push(
+                `(s.role = $${p} OR EXISTS (
+                    SELECT 1 FROM staff_roles sr2
+                    JOIN roles r2 ON r2.id = sr2.role_id
+                    WHERE sr2.staff_id = s.id AND r2.key = $${p}
+                 ))`,
+            );
         }
         if (activeOnly) {
             params.push(true);
             conditions.push(`s.active = $${params.length}`);
         }
 
+        // Aggregate each staffer's assigned role keys (RBAC source of truth).
+        // Pickers prefer this over the legacy s.role string.
+        const roleKeysSelect = `,
+          COALESCE((
+            SELECT array_agg(r.key ORDER BY r.position ASC, r.id ASC)
+            FROM staff_roles sr
+            JOIN roles r ON r.id = sr.role_id
+            WHERE sr.staff_id = s.id
+          ), ARRAY[]::text[]) AS role_keys`;
+
         const sql = `
           SELECT s.id, s.name, s.role, s.employee_id, s.active, s.color_hex, s.default_home_path, s.created_at
+          ${roleKeysSelect}
           ${scheduledTodaySelect}
           FROM staff s
           ${scheduleJoin}
@@ -168,7 +188,14 @@ async function handleGet(request: NextRequest) {
             const fallbackParams: any[] = [];
             if (role) {
                 fallbackParams.push(role);
-                fallbackConditions.push(`s.role = $${fallbackParams.length}`);
+                const p = fallbackParams.length;
+                fallbackConditions.push(
+                    `(s.role = $${p} OR EXISTS (
+                        SELECT 1 FROM staff_roles sr2
+                        JOIN roles r2 ON r2.id = sr2.role_id
+                        WHERE sr2.staff_id = s.id AND r2.key = $${p}
+                     ))`,
+                );
             }
             if (activeOnly) {
                 fallbackParams.push(true);
@@ -176,7 +203,13 @@ async function handleGet(request: NextRequest) {
             }
 
             const fallbackSql = `
-              SELECT s.id, s.name, s.role, s.employee_id, s.active, s.color_hex, s.default_home_path, s.created_at
+              SELECT s.id, s.name, s.role, s.employee_id, s.active, s.color_hex, s.default_home_path, s.created_at,
+                COALESCE((
+                  SELECT array_agg(r.key ORDER BY r.position ASC, r.id ASC)
+                  FROM staff_roles sr
+                  JOIN roles r ON r.id = sr.role_id
+                  WHERE sr.staff_id = s.id
+                ), ARRAY[]::text[]) AS role_keys
               FROM staff s
               ${fallbackConditions.length > 0 ? `WHERE ${fallbackConditions.join(' AND ')}` : ''}
               ORDER BY s.role ASC, s.name ASC

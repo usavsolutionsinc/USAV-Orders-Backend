@@ -1,39 +1,53 @@
 'use client';
 
-import Link from 'next/link';
-import { sectionLabel, cardTitle, fieldLabel } from '@/design-system/tokens/typography/presets';
+import { useEffect } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
+import { useAuth } from '@/contexts/AuthContext';
+import { ZendeskTicketListContainer } from '@/components/support/zendesk/ZendeskTicketListContainer';
+import { sectionLabel } from '@/design-system/tokens/typography/presets';
+import { RefreshCw } from '@/components/Icons';
 
+/**
+ * Contextual sidebar for /support: the Zendesk ticket queue lives here (search,
+ * status filter, rows, pagination). Selecting a ticket sets `?ticket=<id>`,
+ * which the page body (SupportWorkspace) renders as the conversation detail.
+ * One sidebar — no separate ticket-list column.
+ */
 export function SupportSidebarPanel() {
+  const { has, isLoaded } = useAuth();
+  const queryClient = useQueryClient();
+
+  // Keep honoring the legacy 'support-refresh' event (other surfaces may fire it).
+  useEffect(() => {
+    const onRefresh = () => void queryClient.invalidateQueries({ queryKey: ['zendesk'] });
+    window.addEventListener('support-refresh', onRefresh);
+    return () => window.removeEventListener('support-refresh', onRefresh);
+  }, [queryClient]);
+
+  if (isLoaded && !has('integrations.zendesk')) {
+    return (
+      <div className="flex h-full items-center justify-center p-6 text-center text-caption font-semibold text-gray-500">
+        Requires the “Manage Zendesk tickets” permission.
+      </div>
+    );
+  }
+
   return (
-    <div className="h-full overflow-y-auto px-4 py-4">
-      <div className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm">
+    <div className="flex h-full min-h-0 flex-col bg-white">
+      <div className="flex shrink-0 items-center justify-between border-b border-gray-100 px-3 py-2.5">
         <p className={`${sectionLabel} text-rose-600`}>Customer Support</p>
-        <h3 className={`mt-2 ${cardTitle}`}>Operational queue</h3>
-        <p className="mt-2 text-caption font-semibold leading-relaxed text-gray-600">
-          Manage Zendesk support tickets directly here — read the conversation, reply or add an internal note, and set
-          status, priority, and assignee without leaving the app.
-        </p>
         <button
           type="button"
-          onClick={() => window.dispatchEvent(new CustomEvent('support-refresh'))}
-          className={`mt-4 inline-flex items-center justify-center rounded-xl bg-gray-900 px-4 py-2 ${sectionLabel} text-white transition-colors hover:bg-black`}
+          onClick={() => void queryClient.invalidateQueries({ queryKey: ['zendesk'] })}
+          aria-label="Refresh tickets"
+          title="Refresh tickets"
+          className="rounded-md p-1.5 text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-700"
         >
-          Refresh Queue
+          <RefreshCw className="h-4 w-4" />
         </button>
-        <div className={`mt-4 space-y-2 ${fieldLabel}`}>
-          <Link
-            href="/admin?section=connections"
-            className="block rounded-xl border border-gray-200 px-3 py-2 text-gray-600 hover:bg-gray-50 hover:text-gray-900"
-          >
-            Check Connections
-          </Link>
-          <Link
-            href="/repair"
-            className="block rounded-xl border border-gray-200 px-3 py-2 text-gray-600 hover:bg-gray-50 hover:text-gray-900"
-          >
-            Repair Tickets
-          </Link>
-        </div>
+      </div>
+      <div className="min-h-0 flex-1">
+        <ZendeskTicketListContainer />
       </div>
     </div>
   );

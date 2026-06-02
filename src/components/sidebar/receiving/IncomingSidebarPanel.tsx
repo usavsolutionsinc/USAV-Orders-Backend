@@ -6,8 +6,25 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import type { DateRange } from 'react-day-picker';
 import { SearchBar } from '@/components/ui/SearchBar';
 import { DateRangePickerField } from '@/design-system/components/DateRangePickerField';
-import { Package, Truck, AlertTriangle, Clock, ChevronDown, RefreshCw } from '@/components/Icons';
+import { Package, Truck, AlertTriangle, Clock, ChevronDown, RefreshCw, Copy as CopyIcon } from '@/components/Icons';
 import { toast } from '@/lib/toast';
+import { copyToClipboard } from '@/utils/_dom';
+
+/** Compact "delivered N ago" label for the needs-receiving list. */
+function deliveredAgo(iso: string | null): string {
+  if (!iso) return '—';
+  const ms = Date.now() - new Date(iso).getTime();
+  if (!Number.isFinite(ms) || ms < 0) return 'just now';
+  const days = Math.floor(ms / 86_400_000);
+  if (days >= 1) return `${days}d ago`;
+  const hrs = Math.floor(ms / 3_600_000);
+  return hrs >= 1 ? `${hrs}h ago` : 'recently';
+}
+
+function trackingLast4(raw: string): string {
+  const v = (raw || '').trim();
+  return v.length > 4 ? v.slice(-4) : v;
+}
 import { RECEIVING_HISTORY_URL_PARAMS } from '@/lib/receiving-history-search';
 import {
   INCOMING_SORT_LABELS,
@@ -32,6 +49,17 @@ export interface IncomingSummary {
   pending_carrier: number;
   awaiting_tracking: number;
   expected_today: number;
+}
+
+/** A delivered shipment the dock hasn't checked in (shipment-anchored, inbound-only). */
+interface DeliveredUnscanned {
+  shipment_id: number;
+  carrier: string;
+  tracking_number_raw: string;
+  tracking_number_normalized: string;
+  delivered_at: string | null;
+  source_system: string | null;
+  po_number: string | null;
 }
 
 interface TileSpec {
@@ -202,6 +230,7 @@ export function IncomingSidebarPanel() {
       }
       queryClient.invalidateQueries({ queryKey: ['receiving-lines-incoming-summary'] });
       queryClient.invalidateQueries({ queryKey: ['receiving-lines-table'] });
+      queryClient.invalidateQueries({ queryKey: ['incoming-delivered-unscanned'] });
       if (data.throttled) {
         toast.success('Just refreshed — showing the latest tracking');
       } else {
@@ -216,6 +245,12 @@ export function IncomingSidebarPanel() {
       setRefreshing(false);
     }
   }, [refreshing, queryClient]);
+
+  const copyTracking = useCallback(async (value: string) => {
+    const ok = await copyToClipboard(value);
+    if (ok) toast.success('Tracking # copied');
+    else toast.error("Couldn't copy tracking #");
+  }, []);
 
   const search = searchParams.get(RECEIVING_HISTORY_URL_PARAMS.q)?.trim() ?? '';
   const stateRaw = (searchParams.get('state') || '').trim().toUpperCase();
@@ -340,6 +375,26 @@ export function IncomingSidebarPanel() {
       }
     : null;
 
+  // Shipment-anchored "delivered but not checked-in" list (inbound only). These
+  // have no PO line to render in the main table, so they live in their own
+  // sidebar section below the tiles. Refreshed by the Refresh-tracking button.
+  const { data: deliveredData } = useQuery<{
+    success: true;
+    count: number;
+    window_days: number;
+    items: DeliveredUnscanned[];
+  }>({
+    queryKey: ['incoming-delivered-unscanned'],
+    queryFn: async () => {
+      const res = await fetch('/api/receiving-lines/incoming/delivered-unscanned', { cache: 'no-store' });
+      if (!res.ok) throw new Error('delivered-unscanned fetch failed');
+      return res.json();
+    },
+    refetchInterval: 60_000,
+    staleTime: 30_000,
+  });
+  const deliveredItems = deliveredData?.items ?? [];
+
   const tiles = useMemo(
     () =>
       TILES.map((t) => {
@@ -424,7 +479,49 @@ export function IncomingSidebarPanel() {
         </button>
       </div>
 
-      <div className="min-h-0 flex-1 space-y-1.5 overflow-y-auto px-3 py-3">{tiles}</div>
+      <div className="min-h-0 flex-1 overflow-y-auto px-3 py-3">
+        <div className="space-y-1.5">{tiles}</div>
+
+        {/* Shipment-anchored "delivered but not checked-in" list. These boxes
+            have no PO line to render in the main table, so they surface here.
+            Click a row to copy its tracking # for lookup at the station. */}
+        {deliveredItems.length > 0 ? (
+          <div className="mt-4 border-t border-gray-200 pt-3">
+            <p className="px-0.5 text-eyebrow font-black uppercase tracking-widest text-rose-600">
+              Delivered · needs receiving · {deliveredItems.length}
+            </p>
+            <p className="mt-0.5 px-0.5 text-[10px] font-medium leading-tight text-gray-400">
+              Carrier-confirmed delivery with no dock scan yet (last {deliveredData?.window_days ?? 30}d).
+            </p>
+            <ul className="mt-2 space-y-1">
+              {deliveredItems.map((it) => (
+                <li key={it.shipment_id}>
+                  <button
+                    type="button"
+                    onClick={() => void copyTracking(it.tracking_number_raw)}
+                    title={`Copy ${it.tracking_number_raw}`}
+                    className="flex w-full items-center gap-2 rounded-md border border-rose-100 bg-rose-50/40 px-2 py-1.5 text-left transition-colors hover:bg-rose-50"
+                  >
+                    <span className="shrink-0 rounded bg-white px-1 py-0.5 text-[8.5px] font-black uppercase tracking-wider text-gray-600 ring-1 ring-inset ring-gray-200">
+                      {it.carrier}
+                    </span>
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate font-mono text-caption font-bold text-gray-900">
+                        …{trackingLast4(it.tracking_number_raw)}
+                        {it.po_number ? <span className="text-gray-400"> · PO {it.po_number}</span> : null}
+                      </span>
+                      <span className="block text-[10px] font-semibold text-gray-400">
+                        delivered {deliveredAgo(it.delivered_at)}
+                      </span>
+                    </span>
+                    <CopyIcon className="h-3 w-3 shrink-0 text-gray-400" />
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </div>
+        ) : null}
+      </div>
     </div>
   );
 }

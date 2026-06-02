@@ -8,22 +8,33 @@ import { useAblyChannel } from '@/hooks/useAblyChannel';
 import { getStaffChannelName } from '@/lib/realtime/channels';
 import type { StaffMember } from '@/lib/staffCache';
 import type { StaffAvailabilityMember, StaffAvailabilityResponse } from '@/lib/staff-availability';
+import { staffHasRole } from '@/utils/staff';
 
 interface StaffApiRow {
   id: number | string;
   name: string | null;
   role: string | null;
+  role_keys?: unknown;
+}
+
+function rolesFrom(roleKeys: unknown, role: string): string[] {
+  const keys = Array.isArray(roleKeys) ? roleKeys.map((k) => String(k)).filter(Boolean) : [];
+  return keys.length > 0 ? keys : role ? [role] : [];
 }
 
 function normalizeStaff(raw: unknown): StaffMember[] {
   if (!Array.isArray(raw)) return [];
   return raw
     .map((row) => row as StaffApiRow)
-    .map((row) => ({
-      id: Number(row.id),
-      name: String(row.name || ''),
-      role: String(row.role || ''),
-    }))
+    .map((row) => {
+      const role = String(row.role || '');
+      return {
+        id: Number(row.id),
+        name: String(row.name || ''),
+        role,
+        roles: rolesFrom(row.role_keys, role),
+      };
+    })
     .filter((row) => Number.isFinite(row.id) && row.id > 0);
 }
 
@@ -38,11 +49,15 @@ async function fetchStaff(url: string): Promise<StaffMember[]> {
 
 function normalizeAvailabilityMembers(rows: StaffAvailabilityMember[] | undefined): StaffMember[] {
   if (!Array.isArray(rows)) return [];
-  return rows.map((row) => ({
-    id: Number(row.id),
-    name: String(row.name || ''),
-    role: String(row.role || ''),
-  }));
+  return rows.map((row) => {
+    const role = String(row.role || '');
+    return {
+      id: Number(row.id),
+      name: String(row.name || ''),
+      role,
+      roles: Array.isArray(row.roles) && row.roles.length > 0 ? row.roles.map(String) : role ? [role] : [],
+    };
+  });
 }
 
 async function fetchAvailability(): Promise<StaffAvailabilityResponse> {
@@ -105,12 +120,12 @@ export function useTodayStaffAvailability() {
   const onIdSet = useMemo(() => new Set(on.map((s) => Number(s.id))), [on]);
   const off = useMemo(() => all.filter((s) => !onIdSet.has(Number(s.id))), [all, onIdSet]);
 
-  const techniciansOn = useMemo(() => on.filter((s) => s.role === 'technician'), [on]);
-  const packersOn = useMemo(() => on.filter((s) => s.role === 'packer'), [on]);
-  const techniciansOff = useMemo(() => off.filter((s) => s.role === 'technician'), [off]);
-  const packersOff = useMemo(() => off.filter((s) => s.role === 'packer'), [off]);
-  const techniciansInactive = useMemo(() => inactive.filter((s) => s.role === 'technician'), [inactive]);
-  const packersInactive = useMemo(() => inactive.filter((s) => s.role === 'packer'), [inactive]);
+  const techniciansOn = useMemo(() => on.filter((s) => staffHasRole(s, 'technician')), [on]);
+  const packersOn = useMemo(() => on.filter((s) => staffHasRole(s, 'packer')), [on]);
+  const techniciansOff = useMemo(() => off.filter((s) => staffHasRole(s, 'technician')), [off]);
+  const packersOff = useMemo(() => off.filter((s) => staffHasRole(s, 'packer')), [off]);
+  const techniciansInactive = useMemo(() => inactive.filter((s) => staffHasRole(s, 'technician')), [inactive]);
+  const packersInactive = useMemo(() => inactive.filter((s) => staffHasRole(s, 'packer')), [inactive]);
 
   return {
     all,

@@ -2,6 +2,7 @@
 
 import React, { useEffect, useState } from 'react';
 import { getActiveStaff } from '@/lib/staffCache';
+import { staffHasRole } from '@/utils/staff';
 import { ChevronLeft, Loader2, X, Check } from '../Icons';
 import { ProductSelector, type SelectedItem } from './ProductSelector';
 import { ReasonSelector } from './ReasonSelector';
@@ -156,7 +157,7 @@ export function RepairIntakeForm({ onClose, onSubmit, initialData, favoriteSkuId
         let active = true;
         getActiveStaff()
             .then((data) => {
-                if (active) setTechs(data.filter((m) => m.role === 'technician'));
+                if (active) setTechs(data.filter((m) => staffHasRole(m, 'technician')));
             })
             .catch(() => setTechs([]))
             .finally(() => setLoadingTechs(false));

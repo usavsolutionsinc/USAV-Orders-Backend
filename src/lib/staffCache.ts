@@ -3,7 +3,10 @@ import { getCurrentPSTDateKey } from '@/utils/date';
 export interface StaffMember {
   id: number;
   name: string;
+  /** Legacy primary-role string (mirror of staff_roles[0]). Kept for display. */
   role: string;
+  /** RBAC role keys from staff_roles — the source of truth for membership. */
+  roles: string[];
 }
 
 // Module-level singleton: one fetch per page load, shared across all consumers.
@@ -15,11 +18,20 @@ let _presentDateKey: string | null = null;
 
 function normalizeStaff(raw: any[]): StaffMember[] {
   return Array.isArray(raw)
-    ? raw.map((m) => ({
-        id: Number(m.id),
-        name: String(m.name || ''),
-        role: String(m.role || ''),
-      }))
+    ? raw.map((m) => {
+        const roleKeys = Array.isArray(m.role_keys)
+          ? m.role_keys.map((k: unknown) => String(k)).filter(Boolean)
+          : [];
+        const role = String(m.role || '');
+        // Fall back to the legacy primary-role string if no staff_roles rows.
+        const roles = roleKeys.length > 0 ? roleKeys : role ? [role] : [];
+        return {
+          id: Number(m.id),
+          name: String(m.name || ''),
+          role,
+          roles,
+        };
+      })
     : [];
 }
 

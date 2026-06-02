@@ -13,7 +13,7 @@ import { ShippedDetailsPanelContent, type ShippedActiveSection } from './Shipped
 import { QtyBadge } from '@/components/ui/QtyBadge';
 import { useDeleteOrderRow } from '@/hooks';
 import { dispatchNavigateShippedDetails } from '@/utils/events';
-import { getStaffName } from '@/utils/staff';
+import { getStaffName, staffHasRole } from '@/utils/staff';
 import { useOrderFieldSave } from '@/hooks/useOrderFieldSave';
 import { toPSTDateKey } from '@/utils/date';
 import { getPresentStaffForToday, type StaffMember } from '@/lib/staffCache';
@@ -175,11 +175,11 @@ export function ShippedDetailsPanel({
   }, [itemNumber, orderNumber, persistInlineFields, shippingTrackingNumber]);
 
   const technicianOptions = staff
-    .filter((member) => member.role === 'technician')
+    .filter((member) => staffHasRole(member, 'technician'))
     .map((member) => ({ id: Number(member.id), name: member.name }))
     .sort((a, b) => a.name.localeCompare(b.name));
   const packerOptions = staff
-    .filter((member) => member.role === 'packer')
+    .filter((member) => staffHasRole(member, 'packer'))
     .map((member) => ({ id: Number(member.id), name: member.name }));
 
   const openAssignmentCard = useCallback(async () => {

@@ -6,6 +6,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Camera, Check, ChevronRight, Loader2, Package, RefreshCw, X } from '@/components/Icons';
 import { formatTimePST, getCurrentPSTDateKey, toPSTDateKey } from '@/utils/date';
 import { getActiveStaff } from '@/lib/staffCache';
+import { staffHasRole } from '@/utils/staff';
 import { FormField } from '@/design-system/components';
 import { ExpandableSection } from '@/design-system/primitives';
 import { sectionLabel, fieldLabel, cardTitle, chipText, monoValue, microBadge } from '@/design-system/tokens/typography/presets';
@@ -322,7 +323,7 @@ export default function Mode2Unboxing({ staffId }: Mode2UnboxingProps) {
 
     const { data: pendingEntries = [], isLoading, refetch } = usePendingEntries();
     const staff = useStaff();
-    const technicians = staff.filter((s) => s.role === 'technician');
+    const technicians = staff.filter((s) => staffHasRole(s, 'technician'));
 
     const selectEntry = (entry: ReceivingLog) => {
         setSelectedEntry(entry);

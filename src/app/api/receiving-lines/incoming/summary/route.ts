@@ -101,6 +101,37 @@ export const GET = withAuth(async (_request: NextRequest) => {
       expected_today: 0,
     };
 
+    // `delivered_unopened` is shipment-anchored, not PO-line-anchored: the
+    // packages that matter (carrier-delivered, no dock scan yet) are mostly
+    // shipments registered from a PO reference# that never got a receiving
+    // row, so the PO-line FILTER above misses them and always reads ~0. Scope
+    // to INBOUND only (has a receiving row OR a receiving-origin source_system)
+    // so outbound order/packer tracking can't leak in. Deduped by normalized
+    // tracking#, windowed to stay actionable. Mirrors the list returned by
+    // /api/receiving-lines/incoming/delivered-unscanned (same predicate) so the
+    // tile count and that section always agree.
+    const deliveredUnopened = await pool.query<{ n: number }>(
+      `SELECT COUNT(*)::int AS n FROM (
+         SELECT DISTINCT ON (stn.tracking_number_normalized) stn.id
+           FROM shipping_tracking_numbers stn
+          WHERE stn.is_delivered = true
+            AND stn.delivered_at > NOW() - interval '30 days'
+            AND (
+              EXISTS (SELECT 1 FROM receiving r WHERE r.shipment_id = stn.id)
+              OR stn.source_system IN (
+                'zoho_po','receiving_lookup_po','receiving_lines_patch','receiving.link-po','receiving_entry'
+              )
+            )
+            AND NOT EXISTS (
+              SELECT 1 FROM receiving r2
+              JOIN receiving_scans rs ON rs.receiving_id = r2.id
+              WHERE r2.shipment_id = stn.id
+            )
+          ORDER BY stn.tracking_number_normalized, stn.delivered_at DESC
+       ) d`,
+    );
+    row.delivered_unopened = Number(deliveredUnopened.rows[0]?.n ?? 0);
+
     return NextResponse.json({ success: true, ...row });
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Failed to compute summary';

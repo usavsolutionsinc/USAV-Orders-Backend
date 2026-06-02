@@ -374,8 +374,8 @@ export async function setManualSkuCatalogId(
 ): Promise<ProductManual | null> {
   const result = await pool.query<ProductManual>(
     `UPDATE product_manuals
-     SET sku_catalog_id = $2,
-         status = CASE WHEN $2 IS NOT NULL AND status = 'unassigned' THEN 'assigned' ELSE status END,
+     SET sku_catalog_id = $2::int,
+         status = CASE WHEN $2::int IS NOT NULL AND status = 'unassigned' THEN 'assigned' ELSE status END,
          updated_at = NOW()
      WHERE id = $1 AND is_active = TRUE
      RETURNING *`,

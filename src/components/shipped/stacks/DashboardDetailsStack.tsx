@@ -8,8 +8,8 @@ import { toPSTDateKey } from '@/utils/date';
 import { OutOfStockField } from '@/components/ui/OutOfStockField';
 import { OutOfStockEditorBlock } from '@/components/ui/OutOfStockEditorBlock';
 import { dispatchCloseShippedDetails } from '@/utils/events';
-import { getActiveStaff } from '@/lib/staffCache';
-import { PACKER_IDS } from '@/utils/staff';
+import { getActiveStaff, type StaffMember } from '@/lib/staffCache';
+import { PACKER_IDS, staffHasRole } from '@/utils/staff';
 import { MarkAsShippedForm } from './MarkAsShippedForm';
 import { DeleteOrderControl } from './DeleteOrderControl';
 import { useOrderFieldSave } from '@/hooks/useOrderFieldSave';
@@ -29,7 +29,7 @@ export function DashboardDetailsStack({
   isMarkAsShippedOpen = false,
   setIsMarkAsShippedOpen,
 }: DetailsStackProps) {
-  const [staffOptions, setStaffOptions] = useState<Array<{ id: number; name: string; role: string }>>([]);
+  const [staffOptions, setStaffOptions] = useState<StaffMember[]>([]);
   const [outOfStock, setOutOfStock] = useState((shipped as any).out_of_stock || '');
   const [notes, setNotes] = useState(shipped.notes || '');
   const [shipByDate, setShipByDate] = useState(''); // MM-DD-YY
@@ -48,9 +48,15 @@ export function DashboardDetailsStack({
     onUpdate,
   });
 
-  const packerOptions = packerIdOrder
-    .map((id) => staffOptions.find((member) => member.role === 'packer' && member.id === id))
-    .filter((member): member is { id: number; name: string; role: string } => Boolean(member))
+  // All packers (by staff_roles), ordered with the preferred PACKER_IDS first.
+  const packerOptions = staffOptions
+    .filter((member) => staffHasRole(member, 'packer'))
+    .slice()
+    .sort((a, b) => {
+      const ai = packerIdOrder.indexOf(a.id);
+      const bi = packerIdOrder.indexOf(b.id);
+      return (ai === -1 ? Number.MAX_SAFE_INTEGER : ai) - (bi === -1 ? Number.MAX_SAFE_INTEGER : bi);
+    })
     .map((member) => ({ id: member.id, name: member.name }));
 
   const isValidShipByDate = (value: any) => {

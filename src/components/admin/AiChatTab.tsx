@@ -510,7 +510,7 @@ export default function AiChatTab() {
           ) : (
             <div className="mx-auto flex w-full max-w-4xl flex-col gap-4">
               {messages.map((msg) => {
-                const timestampLabel = new Date(msg.ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                const timestampLabel = new Date(msg.ts).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', hour12: true });
 
                 if (msg.role === 'user') {
                   return (

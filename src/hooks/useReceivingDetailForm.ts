@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import type { ReceivingDetailsLog } from '@/components/station/ReceivingDetailsStack';
 import { getActiveStaff } from '@/lib/staffCache';
+import { staffHasRole } from '@/utils/staff';
 
 type StaffOption = {
   id: number;
@@ -108,7 +109,7 @@ export function useReceivingDetailForm({
         if (!active) return;
         setTechs(
           data
-            .filter((m) => m.role === 'technician')
+            .filter((m) => staffHasRole(m, 'technician'))
             .map((m) => ({ id: m.id, name: m.name })),
         );
       })

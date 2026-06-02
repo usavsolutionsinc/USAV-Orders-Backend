@@ -7,6 +7,7 @@ import {
   isStaffBusinessDay,
 } from '@/lib/staff-schedule';
 import { toPSTDateKey } from '@/utils/date';
+import { staffHasRole } from '@/utils/staff';
 
 export type StaffAvailabilityStatus = 'on' | 'off' | 'inactive';
 export type StaffUnavailableReason = 'off_today' | 'inactive' | 'non_business_day';
@@ -15,6 +16,7 @@ export interface StaffAvailabilityMember {
   id: number;
   name: string;
   role: string;
+  roles: string[];
   active: boolean;
   employeeId: string | null;
   status: StaffAvailabilityStatus;
@@ -76,6 +78,7 @@ export interface RawStaffScheduleRow {
   id: number;
   name: string;
   role: string;
+  roleKeys?: string[];
   active: boolean;
   employee_id: string | null;
   is_scheduled_today: boolean;
@@ -163,12 +166,17 @@ export function toAvailabilityResponse(
 
   for (const row of rows) {
     const role = String(row.role || '').trim();
-    if (roleFilter && role && !roleFilter.has(role)) continue;
+    const roles = Array.isArray(row.roleKeys) && row.roleKeys.length > 0
+      ? row.roleKeys
+      : role ? [role] : [];
+    // Role filter matches RBAC membership (any assigned role), with legacy fallback.
+    if (roleFilter && roles.length && !roles.some((r) => roleFilter.has(r))) continue;
 
     const base = {
       id: Number(row.id),
       name: String(row.name || ''),
       role,
+      roles,
       active: Boolean(row.active),
       employeeId: row.employee_id ?? null,
     };
@@ -195,12 +203,12 @@ export function toAvailabilityResponse(
     on: on.length,
     off: off.length,
     inactive: inactive.length,
-    techOn: on.filter((m) => m.role === 'technician').length,
-    techOff: off.filter((m) => m.role === 'technician').length,
-    techInactive: inactive.filter((m) => m.role === 'technician').length,
-    packerOn: on.filter((m) => m.role === 'packer').length,
-    packerOff: off.filter((m) => m.role === 'packer').length,
-    packerInactive: inactive.filter((m) => m.role === 'packer').length,
+    techOn: on.filter((m) => staffHasRole(m, 'technician')).length,
+    techOff: off.filter((m) => staffHasRole(m, 'technician')).length,
+    techInactive: inactive.filter((m) => staffHasRole(m, 'technician')).length,
+    packerOn: on.filter((m) => staffHasRole(m, 'packer')).length,
+    packerOff: off.filter((m) => staffHasRole(m, 'packer')).length,
+    packerInactive: inactive.filter((m) => staffHasRole(m, 'packer')).length,
   };
 
   return {

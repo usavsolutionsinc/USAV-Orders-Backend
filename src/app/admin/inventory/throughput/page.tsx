@@ -229,7 +229,7 @@ export default async function ThroughputPage({
                     <th className="px-2 py-1 text-left font-medium text-gray-500">Station</th>
                     {hourlyBuckets.map((iso) => (
                       <th key={iso} className="px-1 py-1 text-center font-normal text-micro text-gray-400">
-                        {new Date(iso).toLocaleTimeString([], { hour: '2-digit' })}
+                        {new Date(iso).toLocaleTimeString([], { hour: 'numeric', hour12: true })}
                       </th>
                     ))}
                   </tr>

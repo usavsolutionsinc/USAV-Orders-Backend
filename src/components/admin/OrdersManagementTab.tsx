@@ -13,7 +13,7 @@ import { useExternalItemUrl } from '@/hooks/useExternalItemUrl';
 import { DaysLateBadge } from '@/components/ui/DaysLateBadge';
 import { OrderStaffAssignmentButtons } from '@/components/ui/OrderStaffAssignmentButtons';
 import { useOrderAssignment } from '@/hooks';
-import { TECH_NAME_ORDER, PACKER_NAME_ORDER, DEFAULT_TECH_ID, DEFAULT_PACKER_ID, getStaffName } from '@/utils/staff';
+import { TECH_NAME_ORDER, PACKER_NAME_ORDER, DEFAULT_TECH_ID, DEFAULT_PACKER_ID, getStaffName, staffHasRole } from '@/utils/staff';
 import { getActiveStaff, type StaffMember } from '@/lib/staffCache';
 import { sectionLabel, cardTitle, microBadge } from '@/design-system/tokens/typography/presets';
 import type { Order } from './types';
@@ -69,11 +69,11 @@ export function OrdersManagementTab() {
   });
 
   const testerOptions = TECH_NAME_ORDER
-    .map((name) => activeStaff.find((member) => member.role === 'technician' && member.name.trim().toLowerCase() === name))
+    .map((name) => activeStaff.find((member) => staffHasRole(member, 'technician') && member.name.trim().toLowerCase() === name))
     .filter((member): member is StaffMember => Boolean(member))
     .map((member) => ({ id: member.id, name: member.name }));
   const packerOptions = PACKER_NAME_ORDER
-    .map((name) => activeStaff.find((member) => member.role === 'packer' && member.name.trim().toLowerCase() === name))
+    .map((name) => activeStaff.find((member) => staffHasRole(member, 'packer') && member.name.trim().toLowerCase() === name))
     .filter((member): member is StaffMember => Boolean(member))
     .map((member) => ({ id: member.id, name: member.name }));
 

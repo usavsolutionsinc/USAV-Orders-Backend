@@ -35,6 +35,22 @@ export const STAFF_ID_BY_NAME: Record<string, number> = Object.fromEntries(
   Object.entries(STAFF_NAMES).map(([id, name]) => [name.toLowerCase(), Number(id)])
 );
 
+/**
+ * Whether a staff member belongs to a role, by RBAC assignment (staff_roles)
+ * with a fallback to the legacy primary-role string. Use this for all
+ * technician/packer/etc. picker membership checks instead of `member.role === x`,
+ * so membership tracks staff_roles (the source of truth).
+ */
+export function staffHasRole(
+  member: { role?: string | null; roles?: readonly string[] | null },
+  roleKey: string,
+): boolean {
+  if (Array.isArray(member.roles) && member.roles.length > 0) {
+    return member.roles.includes(roleKey);
+  }
+  return member.role === roleKey;
+}
+
 export function getStaffName(staffId: number | null | undefined): string {
   if (!staffId) return 'Not specified';
   return STAFF_NAMES[staffId] || `Staff #${staffId}`;

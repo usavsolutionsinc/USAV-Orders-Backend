@@ -495,17 +495,18 @@ export async function upsertVerification(params: {
   );
   if (result.rows.length > 0) return result.rows[0];
 
-  // Already exists — update it
+  // Already exists — update it. Own param list (no skuCatalogId): the row's
+  // identity is fixed, and Postgres rejects a supplied parameter the SQL never
+  // references ("could not determine data type of parameter $3").
   const updated = await pool.query(
     `UPDATE tech_verifications
-     SET passed = $6, verified_by = $7, verified_at = NOW(), notes = $8
+     SET passed = $5, verified_by = $6, verified_at = NOW(), notes = $7
      WHERE source_kind = $1 AND source_row_id = $2
-       AND step_type = $4 AND step_id = $5
+       AND step_type = $3 AND step_id = $4
      RETURNING *`,
     [
       params.sourceKind,
       params.sourceRowId,
-      params.skuCatalogId,
       params.stepType,
       params.stepId,
       params.passed,

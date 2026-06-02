@@ -35,6 +35,11 @@ export const GET = withAuth(async (request: NextRequest) => {
         s.id,
         s.name,
         s.role,
+        COALESCE((
+          SELECT array_agg(r.key ORDER BY r.position ASC, r.id ASC)
+          FROM staff_roles sr JOIN roles r ON r.id = sr.role_id
+          WHERE sr.staff_id = s.id
+        ), ARRAY[]::text[]) AS role_keys,
         s.active,
         s.employee_id,
         (
@@ -97,6 +102,11 @@ export const GET = withAuth(async (request: NextRequest) => {
           s.id,
           s.name,
           s.role,
+          COALESCE((
+            SELECT array_agg(r.key ORDER BY r.position ASC, r.id ASC)
+            FROM staff_roles sr JOIN roles r ON r.id = sr.role_id
+            WHERE sr.staff_id = s.id
+          ), ARRAY[]::text[]) AS role_keys,
           s.active,
           s.employee_id,
           true AS is_scheduled_today
@@ -113,6 +123,7 @@ export const GET = withAuth(async (request: NextRequest) => {
       id: Number(row.id),
       name: String(row.name || ''),
       role: String(row.role || ''),
+      roleKeys: Array.isArray(row.role_keys) ? row.role_keys.map((k: unknown) => String(k)).filter(Boolean) : [],
       active: Boolean(row.active),
       employee_id: row.employee_id == null ? null : String(row.employee_id),
       is_scheduled_today: Boolean(row.is_scheduled_today),

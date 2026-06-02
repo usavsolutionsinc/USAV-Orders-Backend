@@ -10,6 +10,15 @@ function pad2(value: number): string {
   return String(value).padStart(2, '0');
 }
 
+/** Render a wall-clock time as 12-hour with AM/PM (e.g. "4:17:50 PM"). */
+function to12h(hour24: number, minute: number, second: number, withSeconds = true): string {
+  const period = hour24 >= 12 ? 'PM' : 'AM';
+  const h12 = hour24 % 12 === 0 ? 12 : hour24 % 12;
+  return withSeconds
+    ? `${h12}:${pad2(minute)}:${pad2(second)} ${period}`
+    : `${h12}:${pad2(minute)} ${period}`;
+}
+
 function getPstYmdFromDate(date: Date): string {
   const parts = new Intl.DateTimeFormat('en-US', {
     timeZone: PST_TIME_ZONE,
@@ -195,10 +204,10 @@ export function formatDateTimePST(input: string | Date | null | undefined): stri
         month: '2-digit',
         day: '2-digit',
         year: 'numeric',
-        hour: '2-digit',
+        hour: 'numeric',
         minute: '2-digit',
         second: '2-digit',
-        hourCycle: 'h23',
+        hour12: true,
       })
       .replace(',', '');
   }
@@ -212,12 +221,12 @@ export function formatDateTimePST(input: string | Date | null | undefined): stri
     if (!month || !day || !year) return 'N/A';
 
     const [h = '00', m = '00', s = '00'] = (timePart || '00:00:00').split(':');
-    return `${pad2(month)}/${pad2(day)}/${year} ${pad2(Number(h))}:${pad2(Number(m))}:${pad2(Number(s))}`;
+    return `${pad2(month)}/${pad2(day)}/${year} ${to12h(Number(h), Number(m), Number(s))}`;
   }
 
   if (ISO_DATE_ONLY_RE.test(raw)) {
     const [year, month, day] = raw.split('-').map(Number);
-    return `${pad2(month)}/${pad2(day)}/${year} 00:00:00`;
+    return `${pad2(month)}/${pad2(day)}/${year} ${to12h(0, 0, 0)}`;
   }
 
   if ((ISO_NAIVE_RE.test(raw) || ISO_NAIVE_FRACTION_RE.test(raw)) && !TZ_SUFFIX_RE.test(raw)) {
@@ -226,7 +235,7 @@ export function formatDateTimePST(input: string | Date | null | undefined): stri
     const [year, month, day] = datePart.split('-').map(Number);
     const timePart = (timePartRaw || '00:00:00').split('.')[0];
     const [hh = '00', mm = '00', ss = '00'] = timePart.split(':');
-    return `${pad2(month)}/${pad2(day)}/${year} ${pad2(Number(hh))}:${pad2(Number(mm))}:${pad2(Number(ss))}`;
+    return `${pad2(month)}/${pad2(day)}/${year} ${to12h(Number(hh), Number(mm), Number(ss))}`;
   }
 
   const parsed = new Date(raw);
@@ -238,10 +247,10 @@ export function formatDateTimePST(input: string | Date | null | undefined): stri
       month: '2-digit',
       day: '2-digit',
       year: 'numeric',
-      hour: '2-digit',
+      hour: 'numeric',
       minute: '2-digit',
       second: '2-digit',
-      hourCycle: 'h23',
+      hour12: true,
     })
     .replace(',', '');
 }
@@ -268,13 +277,8 @@ export function formatTimePST(
   input: string | Date | null | undefined,
   options?: { withSeconds?: boolean }
 ): string {
-  if (!input) return '--:--';
-  const withSeconds = options?.withSeconds ?? false;
-  const full = formatDateTimePST(input);
-  if (full === 'N/A') return '--:--';
-  const timePart = full.split(' ')[1] || '';
-  if (!timePart) return '--:--';
-  return withSeconds ? timePart : timePart.split(':').slice(0, 2).join(':');
+  // Time-of-day display is 12-hour with AM/PM; delegate to the canonical 12h formatter.
+  return formatTime12hPST(input, options);
 }
 
 /** Wall-clock time in America/Los_Angeles (12-hour with AM/PM). */
