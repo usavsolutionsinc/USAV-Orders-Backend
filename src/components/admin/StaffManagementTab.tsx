@@ -65,7 +65,6 @@ const STAFF_HOME_OPTIONS: ReadonlyArray<{ value: string; label: string }> = [
   { value: '/warehouse',   label: 'Warehouse' },
   { value: '/products',    label: 'Products' },
   { value: '/walk-in',     label: 'Walk-in' },
-  { value: '/work-orders', label: 'Work orders' },
   { value: '/fba',         label: 'Amazon FBA' },
   { value: '/replenish',   label: 'Replenish' },
   { value: '/admin',       label: 'Admin' },

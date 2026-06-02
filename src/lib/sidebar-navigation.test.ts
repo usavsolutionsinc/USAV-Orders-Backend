@@ -14,7 +14,6 @@ test('getSidebarNavItems omits mobile-restricted routes in mobile mode', () => {
   const navIds = getSidebarNavItems({ mobileRestricted: true }).map((item) => item.id);
 
   assert.equal(navIds.includes('operations'), false);
-  assert.equal(navIds.includes('work-orders'), false);
   assert.equal(navIds.includes('support'), false);
   assert.equal(navIds.includes('previous-quarters'), false);
   assert.equal(navIds.includes('admin'), false);
@@ -27,7 +26,6 @@ test('getSidebarNavItems omits mobile-restricted routes in mobile mode', () => {
 
 test('isSidebarRouteMobileRestricted only flags mobile-blocked routes', () => {
   assert.equal(isSidebarRouteMobileRestricted('operations'), true);
-  assert.equal(isSidebarRouteMobileRestricted('work-orders'), true);
   assert.equal(isSidebarRouteMobileRestricted('support'), true);
   assert.equal(isSidebarRouteMobileRestricted('previous-quarters'), true);
   assert.equal(isSidebarRouteMobileRestricted('admin'), true);

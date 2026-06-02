@@ -94,7 +94,7 @@ export function ExceptionsRow() {
       sub: 'Wire from /api/work-orders when ready',
       Icon: Wrench,
       tone: { ring: 'bg-orange-50', text: 'text-orange-700', accent: 'bg-orange-500' },
-      href: '/work-orders',
+      href: '/repair',
       disabled: true,
     },
   ];

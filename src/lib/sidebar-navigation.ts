@@ -7,7 +7,6 @@ import {
   LayoutDashboard,
   Monitor,
   Package,
-  PackageCheck,
   Settings,
   ShieldCheck,
   ShoppingCart,
@@ -23,7 +22,6 @@ export type SidebarRouteKey =
   | 'receiving'
   | 'walk-in'
   | 'repair'
-  | 'work-orders'
   | 'replenish'
   | 'inventory'
   | 'products'
@@ -56,7 +54,6 @@ export interface SidebarNavItem {
 
 const MOBILE_RESTRICTED_SIDEBAR_IDS = new Set<SidebarRouteKey>([
   'operations',
-  'work-orders',
   'manuals-library',
   'support',
   'previous-quarters',
@@ -86,7 +83,6 @@ export const APP_SIDEBAR_NAV: SidebarNavItem[] = [
   { id: 'dashboard',         label: 'Orders / Shipping', href: '/dashboard',    icon: LayoutDashboard, kind: 'main',    requires: 'dashboard.view' },
   { id: 'fba',               label: 'Amazon FBA',  href: '/fba',                icon: Package,         kind: 'main',    requires: 'fba.view' },
   { id: 'walk-in',           label: 'Walk-In',     href: '/walk-in',            icon: ShoppingCart,    kind: 'main',    requires: 'walk_in.view' },
-  { id: 'work-orders',       label: 'Work Orders', href: '/work-orders',        icon: PackageCheck,    kind: 'main',    requires: 'work_orders.view' },
   { id: 'replenish',         label: 'Replenish',   href: '/replenish',          icon: RefreshCw,       kind: 'main',    requires: 'replenish.view' },
   { id: 'receiving',         label: 'Receiving',   href: '/receiving',          icon: ClipboardList,   kind: 'station', requires: 'receiving.view' },
   { id: 'tech',              label: 'Testing',     href: '/tech',               icon: Wrench,          kind: 'station', requires: 'tech.view' },
@@ -136,7 +132,6 @@ export function getSidebarRouteKey(pathname: string | null): SidebarRouteKey {
   if (pathname === '/receiving' || pathname.startsWith('/receiving/')) return 'receiving';
   if (pathname === '/walk-in' || pathname.startsWith('/walk-in/')) return 'walk-in';
   if (pathname === '/repair' || pathname.startsWith('/repair/')) return 'walk-in';
-  if (pathname === '/work-orders' || pathname.startsWith('/work-orders/')) return 'work-orders';
   if (pathname === '/replenish' || pathname.startsWith('/replenish/')) return 'replenish';
   if (pathname === '/products' || pathname.startsWith('/products/')) return 'products';
   if (pathname === '/warehouse' || pathname.startsWith('/warehouse/')) return 'warehouse';
@@ -189,7 +184,6 @@ export const ROUTE_PERMISSIONS: ReadonlyArray<{ prefix: string; permission: stri
   { prefix: '/fba',                permission: 'fba.view' },
   { prefix: '/walk-in',            permission: 'walk_in.view' },
   { prefix: '/repair',             permission: 'repair.view' },
-  { prefix: '/work-orders',        permission: 'work_orders.view' },
   { prefix: '/replenish',          permission: 'replenish.view' },
   { prefix: '/receiving',          permission: 'receiving.view' },
   { prefix: '/tech',               permission: 'tech.view' },

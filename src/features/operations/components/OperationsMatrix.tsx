@@ -82,7 +82,6 @@ const DOMAINS: Domain[] = [
     links: [
       { name: 'Serial Number Intake', href: '/tech', badge: 'Critical' },
       { name: 'Device Repairs', href: '/repair' },
-      { name: 'Work Orders', href: '/work-orders' },
     ],
   },
   {
