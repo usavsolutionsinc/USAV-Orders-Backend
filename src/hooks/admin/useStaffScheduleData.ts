@@ -1,5 +1,6 @@
 import { useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
+import { qk } from '@/queries/keys';
 import type { Staff, StaffAvailabilityRule } from '@/components/admin/types';
 import { getCurrentBusinessWeekDays, getNextBusinessDays } from '@/lib/staff-availability';
 import {
@@ -180,7 +181,7 @@ export function useStaffScheduleData() {
   const nextWeekStartDate = nextBusinessDays[0]?.date || '';
 
   const { data: staff = [] } = useQuery<Staff[]>({
-    queryKey: ['staff'],
+    queryKey: qk.staff.all,
     queryFn: async () => {
       const res = await fetch('/api/staff?active=false');
       if (!res.ok) throw new Error('Failed to fetch staff');
@@ -189,7 +190,7 @@ export function useStaffScheduleData() {
   });
 
   const { data: scheduleResponse } = useQuery<StaffScheduleResponse>({
-    queryKey: ['staff-schedule', 'range', thisWeekStartDate, nextBusinessDays[nextBusinessDays.length - 1]?.date || ''],
+    queryKey: qk.staffSchedule.range(thisWeekStartDate, nextBusinessDays[nextBusinessDays.length - 1]?.date || ''),
     enabled: Boolean(thisWeekStartDate && nextBusinessDays[nextBusinessDays.length - 1]?.date),
     queryFn: async () => {
       const startDate = thisWeekStartDate;
@@ -201,7 +202,7 @@ export function useStaffScheduleData() {
   });
 
   const { data: currentWeekResponse } = useQuery<StaffWeekScheduleResponse>({
-    queryKey: ['staff-schedule', 'week', thisWeekStartDate],
+    queryKey: qk.staffSchedule.week(thisWeekStartDate),
     enabled: Boolean(thisWeekStartDate),
     queryFn: async () => {
       const res = await fetch(`/api/staff/schedule/week?weekStart=${encodeURIComponent(thisWeekStartDate)}&includeInactive=true`);
@@ -211,7 +212,7 @@ export function useStaffScheduleData() {
   });
 
   const { data: nextWeekResponse } = useQuery<StaffWeekScheduleResponse>({
-    queryKey: ['staff-schedule', 'week', nextWeekStartDate],
+    queryKey: qk.staffSchedule.week(nextWeekStartDate),
     enabled: Boolean(nextWeekStartDate),
     queryFn: async () => {
       const res = await fetch(`/api/staff/schedule/week?weekStart=${encodeURIComponent(nextWeekStartDate)}&includeInactive=true`);
@@ -221,7 +222,7 @@ export function useStaffScheduleData() {
   });
 
   const { data: availabilityRulesResponse } = useQuery<StaffAvailabilityRulesResponse>({
-    queryKey: ['staff-availability-rules'],
+    queryKey: qk.staffAvailabilityRules,
     queryFn: async () => {
       const res = await fetch('/api/staff/availability-rules');
       if (!res.ok) throw new Error('Failed to fetch availability rules');

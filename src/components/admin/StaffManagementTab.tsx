@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { qk } from '@/queries/keys';
 import { motion } from 'framer-motion';
 import { StaffColorWheel } from './StaffColorWheel';
 import { StaffScheduleBoard } from './StaffScheduleBoard';
@@ -113,8 +114,8 @@ export function StaffManagementTab() {
       return res.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['staff'] });
-      queryClient.invalidateQueries({ queryKey: ['staff-schedule'] });
+      queryClient.invalidateQueries({ queryKey: qk.staff.all });
+      queryClient.invalidateQueries({ queryKey: qk.staffSchedule.all });
       setIsAddingStaff(false);
       setNewStaffName('');
       setNewStaffEmployeeId('');
@@ -141,8 +142,8 @@ export function StaffManagementTab() {
       return res.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['staff'] });
-      queryClient.invalidateQueries({ queryKey: ['staff-schedule'] });
+      queryClient.invalidateQueries({ queryKey: qk.staff.all });
+      queryClient.invalidateQueries({ queryKey: qk.staffSchedule.all });
       setEditingStaffId(null);
     },
   });
@@ -154,8 +155,8 @@ export function StaffManagementTab() {
       return res.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['staff'] });
-      queryClient.invalidateQueries({ queryKey: ['staff-schedule'] });
+      queryClient.invalidateQueries({ queryKey: qk.staff.all });
+      queryClient.invalidateQueries({ queryKey: qk.staffSchedule.all });
       setEditingStaffId(null);
     },
   });
@@ -177,8 +178,8 @@ export function StaffManagementTab() {
       setSavingScheduleKey(`${variables.staffId}:${variables.scheduleDate || variables.dayOfWeek}`);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['staff-schedule'] });
-      queryClient.invalidateQueries({ queryKey: ['staff'] });
+      queryClient.invalidateQueries({ queryKey: qk.staffSchedule.all });
+      queryClient.invalidateQueries({ queryKey: qk.staff.all });
     },
     onSettled: () => {
       setSavingScheduleKey(null);
@@ -199,8 +200,8 @@ export function StaffManagementTab() {
       return res.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['staff-schedule'] });
-      queryClient.invalidateQueries({ queryKey: ['staff'] });
+      queryClient.invalidateQueries({ queryKey: qk.staffSchedule.all });
+      queryClient.invalidateQueries({ queryKey: qk.staff.all });
     },
   });
 
@@ -218,8 +219,8 @@ export function StaffManagementTab() {
       return res.json();
     },
     onSuccess: (_data, variables) => {
-      queryClient.invalidateQueries({ queryKey: ['staff-schedule'] });
-      queryClient.invalidateQueries({ queryKey: ['staff'] });
+      queryClient.invalidateQueries({ queryKey: qk.staffSchedule.all });
+      queryClient.invalidateQueries({ queryKey: qk.staff.all });
       toast.success(
         variables.mode === 'template'
           ? 'Next week copied from weekly template'
@@ -245,8 +246,8 @@ export function StaffManagementTab() {
       return res.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['staff-schedule'] });
-      queryClient.invalidateQueries({ queryKey: ['staff'] });
+      queryClient.invalidateQueries({ queryKey: qk.staffSchedule.all });
+      queryClient.invalidateQueries({ queryKey: qk.staff.all });
       toast.success('Schedule updated');
     },
     onError: (error: any) => {
@@ -285,9 +286,9 @@ export function StaffManagementTab() {
       return res.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['staff-availability-rules'] });
-      queryClient.invalidateQueries({ queryKey: ['staff-schedule'] });
-      queryClient.invalidateQueries({ queryKey: ['staff'] });
+      queryClient.invalidateQueries({ queryKey: qk.staffAvailabilityRules });
+      queryClient.invalidateQueries({ queryKey: qk.staffSchedule.all });
+      queryClient.invalidateQueries({ queryKey: qk.staff.all });
       toast.success('Availability rule saved');
     },
     onError: (error: any) => {
@@ -305,9 +306,9 @@ export function StaffManagementTab() {
       return res.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['staff-availability-rules'] });
-      queryClient.invalidateQueries({ queryKey: ['staff-schedule'] });
-      queryClient.invalidateQueries({ queryKey: ['staff'] });
+      queryClient.invalidateQueries({ queryKey: qk.staffAvailabilityRules });
+      queryClient.invalidateQueries({ queryKey: qk.staffSchedule.all });
+      queryClient.invalidateQueries({ queryKey: qk.staff.all });
       toast.success('Availability rule removed');
     },
     onError: (error: any) => {
@@ -342,8 +343,8 @@ export function StaffManagementTab() {
   }, []);
 
   useAblyChannel(staffChannelName, 'staff.schedule.changed', () => {
-    queryClient.invalidateQueries({ queryKey: ['staff-schedule'] });
-    queryClient.invalidateQueries({ queryKey: ['staff'] });
+    queryClient.invalidateQueries({ queryKey: qk.staffSchedule.all });
+    queryClient.invalidateQueries({ queryKey: qk.staff.all });
   }, true);
 
 

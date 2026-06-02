@@ -2,6 +2,7 @@
 
 import { useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
+import { qk } from '@/queries/keys';
 import { SearchBar } from '@/components/ui/SearchBar';
 import {
   AdminSidebarShell,
@@ -59,7 +60,7 @@ export function StaffAdminSidebarPanel() {
   })();
 
   const { data: staff = [], isLoading } = useQuery<StaffRow[]>({
-    queryKey: ['staff'],
+    queryKey: qk.staff.all,
     queryFn: async () => {
       const res = await fetch('/api/staff?active=false');
       if (!res.ok) throw new Error('Failed to load staff');

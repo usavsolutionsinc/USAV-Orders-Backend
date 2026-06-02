@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { qk } from '@/queries/keys';
 import { Search, X } from '@/components/Icons';
 import { ActionsSection } from './ActionsSection';
 import { CommonPagesBar } from './CommonPagesBar';
@@ -78,7 +79,7 @@ export function QuickAccessPopover({ onClose, onOpenHistoryPopover, onOpenInboxP
       return r.json();
     },
     onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: ['staff'] });
+      void queryClient.invalidateQueries({ queryKey: qk.staff.all });
     },
   });
 

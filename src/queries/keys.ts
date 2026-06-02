@@ -46,4 +46,15 @@ export const qk = {
     shipments: ['fba-shipments'] as const,
     fnskus: ['fba-fnskus'] as const,
   },
+  staff: {
+    all: ['staff'] as const,
+    availabilityToday: ['staff', 'availability-today'] as const,
+  },
+  staffSchedule: {
+    all: ['staff-schedule'] as const,
+    range: (weekStart: string, end: string) =>
+      ['staff-schedule', 'range', weekStart, end] as const,
+    week: (weekStart: string) => ['staff-schedule', 'week', weekStart] as const,
+  },
+  staffAvailabilityRules: ['staff-availability-rules'] as const,
 } as const;

@@ -18,6 +18,7 @@
 
 import { useEffect, useReducer } from 'react';
 import { useQuery } from '@tanstack/react-query';
+import { qk } from '@/queries/keys';
 import {
   setStaffColorCache,
   _subscribeStaffColorCache,
@@ -30,10 +31,10 @@ interface StaffColorRecord {
 }
 
 export function StaffColorsProvider({ children }: { children: React.ReactNode }) {
-  // Reuses the canonical ['staff'] React Query key so updates from the admin
-  // staff page (which invalidate ['staff']) refresh this cache for free.
+  // Reuses the canonical staff React Query key so updates from the admin
+  // staff page (which invalidate qk.staff.all) refresh this cache for free.
   const { data } = useQuery<StaffColorRecord[]>({
-    queryKey: ['staff'],
+    queryKey: qk.staff.all,
     queryFn: async () => {
       const r = await fetch('/api/staff?active=false', { cache: 'no-store' });
       if (!r.ok) return [];
