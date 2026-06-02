@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { qk } from '@/queries/keys';
 import { Check, Loader2 } from '@/components/Icons';
 
 export interface FbaFnskuRow {
@@ -30,14 +31,14 @@ export function FbaFnskuDirectoryPanel({
   useEffect(() => {
     if (isEmbed) return;
     const refresh = () => {
-      queryClient.invalidateQueries({ queryKey: ['admin-fba-fnskus'] });
+      queryClient.invalidateQueries({ queryKey: qk.adminFbaFnskus.all });
     };
     window.addEventListener('usav-refresh-data', refresh);
     return () => window.removeEventListener('usav-refresh-data', refresh);
   }, [isEmbed, queryClient]);
 
   const { data, isLoading } = useQuery<{ rows: FbaFnskuRow[] }>({
-    queryKey: ['admin-fba-fnskus', searchTerm],
+    queryKey: qk.adminFbaFnskus.list(searchTerm),
     queryFn: async () => {
       const q = searchTerm.trim();
       const url = q

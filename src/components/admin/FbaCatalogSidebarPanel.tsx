@@ -10,6 +10,7 @@
 
 import { useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
+import { qk } from '@/queries/keys';
 import { SearchBar } from '@/components/ui/SearchBar';
 import {
   AdminSidebarShell,
@@ -39,7 +40,7 @@ export function FbaCatalogSidebarPanel() {
   const selected = searchParams.get('fnsku') ?? '';
 
   const { data, isLoading } = useQuery<{ rows: FbaFnskuRow[] }>({
-    queryKey: ['admin-fba-fnskus', search],
+    queryKey: qk.adminFbaFnskus.list(search),
     queryFn: async () => {
       const q = search.trim();
       const url = q

@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { qk } from '@/queries/keys';
 import { AdminEmptyDetail } from './shared';
 
 interface FbaFnskuRow {
@@ -72,7 +73,7 @@ export function FBAManagementTab(_props: FBAManagementTabProps = {}) {
       return json;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['admin-fba-fnskus'] });
+      queryClient.invalidateQueries({ queryKey: qk.adminFbaFnskus.all });
       setIsAddOpen(false);
       setProductTitle('');
       setAsin('');
@@ -94,7 +95,7 @@ export function FBAManagementTab(_props: FBAManagementTabProps = {}) {
       return json;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['admin-fba-fnskus'] });
+      queryClient.invalidateQueries({ queryKey: qk.adminFbaFnskus.all });
       queryClient.invalidateQueries({ queryKey: ['admin-fba-fnsku-detail', selectedFnsku] });
       setIsEditing(false);
     },
@@ -113,7 +114,7 @@ export function FBAManagementTab(_props: FBAManagementTabProps = {}) {
       return json;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['admin-fba-fnskus'] });
+      queryClient.invalidateQueries({ queryKey: qk.adminFbaFnskus.all });
       if (fileInputRef.current) fileInputRef.current.value = '';
     },
   });
