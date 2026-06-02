@@ -6,7 +6,8 @@ import AiAnswerCard from '@/components/ai/AiAnswerCard';
 import MarkdownRenderer from '@/components/ai/MarkdownRenderer';
 import { sectionLabel } from '@/design-system/tokens/typography/presets';
 import { useAiChat, type ChatMessage } from '@/components/ai/useAiChat';
-import { linkifyOrderRefs, inferDestination, countOrderRefs } from '@/components/ai/ai-answer-enrich';
+import AiOrderList from '@/components/ai/AiOrderList';
+import { linkifyOrderRefs, inferDestination, countOrderRefs, extractOrderRefs } from '@/components/ai/ai-answer-enrich';
 
 function ArrowRightGlyph({ className = 'h-3.5 w-3.5' }: { className?: string }) {
   return (
@@ -264,10 +265,26 @@ export default function AiChatConversation({ variant = 'panel', chat }: AiChatCo
                       {msg.analysis ? (
                         <AiAnswerCard analysis={msg.analysis} content={msg.content} modeLabel={modeLabel(msg.mode)} timestampLabel={ts} onFollowUp={(p) => submit(p)} />
                       ) : msg.content ? (
-                        <div className="text-sm leading-7 text-gray-800">
-                          <MarkdownRenderer content={msg.streaming ? msg.content : linkifyOrderRefs(msg.content)} />
-                          {showCaret ? <span className="ml-0.5 inline-block h-4 w-[2px] animate-pulse bg-blue-500 align-middle" /> : null}
-                        </div>
+                        (() => {
+                          const refs = msg.streaming ? [] : extractOrderRefs(msg.content);
+                          if (refs.length >= 3) {
+                            return (
+                              <div className="space-y-2">
+                                <AiOrderList orderIds={refs} />
+                                <details className="text-sm leading-7 text-gray-700">
+                                  <summary className="cursor-pointer text-caption font-semibold text-gray-500 hover:text-gray-700">Show full text answer</summary>
+                                  <div className="mt-1"><MarkdownRenderer content={linkifyOrderRefs(msg.content)} /></div>
+                                </details>
+                              </div>
+                            );
+                          }
+                          return (
+                            <div className="text-sm leading-7 text-gray-800">
+                              <MarkdownRenderer content={msg.streaming ? msg.content : linkifyOrderRefs(msg.content)} />
+                              {showCaret ? <span className="ml-0.5 inline-block h-4 w-[2px] animate-pulse bg-blue-500 align-middle" /> : null}
+                            </div>
+                          );
+                        })()
                       ) : (
                         <div className="flex items-center gap-2 py-1 text-caption text-gray-500">
                           <Loader2 className="h-3.5 w-3.5 animate-spin text-gray-400" />
@@ -276,15 +293,18 @@ export default function AiChatConversation({ variant = 'panel', chat }: AiChatCo
                       )}
 
                       {!msg.streaming && msg.content && !msg.analysis ? (() => {
+                        const n = countOrderRefs(msg.content);
+                        // List answers (>=3 refs) render AiOrderList, which has its own
+                        // "Take me there" — don't duplicate it here.
+                        if (n >= 3) return null;
                         const dest = inferDestination(prevUser, msg.content);
                         if (!dest) return null;
-                        const n = countOrderRefs(msg.content);
                         return (
                           <a
                             href={dest.href}
                             className="mt-2 inline-flex items-center gap-1.5 rounded-lg border border-blue-200 bg-blue-50 px-3 py-1.5 text-caption font-semibold text-blue-700 transition-colors hover:border-blue-300 hover:bg-blue-100"
                           >
-                            {n >= 3 ? `${dest.label} — see all ${n}+` : dest.label}
+                            {dest.label}
                             <ArrowRightGlyph className="h-3.5 w-3.5" />
                           </a>
                         );

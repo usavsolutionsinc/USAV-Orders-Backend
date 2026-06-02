@@ -59,6 +59,9 @@ flowchart LR
   ai(["ai"])
   root --> ai
   click ai "src/app/ai/page.tsx" "page: src/app/ai/page.tsx"
+  ai_chat(["ai-chat"])
+  root --> ai_chat
+  click ai_chat "src/app/ai-chat/page.tsx" "page: src/app/ai-chat/page.tsx"
   api["api"]
   root --> api
   api_activity["activity"]
@@ -209,6 +212,3 @@ flowchart LR
   api_admin_sessions["sessions"]
   api_admin --> api_admin_sessions
   click api_admin_sessions "src/app/api/admin/sessions/route.ts" "route: src/app/api/admin/sessions/route.ts"
-  api_admin_sessions__sid["[sid]"]
-  api_admin_sessions --> api_admin_sessions__sid
-  click api_admin_sessions__sid "src/app/api/admin/sessions/[sid]/route.ts" "route: src/app/api/admin/sessions/[sid]/route.ts"

@@ -43,6 +43,21 @@ export function countOrderRefs(text: string): number {
   return seen.size;
 }
 
+/** Distinct order/tracking refs (cleaned, capped) for live record lookup. */
+export function extractOrderRefs(text: string, limit = 30): string[] {
+  if (!text) return [];
+  const out: string[] = [];
+  const seen = new Set<string>();
+  for (const m of text.matchAll(ORDER_REF_RE)) {
+    const id = m[2];
+    if (seen.has(id)) continue;
+    seen.add(id);
+    out.push(id);
+    if (out.length >= limit) break;
+  }
+  return out;
+}
+
 /**
  * Best-effort "Take me there" target inferred from the user's question and the
  * answer. Returns null when no clear destination applies.
