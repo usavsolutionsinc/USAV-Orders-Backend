@@ -463,8 +463,12 @@ Migrated clusters (each its own commit, `tsc` 0 errors, pushed):
 | dashboard invalidation hub | `qk.dashboardTable.*`, `qk.shippedTable`, `qk.dashboardStockZoho`, `qk.dashboardFbaShipments` | `lib/dashboard-query-invalidation` |
 | admin-features | `qk.adminFeatures.{list,all}` | `FeaturesManagementTab` |
 | FBA realtime hub | `qk.fba.{board,stageCounts,queue,logs,shipments,fnskus}` | `useFbaRealtimeInvalidation` |
+| **staff** | `qk.staff.{all,availabilityToday}`, `qk.staffSchedule.{all,range,week}`, `qk.staffAvailabilityRules` | `StaffColorsProvider`, `StaffAdminSidebarPanel`, `QuickAccessPopover`, `StaffManagementTab`, `useTodayStaffAvailability`, `useStaffScheduleData` (~30 sites) |
+| **repairs** | `qk.repairs.{all,list}` | `ActivityInboxContext`, `useRepairs`, `useRepairQueries`, `useRealtimeInvalidation` |
+
+> **Key insight (de-risks migration):** because each `qk` entry is an *identical array* to the literal it replaces, any mix of migrated/un-migrated sites still matches by prefix — so a partial migration is never wrong, only incomplete, and `tsc` catches shape errors.
 
 **Remaining / blocked:**
-- The high-frequency multi-file clusters (`staff`×15, `repairs`×13, `staff-schedule`, `dashboard-table` *consumers*, `receiving-*`, `shipped-table` consumers) live in files the concurrent session is actively editing → **contended**, deferred.
-- Some literals (`tech-logs`, `receiving-logs`, `fba-board`) also appear in **API routes** where they are NOT query keys — those need per-site inspection, not a blind cluster swap.
-- ~20 keys are **single-file/single-use** (not cross-file duplication) — migrating them is low-value "convention centralization"; do opportunistically when touching those files.
+- **`dashboard-table` consumers — deliberately deferred.** The invalidation sites are simple prefixes (safe), but the *query definitions* (`dashboard/page.tsx`) carry composite filter objects (`['dashboard-table','pending',{searchQuery,…}]`) feeding the **core order tables**. A subtle key-shape error there breaks caching/realtime invisibly and can't be runtime-tested here — not worth the risk for the dedup value. Leave until verifiable.
+- Some literals (`tech-logs`, `receiving-logs`, `fba-board`) also appear in **API routes** where they are NOT query keys — need per-site inspection, not a blind swap.
+- ~20 keys are **single-file/single-use** (not cross-file duplication) — low-value "convention centralization"; do opportunistically when touching those files.
