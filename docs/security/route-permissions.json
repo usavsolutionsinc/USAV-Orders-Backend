@@ -1,9 +1,9 @@
 {
   "version": 1,
-  "generatedAt": "2026-06-02T06:51:09Z",
-  "totalRoutes": 486,
+  "generatedAt": "2026-06-02T07:14:16Z",
+  "totalRoutes": 487,
   "summary": {
-    "permissionGated": 410,
+    "permissionGated": 411,
     "authenticatedNoPermission": 16,
     "anonymousIntentional": 39,
     "serviceToService": 3,
@@ -2011,6 +2011,17 @@
       ],
       "gate": "requireRoutePerm",
       "permission": "orders.view",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/orders/[id]/tracking/route.ts",
+      "methods": [
+        "DELETE",
+        "PATCH",
+        "POST"
+      ],
+      "gate": "requireRoutePerm",
+      "permission": "orders.create",
       "exemptReason": null
     },
     {

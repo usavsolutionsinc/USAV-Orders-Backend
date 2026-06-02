@@ -1,6 +1,7 @@
 import type { ComponentType } from 'react';
 import {
   BarChart3,
+  Barcode,
   Box,
   Calendar,
   Camera,
@@ -12,14 +13,17 @@ import {
   Lock,
   Package,
   ShieldCheck,
+  Star,
   User,
+  Wrench,
   Zap,
 } from '@/components/Icons';
 
 export type AdminSection =
   | 'overview'
   | 'goals' | 'staff' | 'access' | 'roles' | 'connections' | 'integrations' | 'fba'
-  | 'manuals' | 'reason_codes' | 'features' | 'logs' | 'jobs' | 'ai_chat' | 'architecture'
+  | 'manuals' | 'reason_codes' | 'sku_catalog' | 'repair_issues' | 'favorites' | 'features'
+  | 'logs' | 'jobs' | 'ai_chat' | 'architecture'
   | 'photo_backup' | 'billing';
 
 export type AdminGroup = 'Performance' | 'People' | 'Data sources' | 'System' | 'Account';
@@ -48,8 +52,11 @@ export const ADMIN_SECTION_OPTIONS: AdminSectionOption[] = [
   { value: 'connections',  label: 'Connections',  description: 'Marketplace, Zoho, and shipping sync tools',                   group: 'Data sources', icon: Link2 },
   { value: 'integrations', label: 'Integrations', description: 'Per-tenant credential vault and provider status',              group: 'Data sources', icon: Zap },
   { value: 'fba',          label: 'FBA',          description: 'FNSKU catalog rows and CSV imports',                           group: 'Data sources', icon: Package },
+  { value: 'sku_catalog',  label: 'SKU Catalog',  description: 'Master product records — titles, categories, barcodes, images', group: 'Data sources', icon: Barcode,      requires: 'sku_stock.view' },
   { value: 'manuals',      label: 'Manuals',      description: 'Link product manuals to item numbers',                         group: 'Data sources', icon: FileText },
   { value: 'reason_codes', label: 'Reason Codes', description: 'Inventory adjustment / bin-edit reason codes',                  group: 'Data sources', icon: ClipboardList, requires: 'sku_stock.manage' },
+  { value: 'repair_issues',label: 'Repair Issues',description: 'Global repair issue checklist templates',                       group: 'Data sources', icon: Wrench,       requires: 'repair.intake' },
+  { value: 'favorites',    label: 'Favorites',    description: 'Quick-pick SKU shortcuts per workspace',                       group: 'Data sources', icon: Star,         requires: 'sku_stock.manage' },
 
   { value: 'photo_backup', label: 'Photo Backup', description: 'Mirror Vercel Blob photos into Google Photos albums',          group: 'System',      icon: Camera },
   { value: 'jobs',         label: 'Jobs',         description: 'QStash scheduled jobs and execution logs',                     group: 'System',      icon: Calendar },

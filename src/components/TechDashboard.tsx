@@ -6,14 +6,14 @@ import { useQueryClient } from '@tanstack/react-query';
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
 import { TechTable } from './TechTable';
 import { TestingHistoryList, TESTING_SELECTION_SCOPE } from './tech/TestingHistoryList';
-import { usePageHeader } from '@/hooks/usePageHeader';
+import { usePageSelection } from '@/hooks/usePageHeader';
 import { useTableSelection } from '@/hooks/useTableSelection';
 import { emitToggleAll } from '@/lib/selection/table-selection';
 import { ContextualSelectionBar } from '@/design-system/components/ContextualSelectionBar';
 import type { SelectionAction } from '@/lib/selection/selection-actions';
 import { ReceivingClaimModal } from './receiving/workspace/ReceivingClaimModal';
 import { printProductLabel, printProductLabels } from '@/lib/print/printProductLabel';
-import { Copy, Check, X, Printer, MessageSquare, User, Smartphone } from '@/components/Icons';
+import { Copy, Printer, MessageSquare, User, Smartphone } from '@/components/Icons';
 import { toast } from '@/lib/toast';
 import type { ReceivingLineRow } from './station/ReceivingLinesTable';
 import PendingOrdersTable from './PendingOrdersTable';
@@ -191,7 +191,9 @@ export default function TechDashboard({ techId }: TechDashboardProps) {
                 icon: <User className="h-4 w-4" />,
                 enabled: () => false,
                 disabledReason: 'Coming next — needs assignment backend',
-                run: () => {},
+                run: () => {
+                    /* disabled until the backend lands */
+                },
             },
             {
                 key: 'phone',
@@ -199,33 +201,25 @@ export default function TechDashboard({ techId }: TechDashboardProps) {
                 icon: <Smartphone className="h-4 w-4" />,
                 enabled: () => false,
                 disabledReason: 'Coming next — needs phone push channel',
-                run: () => {},
+                run: () => {
+                    /* disabled until the backend lands */
+                },
             },
         ],
         [handleCopyTestingDetails, handlePrintTestingLabels],
     );
 
-    usePageHeader(
-        isTestingHistory ? (
-            <div className="flex items-center gap-2">
-                <span className="text-sm font-bold text-gray-900">
-                    {testingSelectMode ? `${testingSelectedRows.length} selected` : 'Testing history'}
-                </span>
-                <button
-                    type="button"
-                    onClick={() => (testingSelectMode ? exitTestingSelect() : setTestingSelectMode(true))}
-                    className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-caption font-semibold transition-colors ${
-                        testingSelectMode
-                            ? 'border-blue-600 bg-blue-600 text-white hover:bg-blue-700'
-                            : 'border-gray-200 bg-white text-gray-700 hover:bg-gray-50'
-                    }`}
-                >
-                    {testingSelectMode ? <X className="h-3.5 w-3.5" /> : <Check className="h-3.5 w-3.5" />}
-                    {testingSelectMode ? 'Cancel' : 'Select'}
-                </button>
-            </div>
-        ) : null,
-        [isTestingHistory, testingSelectMode, testingSelectedRows.length, exitTestingSelect],
+    // Selection toggle — surfaced as the pencil in the global header's right
+    // actions while testing history is up. No page title in the header.
+    usePageSelection(
+        isTestingHistory
+            ? {
+                  active: testingSelectMode,
+                  onToggle: () =>
+                      testingSelectMode ? exitTestingSelect() : setTestingSelectMode(true),
+              }
+            : null,
+        [isTestingHistory, testingSelectMode, exitTestingSelect],
     );
 
     const [selectedLog, setSelectedLog] = useState<ReceivingDetailsLog | null>(null);

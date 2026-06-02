@@ -1208,15 +1208,14 @@ export function ShippingInformationSection({
     const trimmed = String(nextTracking || '').trim();
     if (!trimmed) return;
     try {
-      const res = await fetch('/api/orders/assign', {
-        method: 'POST',
+      const res = await fetch(`/api/orders/${orderId}/tracking`, {
+        method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          orderId,
-          trackingLinkEdits: [
+          edits: [
             {
               shipmentId: Number(shipmentId),
-              shippingTrackingNumber: trimmed,
+              trackingNumber: trimmed,
             },
           ],
         }),
@@ -1306,37 +1305,65 @@ export function ShippingInformationSection({
     try {
       const currentOrderId = Number((shipped as any).id);
 
-      // ── 1. Save non-tracking order fields ────────────────────────────────
-      // Pass ORIGINAL tracking so saveInlineFields skips the tracking path;
-      // tracking is handled entirely through the unified pipeline below.
-      await internalFieldSave.saveInlineFields(
-        editDraft.orderNumber,
-        editDraft.itemNumber,
-        ef.trackingNumber,
-      );
+      // ── 1. Record fields → canonical CRUD ────────────────────────────────
+      // itemNumber goes through the canonical PATCH /api/orders/[id]. orderNumber
+      // stays on /api/orders/assign because that route owns the cross-order
+      // duplicate check (409). shipByDate stays on saveShipByDate (assign) to
+      // preserve the work_assignments deadline-promotion behavior. Each field is
+      // compared against the live `ef` props directly — no stale ref gates that
+      // could silently skip the write.
+      const recordPatch: Record<string, unknown> = {};
+      if (editDraft.itemNumber.trim() !== String(ef.itemNumber || '').trim()) {
+        recordPatch.itemNumber = editDraft.itemNumber.trim() || null;
+      }
+      if (Object.keys(recordPatch).length > 0) {
+        const res = await fetch(`/api/orders/${currentOrderId}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(recordPatch),
+        });
+        if (!res.ok) {
+          const payload = await res.json().catch(() => ({}));
+          throw new Error(String(payload?.details || payload?.error || 'Failed to save order fields'));
+        }
+      }
+
+      if (editDraft.orderNumber.trim() !== String(ef.orderNumber || '').trim()) {
+        const res = await fetch('/api/orders/assign', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ orderId: currentOrderId, orderNumber: editDraft.orderNumber.trim() }),
+        });
+        if (!res.ok) {
+          const payload = await res.json().catch(() => ({}));
+          throw new Error(String(payload?.error || payload?.details || 'Failed to save order ID'));
+        }
+      }
 
       if (normalizeShipByDraft(editDraft.shipByDate) !== normalizeShipByDraft(ef.shipByDate)) {
         await internalFieldSave.saveShipByDate(editDraft.shipByDate);
       }
 
-      // ── 2. Diff tracking rows ────────────────────────────────────────────
+      // ── 2. Tracking → canonical sub-resource (no brittle client diffing) ──
       //
-      // Phase A: Primary tracking (row 0) → always routed through
-      //   `shippingTrackingNumber` which calls `upsertOrderTracking` on the
-      //   API. This correctly handles shipmentId=null (looks up via
-      //   order_shipment_links), updates in place, and creates when needed.
+      // We send desired-state ops whenever the tracking section was *touched*,
+      // compared by RAW value (not normalized). Normalized comparison was the
+      // cause of the silent no-op: an edit that collapsed to the same key was
+      // treated as "no change" and the request was never sent. The server
+      // enforces dedup and returns 409, which now surfaces as a visible error
+      // instead of being swallowed.
       //
-      // Phase B: Additional tracking (rows 1+) → diff into edits/creates/
-      //   deletes using shipmentId. Only rows with a valid shipmentId can
-      //   be edited or deleted; new rows go through creates.
+      //   Primary (row 0) → `primaryTrackingNumber` → upsertOrderTracking
+      //   Additional (rows 1+) → edits / creates / deletes by shipmentId
+      const rowKey = (rows: Array<{ shipmentId: number | null; tracking: string }>) =>
+        JSON.stringify(rows.map((r) => [r.shipmentId ?? null, String(r.tracking || '').trim()]));
+      const trackingTouched = rowKey(editDraft.trackingRows) !== rowKey(allTrackingRows);
 
       const primaryDraftTracking = String(editDraft.trackingRows[0]?.tracking || '').trim();
       const originalPrimaryTracking = String(allTrackingRows[0]?.tracking || '').trim();
-      const primaryTrackingChanged = normalizeTrackingKey(primaryDraftTracking) !== normalizeTrackingKey(originalPrimaryTracking);
+      const primaryTrackingChanged = primaryDraftTracking !== originalPrimaryTracking;
 
-      // Build map of ALL original rows with valid shipmentIds.
-      // Row 0's primary tracking is routed through shippingTrackingNumber (Phase A),
-      // but its shipmentId still needs cleanup if deleted.
+      // Map of original rows by shipmentId, for diffing additional rows.
       const originalById = new Map<number, string>();
       for (const row of allTrackingRows) {
         const sid = Number(row.shipmentId);
@@ -1346,25 +1373,18 @@ export function ShippingInformationSection({
       }
 
       const nextSeenIds = new Set<number>();
-      const trackingLinkDeletes: Array<{ shipmentId: number }> = [];
-      const trackingLinkEdits: Array<{ shipmentId: number; shippingTrackingNumber: string }> = [];
-      const trackingLinkCreates: Array<{ shippingTrackingNumber: string }> = [];
+      const deletes: Array<{ shipmentId: number }> = [];
+      const edits: Array<{ shipmentId: number; trackingNumber: string }> = [];
+      const creates: Array<{ trackingNumber: string }> = [];
 
-      // Build a set of tracking numbers already owned by this order so we
-      // can detect moves (e.g. STN 2 pasted into slot 1) and skip them
-      // instead of treating them as duplicates.
-      const ownedTrackingKeys = new Set(
-        allTrackingRows.map((r) => normalizeTrackingKey(r.tracking)).filter(Boolean)
-      );
-
-      // Track row 0's shipmentId so the delete loop doesn't double-delete it
-      // (Phase A already handles primary cleanup via upsertOrderTracking)
+      // Row 0 (primary) is handled via primaryTrackingNumber; reserve its id so
+      // the delete loop below doesn't double-remove it.
       const row0Sid = Number(editDraft.trackingRows[0]?.shipmentId);
       if (Number.isFinite(row0Sid) && row0Sid > 0) {
         nextSeenIds.add(row0Sid);
       }
 
-      // Phase B: Diff additional rows (index 1+)
+      // Diff additional rows (index 1+)
       for (let idx = 1; idx < editDraft.trackingRows.length; idx++) {
         const nextRow = editDraft.trackingRows[idx];
         const sid = Number(nextRow.shipmentId);
@@ -1373,76 +1393,59 @@ export function ShippingInformationSection({
         if (Number.isFinite(sid) && sid > 0) {
           nextSeenIds.add(sid);
           if (!nextTracking) {
-            trackingLinkDeletes.push({ shipmentId: sid });
+            deletes.push({ shipmentId: sid });
             continue;
           }
           const prev = String(originalById.get(sid) || '').trim();
           if (nextTracking !== prev) {
-            const nextKey = normalizeTrackingKey(nextTracking);
-            const isOwnedElsewhere = nextKey && ownedTrackingKeys.has(nextKey)
-              && normalizeTrackingKey(prev) !== nextKey;
-            if (!isOwnedElsewhere) {
-              trackingLinkEdits.push({ shipmentId: sid, shippingTrackingNumber: nextTracking });
-            }
+            edits.push({ shipmentId: sid, trackingNumber: nextTracking });
           }
           continue;
         }
 
-        // New row — create, unless the tracking already exists on this order
+        // New row → create. The server rejects true cross-order duplicates (409).
         if (nextTracking) {
-          const nextKey = normalizeTrackingKey(nextTracking);
-          if (!nextKey || !ownedTrackingKeys.has(nextKey)) {
-            trackingLinkCreates.push({ shippingTrackingNumber: nextTracking });
-          }
+          creates.push({ trackingNumber: nextTracking });
         }
       }
 
       // Original additional rows that disappeared from the draft → delete
       for (const sid of originalById.keys()) {
         if (!nextSeenIds.has(sid)) {
-          trackingLinkDeletes.push({ shipmentId: sid });
+          deletes.push({ shipmentId: sid });
         }
       }
 
       // Resolve which shipment should be primary after the save
       const draftRow0 = editDraft.trackingRows[0];
-      const draftRow0Tracking = normalizeTrackingKey(draftRow0?.tracking);
+      const draftRow0Key = normalizeTrackingKey(draftRow0?.tracking);
       const draftRow0ShipmentId = (() => {
         const sid = Number(draftRow0?.shipmentId);
         if (Number.isFinite(sid) && sid > 0) return sid;
-        if (!draftRow0Tracking) return null;
+        if (!draftRow0Key) return null;
         const match = allTrackingRows.find(
-          (r) => r.shipmentId != null && normalizeTrackingKey(r.tracking) === draftRow0Tracking
+          (r) => r.shipmentId != null && normalizeTrackingKey(r.tracking) === draftRow0Key
         );
         return match ? Number(match.shipmentId) : null;
       })();
 
       let trackingChanged = false;
-      const hasTrackingChanges =
-        primaryTrackingChanged
-        || trackingLinkDeletes.length > 0
-        || trackingLinkEdits.length > 0
-        || trackingLinkCreates.length > 0;
-
-      if (hasTrackingChanges) {
-        const res = await fetch('/api/orders/assign', {
-          method: 'POST',
+      if (trackingTouched) {
+        const res = await fetch(`/api/orders/${currentOrderId}/tracking`, {
+          method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            orderId: currentOrderId,
-            // Phase A: primary tracking via upsertOrderTracking (handles null shipmentId)
-            ...(primaryTrackingChanged ? { shippingTrackingNumber: primaryDraftTracking || null } : {}),
-            // Phase B: additional tracking via link operations
-            trackingLinkDeletes,
-            trackingLinkEdits,
-            trackingLinkCreates,
+            ...(primaryTrackingChanged ? { primaryTrackingNumber: primaryDraftTracking || null } : {}),
+            edits,
+            creates,
+            deletes,
             setPrimaryShipmentId: draftRow0ShipmentId,
           }),
         });
 
         if (!res.ok) {
           const payload = await res.json().catch(() => ({}));
-          throw new Error(String(payload?.details || payload?.error || 'Failed to update tracking links'));
+          throw new Error(String(payload?.details || payload?.error || 'Failed to update tracking'));
         }
 
         trackingChanged = true;

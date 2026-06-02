@@ -66,4 +66,21 @@ export const qk = {
     all: ['repairs'] as const,
     list: (page: number, limit: number) => ['repairs', page, limit] as const,
   },
+  skuCatalog: {
+    /** Broad invalidation prefix — matches every SKU catalog admin query. */
+    all: ['sku-catalog'] as const,
+    list: (search: string, sort: string, dir: string, page: number) =>
+      ['sku-catalog', 'list', search, sort, dir, page] as const,
+    detail: (id: number) => ['sku-catalog', 'detail', id] as const,
+  },
+  repairIssues: {
+    /** Broad invalidation prefix — matches every repair-issue-templates query. */
+    all: ['repair-issues'] as const,
+    list: () => ['repair-issues', 'list', 'global'] as const,
+  },
+  favorites: {
+    /** Broad invalidation prefix — matches every favorites query. */
+    all: ['favorites'] as const,
+    list: (workspace: string) => ['favorites', 'list', workspace] as const,
+  },
 } as const;

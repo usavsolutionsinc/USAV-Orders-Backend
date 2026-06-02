@@ -89,6 +89,71 @@ test.describe('orders record route', () => {
   });
 });
 
+test.describe('orders tracking sub-resource', () => {
+  const orderId = process.env.PW_TEST_ORDER_ID;
+
+  test('set → edit → delete primary tracking', async ({ request }) => {
+    test.skip(!orderId, 'set PW_TEST_ORDER_ID to an existing order id');
+
+    // Capture the original tracking so we can best-effort restore at the end.
+    const before = (await (await request.get(`/api/orders/${orderId}`)).json()).order;
+    const originalTracking: string | null = before?.shipping_tracking_number ?? null;
+
+    // SET primary tracking → reflected on the order read.
+    const t1 = `1ZE2E${Date.now()}`;
+    const setRes = await request.patch(`/api/orders/${orderId}/tracking`, {
+      data: { primaryTrackingNumber: t1 },
+    });
+    expect(setRes.status()).toBe(200);
+    const afterSet = (await (await request.get(`/api/orders/${orderId}`)).json()).order;
+    expect(afterSet?.shipping_tracking_number).toBe(t1);
+    const shipmentId = Number(afterSet?.shipment_id);
+    expect(Number.isFinite(shipmentId) && shipmentId > 0).toBe(true);
+
+    // EDIT primary tracking to a new value.
+    const t2 = `1ZE2E${Date.now()}X`;
+    const editRes = await request.patch(`/api/orders/${orderId}/tracking`, {
+      data: { primaryTrackingNumber: t2 },
+    });
+    expect(editRes.status()).toBe(200);
+    const afterEdit = (await (await request.get(`/api/orders/${orderId}`)).json()).order;
+    expect(afterEdit?.shipping_tracking_number).toBe(t2);
+
+    // DELETE unlinks the shipment from the order (?shipment_id=).
+    const editedShipmentId = Number(afterEdit?.shipment_id) || shipmentId;
+    const delRes = await request.delete(`/api/orders/${orderId}/tracking?shipment_id=${editedShipmentId}`);
+    expect(delRes.status()).toBe(200);
+    const afterDel = (await (await request.get(`/api/orders/${orderId}`)).json()).order;
+    expect(afterDel?.shipping_tracking_number ?? null).toBeNull();
+
+    // Best-effort restore of the original primary tracking.
+    if (originalTracking) {
+      await request.patch(`/api/orders/${orderId}/tracking`, {
+        data: { primaryTrackingNumber: originalTracking },
+      });
+    }
+  });
+
+  test('empty body → 400', async ({ request }) => {
+    test.skip(!orderId, 'set PW_TEST_ORDER_ID to an existing order id');
+    const res = await request.patch(`/api/orders/${orderId}/tracking`, { data: {} });
+    expect(res.status()).toBe(400);
+  });
+
+  test('delete without shipment_id → 400', async ({ request }) => {
+    test.skip(!orderId, 'set PW_TEST_ORDER_ID to an existing order id');
+    const res = await request.delete(`/api/orders/${orderId}/tracking`);
+    expect(res.status()).toBe(400);
+  });
+
+  test('unknown order id → 404', async ({ request }) => {
+    const res = await request.patch('/api/orders/999999999/tracking', {
+      data: { primaryTrackingNumber: '1ZNOPE' },
+    });
+    expect(res.status()).toBe(404);
+  });
+});
+
 test.describe('repair-service soft-cancel', () => {
   const repairId = process.env.PW_TEST_REPAIR_ID;
 

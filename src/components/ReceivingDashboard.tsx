@@ -4,14 +4,14 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
 import ReceivingLinesTable, { RECEIVING_SELECTION_SCOPE } from './station/ReceivingLinesTable';
-import { usePageHeader } from '@/hooks/usePageHeader';
+import { usePageSelection } from '@/hooks/usePageHeader';
 import { useTableSelection } from '@/hooks/useTableSelection';
 import { emitToggleAll } from '@/lib/selection/table-selection';
 import { ContextualSelectionBar } from '@/design-system/components/ContextualSelectionBar';
 import type { SelectionAction } from '@/lib/selection/selection-actions';
 import { ReceivingClaimModal } from './receiving/workspace/ReceivingClaimModal';
 import { printProductLabel, printProductLabels } from '@/lib/print/printProductLabel';
-import { Copy, Check, X, Printer, MessageSquare, User, Smartphone } from '@/components/Icons';
+import { Copy, Printer, MessageSquare, User, Smartphone } from '@/components/Icons';
 import { toast } from '@/lib/toast';
 import { LocalPickupCatalogPanel } from './work-orders/LocalPickupCatalogPanel';
 import { ReceivingLineWorkspace } from './receiving/workspace/ReceivingLineWorkspace';
@@ -191,7 +191,9 @@ export default function ReceivingDashboard() {
         icon: <User className="h-4 w-4" />,
         enabled: () => false,
         disabledReason: 'Coming next — needs assignment backend',
-        run: () => {},
+        run: () => {
+          /* disabled until the backend lands */
+        },
       },
       {
         key: 'phone',
@@ -199,34 +201,24 @@ export default function ReceivingDashboard() {
         icon: <Smartphone className="h-4 w-4" />,
         enabled: () => false,
         disabledReason: 'Coming next — needs phone push channel',
-        run: () => {},
+        run: () => {
+          /* disabled until the backend lands */
+        },
       },
     ],
     [handleCopyDetails, handlePrintLabels],
   );
 
-  // Contextual header control: a Select toggle, shown only when the list is up.
-  usePageHeader(
-    isTableOnlyMode ? (
-      <div className="flex items-center gap-2">
-        <span className="text-sm font-bold text-gray-900">
-          {selectMode ? `${selectedRows.length} selected` : 'Receiving'}
-        </span>
-        <button
-          type="button"
-          onClick={() => (selectMode ? exitSelectMode() : setSelectMode(true))}
-          className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-caption font-semibold transition-colors ${
-            selectMode
-              ? 'border-blue-600 bg-blue-600 text-white hover:bg-blue-700'
-              : 'border-gray-200 bg-white text-gray-700 hover:bg-gray-50'
-          }`}
-        >
-          {selectMode ? <X className="h-3.5 w-3.5" /> : <Check className="h-3.5 w-3.5" />}
-          {selectMode ? 'Cancel' : 'Select'}
-        </button>
-      </div>
-    ) : null,
-    [isTableOnlyMode, selectMode, selectedRows.length, exitSelectMode],
+  // Selection toggle — surfaced as the pencil in the global header's right
+  // actions while the list is up. No page title in the header.
+  usePageSelection(
+    isTableOnlyMode
+      ? {
+          active: selectMode,
+          onToggle: () => (selectMode ? exitSelectMode() : setSelectMode(true)),
+        }
+      : null,
+    [isTableOnlyMode, selectMode, exitSelectMode],
   );
 
   useEffect(() => {

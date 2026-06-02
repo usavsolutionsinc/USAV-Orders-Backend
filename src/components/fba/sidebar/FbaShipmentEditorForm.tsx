@@ -745,25 +745,40 @@ export function FbaShipmentEditorForm({
   // ── Save ──
   const handleSave = async () => {
     setSaving(true); setError(null);
+    // Every write below is checked: a non-OK response throws so the modal
+    // surfaces the failure instead of closing as if the save succeeded.
+    const ensureOk = async (res: Response, fallback: string) => {
+      if (res.ok) return;
+      const data = await res.json().catch(() => ({} as { error?: string }));
+      throw new Error(String(data?.error || `${fallback} (${res.status})`));
+    };
     try {
       const newAmazon = amazonShipmentId.trim().toUpperCase();
       if (newAmazon !== (shipment.amazon_shipment_id || '').trim().toUpperCase()) {
         const res = await fetch(fbaPaths.plan(shipment.id), { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ amazon_shipment_id: newAmazon || null }) });
-        if (!res.ok) throw new Error('Failed to update FBA Shipment ID');
+        await ensureOk(res, 'Failed to update FBA Shipment ID');
       }
       const currentLinkIds = new Set(bundles.map((b) => b.link_id).filter(Boolean));
       for (const ob of shipment.bundles) {
-        if (!currentLinkIds.has(ob.link_id)) await fetch(`${fbaPaths.planTracking(shipment.id)}?link_id=${ob.link_id}`, { method: 'DELETE' });
+        if (!currentLinkIds.has(ob.link_id)) {
+          const res = await fetch(`${fbaPaths.planTracking(shipment.id)}?link_id=${ob.link_id}`, { method: 'DELETE' });
+          await ensureOk(res, 'Failed to remove tracking');
+        }
       }
       for (const bundle of bundles) {
         const allocations = bundle.allocations.map((a) => ({ shipment_item_id: a.item_id, qty: a.qty }));
         if (bundle.link_id) {
-          await fetch(fbaPaths.planTracking(shipment.id), { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ link_id: bundle.link_id, tracking_number: bundle.tracking_number.trim(), carrier: bundle.carrier || 'UPS', allocations }) });
+          const res = await fetch(fbaPaths.planTracking(shipment.id), { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ link_id: bundle.link_id, tracking_number: bundle.tracking_number.trim(), carrier: bundle.carrier || 'UPS', allocations }) });
+          await ensureOk(res, 'Failed to update tracking');
         } else if (bundle.tracking_number.trim()) {
-          await fetch(fbaPaths.planTracking(shipment.id), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ tracking_number: bundle.tracking_number.trim(), carrier: bundle.carrier || 'UPS', allocations }) });
+          const res = await fetch(fbaPaths.planTracking(shipment.id), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ tracking_number: bundle.tracking_number.trim(), carrier: bundle.carrier || 'UPS', allocations }) });
+          await ensureOk(res, 'Failed to add tracking');
         }
       }
-      for (const itemId of removedItemIds) await deleteFbaItem(shipment.id, itemId);
+      for (const itemId of removedItemIds) {
+        const result = await deleteFbaItem(shipment.id, itemId);
+        if (!result.ok) throw new Error(result.error || 'Failed to remove item');
+      }
       saveUndoStack(shipment.id, []);
       window.dispatchEvent(new CustomEvent(FBA_ACTIVE_SHIPMENTS_REFRESH));
       window.dispatchEvent(new CustomEvent(USAV_REFRESH_DATA));

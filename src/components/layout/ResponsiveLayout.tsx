@@ -82,6 +82,11 @@ export function ResponsiveLayout({ children }: ResponsiveLayoutProps) {
   // Desktop-only: collapse the permanent left sidebar via the global header's
   // top-left toggle so the main content can run full-width.
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  // Desktop-only: while collapsed, resting the pointer at the far-left edge for
+  // ~2s re-opens the sidebar (it stays open until toggled again). `edgeArming`
+  // drives the progress sliver that fills over the dwell as a "about to open" cue.
+  const peekTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [edgeArming, setEdgeArming] = useState(false);
   const drawerRef = useRef<HTMLDivElement>(null);
   // Mobile devices may only reach a narrow allowlist of routes (see
   // isMobileAllowedPath() in sidebar-navigation.ts). Any other path on a
@@ -91,6 +96,23 @@ export function ResponsiveLayout({ children }: ResponsiveLayoutProps) {
 
   const openDrawer = useCallback(() => setDrawerOpen(true), []);
   const closeDrawer = useCallback(() => setDrawerOpen(false), []);
+
+  // Arm / cancel the 2-second left-edge dwell that re-opens the collapsed sidebar.
+  const armSidebarPeek = useCallback(() => {
+    if (peekTimer.current) clearTimeout(peekTimer.current);
+    setEdgeArming(true);
+    peekTimer.current = setTimeout(() => {
+      setSidebarCollapsed(false);
+      setEdgeArming(false);
+    }, 2000);
+  }, []);
+  const cancelSidebarPeek = useCallback(() => {
+    if (peekTimer.current) {
+      clearTimeout(peekTimer.current);
+      peekTimer.current = null;
+    }
+    setEdgeArming(false);
+  }, []);
 
   // Pages that ship their own mobile header + quick-access trigger. We must
   // suppress the global `MobileAppHeader` and `QuickAccessFab` on these so the
@@ -126,6 +148,14 @@ export function ResponsiveLayout({ children }: ResponsiveLayoutProps) {
     if (!isMobile) return;
     setDrawerOpen(false);
   }, [pathname, isMobile]);
+
+  // Clear any pending left-edge dwell timer on unmount.
+  useEffect(
+    () => () => {
+      if (peekTimer.current) clearTimeout(peekTimer.current);
+    },
+    [],
+  );
 
   useEffect(() => {
     if (!mobileRouteRestricted) return;
@@ -209,6 +239,42 @@ export function ResponsiveLayout({ children }: ResponsiveLayoutProps) {
             {children}
           </main>
         </div>
+
+        {/* Left-edge reveal — only when the sidebar is collapsed. Rest the
+            pointer against the far-left edge for ~2s and the sidebar re-opens
+            (and stays open until toggled again). */}
+        {sidebarCollapsed && (
+          <div
+            className="fixed bottom-0 left-0 top-10 z-40 w-6"
+            onMouseEnter={armSidebarPeek}
+            onMouseLeave={cancelSidebarPeek}
+            aria-hidden
+          >
+            <AnimatePresence>
+              {edgeArming && (
+                <motion.div
+                  key="edge-arming"
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  transition={{ duration: 0.15 }}
+                  className="absolute inset-y-0 left-0 w-1 overflow-hidden rounded-r-full bg-gray-300/60"
+                >
+                  {/* Fills top→bottom over the 2s dwell — a progress cue that the
+                      sidebar is about to open. */}
+                  <motion.div
+                    initial={{ scaleY: 0 }}
+                    animate={{ scaleY: 1 }}
+                    transition={{ duration: 2, ease: 'linear' }}
+                    style={{ transformOrigin: 'top' }}
+                    className="h-full w-full bg-blue-500"
+                  />
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
+        )}
+
         <CommandBar />
         <Suspense fallback={null}>
           <GlobalDesktopSkuScanner />
