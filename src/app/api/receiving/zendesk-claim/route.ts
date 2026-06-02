@@ -8,7 +8,7 @@ import {
   type ClaimSeverity,
   type ClaimType,
 } from '@/lib/zendesk-claim-template';
-import { updateTicket } from '@/lib/zendesk';
+import { createTicket, ZendeskNotConfiguredError } from '@/lib/zendesk';
 import { buildExternalId, linkTicket } from '@/lib/zendesk-links';
 
 export const dynamic = 'force-dynamic';
@@ -27,9 +27,8 @@ interface ClaimRequest {
 
 /**
  * Create a Zendesk ticket for a receiving claim (damage / missing / wrong
- * item / vendor defect). Uses the existing GAS Web App bridge (same one
- * powering `createZendeskTicket` in src/lib/zendesk.ts) so we share the
- * same email-relay infrastructure as the repair flow.
+ * item / vendor defect) directly via the Zendesk REST API
+ * (`createTicket` in src/lib/zendesk.ts).
  *
  * If the operator edited the subject/body in the modal, those values are
  * sent verbatim. Otherwise the template builder fills them from PO/tracking/
@@ -75,76 +74,50 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
       description = editedDescription || template.description;
     }
 
-    const gasUrl = process.env.ZendeskTicketMailer_GAS_WebappURL;
-    if (!gasUrl) {
-      return NextResponse.json({
-        success: false,
-        error: 'Zendesk bridge not configured',
-        draftBody: description,
-      }, { status: 503 });
-    }
+    const entityType = lineId != null ? 'RECEIVING_LINE' : 'RECEIVING';
+    const entityId = lineId != null ? lineId : receivingId;
 
-    const payload = {
-      subject,
-      description,
-      customerName: 'USAV Receiving',
-      customerEmail: '',
-    };
-
-    let ticketNumber: string | null = null;
+    // Create the ticket directly via the Zendesk REST API. external_id is set at
+    // creation time so the support workspace can resolve this claim's Blob photos.
+    let ticket;
     try {
-      const gasRes = await fetch(gasUrl, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
+      ticket = await createTicket({
+        subject,
+        comment: { body: description, public: false },
+        type: 'task',
+        tags: ['receiving_claim', `claim_${claimType}`],
+        external_id: buildExternalId(entityType, entityId),
       });
-      if (!gasRes.ok) {
-        return NextResponse.json({
-          success: false,
-          error: `Zendesk bridge HTTP ${gasRes.status}`,
-          draftBody: description,
-        }, { status: 502 });
-      }
-      const result = await gasRes.json().catch(() => null);
-      if (!result?.ok) {
-        return NextResponse.json({
-          success: false,
-          error: result?.error || 'Bridge rejected request',
-          draftBody: description,
-        }, { status: 502 });
-      }
-      const raw =
-        result.ticketNumber ?? result.ticket_number ?? result.ticketId ?? result.ticket_id ?? result.id;
-      ticketNumber = raw == null
-        ? null
-        : (String(raw).startsWith('#') ? String(raw) : `#${raw}`);
     } catch (err: unknown) {
+      if (err instanceof ZendeskNotConfiguredError) {
+        return NextResponse.json({
+          success: false,
+          error: 'Zendesk is not configured',
+          draftBody: description,
+        }, { status: 503 });
+      }
       return NextResponse.json({
         success: false,
-        error: err instanceof Error ? err.message : 'Bridge request failed',
+        error: err instanceof Error ? err.message : 'Zendesk request failed',
         draftBody: description,
       }, { status: 502 });
     }
 
-    // Backfill the ticket→entity link so the support workspace can resolve this
-    // claim's Blob photos. Best-effort: GAS already created the ticket, so a
-    // failure here must not turn a successful claim into an error.
-    const numericTicketId = ticketNumber ? Number(String(ticketNumber).replace(/^#/, '')) : NaN;
-    if (Number.isInteger(numericTicketId) && numericTicketId > 0) {
-      const entityType = lineId != null ? 'RECEIVING_LINE' : 'RECEIVING';
-      const entityId = lineId != null ? lineId : receivingId;
-      try {
-        await updateTicket(numericTicketId, { external_id: buildExternalId(entityType, entityId) });
-        await linkTicket({
-          orgId: ctx.organizationId,
-          zendeskTicketId: numericTicketId,
-          entityType,
-          entityId,
-          staffId: ctx.staffId,
-        });
-      } catch (linkErr) {
-        console.warn('[POST /api/receiving/zendesk-claim] ticket link backfill failed', linkErr);
-      }
+    const ticketNumber = `#${ticket.id}`;
+
+    // Write the ticket→entity link row (the support workspace prefers ticket_links
+    // over external_id). Best-effort: the ticket already exists, so a failure here
+    // must not turn a successful claim into an error.
+    try {
+      await linkTicket({
+        orgId: ctx.organizationId,
+        zendeskTicketId: ticket.id,
+        entityType,
+        entityId,
+        staffId: ctx.staffId,
+      });
+    } catch (linkErr) {
+      console.warn('[POST /api/receiving/zendesk-claim] ticket link backfill failed', linkErr);
     }
 
     return NextResponse.json({ success: true, ticketNumber });

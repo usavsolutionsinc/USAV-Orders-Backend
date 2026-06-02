@@ -38,6 +38,19 @@ module.exports = {
       from: {},
       to: { dependencyTypes: ['deprecated'] },
     },
+    {
+      name: 'design-system-stays-generic',
+      comment:
+        'design-system must stay context-free: it should not import app/feature/domain code ' +
+        '(components, hooks, lib, app, features, queries, services, contexts, data). ' +
+        'Shared UI that needs app context belongs in components/ui instead. ' +
+        'Currently `warn` because ~35 pre-existing violations exist (Icons barrel, a few ' +
+        'mis-filed feature components); see COMPONENT_DEDUP_PLAN.md. Drive these to zero, ' +
+        'then raise severity to `error`.',
+      severity: 'warn',
+      from: { path: '^src/design-system' },
+      to: { path: '^src/(components|hooks|lib|app|features|queries|services|contexts|data)(/|$)' },
+    },
   ],
   options: {
     doNotFollow: {

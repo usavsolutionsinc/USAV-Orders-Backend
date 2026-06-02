@@ -1,5 +1,6 @@
 /**
- * Zendesk integration utility for creating repair service tickets via Google Apps Script Web App
+ * Zendesk integration utility for creating repair service tickets via the
+ * Zendesk REST API.
  */
 
 interface RepairTicketData {
@@ -162,19 +163,21 @@ function calculateDueDate(startDate: Date): string {
 }
 
 /**
- * Send ticket data to Google Apps Script Web App to create a Zendesk ticket
+ * Create a Zendesk repair-service ticket directly via the REST API.
+ * Returns the ticket number formatted as `#<id>` (e.g. `#12345`).
+ * Throws ZendeskNotConfiguredError / ZendeskApiError on failure.
  */
 export async function createZendeskTicket(data: RepairTicketData): Promise<string | null> {
-    const { 
+    const {
         repairServiceId,
         repairServiceNumber,
-        customerName, 
-        customerPhone, 
-        customerEmail, 
-        productTitle, 
+        customerName,
+        customerPhone,
+        customerEmail,
+        productTitle,
         contactInfo,
         issue,
-        serialNumber, 
+        serialNumber,
         price,
         notes
     } = data;
@@ -187,77 +190,35 @@ export async function createZendeskTicket(data: RepairTicketData): Promise<strin
         if (!productTitle) missing.push('Product Title');
         if (!serialNumber) missing.push('Serial #');
         if (!price) missing.push('Price');
-        
-        throw new Error(`Missing required fields: ${missing.join(', ')}`);
-    }
 
-    const gasUrl = process.env.ZendeskTicketMailer_GAS_WebappURL;
-    if (!gasUrl) {
-        console.error('Missing ZendeskTicketMailer_GAS_WebappURL environment variable');
-        throw new Error('Server configuration error: Missing Web App URL');
+        throw new Error(`Missing required fields: ${missing.join(', ')}`);
     }
 
     // 2. Calculate due date
     const dueDate = calculateDueDate(new Date());
 
-    // 3. Format Price (ensure it has $)
-    const formattedPrice = price.startsWith('$') ? price : `$${price}`;
-
-    // 4. Build JSON payload - Format like repair service paper
+    // 3. Build description — formatted like the repair service paper
     let description = `RS Table ID: ${repairServiceId}\nRS Number: ${repairServiceNumber}\n\nProduct Title: ${productTitle}\n\nSN & Issue: ${serialNumber}, ${issue}\n\nContact Info: ${contactInfo}\n\nDue Date: ${dueDate}`;
-    
+
     // Add notes at the end if present
     if (notes) {
         description += `\n\n${notes}`;
     }
-    
-    const payload = {
+
+    // 4. Create the ticket directly via the Zendesk REST API. external_id links
+    //    it to the repair entity so the support workspace can resolve photos.
+    //    The first comment is internal (public: false) so creating the intake
+    //    ticket never emails the walk-in customer.
+    const ticket = await createTicket({
         subject: `Repair RS ${repairServiceId}: Walk-in ${customerName} - ${customerPhone} - Due Date: ${dueDate}`,
-        description: description,
-        customerName: customerName,
-        customerEmail: customerEmail || ''
-    };
+        comment: { body: description, public: false },
+        type: 'task',
+        tags: ['repair_service', 'walk_in'],
+        external_id: `repair:${repairServiceId}`,
+        ...(customerEmail ? { requester: { name: customerName, email: customerEmail } } : {}),
+    });
 
-    try {
-        const response = await fetch(gasUrl, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify(payload),
-        });
-
-        if (!response.ok) {
-            const errorText = await response.text();
-            console.error('GAS Web App Error:', errorText);
-            throw new Error('The ticket could not be created (Web App error)');
-        }
-
-        const result = await response.json();
-        console.log('Zendesk GAS Response:', JSON.stringify(result));
-        
-        if (result.ok) {
-            // Try different possible property names for ticket number
-            const ticketNumber = result.ticketNumber || result.ticket_number || result.ticketId || result.ticket_id || result.id;
-            
-            if (!ticketNumber) {
-                console.error('Zendesk ticket created but no ticket number found in response:', result);
-                throw new Error('Ticket created but ticket number not returned');
-            }
-            
-            // Format ticket number with # prefix if not already present
-            const formattedTicketNumber = ticketNumber.toString().startsWith('#') 
-                ? ticketNumber.toString() 
-                : `#${ticketNumber}`;
-            
-            return formattedTicketNumber;
-        } else {
-            throw new Error(result.error || 'The ticket could not be created');
-        }
-    } catch (error: any) {
-        console.error('Error calling GAS Web App:', error);
-        throw new Error(error.message || 'The ticket could not be created due to a network error');
-    }
+    return `#${ticket.id}`;
 }
 
 /* ────────────────────────────────────────────────────────────────────────

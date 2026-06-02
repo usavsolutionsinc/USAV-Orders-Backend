@@ -151,7 +151,7 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
             }
         }
 
-        // Step 4: Create Zendesk ticket via GAS Web App
+        // Step 4: Create Zendesk ticket via the Zendesk REST API
         let zendeskTicketNumber: string | null = null;
         try {
             zendeskTicketNumber = await createZendeskTicket({

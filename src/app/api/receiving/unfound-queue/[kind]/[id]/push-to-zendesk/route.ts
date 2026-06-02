@@ -4,9 +4,8 @@
  * Composes a Zendesk ticket from the queue row + source context and writes
  * the ticket id back onto unfound_overlay (zendesk_ticket_id + zendesk_synced_at).
  *
- * Uses the same GAS bridge as /api/receiving/zendesk-claim
- * (process.env.ZendeskTicketMailer_GAS_WebappURL). The bridge handles the
- * actual Zendesk API auth + ticket create.
+ * Creates the ticket directly via the Zendesk REST API (`createTicket` in
+ * src/lib/zendesk.ts), the same client used by /api/receiving/zendesk-claim.
  *
  * Body (optional overrides):
  *   subject?: string       — operator-edited subject; falls back to a generated one
@@ -18,6 +17,7 @@ import pool from '@/lib/db';
 import { withAuth } from '@/lib/auth/withAuth';
 import { invalidateCacheTags } from '@/lib/cache/upstash-cache';
 import { after } from 'next/server';
+import { createTicket, ZendeskNotConfiguredError } from '@/lib/zendesk';
 
 const ALLOWED_KINDS = new Set(['email_po', 'unmatched_receiving', 'station_exception']);
 
@@ -119,73 +119,33 @@ export const POST = withAuth(async (request: NextRequest, ctx) => {
   const subject = (body.subject?.trim() || generated.subject).slice(0, 250);
   const description = body.description?.trim() || generated.description;
 
-  const gasUrl = process.env.ZendeskTicketMailer_GAS_WebappURL;
-  if (!gasUrl) {
-    // Surface the would-be ticket body so the operator can copy/paste while
-    // the bridge is being configured.
-    return NextResponse.json(
-      {
-        success: false,
-        error: 'Zendesk bridge not configured (ZendeskTicketMailer_GAS_WebappURL)',
-        draftSubject: subject,
-        draftBody: description,
-      },
-      { status: 503 },
-    );
-  }
-
-  let ticketNumber: string | null = null;
+  // Create the ticket directly via the Zendesk REST API.
+  let ticket;
   try {
-    const gasRes = await fetch(gasUrl, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        subject,
-        description,
-        customerName: 'USAV Receiving — Unfound Queue',
-        customerEmail: '',
-      }),
+    ticket = await createTicket({
+      subject,
+      comment: { body: description, public: false },
+      type: 'task',
+      tags: ['unfound_queue', `unfound_${kind}`],
     });
-    if (!gasRes.ok) {
-      return NextResponse.json(
-        {
-          success: false,
-          error: `Zendesk bridge HTTP ${gasRes.status}`,
-          draftSubject: subject,
-          draftBody: description,
-        },
-        { status: 502 },
-      );
-    }
-    const result = (await gasRes.json().catch(() => null)) as
-      | Record<string, unknown>
-      | null;
-    if (!result?.ok) {
-      return NextResponse.json(
-        {
-          success: false,
-          error: (result?.error as string) || 'Bridge rejected request',
-          draftSubject: subject,
-          draftBody: description,
-        },
-        { status: 502 },
-      );
-    }
-    const rawId =
-      (result.ticketNumber as string | number | undefined) ??
-      (result.ticket_number as string | number | undefined) ??
-      (result.ticketId as string | number | undefined) ??
-      (result.ticket_id as string | number | undefined) ??
-      (result.id as string | number | undefined);
-    if (rawId != null) {
-      const s = String(rawId);
-      ticketNumber = s.startsWith('#') ? s : `#${s}`;
-    }
   } catch (err: unknown) {
+    if (err instanceof ZendeskNotConfiguredError) {
+      // Surface the would-be ticket body so the operator can copy/paste while
+      // Zendesk credentials are being configured.
+      return NextResponse.json(
+        {
+          success: false,
+          error: 'Zendesk is not configured',
+          draftSubject: subject,
+          draftBody: description,
+        },
+        { status: 503 },
+      );
+    }
     return NextResponse.json(
       {
         success: false,
-        error: err instanceof Error ? err.message : 'Bridge request failed',
+        error: err instanceof Error ? err.message : 'Zendesk request failed',
         draftSubject: subject,
         draftBody: description,
       },
@@ -193,17 +153,7 @@ export const POST = withAuth(async (request: NextRequest, ctx) => {
     );
   }
 
-  if (!ticketNumber) {
-    return NextResponse.json(
-      {
-        success: false,
-        error: 'Bridge returned no ticket id',
-        draftSubject: subject,
-        draftBody: description,
-      },
-      { status: 502 },
-    );
-  }
+  const ticketNumber = `#${ticket.id}`;
 
   // Persist the ticket id onto the overlay (upsert — overlay row may not exist yet).
   await pool.query(

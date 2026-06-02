@@ -59,10 +59,10 @@ This design system implements the "Kinetic Ledger" direction for dense operation
 ### Components (`components/`)
 
 - Layout/data rows: `DetailLineRow`, `DetailsPanelRow`, `PanelSection`, `MetricLineRow`
-- Status/feedback: `StatusBadge`, `InlineSaveIndicator`, `AlertLineRow`
+- Status/feedback: `StatusBadge`, `InlineSaveIndicator`
 - Values/editing: `UnderlineValue`, `InlineEditableValue`
 - Actions: `CopyActionIcon`, `ExternalLinkActionIcon`
-- Search/labels: `CompactSearchInput`, `StatusMicroLabel`
+- Search/labels: `StatusMicroLabel`
 - Overlays: `AssignmentOverlayCard`, `Tooltip`
 - **New components:**
   - `DateGroupHeader.tsx` — sticky date group header for tables with variant-based tonal backgrounds

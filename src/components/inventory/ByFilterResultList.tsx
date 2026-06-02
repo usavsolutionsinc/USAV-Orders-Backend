@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { Loader2 } from '@/components/Icons';
 import type { UnitListResponse, UnitListRow } from './types';
+import { inventoryStatusBadgeClass } from './status-classes';
 
 const PAGE_SIZE = 100;
 
@@ -11,28 +12,6 @@ interface ByFilterResultListProps {
     states: string[];
     conditions: string[];
 }
-
-const STATUS_COLOR: Record<string, string> = {
-    UNKNOWN: 'bg-gray-100 text-gray-600',
-    RECEIVED: 'bg-blue-50 text-blue-700',
-    TRIAGED: 'bg-blue-50 text-blue-700',
-    IN_TEST: 'bg-indigo-50 text-indigo-700',
-    IN_REPAIR: 'bg-amber-50 text-amber-700',
-    REPAIR_DONE: 'bg-amber-50 text-amber-700',
-    TESTED: 'bg-emerald-50 text-emerald-700',
-    GRADED: 'bg-emerald-50 text-emerald-700',
-    STOCKED: 'bg-green-50 text-green-700',
-    ALLOCATED: 'bg-purple-50 text-purple-700',
-    PICKED: 'bg-purple-50 text-purple-700',
-    PACKED: 'bg-purple-50 text-purple-700',
-    LABELED: 'bg-purple-50 text-purple-700',
-    STAGED: 'bg-purple-50 text-purple-700',
-    SHIPPED: 'bg-gray-100 text-gray-700',
-    RETURNED: 'bg-orange-50 text-orange-700',
-    RMA: 'bg-orange-50 text-orange-700',
-    ON_HOLD: 'bg-red-50 text-red-700',
-    SCRAPPED: 'bg-red-100 text-red-700',
-};
 
 function relativeTime(iso: string | null): string {
     if (!iso) return '—';
@@ -180,7 +159,7 @@ function UnitRow({ row }: { row: UnitListRow }) {
     const binHref = row.current_location
         ? `/inventory?bin=${encodeURIComponent(row.current_location)}`
         : null;
-    const statusTone = STATUS_COLOR[row.current_status] || 'bg-gray-100 text-gray-600';
+    const statusTone = inventoryStatusBadgeClass(row.current_status);
 
     return (
         <li className="flex items-start gap-3 border-b border-gray-100 px-4 py-2.5 hover:bg-blue-50/40 sm:px-6">

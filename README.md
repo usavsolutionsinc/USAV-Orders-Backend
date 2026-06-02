@@ -184,7 +184,6 @@ npm run dev
 - `ZENDESK_SUBDOMAIN`
 - `ZENDESK_EMAIL` or `ZENDESK_API_USER`
 - `ZENDESK_API_TOKEN`
-- `ZendeskTicketMailer_GAS_WebappURL` (optional GAS bridge)
 - `ZOHO_ORG_ID` or `ZOHO_ORGANIZATION_ID`
 - `ZOHO_DOMAIN` (optional)
 - `ZOHO_CLIENT_ID`

@@ -2,35 +2,15 @@
 
 import Link from 'next/link';
 import type { PulseEventRow } from './types';
+import { inventoryStatusBadgeClass } from './status-classes';
 
 interface EventRowProps {
     event: PulseEventRow;
 }
 
-const STATUS_COLOR: Record<string, string> = {
-    RECEIVED: 'bg-blue-50 text-blue-700',
-    TRIAGED: 'bg-blue-50 text-blue-700',
-    IN_TEST: 'bg-indigo-50 text-indigo-700',
-    IN_REPAIR: 'bg-amber-50 text-amber-700',
-    REPAIR_DONE: 'bg-amber-50 text-amber-700',
-    TESTED: 'bg-emerald-50 text-emerald-700',
-    GRADED: 'bg-emerald-50 text-emerald-700',
-    STOCKED: 'bg-green-50 text-green-700',
-    ALLOCATED: 'bg-purple-50 text-purple-700',
-    PICKED: 'bg-purple-50 text-purple-700',
-    PACKED: 'bg-purple-50 text-purple-700',
-    LABELED: 'bg-purple-50 text-purple-700',
-    STAGED: 'bg-purple-50 text-purple-700',
-    SHIPPED: 'bg-gray-100 text-gray-700',
-    RETURNED: 'bg-orange-50 text-orange-700',
-    RMA: 'bg-orange-50 text-orange-700',
-    ON_HOLD: 'bg-red-50 text-red-700',
-    SCRAPPED: 'bg-red-100 text-red-700',
-};
-
 function statusBadgeClass(status: string | null): string {
     if (!status) return 'bg-gray-100 text-gray-500';
-    return STATUS_COLOR[status] || 'bg-gray-100 text-gray-600';
+    return inventoryStatusBadgeClass(status);
 }
 
 function relativeTime(iso: string): string {

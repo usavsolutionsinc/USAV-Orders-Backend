@@ -7,6 +7,7 @@ import {
     SERIAL_STATUS_VALUES,
     CONDITION_GRADE_VALUES,
 } from './types';
+import { inventoryStatusChipClass } from './status-classes';
 
 interface InventoryFilterChipsProps {
     states: string[];
@@ -14,28 +15,6 @@ interface InventoryFilterChipsProps {
     onChange: (next: { states?: string[]; conditions?: string[] }) => void;
     onClear: () => void;
 }
-
-const STATUS_COLOR: Record<string, string> = {
-    UNKNOWN: 'bg-gray-100 text-gray-600 ring-gray-200',
-    RECEIVED: 'bg-blue-50 text-blue-700 ring-blue-200',
-    TRIAGED: 'bg-blue-50 text-blue-700 ring-blue-200',
-    IN_TEST: 'bg-indigo-50 text-indigo-700 ring-indigo-200',
-    IN_REPAIR: 'bg-amber-50 text-amber-700 ring-amber-200',
-    REPAIR_DONE: 'bg-amber-50 text-amber-700 ring-amber-200',
-    TESTED: 'bg-emerald-50 text-emerald-700 ring-emerald-200',
-    GRADED: 'bg-emerald-50 text-emerald-700 ring-emerald-200',
-    STOCKED: 'bg-green-50 text-green-700 ring-green-200',
-    ALLOCATED: 'bg-purple-50 text-purple-700 ring-purple-200',
-    PICKED: 'bg-purple-50 text-purple-700 ring-purple-200',
-    PACKED: 'bg-purple-50 text-purple-700 ring-purple-200',
-    LABELED: 'bg-purple-50 text-purple-700 ring-purple-200',
-    STAGED: 'bg-purple-50 text-purple-700 ring-purple-200',
-    SHIPPED: 'bg-gray-100 text-gray-700 ring-gray-200',
-    RETURNED: 'bg-orange-50 text-orange-700 ring-orange-200',
-    RMA: 'bg-orange-50 text-orange-700 ring-orange-200',
-    ON_HOLD: 'bg-red-50 text-red-700 ring-red-200',
-    SCRAPPED: 'bg-red-100 text-red-700 ring-red-300',
-};
 
 const CONDITION_COLOR: Record<string, string> = {
     BRAND_NEW: 'bg-white text-gray-700 ring-gray-300',
@@ -87,7 +66,7 @@ export function InventoryFilterChips({
                 <div className="grid grid-cols-2 gap-1 sm:grid-cols-3">
                     {SERIAL_STATUS_VALUES.map((s) => {
                         const selected = stateSet.has(s);
-                        const tone = STATUS_COLOR[s] || 'bg-gray-100 text-gray-700 ring-gray-200';
+                        const tone = inventoryStatusChipClass(s);
                         return (
                             <button
                                 key={s}

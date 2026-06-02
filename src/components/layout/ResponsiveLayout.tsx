@@ -10,6 +10,7 @@ import { useUIMode } from '@/design-system/providers/UIModeProvider';
 import { X } from '@/components/Icons';
 import { getSidebarRouteKey, isMobileAllowedPath } from '@/lib/sidebar-navigation';
 import { QuickAccessFab } from '@/components/layout/QuickAccessFab';
+import { GlobalHeader } from '@/components/layout/GlobalHeader';
 import { GlobalDesktopSkuScanner } from '@/components/layout/GlobalDesktopSkuScanner';
 import { MobileScanFab } from '@/components/mobile/shared/MobileScanFab';
 import { usePhoneScanBridge } from '@/hooks/usePhoneScanBridge';
@@ -206,6 +207,7 @@ export function ResponsiveLayout({ children }: ResponsiveLayoutProps) {
           </Suspense>
         )}
         <div className="flex-1 flex flex-col min-w-0 h-full overflow-hidden relative">
+          <GlobalHeader />
           <main className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
             {children}
           </main>
@@ -214,7 +216,6 @@ export function ResponsiveLayout({ children }: ResponsiveLayoutProps) {
         <Suspense fallback={null}>
           <GlobalDesktopSkuScanner />
         </Suspense>
-        {!hideFabPage && <QuickAccessFab />}
         {drawerOverlay}
       </div>
     );
