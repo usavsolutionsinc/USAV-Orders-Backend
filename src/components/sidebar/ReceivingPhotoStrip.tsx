@@ -5,6 +5,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useAblyChannel } from '@/hooks/useAblyChannel';
 import { PhotoGallery } from '@/components/shipped/PhotoGallery';
 import { NasReceivingAttach } from '@/components/sidebar/NasReceivingAttach';
+import { nasConfigured } from '@/lib/nas-photos';
 
 interface PhotoRow {
   id: number;
@@ -85,21 +86,32 @@ export const ReceivingPhotoStrip = memo(function ReceivingPhotoStrip({
 
   const refresh = () => queryClient.invalidateQueries({ queryKey });
 
+  // Empty state: a single full-width "click to add photos" dropzone (when the
+  // NAS is configured). With photos: a compact attach button above the gallery.
+  if (galleryPhotos.length === 0) {
+    return nasConfigured() ? (
+      <NasReceivingAttach
+        receivingId={receivingId}
+        onAttached={refresh}
+        fullWidth
+        label="Click to add photos"
+      />
+    ) : (
+      <p className="text-micro font-bold uppercase tracking-widest text-gray-400">
+        No photos yet.
+      </p>
+    );
+  }
+
   return (
     <div className="space-y-2">
       <NasReceivingAttach receivingId={receivingId} onAttached={refresh} />
-      {galleryPhotos.length > 0 ? (
-        <PhotoGallery
-          photos={galleryPhotos}
-          orderId={`RCV-${receivingId}`}
-          launcherLayout="toolbar"
-          onPhotoDeleted={refresh}
-        />
-      ) : (
-        <p className="text-micro font-bold uppercase tracking-widest text-gray-400">
-          No photos yet — pair some from the NAS.
-        </p>
-      )}
+      <PhotoGallery
+        photos={galleryPhotos}
+        orderId={`RCV-${receivingId}`}
+        launcherLayout="toolbar"
+        onPhotoDeleted={refresh}
+      />
     </div>
   );
 });

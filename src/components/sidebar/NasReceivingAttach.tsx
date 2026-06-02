@@ -8,6 +8,10 @@ interface Props {
   receivingId: number;
   /** Called after one or more photos are attached, so the gallery can refetch. */
   onAttached: () => void;
+  /** Render as a full-width dropzone-style block (used for the empty state). */
+  fullWidth?: boolean;
+  /** Button label (defaults to "Select from NAS"). */
+  label?: string;
 }
 
 /**
@@ -22,7 +26,7 @@ interface Props {
  *
  * Hidden entirely unless NEXT_PUBLIC_NAS_PHOTOS_BASE_URL is configured.
  */
-export function NasReceivingAttach({ receivingId, onAttached }: Props) {
+export function NasReceivingAttach({ receivingId, onAttached, fullWidth = false, label }: Props) {
   const [open, setOpen] = useState(false);
   if (!nasConfigured()) return null;
 
@@ -31,10 +35,14 @@ export function NasReceivingAttach({ receivingId, onAttached }: Props) {
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-2.5 text-micro font-black uppercase tracking-widest text-gray-700 transition-colors hover:bg-gray-50"
         title="Pair photos from the NAS to this PO"
+        className={
+          fullWidth
+            ? 'flex w-full items-center justify-center gap-1.5 rounded-xl border border-dashed border-gray-300 bg-gray-50/60 px-4 py-6 text-caption font-bold uppercase tracking-widest text-gray-500 transition-colors hover:border-blue-300 hover:bg-blue-50/40 hover:text-blue-700'
+            : 'inline-flex h-8 items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-2.5 text-micro font-black uppercase tracking-widest text-gray-700 transition-colors hover:bg-gray-50'
+        }
       >
-        + Select from NAS
+        + {label ?? 'Select from NAS'}
       </button>
       {open ? (
         <NasPickerDialog
