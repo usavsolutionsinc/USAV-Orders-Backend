@@ -116,13 +116,16 @@ export const GET = withAuth(async (request: NextRequest) => {
           : sortRaw === 'recently_added'
             ? 'recently_added'
             : 'zoho_newest';
-    const view: 'all' | 'recent' | 'received' | 'incoming' | 'activity' | null =
+    const view: 'all' | 'recent' | 'received' | 'incoming' | 'activity' | 'testing' | null =
       viewRaw === 'recent' ? 'recent'
         : viewRaw === 'received' ? 'received'
         : viewRaw === 'all' ? 'all'
         : viewRaw === 'incoming' ? 'incoming'
         : viewRaw === 'activity' ? 'activity'
+        : viewRaw === 'testing' ? 'testing'
         : null;
+    // view=testing only: scope the recently-tested feed to one staff member.
+    const testerId = Number(searchParams.get('tester'));
     const include     = String(searchParams.get('include') || '').trim().toLowerCase();
     const includeSerials = include.split(',').map((s) => s.trim()).includes('serials');
 
@@ -380,6 +383,24 @@ export const GET = withAuth(async (request: NextRequest) => {
         `(rl.workflow_status IS NULL OR rl.workflow_status IN ('EXPECTED','ARRIVED','MATCHED','UNBOXED','AWAITING_TEST','IN_TEST','PASSED','DONE'))
          AND NOT (rl.workflow_status = 'EXPECTED' AND COALESCE(rl.quantity_received, 0) = 0)`,
       );
+    } else if (view === 'testing') {
+      // "Testing" = the recently-tested feed, backed by the testing_results
+      // log. A line qualifies once it has at least one recorded verdict; when
+      // a tester is supplied we scope to that staff's own tested items. Ordered
+      // by rl.updated_at below — the per-verdict line rollup bumps it, so the
+      // most recently tested rises to the top.
+      if (Number.isFinite(testerId) && testerId > 0) {
+        conditions.push(
+          `EXISTS (SELECT 1 FROM testing_results tr
+                    WHERE tr.receiving_line_id = rl.id AND tr.tested_by = $${idx})`,
+        );
+        values.push(testerId);
+        idx++;
+      } else {
+        conditions.push(
+          `EXISTS (SELECT 1 FROM testing_results tr WHERE tr.receiving_line_id = rl.id)`,
+        );
+      }
     } else if (view === 'incoming') {
       // "Incoming" = on a Zoho PO, vendor has issued it, warehouse hasn't
       // touched it yet. Backed by the /api/cron/zoho/incoming-po-sync delta
@@ -493,7 +514,7 @@ export const GET = withAuth(async (request: NextRequest) => {
         ? incomingOrderBy
         : view === 'recent' || view === 'all' || view === 'activity'
           ? `ORDER BY COALESCE(rs_agg.last_scan::text, r.received_at::text, rl.created_at::text) DESC, rl.id DESC`
-          : view === 'received'
+          : view === 'received' || view === 'testing'
             ? `ORDER BY COALESCE(rl.updated_at::text, rl.created_at::text) DESC, rl.id DESC`
             : `ORDER BY COALESCE(rl.zoho_last_modified_time, rl.created_at::text) DESC, rl.id DESC`;
     // The lateral aggregate is needed for view=recent and view=all so the

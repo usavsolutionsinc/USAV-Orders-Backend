@@ -124,8 +124,15 @@ export async function createSession(opts: CreateSessionOpts): Promise<SessionRow
   const defaultExpiresAt = new Date(Date.now() + window.absoluteMs);
   // Shift-bound expiry wins (if it's sooner). Falls back to the device's
   // absolute window when no shift is provided.
-  const expiresAt = opts.expiresAt && opts.expiresAt.getTime() > Date.now()
-    ? new Date(Math.min(opts.expiresAt.getTime(), defaultExpiresAt.getTime()))
+  //
+  // Exception: 'persistent' staff opted out of auto-signout — the whole point
+  // of the policy is to stay signed in across days. Binding their session to
+  // shift end (min() below) would silently defeat that, so we ignore the
+  // shift window for them and use the full 1-year persistent window.
+  const honorShift =
+    policy !== 'persistent' && opts.expiresAt && opts.expiresAt.getTime() > Date.now();
+  const expiresAt = honorShift
+    ? new Date(Math.min(opts.expiresAt!.getTime(), defaultExpiresAt.getTime()))
     : defaultExpiresAt;
 
   // staff_sessions.organization_id is derived from staff.organization_id at
@@ -280,17 +287,20 @@ export async function loadSessionWithReason(
 }
 
 /**
- * Bump last_seen_at. Best-effort; failure must not break the request.
- * Called from middleware after a successful loadSession.
+ * Bump last_seen_at and return the session's (possibly slid) expires_at so
+ * the caller can refresh the cookie's max-age to match. Best-effort; failure
+ * must not break the request, so it resolves to null on error.
+ *
+ * Called from the /api/auth/session heartbeat after a successful loadSession.
  */
-export async function touchSession(sid: string): Promise<void> {
+export async function touchSession(sid: string): Promise<Date | null> {
   try {
     // For persistent-policy staff, slide expires_at forward so the session
     // never crosses its absolute window as long as they keep using it.
     // Default/extended policies leave expires_at alone — absolute window is
     // a hard ceiling for them.
     const persistentMs = PERSISTENT_WINDOW.absoluteMs;
-    await pool.query(
+    const r = await pool.query(
       `UPDATE staff_sessions s
           SET last_seen_at = NOW(),
               expires_at = CASE
@@ -301,11 +311,14 @@ export async function touchSession(sid: string): Promise<void> {
          FROM staff st
         WHERE s.sid = $1
           AND s.revoked_at IS NULL
-          AND st.id = s.staff_id`,
+          AND st.id = s.staff_id
+      RETURNING s.expires_at`,
       [sid, String(persistentMs)],
     );
+    return (r.rows[0] as { expires_at: Date } | undefined)?.expires_at ?? null;
   } catch {
     // swallow
+    return null;
   }
 }
 

@@ -218,6 +218,10 @@ export function LineEditPanel({
     !row.disposition_code || row.disposition_code === 'HOLD' ? 'ACCEPT' : row.disposition_code,
   );
   const [cond, setCond] = useState(row.condition_grade || 'USED_A');
+  // Effective condition of the currently-selected unit on a multi-qty line.
+  // Reported up from ReceivingUnitRows so the label preview/print reflects the
+  // selected item rather than the line-level grade. Null on single-qty lines.
+  const [unitLabelCondition, setUnitLabelCondition] = useState<string | null>(null);
   const [notes, setNotes] = useState('');
   const [supportNotes, setSupportNotes] = useState('');
   const [trackingEdit, setTrackingEdit] = useState(row.tracking_number || '');
@@ -349,6 +353,9 @@ export function LineEditPanel({
     setQa(!row.qa_status || row.qa_status === 'PENDING' ? 'PASSED' : row.qa_status);
     setDisp(!row.disposition_code || row.disposition_code === 'HOLD' ? 'ACCEPT' : row.disposition_code);
     setCond(row.condition_grade || 'USED_A');
+    // Clear the per-unit label override on line switch — the new line's
+    // ReceivingUnitRows (if multi-qty) re-reports its selection on mount.
+    setUnitLabelCondition(null);
     setTrackingEdit(row.tracking_number || '');
     setPoNumberEdit((row.zoho_purchaseorder_number || row.zoho_purchaseorder_id || '').trim());
   }, [row.id, row.qa_status, row.disposition_code, row.condition_grade, row.tracking_number, row.receiving_type, row.zoho_purchaseorder_number, row.zoho_purchaseorder_id]);
@@ -1187,6 +1194,11 @@ export function LineEditPanel({
         ? 'Unfound'
         : 'Unknown';
   const labelDate = new Date().toLocaleDateString('en-US', { month: 'numeric', day: 'numeric', year: '2-digit' });
+  // On a multi-qty line, the printed/previewed label tracks the selected
+  // unit's condition (reported up from ReceivingUnitRows) so each item gets a
+  // label with its own grade. Single-qty lines use the line-level grade.
+  const isMultiQtyLine = (row.quantity_expected ?? 0) > 1;
+  const labelConditionCode = isMultiQtyLine && unitLabelCondition ? unitLabelCondition : cond;
   const labelPayload: ReceivingLabelPayload = {
     receivingId: row.receiving_id ?? null,
     scanValue,
@@ -1196,7 +1208,7 @@ export function LineEditPanel({
     // is an internal RCV-{id} (unmatched cartons with no PO).
     trackingNumber: trackingHint || null,
     notes: notes.trim(),
-    conditionCode: cond,
+    conditionCode: labelConditionCode,
     date: labelDate,
   };
 
@@ -1964,6 +1976,7 @@ export function LineEditPanel({
               <PoLinesAccordion
                 receivingId={row.receiving_id}
                 activeLineId={row.id}
+                activeConditionOverride={isMultiQtyLine ? unitLabelCondition : null}
                 activeRowSlot={({ serials }) => (
                   <div className="space-y-3">
                     {/* Multi-qty same-product lines split into one row per unit
@@ -1988,6 +2001,7 @@ export function LineEditPanel({
                           void replaceSerialUnit(original, next)
                         }
                         onSetUnitGrade={(id, grade) => setUnitGrade(id, grade)}
+                        onActiveConditionChange={setUnitLabelCondition}
                       />
                     ) : (
                       <>

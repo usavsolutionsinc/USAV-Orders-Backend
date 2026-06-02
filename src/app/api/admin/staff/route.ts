@@ -12,6 +12,7 @@ import pool from '@/lib/db';
 import { withAuth } from '@/lib/auth/withAuth';
 import { audit } from '@/lib/auth/audit';
 import { canonicalRole, ALL_ROLES, type StaffRole } from '@/lib/auth/permissions';
+import { invalidateStaffRolesCache } from '@/lib/auth/role-store';
 
 export const runtime = 'nodejs';
 
@@ -42,13 +43,37 @@ export const POST = withAuth(async (req, ctx) => {
     return NextResponse.json({ error: 'INVALID_ROLE', allowed: ALL_ROLES }, { status: 400 });
   }
 
-  const r = await pool.query(
-    `INSERT INTO staff (name, role, status, employee_code, active)
-     VALUES ($1, $2, 'invited', $3, true)
-     RETURNING id, name, role, status, employee_code`,
-    [name, canonical, employeeCode],
-  );
-  const created = r.rows[0] as { id: number; name: string; role: string; status: string };
+  // Create the staff row AND its matching `staff_roles` assignment in one
+  // transaction. Effective permissions are resolved from `staff_roles × roles`
+  // (see current-user.ts) — the `staff.role` column is only a display-label
+  // fallback. Inserting the staff row alone leaves the new hire with an empty
+  // permission set, so every gated route 403s even though the UI shows their
+  // role. Roles can still be edited afterward via PUT /api/admin/staff/[id]/roles.
+  const client = await pool.connect();
+  let created: { id: number; name: string; role: string; status: string };
+  try {
+    await client.query('BEGIN');
+    const r = await client.query(
+      `INSERT INTO staff (name, role, status, employee_code, active)
+       VALUES ($1, $2, 'invited', $3, true)
+       RETURNING id, name, role, status, employee_code`,
+      [name, canonical, employeeCode],
+    );
+    created = r.rows[0] as { id: number; name: string; role: string; status: string };
+    await client.query(
+      `INSERT INTO staff_roles (staff_id, role_id, granted_at, granted_by)
+       SELECT $1, r.id, NOW(), $3 FROM roles r WHERE r.key = $2
+       ON CONFLICT (staff_id, role_id) DO NOTHING`,
+      [created.id, canonical, ctx.staffId ?? null],
+    );
+    await client.query('COMMIT');
+  } catch (err) {
+    await client.query('ROLLBACK');
+    throw err;
+  } finally {
+    client.release();
+  }
+  invalidateStaffRolesCache(created.id);
   await audit({
     staffId: ctx.staffId, sid: ctx.session?.sid ?? null,
     event: 'staff.created', result: 'ok',

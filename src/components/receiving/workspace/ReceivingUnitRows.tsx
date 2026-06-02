@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { ConditionPills } from './ConditionPills';
 import { UnitSlotList, type UnitLike } from './UnitSlotList';
 import { conditionGradeTableLabel } from '@/components/station/receiving-constants';
@@ -24,6 +24,13 @@ interface Props {
   onReplaceSerial: (original: UnitSerial, next: string) => void;
   /** Persist a per-unit grade for an already-scanned serial. */
   onSetUnitGrade: (serialUnitId: number, grade: string) => void;
+  /**
+   * Fires with the effective condition grade of the currently-selected unit
+   * (saved grade → pending grade → line default). Lets the parent print/preview
+   * a label that matches the selected item rather than the line-level grade, so
+   * a multi-qty PO with mixed conditions gets one correct label per unit.
+   */
+  onActiveConditionChange?: (grade: string | null) => void;
 }
 
 /**
@@ -48,6 +55,7 @@ export function ReceivingUnitRows({
   onDeleteSerial,
   onReplaceSerial,
   onSetUnitGrade,
+  onActiveConditionChange,
 }: Props) {
   const total = Math.max(quantityExpected, saved.length, 1);
 
@@ -55,18 +63,34 @@ export function ReceivingUnitRows({
   const firstEmpty = saved.length < total ? saved.length : 0;
   const [selectedIndex, setSelectedIndex] = useState(firstEmpty);
 
-  // Re-home selection when switching to a different line.
-  useEffect(() => {
-    setSelectedIndex(saved.length < total ? saved.length : 0);
-    // Only re-seed on line change, not on every serial add.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [lineId]);
-
   // Grade chosen for empty slots before their serial is scanned, keyed by slot.
   const [pendingGrade, setPendingGrade] = useState<Record<number, string>>({});
 
   const gradeFor = (serial: UnitSerial | null, index: number): string | null =>
     serial?.condition_grade ?? pendingGrade[index] ?? lineCondition ?? null;
+
+  // Surface the selected unit's effective grade to the parent (for the label
+  // preview / print). Recomputed whenever the selection, that unit's saved or
+  // pending grade, or the line default changes. Guarded against redundant
+  // emits so the parent isn't re-rendered on every keystroke elsewhere.
+  const activeGrade = gradeFor(saved[selectedIndex] ?? null, selectedIndex);
+  const lastEmittedRef = useRef<string | null | undefined>(undefined);
+
+  // Re-home selection when switching to a different line, and re-arm the emit
+  // guard so the new line's selected grade is always reported even if it equals
+  // the previous line's last emitted value.
+  useEffect(() => {
+    setSelectedIndex(saved.length < total ? saved.length : 0);
+    lastEmittedRef.current = undefined;
+    // Only re-seed on line change, not on every serial add.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [lineId]);
+
+  useEffect(() => {
+    if (lastEmittedRef.current === activeGrade) return;
+    lastEmittedRef.current = activeGrade;
+    onActiveConditionChange?.(activeGrade);
+  }, [activeGrade, onActiveConditionChange]);
 
   return (
     <UnitSlotList

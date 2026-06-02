@@ -182,6 +182,22 @@ export const POST = withAuth(async (request, ctx) => {
       payload: { verdict },
     });
 
+    // 4b. Recently-Tested feed row. References the unit by id only — serial
+    //     number / SKU / condition are JOINed from serial_units at read time
+    //     (single source of truth), never copied here. Authoritative state
+    //     stays on serial_units, so a write failure here is logged, not fatal.
+    try {
+      await pool.query(
+        `INSERT INTO testing_results
+           (serial_unit_id, receiving_line_id, verdict, unit_status,
+            tested_by, notes, inventory_event_id)
+         VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+        [unit.id, lineId, verdict, mapping.nextStatus, actorStaffId, notes, event.id],
+      );
+    } catch (err) {
+      console.warn('[test] testing_results insert failed (non-fatal):', err);
+    }
+
     // 5. Line rollup. Only runs when the unit has a parent line.
     let lineRollup: {
       id: number;

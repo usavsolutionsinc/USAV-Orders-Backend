@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
-import { AlertCircle, ChevronDown, ChevronLeft, ChevronUp, Clock, LayoutDashboard, Menu, Package, PackageCheck, X } from '@/components/Icons';
+import { AlertCircle, Check, ChevronDown, Clock, LayoutDashboard, Menu, Package, PackageCheck, X } from '@/components/Icons';
 import { sidebarHeaderBandClass } from '@/components/layout/header-shell';
 import { HorizontalButtonSlider, type HorizontalSliderItem } from '@/components/ui/HorizontalButtonSlider';
 import { sectionLabel } from '@/design-system/tokens/typography/presets';
@@ -296,7 +296,7 @@ function NavSection({
   onNavigate: () => void;
 }) {
   return (
-    <div className="space-y-1">
+    <div className="space-y-0.5">
       {items.map((item) => {
         const href = resolveHref(item);
         const isActive = isSidebarNavActive(pathname, href);
@@ -307,37 +307,15 @@ function NavSection({
             href={href}
             onClick={onNavigate}
             prefetch={process.env.NODE_ENV === 'production'}
-            className="group block relative"
+            className={`flex items-center gap-3 px-3 py-2.5 rounded-xl transition-colors ${
+              isActive
+                ? 'bg-blue-600 text-white'
+                : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900'
+            }`}
           >
-            {isActive && (
-              <motion.div
-                layoutId="active-sidebar-bar"
-                className="absolute inset-0 bg-blue-600 rounded-2xl shadow-lg shadow-blue-600/20"
-                transition={{ type: 'spring', damping: 30, stiffness: 350 }}
-              />
-            )}
-            <div
-              className={`relative flex items-center gap-3 px-3 py-3 rounded-2xl transition-all duration-200 ${
-                isActive ? 'text-white' : 'text-gray-500 hover:bg-gray-50 hover:text-gray-900'
-              }`}
-            >
-              <motion.div layoutId={isActive ? 'sidebar-icon' : undefined}>
-                <Icon className={`h-5 w-5 ${isActive ? 'text-white' : 'text-gray-500 group-hover:text-blue-500'}`} />
-              </motion.div>
-              <motion.span
-                layoutId={isActive ? 'sidebar-title' : undefined}
-                className="flex-1 text-caption font-black uppercase tracking-wider"
-              >
-                {item.label}
-              </motion.span>
-              <motion.div layoutId={isActive ? 'sidebar-arrow' : undefined} className="flex items-center">
-                {isActive ? (
-                  <ChevronDown className="h-4 w-4 opacity-0 group-hover:opacity-100 transition-opacity text-white/70" />
-                ) : (
-                  <ChevronUp className="h-4 w-4 opacity-0 group-hover:opacity-100 transition-opacity text-gray-400" />
-                )}
-              </motion.div>
-            </div>
+            <Icon className={`h-5 w-5 shrink-0 ${isActive ? 'text-white' : 'text-gray-400'}`} />
+            <span className="flex-1 text-caption font-black uppercase tracking-wider">{item.label}</span>
+            {isActive && <Check className="h-4 w-4 shrink-0 text-white/80" />}
           </Link>
         );
       })}
@@ -359,18 +337,14 @@ export default function DashboardSidebar({ inDrawer = false, onNavigate }: { inD
   const collapseDesktopSidebar = false;
   const [isMobileOpen, setIsMobileOpen] = useState(false);
   const [canShowMobileSidebar, setCanShowMobileSidebar] = useState(false);
-  const [showHomeNavigation, setShowHomeNavigation] = useState(false);
-  const [transitionDirection, setTransitionDirection] = useState<'up' | 'down'>('up');
+  // Dropdown state: when open, the sidebar shows the full list of pages; when
+  // closed, it shows the active page's context panel with the current tab
+  // pinned at the top as the dropdown trigger.
+  const [navOpen, setNavOpen] = useState(false);
 
-  const navigateToContext = useCallback(() => {
-    setTransitionDirection('up');
-    setShowHomeNavigation(false);
-  }, []);
-
-  const navigateToHome = useCallback(() => {
-    setTransitionDirection('down');
-    setShowHomeNavigation(true);
-  }, []);
+  const closeNav = useCallback(() => setNavOpen(false), []);
+  const openNav = useCallback(() => setNavOpen(true), []);
+  const toggleNav = useCallback(() => setNavOpen((open) => !open), []);
 
   useEffect(() => {
     const syncMobileSidebarAvailability = () => {
@@ -392,7 +366,7 @@ export default function DashboardSidebar({ inDrawer = false, onNavigate }: { inD
 
   useEffect(() => {
     if (!pathname) return;
-    setShowHomeNavigation(false);
+    setNavOpen(false);
     setIsMobileOpen(false);
     // Only close the details panel on actual route changes, not search param
     // updates (e.g. openOrderId changing during up/down navigation).
@@ -464,115 +438,78 @@ export default function DashboardSidebar({ inDrawer = false, onNavigate }: { inD
         bottom: visibleNavItems.filter((item) => item.kind === 'bottom'),
       };
 
-  const containerVariants = {
-    hidden: { opacity: 0 },
-    visible: {
-      opacity: 1,
-      transition: {
-        staggerChildren: 0.1,
-        delayChildren: 0.1,
-      },
-    },
-  };
-  const itemVariants = {
-    hidden: { opacity: 0, y: 15, filter: 'blur(4px)' },
-    visible: {
-      opacity: 1,
-      y: 0,
-      filter: 'blur(0px)',
-      transition: { type: 'spring', damping: 30, stiffness: 350, mass: 0.6 },
-    },
-  };
-
   const currentNavItem = APP_SIDEBAR_NAV.find((item) => item.id === routeKey);
   const CurrentIcon = currentNavItem?.icon ?? LayoutDashboard;
 
+  // The dropdown is forced open when there is no context to show: inside the
+  // mobile drawer (it's a pure menu) or on an unknown route.
+  const isOpen = navOpen || inDrawer || routeKey === 'unknown';
+  const handlePickFromNav = () => { closeNav(); onNavigate?.(); };
+
   const shell = (
     <aside className="h-full w-full bg-white border-r border-gray-300 overflow-hidden shadow-xl shadow-gray-900/5 flex flex-col">
+      {/* Pinned trigger — the currently selected page stays at the top of the
+          sidebar and toggles the dropdown list of every other page. */}
+      <button
+        type="button"
+        onClick={toggleNav}
+        aria-expanded={isOpen}
+        aria-label={isOpen ? 'Close navigation menu' : 'Open navigation menu'}
+        className={`group w-full flex min-h-[44px] items-center gap-3 px-3 py-3 text-left border-b border-gray-200 transition-colors hover:bg-gray-50 ${
+          inDrawer ? 'pt-[max(3.5rem,calc(env(safe-area-inset-top)+2.75rem))]' : ''
+        }`}
+      >
+        <CurrentIcon className="h-5 w-5 shrink-0 text-blue-600" />
+        <span className="min-w-0 flex-1 truncate text-sm font-black uppercase tracking-wider text-gray-900">
+          {sidebarTitle}
+        </span>
+        <ChevronDown
+          className={`h-4 w-4 shrink-0 text-gray-400 transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`}
+        />
+      </button>
+
       <div className="flex-1 overflow-hidden relative">
-        <AnimatePresence initial={false} custom={transitionDirection}>
-          {inDrawer || showHomeNavigation || routeKey === 'unknown' ? (
+        <AnimatePresence initial={false} mode="wait">
+          {isOpen ? (
             <motion.div
               key="navigation"
-              custom={transitionDirection}
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              variants={containerVariants}
-              className="h-full flex flex-col bg-white"
+              initial={{ opacity: 0, y: -6 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -6 }}
+              transition={{ duration: 0.15, ease: 'easeOut' }}
+              className="absolute inset-0 flex flex-col bg-white"
             >
-              <div
-                className={`flex-1 overflow-y-auto px-3 space-y-6 ${
-                  inDrawer
-                    ? 'pt-[max(3.5rem,calc(env(safe-area-inset-top)+2.75rem))]'
-                    : 'pt-3'
-                } pb-3`}
-              >
+              <div className="flex-1 overflow-y-auto px-3 pt-3 pb-3 space-y-5">
                 {groupedNav.main.length > 0 && (
-                  <motion.div variants={itemVariants}>
-                    <p className="px-1 pb-2 text-eyebrow font-black uppercase tracking-[0.25em] text-blue-600">Main</p>
-                    <NavSection items={groupedNav.main} pathname={pathname} resolveHref={resolveHref} onNavigate={() => { navigateToContext(); onNavigate?.(); }} />
-                  </motion.div>
+                  <div>
+                    <p className="px-1 pb-1.5 text-eyebrow font-black uppercase tracking-[0.25em] text-blue-600">Main</p>
+                    <NavSection items={groupedNav.main} pathname={pathname} resolveHref={resolveHref} onNavigate={handlePickFromNav} />
+                  </div>
                 )}
                 {groupedNav.station.length > 0 && (
-                  <motion.div variants={itemVariants}>
-                    <p className="px-1 pb-2 text-eyebrow font-black uppercase tracking-[0.25em] text-gray-500">Stations</p>
-                    <NavSection items={groupedNav.station} pathname={pathname} resolveHref={resolveHref} onNavigate={() => { navigateToContext(); onNavigate?.(); }} />
-                  </motion.div>
+                  <div>
+                    <p className="px-1 pb-1.5 text-eyebrow font-black uppercase tracking-[0.25em] text-gray-500">Stations</p>
+                    <NavSection items={groupedNav.station} pathname={pathname} resolveHref={resolveHref} onNavigate={handlePickFromNav} />
+                  </div>
                 )}
                 {groupedNav.bottom.length > 0 && (
-                  <motion.div variants={itemVariants}>
-                    <p className="px-1 pb-2 text-eyebrow font-black uppercase tracking-[0.25em] text-gray-500">More</p>
-                    <NavSection items={groupedNav.bottom} pathname={pathname} resolveHref={resolveHref} onNavigate={() => { navigateToContext(); onNavigate?.(); }} />
-                  </motion.div>
+                  <div>
+                    <p className="px-1 pb-1.5 text-eyebrow font-black uppercase tracking-[0.25em] text-gray-500">More</p>
+                    <NavSection items={groupedNav.bottom} pathname={pathname} resolveHref={resolveHref} onNavigate={handlePickFromNav} />
+                  </div>
                 )}
               </div>
             </motion.div>
           ) : (
             <motion.div
               key="context"
-              custom={transitionDirection}
-              initial="hidden"
-              animate="visible"
-              exit="hidden"
-              variants={containerVariants}
-              className="h-full flex flex-col overflow-hidden bg-white"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.12, ease: 'easeOut' }}
+              className="absolute inset-0 flex flex-col overflow-hidden bg-white"
             >
-              <button
-                type="button"
-                onClick={navigateToHome}
-                className="group relative w-full flex min-h-[44px] items-center text-left transition-colors hover:bg-gray-50 z-20"
-                aria-label="Back to navigation"
-              >
-                <motion.div
-                  layoutId="active-sidebar-bar"
-                  className="absolute inset-0 border-b border-gray-200 bg-white"
-                  transition={{ type: 'spring', damping: 30, stiffness: 350 }}
-                />
-                <div className="relative flex w-full items-center gap-3 px-3 py-3 z-10">
-                  <motion.div layoutId="sidebar-icon">
-                    <CurrentIcon className="h-5 w-5 text-blue-600" />
-                  </motion.div>
-                  <div className="min-w-0 flex-1">
-                    <motion.p
-                      layoutId="sidebar-title"
-                      className="text-sm font-black tracking-tight text-gray-900 truncate uppercase tracking-wider"
-                    >
-                      {sidebarTitle}
-                    </motion.p>
-                  </div>
-                  <motion.div layoutId="sidebar-arrow">
-                    <ChevronDown className="h-4 w-4 opacity-0 group-hover:opacity-100 transition-opacity text-gray-400" />
-                  </motion.div>
-                </div>
-              </button>
-              <motion.div 
-                variants={itemVariants} 
-                className="flex-1 overflow-hidden"
-                transition={{ delay: 0.25 }}
-              >
-                <SidebarContextPanel onBackToAppNav={navigateToHome} />
-              </motion.div>
+              <SidebarContextPanel onBackToAppNav={openNav} />
             </motion.div>
           )}
         </AnimatePresence>

@@ -41,6 +41,13 @@ interface Props {
   activeRowSlot?:
     | React.ReactNode
     | ((ctx: ActiveRowSlotContext) => React.ReactNode);
+  /**
+   * Condition grade of the unit currently selected in the active row's body
+   * (multi-qty lines). When set, the active row's header condition badge shows
+   * this instead of the line-level grade, so the header tracks the selected
+   * unit. Null/undefined → fall back to `line.condition_grade`.
+   */
+  activeConditionOverride?: string | null;
 }
 
 /**
@@ -52,7 +59,7 @@ interface Props {
  *
  * Single-line cartons should not mount this component (the parent guards).
  */
-export function PoLinesAccordion({ receivingId, activeLineId, activeRowSlot }: Props) {
+export function PoLinesAccordion({ receivingId, activeLineId, activeRowSlot, activeConditionOverride }: Props) {
   const queryClient = useQueryClient();
   const queryKey = useMemo(
     () => ['receiving-siblings', receivingId] as const,
@@ -70,6 +77,12 @@ export function PoLinesAccordion({ receivingId, activeLineId, activeRowSlot }: P
     },
     enabled: Number.isFinite(receivingId) && receivingId > 0,
     staleTime: 15_000,
+    // Do NOT refetch on window focus. The Pass+Print flow opens a print
+    // popup / silent-print window, which bounces focus and would otherwise
+    // refetch and wipe the optimistic verdict the operator just set. The
+    // global QueryClient default is `refetchOnWindowFocus: 'always'`, so this
+    // override is load-bearing for the testing workspace.
+    refetchOnWindowFocus: false,
   });
 
   // Local optimistic mirror — receives line-updated patches so progress
@@ -175,7 +188,13 @@ export function PoLinesAccordion({ receivingId, activeLineId, activeRowSlot }: P
                       expected={line.quantity_expected}
                     />
                     <span aria-hidden>·</span>
-                    <ConditionBadge grade={line.condition_grade} />
+                    <ConditionBadge
+                      grade={
+                        isActive && activeConditionOverride
+                          ? activeConditionOverride
+                          : line.condition_grade
+                      }
+                    />
                     {(line.sku || '').trim() ? (
                       <>
                         <span aria-hidden>·</span>

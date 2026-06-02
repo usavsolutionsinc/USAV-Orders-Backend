@@ -2,11 +2,14 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { toast } from '@/lib/toast';
+import { Barcode, ClipboardList, MapPin, Package } from '@/components/Icons';
 import { TestingScanBar } from '@/components/sidebar/receiving/TestingScanBar';
 import { TestingRecentRail } from '@/components/sidebar/receiving/TestingRecentRail';
 import {
   resolveTestingScan,
   type ResolvedTestingScan,
+  type ResolvedVia,
+  type ForcedTestingType,
 } from '@/lib/testing/resolve-testing-scan';
 import {
   dispatchSelectLine,
@@ -42,12 +45,41 @@ interface Props {
  * receiving workspace listens for), so {@link TechTestingWorkspace} can pick
  * it up via the same listener LineEditPanel uses.
  */
+/** Human label for the toast describing how a scan was matched. */
+function viaFoundLabel(via: string | undefined): string | null {
+  if (via === 'serial') return 'serial number';
+  if (via === 'po') return 'PO number';
+  if (via === 'tracking') return 'tracking number';
+  return null; // explicit handle / unit-id scans don't need a callout
+}
+
+/** Icon + label + chip tint for the real-time "acknowledged as" indicator. */
+function viaAckMeta(via: ResolvedVia): { label: string; Icon: typeof MapPin; chip: string } {
+  switch (via) {
+    case 'tracking':
+      return { label: 'Tracking', Icon: MapPin, chip: 'bg-blue-50 text-blue-700 ring-blue-200' };
+    case 'po':
+      return { label: 'PO#', Icon: ClipboardList, chip: 'bg-indigo-50 text-indigo-700 ring-indigo-200' };
+    case 'serial':
+    case 'unit_id':
+      return { label: via === 'unit_id' ? 'Unit ID' : 'Serial', Icon: Barcode, chip: 'bg-emerald-50 text-emerald-700 ring-emerald-200' };
+    case 'handle':
+    case 'receiving_id':
+    default:
+      return { label: 'Carton', Icon: Package, chip: 'bg-slate-50 text-slate-700 ring-slate-200' };
+  }
+}
+
 export function TestingSidebarPanel({
   selectedLineId: selectedLineIdProp,
   staffId,
 }: Props) {
   const [scanValue, setScanValue] = useState('');
   const [isResolving, setIsResolving] = useState(false);
+  /** Armed search route — forces the next scan's type. null = auto-detect. */
+  const [armedMode, setArmedMode] = useState<ForcedTestingType | null>(null);
+  /** Real-time "acknowledged as" indicator: what the last scan was recognised as. */
+  const [lastAck, setLastAck] = useState<{ via: ResolvedVia; value: string } | null>(null);
   /** Multi-line carton picker state. Set when a scan returns >1 line. */
   const [picker, setPicker] = useState<ResolvedTestingScan & { kind: 'multi' } | null>(null);
   // Self-track the selection when the parent doesn't pass one down — keeps
@@ -75,40 +107,81 @@ export function TestingSidebarPanel({
   // ignored, mirroring the receiving sidebar's lookup-in-flight counter.
   const inFlightRef = useRef(false);
 
-  const handleSubmit = useCallback(async () => {
-    const value = scanValue.trim();
-    if (!value || inFlightRef.current) return;
-    inFlightRef.current = true;
-    setIsResolving(true);
-    try {
-      const result = await resolveTestingScan(value);
-      switch (result.kind) {
-        case 'line': {
-          dispatchSelectLine(result.row);
-          setScanValue('');
-          break;
+  const runScan = useCallback(
+    async (rawValue: string, forcedType: ForcedTestingType | null) => {
+      const value = rawValue.trim();
+      if (!value || inFlightRef.current) return;
+      inFlightRef.current = true;
+      setIsResolving(true);
+      try {
+        const result = await resolveTestingScan(value, { forcedType });
+        switch (result.kind) {
+          case 'line': {
+            dispatchSelectLine(result.row);
+            setScanValue('');
+            setArmedMode(null);
+            if (result.via) setLastAck({ via: result.via, value });
+            const label = viaFoundLabel(result.via);
+            if (label) {
+              toast.success(`Found via ${label}`, {
+                description: 'Opened the matching receiving line.',
+              });
+            }
+            break;
+          }
+          case 'multi': {
+            // Multi-item PO — let the tech pick which line to test.
+            setPicker(result);
+            setArmedMode(null);
+            if (result.via) setLastAck({ via: result.via, value });
+            const label = viaFoundLabel(result.via);
+            if (label) {
+              toast.success(`Found via ${label}`, { description: 'Pick the line to test.' });
+            }
+            break;
+          }
+          case 'not_found': {
+            const what = forcedType === 'po' ? 'PO' : forcedType === 'tracking' ? 'tracking' : forcedType === 'serial' ? 'serial' : 'receiving line';
+            toast.error('Not found', {
+              description: `No ${what} match for "${result.query}".`,
+            });
+            break;
+          }
+          case 'error': {
+            toast.error('Lookup failed', { description: result.message });
+            break;
+          }
         }
-        case 'multi': {
-          // Multi-item PO — let the tech pick which line to test.
-          setPicker(result);
-          break;
-        }
-        case 'not_found': {
-          toast.error('Not found', {
-            description: `No receiving line matches "${result.query}".`,
-          });
-          break;
-        }
-        case 'error': {
-          toast.error('Lookup failed', { description: result.message });
-          break;
-        }
+      } finally {
+        inFlightRef.current = false;
+        setIsResolving(false);
       }
-    } finally {
-      inFlightRef.current = false;
-      setIsResolving(false);
-    }
-  }, [scanValue]);
+    },
+    [],
+  );
+
+  const handleSubmit = useCallback(() => {
+    void runScan(scanValue, armedMode);
+  }, [runScan, scanValue, armedMode]);
+
+  // Arm/disarm a search route. Clicking a route while the field already holds a
+  // value searches immediately (mirrors the shipping station's mode buttons).
+  const toggleMode = useCallback(
+    (mode: ForcedTestingType) => {
+      const turningOff = armedMode === mode;
+      const next = turningOff ? null : mode;
+      setArmedMode(next);
+      const pending = scanValue.trim();
+      if (next && pending) {
+        void runScan(scanValue, next);
+        return;
+      }
+      requestAnimationFrame(() => {
+        document.querySelector<HTMLInputElement>('[data-testing-scan] input')?.focus();
+      });
+    },
+    [armedMode, scanValue, runScan],
+  );
 
   // External focus trigger — match the receiving sidebar's convention so
   // Quick Access chips that navigate to Testing can hot-focus the bar.
@@ -125,25 +198,46 @@ export function TestingSidebarPanel({
 
   return (
     <div className="relative flex h-full w-full flex-col overflow-hidden bg-white">
-      {/* Scan bar — testing-only variant of StationScanBar. Single Package
-          icon on the left, no mode-toggle buttons on the right. Testing
-          accepts every input shape through `resolveTestingScan`, so the
-          multi-mode arming the shipping bar shows would be misleading. */}
+      {/* Scan bar — same chrome + mode toggles as the shipping StationScanBar.
+          Tap Tracking / PO# / Serial to force the next scan's search type, or
+          leave unarmed to auto-detect. */}
       <div className="px-5 pt-4 pb-2">
         <TestingScanBar
           value={scanValue}
           onChange={setScanValue}
-          onSubmit={() => void handleSubmit()}
+          onSubmit={handleSubmit}
           isResolving={isResolving}
           staffId={staffId}
+          armedMode={armedMode}
+          onToggleMode={toggleMode}
         />
+
+        {/* Real-time acknowledgment — what the last scan was recognised as. */}
+        {lastAck ? (() => {
+          const meta = viaAckMeta(lastAck.via);
+          return (
+            <div className="mt-2 flex items-center gap-1.5">
+              <span
+                className={`inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-eyebrow font-black uppercase tracking-widest ring-1 ring-inset ${meta.chip}`}
+              >
+                <meta.Icon className="h-3 w-3 shrink-0" />
+                {meta.label}
+              </span>
+              <span className="min-w-0 truncate font-mono text-micro font-bold text-gray-600" title={lastAck.value}>
+                {lastAck.value}
+              </span>
+            </div>
+          );
+        })() : null}
       </div>
 
       {/* Multi-line picker — tiny inline list when a PO has >1 receiving_line */}
       {picker ? (
         <div className="border-b border-amber-200 bg-amber-50 px-3 py-2">
           <p className="mb-1 text-eyebrow font-black uppercase tracking-widest text-amber-700">
-            Pick a line — {picker.rows.length} items on this PO
+            {picker.via === 'serial'
+              ? `Pick a unit — ${picker.rows.length} serial matches`
+              : `Pick a line — ${picker.rows.length} items on this PO`}
           </p>
           <ul className="space-y-1">
             {picker.rows.map((row) => (
@@ -181,6 +275,7 @@ export function TestingSidebarPanel({
         <TestingRecentRail
           selectedLineId={selectedLineId}
           selectedRow={internalSelectedRow}
+          testerId={staffId ? Number(staffId) : null}
         />
       </div>
     </div>

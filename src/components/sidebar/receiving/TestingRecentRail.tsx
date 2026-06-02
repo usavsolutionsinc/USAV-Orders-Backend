@@ -29,6 +29,12 @@ interface Props {
   selectedLineId: number | null;
   selectedRow?: ReceivingLineRow | null;
   limit?: number;
+  /**
+   * When set, the rail shows ONLY items this staff member has recently tested
+   * (from the testing_results log, newest verdict first). When null it falls
+   * back to the shared touched-activity feed.
+   */
+  testerId?: number | null;
 }
 
 /**
@@ -39,22 +45,33 @@ export function TestingRecentRail({
   selectedLineId,
   selectedRow = null,
   limit = 25,
+  testerId = null,
 }: Props) {
+  const hasTester = Number.isFinite(testerId) && (testerId as number) > 0;
+
   // 'rail' segment keeps this DISTINCT from the main ReceivingLinesTable keys —
   // the table caches the full ApiResponse object under
   // ['receiving-lines-table', <view>, 'receive'|...], while the rail caches the
   // bare receiving_lines array. Sharing a key feeds one query the other's shape
   // (→ "allRows.slice is not a function"). Still under the
-  // ['receiving-lines-table'] prefix so broad invalidations refresh it.
-  const queryKey = useMemo(() => ['receiving-lines-table', 'rail', 'activity', 'test'] as const, []);
+  // ['receiving-lines-table'] prefix so broad invalidations refresh it. The
+  // tester segment keeps each staff member's feed in its own cache slot.
+  const queryKey = useMemo(
+    () => ['receiving-lines-table', 'rail', 'testing', String(testerId ?? 'all')] as const,
+    [testerId],
+  );
 
   const fetchFn = async (): Promise<ApiResponse> => {
     const params = new URLSearchParams({ limit: '500', offset: '0' });
     params.set('include', 'serials');
-    // For testing, we only care about items that have at least been received.
-    // 'activity' drops untouched-incoming (EXPECTED, nothing received) so the
-    // feed reflects what's been scanned/worked, not what's still en route.
-    params.set('view', 'activity');
+    if (hasTester) {
+      // Recently-tested feed scoped to this staff member (testing_results).
+      params.set('view', 'testing');
+      params.set('tester', String(testerId));
+    } else {
+      // No identity yet — fall back to the shared touched-activity feed.
+      params.set('view', 'activity');
+    }
     const res = await fetch(`/api/receiving-lines?${params.toString()}`);
     if (!res.ok) throw new Error('fetch failed');
     return res.json();
@@ -68,9 +85,9 @@ export function TestingRecentRail({
       queryKey={queryKey}
       fetchFn={fetchFn}
       updateEvent="receiving-line-updated"
-      refreshEvents={['receiving-entry-added', 'usav-refresh-data']}
+      refreshEvents={['receiving-entry-added', 'usav-refresh-data', 'testing-result-recorded']}
       eyebrowTitle="Recent"
-      eyebrowSuffix="Testing Feed"
+      eyebrowSuffix={hasTester ? 'You Tested' : 'Testing Feed'}
       getStatusDot={getTestingStatusDot}
       renderQuantity={(row) => {
         const tested = getTestedQty(row);

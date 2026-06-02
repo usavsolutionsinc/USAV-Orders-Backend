@@ -1754,6 +1754,32 @@ export const serialUnitConditionHistory = pgTable('serial_unit_condition_history
 });
 
 /**
+ * testing_results — append-only log of per-unit testing verdicts (2026-05-29).
+ * Powers the "Recently Tested" feed: one row per verdict click. References the
+ * serial unit by id ONLY — serial number / SKU / condition are JOINed from
+ * serial_units (single source of truth, written by the receiving pipeline),
+ * never duplicated here. Authoritative current state lives on
+ * serial_units.current_status; this is history, keyed by created_at.
+ *
+ * verdict ∈ PASS | TEST_AGAIN | TESTING_FAILED (CHECK constraint)
+ * Writer: src/app/api/serial-units/[id]/test/route.ts
+ */
+export const testingResults = pgTable('testing_results', {
+  id: bigserial('id', { mode: 'number' }).primaryKey(),
+  /** The serial unit under test — the only serial reference. */
+  serialUnitId: integer('serial_unit_id').references(() => serialUnits.id, { onDelete: 'set null' }),
+  receivingLineId: integer('receiving_line_id').references(() => receivingLines.id, { onDelete: 'set null' }),
+  /** PASS | TEST_AGAIN | TESTING_FAILED */
+  verdict: text('verdict').notNull(),
+  /** serial_status the verdict mapped to: TESTED | IN_TEST | ON_HOLD. */
+  unitStatus: text('unit_status'),
+  testedBy: integer('tested_by').references(() => staff.id, { onDelete: 'set null' }),
+  notes: text('notes'),
+  inventoryEventId: bigint('inventory_event_id', { mode: 'number' }).references(() => inventoryEvents.id, { onDelete: 'set null' }),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+});
+
+/**
  * order_unit_allocations — reservation of a specific serialized unit to an
  * order line. Enforces "one live allocation per unit" via DEFERRABLE UNIQUE
  * on serial_unit_id WHERE state != 'RELEASED'. Released rows stay for history.
@@ -1869,6 +1895,8 @@ export type SerialUnitConditionHistoryRow = typeof serialUnitConditionHistory.$i
 export type NewSerialUnitConditionHistoryRow = typeof serialUnitConditionHistory.$inferInsert;
 export type OrderUnitAllocation = typeof orderUnitAllocations.$inferSelect;
 export type NewOrderUnitAllocation = typeof orderUnitAllocations.$inferInsert;
+export type TestingResult = typeof testingResults.$inferSelect;
+export type NewTestingResult = typeof testingResults.$inferInsert;
 export type FbaShipmentItemUnit = typeof fbaShipmentItemUnits.$inferSelect;
 export type NewFbaShipmentItemUnit = typeof fbaShipmentItemUnits.$inferInsert;
 export type UnitIdSequence = typeof unitIdSequences.$inferSelect;

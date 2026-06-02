@@ -8,6 +8,8 @@ import {
   type ClaimSeverity,
   type ClaimType,
 } from '@/lib/zendesk-claim-template';
+import { updateTicket } from '@/lib/zendesk';
+import { buildExternalId, linkTicket } from '@/lib/zendesk-links';
 
 export const dynamic = 'force-dynamic';
 
@@ -33,7 +35,7 @@ interface ClaimRequest {
  * sent verbatim. Otherwise the template builder fills them from PO/tracking/
  * photos/line context.
  */
-export const POST = withAuth(async (req: NextRequest) => {
+export const POST = withAuth(async (req: NextRequest, ctx) => {
   try {
     const body = (await req.json().catch(() => null)) as ClaimRequest | null;
     if (!body) throw ApiError.badRequest('Missing body');
@@ -122,6 +124,27 @@ export const POST = withAuth(async (req: NextRequest) => {
         error: err instanceof Error ? err.message : 'Bridge request failed',
         draftBody: description,
       }, { status: 502 });
+    }
+
+    // Backfill the ticket→entity link so the support workspace can resolve this
+    // claim's Blob photos. Best-effort: GAS already created the ticket, so a
+    // failure here must not turn a successful claim into an error.
+    const numericTicketId = ticketNumber ? Number(String(ticketNumber).replace(/^#/, '')) : NaN;
+    if (Number.isInteger(numericTicketId) && numericTicketId > 0) {
+      const entityType = lineId != null ? 'RECEIVING_LINE' : 'RECEIVING';
+      const entityId = lineId != null ? lineId : receivingId;
+      try {
+        await updateTicket(numericTicketId, { external_id: buildExternalId(entityType, entityId) });
+        await linkTicket({
+          orgId: ctx.organizationId,
+          zendeskTicketId: numericTicketId,
+          entityType,
+          entityId,
+          staffId: ctx.staffId,
+        });
+      } catch (linkErr) {
+        console.warn('[POST /api/receiving/zendesk-claim] ticket link backfill failed', linkErr);
+      }
     }
 
     return NextResponse.json({ success: true, ticketNumber });
