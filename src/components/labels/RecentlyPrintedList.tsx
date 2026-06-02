@@ -3,6 +3,7 @@
 import { Printer, Clock } from '@/components/Icons';
 import { timeAgo } from '@/utils/_date';
 import { useLabelPrintFeed, type LabelPrintFeedItem } from '@/hooks/useLabelPrintFeed';
+import { unitStatusBadgeClass } from '@/lib/unit-status';
 
 interface RecentlyPrintedListProps {
   /** Clicking a row fires this with the product SKU so the print workspace pre-fills. */
@@ -119,25 +120,11 @@ function RecentRow({ item, onPick }: { item: LabelPrintFeedItem; onPick: (sku: s
 }
 
 function StatusChip({ status }: { status: string }) {
-  const tone = STATUS_TONE[status] ?? 'bg-gray-100 text-gray-600';
   return (
     <span
-      className={`rounded px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider ${tone}`}
+      className={`rounded px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider ${unitStatusBadgeClass(status)}`}
     >
       {status}
     </span>
   );
 }
-
-const STATUS_TONE: Record<string, string> = {
-  UNKNOWN: 'bg-gray-100 text-gray-500',
-  LABELED: 'bg-amber-100 text-amber-700',
-  RECEIVED: 'bg-blue-100 text-blue-700',
-  TESTED: 'bg-indigo-100 text-indigo-700',
-  STOCKED: 'bg-emerald-100 text-emerald-700',
-  PICKED: 'bg-violet-100 text-violet-700',
-  SHIPPED: 'bg-slate-200 text-slate-700',
-  RETURNED: 'bg-orange-100 text-orange-700',
-  RMA: 'bg-rose-100 text-rose-700',
-  SCRAPPED: 'bg-red-100 text-red-700',
-};

@@ -4,6 +4,7 @@ import { useMemo } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
 import { timeAgo } from '@/utils/_date';
+import { unitStatusBadgeClass } from '@/lib/unit-status';
 import {
   History,
   Package,
@@ -445,7 +446,7 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
 
 function StatusPill({ status }: { status: string | null }) {
   const v = (status || 'UNKNOWN').toUpperCase();
-  const tone = STATUS_TONE[v] || 'bg-slate-100 text-slate-600';
+  const tone = unitStatusBadgeClass(v);
   return (
     <span
       className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-micro font-bold uppercase tracking-wide ${tone}`}
@@ -497,19 +498,6 @@ function ErrorState({ message }: { message: string }) {
 }
 
 // ─── Lookup tables ──────────────────────────────────────────────────────────
-
-const STATUS_TONE: Record<string, string> = {
-  UNKNOWN: 'bg-slate-100 text-slate-600',
-  LABELED: 'bg-amber-100 text-amber-700',
-  RECEIVED: 'bg-amber-100 text-amber-800',
-  TESTED: 'bg-blue-100 text-blue-700',
-  STOCKED: 'bg-emerald-100 text-emerald-700',
-  PICKED: 'bg-indigo-100 text-indigo-700',
-  SHIPPED: 'bg-violet-100 text-violet-700',
-  RETURNED: 'bg-rose-100 text-rose-700',
-  RMA: 'bg-rose-100 text-rose-700',
-  SCRAPPED: 'bg-red-100 text-red-700',
-};
 
 const ICON_FOR_EVENT: Record<string, { icon: React.ComponentType<{ className?: string }>; tone: string }> = {
   RECEIVED:   { icon: PackageCheck, tone: 'bg-amber-100 text-amber-700' },
