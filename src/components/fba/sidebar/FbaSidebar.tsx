@@ -17,6 +17,7 @@ import { FbaWorkspaceScanField } from '@/components/fba/sidebar/FbaWorkspaceScan
 import { useActiveStaffDirectory } from '@/components/sidebar/hooks';
 import { useStationTheme } from '@/hooks/useStationTheme';
 import { useAuth } from '@/contexts/AuthContext';
+import { useMasterNavEnabled } from '@/components/sidebar/master-nav';
 import { FbaShippedTable } from '@/components/fba/FbaShippedTable';
 import { FbaPlanRail, FbaCombineRail } from '@/components/fba/sidebar/FbaSidebarRails';
 import type { FbaBoardItem } from '@/components/fba/FbaBoardTable';
@@ -198,6 +199,7 @@ function FbaWorkspaceSidebarInner() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const staffDirectory = useActiveStaffDirectory();
+  const masterNavEnabled = useMasterNavEnabled();
 
   const activeMode: FbaMode = resolveFbaMode(searchParams.get('mode'));
 
@@ -468,18 +470,19 @@ function FbaWorkspaceSidebarInner() {
 
   return (
     <div className="relative flex h-full w-full flex-col overflow-hidden bg-white">
-      {/* View pills (2nd row) */}
-      <div className={sidebarHeaderPillRowClass}>
-        <HorizontalButtonSlider
-          items={modeItems}
-          value={activeMode}
-          onChange={(next) => updateFbaParams({ mode: next as FbaMode })}
-          variant="nav"
-          dense
-          className="w-full"
-          aria-label="FBA mode"
-        />
-      </div>
+      {!masterNavEnabled && (
+        <div className={sidebarHeaderPillRowClass}>
+          <HorizontalButtonSlider
+            items={modeItems}
+            value={activeMode}
+            onChange={(next) => updateFbaParams({ mode: next as FbaMode })}
+            variant="nav"
+            dense
+            className="w-full"
+            aria-label="FBA mode"
+          />
+        </div>
+      )}
 
       {/* Scan bar — pinned at the top of the working area so it never scrolls
           away. The mode is locked per page: Plan on the plan page (FNSKU adds to

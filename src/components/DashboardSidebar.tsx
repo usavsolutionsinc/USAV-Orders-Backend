@@ -26,7 +26,7 @@ import { SupportSidebarPanel } from '@/components/sidebar/SupportSidebarPanel';
 import { AiChatSidebarPanel } from '@/components/sidebar/AiChatSidebarPanel';
 import { SettingsSidebarPanel } from '@/components/sidebar/SettingsSidebarPanel';
 import { AuditLogSidebarPanel } from '@/components/sidebar/AuditLogSidebarPanel';
-import { MasterNav, MasterNavProvider } from '@/components/sidebar/master-nav';
+import { MasterNav, MasterNavProvider, useMasterNavEnabled } from '@/components/sidebar/master-nav';
 import { useUIMode } from '@/design-system/providers/UIModeProvider';
 import { useAuth } from '@/contexts/AuthContext';
 import { getSidebarRouteKey } from '@/lib/sidebar-navigation';
@@ -35,10 +35,13 @@ import { dispatchCloseShippedDetails, DASHBOARD_SHIPPED_FOCUS_SEARCH_PARAM } fro
 import { useDashboardSearchController } from '@/hooks/useDashboardSearchController';
 const MOBILE_SIDEBAR_MIN_WIDTH = 420;
 
-// Pages whose panels gate their own pill-row on useMasterNavEnabled() — only
-// these show the master-nav L2 rail. dashboard/receiving/fba (heavy) keep their
-// existing switchers until a later phase. Keep in sync with the gated panels.
+// Pages that use the master-nav L2 ModeRail (flush segmented). Panels for these
+// ids gate their own pill-row on useMasterNavEnabled() so the switcher is not
+// doubled. Keep this set in sync with those gated panels.
 const MASTER_NAV_RAIL_PAGES: ReadonlySet<string> = new Set([
+  'dashboard',
+  'receiving',
+  'fba',
   'inventory',
   'warehouse',
   'products',
@@ -86,6 +89,7 @@ function SidebarContextPanel({ onBackToAppNav }: { onBackToAppNav?: () => void }
   const { user } = useAuth();
   const routeKey = getSidebarRouteKey(pathname);
   const dashboardSearch = useDashboardSearchController();
+  const masterNavEnabled = useMasterNavEnabled();
 
   const updateSearch = (mutate: (params: URLSearchParams) => void, nextPathname?: string) => {
     const nextParams = new URLSearchParams(searchParams.toString());
@@ -136,10 +140,8 @@ function SidebarContextPanel({ onBackToAppNav }: { onBackToAppNav?: () => void }
 
   if (routeKey === 'dashboard') {
     const focusShippedSearch = searchParams.get(DASHBOARD_SHIPPED_FOCUS_SEARCH_PARAM) === '1';
-    const filterControl = (
-      // 40px pill band routed through the shared SidebarSection so it inherits
-      // the one canonical left gutter (SIDEBAR_GUTTER) + hairline instead of a
-      // hand-typed px-3 that drifts out of alignment with the rows below.
+    // Legacy in-panel switcher — only when master nav is off (standalone / tests).
+    const filterControl = masterNavEnabled ? null : (
       <SidebarSection band>
         <HorizontalButtonSlider
           items={DASHBOARD_ORDERS_SUBVIEW_ITEMS}

@@ -6,6 +6,7 @@ import { AnimatePresence, motion } from 'framer-motion';
 import { AlertTriangle, Check, Loader2, X } from '@/components/Icons';
 import { framerTransition } from '@/design-system/foundations/motion-framer';
 import { sectionLabel, fieldLabel, microBadge, dataValue } from '@/design-system/tokens/typography/presets';
+import { TrackingChip, OrderIdChip, SkuScanRefChip, getLast4 } from '@/components/ui/CopyChip';
 import type {
   ExceptionsTabState,
   OrderExceptionResolutionDetail,
@@ -240,7 +241,7 @@ function DetailTable({
   return (
     <div className="max-h-[40vh] overflow-y-auto">
       <table className="w-full text-sm">
-        <thead className="sticky top-0 bg-gray-50 text-left">
+        <thead className="sticky top-0 z-10 bg-gray-50 text-left shadow-[0_1px_0_0_rgb(229_231_235)]">
           <tr className="text-[10px] uppercase tracking-wide text-gray-500">
             <th className="px-3 py-2 font-semibold">Order</th>
             <th className="px-3 py-2 font-semibold">Product</th>
@@ -254,10 +255,14 @@ function DetailTable({
             const provenance = kind !== 'inserted' ? formatExistingProvenance(row) : null;
             return (
               <tr key={`${kind}:${row.orderId}:${i}`} className="hover:bg-gray-50/60">
-                <td className="px-3 py-2 font-mono text-xs text-gray-900 align-top">
-                  <div>{row.orderId || '—'}</div>
+                <td className="px-3 py-2 align-top">
+                  {row.orderId ? (
+                    <OrderIdChip value={row.orderId} display={getLast4(row.orderId)} />
+                  ) : (
+                    <span className="font-mono text-xs text-gray-400">—</span>
+                  )}
                   {provenance ? (
-                    <div className="mt-0.5 text-[10px] font-normal text-gray-400">{provenance}</div>
+                    <div className="mt-0.5 pl-1.5 text-[10px] font-normal text-gray-400">{provenance}</div>
                   ) : null}
                 </td>
                 <td className="px-3 py-2 text-gray-700 align-top">
@@ -270,8 +275,23 @@ function DetailTable({
                     </span>
                   ) : null}
                 </td>
-                <td className="px-3 py-2 font-mono text-xs text-gray-600 align-top">{row.sku || row.itemNumber || '—'}</td>
-                <td className="px-3 py-2 font-mono text-xs text-gray-500 align-top">{row.tracking || '—'}</td>
+                <td className="px-3 py-2 align-top">
+                  {row.sku || row.itemNumber ? (
+                    <SkuScanRefChip
+                      value={(row.sku || row.itemNumber) as string}
+                      display={getLast4(row.sku || row.itemNumber)}
+                    />
+                  ) : (
+                    <span className="font-mono text-xs text-gray-400">—</span>
+                  )}
+                </td>
+                <td className="px-3 py-2 align-top">
+                  {row.tracking ? (
+                    <TrackingChip value={row.tracking} display={getLast4(row.tracking)} />
+                  ) : (
+                    <span className="font-mono text-xs text-gray-400">—</span>
+                  )}
+                </td>
                 <td className="px-3 py-2 text-right align-top">
                   <span className={badge(kind)}>{kind}</span>
                 </td>
@@ -298,7 +318,7 @@ function ExceptionTable({
   return (
     <div className="max-h-[40vh] overflow-y-auto">
       <table className="w-full text-sm">
-        <thead className="sticky top-0 bg-gray-50 text-left">
+        <thead className="sticky top-0 z-10 bg-gray-50 text-left shadow-[0_1px_0_0_rgb(229_231_235)]">
           <tr className="text-[10px] uppercase tracking-wide text-gray-500">
             <th className="px-3 py-2 font-semibold">Exception</th>
             <th className="px-3 py-2 font-semibold">Tracking</th>

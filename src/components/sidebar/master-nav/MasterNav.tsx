@@ -87,7 +87,9 @@ export function MasterNav({
     return fallbackItem ? toPageNav(fallbackItem) : pages[0];
   }, [pages, pageId]);
 
-  // Current page hidden from the menu; recents pinned on top (still listed below).
+  // Recents = fast switch-back only (never the page you're on). Grouped sections
+  // mirror APP_SIDEBAR_NAV order so the active page sits in its real slot (e.g.
+  // Orders / Shipping between Operations and Walk-In) with the blue row highlight.
   const recentPages = useMemo(
     () =>
       recents
@@ -96,7 +98,7 @@ export function MasterNav({
         .filter((p): p is SidebarPageNav => Boolean(p)),
     [recents, pages, pageId],
   );
-  const otherPages = useMemo(() => pages.filter((p) => p.id !== pageId), [pages, pageId]);
+  const otherPages = useMemo(() => pages, [pages]);
 
   if (!activePage) return null;
 

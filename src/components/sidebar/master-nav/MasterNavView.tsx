@@ -90,6 +90,8 @@ export function MasterNavView({
   const dropdown = (
     <MasterNavDropdown
       ref={menuRef}
+      activePage={activePage}
+      activeModeId={activeModeId}
       recentPages={recentPages}
       otherPages={otherPages}
       expandedKey={expandedKey}
@@ -130,6 +132,8 @@ export function MasterNavView({
           {open && (
             <MasterNavDropdown
               ref={menuRef}
+              activePage={activePage}
+              activeModeId={activeModeId}
               recentPages={recentPages}
               otherPages={otherPages}
               expandedKey={expandedKey}

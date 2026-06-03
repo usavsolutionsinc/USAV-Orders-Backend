@@ -18,14 +18,13 @@ const PAGE_GROUPS: ReadonlyArray<{ kind: NonNullable<SidebarNavItem['kind']>; la
 ];
 
 /**
- * The master-nav menu (plan §3.4): RECENT pages pinned on top for fast
- * switch-back, then the rest grouped Main / Stations / More (mirroring the
- * legacy sidebar nav), and the page you're on is hidden (the caller filters it
- * out). Every page is a split row — tap the left (icon + name) to jump to its
- * default mode; tap the right (count + chevron) to expand its modes and land on
- * one directly. Pure / presentational.
+ * The master-nav menu (plan §3.4): RECENT pages on top (not the active one),
+ * then Main / Stations / More in sidebar nav order. The active page only appears
+ * in its group (blue row). Recents may also appear again in their group below.
  */
 interface MasterNavDropdownProps {
+  activePage: SidebarPageNav;
+  activeModeId: string | null;
   recentPages: SidebarPageNav[];
   otherPages: SidebarPageNav[];
   /** `"${section}-${pageId}"` of the row whose modes are expanded, or null. */
@@ -36,26 +35,37 @@ interface MasterNavDropdownProps {
 }
 
 export const MasterNavDropdown = forwardRef<HTMLDivElement, MasterNavDropdownProps>(function MasterNavDropdown(
-  { recentPages, otherPages, expandedKey, onToggleRow, onNavigate, className },
+  { activePage, activeModeId, recentPages, otherPages, expandedKey, onToggleRow, onNavigate, className },
   ref,
 ) {
+  const highlightedModeId = activeModeId ?? activePage.modes?.[0]?.id ?? null;
+
   const renderRow = (page: SidebarPageNav, keyPrefix: string) => {
     const rowKey = `${keyPrefix}-${page.id}`;
     const open = expandedKey === rowKey;
+    const isPageActive = page.id === activePage.id;
     const PageIcon = page.icon;
     const modeCount = page.modes?.length ?? 0;
     return (
       <div key={rowKey}>
-        <div className="flex items-stretch">
+        <div
+          className={cn(
+            'flex items-stretch overflow-hidden rounded-xl transition-colors',
+            isPageActive && 'bg-blue-600',
+          )}
+        >
           {/* Left: go straight to the page's default mode. */}
           <button
             type="button"
             onClick={() => onNavigate(page.id)}
             title={`Go to ${page.label}`}
-            className="flex min-w-0 flex-1 items-center gap-2.5 rounded-xl px-2.5 py-2 text-left transition-colors hover:bg-surface-canvas"
+            className={cn(
+              'flex min-w-0 flex-1 items-center gap-2.5 px-2.5 py-2 text-left transition-colors',
+              isPageActive ? 'text-white' : 'rounded-xl hover:bg-surface-canvas',
+            )}
           >
-            <PageIcon className="h-[18px] w-[18px] shrink-0 text-text-muted" />
-            <span className="min-w-0 flex-1 truncate text-[14px] font-semibold text-text-default">{page.label}</span>
+            <PageIcon className={cn('h-[18px] w-[18px] shrink-0', isPageActive ? 'text-white' : 'text-text-muted')} />
+            <span className="min-w-0 flex-1 truncate text-[14px] font-semibold">{page.label}</span>
           </button>
           {/* Right: expand / collapse this page's modes (no-op if 0/1 mode). */}
           {modeCount > 1 && (
@@ -64,10 +74,24 @@ export const MasterNavDropdown = forwardRef<HTMLDivElement, MasterNavDropdownPro
               onClick={() => onToggleRow(open ? null : rowKey)}
               aria-expanded={open}
               title={`${modeCount} modes`}
-              className="flex shrink-0 items-center gap-1.5 rounded-xl px-2.5 py-2 transition-colors hover:bg-surface-canvas"
+              className={cn(
+                'flex shrink-0 items-center gap-1.5 px-2.5 py-2 transition-colors',
+                isPageActive ? 'text-white/90 hover:text-white' : 'rounded-xl hover:bg-surface-canvas',
+              )}
             >
-              <span className="text-[11px] font-bold tabular-nums text-text-muted/60">{modeCount}</span>
-              <motion.span animate={{ rotate: open ? 180 : 0 }} transition={spring} className="text-text-muted">
+              <span
+                className={cn(
+                  'text-[11px] font-bold tabular-nums',
+                  isPageActive ? 'text-white/80' : 'text-text-muted/60',
+                )}
+              >
+                {modeCount}
+              </span>
+              <motion.span
+                animate={{ rotate: open ? 180 : 0 }}
+                transition={spring}
+                className={isPageActive ? 'text-white' : 'text-text-muted'}
+              >
                 <ChevronDown className="h-4 w-4" />
               </motion.span>
             </button>
@@ -85,12 +109,18 @@ export const MasterNavDropdown = forwardRef<HTMLDivElement, MasterNavDropdownPro
               <div className="space-y-0.5 py-1 pl-[34px] pr-1">
                 {page.modes.map((mode) => {
                   const ModeIcon = mode.icon;
+                  const isModeActive = isPageActive && mode.id === highlightedModeId;
                   return (
                     <button
                       key={mode.id}
                       type="button"
                       onClick={() => onNavigate(page.id, mode.id)}
-                      className="flex w-full items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-left text-[13px] font-medium text-text-default transition-colors hover:bg-blue-600 hover:text-white"
+                      className={cn(
+                        'flex w-full items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-left text-[13px] font-medium transition-colors',
+                        isModeActive
+                          ? 'bg-blue-600 text-white'
+                          : 'text-text-default hover:bg-blue-600 hover:text-white',
+                      )}
                     >
                       <ModeIcon className="h-4 w-4 shrink-0 opacity-80" />
                       <span className="min-w-0 flex-1 truncate">{mode.label}</span>

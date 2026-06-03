@@ -33,6 +33,8 @@ import { orderSyncService, type ChannelOrder } from '@/services/OrderSyncService
 import {
   findShippedOrdersForFulfillment,
   type ShippedFulfillmentOrder,
+  type ShippedFulfillmentLine,
+  type ShippedFulfillmentPacker,
 } from '@/lib/zoho/fulfillment-source';
 import { getFulfillmentSyncConfig, type FulfillmentSyncConfig } from '@/lib/zoho/fulfillment-config';
 
@@ -199,6 +201,15 @@ export interface OrderSyncResult {
   status: 'completed' | 'error' | 'skipped' | 'dry_run';
   stage: string;
   delivered: boolean;
+  /** Display context (sales-channel, carrier, scanner, line items) so the UI can
+   *  show exactly what each shipped/packer-scanned order pushed to Zoho. */
+  channel: string | null;
+  carrier: string | null;
+  trackingNumber: string | null;
+  orderDate: string | null;
+  deliveredAt: string | null;
+  packer: ShippedFulfillmentPacker | null;
+  lines: ShippedFulfillmentLine[];
   zoho: {
     salesOrderId?: string | null;
     packageId?: string | null;
@@ -224,6 +235,19 @@ export async function syncOneOrder(
   opts: { dryRun: boolean; force?: boolean }
 ): Promise<OrderSyncResult> {
   const { client, ledger, config, orgId } = deps;
+
+  // Display context attached to every result (regardless of outcome) so the UI
+  // can render the order's channel, scanner, tracking, and line items.
+  const display = {
+    channel: order.channel,
+    carrier: order.carrier,
+    trackingNumber: order.trackingNumber,
+    orderDate: order.orderDate,
+    deliveredAt: order.deliveredAt,
+    packer: order.packer,
+    lines: order.lines,
+  };
+
   const existing = await ledger.get(order.referenceNumber);
 
   // Skip already-completed orders whose shipment snapshot hasn't changed.
@@ -237,6 +261,7 @@ export async function syncOneOrder(
       status: 'skipped',
       stage: existing.stage,
       delivered: existing.delivered,
+      ...display,
       zoho: {
         salesOrderId: existing.zohoSalesorderId,
         packageId: existing.zohoPackageId,
@@ -272,6 +297,7 @@ export async function syncOneOrder(
       status: 'dry_run',
       stage: rec.stage,
       delivered: rec.delivered,
+      ...display,
       zoho: {
         salesOrderId: rec.zohoSalesorderId,
         packageId: rec.zohoPackageId,
@@ -433,6 +459,7 @@ export async function syncOneOrder(
       status: 'completed',
       stage: rec.stage,
       delivered: rec.delivered,
+      ...display,
       zoho: {
         salesOrderId: rec.zohoSalesorderId,
         packageId: rec.zohoPackageId,
@@ -451,6 +478,7 @@ export async function syncOneOrder(
       status: 'error',
       stage: rec.stage,
       delivered: rec.delivered,
+      ...display,
       zoho: {
         salesOrderId: rec.zohoSalesorderId,
         packageId: rec.zohoPackageId,

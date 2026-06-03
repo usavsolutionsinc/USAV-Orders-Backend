@@ -267,11 +267,10 @@ function ReceivingModeSwitcherDemo() {
     setPagesOpen(false);
   };
 
-  // Current page hidden from the menu; recents pinned on top (still listed below).
   const recentPages = recents
     .filter((id) => id !== pageId)
     .flatMap((id) => pages.filter((p) => p.id === id));
-  const otherPages = pages.filter((p) => p.id !== pageId);
+  const otherPages = pages;
 
   return (
     <div className="mx-auto w-full max-w-[320px] space-y-3">

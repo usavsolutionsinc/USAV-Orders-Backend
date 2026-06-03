@@ -150,31 +150,32 @@ export function ReceivingHistorySearchSection({ onSwitchToReceiving }: Props) {
 
   return (
     <div className="shrink-0 bg-white">
-      <div className="space-y-3 py-3">
-        <SidebarSearchBar
-          value={draft}
-          onChange={setDraft}
-          placeholder={getReceivingHistoryPlaceholder(searchField)}
-          isSearching={tableFetching}
-          variant="blue"
-          rightElement={
-            <button
-              type="button"
-              onClick={() => {
-                onSwitchToReceiving();
-                queueMicrotask(() => {
-                  window.dispatchEvent(new CustomEvent('receiving-focus-scan'));
-                });
-              }}
-              className="rounded-xl bg-emerald-500 p-2.5 text-white transition-colors hover:bg-emerald-600 disabled:bg-gray-300"
-              title="Receive — scan a new tracking number"
-              aria-label="Switch to receiving tab and focus scan field"
-            >
-              <Plus className="h-5 w-5" />
-            </button>
-          }
-        />
-
+      {/* Search sits flush in its 40px band (matches Incoming + the
+          pending/products reference); the filter control sits below it. */}
+      <SidebarSearchBar
+        value={draft}
+        onChange={setDraft}
+        placeholder={getReceivingHistoryPlaceholder(searchField)}
+        isSearching={tableFetching}
+        variant="blue"
+        rightElement={
+          <button
+            type="button"
+            onClick={() => {
+              onSwitchToReceiving();
+              queueMicrotask(() => {
+                window.dispatchEvent(new CustomEvent('receiving-focus-scan'));
+              });
+            }}
+            className="rounded-xl bg-emerald-500 p-2.5 text-white transition-colors hover:bg-emerald-600 disabled:bg-gray-300"
+            title="Receive — scan a new tracking number"
+            aria-label="Switch to receiving tab and focus scan field"
+          >
+            <Plus className="h-5 w-5" />
+          </button>
+        }
+      />
+      <div className="space-y-2 pb-2">
         {/* Single filter entry point — the carton-source scope and the
             search-field axis condense into one popover below the search bar
             (mirrors IncomingSidebarPanel). */}

@@ -145,50 +145,52 @@ export default function UnshippedSidebar(props: UnshippedSidebarProps) {
   const visibleSearchHistory = showAllSearchHistory ? searchHistory : searchHistory.slice(0, 3);
 
   const content = (
-    <>
+    <motion.div initial="hidden" animate="visible" variants={containerVariants} className="h-full flex flex-col overflow-hidden">
       {filterControl ? (
-        <motion.div initial="hidden" animate="visible" variants={containerVariants} className="relative z-20">
+        <motion.div variants={itemVariants} className="relative z-20">
           {filterControl}
         </motion.div>
       ) : null}
-      <motion.div
-        initial="hidden"
-        animate="visible"
-        variants={containerVariants}
-        className={`h-full flex flex-col overflow-y-auto no-scrollbar ${SIDEBAR_GUTTER} pb-6 ${filterControl ? 'pt-0' : 'pt-6'}`}
-      >
-        {!hideSectionHeader ? (
-          <motion.header variants={itemVariants}>
-            <h2 className="text-xl font-black tracking-tighter uppercase leading-none text-gray-900">
-              Unshipped
-            </h2>
-            <p className="text-eyebrow font-bold text-blue-600 uppercase tracking-widest mt-1">
-              Shipping Queue
-            </p>
-          </motion.header>
-        ) : null}
+      {!hideSectionHeader ? (
+        <motion.header variants={itemVariants} className={`${SIDEBAR_GUTTER} ${filterControl ? 'pt-2' : 'pt-6'}`}>
+          <h2 className="text-xl font-black tracking-tighter uppercase leading-none text-gray-900">
+            Unshipped
+          </h2>
+          <p className="text-eyebrow font-bold text-blue-600 uppercase tracking-widest mt-1">
+            Shipping Queue
+          </p>
+        </motion.header>
+      ) : null}
 
-        <motion.div variants={itemVariants} className={`${hideSectionHeader ? '' : 'mt-4'} space-y-4`}>
-          <SidebarSearchBar
-            value={searchQuery}
-            onChange={handleInputChange}
-            onSearch={handleSearch}
-            onClear={() => { setSearchQuery(''); handleSearch(''); }}
-            inputRef={searchInputRef}
-            placeholder="Search orders, serials..."
-            variant="blue"
-            rightElement={
-              <button
-                type="button"
-                onClick={handleOpenIntakeForm}
-                className="rounded-xl bg-emerald-500 p-2.5 text-white transition-colors hover:bg-emerald-600 disabled:bg-gray-300"
-                title="New Order Entry"
-                aria-label="Open new order entry form"
-              >
-                <Plus className="h-5 w-5" />
-              </button>
-            }
-          />
+      {/* Search hoisted to a flush direct child of the flex column (matches the
+          Pending reference). It must NOT live inside the overflow-y scroll body,
+          or the band double-insets / negative margins clamp against overflow-x. */}
+      <SidebarSearchBar
+        value={searchQuery}
+        onChange={handleInputChange}
+        onSearch={handleSearch}
+        onClear={() => { setSearchQuery(''); handleSearch(''); }}
+        inputRef={searchInputRef}
+        placeholder="Search orders, serials..."
+        variant="blue"
+        rightElement={
+          <button
+            type="button"
+            onClick={handleOpenIntakeForm}
+            className="rounded-xl bg-emerald-500 p-2.5 text-white transition-colors hover:bg-emerald-600 disabled:bg-gray-300"
+            title="New Order Entry"
+            aria-label="Open new order entry form"
+          >
+            <Plus className="h-5 w-5" />
+          </button>
+        }
+      />
+
+      <motion.div
+        variants={itemVariants}
+        className={`flex-1 min-h-0 flex flex-col overflow-y-auto no-scrollbar ${SIDEBAR_GUTTER} pb-6 pt-4`}
+      >
+        <div className="space-y-4">
           <RecentSearchesList
             items={visibleSearchHistory}
             totalCount={searchHistory.length}
@@ -204,7 +206,7 @@ export default function UnshippedSidebar(props: UnshippedSidebarProps) {
             searchQuery={searchQuery}
             onOpenShippedMatches={onOpenShippedMatches}
           />
-        </motion.div>
+        </div>
 
         <AwaitingEbayPanel
           onRefresh={() => {
@@ -213,7 +215,7 @@ export default function UnshippedSidebar(props: UnshippedSidebarProps) {
           }}
         />
       </motion.div>
-    </>
+    </motion.div>
   );
 
   if (embedded) {

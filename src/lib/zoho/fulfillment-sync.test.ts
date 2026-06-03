@@ -101,6 +101,7 @@ const ORDER: ShippedFulfillmentOrder = {
   deliveredAt: '2026-05-03',
   changedAt: '2026-05-03 10:00:00+00',
   customer: null,
+  packer: { id: 7, name: 'Pat Packer', packedAt: '2026-05-02 09:00:00+00' },
   lines: [{ sku: 'SKU1', quantity: 2, productTitle: 'Widget', itemNumber: null }],
   sourceHash: 'hash-1',
 };

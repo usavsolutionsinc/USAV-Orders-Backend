@@ -12,6 +12,7 @@ export function DateGroupHeader({ date, total }: DateGroupHeaderProps) {
     <DesktopDateGroupHeader
       date={date}
       total={total}
+      className="border-t border-gray-300"
     />
   );
 }

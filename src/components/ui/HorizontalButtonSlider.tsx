@@ -2,7 +2,9 @@
 
 import { useCallback, useId, useRef, type RefObject, type WheelEvent } from 'react';
 import { motion } from 'framer-motion';
+import { receivingHeaderHairlineClass } from '@/components/layout/header-shell';
 import { framerTransition } from '@/design-system/foundations/motion-framer';
+import { cn } from '@/utils/_cn';
 
 export type HorizontalSliderTone = 'zinc' | 'yellow' | 'emerald' | 'red' | 'blue' | 'orange' | 'purple';
 
@@ -106,6 +108,12 @@ export type HorizontalButtonSliderProps = {
    * `aria-label` / `title`). Compact square-ish hit targets for tight headers.
    */
   navIconOnly?: boolean;
+  /**
+   * Square, edge-to-edge segmented track for full-bleed sidebar bands (e.g.
+   * master-nav `ModeRail`). Drops outer radius, inset padding, and the track
+   * ring so the gray fill meets the panel edges.
+   */
+  segmentedFlush?: boolean;
   'aria-label'?: string;
 };
 
@@ -119,6 +127,7 @@ export function HorizontalButtonSlider({
   className = '',
   legend,
   navIconOnly = false,
+  segmentedFlush = false,
   'aria-label': ariaLabel,
 }: HorizontalButtonSliderProps) {
   const scrollerRef = useRef<HTMLDivElement | null>(null);
@@ -143,10 +152,12 @@ export function HorizontalButtonSlider({
   const isSegmented = variant === 'segmented';
   const useScroller = variant !== 'floating' && !isSegmented;
   const containerClass = isSegmented
-    ? // Recessed gray track (bg-surface-canvas + inset ring) so the active blue
-      // pill reads as raised — the depth the demo gets from its surface-canvas
-      // strip. p-1 + h-8 tabs = 40px, filling the host's fixed 40px band.
-      'rounded-xl bg-surface-canvas p-1 ring-1 ring-inset ring-border-soft'
+    ? segmentedFlush
+      ? // Full-bleed sidebar band: square white fill + bottom hairline (matches header bands).
+        cn('h-full rounded-none bg-white p-0', receivingHeaderHairlineClass)
+      : // Recessed gray track (bg-surface-canvas + inset ring) so the active blue
+        // pill reads as raised. p-1 + h-8 tabs = 40px in a fixed 40px band.
+        'rounded-xl bg-surface-canvas p-1 ring-1 ring-inset ring-border-soft'
     : useScroller
       ? `-mx-1 overflow-x-auto overscroll-x-contain ${scrollerPadY} [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden`
       : 'overflow-visible py-2';
@@ -168,7 +179,9 @@ export function HorizontalButtonSlider({
         <div
           className={
             isSegmented
-              ? 'flex gap-1'
+              ? segmentedFlush
+                ? 'flex h-full gap-0'
+                : 'flex gap-1'
               : useScroller
                 ? 'flex min-w-max snap-x snap-mandatory gap-2 px-1'
                 : 'flex flex-wrap gap-2'
@@ -178,6 +191,12 @@ export function HorizontalButtonSlider({
             const isActive = value === item.id;
             if (variant === 'segmented') {
               const Icon = item.icon;
+              const segTabClass = segmentedFlush
+                ? 'relative flex h-full min-h-[40px] flex-1 items-center justify-center rounded-none'
+                : 'relative flex h-8 flex-1 items-center justify-center rounded-xl';
+              const segIndicatorClass = segmentedFlush
+                ? 'absolute inset-0 rounded-none bg-blue-600'
+                : 'absolute inset-0 rounded-xl bg-blue-600 shadow-sm shadow-blue-600/25';
               return (
                 <motion.button
                   key={item.id}
@@ -189,14 +208,14 @@ export function HorizontalButtonSlider({
                   whileTap={{ scale: 0.94 }}
                   transition={framerTransition.sliderIndicator}
                   onClick={() => onChange(item.id)}
-                  className={`relative flex h-8 flex-1 items-center justify-center rounded-xl transition-colors ${
+                  className={`${segTabClass} transition-colors ${
                     isActive ? 'text-white' : 'text-text-muted hover:text-text-default'
                   }`}
                 >
                   {isActive ? (
                     <motion.span
                       layoutId={`${indicatorId}-seg`}
-                      className="absolute inset-0 rounded-xl bg-blue-600 shadow-sm shadow-blue-600/25"
+                      className={segIndicatorClass}
                       transition={framerTransition.sliderIndicator}
                     />
                   ) : null}

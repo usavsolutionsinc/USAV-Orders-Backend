@@ -403,13 +403,14 @@ export function IncomingSidebarPanel() {
 
   return (
     <div className="flex h-full min-h-0 flex-col">
-      <div className="shrink-0 space-y-2 border-b border-gray-200 bg-white py-2">
-        <SidebarSearchBar
-          value={search}
-          onChange={setSearch}
-          placeholder="Search PO #, tracking, SKU…"
-        />
-
+      {/* Search sits flush in its 40px band (matches the pending/products
+          reference); the filter + refresh controls form a block below it. */}
+      <SidebarSearchBar
+        value={search}
+        onChange={setSearch}
+        placeholder="Search PO #, tracking, SKU…"
+      />
+      <div className="shrink-0 space-y-2 border-b border-gray-200 bg-white pb-2">
         {/* Single filter entry point — the delivery-state facet, PO purchase
             date range, and sort axis all condense into one popover below the
             search bar (mirrors the dashboard's ShippedCarrierFilters). */}

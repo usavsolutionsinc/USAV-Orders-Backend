@@ -32,6 +32,7 @@ import {
 import { useAblyChannel } from '@/hooks/useAblyChannel';
 import { useAblyClient } from '@/contexts/AblyContext';
 import { useAuth } from '@/contexts/AuthContext';
+import { useMasterNavEnabled } from '@/components/sidebar/master-nav';
 import { printProductLabel } from '@/lib/print/printProductLabel';
 import { LocalPickupSidebarList } from '@/components/work-orders/LocalPickupSidebarList';
 import { UnfoundQueueSidebarToolbar } from '@/components/receiving/unfound/UnfoundQueueSidebarToolbar';
@@ -112,6 +113,7 @@ export function ReceivingSidebarPanel() {
   const searchParams = useSearchParams();
   const pathname = usePathname();
   const { isMobile } = useUIModeOptional();
+  const masterNavEnabled = useMasterNavEnabled();
   const rawMode = searchParams.get('mode');
   // /receiving/unfound owns its own mode — pathname takes precedence over
   // ?mode= so the Unfound pill stays highlighted on the dedicated route.
@@ -1062,17 +1064,18 @@ export function ReceivingSidebarPanel() {
 
   return (
     <div className="h-full flex flex-col overflow-hidden">
-      {/* Mode pills (2nd row) */}
-      <div className={sidebarHeaderPillRowClass}>
-        <HorizontalButtonSlider
-          items={RECEIVING_MODE_ITEMS}
-          value={mode}
-          onChange={(next) => updateMode(next as ReceivingMode)}
-          variant="segmented"
-          className="w-full"
-          aria-label="Receiving mode"
-        />
-      </div>
+      {!masterNavEnabled && (
+        <div className={sidebarHeaderPillRowClass}>
+          <HorizontalButtonSlider
+            items={RECEIVING_MODE_ITEMS}
+            value={mode}
+            onChange={(next) => updateMode(next as ReceivingMode)}
+            variant="segmented"
+            className="w-full"
+            aria-label="Receiving mode"
+          />
+        </div>
+      )}
 
       {mode === 'pickup' ? (
         <div className="min-h-0 flex-1 overflow-hidden">

@@ -23,7 +23,6 @@ import { TestingLinePanel, type UnitSlotSerial } from '@/components/tech/Testing
 import { SkuTestingPanel } from '@/components/tech/SkuTestingPanel';
 import {
   unitStatusToVerdict,
-  workflowToVerdict,
   type TestingVerdict,
 } from '@/components/receiving/workspace/TestingStatusPills';
 import {
@@ -1043,7 +1042,7 @@ export function TechTestingWorkspace({ staffId, selectedLineId, onSelectedLineCh
                         lineId={line.id}
                         saved={lineSerials}
                         expected={line.quantity_expected ?? null}
-                        verdict={deriveLineVerdict(lineSerials) ?? workflowToVerdict(line.workflow_status)}
+                        verdict={deriveLineVerdict(lineSerials)}
                         isMutating={isMutating}
                         isSubmitting={serialSubmitting}
                         disabled={saving}
@@ -1089,7 +1088,7 @@ export function TechTestingWorkspace({ staffId, selectedLineId, onSelectedLineCh
                         lineId={row.id}
                         saved={lineSerials}
                         expected={row.quantity_expected ?? null}
-                        verdict={deriveLineVerdict(lineSerials) ?? workflowToVerdict(row.workflow_status)}
+                        verdict={deriveLineVerdict(lineSerials)}
                         isMutating={isMutating}
                         isSubmitting={serialSubmitting}
                         disabled={!row.receiving_id || saving}

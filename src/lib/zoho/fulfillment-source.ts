@@ -32,6 +32,13 @@ export interface ShippedFulfillmentCustomer {
   shippingAddress: Record<string, unknown> | null;
 }
 
+/** Who scanned/packed the order at the PACK station (the ORDERS packer_log). */
+export interface ShippedFulfillmentPacker {
+  id: number | null;
+  name: string | null;
+  packedAt: string | null;
+}
+
 export interface ShippedFulfillmentOrder {
   /** orders.order_id — the channel order id, used as Zoho reference_number. */
   referenceNumber: string;
@@ -44,6 +51,8 @@ export interface ShippedFulfillmentOrder {
   /** Most recent change timestamp across the order's rows + tracking — drives the delta cursor. */
   changedAt: string;
   customer: ShippedFulfillmentCustomer | null;
+  /** The PACK-station scanner for this order (null if never scanned, e.g. carrier-only). */
+  packer: ShippedFulfillmentPacker | null;
   lines: ShippedFulfillmentLine[];
   /** Stable hash of the shipment-relevant snapshot; lets us skip unchanged completed orders. */
   sourceHash: string;
@@ -70,6 +79,9 @@ interface AggRow {
   delivered_at: string | null;
   changed_at: string;
   customer_id: number | null;
+  packed_by_id: number | null;
+  packer_name: string | null;
+  packed_at: string | null;
   lines: ShippedFulfillmentLine[];
 }
 
@@ -139,6 +151,9 @@ export async function findShippedOrdersForFulfillment(
       to_char(MAX(stn.delivered_at), 'YYYY-MM-DD HH24:MI:SSOF') AS delivered_at,
       to_char(MAX(${CHANGED_AT_EXPR}), 'YYYY-MM-DD HH24:MI:SSOF') AS changed_at,
       MAX(o.customer_id)                          AS customer_id,
+      MAX(pk.packed_by)::int                      AS packed_by_id,
+      MAX(s_packer.name)                          AS packer_name,
+      to_char(MAX(pk.packed_at), 'YYYY-MM-DD HH24:MI:SSOF') AS packed_at,
       jsonb_agg(jsonb_build_object(
         'sku', o.sku,
         'quantity', COALESCE(NULLIF(o.quantity, '')::numeric, 1),
@@ -147,6 +162,15 @@ export async function findShippedOrdersForFulfillment(
       ) ORDER BY o.id)                            AS lines
     FROM orders o
     JOIN shipping_tracking_numbers stn ON stn.id = o.shipment_id
+    LEFT JOIN LATERAL (
+      SELECT pl.packed_by, pl.created_at AS packed_at
+      FROM packer_logs pl
+      WHERE pl.shipment_id IS NOT NULL
+        AND pl.shipment_id = o.shipment_id
+        AND pl.tracking_type = 'ORDERS'
+      ORDER BY pl.created_at DESC NULLS LAST LIMIT 1
+    ) pk ON true
+    LEFT JOIN staff s_packer ON s_packer.id = pk.packed_by
     WHERE ${conditions.join(' AND ')}
     GROUP BY o.order_id
     ${having}
@@ -210,6 +234,10 @@ export async function findShippedOrdersForFulfillment(
       deliveredAt: r.delivered_at,
       changedAt: r.changed_at,
       customer: r.customer_id != null ? customersById.get(r.customer_id) ?? null : null,
+      packer:
+        r.packed_by_id != null || r.packer_name
+          ? { id: r.packed_by_id, name: r.packer_name, packedAt: r.packed_at }
+          : null,
       lines,
       sourceHash: computeSourceHash({
         carrier: r.carrier,
