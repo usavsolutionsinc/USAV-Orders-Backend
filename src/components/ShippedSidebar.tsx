@@ -22,7 +22,7 @@ import { SIDEBAR_GUTTER } from '@/components/layout/header-shell';
 import { ShippedIntakeForm, type ShippedFormData } from './shipped';
 import { ShippedDetailsPanel } from './shipped/ShippedDetailsPanel';
 import { ShippedOrder } from '@/lib/neon/orders-queries';
-import { SearchBar } from './ui/SearchBar';
+import { SidebarSearchBar } from './ui/SidebarSearchBar';
 import { HorizontalButtonSlider, type HorizontalSliderItem } from './ui/HorizontalButtonSlider';
 import { useShippedSearch } from '@/hooks/useShippedSearch';
 import { useDebounce } from '@/hooks';
@@ -38,6 +38,7 @@ import {
     type ShippedSearchField,
 } from '@/lib/shipped-search';
 import { ShippedCarrierFilters } from '@/components/shipping/ShippedFilterToolbar';
+import { ZohoSyncButton } from '@/components/shipped/ZohoSyncButton';
 
 interface SearchHistory {
     query: string;
@@ -298,7 +299,7 @@ Shipped: ${result.packed_at ? formatDateTimePST(result.packed_at) : 'Not Shipped
     ) : (
         <motion.div initial="hidden" animate="visible" variants={containerVariants} className="h-full flex flex-col overflow-hidden">
             {filterControl ? <motion.div variants={itemVariants} className="relative z-20">{filterControl}</motion.div> : null}
-            <div className={`h-full flex flex-col space-y-4 overflow-y-auto scrollbar-hide ${SIDEBAR_GUTTER} pb-6 ${filterControl ? 'pt-4' : 'pt-6'}`}>
+            <div className={`h-full flex flex-col space-y-4 overflow-y-auto scrollbar-hide ${SIDEBAR_GUTTER} pb-6 ${filterControl ? 'pt-0' : 'pt-6'}`}>
                     {!hideSectionHeader ? (
                         <motion.header variants={itemVariants}>
                             <h2 className="text-xl font-black tracking-tighter uppercase leading-none text-gray-900">
@@ -322,7 +323,7 @@ Shipped: ${result.packed_at ? formatDateTimePST(result.packed_at) : 'Not Shipped
                                 }
                             }}
                         >
-                            <SearchBar
+                            <SidebarSearchBar
                                 value={inputValue}
                                 onChange={setInputValue}
                                 placeholder={getShippedSearchPlaceholder(shippedSearchField)}
@@ -384,6 +385,9 @@ Shipped: ${result.packed_at ? formatDateTimePST(result.packed_at) : 'Not Shipped
                         </div>
 
                         <ShippedCarrierFilters layout="sidebar" />
+
+                        {/* Manual Zoho fulfillment sync — gated by integrations.zoho */}
+                        <ZohoSyncButton variant="sidebar" />
 
                         {/* Search Results */}
                         {results.length > 0 && (

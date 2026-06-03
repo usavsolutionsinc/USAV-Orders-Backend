@@ -28,7 +28,7 @@ import { RoomsSidebarList } from '@/components/warehouse/RoomsSidebarList';
 import { BinLabelPrinter } from '@/components/barcode/BinLabelPrinter';
 import { RackLabelPrinter } from '@/components/barcode/RackLabelPrinter';
 import { RoomFinderProvider, useRoomFinder } from '@/components/warehouse/roomFinderContext';
-import { SearchBar } from '@/components/ui/SearchBar';
+import { SidebarSearchBar } from '@/components/ui/SidebarSearchBar';
 
 type InventoryTab = 'rooms' | 'bins' | 'labels' | 'racks' | 'map';
 
@@ -139,13 +139,12 @@ function RoomFinderSearchBar({ tab }: { tab: InventoryTab }) {
         ? 'Search rooms to print racks for…'
         : 'Search rooms by name or zone…';
   return (
-    <SearchBar
+    <SidebarSearchBar
       value={query}
       onChange={setQuery}
       onClear={() => setQuery('')}
       placeholder={placeholder}
       variant="blue"
-      size="compact"
       hideUnderline
     />
   );

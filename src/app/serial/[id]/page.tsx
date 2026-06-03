@@ -3,6 +3,8 @@
 import { Suspense, useCallback, useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
+import { unitStatusBadgeTone } from '@/components/station/receiving-constants';
+import { ScanAgainBar } from '@/components/mobile/receiving/ScanAgainBar';
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -54,24 +56,11 @@ function formatAgo(iso: string): string {
   return `${Math.floor(h / 24)}d`;
 }
 
-const STATUS_TONE: Record<string, string> = {
-  UNKNOWN: 'bg-slate-100 text-slate-600',
-  RECEIVED: 'bg-amber-100 text-amber-800',
-  TESTED: 'bg-blue-100 text-blue-700',
-  STOCKED: 'bg-emerald-100 text-emerald-700',
-  PICKED: 'bg-indigo-100 text-indigo-700',
-  SHIPPED: 'bg-violet-100 text-violet-700',
-  RETURNED: 'bg-rose-100 text-rose-700',
-  RMA: 'bg-rose-100 text-rose-700',
-  SCRAPPED: 'bg-rose-100 text-rose-700',
-};
-
 function StatusPill({ status }: { status: string | null }) {
   const v = (status || 'UNKNOWN').toUpperCase();
-  const tone = STATUS_TONE[v] || 'bg-slate-100 text-slate-600';
   return (
     <span
-      className={`inline-flex items-center rounded-full px-2 py-0.5 text-micro font-bold uppercase tracking-wide ${tone}`}
+      className={`inline-flex items-center rounded-full px-2 py-0.5 text-micro font-bold uppercase tracking-wide ${unitStatusBadgeTone(v)}`}
     >
       {v}
     </span>
@@ -206,18 +195,21 @@ function UnitPageInner() {
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col">
       <header className="sticky top-0 z-10 bg-white border-b border-slate-200 px-4 py-3">
-        <div className="flex items-center justify-between">
+        <div className="flex items-center justify-between gap-2">
           {lineHref ? (
             <button
               type="button"
               onClick={() => router.push(lineHref)}
-              className="text-xs font-bold text-blue-600"
+              className="text-xs font-bold text-blue-600 shrink-0"
             >
               ← Line
             </button>
           ) : (
             <span />
           )}
+          <ScanAgainBar />
+        </div>
+        <div className="mt-2 flex justify-end">
           <StatusPill status={unit?.current_status ?? null} />
         </div>
         <h1 className="mt-2 truncate font-mono text-base font-black text-slate-900">

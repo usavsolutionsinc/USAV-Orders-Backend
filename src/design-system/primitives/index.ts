@@ -14,6 +14,7 @@ export * from './PanelRow';
 export * from './PrimaryButton';
 export * from './SearchField';
 export * from './StatusText';
+export * from './TextField';
 export * from './StickyHeader';
 export * from './Spinner';
 export * from './EmptyState';

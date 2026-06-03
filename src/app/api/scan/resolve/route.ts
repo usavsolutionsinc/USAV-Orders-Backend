@@ -11,6 +11,7 @@ import { routeScan } from '@/lib/barcode-routing';
 import { normalizeTrackingKey18 } from '@/lib/tracking-format';
 import { query, queryOne } from '@/lib/neon-client';
 import { withAuth } from '@/lib/auth/withAuth';
+import { publishScanLog } from '@/lib/realtime/publish';
 
 /**
  * GET|POST /api/scan/resolve
@@ -355,6 +356,12 @@ async function resolve(input: string, staffId: number, device: unknown): Promise
       matches: [], outcome: 'single', routedTo: handleRoute.redirect,
       parsedAis: null, device,
     });
+    // Push the receiving scan to the signed-in staff's desktop phone-history
+    // popover (scanlog:{staffId}). Read-only history feed — never touches
+    // receiving_* or the receiving-station `phone:{staffId}` bridge.
+    void publishScanLog({
+      staffId, rawValue: trimmed, kind, routedTo: handleRoute.redirect,
+    });
     return result;
   }
 
@@ -378,6 +385,7 @@ async function resolve(input: string, staffId: number, device: unknown): Promise
         carrier: null, matches: [], outcome: 'single', routedTo: route,
         parsedAis: null, device,
       });
+      void publishScanLog({ staffId, rawValue: trimmed, kind: 'package', routedTo: route });
       return result;
     }
   }

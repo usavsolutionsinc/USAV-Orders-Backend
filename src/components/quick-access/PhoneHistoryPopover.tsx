@@ -4,6 +4,18 @@ import { useCallback, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Clock, Image, X } from '@/components/Icons';
 import { getLast4 } from '@/components/ui/CopyChip';
+import { useAuth } from '@/contexts/AuthContext';
+import { useAblyChannel } from '@/hooks/useAblyChannel';
+
+interface ScanHistoryEntry {
+  id: number;
+  rawValue: string;
+  kind: string;
+  scannedAt: string;
+  type: 'receiving' | 'receiving-line' | 'serial-unit';
+  typeLabel: string;
+  desktopHref: string;
+}
 
 interface HistoryPhoto {
   id: number;
@@ -59,8 +71,49 @@ interface PhoneHistoryPopoverProps {
  */
 export function PhoneHistoryPopover({ onClose }: PhoneHistoryPopoverProps) {
   const router = useRouter();
+  const { user } = useAuth();
+  const staffId = user?.staffId ?? 0;
   const [entries, setEntries] = useState<HistoryEntry[] | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [scans, setScans] = useState<ScanHistoryEntry[] | null>(null);
+
+  const fetchScans = useCallback(async () => {
+    try {
+      const res = await fetch('/api/scan/history?limit=20', {
+        credentials: 'include',
+        cache: 'no-store',
+      });
+      if (!res.ok) {
+        setScans([]);
+        return;
+      }
+      const data = (await res.json()) as { entries?: ScanHistoryEntry[] };
+      setScans(Array.isArray(data.entries) ? data.entries : []);
+    } catch {
+      setScans([]);
+    }
+  }, []);
+
+  useEffect(() => {
+    void fetchScans();
+  }, [fetchScans]);
+
+  // Live-prepend: when this staff scans a receiving label on their phone, the
+  // resolver publishes on scanlog:{staffId} — refetch so it appears instantly.
+  useAblyChannel(
+    staffId > 0 ? `scanlog:${staffId}` : 'scanlog:__idle__',
+    'scan_logged',
+    () => { void fetchScans(); },
+    staffId > 0,
+  );
+
+  const handleOpenScan = useCallback(
+    (entry: ScanHistoryEntry) => {
+      onClose();
+      router.push(entry.desktopHref);
+    },
+    [onClose, router],
+  );
 
   const fetchHistory = useCallback(async () => {
     try {
@@ -128,6 +181,31 @@ export function PhoneHistoryPopover({ onClose }: PhoneHistoryPopoverProps) {
       </header>
 
       <div className="max-h-[min(70vh,calc(100vh-8rem))] overflow-y-auto overscroll-contain px-4 py-2">
+        {scans && scans.length > 0 && (
+          <section className="mb-3">
+            <p className="mb-1 text-micro font-black uppercase tracking-widest text-gray-500">
+              Phone scans · tap to open
+            </p>
+            <div className="overflow-hidden rounded-lg border border-gray-100 divide-y divide-gray-100">
+              {scans.map((s) => (
+                <button
+                  key={s.id}
+                  type="button"
+                  onClick={() => handleOpenScan(s)}
+                  className="flex w-full items-center gap-2 px-3 py-2 text-left transition-colors active:bg-gray-50 hover:bg-gray-50"
+                >
+                  <span className="inline-flex shrink-0 items-center rounded-md border border-gray-200 bg-gray-50 px-1.5 py-0.5 text-eyebrow font-black uppercase tracking-wider text-gray-600">
+                    {s.typeLabel}
+                  </span>
+                  <span className="min-w-0 flex-1 truncate font-mono text-label font-bold text-gray-900">
+                    {s.rawValue}
+                  </span>
+                  <span className="shrink-0 text-micro text-gray-400">{timeAgo(s.scannedAt)}</span>
+                </button>
+              ))}
+            </div>
+          </section>
+        )}
         {entries === null ? (
           <div className="flex items-center justify-center py-6">
             <div className="h-5 w-5 animate-spin rounded-full border-2 border-gray-200 border-t-gray-600" />

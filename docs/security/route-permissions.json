@@ -1,11 +1,11 @@
 {
   "version": 1,
-  "generatedAt": "2026-06-02T16:34:32Z",
-  "totalRoutes": 489,
+  "generatedAt": "2026-06-03T05:25:46Z",
+  "totalRoutes": 499,
   "summary": {
-    "permissionGated": 413,
-    "authenticatedNoPermission": 16,
-    "anonymousIntentional": 39,
+    "permissionGated": 417,
+    "authenticatedNoPermission": 17,
+    "anonymousIntentional": 44,
     "serviceToService": 3,
     "ungatedRead": 18,
     "ungatedWrite": 0
@@ -530,6 +530,16 @@
       "exemptReason": null
     },
     {
+      "path": "/api/admin/staff/[id]/stations/route.ts",
+      "methods": [
+        "GET",
+        "PUT"
+      ],
+      "gate": "withAuth",
+      "permission": "admin.manage_staff",
+      "exemptReason": null
+    },
+    {
       "path": "/api/admin/staff/deactivate/route.ts",
       "methods": [
         "POST"
@@ -614,6 +624,15 @@
     },
     {
       "path": "/api/ai/chat/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "gate": "withAuth",
+      "permission": "dashboard.view",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/ai/chat/stream/route.ts",
       "methods": [
         "POST"
       ],
@@ -989,6 +1008,33 @@
       "exemptReason": "cron endpoint"
     },
     {
+      "path": "/api/cron/shipping/subscribe-fedex/route.ts",
+      "methods": [
+        "GET"
+      ],
+      "gate": "NONE",
+      "permission": null,
+      "exemptReason": "cron endpoint"
+    },
+    {
+      "path": "/api/cron/shipping/subscribe-ups/route.ts",
+      "methods": [
+        "GET"
+      ],
+      "gate": "NONE",
+      "permission": null,
+      "exemptReason": "cron endpoint"
+    },
+    {
+      "path": "/api/cron/shipping/subscribe-usps/route.ts",
+      "methods": [
+        "GET"
+      ],
+      "gate": "NONE",
+      "permission": null,
+      "exemptReason": "cron endpoint"
+    },
+    {
       "path": "/api/cron/shipping/sync-due/route.ts",
       "methods": [
         "GET"
@@ -1014,6 +1060,15 @@
         "POST"
       ],
       "gate": "isQStashOrigin",
+      "permission": null,
+      "exemptReason": "cron endpoint"
+    },
+    {
+      "path": "/api/cron/zoho/fulfillment-sync/route.ts",
+      "methods": [
+        "GET"
+      ],
+      "gate": "NONE",
       "permission": null,
       "exemptReason": "cron endpoint"
     },
@@ -2070,6 +2125,15 @@
       "exemptReason": null
     },
     {
+      "path": "/api/orders/batch/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "gate": "withAuth",
+      "permission": "dashboard.view",
+      "exemptReason": null
+    },
+    {
       "path": "/api/orders/check-shipped/route.ts",
       "methods": [
         "POST"
@@ -2734,6 +2798,15 @@
       ],
       "gate": "withAuth",
       "permission": "tech.qc_pass",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/receiving-lines/incoming/delivered-unscanned/route.ts",
+      "methods": [
+        "GET"
+      ],
+      "gate": "withAuth",
+      "permission": "receiving.view",
       "exemptReason": null
     },
     {
@@ -3534,15 +3607,6 @@
       "exemptReason": null
     },
     {
-      "path": "/api/shipped/summary/route.ts",
-      "methods": [
-        "GET"
-      ],
-      "gate": "withAuth",
-      "permission": "shipping.view",
-      "exemptReason": null
-    },
-    {
       "path": "/api/shipping/track/[id]/route.ts",
       "methods": [
         "GET"
@@ -3852,6 +3916,15 @@
       ],
       "gate": "withAuth",
       "permission": "reports.view",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/staff-goals/me/route.ts",
+      "methods": [
+        "GET"
+      ],
+      "gate": "withAuth (no permission)",
+      "permission": null,
       "exemptReason": null
     },
     {
@@ -4339,6 +4412,16 @@
       "exemptReason": "webhook (gated by signature)"
     },
     {
+      "path": "/api/webhooks/usps/route.ts",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "gate": "NONE",
+      "permission": null,
+      "exemptReason": "webhook (gated by signature)"
+    },
+    {
       "path": "/api/webhooks/zoho/orders/route.ts",
       "methods": [
         "GET",
@@ -4441,6 +4524,15 @@
       ],
       "gate": "withAuth",
       "permission": "receiving.scan_po",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/zoho/fulfillment-sync/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "gate": "withAuth",
+      "permission": "integrations.zoho",
       "exemptReason": null
     },
     {

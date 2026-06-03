@@ -23,7 +23,7 @@ import type { ReceivingLineRow } from '@/components/station/ReceivingLinesTable'
 
 export type ReceivingMode = 'receive' | 'incoming' | 'history' | 'pickup' | 'unfound';
 
-// Sidebar order: Receiving → Incoming → History → Unfound → Local Pickup.
+// Sidebar order: Receiving → Incoming → History → Local Pickup → Unfound.
 // `unfound` is a route-switch (navigates to /receiving/unfound and mounts
 // UnfoundQueueTable as the workspace surface); the other four flip the
 // `?mode=` URL param. updateMode in ReceivingSidebarPanel handles the
@@ -37,8 +37,8 @@ export const RECEIVING_MODE_ITEMS: HorizontalSliderItem[] = [
   { id: 'receive',  label: 'Receiving',    icon: ClipboardList },
   { id: 'incoming', label: 'Incoming',     icon: Package },
   { id: 'history',  label: 'History',      icon: List },
-  { id: 'unfound',  label: 'Unfound',      icon: AlertTriangle },
   { id: 'pickup',   label: 'Local Pickup', icon: ShoppingCart },
+  { id: 'unfound',  label: 'Unfound',      icon: AlertTriangle },
 ];
 
 // ── Carton scratch (localStorage) ───────────────────────────────────────────

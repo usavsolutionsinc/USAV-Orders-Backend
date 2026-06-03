@@ -1,4 +1,3 @@
-export type PendingStockFilterPreference = 'all' | 'pending' | 'stock';
 export type ShippedTypeFilterPreference = 'all' | 'orders' | 'sku' | 'fba';
 export type ShippedSearchFieldPreference =
   | 'all'
@@ -9,7 +8,6 @@ export type ShippedSearchFieldPreference =
   | 'serial_number';
 export type DetailsOpenBehaviorPreference = 'auto' | 'side_panel';
 
-const PREF_PENDING_FILTER = 'dashboard:pending-filter';
 const PREF_SHIPPED_FILTER = 'dashboard:shipped-filter';
 const PREF_SHIPPED_SEARCH_FIELD = 'dashboard:shipped-search-field';
 const PREF_SHIPPED_WEEK_OFFSET = 'dashboard:shipped-week-offset';
@@ -17,18 +15,6 @@ const PREF_DETAILS_OPEN_BEHAVIOR = 'dashboard:details-open-behavior';
 
 function canUseStorage() {
   return typeof window !== 'undefined' && !!window.localStorage;
-}
-
-export function readPendingFilterPreference(): PendingStockFilterPreference | null {
-  if (!canUseStorage()) return null;
-  const raw = String(window.localStorage.getItem(PREF_PENDING_FILTER) || '').trim();
-  if (raw === 'pending' || raw === 'stock' || raw === 'all') return raw;
-  return null;
-}
-
-export function writePendingFilterPreference(value: PendingStockFilterPreference): void {
-  if (!canUseStorage()) return;
-  window.localStorage.setItem(PREF_PENDING_FILTER, value);
 }
 
 export function readShippedFilterPreference(): ShippedTypeFilterPreference | null {

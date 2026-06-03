@@ -10,7 +10,7 @@ import { DashboardShippedSearchHandoffCard } from '@/components/dashboard/Dashbo
 import { AwaitingEbayPanel } from '@/components/unshipped/AwaitingEbayPanel';
 import { motion } from 'framer-motion';
 import { RecentSearchesList } from '@/components/sidebar/RecentSearchesList';
-import { SearchBar } from '@/components/ui/SearchBar';
+import { SidebarSearchBar } from '@/components/ui/SidebarSearchBar';
 
 interface UnshippedSidebarProps {
   showIntakeForm?: boolean;
@@ -155,7 +155,7 @@ export default function UnshippedSidebar(props: UnshippedSidebarProps) {
         initial="hidden"
         animate="visible"
         variants={containerVariants}
-        className={`h-full flex flex-col overflow-y-auto no-scrollbar ${SIDEBAR_GUTTER} pb-6 ${filterControl ? 'pt-4' : 'pt-6'}`}
+        className={`h-full flex flex-col overflow-y-auto no-scrollbar ${SIDEBAR_GUTTER} pb-6 ${filterControl ? 'pt-0' : 'pt-6'}`}
       >
         {!hideSectionHeader ? (
           <motion.header variants={itemVariants}>
@@ -169,7 +169,7 @@ export default function UnshippedSidebar(props: UnshippedSidebarProps) {
         ) : null}
 
         <motion.div variants={itemVariants} className={`${hideSectionHeader ? '' : 'mt-4'} space-y-4`}>
-          <SearchBar
+          <SidebarSearchBar
             value={searchQuery}
             onChange={handleInputChange}
             onSearch={handleSearch}

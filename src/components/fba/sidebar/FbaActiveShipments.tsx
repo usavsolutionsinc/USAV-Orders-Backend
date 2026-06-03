@@ -8,6 +8,7 @@ import { patchFbaItem } from '@/lib/fba/patch';
 import { useFbaEvent, useFbaEvents } from '@/components/fba/hooks/useFbaEvent';
 import { motion, AnimatePresence, LayoutGroup } from 'framer-motion';
 import { Package, Pencil } from '@/components/Icons';
+import { SIDEBAR_GUTTER } from '@/components/layout/header-shell';
 import { FbaShipmentEditorForm } from '@/components/fba/sidebar/FbaShipmentEditorForm';
 import { FbaTrackingGroupDisplay } from '@/components/fba/sidebar/FbaTrackingGroupDisplay';
 import {
@@ -511,7 +512,7 @@ export function FbaActiveShipments({ stationTheme = 'green' }: { stationTheme?: 
 
   if (loading) {
     return (
-      <div className="space-y-3 px-3 py-4">
+      <div className={`space-y-3 ${SIDEBAR_GUTTER} py-4`}>
         <div className="h-4 w-32 bg-zinc-100 rounded animate-pulse mb-3" />
         <SkeletonList count={3} type="card" />
       </div>

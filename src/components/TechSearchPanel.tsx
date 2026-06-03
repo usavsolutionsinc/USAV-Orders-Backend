@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { Search, Loader2, Package, Copy, Check } from './Icons';
-import { SearchBar } from './ui/SearchBar';
+import { SidebarSearchBar } from './ui/SidebarSearchBar';
 
 interface SearchResult {
     id: number;
@@ -63,7 +63,7 @@ export default function TechSearchPanel() {
                 </div>
 
                 <div className="space-y-2">
-                    <SearchBar
+                    <SidebarSearchBar
                         value={searchQuery}
                         onChange={setSearchQuery}
                         onSearch={handleSearch}

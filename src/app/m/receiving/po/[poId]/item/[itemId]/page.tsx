@@ -8,6 +8,12 @@ import { Camera } from '@/components/Icons';
 import { MobileTopBar } from '@/components/mobile/receiving/MobileTopBar';
 import { PhotoFab } from '@/components/mobile/receiving/PhotoFab';
 import { useRealtimeInvalidation } from '@/hooks/useRealtimeInvalidation';
+import {
+  workflowStatusTableLabel,
+  conditionGradeTableLabel,
+  conditionBadgeTone,
+} from '@/components/station/receiving-constants';
+import { workflowStageBadge } from '@/lib/receiving/workflow-stages';
 
 interface PhotoRow {
   id: number;
@@ -39,15 +45,6 @@ interface DetailResponse {
   header: { po_number: string; po_id: string; receiving_id: number | null };
   items: ItemDetail[];
 }
-
-const STATUS_TONE: Record<string, string> = {
-  EXPECTED: 'bg-slate-100 text-slate-600',
-  ARRIVED:  'bg-amber-100 text-amber-800',
-  MATCHED:  'bg-amber-100 text-amber-800',
-  UNBOXED:  'bg-amber-100 text-amber-800',
-  PASSED:   'bg-emerald-100 text-emerald-700',
-  DONE:     'bg-emerald-100 text-emerald-700',
-};
 
 export default function MobilePurchaseOrderItemDetailPage(
   props: { params: Promise<{ poId: string; itemId: string }> },
@@ -135,16 +132,14 @@ export default function MobilePurchaseOrderItemDetailPage(
                   <span>{item.quantity_received}/{item.quantity_expected ?? '?'}</span>
                   {item.workflow_status ? (
                     <span
-                      className={`inline-flex items-center rounded px-1.5 py-0.5 text-eyebrow font-black uppercase tracking-wider ${
-                        STATUS_TONE[item.workflow_status] ?? 'bg-slate-100 text-slate-600'
-                      }`}
+                      className={`inline-flex items-center rounded px-1.5 py-0.5 text-eyebrow font-black uppercase tracking-wider ${workflowStageBadge(item.workflow_status)}`}
                     >
-                      {item.workflow_status}
+                      {workflowStatusTableLabel(item.workflow_status)}
                     </span>
                   ) : null}
                   {item.condition_grade ? (
-                    <span className="inline-flex items-center rounded bg-gray-100 px-1.5 py-0.5 text-eyebrow font-black uppercase tracking-wider text-gray-700">
-                      {item.condition_grade.replace('_', ' ')}
+                    <span className={`inline-flex items-center rounded px-1.5 py-0.5 text-eyebrow font-black uppercase tracking-wider ${conditionBadgeTone(item.condition_grade)}`}>
+                      {conditionGradeTableLabel(item.condition_grade)}
                     </span>
                   ) : null}
                 </p>

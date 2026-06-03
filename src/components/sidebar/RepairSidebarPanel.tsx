@@ -4,9 +4,9 @@ import { useEffect, useRef, useState } from 'react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { createPortal } from 'react-dom';
 import { Check, Clock, Loader2, Plus, Tool } from '@/components/Icons';
-import { SearchBar } from '@/components/ui/SearchBar';
+import { SidebarSearchBar } from '@/components/ui/SidebarSearchBar';
 import { HorizontalButtonSlider, type HorizontalSliderItem } from '@/components/ui/HorizontalButtonSlider';
-import { sidebarHeaderPillRowClass, sidebarHeaderRowClass, SIDEBAR_GUTTER } from '@/components/layout/header-shell';
+import { sidebarHeaderPillRowClass, SIDEBAR_GUTTER } from '@/components/layout/header-shell';
 import { useMasterNavEnabled } from '@/components/sidebar/master-nav';
 import { useBodyScrollLock } from '@/design-system/hooks';
 import { toast } from '@/lib/toast';
@@ -209,8 +209,7 @@ export function RepairSidebarPanel({ embedded = false, hideSectionHeader = false
           </div>
         ) : null}
 
-        <div className={sidebarHeaderRowClass}>
-          <SearchBar
+        <SidebarSearchBar
             value={searchValue}
             onChange={setSearchValue}
             onSearch={() =>
@@ -222,7 +221,6 @@ export function RepairSidebarPanel({ embedded = false, hideSectionHeader = false
             onClear={handleClearSearch}
             placeholder="Search repairs, tickets, SKU…"
             variant="orange"
-            size="compact"
             rightElement={
               <button
                 type="button"
@@ -240,7 +238,6 @@ export function RepairSidebarPanel({ embedded = false, hideSectionHeader = false
               </button>
             }
           />
-        </div>
 
         {!masterNavEnabled && (
           <div className={sidebarHeaderPillRowClass}>

@@ -1,24 +1,19 @@
 'use client';
 
-import { useEffect, useMemo } from 'react';
+import { useEffect } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { getOrdersChannelName } from '@/lib/realtime/channels';
 import { OrdersQueueTable } from '@/components/dashboard/OrdersQueueTable';
 import type { DashboardSearchSectionProps } from '@/components/dashboard/DashboardSearchSectionProps';
-import StockZohoOrdersTable from '@/components/dashboard/StockZohoOrdersTable';
 import { dispatchCloseShippedDetails, dispatchOpenShippedDetails } from '@/utils/events';
 import { fetchPendingOrderRowById, fetchPendingOrdersData } from '@/lib/dashboard-table-data';
 import { useAblyChannel } from '@/hooks/useAblyChannel';
-import { readPendingFilterPreference, writePendingFilterPreference } from '@/utils/dashboard-preferences';
 
 export interface PendingOrdersTableProps extends DashboardSearchSectionProps {
   packedBy?: number;
   testedBy?: number;
-  overridePendingFilter?: PendingStockFilter;
 }
-
-type PendingStockFilter = 'all' | 'pending' | 'stock';
 
 function patchOrderRecordFromAssignmentEvent(row: any, detail: any) {
   const patched = { ...row };
@@ -56,7 +51,6 @@ function patchOrderRecordFromAssignmentEvent(row: any, detail: any) {
 export default function PendingOrdersTable({
   packedBy,
   testedBy,
-  overridePendingFilter,
   strictSearchScope = false,
   bannerTitle,
   bannerSubtitle,
@@ -69,13 +63,6 @@ export default function PendingOrdersTable({
   const searchParams = useSearchParams();
   const queryClient = useQueryClient();
   const searchQuery = String(searchParams.get('search') || '').trim();
-  const pendingFilterParam = searchParams.get('pendingFilter');
-  const pendingFilter: PendingStockFilter = useMemo(() => {
-    if (overridePendingFilter) return overridePendingFilter;
-    if (pendingFilterParam === 'stock') return 'stock';
-    if (pendingFilterParam === 'pending') return 'pending';
-    return readPendingFilterPreference() ?? 'all';
-  }, [overridePendingFilter, pendingFilterParam]);
   const queryKey = ['dashboard-table', 'pending', { searchQuery, packedBy, testedBy, strictSearchScope }] as const;
 
   const query = useQuery({
@@ -177,10 +164,6 @@ export default function PendingOrdersTable({
   );
 
   useEffect(() => {
-    writePendingFilterPreference(pendingFilter);
-  }, [pendingFilter]);
-
-  useEffect(() => {
     /** Same path as sidebar import/work-order saves: invalidate so the table refetches a full `/api/orders` snapshot. */
     const handleRefresh = () => {
       void queryClient.invalidateQueries({ queryKey: ['dashboard-table', 'pending'], refetchType: 'active' });
@@ -273,36 +256,18 @@ export default function PendingOrdersTable({
   };
 
   const allPendingRecords = query.data || [];
-  const pendingUntestedRecords = allPendingRecords.filter(
-    (record) => !Boolean((record as any).has_tech_scan)
-  );
-  const pendingSearchEmptyTitle =
-    searchEmptyTitle
-      ?? (pendingFilter === 'all' ? 'No pending orders found' : 'No pending untested orders found');
-  const pendingSearchResultLabel =
-    searchResultLabel
-      ?? (pendingFilter === 'all' ? 'pending orders' : 'pending untested orders');
-  const pendingClearSearchLabel =
-    clearSearchLabel
-      ?? (pendingFilter === 'all' ? 'Show All Pending Orders' : 'Show All Pending Untested Orders');
-
-  if (pendingFilter === 'stock') {
-    return (
-      <StockZohoOrdersTable
-        searchValue={searchQuery}
-        onClearSearch={clearSearch}
-      />
-    );
-  }
+  const pendingSearchEmptyTitle = searchEmptyTitle ?? 'No pending orders found';
+  const pendingSearchResultLabel = searchResultLabel ?? 'pending orders';
+  const pendingClearSearchLabel = clearSearchLabel ?? 'Show All Pending Orders';
 
   return (
     <OrdersQueueTable
-      records={pendingFilter === 'all' ? allPendingRecords : pendingUntestedRecords}
+      records={allPendingRecords}
       loading={query.isLoading}
       isRefreshing={query.isFetching && !query.isLoading}
       searchValue={searchQuery}
       onClearSearch={clearSearch}
-      emptyMessage={pendingFilter === 'all' ? 'No pending orders found' : 'No pending untested orders found'}
+      emptyMessage="No pending orders found"
       searchEmptyTitle={pendingSearchEmptyTitle}
       searchResultLabel={pendingSearchResultLabel}
       clearSearchLabel={pendingClearSearchLabel}

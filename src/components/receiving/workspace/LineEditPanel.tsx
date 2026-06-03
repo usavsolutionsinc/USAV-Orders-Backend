@@ -61,9 +61,11 @@ import { markConditionSet } from './ReceivingProgressStepper';
 import { SerialCard } from './SerialCard';
 import { ReceivingUnitRows, type UnitSerial } from './ReceivingUnitRows';
 import { PoLinesAccordion } from './PoLinesAccordion';
+import { takeSerialEditHandoff } from './serialEditHandoff';
 import { UnmatchedItemsSection } from './UnmatchedItemsSection';
 import { ReceivingClaimModal } from './ReceivingClaimModal';
 import { WorkspaceCard } from '@/design-system/components';
+import { TextField } from '@/design-system/primitives';
 import { StickyActionBar } from '@/design-system/components/StickyActionBar';
 import { PaneHeaderActionBar, type PaneHeaderActionBarAction } from '@/components/ui/pane-header';
 import { printProductLabel } from '@/lib/print/printProductLabel';
@@ -499,7 +501,13 @@ export function LineEditPanel({
   }, [row.id, row.serials]);
 
   useEffect(() => {
-    setHeaderSerialEdit(null);
+    // Consume a handoff queued by Edit on a non-active accordion row. This panel
+    // remounts on every line switch (ReceivingLineWorkspace keys by row.id), so
+    // it always starts with a null target — no reset needed. `take` is
+    // destructive, which also makes React StrictMode's dev double-invoke a safe
+    // no-op on the second pass (the store is already drained).
+    const handoff = takeSerialEditHandoff(row.id);
+    if (handoff) setHeaderSerialEdit(handoff);
   }, [row.id]);
 
   // Prefill Zendesk, listing, and serial from Zoho PO notes + line description.
@@ -755,11 +763,13 @@ export function LineEditPanel({
     }
   }, [row.id]);
 
-  const refreshLineWithSerials = useCallback(async () => {
+  const refreshLineWithSerials = useCallback(async (lineId: number = row.id) => {
     try {
-      const res = await fetch(`/api/receiving-lines?id=${row.id}&include=serials`);
+      const res = await fetch(`/api/receiving-lines?id=${lineId}&include=serials`);
       const data = await res.json();
       if (data?.success && data.receiving_line) {
+        // dispatchLineUpdated patches the accordion's matching row, so editing
+        // a serial on a non-active sibling refreshes that sibling's chips too.
         dispatchLineUpdated(data.receiving_line as ReceivingLineRow);
       }
     } catch {
@@ -859,14 +869,17 @@ export function LineEditPanel({
   // Remove a single serial_unit from the line (X / Delete on a chip or unit
   // row). Shared by the single-block adder and the multi-qty unit rows.
   const deleteSerialUnit = useCallback(
-    async (serialUnitId: number) => {
+    async (serialUnitId: number, lineId: number = row.id) => {
       if (serialUnitId == null) return;
       const res = await fetch('/api/receiving/scan-serial', {
         method: 'DELETE',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           serial_unit_id: serialUnitId,
-          receiving_line_id: row.id,
+          // Route to the chip's own line — the endpoint only removes a unit
+          // that still points at this line, so a sibling's serial would 404
+          // if we sent the active row's id.
+          receiving_line_id: lineId,
         }),
       });
       const data = await res.json().catch(() => null);
@@ -876,7 +889,7 @@ export function LineEditPanel({
       }
       toast.success('Serial removed');
       // Removing a serial is metadata-only — quantity_received is unchanged.
-      await refreshLineWithSerials();
+      await refreshLineWithSerials(lineId);
     },
     [row.id, refreshLineWithSerials],
   );
@@ -1648,8 +1661,7 @@ export function LineEditPanel({
                       </div>
                     ) : null}
                     {zendeskTrimmed ? (
-                      <div className="flex shrink-0 items-center gap-1">
-                        <TicketChip value={zendeskTrimmed} display={zendeskChipDisplay} />
+                      <div className="flex shrink-0 items-center justify-end gap-1">
                         {zendeskHref ? (
                           <a
                             href={zendeskHref}
@@ -1657,11 +1669,12 @@ export function LineEditPanel({
                             rel="noopener noreferrer"
                             aria-label="Open Zendesk ticket"
                             title="Open in Zendesk"
-                            className={RECEIVING_CHIP_EDIT_BTN_CLASS}
+                            className="inline-flex h-[22px] w-[22px] shrink-0 items-center justify-center rounded text-slate-400 transition-colors hover:bg-slate-100 hover:text-blue-600"
                           >
-                            <ExternalLink className="h-3 w-3" />
+                            <ExternalLink className="h-3.5 w-3.5 shrink-0" />
                           </a>
                         ) : null}
+                        <TicketChip value={zendeskTrimmed} display={zendeskChipDisplay} />
                       </div>
                     ) : null}
                     {inlinePoInput ? (
@@ -2019,12 +2032,15 @@ export function LineEditPanel({
                 activeConditionOverride={isMultiQtyLine ? (unitLabelCondition ?? cond) : cond}
                 activeSerialActions={{
                   editingSerialId: headerSerialEdit?.id ?? null,
+                  // Only called for the active row — the accordion routes a
+                  // non-active row's Edit through the handoff store + line
+                  // switch, which this panel consumes on (re)mount.
                   onEdit: (s) => setHeaderSerialEdit(s),
-                  onDelete: (s) => {
+                  onDelete: (s, lineId) => {
                     if (s.id == null) return;
                     if (!window.confirm(`Remove serial ${s.serial_number}?`)) return;
                     if (headerSerialEdit?.id === s.id) setHeaderSerialEdit(null);
-                    void deleteSerialUnit(s.id);
+                    void deleteSerialUnit(s.id, lineId);
                   },
                 }}
                 activeRowSlot={({ serials }) => (
@@ -2107,22 +2123,15 @@ export function LineEditPanel({
               to the photos + chips without it nesting inside the active PO
               row. Saves on blur (same contract SerialCard used). */}
           <section className="rounded-2xl bg-white p-4 shadow-sm ring-1 ring-gray-200/60">
-            <label
-              htmlFor={`po-item-notes-${row.id}`}
-              className="block text-eyebrow font-black uppercase tracking-widest text-gray-500"
-            >
-              Notes
-            </label>
-            <textarea
-              id={`po-item-notes-${row.id}`}
+            <TextField
+              multiline
+              rows={2}
+              label="Notes"
               value={notes}
-              onChange={(e) => setNotes(e.target.value)}
+              onChange={setNotes}
               onBlur={() => {
                 if (notes !== (row.notes || '')) void patch({ notes });
               }}
-              rows={2}
-              placeholder="PO-line notes (saved on off click)"
-              className="mt-1.5 w-full resize-none rounded-md border border-gray-200 bg-white px-2 py-1.5 text-caption font-medium leading-snug text-gray-900 placeholder:text-gray-400 focus:border-blue-300 focus:outline-none focus:ring-2 focus:ring-blue-500/10"
             />
           </section>
 

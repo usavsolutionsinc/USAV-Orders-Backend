@@ -232,13 +232,6 @@ export function MobileStationPacking({
     });
   }, []);
 
-  // Global mobile FAB delegates to the packer scan sheet on /packer.
-  useEffect(() => {
-    const h = () => handleOpenScanSheet();
-    window.addEventListener('mobile-scan-fab-open', h);
-    return () => window.removeEventListener('mobile-scan-fab-open', h);
-  }, [handleOpenScanSheet]);
-
   // ── Subscribe to desktop-originated packer scans ───────────────────────────
   // When the desktop (PackerSidebarPanel / StationPacking) scans a tracking
   // number and writes packer_logs, the API publishes `scan_ready` on

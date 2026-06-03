@@ -3,7 +3,17 @@
 import { Suspense, useCallback, useEffect, useMemo, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
-import { workflowStatusTableLabel } from '@/components/station/receiving-constants';
+import {
+  workflowStatusTableLabel,
+  conditionGradeTableLabel,
+  conditionBadgeTone,
+  unitStatusBadgeTone,
+  getStatusDotBg,
+} from '@/components/station/receiving-constants';
+import { workflowStageBadge } from '@/lib/receiving/workflow-stages';
+import { getLast4 } from '@/components/ui/CopyChip';
+import { ReceivingIdentityChips } from '@/components/receiving/ReceivingIdentityChips';
+import { ScanAgainBar } from '@/components/mobile/receiving/ScanAgainBar';
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -48,26 +58,11 @@ function randomId(): string {
   return `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
 }
 
-const STATUS_TONE: Record<string, string> = {
-  EXPECTED: 'bg-slate-100 text-slate-600',
-  ARRIVED: 'bg-amber-100 text-amber-800',
-  MATCHED: 'bg-amber-100 text-amber-800',
-  UNBOXED: 'bg-amber-100 text-amber-800',
-  AWAITING_TEST: 'bg-blue-100 text-blue-700',
-  IN_TEST: 'bg-blue-100 text-blue-700',
-  PASSED: 'bg-emerald-100 text-emerald-700',
-  FAILED: 'bg-rose-100 text-rose-700',
-  DONE: 'bg-emerald-100 text-emerald-700',
-  RTV: 'bg-rose-100 text-rose-700',
-  SCRAP: 'bg-rose-100 text-rose-700',
-};
-
 function StatusPill({ status }: { status: string | null }) {
-  const v = (status || 'EXPECTED').toUpperCase();
-  const tone = STATUS_TONE[v] || 'bg-slate-100 text-slate-600';
+  const v = status || 'EXPECTED';
   return (
-    <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-micro font-bold uppercase tracking-wide ${tone}`}>
-      {workflowStatusTableLabel(status || 'EXPECTED')}
+    <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-micro font-bold uppercase tracking-wide ${workflowStageBadge(v)}`}>
+      {workflowStatusTableLabel(v)}
     </span>
   );
 }
@@ -266,38 +261,55 @@ function LinePageInner() {
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col">
       <header className="sticky top-0 z-10 bg-white border-b border-slate-200 px-4 py-3">
-        <div className="flex items-center justify-between">
+        <div className="flex items-center justify-between gap-2">
           {cartonHref ? (
             <button
               type="button"
               onClick={() => router.push(cartonHref)}
-              className="text-xs font-bold text-blue-600"
+              className="text-xs font-bold text-blue-600 shrink-0"
             >
               ← Package
             </button>
           ) : (
             <span />
           )}
-          <StatusPill status={line?.workflow_status ?? null} />
+          <ScanAgainBar />
         </div>
-        <h1 className="mt-2 truncate font-mono text-base font-black text-slate-900">
-          {line?.sku || `Line #${lineId}`}
-        </h1>
-        {line?.item_name && (
-          <p className="mt-1 text-caption text-slate-500 line-clamp-2 leading-snug">
-            {line.item_name}
-          </p>
-        )}
-        <div className="mt-2 flex items-center justify-between text-caption font-bold">
-          <span className={isComplete ? 'text-emerald-600' : 'text-slate-700'}>
-            {received}/{expected ?? '?'} received
-          </span>
+
+        {/* Slim identity row — mirrors the desktop ReceivingLineOrderRow:
+            status dot + title, then a color-coded status/condition/qty line. */}
+        <div className="mt-2 flex min-w-0 items-center gap-2">
+          <span
+            className={`h-2 w-2 shrink-0 rounded-full ${getStatusDotBg(line?.workflow_status, received, expected)}`}
+            title={workflowStatusTableLabel(line?.workflow_status ?? 'EXPECTED')}
+          />
+          <h1 className="truncate text-sm font-bold text-slate-900">
+            {line?.item_name || line?.sku || `Line #${lineId}`}
+          </h1>
+        </div>
+        <div className="mt-1 flex flex-wrap items-center gap-1.5 pl-4">
+          <StatusPill status={line?.workflow_status ?? null} />
           {line?.condition_grade && (
-            <span className="text-slate-500">
-              Cond: {line.condition_grade.replace(/_/g, ' ')}
+            <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-micro font-bold uppercase tracking-wide ${conditionBadgeTone(line.condition_grade)}`}>
+              {conditionGradeTableLabel(line.condition_grade)}
             </span>
           )}
+          <span
+            className={`text-caption font-black uppercase tracking-widest ${isComplete ? 'text-emerald-600' : 'text-slate-600'}`}
+          >
+            {received}/{expected ?? '?'}
+          </span>
         </div>
+
+        {/* Shared last-4 chips — PO + SKU + most-recent serial (tap to copy). */}
+        <ReceivingIdentityChips
+          po={line?.zoho_purchaseorder_number}
+          sku={line?.sku}
+          serialsCsv={(serials ?? []).map((s) => s.serial_number).filter(Boolean).join(', ')}
+          includeTracking={false}
+          includeSerial={serials.length > 0}
+          className="mt-2 flex flex-wrap items-center gap-1.5 pl-4"
+        />
       </header>
 
       {flash && (
@@ -391,11 +403,12 @@ function LinePageInner() {
               {serials.map((s) => (
                 <span
                   key={s.id}
-                  className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2 py-0.5 font-mono text-micro font-bold text-slate-700"
+                  title={s.serial_number}
+                  className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 font-mono text-micro font-bold ${unitStatusBadgeTone(s.current_status)}`}
                 >
-                  {s.serial_number}
-                  <span className="text-slate-400">·</span>
-                  <span className="text-slate-500">{s.current_status}</span>
+                  …{getLast4(s.serial_number)}
+                  <span className="opacity-50">·</span>
+                  <span className="opacity-80">{s.current_status}</span>
                 </span>
               ))}
             </div>

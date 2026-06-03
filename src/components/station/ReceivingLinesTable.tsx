@@ -7,8 +7,8 @@ import { useUIModeOptional } from '@/design-system/providers/UIModeProvider';
 import { Check } from '@/components/Icons';
 import { emitSelection, onToggleAll } from '@/lib/selection/table-selection';
 import { SkeletonList } from '@/design-system/components/Skeletons';
-import { TrackingChip, OrderIdChip, SkuScanRefChip, SerialChip, getLast4, getLast4Serial } from '@/components/ui/CopyChip';
-import { conditionGradeTableLabel, workflowStatusTableLabel } from '@/components/station/receiving-constants';
+import { conditionGradeTableLabel, workflowStatusTableLabel, getStatusDotBg } from '@/components/station/receiving-constants';
+import { ReceivingIdentityChips } from '@/components/receiving/ReceivingIdentityChips';
 import WeekHeader from '@/components/ui/WeekHeader';
 import { DesktopDateGroupHeader } from '@/components/ui/DesktopDateGroupHeader';
 import type { IncomingDeliveryState } from '@/components/sidebar/receiving/IncomingSidebarPanel';
@@ -143,29 +143,6 @@ export const RECEIVING_SELECTION_SCOPE = 'receiving' as const;
 
 export function dispatchLineUpdated(row: Partial<ReceivingLineRow> & { id: number }) {
   window.dispatchEvent(new CustomEvent('receiving-line-updated', { detail: row }));
-}
-
-function getStatusDotBg(
-  status: string | null | undefined,
-  qtyReceived?: number,
-  qtyExpected?: number | null,
-) {
-  if (
-    qtyExpected != null &&
-    qtyExpected > 0 &&
-    qtyReceived != null &&
-    qtyReceived >= qtyExpected
-  ) {
-    return 'bg-emerald-500';
-  }
-  const value = String(status || '').trim().toUpperCase();
-  if (value === 'EXPECTED') return 'bg-amber-400';
-  if (value === 'ARRIVED' || value === 'MATCHED') return 'bg-blue-500';
-  if (value === 'UNBOXED') return 'bg-indigo-500';
-  if (value === 'AWAITING_TEST' || value === 'IN_TEST') return 'bg-violet-500';
-  if (value === 'PASSED' || value === 'DONE') return 'bg-emerald-500';
-  if (value.startsWith('FAILED') || value === 'SCRAP' || value === 'RTV') return 'bg-rose-500';
-  return 'bg-gray-400';
 }
 
 /**
@@ -317,14 +294,111 @@ export function ReceivingLineOrderRow({
         </div>
       </div>
 
-      <div className={dashboardOrderRowChipsClass(isMobile)}>
-        <OrderIdChip value={poValue} display={getLast4(poValue)} />
-        <SkuScanRefChip value={skuValue} display={getLast4(skuValue)} />
-        <TrackingChip value={trackingValue} display={getLast4(trackingValue)} />
-        {isIncoming ? null : <SerialChip value={serialsCsv} display={getLast4Serial(serialsCsv)} />}
-      </div>
+      <ReceivingIdentityChips
+        po={poValue}
+        sku={skuValue}
+        tracking={trackingValue}
+        serialsCsv={serialsCsv}
+        includeSerial={!isIncoming}
+        className={dashboardOrderRowChipsClass(isMobile)}
+      />
     </div>
   );
+}
+
+/**
+ * Shipment-anchored "delivered, no dock scan yet" box (incoming-only). The
+ * endpoint resolves each box's Zoho PO from its tracking#, so PO#, vendor,
+ * dates and the product/item name ride along — these render with the same
+ * fidelity as any other incoming PO row.
+ */
+interface DeliveredUnscanned {
+  shipment_id: number;
+  carrier: string;
+  tracking_number_raw: string;
+  tracking_number_normalized: string;
+  delivered_at: string | null;
+  source_system: string | null;
+  zoho_purchaseorder_id: string | null;
+  po_number: string | null;
+  vendor_name: string | null;
+  expected_delivery_date: string | null;
+  po_date: string | null;
+  first_item_name: string | null;
+  item_count: number | null;
+}
+
+interface DeliveredUnscannedResponse {
+  success: boolean;
+  count: number;
+  window_days: number;
+  items: DeliveredUnscanned[];
+}
+
+/**
+ * Remap a shipment-anchored "delivered but not dock-scanned" box onto the
+ * standard {@link ReceivingLineRow} shape so the "Delivered · not scanned"
+ * facet renders through the very same date-grouping + {@link ReceivingLineOrderRow}
+ * pipeline as every other history/incoming row — no bespoke pane. Mirrors the
+ * server's `buildUnmatchedEmptyReceivingLine` placeholder: there's no PO line
+ * yet, so quantities are zero and the carton reads as an unmatched delivery.
+ */
+function deliveredUnscannedToRow(item: DeliveredUnscanned): ReceivingLineRow {
+  // Product title: the PO's first line item, with a "+N more" hint when the PO
+  // spans several lines. Falls back to the PO# (or a generic label) when the
+  // line names aren't synced yet.
+  const itemCount = item.item_count ?? 0;
+  const productTitle = item.first_item_name
+    ? itemCount > 1
+      ? `${item.first_item_name} +${itemCount - 1} more`
+      : item.first_item_name
+    : item.po_number
+      ? `PO ${item.po_number}`
+      : 'Delivered · needs receiving';
+
+  return {
+    id: -2_000_000 - item.shipment_id,
+    receiving_id: null,
+    tracking_number: item.tracking_number_raw,
+    tracking_source: 'shipment',
+    carrier: item.carrier,
+    shipment_status: 'DELIVERED',
+    is_delivered: true,
+    delivered_at: item.delivered_at,
+    zoho_item_id: null,
+    zoho_line_item_id: null,
+    zoho_purchase_receive_id: null,
+    zoho_purchaseorder_id: item.zoho_purchaseorder_id,
+    zoho_purchaseorder_number: item.po_number,
+    item_name: productTitle,
+    sku: null,
+    quantity_received: 0,
+    quantity_expected: itemCount > 0 ? itemCount : null,
+    qa_status: 'PENDING',
+    workflow_status: 'EXPECTED',
+    disposition_code: 'HOLD',
+    condition_grade: 'BRAND_NEW',
+    disposition_audit: [],
+    needs_test: false,
+    assigned_tech_id: null,
+    zoho_sync_source: null,
+    zoho_last_modified_time: null,
+    zoho_synced_at: null,
+    receiving_type: 'PO',
+    notes: null,
+    delivery_state: 'DELIVERED_UNOPENED',
+    po_date: item.po_date,
+    expected_delivery_date: item.expected_delivery_date,
+    vendor_name: item.vendor_name,
+    created_at: item.delivered_at,
+    last_activity_at: item.delivered_at,
+    image_url: null,
+    source_platform: null,
+    receiving_source: 'unmatched',
+    serials: [],
+    photo_count: 0,
+    zendesk_ticket: null,
+  };
 }
 
 export default function ReceivingLinesTable({ selectMode = false }: { selectMode?: boolean } = {}) {
@@ -464,13 +538,47 @@ export default function ReceivingLinesTable({ selectMode = false }: { selectMode
     refetchOnWindowFocus: true,
   });
 
+  // "Delivered · not scanned" facet: these boxes are shipment-anchored with no
+  // PO line, so the incoming list query above returns nothing for them. Pull
+  // the shipment-level feed and remap each onto a ReceivingLineRow so they flow
+  // through the same grouping + ReceivingLineOrderRow render path as the rest of
+  // the table (reusing the history components instead of a bespoke pane). Shares
+  // the `incoming-delivered-unscanned` key so the sidebar's Refresh-tracking
+  // button still re-fetches it.
+  const isDeliveredUnscannedFacet =
+    isIncomingMode && incomingState === 'DELIVERED_UNOPENED';
+  const { data: deliveredData } = useQuery<DeliveredUnscannedResponse>({
+    queryKey: ['incoming-delivered-unscanned'],
+    queryFn: async () => {
+      const res = await fetch('/api/receiving-lines/incoming/delivered-unscanned', {
+        cache: 'no-store',
+      });
+      if (!res.ok) throw new Error('delivered-unscanned fetch failed');
+      return res.json();
+    },
+    enabled: isDeliveredUnscannedFacet,
+    refetchInterval: 60_000,
+    staleTime: 30_000,
+  });
+  const deliveredRows = useMemo<ReceivingLineRow[]>(
+    () =>
+      isDeliveredUnscannedFacet
+        ? (deliveredData?.items ?? []).map(deliveredUnscannedToRow)
+        : [],
+    [isDeliveredUnscannedFacet, deliveredData],
+  );
+
   // IncomingSidebarPanel owns the search + facet controls; the table just
   // reads the URL params it writes. Summary polling lives in the sidebar so
   // the count rendering doesn't unmount on a right-pane row click.
 
   useEffect(() => {
+    if (isDeliveredUnscannedFacet) {
+      setLocalRows(deliveredRows);
+      return;
+    }
     if (data?.receiving_lines) setLocalRows(data.receiving_lines);
-  }, [data]);
+  }, [data, isDeliveredUnscannedFacet, deliveredRows]);
 
   // Incoming: if `?page` is past the end of the filtered result set (e.g.
   // operator was on page 7 with 175+ rows, then filtered to 18 → page 7
@@ -663,9 +771,39 @@ export default function ReceivingLinesTable({ selectMode = false }: { selectMode
   // Incoming groups by the Zoho PO date (`po_date` from zoho_po_mirror) so
   // the day band reflects when the buyer authored the PO upstream — not when
   // we synced it locally. Other modes keep the legacy created_at grouping.
+  // Collapse duplicate "Unfound receiving" cartons. An unmatched package that
+  // never resolves to a PO has no line, so each scan of it surfaces as its own
+  // synthetic placeholder row (id < 0). Scanning the same un-found box several
+  // times therefore stacks identical tracking-number rows in History. We keep
+  // only the most-recent scan per tracking number. ONLY placeholders are
+  // touched — a real PO carton legitimately has many lines sharing a tracking #,
+  // so those are never merged.
+  const dedupedRows = useMemo(() => {
+    const seenByTracking = new Map<string, number>(); // tracking → index in out
+    const out: ReceivingLineRow[] = [];
+    for (const row of localRows) {
+      const isUnfoundPlaceholder = row.id < 0;
+      const trackingKey = (row.tracking_number || '').trim().toLowerCase();
+      if (!isUnfoundPlaceholder || !trackingKey) {
+        out.push(row);
+        continue;
+      }
+      const existingIdx = seenByTracking.get(trackingKey);
+      if (existingIdx == null) {
+        seenByTracking.set(trackingKey, out.length);
+        out.push(row);
+      } else if (
+        receivingRowActivityMs(row) > receivingRowActivityMs(out[existingIdx])
+      ) {
+        out[existingIdx] = row;
+      }
+    }
+    return out;
+  }, [localRows]);
+
   const groupedRecords = useMemo(() => {
     const groups: Record<string, ReceivingLineRow[]> = {};
-    for (const row of localRows) {
+    for (const row of dedupedRows) {
       // History/Receive group by the activity axis (last scan/receive) so the
       // feed mirrors the Recent rail; Incoming groups by the Zoho PO date.
       const sourceTs = isIncomingMode
@@ -681,7 +819,7 @@ export default function ReceivingLinesTable({ selectMode = false }: { selectMode
       groups[date].push(row);
     }
     return groups;
-  }, [localRows, isIncomingMode]);
+  }, [dedupedRows, isIncomingMode]);
 
   const filteredGroupedRecords = useMemo(() => {
     if (skipWeekFilter) return groupedRecords;
@@ -841,6 +979,9 @@ export default function ReceivingLinesTable({ selectMode = false }: { selectMode
   const formatHeaderDate = () => formatDateWithOrdinal(getCurrentPSTDateKey());
 
   const emptyMessage = useMemo(() => {
+    if (isDeliveredUnscannedFacet) {
+      return 'Nothing delivered-and-unscanned right now.';
+    }
     if (isHistoryMode && (historySearch || historySearchScope !== 'all')) {
       return 'No lines match — try different text or widen source (All).';
     }
@@ -848,7 +989,7 @@ export default function ReceivingLinesTable({ selectMode = false }: { selectMode
       return 'No incoming POs — Zoho says everything issued is already received.';
     }
     return 'No lines yet — start scanning to populate.';
-  }, [isHistoryMode, isIncomingMode, historySearch, historySearchScope]);
+  }, [isDeliveredUnscannedFacet, isHistoryMode, isIncomingMode, historySearch, historySearchScope]);
 
   return (
     <div className="flex h-full min-w-0 overflow-hidden bg-white">
@@ -861,7 +1002,7 @@ export default function ReceivingLinesTable({ selectMode = false }: { selectMode
           // with whatever filter is applied.
           <IncomingPaneHeader
             count={localRows.length}
-            total={Number(data?.total ?? 0)}
+            total={isDeliveredUnscannedFacet ? deliveredRows.length : Number(data?.total ?? 0)}
             page={incomingPage}
           />
         ) : (

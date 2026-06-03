@@ -122,3 +122,71 @@ export function conditionGradeTableLabel(code: string | null | undefined): strin
   if (c === 'USED_C') return 'USED-C';
   return c.replace(/_/g, ' ');
 }
+
+/** Soft pill tone per condition grade. Shared by table rows and the scanned
+ *  line/receipt detail headers so condition reads the same color everywhere. */
+export const CONDITION_BADGE: Record<string, string> = {
+  BRAND_NEW:   'bg-yellow-100 text-yellow-700',
+  LIKE_NEW:    'bg-emerald-100 text-emerald-700',
+  REFURBISHED: 'bg-teal-100 text-teal-700',
+  USED_A:      'bg-blue-100 text-blue-700',
+  USED_B:      'bg-indigo-100 text-indigo-700',
+  USED_C:      'bg-slate-100 text-slate-600',
+  PARTS:       'bg-amber-100 text-amber-800',
+};
+
+export function conditionBadgeTone(code: string | null | undefined): string {
+  const c = String(code || '').trim().toUpperCase();
+  return CONDITION_BADGE[c] || 'bg-slate-100 text-slate-600';
+}
+
+/** Soft pill tone per serial-unit lifecycle status (RECEIVED → … → SHIPPED).
+ *  This is the unit domain, distinct from receiving workflow_status. Shared by
+ *  the desktop /serial/[id] page and the mobile /m/u/[id] page. */
+export const UNIT_STATUS_BADGE: Record<string, string> = {
+  UNKNOWN:  'bg-slate-100 text-slate-600',
+  LABELED:  'bg-amber-100 text-amber-700',
+  RECEIVED: 'bg-amber-100 text-amber-800',
+  IN_TEST:  'bg-blue-100 text-blue-700',
+  TESTED:   'bg-blue-100 text-blue-700',
+  STOCKED:  'bg-emerald-100 text-emerald-700',
+  PICKED:   'bg-indigo-100 text-indigo-700',
+  SHIPPED:  'bg-violet-100 text-violet-700',
+  RETURNED: 'bg-rose-100 text-rose-700',
+  RMA:      'bg-rose-100 text-rose-700',
+  SCRAPPED: 'bg-red-100 text-red-700',
+};
+
+export function unitStatusBadgeTone(status: string | null | undefined): string {
+  const s = String(status || '').trim().toUpperCase();
+  return UNIT_STATUS_BADGE[s] || 'bg-slate-100 text-slate-600';
+}
+
+/**
+ * Inline status-dot color for a receiving line. Quantity-complete wins over
+ * status (a fully-received line is always emerald). Lifted out of
+ * ReceivingLinesTable so the table rows and the scanned-line header render the
+ * exact same dot. Unlike the registry `workflowStageDot`, this folds in qty.
+ */
+export function getStatusDotBg(
+  status: string | null | undefined,
+  qtyReceived?: number,
+  qtyExpected?: number | null,
+): string {
+  if (
+    qtyExpected != null &&
+    qtyExpected > 0 &&
+    qtyReceived != null &&
+    qtyReceived >= qtyExpected
+  ) {
+    return 'bg-emerald-500';
+  }
+  const value = String(status || '').trim().toUpperCase();
+  if (value === 'EXPECTED') return 'bg-amber-400';
+  if (value === 'ARRIVED' || value === 'MATCHED') return 'bg-blue-500';
+  if (value === 'UNBOXED') return 'bg-indigo-500';
+  if (value === 'AWAITING_TEST' || value === 'IN_TEST') return 'bg-violet-500';
+  if (value === 'PASSED' || value === 'DONE') return 'bg-emerald-500';
+  if (value.startsWith('FAILED') || value === 'SCRAP' || value === 'RTV') return 'bg-rose-500';
+  return 'bg-gray-400';
+}

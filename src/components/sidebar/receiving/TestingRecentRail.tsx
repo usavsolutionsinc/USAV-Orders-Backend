@@ -56,6 +56,9 @@ interface Props {
 export function TestingRecentRail({
   selectedLineId,
   selectedRow = null,
+  // Cap the rendered feed at 25 (matches the Receiving rail). The fetch still
+  // pulls up to 500 for selection-pinning, but only the 25 most-recent verdicts
+  // render; the sidebar's overflow-y-auto container scrolls within that.
   limit = 25,
   testerId = null,
 }: Props) {

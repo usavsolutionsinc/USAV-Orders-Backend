@@ -20,7 +20,10 @@ export function AdminSidebarShell({
   return (
     <div className="flex h-full flex-col overflow-hidden bg-white">
       {search ? (
-        <div className="flex-shrink-0 border-b border-gray-200 px-3 py-3">{search}</div>
+        // 40px flush search band — one source of truth for every admin panel's
+        // header search, matching the house 40px sidebar grid. Panels pass a plain
+        // <SearchBar> (no size); the band + height live HERE so they can't drift.
+        <div className="flex h-[40px] flex-shrink-0 items-center border-b border-gray-200 px-3">{search}</div>
       ) : null}
       {filters ? (
         <div className="flex flex-shrink-0 items-center gap-1.5 border-b border-gray-200 px-3 py-2">

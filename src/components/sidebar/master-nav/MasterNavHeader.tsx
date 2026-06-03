@@ -33,13 +33,13 @@ export function MasterNavHeader({
       aria-expanded={open}
       title="Switch page or mode"
       className={cn(
-        'flex h-[40px] w-full min-w-0 items-center gap-2 px-2.5 text-left transition-colors hover:bg-surface-canvas',
+        // Exactly 40px — same grid as every other sidebar band (no bulky chip,
+        // so the header reads as a lean 40px bar, not a taller block).
+        'flex h-[40px] w-full min-w-0 items-center gap-2.5 px-3 text-left transition-colors hover:bg-surface-canvas',
         className,
       )}
     >
-      <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-blue-600/10 text-blue-600">
-        <Icon className="h-4 w-4" />
-      </span>
+      <Icon className="h-5 w-5 shrink-0 text-blue-600" />
       <span className="min-w-0 flex-1 truncate text-[15px] font-bold tracking-tight text-text-default">
         {label}
       </span>

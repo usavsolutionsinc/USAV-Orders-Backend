@@ -11,7 +11,7 @@
  * Motion 11 + Sonner + your CSS-variable design tokens.
  */
 
-import { useEffect, useId, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { AnimatePresence, motion, useMotionValue, useReducedMotion, animate } from 'framer-motion';
 import { toast } from 'sonner';
 import {
@@ -39,6 +39,7 @@ import {
 } from '@/components/Icons';
 
 import { MasterNavView } from '@/components/sidebar/master-nav';
+import { TextField } from '@/design-system/primitives';
 import { SIDEBAR_PAGE_NAV } from '@/lib/sidebar-navigation';
 
 /* ════════════════════════ shared gallery furniture ════════════════════════ */
@@ -288,6 +289,10 @@ function ReceivingModeSwitcherDemo() {
           expandedKey={expandedKey}
           onToggleRow={setExpandedKey}
           onNavigate={onNavigate}
+          onRequestClose={() => {
+            setPagesOpen(false);
+            setExpandedKey(null);
+          }}
         />
       </div>
 
@@ -687,32 +692,10 @@ export function SubPageNavSection() {
 
 /* ════════════════════════ 3 · INPUTS ══════════════════════════════════════ */
 
+/** Thin stateful wrapper over the real {@link TextField} primitive for the showroom. */
 function FloatField({ label, type = 'text' }: { label: string; type?: string }) {
   const [v, setV] = useState('');
-  const id = useId();
-  const float = v.length > 0;
-  return (
-    <div className="relative w-full">
-      <input
-        id={id}
-        type={type}
-        value={v}
-        onChange={(e) => setV(e.target.value)}
-        placeholder=" "
-        className="peer w-full rounded-xl border border-border-soft bg-surface-card px-3.5 pb-2 pt-5 text-[13px] text-text-default outline-none transition-shadow duration-150 focus:border-blue-500 focus:ring-4 focus:ring-blue-500/15"
-      />
-      <label
-        htmlFor={id}
-        className={cx(
-          'pointer-events-none absolute left-3.5 origin-left text-text-muted transition-all duration-150',
-          float ? 'top-1.5 text-[10px] font-semibold text-blue-600' : 'top-3.5 text-[13px]',
-          'peer-focus:top-1.5 peer-focus:text-[10px] peer-focus:font-semibold peer-focus:text-blue-600',
-        )}
-      >
-        {label}
-      </label>
-    </div>
-  );
+  return <TextField label={label} value={v} onChange={setV} type={type} />;
 }
 
 export function InputsSection() {

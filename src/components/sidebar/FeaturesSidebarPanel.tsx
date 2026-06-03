@@ -2,7 +2,7 @@
 
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Plus, X } from '@/components/Icons';
-import { SearchBar } from '@/components/ui/SearchBar';
+import { SidebarSearchBar } from '@/components/ui/SidebarSearchBar';
 import { ViewDropdown } from '@/components/ui/ViewDropdown';
 import { dataValue, fieldLabel } from '@/design-system/tokens/typography/presets';
 import { SIDEBAR_GUTTER } from '@/components/layout/header-shell';
@@ -122,15 +122,13 @@ export function FeaturesSidebarPanel() {
         />
       </div>
 
-      <div className={`border-b border-gray-200 ${SIDEBAR_GUTTER} py-3`}>
-        <SearchBar
-          value={searchValue}
-          onChange={(value) => updateParams({ search: value })}
-          onClear={() => updateParams({ search: '' })}
-          placeholder="Search title or page"
-          variant="gray"
-        />
-      </div>
+      <SidebarSearchBar
+        value={searchValue}
+        onChange={(value) => updateParams({ search: value })}
+        onClear={() => updateParams({ search: '' })}
+        placeholder="Search title or page"
+        variant="gray"
+      />
 
       <div className="flex-1 overflow-y-auto">
         <button

@@ -1,7 +1,8 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { Barcode, Plus, X } from '@/components/Icons';
+import { Plus, X } from '@/components/Icons';
+import { TextField } from '@/design-system/primitives';
 import { SerialChipWithMenu } from '@/components/receiving/workspace/SerialCard';
 
 interface SavedSerial {
@@ -212,49 +213,38 @@ export function InlineSerialAdder({
           </div>
         ) : null}
 
-        <div className="relative">
-          <Barcode
-            className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-gray-400"
-            aria-hidden
-          />
-          <input
-            ref={inputRef}
-            value={scan}
-            disabled={disabled || isSubmitting}
-            onChange={(e) => setScan(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') {
-                e.preventDefault();
-                void submit();
-              } else if (e.key === 'Escape' && editing) {
-                e.preventDefault();
-                cancelEdit();
-              }
-            }}
-            placeholder={
-              editing
-                ? 'Editing serial — press Enter to save, Esc to cancel'
-                : 'Scan Serial #'
+        <TextField
+          ref={inputRef}
+          label="Serial"
+          value={scan}
+          onChange={setScan}
+          tone={editing ? 'amber' : 'blue'}
+          mono
+          disabled={disabled || isSubmitting}
+          autoComplete="off"
+          spellCheck={false}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') {
+              e.preventDefault();
+              void submit();
+            } else if (e.key === 'Escape' && editing) {
+              e.preventDefault();
+              cancelEdit();
             }
-            autoComplete="off"
-            spellCheck={false}
-            className={`block h-10 w-full rounded-lg border bg-white pl-9 pr-8 font-mono text-sm text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 disabled:cursor-not-allowed disabled:bg-gray-50 disabled:text-gray-400 ${
-              editing
-                ? 'border-amber-400 focus:border-amber-500 focus:ring-amber-500/30'
-                : 'border-gray-200 focus:border-blue-500 focus:ring-blue-500/30'
-            }`}
-          />
-          {scan || editing ? (
-            <button
-              type="button"
-              onClick={() => (editing ? cancelEdit() : setScan(''))}
-              aria-label={editing ? 'Cancel edit' : 'Clear'}
-              className="absolute right-2 top-1/2 -translate-y-1/2 rounded-md p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-700"
-            >
-              <X className="h-3 w-3" />
-            </button>
-          ) : null}
-        </div>
+          }}
+          trailing={
+            scan || editing ? (
+              <button
+                type="button"
+                onClick={() => (editing ? cancelEdit() : setScan(''))}
+                aria-label={editing ? 'Cancel edit' : 'Clear'}
+                className="rounded-md p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-700"
+              >
+                <X className="h-3 w-3" />
+              </button>
+            ) : undefined
+          }
+        />
       </div>
       <button
         type="button"
@@ -262,7 +252,7 @@ export function InlineSerialAdder({
         disabled={!scan.trim() || isSubmitting || disabled}
         aria-label={editing ? 'Save serial' : 'Add serial'}
         title={editing ? 'Save serial' : 'Add serial'}
-        className={`inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-lg text-white shadow-sm transition-colors disabled:cursor-not-allowed disabled:bg-gray-300 ${
+        className={`inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-lg text-white shadow-sm transition-colors disabled:cursor-not-allowed disabled:bg-gray-300 ${
           editing ? 'bg-amber-500 hover:bg-amber-600' : 'bg-blue-600 hover:bg-blue-700'
         }`}
       >

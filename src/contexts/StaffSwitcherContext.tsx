@@ -7,7 +7,7 @@
  *   const { openSwitcher } = useStaffSwitcher();
  *   <button onClick={openSwitcher}>Switch ↗</button>
  *
- * The provider is mounted next to QuickAccessFab in ResponsiveLayout.
+ * The provider is mounted in the root layout; QuickAccessButton opens the sheet.
  */
 
 import { createContext, useCallback, useContext, useMemo, useState } from 'react';

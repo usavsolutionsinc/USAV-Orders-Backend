@@ -5,8 +5,8 @@ import { createPortal } from 'react-dom';
 import { useMemo } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { Loader2, Minus, Plus, ShoppingCart, X } from '@/components/Icons';
-import { SearchBar } from '@/components/ui/SearchBar';
-import { sidebarHeaderPillRowClass, sidebarHeaderRowClass, SIDEBAR_GUTTER } from '@/components/layout/header-shell';
+import { SidebarSearchBar } from '@/components/ui/SidebarSearchBar';
+import { sidebarHeaderPillRowClass, SIDEBAR_GUTTER } from '@/components/layout/header-shell';
 import { SalesIntakeForm } from '@/components/walk-in/SalesIntakeForm';
 import { useSquareCatalog, type SquareCatalogItem } from '@/hooks/useSquareCatalog';
 import { useSquareCategories } from '@/hooks/useSquareCategories';
@@ -137,15 +137,13 @@ export function SalesSidebarPanel({ embedded = false }: SalesSidebarPanelProps) 
   const content = (
     <div className="flex h-full flex-col overflow-hidden bg-white">
       {/* Search bar + New Sale button */}
-      <div className={sidebarHeaderRowClass}>
-        <SearchBar
+      <SidebarSearchBar
           value={searchValue}
           onChange={setSearchValue}
           onSearch={() => {}}
           onClear={() => setSearchValue('')}
           placeholder="Search products, SKU…"
           variant="emerald"
-          size="compact"
           rightElement={
             <button
               type="button"
@@ -158,7 +156,6 @@ export function SalesSidebarPanel({ embedded = false }: SalesSidebarPanelProps) 
             </button>
           }
         />
-      </div>
 
       {/* ── SEARCH MODE: category tabs + product results ── */}
       {isSearchMode ? (

@@ -5,14 +5,16 @@ import { useQueryClient } from '@tanstack/react-query';
 import { toast } from '@/lib/toast';
 import { Loader2, Printer } from '@/components/Icons';
 import { StickyActionBar } from '@/design-system/components/StickyActionBar';
-import { OrderIdChip, TrackingChip, ListingUrlChip, getLast4 } from '@/components/ui/CopyChip';
+import { TextField } from '@/design-system/primitives';
+import { OrderIdChip, TrackingChip, ListingUrlChip, TicketChip, getLast4 } from '@/components/ui/CopyChip';
 import { zendeskTicketUrl } from '@/lib/zendesk-ticket-url';
 import { PoLinesAccordion } from '@/components/receiving/workspace/PoLinesAccordion';
+import { takeSerialEditHandoff } from '@/components/receiving/workspace/serialEditHandoff';
 import { UnmatchedItemsSection } from '@/components/receiving/workspace/UnmatchedItemsSection';
 import { ReceivingClaimModal } from '@/components/receiving/workspace/ReceivingClaimModal';
 import { ReceivingAuditModal } from '@/components/receiving/workspace/ReceivingAuditModal';
 import { PaneHeaderActionBar, type PaneHeaderActionBarAction } from '@/components/ui/pane-header';
-import { Copy, Info } from '@/components/Icons';
+import { Copy, Info, ExternalLink } from '@/components/Icons';
 import { buildReceivingCopyInfo } from '@/utils/copy-all-receiving';
 import { copyToClipboard } from '@/utils/_dom';
 import { ReceivingCartonStaffDropdown } from '@/components/sidebar/receiving/ReceivingCartonStaffDropdown';
@@ -484,7 +486,9 @@ export function TechTestingWorkspace({ staffId, selectedLineId, onSelectedLineCh
           return;
         }
         toast.success('Serial removed');
-        if (row && lineId === row.id) await refreshLineWithSerials(row.id);
+        // Refresh the line the serial actually belonged to (may be a collapsed
+        // sibling, not the active row), so its accordion chips update too.
+        await refreshLineWithSerials(lineId);
       } catch (err) {
         toast.error(err instanceof Error ? err.message : 'Remove failed');
       }
@@ -639,8 +643,11 @@ export function TechTestingWorkspace({ staffId, selectedLineId, onSelectedLineCh
   useEffect(() => {
     setPreviewBySerialUnit({});
     // Drop any in-progress serial edit so a target from the prior line never
-    // populates the new line's scan input.
+    // populates the new line's scan input, then consume a handoff queued by
+    // Edit on a non-active accordion row (applied once that line is active).
     setHeaderSerialEdit(null);
+    const handoff = row?.id != null ? takeSerialEditHandoff(row.id) : null;
+    if (handoff) setHeaderSerialEdit(handoff as UnitSlotSerial);
   }, [row?.id]);
 
   // Live preview payload — encodes the active slot's allocated unit id +
@@ -884,6 +891,16 @@ export function TechTestingWorkspace({ staffId, selectedLineId, onSelectedLineCh
   // ── Workspace ─────────────────────────────────────────────────────────────
   const poNumber = (row.zoho_purchaseorder_number || row.zoho_purchaseorder_id || '').trim();
   const tracking = (row.tracking_number || '').trim();
+  // Zendesk support ticket. Rendered as the orange TicketChip (matches the
+  // repair-table ticket display) between the listing link and the PO number.
+  const zendeskTrimmed = (row.zendesk_ticket || '').trim();
+  const zendeskHref = zendeskTicketUrl(zendeskTrimmed);
+  const zendeskChipDisplay = (() => {
+    const raw = zendeskTrimmed.replace(/^#/, '').trim();
+    const fromUrl = raw.match(/tickets\/(\d+)/);
+    if (fromUrl) return fromUrl[1];
+    return raw.length > 12 ? raw.slice(0, 12) : raw;
+  })();
   // Listing URL: prefer the DB-persisted carton column (`receiving.listing_url`)
   // so the URL surfaces across browsers/devices without re-pinging Zoho. Fall
   // back to the per-browser localStorage scratch for cartons that pre-date the
@@ -981,19 +998,25 @@ export function TechTestingWorkspace({ staffId, selectedLineId, onSelectedLineCh
                       openHref={listingOpenHref}
                       previewDisplay={listingPreview}
                     />
-                    {row.zendesk_ticket?.trim() && zendeskTicketUrl(row.zendesk_ticket) ? (
-                      <a
-                        href={zendeskTicketUrl(row.zendesk_ticket)!}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        title="Open Zendesk ticket"
-                        className="inline-flex shrink-0 items-center gap-1 rounded-full bg-blue-50 px-2 py-1 text-caption font-bold text-blue-700 transition-colors hover:bg-blue-100"
-                      >
-                        {row.zendesk_ticket}
-                      </a>
-                    ) : null}
                   </div>
                   <div className="flex shrink-0 items-center gap-2">
+                    {zendeskTrimmed ? (
+                      <div className="flex shrink-0 items-center justify-end gap-1">
+                        {zendeskHref ? (
+                          <a
+                            href={zendeskHref}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            aria-label="Open Zendesk ticket"
+                            title="Open in Zendesk"
+                            className="inline-flex h-[22px] w-[22px] shrink-0 items-center justify-center rounded text-slate-400 transition-colors hover:bg-slate-100 hover:text-blue-600"
+                          >
+                            <ExternalLink className="h-3.5 w-3.5 shrink-0" />
+                          </a>
+                        ) : null}
+                        <TicketChip value={zendeskTrimmed} display={zendeskChipDisplay} />
+                      </div>
+                    ) : null}
                     <OrderIdChip value={poNumber} display={poNumber ? getLast4(poNumber) : '----'} />
                     <TrackingChip
                       value={tracking}
@@ -1048,12 +1071,15 @@ export function TechTestingWorkspace({ staffId, selectedLineId, onSelectedLineCh
                   activeLineId={row.id}
                   activeSerialActions={{
                     editingSerialId: headerSerialEdit?.id ?? null,
+                    // Only called for the active row — the accordion routes a
+                    // non-active row's Edit through the handoff store + line
+                    // switch, consumed on the row?.id effect above.
                     onEdit: (s) => setHeaderSerialEdit(s as UnitSlotSerial),
-                    onDelete: (s) => {
+                    onDelete: (s, lineId) => {
                       if (s.id == null) return;
                       if (!window.confirm(`Remove serial ${s.serial_number}?`)) return;
                       if (headerSerialEdit?.id === s.id) setHeaderSerialEdit(null);
-                      void deleteSerial(row.id, s.id);
+                      void deleteSerial(lineId, s.id);
                     },
                   }}
                   activeRowSlot={({ serials }) => {
@@ -1107,25 +1133,18 @@ export function TechTestingWorkspace({ staffId, selectedLineId, onSelectedLineCh
 
             {/* ── DIV 4 — Notes (per-line) ────────────────────────────────── */}
             <section className={SECTION}>
-              <label
-                htmlFor={`testing-notes-${row.id}`}
-                className={`block ${EYEBROW}`}
-              >
-                Notes
-              </label>
-              <textarea
-                id={`testing-notes-${row.id}`}
+              <TextField
+                multiline
+                rows={2}
+                label="Notes"
                 value={notes}
-                onChange={(e) => setNotes(e.target.value)}
+                onChange={setNotes}
                 onBlur={() => {
                   const next = notes.trim();
                   if (next !== (row.notes || '')) {
                     void patchLine({ notes: next || null });
                   }
                 }}
-                rows={2}
-                placeholder="Test conditions, observations, repair handoff context…"
-                className="mt-1.5 w-full resize-none rounded-md border border-gray-200 bg-white px-2 py-1.5 text-caption font-medium leading-snug text-gray-900 placeholder:text-gray-400 focus:border-blue-300 focus:outline-none focus:ring-2 focus:ring-blue-500/10"
               />
             </section>
 

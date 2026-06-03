@@ -13,7 +13,7 @@ import { ReceivingClaimModal } from './receiving/workspace/ReceivingClaimModal';
 import { printProductLabel, printProductLabels } from '@/lib/print/printProductLabel';
 import { Copy, Printer, MessageSquare, User, Smartphone } from '@/components/Icons';
 import { toast } from '@/lib/toast';
-import { LocalPickupCatalogPanel } from './work-orders/LocalPickupCatalogPanel';
+import { LocalPickupEditPanel } from './work-orders/LocalPickupEditPanel';
 import { ReceivingLineWorkspace } from './receiving/workspace/ReceivingLineWorkspace';
 import { ReceivingScanLoader } from './receiving/workspace/ReceivingScanLoader';
 import { ReceivingDetailsStack, type ReceivingDetailsLog } from './station/ReceivingDetailsStack';
@@ -57,7 +57,7 @@ interface NavState {
  * Right-pane renderer for `/receiving`. Headerless — driven entirely by the
  * sidebar's mode pills (`?mode=receive|pickup`) + selection state.
  *
- *   ?mode=pickup            → LocalPickupCatalogPanel (catalog history)
+ *   ?mode=pickup            → LocalPickupEditPanel (staged-item editor)
  *   workspace open          → ReceivingLineWorkspace (focused line editor)
  *   no selection, receive   → ReceivingLinesTable (history)
  *
@@ -468,7 +468,7 @@ export default function ReceivingDashboard() {
     return (
       <div className="flex h-full w-full overflow-hidden bg-[linear-gradient(180deg,#f8fbfb_0%,#ffffff_16%)]">
         <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
-          <LocalPickupCatalogPanel />
+          <LocalPickupEditPanel />
         </div>
       </div>
     );

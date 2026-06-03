@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { SearchBar } from '@/components/ui/SearchBar';
+import { SidebarSearchBar } from '@/components/ui/SidebarSearchBar';
 import { ViewDropdown } from '@/components/ui/ViewDropdown';
 import { Loader2, RefreshCw, X } from '@/components/Icons';
 import { sectionLabel, dataValue, fieldLabel } from '@/design-system/tokens/typography/presets';
@@ -317,15 +317,13 @@ export function GoalsSidebarPanel() {
         />
       </div>
 
-      <div className={`border-b border-gray-200 ${SIDEBAR_GUTTER} py-3`}>
-        <SearchBar
-          value={searchValue}
-          onChange={(value) => updateParams({ search: value })}
-          onClear={() => updateParams({ search: '' })}
-          placeholder="Search staff or role"
-          variant="blue"
-        />
-      </div>
+      <SidebarSearchBar
+        value={searchValue}
+        onChange={(value) => updateParams({ search: value })}
+        onClear={() => updateParams({ search: '' })}
+        placeholder="Search staff or role"
+        variant="blue"
+      />
 
       <div className={`flex-1 overflow-y-auto ${SIDEBAR_GUTTER} py-4 space-y-5`}>
         <section className="space-y-2">

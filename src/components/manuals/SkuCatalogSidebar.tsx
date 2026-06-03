@@ -4,8 +4,8 @@ import { useCallback, useEffect, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { AnimatePresence, motion } from 'framer-motion';
 import { ChevronDown, Link2, Check, Loader2, ExternalLink } from '@/components/Icons';
-import { sidebarHeaderBandClass, sidebarHeaderRowClass, SIDEBAR_GUTTER } from '@/components/layout/header-shell';
-import { SearchBar } from '@/components/ui/SearchBar';
+import { SIDEBAR_GUTTER } from '@/components/layout/header-shell';
+import { SidebarSearchBar } from '@/components/ui/SidebarSearchBar';
 import { HorizontalButtonSlider, type HorizontalSliderItem } from '@/components/ui/HorizontalButtonSlider';
 import { microBadge, tableHeader } from '@/design-system/tokens/typography/presets';
 import { getExternalUrlByPlatform, getPlatformLabelByItemNumber } from '@/hooks/useExternalItemUrl';
@@ -231,16 +231,13 @@ export function SkuCatalogSidebar({ basePath = '/manuals' }: { basePath?: string
   return (
     <div className="flex h-full flex-col overflow-hidden bg-white">
       {/* Search */}
-      <div className={`${sidebarHeaderBandClass} ${sidebarHeaderRowClass}`}>
-        <SearchBar
-          value={localSearch}
-          onChange={handleSearchChange}
-          onClear={() => handleSearchChange('')}
-          placeholder="Search SKU catalog..."
-          variant="blue"
-          size="compact"
-        />
-      </div>
+      <SidebarSearchBar
+        value={localSearch}
+        onChange={handleSearchChange}
+        onClear={() => handleSearchChange('')}
+        placeholder="Search SKU catalog..."
+        variant="blue"
+      />
 
       {/* Sort slider */}
       <div className={`shrink-0 border-b border-gray-100 bg-white ${SIDEBAR_GUTTER} py-1`}>

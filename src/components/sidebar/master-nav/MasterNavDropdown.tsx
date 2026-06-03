@@ -1,5 +1,6 @@
 'use client';
 
+import { forwardRef } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { ChevronDown } from '@/components/Icons';
 import type { SidebarNavItem, SidebarPageNav } from '@/lib/sidebar-navigation';
@@ -24,14 +25,7 @@ const PAGE_GROUPS: ReadonlyArray<{ kind: NonNullable<SidebarNavItem['kind']>; la
  * default mode; tap the right (count + chevron) to expand its modes and land on
  * one directly. Pure / presentational.
  */
-export function MasterNavDropdown({
-  recentPages,
-  otherPages,
-  expandedKey,
-  onToggleRow,
-  onNavigate,
-  className,
-}: {
+interface MasterNavDropdownProps {
   recentPages: SidebarPageNav[];
   otherPages: SidebarPageNav[];
   /** `"${section}-${pageId}"` of the row whose modes are expanded, or null. */
@@ -39,7 +33,12 @@ export function MasterNavDropdown({
   onToggleRow: (key: string | null) => void;
   onNavigate: (pageId: string, modeId?: string) => void;
   className?: string;
-}) {
+}
+
+export const MasterNavDropdown = forwardRef<HTMLDivElement, MasterNavDropdownProps>(function MasterNavDropdown(
+  { recentPages, otherPages, expandedKey, onToggleRow, onNavigate, className },
+  ref,
+) {
   const renderRow = (page: SidebarPageNav, keyPrefix: string) => {
     const rowKey = `${keyPrefix}-${page.id}`;
     const open = expandedKey === rowKey;
@@ -108,6 +107,7 @@ export function MasterNavDropdown({
 
   return (
     <motion.div
+      ref={ref}
       initial={{ opacity: 0, y: -6, scale: 0.98 }}
       animate={{ opacity: 1, y: 0, scale: 1 }}
       exit={{ opacity: 0, y: -6, scale: 0.98 }}
@@ -136,4 +136,4 @@ export function MasterNavDropdown({
       })}
     </motion.div>
   );
-}
+});

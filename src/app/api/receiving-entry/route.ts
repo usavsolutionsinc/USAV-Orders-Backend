@@ -92,11 +92,21 @@ export const POST = withAuth(async (request: NextRequest) => {
         });
 
         const { columns: availableColumns, dateColumn } = await getReceivingSchema();
+        // `receiving.source` is NOT NULL with CHECK (source IN
+        // ('zoho_po','unmatched','local_pickup')) and no DB default, so the
+        // insert must supply a valid value. Loose scans default to
+        // 'unmatched'; local-pickup intakes pass 'local_pickup'. Whitelist so
+        // a bad body value can't trip the check constraint at INSERT time.
+        const sourceAllowed = new Set(['zoho_po', 'unmatched', 'local_pickup']);
+        const rawSource = String(body?.source || '').trim().toLowerCase();
+        const source = sourceAllowed.has(rawSource) ? rawSource : 'unmatched';
+
         const valuesByColumn: Record<string, any> = {
             [dateColumn]: now,
             receiving_tracking_number: trackingNumber,
             shipment_id: shipment?.id ?? null,
             carrier: detectedCarrier,
+            source,
             received_at: now,
             condition_grade: conditionGrade,
             qa_status: qaStatus,

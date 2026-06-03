@@ -1,15 +1,16 @@
 'use client';
 
 import { HorizontalButtonSlider, type HorizontalSliderItem } from '@/components/ui/HorizontalButtonSlider';
+import { SidebarSection } from '@/components/layout/SidebarSection';
 import type { SidebarModeItem } from '@/lib/sidebar-navigation';
-import { cn } from '@/utils/_cn';
 
 /**
- * L2 icon-only mode switcher (plan §3.4). Wraps the shared
- * `HorizontalButtonSlider` `segmented` variant (its sliding `layoutId` pill is
- * per-instance, so multiple rails coexist). The grey strip is a FLUSH, full-bleed
- * fill — square corners, top hairline only — never a rounded bubble. Renders
- * nothing for single-surface pages (≤1 mode).
+ * L2 icon-only mode switcher (plan §3.4). Renders exactly like the dashboard
+ * order-view switcher: the shared `HorizontalButtonSlider` `segmented` variant
+ * inside a 40px `SidebarSection band`. The segmented control IS the rounded,
+ * outlined "bubble" (recessed grey track, `ring-1` outline, `p-1` padding,
+ * `h-8` tabs) — the whole row fits the 40px band, no extra wrapper height.
+ * Renders nothing for single-surface pages (≤1 mode).
  */
 export function ModeRail({
   modes,
@@ -25,12 +26,7 @@ export function ModeRail({
   if (!modes || modes.length <= 1) return null;
   const items: HorizontalSliderItem[] = modes.map((m) => ({ id: m.id, label: m.label, icon: m.icon }));
   return (
-    <div
-      className={cn(
-        'flex items-center gap-1 border-t border-border-soft bg-surface-canvas px-2 py-1.5',
-        className,
-      )}
-    >
+    <SidebarSection band className={className}>
       <HorizontalButtonSlider
         items={items}
         value={activeModeId}
@@ -39,6 +35,6 @@ export function ModeRail({
         aria-label="Mode"
         className="w-full"
       />
-    </div>
+    </SidebarSection>
   );
 }

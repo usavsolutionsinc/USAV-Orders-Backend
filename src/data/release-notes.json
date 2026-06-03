@@ -1,7 +1,447 @@
 {
-  "generatedAt": "2026-05-29T18:09:44.274Z",
+  "generatedAt": "2026-06-03T06:49:36.748Z",
   "count": 199,
   "commits": [
+    {
+      "sha": "4e55286b9ee1c8bbf6a917a6ed3c4fd38d5fa9bc",
+      "shortSha": "4e55286b",
+      "date": "2026-06-02T21:10:14-07:00",
+      "author": "DENSENSE8",
+      "subject": "modernizing",
+      "body": "Summary of what shipped:\n  - StationTesting — removed the 3 view-switcher icons (scan bar is now full-width); dropped the dead techViewSwitcher/todayCount/goal props.\n  - TechDashboard — shipping-mode right pane is locked to the History feed with the active/preview order crossfading over it; removed the Shipped/Pending sub-tabs and their tables.\n  - TechSidebarPanel — deleted the switcher wiring and the orphaned goal/count plumbing + helpers.\n  - tech-station-view-config — trimmed to just the Shipping/Testing top-mode pills.\n  - UpNextOrder — tightened the spacing around the LATE · DUE TODAY urgency row.",
+      "type": "other",
+      "title": "modernizing"
+    },
+    {
+      "sha": "27554f15a60518b98fce932675889f0818c0d184",
+      "shortSha": "27554f15",
+      "date": "2026-06-02T21:08:27-07:00",
+      "author": "DENSENSE8",
+      "subject": "Simplify tech shipping panel: full-width scan bar, fixed History pane",
+      "body": "Streamline the /tech shipping-mode station UI:\n\n- StationTesting: remove the History/Shipped/Pending view-switcher icons so\n  the scan bar spans full width; drop the now-dead techViewSwitcher/todayCount/\n  goal props (goal lives in the global header chip now).\n- TechDashboard: lock the shipping-mode right pane to the History feed\n  (TechTable) with the active/preview order crossfading over it; remove the\n  Shipped/Pending sub-tabs, their tables, and the rightViewMode branching.\n- TechSidebarPanel: delete the view-switcher wiring (viewMode, updateViewMode)\n  and the orphaned goal/today-count plumbing and helpers.\n- tech-station-view-config: drop TechStationViewMode, TECH_STATION_VIEW_ITEMS,\n  and the slider-none sentinel; keep only the top-mode (Shipping/Testing) pills.\n- UpNextOrder: tighten vertical spacing around the late/due-today urgency row.\n\nCo-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>",
+      "type": "other",
+      "title": "Simplify tech shipping panel: full-width scan bar, fixed History pane"
+    },
+    {
+      "sha": "a8b2dfa8004519647a244451d7cd0b0ee66c559e",
+      "shortSha": "a8b2dfa8",
+      "date": "2026-06-02T16:57:00-07:00",
+      "author": "usavsolutionsinc",
+      "subject": "ai chat and order bullk",
+      "body": "",
+      "type": "other",
+      "title": "ai chat and order bullk"
+    },
+    {
+      "sha": "6cf20e831b1e7118e662641aba9ef8b95dded3a3",
+      "shortSha": "6cf20e83",
+      "date": "2026-06-02T13:38:56-07:00",
+      "author": "usavsolutionsinc",
+      "subject": "UX updates",
+      "body": "",
+      "type": "other",
+      "title": "UX updates"
+    },
+    {
+      "sha": "afc7eb7bc82275062940285ce087c7f7092dafc0",
+      "shortSha": "afc7eb7b",
+      "date": "2026-06-02T10:47:21-07:00",
+      "author": "usavsolutionsinc",
+      "subject": "updated the packer roles bug",
+      "body": "",
+      "type": "other",
+      "title": "updated the packer roles bug"
+    },
+    {
+      "sha": "6904c668cc506545e98ea6e01a9e57c1b8c3e952",
+      "shortSha": "6904c668",
+      "date": "2026-06-02T10:37:41-07:00",
+      "author": "usavsolutionsinc",
+      "subject": "main UX and UI updates",
+      "body": "",
+      "type": "other",
+      "title": "main UX and UI updates"
+    },
+    {
+      "sha": "1c07f39303b0ba5a4aba174dae3f5f2eff298811",
+      "shortSha": "1c07f393",
+      "date": "2026-06-02T08:48:17-07:00",
+      "author": "DENSENSE8",
+      "subject": "updated receiving and all side bars UI and UX display",
+      "body": "",
+      "type": "other",
+      "title": "updated receiving and all side bars UI and UX display"
+    },
+    {
+      "sha": "e57f49c6ea6263531c90ff2564f9faf50b5aa05b",
+      "shortSha": "e57f49c6",
+      "date": "2026-06-02T08:45:53-07:00",
+      "author": "DENSENSE8",
+      "subject": "test(e2e): parts auto-sort spec (grade→PARTS sorts to TECH-PARTS bin)",
+      "body": "Authenticated Playwright API spec covering the For-Parts auto-sort:\n  1. seed a throwaway serial, grade PARTS → unit STOCKED in TECH-PARTS bin\n     (parts_sorted:true), then delete the seed (zero residue)\n  2. committed unit (ALLOCATED/SHIPPED) graded PARTS → parts_sorted:false,\n     location unchanged\n  3. PATCH a MATCHED receiving line to PARTS → needs_test cleared\nEach test self-skips when data is absent and restores state in finally so it's\nidempotent against the live DB.\n\nCo-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>",
+      "type": "test",
+      "title": "parts auto-sort spec (grade→PARTS sorts to TECH-PARTS bin)"
+    },
+    {
+      "sha": "37e887bb788c71095b7346d1c2979d31a2e990f1",
+      "shortSha": "37e887bb",
+      "date": "2026-06-02T07:53:58-07:00",
+      "author": "DENSENSE8",
+      "subject": "fix(migration): parts bin uses NULL zone_letter to avoid unique collision",
+      "body": "Matches the version already applied to the DB; 'Z' collided with UNSORTED under\nidx_locations_zone_letter_unique_active.\n\nCo-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>",
+      "type": "fix",
+      "title": "parts bin uses NULL zone_letter to avoid unique collision"
+    },
+    {
+      "sha": "dd2a35a8b9884f666fb2b5855af4a1e02f06dc4d",
+      "shortSha": "dd2a35a8",
+      "date": "2026-06-02T07:52:25-07:00",
+      "author": "DENSENSE8",
+      "subject": "snapshot: admin CRUD tabs + locations WIP before pulling feature work",
+      "body": "Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>",
+      "type": "other",
+      "title": "snapshot: admin CRUD tabs + locations WIP before pulling feature work"
+    },
+    {
+      "sha": "35df11cc9e6ed89bc9ca778c873ff4b7adc2c714",
+      "shortSha": "35df11cc",
+      "date": "2026-06-02T07:48:39-07:00",
+      "author": "DENSENSE8",
+      "subject": "docs: production plan for NAS photo viewing/attaching feature",
+      "body": "Developer-ready plan to take the \"attach NAS photos to a PO\" feature to\nprod: reachability decision (Cloudflare Tunnel for HTTPS + Zendesk),\ndedicated share + service account, Caddy as a managed service, env vars,\nrequired code hardening (photoUrl origin allowlist, audit logging),\nsecurity checklist, testing, rollout/rollback, and ops.\n\nCo-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>",
+      "type": "docs",
+      "title": "production plan for NAS photo viewing/attaching feature"
+    },
+    {
+      "sha": "37fdd6ed52885170c3d51f488ad2df79bd6249c9",
+      "shortSha": "37fdd6ed",
+      "date": "2026-06-02T07:47:16-07:00",
+      "author": "DENSENSE8",
+      "subject": "docs: production plan for NAS photo viewing/attaching feature",
+      "body": "Developer-ready plan to take the \"attach NAS photos to a PO\" feature to\nprod: reachability decision (Cloudflare Tunnel for HTTPS + Zendesk),\ndedicated share + service account, Caddy as a managed service, env vars,\nrequired code hardening (photoUrl origin allowlist, audit logging),\nsecurity checklist, testing, rollout/rollback, and ops.\n\nCo-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>",
+      "type": "docs",
+      "title": "production plan for NAS photo viewing/attaching feature"
+    },
+    {
+      "sha": "da549c250e79ba745c0d900b55a2904bb787e46f",
+      "shortSha": "da549c25",
+      "date": "2026-06-02T07:39:52-07:00",
+      "author": "DENSENSE8",
+      "subject": "repair issues and auto sort to parts bins from parts condition selection",
+      "body": "",
+      "type": "other",
+      "title": "repair issues and auto sort to parts bins from parts condition selection"
+    },
+    {
+      "sha": "00fd5fbf17b36b659e0a61d895edc89c33f513fe",
+      "shortSha": "00fd5fbf",
+      "date": "2026-06-02T07:38:16-07:00",
+      "author": "DENSENSE8",
+      "subject": "feat(receiving): auto-sort \"For Parts\" units to the Technical Room parts bin",
+      "body": "When a serial unit's condition is set to PARTS, it skips testing and the claim\nflow and is auto-sorted into a pickable parts bin (STOCKED, so it stays sellable\nand usable as repair stock). Fires from the grade endpoint (inventory unit panel\n+ receiving per-chip condition menu) and from a receiving line's condition\n(clears needs_test so the line drops out of the test queue, then sorts its\nserials). Guards skip units already committed to an order/shipped or already in\nthe bin; failures never fail the grade/PATCH write.\n\n- src/lib/inventory/parts-sort.ts: resolvePartsBin + sortSerialUnitToParts + guard\n- serial-units/[id]/grade: hook on PARTS grade, returns parts_sorted\n- receiving-lines PATCH: condition=PARTS -> needs_test=false + sort serials\n- inventory/panels/UnitDetailsPanel: Parts - Tech Room badge + sort toast\n- migration 2026-06-02_parts_bin.sql: seed pickable TECH-PARTS bin\n\nCo-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>",
+      "type": "feature",
+      "title": "auto-sort \"For Parts\" units to the Technical Room parts bin"
+    },
+    {
+      "sha": "f2c92dea90fedc21f9842a97778678795d4294c7",
+      "shortSha": "f2c92dea",
+      "date": "2026-06-02T00:44:47-07:00",
+      "author": "DENSENSE8",
+      "subject": "feat(receiving): full-width \"click to add photos\" empty state for NAS attach",
+      "body": "When a PO has no photos yet, show a single full-width dropzone-style\nbutton (\"Click to add photos\") instead of a small button + separate\ncaption. NasReceivingAttach gains fullWidth/label props; compact button\nremains for the with-photos state.\n\nCo-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>",
+      "type": "feature",
+      "title": "full-width \"click to add photos\" empty state for NAS attach"
+    },
+    {
+      "sha": "f4ed9d72b3fe125a8ba4dc8c4b73199f8bb36b09",
+      "shortSha": "f4ed9d72",
+      "date": "2026-06-02T00:38:28-07:00",
+      "author": "DENSENSE8",
+      "subject": "feat(receiving): pair NAS photos to a PO from the desktop photo strip",
+      "body": "Adds a \"Select from NAS\" control to the receiving PO photo strip\n(ReceivingPhotoStrip, shown in the desktop carton/staff card). It opens a\npicker dialog that browses the self-hosted NAS (Caddy), multi-selects\nrecent photos, and pairs them to the receiving package by URL via the\nexisting POST /api/receiving-photos { receivingId, photoUrl }.\n\nPhotos then render in the same PhotoGallery, support delete (DELETE\n/api/photos/:id), and flow into Zendesk claims like any receiving photo —\nfull CRUD, no Vercel Blob / Cloudflare. Hidden unless\nNEXT_PUBLIC_NAS_PHOTOS_BASE_URL is set.\n\nCo-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>",
+      "type": "feature",
+      "title": "pair NAS photos to a PO from the desktop photo strip"
+    },
+    {
+      "sha": "10892eee08191870929ea2d8ea05d6359d1e8efb",
+      "shortSha": "10892eee",
+      "date": "2026-06-02T00:09:37-07:00",
+      "author": "DENSENSE8",
+      "subject": "overall consistency in UX and UI and api endpoints",
+      "body": "",
+      "type": "other",
+      "title": "overall consistency in UX and UI and api endpoints"
+    },
+    {
+      "sha": "5b9a36650c915746eb322b01b410ec63ac6a058e",
+      "shortSha": "5b9a3665",
+      "date": "2026-06-01T23:37:44-07:00",
+      "author": "DENSENSE8",
+      "subject": "feat(receiving): deploy NAS photo server via Caddy (no Docker)",
+      "body": "The Ugreen DH2300 (ARM RK3576) has no UGOS Docker app and a broken apt\nstate, so Docker install isn't viable. Switched the deployed file server\nto a single static Caddy binary (read-only, JSON browse + CORS, port\n8088). The picker's listing parser now handles both Caddy's JSON shape\n(is_dir/mod_time) and nginx's (type/mtime), so either backend works.\n\n- deploy/nas-photo-server/Caddyfile: the deployed config.\n- README: Caddy (no-Docker) as primary method + rationale + persistence\n  options; nginx/Docker kept as the alternative.\n- docker-compose.yml: point bind mount at the real host path.\n\nCo-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>",
+      "type": "feature",
+      "title": "deploy NAS photo server via Caddy (no Docker)"
+    },
+    {
+      "sha": "6c14bdd2f76bf2acab1c3d908f163cc5011aaf81",
+      "shortSha": "6c14bdd2",
+      "date": "2026-06-01T23:28:58-07:00",
+      "author": "DENSENSE8",
+      "subject": "docs: record staff + repairs key migrations; note dashboard-table deferral",
+      "body": "Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>",
+      "type": "docs",
+      "title": "record staff + repairs key migrations; note dashboard-table deferral"
+    },
+    {
+      "sha": "6173971d84524c9bffa84aec943bbf40b03c9438",
+      "shortSha": "6173971d",
+      "date": "2026-06-01T23:27:55-07:00",
+      "author": "DENSENSE8",
+      "subject": "refactor(queries): migrate repairs keys into qk factory",
+      "body": "qk.repairs.{all,list}; ActivityInboxContext, useRepairs, useRepairQueries\n(incl. optimistic cancel/getQueriesData/setQueriesData), useRealtimeInvalidation.\nIdentical key arrays. tsc 0 errors.\n\nCo-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>",
+      "type": "refactor",
+      "title": "migrate repairs keys into qk factory"
+    },
+    {
+      "sha": "44ed7f28294efd570bdf32daae92a2a62c45f0f0",
+      "shortSha": "44ed7f28",
+      "date": "2026-06-01T23:25:37-07:00",
+      "author": "DENSENSE8",
+      "subject": "refactor(queries): migrate staff/staff-schedule keys into qk factory",
+      "body": "qk.staff.{all,availabilityToday}, qk.staffSchedule.{all,range,week},\nqk.staffAvailabilityRules. Migrated across StaffColorsProvider,\nStaffAdminSidebarPanel, QuickAccessPopover, StaffManagementTab,\nuseTodayStaffAvailability, useStaffScheduleData (~30 sites). Identical key\narrays — prefix invalidation unchanged. tsc 0 errors.\n\nCo-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>",
+      "type": "refactor",
+      "title": "migrate staff/staff-schedule keys into qk factory"
+    },
+    {
+      "sha": "7d45b7103d96e852c0d90701ea07807515f4f212",
+      "shortSha": "7d45b710",
+      "date": "2026-06-01T23:15:02-07:00",
+      "author": "DENSENSE8",
+      "subject": "docs: record Phase 3 query-key factory progress in dedup plan",
+      "body": "Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>",
+      "type": "docs",
+      "title": "record Phase 3 query-key factory progress in dedup plan"
+    },
+    {
+      "sha": "aba046319df455c0258e779d5b84c267fb262fd1",
+      "shortSha": "aba04631",
+      "date": "2026-06-01T23:14:21-07:00",
+      "author": "DENSENSE8",
+      "subject": "refactor(queries): centralize FBA realtime invalidation keys in qk",
+      "body": "qk.fba.{board,stageCounts,queue,logs,shipments,fnskus}; useFbaRealtimeInvalidation\nadopts them (+ reuses qk.dashboardFbaShipments). Identical key arrays. tsc clean.\n\nCo-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>",
+      "type": "refactor",
+      "title": "centralize FBA realtime invalidation keys in qk"
+    },
+    {
+      "sha": "5dba4f5db61b731508c0d1191b955bbad6cff6e5",
+      "shortSha": "5dba4f5d",
+      "date": "2026-06-01T23:12:30-07:00",
+      "author": "DENSENSE8",
+      "subject": "refactor(queries): migrate admin-features keys into qk factory",
+      "body": "qk.adminFeatures.{all,list}; FeaturesManagementTab query + 3 invalidations.\nSingle-file, zero key-shape change. tsc clean.\n\nCo-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>",
+      "type": "refactor",
+      "title": "migrate admin-features keys into qk factory"
+    },
+    {
+      "sha": "aeaed8ede9b6838957eb4fcc3f9c811d91db3f04",
+      "shortSha": "aeaed8ed",
+      "date": "2026-06-01T23:11:13-07:00",
+      "author": "DENSENSE8",
+      "subject": "refactor(queries): centralize dashboard invalidation keys in qk",
+      "body": "Adds qk.dashboardTable.{pending,unshipped,shipped,shippedFba}, qk.shippedTable,\nqk.dashboardStockZoho, qk.dashboardFbaShipments and adopts them in the dashboard\ninvalidation hub. Identical key arrays; consumers migrate incrementally. tsc clean.\n\nCo-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>",
+      "type": "refactor",
+      "title": "centralize dashboard invalidation keys in qk"
+    },
+    {
+      "sha": "026d4ee09366da3d851a5d46b8cb348c847a172e",
+      "shortSha": "026d4ee0",
+      "date": "2026-06-01T23:09:44-07:00",
+      "author": "DENSENSE8",
+      "subject": "refactor(queries): migrate admin-fba-fnskus keys into qk factory",
+      "body": "qk.adminFbaFnskus.{all,list}; FbaCatalogSidebarPanel + FbaFnskuDirectoryPanel\nqueries and FBAManagementTab invalidations. Zero key-shape change. tsc clean.\n\nCo-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>",
+      "type": "refactor",
+      "title": "migrate admin-fba-fnskus keys into qk factory"
+    },
+    {
+      "sha": "afa19394f635ef348d06c2d6df551907160e1c2f",
+      "shortSha": "afa19394",
+      "date": "2026-06-01T23:02:54-07:00",
+      "author": "DENSENSE8",
+      "subject": "refactor(queries): add React Query key factory; adopt for walk-in-sales + ebay-accounts",
+      "body": "Phase 3 foundation: centralizes React Query cache keys in src/queries/keys.ts\n(`qk`) so a query and its invalidations share one source instead of repeating\nstring literals (which silently break caching on a typo).\n\nAdopted in two clusters (zero key-shape change, behavior preserved):\n- walk-in-sales: useWalkInSales (list key) + its + useRealtimeInvalidation\n  invalidations -> qk.walkInSales.{list,all}\n- ebay-accounts: AwaitingEbayPanel, OrdersIntegrityCard, ConnectionsSidebarPanel\n  -> qk.ebayAccounts\n\nAdoption is incremental; remaining string-literal keys migrate as files are touched.\ntsc --noEmit: 0 errors.\n\nCo-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>",
+      "type": "refactor",
+      "title": "add React Query key factory; adopt for walk-in-sales + ebay-accounts"
+    },
+    {
+      "sha": "fc53c04d0799eed67fff219cb61262661c88f4f3",
+      "shortSha": "fc53c04d",
+      "date": "2026-06-01T20:49:36-07:00",
+      "author": "DENSENSE8",
+      "subject": "chore: gitignore Playwright e2e artifacts",
+      "body": "Ignore playwright-report/, test-results/, and tests/.auth/ (saved auth\nstorage state) so e2e runs don't leave untracked noise / commit secrets.\n\nCo-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>",
+      "type": "chore",
+      "title": "gitignore Playwright e2e artifacts"
+    },
+    {
+      "sha": "dcf9bc0185cd4b9aac6330ff6d2decffe475847e",
+      "shortSha": "dcf9bc01",
+      "date": "2026-06-01T20:48:27-07:00",
+      "author": "DENSENSE8",
+      "subject": "test(e2e): NAS photo picker — attach-by-URL contract + gated UI smoke",
+      "body": "API test (desktop): POSTs a NAS-style photoUrl to /api/receiving-photos,\nasserts it persists and is returned by GET, that a duplicate attach 409s,\nand deletes the row in cleanup. Uses a unique URL per run so it's\ndeterministic; pass PW_TEST_RECEIVING_ID for a real receiving row.\n\nUI test (mobile): opens the PO gallery and, when the NAS button is\npresent (NEXT_PUBLIC_NAS_PHOTOS_BASE_URL set on the dev server), asserts\nthe picker dialog opens; otherwise skips cleanly.\n\nCo-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>",
+      "type": "test",
+      "title": "NAS photo picker — attach-by-URL contract + gated UI smoke"
+    },
+    {
+      "sha": "ff38c089b742cf7c68094ecbeb0f305e78dce9b3",
+      "shortSha": "ff38c089",
+      "date": "2026-06-01T20:44:32-07:00",
+      "author": "DENSENSE8",
+      "subject": "chore: consolidate in-flight working-tree work onto main",
+      "body": "Captures the concurrent session's uncommitted changes (receiving serial\ndecoupling, zendesk claim/ticket URL, replenish workspace refactor, staff\nmanagement, NAS photo picker, global header/table-selection, design-demo,\nsidebar/nav, permission registry) into a single commit on main per request.\n\nExcludes .env.local (tracked env file — not committing local env/secret changes).\ntsc --noEmit: 0 errors.\n\nCo-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>",
+      "type": "chore",
+      "title": "consolidate in-flight working-tree work onto main"
+    },
+    {
+      "sha": "323dc611fe97e5272d1f1fc8f60e35fe923c8f26",
+      "shortSha": "323dc611",
+      "date": "2026-06-01T20:41:39-07:00",
+      "author": "DENSENSE8",
+      "subject": "feat(receiving): \"Select from NAS\" photo picker",
+      "body": "Attach photos that already synced from phones to the NAS instead of\nre-capturing them in the mobile site. Reuses the existing\n/api/receiving-photos endpoint (which already accepts a photoUrl), so\nNAS photos flow through the normal gallery, Zendesk claim, and delete\npaths with no backend change.\n\n- deploy/nas-photo-server: read-only nginx container (autoindex JSON +\n  CORS) that runs on the Ugreen NAS, sandboxed to one photos folder.\n- src/lib/nas-photos.ts: browser-side listing + attach helpers. The app\n  is on Vercel and can't reach the LAN, so the browser talks to the NAS\n  directly; Vercel only stores the chosen URL.\n- NasPhotoPicker: full-screen folder browser / multi-select modal.\n- PhotoGalleryView: \"NAS\" button (shown only when\n  NEXT_PUBLIC_NAS_PHOTOS_BASE_URL is set).\n\nNote: production needs the NAS served over HTTPS (mixed content);\nHEIC excluded (no transcode).\n\nCo-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>",
+      "type": "feature",
+      "title": "\"Select from NAS\" photo picker"
+    },
+    {
+      "sha": "4d90e5a4e84998177026cafcfbb89fca866d28c7",
+      "shortSha": "4d90e5a4",
+      "date": "2026-06-01T20:38:55-07:00",
+      "author": "DENSENSE8",
+      "subject": "chore(design-system): remove dead DetailLineRow",
+      "body": "DetailLineRow's only consumer was AlertLineRow, which was removed in the\nPhase 0 cleanup, leaving it barrel-only/orphaned. DetailsPanelRow (the other\nthin PanelRow wrapper) remains and is actively used.\n\nCo-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>",
+      "type": "chore",
+      "title": "remove dead DetailLineRow"
+    },
+    {
+      "sha": "8a29191c9214723af5d16f78928b1ae88e3eb3f5",
+      "shortSha": "8a29191c",
+      "date": "2026-06-01T20:18:26-07:00",
+      "author": "DENSENSE8",
+      "subject": "refactor(status): align labels unit-status colors to canonical palette",
+      "body": "Promotes the inventory unit-status color map to a shared\nsrc/lib/unit-status.ts (unitStatusBadgeClass / unitStatusChipClass) and\nroutes the labels views through it, so the same unit status reads the same\ncolor across inventory + labels.\n\n- src/lib/unit-status.ts: new canonical source (badge + chip variants)\n- inventory/status-classes.ts: now a thin re-export shim (inventory callers unchanged)\n- labels/RecentlyPrintedList + UnitHistoryWorkspace: drop divergent local\n  STATUS_TONE maps; use the shared palette (some label colors shift to match\n  inventory per product decision).\n\nCo-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>",
+      "type": "refactor",
+      "title": "align labels unit-status colors to canonical palette"
+    },
+    {
+      "sha": "5351e824e7fda2215b0fb3a6a6b19181777ba3a9",
+      "shortSha": "5351e824",
+      "date": "2026-06-01T19:59:48-07:00",
+      "author": "DENSENSE8",
+      "subject": "refactor: remove unused /work-orders route + its wiring",
+      "body": "Removes the work-orders desktop dashboard page and everything that pointed\nat the dead route, while keeping the shared work-order machinery that other\nfeatures depend on.\n\nDeleted (page-only):\n- app/work-orders/page.tsx, components/work-orders/{WorkOrdersDashboard,\n  SkuStockAssignPanel,LocalPickupTable,assign-session-events}\n- components/sidebar/WorkOrdersSidebarPanel\n\nRewired:\n- sidebar-navigation: dropped the nav item, route key, mobile-restrict entry,\n  route->permission prefix, and orphaned PackageCheck icon (+ test)\n- DashboardSidebar: dropped the work-orders panel branch + import\n- OperationsMatrix tile + StaffManagementTab landing option removed\n- ExceptionsRow placeholder href -> /repair\n- upnext-helpers sourcePath: order -> /dashboard, repair -> /repair\n  (consistent with the API's per-type source paths)\n\nKept (load-bearing elsewhere): components/work-orders/{types,\nWorkOrderAssignmentCard,WorkOrderInfoStrip,LocalPickupIntakeForm,\nLocalPickupCatalogPanel}, the work_orders.view permission, and\n/api/work-orders + /api/assignments routes (back the station up-next\nassignment flow; verified by test:auth).\n\nCo-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>",
+      "type": "refactor",
+      "title": "remove unused /work-orders route + its wiring"
+    },
+    {
+      "sha": "77888b999507efe87d231c2edb35e864c9b56039",
+      "shortSha": "77888b99",
+      "date": "2026-06-01T19:40:11-07:00",
+      "author": "DENSENSE8",
+      "subject": "feat: global header + contextual table selection (receiving + testing)",
+      "body": "Add a persistent desktop global header (search/quick-access, notifications,\nstaff switcher, account menu) with a contextual zone fed via HeaderContext,\nplus a reusable Select -> pick rows -> act flow built on a scoped window-event\nbus (useTableSelection + SelectionActionBar).\n\nWire selection into the Receiving History/Incoming list and a new tech Testing\nHistory view (Recent/History sidebar pills mirroring receiving/FBA). Bulk\nprimary action = Copy details. Also folds in in-flight zendesk/repair/serial\nworking-tree changes.\n\nCo-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>",
+      "type": "feature",
+      "title": "global header + contextual table selection (receiving + testing)"
+    },
+    {
+      "sha": "7be45c919597209b2207c2ccfe18413685120607",
+      "shortSha": "7be45c91",
+      "date": "2026-06-01T19:33:14-07:00",
+      "author": "DENSENSE8",
+      "subject": "decouple serial numbers from receiving",
+      "body": "",
+      "type": "other",
+      "title": "decouple serial numbers from receiving"
+    },
+    {
+      "sha": "bcc51a67fa4f65188a490252915a6ae071499a61",
+      "shortSha": "bcc51a67",
+      "date": "2026-06-01T19:13:59-07:00",
+      "author": "DENSENSE8",
+      "subject": "cleaning up",
+      "body": "",
+      "type": "other",
+      "title": "cleaning up"
+    },
+    {
+      "sha": "ddeaa3fb29936cdec9e990aa3e9f7b20691e1f99",
+      "shortSha": "ddeaa3fb",
+      "date": "2026-06-01T18:46:03-07:00",
+      "author": "DENSENSE8",
+      "subject": "Stop tracking auto-generated next-env.d.ts",
+      "body": "",
+      "type": "other",
+      "title": "Stop tracking auto-generated next-env.d.ts"
+    },
+    {
+      "sha": "84642c1e1c98c5e038c164c79479f6a968e23b7c",
+      "shortSha": "84642c1e",
+      "date": "2026-06-01T17:02:17-07:00",
+      "author": "usavsolutionsinc",
+      "subject": "zendesk and uopating to the testing",
+      "body": "",
+      "type": "other",
+      "title": "zendesk and uopating to the testing"
+    },
+    {
+      "sha": "ec326b12808ee10a535fa7ed946981f05f0526f0",
+      "shortSha": "ec326b12",
+      "date": "2026-06-01T14:53:38-07:00",
+      "author": "usavsolutionsinc",
+      "subject": "fix(receiving): unit condition in accordion header + swap serial/condition layout",
+      "body": "Follow-ups to per-unit label condition:\n- PoLinesAccordion: the active row's header condition badge now tracks the\n  selected unit (activeConditionOverride) instead of the static line-level\n  grade, so the main row shows e.g. USED-B when unit 1/3 is USED B.\n- UnitSlotList: collapsed unit rows put condition on the left and the serial\n  number on the right, matching the expanded row's condition-first layout.\n\nCo-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>",
+      "type": "fix",
+      "title": "unit condition in accordion header + swap serial/condition layout"
+    },
+    {
+      "sha": "f8c91c91d71dc84d7c1e081b9debd810cded3097",
+      "shortSha": "f8c91c91",
+      "date": "2026-06-01T14:21:59-07:00",
+      "author": "usavsolutionsinc",
+      "subject": "fix(receiving): label tracks selected unit condition on multi-qty lines",
+      "body": "A PO line with >1 of the same item splits into per-unit rows\n(ReceivingUnitRows), each with its own condition grade. But the label\npreview/print used the line-level `cond`, so it always showed the line\ndefault (rendered as \"New\" when empty) regardless of which unit was\nselected — there was no per-item label.\n\nReceivingUnitRows now reports the selected unit's effective grade\n(saved → pending → line default) via onActiveConditionChange, re-arming\nthe emit on line switch. LineEditPanel feeds that into the label payload's\nconditionCode for multi-qty lines, so selecting an item refreshes the\nlabel's condition; single-qty lines are unchanged.\n\nCo-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>",
+      "type": "fix",
+      "title": "label tracks selected unit condition on multi-qty lines"
+    },
+    {
+      "sha": "1e1c77bd91648242820a401b18eec1f7471b3b2c",
+      "shortSha": "1e1c77bd",
+      "date": "2026-06-01T14:16:30-07:00",
+      "author": "usavsolutionsinc",
+      "subject": "fix(auth): assign staff_roles on create/invite + honor persistent sessions",
+      "body": "Two production auth bugs:\n\n1. Packer/role FORBIDDEN: effective permissions resolve only from\n   staff_roles×roles, but POST /api/admin/staff and /staff/invite wrote\n   staff.role without inserting a staff_roles row — created staff resolved\n   to an empty permission set and 403'd on every gated route while the UI\n   still showed their role. Both endpoints now insert the matching\n   staff_roles assignment (transactional) + invalidate the role cache;\n   invite also canonicalizes/validates the role key.\n\n2. Persistent login not sticking: signin bound sessions to shift end and\n   createSession took min(shiftEnd, policyWindow), collapsing the\n   persistent 1-year window to midnight; /api/auth/session slid the DB\n   expiry but never re-issued the cookie, so the browser dropped it on\n   lid-close/next day. persistent staff now bypass shift-bound expiry, and\n   the heartbeat re-issues usav_sid with the slid max-age each call.\n\nCo-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>",
+      "type": "fix",
+      "title": "assign staff_roles on create/invite + honor persistent sessions"
+    },
+    {
+      "sha": "93cd071bbada82fcc0c776cd5bba0d414e2e296b",
+      "shortSha": "93cd071b",
+      "date": "2026-06-01T09:09:31-07:00",
+      "author": "usavsolutionsinc",
+      "subject": "updated the testing components and the ai chat page",
+      "body": "",
+      "type": "other",
+      "title": "updated the testing components and the ai chat page"
+    },
+    {
+      "sha": "952f423a0ba9792ae65a47b984839ca04ef298b7",
+      "shortSha": "952f423a",
+      "date": "2026-05-29T11:11:26-07:00",
+      "author": "usavsolutionsinc",
+      "subject": "feat: FBA combine workspace, receiving workflow stages, step-up client wiring + sidebar polish",
+      "body": "UI / sidebar\n- Add FbaCombineWorkspace and refresh FBA sidebar rails, paired review,\n  active shipments, scan field, and board table\n- Smooth sidebar selection/section animations (DashboardSidebar,\n  SidebarRailShell, SidebarSectionList, TechSidebarPanel)\n- Receiving sidebar/rail + station updates (incoming details, recent rails,\n  scan bar, PO lines, pending unboxing, unit slots)\n\nReceiving\n- Add workflow-stages module and wire receive-line + receiving-lines route\n- New e2e-receiving-workflow-views script\n\nAuth / integrations\n- Add StepUpProvider for client-side step-up (403 STEPUP_REQUIRED) handling\n- eBay token refresh/client + integrations crypto hardening\n\nChore\n- Regenerated release notes, architecture diagrams, sw.js, next-env.d.ts\n- Remove stale .claude/scheduled_tasks.lock\n\nCo-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>",
+      "type": "feature",
+      "title": "FBA combine workspace, receiving workflow stages, step-up client wiring + sidebar polish"
+    },
     {
       "sha": "2214870b78c5c323c294eeef04614e3b95f83a54",
       "shortSha": "2214870b",
@@ -1551,446 +1991,6 @@
       "body": "",
       "type": "other",
       "title": "updated the staff and staff colors"
-    },
-    {
-      "sha": "4f80c5946a99658e546f447df6af8e389f7fff8f",
-      "shortSha": "4f80c594",
-      "date": "2026-03-06T11:24:04-08:00",
-      "author": "usavsolutionsinc",
-      "subject": "fixed the ts errors",
-      "body": "",
-      "type": "fix",
-      "title": "fixed the ts errors"
-    },
-    {
-      "sha": "c7e30d119c0ecf3bbee5073b42d3ca71fb0c4603",
-      "shortSha": "c7e30d11",
-      "date": "2026-03-06T11:16:45-08:00",
-      "author": "usavsolutionsinc",
-      "subject": "updated the receiving table and the manuals to item number to all be industry standard",
-      "body": "",
-      "type": "other",
-      "title": "updated the receiving table and the manuals to item number to all be industry standard"
-    },
-    {
-      "sha": "7f34615e8c9611bebb5db224916dc8c1ed00bae4",
-      "shortSha": "7f34615e",
-      "date": "2026-03-05T13:07:58-08:00",
-      "author": "usavsolutionsinc",
-      "subject": "add to receiving table and made work_assigments table and added ably websocket for client updates google like behavior",
-      "body": "",
-      "type": "other",
-      "title": "add to receiving table and made work_assigments table and added ably websocket for client updates google like behavior"
-    },
-    {
-      "sha": "300a6f8b04508b692cbd267a8a47be43d10a9c52",
-      "shortSha": "300a6f8b",
-      "date": "2026-03-04T15:28:06-08:00",
-      "author": "usavsolutionsinc",
-      "subject": "updated the ebay sync and integrity logic",
-      "body": "",
-      "type": "other",
-      "title": "updated the ebay sync and integrity logic"
-    },
-    {
-      "sha": "af38b7b7f0d85b7e949775e4e614c2950e2ebbaa",
-      "shortSha": "af38b7b7",
-      "date": "2026-03-04T14:55:12-08:00",
-      "author": "usavsolutionsinc",
-      "subject": "added manual and tighten up the logic for stationtesting",
-      "body": "",
-      "type": "other",
-      "title": "added manual and tighten up the logic for stationtesting"
-    },
-    {
-      "sha": "b354bbba3c1ae5adeb46af8a5c26192febb843bc",
-      "shortSha": "b354bbba",
-      "date": "2026-03-04T13:08:52-08:00",
-      "author": "usavsolutionsinc",
-      "subject": "updated the code base to include manuals for tech scans, better caching weekly from server side architecture, improved receiving table,",
-      "body": "",
-      "type": "other",
-      "title": "updated the code base to include manuals for tech scans, better caching weekly from server side architecture, improved receiving table,"
-    },
-    {
-      "sha": "4e864d4377727e59c270cdc51a04a09a21b714b7",
-      "shortSha": "4e864d43",
-      "date": "2026-03-04T09:46:04-08:00",
-      "author": "usavsolutionsinc",
-      "subject": "updated the drizzle schema",
-      "body": "",
-      "type": "other",
-      "title": "updated the drizzle schema"
-    },
-    {
-      "sha": "348f7022ac95941cbcedf6766a7c963ff1aa40aa",
-      "shortSha": "348f7022",
-      "date": "2026-03-04T09:02:16-08:00",
-      "author": "usavsolutionsinc",
-      "subject": "updated the repair service cache issue",
-      "body": "",
-      "type": "other",
-      "title": "updated the repair service cache issue"
-    },
-    {
-      "sha": "19172e317891abc30e4d7a3a8c6998727a2b4493",
-      "shortSha": "19172e31",
-      "date": "2026-03-03T15:54:46-08:00",
-      "author": "usavsolutionsinc",
-      "subject": "improved overall code base, implemented vercel KV caching",
-      "body": "",
-      "type": "other",
-      "title": "improved overall code base, implemented vercel KV caching"
-    },
-    {
-      "sha": "adc594186b1f1a888b7087254ac04edaaa3e642d",
-      "shortSha": "adc59418",
-      "date": "2026-03-03T09:34:43-08:00",
-      "author": "usavsolutionsinc",
-      "subject": "search params ts error fix",
-      "body": "",
-      "type": "other",
-      "title": "search params ts error fix"
-    },
-    {
-      "sha": "1a946f58ed0a3fb28de78556606749d0750cccad",
-      "shortSha": "1a946f58",
-      "date": "2026-03-03T09:26:31-08:00",
-      "author": "usavsolutionsinc",
-      "subject": "updated the connections tab, dashbord tab and fitlering x10",
-      "body": "",
-      "type": "other",
-      "title": "updated the connections tab, dashbord tab and fitlering x10"
-    },
-    {
-      "sha": "14fcaa367c4ad1bb884ff4fced5b27401c82079a",
-      "shortSha": "14fcaa36",
-      "date": "2026-03-02T11:28:08-08:00",
-      "author": "usavsolutionsinc",
-      "subject": "updated the whole flow, removed google sheet support for the sync and scripts logic",
-      "body": "",
-      "type": "other",
-      "title": "updated the whole flow, removed google sheet support for the sync and scripts logic"
-    },
-    {
-      "sha": "0751763ff3bf5a5c2d9aa7ef0e490ab6ba93844d",
-      "shortSha": "0751763f",
-      "date": "2026-02-27T16:56:10-08:00",
-      "author": "usavsolutionsinc",
-      "subject": "bug fix",
-      "body": "",
-      "type": "other",
-      "title": "bug fix"
-    },
-    {
-      "sha": "dc18727b52fd61230d2ce7e669d989ec766b69e1",
-      "shortSha": "dc18727b",
-      "date": "2026-02-27T16:38:47-08:00",
-      "author": "usavsolutionsinc",
-      "subject": "ts fix",
-      "body": "",
-      "type": "other",
-      "title": "ts fix"
-    },
-    {
-      "sha": "cea3e6961a0d0b64092e4292b1c0c53bc17cf524",
-      "shortSha": "cea3e696",
-      "date": "2026-02-27T16:23:29-08:00",
-      "author": "usavsolutionsinc",
-      "subject": "ts fix",
-      "body": "",
-      "type": "other",
-      "title": "ts fix"
-    },
-    {
-      "sha": "332b3d1342cf7f66a43f25537ba5732ec6f109ac",
-      "shortSha": "332b3d13",
-      "date": "2026-02-27T16:13:26-08:00",
-      "author": "usavsolutionsinc",
-      "subject": "updated the serach bar crash",
-      "body": "",
-      "type": "other",
-      "title": "updated the serach bar crash"
-    },
-    {
-      "sha": "00d72ba202129e6f1c6dd545366176f13614b461",
-      "shortSha": "00d72ba2",
-      "date": "2026-02-27T16:04:48-08:00",
-      "author": "usavsolutionsinc",
-      "subject": "one single side bar",
-      "body": "",
-      "type": "other",
-      "title": "one single side bar"
-    },
-    {
-      "sha": "c2245f0c2a67811b1041e0a98564ff6b47c82c72",
-      "shortSha": "c2245f0c",
-      "date": "2026-02-27T12:31:13-08:00",
-      "author": "usavsolutionsinc",
-      "subject": "updated the packer logs and the receiving table tech table X/shipped",
-      "body": "",
-      "type": "other",
-      "title": "updated the packer logs and the receiving table tech table X/shipped"
-    },
-    {
-      "sha": "2f81edfb70d806d4b97339402e2af7bd6dcabf83",
-      "shortSha": "2f81edfb",
-      "date": "2026-02-27T12:07:27-08:00",
-      "author": "usavsolutionsinc",
-      "subject": "perfected moved entirely away from google sheets",
-      "body": "",
-      "type": "performance",
-      "title": "perfected moved entirely away from google sheets"
-    },
-    {
-      "sha": "bcb9527b87f0b1a47c622a528b9754b9cab80aab",
-      "shortSha": "bcb9527b",
-      "date": "2026-02-26T16:44:33-08:00",
-      "author": "usavsolutionsinc",
-      "subject": "updated and started on the manuals",
-      "body": "",
-      "type": "other",
-      "title": "updated and started on the manuals"
-    },
-    {
-      "sha": "952197a20e8e0138a8af3eab71d1e081abe4738f",
-      "shortSha": "952197a2",
-      "date": "2026-02-26T13:32:18-08:00",
-      "author": "usavsolutionsinc",
-      "subject": "removed the assigment page and just updated the dashboarddetailsstack to include the selections of tester id and packer id",
-      "body": "",
-      "type": "other",
-      "title": "removed the assigment page and just updated the dashboarddetailsstack to include the selections of tester id and packer id"
-    },
-    {
-      "sha": "93bd52b9d3d272331bc5552d563e13fb07bf3ed5",
-      "shortSha": "93bd52b9",
-      "date": "2026-02-26T10:28:10-08:00",
-      "author": "usavsolutionsinc",
-      "subject": "backend caching upstash KV and qstash for api timer",
-      "body": "",
-      "type": "other",
-      "title": "backend caching upstash KV and qstash for api timer"
-    },
-    {
-      "sha": "f804d3e539ef149dd5d01689f895f16413a87518",
-      "shortSha": "f804d3e5",
-      "date": "2026-02-26T10:02:01-08:00",
-      "author": "usavsolutionsinc",
-      "subject": "updated to include filtered tested by dashboard shipping in station stesting",
-      "body": "",
-      "type": "other",
-      "title": "updated to include filtered tested by dashboard shipping in station stesting"
-    },
-    {
-      "sha": "28580984a4826871231db518f3e3f491a416e538",
-      "shortSha": "28580984",
-      "date": "2026-02-26T09:05:37-08:00",
-      "author": "usavsolutionsinc",
-      "subject": "restructured and improved the general code base",
-      "body": "",
-      "type": "other",
-      "title": "restructured and improved the general code base"
-    },
-    {
-      "sha": "22d8f711a644a0810592229dead34f1064dada7e",
-      "shortSha": "22d8f711",
-      "date": "2026-02-25T12:24:19-08:00",
-      "author": "usavsolutionsinc",
-      "subject": "improved the overall flow",
-      "body": "",
-      "type": "other",
-      "title": "improved the overall flow"
-    },
-    {
-      "sha": "ed2faf4998488f614afdef6cdef8e64b04cb23f1",
-      "shortSha": "ed2faf49",
-      "date": "2026-02-24T16:31:37-08:00",
-      "author": "usavsolutionsinc",
-      "subject": "updated the display of the shipped table",
-      "body": "",
-      "type": "other",
-      "title": "updated the display of the shipped table"
-    },
-    {
-      "sha": "1f7a9561a401d3e788860c24af32b819ab0d155c",
-      "shortSha": "1f7a9561",
-      "date": "2026-02-24T16:25:47-08:00",
-      "author": "usavsolutionsinc",
-      "subject": "updated the display and add FBA suppoort to the station testing",
-      "body": "",
-      "type": "other",
-      "title": "updated the display and add FBA suppoort to the station testing"
-    },
-    {
-      "sha": "23b8272144a79d927e040acd70efa08b460e124f",
-      "shortSha": "23b82721",
-      "date": "2026-02-24T16:11:11-08:00",
-      "author": "usavsolutionsinc",
-      "subject": "updated the dashboard dispplay",
-      "body": "",
-      "type": "other",
-      "title": "updated the dashboard dispplay"
-    },
-    {
-      "sha": "2ed9ce40aa6e0f3a2bb35e6448542299e9428d68",
-      "shortSha": "2ed9ce40",
-      "date": "2026-02-24T15:25:43-08:00",
-      "author": "usavsolutionsinc",
-      "subject": "updated receiving and tech add serial number to be used by mobile as well",
-      "body": "",
-      "type": "other",
-      "title": "updated receiving and tech add serial number to be used by mobile as well"
-    },
-    {
-      "sha": "e110d4f683f54cba96458b6d8f126d14fb78f224",
-      "shortSha": "e110d4f6",
-      "date": "2026-02-24T12:19:10-08:00",
-      "author": "usavsolutionsinc",
-      "subject": "PST time stamp in receiving",
-      "body": "",
-      "type": "other",
-      "title": "PST time stamp in receiving"
-    },
-    {
-      "sha": "a7435744ca93d64c3217ada6d889977e9dba8dab",
-      "shortSha": "a7435744",
-      "date": "2026-02-24T10:59:31-08:00",
-      "author": "usavsolutionsinc",
-      "subject": "allowed connections prod url support and updated the tech details stack",
-      "body": "",
-      "type": "other",
-      "title": "allowed connections prod url support and updated the tech details stack"
-    },
-    {
-      "sha": "7fd8d76ff49cd817dfb083af46b814ccda1809f1",
-      "shortSha": "7fd8d76f",
-      "date": "2026-02-24T10:27:11-08:00",
-      "author": "usavsolutionsinc",
-      "subject": "updated the SN post to tech_serial_numbers table with out finding order",
-      "body": "",
-      "type": "other",
-      "title": "updated the SN post to tech_serial_numbers table with out finding order"
-    },
-    {
-      "sha": "df43a304af20bcc2702204197157caf170ae726b",
-      "shortSha": "df43a304",
-      "date": "2026-02-24T09:29:17-08:00",
-      "author": "usavsolutionsinc",
-      "subject": "updated the post and upsert to the order_exceptions and the tech_serial_numbers table",
-      "body": "",
-      "type": "other",
-      "title": "updated the post and upsert to the order_exceptions and the tech_serial_numbers table"
-    },
-    {
-      "sha": "248de1c53178a09086787b4481683b32223b109c",
-      "shortSha": "248de1c5",
-      "date": "2026-02-23T16:58:57-08:00",
-      "author": "usavsolutionsinc",
-      "subject": "updated the display of the tech table and upnextorder,",
-      "body": "",
-      "type": "other",
-      "title": "updated the display of the tech table and upnextorder,"
-    },
-    {
-      "sha": "fbe31e470c120bc6dc9087e20163263ec0461100",
-      "shortSha": "fbe31e47",
-      "date": "2026-02-23T15:42:37-08:00",
-      "author": "usavsolutionsinc",
-      "subject": "added days late and more back fill for orders and cleaned up UI",
-      "body": "",
-      "type": "other",
-      "title": "added days late and more back fill for orders and cleaned up UI"
-    },
-    {
-      "sha": "79c3c1ebdfcb0e3b7c2330f49c2c9b035a32412b",
-      "shortSha": "79c3c1eb",
-      "date": "2026-02-23T10:59:19-08:00",
-      "author": "usavsolutionsinc",
-      "subject": "CRUD Update to import latest orders",
-      "body": "",
-      "type": "other",
-      "title": "CRUD Update to import latest orders"
-    },
-    {
-      "sha": "23af556c4b671891428d0b8873c6a54f6b3c1afa",
-      "shortSha": "23af556c",
-      "date": "2026-02-23T10:18:08-08:00",
-      "author": "usavsolutionsinc",
-      "subject": "updated the shipstation endpint",
-      "body": "",
-      "type": "other",
-      "title": "updated the shipstation endpint"
-    },
-    {
-      "sha": "9de2d840c096bcc42bb567cacc291a1f211f64a1",
-      "shortSha": "9de2d840",
-      "date": "2026-02-23T10:10:02-08:00",
-      "author": "usavsolutionsinc",
-      "subject": "allowed orders without matches to the system and updated the shipstation records",
-      "body": "",
-      "type": "other",
-      "title": "allowed orders without matches to the system and updated the shipstation records"
-    },
-    {
-      "sha": "f3188594a83017985d85de43fcc9a08b61eeea59",
-      "shortSha": "f3188594",
-      "date": "2026-02-18T09:47:37-08:00",
-      "author": "usavsolutionsinc",
-      "subject": "updated the serial number post from stationtesting",
-      "body": "",
-      "type": "other",
-      "title": "updated the serial number post from stationtesting"
-    },
-    {
-      "sha": "022606847adc4f7f640cde721cbd33f7ce4b7a3c",
-      "shortSha": "02260684",
-      "date": "2026-02-16T16:51:16-08:00",
-      "author": "usavsolutionsinc",
-      "subject": "updated the tech scanning insert endpoints to tech_serial_numbers table",
-      "body": "",
-      "type": "other",
-      "title": "updated the tech scanning insert endpoints to tech_serial_numbers table"
-    },
-    {
-      "sha": "816d85d839f6a8a6104f23a34dc1a16936d7be2c",
-      "shortSha": "816d85d8",
-      "date": "2026-02-16T14:56:25-08:00",
-      "author": "usavsolutionsinc",
-      "subject": "updated the tech_serial_number sheet schema",
-      "body": "",
-      "type": "other",
-      "title": "updated the tech_serial_number sheet schema"
-    },
-    {
-      "sha": "9774011165df82e1031189fb48e952b9047be871",
-      "shortSha": "97740111",
-      "date": "2026-02-16T14:25:11-08:00",
-      "author": "usavsolutionsinc",
-      "subject": "added qty condition and order_id support",
-      "body": "",
-      "type": "other",
-      "title": "added qty condition and order_id support"
-    },
-    {
-      "sha": "f70d4ee8359a045c98efdf86bb6a798bb155233e",
-      "shortSha": "f70d4ee8",
-      "date": "2026-02-16T14:19:07-08:00",
-      "author": "usavsolutionsinc",
-      "subject": "updated the upnextorder styling for the tech statiosn",
-      "body": "",
-      "type": "other",
-      "title": "updated the upnextorder styling for the tech statiosn"
-    },
-    {
-      "sha": "468869e035d5c55c255827a73759cd77edec70c3",
-      "shortSha": "468869e0",
-      "date": "2026-02-16T13:41:12-08:00",
-      "author": "usavsolutionsinc",
-      "subject": "updated the repair table and the details panel to handle copy and paste",
-      "body": "",
-      "type": "other",
-      "title": "updated the repair table and the details panel to handle copy and paste"
     }
   ]
 }

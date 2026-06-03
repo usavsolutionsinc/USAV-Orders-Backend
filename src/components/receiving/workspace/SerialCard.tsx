@@ -1,8 +1,9 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { Barcode, X } from '@/components/Icons';
+import { X } from '@/components/Icons';
 import { SerialChip } from '@/components/ui/CopyChip';
+import { TextField } from '@/design-system/primitives';
 import { ConditionPills } from './ConditionPills';
 
 interface SavedSerial {
@@ -63,7 +64,6 @@ interface Props {
  */
 export function SerialCard({
   saved,
-  expected,
   onAdd,
   isSubmitting,
   disabled = false,
@@ -85,8 +85,6 @@ export function SerialCard({
   const [showSavingLabel, setShowSavingLabel] = useState(false);
   const inputRef = useRef<HTMLInputElement | null>(null);
   const count = saved.length;
-  const target = expected ?? 0;
-  const isAtCap = target > 0 && count >= target;
 
   // If the underlying saved list changes while editing (e.g. the original
   // chip got deleted from elsewhere), clear the edit state so we don't try
@@ -182,53 +180,41 @@ export function SerialCard({
   return (
     <Shell className={shellClass}>
       <div className="flex items-stretch gap-2">
-        <div className="relative flex-1">
-          <Barcode
-            className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400"
-            aria-hidden
-          />
-          <input
-            ref={inputRef}
-            value={scan}
-            disabled={disabled || isSubmitting}
-            onChange={(e) => setScan(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') {
-                e.preventDefault();
-                submit();
-              } else if (e.key === 'Escape' && editing) {
-                e.preventDefault();
-                cancelEdit();
-              }
-            }}
-            placeholder={
-              editing
-                ? `Editing serial — press Enter to save, Esc to cancel`
-                : isAtCap
-                  ? 'All expected scanned — add more if needed'
-                  : 'Scan or type a serial → ⏎'
+        <TextField
+          ref={inputRef}
+          label="Serial"
+          value={scan}
+          onChange={setScan}
+          tone={editing ? 'amber' : 'blue'}
+          mono
+          className="flex-1"
+          disabled={disabled || isSubmitting}
+          autoComplete="off"
+          spellCheck={false}
+          // eslint-disable-next-line jsx-a11y/no-autofocus -- scan-focused workflow
+          autoFocus
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') {
+              e.preventDefault();
+              submit();
+            } else if (e.key === 'Escape' && editing) {
+              e.preventDefault();
+              cancelEdit();
             }
-            autoComplete="off"
-            spellCheck={false}
-            // eslint-disable-next-line jsx-a11y/no-autofocus -- scan-focused workflow
-            autoFocus
-            className={`block h-11 w-full rounded-xl border bg-white pl-9 pr-3 font-mono text-sm text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 disabled:cursor-not-allowed disabled:bg-gray-50 disabled:text-gray-400 ${
-              editing
-                ? 'border-amber-400 focus:border-amber-500 focus:ring-amber-500/30'
-                : 'border-gray-200 focus:border-blue-500 focus:ring-blue-500/30'
-            }`}
-          />
-          {scan || editing ? (
-            <button
-              type="button"
-              onClick={() => (editing ? cancelEdit() : setScan(''))}
-              aria-label={editing ? 'Cancel edit' : 'Clear input'}
-              className="absolute right-2 top-1/2 -translate-y-1/2 rounded-md p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-700"
-            >
-              <X className="h-3.5 w-3.5" />
-            </button>
-          ) : null}
-        </div>
+          }}
+          trailing={
+            scan || editing ? (
+              <button
+                type="button"
+                onClick={() => (editing ? cancelEdit() : setScan(''))}
+                aria-label={editing ? 'Cancel edit' : 'Clear input'}
+                className="rounded-md p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-700"
+              >
+                <X className="h-3.5 w-3.5" />
+              </button>
+            ) : undefined
+          }
+        />
         <button
           type="button"
           onClick={submit}

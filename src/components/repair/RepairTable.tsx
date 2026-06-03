@@ -280,9 +280,13 @@ export function RepairTable({ filter }: RepairTableProps) {
                     <DateGroupHeader date={date} count={records.length} formatDate={formatDateWithOrdinal} />
                     {records.map((repair, index) => (
                       <motion.div
+                        key={
+                          repair.id != null
+                            ? `rep-${repair.id}`
+                            : `rep-${date}-${index}-${repair.ticket_number || repair.source_tracking_number || 'row'}`
+                        }
                         {...framerPresence.tableRow}
                         transition={framerTransition.tableRowMount}
-                        key={repair.id}
                         onClick={() => handleRowClick(repair)}
                         onKeyDown={(event: KeyboardEvent<HTMLDivElement>) => {
                           if (event.target !== event.currentTarget) return;

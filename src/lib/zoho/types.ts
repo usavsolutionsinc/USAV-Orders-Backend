@@ -93,11 +93,32 @@ export interface ZohoContact {
   last_modified_time?: string;
 }
 
+/** A line on a Zoho sales order. `line_item_id` is what packages/invoices reference. */
+export interface ZohoSalesOrderLineItem {
+  line_item_id: string;
+  item_id?: string;
+  name?: string;
+  sku?: string;
+  quantity?: number | string;
+  quantity_invoiced?: number | string;
+  quantity_packed?: number | string;
+  quantity_shipped?: number | string;
+  rate?: number | string;
+  tax_id?: string;
+  unit?: string;
+}
+
 export interface ZohoSalesOrder {
   salesorder_id: string;
   salesorder_number?: string;
   reference_number?: string;
   status?: string;
+  /** Fulfillment sub-statuses Zoho exposes on the SO. */
+  order_status?: string;
+  invoiced_status?: string;
+  paid_status?: string;
+  shipped_status?: string;
+  customer_id?: string;
   date?: string;
   shipment_date?: string;
   sub_total?: number | string;
@@ -105,7 +126,7 @@ export interface ZohoSalesOrder {
   total?: number | string;
   currency_code?: string;
   shipping_charge?: number | string;
-  line_items?: unknown[];
+  line_items?: ZohoSalesOrderLineItem[];
   billing_address?: unknown;
   shipping_address?: unknown;
   last_modified_time?: string;
@@ -114,22 +135,29 @@ export interface ZohoSalesOrder {
 export interface ZohoPackage {
   package_id: string;
   package_number?: string;
+  salesorder_id?: string;
   status?: string;
   date?: string;
   line_items?: unknown[];
 }
 
 export interface ZohoShipmentOrder {
-  shipmentorder_id: string;
+  /** Zoho returns `shipment_id` on create; older docs say `shipmentorder_id`. */
+  shipment_id?: string;
+  shipmentorder_id?: string;
+  shipment_number?: string;
   status?: string;
   date?: string;
   tracking_number?: string;
   carrier?: string;
+  delivery_method?: string;
 }
 
 export interface ZohoInvoice {
   invoice_id: string;
   invoice_number?: string;
+  reference_number?: string;
+  customer_id?: string;
   status?: string;
   date?: string;
   due_date?: string;
@@ -168,19 +196,40 @@ export interface CreateSalesOrderPayload {
   notes?: string;
 }
 
+/**
+ * Package create body. `salesorder_id` is a QUERY param (passed separately to
+ * the client method), not part of the body. Each line references the SO line
+ * via `so_line_item_id`.
+ */
 export interface CreatePackagePayload {
-  salesorder_id: string;
+  package_number?: string;
   date?: string;
-  line_items: unknown[];
+  line_items: Array<{ so_line_item_id: string; quantity: number }>;
   notes?: string;
 }
 
+/**
+ * Shipment-order create body. `salesorder_id` and `package_ids` are QUERY params
+ * (passed separately to the client method). `delivery_method` is the carrier.
+ */
 export interface CreateShipmentOrderPayload {
-  package_ids: string[];
+  shipment_number?: string;
   date?: string;
+  delivery_method?: string;
   tracking_number?: string;
-  carrier?: string;
-  shipment_type?: string;
+  reference_number?: string;
+  shipping_charge?: number;
+  notes?: string;
+}
+
+export interface CreatePaymentPayload {
+  customer_id: string;
+  payment_mode?: string;
+  amount: number;
+  date: string;
+  reference_number?: string;
+  description?: string;
+  invoices: Array<{ invoice_id: string; amount_applied: number }>;
 }
 
 export interface CreateAdjustmentPayload {
@@ -193,8 +242,11 @@ export interface CreateAdjustmentPayload {
 export interface CreateInvoicePayload {
   customer_id: string;
   salesorder_id?: string;
+  reference_number?: string;
+  invoice_number?: string;
   date?: string;
   due_date?: string;
   line_items?: unknown[];
   notes?: string;
+  custom_fields?: unknown[];
 }

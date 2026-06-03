@@ -1,10 +1,8 @@
 'use client';
 
-import Link from 'next/link';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
-import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { AnimatePresence, motion } from 'framer-motion';
-import { AlertCircle, Check, ChevronDown, Clock, LayoutDashboard, Menu, PackageCheck, X } from '@/components/Icons';
+import React, { useEffect, useRef, useState } from 'react';
+import { AlertCircle, Clock, Menu, PackageCheck, X } from '@/components/Icons';
 import { HorizontalButtonSlider, type HorizontalSliderItem } from '@/components/ui/HorizontalButtonSlider';
 import { SidebarSection } from '@/components/layout/SidebarSection';
 import { sectionLabel } from '@/design-system/tokens/typography/presets';
@@ -31,28 +29,21 @@ import { AuditLogSidebarPanel } from '@/components/sidebar/AuditLogSidebarPanel'
 import { MasterNav, MasterNavProvider } from '@/components/sidebar/master-nav';
 import { useUIMode } from '@/design-system/providers/UIModeProvider';
 import { useAuth } from '@/contexts/AuthContext';
-import {
-  getSidebarRouteKey,
-  getSidebarNavItems,
-  isSidebarNavActive,
-  type SidebarNavItem,
-  APP_SIDEBAR_NAV,
-} from '@/lib/sidebar-navigation';
+import { getSidebarRouteKey } from '@/lib/sidebar-navigation';
 import type { ShippedFormData } from '@/components/shipped';
 import { dispatchCloseShippedDetails, DASHBOARD_SHIPPED_FOCUS_SEARCH_PARAM } from '@/utils/events';
-import { getDashboardOrderViewFromSearch, parseDashboardOpenOrderId } from '@/utils/dashboard-search-state';
 import { useDashboardSearchController } from '@/hooks/useDashboardSearchController';
 const MOBILE_SIDEBAR_MIN_WIDTH = 420;
 
 // Pages whose panels gate their own pill-row on useMasterNavEnabled() — only
-// these show the master-nav L2 rail. dashboard/receiving/fba (heavy) and tech
-// (nested switcher shared with the standalone /tech station) keep their existing
-// switchers until a later phase. Keep in sync with the gated panels.
+// these show the master-nav L2 rail. dashboard/receiving/fba (heavy) keep their
+// existing switchers until a later phase. Keep in sync with the gated panels.
 const MASTER_NAV_RAIL_PAGES: ReadonlySet<string> = new Set([
   'inventory',
   'warehouse',
   'products',
   'walk-in',
+  'tech',
 ]);
 
 // Sub-views shown above the search bar.
@@ -61,39 +52,6 @@ const DASHBOARD_ORDERS_SUBVIEW_ITEMS: HorizontalSliderItem[] = [
   { id: 'shipped',   label: 'Shipped',  icon: PackageCheck },
   { id: 'unshipped', label: 'Awaiting', icon: AlertCircle },
 ];
-
-// The order-view pills are icon-only; their name is surfaced in the sidebar
-// header title instead (the page icon already carries the page context). Keep
-// these labels in sync with DASHBOARD_ORDERS_SUBVIEW_ITEMS.
-const DASHBOARD_ORDERS_SUBVIEW_LABELS: Record<string, string> = {
-  pending: 'Pending',
-  shipped: 'Shipped',
-  unshipped: 'Awaiting',
-  fba: 'FBA',
-};
-
-// Receiving's icon-only modes spell their selection out in the sidebar header.
-// Mirrors the mode resolution in ReceivingSidebarPanel.
-const RECEIVING_MODE_LABELS: Record<string, string> = {
-  receive: 'Receiving',
-  incoming: 'Incoming',
-  history: 'History',
-  unfound: 'Unfound',
-  pickup: 'Local Pickup',
-};
-
-function getReceivingModeFromLocation(
-  pathname: string | null,
-  searchParams: Pick<URLSearchParams, 'get'>,
-): keyof typeof RECEIVING_MODE_LABELS {
-  if (pathname?.startsWith('/receiving/unfound')) return 'unfound';
-  const m = searchParams.get('mode');
-  if (m === 'pickup') return 'pickup';
-  if (m === 'history') return 'history';
-  if (m === 'incoming') return 'incoming';
-  return 'receive';
-}
-
 
 function getSidebarTitle(pathname: string | null) {
   const routeKey = getSidebarRouteKey(pathname);
@@ -240,10 +198,6 @@ function SidebarContextPanel({ onBackToAppNav }: { onBackToAppNav?: () => void }
         searchValue={dashboardSearch.searchQuery}
         onSearchChange={dashboardSearch.setSearch}
         onOpenShippedMatches={dashboardSearch.openShippedMatches}
-        showPendingFilterControl={dashboardSearch.orderView === 'pending'}
-        pendingFilterValue={dashboardSearch.pendingFilter}
-        highContrastSliders
-        onPendingFilterChange={dashboardSearch.setPendingFilter}
       />
     );
   }
@@ -305,67 +259,15 @@ function SidebarContextPanel({ onBackToAppNav }: { onBackToAppNav?: () => void }
   return null;
 }
 
-function NavSection({
-  items,
-  pathname,
-  resolveHref,
-  onNavigate,
-}: {
-  items: SidebarNavItem[];
-  pathname: string | null;
-  resolveHref: (item: SidebarNavItem) => string;
-  onNavigate: () => void;
-}) {
-  return (
-    <div className="space-y-0.5">
-      {items.map((item) => {
-        const href = resolveHref(item);
-        const isActive = isSidebarNavActive(pathname, href);
-        const Icon = item.icon;
-        return (
-          <Link
-            key={item.id}
-            href={href}
-            onClick={onNavigate}
-            prefetch={process.env.NODE_ENV === 'production'}
-            className={`flex items-center gap-3 px-3 py-2.5 rounded-xl transition-colors ${
-              isActive
-                ? 'bg-blue-600 text-white'
-                : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900'
-            }`}
-          >
-            <Icon className={`h-5 w-5 shrink-0 ${isActive ? 'text-white' : 'text-gray-400'}`} />
-            <span className="flex-1 text-caption font-black uppercase tracking-wider">{item.label}</span>
-            {isActive && <Check className="h-4 w-4 shrink-0 text-white/80" />}
-          </Link>
-        );
-      })}
-    </div>
-  );
-}
-
 export default function DashboardSidebar({ inDrawer = false, onNavigate }: { inDrawer?: boolean; onNavigate?: () => void }) {
   const { isMobile } = useUIMode();
   const pathname = usePathname();
   const searchParams = useSearchParams();
-  const routeKey = getSidebarRouteKey(pathname);
   const [stationDetailsOpen, setStationDetailsOpen] = useState(false);
-  const dashboardOrderView =
-    routeKey === 'dashboard' ? getDashboardOrderViewFromSearch(searchParams) : null;
-  const dashboardOpenOrderId =
-    routeKey === 'dashboard' ? parseDashboardOpenOrderId(searchParams.get('openOrderId')) : null;
   // Details panel is a fixed overlay (z-[100]) — never collapse the sidebar for it.
   const collapseDesktopSidebar = false;
   const [isMobileOpen, setIsMobileOpen] = useState(false);
   const [canShowMobileSidebar, setCanShowMobileSidebar] = useState(false);
-  // Dropdown state: when open, the sidebar shows the full list of pages; when
-  // closed, it shows the active page's context panel with the current tab
-  // pinned at the top as the dropdown trigger.
-  const [navOpen, setNavOpen] = useState(false);
-
-  const closeNav = useCallback(() => setNavOpen(false), []);
-  const openNav = useCallback(() => setNavOpen(true), []);
-  const toggleNav = useCallback(() => setNavOpen((open) => !open), []);
 
   useEffect(() => {
     const syncMobileSidebarAvailability = () => {
@@ -387,7 +289,6 @@ export default function DashboardSidebar({ inDrawer = false, onNavigate }: { inD
 
   useEffect(() => {
     if (!pathname) return;
-    setNavOpen(false);
     setIsMobileOpen(false);
     // Only close the details panel on actual route changes, not search param
     // updates (e.g. openOrderId changing during up/down navigation).
@@ -411,23 +312,6 @@ export default function DashboardSidebar({ inDrawer = false, onNavigate }: { inD
     };
   }, []);
 
-  const resolveHref = (item: SidebarNavItem) => {
-    if (item.id === 'tech') return '/tech';
-    if (item.id === 'packer') return '/packer';
-    return item.href;
-  };
-
-  const sidebarTitle = getSidebarTitle(pathname);
-  // On the dashboard the page icon already conveys the page; the header name is
-  // spent on the active order-view (Pending / Shipped / Awaiting) so the
-  // icon-only pills below have their selection spelled out up top.
-  const headerTitle =
-    routeKey === 'dashboard' && dashboardOrderView
-      ? DASHBOARD_ORDERS_SUBVIEW_LABELS[dashboardOrderView] ?? sidebarTitle
-      : routeKey === 'receiving'
-        ? RECEIVING_MODE_LABELS[getReceivingModeFromLocation(pathname, searchParams)] ?? sidebarTitle
-        : sidebarTitle;
-
   const { user: authUser, isLoaded: authLoaded } = useAuth();
   // Only apply permission filtering once auth has loaded AND the user is
   // signed in. Pre-sign-in (or while auth resolves) we render the full nav
@@ -437,132 +321,29 @@ export default function DashboardSidebar({ inDrawer = false, onNavigate }: { inD
     return new Set(authUser.permissions);
   }, [authLoaded, authUser]);
 
-  const visibleNavItems = getSidebarNavItems({
-    mobileRestricted: isMobile,
-    permissions: authPermissions,
-  });
-
-  // On mobile inside receiving/packing, collapse the nav to just Home (/m/home)
-  // plus the current station — the rest is noise while you're heads-down at a
-  // workstation, and the cockpit lives at /m/home anyway.
-  const isMobileStationLockdown =
-    isMobile && (routeKey === 'receiving' || routeKey === 'packer');
-
-  const groupedNav = isMobileStationLockdown
-    ? {
-        main: [
-          {
-            id: 'home',
-            label: 'Home',
-            href: '/m/home',
-            icon: LayoutDashboard,
-            kind: 'main' as const,
-          } satisfies SidebarNavItem,
-        ],
-        station: visibleNavItems.filter((item) => item.id === routeKey),
-        bottom: [] as SidebarNavItem[],
-      }
-    : {
-        main: visibleNavItems.filter((item) => item.kind === 'main'),
-        station: visibleNavItems.filter((item) => item.kind === 'station'),
-        bottom: visibleNavItems.filter((item) => item.kind === 'bottom'),
-      };
-
-  const currentNavItem = APP_SIDEBAR_NAV.find((item) => item.id === routeKey);
-  const CurrentIcon = currentNavItem?.icon ?? LayoutDashboard;
-
-  // The dropdown is forced open when there is no context to show: inside the
-  // mobile drawer (it's a pure menu) or on an unknown route.
-  const isOpen = navOpen || inDrawer || routeKey === 'unknown';
-  const handlePickFromNav = () => { closeNav(); onNavigate?.(); };
-
-  // P2 (master sidebar nav) — opt-in via `?masterNav=1`. When on, the legacy
-  // pinned-trigger + flat page list is replaced by the single master-nav
-  // dropdown (recents on top, current hidden, per-page mode rail). Default off,
-  // so current users are unaffected until this is verified in-browser and the
-  // default is flipped. See docs/design-system/master-sidebar-nav-migration-plan.md.
-  const masterNavEnabled = searchParams.get('masterNav') === '1';
-
-  const shell = masterNavEnabled ? (
-    <aside className="h-full w-full bg-white border-r border-gray-300 overflow-hidden shadow-xl shadow-gray-900/5 flex flex-col">
+  // The single master sidebar nav — one dropdown (recents on top, current page
+  // hidden, grouped Main / Stations / More) plus the per-page L2 mode rail. The
+  // MasterNavProvider tells the panels rendered in renderContext to hide their
+  // own mode pills (the rail is the single switcher).
+  // See docs/design-system/master-sidebar-nav-migration-plan.md.
+  const shell = (
+    <aside
+      className={`h-full w-full bg-white border-r border-gray-300 overflow-hidden shadow-xl shadow-gray-900/5 flex flex-col ${
+        // In the mobile drawer, inset the top so the header clears the notch /
+        // status bar (parity with the old drawer trigger).
+        inDrawer ? 'pt-[max(3.5rem,calc(env(safe-area-inset-top)+2.75rem))]' : ''
+      }`}
+    >
       <MasterNavProvider enabled>
         <MasterNav
           permissions={authPermissions}
           mobileRestricted={isMobile}
           railPageIds={MASTER_NAV_RAIL_PAGES}
-          renderContext={() => <SidebarContextPanel onBackToAppNav={openNav} />}
+          onNavigate={onNavigate}
+          renderContext={() => <SidebarContextPanel />}
           className="flex-1 min-h-0"
         />
       </MasterNavProvider>
-    </aside>
-  ) : (
-    <aside className="h-full w-full bg-white border-r border-gray-300 overflow-hidden shadow-xl shadow-gray-900/5 flex flex-col">
-      {/* Pinned trigger — the currently selected page stays at the top of the
-          sidebar and toggles the dropdown list of every other page. */}
-      <button
-        type="button"
-        onClick={toggleNav}
-        aria-expanded={isOpen}
-        aria-label={isOpen ? 'Close navigation menu' : 'Open navigation menu'}
-        className={`group w-full flex h-[40px] items-center gap-3 px-3 py-2 text-left border-b border-gray-300 transition-colors hover:bg-gray-50 ${
-          inDrawer ? 'h-auto pt-[max(3.5rem,calc(env(safe-area-inset-top)+2.75rem))] pb-2' : ''
-        }`}
-      >
-        <CurrentIcon className="h-5 w-5 shrink-0 text-blue-600" />
-        <span className="min-w-0 flex-1 truncate text-sm font-black uppercase tracking-wider text-gray-900">
-          {headerTitle}
-        </span>
-        <ChevronDown
-          className={`h-4 w-4 shrink-0 text-gray-400 transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`}
-        />
-      </button>
-
-      <div className="flex-1 overflow-hidden relative">
-        <AnimatePresence initial={false} mode="wait">
-          {isOpen ? (
-            <motion.div
-              key="navigation"
-              initial={{ opacity: 0, y: -6 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -6 }}
-              transition={{ duration: 0.15, ease: 'easeOut' }}
-              className="absolute inset-0 flex flex-col bg-white"
-            >
-              <div className="flex-1 overflow-y-auto px-3 pt-3 pb-3 space-y-5">
-                {groupedNav.main.length > 0 && (
-                  <div>
-                    <p className="px-1 pb-1.5 text-eyebrow font-black uppercase tracking-[0.25em] text-blue-600">Main</p>
-                    <NavSection items={groupedNav.main} pathname={pathname} resolveHref={resolveHref} onNavigate={handlePickFromNav} />
-                  </div>
-                )}
-                {groupedNav.station.length > 0 && (
-                  <div>
-                    <p className="px-1 pb-1.5 text-eyebrow font-black uppercase tracking-[0.25em] text-gray-500">Stations</p>
-                    <NavSection items={groupedNav.station} pathname={pathname} resolveHref={resolveHref} onNavigate={handlePickFromNav} />
-                  </div>
-                )}
-                {groupedNav.bottom.length > 0 && (
-                  <div>
-                    <p className="px-1 pb-1.5 text-eyebrow font-black uppercase tracking-[0.25em] text-gray-500">More</p>
-                    <NavSection items={groupedNav.bottom} pathname={pathname} resolveHref={resolveHref} onNavigate={handlePickFromNav} />
-                  </div>
-                )}
-              </div>
-            </motion.div>
-          ) : (
-            <motion.div
-              key="context"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              transition={{ duration: 0.12, ease: 'easeOut' }}
-              className="absolute inset-0 flex flex-col overflow-hidden bg-white"
-            >
-              <SidebarContextPanel onBackToAppNav={openNav} />
-            </motion.div>
-          )}
-        </AnimatePresence>
-      </div>
     </aside>
   );
 

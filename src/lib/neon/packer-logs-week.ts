@@ -110,7 +110,77 @@ export async function fetchPackerLogRows(
   const limitIdx = params.length - 1;
   const offsetIdx = params.length;
 
+  // Page-selection joins. Almost every filter touches only sal/pl, but a
+  // testedBy filter references the order-derived laterals — so pull those into
+  // the page query only when testedBy is active (keeps the common path minimal).
+  const pageFilterJoins = opts.testedBy != null && !Number.isNaN(opts.testedBy)
+    ? `
+        LEFT JOIN shipping_tracking_numbers stn ON stn.id = sal.shipment_id
+        LEFT JOIN LATERAL (
+            SELECT ord.id
+            FROM orders ord
+            LEFT JOIN order_shipment_links osl ON osl.order_row_id = ord.id
+            LEFT JOIN shipping_tracking_numbers ord_stn ON ord_stn.id = ord.shipment_id
+            WHERE (
+                sal.shipment_id IS NOT NULL
+                AND (
+                  osl.shipment_id = sal.shipment_id
+                  OR ord.shipment_id = sal.shipment_id
+                )
+            ) OR (
+                COALESCE(stn.tracking_number_raw, sal.scan_ref, '') <> ''
+                AND ord_stn.tracking_number_raw IS NOT NULL
+                AND ord_stn.tracking_number_raw != ''
+                AND RIGHT(regexp_replace(UPPER(ord_stn.tracking_number_raw), '[^A-Z0-9]', '', 'g'), 18) =
+                    RIGHT(regexp_replace(UPPER(COALESCE(stn.tracking_number_raw, sal.scan_ref, '')), '[^A-Z0-9]', '', 'g'), 18)
+            )
+            ORDER BY
+                CASE
+                  WHEN sal.shipment_id IS NOT NULL AND osl.shipment_id = sal.shipment_id THEN 0
+                  WHEN sal.shipment_id IS NOT NULL AND ord.shipment_id = sal.shipment_id THEN 1
+                  ELSE 2
+                END,
+                CASE WHEN COALESCE(osl.is_primary, false) THEN 0 ELSE 1 END,
+                ord.created_at DESC NULLS LAST,
+                ord.id DESC
+            LIMIT 1
+        ) order_match ON TRUE
+        LEFT JOIN orders o ON o.id = order_match.id
+        LEFT JOIN LATERAL (
+            SELECT assigned_tech_id
+            FROM work_assignments
+            WHERE entity_type = 'ORDER'
+              AND entity_id = o.id
+              AND work_type = 'TEST'
+              AND status IN ('ASSIGNED', 'IN_PROGRESS')
+            ORDER BY created_at DESC, id DESC
+            LIMIT 1
+        ) wa_t ON TRUE
+        LEFT JOIN LATERAL (
+            SELECT MIN(tsn.tested_by)::int AS tested_by
+            FROM tech_serial_numbers tsn
+            WHERE o.shipment_id IS NOT NULL
+              AND tsn.shipment_id = o.shipment_id
+        ) test_data ON TRUE`
+    : '';
+
+  // Resolve the page of station_activity_logs rows BEFORE the expensive per-row
+  // product-title / serial / order-match laterals run. Previously LIMIT was
+  // applied last, so Postgres evaluated every lateral for ALL PACK rows in
+  // history (thousands, unbounded growth) and only then kept 50 — ~20s/request.
+  // Selecting the page first caps the heavy work at `limit` rows (~350ms).
+  const pageCte = `
+    WITH page AS MATERIALIZED (
+        SELECT sal.id
+        FROM station_activity_logs sal
+        LEFT JOIN packer_logs pl ON pl.id = sal.packer_log_id${pageFilterJoins}
+        ${whereClause}
+        ORDER BY sal.created_at DESC NULLS LAST
+        LIMIT $${limitIdx} OFFSET $${offsetIdx}
+    )`;
+
   const query = `
+    ${pageCte}
     SELECT
         sal.id,
         sal.packer_log_id AS packer_log_id,
@@ -183,6 +253,7 @@ export async function fetchPackerLogRows(
         stn.exception_at::text                 AS exception_at,
         stn.is_terminal                        AS is_terminal
     FROM station_activity_logs sal
+    JOIN page ON page.id = sal.id
     LEFT JOIN packer_logs pl ON pl.id = sal.packer_log_id
     LEFT JOIN LATERAL (
         SELECT
@@ -441,9 +512,7 @@ export async function fetchPackerLogRows(
     ) test_data ON TRUE
     LEFT JOIN staff tested_staff ON tested_staff.id = test_data.tested_by
     LEFT JOIN staff tester_staff ON tester_staff.id = wa_t.assigned_tech_id
-    ${whereClause}
     ORDER BY sal.created_at DESC NULLS LAST
-    LIMIT $${limitIdx} OFFSET $${offsetIdx}
   `;
 
   const result = await queryWithRetry(

@@ -10,6 +10,8 @@ import { MobileTopBar } from '@/components/mobile/receiving/MobileTopBar';
 import { PhotoFab } from '@/components/mobile/receiving/PhotoFab';
 import { ReceivingPhotoStrip } from '@/components/sidebar/ReceivingPhotoStrip';
 import { useRealtimeInvalidation } from '@/hooks/useRealtimeInvalidation';
+import { workflowStatusTableLabel } from '@/components/station/receiving-constants';
+import { workflowStageBadge } from '@/lib/receiving/workflow-stages';
 
 interface PoItem {
   id: number;
@@ -48,15 +50,11 @@ interface DetailResponse {
   items: PoItem[];
 }
 
-const STATUS_TONE: Record<string, string> = {
-  EXPECTED: 'bg-slate-100 text-slate-600',
-  ARRIVED:  'bg-amber-100 text-amber-800',
-  MATCHED:  'bg-amber-100 text-amber-800',
-  UNBOXED:  'bg-amber-100 text-amber-800',
-  PASSED:   'bg-emerald-100 text-emerald-700',
-  DONE:     'bg-emerald-100 text-emerald-700',
-  RECEIVED: 'bg-emerald-100 text-emerald-700',
+// PO-header rollup status (not a per-line workflow stage). Item rows use the
+// shared workflowStageBadge registry instead.
+const HEADER_STATUS_TONE: Record<string, string> = {
   OPEN:     'bg-amber-100 text-amber-800',
+  RECEIVED: 'bg-emerald-100 text-emerald-700',
 };
 
 type Tab = 'items' | 'photos';
@@ -114,7 +112,7 @@ export default function MobilePoDetailPage(props: { params: Promise<{ poId: stri
               </p>
               <span
                 className={`inline-flex items-center rounded-full px-2 py-0.5 text-micro font-black uppercase tracking-wide ${
-                  STATUS_TONE[header.status] ?? 'bg-slate-100 text-slate-600'
+                  HEADER_STATUS_TONE[header.status] ?? 'bg-slate-100 text-slate-600'
                 }`}
               >
                 {header.status}
@@ -218,11 +216,9 @@ function ItemsList({ poId, items }: { poId: string; items: PoItem[] }) {
                   {it.quantity_received}/{it.quantity_expected ?? '?'}
                   {' · '}
                   <span
-                    className={`inline-flex items-center rounded px-1.5 py-0.5 text-eyebrow font-black uppercase tracking-wider ${
-                      STATUS_TONE[status] ?? 'bg-slate-100 text-slate-600'
-                    }`}
+                    className={`inline-flex items-center rounded px-1.5 py-0.5 text-eyebrow font-black uppercase tracking-wider ${workflowStageBadge(status)}`}
                   >
-                    {status}
+                    {workflowStatusTableLabel(status)}
                   </span>
                 </p>
               </div>

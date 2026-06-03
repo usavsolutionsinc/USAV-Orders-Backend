@@ -1,6 +1,7 @@
 'use client';
 
 import { ChevronDown, ChevronUp } from '@/components/Icons';
+import { SIDEBAR_GUTTER } from '@/components/layout/header-shell';
 import type { ReactNode } from 'react';
 
 export interface SidebarSection<TId extends string = string> {
@@ -59,7 +60,7 @@ export function SidebarSectionList<TId extends string = string>({
           return (
             <div
               key={`group:${item.group}:${idx}`}
-              className="border-b border-gray-100 bg-gray-50 px-4 py-1.5 text-micro font-semibold uppercase tracking-wide text-gray-500"
+              className={`border-b border-gray-100 bg-gray-50 ${SIDEBAR_GUTTER} py-1.5 text-micro font-semibold uppercase tracking-wide text-gray-500`}
             >
               {item.group}
             </div>
@@ -73,7 +74,7 @@ export function SidebarSectionList<TId extends string = string>({
             type="button"
             onClick={() => onSelect(s.id)}
             aria-current={isActive ? 'page' : undefined}
-            className={`group flex w-full items-start gap-3 border-b border-gray-100 px-4 py-3 text-left transition ${
+            className={`group flex w-full items-start gap-3 border-b border-gray-100 ${SIDEBAR_GUTTER} py-3 text-left transition ${
               isActive ? 'bg-blue-50 text-blue-700' : 'text-gray-900 hover:bg-gray-50'
             }`}
           >

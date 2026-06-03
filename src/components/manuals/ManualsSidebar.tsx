@@ -2,8 +2,8 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { sidebarHeaderBandClass, sidebarHeaderRowClass, SIDEBAR_GUTTER } from '@/components/layout/header-shell';
-import { SearchBar } from '@/components/ui/SearchBar';
+import { SIDEBAR_GUTTER } from '@/components/layout/header-shell';
+import { SidebarSearchBar } from '@/components/ui/SidebarSearchBar';
 import { FileText, ExternalLink } from '@/components/Icons';
 import { sectionLabel } from '@/design-system/tokens/typography/presets';
 
@@ -146,17 +146,14 @@ export function ManualsSidebar({ embedded = false }: { embedded?: boolean }) {
   return (
     <div className="h-full flex flex-col overflow-hidden">
       {!embedded && (
-        <div className={`${sidebarHeaderBandClass} ${sidebarHeaderRowClass}`}>
-          <SearchBar
-            value={localSearch}
-            onChange={handleSearchChange}
-            onClear={() => handleSearchChange('')}
-            placeholder="Search product name..."
-            variant="blue"
-            size="compact"
-            isSearching={isLoading}
-          />
-        </div>
+        <SidebarSearchBar
+          value={localSearch}
+          onChange={handleSearchChange}
+          onClear={() => handleSearchChange('')}
+          placeholder="Search product name..."
+          variant="blue"
+          isSearching={isLoading}
+        />
       )}
 
       <div className={`flex-1 overflow-y-auto ${SIDEBAR_GUTTER} py-2`}>

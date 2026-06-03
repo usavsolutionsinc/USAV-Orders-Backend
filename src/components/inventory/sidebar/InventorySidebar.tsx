@@ -21,9 +21,9 @@ import {
     type NavigateInventoryDetailsPayload,
 } from '@/lib/inventory-events-channel';
 import { microBadge } from '@/design-system/tokens/typography/presets';
-import { SearchBar } from '@/components/ui/SearchBar';
+import { SidebarSearchBar } from '@/components/ui/SidebarSearchBar';
 import { HorizontalButtonSlider, type HorizontalSliderItem } from '@/components/ui/HorizontalButtonSlider';
-import { sidebarHeaderRowClass, sidebarHeaderPillRowClass, SIDEBAR_GUTTER } from '@/components/layout/header-shell';
+import { sidebarHeaderPillRowClass, SIDEBAR_GUTTER } from '@/components/layout/header-shell';
 import {
     INVENTORY_SEARCH_FIELDS,
     getInventorySearchPlaceholder,
@@ -232,15 +232,13 @@ export function InventorySidebar({ embedded = true }: InventorySidebarProps) {
             className="h-full flex flex-col overflow-hidden"
         >
             {/* Row 2: search bar — always mounted above tabs */}
-            <div className={`${sidebarHeaderRowClass} shrink-0`}>
-                <SearchBar
+            <SidebarSearchBar
                     value={inputValue}
                     onChange={setInputValue}
                     placeholder={getInventorySearchPlaceholder(tab, field)}
                     isSearching={search.isFetching}
                     variant="blue"
                 />
-            </div>
 
             {/* Row 3: tab pills — ACTIVITY / BINS / SKUs / UNITS / … */}
             <div className={sidebarHeaderPillRowClass}>

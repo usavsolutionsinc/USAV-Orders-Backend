@@ -11,21 +11,17 @@ import {
 import { useMotionTransition } from '@/design-system/foundations/motion-framer-hooks';
 import {
   AlertTriangle,
-  Box,
   Check,
   Database,
-  Layout,
   Loader2,
   Plus,
   ShieldCheck,
-  Tool,
   X,
 } from '@/components/Icons';
 import { DashboardShippedSearchHandoffCard } from '@/components/dashboard/DashboardShippedSearchHandoffCard';
 import { RecentSearchesList } from '@/components/sidebar/RecentSearchesList';
-import { SearchBar } from '@/components/ui/SearchBar';
-import { sidebarHeaderPillRowClass, sidebarHeaderRowClass, SIDEBAR_GUTTER } from '@/components/layout/header-shell';
-import { HorizontalButtonSlider, type HorizontalSliderItem } from '@/components/ui/HorizontalButtonSlider';
+import { SidebarSearchBar } from '@/components/ui/SidebarSearchBar';
+import { SIDEBAR_GUTTER } from '@/components/layout/header-shell';
 import { ShippedIntakeForm, type ShippedFormData } from '@/components/shipped';
 import { sectionLabel, fieldLabel, microBadge } from '@/design-system/tokens/typography/presets';
 import { dispatchUsavRefreshData, invalidateDashboardOrderQueries } from '@/lib/dashboard-query-invalidation';
@@ -40,14 +36,6 @@ import type {
 } from '@/lib/orders-sync/types';
 import { streamNdjson } from '@/lib/orders-sync/client';
 
-type PendingStockFilter = 'all' | 'pending' | 'stock';
-
-const PENDING_STOCK_FILTER_ITEMS: HorizontalSliderItem[] = [
-  { id: 'all',     label: 'All',       icon: Layout },
-  { id: 'pending', label: 'Pick/Test', icon: Tool },
-  { id: 'stock',   label: 'Stock',     icon: Box },
-];
-
 interface DashboardManagementPanelProps {
   showIntakeForm?: boolean;
   onCloseForm?: () => void;
@@ -56,11 +44,6 @@ interface DashboardManagementPanelProps {
   searchValue?: string;
   onSearchChange?: (value: string) => void;
   onOpenShippedMatches?: (searchQuery: string) => void;
-  showPendingFilterControl?: boolean;
-  pendingFilterValue?: PendingStockFilter;
-  onPendingFilterChange?: (value: PendingStockFilter) => void;
-  /** Match dashboard order-view TabSwitch (high contrast for bright / glare-heavy screens). */
-  highContrastSliders?: boolean;
 }
 
 interface SearchHistory {
@@ -137,10 +120,6 @@ export function DashboardManagementPanel({
   searchValue = '',
   onSearchChange,
   onOpenShippedMatches,
-  showPendingFilterControl = false,
-  pendingFilterValue = 'all',
-  onPendingFilterChange,
-  highContrastSliders = false,
 }: DashboardManagementPanelProps) {
   const queryClient = useQueryClient();
   const router = useRouter();
@@ -525,8 +504,7 @@ export function DashboardManagementPanel({
             {filterControl}
           </motion.div>
         ) : null}
-        <div className={`${sidebarHeaderRowClass} shrink-0`}>
-          <SearchBar
+        <SidebarSearchBar
             value={searchQuery}
             onChange={handleInputChange}
             onClear={() => { setSearchQuery(''); handleSearch(''); }}
@@ -544,21 +522,7 @@ export function DashboardManagementPanel({
                 <Plus className="h-5 w-5" />
               </button>
             }
-          />
-        </div>
-        {showPendingFilterControl ? (
-          <div className={sidebarHeaderPillRowClass}>
-            <HorizontalButtonSlider
-              items={PENDING_STOCK_FILTER_ITEMS}
-              value={pendingFilterValue ?? 'all'}
-              onChange={(tab) => onPendingFilterChange?.(tab === 'stock' ? 'stock' : tab === 'pending' ? 'pending' : 'all')}
-              variant="nav"
-              dense
-              className="w-full"
-              aria-label="Pending stock filter"
-            />
-          </div>
-        ) : null}
+        />
         <div className={`h-full flex flex-col space-y-6 overflow-y-auto scrollbar-hide ${SIDEBAR_GUTTER} pb-6 pt-4`}>
           <div className="space-y-4">
             <motion.div variants={itemVariants} className="-mt-2">
@@ -580,25 +544,6 @@ export function DashboardManagementPanel({
                 }}
               />
             </motion.div>
-            <motion.div variants={itemVariants} className="-mt-1 text-left">
-              <p className={sectionLabel}>Click an order for more details</p>
-              <p className={`${fieldLabel} text-gray-500 mt-1`}>Orders are sorted by ship-by date</p>
-              <div className="flex flex-col gap-1 mt-1">
-                <div className="flex items-center gap-1.5">
-                  <span className="w-2 h-2 rounded-full bg-red-500 shrink-0" />
-                  <span className={`${fieldLabel} text-gray-500`}>Out of stock</span>
-                </div>
-                <div className="flex items-center gap-1.5">
-                  <span className="w-2 h-2 rounded-full bg-yellow-400 shrink-0" />
-                  <span className={`${fieldLabel} text-gray-500`}>Pending pick/test</span>
-                </div>
-                <div className="flex items-center gap-1.5">
-                  <span className="w-2 h-2 rounded-full bg-emerald-500 shrink-0" />
-                  <span className={`${fieldLabel} text-gray-500`}>Tested by tech</span>
-                </div>
-              </div>
-            </motion.div>
-
             <motion.div variants={itemVariants} className="space-y-4 px-4 pb-4 pt-0 bg-gray-50 rounded-2xl border border-gray-100">
               <div className="space-y-3">
                 {canImportOrders ? (

@@ -136,7 +136,7 @@ test('resolver matches existing panel derivations for known deep-links', () => {
   // Dashboard: bare presence params, shipped wins over pending if both present.
   assert.equal(resolveSidebarMode('dashboard', at('/dashboard', 'shipped=')), 'shipped');
   assert.equal(resolveSidebarMode('dashboard', at('/dashboard')), 'pending');
-  // Tech: view=testing flips the top mode.
+  // Tech: top-mode switch only — view=testing flips to Testing, else Shipping.
   assert.equal(resolveSidebarMode('tech', at('/tech', 'view=testing')), 'testing');
-  assert.equal(resolveSidebarMode('tech', at('/tech', 'staffId=7')), 'shipped');
+  assert.equal(resolveSidebarMode('tech', at('/tech', 'staffId=7')), 'shipping');
 });

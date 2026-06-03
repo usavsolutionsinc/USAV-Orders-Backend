@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   APP_SIDEBAR_NAV,
   getSidebarNavItems,
@@ -33,11 +33,14 @@ export function MasterNav({
   showModeRail = true,
   railPageIds,
   renderContext,
+  onNavigate,
   className,
 }: {
   permissions?: ReadonlySet<string>;
   mobileRestricted?: boolean;
   showModeRail?: boolean;
+  /** Fired after a page/mode pick (e.g. to close the mobile drawer). */
+  onNavigate?: () => void;
   /**
    * Restrict the L2 rail to these page ids (the pages whose panels have already
    * dropped their own pill-row). When omitted, the rail shows for every modeful
@@ -55,6 +58,11 @@ export function MasterNav({
 
   const [open, setOpen] = useState(false);
   const [expandedKey, setExpandedKey] = useState<string | null>(null);
+
+  const closeMenu = useCallback(() => {
+    setOpen(false);
+    setExpandedKey(null);
+  }, []);
 
   // Pin the page you land on so it's a recent next time you're elsewhere.
   useEffect(() => {
@@ -109,7 +117,9 @@ export function MasterNav({
         navigate(nextPageId, nextModeId);
         setOpen(false);
         setExpandedKey(null);
+        onNavigate?.();
       }}
+      onRequestClose={closeMenu}
       showModeRail={railOn}
       renderContext={renderContext}
       className={className}

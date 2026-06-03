@@ -3,9 +3,19 @@
 import { Suspense, useCallback, useEffect, useMemo, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
-import { workflowStatusTableLabel } from '@/components/station/receiving-constants';
+import {
+  workflowStatusTableLabel,
+  conditionGradeTableLabel,
+  conditionBadgeTone,
+  unitStatusBadgeTone,
+  getStatusDotBg,
+} from '@/components/station/receiving-constants';
+import { workflowStageBadge } from '@/lib/receiving/workflow-stages';
+import { getLast4 } from '@/components/ui/CopyChip';
+import { ReceivingIdentityChips } from '@/components/receiving/ReceivingIdentityChips';
 import { NetworkChip } from '@/components/mobile/NetworkChip';
 import { ReceivingQaActionSheet } from '@/components/mobile/receiving/ReceivingQaActionSheet';
+import { ScanAgainBar } from '@/components/mobile/receiving/ScanAgainBar';
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -86,29 +96,13 @@ interface FullCarton {
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
-const STATUS_TONE: Record<string, string> = {
-  EXPECTED: 'bg-slate-100 text-slate-600',
-  ARRIVED: 'bg-amber-100 text-amber-800',
-  MATCHED: 'bg-amber-100 text-amber-800',
-  UNBOXED: 'bg-amber-100 text-amber-800',
-  AWAITING_TEST: 'bg-blue-100 text-blue-700',
-  IN_TEST: 'bg-blue-100 text-blue-700',
-  PASSED: 'bg-emerald-100 text-emerald-700',
-  FAILED: 'bg-rose-100 text-rose-700',
-  RTV: 'bg-rose-100 text-rose-700',
-  SCRAP: 'bg-rose-100 text-rose-700',
-  DONE: 'bg-emerald-100 text-emerald-700',
-  RECEIVED: 'bg-emerald-100 text-emerald-700',
-};
-
 function StatusPill({ status }: { status: string | null }) {
-  const v = (status || 'EXPECTED').toUpperCase();
-  const tone = STATUS_TONE[v] || 'bg-slate-100 text-slate-600';
+  const v = status || 'EXPECTED';
   return (
     <span
-      className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-bold uppercase tracking-wide ${tone}`}
+      className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-bold uppercase tracking-wide ${workflowStageBadge(v)}`}
     >
-      {workflowStatusTableLabel(status || 'EXPECTED')}
+      {workflowStatusTableLabel(v)}
     </span>
   );
 }
@@ -221,6 +215,7 @@ function CartonPageInner() {
             ) : null}
           </div>
           <div className="flex flex-col items-end gap-1.5">
+            <ScanAgainBar />
             <NetworkChip compact />
             {carton ? (
               <span className="inline-flex items-center rounded-full bg-slate-900 px-2 py-0.5 text-xs font-bold uppercase tracking-wide text-white">
@@ -326,42 +321,50 @@ function CartonPageInner() {
                     key={line.id}
                     type="button"
                     onClick={() => router.push(`/m/l/${line.id}`)}
-                    className="block w-full text-left rounded-lg border border-slate-200 bg-white px-4 py-3 shadow-sm active:bg-slate-50"
+                    className="block w-full text-left rounded-lg border border-slate-200 bg-white px-4 py-2.5 shadow-sm active:bg-slate-50"
                   >
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="min-w-0 flex-1">
-                        <p className="font-mono text-sm font-black text-slate-900 truncate">
-                          {line.sku || `Line #${line.id}`}
-                        </p>
-                        {line.item_name && (
-                          <p className="mt-1 text-caption text-slate-500 line-clamp-2 leading-snug">
-                            {line.item_name}
-                          </p>
-                        )}
-                      </div>
-                      <StatusPill status={line.workflow_status} />
+                    {/* Slim identity row — status dot + product title. */}
+                    <div className="flex min-w-0 items-center gap-2">
+                      <span
+                        className={`h-2 w-2 shrink-0 rounded-full ${getStatusDotBg(line.workflow_status, received, expected)}`}
+                        title={workflowStatusTableLabel(line.workflow_status ?? 'EXPECTED')}
+                      />
+                      <p className="truncate text-sm font-bold text-slate-900">
+                        {line.item_name || line.sku || `Line #${line.id}`}
+                      </p>
                     </div>
-                    <div className="mt-2 flex items-center justify-between text-caption font-bold">
-                      <span className={isComplete ? 'text-emerald-600' : 'text-slate-700'}>
-                        {received}/{expected ?? '?'} received
-                      </span>
-                      {line.serials && line.serials.length > 0 && (
-                        <span className="text-slate-500">
-                          {line.serials.length} serial
-                          {line.serials.length === 1 ? '' : 's'}
+                    {/* Color-coded status / condition / qty. */}
+                    <div className="mt-1 flex flex-wrap items-center gap-1.5 pl-4">
+                      <StatusPill status={line.workflow_status} />
+                      {line.condition_grade && (
+                        <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-micro font-bold uppercase tracking-wide ${conditionBadgeTone(line.condition_grade)}`}>
+                          {conditionGradeTableLabel(line.condition_grade)}
                         </span>
                       )}
+                      <span className={`text-caption font-black uppercase tracking-widest ${isComplete ? 'text-emerald-600' : 'text-slate-600'}`}>
+                        {received}/{expected ?? '?'}
+                      </span>
                     </div>
+                    {/* Shared last-4 SKU chip (tap to copy). Serials render in
+                        their own status-colored row below. */}
+                    <ReceivingIdentityChips
+                      sku={line.sku}
+                      includePo={false}
+                      includeTracking={false}
+                      includeSerial={false}
+                      className="mt-2 flex flex-wrap items-center gap-1.5 pl-4"
+                    />
                     {line.serials && line.serials.length > 0 && (
-                      <div className="mt-2 flex flex-wrap gap-1">
+                      <div className="mt-2 flex flex-wrap gap-1 pl-4">
                         {line.serials.slice(0, 4).map((s) => (
                           <span
                             key={s.id}
-                            className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2 py-0.5 font-mono text-xs font-bold text-slate-700"
+                            title={s.serial_number}
+                            className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 font-mono text-micro font-bold ${unitStatusBadgeTone(s.current_status)}`}
                           >
-                            {s.serial_number}
+                            …{getLast4(s.serial_number)}
                             {s.current_location ? (
-                              <span className="text-slate-400">· {s.current_location}</span>
+                              <span className="opacity-60">· {s.current_location}</span>
                             ) : null}
                           </span>
                         ))}

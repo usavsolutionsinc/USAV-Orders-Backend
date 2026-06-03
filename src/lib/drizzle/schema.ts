@@ -736,6 +736,40 @@ export const itemAdjustments = pgTable('item_adjustments', {
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 });
 
+// Idempotency + audit ledger for the shipped-order → Zoho fulfillment sync.
+// See src/lib/migrations/2026-06-02_zoho_fulfillment_sync.sql and
+// src/lib/zoho/fulfillment-sync.ts. One row per internal order keyed by
+// reference_number (= orders.order_id). Records every Zoho artifact created so
+// the push sync stays idempotent and leaves a durable audit trail.
+export const zohoFulfillmentSync = pgTable('zoho_fulfillment_sync', {
+  id: bigserial('id', { mode: 'number' }).primaryKey(),
+  organizationId: uuid('organization_id'),
+  referenceNumber: text('reference_number').notNull().unique(),
+  channel: text('channel'),
+  zohoSalesorderId: text('zoho_salesorder_id'),
+  zohoPackageId: text('zoho_package_id'),
+  zohoShipmentId: text('zoho_shipment_id'),
+  zohoInvoiceId: text('zoho_invoice_id'),
+  invoiceStatus: text('invoice_status'),
+  stage: text('stage').notNull().default('pending'),
+  status: text('status').notNull().default('pending'),
+  delivered: boolean('delivered').notNull().default(false),
+  carrier: text('carrier'),
+  trackingNumber: text('tracking_number'),
+  sourceHash: text('source_hash'),
+  attempts: integer('attempts').notNull().default(0),
+  lastError: text('last_error'),
+  dryRun: boolean('dry_run').notNull().default(false),
+  raw: jsonb('raw').notNull().default({}),
+  syncedAt: timestamp('synced_at', { withTimezone: true }),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+}, (table) => ({
+  statusIdx: index('zfs_status_idx').on(table.status),
+  updatedAtIdx: index('zfs_updated_at_idx').on(table.updatedAt),
+  salesOrderIdx: index('zfs_salesorder_idx').on(table.zohoSalesorderId),
+}));
+
 export const syncCursors = pgTable('sync_cursors', {
   organizationId: orgIdCol(),
   resource: text('resource').primaryKey(),

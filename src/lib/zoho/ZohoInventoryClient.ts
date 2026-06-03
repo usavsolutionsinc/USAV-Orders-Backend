@@ -4,6 +4,7 @@ import type {
   CreateContactPayload,
   CreateInvoicePayload,
   CreatePackagePayload,
+  CreatePaymentPayload,
   CreateSalesOrderPayload,
   CreateShipmentOrderPayload,
   ZohoContact,
@@ -91,20 +92,54 @@ export class ZohoInventoryClient {
     return res.salesorders?.[0] ?? null;
   }
 
+  /** Full sales-order detail, including `line_items` (with `line_item_id`) and `customer_id`. */
+  async getSalesOrder(soId: string): Promise<ZohoSalesOrder> {
+    const res = await zohoGet<{ salesorder?: ZohoSalesOrder }>(
+      `/api/v1/salesorders/${encodeURIComponent(soId)}`
+    );
+    if (!res.salesorder) throw new Error(`Zoho sales order not found: ${soId}`);
+    return res.salesorder;
+  }
+
   async confirmSalesOrder(soId: string): Promise<void> {
     await zohoPost(`/api/v1/salesorders/${encodeURIComponent(soId)}/status/confirmed`, {});
   }
 
-  async createPackage(payload: CreatePackagePayload): Promise<ZohoPackage> {
-    const res = await zohoPost<{ package?: ZohoPackage }>('/api/v1/packages', payload);
-    if (!res.package) throw new Error('Zoho package create returned no package');
-    return res.package;
+  /** Existing packages for a sales order — used to avoid creating duplicates. */
+  async listPackagesForSalesOrder(soId: string): Promise<ZohoPackage[]> {
+    const res = await zohoGet<ZohoListResponse<ZohoPackage> & { packages?: ZohoPackage[] }>(
+      '/api/v1/packages',
+      { salesorder_id: soId }
+    );
+    return res.packages ?? [];
   }
 
-  async createShipmentOrder(payload: CreateShipmentOrderPayload): Promise<ZohoShipmentOrder> {
-    const res = await zohoPost<{ shipmentorder?: ZohoShipmentOrder }>('/api/v1/shipmentorders', payload);
-    if (!res.shipmentorder) throw new Error('Zoho shipment order create returned no shipmentorder');
-    return res.shipmentorder;
+  /** `salesorder_id` is a required query param for package create. */
+  async createPackage(salesOrderId: string, payload: CreatePackagePayload): Promise<ZohoPackage> {
+    const res = await zohoPost<{ package?: ZohoPackage | ZohoPackage[] }>(
+      '/api/v1/packages',
+      payload,
+      { salesorder_id: salesOrderId }
+    );
+    const pkg = Array.isArray(res.package) ? res.package[0] : res.package;
+    if (!pkg) throw new Error('Zoho package create returned no package');
+    return pkg;
+  }
+
+  /** `salesorder_id` + `package_ids` are required query params for shipment create. */
+  async createShipmentOrder(
+    salesOrderId: string,
+    packageIds: string[],
+    payload: CreateShipmentOrderPayload
+  ): Promise<ZohoShipmentOrder> {
+    const res = await zohoPost<{ shipment_order?: ZohoShipmentOrder; shipmentorder?: ZohoShipmentOrder }>(
+      '/api/v1/shipmentorders',
+      payload,
+      { salesorder_id: salesOrderId, package_ids: packageIds.join(',') }
+    );
+    const shipment = res.shipment_order ?? res.shipmentorder;
+    if (!shipment) throw new Error('Zoho shipment order create returned no shipmentorder');
+    return shipment;
   }
 
   async markShipmentDelivered(shipmentId: string): Promise<void> {
@@ -119,10 +154,32 @@ export class ZohoInventoryClient {
     return res.inventory_adjustment || res.item_adjustment || {};
   }
 
+  async findInvoiceByReference(referenceNumber: string): Promise<ZohoInvoice | null> {
+    const res = await zohoGet<ZohoListResponse<ZohoInvoice> & { invoices?: ZohoInvoice[] }>(
+      '/api/v1/invoices',
+      { reference_number: referenceNumber }
+    );
+    return res.invoices?.[0] ?? null;
+  }
+
   async createInvoice(payload: CreateInvoicePayload): Promise<ZohoInvoice> {
     const res = await zohoPost<{ invoice?: ZohoInvoice }>('/api/v1/invoices', payload);
     if (!res.invoice) throw new Error('Zoho invoice create returned no invoice');
     return res.invoice;
+  }
+
+  /** Move a draft invoice to `sent` (opens it as a receivable / accounting record). */
+  async markInvoiceSent(invoiceId: string): Promise<void> {
+    await zohoPost(`/api/v1/invoices/${encodeURIComponent(invoiceId)}/status/sent`, {});
+  }
+
+  /** Record a customer payment against one or more invoices (closes the receivable). */
+  async recordPayment(payload: CreatePaymentPayload): Promise<{ payment_id?: string }> {
+    const res = await zohoPost<{ payment?: { payment_id?: string } }>(
+      '/api/v1/customerpayments',
+      payload
+    );
+    return res.payment ?? {};
   }
 
   async deleteItem(itemId: string): Promise<void> {

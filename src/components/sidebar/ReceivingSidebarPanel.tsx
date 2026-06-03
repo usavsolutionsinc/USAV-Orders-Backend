@@ -33,7 +33,7 @@ import { useAblyChannel } from '@/hooks/useAblyChannel';
 import { useAblyClient } from '@/contexts/AblyContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { printProductLabel } from '@/lib/print/printProductLabel';
-import { LocalPickupIntakeForm } from '@/components/work-orders/LocalPickupIntakeForm';
+import { LocalPickupSidebarList } from '@/components/work-orders/LocalPickupSidebarList';
 import { UnfoundQueueSidebarToolbar } from '@/components/receiving/unfound/UnfoundQueueSidebarToolbar';
 import {
   type ReceivingLineRow,
@@ -1076,7 +1076,7 @@ export function ReceivingSidebarPanel() {
 
       {mode === 'pickup' ? (
         <div className="min-h-0 flex-1 overflow-hidden">
-          <LocalPickupIntakeForm variant="sidebar" staffId={staffId} />
+          <LocalPickupSidebarList />
         </div>
       ) : mode === 'unfound' ? (
         // Unfound queue lives in the right pane (UnfoundQueueTable). The

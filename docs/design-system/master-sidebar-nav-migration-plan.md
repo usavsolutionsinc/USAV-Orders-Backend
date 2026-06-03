@@ -192,32 +192,30 @@ tests still green. **Not** wired into `DashboardSidebar` yet — that's P2.
 *Acceptance met: dropdown switches page+mode against real config, light/dark,
 keyboard (native buttons), reduced-motion (via the segmented slider).*
 
-**P2 · Cut over the simple multi-mode pages. 🟡 IN PROGRESS (flagged) 2026-06-02.**
-Wired `MasterNav` into `DashboardSidebar` behind **`?masterNav=1`** (default off —
-zero change for current users until verified in-browser, then flip the default).
-When on, the legacy pinned-trigger + flat page list is replaced by the master nav.
-The menu is a true **dropdown overlay** anchored in the header band — it floats
-over the workspace body (`renderContext` = the existing `SidebarContextPanel`,
-rendered unchanged), it does NOT take the panel over. It stays within the panel's
-width/height, so the sidebar's `overflow-hidden` doesn't clip it. Permission +
-mobile filtering passed through.
-- The dropdown keeps **Recent pinned on top**, then groups the rest **Main /
-  Stations / More** off each page's `kind` (mirrors the legacy nav).
-- New `MasterNavContext` (`useMasterNavEnabled`) lets panels hide their OWN
-  pill-row so the L2 rail isn't doubled — gated, not deleted, so legacy stays
-  intact. `MasterNavView` renders header + overlay dropdown + rail + optional
-  context body (`showModeRail`/`renderContext`); `MasterNav` gained a
-  `railPageIds` allowlist.
-- Rail + pill-row suppression live for **inventory, warehouse, products,
-  walk-in/repair** (`MASTER_NAV_RAIL_PAGES`). **tech deferred** — its sub-switcher
-  is shared with the standalone `/tech` station (`StationTesting`), so it needs
-  care; dashboard/receiving/fba stay on their own switchers (P3). tsc + tests
-  green.
-- **Remaining for P2-final:** browser-verify the flagged flow (panel-mode menu,
-  rail nav, deep-links), migrate **tech**, then flip the default and DELETE the
-  gated pill-rows + legacy `navOpen`/`NavSection`/`getSidebarTitle`.
-*Acceptance (partial): flagged modes reachable from the dropdown + old `?param=`
-deep-links still resolve (round-trip tests). Full acceptance pending browser QA.*
+**P2 · Cut over the simple multi-mode pages. ✅ DONE (default on, legacy deleted) 2026-06-02.**
+`MasterNav` is now the sidebar nav in `DashboardSidebar` for everyone — the flag
+is gone, the legacy pinned-trigger + flat `NavSection` list + `getReceivingMode…`
+/ header-title machinery is deleted (`DashboardSidebar` 615 → 399 lines).
+- The menu is a true **dropdown overlay** anchored in the header band — it floats
+  over the workspace body (`renderContext` = the existing `SidebarContextPanel`,
+  rendered unchanged), NOT a panel takeover. It stays within the panel bounds, so
+  `overflow-hidden` doesn't clip it. **Recent pinned on top**, then **Main /
+  Stations / More** off each page's `kind` (mirrors the legacy nav). Permission +
+  mobile filtering + `onNavigate` (drawer-close) + inDrawer safe-area inset all
+  wired through.
+- **`MasterNavContext` (`useMasterNavEnabled`) is the permanent mechanism** (NOT
+  scaffolding): the migrated panels gate their OWN pill-row on it, so inside the
+  sidebar (provider enabled) the L2 rail is the single switcher, while the SAME
+  panels rendered **standalone** (e.g. `/walk-in` page, tech via `TechPageContent`)
+  still show their own pills. So the pill-rows are kept-but-gated, not deleted.
+- Rail live for **inventory, warehouse, products, walk-in/repair, tech**
+  (`MASTER_NAV_RAIL_PAGES`). Tech's config modes corrected to the real 2-way
+  switch **Shipping ↔ Testing**. dashboard/receiving/fba keep their own switchers
+  (P3 — not in `railPageIds`, panels not gated). Full project `tsc` = 0 errors,
+  lib tests green.
+- **Not browser-verified** (no browser this session) — the change is now live for
+  all users, so this needs a real-browser smoke test of the overlay menu, grouped
+  list, rail nav, mobile drawer, and deep-link parity.
 
 **P3 · Cut over the heavy stations.**
 **receiving** (pathname + `?mode=`, `/receiving/unfound`), **fba**

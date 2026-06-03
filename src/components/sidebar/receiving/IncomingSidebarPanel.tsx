@@ -1,30 +1,13 @@
 'use client';
 
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import type { DateRange } from 'react-day-picker';
-import { SearchBar } from '@/components/ui/SearchBar';
+import { SidebarSearchBar } from '@/components/ui/SidebarSearchBar';
 import { DateRangePickerField } from '@/design-system/components/DateRangePickerField';
-import { Package, Truck, AlertTriangle, Clock, ChevronDown, RefreshCw, Copy as CopyIcon } from '@/components/Icons';
+import { Package, Truck, AlertTriangle, Clock, ChevronDown, RefreshCw, Filter } from '@/components/Icons';
 import { toast } from '@/lib/toast';
-import { copyToClipboard } from '@/utils/_dom';
-
-/** Compact "delivered N ago" label for the needs-receiving list. */
-function deliveredAgo(iso: string | null): string {
-  if (!iso) return '—';
-  const ms = Date.now() - new Date(iso).getTime();
-  if (!Number.isFinite(ms) || ms < 0) return 'just now';
-  const days = Math.floor(ms / 86_400_000);
-  if (days >= 1) return `${days}d ago`;
-  const hrs = Math.floor(ms / 3_600_000);
-  return hrs >= 1 ? `${hrs}h ago` : 'recently';
-}
-
-function trackingLast4(raw: string): string {
-  const v = (raw || '').trim();
-  return v.length > 4 ? v.slice(-4) : v;
-}
 import { RECEIVING_HISTORY_URL_PARAMS } from '@/lib/receiving-history-search';
 import {
   INCOMING_SORT_LABELS,
@@ -49,17 +32,6 @@ export interface IncomingSummary {
   pending_carrier: number;
   awaiting_tracking: number;
   expected_today: number;
-}
-
-/** A delivered shipment the dock hasn't checked in (shipment-anchored, inbound-only). */
-interface DeliveredUnscanned {
-  shipment_id: number;
-  carrier: string;
-  tracking_number_raw: string;
-  tracking_number_normalized: string;
-  delivered_at: string | null;
-  source_system: string | null;
-  po_number: string | null;
 }
 
 interface TileSpec {
@@ -216,6 +188,32 @@ export function IncomingSidebarPanel() {
   const queryClient = useQueryClient();
   const [refreshing, setRefreshing] = useState(false);
 
+  // Single-filter popover (mirrors the dashboard's ShippedCarrierFilters):
+  // every refinement — the delivery-state facet, the PO date range, and the
+  // sort axis — lives behind one button below the search bar.
+  const [filtersOpen, setFiltersOpen] = useState(false);
+  const popoverRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!filtersOpen) return;
+    const onClick = (e: MouseEvent) => {
+      const target = e.target as HTMLElement;
+      if (popoverRef.current && !popoverRef.current.contains(target)) {
+        // Clicks inside a portaled Radix popper (the date calendar) aren't "outside".
+        if (target.closest?.('[data-radix-popper-content-wrapper]')) return;
+        setFiltersOpen(false);
+      }
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setFiltersOpen(false);
+    };
+    document.addEventListener('mousedown', onClick);
+    document.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('mousedown', onClick);
+      document.removeEventListener('keydown', onKey);
+    };
+  }, [filtersOpen]);
+
   // Re-poll carrier tracking for the incoming set, then refetch the tiles +
   // row list so just-delivered packages stop showing a stale transit status.
   const refreshTracking = useCallback(async () => {
@@ -245,12 +243,6 @@ export function IncomingSidebarPanel() {
       setRefreshing(false);
     }
   }, [refreshing, queryClient]);
-
-  const copyTracking = useCallback(async (value: string) => {
-    const ok = await copyToClipboard(value);
-    if (ok) toast.success('Tracking # copied');
-    else toast.error("Couldn't copy tracking #");
-  }, []);
 
   const search = searchParams.get(RECEIVING_HISTORY_URL_PARAMS.q)?.trim() ?? '';
   const stateRaw = (searchParams.get('state') || '').trim().toUpperCase();
@@ -375,26 +367,6 @@ export function IncomingSidebarPanel() {
       }
     : null;
 
-  // Shipment-anchored "delivered but not checked-in" list (inbound only). These
-  // have no PO line to render in the main table, so they live in their own
-  // sidebar section below the tiles. Refreshed by the Refresh-tracking button.
-  const { data: deliveredData } = useQuery<{
-    success: true;
-    count: number;
-    window_days: number;
-    items: DeliveredUnscanned[];
-  }>({
-    queryKey: ['incoming-delivered-unscanned'],
-    queryFn: async () => {
-      const res = await fetch('/api/receiving-lines/incoming/delivered-unscanned', { cache: 'no-store' });
-      if (!res.ok) throw new Error('delivered-unscanned fetch failed');
-      return res.json();
-    },
-    refetchInterval: 60_000,
-    staleTime: 30_000,
-  });
-  const deliveredItems = deliveredData?.items ?? [];
-
   const tiles = useMemo(
     () =>
       TILES.map((t) => {
@@ -424,49 +396,118 @@ export function IncomingSidebarPanel() {
     [summary, state, setState],
   );
 
+  // Filter button summary: the selected delivery-state facet + an active PO
+  // date range each count as one refinement (sort is an ordering, not a filter).
+  const activeTile = state ? TILES.find((t) => t.state === state) ?? null : null;
+  const activeFilterCount = (state ? 1 : 0) + (poFrom ? 1 : 0);
+
   return (
     <div className="flex h-full min-h-0 flex-col">
-      <div className="shrink-0 space-y-2 border-b border-gray-200 bg-white px-3 py-2">
-        <SearchBar
+      <div className="shrink-0 space-y-2 border-b border-gray-200 bg-white py-2">
+        <SidebarSearchBar
           value={search}
           onChange={setSearch}
           placeholder="Search PO #, tracking, SKU…"
         />
-        {/* PO purchase-date range filter. Maps to `zoho_po_mirror.po_date`
-            via `?po_from=` / `?po_to=` URL params; the list endpoint
-            narrows incoming rows server-side. */}
-        <DateRangePickerField
-          value={dateRange}
-          onChange={setDateRange}
-          placeholder="PO purchased between…"
-        />
-        {/* Sort axis — used to live in the right-pane header; moved here so
-            the right pane can host pagination without competing controls. */}
-        <div>
-          <label className="flex items-center justify-between gap-2 text-eyebrow font-black uppercase tracking-wider text-gray-500">
-            <span className="shrink-0">Sort</span>
-            <div className="relative flex-1">
-              <select
-                value={sort}
-                onChange={(e) => setSort(e.target.value as IncomingSort)}
-                className="h-8 w-full cursor-pointer appearance-none rounded-md border border-gray-200 bg-white pl-2 pr-7 text-caption font-semibold text-gray-900 hover:border-blue-300 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
-                aria-label="Sort incoming POs by"
-              >
-                {(Object.keys(INCOMING_SORT_LABELS) as IncomingSort[]).map((k) => (
-                  <option key={k} value={k}>
-                    {INCOMING_SORT_LABELS[k]}
-                  </option>
-                ))}
-              </select>
-              <ChevronDown className="pointer-events-none absolute right-1.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-gray-400" />
+
+        {/* Single filter entry point — the delivery-state facet, PO purchase
+            date range, and sort axis all condense into one popover below the
+            search bar (mirrors the dashboard's ShippedCarrierFilters). */}
+        <div className="relative px-1.5" ref={popoverRef}>
+          <button
+            type="button"
+            onClick={() => setFiltersOpen((o) => !o)}
+            aria-expanded={filtersOpen}
+            aria-haspopup="dialog"
+            className={`flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-label font-bold ring-1 ring-inset transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500/40 ${
+              activeFilterCount > 0
+                ? 'bg-blue-50 text-blue-700 ring-blue-200 hover:bg-blue-100'
+                : 'bg-white text-gray-700 ring-gray-200 hover:bg-gray-50'
+            }`}
+          >
+            <Filter className="h-4 w-4 shrink-0" />
+            <span className="flex-1 truncate text-left">
+              {activeTile ? activeTile.label : 'Filters'}
+            </span>
+            {activeFilterCount > 0 ? (
+              <span className="inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-blue-600 px-1.5 text-mini font-black text-white">
+                {activeFilterCount}
+              </span>
+            ) : null}
+            <ChevronDown className={`h-3.5 w-3.5 shrink-0 transition-transform ${filtersOpen ? 'rotate-180' : ''}`} />
+          </button>
+
+          {filtersOpen ? (
+            <div
+              role="dialog"
+              aria-label="Incoming filters"
+              className="absolute left-0 right-0 top-full z-[60] mt-1 max-h-[70vh] space-y-3 overflow-y-auto rounded-xl border border-gray-200 bg-white p-3 shadow-xl ring-1 ring-black/5"
+            >
+              {/* Delivery-state facet — the old vertical tile stack, now grouped. */}
+              <div>
+                <span className="mb-1 block text-eyebrow font-black uppercase tracking-wider text-gray-500">
+                  Status
+                </span>
+                <div className="space-y-1.5">{tiles}</div>
+              </div>
+
+              {/* PO purchase-date range — maps to `zoho_po_mirror.po_date` via
+                  `?po_from=` / `?po_to=`; the list endpoint narrows server-side. */}
+              <div>
+                <span className="mb-1 block text-eyebrow font-black uppercase tracking-wider text-gray-500">
+                  PO purchased between
+                </span>
+                <DateRangePickerField
+                  value={dateRange}
+                  onChange={setDateRange}
+                  placeholder="Any date"
+                />
+                <p className="mt-1 text-eyebrow font-medium text-gray-400">
+                  Date in header = when Zoho PO was created
+                </p>
+              </div>
+
+              {/* Sort axis — same `?sort=` URL contract the API + header read. */}
+              <label className="block">
+                <span className="mb-1 block text-eyebrow font-black uppercase tracking-wider text-gray-500">
+                  Sort
+                </span>
+                <div className="relative">
+                  <select
+                    value={sort}
+                    onChange={(e) => setSort(e.target.value as IncomingSort)}
+                    className="h-9 w-full cursor-pointer appearance-none rounded-md border border-gray-200 bg-white pl-2.5 pr-7 text-caption font-semibold text-gray-900 hover:border-blue-300 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+                    aria-label="Sort incoming POs by"
+                  >
+                    {(Object.keys(INCOMING_SORT_LABELS) as IncomingSort[]).map((k) => (
+                      <option key={k} value={k}>
+                        {INCOMING_SORT_LABELS[k]}
+                      </option>
+                    ))}
+                  </select>
+                  <ChevronDown className="pointer-events-none absolute right-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-gray-400" />
+                </div>
+              </label>
+
+              {activeFilterCount > 0 ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setState(null);
+                    setDateRange(undefined);
+                  }}
+                  className="w-full text-center text-xs font-bold text-gray-500 underline-offset-2 hover:text-gray-900 hover:underline"
+                >
+                  Clear filters
+                </button>
+              ) : null}
             </div>
-          </label>
-          <p className="mt-1 text-eyebrow font-medium text-gray-400">
-            Date in header = when Zoho PO was created
-          </p>
+          ) : null}
         </div>
+
         {/* Re-poll carrier tracking for incoming POs on demand — flips
             just-delivered packages so the counts below are dependable. */}
+        <div className="px-1.5">
         <button
           type="button"
           onClick={() => void refreshTracking()}
@@ -477,51 +518,12 @@ export function IncomingSidebarPanel() {
           <RefreshCw className={`h-3.5 w-3.5 ${refreshing ? 'animate-spin' : ''}`} />
           {refreshing ? 'Refreshing tracking…' : 'Refresh tracking'}
         </button>
+        </div>
       </div>
 
-      <div className="min-h-0 flex-1 overflow-y-auto px-3 py-3">
-        <div className="space-y-1.5">{tiles}</div>
-
-        {/* Shipment-anchored "delivered but not checked-in" list. These boxes
-            have no PO line to render in the main table, so they surface here.
-            Click a row to copy its tracking # for lookup at the station. */}
-        {deliveredItems.length > 0 ? (
-          <div className="mt-4 border-t border-gray-200 pt-3">
-            <p className="px-0.5 text-eyebrow font-black uppercase tracking-widest text-rose-600">
-              Delivered · needs receiving · {deliveredItems.length}
-            </p>
-            <p className="mt-0.5 px-0.5 text-[10px] font-medium leading-tight text-gray-400">
-              Carrier-confirmed delivery with no dock scan yet (last {deliveredData?.window_days ?? 30}d).
-            </p>
-            <ul className="mt-2 space-y-1">
-              {deliveredItems.map((it) => (
-                <li key={it.shipment_id}>
-                  <button
-                    type="button"
-                    onClick={() => void copyTracking(it.tracking_number_raw)}
-                    title={`Copy ${it.tracking_number_raw}`}
-                    className="flex w-full items-center gap-2 rounded-md border border-rose-100 bg-rose-50/40 px-2 py-1.5 text-left transition-colors hover:bg-rose-50"
-                  >
-                    <span className="shrink-0 rounded bg-white px-1 py-0.5 text-[8.5px] font-black uppercase tracking-wider text-gray-600 ring-1 ring-inset ring-gray-200">
-                      {it.carrier}
-                    </span>
-                    <span className="min-w-0 flex-1">
-                      <span className="block truncate font-mono text-caption font-bold text-gray-900">
-                        …{trackingLast4(it.tracking_number_raw)}
-                        {it.po_number ? <span className="text-gray-400"> · PO {it.po_number}</span> : null}
-                      </span>
-                      <span className="block text-[10px] font-semibold text-gray-400">
-                        delivered {deliveredAgo(it.delivered_at)}
-                      </span>
-                    </span>
-                    <CopyIcon className="h-3 w-3 shrink-0 text-gray-400" />
-                  </button>
-                </li>
-              ))}
-            </ul>
-          </div>
-        ) : null}
-      </div>
+      {/* The "Delivered · needs receiving" boxes now render in the main pane —
+          ReceivingLinesTable remaps them onto the standard ReceivingLineOrderRow
+          when the "Delivered · not scanned" facet is selected. */}
     </div>
   );
 }

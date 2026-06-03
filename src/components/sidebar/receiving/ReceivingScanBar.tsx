@@ -2,11 +2,7 @@
 
 import { useEffect, useRef } from 'react';
 import { Barcode, Search } from '@/components/Icons';
-import { SearchBar } from '@/components/ui/SearchBar';
-import {
-  sidebarHeaderBandClass,
-  sidebarHeaderRowClass,
-} from '@/components/layout/header-shell';
+import { SidebarSearchBar } from '@/components/ui/SidebarSearchBar';
 
 interface Props {
   /**
@@ -56,34 +52,27 @@ export function ReceivingScanBar({
   // pills row above already has a gray bottom border — adding a top border
   // here would stack on top of it and read as a doubled indigo+gray stripe.
   return (
-    <div
-      className={`${sidebarHeaderBandClass} ${sidebarHeaderRowClass} flex items-center gap-2 transition-colors ${
-        searchMode ? 'bg-indigo-50/30' : ''
-      }`}
-    >
-      <div className="flex-1 min-w-0">
-        <SearchBar
-          key={scanBarKey}
-          value={value}
-          onChange={onChange}
-          onSearch={onSubmit}
-          onClear={() => onChange('')}
-          inputRef={inputRef}
-          placeholder={searchMode ? 'Search tracking or PO #…' : 'Scan tracking…'}
-          variant={searchMode ? 'purple' : 'blue'}
-          size="compact"
-          isSearching={isSearching}
-          leadingIcon={
-            searchMode ? (
-              <Search className="w-[14px] h-[14px]" />
-            ) : (
-              <Barcode className="w-[14px] h-[14px]" />
-            )
-          }
-          className="w-full"
-          autoFocus
-        />
-      </div>
+    <div className={`transition-colors ${searchMode ? 'bg-indigo-50/30' : ''}`}>
+      <SidebarSearchBar
+        key={scanBarKey}
+        value={value}
+        onChange={onChange}
+        onSearch={onSubmit}
+        onClear={() => onChange('')}
+        inputRef={inputRef}
+        placeholder={searchMode ? 'Search tracking or PO #…' : 'Scan tracking…'}
+        variant={searchMode ? 'purple' : 'blue'}
+        isSearching={isSearching}
+        leadingIcon={
+          searchMode ? (
+            <Search className="w-[14px] h-[14px]" />
+          ) : (
+            <Barcode className="w-[14px] h-[14px]" />
+          )
+        }
+        className="w-full"
+        autoFocus
+      />
     </div>
   );
 }

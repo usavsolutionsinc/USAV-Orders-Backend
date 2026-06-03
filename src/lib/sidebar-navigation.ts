@@ -7,7 +7,9 @@ import {
   Check,
   ClipboardList,
   Clock,
+  DollarSign,
   FileText,
+  History,
   Inbox,
   Layers,
   LayoutDashboard,
@@ -315,8 +317,8 @@ export const SIDEBAR_PAGE_NAV: SidebarPageNav[] = [
       { id: 'receive',  label: 'Receiving',    icon: ClipboardList,  to: () => ({ pathname: RECEIVING, params: { mode: null } }) },
       { id: 'incoming', label: 'Incoming',     icon: Inbox,          to: () => ({ pathname: RECEIVING, params: { mode: 'incoming' } }) },
       { id: 'history',  label: 'History',      icon: List,           to: () => ({ pathname: RECEIVING, params: { mode: 'history' } }) },
-      { id: 'unfound',  label: 'Unfound',      icon: AlertTriangle,  to: () => ({ pathname: `${RECEIVING}/unfound`, params: { mode: null } }) },
       { id: 'pickup',   label: 'Local Pickup', icon: ShoppingCart,   to: () => ({ pathname: RECEIVING, params: { mode: 'pickup' } }) },
+      { id: 'unfound',  label: 'Unfound',      icon: AlertTriangle,  to: () => ({ pathname: `${RECEIVING}/unfound`, params: { mode: null } }) },
     ],
     resolveMode: ({ pathname, params }) => {
       if (pathname.startsWith(`${RECEIVING}/unfound`)) return 'unfound';
@@ -383,32 +385,38 @@ export const SIDEBAR_PAGE_NAV: SidebarPageNav[] = [
     },
   },
   // ── Testing ───────────────────────────────────────────────────────────────
-  // `?view=`: `testing` flips the top mode; pending/history are shipping
-  // sub-modes; default `shipped` (param cleared). Flattened per plan D3.
+  // Top-mode switch — Shipping / Testing / History (matches TECH_TOP_MODE_ITEMS).
+  // `?view=testing` → Testing; `?view=testing-history` → the tested-lines feed;
+  // everything else is Shipping (whose right pane is the shipping History feed).
   {
     id: 'tech', label: 'Testing', href: TECH, icon: Wrench, kind: 'station', requires: 'tech.view',
     modes: [
-      { id: 'shipped', label: 'Shipped', icon: Truck, to: () => ({ pathname: TECH, params: { view: null } }) },
-      { id: 'pending', label: 'Pending', icon: Clock, to: () => ({ pathname: TECH, params: { view: 'pending' } }) },
-      { id: 'history', label: 'History', icon: List,  to: () => ({ pathname: TECH, params: { view: 'history' } }) },
-      { id: 'testing', label: 'Testing', icon: Wrench, to: () => ({ pathname: TECH, params: { view: 'testing' } }) },
+      { id: 'shipping', label: 'Shipping', icon: Truck,       to: () => ({ pathname: TECH, params: { view: null } }) },
+      { id: 'testing',  label: 'Testing',  icon: ShieldCheck, to: () => ({ pathname: TECH, params: { view: 'testing' } }) },
+      { id: 'history',  label: 'History',  icon: History,     to: () => ({ pathname: TECH, params: { view: 'testing-history' } }) },
     ],
-    resolveMode: ({ params }) => {
-      const v = params.get('view');
-      return v === 'pending' || v === 'history' || v === 'testing' ? v : 'shipped';
-    },
+    resolveMode: ({ params }) =>
+      params.get('view') === 'testing'
+        ? 'testing'
+        : params.get('view') === 'testing-history'
+          ? 'history'
+          : 'shipping',
   },
-  // ── Walk-In (Repair queue tabs) ───────────────────────────────────────────
-  // `?tab=incoming|active|done`; default `active`. /repair routes onto this
+  // ── Walk-In (Repair queue tabs + Sales) ───────────────────────────────────
+  // `?tab=incoming|active|done` drives the repair-queue status (default `active`);
+  // `?mode=sales` flips the panel to the Sales surface. The status tabs clear
+  // `mode` so switching off Sales lands back in Repairs. /repair routes onto this
   // page key too (see getSidebarRouteKey).
   {
     id: 'walk-in', label: 'Walk-In', href: WALK_IN, icon: ShoppingCart, kind: 'main', requires: 'walk_in.view',
     modes: [
-      { id: 'incoming', label: 'Incoming', icon: Inbox,  to: () => ({ pathname: WALK_IN, params: { tab: 'incoming' } }) },
-      { id: 'active',   label: 'Active',   icon: Wrench, to: () => ({ pathname: WALK_IN, params: { tab: null } }) },
-      { id: 'done',     label: 'Done',     icon: Check,  to: () => ({ pathname: WALK_IN, params: { tab: 'done' } }) },
+      { id: 'incoming', label: 'Incoming', icon: Inbox,      to: () => ({ pathname: WALK_IN, params: { tab: 'incoming', mode: null } }) },
+      { id: 'active',   label: 'Active',   icon: Wrench,     to: () => ({ pathname: WALK_IN, params: { tab: null, mode: null } }) },
+      { id: 'done',     label: 'Done',     icon: Check,      to: () => ({ pathname: WALK_IN, params: { tab: 'done', mode: null } }) },
+      { id: 'sales',    label: 'Sales',    icon: DollarSign, to: () => ({ pathname: WALK_IN, params: { mode: 'sales', tab: null } }) },
     ],
     resolveMode: ({ params }) => {
+      if (params.get('mode') === 'sales') return 'sales';
       const t = params.get('tab');
       return t === 'incoming' || t === 'done' ? t : 'active';
     },

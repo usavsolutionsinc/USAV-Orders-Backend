@@ -71,18 +71,18 @@ export default function TechDashboard({ techId }: TechDashboardProps) {
 
     const rawView = searchParams.get('view');
     // Shipping mode's right pane is fixed to the History feed — the legacy
-    // `shipped`/`pending` sub-tabs were removed. Anything that isn't the
-    // receiving or testing surface falls through to History.
+    // `shipped`/`pending` sub-tabs were removed. `testing-history` is the
+    // tested-lines browse feed (promoted from a sub-tab to its own top mode).
+    // Anything else falls through to the shipping History feed.
     const rightViewMode = rawView === 'receiving'
         ? 'receiving'
         : rawView === 'testing'
             ? 'testing'
-            : 'history';
+            : rawView === 'testing-history'
+                ? 'testing-history'
+                : 'history';
     const router = useRouter();
-    // Testing sub-tab — Recent (workspace, default) vs History (browse + bulk
-    // select). The sidebar's Recent/History pills drive `?testingTab`.
-    const testingTab = searchParams.get('testingTab') === 'history' ? 'history' : 'recent';
-    const isTestingHistory = rightViewMode === 'testing' && testingTab === 'history';
+    const isTestingHistory = rightViewMode === 'testing-history';
 
     // ── Testing-history bulk selection ──────────────────────────────────────
     const [testingSelectMode, setTestingSelectMode] = useState(false);
@@ -104,9 +104,10 @@ export default function TechDashboard({ techId }: TechDashboardProps) {
     }, []);
 
     const openTestingLine = useCallback(() => {
-        // Clicking a history row opens it in the workspace → flip back to Recent.
+        // Clicking a history row opens it in the workspace → switch to the
+        // Testing mode (Recent workspace).
         const params = new URLSearchParams(searchParams.toString());
-        params.delete('testingTab');
+        params.set('view', 'testing');
         router.replace(`/tech?${params.toString()}`);
     }, [router, searchParams]);
 
@@ -333,19 +334,21 @@ export default function TechDashboard({ techId }: TechDashboardProps) {
     if (rightViewMode === 'receiving') {
         rightPane = <ReceivingInboundFeed onSelectLog={setSelectedLog} />;
     } else if (rightViewMode === 'testing') {
-        // Testing sub-page. Recent → the Pass/Test-Again verdict workspace;
-        // History → the browse + bulk-select feed of this tech's tested lines.
-        rightPane = isTestingHistory ? (
-            <TestingHistoryList
-                staffId={techId}
-                selectMode={testingSelectMode}
-                onOpenLine={openTestingLine}
-            />
-        ) : (
+        // Testing mode → the Pass/Test-Again verdict workspace.
+        rightPane = (
             <TechTestingWorkspace
                 staffId={techId}
                 selectedLineId={testingLineId}
                 onSelectedLineChange={setTestingLineId}
+            />
+        );
+    } else if (rightViewMode === 'testing-history') {
+        // History mode → the browse + bulk-select feed of this tech's tested lines.
+        rightPane = (
+            <TestingHistoryList
+                staffId={techId}
+                selectMode={testingSelectMode}
+                onOpenLine={openTestingLine}
             />
         );
     } else {

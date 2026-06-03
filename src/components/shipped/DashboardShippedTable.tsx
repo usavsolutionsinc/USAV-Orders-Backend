@@ -3,9 +3,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
-import { ChevronLeft, ChevronRight, Loader2 } from '@/components/Icons';
+import { Loader2 } from '@/components/Icons';
 import { MobileDateGroupHeader } from '@/components/mobile/MobileDateGroupHeader';
 import { DateGroupHeader } from '@/components/shipped/DateGroupHeader';
+import WeekHeader from '@/components/ui/WeekHeader';
 import { sectionLabel, fieldLabel } from '@/design-system/tokens/typography/presets';
 import type { DashboardSearchSectionProps } from '@/components/dashboard/DashboardSearchSectionProps';
 import { mainStickyHeaderClass, mainStickyHeaderRowClass } from '@/components/layout/header-shell';
@@ -150,20 +151,14 @@ export function DashboardShippedTable({
   const hasDateRange =
     /^\d{4}-\d{2}-\d{2}$/.test(dateFrom) && /^\d{4}-\d{2}-\d{2}$/.test(dateTo);
 
-  const anyRefinement =
-    exceptionsOnly || !!carrierFilter || !!statusFilter ||
-    effPackedBy != null || effTestedBy != null || hasDateRange;
+  // Browse by week (newest first), navigated with the WeekHeader. A carrier/
+  // status/exception filter — or an explicit date range — drops the week window
+  // so the full recent dataset is searchable, not just this week's slice.
+  const anyCarrierFilter = exceptionsOnly || !!carrierFilter || !!statusFilter;
+  const effectiveWeekStart = hasDateRange ? dateFrom : anyCarrierFilter ? '' : weekRange.startStr;
+  const effectiveWeekEnd   = hasDateRange ? dateTo   : anyCarrierFilter ? '' : weekRange.endStr;
 
-  // The shipped browse is paginated (50/page across all time, newest first)
-  // instead of week-by-week — so FBA and older orders aren't hidden behind a
-  // week window. A date-range filter scopes the set; pagination still applies.
-  const PAGE_SIZE = 50;
-  const page = Math.max(1, Number.parseInt(searchParams.get('shippedPage') || '1', 10) || 1);
-  const offset = (page - 1) * PAGE_SIZE;
-  const effectiveWeekStart = hasDateRange ? dateFrom : '';
-  const effectiveWeekEnd   = hasDateRange ? dateTo : '';
-
-  const queryKey = ['dashboard-table', 'shipped', { weekStart: effectiveWeekStart, weekEnd: effectiveWeekEnd, packedBy: effPackedBy, testedBy: effTestedBy, shippedFilter, page }] as const;
+  const queryKey = ['dashboard-table', 'shipped', { weekStart: effectiveWeekStart, weekEnd: effectiveWeekEnd, packedBy: effPackedBy, testedBy: effTestedBy, shippedFilter }] as const;
 
   const search = searchParams.get('search') || '';
   const normalizedSearch = search.trim().toLowerCase();
@@ -177,9 +172,6 @@ export function DashboardShippedTable({
         weekStart: effectiveWeekStart,
         weekEnd: effectiveWeekEnd,
         shippedFilter,
-        // Fetch one extra row to detect whether a next page exists.
-        limit: PAGE_SIZE + 1,
-        offset,
       }),
     // When a search is active, packer_logs is bypassed and we drive
     // from /api/shipped via the universal `useShippedSearch` hook — same TanStack
@@ -238,10 +230,10 @@ export function DashboardShippedTable({
     };
   }, []);
 
-  const setPageInUrl = (nextPage: number) => {
+  const setWeekOffsetInUrl = (nextOffset: number) => {
     const params = new URLSearchParams(searchParams.toString());
-    if (nextPage <= 1) params.delete('shippedPage');
-    else params.set('shippedPage', String(nextPage));
+    if (nextOffset <= 0) params.delete('shippedWeekOffset');
+    else params.set('shippedWeekOffset', String(nextOffset));
     const nextSearch = params.toString();
     const nextPath = pathname || '/dashboard';
     router.replace(nextSearch ? `${nextPath}?${nextSearch}` : nextPath, { scroll: false });
@@ -255,13 +247,7 @@ export function DashboardShippedTable({
     router.replace(nextSearch ? `${nextPath}?${nextSearch}` : nextPath, { scroll: false });
   };
 
-  // We fetch PAGE_SIZE+1 rows; the extra row only signals "has next page".
-  const pageData = useMemo(() => query.data || [], [query.data]);
-  const hasNextPage = pageData.length > PAGE_SIZE;
-  const rawRecords = useMemo(
-    () => (hasNextPage ? pageData.slice(0, PAGE_SIZE) : pageData),
-    [pageData, hasNextPage],
-  );
+  const rawRecords = useMemo(() => query.data || [], [query.data]);
 
   const toDetailRecord = useCallback((record: PackerRecord): ShippedOrder => ({
     id: record.order_row_id || record.id,
@@ -608,8 +594,8 @@ export function DashboardShippedTable({
                 </div>
               </div>
             </div>
-          ) : normalizedSearch ? (
-            // Search active — show a plain result count, no pagination.
+          ) : (normalizedSearch || anyCarrierFilter) ? (
+            // Search or carrier/status/exception filter active — plain count, no week nav.
             <div className={mainStickyHeaderClass}>
               <div className={mainStickyHeaderRowClass}>
                 <p className={`${sectionLabel} text-gray-700`}>
@@ -621,43 +607,15 @@ export function DashboardShippedTable({
               </div>
             </div>
           ) : (
-            // Browse — 50/page pagination (newest first, across all time).
-            <div className={mainStickyHeaderClass}>
-              <div className={`${mainStickyHeaderRowClass} justify-between`}>
-                <p className={`${sectionLabel} text-gray-700 tabular-nums`}>
-                  {totalCount === 0
-                    ? 'No results'
-                    : `${offset + 1}–${offset + totalCount}`}
-                  {anyRefinement ? ' · filtered' : ''}
-                </p>
-                <div className="flex items-center gap-1">
-                  {(query.isFetching && !query.isLoading) ? (
-                    <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin text-blue-500" />
-                  ) : null}
-                  <button
-                    type="button"
-                    onClick={() => setPageInUrl(page - 1)}
-                    disabled={page <= 1}
-                    aria-label="Previous page"
-                    className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-gray-200 bg-white text-gray-600 transition-colors hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-40"
-                  >
-                    <ChevronLeft className="h-4 w-4" />
-                  </button>
-                  <span className="px-1 text-caption font-bold tabular-nums text-gray-600">
-                    Page {page}
-                  </span>
-                  <button
-                    type="button"
-                    onClick={() => setPageInUrl(page + 1)}
-                    disabled={!hasNextPage}
-                    aria-label="Next page"
-                    className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-gray-200 bg-white text-gray-600 transition-colors hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-40"
-                  >
-                    <ChevronRight className="h-4 w-4" />
-                  </button>
-                </div>
-              </div>
-            </div>
+            <WeekHeader
+              stickyDate={stickyDate}
+              fallbackDate={fallbackDate}
+              count={currentCount || totalCount}
+              weekRange={weekRange}
+              weekOffset={weekOffset}
+              onPrevWeek={() => setWeekOffsetInUrl(weekOffset + 1)}
+              onNextWeek={() => setWeekOffsetInUrl(Math.max(0, weekOffset - 1))}
+            />
           )}
 
           <div ref={scrollRef} className="flex-1 min-h-0 overflow-x-auto overflow-y-auto no-scrollbar w-full">

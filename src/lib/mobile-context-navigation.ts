@@ -42,8 +42,8 @@ const DASHBOARD_VIEW_OPTIONS: MobileContextOption[] = [
 const RECEIVING_MODE_OPTIONS: MobileContextOption[] = [
   { id: 'receive', label: 'Receiving' },
   { id: 'history', label: 'History' },
-  { id: 'unfound', label: 'Unfound' },
   { id: 'pickup', label: 'Local Pick Up' },
+  { id: 'unfound', label: 'Unfound' },
 ];
 
 const WALK_IN_MODE_OPTIONS: MobileContextOption[] = [

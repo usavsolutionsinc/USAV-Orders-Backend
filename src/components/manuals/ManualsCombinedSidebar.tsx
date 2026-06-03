@@ -3,8 +3,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { HorizontalButtonSlider, type HorizontalSliderItem } from '@/components/ui/HorizontalButtonSlider';
-import { sidebarHeaderBandClass, sidebarHeaderRowClass, SIDEBAR_GUTTER } from '@/components/layout/header-shell';
-import { SearchBar } from '@/components/ui/SearchBar';
+import { SIDEBAR_GUTTER } from '@/components/layout/header-shell';
+import { SidebarSearchBar } from '@/components/ui/SidebarSearchBar';
 import { ManualsSidebar } from '@/components/manuals/ManualsSidebar';
 import { SkuPairingMovedCard } from '@/components/manuals/SkuPairingMovedCard';
 
@@ -32,14 +32,12 @@ export function ManualsCombinedSidebar() {
 
   return (
     <div className="flex h-full flex-col overflow-hidden bg-white">
-      {/* Search bar (shared) */}
-      <div className={`${sidebarHeaderBandClass} ${sidebarHeaderRowClass}`}>
-        {viewMode === 'manuals' ? (
-          <ManualsSearchBar />
-        ) : (
-          <SkuPairingSearchBar />
-        )}
-      </div>
+      {/* Search bar (shared) — each sub-bar supplies its own SidebarSearchBar band */}
+      {viewMode === 'manuals' ? (
+        <ManualsSearchBar />
+      ) : (
+        <SkuPairingSearchBar />
+      )}
 
       {/* Slider below search */}
       <div className={`shrink-0 border-b border-gray-200 bg-white ${SIDEBAR_GUTTER} py-1.5`}>
@@ -84,13 +82,12 @@ function ManualsSearchBar() {
   };
 
   return (
-    <SearchBar
+    <SidebarSearchBar
       value={localSearch}
       onChange={handleChange}
       onClear={() => handleChange('')}
       placeholder="Search manuals..."
       variant="blue"
-      size="compact"
     />
   );
 }
@@ -104,13 +101,12 @@ function SkuPairingSearchBar() {
   };
 
   return (
-    <SearchBar
+    <SidebarSearchBar
       value={value}
       onChange={handleChange}
       onClear={() => handleChange('')}
       placeholder="Search unpaired items..."
       variant="blue"
-      size="compact"
     />
   );
 }

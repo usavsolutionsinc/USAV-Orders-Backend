@@ -426,6 +426,35 @@ export async function publishPackerScanReady(payload: PackerScanReadyPayload) {
   });
 }
 
+// ─── Phone → desktop scan-history feed ────────────────────────────────────
+// Fired when a phone scans a receiving Data Matrix label (R-/L-/U-) on
+// /m/scan. The signed-in staff's desktop (subscribed to scanlog:{staffId})
+// refetches its phone-history popover so the scan shows up live. This channel
+// is READ-ONLY history — it NEVER writes receiving_* and is strictly disjoint
+// from the receiving-station `phone:{staffId}` bridge.
+
+export interface ScanLoggedPayload {
+  staffId: number;
+  rawValue: string;
+  kind: string;
+  /** Mobile route the scan resolved to, e.g. /m/r/123, /m/l/45, /m/u/7. */
+  routedTo: string;
+}
+
+export async function publishScanLog(payload: ScanLoggedPayload) {
+  const staffId = Number(payload.staffId);
+  if (!Number.isFinite(staffId) || staffId <= 0) return;
+
+  await publishEvent(`scanlog:${staffId}`, 'scan_logged', {
+    type: 'scan.logged',
+    staffId,
+    rawValue: payload.rawValue,
+    kind: payload.kind,
+    routedTo: payload.routedTo,
+    timestamp: formatPSTTimestamp(),
+  });
+}
+
 export async function publishReceivingLogChanged(payload: ReceivingLogChangedPayload) {
   await publishEvent(getStationChannelName(), 'receiving-log.changed', {
     type: 'receiving-log.changed',

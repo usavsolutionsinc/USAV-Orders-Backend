@@ -2,8 +2,8 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { sidebarHeaderBandClass, sidebarHeaderPillRowClass, sidebarHeaderRowClass, SIDEBAR_GUTTER } from '@/components/layout/header-shell';
-import { SearchBar } from '@/components/ui/SearchBar';
+import { sidebarHeaderBandClass, sidebarHeaderPillRowClass, SIDEBAR_GUTTER } from '@/components/layout/header-shell';
+import { SidebarSearchBar } from '@/components/ui/SidebarSearchBar';
 import { HorizontalButtonSlider, type HorizontalSliderItem } from '@/components/ui/HorizontalButtonSlider';
 import { useMasterNavEnabled } from '@/components/sidebar/master-nav';
 import { BARCODE_MODES, type BarcodeMode } from '@/components/barcode/ModeSelector';
@@ -186,8 +186,7 @@ export function ProductsSidebarPanel() {
       )}
 
       {/* Search bar — always mounted so it stays in position across all sub-views */}
-      <div className={sidebarHeaderRowClass}>
-        <SearchBar
+      <SidebarSearchBar
           value={searchInput}
           onChange={isHistory ? setSearchInput : handleSearchChange}
           onSearch={
@@ -216,9 +215,7 @@ export function ProductsSidebarPanel() {
                     : 'Search products…'
           }
           variant={isLabels ? 'blue' : 'gray'}
-          size="compact"
         />
-      </div>
 
       {/* Labels sub-tab row — Print / Recent / History. */}
       {isLabels && (

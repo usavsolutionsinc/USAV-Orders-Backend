@@ -10,10 +10,8 @@ import { useUIMode } from '@/design-system/providers/UIModeProvider';
 import { useBodyScrollLock } from '@/design-system/hooks';
 import { X } from '@/components/Icons';
 import { isMobileAllowedPath } from '@/lib/sidebar-navigation';
-import { QuickAccessFab } from '@/components/layout/QuickAccessFab';
 import { GlobalHeader } from '@/components/layout/GlobalHeader';
 import { GlobalDesktopSkuScanner } from '@/components/layout/GlobalDesktopSkuScanner';
-import { MobileScanFab } from '@/components/mobile/shared/MobileScanFab';
 import { usePhoneScanBridge } from '@/hooks/usePhoneScanBridge';
 import { useGlobalWedgeScanner } from '@/hooks/useGlobalWedgeScanner';
 import { OfflineBanner } from '@/components/layout/OfflineBanner';
@@ -113,24 +111,6 @@ export function ResponsiveLayout({ children }: ResponsiveLayoutProps) {
     }
     setEdgeArming(false);
   }, []);
-
-  // Pages that ship their own mobile header + quick-access trigger. We must
-  // suppress the global `MobileAppHeader` and `QuickAccessFab` on these so the
-  // operator doesn't see two stacked top bars and two FABs.
-  //
-  // Note: phone UAs that hit `/receiving` get edge-rewritten to `/m/receiving`,
-  // but the browser URL stays `/receiving` — so `usePathname()` reports
-  // `/receiving` on first land. The `isMobile`-gated arms below catch those
-  // pre-rewrite URLs.
-  const isMobileReceivingPage =
-    (pathname?.startsWith('/m/receiving') ?? false) ||
-    (isMobile && (pathname === '/receiving' || pathname === '/receiving/'));
-  const isMobilePackerPage =
-    isMobile && (pathname === '/packer' || pathname === '/packer/');
-  const hideFabPage = isMobileReceivingPage || isMobilePackerPage;
-  /** Quick access is embedded in {@link MobileAppHeader} on the mobile hub. */
-  const isMobileCockpitHub =
-    pathname === '/m/home' || pathname === '/m/home/';
 
   useEffect(() => {
     setMounted(true);
@@ -288,13 +268,11 @@ export function ResponsiveLayout({ children }: ResponsiveLayoutProps) {
     return <div className="flex h-full w-full bg-white" aria-hidden="true" />;
   }
 
-  // ── Mobile layout: bottom nav + FAB only ──
+  // ── Mobile layout: content only ──
   //
-  // The drawer sidebar and top app header were removed in 2026-05-25 — mobile
-  // is now intentionally chrome-light. Navigation lives in the bottom nav
-  // (rendered by /m/layout.tsx, admin-gated per staff via mobileDisplayConfig)
-  // plus the QuickAccess FAB. Stations are reached via the cockpit at /m/home
-  // which surfaces recently-scanned items.
+  // Chrome-light: bottom nav lives in /m/layout.tsx (admin-gated). No global
+  // overlay FABs — scan is the centre tab; quick access lives in page headers
+  // where a route ships its own mobile chrome.
   return (
     <div className="flex flex-col h-full w-full overflow-hidden">
       {/* Mirror of desktop: subscribe to phone:{staffId} so any device the
@@ -306,18 +284,9 @@ export function ResponsiveLayout({ children }: ResponsiveLayoutProps) {
       <GlobalWedgeScannerMount />
       <OfflineBanner />
 
-      {/* Main content — full width */}
       <main className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
         {children}
       </main>
-
-      {/* Global FAB — hide on specific pages where it conflicts with custom UI */}
-      {!hideFabPage && !isMobileCockpitHub && <QuickAccessFab />}
-
-      {/* Scan FAB — mobile entry into the scanner from any non-/m/* surface.
-          Self-hides on /m/* (own nav bar with raised scan button) and on
-          /packer / /receiving (single-purpose camera flows). */}
-      {!hideFabPage && <MobileScanFab />}
     </div>
   );
 }

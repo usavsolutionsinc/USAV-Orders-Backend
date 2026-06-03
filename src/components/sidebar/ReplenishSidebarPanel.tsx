@@ -2,8 +2,8 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { sidebarHeaderBandClass, sidebarHeaderPillRowClass, sidebarHeaderRowClass, SIDEBAR_GUTTER } from '@/components/layout/header-shell';
-import { SearchBar } from '@/components/ui/SearchBar';
+import { sidebarHeaderPillRowClass, SIDEBAR_GUTTER } from '@/components/layout/header-shell';
+import { SidebarSearchBar } from '@/components/ui/SidebarSearchBar';
 import { HorizontalButtonSlider, type HorizontalSliderItem } from '@/components/ui/HorizontalButtonSlider';
 import { sectionLabel, fieldLabel } from '@/design-system/tokens/typography/presets';
 import { AlertTriangle, Loader2, RefreshCw } from '@/components/Icons';
@@ -167,16 +167,14 @@ export function ReplenishSidebarPanel() {
       </div>
 
       {/* Search */}
-      <div className={`${sidebarHeaderRowClass} border-b border-gray-300`}>
-        <SearchBar
-          value={localSearch}
-          onChange={setLocalSearch}
-          onClear={() => setLocalSearch('')}
-          placeholder="Search SKU or item name…"
-          variant="emerald"
-          className="w-full"
-        />
-      </div>
+      <SidebarSearchBar
+        value={localSearch}
+        onChange={setLocalSearch}
+        onClear={() => setLocalSearch('')}
+        placeholder="Search SKU or item name…"
+        variant="emerald"
+        className="w-full"
+      />
 
       {/* Scrollable content */}
       <div className={`min-h-0 flex-1 overflow-y-auto ${SIDEBAR_GUTTER} py-3`}>

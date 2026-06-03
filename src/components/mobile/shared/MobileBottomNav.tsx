@@ -96,12 +96,16 @@ function MobileBottomNavInner({ tabs }: { tabs: ReadonlyArray<MobileNavTabId> })
     router.replace('/signin');
   }, [signOut, router]);
 
-  // Scan owns the centre slot regardless of order; everything else fills
-  // around it. Five-column grid: [left] [left] [scan] [right] [right].
+  // Scan owns the centre slot regardless of order. Five-column grid:
+  // [left] [left] [scan] [other] [signout]. Sign out is always the
+  // rightmost cell when present; other tabs fill left first, then one
+  // slot immediately right of scan.
   const nonScan = tabs.filter((t) => t !== 'scan');
   const showScan = tabs.includes('scan');
-  const leftTabs = nonScan.slice(0, Math.min(2, Math.ceil(nonScan.length / 2)));
-  const rightTabs = nonScan.slice(leftTabs.length, leftTabs.length + 2);
+  const hasSignout = nonScan.includes('signout');
+  const others = nonScan.filter((t) => t !== 'signout');
+  const leftTabs = others.slice(0, 2);
+  const rightTabBeforeSignout = others[2];
 
   const renderTab = (id: MobileNavTabId, key: string) => {
     switch (id) {
@@ -147,11 +151,14 @@ function MobileBottomNavInner({ tabs }: { tabs: ReadonlyArray<MobileNavTabId> })
     const id = leftTabs[i];
     leftCells.push(id ? renderTab(id, `l-${i}`) : <span key={`ls-${i}`} aria-hidden />);
   }
-  const rightCells: React.ReactNode[] = [];
-  for (let i = 0; i < 2; i++) {
-    const id = rightTabs[i];
-    rightCells.push(id ? renderTab(id, `r-${i}`) : <span key={`rs-${i}`} aria-hidden />);
-  }
+  const rightCells: React.ReactNode[] = [
+    rightTabBeforeSignout
+      ? renderTab(rightTabBeforeSignout, 'r-0')
+      : <span key="rs-0" aria-hidden />,
+    hasSignout
+      ? renderTab('signout', 'r-1')
+      : <span key="rs-1" aria-hidden />,
+  ];
 
   return (
     <nav
@@ -164,7 +171,7 @@ function MobileBottomNavInner({ tabs }: { tabs: ReadonlyArray<MobileNavTabId> })
 
         {/* Raised centre — Scan */}
         {showScan ? (
-          <div className="relative flex items-end justify-center">
+          <div className="flex items-end justify-center">
             <button
               type="button"
               onClick={() => {
@@ -192,13 +199,6 @@ function MobileBottomNavInner({ tabs }: { tabs: ReadonlyArray<MobileNavTabId> })
             >
               <Barcode className="h-7 w-7" />
             </button>
-            <span
-              className={`absolute -bottom-0.5 text-eyebrow font-black uppercase tracking-[0.14em] leading-none ${
-                isActive('/m/scan') ? 'text-blue-600' : 'text-gray-500'
-              }`}
-            >
-              Scan
-            </span>
           </div>
         ) : (
           <span aria-hidden />

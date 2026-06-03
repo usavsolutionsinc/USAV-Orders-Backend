@@ -6,6 +6,7 @@ import { motion, LayoutGroup } from 'framer-motion';
 import { ChevronDown } from '@/components/Icons';
 import { SerialChip, SkuScanRefChip, getLast4 } from '@/components/ui/CopyChip';
 import { SerialChipWithMenu } from '@/components/receiving/workspace/SerialCard';
+import { setSerialEditHandoff } from '@/components/receiving/workspace/serialEditHandoff';
 import { conditionGradeTableLabel } from '@/components/station/receiving-constants';
 import {
   dispatchSelectLine,
@@ -23,8 +24,19 @@ type ActiveRowSerial = { id?: number; serial_number: string; condition_grade?: s
 
 export interface PoLineSerialActions {
   editingSerialId?: number | null;
-  onEdit?: (serial: ActiveRowSerial) => void;
-  onDelete?: (serial: ActiveRowSerial) => void;
+  /**
+   * Edit a serial. `lineId` is the row the chip belongs to — NOT necessarily
+   * the active row, since the menu is offered on every row. For a non-active
+   * row the accordion activates that line first (so its scan input mounts);
+   * the parent then targets the serial for in-place editing on that line.
+   */
+  onEdit?: (serial: ActiveRowSerial, lineId: number) => void;
+  /**
+   * Delete a serial from its own `lineId`. The scan-serial DELETE endpoint
+   * only removes a unit that still points at the given line, so the parent
+   * MUST route the delete to `lineId` (not the active row).
+   */
+  onDelete?: (serial: ActiveRowSerial, lineId: number) => void;
 }
 
 interface ActiveRowSlotContext {
@@ -241,14 +253,37 @@ export function PoLinesAccordion({
                             condition_grade:
                               (s as { condition_grade?: string | null }).condition_grade ?? null,
                           };
-                          if (isActive && activeSerialActions?.onEdit) {
+                          // Offer the Edit/Delete menu on EVERY row, not just
+                          // the active one. Editing a chip on a collapsed row
+                          // activates that line first (dispatchSelectLine) so
+                          // its scan input mounts; delete is routed to the
+                          // chip's own line id by the parent.
+                          if (activeSerialActions?.onEdit || activeSerialActions?.onDelete) {
+                            const { onEdit, onDelete } = activeSerialActions;
                             return (
                               <SerialChipWithMenu
                                 key={`${sn}-${i}`}
                                 serial={serialRecord}
-                                isEditing={activeSerialActions.editingSerialId === s.id}
-                                onEdit={activeSerialActions.onEdit}
-                                onDelete={activeSerialActions.onDelete}
+                                isEditing={isActive && activeSerialActions.editingSerialId === s.id}
+                                onEdit={
+                                  onEdit
+                                    ? (target) => {
+                                        if (isActive) {
+                                          onEdit(target, line.id);
+                                        } else {
+                                          // Non-active row: the workspace may
+                                          // remount on the line switch, so stash
+                                          // the target in a module store the new
+                                          // workspace consumes for this line.
+                                          setSerialEditHandoff(line.id, target);
+                                          dispatchSelectLine(line);
+                                        }
+                                      }
+                                    : undefined
+                                }
+                                onDelete={
+                                  onDelete ? (target) => onDelete(target, line.id) : undefined
+                                }
                               />
                             );
                           }

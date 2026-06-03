@@ -9,17 +9,14 @@ import {
 } from '@/utils/dashboard-search-state';
 import {
   readDetailsOpenBehaviorPreference,
-  readPendingFilterPreference,
   readShippedFilterPreference,
   readShippedSearchFieldPreference,
   writeDetailsOpenBehaviorPreference,
-  writePendingFilterPreference,
   writeShippedFilterPreference,
   writeShippedSearchFieldPreference,
   type DetailsOpenBehaviorPreference,
 } from '@/utils/dashboard-preferences';
 import { normalizeShippedSearchField, type ShippedSearchField } from '@/lib/shipped-search';
-export type PendingStockFilter = 'all' | 'pending' | 'stock';
 export type ShippedTypeFilter = 'all' | 'orders' | 'sku' | 'fba';
 
 export function useDashboardSearchController() {
@@ -29,12 +26,6 @@ export function useDashboardSearchController() {
 
   const orderView = getDashboardOrderViewFromSearch(searchParams);
   const searchQuery = String(searchParams.get('search') || '').trim();
-  const pendingFilterParam = searchParams.get('pendingFilter');
-  const pendingFilter: PendingStockFilter = useMemo(() => {
-    if (pendingFilterParam === 'stock') return 'stock';
-    if (pendingFilterParam === 'pending') return 'pending';
-    return readPendingFilterPreference() ?? 'all';
-  }, [pendingFilterParam]);
   const shippedFilterParam = searchParams.get('shippedFilter');
   const shippedFilter: ShippedTypeFilter = useMemo(() => {
     if (shippedFilterParam === 'orders') return 'orders';
@@ -96,13 +87,6 @@ export function useDashboardSearchController() {
     }, '/dashboard');
   }, [updateSearch]);
 
-  const setPendingFilter = useCallback((value: PendingStockFilter) => {
-    writePendingFilterPreference(value);
-    updateSearch((params) => {
-      params.set('pendingFilter', value);
-    }, '/dashboard');
-  }, [updateSearch]);
-
   const setShippedFilter = useCallback((value: ShippedTypeFilter) => {
     writeShippedFilterPreference(value);
     updateSearch((params) => {
@@ -136,10 +120,6 @@ export function useDashboardSearchController() {
   }, [updateSearch]);
 
   useEffect(() => {
-    writePendingFilterPreference(pendingFilter);
-  }, [pendingFilter]);
-
-  useEffect(() => {
     writeShippedFilterPreference(shippedFilter);
   }, [shippedFilter]);
 
@@ -150,7 +130,6 @@ export function useDashboardSearchController() {
   return {
     orderView,
     searchQuery,
-    pendingFilter,
     shippedFilter,
     shippedSearchField,
     detailsOpenBehavior,
@@ -159,7 +138,6 @@ export function useDashboardSearchController() {
     setSearch,
     setOrderView,
     openShippedMatches,
-    setPendingFilter,
     setShippedFilter,
     setShippedSearchField,
     setDetailsOpenBehavior,
