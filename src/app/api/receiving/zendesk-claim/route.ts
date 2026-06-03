@@ -10,7 +10,7 @@ import {
   type ClaimType,
 } from '@/lib/zendesk-claim-template';
 import { createTicket, uploadFileToZendesk, ZendeskNotConfiguredError } from '@/lib/zendesk';
-import { readPhotoBytes, archiveClaimToFolder, poReceivingLink } from '@/lib/receiving-claim-photos';
+import { readPhotoBytes, archiveClaimToFolder, archiveClaimViaAgent, poReceivingLink } from '@/lib/receiving-claim-photos';
 import { buildExternalId, linkTicket } from '@/lib/zendesk-links';
 import { zendeskTicketUrl } from '@/lib/zendesk-ticket-url';
 import { readIdempotencyKey, withIdempotentResponse } from '@/lib/api-idempotency';
@@ -153,10 +153,14 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
 
         const ticketNumber = `#${ticket.id}`;
 
-        // Local archive: copy ALL of the PO's photos into a folder named after the
-        // ticket (".../2 Zendesk 2026/<ticket#>/") so we keep the full set even
-        // though only the selected subset was uploaded to Zendesk. Best-effort —
-        // the ticket already exists, so a filesystem hiccup must not fail the claim.
+        // Archive ALL of the PO's photos into a folder named after the ticket
+        // (".../2 Zendesk 2026/<ticket#>/") so we keep the full set even though
+        // only the selected subset was uploaded to Zendesk. In prod (Vercel) this
+        // goes through the office archive agent over the tunnel; on a LAN/dev box
+        // it writes the mount directly. Best-effort — the ticket already exists,
+        // so a hiccup never fails the claim — but we DO surface a warning so a
+        // claim whose photos silently didn't archive is visible to the operator.
+        let archiveWarning: string | null = null;
         try {
           const allPhotosRes = await pool.query<{ url: string | null }>(
             `SELECT url FROM photos
@@ -182,12 +186,24 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
             '--- Ticket body ---',
             description,
           ].join('\n');
-          const archived = await archiveClaimToFolder({ ticketId: ticket.id, photos: allPhotos, info });
-          if (archived) {
+          // Prefer the office agent (works from Vercel); fall back to a direct
+          // filesystem write when running on a box that has the share mounted.
+          const useAgent = Boolean(process.env.NAS_AGENT_URL && process.env.NAS_AGENT_TOKEN);
+          const archived = useAgent
+            ? await archiveClaimViaAgent({ ticketId: ticket.id, photos: allPhotos, info })
+            : await archiveClaimToFolder({ ticketId: ticket.id, photos: allPhotos, info });
+          if (!archived) {
+            archiveWarning = 'Photos were NOT archived to the NAS (archive agent/mount unavailable).';
+            console.warn('[zendesk-claim] archive skipped — no agent/mount configured');
+          } else {
             console.log(`[zendesk-claim] archived ${archived.copied}/${archived.total} photo(s) → ${archived.folder}`);
+            if (archived.copied < archived.total) {
+              archiveWarning = `Only ${archived.copied} of ${archived.total} photos archived to the NAS.`;
+            }
           }
         } catch (archiveErr) {
-          console.warn('[zendesk-claim] local photo archive failed', archiveErr);
+          archiveWarning = `NAS archive failed: ${archiveErr instanceof Error ? archiveErr.message : 'unknown error'}`;
+          console.warn('[zendesk-claim] photo archive failed', archiveErr);
         }
 
         // Write the ticket→entity link row (the support workspace prefers ticket_links
@@ -219,7 +235,7 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
 
         return {
           status: 200,
-          body: { success: true, ticketNumber, ticketUrl: zendeskTicketUrl(ticket.id) },
+          body: { success: true, ticketNumber, ticketUrl: zendeskTicketUrl(ticket.id), archiveWarning },
         };
       },
     );

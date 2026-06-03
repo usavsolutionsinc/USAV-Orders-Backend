@@ -271,6 +271,11 @@ export function ReceivingClaimModal({ open, row, onClose, onTicketCreated }: Pro
       } else {
         toast.success('Claim filed — paste the Zendesk # back when assigned');
       }
+      // Surface a NAS-archive problem so a claim whose photos didn't archive
+      // isn't silently treated as fully done.
+      if (data.archiveWarning) {
+        toast.warning(String(data.archiveWarning), { duration: 8000 });
+      }
       onClose();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Network error');

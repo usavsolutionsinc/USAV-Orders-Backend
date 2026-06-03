@@ -151,6 +151,46 @@ export async function archiveClaimToFolder(opts: {
 }
 
 /**
+ * Archive a claim's photos via the office "archive agent" instead of a local
+ * filesystem write. This is the production path: the app runs on Vercel, which
+ * can't reach the LAN NAS, so it POSTs the ticket # + photo list to the agent
+ * (through the Cloudflare tunnel). The agent — running on the office machine
+ * that has the share mounted — does the real mkdir + copy into
+ * ".../2 Zendesk 2026/<ticket#>/".
+ *
+ * Returns null when the agent isn't configured (so callers can fall back to the
+ * local write for dev/LAN-hosted runs). THROWS on agent/transport failure so
+ * the caller can surface a warning — a filed claim whose photos didn't archive
+ * must not look like a clean success.
+ */
+export async function archiveClaimViaAgent(opts: {
+  ticketId: number | string;
+  photos: Array<{ url: string }>;
+  info: string;
+}): Promise<{ folder: string; copied: number; total: number } | null> {
+  const base = (process.env.NAS_AGENT_URL || '').replace(/\/+$/, '');
+  const token = process.env.NAS_AGENT_TOKEN || '';
+  if (!base || !token) return null;
+
+  const res = await fetch(`${base}/archive`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', 'x-agent-token': token },
+    body: JSON.stringify({ ticketId: opts.ticketId, photos: opts.photos, info: opts.info }),
+    cache: 'no-store',
+  });
+  if (!res.ok) throw new Error(`archive agent returned HTTP ${res.status}`);
+  const data = (await res.json().catch(() => null)) as
+    | { ok?: boolean; folder?: string; copied?: number; total?: number; error?: string }
+    | null;
+  if (!data?.ok) throw new Error(data?.error || 'archive agent error');
+  return {
+    folder: data.folder || '',
+    copied: data.copied ?? 0,
+    total: data.total ?? opts.photos.length,
+  };
+}
+
+/**
  * Canonical "view the PO receiving" link, built from the request origin so it
  * points at whatever host the operator is actually on (LAN URL on the LAN, the
  * public URL otherwise). Routes to the single-carton view (/m/r/:id).
