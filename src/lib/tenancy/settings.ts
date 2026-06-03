@@ -30,6 +30,13 @@ export const OrgSettingsSchema = z.object({
   requirePasskeyForNewStaff: z.boolean().default(false),
   // Hard cap on simultaneous active sessions per staff. 0 = unlimited.
   maxConcurrentSessions: z.number().int().min(0).default(0),
+  // Per-station default folder for the receiving NAS photo picker. Keys are
+  // station codes (TECH/PACK/UNBOX/SALES/FBA); values are a relative folder
+  // path the picker auto-opens for an operator on that station (e.g.
+  // "JUN 2026" or "2 Zendesk 2026/sub"). "" / missing = start at the root.
+  // Admin-configured (see StationNasFoldersTab); resolved per-operator via
+  // their primary station.
+  stationNasPhotoFolders: z.record(z.string(), z.string()).default({}),
 }).passthrough();
 
 export type OrgSettings = z.infer<typeof OrgSettingsSchema>;

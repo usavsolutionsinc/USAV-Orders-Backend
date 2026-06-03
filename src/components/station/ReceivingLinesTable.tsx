@@ -50,6 +50,10 @@ export interface ReceivingLineRow {
   zoho_purchaseorder_id: string | null;
   zoho_purchaseorder_number: string | null;
   item_name: string | null;
+  /** Canonical Zoho catalog title (sku_catalog.product_title), joined by SKU. Prefer over item_name for display; null when the SKU isn't catalogued yet. */
+  catalog_product_title?: string | null;
+  /** Canonical sku_catalog.id for this line's SKU. Keys the SKU pairing surface; null when the SKU isn't catalogued yet. */
+  sku_catalog_id?: number | null;
   sku: string | null;
   quantity_received: number;
   quantity_expected: number | null;

@@ -84,7 +84,7 @@ const itemVariants = {
 };
 
 function emptyTransferDetails(): TransferOrderDetails {
-  return { inserted: [], updated: [], deleted: [], unknownTitle: [] };
+  return { inserted: [], updated: [], deleted: [], unknownTitle: [], unresolvedTracking: [] };
 }
 
 function cloneDetails(d: TransferOrderDetails): TransferOrderDetails {
@@ -93,6 +93,7 @@ function cloneDetails(d: TransferOrderDetails): TransferOrderDetails {
     updated: [...d.updated],
     deleted: [...d.deleted],
     unknownTitle: [...d.unknownTitle],
+    unresolvedTracking: [...(d.unresolvedTracking ?? [])],
   };
 }
 
@@ -148,6 +149,8 @@ export function DashboardManagementPanel({
       tabName?: string;
       inserted?: number;
       updated?: number;
+      trackingAttached?: number;
+      unresolvedTracking?: number;
       processedRows?: number;
       exceptionsResolved?: number;
       ecwidInserted?: number;
@@ -320,6 +323,7 @@ export function DashboardManagementPanel({
               inserted: acc.inserted.length,
               updated: acc.updated.length,
               deleted: acc.deleted.length,
+              unresolvedTracking: acc.unresolvedTracking.length,
             } as TransferTabState));
           } else if (event.type === 'result') {
             payload = event.result;
@@ -336,7 +340,13 @@ export function DashboardManagementPanel({
       const success = !lastError && (data as any).success !== false;
       const ins = Number((data as any).insertedOrders ?? acc.inserted.length);
       const upd = Number((data as any).updatedOrdersFields ?? acc.updated.length);
-      const parts = [ins && `${ins} inserted`, upd && `${upd} updated`].filter(Boolean);
+      const trk = Number((data as any).updatedOrdersTracking ?? 0);
+      const unresolved = Number((data as any).unresolvedTrackingCount ?? acc.unresolvedTracking.length);
+      const parts = [
+        ins && `${ins} inserted`,
+        upd && `${upd} updated${trk ? ` (${trk} tracking)` : ''}`,
+        unresolved && `⚠ ${unresolved} tracking not recognized`,
+      ].filter(Boolean);
       setter({
         status: success ? 'done' : 'error',
         summary: success
@@ -346,6 +356,8 @@ export function DashboardManagementPanel({
         details: cloneDetails(acc),
         inserted: ins,
         updated: upd,
+        trackingAttached: trk,
+        unresolvedTracking: unresolved,
         deleted: Number((data as any).deletedDuplicateOrders ?? acc.deleted.length),
         processedRows: Number((data as any).processedRows || 0),
         tabName: (data as any).tabName,
@@ -450,6 +462,10 @@ export function DashboardManagementPanel({
         + Number(ecwidResultPayload?.insertedOrders || 0);
       const totalUpdated = Number(sheetsResultPayload?.updatedOrdersFields || 0)
         + Number(ecwidResultPayload?.updatedOrdersFields || 0);
+      const totalTracking = Number(sheetsResultPayload?.updatedOrdersTracking || 0)
+        + Number(ecwidResultPayload?.updatedOrdersTracking || 0);
+      const totalUnresolved = Number(sheetsResultPayload?.unresolvedTrackingCount || 0)
+        + Number(ecwidResultPayload?.unresolvedTrackingCount || 0);
       const exceptionsResolved = Number(exceptionsResultPayload?.matched || 0);
 
       await invalidateDashboardOrderQueries(queryClient);
@@ -460,7 +476,8 @@ export function DashboardManagementPanel({
       );
       const parts = [];
       if (totalInserted > 0) parts.push(`${totalInserted} inserted`);
-      if (totalUpdated > 0) parts.push(`${totalUpdated} updated`);
+      if (totalUpdated > 0) parts.push(`${totalUpdated} updated${totalTracking ? ` (${totalTracking} tracking)` : ''}`);
+      if (totalUnresolved > 0) parts.push(`⚠ ${totalUnresolved} tracking not recognized`);
 
       setStatus({
         type: anyFailed ? 'error' : 'success',
@@ -469,6 +486,8 @@ export function DashboardManagementPanel({
           tabName: sheetsResultPayload?.tabName as string | undefined,
           inserted: totalInserted,
           updated: totalUpdated,
+          trackingAttached: totalTracking,
+          unresolvedTracking: totalUnresolved,
           processedRows: Number(sheetsResultPayload?.processedRows || 0)
             + Number(ecwidResultPayload?.processedRows || 0),
           exceptionsResolved,
@@ -719,6 +738,21 @@ export function DashboardManagementPanel({
                             <ShieldCheck className="w-3.5 h-3.5 text-blue-600 shrink-0" />
                             <p className={`${fieldLabel} text-blue-700`}>
                               <span className="font-black">{status.details.exceptionsResolved}</span> exception{status.details.exceptionsResolved === 1 ? '' : 's'} auto-resolved
+                            </p>
+                          </motion.div>
+                        ) : null}
+
+                        {/* Unrecognized tracking warning */}
+                        {(status.details.unresolvedTracking ?? 0) > 0 ? (
+                          <motion.div
+                            initial={{ opacity: 0, y: 6 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            transition={{ delay: 0.45 }}
+                            className="flex items-center gap-2 px-3 py-2 rounded-xl bg-amber-50/80 border border-amber-200/60"
+                          >
+                            <AlertTriangle className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+                            <p className={`${fieldLabel} text-amber-700`}>
+                              <span className="font-black">{status.details.unresolvedTracking}</span> tracking number{status.details.unresolvedTracking === 1 ? '' : 's'} not recognized — check the sheet for malformed or doubled values
                             </p>
                           </motion.div>
                         ) : null}

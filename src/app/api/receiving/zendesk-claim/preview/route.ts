@@ -8,6 +8,7 @@ import {
   type ClaimSeverity,
   type ClaimType,
 } from '@/lib/zendesk-claim-template';
+import { poReceivingLink } from '@/lib/receiving-claim-photos';
 
 export const dynamic = 'force-dynamic';
 
@@ -43,6 +44,7 @@ export const POST = withAuth(async (req: NextRequest) => {
       claimType: body.claimType,
       severity,
       reason: body.reason,
+      poReceivingLink: poReceivingLink(req, receivingId),
     });
 
     return NextResponse.json({ success: true, ...template });

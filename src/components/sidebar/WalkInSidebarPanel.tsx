@@ -2,7 +2,7 @@
 
 import { useSearchParams } from 'next/navigation';
 import { RepairSidebarPanel } from './RepairSidebarPanel';
-import { SalesSidebarPanel } from './SalesSidebarPanel';
+import { SalesCartSidebar } from '@/components/walk-in/SalesCartSidebar';
 
 interface WalkInSidebarPanelProps {
   embedded?: boolean;
@@ -24,7 +24,7 @@ export function WalkInSidebarPanel({ embedded = false, hideSectionHeader = false
         {mode === 'repairs' ? (
           <RepairSidebarPanel embedded hideSectionHeader />
         ) : (
-          <SalesSidebarPanel embedded hideSectionHeader />
+          <SalesCartSidebar />
         )}
       </div>
     </div>

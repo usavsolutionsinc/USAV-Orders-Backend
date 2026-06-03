@@ -13,8 +13,9 @@ import { suggestPairingsForSku } from '@/lib/neon/pairing-queries';
  *     suggestions:  { amazon: [...], ebay: [...], ... }
  *   }
  *
- * - confirmed = active sku_platform_ids rows whose sku_catalog_id matches OR
- *   whose platform_sku equals sc.sku (legacy unpaired-but-equal rows).
+ * - confirmed = active sku_platform_ids rows explicitly linked to this
+ *   sku_catalog_id. A coincidental platform_sku == sc.sku match is NOT treated
+ *   as confirmed (that misrepresents unpaired rows as linked).
  * - suggestions = unpaired sku_platform_ids rows ranked by title-similarity +
  *   order-volume + account-source heuristics. NEVER auto-applied; the Hub
  *   collects accepts and POSTs them to /pair-batch.

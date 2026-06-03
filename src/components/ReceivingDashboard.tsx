@@ -14,6 +14,7 @@ import { printProductLabel, printProductLabels } from '@/lib/print/printProductL
 import { Copy, Printer, MessageSquare, User, Smartphone } from '@/components/Icons';
 import { toast } from '@/lib/toast';
 import { LocalPickupEditPanel } from './work-orders/LocalPickupEditPanel';
+import { LocalPickupReviewPanel } from './work-orders/LocalPickupReviewPanel';
 import { ReceivingLineWorkspace } from './receiving/workspace/ReceivingLineWorkspace';
 import { ReceivingScanLoader } from './receiving/workspace/ReceivingScanLoader';
 import { ReceivingDetailsStack, type ReceivingDetailsLog } from './station/ReceivingDetailsStack';
@@ -85,6 +86,9 @@ export default function ReceivingDashboard() {
   const [workspace, setWorkspace] = useState<WorkspaceState | null>(null);
   const [nav, setNav] = useState<NavState | null>(null);
   const [overlayLog, setOverlayLog] = useState<ReceivingDetailsLog | null>(null);
+  // A finalized local pickup PO opens its own review/reprint panel instead of
+  // the generic carton details stack (it has no receiving_lines).
+  const [pickupReviewOrderId, setPickupReviewOrderId] = useState<number | null>(null);
   // Incoming-mode details panel — populated when a row is selected in
   // mode=incoming. Stored as {po_id, po_number} so the panel can render its
   // header label immediately, then re-key its details query on po_id change.
@@ -428,7 +432,17 @@ export default function ReceivingDashboard() {
           const carton = data.receiving as ReceivingDetailsLog & {
             id?: number | string;
             receiving_tracking_number?: string | null;
+            source?: string | null;
+            local_pickup_order_id?: number | string | null;
           };
+          // Local pickup POs route to the dedicated review/reprint panel.
+          if (carton.source === 'local_pickup') {
+            const lpoId = Number(carton.local_pickup_order_id);
+            setOverlayLog(null);
+            setPickupReviewOrderId(Number.isFinite(lpoId) && lpoId > 0 ? lpoId : null);
+            return;
+          }
+          setPickupReviewOrderId(null);
           const lines = Array.isArray(data.lines)
             ? (data.lines as Array<{
                 zoho_purchaseorder_id?: string | null;
@@ -600,6 +614,14 @@ export default function ReceivingDashboard() {
           />
         ) : null}
       </AnimatePresence>
+
+      {pickupReviewOrderId != null ? (
+        <LocalPickupReviewPanel
+          mode="reprint"
+          orderId={pickupReviewOrderId}
+          onClose={() => setPickupReviewOrderId(null)}
+        />
+      ) : null}
 
       {claimRow ? (
         <ReceivingClaimModal

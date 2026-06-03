@@ -403,14 +403,14 @@ export const SIDEBAR_PAGE_NAV: SidebarPageNav[] = [
           : 'shipping',
   },
   // ── Walk-In (Repair queue tabs + Sales) ───────────────────────────────────
-  // `?tab=incoming|active|done` drives the repair-queue status (default `active`);
+  // `?tab=active|done` drives the repair-queue status (default `active`);
   // `?mode=sales` flips the panel to the Sales surface. The status tabs clear
   // `mode` so switching off Sales lands back in Repairs. /repair routes onto this
-  // page key too (see getSidebarRouteKey).
+  // page key too (see getSidebarRouteKey). Incoming repairs now live in the
+  // Receiving incoming display, so there's no longer an Incoming tab here.
   {
     id: 'walk-in', label: 'Walk-In', href: WALK_IN, icon: ShoppingCart, kind: 'main', requires: 'walk_in.view',
     modes: [
-      { id: 'incoming', label: 'Incoming', icon: Inbox,      to: () => ({ pathname: WALK_IN, params: { tab: 'incoming', mode: null } }) },
       { id: 'active',   label: 'Active',   icon: Wrench,     to: () => ({ pathname: WALK_IN, params: { tab: null, mode: null } }) },
       { id: 'done',     label: 'Done',     icon: Check,      to: () => ({ pathname: WALK_IN, params: { tab: 'done', mode: null } }) },
       { id: 'sales',    label: 'Sales',    icon: DollarSign, to: () => ({ pathname: WALK_IN, params: { mode: 'sales', tab: null } }) },
@@ -418,7 +418,7 @@ export const SIDEBAR_PAGE_NAV: SidebarPageNav[] = [
     resolveMode: ({ params }) => {
       if (params.get('mode') === 'sales') return 'sales';
       const t = params.get('tab');
-      return t === 'incoming' || t === 'done' ? t : 'active';
+      return t === 'done' ? t : 'active';
     },
   },
 ];

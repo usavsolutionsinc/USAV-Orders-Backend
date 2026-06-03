@@ -38,6 +38,7 @@ import {
 } from '@/components/receiving/unfound/EcwidProductSearchPopover';
 import {
   addLine,
+  closeReview,
   getSelectedLine,
   patchLine,
   removeLine,
@@ -46,10 +47,11 @@ import {
   type CartLine,
   type ConditionGrade,
 } from './localPickupStore';
+import { LocalPickupReviewPanel } from './LocalPickupReviewPanel';
 
 export function LocalPickupEditPanel() {
   const cartState = useLocalPickupCart();
-  const { cart, selectedKey } = cartState;
+  const { cart, selectedKey, reviewOpen } = cartState;
   const selected = getSelectedLine(cartState);
   const [addOpen, setAddOpen] = useState(false);
 
@@ -165,9 +167,14 @@ export function LocalPickupEditPanel() {
         <EcwidProductSearchPopover
           receivingId={0}
           popoverMode="search"
+          searchFieldOverride="zoho_catalog"
           onSelect={handleAddSelection}
           onClose={() => setAddOpen(false)}
         />
+      ) : null}
+
+      {reviewOpen ? (
+        <LocalPickupReviewPanel mode="finalize" onClose={closeReview} />
       ) : null}
     </div>
   );

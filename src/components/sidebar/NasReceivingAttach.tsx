@@ -1,11 +1,87 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { attachNasPhoto, listNasDir, nasConfigured, type NasEntry } from '@/lib/nas-photos';
+import { NasBreadcrumb, NasFolderCard, NasSectionLabel } from '@/components/nas/NasBrowserChrome';
+
+type SortKey = 'po' | 'recent' | 'oldest' | 'name';
+// 5 columns × 5 rows.
+const PAGE_SIZE = 25;
+// The "PO scan time" view starts this far BEFORE the scan, then runs forward —
+// captures shots taken right as scanning began.
+const PO_WINDOW_MS = 10 * 60 * 1000; // 10 minutes
+
+// Parse a NAS entry's mtime to epoch ms. Date.parse handles both the dev
+// server's ISO strings and nginx autoindex's RFC-1123 GMT strings, so sorting
+// is correct against either backend (a plain lexical compare would not be).
+function entryTime(e: NasEntry): number {
+  const t = e.mtime ? Date.parse(e.mtime) : NaN;
+  return Number.isNaN(t) ? 0 : t;
+}
+
+// `anchor` (epoch ms) is the PO scan time. The 'po' view shows photos from 10
+// minutes before the scan onward, in chronological order (forward in time), so
+// the operator reads the receiving session top-to-bottom as it happened. Photos
+// from before that window (earlier sessions) drop below it, newest-first.
+function compareEntries(a: NasEntry, b: NasEntry, key: SortKey, anchor: number | null): number {
+  if (key === 'name') return a.name.localeCompare(b.name, undefined, { numeric: true });
+  const at = entryTime(a);
+  const bt = entryTime(b);
+  if (key === 'po' && anchor != null) {
+    const windowStart = anchor - PO_WINDOW_MS;
+    const aIn = at >= windowStart;
+    const bIn = bt >= windowStart;
+    if (aIn !== bIn) return aIn ? -1 : 1; // in-window photos first
+    if (aIn) return at - bt; // within window: ascending (forward in time)
+    return bt - at; // before window: newest-first, after the window block
+  }
+  return key === 'oldest' ? at - bt : bt - at;
+}
+
+// Small webp preview instead of the multi-MB original (dev NAS route honours
+// ?thumb; nginx ignores it and serves the full image — still correct, just not
+// shrunk). The full-res `url` is what gets attached to the PO.
+function thumbUrl(url: string, size = 128): string {
+  return url + (url.includes('?') ? '&' : '?') + `thumb=${size}`;
+}
+
+function formatMtime(mtime?: string): string {
+  if (!mtime) return '';
+  const t = Date.parse(mtime);
+  if (Number.isNaN(t)) return '';
+  return new Date(t).toLocaleString(undefined, {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+  });
+}
+
+function sortOptions(hasAnchor: boolean): { value: SortKey; label: string }[] {
+  return [
+    { value: 'recent', label: 'Most recent' },
+    ...(hasAnchor ? [{ value: 'po' as const, label: 'PO scan time' }] : []),
+    { value: 'oldest', label: 'Oldest' },
+    { value: 'name', label: 'Name (A–Z)' },
+  ];
+}
 
 interface Props {
   /** The receiving package (PO) these photos pair to. */
   receivingId: number;
+  /**
+   * When this PO was scanned (ISO). When provided, the picker defaults to a
+   * "PO scan time" sort so photos taken around the scan surface first.
+   */
+  poCreatedAt?: string | null;
+  /**
+   * Folder the picker opens to (relative path, "" = root). Admin-configured per
+   * station — see StationNasFoldersTab. Lets a receiving station land directly
+   * in, e.g., "JUN 2026" instead of the root.
+   */
+  initialFolder?: string;
   /** Called after one or more photos are attached, so the gallery can refetch. */
   onAttached: () => void;
   /** Render as a full-width dropzone-style block (used for the empty state). */
@@ -26,13 +102,17 @@ interface Props {
  *
  * Hidden entirely unless NEXT_PUBLIC_NAS_PHOTOS_BASE_URL is configured.
  */
-export function NasReceivingAttach({ receivingId, onAttached, fullWidth = false, label }: Props) {
+export function NasReceivingAttach({ receivingId, poCreatedAt = null, initialFolder = '', onAttached, fullWidth = false, label }: Props) {
   const [open, setOpen] = useState(false);
+  // Anchors the picker over the right panel (the scroll surface this control
+  // lives in) instead of centering on the whole viewport — see NasPickerDialog.
+  const anchorRef = useRef<HTMLButtonElement>(null);
   if (!nasConfigured()) return null;
 
   return (
     <>
       <button
+        ref={anchorRef}
         type="button"
         onClick={() => setOpen(true)}
         title="Pair photos from the NAS to this PO"
@@ -47,6 +127,9 @@ export function NasReceivingAttach({ receivingId, onAttached, fullWidth = false,
       {open ? (
         <NasPickerDialog
           receivingId={receivingId}
+          poCreatedAt={poCreatedAt}
+          initialFolder={initialFolder}
+          anchorRef={anchorRef}
           onClose={() => setOpen(false)}
           onAttached={onAttached}
         />
@@ -55,21 +138,121 @@ export function NasReceivingAttach({ receivingId, onAttached, fullWidth = false,
   );
 }
 
+/**
+ * Find the rect of the scrollable panel the picker lives in (the receiving
+ * detail pane's `overflow-y-auto` surface), so the dialog can sit over THAT
+ * panel rather than the whole viewport. Walks up from the trigger to the first
+ * vertical-scroll surface (the panel's `overflow-y-auto`), stopping short of
+ * <body> so page-level scroll doesn't count. Matches on the overflow style
+ * alone (not current overflow) so a short, non-scrolling PO still anchors over
+ * the panel. Returns null when there isn't one → caller falls back to centering.
+ */
+function findPanelRect(anchor: HTMLElement | null): DOMRect | null {
+  let node = anchor?.parentElement ?? null;
+  while (node && node !== document.body) {
+    const oy = window.getComputedStyle(node).overflowY;
+    if (oy === 'auto' || oy === 'scroll' || oy === 'overlay') {
+      return node.getBoundingClientRect();
+    }
+    node = node.parentElement;
+  }
+  return null;
+}
+
 function NasPickerDialog({
   receivingId,
+  poCreatedAt,
+  initialFolder,
+  anchorRef,
   onClose,
   onAttached,
 }: {
   receivingId: number;
+  poCreatedAt: string | null;
+  initialFolder: string;
+  anchorRef: React.RefObject<HTMLButtonElement | null>;
   onClose: () => void;
   onAttached: () => void;
 }) {
-  const [dir, setDir] = useState('');
+  // PO scan time as epoch ms (null when unknown / unparseable).
+  const anchor = useMemo(() => {
+    if (!poCreatedAt) return null;
+    const t = Date.parse(poCreatedAt);
+    return Number.isNaN(t) ? null : t;
+  }, [poCreatedAt]);
+  const options = useMemo(() => sortOptions(anchor != null), [anchor]);
+
+  // Open straight to the station's configured folder (admin setting), trimming
+  // any stray slashes. Falls back to the root when unset.
+  const [dir, setDir] = useState(() => (initialFolder || '').replace(/^\/+|\/+$/g, ''));
   const [entries, setEntries] = useState<NasEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [selected, setSelected] = useState<Set<string>>(new Set());
+  // Anchor for shift-click range selection (the last row clicked without shift).
+  const [anchorUrl, setAnchorUrl] = useState<string | null>(null);
   const [attaching, setAttaching] = useState(false);
+  // Larger preview opened by clicking a row's thumbnail (null = closed).
+  const [preview, setPreview] = useState<NasEntry | null>(null);
+  // Default to newest-first. "PO scan time" stays available as an option when
+  // the scan time is known, but most-recent is the default view.
+  const [sortKey, setSortKey] = useState<SortKey>('recent');
+  const [page, setPage] = useState(0);
+  const [portalTarget, setPortalTarget] = useState<HTMLElement | null>(null);
+  // When set, the card is positioned over the right panel; null = fall back to
+  // viewport-centered (no panel found, e.g. an unusual mount context).
+  const [cardStyle, setCardStyle] = useState<React.CSSProperties | null>(null);
+
+  // Portal to <body>: Framer Motion transforms on the receiving workspace make
+  // an ancestor the containing block for `position: fixed`, so `inset-0` would
+  // otherwise resolve to the content box (below GlobalHeader) and leave the
+  // header strip uncovered. Mounting on body lets the dim cover the full
+  // viewport — header + sidebar included.
+  useEffect(() => {
+    setPortalTarget(document.body);
+  }, []);
+
+  // Center the card horizontally over the receiving right panel rather than the
+  // whole viewport, so it never drifts left over the global nav. Recomputes on
+  // resize. Vertical stays viewport-centered (the panel scrolls).
+  useEffect(() => {
+    const compute = () => {
+      const rect = findPanelRect(anchorRef.current);
+      if (!rect || rect.width < 1) {
+        setCardStyle(null);
+        return;
+      }
+      const GAP = 16;
+      const maxW = 672; // matches max-w-2xl
+      const width = Math.max(280, Math.min(maxW, rect.width - GAP * 2));
+      setCardStyle({
+        position: 'fixed',
+        left: Math.round(rect.left + (rect.width - width) / 2),
+        width: Math.round(width),
+        top: '50%',
+        transform: 'translateY(-50%)',
+        maxHeight: '80vh',
+      });
+    };
+    compute();
+    window.addEventListener('resize', compute);
+    return () => window.removeEventListener('resize', compute);
+  }, [anchorRef]);
+
+  // Esc closes the preview lightbox first (if open), otherwise the whole picker.
+  // onClose is read through a ref so its changing identity doesn't re-subscribe
+  // the listener (and keeps the dep array stable).
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape') return;
+      if (preview) setPreview(null);
+      else onCloseRef.current();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [preview]);
 
   const load = useCallback(async (relDir: string) => {
     setLoading(true);
@@ -96,11 +279,41 @@ function NasPickerDialog({
       return next;
     });
 
-  const goUp = () => {
-    const parts = dir.split('/');
-    parts.pop();
-    setDir(parts.join('/'));
+  // Row click: plain click toggles + sets the anchor; shift-click applies the
+  // anchor's current state to the whole range (within the current page), like a
+  // file manager — so it selects OR deselects a range. To bulk-deselect: click a
+  // selected row (toggles it off → anchor), then shift-click the range end.
+  const handleRowSelect = (url: string, shiftKey: boolean) => {
+    if (shiftKey && anchorUrl) {
+      const a = pagedFiles.findIndex((f) => f.url === anchorUrl);
+      const b = pagedFiles.findIndex((f) => f.url === url);
+      if (a >= 0 && b >= 0) {
+        const [lo, hi] = a < b ? [a, b] : [b, a];
+        const range = pagedFiles.slice(lo, hi + 1).map((f) => f.url);
+        const fillSelected = selected.has(anchorUrl); // match the anchor's state
+        setSelected((prev) => {
+          const next = new Set(prev);
+          for (const u of range) {
+            if (fillSelected) next.add(u);
+            else next.delete(u);
+          }
+          return next;
+        });
+        return; // keep the existing anchor for further range extension
+      }
+    }
+    toggle(url);
+    setAnchorUrl(url);
   };
+
+  // Navigating folders drops the current selection (the chosen URLs belong to
+  // the folder you're leaving) and resets to the first page.
+  const navigate = useCallback((relDir: string) => {
+    setSelected(new Set());
+    setAnchorUrl(null);
+    setPage(0);
+    setDir(relDir);
+  }, []);
 
   const handleAttach = async () => {
     if (selected.size === 0) return;
@@ -121,19 +334,35 @@ function NasPickerDialog({
     onClose();
   };
 
-  const folders = entries.filter((e) => e.type === 'directory');
-  const files = entries.filter((e) => e.type === 'file');
+  const folders = useMemo(
+    () => entries.filter((e) => e.type === 'directory').sort((a, b) => compareEntries(a, b, sortKey, anchor)),
+    [entries, sortKey, anchor],
+  );
+  const files = useMemo(
+    () => entries.filter((e) => e.type === 'file').sort((a, b) => compareEntries(a, b, sortKey, anchor)),
+    [entries, sortKey, anchor],
+  );
 
-  return (
+  const pageCount = Math.max(1, Math.ceil(files.length / PAGE_SIZE));
+  const safePage = Math.min(page, pageCount - 1); // clamp if the folder shrank
+  const pagedFiles = files.slice(safePage * PAGE_SIZE, safePage * PAGE_SIZE + PAGE_SIZE);
+
+  if (!portalTarget) return null;
+
+  return createPortal(
+    <>
     <div
       role="dialog"
       aria-modal="true"
-      className="fixed inset-0 z-[100] grid place-items-center bg-black/40 p-4"
+      className={`fixed inset-0 z-[100] bg-black/40 ${cardStyle ? '' : 'grid place-items-center p-4'}`}
       onClick={onClose}
     >
       <div
         onClick={(e) => e.stopPropagation()}
-        className="flex max-h-[80vh] w-full max-w-2xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl ring-1 ring-gray-200"
+        style={cardStyle ?? undefined}
+        className={`flex flex-col overflow-hidden rounded-2xl bg-white shadow-2xl ring-1 ring-gray-200 ${
+          cardStyle ? '' : 'max-h-[80vh] w-full max-w-2xl'
+        }`}
       >
         {/* Header */}
         <div className="flex items-center justify-between border-b border-gray-100 px-4 py-3">
@@ -143,31 +372,79 @@ function NasPickerDialog({
             </p>
             <p className="truncate text-sm font-bold text-gray-800">/{dir || 'Photos'}</p>
           </div>
-          <button
-            type="button"
-            onClick={onClose}
-            className="rounded-lg border border-gray-200 px-3 py-1.5 text-micro font-black uppercase tracking-widest text-gray-600 hover:bg-gray-50"
-          >
-            Close
-          </button>
+          <div className="flex shrink-0 items-center gap-2">
+            <label className="flex items-center gap-1.5">
+              <span className="text-micro font-black uppercase tracking-widest text-gray-400">Sort</span>
+              <select
+                value={sortKey}
+                onChange={(e) => {
+                  setSortKey(e.target.value as SortKey);
+                  setPage(0);
+                }}
+                className="rounded-lg border border-gray-200 bg-white px-2 py-1.5 text-micro font-bold uppercase tracking-wider text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-200"
+              >
+                {options.map((o) => (
+                  <option key={o.value} value={o.value}>
+                    {o.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <button
+              type="button"
+              onClick={onClose}
+              className="rounded-lg border border-gray-200 px-3 py-1.5 text-micro font-black uppercase tracking-widest text-gray-600 hover:bg-gray-50"
+            >
+              Close
+            </button>
+          </div>
         </div>
 
-        {dir ? (
-          <button
-            type="button"
-            onClick={goUp}
-            className="border-b border-gray-100 px-4 py-2 text-left text-micro font-bold uppercase tracking-widest text-blue-600 hover:bg-gray-50"
-          >
-            ↑ Up a folder
-          </button>
+        {dir || pageCount > 1 ? (
+          <div className="flex items-center justify-between gap-3 border-b border-gray-100 px-3 py-2">
+            <div className="min-w-0 flex-1 overflow-x-auto">
+              <NasBreadcrumb dir={dir} onNavigate={navigate} />
+            </div>
+            {pageCount > 1 ? (
+              <div className="flex shrink-0 items-center gap-1.5">
+                <button
+                  type="button"
+                  aria-label="Previous page"
+                  disabled={safePage === 0}
+                  onClick={() => setPage((p) => Math.max(0, p - 1))}
+                  className="inline-flex h-7 w-7 items-center justify-center rounded-lg border border-gray-200 text-sm font-black text-gray-600 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-40"
+                >
+                  ‹
+                </button>
+                <span className="text-micro font-bold uppercase tracking-widest tabular-nums text-gray-400">
+                  {safePage + 1} / {pageCount}
+                </span>
+                <button
+                  type="button"
+                  aria-label="Next page"
+                  disabled={safePage >= pageCount - 1}
+                  onClick={() => setPage((p) => Math.min(pageCount - 1, p + 1))}
+                  className="inline-flex h-7 w-7 items-center justify-center rounded-lg border border-gray-200 text-sm font-black text-gray-600 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-40"
+                >
+                  ›
+                </button>
+              </div>
+            ) : null}
+          </div>
         ) : null}
 
         {/* Body */}
         <div className="min-h-0 flex-1 overflow-y-auto p-3">
           {loading ? (
-            <div className="grid grid-cols-4 gap-2 sm:grid-cols-5">
-              {Array.from({ length: 10 }).map((_, i) => (
-                <div key={i} className="aspect-square animate-pulse rounded-lg bg-gray-100" />
+            <div className="space-y-1">
+              {Array.from({ length: 8 }).map((_, i) => (
+                <div key={i} className="flex items-center gap-3 rounded-lg border border-gray-100 px-2 py-1.5">
+                  <div className="h-10 w-10 shrink-0 animate-pulse rounded-md bg-gray-100" />
+                  <div className="flex-1 space-y-1.5">
+                    <div className="h-3 w-2/3 animate-pulse rounded bg-gray-100" />
+                    <div className="h-2 w-1/3 animate-pulse rounded bg-gray-100" />
+                  </div>
+                </div>
               ))}
             </div>
           ) : error ? (
@@ -186,67 +463,85 @@ function NasPickerDialog({
               This folder is empty.
             </p>
           ) : (
-            <>
+            <div className="space-y-3">
               {folders.length > 0 ? (
-                <div className="mb-2 divide-y divide-gray-100 rounded-lg border border-gray-100">
+                <div className="space-y-1.5">
+                  <NasSectionLabel>
+                    Folders · {folders.length}
+                  </NasSectionLabel>
                   {folders.map((f) => (
-                    <button
-                      key={f.relPath}
-                      type="button"
-                      onClick={() => {
-                        setSelected(new Set());
-                        setDir(f.relPath);
-                      }}
-                      className="flex w-full items-center gap-2 px-3 py-2 text-left hover:bg-gray-50"
-                    >
-                      <span>📁</span>
-                      <span className="truncate text-caption font-semibold text-gray-700">
-                        {f.name}
-                      </span>
-                    </button>
+                    <NasFolderCard key={f.relPath} name={f.name} onOpen={() => navigate(f.relPath)} />
                   ))}
                 </div>
               ) : null}
 
               {files.length > 0 ? (
-                <div className="grid grid-cols-4 gap-2 sm:grid-cols-5">
-                  {files.map((f) => {
+                <div className="space-y-1.5">
+                  <NasSectionLabel>
+                    Photos · {files.length}
+                  </NasSectionLabel>
+                  <div className="space-y-1">
+                  {pagedFiles.map((f) => {
                     const isSel = selected.has(f.url);
                     return (
-                      <button
+                      <div
                         key={f.relPath}
-                        type="button"
-                        onClick={() => toggle(f.url)}
-                        className={`relative aspect-square overflow-hidden rounded-lg ring-2 transition ${
-                          isSel ? 'ring-blue-500' : 'ring-transparent hover:ring-gray-200'
+                        className={`flex w-full items-center gap-3 rounded-lg border px-2 py-1.5 transition ${
+                          isSel
+                            ? 'border-blue-400 bg-blue-50/60 ring-1 ring-inset ring-blue-200'
+                            : 'border-gray-100 hover:bg-gray-50'
                         }`}
-                        title={f.name}
                       >
-                        {/* eslint-disable-next-line @next/next/no-img-element */}
-                        <img
-                          src={f.url}
-                          alt={f.name}
-                          loading="lazy"
-                          className={`h-full w-full object-cover ${isSel ? 'opacity-70' : ''}`}
-                        />
-                        {isSel ? (
-                          <span className="absolute right-1 top-1 grid h-5 w-5 place-items-center rounded-full bg-blue-600 text-[11px] font-black text-white">
+                        {/* Thumbnail → open a larger preview (doesn't select). */}
+                        <button
+                          type="button"
+                          onClick={() => setPreview(f)}
+                          className="shrink-0 overflow-hidden rounded-md ring-1 ring-inset ring-gray-200 transition hover:ring-blue-300"
+                          title="Preview"
+                          aria-label={`Preview ${f.name}`}
+                        >
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img
+                            src={thumbUrl(f.url)}
+                            alt=""
+                            loading="lazy"
+                            decoding="async"
+                            className="h-10 w-10 bg-gray-100 object-cover"
+                          />
+                        </button>
+                        {/* Rest of the row → toggle selection (shift-click = range). */}
+                        <button
+                          type="button"
+                          onClick={(e) => handleRowSelect(f.url, e.shiftKey)}
+                          className="flex min-w-0 flex-1 select-none items-center gap-3 text-left"
+                          title={isSel ? 'Deselect' : 'Select · Shift-click for a range'}
+                        >
+                          <div className="min-w-0 flex-1">
+                            <p className="truncate text-caption font-semibold text-gray-800">{f.name}</p>
+                            <p className="text-micro font-medium text-gray-400">{formatMtime(f.mtime)}</p>
+                          </div>
+                          <span
+                            className={`grid h-5 w-5 shrink-0 place-items-center rounded-full border text-[11px] font-black transition ${
+                              isSel ? 'border-blue-600 bg-blue-600 text-white' : 'border-gray-300 text-transparent'
+                            }`}
+                          >
                             ✓
                           </span>
-                        ) : null}
-                      </button>
+                        </button>
+                      </div>
                     );
                   })}
+                  </div>
                 </div>
               ) : null}
-            </>
+            </div>
           )}
         </div>
 
         {/* Footer */}
         <div className="flex items-center justify-between gap-3 border-t border-gray-100 px-4 py-3">
           <span className="text-micro font-bold uppercase tracking-widest text-gray-400">
-            {selected.size > 0 ? `${selected.size} selected` : 'Tap photos to select'}
+            {selected.size > 0 ? `${selected.size} selected` : 'Tap to select · Shift-click for a range'}
           </span>
           <button
             type="button"
@@ -259,5 +554,37 @@ function NasPickerDialog({
         </div>
       </div>
     </div>
+
+      {/* Larger preview lightbox (opened from a row's thumbnail). A ~1024px webp
+          — sharp on the dev route — so it's crisp but still loads fast. */}
+      {preview ? (
+        <div
+          role="dialog"
+          aria-modal="true"
+          className="fixed inset-0 z-[110] flex flex-col items-center justify-center gap-3 bg-black/85 p-4"
+          onClick={() => setPreview(null)}
+        >
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={thumbUrl(preview.url, 1024)}
+            alt={preview.name}
+            onClick={(e) => e.stopPropagation()}
+            className="max-h-[82vh] max-w-full rounded-lg object-contain shadow-2xl"
+          />
+          <div className="flex items-center gap-3 rounded-full bg-white/10 px-4 py-1.5 text-center backdrop-blur">
+            <span className="truncate text-caption font-bold text-white">{preview.name}</span>
+            <span className="text-micro font-medium text-white/60">{formatMtime(preview.mtime)}</span>
+          </div>
+          <button
+            type="button"
+            onClick={() => setPreview(null)}
+            className="absolute right-4 top-4 rounded-lg border border-white/20 bg-white/10 px-3 py-1.5 text-micro font-black uppercase tracking-widest text-white hover:bg-white/20"
+          >
+            Close
+          </button>
+        </div>
+      ) : null}
+    </>,
+    portalTarget,
   );
 }

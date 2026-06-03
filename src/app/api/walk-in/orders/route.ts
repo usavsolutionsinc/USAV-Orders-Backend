@@ -5,7 +5,12 @@ import { isAllowedAdminOrigin } from '@/lib/security/allowed-origin';
 import { withAuth } from '@/lib/auth/withAuth';
 
 interface LineItemInput {
-  catalog_object_id: string;
+  /** Square catalog variation id — present for catalog products. */
+  catalog_object_id?: string;
+  /** Ad-hoc line name — present for manual "not in catalog" products. */
+  name?: string;
+  /** Ad-hoc unit price in minor units; currency defaults to the location's. */
+  base_price_money?: { amount: number; currency?: string };
   quantity: string; // Square requires string
 }
 
@@ -32,14 +37,27 @@ export const POST = withAuth(async (req: NextRequest) => {
 
     const cfg = getSquareConfig();
 
+    // Catalog lines charge by catalog_object_id (Square's price is
+    // authoritative); manual lines come through as ad-hoc name + base_price_money
+    // (the "Product not added yet?" path), so the terminal can still charge them.
     const orderBody: Record<string, unknown> = {
       idempotency_key: randomUUID(),
       order: {
         location_id: cfg.locationId,
-        line_items: body.line_items.map((li) => ({
-          catalog_object_id: li.catalog_object_id,
-          quantity: String(li.quantity || '1'),
-        })),
+        line_items: body.line_items.map((li) => {
+          const quantity = String(li.quantity || '1');
+          if (li.catalog_object_id) {
+            return { catalog_object_id: li.catalog_object_id, quantity };
+          }
+          return {
+            name: li.name || 'Item',
+            quantity,
+            base_price_money: {
+              amount: Math.max(0, Math.round(li.base_price_money?.amount ?? 0)),
+              currency: li.base_price_money?.currency || cfg.currency,
+            },
+          };
+        }),
         ...(body.customer_id ? { customer_id: body.customer_id } : {}),
       },
     };

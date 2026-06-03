@@ -402,7 +402,9 @@ export async function getTicket(id: number): Promise<ZendeskTicket | null> {
 
 export interface CreateTicketInput {
     subject: string;
-    comment: { body: string; html_body?: string; public?: boolean };
+    // `uploads` carries upload tokens from uploadFileToZendesk() — Zendesk turns
+    // each into a file attachment on this comment.
+    comment: { body: string; html_body?: string; public?: boolean; uploads?: string[] };
     priority?: ZendeskTicketPriority;
     status?: ZendeskTicketStatus;
     type?: ZendeskTicketType;
@@ -420,6 +422,43 @@ export interface CreateTicketInput {
  * identical-key create for ~2h and returns the original ticket instead of making
  * a duplicate. Use a per-submit UUID so distinct submissions still create distinct tickets.
  */
+/**
+ * Upload one file to Zendesk's Uploads API and return its upload token. Pass the
+ * token (or several) as `comment.uploads` on createTicket so the file rides along
+ * as a real attachment on the ticket — not a link in the body. The body must be
+ * raw bytes (not JSON), so this bypasses zendeskApiRequest and calls fetch directly.
+ */
+export async function uploadFileToZendesk(
+    filename: string,
+    bytes: Uint8Array,
+    contentType = 'application/octet-stream',
+): Promise<string> {
+    const config = requireZendeskConfig();
+    const auth = Buffer.from(`${config.user}/token:${config.apiToken}`).toString('base64');
+    const response = await fetch(
+        `https://${config.subdomain}.zendesk.com/api/v2/uploads.json?filename=${encodeURIComponent(filename)}`,
+        {
+            method: 'POST',
+            headers: { 'Content-Type': contentType, Authorization: `Basic ${auth}` },
+            // Raw bytes (not JSON). Node's fetch accepts a Uint8Array body at
+            // runtime; the cast sidesteps the over-narrow DOM BodyInit typing.
+            body: bytes as unknown as BodyInit,
+            cache: 'no-store',
+        },
+    );
+    if (!response.ok) {
+        const errorText = await response.text().catch(() => '');
+        throw new ZendeskApiError(
+            response.status,
+            `Zendesk upload failed (${response.status})${errorText ? `: ${errorText}` : ''}`,
+        );
+    }
+    const data = (await response.json().catch(() => ({}))) as { upload?: { token?: string } };
+    const token = data.upload?.token;
+    if (!token) throw new ZendeskApiError(502, 'Zendesk upload returned no token');
+    return token;
+}
+
 export async function createTicket(
     input: CreateTicketInput,
     opts: { idempotencyKey?: string } = {},

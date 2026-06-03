@@ -24,13 +24,14 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
       return NextResponse.json({ success: false, error: 'Order not found' }, { status: 404 });
     }
 
+    // Titles come from the canonical Zoho `sku_catalog` (not Ecwid display_name)
+    // so the review/reprint panel matches the pickup product search.
     const itemsResult = await pool.query(
       `SELECT oi.*,
-         COALESCE(sp.display_name, oi.product_title) AS display_name,
-         COALESCE(sp.image_url, oi.image_url) AS resolved_image_url
+         COALESCE(sc.product_title, oi.product_title) AS display_name,
+         COALESCE(sc.image_url, oi.image_url) AS resolved_image_url
        FROM local_pickup_order_items oi
-       LEFT JOIN sku_platform_ids sp
-         ON sp.platform_sku = oi.sku AND sp.platform = 'ecwid' AND sp.is_active = true
+       LEFT JOIN sku_catalog sc ON sc.sku = oi.sku
        WHERE oi.order_id = $1
        ORDER BY oi.id ASC`,
       [orderId],

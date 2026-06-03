@@ -2141,91 +2141,9 @@ export function LineEditPanel({
           {/* Shipment PO moved above (under the ContextCard); Item removed
               entirely as its fields are surfaced as top-of-workspace cards. */}
 
-          {/* ── SUPPORT ──
-              Hidden by default. Surfaces when:
-                • the operator opens a claim (showSupportOverride flips true), OR
-                • a Zendesk ticket / support notes were already saved (so the
-                  history of the carton is still reachable on re-open).
-              The "Make a claim" flow auto-populates `zendesk` on success, so
-              the operator sees the freshly-filed ticket # immediately. */}
-          {(showSupportOverride || zendesk.trim() || supportNotes.trim()) ? (
-          <WorkspaceCard tone="orange" bodyClassName="px-0 py-0" className="overflow-hidden">
-            <FlowSection
-              embedded
-              title="Support"
-              summary={
-                zendesk.trim()
-                  ? 'Zendesk'
-                  : supportNotes.trim()
-                    ? 'Notes'
-                    : undefined
-              }
-              open={flowOpen.support}
-              onToggle={() => toggleFlow('support')}
-              tone="support"
-              bodyClassName="px-3 py-3"
-            >
-          <div className="space-y-2.5">
-            <div>
-              <span className={FLOW_SECTION_LABEL}>Zendesk</span>
-              <div className="mt-1 flex gap-1">
-                <input
-                  type="text"
-                  value={zendesk}
-                  onChange={(e) => setZendesk(e.target.value)}
-                  onBlur={() => void saveZendeskTicket()}
-                  placeholder="Ticket # or URL"
-                  className={`${INPUT_CLASS} flex-1 min-w-0`}
-                />
-                <button
-                  type="button"
-                  onClick={async () => {
-                    try {
-                      const t = await navigator.clipboard.readText();
-                      if (t) setZendesk(t.trim());
-                    } catch { /* */ }
-                  }}
-                  title="Paste"
-                  className="shrink-0 border border-slate-200 bg-white px-1.5 py-0.5 text-slate-500 transition-colors hover:bg-slate-50"
-                >
-                  <Clipboard className="h-3 w-3" />
-                </button>
-                {zendeskTicketUrl(zendesk) ? (
-                  <a
-                    href={zendeskTicketUrl(zendesk)!}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    title="Open in Zendesk"
-                    className="shrink-0 border border-slate-200 bg-white px-1.5 py-0.5 text-blue-600 transition-colors hover:bg-blue-50"
-                  >
-                    <ExternalLink className="h-3 w-3" />
-                  </a>
-                ) : null}
-              </div>
-            </div>
-            <div>
-              <label htmlFor={`support-notes-${row.receiving_id ?? 'none'}-${row.id}`} className={FLOW_SECTION_LABEL}>
-                Support notes
-              </label>
-              <textarea
-                id={`support-notes-${row.receiving_id ?? 'none'}-${row.id}`}
-                value={supportNotes}
-                onChange={(e) => setSupportNotes(e.target.value)}
-                onBlur={() => void saveSupportNotes()}
-                disabled={row.receiving_id == null}
-                rows={2}
-                placeholder={
-                  row.receiving_id == null
-                    ? 'Link this line to a shipment to save support notes'
-                    : 'Ticket context, vendor issues, PO-wide notes…'
-                }
-                className="mt-1 w-full resize-none rounded-md border border-slate-200 bg-white px-2 py-1 text-caption font-medium leading-snug text-slate-900 placeholder:text-slate-400 focus:border-blue-300 focus:outline-none focus:ring-2 focus:ring-blue-500/10 disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-400"
-              />
-            </div>
-          </div>
-            </FlowSection>
-          </WorkspaceCard>
-          ) : null}
+          {/* Support (Zendesk # + notes) removed from the column — the Zendesk
+              ticket is shown as a pill in the top header. The claim flow still
+              persists the ticket # to receiving_lines.zendesk_ticket. */}
 
           {scanValue || row.sku ? (
             <WorkspaceCard label="Label preview">
@@ -2316,13 +2234,10 @@ export function LineEditPanel({
       row={row}
       onClose={() => setClaimModalOpen(false)}
       onTicketCreated={(tk) => {
-        // Auto-populate the Support ZD field — only if empty, so we don't
-        // stomp in-flight operator edits. The existing save flow persists it
-        // on the next Receive / patch event.
+        // Keep the in-memory zendesk value in sync (persisted to the line by
+        // the claim route + the Receive/patch save flow). The header pill reads
+        // receiving_lines.zendesk_ticket, so the freshly-filed # shows there.
         if (!zendesk.trim()) setZendesk(tk);
-        // Reveal the Support card so the operator can verify the
-        // freshly-filed ticket # without hunting for a toggle.
-        setShowSupportOverride(true);
         // Broadcast so other surfaces (Recent rail, table) can refresh
         // their cached row if they hold a zendesk_ticket field.
         dispatchLineUpdated({ id: row.id, notes: row.notes });

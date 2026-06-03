@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { listNasDir, nasConfigured, type NasEntry } from '@/lib/nas-photos';
+import { NasBreadcrumb, NasFolderCard, NasSectionLabel } from '@/components/nas/NasBrowserChrome';
 
 /**
  * /photos — standalone PREVIEW of the NAS photo source.
@@ -42,12 +43,6 @@ export default function NasPhotosPreviewPage() {
     else setLoading(false);
   }, [dir, load, configured]);
 
-  const goUp = () => {
-    const parts = dir.split('/');
-    parts.pop();
-    setDir(parts.join('/'));
-  };
-
   const folders = entries.filter((e) => e.type === 'directory');
   const files = entries.filter((e) => e.type === 'file');
 
@@ -67,13 +62,9 @@ export default function NasPhotosPreviewPage() {
           </code>
         </div>
         {dir ? (
-          <button
-            type="button"
-            onClick={goUp}
-            className="mt-2 text-xs font-bold uppercase tracking-widest text-blue-400 active:text-blue-300"
-          >
-            ↑ Up a folder
-          </button>
+          <div className="mt-2">
+            <NasBreadcrumb dir={dir} onNavigate={setDir} tone="dark" />
+          </div>
         ) : null}
       </header>
 
@@ -112,27 +103,22 @@ export default function NasPhotosPreviewPage() {
           This folder is empty.
         </p>
       ) : (
-        <div className="p-1">
+        <div className="space-y-4 p-3">
           {/* Folders */}
           {folders.length > 0 ? (
-            <div className="mb-1 divide-y divide-white/5 rounded bg-white/[0.03]">
+            <div className="space-y-1.5">
+              <NasSectionLabel tone="dark">Folders · {folders.length}</NasSectionLabel>
               {folders.map((f) => (
-                <button
-                  key={f.relPath}
-                  type="button"
-                  onClick={() => setDir(f.relPath)}
-                  className="flex w-full items-center gap-3 px-4 py-3 text-left active:bg-white/5"
-                >
-                  <span className="text-lg">📁</span>
-                  <span className="truncate text-sm font-bold">{f.name}</span>
-                </button>
+                <NasFolderCard key={f.relPath} name={f.name} onOpen={() => setDir(f.relPath)} tone="dark" />
               ))}
             </div>
           ) : null}
 
           {/* Files */}
           {files.length > 0 ? (
-            <div className="grid grid-cols-3 gap-1 sm:grid-cols-4 md:grid-cols-6">
+            <div className="space-y-1.5">
+              <NasSectionLabel tone="dark">Photos · {files.length}</NasSectionLabel>
+              <div className="grid grid-cols-3 gap-1 sm:grid-cols-4 md:grid-cols-6">
               {files.map((f) => (
                 <button
                   key={f.relPath}
@@ -153,6 +139,7 @@ export default function NasPhotosPreviewPage() {
                   </span>
                 </button>
               ))}
+              </div>
             </div>
           ) : null}
         </div>

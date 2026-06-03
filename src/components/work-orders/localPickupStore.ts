@@ -21,6 +21,7 @@
 
 import { useSyncExternalStore } from 'react';
 import { invalidateReceivingCache } from '@/lib/receivingCache';
+import { buildLocalPickupPoNumber } from '@/lib/local-pickup/po-number';
 
 export const CONDITION_OPTIONS = [
   { value: 'BRAND_NEW', label: 'Brand New' },
@@ -59,6 +60,8 @@ interface PickupState {
   cart: CartLine[];
   /** key of the line the main editor is focused on; null = none selected. */
   selectedKey: string | null;
+  /** Review & print overlay open (the finalize step before logging the PO). */
+  reviewOpen: boolean;
   isSubmitting: boolean;
   submitError: string | null;
   successMessage: string | null;
@@ -67,10 +70,27 @@ interface PickupState {
 let state: PickupState = {
   cart: [],
   selectedKey: null,
+  reviewOpen: false,
   isSubmitting: false,
   submitError: null,
   successMessage: null,
 };
+
+/**
+ * Set after the order + receiving row are created but before the Zoho PO
+ * succeeds, so a retry of {@link finalize} reuses them instead of creating a
+ * duplicate order / receiving entry. Cleared once the PO is committed.
+ */
+let pendingFinalize: { orderId: number; receivingId: number; poNumber: string } | null = null;
+
+/** Result of a successful finalize, returned to the review panel for printing. */
+export interface FinalizeResult {
+  ok: boolean;
+  orderId?: number;
+  receivingId?: number;
+  poNumber?: string;
+  error?: string;
+}
 
 const listeners = new Set<() => void>();
 
@@ -186,35 +206,83 @@ export function clearMessages(): void {
   }
 }
 
+export function openReview(): void {
+  if (state.cart.length === 0) return;
+  // Fresh review session — drop any half-finished finalize from a prior attempt
+  // so we never reuse a stale order/receiving against an edited cart.
+  pendingFinalize = null;
+  setState({ reviewOpen: true, submitError: null, successMessage: null });
+}
+
+export function closeReview(): void {
+  pendingFinalize = null;
+  setState({ reviewOpen: false });
+}
+
 /**
- * Persist every staged line. Identical to the old inline form: one
- * receiving-entry (synthetic LOCAL tracking) + one local-pickups detail per
- * line. On full success the cart is cleared; partial failures keep the cart and
- * surface the per-SKU errors. Returns the created receiving ids.
+ * Finalize the staged pickup as a single Purchase Order:
+ *   1. create one DRAFT `local_pickup_order` (+ items) for the whole batch
+ *   2. create one `receiving` row (source 'local_pickup') that owns the label
+ *      QR + receiving-history row — tracking = the PO number
+ *   3. POST `…/{id}/finalize` → resolves the Zoho vendor, creates the Zoho PO
+ *      `LCPU-{NAME}-{MMDDYY}`, marks the order COMPLETED + links the receiving
+ *
+ * Steps 1–2 are remembered in {@link pendingFinalize} so a retry after a Zoho
+ * failure reuses the same order + receiving row (no duplicates). On success the
+ * cart is cleared and the order id / receiving id / PO number are returned so
+ * the review panel can print the label.
  */
-export async function submit(): Promise<number[]> {
-  if (state.isSubmitting || state.cart.length === 0) return [];
-  const cart = state.cart;
+export async function finalize(name: string, notes: string): Promise<FinalizeResult> {
+  if (state.isSubmitting) return { ok: false, error: 'Finalize already in progress' };
+  const trimmedName = name.trim();
+  if (!trimmedName) return { ok: false, error: 'Pickup name is required' };
+  if (state.cart.length === 0) return { ok: false, error: 'No items to finalize' };
+
   setState({ isSubmitting: true, submitError: null, successMessage: null });
+  try {
+    if (!pendingFinalize) {
+      const pickupDate = new Date().toISOString().slice(0, 10);
+      const poNumber = buildLocalPickupPoNumber(trimmedName, pickupDate);
 
-  const createdReceivingIds: number[] = [];
-  const errors: string[] = [];
+      // 1. One DRAFT order + items for the whole pickup.
+      const orderRes = await fetch('/api/local-pickup-orders', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          pickupDate,
+          customerName: trimmedName,
+          notes: notes.trim() || null,
+          items: state.cart.map((l) => ({
+            sku: l.sku,
+            productTitle: l.product_title,
+            imageUrl: l.image_url,
+            quantity: l.quantity,
+            conditionGrade: l.conditionGrade,
+            partsStatus: l.partsStatus,
+            missingPartsNote: l.partsStatus === 'MISSING_PARTS' ? l.missingPartsNote : '',
+            conditionNote: l.conditionNote,
+            totalPrice: parseMoney(l.total),
+          })),
+        }),
+      });
+      const orderData = await orderRes.json().catch(() => ({}));
+      if (!orderRes.ok || !orderData?.success) {
+        throw new Error(orderData?.error || `Failed to create order (HTTP ${orderRes.status})`);
+      }
+      const orderId = Number(orderData.order?.id);
+      if (!Number.isFinite(orderId) || orderId <= 0) {
+        throw new Error('Missing order id from local-pickup-orders response');
+      }
 
-  for (const line of cart) {
-    try {
-      const syntheticTracking = `LOCAL-${line.sku || 'ITEM'}-${Date.now()}-${Math.random()
-        .toString(36)
-        .slice(2, 6)
-        .toUpperCase()}`;
-
+      // 2. One receiving row owns the scannable label + history row.
       const entryRes = await fetch('/api/receiving-entry', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          trackingNumber: syntheticTracking,
+          trackingNumber: poNumber,
           carrier: 'LOCAL',
           source: 'local_pickup',
-          conditionGrade: line.conditionGrade,
+          conditionGrade: 'USED_A',
           qaStatus: 'PASSED',
           dispositionCode: 'ACCEPT',
           isReturn: false,
@@ -223,62 +291,53 @@ export async function submit(): Promise<number[]> {
           skipZohoMatch: true,
         }),
       });
+      const entryData = await entryRes.json().catch(() => ({}));
       if (!entryRes.ok) {
-        const err = await entryRes.json().catch(() => ({}));
-        throw new Error(err?.error || `HTTP ${entryRes.status}`);
+        throw new Error(entryData?.error || `Failed to create receiving entry (HTTP ${entryRes.status})`);
       }
-      const entryData = await entryRes.json();
       const receivingId = Number(entryData?.record?.id);
       if (!Number.isFinite(receivingId) || receivingId <= 0) {
         throw new Error('Missing receiving_id from receiving-entry response');
       }
-      createdReceivingIds.push(receivingId);
 
-      const totalNumber = parseMoney(line.total);
-
-      const detailRes = await fetch('/api/local-pickups', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          receivingId,
-          productTitle: line.product_title,
-          sku: line.sku,
-          quantity: line.quantity,
-          partsStatus: line.partsStatus,
-          missingPartsNote:
-            line.partsStatus === 'MISSING_PARTS' ? line.missingPartsNote : '',
-          receivingGrade: line.conditionGrade,
-          conditionNote: line.conditionNote,
-          total: totalNumber ? totalNumber.toFixed(2) : null,
-        }),
-      });
-      if (!detailRes.ok) {
-        const err = await detailRes.json().catch(() => ({}));
-        throw new Error(err?.error || `HTTP ${detailRes.status}`);
-      }
-    } catch (err) {
-      errors.push(`${line.sku}: ${err instanceof Error ? err.message : 'Failed'}`);
+      pendingFinalize = { orderId, receivingId, poNumber };
     }
-  }
 
-  invalidateReceivingCache();
-  window.dispatchEvent(new CustomEvent('usav-refresh-data'));
-  window.dispatchEvent(new CustomEvent('dashboard-refresh'));
+    // 3. Push to Zoho + complete (retry-safe via pendingFinalize).
+    const finRes = await fetch(`/api/local-pickup-orders/${pendingFinalize.orderId}/finalize`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ receivingId: pendingFinalize.receivingId }),
+    });
+    const finData = await finRes.json().catch(() => ({}));
+    if (!finRes.ok || !finData?.success) {
+      throw new Error(finData?.error || `Failed to finalize (HTTP ${finRes.status})`);
+    }
 
-  if (errors.length === 0) {
+    const result: FinalizeResult = {
+      ok: true,
+      orderId: pendingFinalize.orderId,
+      receivingId: pendingFinalize.receivingId,
+      poNumber: String(finData.poNumber || pendingFinalize.poNumber),
+    };
+    pendingFinalize = null;
+
+    invalidateReceivingCache();
+    window.dispatchEvent(new CustomEvent('usav-refresh-data'));
+    window.dispatchEvent(new CustomEvent('dashboard-refresh'));
+
     setState({
       cart: [],
       selectedKey: null,
       isSubmitting: false,
-      successMessage: `Logged ${createdReceivingIds.length} item${
-        createdReceivingIds.length === 1 ? '' : 's'
-      }`,
+      successMessage: `Logged ${result.poNumber}`,
     });
-  } else {
-    setState({ isSubmitting: false, submitError: errors.join(' · ') });
+    return result;
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : 'Finalize failed';
+    setState({ isSubmitting: false, submitError: msg });
+    return { ok: false, error: msg };
   }
-
-  return createdReceivingIds;
 }
 
 // ── Hook ─────────────────────────────────────────────────────────────────────

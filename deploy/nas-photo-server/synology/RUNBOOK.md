@@ -1,7 +1,8 @@
 # Production runbook — NAS photos live on the Vercel site (Synology + Cloudflare Tunnel)
 
-Goal: receiving photos already syncing to the Synology NAS become viewable on the
-live (HTTPS) Vercel app, for **in-office staff, remote staff, and Zendesk tickets**.
+Goal: the purchasing photos already living on the Synology NAS
+(`/volume1/USAV Media/Puchasing photos/2026`) become viewable on the live (HTTPS)
+Vercel app, for **in-office staff, remote staff, and Zendesk tickets**.
 
 Target NAS: **Synology DiskStation, DSM 7** — `192.168.254.14` (`USAVSolutions.local`).
 Public host we'll create: **`nas-photos.michaelgarisek.com`**.
@@ -26,14 +27,21 @@ tunnel on the NAS, (2) flip one Vercel env var.
 
 ---
 
-## Step 1 — Dedicated shared folder (DSM GUI)
+## Step 1 — Confirm the photos folder (DSM GUI)
 
-1. DSM → **Control Panel → Shared Folder → Create**.
-2. Name it `ReceivingPhotos`. (Host path becomes `/volume1/ReceivingPhotos`.)
-3. Repoint the phone photo-sync to drop receiving photos into this folder.
-   Do **not** reuse a personal home folder — those hold secrets.
+This server serves the existing purchasing photos for 2026:
 
-> If your volume isn't `volume1`, adjust the path in `docker-compose.yml`.
+- **Share:** `USAV Media` (mounts as `/Volumes/USAV Media` on a Mac).
+- **Host path on the NAS:** `/volume1/USAV Media/Puchasing photos/2026`
+  (folder is spelled "Puchasing" on disk — keep it exact).
+
+1. DSM → **File Station** → confirm `USAV Media/Puchasing photos/2026` exists and
+   holds the images you want served.
+2. The compose mount is **read-only** (`:ro`), so the server can never modify or
+   delete anything in this folder.
+
+> The mount exposes ONLY the `2026` subfolder — nothing else under `USAV Media`.
+> If your volume isn't `volume1`, adjust the path prefix in `docker-compose.yml`.
 
 ## Step 2 — Install Container Manager (DSM GUI)
 

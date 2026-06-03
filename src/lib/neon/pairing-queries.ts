@@ -133,6 +133,9 @@ export async function suggestPairingsForSku(
   const catalog = catalogResult.rows[0];
 
   // ── Confirmed (already paired) — one row per existing mapping ─────────────
+  // Strictly rows explicitly linked to this catalog id. We deliberately do NOT
+  // treat platform_sku == sc.sku as confirmed: a coincidental SKU-string match
+  // is not a pairing, and showing it as "linked" misrepresents unpaired rows.
   const confirmedResult = await pool.query<{
     platformIdRowId: number;
     platform: string;
@@ -159,10 +162,10 @@ export async function suggestPairingsForSku(
        sp.paired_by        AS "pairedBy",
        to_char(sp.paired_at, 'YYYY-MM-DD"T"HH24:MI:SSZ') AS "pairedAt"
      FROM sku_platform_ids sp
-     WHERE (sp.sku_catalog_id = $1 OR sp.platform_sku = $2)
+     WHERE sp.sku_catalog_id = $1
        AND sp.is_active = true
      ORDER BY sp.platform ASC, sp.account_name ASC NULLS LAST`,
-    [catalog.id, catalog.sku],
+    [catalog.id],
   );
 
   // ── Candidates: read from the materialized sku_pairing_suggestions table ──

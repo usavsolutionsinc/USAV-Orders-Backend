@@ -147,6 +147,8 @@ export const GET = withAuth(async (request: NextRequest) => {
                 stn.is_delivered             AS shipment_is_delivered,
                 stn.delivered_at             AS shipment_delivered_at,
                 sc.image_url,
+                sc.product_title             AS catalog_product_title,
+                sc.id                        AS sku_catalog_id,
                 (SELECT COUNT(*) FROM photos p
                   WHERE p.entity_type = 'RECEIVING'
                     AND p.entity_id = rl.receiving_id) AS photo_count
@@ -199,6 +201,8 @@ export const GET = withAuth(async (request: NextRequest) => {
                   stn.is_delivered             AS shipment_is_delivered,
                   stn.delivered_at             AS shipment_delivered_at,
                   sc.image_url,
+                  sc.product_title             AS catalog_product_title,
+                  sc.id                        AS sku_catalog_id,
                   (SELECT COUNT(*) FROM photos p
                     WHERE p.entity_type = 'RECEIVING'
                       AND p.entity_id = rl.receiving_id) AS photo_count
@@ -627,6 +631,8 @@ export const GET = withAuth(async (request: NextRequest) => {
                 stn.is_delivered             AS shipment_is_delivered,
                 stn.delivered_at             AS shipment_delivered_at,
                 sc.image_url,
+                sc.product_title             AS catalog_product_title,
+                sc.id                        AS sku_catalog_id,
                 (SELECT COUNT(*) FROM photos p
                   WHERE p.entity_type = 'RECEIVING'
                     AND p.entity_id = rl.receiving_id) AS photo_count
@@ -731,7 +737,7 @@ export const GET = withAuth(async (request: NextRequest) => {
                FROM receiving_scans rs
                WHERE rs.receiving_id = r.id
             ) rs_agg ON TRUE
-           WHERE r.source = 'unmatched'
+           WHERE r.source IN ('unmatched', 'local_pickup')
              AND NOT EXISTS (
                SELECT 1 FROM receiving_lines rl WHERE rl.receiving_id = r.id
              )
@@ -745,7 +751,7 @@ export const GET = withAuth(async (request: NextRequest) => {
           `SELECT COUNT(*)::bigint AS n
              FROM receiving r
              LEFT JOIN shipping_tracking_numbers stn ON stn.id = r.shipment_id
-            WHERE r.source = 'unmatched'
+            WHERE r.source IN ('unmatched', 'local_pickup')
               AND NOT EXISTS (
                 SELECT 1 FROM receiving_lines rl WHERE rl.receiving_id = r.id
               )
@@ -1129,6 +1135,12 @@ const UNMATCHED_EMPTY_LINE_LABEL = 'Unfound receiving';
  */
 function buildUnmatchedEmptyReceivingLine(pkg: Record<string, unknown>): Record<string, unknown> {
   const rid = Number(pkg.id);
+  // The same line-less placeholder serves both unmatched cartons and finalized
+  // local pickup POs (one receiving row per PO, items live in
+  // local_pickup_order_items). Honour the real source + label so the history
+  // row reads sensibly and the details overlay can branch to the pickup panel.
+  const source = String(pkg.receiving_source || 'unmatched');
+  const isPickup = source === 'local_pickup';
   return {
     id: -rid,
     receiving_id: rid,
@@ -1137,7 +1149,7 @@ function buildUnmatchedEmptyReceivingLine(pkg: Record<string, unknown>): Record<
     receiving_received_at: pkg.receiving_received_at,
     receiving_support_notes: pkg.receiving_support_notes ?? null,
     receiving_listing_url: pkg.receiving_listing_url ?? null,
-    receiving_source: 'unmatched',
+    receiving_source: source,
     receiving_source_platform: pkg.receiving_source_platform,
     receiving_zoho_purchaseorder_number: pkg.receiving_zoho_purchaseorder_number,
     shipment_tracking_number: pkg.shipment_tracking_number,
@@ -1145,7 +1157,9 @@ function buildUnmatchedEmptyReceivingLine(pkg: Record<string, unknown>): Record<
     shipment_status_category: pkg.shipment_status_category,
     shipment_is_delivered: pkg.shipment_is_delivered,
     shipment_delivered_at: pkg.shipment_delivered_at,
-    item_name: UNMATCHED_EMPTY_LINE_LABEL,
+    item_name: isPickup
+      ? String(pkg.receiving_tracking_number || 'Local pickup')
+      : UNMATCHED_EMPTY_LINE_LABEL,
     sku: null,
     zoho_item_id: null,
     zoho_line_item_id: null,
@@ -1237,6 +1251,14 @@ function normalizeRow(row: Record<string, unknown>) {
     zoho_purchaseorder_id:    (row.zoho_purchaseorder_id as string | null) ?? null,
     zoho_purchaseorder_number: (row.zoho_purchaseorder_number as string | null) ?? (row.receiving_zoho_purchaseorder_number as string | null) ?? null,
     item_name:                (row.item_name as string | null) ?? null,
+    // Canonical Zoho catalog title (sku_catalog.product_title), joined by SKU.
+    // Prefer this over item_name for display — item_name is the PO/platform
+    // line name (eBay etc.) and varies by source. Null when the SKU isn't in
+    // the catalog yet; callers fall back to item_name.
+    catalog_product_title:    (row.catalog_product_title as string | null) ?? null,
+    // Canonical sku_catalog.id for this line's SKU (joined). Keys the SKU
+    // pairing surface; null when the SKU isn't catalogued yet.
+    sku_catalog_id:           row.sku_catalog_id != null ? Number(row.sku_catalog_id) : null,
     sku:                      (row.sku as string | null) ?? null,
     quantity_received:        Number(row.quantity_received ?? 0),
     quantity_expected:        row.quantity_expected != null ? Number(row.quantity_expected) : null,

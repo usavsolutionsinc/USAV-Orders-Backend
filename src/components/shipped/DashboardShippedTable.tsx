@@ -6,6 +6,7 @@ import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { Loader2 } from '@/components/Icons';
 import { MobileDateGroupHeader } from '@/components/mobile/MobileDateGroupHeader';
 import { DateGroupHeader } from '@/components/shipped/DateGroupHeader';
+import { DayPickupPrintButton } from '@/components/shipped/PickupReportButton';
 import WeekHeader from '@/components/ui/WeekHeader';
 import { sectionLabel, fieldLabel } from '@/design-system/tokens/typography/presets';
 import type { DashboardSearchSectionProps } from '@/components/dashboard/DashboardSearchSectionProps';
@@ -678,6 +679,11 @@ export function DashboardShippedTable({
                           <DateGroupHeader
                             date={date}
                             total={dayRecords.length}
+                            actions={
+                              /^\d{4}-\d{2}-\d{2}$/.test(date) ? (
+                                <DayPickupPrintButton dateKey={date} />
+                              ) : undefined
+                            }
                           />
                         )}
                         {sortedRecords.map((record, index) => {

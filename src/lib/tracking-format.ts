@@ -52,9 +52,38 @@ export function stripUspsRoutingPrefix(input: string): string {
   return clean;
 }
 
-/** Normalize tracking number, stripping USPS routing prefix if present. */
+/**
+ * Collapse a tracking value that is the *same* number repeated back-to-back.
+ * A double-scan or double-paste (e.g. "9400…3451" pasted twice) produces a
+ * 2x/3x-length string that fails carrier detection and never registers. When
+ * the cleaned string is an exact N-fold repetition of a single unit (N = 2,3)
+ * and that unit is long enough to be a real tracking number, return one copy.
+ *
+ * Only collapses *identical* repeats — two different concatenated numbers are
+ * left untouched. The 12-char minimum unit makes a coincidental match between
+ * a real tracking number and a perfect repetition effectively impossible.
+ */
+export function collapseRepeatedTracking(input: string): string {
+  const clean = normalizeTrackingCanonical(input);
+  const len = clean.length;
+  if (len < 24) return clean; // shortest doubled tracking is 2 × 12 chars
+  for (const n of [2, 3]) {
+    if (len % n !== 0) continue;
+    const unit = len / n;
+    if (unit < 12) continue;
+    const first = clean.slice(0, unit);
+    let allMatch = true;
+    for (let i = 1; i < n; i++) {
+      if (clean.slice(i * unit, (i + 1) * unit) !== first) { allMatch = false; break; }
+    }
+    if (allMatch) return first;
+  }
+  return clean;
+}
+
+/** Normalize tracking number, collapsing exact repeats and stripping USPS routing prefix. */
 export const normalizeTrackingNumber = (input: string): string =>
-  stripUspsRoutingPrefix(normalizeTrackingCanonical(input));
+  stripUspsRoutingPrefix(collapseRepeatedTracking(normalizeTrackingCanonical(input)));
 
 /** Alias for FBA FNSKU normalization — identical to normalizeTrackingCanonical. */
 export const normalizeFnsku = normalizeTrackingCanonical;

@@ -1,4 +1,5 @@
-# Production NAS photo server for the receiving "Select from NAS" picker.
+# Production NAS photo server for the "Select from NAS" picker.
+# Serves /volume1/USAV Media/Puchasing photos/2026 (purchasing photos, 2026).
 # Runs on the Synology DiskStation (DSM 7) via Container Manager → Projects.
 #
 # Two containers:
@@ -19,9 +20,12 @@ services:
     restart: unless-stopped
     networks: [nasnet]
     volumes:
-      # LEFT = real path on the Synology. Use a DEDICATED shared folder, never
-      # a home directory (which holds secrets). Mounted READ-ONLY (:ro).
-      - "/volume1/ReceivingPhotos:/srv/photos:ro"
+      # LEFT = real path on the Synology. This serves the purchasing photos for
+      # 2026. The "USAV Media" share mounts at /volume1/USAV Media on the NAS
+      # (it shows up as /Volumes/USAV Media on a Mac). Folder name is spelled
+      # "Puchasing" on disk (sic) — keep it exact. Mounted READ-ONLY (:ro).
+      # If your volume isn't volume1, adjust the prefix.
+      - "/volume1/USAV Media/Puchasing photos/2026:/srv/photos:ro"
       - "/volume1/docker/nas-photos/nginx.conf:/etc/nginx/conf.d/default.conf:ro"
     # Defense in depth: container can't write the volume either.
     read_only: true

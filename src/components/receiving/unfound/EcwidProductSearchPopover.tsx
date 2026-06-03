@@ -65,6 +65,13 @@ export interface EcwidProductSearchPopoverProps {
   popoverMode: EcwidProductPopoverMode;
   /** Optional initial query (e.g. parsed product title from listing URL); catalog mode only */
   initialQuery?: string;
+  /**
+   * Force the catalog search to a specific `searchField` and hide the
+   * title/SKU toggle. Local Pickup passes `'zoho_catalog'` so titles come from
+   * the Zoho `sku_catalog` (not Ecwid `display_name`). Omit for the default
+   * unfound-carton behaviour (Ecwid title / SKU toggle).
+   */
+  searchFieldOverride?: 'zoho_catalog';
   onSelect: (selection: EcwidProductSelection) => void | Promise<void>;
   onClose: () => void;
 }
@@ -104,6 +111,7 @@ export function EcwidProductSearchPopover({
   receivingId: _receivingId,
   popoverMode,
   initialQuery = '',
+  searchFieldOverride,
   onSelect,
   onClose,
 }: EcwidProductSearchPopoverProps) {
@@ -187,7 +195,7 @@ export function EcwidProductSearchPopover({
 
       const url = new URL('/api/sku-catalog/search', window.location.origin);
       url.searchParams.set('q', trimmed);
-      url.searchParams.set('searchField', searchField);
+      url.searchParams.set('searchField', searchFieldOverride ?? searchField);
       url.searchParams.set('limit', String(MAX_RESULTS));
 
       fetch(url.toString(), { signal: controller.signal })
@@ -211,7 +219,7 @@ export function EcwidProductSearchPopover({
     return () => {
       if (debounceRef.current) clearTimeout(debounceRef.current);
     };
-  }, [popoverMode, query, searchField, manualTitleMode]);
+  }, [popoverMode, query, searchField, searchFieldOverride, manualTitleMode]);
 
   // Cleanup on unmount
   useEffect(() => () => abortRef.current?.abort(), []);
@@ -278,10 +286,12 @@ export function EcwidProductSearchPopover({
 
   const placeholder = useMemo(
     () =>
-      searchField === 'title'
-        ? 'Search Ecwid product title…'
-        : 'Search Ecwid SKU…',
-    [searchField],
+      searchFieldOverride
+        ? 'Search product name or SKU…'
+        : searchField === 'title'
+          ? 'Search Ecwid product title…'
+          : 'Search Ecwid SKU…',
+    [searchField, searchFieldOverride],
   );
 
   const dialogAria =
@@ -323,7 +333,9 @@ export function EcwidProductSearchPopover({
         >
       {/* Header: catalog toggle + close (repair mode is a fixed list) */}
       <div className="flex items-center justify-between border-b border-gray-100 px-3 py-2">
-        {popoverMode === 'search' && !manualTitleMode ? (
+        {popoverMode === 'search' && !manualTitleMode && searchFieldOverride ? (
+          <span className={`${microBadge} text-gray-700`}>Search Zoho catalog</span>
+        ) : popoverMode === 'search' && !manualTitleMode ? (
           <div className="flex gap-1">
             <ModeButton
               active={searchField === 'title'}

@@ -12,12 +12,22 @@ export const GET = withAuth(async (req: NextRequest) => {
     const searchField = (searchParams.get('searchField') || 'ecwid_sku') as
       | 'ecwid_sku'
       | 'zoho_sku'
-      | 'title';
+      | 'title'
+      | 'zoho_catalog';
     const limit = Math.min(Math.max(Number(searchParams.get('limit') || 20), 1), 100);
 
     if (searchField === 'ecwid_sku' || searchField === 'title') {
       return NextResponse.json(
         await searchFromPlatform(q, searchField, excludeSkuSuffix, limit),
+      );
+    }
+
+    // `zoho_catalog`: title + SKU search sourced purely from the Zoho
+    // `sku_catalog` (no Ecwid display_name fallback). Used by Local Pickup,
+    // which must show canonical Zoho product titles.
+    if (searchField === 'zoho_catalog') {
+      return NextResponse.json(
+        await searchFromZohoCatalog(q, excludeSkuSuffix, limit),
       );
     }
 
@@ -111,6 +121,94 @@ async function searchFromPlatform(
         typeof r.platform_ids === 'string'
           ? JSON.parse(r.platform_ids)
           : r.platform_ids,
+    })),
+  };
+}
+
+/**
+ * Zoho-only catalog search sourced straight from the Zoho `items` mirror —
+ * the authoritative Zoho Inventory table (synced from /api/v1/items). Returns
+ * the Zoho SKU, Zoho name, and `zoho_item_id` so Local Pickup can create a Zoho
+ * PO that references real Zoho items (not Ecwid listings). Matches on Zoho SKU
+ * OR name; only active items with a SKU appear. Results are tagged with a
+ * `zoho` platform chip so there's no Ecwid ambiguity.
+ */
+async function searchFromZohoCatalog(
+  q: string,
+  excludeSkuSuffix: string,
+  limit: number,
+) {
+  // INNER JOIN sku_catalog only to borrow its numeric id (the popover keys on a
+  // numeric id); titles/SKUs/item_id come from `items` (Zoho source of truth).
+  const filterClauses: string[] = [
+    "i.status = 'active'",
+    "i.sku IS NOT NULL",
+    "BTRIM(i.sku) <> ''",
+  ];
+  const params: unknown[] = [];
+
+  if (excludeSkuSuffix) {
+    params.push(`%${excludeSkuSuffix}`);
+    filterClauses.push(`BTRIM(i.sku) NOT ILIKE $${params.length}`);
+  }
+
+  let exactIdx: number | null = null;
+  if (q) {
+    params.push(`%${q}%`);
+    const likeIdx = params.length;
+    params.push(q);
+    exactIdx = params.length;
+    filterClauses.push(`(i.sku ILIKE $${likeIdx} OR i.name ILIKE $${likeIdx})`);
+  }
+
+  params.push(limit);
+  const limitIdx = params.length;
+
+  const orderBy = exactIdx
+    ? `CASE WHEN UPPER(MAX(BTRIM(i.sku))) = UPPER($${exactIdx}) THEN 0 ELSE 1 END, MAX(i.name) ASC`
+    : 'MAX(i.name) ASC';
+
+  const result = await pool.query(
+    `SELECT
+       sc.id,
+       MAX(BTRIM(i.sku))      AS sku,
+       MAX(BTRIM(i.sku))      AS zoho_sku,
+       MAX(i.name)            AS product_title,
+       MAX(i.zoho_item_id)    AS zoho_item_id,
+       MAX(sc.category)       AS category,
+       MAX(i.upc)             AS upc,
+       COALESCE(MAX(i.image_url), MAX(sc.image_url)) AS image_url,
+       bool_or(sc.is_active)  AS is_active
+     FROM items i
+     JOIN sku_catalog sc ON sc.sku = BTRIM(i.sku)
+     WHERE ${filterClauses.join(' AND ')}
+     GROUP BY sc.id
+     ORDER BY ${orderBy}
+     LIMIT $${limitIdx}`,
+    params,
+  );
+
+  return {
+    success: true,
+    items: result.rows.map((r) => ({
+      id: r.id,
+      sku: r.sku,
+      zoho_sku: r.zoho_sku,
+      product_title: r.product_title,
+      zoho_item_id: r.zoho_item_id,
+      category: r.category,
+      upc: r.upc,
+      image_url: r.image_url,
+      is_active: r.is_active,
+      // Tag with the Zoho platform only — these come from the Zoho items mirror.
+      platform_ids: [
+        {
+          platform: 'zoho',
+          platform_sku: r.sku,
+          platform_item_id: r.zoho_item_id,
+          account_name: null,
+        },
+      ],
     })),
   };
 }

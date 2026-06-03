@@ -13,25 +13,24 @@
  */
 
 import { AnimatePresence, motion } from 'framer-motion';
-import { Check, Loader2, Package, ShoppingCart } from '@/components/Icons';
+import { Check, Package, ShoppingCart } from '@/components/Icons';
 import { getSidebarIntakeSubmitButtonClass } from '@/design-system/components';
 import {
   conditionLabel,
   formatMoney,
+  openReview,
   parseMoney,
   selectLine,
-  submit,
   useLocalPickupCart,
   type CartLine,
 } from './localPickupStore';
 
 export function LocalPickupSidebarList() {
-  const { cart, selectedKey, isSubmitting, submitError, successMessage } =
-    useLocalPickupCart();
+  const { cart, selectedKey, submitError, successMessage } = useLocalPickupCart();
 
   const subtotal = cart.reduce((sum, l) => sum + parseMoney(l.total), 0);
   const unitCount = cart.reduce((sum, l) => sum + l.quantity, 0);
-  const canSubmit = cart.length > 0 && !isSubmitting;
+  const canSubmit = cart.length > 0;
   const submitClass = getSidebarIntakeSubmitButtonClass('green');
 
   return (
@@ -83,15 +82,11 @@ export function LocalPickupSidebarList() {
           ) : null}
           <button
             type="button"
-            onClick={() => void submit()}
+            onClick={() => openReview()}
             disabled={!canSubmit}
             className={`flex w-full items-center justify-center gap-2 ${submitClass}`}
           >
-            {isSubmitting ? (
-              <>
-                <Loader2 className="h-4 w-4 animate-spin" /> Logging…
-              </>
-            ) : successMessage ? (
+            {successMessage ? (
               <>
                 <Check className="h-4 w-4" /> {successMessage}
               </>
@@ -99,7 +94,7 @@ export function LocalPickupSidebarList() {
               <>
                 <ShoppingCart className="h-4 w-4" />
                 {cart.length > 0
-                  ? `Log ${unitCount} Item${unitCount === 1 ? '' : 's'}`
+                  ? `Review ${unitCount} Item${unitCount === 1 ? '' : 's'}`
                   : 'Add Products'}
               </>
             )}

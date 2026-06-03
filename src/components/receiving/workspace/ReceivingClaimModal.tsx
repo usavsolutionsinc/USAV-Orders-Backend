@@ -14,6 +14,15 @@ import {
 import { HorizontalButtonSlider, type HorizontalSliderItem } from '@/components/ui/HorizontalButtonSlider';
 import type { ReceivingLineRow } from '@/components/station/ReceivingLinesTable';
 
+// Small preview for the selection grid. NAS-dev URLs support ?thumb (a tiny
+// webp); other URLs (Blob) are shown as-is.
+function claimThumb(url: string): string {
+  if (url.startsWith('/api/nas-dev/')) {
+    return url + (url.includes('?') ? '&' : '?') + 'thumb=96';
+  }
+  return url;
+}
+
 interface Props {
   open: boolean;
   row: ReceivingLineRow;
@@ -42,6 +51,10 @@ export function ReceivingClaimModal({ open, row, onClose, onTicketCreated }: Pro
   const [reason, setReason] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [draftBody, setDraftBody] = useState<string | null>(null);
+  // Photos to attach to the Zendesk ticket as real files (default: none — pick
+  // the ones to send; all PO photos are archived to the ticket folder regardless).
+  const [photos, setPhotos] = useState<{ id: number; url: string }[]>([]);
+  const [selectedPhotoIds, setSelectedPhotoIds] = useState<Set<number>>(new Set());
 
   // Editable ticket template — populated from the server preview endpoint so
   // it reflects exactly what the ticket will contain (PO #, tracking,
@@ -75,7 +88,34 @@ export function ReceivingClaimModal({ open, row, onClose, onTicketCreated }: Pro
     subjectTouched.current = false;
     descriptionTouched.current = false;
     idempotencyKey.current = crypto.randomUUID();
+    setPhotos([]);
+    setSelectedPhotoIds(new Set());
   }, [open, row.receiving_id, row.id, row.receiving_source]);
+
+  // Load the carton's photos so the operator can pick which to attach. Defaults
+  // to all selected — attaching everything is the common case; deselect to trim.
+  useEffect(() => {
+    if (!open || !row.receiving_id) return;
+    const ctrl = new AbortController();
+    fetch(`/api/receiving-photos?receivingId=${row.receiving_id}`, {
+      cache: 'no-store',
+      signal: ctrl.signal,
+    })
+      .then((r) => r.json().catch(() => null))
+      .then((data) => {
+        const list: { id: number; url: string }[] = (data?.photos ?? [])
+          .filter((p: { photoUrl?: string }) => !!p.photoUrl?.trim())
+          .map((p: { id: number; photoUrl: string }) => ({ id: p.id, url: p.photoUrl }));
+        setPhotos(list);
+        // Start with none selected — the operator picks exactly which photos go
+        // to Zendesk. (All PO photos are still archived to the ticket folder.)
+        setSelectedPhotoIds(new Set());
+      })
+      .catch(() => {
+        /* best-effort — claim can still be filed without photos */
+      });
+    return () => ctrl.abort();
+  }, [open, row.receiving_id]);
 
   // Fetch the server-rendered template whenever inputs change. Debounced so
   // typing in "reason" doesn't hammer the endpoint.
@@ -119,6 +159,14 @@ export function ReceivingClaimModal({ open, row, onClose, onTicketCreated }: Pro
     };
   }, [open, row.receiving_id, row.id, claimType, severity, reason]);
 
+  const togglePhoto = (id: number) =>
+    setSelectedPhotoIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+
   const claimTypeItems = useMemo<HorizontalSliderItem[]>(
     () => CLAIM_TYPE_OPTIONS.map((opt) => ({ id: opt.value, label: opt.label })),
     [],
@@ -147,6 +195,7 @@ export function ReceivingClaimModal({ open, row, onClose, onTicketCreated }: Pro
           reason: reason.trim(),
           subject: subject.trim(),
           description: description.trim(),
+          attachPhotoIds: [...selectedPhotoIds],
         }),
       });
       const data = await res.json().catch(() => null);
@@ -277,6 +326,63 @@ export function ReceivingClaimModal({ open, row, onClose, onTicketCreated }: Pro
                   className="block w-full resize-none rounded-lg border border-gray-200 bg-white px-3 py-2 text-label font-medium leading-snug text-gray-900 outline-none focus:border-rose-500 focus:ring-2 focus:ring-rose-500/20"
                 />
               </div>
+
+              {/* Photo selection — these upload to Zendesk as real file
+                  attachments (only the ones checked). */}
+              {photos.length > 0 ? (
+                <div>
+                  <div className="mb-1.5 flex items-center justify-between">
+                    <p className="text-micro font-black uppercase tracking-[0.14em] text-gray-500">
+                      Attach photos ({selectedPhotoIds.size}/{photos.length})
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setSelectedPhotoIds((prev) =>
+                          prev.size === photos.length ? new Set() : new Set(photos.map((p) => p.id)),
+                        )
+                      }
+                      className="text-micro font-bold uppercase tracking-wider text-gray-500 hover:text-gray-900"
+                    >
+                      {selectedPhotoIds.size === photos.length ? 'Clear all' : 'Select all'}
+                    </button>
+                  </div>
+                  <div className="grid grid-cols-6 gap-1.5">
+                    {photos.map((p) => {
+                      const isSel = selectedPhotoIds.has(p.id);
+                      return (
+                        <button
+                          key={p.id}
+                          type="button"
+                          onClick={() => togglePhoto(p.id)}
+                          className={`relative aspect-square overflow-hidden rounded-md ring-2 transition ${
+                            isSel ? 'ring-rose-500' : 'ring-transparent hover:ring-gray-300'
+                          }`}
+                          title={isSel ? 'Selected — click to remove' : 'Click to attach'}
+                        >
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img
+                            src={claimThumb(p.url)}
+                            alt=""
+                            loading="lazy"
+                            decoding="async"
+                            className={`h-full w-full bg-gray-100 object-cover ${isSel ? '' : 'opacity-70'}`}
+                          />
+                          {isSel ? (
+                            <span className="absolute right-0.5 top-0.5 grid h-4 w-4 place-items-center rounded-full bg-rose-600 text-[10px] font-black text-white">
+                              ✓
+                            </span>
+                          ) : null}
+                        </button>
+                      );
+                    })}
+                  </div>
+                  <p className="mt-1 text-micro font-medium text-gray-400">
+                    Selected photos upload to Zendesk as files. All PO photos are also saved to a
+                    local folder named after the ticket #.
+                  </p>
+                </div>
+              ) : null}
 
               <div className="rounded-xl border border-gray-200 bg-gray-50/60 p-3">
                 <div className="mb-2 flex items-center justify-between">

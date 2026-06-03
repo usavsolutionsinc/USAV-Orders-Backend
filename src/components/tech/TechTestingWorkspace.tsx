@@ -14,7 +14,8 @@ import { UnmatchedItemsSection } from '@/components/receiving/workspace/Unmatche
 import { ReceivingClaimModal } from '@/components/receiving/workspace/ReceivingClaimModal';
 import { ReceivingAuditModal } from '@/components/receiving/workspace/ReceivingAuditModal';
 import { PaneHeaderActionBar, type PaneHeaderActionBarAction } from '@/components/ui/pane-header';
-import { Copy, Info, ExternalLink } from '@/components/Icons';
+import { Copy, Info, ExternalLink, Link2 } from '@/components/Icons';
+import { SkuPairingModal } from '@/components/products/pairing/SkuPairingModal';
 import { buildReceivingCopyInfo } from '@/utils/copy-all-receiving';
 import { copyToClipboard } from '@/utils/_dom';
 import { ReceivingCartonStaffDropdown } from '@/components/sidebar/receiving/ReceivingCartonStaffDropdown';
@@ -117,6 +118,7 @@ export function TechTestingWorkspace({ staffId, selectedLineId, onSelectedLineCh
   const [previewBySerialUnit, setPreviewBySerialUnit] = useState<Record<number, AllocatedUnit>>({});
   const [isMutating, setIsMutating] = useState(false);
   const [auditOpen, setAuditOpen] = useState(false);
+  const [pairOpen, setPairOpen] = useState(false);
   const [copyingAll, setCopyingAll] = useState(false);
   /**
    * Serial targeted by the active row header chip's Edit menu item. Feeds the
@@ -734,7 +736,8 @@ export function TechTestingWorkspace({ staffId, selectedLineId, onSelectedLineCh
         window.setTimeout(() => {
           printProductLabel({
             sku: allocation!.unitId,
-            title: row.item_name ?? undefined,
+            // Canonical Zoho catalog title wins; PO/platform name is the fallback.
+            title: (row.catalog_product_title ?? '').trim() || row.item_name || undefined,
             serialNumber: activeSerial.serial_number,
             gtin: allocation!.gtin ?? undefined,
             qrPayload: allocation!.qrUrl ?? undefined,
@@ -888,6 +891,9 @@ export function TechTestingWorkspace({ staffId, selectedLineId, onSelectedLineCh
   }
 
   // ── Workspace ─────────────────────────────────────────────────────────────
+  // Canonical Zoho catalog title (sku_catalog.product_title) wins; fall back to
+  // the PO/platform line name (item_name) when the SKU isn't catalogued yet.
+  const productTitle = (row.catalog_product_title ?? '').trim() || (row.item_name ?? '').trim();
   const poNumber = (row.zoho_purchaseorder_number || row.zoho_purchaseorder_id || '').trim();
   const tracking = (row.tracking_number || '').trim();
   // Zendesk support ticket. Rendered as the orange TicketChip (matches the
@@ -962,6 +968,18 @@ export function TechTestingWorkspace({ staffId, selectedLineId, onSelectedLineCh
                   disabled: !row.receiving_id,
                   title: 'Audit log (inventory events)',
                   ariaLabel: 'View audit log',
+                },
+                {
+                  key: 'pair',
+                  label: 'Pair',
+                  icon: <Link2 className="h-3.5 w-3.5" />,
+                  onClick: () => setPairOpen(true),
+                  disabled: row.sku_catalog_id == null,
+                  title:
+                    row.sku_catalog_id == null
+                      ? 'SKU not in the catalog yet — nothing to pair'
+                      : 'Pair this Zoho SKU to Ecwid / eBay / Amazon / etc.',
+                  ariaLabel: 'Pair SKUs',
                 },
                 {
                   key: 'copy',
@@ -1125,7 +1143,7 @@ export function TechTestingWorkspace({ staffId, selectedLineId, onSelectedLineCh
               <SkuTestingPanel
                 receivingLineId={row.id}
                 sku={row.sku}
-                title={row.item_name ?? ''}
+                title={productTitle}
                 serialUnitId={activeSerial?.id ?? null}
               />
             ) : null}
@@ -1150,6 +1168,7 @@ export function TechTestingWorkspace({ staffId, selectedLineId, onSelectedLineCh
             {previewPayload && row.sku ? (
               <LabelPreviewCard
                 sku={activeAllocation?.unitId || row.sku}
+                title={productTitle}
                 dataMatrixValue={previewPayload.value}
                 dataMatrixSymbology={previewPayload.symbology}
                 showReady={activeVerdict === 'PASS' && hasActiveSerial}
@@ -1203,6 +1222,12 @@ export function TechTestingWorkspace({ staffId, selectedLineId, onSelectedLineCh
           receivingId={row.receiving_id}
         />
       ) : null}
+
+      <SkuPairingModal
+        open={pairOpen}
+        onClose={() => setPairOpen(false)}
+        skuCatalogId={row.sku_catalog_id ?? null}
+      />
     </>
   );
 }

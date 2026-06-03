@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { createPortal } from 'react-dom';
-import { Check, Clock, Loader2, Plus, Tool } from '@/components/Icons';
+import { Check, Loader2, Plus, Tool } from '@/components/Icons';
 import { SidebarSearchBar } from '@/components/ui/SidebarSearchBar';
 import { HorizontalButtonSlider, type HorizontalSliderItem } from '@/components/ui/HorizontalButtonSlider';
 import { sidebarHeaderPillRowClass, SIDEBAR_GUTTER } from '@/components/layout/header-shell';
@@ -11,10 +11,11 @@ import { useMasterNavEnabled } from '@/components/sidebar/master-nav';
 import { useBodyScrollLock } from '@/design-system/hooks';
 import { toast } from '@/lib/toast';
 
+// Incoming repairs now live in the Receiving incoming display, so this queue
+// only exposes Active and Done.
 const REPAIR_TAB_ITEMS: HorizontalSliderItem[] = [
-  { id: 'incoming', label: 'Incoming', icon: Clock },
-  { id: 'active',   label: 'Active',   icon: Tool },
-  { id: 'done',     label: 'Done',     icon: Check },
+  { id: 'active', label: 'Active', icon: Tool },
+  { id: 'done',   label: 'Done',   icon: Check },
 ];
 import {
   RepairIntakeForm,
@@ -75,7 +76,7 @@ export function RepairSidebarPanel({ embedded = false, hideSectionHeader = false
 
   const masterNavEnabled = useMasterNavEnabled();
   const rawTab = searchParams.get('tab');
-  const activeTab: RepairTab = rawTab === 'incoming' ? 'incoming' : rawTab === 'done' ? 'done' : 'active';
+  const activeTab: RepairTab = rawTab === 'done' ? 'done' : 'active';
 
   useEffect(() => {
     setIsMounted(true);
@@ -269,21 +270,23 @@ export function RepairSidebarPanel({ embedded = false, hideSectionHeader = false
           </div>
         )}
 
-        <FavoritesWorkspaceSection
-          workspaceKey="repair"
-          accent="orange"
-          title="Favorites"
-          description=""
-          emptyLabel="No repair favorites yet"
-          useLabel="Start Repair"
-          allowRepairDefaults
-          inlineRows
-          buttonAccent="blue"
-          onUseFavorite={handleUseFavorite}
-          searchSkuSuffixFilter="-RS"
-          fuzzyTitleSearch
-          searchResultsMaxHeightClass="max-h-72"
-        />
+        {activeTab === 'active' && (
+          <FavoritesWorkspaceSection
+            workspaceKey="repair"
+            accent="orange"
+            title="Favorites"
+            description=""
+            emptyLabel="No repair favorites yet"
+            useLabel="Start Repair"
+            allowRepairDefaults
+            inlineRows
+            buttonAccent="blue"
+            onUseFavorite={handleUseFavorite}
+            searchSkuSuffixFilter="-RS"
+            fuzzyTitleSearch
+            searchResultsMaxHeightClass="max-h-72"
+          />
+        )}
       </div>
     </div>
   );

@@ -3,6 +3,9 @@ import { put, del } from '@vercel/blob';
 import pool from '@/lib/db';
 import { ApiError, errorResponse } from '@/lib/api';
 import { withAuth } from '@/lib/auth/withAuth';
+import { getOrganization } from '@/lib/tenancy/organizations';
+import type { OrgId } from '@/lib/tenancy/constants';
+import { getStaffStations } from '@/lib/neon/staff-stations-queries';
 
 export const dynamic = 'force-dynamic';
 
@@ -74,7 +77,7 @@ const SELECT_WITH_RID = `
   p.created_at
 `;
 
-export const GET = withAuth(async (req: NextRequest) => {
+export const GET = withAuth(async (req: NextRequest, ctx) => {
   try {
     const params = new URL(req.url).searchParams;
     const receivingId = Number(params.get('receivingId'));
@@ -118,7 +121,66 @@ export const GET = withAuth(async (req: NextRequest) => {
       values,
     );
 
-    return NextResponse.json({ photos: result.rows.map(mapRow) });
+    // Surface when this carton was physically scanned/received so the NAS picker
+    // can anchor the "PO scan time" sort on the moment the photos were actually
+    // taken. We deliberately prefer received_at / the first tracking-scan over
+    // created_at: a receiving row can be pre-created (e.g. from a Zoho PO import)
+    // long before the package is scanned, so created_at would anchor on a stale
+    // time and surface the oldest photos in the folder. ISO/UTC so the client
+    // can Date.parse it unambiguously against the NAS file mtimes.
+    const cartonRes = await pool.query<{ created_at: string | null }>(
+      `SELECT to_char(
+                COALESCE(
+                  r.received_at,
+                  (SELECT MIN(rs.scanned_at) FROM receiving_scans rs WHERE rs.receiving_id = r.id),
+                  r.created_at
+                ) AT TIME ZONE 'UTC',
+                'YYYY-MM-DD"T"HH24:MI:SS"Z"'
+              ) AS created_at
+         FROM receiving r WHERE r.id = $1 LIMIT 1`,
+      [receivingId],
+    );
+
+    // Resolve the folder the picker should auto-open for THIS operator: their
+    // primary station → the org's admin-configured `stationNasPhotoFolders`
+    // (set in StationNasFoldersTab). '' = open at the NAS root. Best-effort —
+    // never let a settings/station hiccup break the photo strip.
+    let initialNasFolder = '';
+    try {
+      const [org, stations] = await Promise.all([
+        getOrganization(ctx.organizationId as OrgId),
+        getStaffStations(ctx.staffId),
+      ]);
+      const primary = stations.find((s) => s.is_primary)?.station ?? stations[0]?.station;
+      const map = (org?.settings.stationNasPhotoFolders ?? {}) as Record<string, string>;
+      // Prefer the operator's station folder; fall back to a DEFAULT folder that
+      // applies to everyone. The fallback matters because staff_stations can be
+      // empty (no per-staff station assigned) — without it the picker would
+      // always open at the root even when a folder is configured.
+      // Resolution order:
+      //   1. the operator's primary-station folder (needs a staff_stations row),
+      //   2. an explicit DEFAULT (all-stations) folder,
+      //   3. if exactly one distinct folder is configured across every station,
+      //      use it — covers orgs that set the same folder everywhere and don't
+      //      assign per-staff stations (so it "just works" without staff_stations).
+      const distinct = [
+        ...new Set(Object.values(map).map((v) => (v || '').trim()).filter(Boolean)),
+      ];
+      const resolved =
+        (primary && map[primary]) ||
+        map.DEFAULT ||
+        (distinct.length === 1 ? distinct[0] : '') ||
+        '';
+      if (typeof resolved === 'string') initialNasFolder = resolved;
+    } catch {
+      initialNasFolder = '';
+    }
+
+    return NextResponse.json({
+      photos: result.rows.map(mapRow),
+      receivingCreatedAt: cartonRes.rows[0]?.created_at ?? null,
+      initialNasFolder,
+    });
   } catch (error) {
     return errorResponse(error, 'GET /api/receiving-photos');
   }

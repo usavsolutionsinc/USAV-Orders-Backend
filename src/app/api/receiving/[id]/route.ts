@@ -52,7 +52,9 @@ export async function GET(
          r.shipment_id,
          COALESCE(stn.tracking_number_raw, r.receiving_tracking_number) AS tracking,
          COALESCE(NULLIF(stn.carrier, 'UNKNOWN'), r.carrier)            AS carrier,
+         r.source,
          r.source_platform,
+         lpo.id AS local_pickup_order_id,
          r.is_return,
          r.return_platform,
          r.return_reason,
@@ -85,6 +87,9 @@ export async function GET(
          to_char(r.updated_at::timestamp, 'YYYY-MM-DD HH24:MI:SS')   AS updated_at
        FROM receiving r
        LEFT JOIN shipping_tracking_numbers stn ON stn.id = r.shipment_id
+       LEFT JOIN LATERAL (
+         SELECT id FROM local_pickup_orders WHERE receiving_id = r.id ORDER BY id DESC LIMIT 1
+       ) lpo ON TRUE
        LEFT JOIN LATERAL (
          SELECT rs.scanned_at, rs.scanned_by
          FROM receiving_scans rs

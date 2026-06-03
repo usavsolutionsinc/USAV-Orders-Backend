@@ -1,9 +1,11 @@
 import { gs1UnitAi, serialUnitHandle } from '@/lib/barcode-routing';
 import { escapeLabelHtml, printLabel } from '@/lib/print/printLabel';
 
-// Product/testing labels print only the unit id, so they vertically center the
-// single line next to the DataMatrix.
+// Product/testing labels print the product title (the unit id lives in the
+// DataMatrix). The title is small and top-aligned next to the code so longer
+// names get room to wrap. `.sku` is the monospace fallback when no title.
 const PRODUCT_INFO_CSS =
+  '.title{font-weight:700;font-size:11px;line-height:1.15;color:#111;text-align:left;overflow:hidden;display:-webkit-box;-webkit-line-clamp:4;-webkit-box-orient:vertical}' +
   '.sku{font-family:monospace;font-weight:700;font-size:12px;line-height:1.15;color:#111;word-break:break-all;text-align:left}';
 
 /**
@@ -49,7 +51,7 @@ export function buildUnitPayload(args: {
 
 export type PrintProductLabelInput = {
   sku: string;
-  /** Accepted for API compatibility but no longer printed (unit-id only). */
+  /** Product title — printed as the label's readable line. Falls back to the unit id when absent. */
   title?: string;
   /** Per-unit identifier. Under the new format this is the {SKU}-{YEAR}-{SEQ6} value. */
   serialNumber?: string;
@@ -61,10 +63,11 @@ export type PrintProductLabelInput = {
 
 /**
  * Print a product/testing unit label via the shared {@link printLabel} shell —
- * the same 2×1" sticker the receiving label uses, just with a single unit-id
- * line instead of carton metadata. DataMatrix-only layout: unit id on the left,
- * DataMatrix on the right (matches the on-screen live preview). The encoded
- * value is built by {@link buildUnitPayload}; no consumer-readable URL.
+ * the same 2×1" sticker the receiving label uses, just with a single readable
+ * line instead of carton metadata. DataMatrix-only layout: product title on the
+ * left (unit id when no title is available), DataMatrix on the right (matches
+ * the on-screen live preview). The encoded value is built by
+ * {@link buildUnitPayload}; no consumer-readable URL.
  */
 export function printProductLabel(input: PrintProductLabelInput): void {
   if (typeof window === 'undefined') return;
@@ -79,11 +82,19 @@ export function printProductLabel(input: PrintProductLabelInput): void {
     gtin: input.gtin?.trim() || null,
   });
 
+  // Readable line = product title; the unit id is encoded in the DataMatrix.
+  // Fall back to the unit id when no title is available so the label is never
+  // blank.
+  const title = input.title?.trim();
+  const infoHtml = title
+    ? `<div class="title">${escapeLabelHtml(title)}</div>`
+    : `<div class="sku">${escapeLabelHtml(sku)}</div>`;
+
   printLabel({
     name: `Label ${sku}`,
-    infoHtml: `<div class="sku">${escapeLabelHtml(sku)}</div>`,
+    infoHtml,
     infoCss: PRODUCT_INFO_CSS,
-    infoAlign: 'center',
+    infoAlign: 'flex-start',
     dataMatrix: { value, symbology, scale: 4 },
   });
 }

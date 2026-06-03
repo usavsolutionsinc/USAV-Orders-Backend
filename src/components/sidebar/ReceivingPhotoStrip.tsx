@@ -18,6 +18,10 @@ interface PhotoRow {
 
 interface PhotosPayload {
   photos: PhotoRow[];
+  /** When this carton was scanned/created — anchors the NAS picker's default sort. */
+  receivingCreatedAt?: string | null;
+  /** Admin-configured folder for the operator's station — the picker opens here. */
+  initialNasFolder?: string | null;
 }
 
 interface ReceivingPhotoStripProps {
@@ -85,6 +89,8 @@ export const ReceivingPhotoStrip = memo(function ReceivingPhotoStrip({
   }
 
   const refresh = () => queryClient.invalidateQueries({ queryKey });
+  const poCreatedAt = data?.receivingCreatedAt ?? null;
+  const initialFolder = data?.initialNasFolder ?? '';
 
   // Empty state: a single full-width "click to add photos" dropzone (when the
   // NAS is configured). With photos: a compact attach button above the gallery.
@@ -92,6 +98,8 @@ export const ReceivingPhotoStrip = memo(function ReceivingPhotoStrip({
     return nasConfigured() ? (
       <NasReceivingAttach
         receivingId={receivingId}
+        poCreatedAt={poCreatedAt}
+        initialFolder={initialFolder}
         onAttached={refresh}
         fullWidth
         label="Click to add photos"
@@ -103,15 +111,16 @@ export const ReceivingPhotoStrip = memo(function ReceivingPhotoStrip({
     );
   }
 
+  // Once photos exist we don't repeat the "Select from NAS" button here — the
+  // gallery's own toolbar covers viewing, and the NAS picker is offered in the
+  // empty state. (Keeps the workspace photo row from showing two add controls.)
   return (
-    <div className="space-y-2">
-      <NasReceivingAttach receivingId={receivingId} onAttached={refresh} />
-      <PhotoGallery
-        photos={galleryPhotos}
-        orderId={`RCV-${receivingId}`}
-        launcherLayout="toolbar"
-        onPhotoDeleted={refresh}
-      />
-    </div>
+    <PhotoGallery
+      photos={galleryPhotos}
+      orderId={`RCV-${receivingId}`}
+      launcherLayout="toolbar"
+      compact
+      onPhotoDeleted={refresh}
+    />
   );
 });

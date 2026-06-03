@@ -20,6 +20,13 @@ export interface TransferOrderDetails {
   updated: TransferOrderDetail[];
   deleted: TransferOrderDetail[];
   unknownTitle: TransferOrderDetail[];
+  /**
+   * Rows whose sheet tracking value could not be recognized as a carrier
+   * tracking number (carrier detection failed — e.g. a double-scanned or
+   * malformed value). These are NOT linked to any shipment, so they surface
+   * as a warning instead of silently disappearing.
+   */
+  unresolvedTracking: TransferOrderDetail[];
 }
 
 export interface OrderExceptionResolutionDetail {
@@ -40,6 +47,10 @@ export interface TransferTabState {
   inserted?: number;
   updated?: number;
   deleted?: number;
+  /** How many of the `updated` rows were tracking-number attachments. */
+  trackingAttached?: number;
+  /** Rows whose tracking value failed carrier detection (not linked). */
+  unresolvedTracking?: number;
   processedRows?: number;
 }
 
@@ -77,7 +88,7 @@ export type SyncPhase =
  */
 export type SyncStreamEvent =
   | { type: 'phase'; phase: SyncPhase; message?: string; count?: number }
-  | { type: 'detail'; kind: 'inserted' | 'updated' | 'deleted' | 'unknownTitle'; row: TransferOrderDetail }
+  | { type: 'detail'; kind: 'inserted' | 'updated' | 'deleted' | 'unknownTitle' | 'unresolvedTracking'; row: TransferOrderDetail }
   | { type: 'exception'; kind: 'resolved' | 'open'; row: OrderExceptionResolutionDetail }
   | { type: 'result'; result: Record<string, unknown> }
   | { type: 'error'; error: string };

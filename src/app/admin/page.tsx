@@ -17,6 +17,7 @@ import { AdminJobsTab } from '@/components/admin/AdminJobsTab';
 import AiChatTab from '@/components/admin/AiChatTab';
 import { ArchitectureTab } from '@/components/admin/ArchitectureTab';
 import { PhotoBackupTab } from '@/components/admin/PhotoBackupTab';
+import { StationNasFoldersTab } from '@/components/admin/StationNasFoldersTab';
 import { BillingTab } from '@/components/admin/BillingTab';
 import { AdminOverviewTab } from '@/components/admin/AdminOverviewTab';
 import { getAdminSection, type AdminSection } from '@/components/admin/admin-sections';
@@ -51,6 +52,7 @@ function renderTab(
     case 'ai_chat':      return <AiChatTab />;
     case 'architecture': return <ArchitectureTab />;
     case 'photo_backup': return <PhotoBackupTab />;
+    case 'station_photos': return <StationNasFoldersTab />;
     case 'billing':      return <BillingTab />;
     case 'reason_codes': return <ReasonCodesManagementTab />;
     case 'sku_catalog':  return <SkuCatalogManagementTab />;

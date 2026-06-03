@@ -17,7 +17,7 @@ export function ReceivingCartonStaffDropdown({ receivingId, staffId, onMakeClaim
   if (receivingId == null) return null;
 
   return (
-    <div className="flex items-center gap-2 bg-white px-4 py-2">
+    <div className="flex items-stretch gap-2 bg-white px-4 py-2">
       <div className="min-w-0 flex-1">
         <ReceivingPhotoStrip
           receivingId={receivingId}
@@ -28,7 +28,7 @@ export function ReceivingCartonStaffDropdown({ receivingId, staffId, onMakeClaim
         <button
           type="button"
           onClick={onMakeClaim}
-          className="inline-flex h-9 shrink-0 items-center gap-1 rounded-lg bg-orange-500 px-3 text-micro font-black uppercase tracking-widest text-white shadow-sm transition-colors hover:bg-orange-600"
+          className="inline-flex shrink-0 items-center gap-1 self-stretch rounded-lg bg-orange-500 px-3 text-micro font-black uppercase tracking-widest text-white shadow-sm transition-colors hover:bg-orange-600"
           title="File a damage / wrong-item / missing claim for this package"
         >
           Claim →

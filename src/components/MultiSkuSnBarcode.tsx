@@ -1084,12 +1084,11 @@ function PreviewCardModern({
         return (
             <LabelPreviewCard
                 sku={uniqueSku}
-                itemName={title}
+                title={title}
                 dataMatrixValue={dataMatrixValue}
                 dataMatrixSymbology={dataMatrixSymbology}
                 showReady={mode === 'print'}
                 readyBadgeClassName={accent.chip}
-                eyebrowLabel={mode === 'reprint' ? 'Reprinting existing unit ID' : undefined}
             />
         );
     }

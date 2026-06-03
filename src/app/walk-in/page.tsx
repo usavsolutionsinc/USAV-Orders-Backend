@@ -3,7 +3,7 @@
 import { Suspense, useEffect, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { RepairTable } from '@/components/repair';
-import { SalesTable } from '@/components/walk-in/SalesTable';
+import { SalesEditPanel } from '@/components/walk-in/SalesEditPanel';
 import { WalkInSidebarPanel } from '@/components/sidebar/WalkInSidebarPanel';
 import { RouteShell } from '@/design-system/components/RouteShell';
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
@@ -58,7 +58,7 @@ function WalkInPageContent() {
                     mode === 'repairs' ? (
                         <RepairTable filter={repairTab} />
                     ) : (
-                        <SalesTable />
+                        <SalesEditPanel />
                     )
                 }
             />

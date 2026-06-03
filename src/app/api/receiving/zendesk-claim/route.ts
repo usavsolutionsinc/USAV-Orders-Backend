@@ -9,7 +9,8 @@ import {
   type ClaimSeverity,
   type ClaimType,
 } from '@/lib/zendesk-claim-template';
-import { createTicket, ZendeskNotConfiguredError } from '@/lib/zendesk';
+import { createTicket, uploadFileToZendesk, ZendeskNotConfiguredError } from '@/lib/zendesk';
+import { readPhotoBytes, archiveClaimToFolder, poReceivingLink } from '@/lib/receiving-claim-photos';
 import { buildExternalId, linkTicket } from '@/lib/zendesk-links';
 import { zendeskTicketUrl } from '@/lib/zendesk-ticket-url';
 import { readIdempotencyKey, withIdempotentResponse } from '@/lib/api-idempotency';
@@ -27,6 +28,8 @@ interface ClaimRequest {
   subject?: string;
   /** Operator-edited body. When omitted, the server builds from template. */
   description?: string;
+  /** Photo row ids (from /api/receiving-photos) to upload to Zendesk as files. */
+  attachPhotoIds?: number[];
 }
 
 /**
@@ -74,6 +77,7 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
         claimType,
         severity,
         reason: body.reason,
+        poReceivingLink: poReceivingLink(req, receivingId),
       });
       subject = editedSubject || template.subject;
       description = editedDescription || template.description;
@@ -90,15 +94,47 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
       pool,
       { idempotencyKey, route: 'POST /api/receiving/zendesk-claim', staffId: ctx.staffId },
       async (): Promise<{ status: number; body: Record<string, unknown> }> => {
+        // Upload the operator's selected photos to Zendesk as real file
+        // attachments (not links). Scoped to this carton's photos for safety;
+        // best-effort per file so one unreadable photo never blocks the claim.
+        const uploads: string[] = [];
+        const ids = Array.isArray(body.attachPhotoIds)
+          ? body.attachPhotoIds.map(Number).filter((n) => Number.isFinite(n) && n > 0)
+          : [];
+        if (ids.length > 0) {
+          const photoRows = await pool.query<{ id: number; url: string | null }>(
+            `SELECT id, url FROM photos
+              WHERE id = ANY($1::int[])
+                AND ((entity_type = 'RECEIVING'      AND entity_id = $2)
+                  OR (entity_type = 'RECEIVING_LINE' AND entity_id IN
+                        (SELECT id FROM receiving_lines WHERE receiving_id = $2)))`,
+            [ids, receivingId],
+          );
+          for (const row of photoRows.rows) {
+            const pb = await readPhotoBytes(String(row.url || ''));
+            if (!pb) continue;
+            try {
+              uploads.push(await uploadFileToZendesk(pb.filename, pb.bytes, pb.contentType));
+            } catch (upErr) {
+              console.warn('[zendesk-claim] photo upload failed', row.id, upErr);
+            }
+          }
+        }
+
         // Create the ticket directly via the Zendesk REST API. external_id is set
-        // at creation so the support workspace can resolve this claim's Blob photos;
-        // html_body makes the attached photo URLs clickable for agents.
+        // at creation so the support workspace can resolve this claim. Selected
+        // photos ride along as `comment.uploads` (real attachments).
         let ticket;
         try {
           ticket = await createTicket(
             {
               subject,
-              comment: { body: description, html_body: claimBodyToHtml(description), public: false },
+              comment: {
+                body: description,
+                html_body: claimBodyToHtml(description),
+                public: false,
+                uploads: uploads.length ? uploads : undefined,
+              },
               type: 'task',
               tags: ['receiving_claim', `claim_${claimType}`],
               external_id: buildExternalId(entityType, entityId),
@@ -116,6 +152,43 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
         }
 
         const ticketNumber = `#${ticket.id}`;
+
+        // Local archive: copy ALL of the PO's photos into a folder named after the
+        // ticket (".../2 Zendesk 2026/<ticket#>/") so we keep the full set even
+        // though only the selected subset was uploaded to Zendesk. Best-effort —
+        // the ticket already exists, so a filesystem hiccup must not fail the claim.
+        try {
+          const allPhotosRes = await pool.query<{ url: string | null }>(
+            `SELECT url FROM photos
+              WHERE ((entity_type = 'RECEIVING'      AND entity_id = $1)
+                  OR (entity_type = 'RECEIVING_LINE' AND entity_id IN
+                        (SELECT id FROM receiving_lines WHERE receiving_id = $1)))
+              ORDER BY created_at ASC`,
+            [receivingId],
+          );
+          const allPhotos = allPhotosRes.rows
+            .map((r) => ({ url: String(r.url || '') }))
+            .filter((p) => p.url);
+          const info = [
+            `Zendesk Ticket: ${ticketNumber}`,
+            `URL: ${zendeskTicketUrl(ticket.id)}`,
+            `Subject: ${subject}`,
+            `Claim type: ${CLAIM_TYPE_LABEL[claimType]}`,
+            `Severity: ${CLAIM_SEVERITY_LABEL[severity]}`,
+            `Filed: ${new Date().toISOString()}`,
+            `Photos uploaded to Zendesk: ${uploads.length}`,
+            `Photos archived locally: ${allPhotos.length}`,
+            '',
+            '--- Ticket body ---',
+            description,
+          ].join('\n');
+          const archived = await archiveClaimToFolder({ ticketId: ticket.id, photos: allPhotos, info });
+          if (archived) {
+            console.log(`[zendesk-claim] archived ${archived.copied}/${archived.total} photo(s) → ${archived.folder}`);
+          }
+        } catch (archiveErr) {
+          console.warn('[zendesk-claim] local photo archive failed', archiveErr);
+        }
 
         // Write the ticket→entity link row (the support workspace prefers ticket_links
         // over external_id). Best-effort: the ticket already exists, so a failure here

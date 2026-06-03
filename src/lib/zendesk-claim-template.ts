@@ -30,6 +30,8 @@ export interface ClaimTemplateInput {
   claimType: ClaimType;
   severity: ClaimSeverity;
   reason?: string;
+  /** "View the PO receiving" link to embed in the body (built from req origin). */
+  poReceivingLink?: string;
 }
 
 export interface ClaimTemplateResult {
@@ -40,7 +42,7 @@ export interface ClaimTemplateResult {
 export async function buildReceivingClaimTemplate(
   input: ClaimTemplateInput,
 ): Promise<ClaimTemplateResult> {
-  const { receivingId, lineId, claimType, severity, reason } = input;
+  const { receivingId, lineId, claimType, severity, reason, poReceivingLink } = input;
 
   const recvResult = await pool.query(
     `SELECT r.id,
@@ -94,19 +96,6 @@ export async function buildReceivingClaimTemplate(
     }
   }
 
-  const photoResult = await pool.query(
-    // Cap the read — a claim body doesn't benefit from dozens of URLs, and this
-    // query runs on every debounced preview keystroke.
-    `SELECT url FROM photos
-     WHERE entity_type = 'RECEIVING' AND entity_id = $1
-     ORDER BY created_at ASC
-     LIMIT 20`,
-    [receivingId],
-  );
-  const photoUrls = (photoResult.rows as Array<{ url: string | null }>)
-    .map((p) => String(p.url || ''))
-    .filter((u) => !!u.trim());
-
   // Unfound flow: collapse subject + body to a single short token ("Unfound
   // PO") and stop pretending the receiving_id IS a PO# — operators were
   // getting confused by "PO #4232" where 4232 was just the internal row id.
@@ -136,11 +125,12 @@ export async function buildReceivingClaimTemplate(
   if (trimmedReason) {
     descriptionLines.push('Receiving Notes:', trimmedReason, '');
   }
-  if (photoUrls.length > 0) {
-    descriptionLines.push(`Photos attached (${photoUrls.length}):`);
-    photoUrls.forEach((url) => descriptionLines.push(`- ${url}`));
-  } else {
-    descriptionLines.push('Photos: (none uploaded yet)');
+  // Photos ride along as real Zendesk attachments (uploaded at submit from the
+  // operator's selection) rather than inlined URLs. A link back to the carton's
+  // receiving record gives the agent full context.
+  descriptionLines.push('Photos: attached as files (selected in receiving).');
+  if (poReceivingLink) {
+    descriptionLines.push(`View PO receiving: ${poReceivingLink}`);
   }
 
   return { subject, description: descriptionLines.join('\n') };

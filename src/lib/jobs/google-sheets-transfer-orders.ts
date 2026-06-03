@@ -55,6 +55,8 @@ export interface GoogleSheetsTransferOrdersJobResult {
   insertedOrders: number;
   updatedOrdersTracking: number;
   updatedOrdersFields: number;
+  /** Rows whose sheet tracking value failed carrier detection (not linked). */
+  unresolvedTrackingCount: number;
   deletedDuplicateOrders: number;
   matchedCustomers: number;
   unmatchedCustomers: number;
@@ -348,6 +350,7 @@ export async function runGoogleSheetsTransferOrders(
         insertedOrders: 0,
         updatedOrdersTracking: 0,
         updatedOrdersFields: 0,
+        unresolvedTrackingCount: 0,
         deletedDuplicateOrders: 0,
         matchedCustomers: 0,
         unmatchedCustomers: 0,
@@ -355,7 +358,7 @@ export async function runGoogleSheetsTransferOrders(
         ecwidApiRows,
         skippedRows: sheetTotalRows,
         durationMs: Date.now() - startedAt,
-        details: { inserted: [], updated: [], deleted: [], unknownTitle: [] },
+        details: { inserted: [], updated: [], deleted: [], unknownTitle: [], unresolvedTracking: [] },
       };
     }
 
@@ -650,6 +653,7 @@ export async function runGoogleSheetsTransferOrders(
     let matchedCustomers = 0;
     let unmatchedCustomers = 0;
     const detailsUnknownTitle: TransferOrderDetail[] = [];
+    const detailsUnresolvedTracking: TransferOrderDetail[] = [];
 
     for (const [orderId, group] of Array.from(groupedSourceByOrderId.entries())) {
       const row = group.row;
@@ -694,13 +698,28 @@ export async function runGoogleSheetsTransferOrders(
       }
 
       const shipmentIds = new Set<number>();
+      const unresolvedTrackings: string[] = [];
       for (const rawTracking of Array.from(group.trackings.values())) {
+        const cleanRaw = normalizeTracking(rawTracking);
+        if (!cleanRaw) continue;
         const normalized = normalizeTrackingNumber(rawTracking);
         const resolvedShipmentId = normalized
           ? shipmentIdCache.get(normalized) ?? shipmentByNormalized.get(normalized)?.id ?? null
           : null;
         const shipmentId = resolvedShipmentId ?? await ensureShipmentId(rawTracking);
         if (shipmentId && Number.isFinite(shipmentId)) shipmentIds.add(Number(shipmentId));
+        else unresolvedTrackings.push(cleanRaw);
+      }
+      // A non-blank tracking that resolved to no shipment failed carrier
+      // detection (e.g. a double-scanned / malformed value). Surface it as a
+      // warning so it doesn't vanish silently behind an "Up to date" summary.
+      if (unresolvedTrackings.length > 0) {
+        const unresolvedDetail: TransferOrderDetail = {
+          ...detailRow,
+          tracking: unresolvedTrackings.join(', '),
+        };
+        detailsUnresolvedTracking.push(unresolvedDetail);
+        progress({ type: 'detail', kind: 'unresolvedTracking', row: unresolvedDetail });
       }
 
       if (existingOrder) {
@@ -907,6 +926,7 @@ export async function runGoogleSheetsTransferOrders(
       insertedOrders: ordersToInsert.length,
       updatedOrdersTracking,
       updatedOrdersFields: ordersToBackfill.length,
+      unresolvedTrackingCount: detailsUnresolvedTracking.length,
       deletedDuplicateOrders: ordersToDelete.length,
       matchedCustomers,
       unmatchedCustomers,
@@ -918,6 +938,7 @@ export async function runGoogleSheetsTransferOrders(
         updated: ordersToBackfill.map((e) => e.detail),
         deleted: ordersToDelete.map((e) => e.detail),
         unknownTitle: detailsUnknownTitle,
+        unresolvedTracking: detailsUnresolvedTracking,
       },
     };
   } catch (error: any) {

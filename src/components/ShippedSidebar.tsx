@@ -39,6 +39,7 @@ import {
 } from '@/lib/shipped-search';
 import { ShippedCarrierFilters } from '@/components/shipping/ShippedFilterToolbar';
 import { ZohoSyncButton } from '@/components/shipped/ZohoSyncButton';
+import { PickupReportButton } from '@/components/shipped/PickupReportButton';
 
 interface SearchHistory {
     query: string;
@@ -390,6 +391,9 @@ Shipped: ${result.packed_at ? formatDateTimePST(result.packed_at) : 'Not Shipped
 
                         {/* Manual Zoho fulfillment sync — gated by integrations.zoho */}
                         <ZohoSyncButton variant="sidebar" />
+
+                        {/* Daily carrier pickup report — pick a day, print the hand-off log */}
+                        <PickupReportButton />
 
                         {/* Search Results */}
                         {results.length > 0 && (

@@ -60,7 +60,7 @@ export function PhotoGallery({
   photos,
   orderId,
   className = '',
-  compact: _compact = false,
+  compact = false,
   launcherTitle = 'View Packing Photos',
   launcherLayout = 'default',
   onPhotoDeleted,
@@ -644,24 +644,30 @@ export function PhotoGallery({
   };
 
   const toolbarIconBtn =
-    'p-2 rounded-lg bg-white/90 border border-blue-200/90 text-blue-700 shadow-sm hover:bg-blue-50 hover:border-blue-300 transition-all disabled:opacity-40 disabled:pointer-events-none';
+    `${compact ? 'p-1.5' : 'p-2'} rounded-lg bg-white/90 border border-blue-200/90 text-blue-700 shadow-sm hover:bg-blue-50 hover:border-blue-300 transition-all disabled:opacity-40 disabled:pointer-events-none`;
 
   return (
     <>
       {launcherLayout === 'toolbar' ? (
         <div
-          className={`flex w-full min-h-[3.25rem] items-stretch gap-1 rounded-xl border border-blue-200 bg-gradient-to-r from-blue-50 to-blue-100/50 pl-2 pr-1 py-1 ${className}`}
+          className={`flex w-full items-stretch gap-1 rounded-xl border border-blue-200 bg-gradient-to-r from-blue-50 to-blue-100/50 pl-2 pr-1 ${
+            compact ? 'min-h-9 py-0.5' : 'min-h-[3.25rem] py-1'
+          } ${className}`}
         >
           <button
             type="button"
             onClick={() => openViewer(0)}
-            className="flex min-w-0 flex-1 items-center justify-between gap-2 rounded-lg px-2 py-1 text-left transition-all hover:bg-blue-100/50 active:scale-[0.995]"
+            className="flex min-w-0 flex-1 items-center justify-between gap-2 rounded-lg px-2 py-0.5 text-left transition-all hover:bg-blue-100/50 active:scale-[0.995]"
             aria-label="View photos fullscreen"
             title="View photos fullscreen"
           >
             <div className="flex min-w-0 items-center gap-2">
-              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-blue-500 shadow-sm">
-                <ImageIcon className="h-4 w-4 text-white" />
+              <div
+                className={`flex shrink-0 items-center justify-center rounded-lg bg-blue-500 shadow-sm ${
+                  compact ? 'h-7 w-7' : 'h-9 w-9'
+                }`}
+              >
+                <ImageIcon className={compact ? 'h-3.5 w-3.5 text-white' : 'h-4 w-4 text-white'} />
               </div>
               <div className="flex min-w-0 flex-col">
                 <span className="text-micro font-black uppercase tracking-wider text-blue-600">

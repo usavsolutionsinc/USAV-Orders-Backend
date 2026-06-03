@@ -24,6 +24,7 @@ export type AdminSection =
   | 'overview'
   | 'goals' | 'staff' | 'access' | 'roles' | 'connections' | 'integrations' | 'fba'
   | 'manuals' | 'reason_codes' | 'sku_catalog' | 'locations' | 'repair_issues' | 'favorites' | 'features'
+  | 'station_photos'
   | 'logs' | 'jobs' | 'ai_chat' | 'architecture'
   | 'photo_backup' | 'billing';
 
@@ -59,6 +60,7 @@ export const ADMIN_SECTION_OPTIONS: AdminSectionOption[] = [
   { value: 'locations',    label: 'Locations',    description: 'Edit bin name, barcode, type, and capacity',                   group: 'Data sources', icon: MapPin,       requires: 'sku_stock.manage' },
   { value: 'repair_issues',label: 'Repair Issues',description: 'Global repair issue checklist templates',                       group: 'Data sources', icon: Wrench,       requires: 'repair.intake' },
   { value: 'favorites',    label: 'Favorites',    description: 'Quick-pick SKU shortcuts per workspace',                       group: 'Data sources', icon: Star,         requires: 'sku_stock.manage' },
+  { value: 'station_photos',label: 'Receiving Photos', description: 'Per-station NAS folder the photo picker opens to',          group: 'Data sources', icon: Camera },
 
   { value: 'photo_backup', label: 'Photo Backup', description: 'Mirror Vercel Blob photos into Google Photos albums',          group: 'System',      icon: Camera },
   { value: 'jobs',         label: 'Jobs',         description: 'QStash scheduled jobs and execution logs',                     group: 'System',      icon: Calendar },

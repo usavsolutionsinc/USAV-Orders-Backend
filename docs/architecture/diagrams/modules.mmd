@@ -111,20 +111,19 @@ flowchart LR
   click components_products "src/components/products/types.ts" "Open src/components/products/types.ts"
   components_auth["components/auth"]
   click components_auth "src/components/auth/StepUpModal.tsx" "Open src/components/auth/StepUpModal.tsx"
+  components_ai["components/ai"]
+  click components_ai "src/components/ai/AiChatConversation.tsx" "Open src/components/ai/AiChatConversation.tsx"
   lib_dashboard_table_data_ts["lib/dashboard-table-data.ts"]
   click lib_dashboard_table_data_ts "src/lib/dashboard-table-data.ts" "Open src/lib/dashboard-table-data.ts"
   lib_barcode_routing_ts["lib/barcode-routing.ts"]
   click lib_barcode_routing_ts "src/lib/barcode-routing.ts" "Open src/lib/barcode-routing.ts"
   lib_zoho["lib/zoho"]
   click lib_zoho "src/lib/zoho/mock.ts" "Open src/lib/zoho/mock.ts"
-  lib_ebay["lib/ebay"]
-  click lib_ebay "src/lib/ebay/token-refresh.ts" "Open src/lib/ebay/token-refresh.ts"
   app_api --> components_inventory
   app_api --> lib_ai
   app_api --> lib_auth
   app_api --> lib_barcode_routing_ts
   app_api --> lib_db_ts
-  app_api --> lib_ebay
   app_api --> lib_fba
   app_api --> lib_jobs
   app_api --> lib_neon
@@ -228,6 +227,7 @@ flowchart LR
   components_TechDashboard_tsx --> lib_toast_ts
   components_TechDashboard_tsx --> utils
   components_admin --> components_Icons_tsx
+  components_admin --> components_ai
   components_admin --> components_layout
   components_admin --> components_receiving
   components_admin --> components_shipped
@@ -244,6 +244,10 @@ flowchart LR
   components_admin --> lib_toast_ts
   components_admin --> queries
   components_admin --> utils
+  components_ai --> components_Icons_tsx
+  components_ai --> components_ui
+  components_ai --> design_system
+  components_ai --> lib_ai
   components_auth --> contexts
   components_auth --> design_system
   components_auth --> utils
@@ -376,6 +380,7 @@ flowchart LR
   components_shipped --> lib_tracking_format_ts
   components_shipped --> utils
   components_sidebar --> components_Icons_tsx
+  components_sidebar --> components_ai
   components_sidebar --> components_barcode
   components_sidebar --> components_dashboard
   components_sidebar --> components_inventory
@@ -512,17 +517,11 @@ flowchart LR
   lib_dashboard_table_data_ts --> hooks
   lib_dashboard_table_data_ts --> lib_neon
   lib_dashboard_table_data_ts --> utils
-  lib_ebay --> lib_db_ts
-  lib_ebay --> lib_neon
-  lib_ebay --> lib_tenancy
-  lib_ebay --> lib_tracking_format_ts
-  lib_ebay --> utils
   lib_fba --> components_Icons_tsx
   lib_fba --> components_ui
   lib_fba --> lib_scan_resolver_ts
   lib_fba --> lib_tracking_format_ts
   lib_jobs --> lib_db_ts
-  lib_jobs --> lib_ebay
   lib_jobs --> lib_neon
   lib_jobs --> lib_realtime
   lib_jobs --> lib_shipping

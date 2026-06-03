@@ -10,6 +10,7 @@ import {
   ExternalLink,
   AlertCircle,
   ChevronDown,
+  Plus,
 } from '@/components/Icons';
 import { PRODUCT_HUB_PLATFORMS, platformStyle } from './platform-style';
 import { useProductHub } from './useProductHub';
@@ -20,6 +21,13 @@ import { isElectron } from '@/utils/isElectron';
 
 interface ProductHubPanelProps {
   skuCatalogId: number;
+  /**
+   * When true, render an inline "add a pairing manually" form above the channel
+   * list — pick a platform and type a SKU/identifier to link it directly. Off by
+   * default so the products pairing page stays suggestion-only; enabled in the
+   * testing-workspace pairing modal.
+   */
+  allowManualPair?: boolean;
 }
 
 /**
@@ -30,7 +38,7 @@ interface ProductHubPanelProps {
  * so the operator's default action is one Save click. Nothing commits without
  * explicit Save — this is human-in-the-loop by design.
  */
-export function ProductHubPanel({ skuCatalogId }: ProductHubPanelProps) {
+export function ProductHubPanel({ skuCatalogId, allowManualPair = false }: ProductHubPanelProps) {
   const hub = useProductHub(skuCatalogId);
   const snapshot = hub.snapshot;
 
@@ -89,6 +97,9 @@ export function ProductHubPanel({ skuCatalogId }: ProductHubPanelProps) {
       />
 
       <div className="flex-1 overflow-y-auto px-4 py-3">
+        {allowManualPair ? (
+          <ManualPairForm skuCatalogId={skuCatalogId} onAdded={hub.refresh} />
+        ) : null}
         {!hasAnyContent ? (
           <div className="flex flex-col items-center py-16 text-center">
             <div className="flex h-12 w-12 items-center justify-center rounded-full border border-emerald-200 bg-emerald-50">
@@ -442,6 +453,170 @@ function SuggestionRow({
           </button>
         </div>
       </div>
+    </div>
+  );
+}
+
+// ─── Manual add ─────────────────────────────────────────────────────────────
+
+/**
+ * Inline "pair a SKU by hand" form. Posts a single inline-create accept entry
+ * to /api/sku-catalog/pair-batch (the same atomic + audited path the Save
+ * button uses), then refreshes the hub so the new row shows under its channel.
+ * Used when a platform listing isn't in the ranked suggestions yet.
+ */
+function ManualPairForm({
+  skuCatalogId,
+  onAdded,
+}: {
+  skuCatalogId: number;
+  onAdded: () => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [platform, setPlatform] = useState<string>(PRODUCT_HUB_PLATFORMS[0]);
+  const [sku, setSku] = useState('');
+  const [account, setAccount] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const reset = useCallback(() => {
+    setSku('');
+    setAccount('');
+    setError(null);
+  }, []);
+
+  const submit = useCallback(async () => {
+    const value = sku.trim();
+    if (!value) {
+      setError('Enter a SKU or identifier');
+      return;
+    }
+    setSaving(true);
+    setError(null);
+    try {
+      const res = await fetch('/api/sku-catalog/pair-batch', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'same-origin',
+        body: JSON.stringify({
+          skuCatalogId,
+          accept: [
+            {
+              platform,
+              platformSku: value,
+              accountName: account.trim() || null,
+              confidence: 100,
+              reason: 'manual_add',
+            },
+          ],
+          reject: [],
+          unpair: [],
+        }),
+      });
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok || !body?.success) {
+        throw new Error(body?.error || `HTTP ${res.status}`);
+      }
+      window.dispatchEvent(new CustomEvent('sku-pairing-updated'));
+      reset();
+      setOpen(false);
+      onAdded();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to add pairing');
+    } finally {
+      setSaving(false);
+    }
+  }, [account, onAdded, platform, reset, sku, skuCatalogId]);
+
+  if (!open) {
+    return (
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        className="mb-3 inline-flex items-center gap-1.5 rounded-md border border-dashed border-gray-300 px-2.5 py-1.5 text-micro font-bold uppercase tracking-wider text-gray-600 transition-colors hover:border-blue-300 hover:bg-blue-50 hover:text-blue-700"
+      >
+        <Plus className="h-3.5 w-3.5" />
+        Pair a SKU manually
+      </button>
+    );
+  }
+
+  return (
+    <div className="mb-3 rounded-lg border border-blue-200 bg-blue-50/40 p-3">
+      <div className="mb-2 flex items-center justify-between">
+        <span className="text-micro font-bold uppercase tracking-wider text-blue-700">
+          Manual pairing
+        </span>
+        <button
+          type="button"
+          onClick={() => {
+            reset();
+            setOpen(false);
+          }}
+          aria-label="Cancel manual pairing"
+          className="rounded p-0.5 text-gray-400 transition-colors hover:bg-white hover:text-gray-700"
+        >
+          <X className="h-3.5 w-3.5" />
+        </button>
+      </div>
+      <div className="flex flex-wrap items-end gap-2">
+        <label className="flex flex-col gap-0.5">
+          <span className="text-eyebrow font-semibold uppercase tracking-wider text-gray-500">
+            Platform
+          </span>
+          <select
+            value={platform}
+            onChange={(e) => setPlatform(e.target.value)}
+            className="rounded-md border border-gray-300 bg-white px-2 py-1.5 text-xs font-semibold text-gray-900 focus:border-blue-400 focus:outline-none"
+          >
+            {PRODUCT_HUB_PLATFORMS.map((p) => (
+              <option key={p} value={p}>
+                {platformStyle(p).label}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="flex min-w-[8rem] flex-1 flex-col gap-0.5">
+          <span className="text-eyebrow font-semibold uppercase tracking-wider text-gray-500">
+            SKU / identifier
+          </span>
+          <input
+            value={sku}
+            onChange={(e) => setSku(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && !saving) {
+                e.preventDefault();
+                void submit();
+              }
+            }}
+            placeholder="e.g. 01815"
+            className="w-full rounded-md border border-gray-300 bg-white px-2 py-1.5 font-mono text-xs text-gray-900 focus:border-blue-400 focus:outline-none"
+          />
+        </label>
+        <label className="flex min-w-[7rem] flex-1 flex-col gap-0.5">
+          <span className="text-eyebrow font-semibold uppercase tracking-wider text-gray-500">
+            Account <span className="font-normal normal-case text-gray-400">(optional)</span>
+          </span>
+          <input
+            value={account}
+            onChange={(e) => setAccount(e.target.value)}
+            placeholder="e.g. DRAGONH"
+            className="w-full rounded-md border border-gray-300 bg-white px-2 py-1.5 text-xs text-gray-900 focus:border-blue-400 focus:outline-none"
+          />
+        </label>
+        <button
+          type="button"
+          onClick={() => void submit()}
+          disabled={saving || !sku.trim()}
+          className="inline-flex items-center gap-1.5 rounded-md bg-blue-600 px-3 py-1.5 text-xs font-bold text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Link2 className="h-3.5 w-3.5" />}
+          Pair
+        </button>
+      </div>
+      {error ? (
+        <p className="mt-1.5 text-micro font-semibold text-red-600">{error}</p>
+      ) : null}
     </div>
   );
 }
