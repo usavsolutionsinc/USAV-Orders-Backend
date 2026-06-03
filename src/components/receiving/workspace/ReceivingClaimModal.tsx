@@ -92,6 +92,11 @@ export function ReceivingClaimModal({ open, row, onClose, onTicketCreated }: Pro
   // When set, the card is centered over the receiving right panel; null = fall
   // back to viewport-centered (no panel found). Mirrors NasReceivingAttach.
   const [cardStyle, setCardStyle] = useState<React.CSSProperties | null>(null);
+  // Prod proof button: creates a folder on the NAS via the office archive agent.
+  const [nasTest, setNasTest] = useState<{ status: 'idle' | 'running' | 'ok' | 'err'; msg: string }>({
+    status: 'idle',
+    msg: '',
+  });
 
   useEffect(() => {
     setPortalTarget(document.body);
@@ -274,6 +279,29 @@ export function ReceivingClaimModal({ open, row, onClose, onTicketCreated }: Pro
     }
   };
 
+  // PROD proof: ask the server to create a NAS folder via the office archive
+  // agent (Vercel → tunnel → agent → mkdir). Confirms the claim archive path
+  // works in production before wiring it into the real claim submit.
+  const runNasTest = async () => {
+    setNasTest({ status: 'running', msg: 'Creating folder on NAS…' });
+    try {
+      const ticket = `TEST-${Date.now()}`;
+      const res = await fetch('/api/receiving/nas-archive-test', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ name: ticket }),
+      });
+      const data = await res.json().catch(() => null);
+      if (res.ok && data?.success) {
+        setNasTest({ status: 'ok', msg: `Created: ${data.folder ?? data.name}` });
+      } else {
+        setNasTest({ status: 'err', msg: data?.error || `Failed (HTTP ${res.status})` });
+      }
+    } catch (e) {
+      setNasTest({ status: 'err', msg: e instanceof Error ? e.message : 'Network error' });
+    }
+  };
+
   const overlay = portalTarget ? (
       <AnimatePresence>
         {open ? (
@@ -320,16 +348,40 @@ export function ReceivingClaimModal({ open, row, onClose, onTicketCreated }: Pro
                       : `Receiving #${row.receiving_id ?? '—'}`}
                 </p>
               </div>
-              <button
-                type="button"
-                onClick={onClose}
-                disabled={submitting}
-                aria-label="Cancel"
-                className="rounded-lg p-1.5 text-gray-400 transition-colors hover:bg-white hover:text-gray-700 disabled:opacity-50"
-              >
-                <X className="h-4 w-4" />
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={runNasTest}
+                  disabled={nasTest.status === 'running'}
+                  title="Create a folder on the NAS now to confirm the prod archive path works"
+                  className="rounded-lg border border-amber-300 bg-white px-2.5 py-1.5 text-micro font-black uppercase tracking-widest text-amber-700 transition-colors hover:bg-amber-50 disabled:opacity-50"
+                >
+                  {nasTest.status === 'running' ? 'Testing…' : 'Test NAS folder'}
+                </button>
+                <button
+                  type="button"
+                  onClick={onClose}
+                  disabled={submitting}
+                  aria-label="Cancel"
+                  className="rounded-lg p-1.5 text-gray-400 transition-colors hover:bg-white hover:text-gray-700 disabled:opacity-50"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
             </div>
+            {nasTest.status !== 'idle' ? (
+              <div
+                className={`shrink-0 px-5 py-2 text-micro font-bold ${
+                  nasTest.status === 'ok'
+                    ? 'bg-emerald-50 text-emerald-700'
+                    : nasTest.status === 'err'
+                      ? 'bg-rose-50 text-rose-700'
+                      : 'bg-amber-50 text-amber-700'
+                }`}
+              >
+                {nasTest.msg}
+              </div>
+            ) : null}
 
             {/* Body */}
             <div className="space-y-4 overflow-y-auto px-5 py-4">
