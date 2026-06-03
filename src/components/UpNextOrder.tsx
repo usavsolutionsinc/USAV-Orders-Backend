@@ -301,7 +301,7 @@ export default function UpNextOrder({ techId, onStart, onMissingParts, onAllComp
     //   • Linear-style row cards (see SkeletonOrderCard).
     return (
       <div className="relative flex flex-col">
-        <div className="sticky top-0 z-10 bg-white pb-1.5">
+        <div className="sticky top-0 z-10 bg-white pb-0.5">
           <div className="-mx-1 overflow-x-hidden py-2">
             <div className="flex min-w-max gap-2 px-1">
               <div className="h-8 w-20 flex-shrink-0 rounded-full bg-blue-600/90 animate-pulse" />
@@ -334,7 +334,7 @@ export default function UpNextOrder({ techId, onStart, onMissingParts, onAllComp
               switcher matches the global sidebar's view switcher.
               Suppressed entirely when no tabs survive HIDDEN_UP_NEXT_TAB_IDS
               filtering (e.g., when only orders are present). ── */}
-        <div className="sticky top-0 z-10 bg-white pb-1.5">
+        <div className="sticky top-0 z-10 bg-white pb-0.5">
           {sliderItems.length > 0 ? (
             <HorizontalButtonSlider
               items={sliderItems}

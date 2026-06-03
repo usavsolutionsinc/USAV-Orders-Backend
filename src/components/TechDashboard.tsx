@@ -16,8 +16,6 @@ import { printProductLabel, printProductLabels } from '@/lib/print/printProductL
 import { Copy, Printer, MessageSquare, User, Smartphone } from '@/components/Icons';
 import { toast } from '@/lib/toast';
 import type { ReceivingLineRow } from './station/ReceivingLinesTable';
-import PendingOrdersTable from './PendingOrdersTable';
-import { DashboardShippedTable } from './shipped';
 import { StationDetailsHandler } from './station/StationDetailsHandler';
 import { ReceivingInboundFeed } from './station/ReceivingInboundFeed';
 import { ReceivingDetailsStack, type ReceivingDetailsLog } from './station/ReceivingDetailsStack';
@@ -72,15 +70,14 @@ export default function TechDashboard({ techId }: TechDashboardProps) {
     const prefersReducedMotion = useReducedMotion();
 
     const rawView = searchParams.get('view');
-    const rightViewMode = rawView === 'pending'
-        ? 'pending'
-        : rawView === 'receiving'
-            ? 'receiving'
-            : rawView === 'history'
-                ? 'history'
-                : rawView === 'testing'
-                    ? 'testing'
-                    : 'shipped';
+    // Shipping mode's right pane is fixed to the History feed — the legacy
+    // `shipped`/`pending` sub-tabs were removed. Anything that isn't the
+    // receiving or testing surface falls through to History.
+    const rightViewMode = rawView === 'receiving'
+        ? 'receiving'
+        : rawView === 'testing'
+            ? 'testing'
+            : 'history';
     const router = useRouter();
     // Testing sub-tab — Recent (workspace, default) vs History (browse + bulk
     // select). The sidebar's Recent/History pills drive `?testingTab`.
@@ -352,16 +349,9 @@ export default function TechDashboard({ techId }: TechDashboardProps) {
             />
         );
     } else {
-        // Shipping sub-page: shipped | pending | history. Keyed by tab so tab
-        // switches also crossfade; the active/preview order overlays them all.
-        const tabTable =
-            rightViewMode === 'pending' ? (
-                <PendingOrdersTable />
-            ) : rightViewMode === 'shipped' ? (
-                <DashboardShippedTable testedBy={parseInt(techId)} />
-            ) : (
-                <TechTable testedBy={parseInt(techId)} />
-            );
+        // Shipping mode: the right pane is always the tech's History feed; the
+        // active/preview order crossfades over it and back.
+        const tabTable = <TechTable testedBy={parseInt(techId)} />;
         rightPane = (
             <AnimatePresence initial={false} mode="wait">
                 {activeOrderPane ? (
@@ -409,13 +399,7 @@ export default function TechDashboard({ techId }: TechDashboardProps) {
                 </div>
             </div>
 
-            <StationDetailsHandler
-                viewMode={
-                    rightViewMode === 'receiving' || rightViewMode === 'testing'
-                        ? 'history'
-                        : rightViewMode
-                }
-            />
+            <StationDetailsHandler viewMode="history" />
 
             {/* ReceivingDetailsStack — shown when a receiving log is selected from the inbound feed */}
             <AnimatePresence>

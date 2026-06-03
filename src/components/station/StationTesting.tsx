@@ -4,18 +4,13 @@ import { useState, useCallback, useRef } from 'react';
 import { motion } from 'framer-motion';
 import UpNextOrder from '../UpNextOrder';
 import { Barcode, Loader2, Package, MapPin, Settings } from '../Icons';
-import StationGoalBar from './StationGoalBar';
 import { StationScanBar } from './StationScanBar';
 import { ActiveOrderScanFeedback } from './ActiveOrderScanFeedback';
 import { getStationInputMode, type StationInputMode, useStationTestingController } from '@/hooks/useStationTestingController';
 import { looksLikeFnsku } from '@/lib/scan-resolver';
 import { useStationTheme } from '@/hooks/useStationTheme';
 import { useIsMobile } from '@/hooks';
-import { HorizontalButtonSlider, type HorizontalSliderItem } from '@/components/ui/HorizontalButtonSlider';
-import {
-  TECH_STATION_VIEW_SLIDER_NONE,
-  type TechStationViewMode,
-} from '@/components/sidebar/tech-station-view-config';
+import { SIDEBAR_GUTTER } from '@/components/layout/header-shell';
 
 const STATION_EASE_OUT = [0.22, 1, 0.36, 1] as const;
 const STATION_EASE_HEIGHT = [0.25, 0.1, 0.25, 1] as const;
@@ -27,16 +22,8 @@ interface StationTestingProps {
   userName: string;
   staffId: number | string;
   onTrackingScan?: () => void;
-  todayCount: number;
-  goal?: number;
   onComplete?: () => void;
   embedded?: boolean;
-  /** Embedded tech panel: compact icon tabs for History / Shipped / Pending (right pane). */
-  techViewSwitcher?: {
-    items: HorizontalSliderItem[];
-    value: TechStationViewMode | typeof TECH_STATION_VIEW_SLIDER_NONE;
-    onChange: (next: TechStationViewMode) => void;
-  };
 }
 
 export default function StationTesting({
@@ -44,11 +31,8 @@ export default function StationTesting({
   userName,
   staffId,
   onTrackingScan,
-  todayCount = 0,
-  goal = 50,
   onComplete,
   embedded = false,
-  techViewSwitcher,
 }: StationTestingProps) {
   const { theme: themeColor, inputBorder } = useStationTheme({ staffId });
   const [manualMode, setManualMode] = useState<StationInputMode | null>(null);
@@ -344,51 +328,23 @@ export default function StationTesting({
   return (
     <div className={`flex flex-col h-full bg-white overflow-hidden ${embedded ? '' : 'border-r border-gray-100'}`}>
       <div className="flex-1 flex flex-col overflow-hidden">
-        {/* ── Header (always top) ── */}
-        <div className={`space-y-2 px-5 pb-1 pt-4 ${isMobile ? 'pt-3 pb-0' : ''}`}>
-          <div className="space-y-0.5">
-            <div className="flex min-w-0 flex-1 flex-wrap items-center justify-between gap-x-2 gap-y-1">
-              <h2 className={`min-w-0 font-black tracking-tighter text-gray-900 ${isMobile ? 'text-lg' : 'text-xl'}`}>
-                Welcome, {userName}
-              </h2>
-              {techViewSwitcher ? (
-                <div className="shrink-0">
-                  <HorizontalButtonSlider
-                    items={techViewSwitcher.items}
-                    value={techViewSwitcher.value}
-                    onChange={(id) => techViewSwitcher.onChange(id as TechStationViewMode)}
-                    variant="nav"
-                    navIconOnly
-                    className="-mr-1"
-                    aria-label="Technician view"
-                  />
-                </div>
-              ) : null}
-            </div>
+        {/* ── Compact scan band (~40px). Desktop only — on mobile the scan bar
+              docks at the bottom (see footer below), so nothing renders up here.
+              Scan + active-order strip sit flush on SIDEBAR_GUTTER (6px); the
+              gutter gives focus rings + card shadows their breathing room before
+              the column’s overflow-hidden edge. ── */}
+        {!isMobile && (
+          <div className={`shrink-0 min-w-0 space-y-2 ${SIDEBAR_GUTTER} py-1.5`}>
+            {scanBarBlock}
+            <ActiveOrderScanFeedback activeOrder={activeOrder} />
           </div>
-
-          <StationGoalBar
-            count={todayCount}
-            goal={goal}
-            label="- TODAY'S GOAL"
-            theme={themeColor}
-          />
-
-          {/* Inset scan + active-order strip so focus rings and card borders are
-              not clipped by the column’s overflow-hidden ancestors. */}
-          {!isMobile && (
-            <div className="min-w-0 space-y-2 px-1.5">
-              {scanBarBlock}
-              <ActiveOrderScanFeedback activeOrder={activeOrder} />
-            </div>
-          )}
-        </div>
+        )}
 
         {/* ── Scrollable content — Up Next queue. Active-order details now live
               in the right pane (see ActiveOrderWorkspace via TechDashboard);
               this sidebar stays focused on the scan input + queue. ── */}
-        <div className={`flex-1 space-y-3 overflow-y-auto px-5 pb-4 no-scrollbar ${isMobile ? 'pb-2' : ''}`}>
-          <div className="space-y-2 mt-2">
+        <div className={`flex-1 space-y-3 overflow-y-auto ${SIDEBAR_GUTTER} pb-4 no-scrollbar ${isMobile ? 'pb-2' : ''}`}>
+          <div className="space-y-2 mt-0.5">
             <UpNextOrder
               techId={userId}
               onStart={(tracking) => {
@@ -415,7 +371,7 @@ export default function StationTesting({
             strip sits just above the scan bar so it remains in the tech's
             line of sight after a scan. */}
         {isMobile && (
-          <div className="flex-shrink-0 space-y-2 border-t border-gray-100 bg-white px-5 pb-[max(1.125rem,env(safe-area-inset-bottom))] pt-3">
+          <div className={`flex-shrink-0 space-y-2 border-t border-gray-100 bg-white ${SIDEBAR_GUTTER} pb-[max(1.125rem,env(safe-area-inset-bottom))] pt-3`}>
             <div className="min-w-0 space-y-2 px-1.5 pb-2 sm:pb-0">
               <ActiveOrderScanFeedback activeOrder={activeOrder} />
               {scanBarBlock}
