@@ -1069,6 +1069,9 @@ export function TechTestingWorkspace({ staffId, selectedLineId, onSelectedLineCh
                           setActiveSlotByLine((m) => ({ ...m, [line.id]: i }))
                         }
                         onSetVerdict={(next) => void applyLineVerdict(line.id, lineSerials, next)}
+                        onSetUnitVerdict={(serial, next) =>
+                          void handleSlotVerdict(line.id, serial, next)
+                        }
                         onAddSerial={(sn) => submitSerial(line.id, sn)}
                         onDeleteSerial={(s) => {
                           if (s.id == null) return;
@@ -1119,6 +1122,9 @@ export function TechTestingWorkspace({ staffId, selectedLineId, onSelectedLineCh
                           setActiveSlotByLine((m) => ({ ...m, [row.id]: i }))
                         }
                         onSetVerdict={(next) => void applyLineVerdict(row.id, lineSerials, next)}
+                        onSetUnitVerdict={(serial, next) =>
+                          void handleSlotVerdict(row.id, serial, next)
+                        }
                         onAddSerial={(sn) => submitSerial(row.id, sn)}
                         onDeleteSerial={(s) => {
                           if (s.id == null) return;

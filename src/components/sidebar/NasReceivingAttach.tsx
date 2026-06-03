@@ -6,8 +6,9 @@ import { attachNasPhoto, listNasDir, nasConfigured, type NasEntry } from '@/lib/
 import { NasBreadcrumb, NasFolderCard, NasSectionLabel } from '@/components/nas/NasBrowserChrome';
 
 type SortKey = 'po' | 'recent' | 'oldest' | 'name';
-// 5 columns × 5 rows.
-const PAGE_SIZE = 25;
+// Photos shown per page in the picker list (paged to avoid loading every
+// full-size NAS image in a large folder at once).
+const PAGE_SIZE = 10;
 // The "PO scan time" view starts this far BEFORE the scan, then runs forward —
 // captures shots taken right as scanning began.
 const PO_WINDOW_MS = 10 * 60 * 1000; // 10 minutes
@@ -39,10 +40,22 @@ function compareEntries(a: NasEntry, b: NasEntry, key: SortKey, anchor: number |
   return key === 'oldest' ? at - bt : bt - at;
 }
 
-// Small webp preview instead of the multi-MB original (dev NAS route honours
-// ?thumb; nginx ignores it and serves the full image — still correct, just not
-// shrunk). The full-res `url` is what gets attached to the PO.
+// Shrink the multi-MB NAS original to a fast thumbnail. Two paths, because the
+// source differs by environment:
+//   • Public NAS tunnel (absolute https) → the Next.js image optimizer, which
+//     downscales to a tiny cached webp. Works because the tunnel is
+//     unauthenticated (CORS-open) and its host is allowlisted in next.config
+//     `images.remotePatterns`. `size` must be an allowed Next width.
+//   • Dev route (/api/nas-dev, same-origin) → fetch directly with ?thumb. The
+//     optimizer can't be used here: that route is behind the session auth gate
+//     and the optimizer fetches server-side WITHOUT the browser cookie (→ 401,
+//     broken image). A direct browser request carries the cookie and the dev
+//     route honours ?thumb to downscale.
+// The full-res `url` is always what gets attached to the PO.
 function thumbUrl(url: string, size = 128): string {
+  if (/^https?:\/\//i.test(url)) {
+    return `/_next/image?url=${encodeURIComponent(url)}&w=${size}&q=60`;
+  }
   return url + (url.includes('?') ? '&' : '?') + `thumb=${size}`;
 }
 
@@ -555,8 +568,8 @@ function NasPickerDialog({
       </div>
     </div>
 
-      {/* Larger preview lightbox (opened from a row's thumbnail). A ~1024px webp
-          — sharp on the dev route — so it's crisp but still loads fast. */}
+      {/* Larger preview lightbox (opened from a row's thumbnail). A 1080px webp
+          via the optimizer — crisp but still far smaller than the original. */}
       {preview ? (
         <div
           role="dialog"
@@ -566,7 +579,7 @@ function NasPickerDialog({
         >
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
-            src={thumbUrl(preview.url, 1024)}
+            src={thumbUrl(preview.url, 1080)}
             alt={preview.name}
             onClick={(e) => e.stopPropagation()}
             className="max-h-[82vh] max-w-full rounded-lg object-contain shadow-2xl"

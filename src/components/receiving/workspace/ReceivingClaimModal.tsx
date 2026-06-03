@@ -23,6 +23,23 @@ function claimThumb(url: string): string {
   return url;
 }
 
+// Find the rect of the scrollable panel the modal lives in (the receiving
+// detail pane's `overflow-y-auto` surface), so the card can sit centered over
+// THAT panel rather than the whole viewport — matching the NAS photo picker
+// popover. Walks up from a marker to the first vertical-scroll ancestor,
+// stopping short of <body>. Returns null → caller falls back to centering.
+function findPanelRect(node: HTMLElement | null): DOMRect | null {
+  let n = node?.parentElement ?? null;
+  while (n && n !== document.body) {
+    const oy = window.getComputedStyle(n).overflowY;
+    if (oy === 'auto' || oy === 'scroll' || oy === 'overlay') {
+      return n.getBoundingClientRect();
+    }
+    n = n.parentElement;
+  }
+  return null;
+}
+
 interface Props {
   open: boolean;
   row: ReceivingLineRow;
@@ -69,10 +86,44 @@ export function ReceivingClaimModal({ open, row, onClose, onTicketCreated }: Pro
   // reused across retries so a failed-then-retried submit never files two tickets.
   const idempotencyKey = useRef('');
   const [portalTarget, setPortalTarget] = useState<HTMLElement | null>(null);
+  // Hidden marker rendered in the modal's normal DOM position (the receiving
+  // panel tree) so we can locate the panel before portaling the card to <body>.
+  const markerRef = useRef<HTMLSpanElement>(null);
+  // When set, the card is centered over the receiving right panel; null = fall
+  // back to viewport-centered (no panel found). Mirrors NasReceivingAttach.
+  const [cardStyle, setCardStyle] = useState<React.CSSProperties | null>(null);
 
   useEffect(() => {
     setPortalTarget(document.body);
   }, []);
+
+  // Center the card horizontally over the receiving right panel rather than the
+  // whole viewport, so it never drifts to the far edge. Recomputes on open and
+  // resize. Vertical stays viewport-centered.
+  useEffect(() => {
+    if (!open) return;
+    const compute = () => {
+      const rect = findPanelRect(markerRef.current);
+      if (!rect || rect.width < 1) {
+        setCardStyle(null);
+        return;
+      }
+      const GAP = 16;
+      const maxW = 672; // matches max-w-2xl
+      const width = Math.max(280, Math.min(maxW, rect.width - GAP * 2));
+      setCardStyle({
+        position: 'fixed',
+        left: Math.round(rect.left + (rect.width - width) / 2),
+        width: Math.round(width),
+        top: '50%',
+        transform: 'translateY(-50%)',
+        maxHeight: '90vh',
+      });
+    };
+    compute();
+    window.addEventListener('resize', compute);
+    return () => window.removeEventListener('resize', compute);
+  }, [open]);
 
   // Reset transient state each time the modal opens so reopening on a
   // different row doesn't show stale template text.
@@ -235,17 +286,25 @@ export function ReceivingClaimModal({ open, row, onClose, onTicketCreated }: Pro
             className="fixed inset-0 z-[118] bg-gray-900/50 backdrop-blur-sm"
             onClick={onClose}
           />
+          <div
+            className={`pointer-events-none fixed inset-0 z-[120] ${
+              cardStyle ? '' : 'flex items-center justify-center p-4'
+            }`}
+          >
           <motion.div
             key="claim-dialog"
-            initial={{ opacity: 0, y: 8 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: 4 }}
+            // When centered over the panel the card is positioned via cardStyle's
+            // own `transform: translateY(-50%)`, so animate opacity only — a
+            // framer `y` would overwrite that transform and break centering.
+            initial={cardStyle ? { opacity: 0 } : { opacity: 0, y: 8 }}
+            animate={cardStyle ? { opacity: 1 } : { opacity: 1, y: 0 }}
+            exit={cardStyle ? { opacity: 0 } : { opacity: 0, y: 4 }}
             transition={{ duration: 0.18, ease: [0.22, 1, 0.36, 1] }}
-            className="pointer-events-none fixed inset-0 z-[120] flex items-center justify-center p-4"
-          >
-          <div
             onClick={(e) => e.stopPropagation()}
-            className="pointer-events-auto flex max-h-[90vh] w-full max-w-2xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl ring-1 ring-gray-200"
+            style={cardStyle ?? undefined}
+            className={`pointer-events-auto flex flex-col overflow-hidden rounded-2xl bg-white shadow-2xl ring-1 ring-gray-200 ${
+              cardStyle ? '' : 'max-h-[90vh] w-full max-w-2xl'
+            }`}
           >
             {/* Header */}
             <div className="flex shrink-0 items-center justify-between border-b border-gray-100 bg-gradient-to-r from-rose-50 to-amber-50 px-5 py-4">
@@ -495,12 +554,19 @@ export function ReceivingClaimModal({ open, row, onClose, onTicketCreated }: Pro
                 {submitting ? 'Creating…' : 'Create Zendesk ticket'}
               </button>
             </div>
-          </div>
           </motion.div>
+          </div>
         </>
         ) : null}
       </AnimatePresence>
     ) : null;
 
-  return overlay && portalTarget ? createPortal(overlay, portalTarget) : null;
+  return (
+    <>
+      {/* Stays in the receiving panel's DOM tree so findPanelRect can locate
+          the panel; the dialog itself portals to <body>. */}
+      <span ref={markerRef} aria-hidden className="hidden" />
+      {overlay && portalTarget ? createPortal(overlay, portalTarget) : null}
+    </>
+  );
 }

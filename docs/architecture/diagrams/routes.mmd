@@ -146,6 +146,11 @@ flowchart LR
   api_admin_org_export["export"]
   api_admin_org --> api_admin_org_export
   click api_admin_org_export "src/app/api/admin/org/export/route.ts" "route: src/app/api/admin/org/export/route.ts"
+  api_admin_organization["organization"]
+  api_admin --> api_admin_organization
+  api_admin_organization_settings["settings"]
+  api_admin_organization --> api_admin_organization_settings
+  click api_admin_organization_settings "src/app/api/admin/organization/settings/route.ts" "route: src/app/api/admin/organization/settings/route.ts"
   api_admin_po_gmail["po-gmail"]
   api_admin --> api_admin_po_gmail
   api_admin_po_gmail_connect["connect"]
@@ -209,6 +214,3 @@ flowchart LR
   api_admin_roles_reorder["reorder"]
   api_admin_roles --> api_admin_roles_reorder
   click api_admin_roles_reorder "src/app/api/admin/roles/reorder/route.ts" "route: src/app/api/admin/roles/reorder/route.ts"
-  api_admin_sessions["sessions"]
-  api_admin --> api_admin_sessions
-  click api_admin_sessions "src/app/api/admin/sessions/route.ts" "route: src/app/api/admin/sessions/route.ts"

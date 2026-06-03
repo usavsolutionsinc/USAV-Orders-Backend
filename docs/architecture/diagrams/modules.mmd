@@ -7,20 +7,20 @@ flowchart LR
   click utils "src/utils/upnext-shared.ts" "Open src/utils/upnext-shared.ts"
   components_sidebar["components/sidebar"]
   click components_sidebar "src/components/sidebar/AiChatSidebarPanel.tsx" "Open src/components/sidebar/AiChatSidebarPanel.tsx"
-  components_Icons_tsx["components/Icons.tsx"]
-  click components_Icons_tsx "src/components/Icons.tsx" "Open src/components/Icons.tsx"
   design_system["design-system"]
   click design_system "src/design-system/index.ts" "Open src/design-system/index.ts"
+  components_Icons_tsx["components/Icons.tsx"]
+  click components_Icons_tsx "src/components/Icons.tsx" "Open src/components/Icons.tsx"
   components_ui["components/ui"]
   click components_ui "src/components/ui/DeleteButton.tsx" "Open src/components/ui/DeleteButton.tsx"
   lib_db_ts["lib/db.ts"]
   click lib_db_ts "src/lib/db.ts" "Open src/lib/db.ts"
+  components_layout["components/layout"]
+  click components_layout "src/components/layout/SidebarSection.tsx" "Open src/components/layout/SidebarSection.tsx"
   components_station["components/station"]
   click components_station "src/components/station/BarcodeScanner.tsx" "Open src/components/station/BarcodeScanner.tsx"
   components_shipped["components/shipped"]
-  click components_shipped "src/components/shipped/DateGroupHeader.tsx" "Open src/components/shipped/DateGroupHeader.tsx"
-  components_layout["components/layout"]
-  click components_layout "src/components/layout/GlobalHeader.tsx" "Open src/components/layout/GlobalHeader.tsx"
+  click components_shipped "src/components/shipped/PickupReportButton.tsx" "Open src/components/shipped/PickupReportButton.tsx"
   lib_neon["lib/neon"]
   click lib_neon "src/lib/neon/serial-units-queries.ts" "Open src/lib/neon/serial-units-queries.ts"
   contexts["contexts"]
@@ -39,90 +39,89 @@ flowchart LR
   click components_tech "src/components/tech/UpNextActionDock.tsx" "Open src/components/tech/UpNextActionDock.tsx"
   components_repair["components/repair"]
   click components_repair "src/components/repair/SignaturePad.tsx" "Open src/components/repair/SignaturePad.tsx"
+  components_DashboardSidebar_tsx["components/DashboardSidebar…"]
+  click components_DashboardSidebar_tsx "src/components/DashboardSidebar.tsx" "Open src/components/DashboardSidebar.tsx"
   lib_auth["lib/auth"]
   click lib_auth "src/lib/auth/permission-registry.ts" "Open src/lib/auth/permission-registry.ts"
-  components_TechDashboard_tsx["components/TechDashboard.tsx"]
-  click components_TechDashboard_tsx "src/components/TechDashboard.tsx" "Open src/components/TechDashboard.tsx"
+  components_work_orders["components/work-orders"]
+  click components_work_orders "src/components/work-orders/localPickupStore.ts" "Open src/components/work-orders/localPickupStore.ts"
   components_inventory["components/inventory"]
   click components_inventory "src/components/inventory/InventoryShell.tsx" "Open src/components/inventory/InventoryShell.tsx"
   lib_scan_resolver_ts["lib/scan-resolver.ts"]
   click lib_scan_resolver_ts "src/lib/scan-resolver.ts" "Open src/lib/scan-resolver.ts"
   lib_tracking_format_ts["lib/tracking-format.ts"]
   click lib_tracking_format_ts "src/lib/tracking-format.ts" "Open src/lib/tracking-format.ts"
-  components_DashboardSidebar_tsx["components/DashboardSidebar…"]
-  click components_DashboardSidebar_tsx "src/components/DashboardSidebar.tsx" "Open src/components/DashboardSidebar.tsx"
-  components_dashboard["components/dashboard"]
-  click components_dashboard "src/components/dashboard/StockZohoOrdersTable.tsx" "Open src/components/dashboard/StockZohoOrdersTable.tsx"
-  components_barcode["components/barcode"]
-  click components_barcode "src/components/barcode/SkuInput.tsx" "Open src/components/barcode/SkuInput.tsx"
-  components_unshipped["components/unshipped"]
-  click components_unshipped "src/components/unshipped/UnshippedTable.tsx" "Open src/components/unshipped/UnshippedTable.tsx"
-  components_work_orders["components/work-orders"]
-  click components_work_orders "src/components/work-orders/WorkOrderInfoStrip.tsx" "Open src/components/work-orders/WorkOrderInfoStrip.tsx"
-  lib_jobs["lib/jobs"]
-  click lib_jobs "src/lib/jobs/ebay-sync.ts" "Open src/lib/jobs/ebay-sync.ts"
   app_m["app/m"]
   click app_m "src/app/m/layout.tsx" "Open src/app/m/layout.tsx"
-  components_manuals["components/manuals"]
-  click components_manuals "src/components/manuals/ManualsLibrarySidebar.tsx" "Open src/components/manuals/ManualsLibrarySidebar.tsx"
-  lib_toast_ts["lib/toast.ts"]
-  click lib_toast_ts "src/lib/toast.ts" "Open src/lib/toast.ts"
-  components_ReceivingDashboard_tsx["components/ReceivingDashboa…"]
-  click components_ReceivingDashboard_tsx "src/components/ReceivingDashboard.tsx" "Open src/components/ReceivingDashboard.tsx"
+  components_unshipped["components/unshipped"]
+  click components_unshipped "src/components/unshipped/UnshippedTable.tsx" "Open src/components/unshipped/UnshippedTable.tsx"
+  components_dashboard["components/dashboard"]
+  click components_dashboard "src/components/dashboard/DashboardShippedSearchHandoffCard.tsx" "Open src/components/dashboard/DashboardShippedSearchHandoffCard.tsx"
+  components_barcode["components/barcode"]
+  click components_barcode "src/components/barcode/SkuInput.tsx" "Open src/components/barcode/SkuInput.tsx"
   lib_print["lib/print"]
   click lib_print "src/lib/print/printLabel.ts" "Open src/lib/print/printLabel.ts"
-  lib_fba["lib/fba"]
-  click lib_fba "src/lib/fba/board-item.ts" "Open src/lib/fba/board-item.ts"
+  components_TechDashboard_tsx["components/TechDashboard.tsx"]
+  click components_TechDashboard_tsx "src/components/TechDashboard.tsx" "Open src/components/TechDashboard.tsx"
+  lib_toast_ts["lib/toast.ts"]
+  click lib_toast_ts "src/lib/toast.ts" "Open src/lib/toast.ts"
+  lib_jobs["lib/jobs"]
+  click lib_jobs "src/lib/jobs/ebay-sync.ts" "Open src/lib/jobs/ebay-sync.ts"
+  components_manuals["components/manuals"]
+  click components_manuals "src/components/manuals/ManualsLibrarySidebar.tsx" "Open src/components/manuals/ManualsLibrarySidebar.tsx"
   app_receiving["app/receiving"]
   click app_receiving "src/app/receiving/page.tsx" "Open src/app/receiving/page.tsx"
+  components_ReceivingDashboard_tsx["components/ReceivingDashboa…"]
+  click components_ReceivingDashboard_tsx "src/components/ReceivingDashboard.tsx" "Open src/components/ReceivingDashboard.tsx"
   components_labels["components/labels"]
   click components_labels "src/components/labels/ReceivingCartonLabel.tsx" "Open src/components/labels/ReceivingCartonLabel.tsx"
   components_walk_in["components/walk-in"]
-  click components_walk_in "src/components/walk-in/SalesDetailsPanel.tsx" "Open src/components/walk-in/SalesDetailsPanel.tsx"
+  click components_walk_in "src/components/walk-in/SalesEditPanel.tsx" "Open src/components/walk-in/SalesEditPanel.tsx"
   lib_tenancy["lib/tenancy"]
   click lib_tenancy "src/lib/tenancy/db.test.ts" "Open src/lib/tenancy/db.test.ts"
-  components_warehouse["components/warehouse"]
-  click components_warehouse "src/components/warehouse/roomFinderContext.tsx" "Open src/components/warehouse/roomFinderContext.tsx"
-  app_layout_tsx["app/layout.tsx"]
-  click app_layout_tsx "src/app/layout.tsx" "Open src/app/layout.tsx"
+  lib_fba["lib/fba"]
+  click lib_fba "src/lib/fba/board-item.ts" "Open src/lib/fba/board-item.ts"
+  lib_zoho["lib/zoho"]
+  click lib_zoho "src/lib/zoho/mock.ts" "Open src/lib/zoho/mock.ts"
+  lib_receiving["lib/receiving"]
+  click lib_receiving "src/lib/receiving/serial-attach.test.ts" "Open src/lib/receiving/serial-attach.test.ts"
   components_ShippedSidebar_tsx["components/ShippedSidebar.t…"]
   click components_ShippedSidebar_tsx "src/components/ShippedSidebar.tsx" "Open src/components/ShippedSidebar.tsx"
+  components_products["components/products"]
+  click components_products "src/components/products/types.ts" "Open src/components/products/types.ts"
+  components_ai["components/ai"]
+  click components_ai "src/components/ai/AiChatConversation.tsx" "Open src/components/ai/AiChatConversation.tsx"
+  components_warehouse["components/warehouse"]
+  click components_warehouse "src/components/warehouse/roomFinderContext.tsx" "Open src/components/warehouse/roomFinderContext.tsx"
+  lib_sidebar_navigation_ts["lib/sidebar-navigation.ts"]
+  click lib_sidebar_navigation_ts "src/lib/sidebar-navigation.ts" "Open src/lib/sidebar-navigation.ts"
+  app_layout_tsx["app/layout.tsx"]
+  click app_layout_tsx "src/app/layout.tsx" "Open src/app/layout.tsx"
+  components_auth["components/auth"]
+  click components_auth "src/components/auth/StepUpModal.tsx" "Open src/components/auth/StepUpModal.tsx"
   components_quick_access["components/quick-access"]
   click components_quick_access "src/components/quick-access/RecentSection.tsx" "Open src/components/quick-access/RecentSection.tsx"
   components_support["components/support"]
   click components_support "src/components/support/zendesk/badges.ts" "Open src/components/support/zendesk/badges.ts"
   components_sku["components/sku"]
   click components_sku "src/components/sku/BinRowDetailsSheet.tsx" "Open src/components/sku/BinRowDetailsSheet.tsx"
+  lib_dashboard_table_data_ts["lib/dashboard-table-data.ts"]
+  click lib_dashboard_table_data_ts "src/lib/dashboard-table-data.ts" "Open src/lib/dashboard-table-data.ts"
   lib_shipping["lib/shipping"]
   click lib_shipping "src/lib/shipping/repository.ts" "Open src/lib/shipping/repository.ts"
   lib_ai["lib/ai"]
   click lib_ai "src/lib/ai/date-range.test.ts" "Open src/lib/ai/date-range.test.ts"
-  lib_receiving["lib/receiving"]
-  click lib_receiving "src/lib/receiving/serial-attach.test.ts" "Open src/lib/receiving/serial-attach.test.ts"
   app_fba["app/fba"]
   click app_fba "src/app/fba/page.tsx" "Open src/app/fba/page.tsx"
   queries["queries"]
   click queries "src/queries/keys.ts" "Open src/queries/keys.ts"
   components_MultiSkuSnBarcode_tsx["components/MultiSkuSnBarcod…"]
   click components_MultiSkuSnBarcode_tsx "src/components/MultiSkuSnBarcode.tsx" "Open src/components/MultiSkuSnBarcode.tsx"
-  components_PendingOrdersTable_tsx["components/PendingOrdersTab…"]
-  click components_PendingOrdersTable_tsx "src/components/PendingOrdersTable.tsx" "Open src/components/PendingOrdersTable.tsx"
-  components_products["components/products"]
-  click components_products "src/components/products/types.ts" "Open src/components/products/types.ts"
-  components_auth["components/auth"]
-  click components_auth "src/components/auth/StepUpModal.tsx" "Open src/components/auth/StepUpModal.tsx"
-  components_ai["components/ai"]
-  click components_ai "src/components/ai/AiChatConversation.tsx" "Open src/components/ai/AiChatConversation.tsx"
-  lib_dashboard_table_data_ts["lib/dashboard-table-data.ts"]
-  click lib_dashboard_table_data_ts "src/lib/dashboard-table-data.ts" "Open src/lib/dashboard-table-data.ts"
-  lib_barcode_routing_ts["lib/barcode-routing.ts"]
-  click lib_barcode_routing_ts "src/lib/barcode-routing.ts" "Open src/lib/barcode-routing.ts"
-  lib_zoho["lib/zoho"]
-  click lib_zoho "src/lib/zoho/mock.ts" "Open src/lib/zoho/mock.ts"
+  components_shipping["components/shipping"]
+  click components_shipping "src/components/shipping/ShippedFilterToolbar.tsx" "Open src/components/shipping/ShippedFilterToolbar.tsx"
   app_api --> components_inventory
   app_api --> lib_ai
   app_api --> lib_auth
-  app_api --> lib_barcode_routing_ts
   app_api --> lib_db_ts
   app_api --> lib_fba
   app_api --> lib_jobs
@@ -152,6 +151,7 @@ flowchart LR
   app_m --> components_inventory
   app_m --> components_layout
   app_m --> components_mobile
+  app_m --> components_receiving
   app_m --> components_repair
   app_m --> components_sidebar
   app_m --> components_station
@@ -159,6 +159,7 @@ flowchart LR
   app_m --> contexts
   app_m --> hooks
   app_m --> lib_neon
+  app_m --> lib_receiving
   app_m --> utils
   app_receiving --> components_Icons_tsx
   app_receiving --> components_ReceivingDashboard_tsx
@@ -166,14 +167,16 @@ flowchart LR
   app_receiving --> components_mobile
   app_receiving --> components_receiving
   app_receiving --> components_sidebar
-  app_receiving --> components_station
+  app_receiving --> components_ui
   app_receiving --> contexts
   app_receiving --> design_system
   app_receiving --> lib_auth
+  app_receiving --> lib_receiving
   components_DashboardSidebar_tsx --> components_Icons_tsx
   components_DashboardSidebar_tsx --> components_ShippedSidebar_tsx
   components_DashboardSidebar_tsx --> components_admin
   components_DashboardSidebar_tsx --> components_fba
+  components_DashboardSidebar_tsx --> components_layout
   components_DashboardSidebar_tsx --> components_manuals
   components_DashboardSidebar_tsx --> components_shipped
   components_DashboardSidebar_tsx --> components_sidebar
@@ -182,6 +185,7 @@ flowchart LR
   components_DashboardSidebar_tsx --> contexts
   components_DashboardSidebar_tsx --> design_system
   components_DashboardSidebar_tsx --> hooks
+  components_DashboardSidebar_tsx --> lib_sidebar_navigation_ts
   components_DashboardSidebar_tsx --> utils
   components_MultiSkuSnBarcode_tsx --> components_Icons_tsx
   components_MultiSkuSnBarcode_tsx --> components_barcode
@@ -191,11 +195,6 @@ flowchart LR
   components_MultiSkuSnBarcode_tsx --> hooks
   components_MultiSkuSnBarcode_tsx --> lib_print
   components_MultiSkuSnBarcode_tsx --> utils
-  components_PendingOrdersTable_tsx --> components_dashboard
-  components_PendingOrdersTable_tsx --> hooks
-  components_PendingOrdersTable_tsx --> lib_dashboard_table_data_ts
-  components_PendingOrdersTable_tsx --> lib_realtime
-  components_PendingOrdersTable_tsx --> utils
   components_ReceivingDashboard_tsx --> components_Icons_tsx
   components_ReceivingDashboard_tsx --> components_receiving
   components_ReceivingDashboard_tsx --> components_sidebar
@@ -206,7 +205,9 @@ flowchart LR
   components_ReceivingDashboard_tsx --> hooks
   components_ReceivingDashboard_tsx --> lib_print
   components_ReceivingDashboard_tsx --> lib_toast_ts
+  components_ShippedSidebar_tsx --> components_layout
   components_ShippedSidebar_tsx --> components_shipped
+  components_ShippedSidebar_tsx --> components_shipping
   components_ShippedSidebar_tsx --> components_sidebar
   components_ShippedSidebar_tsx --> components_ui
   components_ShippedSidebar_tsx --> design_system
@@ -214,10 +215,8 @@ flowchart LR
   components_ShippedSidebar_tsx --> lib_neon
   components_ShippedSidebar_tsx --> utils
   components_TechDashboard_tsx --> components_Icons_tsx
-  components_TechDashboard_tsx --> components_PendingOrdersTable_tsx
   components_TechDashboard_tsx --> components_receiving
   components_TechDashboard_tsx --> components_repair
-  components_TechDashboard_tsx --> components_shipped
   components_TechDashboard_tsx --> components_station
   components_TechDashboard_tsx --> components_tech
   components_TechDashboard_tsx --> design_system
@@ -240,12 +239,15 @@ flowchart LR
   components_admin --> lib_auth
   components_admin --> lib_db_ts
   components_admin --> lib_realtime
+  components_admin --> lib_sidebar_navigation_ts
   components_admin --> lib_tenancy
   components_admin --> lib_toast_ts
   components_admin --> queries
   components_admin --> utils
   components_ai --> components_Icons_tsx
+  components_ai --> components_shipping
   components_ai --> components_ui
+  components_ai --> contexts
   components_ai --> design_system
   components_ai --> lib_ai
   components_auth --> contexts
@@ -256,7 +258,6 @@ flowchart LR
   components_barcode --> components_warehouse
   components_barcode --> design_system
   components_barcode --> hooks
-  components_barcode --> lib_barcode_routing_ts
   components_dashboard --> components_Icons_tsx
   components_dashboard --> components_fba
   components_dashboard --> components_layout
@@ -293,18 +294,18 @@ flowchart LR
   components_inventory --> lib_toast_ts
   components_labels --> components_Icons_tsx
   components_labels --> components_barcode
+  components_labels --> components_layout
   components_labels --> hooks
-  components_labels --> lib_barcode_routing_ts
   components_labels --> lib_print
   components_labels --> utils
   components_layout --> components_DashboardSidebar_tsx
   components_layout --> components_Icons_tsx
-  components_layout --> components_mobile
   components_layout --> components_quick_access
   components_layout --> components_ui
   components_layout --> contexts
   components_layout --> design_system
   components_layout --> hooks
+  components_layout --> lib_sidebar_navigation_ts
   components_layout --> utils
   components_manuals --> components_Icons_tsx
   components_manuals --> components_admin
@@ -329,6 +330,7 @@ flowchart LR
   components_mobile --> lib_scan_resolver_ts
   components_mobile --> utils
   components_products --> components_Icons_tsx
+  components_products --> components_layout
   components_products --> components_manuals
   components_products --> components_sidebar
   components_products --> design_system
@@ -337,6 +339,7 @@ flowchart LR
   components_quick_access --> components_ui
   components_quick_access --> contexts
   components_quick_access --> hooks
+  components_quick_access --> lib_sidebar_navigation_ts
   components_quick_access --> queries
   components_quick_access --> utils
   components_receiving --> components_Icons_tsx
@@ -349,7 +352,6 @@ flowchart LR
   components_receiving --> components_ui
   components_receiving --> design_system
   components_receiving --> hooks
-  components_receiving --> lib_barcode_routing_ts
   components_receiving --> lib_print
   components_receiving --> lib_toast_ts
   components_receiving --> utils
@@ -361,24 +363,30 @@ flowchart LR
   components_repair --> contexts
   components_repair --> design_system
   components_repair --> hooks
-  components_repair --> lib_barcode_routing_ts
   components_repair --> lib_neon
   components_repair --> lib_print
   components_repair --> utils
   components_shipped --> components_Icons_tsx
+  components_shipped --> components_auth
   components_shipped --> components_dashboard
   components_shipped --> components_fba
   components_shipped --> components_layout
   components_shipped --> components_mobile
   components_shipped --> components_receiving
+  components_shipped --> components_shipping
   components_shipped --> components_ui
   components_shipped --> components_work_orders
   components_shipped --> design_system
   components_shipped --> hooks
   components_shipped --> lib_dashboard_table_data_ts
   components_shipped --> lib_neon
+  components_shipped --> lib_toast_ts
   components_shipped --> lib_tracking_format_ts
   components_shipped --> utils
+  components_shipping --> components_Icons_tsx
+  components_shipping --> components_ui
+  components_shipping --> design_system
+  components_shipping --> utils
   components_sidebar --> components_Icons_tsx
   components_sidebar --> components_ai
   components_sidebar --> components_barcode
@@ -402,7 +410,9 @@ flowchart LR
   components_sidebar --> lib_fba
   components_sidebar --> lib_neon
   components_sidebar --> lib_print
+  components_sidebar --> lib_realtime
   components_sidebar --> lib_receiving
+  components_sidebar --> lib_sidebar_navigation_ts
   components_sidebar --> lib_toast_ts
   components_sidebar --> queries
   components_sidebar --> utils
@@ -414,6 +424,7 @@ flowchart LR
   components_station --> components_Icons_tsx
   components_station --> components_fba
   components_station --> components_layout
+  components_station --> components_receiving
   components_station --> components_shipped
   components_station --> components_sidebar
   components_station --> components_ui
@@ -436,6 +447,7 @@ flowchart LR
   components_tech --> components_Icons_tsx
   components_tech --> components_TechDashboard_tsx
   components_tech --> components_labels
+  components_tech --> components_products
   components_tech --> components_receiving
   components_tech --> components_sidebar
   components_tech --> components_station
@@ -453,6 +465,7 @@ flowchart LR
   components_ui --> utils
   components_unshipped --> components_Icons_tsx
   components_unshipped --> components_dashboard
+  components_unshipped --> components_layout
   components_unshipped --> components_shipped
   components_unshipped --> components_sidebar
   components_unshipped --> components_ui
@@ -464,6 +477,7 @@ flowchart LR
   components_unshipped --> queries
   components_unshipped --> utils
   components_walk_in --> components_Icons_tsx
+  components_walk_in --> components_layout
   components_walk_in --> components_shipped
   components_walk_in --> components_ui
   components_walk_in --> design_system
@@ -476,15 +490,17 @@ flowchart LR
   components_warehouse --> design_system
   components_warehouse --> hooks
   components_work_orders --> components_Icons_tsx
+  components_work_orders --> components_layout
   components_work_orders --> components_receiving
-  components_work_orders --> components_ui
-  components_work_orders --> hooks
+  components_work_orders --> design_system
+  components_work_orders --> lib_print
   contexts --> components_fba
   contexts --> lib_toast_ts
   contexts --> queries
   design_system --> components_Icons_tsx
   design_system --> components_layout
   design_system --> components_mobile
+  design_system --> components_shipping
   design_system --> components_work_orders
   design_system --> hooks
   design_system --> lib_scan_resolver_ts
@@ -498,12 +514,12 @@ flowchart LR
   hooks --> components_work_orders
   hooks --> contexts
   hooks --> design_system
-  hooks --> lib_barcode_routing_ts
   hooks --> lib_dashboard_table_data_ts
   hooks --> lib_fba
   hooks --> lib_neon
   hooks --> lib_realtime
   hooks --> lib_scan_resolver_ts
+  hooks --> lib_sidebar_navigation_ts
   hooks --> lib_toast_ts
   hooks --> lib_tracking_format_ts
   hooks --> queries
@@ -533,7 +549,6 @@ flowchart LR
   lib_neon --> lib_tracking_format_ts
   lib_neon --> utils
   lib_print --> components_ui
-  lib_print --> lib_barcode_routing_ts
   lib_realtime --> lib_db_ts
   lib_realtime --> lib_tenancy
   lib_realtime --> utils
@@ -549,6 +564,7 @@ flowchart LR
   lib_tenancy --> lib_db_ts
   lib_tracking_format_ts --> utils
   lib_zoho --> lib_db_ts
+  lib_zoho --> lib_tenancy
   lib_zoho --> utils
   utils --> components_station
   utils --> components_ui
@@ -557,4 +573,4 @@ flowchart LR
   utils --> lib_neon
   utils --> lib_scan_resolver_ts
   utils --> lib_tracking_format_ts
-  %% truncated: 178 more groups not shown
+  %% truncated: 182 more groups not shown
