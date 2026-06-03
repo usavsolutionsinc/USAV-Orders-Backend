@@ -46,6 +46,19 @@ interface Props {
   onAddSerial: (serial: string) => void | Promise<void>;
   onDeleteSerial: (serial: UnitSlotSerial) => void;
   onReplaceSerial: (original: UnitSlotSerial, next: string) => void;
+  /**
+   * When false, the saved serial chips are rendered by a parent header
+   * (e.g. {@link PoLinesAccordion}'s active row) instead of here, so the
+   * adder hides its own chip list to avoid showing the serials twice.
+   * Defaults to true for surfaces without a header chip list (unmatched).
+   */
+  showSavedChips?: boolean;
+  /**
+   * Controlled edit target from a parent header chip's Edit menu item. When
+   * set, the scan input is populated with this serial for in-place editing.
+   */
+  editingSerial?: UnitSlotSerial | null;
+  onEditingSerialChange?: (serial: UnitSlotSerial | null) => void;
 }
 
 /**
@@ -74,6 +87,9 @@ export function TestingLinePanel({
   onAddSerial,
   onDeleteSerial,
   onReplaceSerial,
+  showSavedChips = true,
+  editingSerial = null,
+  onEditingSerialChange,
 }: Props) {
   return (
     <div className="space-y-3">
@@ -90,6 +106,11 @@ export function TestingLinePanel({
         isSubmitting={isSubmitting}
         disabled={disabled}
         autoFocus={autoFocus}
+        showSavedChips={showSavedChips}
+        editingSerial={editingSerial}
+        onEditingSerialChange={(s) =>
+          onEditingSerialChange?.(s as UnitSlotSerial | null)
+        }
         onAdd={(_lineId, sn) => onAddSerial(sn)}
         onDelete={(_lineId, s) => onDeleteSerial(s as UnitSlotSerial)}
         onReplaceSerial={(_lineId, original, next) =>

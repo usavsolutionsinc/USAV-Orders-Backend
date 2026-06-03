@@ -135,6 +135,21 @@ export function useRealtimeInvalidation({
     receiving,
   );
 
+  // Carrier tracking status changed (webhook push or sync poll). Keeps the
+  // incoming list, its summary tiles, and any open details panel live with the
+  // carrier's real-world state — the receiving-side equivalent of the
+  // order.changed dashboard refresh above.
+  useAblyChannel(
+    STATION_CHANNEL,
+    'shipment.changed',
+    () => {
+      queryClient.invalidateQueries({ queryKey: ['receiving-lines-table'] });
+      queryClient.invalidateQueries({ queryKey: ['receiving-lines-incoming-summary'] });
+      queryClient.invalidateQueries({ queryKey: ['incoming-details'] });
+    },
+    receiving,
+  );
+
   useAblyChannel(
     WALKIN_CHANNEL,
     'sale.completed',

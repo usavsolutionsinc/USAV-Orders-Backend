@@ -31,6 +31,8 @@ interface Props {
    * a multi-qty PO with mixed conditions gets one correct label per unit.
    */
   onActiveConditionChange?: (grade: string | null) => void;
+  /** Header chip Edit — routes into the matching unit's scan input. */
+  serialEditTarget?: UnitSerial | null;
 }
 
 /**
@@ -56,6 +58,7 @@ export function ReceivingUnitRows({
   onReplaceSerial,
   onSetUnitGrade,
   onActiveConditionChange,
+  serialEditTarget = null,
 }: Props) {
   const total = Math.max(quantityExpected, saved.length, 1);
 
@@ -92,6 +95,12 @@ export function ReceivingUnitRows({
     onActiveConditionChange?.(activeGrade);
   }, [activeGrade, onActiveConditionChange]);
 
+  useEffect(() => {
+    if (serialEditTarget?.id == null) return;
+    const idx = saved.findIndex((s) => s.id === serialEditTarget.id);
+    if (idx >= 0) setSelectedIndex(idx);
+  }, [serialEditTarget?.id, saved]);
+
   return (
     <UnitSlotList
       total={total}
@@ -115,6 +124,7 @@ export function ReceivingUnitRows({
       onAddSerial={(index, sn) => onAddSerial(sn, gradeFor(saved[index] ?? null, index))}
       onDeleteSerial={(s) => onDeleteSerial(s.id)}
       onReplaceSerial={(original, next) => onReplaceSerial(original, next)}
+      serialEditTarget={serialEditTarget}
     />
   );
 }

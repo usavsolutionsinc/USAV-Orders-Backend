@@ -24,7 +24,7 @@ import {
 import { DashboardShippedSearchHandoffCard } from '@/components/dashboard/DashboardShippedSearchHandoffCard';
 import { RecentSearchesList } from '@/components/sidebar/RecentSearchesList';
 import { SearchBar } from '@/components/ui/SearchBar';
-import { sidebarHeaderPillRowClass, sidebarHeaderRowClass } from '@/components/layout/header-shell';
+import { sidebarHeaderPillRowClass, sidebarHeaderRowClass, SIDEBAR_GUTTER } from '@/components/layout/header-shell';
 import { HorizontalButtonSlider, type HorizontalSliderItem } from '@/components/ui/HorizontalButtonSlider';
 import { ShippedIntakeForm, type ShippedFormData } from '@/components/shipped';
 import { sectionLabel, fieldLabel, microBadge } from '@/design-system/tokens/typography/presets';
@@ -559,7 +559,7 @@ export function DashboardManagementPanel({
             />
           </div>
         ) : null}
-        <div className="h-full flex flex-col space-y-6 overflow-y-auto scrollbar-hide px-6 pb-6 pt-4">
+        <div className={`h-full flex flex-col space-y-6 overflow-y-auto scrollbar-hide ${SIDEBAR_GUTTER} pb-6 pt-4`}>
           <div className="space-y-4">
             <motion.div variants={itemVariants} className="-mt-2">
               <DashboardShippedSearchHandoffCard

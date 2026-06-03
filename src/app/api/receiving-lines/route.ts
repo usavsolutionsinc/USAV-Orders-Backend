@@ -515,9 +515,15 @@ export const GET = withAuth(async (request: NextRequest) => {
         ? incomingOrderBy
         : view === 'recent' || view === 'all' || view === 'activity'
           ? `ORDER BY COALESCE(rs_agg.last_scan::text, r.received_at::text, rl.created_at::text) DESC, rl.id DESC`
-          : view === 'received' || view === 'testing'
-            ? `ORDER BY COALESCE(rl.updated_at::text, rl.created_at::text) DESC, rl.id DESC`
-            : `ORDER BY COALESCE(rl.zoho_last_modified_time, rl.created_at::text) DESC, rl.id DESC`;
+          : view === 'testing'
+            // Sort the "tested" feed by the SAME verdict time the rail renders
+            // (tr_agg.tested_at) so the timeline reads monotonically. Ordering by
+            // rl.updated_at instead let a non-test edit (or another tester's
+            // verdict) bump a line above items this tester verified more recently.
+            ? `ORDER BY tr_agg.tested_at DESC NULLS LAST, rl.id DESC`
+            : view === 'received'
+              ? `ORDER BY COALESCE(rl.updated_at::text, rl.created_at::text) DESC, rl.id DESC`
+              : `ORDER BY COALESCE(rl.zoho_last_modified_time, rl.created_at::text) DESC, rl.id DESC`;
     // The lateral aggregate is needed for view=recent and view=all so the
     // most recently paired cartons bubble up. Cheap at this scale.
     const recentScansJoin = view === 'recent' || view === 'all' || view === 'activity'
@@ -535,6 +541,26 @@ export const GET = withAuth(async (request: NextRequest) => {
 
     const lastScanSelect = view === 'recent' || view === 'all' || view === 'activity'
       ? `, rs_agg.last_scan::text AS last_scan_at`
+      : '';
+
+    // Testing-view verdict rollup: latest verdict time + verdict count per line,
+    // scoped to the tester when one is supplied. The feed is sorted by
+    // rl.updated_at (the per-verdict line bump), so surfacing tested_at lets the
+    // rail render a timestamp that matches that order instead of the unrelated
+    // receiving/scan time; tested_count drives the "tested k/N" quantity.
+    // testerId is a validated finite integer (>0) so it's safe to inline as a
+    // literal — this keeps the count query's positional params unchanged.
+    const scopeTester = view === 'testing' && Number.isFinite(testerId) && testerId > 0;
+    const testedAggSelect = view === 'testing'
+      ? `, tr_agg.tested_at::text AS tested_at, tr_agg.tested_count::int AS tested_count`
+      : '';
+    const testedAggJoin = view === 'testing'
+      ? `LEFT JOIN LATERAL (
+            SELECT MAX(tr.created_at) AS tested_at, COUNT(*) AS tested_count
+            FROM testing_results tr
+            WHERE tr.receiving_line_id = rl.id
+              ${scopeTester ? `AND tr.tested_by = ${Math.trunc(testerId)}` : ''}
+         ) tr_agg ON TRUE`
       : '';
 
     // Incoming-only extras: derived delivery_state bucket + expected_delivery_date
@@ -605,6 +631,7 @@ export const GET = withAuth(async (request: NextRequest) => {
                   WHERE p.entity_type = 'RECEIVING'
                     AND p.entity_id = rl.receiving_id) AS photo_count
                 ${lastScanSelect}
+                ${testedAggSelect}
                 ${incomingExtrasSelect}
          FROM receiving_lines rl
          -- Soft JOIN: direct FK when set, else PO#-based fallback (see note above).
@@ -617,6 +644,7 @@ export const GET = withAuth(async (request: NextRequest) => {
          LEFT JOIN shipping_tracking_numbers stn ON stn.id = r.shipment_id
          LEFT JOIN sku_catalog sc                ON sc.sku = rl.sku
          ${recentScansJoin}
+         ${testedAggJoin}
          ${incomingExtrasJoin}
          ${where}
          ${orderBy}
@@ -1235,13 +1263,19 @@ function normalizeRow(row: Record<string, unknown>) {
     shipment_is_terminal:     row.shipment_is_terminal == null ? null : !!row.shipment_is_terminal,
     receiving_type:            (row.receiving_type as string | null) ?? 'PO',
     created_at:               (row.created_at as string | null) ?? null,
-    // Most-recent activity timestamp matching the server's sort order for
-    // view=recent/all. Falls through to received_at / created_at so the
-    // rail can render a single "last touched" field regardless of view.
-    last_activity_at:         (row.last_scan_at as string | null)
+    // Most-recent activity timestamp matching the server's sort order. For
+    // view=testing this leads with tested_at (the verdict time the feed is
+    // ordered by); for view=recent/all it's the last scan. Falls through to
+    // received_at / created_at so the rail can render a single "last touched"
+    // field regardless of view.
+    last_activity_at:         (row.tested_at as string | null)
+                              ?? (row.last_scan_at as string | null)
                               ?? (row.receiving_received_at as string | null)
                               ?? (row.created_at as string | null)
                               ?? null,
+    // Recorded testing verdicts for this line (view=testing only; null elsewhere).
+    // Scoped to the tester when the feed is. Drives the rail's "tested k/N".
+    tested_count:             row.tested_count != null ? Number(row.tested_count) : null,
     image_url:                (row.image_url as string | null) ?? null,
     source_platform:          (row.receiving_source_platform as string | null) ?? null,
     /** receiving.source — 'zoho_po' | 'unmatched' | 'local_pickup'. Drives which workspace variant mounts. */

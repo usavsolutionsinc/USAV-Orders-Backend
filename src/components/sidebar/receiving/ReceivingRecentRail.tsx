@@ -69,6 +69,7 @@ export function ReceivingRecentRail({
       refreshEvents={['receiving-entry-added', 'usav-refresh-data']}
       eyebrowTitle="Recent"
       eyebrowSuffix="Same as History"
+      autoSelectFirstWhenEmpty
       getStatusDot={getReceivingStatusDot}
       renderQuantity={(row) => (
         <span className={

@@ -6,6 +6,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { ZendeskTicketListContainer } from '@/components/support/zendesk/ZendeskTicketListContainer';
 import { sectionLabel } from '@/design-system/tokens/typography/presets';
 import { RefreshCw } from '@/components/Icons';
+import { SIDEBAR_GUTTER } from '@/components/layout/header-shell';
 
 /**
  * Contextual sidebar for /support: the Zendesk ticket queue lives here (search,
@@ -34,7 +35,7 @@ export function SupportSidebarPanel() {
 
   return (
     <div className="flex h-full min-h-0 flex-col bg-white">
-      <div className="flex shrink-0 items-center justify-between border-b border-gray-100 px-3 py-2.5">
+      <div className={`flex shrink-0 items-center justify-between border-b border-gray-100 ${SIDEBAR_GUTTER} py-2.5`}>
         <p className={`${sectionLabel} text-rose-600`}>Customer Support</p>
         <button
           type="button"

@@ -1,7 +1,7 @@
 'use client';
 
 import { useMemo } from 'react';
-import { sidebarHeaderBandClass } from '@/components/layout/header-shell';
+import { sidebarHeaderBandClass, SIDEBAR_GUTTER } from '@/components/layout/header-shell';
 import { ChevronDown, ShieldCheck } from '@/components/Icons';
 import { SidebarSectionList, type SidebarSection } from '@/components/sidebar/SidebarSectionList';
 import { useAuth } from '@/contexts/AuthContext';
@@ -83,7 +83,7 @@ export function AdminSidebar({ activeSection, onSectionChange }: AdminSidebarPro
         </div>
       ) : (
         <>
-          <div className={`${sidebarHeaderBandClass} px-2 py-2`}>
+          <div className={`${sidebarHeaderBandClass} ${SIDEBAR_GUTTER} py-2`}>
             <button
               type="button"
               onClick={() => onSectionChange('overview')}

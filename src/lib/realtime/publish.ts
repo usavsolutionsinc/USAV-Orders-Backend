@@ -437,6 +437,28 @@ export async function publishReceivingLogChanged(payload: ReceivingLogChangedPay
   });
 }
 
+type ShipmentChangedPayload = {
+  shipmentId: number;
+  trackingNumber?: string | null;
+  source: string;
+};
+
+/**
+ * Fired whenever a shipment's carrier status changes (webhook push or poll),
+ * independent of any order linkage — this is what makes the receiving/incoming
+ * carrier panels live-update like the carrier's own website. Order-linked
+ * shipments separately get an `order.changed` event for the dashboard views.
+ */
+export async function publishShipmentChanged(payload: ShipmentChangedPayload) {
+  await publishEvent(getStationChannelName(), 'shipment.changed', {
+    type: 'shipment.changed',
+    shipmentId: payload.shipmentId,
+    trackingNumber: payload.trackingNumber ?? null,
+    source: payload.source,
+    timestamp: formatPSTTimestamp(),
+  });
+}
+
 // ─── FBA Events ──────────────────────────────────────────────────────────────
 
 type FbaItemChangedPayload = {

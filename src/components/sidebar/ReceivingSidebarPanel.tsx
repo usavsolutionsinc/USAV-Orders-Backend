@@ -8,7 +8,9 @@ import {
   receivingScanBandClass,
   sidebarHeaderBandClass,
   sidebarHeaderPillRowClass,
+  SIDEBAR_GUTTER,
 } from '@/components/layout/header-shell';
+import { cn } from '@/utils/_cn';
 import { Loader2, MapPin, X } from '@/components/Icons';
 import { useUIModeOptional } from '@/design-system/providers/UIModeProvider';
 import { HorizontalButtonSlider } from '@/components/ui/HorizontalButtonSlider';
@@ -1066,8 +1068,7 @@ export function ReceivingSidebarPanel() {
           items={RECEIVING_MODE_ITEMS}
           value={mode}
           onChange={(next) => updateMode(next as ReceivingMode)}
-          variant="nav"
-          dense
+          variant="segmented"
           className="w-full"
           aria-label="Receiving mode"
         />
@@ -1108,7 +1109,7 @@ export function ReceivingSidebarPanel() {
         initial={{ opacity: 0, x: -20 }}
         animate={{ opacity: 1, x: 0 }}
         transition={{ type: 'spring', damping: 25, stiffness: 120 }}
-        className={`${receivingScanBandClass} ${bandHaloClass[themeColor]} py-1`}
+        className={cn(receivingScanBandClass, bandHaloClass[themeColor], SIDEBAR_GUTTER, 'py-1')}
       >
         <StationScanBar
           value={bulkTracking}

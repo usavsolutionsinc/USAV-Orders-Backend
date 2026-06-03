@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from '@/lib/toast';
 import { Loader2, X } from '@/components/Icons';
@@ -54,6 +55,11 @@ export function ReceivingClaimModal({ open, row, onClose, onTicketCreated }: Pro
   // Stable per-submission idempotency key — generated when the modal opens and
   // reused across retries so a failed-then-retried submit never files two tickets.
   const idempotencyKey = useRef('');
+  const [portalTarget, setPortalTarget] = useState<HTMLElement | null>(null);
+
+  useEffect(() => {
+    setPortalTarget(document.body);
+  }, []);
 
   // Reset transient state each time the modal opens so reopening on a
   // different row doesn't show stale template text.
@@ -168,9 +174,9 @@ export function ReceivingClaimModal({ open, row, onClose, onTicketCreated }: Pro
     }
   };
 
-  return (
-    <AnimatePresence>
-      {open ? (
+  const overlay = portalTarget ? (
+      <AnimatePresence>
+        {open ? (
         <>
           <motion.div
             key="claim-backdrop"
@@ -186,7 +192,7 @@ export function ReceivingClaimModal({ open, row, onClose, onTicketCreated }: Pro
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: 4 }}
             transition={{ duration: 0.18, ease: [0.22, 1, 0.36, 1] }}
-            className="pointer-events-none absolute inset-0 z-[120] flex items-center justify-center p-4"
+            className="pointer-events-none fixed inset-0 z-[120] flex items-center justify-center p-4"
           >
           <div
             onClick={(e) => e.stopPropagation()}
@@ -386,7 +392,9 @@ export function ReceivingClaimModal({ open, row, onClose, onTicketCreated }: Pro
           </div>
           </motion.div>
         </>
-      ) : null}
-    </AnimatePresence>
-  );
+        ) : null}
+      </AnimatePresence>
+    ) : null;
+
+  return overlay && portalTarget ? createPortal(overlay, portalTarget) : null;
 }

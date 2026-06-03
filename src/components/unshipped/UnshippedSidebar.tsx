@@ -5,6 +5,7 @@ import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { ShippedFormData } from '@/components/shipped';
 import { ShippedIntakeForm } from '@/components/shipped/ShippedIntakeForm';
 import { Plus } from '@/components/Icons';
+import { SIDEBAR_GUTTER } from '@/components/layout/header-shell';
 import { DashboardShippedSearchHandoffCard } from '@/components/dashboard/DashboardShippedSearchHandoffCard';
 import { AwaitingEbayPanel } from '@/components/unshipped/AwaitingEbayPanel';
 import { motion } from 'framer-motion';
@@ -154,7 +155,7 @@ export default function UnshippedSidebar(props: UnshippedSidebarProps) {
         initial="hidden"
         animate="visible"
         variants={containerVariants}
-        className={`h-full flex flex-col overflow-y-auto no-scrollbar px-6 pb-6 ${filterControl ? 'pt-4' : 'pt-6'}`}
+        className={`h-full flex flex-col overflow-y-auto no-scrollbar ${SIDEBAR_GUTTER} pb-6 ${filterControl ? 'pt-4' : 'pt-6'}`}
       >
         {!hideSectionHeader ? (
           <motion.header variants={itemVariants}>

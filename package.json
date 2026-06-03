@@ -31,6 +31,7 @@
     "audit-route-auth:emit": "tsx scripts/audit-route-auth.ts --emit",
     "audit-route-auth:check": "tsx scripts/audit-route-auth.ts --check",
     "test:dashboard-state": "tsx --test src/utils/dashboard-search-state.test.ts",
+    "test:shipping-usps": "tsx --test src/lib/shipping/providers/usps-subscription.test.ts",
     "test:auth": "tsx --test src/lib/auth/permission-registry.test.ts src/lib/auth/permissions-shared.test.ts src/lib/auth/route-permission-manifest.test.ts",
     "test:e2e:fba-sidebar": "node scripts/e2e-fba-sidebar.mjs",
     "test:e2e:station-serial": "node scripts/e2e-station-serial.mjs",

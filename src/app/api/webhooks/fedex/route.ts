@@ -1,12 +1,39 @@
+import { createHmac, timingSafeEqual } from 'node:crypto';
 import { NextRequest, NextResponse } from 'next/server';
 import { parseFedExTrackingPayload } from '@/lib/shipping/providers/fedex';
 import { getShipmentByTracking, updateShipmentSummary, upsertShipment, upsertTrackingEvents } from '@/lib/shipping/repository';
 import { publishShipmentStatusChange } from '@/lib/shipping/publish-on-status-change';
 
-function isAuthorized(req: NextRequest): boolean {
+// FedEx signs each push with an HMAC-SHA256 digest (base64) of the raw request
+// body keyed by the security token configured on the webhook project. The
+// header name has varied across FedEx's webhook products, so we check the known
+// variants. Override with FEDEX_WEBHOOK_SIGNATURE_HEADER if your project differs.
+const SIGNATURE_HEADERS = [
+  process.env.FEDEX_WEBHOOK_SIGNATURE_HEADER,
+  'x-fdx-sc-signature',
+  'fdx-signature',
+  'x-fedex-signature',
+].filter(Boolean) as string[];
+
+function constantTimeEquals(a: string, b: string): boolean {
+  const ab = Buffer.from(a);
+  const bb = Buffer.from(b);
+  // timingSafeEqual throws on length mismatch — guard so a wrong-length
+  // signature returns false instead of 500-ing.
+  if (ab.length !== bb.length) return false;
+  return timingSafeEqual(ab, bb);
+}
+
+/**
+ * Verify the request against the webhook project's security token. Prefers
+ * FedEx's real mechanism (HMAC-SHA256 over the raw body) and falls back to a
+ * static bearer/header secret for local replay scripts. Returns true when no
+ * secret is configured outside production so dev/preview keep working.
+ */
+function isAuthorized(req: NextRequest, rawBody: string): boolean {
   const secret =
-    process.env.FEDEX_WEBHOOK_BEARER ||
     process.env.FEDEX_WEBHOOK_SECRET ||
+    process.env.FEDEX_WEBHOOK_BEARER ||
     '';
 
   // Fail closed in production when no secret is configured. Permissive in
@@ -14,9 +41,16 @@ function isAuthorized(req: NextRequest): boolean {
   // without forcing every dev to set the env var.
   if (!secret) return process.env.NODE_ENV !== 'production';
 
+  // 1. HMAC-SHA256 signature (FedEx's real push mechanism).
+  const expected = createHmac('sha256', secret).update(rawBody, 'utf8').digest('base64');
+  for (const header of SIGNATURE_HEADERS) {
+    const provided = req.headers.get(header);
+    if (provided && constantTimeEquals(provided, expected)) return true;
+  }
+
+  // 2. Static bearer / header secret (manual replay & testing).
   const authHeader = req.headers.get('authorization');
   if (authHeader === `Bearer ${secret}`) return true;
-
   if (req.headers.get('x-webhook-secret') === secret) return true;
 
   return false;
@@ -74,13 +108,17 @@ function splitIntoTrackResultPayloads(payload: any): any[] {
 }
 
 export async function POST(req: NextRequest) {
-  if (!isAuthorized(req)) {
+  // Read the raw body once — HMAC verification must hash the exact bytes FedEx
+  // signed, so we can't let req.json() re-serialize first.
+  const rawBody = await req.text();
+
+  if (!isAuthorized(req, rawBody)) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
   let payload: any;
   try {
-    payload = await req.json();
+    payload = JSON.parse(rawBody);
   } catch {
     return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 });
   }

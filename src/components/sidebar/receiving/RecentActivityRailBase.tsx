@@ -35,11 +35,29 @@ export interface RecentActivityRailBaseProps {
 
   eyebrowTitle: string;
   eyebrowSuffix?: string;
+  autoSelectFirstWhenEmpty?: boolean;
 
   getStatusDot: (row: ReceivingLineRow) => string;
   renderQuantity: (row: ReceivingLineRow) => ReactNode;
   previewQtyLabel: string;
   getPreviewQty: (row: ReceivingLineRow) => { current: number; total: number | null };
+}
+
+// Stable module-scope callbacks. The shell wires `getId` into its optimistic-
+// patch listener effect; passing a fresh arrow each render made that effect
+// tear down and re-add its window listener on every parent re-render (a window
+// where a `receiving-line-updated` event could be dropped). Hoisting pins the
+// identity so the effect subscribes once.
+const getRowId = (r: ReceivingLineRow) => r.id;
+const getRowGroupId = (r: ReceivingLineRow) => r.receiving_id ?? null;
+const getRowActivityAt = (r: ReceivingLineRow) => r.last_activity_at ?? r.created_at;
+const selectRow = (r: ReceivingLineRow) => dispatchSelectLine(r);
+
+function canAutoSelectReceivingRailFirst(): boolean {
+  if (typeof window === 'undefined') return false;
+  const params = new URLSearchParams(window.location.search);
+  if (params.get('recvId')) return false;
+  return (params.get('mode') ?? 'receive') === 'receive';
 }
 
 /**
@@ -57,6 +75,7 @@ export function RecentActivityRailBase({
   refreshEvents,
   eyebrowTitle,
   eyebrowSuffix,
+  autoSelectFirstWhenEmpty = false,
   getStatusDot,
   renderQuantity,
   previewQtyLabel,
@@ -73,10 +92,14 @@ export function RecentActivityRailBase({
       limit={limit}
       eyebrowTitle={eyebrowTitle}
       eyebrowSuffix={eyebrowSuffix}
-      getId={(r) => r.id}
-      getGroupId={(r) => r.receiving_id ?? null}
-      getActivityAt={(r) => r.last_activity_at ?? r.created_at}
-      onSelect={(r) => dispatchSelectLine(r)}
+      autoSelectFirstWhenEmpty={autoSelectFirstWhenEmpty}
+      canAutoSelectFirst={
+        autoSelectFirstWhenEmpty ? canAutoSelectReceivingRailFirst : undefined
+      }
+      getId={getRowId}
+      getGroupId={getRowGroupId}
+      getActivityAt={getRowActivityAt}
+      onSelect={selectRow}
       getStatusDot={getStatusDot}
       renderRowMain={(row, ctx) => <ReceivingRowMain row={row} ctx={ctx} renderQuantity={renderQuantity} />}
       renderPopover={(row, p) => (

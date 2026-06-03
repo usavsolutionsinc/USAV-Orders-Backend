@@ -159,7 +159,8 @@ export function DashboardDetailsStack({
   };
 
   return (
-    <div className="pb-8 pt-0 space-y-4">
+    <div className="flex min-h-full flex-col pb-8 pt-4">
+      <div className="flex-1 space-y-4">
       <section className="mx-8 space-y-2">
         {mode === 'tech' ? (
           <div className="flex items-center gap-2 rounded-xl border border-gray-200 bg-white p-2">
@@ -266,6 +267,7 @@ export function DashboardDetailsStack({
           showReturnInformation={showReturnInformation}
           activeSection={activeSection}
         />
+      </div>
       </div>
 
       <section className="mx-8 pt-2 space-y-2">

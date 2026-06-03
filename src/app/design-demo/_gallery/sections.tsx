@@ -29,7 +29,17 @@ import {
   ChevronRight,
   Settings,
   Truck,
+  List,
+  Box,
+  FileText,
+  Barcode,
+  Link2,
+  Clock,
+  History,
 } from '@/components/Icons';
+
+import { MasterNavView } from '@/components/sidebar/master-nav';
+import { SIDEBAR_PAGE_NAV } from '@/lib/sidebar-navigation';
 
 /* ════════════════════════ shared gallery furniture ════════════════════════ */
 
@@ -205,6 +215,92 @@ export function ButtonsSection() {
 
 /* ════════════════════════ 2 · SEGMENTED TABS ══════════════════════════════ */
 
+/**
+ * Master sidebar nav as a single dropdown component.
+ *
+ * Instead of rendering a whole different panel per route, the header IS the
+ * navigation: tap the page title to drop a menu that switches page AND jumps
+ * straight to any of that page's modes. The menu:
+ *   • Hides the page you're already on (no point selecting it again).
+ *   • Pins a RECENT section on top for fast back-and-forth; recents still
+ *     appear in their normal spot in the full ALL PAGES list below.
+ *   • Every page is a split row: tap the LEFT (icon + name) to jump straight to
+ *     the page's default mode; tap the RIGHT (count + chevron) to expand its
+ *     modes as labeled rows — pick one to land on, say, FBA › Inbound.
+ * The closed header de-dupes the live rail: the page icon carries the page
+ * context, so the header *name* shows the active MODE (not a second "RECEIVING"
+ * next to the title).
+ */
+// Drives the REAL master nav components (<MasterNavView>) against the REAL
+// SIDEBAR_PAGE_NAV config — but on local state, so the showroom never actually
+// navigates. The live, router-wired version is <MasterNav> in
+// @/components/sidebar/master-nav.
+function ReceivingModeSwitcherDemo() {
+  const pages = SIDEBAR_PAGE_NAV;
+  const [pageId, setPageId] = useState('receiving');
+  const [modeId, setModeId] = useState<string | null>('receive');
+  const [pagesOpen, setPagesOpen] = useState(false);
+  const [recents, setRecents] = useState<string[]>(['dashboard', 'fba']);
+  // Which page row is expanded to show its mode rows (accordion, one at a time).
+  const [expandedKey, setExpandedKey] = useState<string | null>(null);
+
+  const activePage = pages.find((p) => p.id === pageId) ?? pages[0];
+  const activeModeLabel =
+    activePage.modes?.find((m) => m.id === modeId)?.label ?? activePage.label;
+
+  // Mirrors <MasterNav>'s onNavigate, minus the router: no mode given → resolve
+  // the page's default via its own resolveMode against its bare href; a mode row
+  // or L2 pill → that mode.
+  const onNavigate = (nextPageId: string, nextModeId?: string) => {
+    const target = pages.find((p) => p.id === nextPageId) ?? pages[0];
+    const resolved =
+      nextModeId ??
+      target.resolveMode?.({ pathname: target.href, params: new URLSearchParams() }) ??
+      target.modes?.[0]?.id ??
+      null;
+    setPageId(nextPageId);
+    setModeId(resolved);
+    // Push to the front of recents (dedup, keep last 3) for fast switch-back.
+    setRecents((prev) => [nextPageId, ...prev.filter((id) => id !== nextPageId)].slice(0, 3));
+    setExpandedKey(null);
+    setPagesOpen(false);
+  };
+
+  // Current page hidden from the menu; recents pinned on top (still listed below).
+  const recentPages = recents
+    .filter((id) => id !== pageId)
+    .flatMap((id) => pages.filter((p) => p.id === id));
+  const otherPages = pages.filter((p) => p.id !== pageId);
+
+  return (
+    <div className="mx-auto w-full max-w-[320px] space-y-3">
+      {/* Phone-width rail card. Bottom is squared (rounded-t only) so the grey L2
+          mode strip fills flush to the edges instead of reading as a rounded
+          bubble. No overflow-hidden, or the dropdown gets clipped. */}
+      <div className="relative rounded-t-[1.5rem] border border-border-soft bg-surface-card shadow-sm">
+        <MasterNavView
+          activePage={activePage}
+          activeModeId={modeId}
+          open={pagesOpen}
+          onToggleOpen={() => setPagesOpen((v) => !v)}
+          recentPages={recentPages}
+          otherPages={otherPages}
+          expandedKey={expandedKey}
+          onToggleRow={setExpandedKey}
+          onNavigate={onNavigate}
+        />
+      </div>
+
+      <p className="text-center text-[11px] leading-relaxed text-text-muted">
+        <span className="font-semibold text-text-default">{activePage.label}</span> ›{' '}
+        <span className="font-semibold text-text-default">{activeModeLabel}</span>
+        <br />
+        Title = master nav (recents on top, current hidden) · tap a row's left to go, right (⌄) to pick a mode
+      </p>
+    </div>
+  );
+}
+
 export function SegmentedTabsSection() {
   const tabs = ['Pending', 'Shipped', 'Unshipped', 'FBA'];
   const [active, setActive] = useState(tabs[0]);
@@ -242,6 +338,348 @@ export function SegmentedTabsSection() {
             );
           })}
         </div>
+      </Bay>
+      <Bay
+        title="Master sidebar nav — one dropdown, page + mode"
+        promote="@/components/DashboardSidebar (nav dropdown)"
+        tag="upgrade"
+        caption="Replaces rendering a whole panel per route with one dropdown. Tap the title: RECENT pages pin on top for fast switch-back, ALL PAGES list below, and the page you're on is hidden. Each page is a split row: tap the left (icon + name) to go straight to the page's default mode; tap the right (count + chevron) to expand its modes as labeled rows and pick one (e.g. FBA › Inbound). The L2 icon row + breadcrumb follow whatever you pick."
+        span={2}
+      >
+        <ReceivingModeSwitcherDemo />
+      </Bay>
+    </div>
+  );
+}
+
+/* ═══════════════════ 2b · SUB-PAGE NAVIGATION ═════════════════════════════ */
+
+/**
+ * Sub-page navigation patterns — how to expose the sub-pages *inside* one
+ * section (e.g. Products → Manuals / Labels / Pairing) on a mobile-first rail.
+ *
+ * The screenshot that prompted this stacked TWO rows of identical pills
+ * (Manuals/Labels/Pairing over Products/Recent/History) with search wedged
+ * between. Two identical pill rows read as one ambiguous hierarchy and burn
+ * vertical space. These four Bays are the industry-standard alternatives,
+ * rendered phone-width so you can judge them the way the operator will. Each
+ * differs in weight + how many siblings it scales to — cherry-pick one.
+ */
+type SubPage = { id: string; label: string; icon: (p: { className?: string }) => JSX.Element };
+
+const SUB_PAGES: SubPage[] = [
+  { id: 'products', label: 'Products', icon: Box },
+  { id: 'manuals', label: 'Manuals', icon: FileText },
+  { id: 'labels', label: 'Labels', icon: Barcode },
+  { id: 'pairing', label: 'Pairing', icon: Link2 },
+  { id: 'history', label: 'History', icon: History },
+];
+
+/** Shared phone-width frame so every variant is judged at real rail width. */
+function PhoneFrame({ children, label }: { children: React.ReactNode; label: string }) {
+  return (
+    <div className="mx-auto w-full max-w-[320px] space-y-2">
+      <div className="overflow-hidden rounded-[1.4rem] border border-border-soft bg-surface-card shadow-sm">
+        <div className="flex items-center gap-2 px-3.5 pt-3.5 pb-2">
+          <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-blue-600/10 text-blue-600">
+            <Box className="h-4 w-4" />
+          </span>
+          <span className="text-[15px] font-bold tracking-tight text-text-default">Products</span>
+        </div>
+        {children}
+      </div>
+      <p className="text-center text-[11px] leading-snug text-text-muted">{label}</p>
+    </div>
+  );
+}
+
+/** Inert search bar — every variant scopes search to the active sub-page. */
+function MiniSearch() {
+  return (
+    <div className="relative px-3.5 py-2.5">
+      <Search className="pointer-events-none absolute left-6 top-1/2 h-4 w-4 -translate-y-1/2 text-text-muted" />
+      <div className="w-full rounded-xl border border-border-soft bg-surface-canvas py-2 pl-9 pr-3 text-[13px] text-text-muted">
+        Search SKU, title…
+      </div>
+    </div>
+  );
+}
+
+/* — Variant A: scrollable underline tab strip — */
+function UnderlineStripDemo() {
+  const reduce = useReducedMotion();
+  const [active, setActive] = useState('manuals');
+  return (
+    <PhoneFrame label="Scrollable strip, underline indicator · scales to many siblings">
+      <div className="-mx-px flex items-center gap-1 overflow-x-auto border-y border-border-soft px-3 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+        {SUB_PAGES.map((p) => {
+          const on = active === p.id;
+          return (
+            <button
+              key={p.id}
+              onClick={() => setActive(p.id)}
+              role="tab"
+              aria-selected={on}
+              className={cx(
+                'relative shrink-0 px-3 py-2.5 text-[13px] font-semibold transition-colors',
+                on ? 'text-blue-600' : 'text-text-muted hover:text-text-default',
+              )}
+            >
+              {p.label}
+              {on && (
+                <motion.span
+                  layoutId="subnav-underline"
+                  className="absolute inset-x-2 -bottom-px h-0.5 rounded-full bg-blue-600"
+                  transition={reduce ? { duration: 0 } : spring}
+                />
+              )}
+            </button>
+          );
+        })}
+      </div>
+      <MiniSearch />
+    </PhoneFrame>
+  );
+}
+
+/* — Variant B: segmented control (Apple HIG) — */
+function SegmentedSubDemo() {
+  const reduce = useReducedMotion();
+  const segs = SUB_PAGES.slice(0, 3);
+  const [active, setActive] = useState('products');
+  return (
+    <PhoneFrame label="Connected, equal-width · best for a fixed 2–5 set">
+      <div className="border-y border-border-soft px-3.5 py-2.5">
+        <div className="flex items-center gap-0.5 rounded-xl bg-surface-canvas p-0.5 ring-1 ring-border-soft">
+          {segs.map((p) => {
+            const on = active === p.id;
+            return (
+              <button
+                key={p.id}
+                onClick={() => setActive(p.id)}
+                role="tab"
+                aria-selected={on}
+                className={cx(
+                  'relative flex-1 rounded-lg py-1.5 text-[12px] font-semibold transition-colors',
+                  on ? 'text-text-default' : 'text-text-muted hover:text-text-default',
+                )}
+              >
+                {on && (
+                  <motion.span
+                    layoutId="subnav-segment"
+                    className="absolute inset-0 rounded-lg bg-surface-card shadow-sm ring-1 ring-border-soft"
+                    transition={reduce ? { duration: 0 } : spring}
+                  />
+                )}
+                <span className="relative z-10">{p.label}</span>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+      <MiniSearch />
+    </PhoneFrame>
+  );
+}
+
+/* — Variant C: primary tab strip + secondary chip filter (the two-axis fix) — */
+const SUB_FILTERS = [
+  { id: 'all', label: 'All', icon: List },
+  { id: 'recent', label: 'Recent', icon: Clock },
+  { id: 'history', label: 'History', icon: History },
+];
+
+function TwoAxisDemo() {
+  const reduce = useReducedMotion();
+  const [tab, setTab] = useState('manuals');
+  const [filter, setFilter] = useState('recent');
+  const primary = SUB_PAGES.slice(0, 4);
+  return (
+    <PhoneFrame label="Bold tab strip = sub-page · quiet chips = filter. Differentiated weight kills the two-row ambiguity">
+      {/* primary: which sub-page */}
+      <div className="flex items-center gap-1 overflow-x-auto border-y border-border-soft px-3 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+        {primary.map((p) => {
+          const on = tab === p.id;
+          return (
+            <button
+              key={p.id}
+              onClick={() => setTab(p.id)}
+              role="tab"
+              aria-selected={on}
+              className={cx(
+                'relative shrink-0 px-3 py-2.5 text-[13px] font-semibold transition-colors',
+                on ? 'text-blue-600' : 'text-text-muted hover:text-text-default',
+              )}
+            >
+              {p.label}
+              {on && (
+                <motion.span
+                  layoutId="subnav-twoaxis-underline"
+                  className="absolute inset-x-2 -bottom-px h-0.5 rounded-full bg-blue-600"
+                  transition={reduce ? { duration: 0 } : spring}
+                />
+              )}
+            </button>
+          );
+        })}
+      </div>
+      <MiniSearch />
+      {/* secondary: lighter-weight chip filter */}
+      <div className="flex items-center gap-1.5 px-3.5 pb-3">
+        {SUB_FILTERS.map((f) => {
+          const on = filter === f.id;
+          const FIcon = f.icon;
+          return (
+            <button
+              key={f.id}
+              onClick={() => setFilter(f.id)}
+              className={cx(
+                'inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-semibold ring-1 transition-colors',
+                on
+                  ? 'bg-blue-600/10 text-blue-600 ring-blue-600/20'
+                  : 'text-text-muted ring-border-soft hover:bg-surface-canvas',
+              )}
+            >
+              <FIcon className="h-3 w-3" />
+              {f.label}
+            </button>
+          );
+        })}
+      </div>
+    </PhoneFrame>
+  );
+}
+
+/* — Variant D: filled-pill row, single-row scroll (current look, cleaned up) — */
+function FilledPillDemo() {
+  const reduce = useReducedMotion();
+  const [active, setActive] = useState('labels');
+  return (
+    <PhoneFrame label="Keep the rounded-pill brand look — but never wrap; overflow scrolls">
+      <div className="flex items-center gap-2 overflow-x-auto border-y border-border-soft px-3.5 py-3 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+        {SUB_PAGES.map((p) => {
+          const on = active === p.id;
+          const PIcon = p.icon;
+          return (
+            <button
+              key={p.id}
+              onClick={() => setActive(p.id)}
+              role="tab"
+              aria-selected={on}
+              className={cx(
+                'relative inline-flex shrink-0 items-center gap-1.5 rounded-full px-3.5 py-1.5 text-[12px] font-semibold transition-colors',
+                on ? 'text-white' : 'text-text-muted ring-1 ring-border-soft hover:text-text-default',
+              )}
+            >
+              {on && (
+                <motion.span
+                  layoutId="subnav-pill"
+                  className="absolute inset-0 rounded-full bg-blue-600 shadow-sm shadow-blue-600/25"
+                  transition={reduce ? { duration: 0 } : spring}
+                />
+              )}
+              <PIcon className="relative z-10 h-3.5 w-3.5" />
+              <span className="relative z-10">{p.label}</span>
+            </button>
+          );
+        })}
+      </div>
+      <MiniSearch />
+    </PhoneFrame>
+  );
+}
+
+/* — Anti-pattern: two identical pill rows (the screenshot, for contrast) — */
+function TwoRowAntiPattern() {
+  return (
+    <div className="mx-auto w-full max-w-[320px] space-y-2">
+      <div className="overflow-hidden rounded-[1.4rem] border border-rose-300/60 bg-surface-card shadow-sm">
+        <div className="flex items-center gap-2 px-3.5 pt-3.5 pb-2">
+          <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-blue-600/10 text-blue-600">
+            <Box className="h-4 w-4" />
+          </span>
+          <span className="text-[15px] font-bold tracking-tight text-text-default">Products</span>
+        </div>
+        {/* row 1 */}
+        <div className="flex items-center gap-2 overflow-x-auto px-3.5 py-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+          {['Manuals', 'Labels', 'Pairing'].map((t, i) => (
+            <span
+              key={t}
+              className={cx(
+                'inline-flex shrink-0 items-center rounded-full px-3.5 py-1.5 text-[12px] font-semibold',
+                i === 1 ? 'bg-blue-600 text-white' : 'text-text-muted ring-1 ring-border-soft',
+              )}
+            >
+              {t}
+            </span>
+          ))}
+        </div>
+        <MiniSearch />
+        {/* row 2 — identical weight = which one is the page? */}
+        <div className="flex items-center gap-2 overflow-x-auto px-3.5 pb-3 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+          {['Products', 'Recent', 'History'].map((t, i) => (
+            <span
+              key={t}
+              className={cx(
+                'inline-flex shrink-0 items-center rounded-full px-3.5 py-1.5 text-[12px] font-semibold',
+                i === 0 ? 'bg-blue-600 text-white' : 'text-text-muted ring-1 ring-border-soft',
+              )}
+            >
+              {t}
+            </span>
+          ))}
+        </div>
+      </div>
+      <p className="text-center text-[11px] font-semibold leading-snug text-rose-600">
+        ✗ Anti-pattern · two identical pill rows read as one ambiguous hierarchy
+      </p>
+    </div>
+  );
+}
+
+export function SubPageNavSection() {
+  return (
+    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+      <Bay
+        title="A · Underline tab strip (safe default)"
+        promote="@/design-system/components/SubPageTabs (underline)"
+        tag="new"
+        caption="One horizontally-scrollable row, underline = “you are here.” The X / App Store / Gmail pattern. Best when you have 4+ peer sub-pages — the subtle indicator reads hierarchy better than loud pills as the count grows."
+      >
+        <UnderlineStripDemo />
+      </Bay>
+      <Bay
+        title="B · Segmented control (Apple HIG)"
+        promote="@/components/ui/TabSwitch (segmented)"
+        tag="upgrade"
+        caption="Connected, equal-width control. Best for a small, fixed, mutually-exclusive set (2–5). Native-feeling for view switches like Products / Manuals / Labels."
+      >
+        <SegmentedSubDemo />
+      </Bay>
+      <Bay
+        title="C · Primary tabs + secondary chips (two-axis)"
+        promote="@/design-system/components/SubPageTabs (+ FilterChips)"
+        tag="new"
+        caption="The direct fix for the screenshot. Two independent axes — which sub-page (bold strip) × which dataset (quiet chips) — differentiated by weight instead of stacked as identical rows. My pick for Products."
+        span={2}
+      >
+        <TwoAxisDemo />
+      </Bay>
+      <Bay
+        title="D · Filled-pill row (current look, cleaned)"
+        promote="@/components/ui/PillTabs (single-row)"
+        tag="upgrade"
+        caption="Keeps your rounded-pill aesthetic with a sliding active pill — but a single row that scrolls on overflow instead of wrapping to a second line. Best at ≤5 items."
+      >
+        <FilledPillDemo />
+      </Bay>
+      <Bay
+        title="✗ Anti-pattern (for contrast)"
+        promote="— do not ship —"
+        tag="have"
+        caption="The current screenshot: two identical pill rows with search between. Same visual weight on both rows means the user can't tell which is the page and which is the filter. Shown here only so the team sees why A–C are better."
+      >
+        <TwoRowAntiPattern />
       </Bay>
     </div>
   );

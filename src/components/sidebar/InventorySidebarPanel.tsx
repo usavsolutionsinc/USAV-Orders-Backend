@@ -5,6 +5,7 @@ import { InventorySidebar } from '@/components/inventory/sidebar/InventorySideba
 import { ReplenishSidebarPanel } from '@/components/sidebar/ReplenishSidebarPanel';
 import { sidebarHeaderBandClass, sidebarHeaderPillRowClass } from '@/components/layout/header-shell';
 import { HorizontalButtonSlider, type HorizontalSliderItem } from '@/components/ui/HorizontalButtonSlider';
+import { useMasterNavEnabled } from '@/components/sidebar/master-nav';
 import { Package, RefreshCw } from '@/components/Icons';
 
 type InventorySection = 'inventory' | 'replenish';
@@ -31,6 +32,9 @@ const SECTION_ITEMS: HorizontalSliderItem[] = [
 export function InventorySidebarPanel() {
     const router = useRouter();
     const searchParams = useSearchParams();
+    // When the master nav owns mode switching, its L2 rail is the single
+    // switcher — hide this panel's own section pills to avoid a double switcher.
+    const masterNavEnabled = useMasterNavEnabled();
     const section: InventorySection =
         searchParams.get('section') === 'replenish' ? 'replenish' : 'inventory';
 
@@ -48,17 +52,19 @@ export function InventorySidebarPanel() {
 
     return (
         <div className="flex h-full flex-col overflow-hidden bg-white">
-            <div className={sidebarHeaderPillRowClass}>
-                <HorizontalButtonSlider
-                    items={SECTION_ITEMS}
-                    value={section}
-                    onChange={(id) => setSection(id as InventorySection)}
-                    variant="nav"
-                    dense
-                    className="w-full"
-                    aria-label="Inventory section"
-                />
-            </div>
+            {!masterNavEnabled && (
+                <div className={sidebarHeaderPillRowClass}>
+                    <HorizontalButtonSlider
+                        items={SECTION_ITEMS}
+                        value={section}
+                        onChange={(id) => setSection(id as InventorySection)}
+                        variant="nav"
+                        dense
+                        className="w-full"
+                        aria-label="Inventory section"
+                    />
+                </div>
+            )}
 
             <div className="min-h-0 flex-1 overflow-hidden">
                 {section === 'replenish' ? (

@@ -15,11 +15,23 @@ export function getTestingStatusDot(row: ReceivingLineRow): string {
   return workflowStageDot(row.workflow_status);
 }
 
-/** 
- * Computes "Tested" quantity based on workflow status. 
- * If the line is in a terminal state, we consider the full received quantity as tested.
+/** Full invalidation triggers — module-scope so the shell's refresh-listener
+ * effect keeps a stable identity and subscribes once (a fresh array literal each
+ * render made it re-subscribe, risking a dropped event mid-swap). */
+const TESTING_REFRESH_EVENTS = ['receiving-entry-added', 'usav-refresh-data', 'testing-result-recorded'];
+
+/**
+ * Computes "Tested" quantity for a line in the Testing feed. Prefers the real
+ * recorded-verdict count from the API (`tested_count`, scoped to this tester);
+ * a line with verdicts but a non-terminal workflow_status (e.g. partway through
+ * a multi-unit line, or still IN_TEST) then reads "k/N" instead of a misleading
+ * "0/N". Falls back to the terminal-status heuristic for feeds/rows that don't
+ * carry tested_count (the no-tester activity fallback, older cached rows).
  */
 function getTestedQty(row: ReceivingLineRow): number {
+  if (typeof row.tested_count === 'number') {
+    return Math.min(row.tested_count, row.quantity_received);
+  }
   const v = String(row.workflow_status || '').trim().toUpperCase();
   const isTested = ['PASSED', 'DONE', 'FAILED', 'SCRAP', 'RTV'].some(s => v.startsWith(s));
   return isTested ? row.quantity_received : 0;
@@ -85,7 +97,7 @@ export function TestingRecentRail({
       queryKey={queryKey}
       fetchFn={fetchFn}
       updateEvent="receiving-line-updated"
-      refreshEvents={['receiving-entry-added', 'usav-refresh-data', 'testing-result-recorded']}
+      refreshEvents={TESTING_REFRESH_EVENTS}
       eyebrowTitle="Recent"
       eyebrowSuffix={hasTester ? 'You Tested' : 'Testing Feed'}
       getStatusDot={getTestingStatusDot}

@@ -1,0 +1,118 @@
+'use client';
+
+import { useEffect, useMemo, useState } from 'react';
+import {
+  APP_SIDEBAR_NAV,
+  getSidebarNavItems,
+  getSidebarPageNav,
+  type SidebarNavItem,
+  type SidebarPageNav,
+} from '@/lib/sidebar-navigation';
+import { useActiveSidebarMode } from './useActiveSidebarMode';
+import { useSidebarModeNav } from './useSidebarModeNav';
+import { useRecentPages } from './useRecentPages';
+import { MasterNavView } from './MasterNavView';
+import type { ReactNode } from 'react';
+
+/** Merge a flat nav item with its mode metadata (if the page has modes). */
+function toPageNav(item: SidebarNavItem): SidebarPageNav {
+  return getSidebarPageNav(item.id) ?? item;
+}
+
+/**
+ * Router-wired master nav container (plan §3). Reads the active page+mode from
+ * the URL, writes navigation through `useSidebarModeNav`, and pins recents. This
+ * is what P2 mounts into `DashboardSidebar`; P1 exercises it behind a flag.
+ *
+ * NB: clicking a row genuinely navigates — do not mount this in a pure showroom
+ * Bay (use {@link MasterNavView} with local state there instead).
+ */
+export function MasterNav({
+  permissions,
+  mobileRestricted = false,
+  showModeRail = true,
+  railPageIds,
+  renderContext,
+  className,
+}: {
+  permissions?: ReadonlySet<string>;
+  mobileRestricted?: boolean;
+  showModeRail?: boolean;
+  /**
+   * Restrict the L2 rail to these page ids (the pages whose panels have already
+   * dropped their own pill-row). When omitted, the rail shows for every modeful
+   * page. Used during the phased cutover so un-migrated pages keep their own
+   * switcher instead of getting a doubled one.
+   */
+  railPageIds?: ReadonlySet<string>;
+  /** `panel` mode only: the workspace body shown below the rail when closed. */
+  renderContext?: () => ReactNode;
+  className?: string;
+}) {
+  const { pageId, modeId } = useActiveSidebarMode();
+  const navigate = useSidebarModeNav();
+  const { recents, pushRecent } = useRecentPages();
+
+  const [open, setOpen] = useState(false);
+  const [expandedKey, setExpandedKey] = useState<string | null>(null);
+
+  // Pin the page you land on so it's a recent next time you're elsewhere.
+  useEffect(() => {
+    pushRecent(pageId);
+  }, [pageId, pushRecent]);
+
+  // Close the menu whenever the route resolves to a new page/mode.
+  useEffect(() => {
+    setOpen(false);
+    setExpandedKey(null);
+  }, [pageId, modeId]);
+
+  const pages = useMemo(
+    () => getSidebarNavItems({ permissions, mobileRestricted }).map(toPageNav),
+    [permissions, mobileRestricted],
+  );
+
+  const activePage = useMemo<SidebarPageNav>(() => {
+    const found = pages.find((p) => p.id === pageId);
+    if (found) return found;
+    const fallbackItem = APP_SIDEBAR_NAV.find((item) => item.id === pageId);
+    return fallbackItem ? toPageNav(fallbackItem) : pages[0];
+  }, [pages, pageId]);
+
+  // Current page hidden from the menu; recents pinned on top (still listed below).
+  const recentPages = useMemo(
+    () =>
+      recents
+        .filter((id) => id !== pageId)
+        .map((id) => pages.find((p) => p.id === id))
+        .filter((p): p is SidebarPageNav => Boolean(p)),
+    [recents, pages, pageId],
+  );
+  const otherPages = useMemo(() => pages.filter((p) => p.id !== pageId), [pages, pageId]);
+
+  if (!activePage) return null;
+
+  // Rail shows only for pages cleared for it (or all, when no allowlist).
+  const railOn = showModeRail && (!railPageIds || railPageIds.has(activePage.id));
+
+  return (
+    <MasterNavView
+      activePage={activePage}
+      activeModeId={modeId}
+      open={open}
+      onToggleOpen={() => setOpen((v) => !v)}
+      recentPages={recentPages}
+      otherPages={otherPages}
+      expandedKey={expandedKey}
+      onToggleRow={setExpandedKey}
+      onNavigate={(nextPageId, nextModeId) => {
+        navigate(nextPageId, nextModeId);
+        setOpen(false);
+        setExpandedKey(null);
+      }}
+      showModeRail={railOn}
+      renderContext={renderContext}
+      className={className}
+    />
+  );
+}

@@ -5,6 +5,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { motion, LayoutGroup } from 'framer-motion';
 import { ChevronDown } from '@/components/Icons';
 import { SerialChip, SkuScanRefChip, getLast4 } from '@/components/ui/CopyChip';
+import { SerialChipWithMenu } from '@/components/receiving/workspace/SerialCard';
 import { conditionGradeTableLabel } from '@/components/station/receiving-constants';
 import {
   dispatchSelectLine,
@@ -16,7 +17,15 @@ interface ApiResponse {
   receiving_lines: ReceivingLineRow[];
 }
 
-type ActiveRowSerial = { id: number; serial_number: string };
+// `id` is optional to stay structurally compatible with the chip menu's
+// `SavedSerial` (whose id is optional). Callbacks guard with `if (s.id == null)`.
+type ActiveRowSerial = { id?: number; serial_number: string; condition_grade?: string | null };
+
+export interface PoLineSerialActions {
+  editingSerialId?: number | null;
+  onEdit?: (serial: ActiveRowSerial) => void;
+  onDelete?: (serial: ActiveRowSerial) => void;
+}
 
 interface ActiveRowSlotContext {
   /**
@@ -48,6 +57,11 @@ interface Props {
    * unit. Null/undefined → fall back to `line.condition_grade`.
    */
   activeConditionOverride?: string | null;
+  /**
+   * Edit/delete for serial copy-chips in the active row header. Condition is
+   * set via the line-level picker in the row body, not on chip hover.
+   */
+  activeSerialActions?: PoLineSerialActions;
 }
 
 /**
@@ -59,7 +73,13 @@ interface Props {
  *
  * Single-line cartons should not mount this component (the parent guards).
  */
-export function PoLinesAccordion({ receivingId, activeLineId, activeRowSlot, activeConditionOverride }: Props) {
+export function PoLinesAccordion({
+  receivingId,
+  activeLineId,
+  activeRowSlot,
+  activeConditionOverride,
+  activeSerialActions,
+}: Props) {
   const queryClient = useQueryClient();
   const queryKey = useMemo(
     () => ['receiving-siblings', receivingId] as const,
@@ -182,7 +202,12 @@ export function PoLinesAccordion({ receivingId, activeLineId, activeRowSlot, act
                   >
                     {line.item_name || line.sku || `Line #${line.id}`}
                   </p>
-                  <div className="mt-0.5 flex flex-wrap items-center gap-x-1.5 gap-y-1 truncate text-micro font-semibold uppercase tracking-widest text-gray-500">
+                  {/* No `truncate` here: `flex flex-wrap` already wraps the
+                      badges/chips, and `truncate`'s `overflow: hidden` would
+                      clip the SerialChipWithMenu dropdown (positioned below the
+                      row). The chip menu is not portaled, so any clipping
+                      ancestor hides it. */}
+                  <div className="mt-0.5 flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-1 text-micro font-semibold uppercase tracking-widest text-gray-500">
                     <ProgressBadge
                       received={line.quantity_received}
                       expected={line.quantity_expected}
@@ -207,17 +232,35 @@ export function PoLinesAccordion({ receivingId, activeLineId, activeRowSlot, act
                     {Array.isArray(line.serials) && line.serials.length > 0 ? (
                       <>
                         <span aria-hidden>·</span>
-                        {line.serials
-                          .map((s) => (s.serial_number || '').trim())
-                          .filter(Boolean)
-                          .map((sn, i) => (
+                        {line.serials.map((s, i) => {
+                          const sn = (s.serial_number || '').trim();
+                          if (!sn) return null;
+                          const serialRecord: ActiveRowSerial = {
+                            id: s.id,
+                            serial_number: sn,
+                            condition_grade:
+                              (s as { condition_grade?: string | null }).condition_grade ?? null,
+                          };
+                          if (isActive && activeSerialActions?.onEdit) {
+                            return (
+                              <SerialChipWithMenu
+                                key={`${sn}-${i}`}
+                                serial={serialRecord}
+                                isEditing={activeSerialActions.editingSerialId === s.id}
+                                onEdit={activeSerialActions.onEdit}
+                                onDelete={activeSerialActions.onDelete}
+                              />
+                            );
+                          }
+                          return (
                             <SerialChip
                               key={`${sn}-${i}`}
                               value={sn}
                               display={sn.length > 4 ? sn.slice(-4) : sn}
                               width="w-fit max-w-full"
                             />
-                          ))}
+                          );
+                        })}
                       </>
                     ) : null}
                   </div>

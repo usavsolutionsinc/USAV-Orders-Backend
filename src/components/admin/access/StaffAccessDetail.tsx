@@ -121,6 +121,18 @@ interface RoleSlim {
 
 const STATUS_OPTIONS = ['active', 'invited', 'suspended', 'disabled'] as const;
 
+// Header goal chip stations. Kept local (not imported from the server-only
+// staff-stations-queries module) so no DB code leaks into this client bundle.
+const STATION_OPTIONS = ['TECH', 'PACK', 'UNBOX', 'SALES', 'FBA'] as const;
+type StationKey = (typeof STATION_OPTIONS)[number];
+const STATION_LABELS: Record<StationKey, string> = {
+  TECH: 'Tech',
+  PACK: 'Packing',
+  UNBOX: 'Unboxing',
+  SALES: 'Sales',
+  FBA: 'FBA',
+};
+
 function initials(name: string): string {
   return name.split(/\s+/).filter(Boolean).slice(0, 2).map((p) => p[0]?.toUpperCase() ?? '').join('');
 }
@@ -146,6 +158,10 @@ export function StaffAccessDetail({ staffId }: StaffAccessDetailProps) {
   const [busy, setBusy] = useState<string | null>(null);
   const [qrUrl, setQrUrl] = useState<{ url: string; expiresAt: string } | null>(null);
   const [pinDialogOpen, setPinDialogOpen] = useState(false);
+  const [stations, setStations] = useState<{ primary: StationKey | null; secondary: StationKey[] }>({
+    primary: null,
+    secondary: [],
+  });
 
   const refresh = useCallback(async () => {
     setErr(null);
@@ -227,6 +243,40 @@ export function StaffAccessDetail({ staffId }: StaffAccessDetailProps) {
       setBusy(null);
     }
   }, [staffId, refresh, notifyList]);
+
+  const refreshStations = useCallback(async () => {
+    try {
+      const r = await fetch(`/api/admin/staff/${staffId}/stations`, { credentials: 'include', cache: 'no-store' });
+      if (!r.ok) return;
+      const data = (await r.json()) as { primary: StationKey | null; secondary: StationKey[] };
+      setStations({ primary: data.primary ?? null, secondary: Array.isArray(data.secondary) ? data.secondary : [] });
+    } catch {
+      /* leave defaults */
+    }
+  }, [staffId]);
+
+  useEffect(() => { void refreshStations(); }, [refreshStations]);
+
+  const saveStations = useCallback(async (next: { primary: StationKey | null; secondary: StationKey[] }) => {
+    setStations(next); // optimistic
+    setBusy('stations');
+    try {
+      const r = await fetch(`/api/admin/staff/${staffId}/stations`, {
+        method: 'PUT', credentials: 'include',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify(next),
+      });
+      if (!r.ok) {
+        const data = await r.json().catch(() => ({}));
+        setErr(String((data as { error?: string }).error || 'Station save failed.'));
+        await refreshStations();
+        return;
+      }
+      await refreshStations();
+    } finally {
+      setBusy(null);
+    }
+  }, [staffId, refreshStations]);
 
   const resetPin = useCallback(async () => {
     if (!confirm('Reset this staff\'s PIN and send them an enrollment QR?')) return;
@@ -480,6 +530,89 @@ export function StaffAccessDetail({ staffId }: StaffAccessDetailProps) {
           </div>
         </section>
       )}
+
+      {/* Card A.6 — Stations (header goal chip) */}
+      <section className={`overflow-hidden rounded-2xl border ${sc.border} bg-white shadow-sm`}>
+        <header className="flex items-center justify-between border-b border-gray-100 px-5 py-3">
+          <div>
+            <h2 className="text-sm font-semibold text-gray-900">Stations</h2>
+            <p className="mt-0.5 text-caption text-gray-500">
+              The <b>primary</b> station is always shown in the header goal chip and stays locked.
+              Add <b>secondary</b> stations to let this staffer switch between goals — the Switch
+              control only appears when at least one secondary is set.
+            </p>
+          </div>
+        </header>
+        <div className="space-y-3 px-5 py-4">
+          {/* Primary station */}
+          <label className="flex items-center gap-2.5">
+            <span className="w-20 shrink-0 text-micro font-semibold uppercase tracking-wider text-gray-500">Primary</span>
+            <select
+              value={stations.primary ?? ''}
+              onChange={(e) => {
+                const val = e.target.value;
+                if (!val) { void saveStations({ primary: null, secondary: [] }); return; }
+                const p = val as StationKey;
+                void saveStations({ primary: p, secondary: stations.secondary.filter((s) => s !== p) });
+              }}
+              disabled={busy === 'stations'}
+              className="h-8 rounded-full bg-gray-100 px-3 text-micro font-bold uppercase tracking-wider text-gray-700 outline-none ring-1 ring-gray-200 transition disabled:opacity-60"
+            >
+              <option value="">— none (auto from employee code) —</option>
+              {STATION_OPTIONS.map((st) => (
+                <option key={st} value={st}>{STATION_LABELS[st]}</option>
+              ))}
+            </select>
+          </label>
+
+          {/* Secondary stations */}
+          <div className="flex items-start gap-2.5">
+            <span className="mt-1.5 w-20 shrink-0 text-micro font-semibold uppercase tracking-wider text-gray-500">Secondary</span>
+            <div className="flex flex-wrap gap-1.5">
+              {STATION_OPTIONS.map((st) => {
+                const isPrimary = stations.primary === st;
+                const selected = stations.secondary.includes(st);
+                const disabled = busy === 'stations' || !stations.primary || isPrimary;
+                return (
+                  <button
+                    key={st}
+                    type="button"
+                    disabled={disabled}
+                    onClick={() => {
+                      if (!stations.primary || isPrimary) return;
+                      const has = stations.secondary.includes(st);
+                      void saveStations({
+                        primary: stations.primary,
+                        secondary: has
+                          ? stations.secondary.filter((s) => s !== st)
+                          : [...stations.secondary, st],
+                      });
+                    }}
+                    className={
+                      isPrimary
+                        ? 'inline-flex items-center gap-1 rounded-full bg-blue-50 px-2.5 py-1 text-caption font-semibold text-blue-600 ring-1 ring-inset ring-blue-200'
+                        : selected
+                          ? 'inline-flex items-center gap-1 rounded-full bg-gray-900 px-2.5 py-1 text-caption font-semibold text-white ring-1 ring-inset ring-gray-900 transition disabled:opacity-50'
+                          : 'inline-flex items-center gap-1 rounded-full bg-white px-2.5 py-1 text-caption font-semibold text-gray-600 ring-1 ring-inset ring-gray-200 transition hover:bg-gray-50 disabled:opacity-50'
+                    }
+                    title={isPrimary ? 'This is the primary station' : !stations.primary ? 'Pick a primary station first' : selected ? 'Remove secondary station' : 'Add secondary station'}
+                  >
+                    {STATION_LABELS[st]}
+                    {isPrimary && <span className="text-eyebrow font-bold uppercase tracking-wider opacity-70">primary</span>}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+        <div className="border-t border-gray-100 bg-gray-50/60 px-5 py-2 text-micro text-gray-600">
+          {stations.primary
+            ? <>Chip shows <b>{STATION_LABELS[stations.primary]}</b>{stations.secondary.length > 0 ? ` · Switch between ${stations.secondary.length + 1} stations` : ' · no switch (single station)'}</>
+            : <>No assignment — chip falls back to the station derived from the employee code.</>}
+          {' · '}
+          <span className="text-gray-500">Set the daily target per station in <a href="/admin?section=goals" className="text-blue-600 hover:underline">Goals</a>.</span>
+        </div>
+      </section>
 
       {/* Card A.25 — Landing page (desktop + mobile) */}
       <LandingPageCard

@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { HorizontalButtonSlider, type HorizontalSliderItem } from '@/components/ui/HorizontalButtonSlider';
-import { sidebarHeaderBandClass, sidebarHeaderRowClass } from '@/components/layout/header-shell';
+import { sidebarHeaderBandClass, sidebarHeaderRowClass, SIDEBAR_GUTTER } from '@/components/layout/header-shell';
 import { SearchBar } from '@/components/ui/SearchBar';
 import { ManualsSidebar } from '@/components/manuals/ManualsSidebar';
 import { SkuPairingMovedCard } from '@/components/manuals/SkuPairingMovedCard';
@@ -42,7 +42,7 @@ export function ManualsCombinedSidebar() {
       </div>
 
       {/* Slider below search */}
-      <div className="shrink-0 border-b border-gray-200 bg-white px-3 py-1.5">
+      <div className={`shrink-0 border-b border-gray-200 bg-white ${SIDEBAR_GUTTER} py-1.5`}>
         <HorizontalButtonSlider
           items={VIEW_SLIDER_ITEMS}
           value={viewMode}

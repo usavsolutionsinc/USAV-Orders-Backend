@@ -25,7 +25,10 @@ import {
   dispatchReceivingWorkspaceClose,
   dispatchReceivingWorkspaceOpen,
 } from '@/utils/events';
-import type { ReceivingLineRow } from './station/ReceivingLinesTable';
+import {
+  dispatchSelectLine,
+  type ReceivingLineRow,
+} from './station/ReceivingLinesTable';
 
 /**
  * Remembers the last line the operator had open so a hard refresh lands
@@ -333,28 +336,27 @@ export default function ReceivingDashboard() {
   // pane is never blank on a fresh visit:
   //   1. localStorage `LAST_RECEIVING_LINE_KEY` — the line the operator was
   //      last on (preferred so a refresh feels like nothing happened).
-  //   2. Most-recent line from the same `view=all` query the rail uses —
-  //      first-ever visit, cleared storage, or a deleted line.
-  // Ref-guards against a scan-driven open beating us to the workspace
-  // (we'd otherwise overwrite the fresher row with a stale restore).
+  //   2. Most-recent line from the same `view=activity` query the Recent rail
+  //      uses — first-ever visit, cleared storage, or a deleted line.
+  // Uses `dispatchSelectLine` (not a bare workspace-open) so sidebar
+  // `selectedLine` and the rail highlight stay in sync with the right pane.
   const workspaceRef = useRef<WorkspaceState | null>(null);
   workspaceRef.current = workspace;
   useEffect(() => {
+    const liveMode = searchParams.get('mode') ?? 'receive';
+    if (liveMode !== 'receive') return;
+
     let cancelled = false;
 
     const openRow = (row: ReceivingLineRow) => {
       if (workspaceRef.current) return;
-      dispatchReceivingWorkspaceOpen({
-        row,
-        accordionBootstrap: 'default',
-        scanDriven: false,
-      });
+      dispatchSelectLine(row);
     };
 
     const fetchMostRecent = async (): Promise<ReceivingLineRow | null> => {
       try {
         const res = await fetch(
-          `/api/receiving-lines?limit=1&offset=0&view=all&include=serials`,
+          `/api/receiving-lines?limit=1&offset=0&view=activity&include=serials`,
           { cache: 'no-store' },
         );
         const data = await res.json().catch(() => null);
@@ -408,7 +410,7 @@ export default function ReceivingDashboard() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [searchParams]);
 
   useEffect(() => {
     const handler = (e: Event) => {

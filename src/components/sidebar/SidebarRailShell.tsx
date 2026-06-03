@@ -8,6 +8,7 @@ import { createPortal } from 'react-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ChevronDown } from '@/components/Icons';
+import { SIDEBAR_GUTTER } from '@/components/layout/header-shell';
 
 /**
  * Generic sidebar "recent activity" rail skeleton. Owns the reusable shell —
@@ -58,6 +59,13 @@ export interface SidebarRailShellProps<TRow> {
   eyebrowTitle: string;
   eyebrowSuffix?: string;
   emptyText?: string;
+  /**
+   * When true, selects the first row once data loads if nothing is selected yet.
+   * Re-selects when selection is cleared (e.g. switching back to Receive mode).
+   */
+  autoSelectFirstWhenEmpty?: boolean;
+  /** Optional guard — return false to skip auto-select (deep links, wrong mode). */
+  canAutoSelectFirst?: () => boolean;
 
   getId: (row: TRow) => number;
   /** Grouping key (e.g. receiving_id). Return null for no grouping. */
@@ -77,6 +85,8 @@ export function SidebarRailShell<TRow>({
   queryKey, fetchFn, updateEvent, refreshEvents,
   selectedId, selectedRow = null, limit = 25,
   eyebrowTitle, eyebrowSuffix, emptyText = 'No recent activity yet.',
+  autoSelectFirstWhenEmpty = false,
+  canAutoSelectFirst,
   getId, getGroupId, getActivityAt, onSelect, getStatusDot,
   renderRowMain, renderPopover,
 }: SidebarRailShellProps<TRow>) {
@@ -90,7 +100,11 @@ export function SidebarRailShell<TRow>({
   });
 
   const [localRows, setLocalRows] = useState<TRow[] | null>(null);
-  useEffect(() => { if (Array.isArray(data)) setLocalRows(data); }, [data]);
+  // Mirror query data, but ALSO clear to null when the active query has no array
+  // data — i.e. a queryKey switch (e.g. tester A → tester B) where data is briefly
+  // undefined, or an error. Without the clear, the mirror keeps the previous
+  // feed's rows and renders them under the new feed's label with no skeleton.
+  useEffect(() => { setLocalRows(Array.isArray(data) ? data : null); }, [data]);
 
   useEffect(() => {
     if (!updateEvent) return;
@@ -121,14 +135,18 @@ export function SidebarRailShell<TRow>({
   // under the same key) can hand us a non-array `data`. Never let that crash
   // the whole sidebar — coerce to [] and render empty instead.
   const allRows = Array.isArray(localRows) ? localRows : [];
-  const rows = useMemo(() => {
+  // `pinnedLead` marks that rows[0] is a selected row hoisted in from beyond the
+  // top-N window (so the active line stays visible). `topCount` is the count of
+  // genuine recent rows (excludes the pin) for the eyebrow headline.
+  const { rows, topCount, pinnedLead } = useMemo(() => {
     const top = allRows.slice(0, limit);
-    if (selectedId == null) return top;
-    if (top.some((r) => getId(r) === selectedId)) return top;
+    const base = { rows: top, topCount: top.length, pinnedLead: false };
+    if (selectedId == null) return base;
+    if (top.some((r) => getId(r) === selectedId)) return base;
     const fromDataset = allRows.find((r) => getId(r) === selectedId);
     const pin = fromDataset ?? selectedRow;
-    if (!pin || getId(pin) !== selectedId) return top;
-    return [pin, ...top];
+    if (!pin || getId(pin) !== selectedId) return base;
+    return { rows: [pin, ...top], topCount: top.length, pinnedLead: true };
   }, [allRows, limit, selectedId, selectedRow, getId]);
 
   const grouped = useMemo(() => {
@@ -141,7 +159,10 @@ export function SidebarRailShell<TRow>({
       const curr = rows[i];
       const prevG = prev != null ? getGroupId(prev) : null;
       const currG = curr != null ? getGroupId(curr) : null;
-      const sameGroup = curr != null && prev != null && prevG != null && prevG === currG;
+      // Never merge the hoisted pin (index 0) with the row below it: its
+      // adjacency is an artifact of pinning, not a real package run.
+      const sameGroup = curr != null && prev != null && prevG != null && prevG === currG
+        && !(pinnedLead && i === 1);
       if (!sameGroup) {
         const size = i - runStart;
         const gid = rows[runStart] != null ? getGroupId(rows[runStart]) : null;
@@ -150,7 +171,7 @@ export function SidebarRailShell<TRow>({
       }
     }
     return info;
-  }, [rows, getGroupId]);
+  }, [rows, getGroupId, pinnedLead]);
 
   const [collapsedGroups, setCollapsedGroups] = useState<Set<number>>(new Set());
   const toggleGroup = useCallback((groupId: number) => {
@@ -165,27 +186,63 @@ export function SidebarRailShell<TRow>({
   const [focusIndex, setFocusIndex] = useState<number>(-1);
   useEffect(() => { if (focusIndex >= rows.length) setFocusIndex(rows.length - 1); }, [rows.length, focusIndex]);
 
+  // Row indices that actually render a button — collapsed package members render
+  // nothing, so DOM button positions no longer map 1:1 to row indices. Keyboard
+  // nav walks this list (skipping hidden rows) and focus targets a row by its
+  // logical index via data-rail-index, not DOM position.
+  const visibleIndices = useMemo(() => {
+    const out: number[] = [];
+    for (let i = 0; i < rows.length; i++) {
+      const g = grouped[i];
+      const hidden = g.groupId != null && collapsedGroups.has(g.groupId) && g.groupIndex > 0;
+      if (!hidden) out.push(i);
+    }
+    return out;
+  }, [rows.length, grouped, collapsedGroups]);
+
+  const autoSelectedRef = useRef(false);
+  useEffect(() => {
+    if (!autoSelectFirstWhenEmpty) return;
+    if (selectedId != null) {
+      autoSelectedRef.current = true;
+      return;
+    }
+    autoSelectedRef.current = false;
+  }, [autoSelectFirstWhenEmpty, selectedId]);
+
+  useEffect(() => {
+    if (!autoSelectFirstWhenEmpty || autoSelectedRef.current) return;
+    if (selectedId != null || isLoading || rows.length === 0) return;
+    if (canAutoSelectFirst && !canAutoSelectFirst()) return;
+    autoSelectedRef.current = true;
+    onSelect(rows[0]);
+  }, [autoSelectFirstWhenEmpty, canAutoSelectFirst, selectedId, isLoading, rows, onSelect]);
+
   const focusRow = useCallback((idx: number) => {
-    const btn = listRef.current?.querySelectorAll<HTMLButtonElement>('button[data-rail-row]')[idx];
+    const btn = listRef.current?.querySelector<HTMLButtonElement>(`button[data-rail-row][data-rail-index="${idx}"]`);
     if (btn) btn.focus();
   }, []);
 
   const handleKeyDown = useCallback((e: React.KeyboardEvent<HTMLUListElement>) => {
-    if (rows.length === 0) return;
-    const move = (next: number) => { setFocusIndex(next); focusRow(next); onSelect(rows[next]); };
-    if (e.key === 'ArrowDown') { e.preventDefault(); move(focusIndex < 0 ? 0 : Math.min(focusIndex + 1, rows.length - 1)); }
-    else if (e.key === 'ArrowUp') { e.preventDefault(); move(focusIndex < 0 ? 0 : Math.max(focusIndex - 1, 0)); }
-    else if (e.key === 'Home') { e.preventDefault(); move(0); }
-    else if (e.key === 'End') { e.preventDefault(); move(rows.length - 1); }
+    if (visibleIndices.length === 0) return;
+    // Arrow/Home/End move focus only (roving tabindex); selection happens on
+    // Enter/Space or click. Previously every arrow keypress dispatched onSelect,
+    // opening the line in the workspace on each step.
+    const moveTo = (rowIdx: number) => { setFocusIndex(rowIdx); focusRow(rowIdx); };
+    const pos = visibleIndices.indexOf(focusIndex);
+    if (e.key === 'ArrowDown') { e.preventDefault(); moveTo(pos < 0 ? visibleIndices[0] : visibleIndices[Math.min(pos + 1, visibleIndices.length - 1)]); }
+    else if (e.key === 'ArrowUp') { e.preventDefault(); moveTo(pos < 0 ? visibleIndices[0] : visibleIndices[Math.max(pos - 1, 0)]); }
+    else if (e.key === 'Home') { e.preventDefault(); moveTo(visibleIndices[0]); }
+    else if (e.key === 'End') { e.preventDefault(); moveTo(visibleIndices[visibleIndices.length - 1]); }
     else if ((e.key === 'Enter' || e.key === ' ') && focusIndex >= 0 && focusIndex < rows.length) { e.preventDefault(); onSelect(rows[focusIndex]); }
-  }, [rows, focusIndex, focusRow, onSelect]);
+  }, [rows, visibleIndices, focusIndex, focusRow, onSelect]);
 
   return (
     <section className="border-t border-gray-100 bg-white">
-      <div className="flex items-center justify-between px-3 py-1">
+      <div className={`flex items-center justify-between ${SIDEBAR_GUTTER} py-1`}>
         <p className="text-eyebrow font-black uppercase tracking-widest text-gray-500">
-          {eyebrowTitle} · {rows.length}
-          {allRows.length > rows.length ? (
+          {eyebrowTitle} · {topCount}
+          {allRows.length > topCount ? (
             <span className="ml-1 font-bold text-gray-300">/ {allRows.length}</span>
           ) : null}
         </p>
@@ -194,15 +251,15 @@ export function SidebarRailShell<TRow>({
         )}
       </div>
       {isLoading && rows.length === 0 ? (
-        <div className="space-y-1 px-3 py-2">
+        <div className={`space-y-1 ${SIDEBAR_GUTTER} py-2`}>
           {[0, 1, 2, 3].map((i) => <div key={i} className="h-9 w-full animate-pulse rounded-md bg-gray-100" />)}
         </div>
       ) : rows.length === 0 ? (
-        <p className="px-3 py-3 text-micro font-semibold text-gray-400">{emptyText}</p>
+        <p className={`${SIDEBAR_GUTTER} py-3 text-micro font-semibold text-gray-400`}>{emptyText}</p>
       ) : (
         <ul
           ref={listRef}
-          className="px-2 py-1 outline-none"
+          className={`${SIDEBAR_GUTTER} py-1 outline-none`}
           role="listbox"
           aria-label={`${eyebrowTitle} activity`}
           tabIndex={0}
@@ -225,6 +282,7 @@ export function SidebarRailShell<TRow>({
                 <RailRow
                   key={getId(row)}
                   row={row}
+                  index={idx}
                   isSelected={getId(row) === selectedId}
                   isFocused={idx === focusIndex}
                   groupSize={g.groupSize}
@@ -249,10 +307,11 @@ export function SidebarRailShell<TRow>({
 }
 
 function RailRow<TRow>({
-  row, isSelected, isFocused, groupSize, groupIndex, isCollapsed, showInlinePkgChip,
+  row, index, isSelected, isFocused, groupSize, groupIndex, isCollapsed, showInlinePkgChip,
   onToggleGroup, getStatusDot, getActivityAt, renderRowMain, renderPopover, onClick,
 }: {
   row: TRow;
+  index: number;
   isSelected: boolean;
   isFocused: boolean;
   groupSize: number;
@@ -343,6 +402,7 @@ function RailRow<TRow>({
       <button
         type="button"
         data-rail-row
+        data-rail-index={index}
         tabIndex={-1}
         onClick={onClick}
         className={`relative flex w-full gap-2.5 text-left transition-colors ${isGrouped ? 'pl-3 pr-2' : 'px-2'} ${

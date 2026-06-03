@@ -1,8 +1,12 @@
 import { normalizeUPSStatus, normalizeTrackingNumber } from '../normalize';
 import type { CarrierTrackingEvent, CarrierTrackingResult } from '../types';
 
-const UPS_AUTH_URL = 'https://onlinetools.ups.com/security/v1/oauth/token';
-const UPS_TRACK_URL = 'https://onlinetools.ups.com/api/track/v1/details';
+// UPS uses one host for both production and the CIE sandbox swap (wwwcie.ups.com).
+// Existing behaviour is production-only; expose the base so the subscription
+// client builds its URL from the same root.
+export const UPS_BASE_URL = process.env.UPS_BASE_URL ?? 'https://onlinetools.ups.com';
+const UPS_AUTH_URL = `${UPS_BASE_URL}/security/v1/oauth/token`;
+const UPS_TRACK_URL = `${UPS_BASE_URL}/api/track/v1/details`;
 
 interface TokenCache {
   token: string;
@@ -45,7 +49,7 @@ async function fetchFreshToken(): Promise<string> {
   return tokenCache.token;
 }
 
-async function getAccessToken(forceRefresh = false): Promise<string> {
+export async function getAccessToken(forceRefresh = false): Promise<string> {
   if (!forceRefresh && tokenCache && tokenCache.expiresAt > Date.now() + 60_000) {
     return tokenCache.token;
   }

@@ -306,3 +306,159 @@ export async function updateShipmentError(
     client.release();
   }
 }
+
+// ─── Carrier webhook subscription state ──────────────────────────────────────
+//
+// Carriers push near-real-time track events only for tracking numbers
+// associated to our webhook project / destination. These helpers feed the
+// subscribe-<carrier> crons, which associate pending shipments and (for FedEx's
+// async model) reconcile the resulting jobs to COMPLETED. Carrier-agnostic:
+// pass 'FEDEX' or 'UPS'.
+
+export interface PendingSubscriptionRow {
+  id: number;
+  trackingNumberNormalized: string;
+}
+
+/**
+ * Active shipments for `carrier` that still need a webhook (re)subscription:
+ * never attempted (NULL), queued (PENDING), or previously FAILED. Backed by the
+ * partial index from 2026-06-02_carrier_webhook_subscription.sql.
+ */
+export async function getShipmentsPendingSubscription(
+  carrier: CarrierCode,
+  limit: number
+): Promise<PendingSubscriptionRow[]> {
+  const client = await pool.connect();
+  try {
+    const result = await client.query(
+      `SELECT id, tracking_number_normalized
+         FROM shipping_tracking_numbers
+        WHERE carrier = $1
+          AND is_terminal = false
+          AND (webhook_subscription_status IS NULL
+               OR webhook_subscription_status IN ('PENDING','FAILED'))
+        ORDER BY next_check_at ASC NULLS FIRST
+        LIMIT $2`,
+      [carrier, limit]
+    );
+    return result.rows.map((r) => ({
+      id: r.id,
+      trackingNumberNormalized: r.tracking_number_normalized,
+    }));
+  } finally {
+    client.release();
+  }
+}
+
+/**
+ * Record the outcome of a subscription request against the shipments it
+ * covered. `jobId` is null for synchronous carriers (UPS) or when FedEx
+ * completed synchronously; status is then COMPLETED.
+ */
+export async function markSubscriptionResult(
+  carrier: CarrierCode,
+  trackingNumbers: string[],
+  status: 'SUBMITTED' | 'COMPLETED' | 'FAILED',
+  jobId: string | null,
+  error?: string | null
+): Promise<void> {
+  if (trackingNumbers.length === 0) return;
+  const client = await pool.connect();
+  try {
+    await client.query(
+      `UPDATE shipping_tracking_numbers SET
+         webhook_subscription_status = $3,
+         webhook_subscription_job_id = $4,
+         webhook_subscribed_at       = CASE WHEN $3 = 'COMPLETED' THEN now() ELSE webhook_subscribed_at END,
+         webhook_subscription_error  = $5,
+         updated_at                  = now()
+       WHERE carrier = $1
+         AND tracking_number_normalized = ANY($2::text[])`,
+      [carrier, trackingNumbers, status, jobId, error ? error.slice(0, 1000) : null]
+    );
+  } finally {
+    client.release();
+  }
+}
+
+/**
+ * Active shipments whose subscription COMPLETED but is older than `ttlDays` —
+ * i.e. due for renewal. Carriers expire subscriptions (USPS in particular), so
+ * re-subscribing before TTL keeps push alive. Returns [] when ttlDays <= 0
+ * (renewal disabled). Not index-backed (COMPLETED rows are excluded from the
+ * pending index), but the carrier + is_terminal + LIMIT keep it bounded.
+ */
+export async function getShipmentsForSubscriptionRenewal(
+  carrier: CarrierCode,
+  ttlDays: number,
+  limit: number
+): Promise<PendingSubscriptionRow[]> {
+  if (!ttlDays || ttlDays <= 0) return [];
+  const client = await pool.connect();
+  try {
+    const result = await client.query(
+      `SELECT id, tracking_number_normalized
+         FROM shipping_tracking_numbers
+        WHERE carrier = $1
+          AND is_terminal = false
+          AND webhook_subscription_status = 'COMPLETED'
+          AND webhook_subscribed_at IS NOT NULL
+          AND webhook_subscribed_at < now() - ($2 || ' days')::interval
+        ORDER BY webhook_subscribed_at ASC
+        LIMIT $3`,
+      [carrier, String(ttlDays), limit]
+    );
+    return result.rows.map((r) => ({
+      id: r.id,
+      trackingNumberNormalized: r.tracking_number_normalized,
+    }));
+  } finally {
+    client.release();
+  }
+}
+
+/** Distinct jobIds still awaiting reconciliation (status SUBMITTED). FedEx-only. */
+export async function getSubmittedSubscriptionJobIds(
+  carrier: CarrierCode,
+  limit: number
+): Promise<string[]> {
+  const client = await pool.connect();
+  try {
+    const result = await client.query(
+      `SELECT DISTINCT webhook_subscription_job_id AS job_id
+         FROM shipping_tracking_numbers
+        WHERE carrier = $1
+          AND webhook_subscription_status = 'SUBMITTED'
+          AND webhook_subscription_job_id IS NOT NULL
+        LIMIT $2`,
+      [carrier, limit]
+    );
+    return result.rows.map((r) => r.job_id as string);
+  } finally {
+    client.release();
+  }
+}
+
+/** Flip every shipment carrying `jobId` to the reconciled terminal status. */
+export async function markSubscriptionJobStatus(
+  carrier: CarrierCode,
+  jobId: string,
+  status: 'COMPLETED' | 'FAILED'
+): Promise<void> {
+  const client = await pool.connect();
+  try {
+    await client.query(
+      `UPDATE shipping_tracking_numbers SET
+         webhook_subscription_status = $3,
+         webhook_subscribed_at       = CASE WHEN $3 = 'COMPLETED' THEN now() ELSE webhook_subscribed_at END,
+         updated_at                  = now()
+       WHERE carrier = $1
+         AND webhook_subscription_job_id = $2
+         AND webhook_subscription_status = 'SUBMITTED'`,
+      [carrier, jobId, status]
+    );
+  } finally {
+    client.release();
+  }
+}

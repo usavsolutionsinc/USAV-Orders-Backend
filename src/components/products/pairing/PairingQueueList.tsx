@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { AlertCircle } from '@/components/Icons';
+import { SIDEBAR_GUTTER } from '@/components/layout/header-shell';
 import { platformStyle } from './platform-style';
 import { usePairingQueue } from './usePairingQueue';
 import type { PairingQueueItem, PairingSort } from './types';
@@ -39,7 +40,7 @@ export function PairingQueueList({ query, sort, selectedSku, onSelect }: Pairing
   return (
     <div className="flex h-full min-h-0 flex-col bg-white">
       {/* Count bar */}
-      <div className="flex items-center justify-between gap-2 border-b border-gray-100 px-3 py-1.5 text-micro font-black uppercase tracking-wider text-gray-500">
+      <div className={`flex items-center justify-between gap-2 border-b border-gray-100 ${SIDEBAR_GUTTER} py-1.5 text-micro font-black uppercase tracking-wider text-gray-500`}>
         <span>
           {loading ? 'Loading…' : total === null ? '' : `${total} need review`}
         </span>
@@ -50,7 +51,7 @@ export function PairingQueueList({ query, sort, selectedSku, onSelect }: Pairing
         {loading && items.length === 0 ? (
           <div className="space-y-0">
             {Array.from({ length: 8 }).map((_, i) => (
-              <div key={i} className="border-b border-gray-50 px-3 py-3">
+              <div key={i} className={`border-b border-gray-50 ${SIDEBAR_GUTTER} py-3`}>
                 <div className="h-3 w-32 rounded bg-gray-100 animate-pulse" />
                 <div className="mt-1.5 h-2.5 w-48 rounded bg-gray-50 animate-pulse" />
               </div>
@@ -103,7 +104,7 @@ function PairingQueueRow({
       <button
         type="button"
         onClick={() => onSelect(item)}
-        className={`flex w-full items-start gap-2.5 px-3 py-2.5 text-left transition-colors ${
+        className={`flex w-full items-start gap-2.5 ${SIDEBAR_GUTTER} py-2.5 text-left transition-colors ${
           selected ? 'bg-blue-50 border-l-2 border-l-blue-600' : 'hover:bg-gray-50'
         }`}
       >

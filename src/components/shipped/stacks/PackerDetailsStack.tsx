@@ -80,7 +80,8 @@ export function PackerDetailsStack({
   };
 
   return (
-    <div className="pb-8 pt-4 space-y-4">
+    <div className="flex min-h-full flex-col pb-8 pt-4">
+      <div className="flex-1">
       <ShippedDetailsPanelContent
         shipped={shipped}
         durationData={durationData}
@@ -90,6 +91,7 @@ export function PackerDetailsStack({
         showTestingInformation={false}
         activeSection={activeSection}
       />
+      </div>
 
       <section className="mx-8 pt-2">
         <button
@@ -103,7 +105,7 @@ export function PackerDetailsStack({
             ? 'Deleting...'
             : isDeleteArmed
               ? 'Click Again To Confirm'
-              : 'Delete Packer Log'}
+              : 'Delete'}
         </button>
       </section>
     </div>

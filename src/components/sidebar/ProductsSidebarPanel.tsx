@@ -2,9 +2,10 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { sidebarHeaderBandClass, sidebarHeaderPillRowClass, sidebarHeaderRowClass } from '@/components/layout/header-shell';
+import { sidebarHeaderBandClass, sidebarHeaderPillRowClass, sidebarHeaderRowClass, SIDEBAR_GUTTER } from '@/components/layout/header-shell';
 import { SearchBar } from '@/components/ui/SearchBar';
 import { HorizontalButtonSlider, type HorizontalSliderItem } from '@/components/ui/HorizontalButtonSlider';
+import { useMasterNavEnabled } from '@/components/sidebar/master-nav';
 import { BARCODE_MODES, type BarcodeMode } from '@/components/barcode/ModeSelector';
 import { useBarcodeMode } from '@/hooks/useBarcodeMode';
 import { useLabelRecents } from '@/hooks/useLabelRecents';
@@ -90,6 +91,7 @@ function LabelsSubViewPlaceholder({ title, body }: { title: string; body: string
 export function ProductsSidebarPanel() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const masterNavEnabled = useMasterNavEnabled();
   const view = parseView(searchParams.get('view'));
   const labelsView = parseLabelsView(searchParams.get('labelsView'));
   const currentQuery = searchParams.get('q') || '';
@@ -169,17 +171,19 @@ export function ProductsSidebarPanel() {
   // own sidebar bodies below.
   return (
     <div className="flex h-full flex-col overflow-hidden bg-white">
-      <div className={sidebarHeaderPillRowClass}>
-        <HorizontalButtonSlider
-          items={viewItems}
-          value={view}
-          onChange={handleViewChange}
-          variant="nav"
-          dense
-          className="w-full"
-          aria-label="Products view"
-        />
-      </div>
+      {!masterNavEnabled && (
+        <div className={sidebarHeaderPillRowClass}>
+          <HorizontalButtonSlider
+            items={viewItems}
+            value={view}
+            onChange={handleViewChange}
+            variant="nav"
+            dense
+            className="w-full"
+            aria-label="Products view"
+          />
+        </div>
+      )}
 
       {/* Search bar — always mounted so it stays in position across all sub-views */}
       <div className={sidebarHeaderRowClass}>
@@ -233,7 +237,7 @@ export function ProductsSidebarPanel() {
 
       {/* Label-printer mode dropdown — only shown on the Print sub-view. */}
       {isLabels && labelsView === 'print' && (
-        <div className="shrink-0 border-b border-gray-100 bg-white px-3 py-2">
+        <div className={`shrink-0 border-b border-gray-100 bg-white ${SIDEBAR_GUTTER} py-2`}>
           <ModeDropdown mode={mode} onChange={setMode} />
         </div>
       )}
@@ -464,7 +468,7 @@ function ProductPickerList({ query, recents, onPick }: ProductPickerListProps) {
       ) : (
         <ul className="divide-y divide-gray-100">
           {recentItems.length > 0 && (
-            <li className="bg-gray-50 px-3 py-1.5 text-eyebrow font-black uppercase tracking-[0.18em] text-gray-500">
+            <li className={`bg-gray-50 ${SIDEBAR_GUTTER} py-1.5 text-eyebrow font-black uppercase tracking-[0.18em] text-gray-500`}>
               Recent
             </li>
           )}
@@ -472,7 +476,7 @@ function ProductPickerList({ query, recents, onPick }: ProductPickerListProps) {
             <ProductRow key={`recent-${item.id}`} item={item} onPick={onPick} />
           ))}
           {recentItems.length > 0 && restItems.length > 0 && (
-            <li className="bg-gray-50 px-3 py-1.5 text-eyebrow font-black uppercase tracking-[0.18em] text-gray-500">
+            <li className={`bg-gray-50 ${SIDEBAR_GUTTER} py-1.5 text-eyebrow font-black uppercase tracking-[0.18em] text-gray-500`}>
               All
             </li>
           )}
@@ -496,7 +500,7 @@ function ProductRow({ item, onPick }: ProductRowProps) {
       <button
         type="button"
         onClick={() => onPick(item.sku)}
-        className="flex w-full items-center gap-3 px-3 py-2 text-left transition-colors hover:bg-blue-50"
+        className={`flex w-full items-center gap-3 ${SIDEBAR_GUTTER} py-2 text-left transition-colors hover:bg-blue-50`}
       >
         <span className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-md bg-gray-50 ring-1 ring-gray-200">
           {item.image_url ? (

@@ -117,6 +117,12 @@ export function TechTestingWorkspace({ staffId, selectedLineId, onSelectedLineCh
   const [isMutating, setIsMutating] = useState(false);
   const [auditOpen, setAuditOpen] = useState(false);
   const [copyingAll, setCopyingAll] = useState(false);
+  /**
+   * Serial targeted by the active row header chip's Edit menu item. Feeds the
+   * accordion (to highlight the chip) and the inline adder (to populate the
+   * scan input for an in-place typo fix), mirroring receiving's LineEditPanel.
+   */
+  const [headerSerialEdit, setHeaderSerialEdit] = useState<UnitSlotSerial | null>(null);
 
   const lastSelectedRef = useRef<number | null>(null);
   const queryClient = useQueryClient();
@@ -632,6 +638,9 @@ export function TechTestingWorkspace({ staffId, selectedLineId, onSelectedLineCh
   // preview.
   useEffect(() => {
     setPreviewBySerialUnit({});
+    // Drop any in-progress serial edit so a target from the prior line never
+    // populates the new line's scan input.
+    setHeaderSerialEdit(null);
   }, [row?.id]);
 
   // Live preview payload — encodes the active slot's allocated unit id +
@@ -1037,6 +1046,16 @@ export function TechTestingWorkspace({ staffId, selectedLineId, onSelectedLineCh
                 <PoLinesAccordion
                   receivingId={row.receiving_id}
                   activeLineId={row.id}
+                  activeSerialActions={{
+                    editingSerialId: headerSerialEdit?.id ?? null,
+                    onEdit: (s) => setHeaderSerialEdit(s as UnitSlotSerial),
+                    onDelete: (s) => {
+                      if (s.id == null) return;
+                      if (!window.confirm(`Remove serial ${s.serial_number}?`)) return;
+                      if (headerSerialEdit?.id === s.id) setHeaderSerialEdit(null);
+                      void deleteSerial(row.id, s.id);
+                    },
+                  }}
                   activeRowSlot={({ serials }) => {
                     const lineSerials = serials as UnitSlotSerial[];
                     return (
@@ -1049,6 +1068,9 @@ export function TechTestingWorkspace({ staffId, selectedLineId, onSelectedLineCh
                         isSubmitting={serialSubmitting}
                         disabled={!row.receiving_id || saving}
                         autoFocus
+                        showSavedChips={false}
+                        editingSerial={headerSerialEdit}
+                        onEditingSerialChange={setHeaderSerialEdit}
                         selectedIndex={activeSlot}
                         onSelectIndex={(i) =>
                           setActiveSlotByLine((m) => ({ ...m, [row.id]: i }))

@@ -224,7 +224,11 @@ export function computeNextCheckAt(
   if (status === 'DELIVERED') return null;
 
   const baseOffsets: Record<NormalizedShipmentStatus, number> = {
-    LABEL_CREATED: 8 * 60 * 60 * 1000,
+    // FedEx push (webhook subscription) is the primary freshness source; this
+    // poll is the fallback / missed-event recovery path. Kept at 2h (was 8h) so
+    // a label-created shipment that isn't yet webhook-subscribed — or whose
+    // events we miss — doesn't sit visibly stale for the better part of a day.
+    LABEL_CREATED: 2 * 60 * 60 * 1000,
     ACCEPTED: 4 * 60 * 60 * 1000,
     IN_TRANSIT: 2 * 60 * 60 * 1000,
     OUT_FOR_DELIVERY: 45 * 60 * 1000,

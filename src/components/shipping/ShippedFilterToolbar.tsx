@@ -1,9 +1,12 @@
 'use client';
 
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
-import { AlertTriangle, ChevronDown, Layers, Package, RotateCcw, Truck } from '@/components/Icons';
+import type { DateRange } from 'react-day-picker';
+import { AlertTriangle, ChevronDown, Filter, Truck, X } from '@/components/Icons';
+import type { HorizontalSliderItem } from '@/components/ui/HorizontalButtonSlider';
+import { DateRangePickerField } from '@/design-system/components/DateRangePickerField';
 import type { CarrierCode, ShipmentStatusCategory } from '@/components/shipping/ShipmentStatusBadge';
 
 const CARRIERS: ReadonlyArray<{ value: CarrierCode; label: string }> = [
@@ -27,96 +30,22 @@ const VALID_STATUS = new Set(STATUS_CATEGORIES.map((s) => s.value));
 
 type ShippedTypeFilter = 'all' | 'orders' | 'sku' | 'fba';
 
-const TONE = {
-  rose: {
-    active: 'bg-rose-600 text-white ring-rose-600',
-    inactive: 'bg-white text-rose-700 ring-rose-200 hover:bg-rose-50',
-    ring: 'focus:ring-rose-500/40',
-    iconActive: 'text-white',
-    iconInactive: 'text-rose-500',
-  },
-  amber: {
-    active: 'bg-amber-600 text-white ring-amber-600',
-    inactive: 'bg-white text-amber-800 ring-amber-200 hover:bg-amber-50',
-    ring: 'focus:ring-amber-500/40',
-    iconActive: 'text-white',
-    iconInactive: 'text-amber-500',
-  },
-  blue: {
-    active: 'bg-blue-600 text-white ring-blue-600',
-    inactive: 'bg-white text-blue-700 ring-blue-200 hover:bg-blue-50',
-    ring: 'focus:ring-blue-500/40',
-    iconActive: 'text-white',
-    iconInactive: 'text-blue-500',
-  },
-  orange: {
-    active: 'bg-orange-600 text-white ring-orange-600',
-    inactive: 'bg-white text-orange-800 ring-orange-200 hover:bg-orange-50',
-    ring: 'focus:ring-orange-500/40',
-    iconActive: 'text-white',
-    iconInactive: 'text-orange-500',
-  },
-  gray: {
-    active: 'bg-gray-700 text-white ring-gray-700',
-    inactive: 'bg-white text-gray-700 ring-gray-200 hover:bg-gray-50',
-    ring: 'focus:ring-gray-500/40',
-    iconActive: 'text-white',
-    iconInactive: 'text-gray-500',
-  },
-  slate: {
-    active: 'bg-slate-900 text-white ring-slate-900',
-    inactive: 'bg-white text-slate-700 ring-slate-200 hover:bg-slate-50',
-    ring: 'focus:ring-slate-500/40',
-    iconActive: 'text-white',
-    iconInactive: 'text-slate-500',
-  },
-} as const;
-
-type ToneKey = keyof typeof TONE;
-
-const TYPE_TILES: ReadonlyArray<{
-  value: ShippedTypeFilter;
-  label: string;
-  tone: ToneKey;
-  icon: React.FC<{ className?: string }>;
-  countKey: 'total' | 'orders_count' | 'sku_count' | 'fba_count';
-}> = [
-  { value: 'all',    label: 'All',    tone: 'slate',  icon: Layers,  countKey: 'total' },
-  { value: 'orders', label: 'Orders', tone: 'blue',   icon: Package, countKey: 'orders_count' },
-  { value: 'sku',    label: 'SKU',    tone: 'gray',   icon: Package, countKey: 'sku_count' },
-  { value: 'fba',    label: 'FBA',    tone: 'orange', icon: Package, countKey: 'fba_count' },
-];
-
-const STATUS_TILES: ReadonlyArray<{
-  value: ShipmentStatusCategory;
-  label: string;
-  tone: ToneKey;
-  icon: React.FC<{ className?: string }>;
-  countKey: keyof ShippedSummary;
-}> = [
-  { value: 'EXCEPTION',        label: 'Exception',        tone: 'rose',  icon: AlertTriangle, countKey: 'exception' },
-  { value: 'OUT_FOR_DELIVERY', label: 'Out for delivery', tone: 'amber', icon: Truck,         countKey: 'out_for_delivery' },
-  { value: 'IN_TRANSIT',       label: 'In transit',       tone: 'blue',  icon: Truck,         countKey: 'in_transit' },
-  { value: 'LABEL_CREATED',    label: 'Label created',    tone: 'gray',  icon: Package,       countKey: 'label_created' },
-  { value: 'ACCEPTED',         label: 'Accepted',         tone: 'gray',  icon: Package,       countKey: 'accepted' },
-  { value: 'DELIVERED',        label: 'Delivered',        tone: 'slate', icon: Package,       countKey: 'delivered' },
-  { value: 'RETURNED',         label: 'Returned',         tone: 'orange',icon: RotateCcw,     countKey: 'returned' },
-];
-
-interface ShippedSummary {
-  total: number;
-  orders_count: number;
-  fba_count: number;
-  sku_count: number;
-  needs_attention: number;
-  exception: number;
-  out_for_delivery: number;
-  in_transit: number;
-  label_created: number;
-  accepted: number;
-  delivered: number;
-  returned: number;
+interface StaffOption {
+  id: number;
+  name: string;
 }
+
+// Type filter is a *view switcher* (Shopify-style segmented tabs), not a refinement.
+const TYPE_ITEMS: HorizontalSliderItem[] = [
+  { id: 'all', label: 'All' },
+  { id: 'orders', label: 'Orders' },
+  { id: 'sku', label: 'SKU' },
+  { id: 'fba', label: 'FBA' },
+];
+
+const CARRIER_LABEL = new Map(CARRIERS.map((c) => [c.value, c.label]));
+const STATUS_LABEL = new Map(STATUS_CATEGORIES.map((s) => [s.value, s.label]));
+const TYPE_LABEL = new Map(TYPE_ITEMS.map((t) => [String(t.id), t.label]));
 
 export function readShippedCarrierFilter(searchParams: URLSearchParams | { get: (k: string) => string | null }): CarrierCode | null {
   const raw = String(searchParams.get('carrier') || '').toUpperCase();
@@ -139,6 +68,22 @@ function readShippedTypeFilter(searchParams: URLSearchParams | { get: (k: string
   return 'all';
 }
 
+function parseStaffId(raw: string | null): number | null {
+  const n = Number(raw);
+  return Number.isFinite(n) && n > 0 ? n : null;
+}
+
+function parseISODate(raw: string | null): Date | undefined {
+  if (!raw || !/^\d{4}-\d{2}-\d{2}$/.test(raw.trim())) return undefined;
+  const d = new Date(`${raw.trim()}T00:00:00`);
+  return Number.isFinite(d.getTime()) ? d : undefined;
+}
+
+function toISODate(d: Date | undefined): string | null {
+  if (!d) return null;
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
 export function ShippedCarrierFilters({
   className,
   basePath,
@@ -151,29 +96,70 @@ export function ShippedCarrierFilters({
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
-  const [statusOpen, setStatusOpen] = useState(false);
+  const [open, setOpen] = useState(false);
+  const popoverRef = useRef<HTMLDivElement>(null);
+
+  // Dismiss the popover on outside click / Escape. Clicks inside a portaled
+  // Radix popper (the date calendar) are NOT "outside" — ignore them.
+  useEffect(() => {
+    if (!open) return;
+    const onClick = (e: MouseEvent) => {
+      const target = e.target as HTMLElement;
+      if (popoverRef.current && !popoverRef.current.contains(target)) {
+        if (target.closest?.('[data-radix-popper-content-wrapper]')) return;
+        setOpen(false);
+      }
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setOpen(false);
+    };
+    document.addEventListener('mousedown', onClick);
+    document.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('mousedown', onClick);
+      document.removeEventListener('keydown', onKey);
+    };
+  }, [open]);
 
   const exceptionsOnly = readShippedExceptionsFilter(searchParams);
   const carrier = readShippedCarrierFilter(searchParams);
   const statusCategory = readShippedStatusFilter(searchParams);
   const typeFilter = readShippedTypeFilter(searchParams);
+  const testedBy = parseStaffId(searchParams.get('testedBy'));
+  const packedBy = parseStaffId(searchParams.get('packedBy'));
+  const dateFrom = parseISODate(searchParams.get('dateFrom'));
+  const dateTo = parseISODate(searchParams.get('dateTo'));
+  const dateRange: DateRange | undefined = dateFrom ? { from: dateFrom, to: dateTo } : undefined;
 
-  const { data: summary } = useQuery<ShippedSummary>({
-    queryKey: ['shipped-summary'],
+  // Staff lists for the tester / packer dropdowns.
+  const { data: techs = [] } = useQuery<StaffOption[]>({
+    queryKey: ['staff', 'technician'],
     queryFn: async () => {
-      const res = await fetch('/api/shipped/summary', { cache: 'no-store' });
-      if (!res.ok) throw new Error('summary fetch failed');
-      const data = await res.json();
-      return data as ShippedSummary;
+      const res = await fetch('/api/staff?role=technician&active=true');
+      if (!res.ok) throw new Error('staff fetch failed');
+      return res.json();
     },
-    refetchInterval: 60_000,
-    staleTime: 30_000,
+    staleTime: 10 * 60 * 1000,
   });
+  const { data: packers = [] } = useQuery<StaffOption[]>({
+    queryKey: ['staff', 'packer'],
+    queryFn: async () => {
+      const res = await fetch('/api/staff?role=packer&active=true');
+      if (!res.ok) throw new Error('staff fetch failed');
+      return res.json();
+    },
+    staleTime: 10 * 60 * 1000,
+  });
+
+  const techName = useMemo(() => new Map(techs.map((t) => [t.id, t.name])), [techs]);
+  const packerName = useMemo(() => new Map(packers.map((p) => [p.id, p.name])), [packers]);
 
   const replaceWith = useCallback(
     (mutator: (params: URLSearchParams) => void) => {
       const params = new URLSearchParams(searchParams.toString());
       mutator(params);
+      // Any filter/view change invalidates the current page index.
+      params.delete('shippedPage');
       const target = basePath || pathname || '/dashboard';
       const search = params.toString();
       router.replace(search ? `${target}?${search}` : target, { scroll: false });
@@ -188,59 +174,73 @@ export function ShippedCarrierFilters({
     });
   }, [exceptionsOnly, replaceWith]);
 
-  const setCarrier = useCallback(
-    (next: CarrierCode | null) => {
-      replaceWith((p) => {
-        if (next) p.set('carrier', next);
-        else p.delete('carrier');
-      });
-    },
-    [replaceWith],
-  );
+  const setCarrier = useCallback((next: CarrierCode | null) => {
+    replaceWith((p) => { next ? p.set('carrier', next) : p.delete('carrier'); });
+  }, [replaceWith]);
 
-  const setStatus = useCallback(
-    (next: ShipmentStatusCategory | null) => {
-      replaceWith((p) => {
-        if (next) p.set('statusCategory', next);
-        else p.delete('statusCategory');
-      });
-    },
-    [replaceWith],
-  );
+  const setStatus = useCallback((next: ShipmentStatusCategory | null) => {
+    replaceWith((p) => { next ? p.set('statusCategory', next) : p.delete('statusCategory'); });
+  }, [replaceWith]);
 
-  const setTypeFilter = useCallback(
-    (next: ShippedTypeFilter) => {
-      replaceWith((p) => {
-        if (next === 'all') p.delete('shippedFilter');
-        else p.set('shippedFilter', next);
-      });
-    },
-    [replaceWith],
-  );
+  const setTestedBy = useCallback((next: number | null) => {
+    replaceWith((p) => { next ? p.set('testedBy', String(next)) : p.delete('testedBy'); });
+  }, [replaceWith]);
 
-  const clearAll = useCallback(() => {
+  const setPackedBy = useCallback((next: number | null) => {
+    replaceWith((p) => { next ? p.set('packedBy', String(next)) : p.delete('packedBy'); });
+  }, [replaceWith]);
+
+  const setDateRange = useCallback((next: DateRange | undefined) => {
     replaceWith((p) => {
-      p.delete('exceptions');
-      p.delete('carrier');
-      p.delete('statusCategory');
-      p.delete('shippedFilter');
+      const from = toISODate(next?.from);
+      const to = toISODate(next?.to ?? next?.from);
+      from ? p.set('dateFrom', from) : p.delete('dateFrom');
+      to ? p.set('dateTo', to) : p.delete('dateTo');
     });
   }, [replaceWith]);
 
-  const anyFilter = exceptionsOnly || carrier || statusCategory || typeFilter !== 'all';
+  const setTypeFilter = useCallback((next: ShippedTypeFilter) => {
+    replaceWith((p) => { next === 'all' ? p.delete('shippedFilter') : p.set('shippedFilter', next); });
+  }, [replaceWith]);
 
+  const clearAll = useCallback(() => {
+    replaceWith((p) => {
+      ['exceptions', 'carrier', 'statusCategory', 'testedBy', 'packedBy', 'dateFrom', 'dateTo'].forEach((k) => p.delete(k));
+    });
+  }, [replaceWith]);
+
+  // Active refinements — Type now lives in the popover, so it counts too.
+  const activeCount =
+    (typeFilter !== 'all' ? 1 : 0) +
+    (exceptionsOnly ? 1 : 0) + (carrier ? 1 : 0) + (statusCategory ? 1 : 0) +
+    (testedBy ? 1 : 0) + (packedBy ? 1 : 0) + (dateFrom ? 1 : 0);
+
+  const chips = useMemo(() => {
+    const out: Array<{ key: string; label: string; onRemove: () => void }> = [];
+    if (typeFilter !== 'all') out.push({ key: 'type', label: TYPE_LABEL.get(typeFilter) ?? typeFilter, onRemove: () => setTypeFilter('all') });
+    if (exceptionsOnly) out.push({ key: 'ex', label: 'Needs attention', onRemove: toggleExceptions });
+    if (carrier) out.push({ key: 'carrier', label: CARRIER_LABEL.get(carrier) ?? carrier, onRemove: () => setCarrier(null) });
+    if (statusCategory) out.push({ key: 'status', label: STATUS_LABEL.get(statusCategory) ?? statusCategory, onRemove: () => setStatus(null) });
+    if (testedBy) out.push({ key: 'tester', label: `Tech: ${techName.get(testedBy) ?? `#${testedBy}`}`, onRemove: () => setTestedBy(null) });
+    if (packedBy) out.push({ key: 'packer', label: `Packer: ${packerName.get(packedBy) ?? `#${packedBy}`}`, onRemove: () => setPackedBy(null) });
+    if (dateFrom) {
+      const label = dateTo && toISODate(dateTo) !== toISODate(dateFrom)
+        ? `${toISODate(dateFrom)} → ${toISODate(dateTo)}`
+        : `${toISODate(dateFrom)}`;
+      out.push({ key: 'date', label, onRemove: () => setDateRange(undefined) });
+    }
+    return out;
+  }, [typeFilter, exceptionsOnly, carrier, statusCategory, testedBy, packedBy, dateFrom, dateTo, techName, packerName, toggleExceptions, setCarrier, setStatus, setTestedBy, setPackedBy, setDateRange, setTypeFilter]);
+
+  // Legacy inline layout (deprecated toolbar) — left untouched.
   if (layout === 'inline') {
     return (
       <div className={`flex flex-wrap items-center gap-2 ${className ?? ''}`}>
         <NeedsAttentionButton active={exceptionsOnly} onClick={toggleExceptions} compact />
         <CarrierSelect value={carrier} onChange={setCarrier} />
         <StatusSelect value={statusCategory} onChange={setStatus} />
-        {anyFilter ? (
-          <button
-            type="button"
-            onClick={clearAll}
-            className="text-xs font-bold text-gray-500 underline-offset-2 hover:text-gray-900 hover:underline"
-          >
+        {activeCount > 0 ? (
+          <button type="button" onClick={clearAll} className="text-xs font-bold text-gray-500 underline-offset-2 hover:text-gray-900 hover:underline">
             Clear
           </button>
         ) : null}
@@ -248,122 +248,138 @@ export function ShippedCarrierFilters({
     );
   }
 
+  const selectClass =
+    'h-9 w-full cursor-pointer appearance-none rounded-md border border-gray-200 bg-white pl-2.5 pr-7 text-caption font-semibold text-gray-900 hover:border-blue-300 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20';
+  const labelClass = 'mb-1 block text-eyebrow font-black uppercase tracking-wider text-gray-500';
+
   return (
-    <div className={`space-y-1.5 ${className ?? ''}`}>
-      {/* Type filter tiles — replaces the removed ALL/ORDERS/SKU/FBA pill row */}
-      <div className="space-y-1">
-        {TYPE_TILES.map((tile) => {
-          const active = typeFilter === tile.value;
-          const tone = TONE[tile.tone];
-          const Icon = tile.icon;
-          const count = summary ? summary[tile.countKey] : null;
-          return (
-            <button
-              key={tile.value}
-              type="button"
-              onClick={() => setTypeFilter(active && tile.value !== 'all' ? 'all' : tile.value)}
-              aria-pressed={active}
-              className={`flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-label font-bold ring-1 ring-inset transition-colors focus:outline-none focus:ring-2 ${
-                active ? tone.active : tone.inactive
-              } ${tone.ring}`}
-            >
-              <Icon className={`h-4 w-4 shrink-0 ${active ? tone.iconActive : tone.iconInactive}`} />
-              <span className="flex-1 truncate">{tile.label}</span>
-              <span className="ml-1 tabular-nums text-caption font-black">
-                {count == null ? '—' : count.toLocaleString()}
-              </span>
-            </button>
-          );
-        })}
-      </div>
-
-      {/* Needs attention tile */}
-      <button
-        type="button"
-        onClick={toggleExceptions}
-        aria-pressed={exceptionsOnly}
-        title="Show only shipments with a carrier exception or no scan in >72h"
-        className={`flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-label font-bold ring-1 ring-inset transition-colors focus:outline-none focus:ring-2 ${
-          exceptionsOnly ? TONE.rose.active : TONE.rose.inactive
-        } ${TONE.rose.ring}`}
-      >
-        <AlertTriangle className={`h-4 w-4 shrink-0 ${exceptionsOnly ? TONE.rose.iconActive : TONE.rose.iconInactive}`} />
-        <span className="flex-1 truncate">Needs attention</span>
-        <span className="ml-1 tabular-nums text-caption font-black">
-          {summary == null ? '—' : summary.needs_attention.toLocaleString()}
-        </span>
-      </button>
-
-      {/* Carrier select */}
-      <label className="flex items-center justify-between gap-2 text-eyebrow font-black uppercase tracking-wider text-gray-500">
-        <span className="shrink-0">Carrier</span>
-        <div className="relative flex-1">
-          <select
-            value={carrier ?? ''}
-            onChange={(e) => setCarrier((e.target.value || null) as CarrierCode | null)}
-            className="h-8 w-full cursor-pointer appearance-none rounded-md border border-gray-200 bg-white pl-2 pr-7 text-caption font-semibold text-gray-900 hover:border-blue-300 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
-            aria-label="Filter by carrier"
-          >
-            <option value="">All carriers</option>
-            {CARRIERS.map((c) => (
-              <option key={c.value} value={c.value}>{c.label}</option>
-            ))}
-          </select>
-          <ChevronDown className="pointer-events-none absolute right-1.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-gray-400" />
-        </div>
-      </label>
-
-      {/* Status — collapsible section */}
-      <div>
+    <div className={`space-y-2 ${className ?? ''}`}>
+      {/* Single filter entry point — Type (All/Orders/SKU/FBA) lives inside the
+          popover alongside every other refinement (Shopify / Linear pattern). */}
+      <div className="relative" ref={popoverRef}>
         <button
           type="button"
-          onClick={() => setStatusOpen((o) => !o)}
-          className="flex w-full items-center justify-between gap-1 py-1 text-eyebrow font-black uppercase tracking-wider text-gray-500 hover:text-gray-800"
-          aria-expanded={statusOpen}
+          onClick={() => setOpen((o) => !o)}
+          aria-expanded={open}
+          aria-haspopup="dialog"
+          className={`flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-label font-bold ring-1 ring-inset transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500/40 ${
+            activeCount > 0
+              ? 'bg-blue-50 text-blue-700 ring-blue-200 hover:bg-blue-100'
+              : 'bg-white text-gray-700 ring-gray-200 hover:bg-gray-50'
+          }`}
         >
-          <span>Carrier status</span>
-          <ChevronDown
-            className={`h-3.5 w-3.5 transition-transform duration-150 ${statusOpen ? 'rotate-180' : ''}`}
-          />
+          <Filter className="h-4 w-4 shrink-0" />
+          <span className="flex-1 text-left">Filters</span>
+          {activeCount > 0 ? (
+            <span className="inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-blue-600 px-1.5 text-mini font-black text-white">
+              {activeCount}
+            </span>
+          ) : null}
+          <ChevronDown className={`h-3.5 w-3.5 shrink-0 transition-transform ${open ? 'rotate-180' : ''}`} />
         </button>
 
-        {statusOpen ? (
-          <div className="mt-1 space-y-1">
-            {STATUS_TILES.map((tile) => {
-              const active = statusCategory === tile.value;
-              const tone = TONE[tile.tone];
-              const Icon = tile.icon;
-              const count = summary ? (summary[tile.countKey] as number) : null;
-              return (
-                <button
-                  key={tile.value}
-                  type="button"
-                  onClick={() => setStatus(active ? null : tile.value)}
-                  aria-pressed={active}
-                  className={`flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-label font-bold ring-1 ring-inset transition-colors focus:outline-none focus:ring-2 ${
-                    active ? tone.active : tone.inactive
-                  } ${tone.ring}`}
+        {open ? (
+          <div
+            role="dialog"
+            aria-label="Shipment filters"
+            className="absolute left-0 right-0 top-full z-[60] mt-1 space-y-3 rounded-xl border border-gray-200 bg-white p-3 shadow-xl ring-1 ring-black/5"
+          >
+            <NeedsAttentionButton active={exceptionsOnly} onClick={toggleExceptions} />
+
+            <label className="block">
+              <span className={labelClass}>Type</span>
+              <div className="relative">
+                <select
+                  value={typeFilter}
+                  onChange={(e) => setTypeFilter(e.target.value as ShippedTypeFilter)}
+                  className={selectClass}
+                  aria-label="Shipped type filter"
                 >
-                  <Icon className={`h-4 w-4 shrink-0 ${active ? tone.iconActive : tone.iconInactive}`} />
-                  <span className="flex-1 truncate">{tile.label}</span>
-                  <span className="ml-1 tabular-nums text-caption font-black">
-                    {count == null ? '—' : count.toLocaleString()}
-                  </span>
-                </button>
-              );
-            })}
+                  {TYPE_ITEMS.map((t) => (
+                    <option key={t.id} value={String(t.id)}>{t.label}</option>
+                  ))}
+                </select>
+                <ChevronDown className="pointer-events-none absolute right-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-gray-400" />
+              </div>
+            </label>
+
+            <div>
+              <span className={labelClass}>Packed date</span>
+              <DateRangePickerField
+                value={dateRange}
+                onChange={setDateRange}
+                placeholder="Any date"
+              />
+            </div>
+
+            <label className="block">
+              <span className={labelClass}>Carrier</span>
+              <div className="relative">
+                <select value={carrier ?? ''} onChange={(e) => setCarrier((e.target.value || null) as CarrierCode | null)} className={selectClass} aria-label="Filter by carrier">
+                  <option value="">All carriers</option>
+                  {CARRIERS.map((c) => <option key={c.value} value={c.value}>{c.label}</option>)}
+                </select>
+                <ChevronDown className="pointer-events-none absolute right-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-gray-400" />
+              </div>
+            </label>
+
+            <label className="block">
+              <span className={labelClass}>Carrier status</span>
+              <div className="relative">
+                <select value={statusCategory ?? ''} onChange={(e) => setStatus((e.target.value || null) as ShipmentStatusCategory | null)} className={selectClass} aria-label="Filter by shipment status">
+                  <option value="">All statuses</option>
+                  {STATUS_CATEGORIES.map((s) => <option key={s.value} value={s.value}>{s.label}</option>)}
+                </select>
+                <ChevronDown className="pointer-events-none absolute right-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-gray-400" />
+              </div>
+            </label>
+
+            <label className="block">
+              <span className={labelClass}>Tested by</span>
+              <div className="relative">
+                <select value={testedBy ?? ''} onChange={(e) => setTestedBy(e.target.value ? Number(e.target.value) : null)} className={selectClass} aria-label="Filter by tester">
+                  <option value="">Any tech</option>
+                  {techs.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
+                </select>
+                <ChevronDown className="pointer-events-none absolute right-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-gray-400" />
+              </div>
+            </label>
+
+            <label className="block">
+              <span className={labelClass}>Packed by</span>
+              <div className="relative">
+                <select value={packedBy ?? ''} onChange={(e) => setPackedBy(e.target.value ? Number(e.target.value) : null)} className={selectClass} aria-label="Filter by packer">
+                  <option value="">Any packer</option>
+                  {packers.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+                </select>
+                <ChevronDown className="pointer-events-none absolute right-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-gray-400" />
+              </div>
+            </label>
+
+            {activeCount > 0 ? (
+              <button type="button" onClick={clearAll} className="w-full text-center text-xs font-bold text-gray-500 underline-offset-2 hover:text-gray-900 hover:underline">
+                Clear filters
+              </button>
+            ) : null}
           </div>
         ) : null}
       </div>
 
-      {anyFilter ? (
-        <button
-          type="button"
-          onClick={clearAll}
-          className="w-full text-center text-xs font-bold text-gray-500 underline-offset-2 hover:text-gray-900 hover:underline"
-        >
-          Clear filters
-        </button>
+      {/* Active filter chips */}
+      {chips.length > 0 ? (
+        <div className="flex flex-wrap items-center gap-1.5">
+          {chips.map((chip) => (
+            <button
+              key={chip.key}
+              type="button"
+              onClick={chip.onRemove}
+              className="inline-flex items-center gap-1 rounded-full bg-blue-50 py-0.5 pl-2.5 pr-1.5 text-caption font-bold text-blue-700 ring-1 ring-inset ring-blue-200 transition-colors hover:bg-blue-100"
+            >
+              {chip.label}
+              <X className="h-3 w-3" />
+            </button>
+          ))}
+        </div>
       ) : null}
     </div>
   );

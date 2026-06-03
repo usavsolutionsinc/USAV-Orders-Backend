@@ -18,10 +18,11 @@
  */
 
 import { useRef, useState } from 'react';
-import { Layers, Layout, Database, Zap, Bell, Sparkles, Search, List } from '@/components/Icons';
+import { Layers, Layout, Database, Zap, Bell, Sparkles, Search, List, SlidersHorizontal, Wrench } from '@/components/Icons';
 import {
   ButtonsSection,
   SegmentedTabsSection,
+  SubPageNavSection,
   InputsSection,
   DataTableSection,
   OverlaysSection,
@@ -31,6 +32,7 @@ import {
   cx,
   type Density,
 } from './_gallery/sections';
+import { TestingRailSection } from './_gallery/testing-rail-section';
 
 type SectionDef = {
   id: string;
@@ -44,6 +46,8 @@ type SectionDef = {
 const SECTIONS: SectionDef[] = [
   { id: 'buttons', index: '01', label: 'Buttons & actions', icon: Zap, blurb: 'A single Button primitive with spring-press feedback, async loading, and brand gradient — replacing the ad-hoc <button> markup repeated across sidebars and forms.', render: () => <ButtonsSection /> },
   { id: 'tabs', index: '02', label: 'Segmented tabs', icon: Layout, blurb: 'The TabSwitch hard-rule component upgraded with a Framer layoutId sliding indicator — the active pill glides between tabs instead of snapping.', render: () => <SegmentedTabsSection /> },
+  { id: 'subnav', index: '2b', label: 'Sub-page nav', icon: SlidersHorizontal, blurb: 'How to expose sub-pages inside one section (Products → Manuals / Labels / Pairing) on a mobile-first rail. Four industry-standard variants — underline strip, segmented control, two-axis tabs+chips, single-row pills — plus the two-identical-rows anti-pattern from the current screenshot, for contrast.', render: () => <SubPageNavSection /> },
+  { id: 'testing-rail', index: '2c', label: 'Testing recent rail', icon: Wrench, blurb: 'The forked, testing-specific “YOU TESTED” recent rail with corrected selection semantics: selecting a line highlights it in place instead of hoisting it to the top, and a line only rises when its testing state actually changes (a verdict is recorded). Click rows, hover Pass/Fail to record, and toggle the old hoist-on-select bug to feel the difference. Two off-window display variants: highlight-in-place vs a separate now-testing pin.', render: (d) => <TestingRailSection density={d} /> },
   { id: 'inputs', index: '03', label: 'Inputs', icon: Search, blurb: 'Floating-label fields, a clearable search input, and a spring toggle — consolidating the inconsistent form styling between sidebar and admin forms.', render: () => <InputsSection /> },
   { id: 'data', index: '04', label: 'Data display', icon: Database, blurb: 'A DataTable family (selection, status pills, density-aware rows) to retire the ~6 hand-rolled tables, plus stat cards with animated counters and sparklines.', render: (d) => <DataTableSection density={d} /> },
   { id: 'overlays', index: '05', label: 'Overlays', icon: Layers, blurb: 'The biggest gap: a real Dialog primitive (replacing every fixed inset-0 z-[80] copy), a surfaced ⌘K command palette, Popover, and Tooltip.', render: () => <OverlaysSection /> },

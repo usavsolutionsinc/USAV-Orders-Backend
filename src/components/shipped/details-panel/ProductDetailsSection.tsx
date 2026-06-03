@@ -6,7 +6,6 @@ import { useOrderAssignment } from '@/hooks';
 import { useSkuIdentity } from '@/hooks/useSkuIdentity';
 import { CopyableValueFieldBlock } from '@/components/shipped/details-panel/blocks/CopyableValueFieldBlock';
 import { ContextualManualLinkRow } from '@/components/shipped/details-panel/blocks/ContextualManualLinkRow';
-import { DetailsPanelRow } from '@/design-system/components/DetailsPanelRow';
 import { ConditionPills } from '@/components/receiving/workspace/ConditionPills';
 import { FnskuCatalogInfoPanel } from '@/components/fba/FnskuCatalogInfoPanel';
 import { getFnskuCatalogValue, isFnskuCatalogContext } from '@/utils/fnsku-catalog';
@@ -242,14 +241,14 @@ export function ProductDetailsSection({
             valueClassName="font-dm-sans"
           />
 
-          <DetailsPanelRow
-            label="Condition"
-            actions={isSavingCondition ? (
-              <span className="text-micro font-black uppercase tracking-wide text-blue-600">Saving</span>
+          <div className="border-b border-gray-100 py-3">
+            {isSavingCondition ? (
+              <div className="mb-1 flex justify-end">
+                <span className="text-micro font-black uppercase tracking-wide text-blue-600">Saving</span>
+              </div>
             ) : null}
-          >
             <ConditionPills value={conditionValue} onChange={handleConditionChange} />
-          </DetailsPanelRow>
+          </div>
 
           {itemNumberRow}
 

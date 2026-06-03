@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
-import { Loader2 } from '@/components/Icons';
+import { ChevronLeft, ChevronRight, Loader2 } from '@/components/Icons';
 import { MobileDateGroupHeader } from '@/components/mobile/MobileDateGroupHeader';
 import { DateGroupHeader } from '@/components/shipped/DateGroupHeader';
 import { sectionLabel, fieldLabel } from '@/design-system/tokens/typography/presets';
@@ -25,7 +25,6 @@ import {
   readShippedExceptionsFilter,
   readShippedStatusFilter,
 } from '@/components/shipping/ShippedFilterToolbar';
-import WeekHeader from '@/components/ui/WeekHeader';
 import { formatDateWithOrdinal, getCurrentPSTDateKey, toPSTDateKey } from '@/utils/date';
 import { ShippedOrder } from '@/lib/neon/orders-queries';
 import { fetchDashboardPackedRecords } from '@/lib/dashboard-table-data';
@@ -131,18 +130,40 @@ export function DashboardShippedTable({
   const weekRange = getWeekRangeForOffset(weekOffset);
   const formatDate = useCallback((dateStr: string) => formatDateWithOrdinal(dateStr), []);
 
-  // Read carrier/status/exception filters early so we can bypass the week scope when any is active.
+  // Read refinements early so we can broaden the query scope when any is active.
   const exceptionsOnly = readShippedExceptionsFilter(searchParams);
   const carrierFilter = readShippedCarrierFilter(searchParams);
   const statusFilter = readShippedStatusFilter(searchParams);
-  const anyCarrierFilter = exceptionsOnly || !!carrierFilter || !!statusFilter;
 
-  // When a filter is active, drop the week constraint so the full recent dataset
-  // is visible — not just this week's packer_logs slice.
-  const effectiveWeekStart = anyCarrierFilter ? '' : weekRange.startStr;
-  const effectiveWeekEnd   = anyCarrierFilter ? '' : weekRange.endStr;
+  // Packer / tester come from props (tech & packer pages) OR the URL (dashboard
+  // sidebar filter). An explicit prop wins when both are present.
+  const parseStaffParam = (raw: string | null): number | undefined => {
+    const n = Number(raw);
+    return Number.isFinite(n) && n > 0 ? n : undefined;
+  };
+  const effPackedBy = packedBy ?? parseStaffParam(searchParams.get('packedBy'));
+  const effTestedBy = testedBy ?? parseStaffParam(searchParams.get('testedBy'));
 
-  const queryKey = ['dashboard-table', 'shipped', { weekStart: effectiveWeekStart, weekEnd: effectiveWeekEnd, packedBy, testedBy, shippedFilter }] as const;
+  // Explicit date range (sidebar filter) overrides week-by-week browsing.
+  const dateFrom = (searchParams.get('dateFrom') || '').trim();
+  const dateTo = (searchParams.get('dateTo') || '').trim();
+  const hasDateRange =
+    /^\d{4}-\d{2}-\d{2}$/.test(dateFrom) && /^\d{4}-\d{2}-\d{2}$/.test(dateTo);
+
+  const anyRefinement =
+    exceptionsOnly || !!carrierFilter || !!statusFilter ||
+    effPackedBy != null || effTestedBy != null || hasDateRange;
+
+  // The shipped browse is paginated (50/page across all time, newest first)
+  // instead of week-by-week — so FBA and older orders aren't hidden behind a
+  // week window. A date-range filter scopes the set; pagination still applies.
+  const PAGE_SIZE = 50;
+  const page = Math.max(1, Number.parseInt(searchParams.get('shippedPage') || '1', 10) || 1);
+  const offset = (page - 1) * PAGE_SIZE;
+  const effectiveWeekStart = hasDateRange ? dateFrom : '';
+  const effectiveWeekEnd   = hasDateRange ? dateTo : '';
+
+  const queryKey = ['dashboard-table', 'shipped', { weekStart: effectiveWeekStart, weekEnd: effectiveWeekEnd, packedBy: effPackedBy, testedBy: effTestedBy, shippedFilter, page }] as const;
 
   const search = searchParams.get('search') || '';
   const normalizedSearch = search.trim().toLowerCase();
@@ -151,11 +172,14 @@ export function DashboardShippedTable({
     queryKey,
     queryFn: () =>
       fetchDashboardPackedRecords({
-        packedBy,
-        testedBy,
+        packedBy: effPackedBy,
+        testedBy: effTestedBy,
         weekStart: effectiveWeekStart,
         weekEnd: effectiveWeekEnd,
         shippedFilter,
+        // Fetch one extra row to detect whether a next page exists.
+        limit: PAGE_SIZE + 1,
+        offset,
       }),
     // When a search is active, packer_logs is bypassed and we drive
     // from /api/shipped via the universal `useShippedSearch` hook — same TanStack
@@ -172,8 +196,8 @@ export function DashboardShippedTable({
     query: search,
     shippedFilter,
     searchField: shippedSearchField,
-    packedBy,
-    testedBy,
+    packedBy: effPackedBy,
+    testedBy: effTestedBy,
   });
 
   useEffect(() => {
@@ -214,10 +238,10 @@ export function DashboardShippedTable({
     };
   }, []);
 
-  const setWeekOffsetInUrl = (nextOffset: number) => {
+  const setPageInUrl = (nextPage: number) => {
     const params = new URLSearchParams(searchParams.toString());
-    if (nextOffset <= 0) params.delete('shippedWeekOffset');
-    else params.set('shippedWeekOffset', String(nextOffset));
+    if (nextPage <= 1) params.delete('shippedPage');
+    else params.set('shippedPage', String(nextPage));
     const nextSearch = params.toString();
     const nextPath = pathname || '/dashboard';
     router.replace(nextSearch ? `${nextPath}?${nextSearch}` : nextPath, { scroll: false });
@@ -231,7 +255,13 @@ export function DashboardShippedTable({
     router.replace(nextSearch ? `${nextPath}?${nextSearch}` : nextPath, { scroll: false });
   };
 
-  const rawRecords = useMemo(() => query.data || [], [query.data]);
+  // We fetch PAGE_SIZE+1 rows; the extra row only signals "has next page".
+  const pageData = useMemo(() => query.data || [], [query.data]);
+  const hasNextPage = pageData.length > PAGE_SIZE;
+  const rawRecords = useMemo(
+    () => (hasNextPage ? pageData.slice(0, PAGE_SIZE) : pageData),
+    [pageData, hasNextPage],
+  );
 
   const toDetailRecord = useCallback((record: PackerRecord): ShippedOrder => ({
     id: record.order_row_id || record.id,
@@ -578,8 +608,8 @@ export function DashboardShippedTable({
                 </div>
               </div>
             </div>
-          ) : anyCarrierFilter ? (
-            // Filter active — hide week nav, show a plain count header instead
+          ) : normalizedSearch ? (
+            // Search active — show a plain result count, no pagination.
             <div className={mainStickyHeaderClass}>
               <div className={mainStickyHeaderRowClass}>
                 <p className={`${sectionLabel} text-gray-700`}>
@@ -591,15 +621,43 @@ export function DashboardShippedTable({
               </div>
             </div>
           ) : (
-            <WeekHeader
-              stickyDate={stickyDate}
-              fallbackDate={fallbackDate}
-              count={currentCount || totalCount}
-              weekRange={weekRange}
-              weekOffset={weekOffset}
-              onPrevWeek={() => setWeekOffsetInUrl(weekOffset + 1)}
-              onNextWeek={() => setWeekOffsetInUrl(Math.max(0, weekOffset - 1))}
-            />
+            // Browse — 50/page pagination (newest first, across all time).
+            <div className={mainStickyHeaderClass}>
+              <div className={`${mainStickyHeaderRowClass} justify-between`}>
+                <p className={`${sectionLabel} text-gray-700 tabular-nums`}>
+                  {totalCount === 0
+                    ? 'No results'
+                    : `${offset + 1}–${offset + totalCount}`}
+                  {anyRefinement ? ' · filtered' : ''}
+                </p>
+                <div className="flex items-center gap-1">
+                  {(query.isFetching && !query.isLoading) ? (
+                    <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin text-blue-500" />
+                  ) : null}
+                  <button
+                    type="button"
+                    onClick={() => setPageInUrl(page - 1)}
+                    disabled={page <= 1}
+                    aria-label="Previous page"
+                    className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-gray-200 bg-white text-gray-600 transition-colors hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-40"
+                  >
+                    <ChevronLeft className="h-4 w-4" />
+                  </button>
+                  <span className="px-1 text-caption font-bold tabular-nums text-gray-600">
+                    Page {page}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setPageInUrl(page + 1)}
+                    disabled={!hasNextPage}
+                    aria-label="Next page"
+                    className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-gray-200 bg-white text-gray-600 transition-colors hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-40"
+                  >
+                    <ChevronRight className="h-4 w-4" />
+                  </button>
+                </div>
+              </div>
+            </div>
           )}
 
           <div ref={scrollRef} className="flex-1 min-h-0 overflow-x-auto overflow-y-auto no-scrollbar w-full">

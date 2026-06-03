@@ -1,12 +1,12 @@
 'use client';
 
 import Link from 'next/link';
+import { Settings } from '@/components/Icons';
 import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { qk } from '@/queries/keys';
 import { ActionsSection } from './ActionsSection';
-import { CommonPagesBar } from './CommonPagesBar';
 import { DesktopAppInstallBanner } from './DesktopAppInstallBanner';
 import { PinnedSection } from './PinnedSection';
 import { RecentSection } from './RecentSection';
@@ -81,8 +81,6 @@ export function QuickAccessPopover({ onClose, onOpenHistoryPopover, onOpenInboxP
       aria-label="Quick access"
       className="flex max-h-[calc(100vh-6rem)] w-[340px] flex-col overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-xl"
     >
-      <CommonPagesBar onNavigate={onClose} />
-
       <div className="min-h-0 flex-1 divide-y divide-gray-100 overflow-y-auto overscroll-contain">
         <ActionsSection
           actions={settings.actions}
@@ -113,6 +111,15 @@ export function QuickAccessPopover({ onClose, onOpenHistoryPopover, onOpenInboxP
             <div className="truncate text-sm font-semibold text-gray-900">{staffName || `Staff #${user.staffId}`}</div>
             <div className="truncate text-micro font-medium uppercase tracking-[0.14em] text-gray-500">{user.role.replace(/_/g, ' ')}</div>
           </div>
+          <Link
+            href="/settings?section=quick-access"
+            onClick={onClose}
+            className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-gray-400 transition hover:bg-white hover:text-gray-900"
+            aria-label="Manage in Settings"
+            title="Manage in Settings"
+          >
+            <Settings className="h-3.5 w-3.5" />
+          </Link>
           <button
             type="button"
             onClick={() => { void signOut(); }}
@@ -133,16 +140,6 @@ export function QuickAccessPopover({ onClose, onOpenHistoryPopover, onOpenInboxP
           <span className="text-caption text-gray-500">Pick a staff →</span>
         </button>
       )}
-
-      <footer className="shrink-0 border-t border-gray-100 bg-gray-50 px-4 py-2">
-        <Link
-          href="/settings?section=quick-access"
-          onClick={onClose}
-          className="text-caption font-semibold text-gray-600 hover:text-gray-900"
-        >
-          Manage in Settings →
-        </Link>
-      </footer>
     </div>
   );
 }

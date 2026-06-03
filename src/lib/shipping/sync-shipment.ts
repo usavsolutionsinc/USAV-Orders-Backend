@@ -97,7 +97,13 @@ export async function syncShipment(input: SyncShipmentInput): Promise<SyncShipme
     );
 
     await updateShipmentSummary(shipment.id, result);
-    await publishShipmentStatusChange(shipment.id, 'shipping-sync');
+    // Only notify clients when the poll actually surfaced new carrier events —
+    // otherwise every 2-hour sweep would publish a no-op realtime message per
+    // shipment and trigger needless client refetches. Webhook pushes are the
+    // real-time path; this poll is the fallback that fires on genuine movement.
+    if (inserted > 0) {
+      await publishShipmentStatusChange(shipment.id, 'shipping-sync', shipment.tracking_number_normalized);
+    }
 
     return {
       ok: true,

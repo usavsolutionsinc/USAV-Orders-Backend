@@ -5,6 +5,7 @@ import { sectionLabel } from '@/design-system/tokens/typography/presets';
 import { RefreshCw } from '@/components/Icons';
 import { useAiChat } from '@/components/ai/useAiChat';
 import AiChatConversation from '@/components/ai/AiChatConversation';
+import { SIDEBAR_GUTTER } from '@/components/layout/header-shell';
 
 /**
  * Contextual sidebar for /ai-chat: a full streaming AI chat docked in the
@@ -25,7 +26,7 @@ export function AiChatSidebarPanel() {
 
   return (
     <div className="flex h-full min-h-0 flex-col bg-white">
-      <div className="flex shrink-0 items-center justify-between border-b border-gray-100 px-3 py-2.5">
+      <div className={`flex shrink-0 items-center justify-between border-b border-gray-100 ${SIDEBAR_GUTTER} py-2.5`}>
         <p className={`${sectionLabel} text-blue-600`}>AI Chat</p>
         <button
           type="button"

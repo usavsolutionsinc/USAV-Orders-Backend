@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
+import { Trash2 } from '@/components/Icons';
 import { useDeleteOrderRow } from '@/hooks';
 
 interface DeleteOrderControlProps {
@@ -72,9 +73,10 @@ export function DeleteOrderControl({
       type="button"
       onClick={handleDelete}
       disabled={deleteOrderMutation.isPending}
-      className="w-full h-10 inline-flex items-center justify-center rounded-xl bg-red-600 hover:bg-red-700 text-white text-micro font-black uppercase tracking-wider disabled:opacity-50"
+      className="w-full h-10 inline-flex items-center justify-center gap-2 rounded-xl bg-red-600 hover:bg-red-700 text-white text-micro font-black uppercase tracking-wider disabled:opacity-50"
     >
-      {deleteOrderMutation.isPending ? 'Deleting...' : isDeleteArmed ? 'Click Again To Confirm' : 'Delete Permanently'}
+      <Trash2 className="w-3.5 h-3.5" />
+      {deleteOrderMutation.isPending ? 'Deleting...' : isDeleteArmed ? 'Click Again To Confirm' : 'Delete'}
     </button>
   );
 }

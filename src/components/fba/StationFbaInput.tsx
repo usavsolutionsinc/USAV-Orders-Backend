@@ -42,6 +42,38 @@ interface FnskuSelectResult {
   title?: string;
 }
 
+/**
+ * Themed focus ring on the scan input — copied verbatim from the receiving /
+ * testing sidebars (`focusRingClass`) so the FBA scan bar reads as the same
+ * station component, just wired to FBA's API. Keyed by {@link StationTheme}.
+ */
+const FBA_SCAN_FOCUS_RING: Record<StationTheme, string> = {
+  green: 'focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-500',
+  blue: 'focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500',
+  purple: 'focus:ring-4 focus:ring-purple-500/10 focus:border-purple-500',
+  yellow: 'focus:ring-4 focus:ring-amber-500/10 focus:border-amber-500',
+  black: 'focus:ring-4 focus:ring-slate-700/10 focus:border-slate-700',
+  red: 'focus:ring-4 focus:ring-red-500/10 focus:border-red-500',
+  lightblue: 'focus:ring-4 focus:ring-sky-500/10 focus:border-sky-500',
+  pink: 'focus:ring-4 focus:ring-pink-500/10 focus:border-pink-500',
+};
+
+/**
+ * Soft centered staff-tint halo behind the scan input — same gradient family
+ * as the receiving sidebar's `bandHaloClass`, so the band feels light/airy
+ * instead of a flat-fill block. Keyed by {@link StationTheme}.
+ */
+const FBA_SCAN_BAND_HALO: Record<StationTheme, string> = {
+  green: 'bg-gradient-to-r from-white via-emerald-50 to-white',
+  blue: 'bg-gradient-to-r from-white via-blue-50 to-white',
+  purple: 'bg-gradient-to-r from-white via-purple-50 to-white',
+  yellow: 'bg-gradient-to-r from-white via-amber-50 to-white',
+  black: 'bg-gradient-to-r from-white via-slate-50 to-white',
+  red: 'bg-gradient-to-r from-white via-red-50 to-white',
+  lightblue: 'bg-gradient-to-r from-white via-sky-50 to-white',
+  pink: 'bg-gradient-to-r from-white via-pink-50 to-white',
+};
+
 
 
 export interface StationFbaInputProps {
@@ -959,6 +991,9 @@ export default function StationFbaInput({
         initial={{ opacity: 0, x: -20 }}
         animate={{ opacity: 1, x: 0 }}
         transition={{ type: 'spring', damping: 25, stiffness: 120 }}
+        // Soft staff-tint halo band \u2014 matches the receiving/testing sidebars so
+        // the FBA scan bar presents as the same station component.
+        className={fbaScanOnly ? `rounded-xl px-1.5 py-1 ${FBA_SCAN_BAND_HALO[stationTheme]}` : undefined}
       >
         <StationScanBar
           value={inputValue}
@@ -972,16 +1007,19 @@ export default function StationFbaInput({
           onPaste={fbaScanOnly ? handleInputChange : undefined}
           icon={
             <Package
-              className={`h-4 w-4 ${fbaScanOnly ? workspaceChrome.fnskuScanIconClass : 'text-violet-600'}`}
+              className={`${fbaScanOnly ? 'h-[17px] w-[17px]' : 'h-4 w-4'} ${fbaScanOnly ? workspaceChrome.fnskuScanIconClass : 'text-violet-600'}`}
             />
           }
           iconClassName=""
+          // fbaScanOnly mirrors the receiving/testing scan bar exactly:
+          // StationScanBar's default py-1.5/text-xs height + pl-[2.2rem] inset
+          // for the 17px icon + the shared themed ring-4 focus ring.
           inputClassName={
             fbaScanOnly
-              ? `!py-2.5 !text-sm !font-bold ${workspaceChrome.fnskuScanInputClass}`
+              ? `pl-[2.2rem] ${FBA_SCAN_FOCUS_RING[stationTheme]}`
               : '!py-2.5 !text-sm focus:border-violet-400 focus:ring-2 focus:ring-violet-500/20'
           }
-          rightContentClassName="right-2"
+          rightContentClassName={fbaScanOnly ? 'right-1.5 gap-0.5' : 'right-2'}
           showModeButtons={fbaScanOnly}
           visibleModes={scanMode ? [scanMode] : ['plan', 'select']}
           activeMode={fbaMode}

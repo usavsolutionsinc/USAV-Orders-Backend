@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { FileText, Loader2, Search, ChevronLeft, Plus, Pencil, Check, X, Trash2 } from '@/components/Icons';
+import { SIDEBAR_GUTTER } from '@/components/layout/header-shell';
 import { microBadge, tableHeader } from '@/design-system/tokens/typography/presets';
 import { toast } from '@/lib/toast';
 import { UploadManualModal, RenameFolderModal, dispatchManualsUpdated } from './ManualCrudModals';
@@ -568,7 +569,7 @@ export function LibraryBrowser({ query, basePath }: LibraryBrowserProps) {
     >
       {/* Breadcrumb (only when nested inside a folder, never at root) */}
       {!debouncedQuery && currentPath.length > 0 && (
-        <div className="flex shrink-0 items-center gap-1 overflow-x-auto border-b border-gray-100 bg-white/80 px-3 py-2 backdrop-blur-sm">
+        <div className={`flex shrink-0 items-center gap-1 overflow-x-auto border-b border-gray-100 bg-white/80 ${SIDEBAR_GUTTER} py-2 backdrop-blur-sm`}>
           <button
             type="button"
             onClick={() => goToCrumb(0)}
@@ -609,7 +610,7 @@ export function LibraryBrowser({ query, basePath }: LibraryBrowserProps) {
       )}
 
       {/* Body */}
-      <div className="min-h-0 flex-1 overflow-y-auto px-2.5 py-3">
+      <div className={`min-h-0 flex-1 overflow-y-auto ${SIDEBAR_GUTTER} py-3`}>
         {loading ? (
           <div className="flex items-center justify-center py-16">
             <Loader2 className="h-5 w-5 animate-spin text-gray-400" />

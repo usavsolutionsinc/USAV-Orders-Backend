@@ -42,6 +42,13 @@ interface Props {
   onNotesBlur?: () => void;
   /** DOM id for the notes textarea (used by label). */
   notesId?: string;
+  /** When false, chips stay in the PO header only (no duplicate list below input). */
+  showSavedChips?: boolean;
+  /** Nested inside {@link PoLinesAccordion} — skip duplicate card chrome. */
+  embedded?: boolean;
+  /** Controlled edit target from the PO item header chip. */
+  editingSerial?: SavedSerial | null;
+  onEditingSerialChange?: (serial: SavedSerial | null) => void;
 }
 
 /**
@@ -66,6 +73,10 @@ export function SerialCard({
   onNotesChange,
   onNotesBlur,
   notesId,
+  showSavedChips = true,
+  embedded = false,
+  editingSerial = null,
+  onEditingSerialChange,
 }: Props) {
   const showNotes = typeof notes === 'string' && typeof onNotesChange === 'function';
   const [scan, setScan] = useState('');
@@ -84,8 +95,25 @@ export function SerialCard({
     if (editing && !saved.some((s) => s.id === editing.id)) {
       setEditing(null);
       setScan('');
+      onEditingSerialChange?.(null);
     }
-  }, [saved, editing]);
+  }, [saved, editing, onEditingSerialChange]);
+
+  useEffect(() => {
+    if (!editingSerial) {
+      setEditing(null);
+      return;
+    }
+    setEditing(editingSerial);
+    setScan(editingSerial.serial_number);
+    const t = window.setTimeout(() => {
+      const el = inputRef.current;
+      if (!el) return;
+      el.focus();
+      el.select();
+    }, 0);
+    return () => window.clearTimeout(t);
+  }, [editingSerial]);
 
   useEffect(() => {
     if (!isSubmitting) {
@@ -96,17 +124,9 @@ export function SerialCard({
     return () => window.clearTimeout(t);
   }, [isSubmitting]);
 
-  const tally = target > 0
-    ? `${count}/${target} scanned`
-    : `${count} scanned`;
-  const tallyClass = isAtCap
-    ? 'bg-emerald-50 text-emerald-700 ring-emerald-200'
-    : count > 0
-      ? 'bg-blue-50 text-blue-700 ring-blue-200'
-      : 'bg-gray-50 text-gray-600 ring-gray-200';
-
   const beginEdit = (s: SavedSerial) => {
     setEditing(s);
+    onEditingSerialChange?.(s);
     setScan(s.serial_number);
     // Defer focus until the input is enabled in the new render pass.
     setTimeout(() => {
@@ -119,6 +139,7 @@ export function SerialCard({
 
   const cancelEdit = () => {
     setEditing(null);
+    onEditingSerialChange?.(null);
     setScan('');
   };
 
@@ -133,6 +154,7 @@ export function SerialCard({
         onReplaceSerial(editing, trimmed);
       }
       setEditing(null);
+      onEditingSerialChange?.(null);
       setScan('');
       return;
     }
@@ -152,19 +174,13 @@ export function SerialCard({
     }
   };
 
-  return (
-    <section className="rounded-2xl bg-white p-4 shadow-sm ring-1 ring-gray-200/60">
-      <div className="mb-2 flex items-center justify-between">
-        <h3 className="text-caption font-bold uppercase tracking-[0.14em] text-gray-500">
-          Serial numbers
-        </h3>
-        <span
-          className={`rounded-md px-2 py-0.5 text-micro font-black uppercase tracking-widest ring-1 ${tallyClass}`}
-        >
-          {tally}
-        </span>
-      </div>
+  const Shell = embedded ? 'div' : 'section';
+  const shellClass = embedded
+    ? 'w-full'
+    : 'rounded-2xl bg-white p-4 shadow-sm ring-1 ring-gray-200/60';
 
+  return (
+    <Shell className={shellClass}>
       <div className="flex items-stretch gap-2">
         <div className="relative flex-1">
           <Barcode
@@ -228,9 +244,9 @@ export function SerialCard({
       </div>
 
       {/* Saved serials — rendered BELOW the input as emerald copy-chips.
-          Each chip exposes Edit / Delete actions in a small hover dropdown;
-          the chip itself still click-to-copies via SerialChip. */}
-      {count > 0 ? (
+          Each chip exposes Edit / Delete in a hover menu below the chip;
+          click the chip body to copy (SerialChip). */}
+      {showSavedChips && count > 0 ? (
         <div className="mt-3 flex flex-wrap items-center gap-1.5">
           {saved.map((s, idx) => {
             const sn = (s.serial_number || '').trim();
@@ -272,18 +288,16 @@ export function SerialCard({
           />
         </div>
       ) : null}
-    </section>
+    </Shell>
   );
 }
 
 /**
- * SerialChip wrapped with a hover dropdown menu (Edit / Delete). Click the
- * chip body to copy — same as a bare SerialChip — but hovering reveals a
- * small floating menu with two rows of actions.
+ * {@link SerialChip} wrapped with a hover menu (Edit / Delete) positioned below
+ * the chip. Click the chip to copy; hover to reveal actions.
  *
- * Exported so the receiving + testing inline adders can render the exact
- * same chip affordance (edit + delete dropdown) the standalone SerialCard
- * uses. Keeps copy + edit + delete behavior identical across surfaces.
+ * Wired from {@link PoLinesAccordion} when `LineEditPanel` passes
+ * `activeSerialActions`, and reused by SerialCard / InlineSerialAdder chip lists.
  */
 export function SerialChipWithMenu({
   serial,
@@ -296,14 +310,18 @@ export function SerialChipWithMenu({
   isEditing: boolean;
   onEdit?: (s: SavedSerial) => void;
   onDelete?: (s: SavedSerial) => void;
-  /** When provided, the chip menu exposes a condition picker for this serial. */
+  /** When provided, the hover menu includes a condition picker for this serial. */
   onSetCondition?: (s: SavedSerial, grade: string) => void;
 }) {
   const sn = serial.serial_number;
   const hasActions = !!(onEdit || onDelete || onSetCondition);
 
   return (
-    <div className="group relative inline-flex">
+    <div
+      className="group relative inline-flex"
+      onClick={(e) => e.stopPropagation()}
+      onKeyDown={(e) => e.stopPropagation()}
+    >
       <div
         className={`inline-flex items-center gap-1 rounded-md transition-colors ${
           isEditing ? 'ring-2 ring-amber-400 ring-offset-1' : ''
@@ -316,11 +334,8 @@ export function SerialChipWithMenu({
         />
       </div>
       {hasActions ? (
-        // Outer wrapper holds the chip-to-menu gap as transparent padding so
-        // the hover region is contiguous — moving the cursor from the chip
-        // down into the dropdown doesn't cross a dead zone and dismiss it.
         <div
-          className="invisible pointer-events-none absolute left-1/2 top-full z-30 -translate-x-1/2 pt-1 opacity-0 transition-opacity duration-100 group-hover:visible group-hover:pointer-events-auto group-hover:opacity-100 group-focus-within:visible group-focus-within:pointer-events-auto group-focus-within:opacity-100"
+          className="invisible pointer-events-none absolute left-1/2 top-full z-[100] -translate-x-1/2 pt-1 opacity-0 transition-opacity duration-100 group-hover:visible group-hover:pointer-events-auto group-hover:opacity-100 group-focus-within:visible group-focus-within:pointer-events-auto group-focus-within:opacity-100"
         >
           <div
             role="menu"

@@ -302,14 +302,19 @@ export async function fetchDashboardPackedRecords({
   weekStart,
   weekEnd,
   shippedFilter,
+  limit = 1000,
+  offset = 0,
 }: {
   packedBy?: number;
   testedBy?: number;
   weekStart?: string;
   weekEnd?: string;
   shippedFilter?: string;
+  limit?: number;
+  offset?: number;
 }) {
-  const params = new URLSearchParams({ limit: '1000' });
+  const params = new URLSearchParams({ limit: String(limit) });
+  if (offset) params.set('offset', String(offset));
   if (weekStart) params.set('weekStart', weekStart);
   if (weekEnd) params.set('weekEnd', weekEnd);
   if (packedBy !== undefined) params.set('packedBy', String(packedBy));

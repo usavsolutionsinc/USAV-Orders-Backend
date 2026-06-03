@@ -6,6 +6,7 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { AlertCircle, Check, ChevronDown, Clock, LayoutDashboard, Menu, PackageCheck, X } from '@/components/Icons';
 import { HorizontalButtonSlider, type HorizontalSliderItem } from '@/components/ui/HorizontalButtonSlider';
+import { SidebarSection } from '@/components/layout/SidebarSection';
 import { sectionLabel } from '@/design-system/tokens/typography/presets';
 import { AdminSidebar } from '@/components/admin/AdminSidebar';
 import { ADMIN_SECTION_OPTIONS, type AdminSection } from '@/components/admin/admin-sections';
@@ -27,6 +28,7 @@ import { SupportSidebarPanel } from '@/components/sidebar/SupportSidebarPanel';
 import { AiChatSidebarPanel } from '@/components/sidebar/AiChatSidebarPanel';
 import { SettingsSidebarPanel } from '@/components/sidebar/SettingsSidebarPanel';
 import { AuditLogSidebarPanel } from '@/components/sidebar/AuditLogSidebarPanel';
+import { MasterNav, MasterNavProvider } from '@/components/sidebar/master-nav';
 import { useUIMode } from '@/design-system/providers/UIModeProvider';
 import { useAuth } from '@/contexts/AuthContext';
 import {
@@ -42,12 +44,55 @@ import { getDashboardOrderViewFromSearch, parseDashboardOpenOrderId } from '@/ut
 import { useDashboardSearchController } from '@/hooks/useDashboardSearchController';
 const MOBILE_SIDEBAR_MIN_WIDTH = 420;
 
+// Pages whose panels gate their own pill-row on useMasterNavEnabled() — only
+// these show the master-nav L2 rail. dashboard/receiving/fba (heavy) and tech
+// (nested switcher shared with the standalone /tech station) keep their existing
+// switchers until a later phase. Keep in sync with the gated panels.
+const MASTER_NAV_RAIL_PAGES: ReadonlySet<string> = new Set([
+  'inventory',
+  'warehouse',
+  'products',
+  'walk-in',
+]);
+
 // Sub-views shown above the search bar.
 const DASHBOARD_ORDERS_SUBVIEW_ITEMS: HorizontalSliderItem[] = [
   { id: 'pending',   label: 'Pending',  icon: Clock },
   { id: 'shipped',   label: 'Shipped',  icon: PackageCheck },
   { id: 'unshipped', label: 'Awaiting', icon: AlertCircle },
 ];
+
+// The order-view pills are icon-only; their name is surfaced in the sidebar
+// header title instead (the page icon already carries the page context). Keep
+// these labels in sync with DASHBOARD_ORDERS_SUBVIEW_ITEMS.
+const DASHBOARD_ORDERS_SUBVIEW_LABELS: Record<string, string> = {
+  pending: 'Pending',
+  shipped: 'Shipped',
+  unshipped: 'Awaiting',
+  fba: 'FBA',
+};
+
+// Receiving's icon-only modes spell their selection out in the sidebar header.
+// Mirrors the mode resolution in ReceivingSidebarPanel.
+const RECEIVING_MODE_LABELS: Record<string, string> = {
+  receive: 'Receiving',
+  incoming: 'Incoming',
+  history: 'History',
+  unfound: 'Unfound',
+  pickup: 'Local Pickup',
+};
+
+function getReceivingModeFromLocation(
+  pathname: string | null,
+  searchParams: Pick<URLSearchParams, 'get'>,
+): keyof typeof RECEIVING_MODE_LABELS {
+  if (pathname?.startsWith('/receiving/unfound')) return 'unfound';
+  const m = searchParams.get('mode');
+  if (m === 'pickup') return 'pickup';
+  if (m === 'history') return 'history';
+  if (m === 'incoming') return 'incoming';
+  return 'receive';
+}
 
 
 function getSidebarTitle(pathname: string | null) {
@@ -134,22 +179,19 @@ function SidebarContextPanel({ onBackToAppNav }: { onBackToAppNav?: () => void }
   if (routeKey === 'dashboard') {
     const focusShippedSearch = searchParams.get(DASHBOARD_SHIPPED_FOCUS_SEARCH_PARAM) === '1';
     const filterControl = (
-      // Each pill row is its own 40px band — same pattern as the sidebar title
-      // header (h-[40px] + border-b, border-box) so the divider is INSIDE the
-      // 40px and the rows line up exactly with the rest of the 40px grid.
-      <div className="shrink-0 bg-white">
-        <div className="flex h-[40px] items-center border-b border-gray-300 px-3">
-          <HorizontalButtonSlider
-            items={DASHBOARD_ORDERS_SUBVIEW_ITEMS}
-            value={dashboardSearch.orderView}
-            onChange={(view) => dashboardSearch.setOrderView(view as typeof dashboardSearch.orderView)}
-            variant="nav"
-            dense
-            aria-label="Orders view"
-            className="w-full"
-          />
-        </div>
-      </div>
+      // 40px pill band routed through the shared SidebarSection so it inherits
+      // the one canonical left gutter (SIDEBAR_GUTTER) + hairline instead of a
+      // hand-typed px-3 that drifts out of alignment with the rows below.
+      <SidebarSection band>
+        <HorizontalButtonSlider
+          items={DASHBOARD_ORDERS_SUBVIEW_ITEMS}
+          value={dashboardSearch.orderView}
+          onChange={(view) => dashboardSearch.setOrderView(view as typeof dashboardSearch.orderView)}
+          variant="segmented"
+          aria-label="Orders view"
+          className="w-full"
+        />
+      </SidebarSection>
     );
 
     if (dashboardSearch.orderView === 'shipped') {
@@ -376,6 +418,15 @@ export default function DashboardSidebar({ inDrawer = false, onNavigate }: { inD
   };
 
   const sidebarTitle = getSidebarTitle(pathname);
+  // On the dashboard the page icon already conveys the page; the header name is
+  // spent on the active order-view (Pending / Shipped / Awaiting) so the
+  // icon-only pills below have their selection spelled out up top.
+  const headerTitle =
+    routeKey === 'dashboard' && dashboardOrderView
+      ? DASHBOARD_ORDERS_SUBVIEW_LABELS[dashboardOrderView] ?? sidebarTitle
+      : routeKey === 'receiving'
+        ? RECEIVING_MODE_LABELS[getReceivingModeFromLocation(pathname, searchParams)] ?? sidebarTitle
+        : sidebarTitle;
 
   const { user: authUser, isLoaded: authLoaded } = useAuth();
   // Only apply permission filtering once auth has loaded AND the user is
@@ -425,7 +476,26 @@ export default function DashboardSidebar({ inDrawer = false, onNavigate }: { inD
   const isOpen = navOpen || inDrawer || routeKey === 'unknown';
   const handlePickFromNav = () => { closeNav(); onNavigate?.(); };
 
-  const shell = (
+  // P2 (master sidebar nav) — opt-in via `?masterNav=1`. When on, the legacy
+  // pinned-trigger + flat page list is replaced by the single master-nav
+  // dropdown (recents on top, current hidden, per-page mode rail). Default off,
+  // so current users are unaffected until this is verified in-browser and the
+  // default is flipped. See docs/design-system/master-sidebar-nav-migration-plan.md.
+  const masterNavEnabled = searchParams.get('masterNav') === '1';
+
+  const shell = masterNavEnabled ? (
+    <aside className="h-full w-full bg-white border-r border-gray-300 overflow-hidden shadow-xl shadow-gray-900/5 flex flex-col">
+      <MasterNavProvider enabled>
+        <MasterNav
+          permissions={authPermissions}
+          mobileRestricted={isMobile}
+          railPageIds={MASTER_NAV_RAIL_PAGES}
+          renderContext={() => <SidebarContextPanel onBackToAppNav={openNav} />}
+          className="flex-1 min-h-0"
+        />
+      </MasterNavProvider>
+    </aside>
+  ) : (
     <aside className="h-full w-full bg-white border-r border-gray-300 overflow-hidden shadow-xl shadow-gray-900/5 flex flex-col">
       {/* Pinned trigger — the currently selected page stays at the top of the
           sidebar and toggles the dropdown list of every other page. */}
@@ -440,7 +510,7 @@ export default function DashboardSidebar({ inDrawer = false, onNavigate }: { inD
       >
         <CurrentIcon className="h-5 w-5 shrink-0 text-blue-600" />
         <span className="min-w-0 flex-1 truncate text-sm font-black uppercase tracking-wider text-gray-900">
-          {sidebarTitle}
+          {headerTitle}
         </span>
         <ChevronDown
           className={`h-4 w-4 shrink-0 text-gray-400 transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`}

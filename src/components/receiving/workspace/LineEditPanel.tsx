@@ -58,7 +58,7 @@ import { ReceiveResponsePanel } from './ReceiveResponsePanel';
 import { ReceivingAuditModal } from './ReceivingAuditModal';
 import { ConditionPills } from './ConditionPills';
 import { markConditionSet } from './ReceivingProgressStepper';
-import { InlineSerialAdder } from './InlineSerialAdder';
+import { SerialCard } from './SerialCard';
 import { ReceivingUnitRows, type UnitSerial } from './ReceivingUnitRows';
 import { PoLinesAccordion } from './PoLinesAccordion';
 import { UnmatchedItemsSection } from './UnmatchedItemsSection';
@@ -231,6 +231,11 @@ export function LineEditPanel({
   const [listingLink, setListingLink] = useState('');
   const [saving, setSaving] = useState(false);
   const [serialSubmitting, setSerialSubmitting] = useState(false);
+  const [headerSerialEdit, setHeaderSerialEdit] = useState<{
+    id?: number;
+    serial_number: string;
+    condition_grade?: string | null;
+  } | null>(null);
   // Receive runs as a fire-and-forget background task (Zoho roundtrip can
   // take many seconds). The button does NOT visually lock — progress is
   // surfaced in a sticky bottom-right toast. A ref guards against accidental
@@ -492,6 +497,10 @@ export function LineEditPanel({
       : '';
     setSerialInput(latest);
   }, [row.id, row.serials]);
+
+  useEffect(() => {
+    setHeaderSerialEdit(null);
+  }, [row.id]);
 
   // Prefill Zendesk, listing, and serial from Zoho PO notes + line description.
   useEffect(() => {
@@ -2008,6 +2017,16 @@ export function LineEditPanel({
                 receivingId={row.receiving_id}
                 activeLineId={row.id}
                 activeConditionOverride={isMultiQtyLine ? (unitLabelCondition ?? cond) : cond}
+                activeSerialActions={{
+                  editingSerialId: headerSerialEdit?.id ?? null,
+                  onEdit: (s) => setHeaderSerialEdit(s),
+                  onDelete: (s) => {
+                    if (s.id == null) return;
+                    if (!window.confirm(`Remove serial ${s.serial_number}?`)) return;
+                    if (headerSerialEdit?.id === s.id) setHeaderSerialEdit(null);
+                    void deleteSerialUnit(s.id);
+                  },
+                }}
                 activeRowSlot={({ serials }) => (
                   <div className="space-y-3">
                     {(row.quantity_expected ?? 0) > 1 ? (
@@ -2023,6 +2042,9 @@ export function LineEditPanel({
                         lineCondition={cond}
                         disabled={!row.receiving_id}
                         isSubmitting={serialSubmitting}
+                        serialEditTarget={
+                          headerSerialEdit?.id != null ? (headerSerialEdit as UnitSerial) : null
+                        }
                         onAddSerial={(sn, grade) => submitSerial(sn, grade)}
                         onDeleteSerial={(id) => {
                           if (!window.confirm('Remove this serial?')) return;
@@ -2037,28 +2059,26 @@ export function LineEditPanel({
                       // part-serials under one unit): one condition picker + a
                       // flat serial list.
                       <>
-                        <div>
-                          <p className="mb-1 text-micro font-bold uppercase tracking-[0.14em] text-gray-500">
-                            Condition
-                          </p>
-                          <ConditionPills
-                            value={cond}
-                            onChange={(next) => {
-                              setCond(next);
-                              markConditionSet(row.id);
-                              void patch({ condition_grade: next });
-                            }}
-                          />
-                        </div>
-                        <InlineSerialAdder
-                          key={`adder-${row.id}`}
-                          lineId={row.id}
+                        <ConditionPills
+                          value={cond}
+                          onChange={(next) => {
+                            setCond(next);
+                            markConditionSet(row.id);
+                            void patch({ condition_grade: next });
+                          }}
+                        />
+                        <SerialCard
+                          key={`serial-card-${row.id}`}
                           saved={serials}
                           expected={row.quantity_expected ?? null}
                           isSubmitting={serialSubmitting}
                           disabled={!row.receiving_id}
-                          onAdd={(_lineId, sn) => submitSerial(sn, cond)}
-                          onReplaceSerial={(_lineId, original, nextSerial) => {
+                          embedded
+                          showSavedChips={false}
+                          editingSerial={headerSerialEdit}
+                          onEditingSerialChange={setHeaderSerialEdit}
+                          onAdd={(sn) => submitSerial(sn, cond)}
+                          onReplaceSerial={(original, nextSerial) => {
                             if (original.id == null) return;
                             void replaceSerialUnit(
                               {
@@ -2069,13 +2089,10 @@ export function LineEditPanel({
                               nextSerial,
                             );
                           }}
-                          onDelete={(_lineId, s) => {
+                          onDeleteSerial={(s) => {
                             if (s.id == null) return;
                             if (!window.confirm(`Remove serial ${s.serial_number}?`)) return;
                             void deleteSerialUnit(s.id);
-                          }}
-                          onSetCondition={(_lineId, s, grade) => {
-                            if (s.id != null) void setUnitGrade(s.id, grade);
                           }}
                         />
                       </>

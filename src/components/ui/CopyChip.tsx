@@ -86,6 +86,8 @@ export interface CopyChipProps {
    * Outer wrapper horizontal padding — `flush` aligns with sidebar grids where the chip icon lives in another column.
    */
   outerPad?: 'chip' | 'flush';
+  /** When true, skip the global hover copy tooltip (e.g. chip has its own action menu). */
+  disableTooltip?: boolean;
 }
 
 export function CopyChip({
@@ -100,6 +102,7 @@ export function CopyChip({
   fitDisplayWidth = false,
   onCopy,
   outerPad = 'chip',
+  disableTooltip = false,
 }: CopyChipProps) {
   const anchorId = useId();
   const chipRef = useRef<HTMLDivElement | null>(null);
@@ -132,7 +135,7 @@ export function CopyChip({
   }, [anchorId]);
 
   const openTooltip = () => {
-    if (!tooltipCtx || !canCopy) return;
+    if (disableTooltip || !tooltipCtx || !canCopy) return;
     tooltipCtx.activate({ anchorId, value: normalizedValue, getRect });
   };
 
@@ -166,10 +169,12 @@ export function CopyChip({
       <button
         type="button"
         onClick={handleCopy}
-        onFocus={() => openTooltip()}
+        onFocus={() => {
+          if (!disableTooltip) openTooltip();
+        }}
         onBlur={closeTooltipImmediate}
         disabled={isDisabled}
-        title={!tooltipCtx && canCopy ? normalizedValue : undefined}
+        title={!disableTooltip && !tooltipCtx && canCopy ? normalizedValue : undefined}
         className={
           fitDisplayWidth
             ? 'inline-flex w-auto max-w-full items-center justify-start gap-0.5 py-0 bg-transparent text-left text-black transition-all active:scale-95 disabled:opacity-30'
@@ -391,6 +396,7 @@ export const SerialChip = ({
   value,
   display,
   width = 'w-[84px] shrink-0',
+  disableTooltip = false,
 }: {
   value: string;
   display: string;
@@ -398,6 +404,7 @@ export const SerialChip = ({
    *  for the Barcode icon + 4-char mono value so every row aligns identically
    *  across all tables (tech / packer / shipped / receiving). */
   width?: string;
+  disableTooltip?: boolean;
 }) => (
   <CopyChip
     value={value}
@@ -408,6 +415,7 @@ export const SerialChip = ({
     width={width}
     truncateDisplay={false}
     fitDisplayWidth
+    disableTooltip={disableTooltip}
   />
 );
 

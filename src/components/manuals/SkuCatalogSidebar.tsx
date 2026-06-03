@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { AnimatePresence, motion } from 'framer-motion';
 import { ChevronDown, Link2, Check, Loader2, ExternalLink } from '@/components/Icons';
-import { sidebarHeaderBandClass, sidebarHeaderRowClass } from '@/components/layout/header-shell';
+import { sidebarHeaderBandClass, sidebarHeaderRowClass, SIDEBAR_GUTTER } from '@/components/layout/header-shell';
 import { SearchBar } from '@/components/ui/SearchBar';
 import { HorizontalButtonSlider, type HorizontalSliderItem } from '@/components/ui/HorizontalButtonSlider';
 import { microBadge, tableHeader } from '@/design-system/tokens/typography/presets';
@@ -80,7 +80,7 @@ function AccordionSection({
   return (
     <div className="border-t border-gray-100">
       <button type="button" onClick={() => setOpen(!open)}
-        className="flex w-full items-center gap-2 px-3 py-2.5 text-left hover:bg-gray-50 transition-colors">
+        className={`flex w-full items-center gap-2 ${SIDEBAR_GUTTER} py-2.5 text-left hover:bg-gray-50 transition-colors`}>
         <span className={toneClass}>{icon}</span>
         <span className={`flex-1 ${tableHeader} text-gray-700`}>{title}</span>
         <span className={`${microBadge} rounded-full px-1.5 py-0.5 bg-gray-100 text-gray-500`}>{count}</span>
@@ -92,7 +92,7 @@ function AccordionSection({
         {open && (
           <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }}
             exit={{ height: 0, opacity: 0 }} transition={{ duration: 0.2 }} className="overflow-hidden">
-            <div className="px-3 pb-3">{children}</div>
+            <div className={`${SIDEBAR_GUTTER} pb-3`}>{children}</div>
           </motion.div>
         )}
       </AnimatePresence>
@@ -124,7 +124,7 @@ function SelectedBanner({ detail }: { detail: SkuCatalogDetail }) {
   const uniqueLinks = externalLinks.filter((link, i, arr) => arr.findIndex((l) => l.label === link.label) === i);
 
   return (
-    <div className="shrink-0 border-b border-gray-200 bg-blue-50/50 px-3 py-3">
+    <div className={`shrink-0 border-b border-gray-200 bg-blue-50/50 ${SIDEBAR_GUTTER} py-3`}>
       <div className="flex items-start gap-2.5">
         {catalog.image_url && (
           <img src={catalog.image_url} alt="" className="h-9 w-9 rounded-lg object-cover bg-gray-100 shrink-0" />
@@ -243,7 +243,7 @@ export function SkuCatalogSidebar({ basePath = '/manuals' }: { basePath?: string
       </div>
 
       {/* Sort slider */}
-      <div className="shrink-0 border-b border-gray-100 bg-white px-3 py-1">
+      <div className={`shrink-0 border-b border-gray-100 bg-white ${SIDEBAR_GUTTER} py-1`}>
         <HorizontalButtonSlider
           items={SORT_ITEMS.map((item) => ({
             ...item,
@@ -258,7 +258,7 @@ export function SkuCatalogSidebar({ basePath = '/manuals' }: { basePath?: string
       </div>
 
       {/* Mode slider */}
-      <div className="shrink-0 border-b border-gray-200 bg-white px-3 py-1.5">
+      <div className={`shrink-0 border-b border-gray-200 bg-white ${SIDEBAR_GUTTER} py-1.5`}>
         <HorizontalButtonSlider
           items={MODE_ITEMS}
           value={mode}
@@ -274,7 +274,7 @@ export function SkuCatalogSidebar({ basePath = '/manuals' }: { basePath?: string
           lives at /products?view=pairing, and the Manuals section moved into
           Library.) */}
       {loadingDetail && (
-        <div className="shrink-0 border-b border-gray-200 bg-gray-50 px-3 py-4 flex items-center justify-center">
+        <div className={`shrink-0 border-b border-gray-200 bg-gray-50 ${SIDEBAR_GUTTER} py-4 flex items-center justify-center`}>
           <Loader2 className="h-4 w-4 animate-spin text-gray-400" />
         </div>
       )}
@@ -284,7 +284,7 @@ export function SkuCatalogSidebar({ basePath = '/manuals' }: { basePath?: string
       )}
 
       {!selectedId && !loadingDetail && (
-        <div className="shrink-0 border-b border-gray-100 px-3 py-3">
+        <div className={`shrink-0 border-b border-gray-100 ${SIDEBAR_GUTTER} py-3`}>
           <p className="text-micro font-bold text-gray-400 text-center">
             Select a product from the table to manage
           </p>

@@ -7,7 +7,8 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { Plus, X } from '@/components/Icons';
 import { FbaFnskuScanToast } from '@/components/fba/sidebar/FbaFnskuScanToast';
 import { SearchBar } from '@/components/ui/SearchBar';
-import { sidebarHeaderBandClass, sidebarHeaderPillRowClass } from '@/components/layout/header-shell';
+import { sidebarHeaderBandClass, sidebarHeaderPillRowClass, SIDEBAR_GUTTER } from '@/components/layout/header-shell';
+import { SidebarSection } from '@/components/layout/SidebarSection';
 import { HorizontalButtonSlider } from '@/components/ui/HorizontalButtonSlider';
 import { useAblyChannel } from '@/hooks/useAblyChannel';
 import { getDbTableChannelName } from '@/lib/realtime/channels';
@@ -48,11 +49,11 @@ function emitOpenUploadFba() {
 function FbaCatalogSidebarFallback() {
   return (
     <div className="relative flex h-full w-full flex-col overflow-hidden bg-white">
-      <div className={`${sidebarSubBandClass} px-3 py-2.5`}>
+      <div className={`${sidebarSubBandClass} ${SIDEBAR_GUTTER} py-2.5`}>
         <div className="h-4 w-24 bg-zinc-100 rounded mb-2 animate-pulse" />
         <div className="h-10 w-full rounded-xl bg-zinc-100 animate-pulse" />
       </div>
-      <div className="min-h-0 flex-1 space-y-4 p-3">
+      <div className={`min-h-0 flex-1 space-y-4 ${SIDEBAR_GUTTER} py-3`}>
         <div className="h-4 w-32 bg-zinc-100 rounded animate-pulse" />
         <div className="space-y-2">
           <div className="h-14 w-full rounded-xl bg-zinc-50 border border-zinc-100 animate-pulse" />
@@ -98,7 +99,7 @@ function FbaCatalogSidebarInner() {
 
   return (
     <div className="relative flex h-full w-full flex-col overflow-hidden bg-white">
-      <div className={`${sidebarSubBandClass} px-3 py-2.5`}>
+      <div className={`${sidebarSubBandClass} ${SIDEBAR_GUTTER} py-2.5`}>
         <p className="mb-2 text-micro font-semibold uppercase tracking-widest text-zinc-500">
           Catalog search
         </p>
@@ -112,7 +113,7 @@ function FbaCatalogSidebarInner() {
         />
       </div>
 
-      <div className="min-h-0 flex-1 space-y-2 overflow-y-auto px-3 py-3">
+      <div className={`min-h-0 flex-1 space-y-2 overflow-y-auto ${SIDEBAR_GUTTER} py-3`}>
         <p className="text-micro font-semibold uppercase tracking-widest text-zinc-500">Catalog actions</p>
 
         <button type="button" onClick={emitOpenAddFba} className={actionRowClass}>
@@ -153,7 +154,7 @@ function FbaCatalogSidebarInner() {
         </button>
       </div>
 
-      <div className={`${sidebarSubBandClass} mt-auto px-3 py-3`}>
+      <div className={`${sidebarSubBandClass} mt-auto ${SIDEBAR_GUTTER} py-3`}>
         <p className="text-micro font-semibold uppercase tracking-widest text-zinc-500">FBA Station</p>
         <Link
           href="/fba"
@@ -177,10 +178,10 @@ function FbaWorkspaceSidebarFallback() {
         </div>
       </div>
       <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-        <div className={`${sidebarSubBandClass} px-3 py-2.5`}>
+        <div className={`${sidebarSubBandClass} ${SIDEBAR_GUTTER} py-2.5`}>
           <div className="h-24 w-full rounded-2xl bg-zinc-100 animate-pulse" />
         </div>
-        <div className="min-h-0 flex-1 space-y-3 p-3 overflow-y-auto bg-white">
+        <div className={`min-h-0 flex-1 space-y-3 ${SIDEBAR_GUTTER} py-3 overflow-y-auto bg-white`}>
           <div className="h-4 w-32 bg-zinc-100 rounded animate-pulse" />
           <div className="space-y-2">
             <div className="h-16 w-full rounded-xl bg-zinc-50 border border-zinc-100 animate-pulse" />
@@ -485,7 +486,7 @@ function FbaWorkspaceSidebarInner() {
           today's plan, Plan button only) and Select on combine (FNSKU selects
           packed items, Select button only). */}
       {isBoard && !editorActive && (
-        <div className={`${sidebarSubBandClass} px-3 py-2.5`}>
+        <div className={`${sidebarSubBandClass} ${SIDEBAR_GUTTER} py-2.5`}>
           <FbaWorkspaceScanField
             staffName={staffName}
             staffId={staffIdNum}
@@ -511,7 +512,7 @@ function FbaWorkspaceSidebarInner() {
 
         {/* Shipped: search filter */}
         {activeMode === 'shipped' && (
-          <div className={`${sidebarSubBandClass} px-3 py-2.5`}>
+          <div className={`${sidebarSubBandClass} ${SIDEBAR_GUTTER} py-2.5`}>
             <p className="mb-2 text-micro font-semibold uppercase tracking-widest text-gray-500">
               Filter shipped list
             </p>
@@ -545,9 +546,11 @@ function FbaWorkspaceSidebarInner() {
 
         {/* Plans error banner */}
         {plansError && (
-          <div className="mx-3 my-2 rounded-lg border border-red-200 bg-red-50 px-2.5 py-2 text-caption font-semibold text-red-700">
-            {plansError}
-          </div>
+          <SidebarSection className="my-2">
+            <div className="rounded-lg border border-red-200 bg-red-50 px-2.5 py-2 text-caption font-semibold text-red-700">
+              {plansError}
+            </div>
+          </SidebarSection>
         )}
 
         {/* Pending shipment cards removed: combine flow is table-first only */}

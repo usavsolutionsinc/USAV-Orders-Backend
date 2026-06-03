@@ -5,6 +5,7 @@ import { Plus, X } from '@/components/Icons';
 import { SearchBar } from '@/components/ui/SearchBar';
 import { ViewDropdown } from '@/components/ui/ViewDropdown';
 import { dataValue, fieldLabel } from '@/design-system/tokens/typography/presets';
+import { SIDEBAR_GUTTER } from '@/components/layout/header-shell';
 
 const FEATURE_TYPE_OPTIONS = [
   { value: 'all', label: 'All Types' },
@@ -121,7 +122,7 @@ export function FeaturesSidebarPanel() {
         />
       </div>
 
-      <div className="border-b border-gray-200 px-3 py-3">
+      <div className={`border-b border-gray-200 ${SIDEBAR_GUTTER} py-3`}>
         <SearchBar
           value={searchValue}
           onChange={(value) => updateParams({ search: value })}
@@ -135,7 +136,7 @@ export function FeaturesSidebarPanel() {
         <button
           type="button"
           onClick={emitOpenAddFeature}
-          className="flex w-full items-center justify-between border-b border-gray-200 px-4 py-3 text-left transition-colors hover:bg-gray-50"
+          className={`flex w-full items-center justify-between border-b border-gray-200 ${SIDEBAR_GUTTER} py-3 text-left transition-colors hover:bg-gray-50`}
         >
           <div>
             <p className={dataValue}>Add Work Item</p>
@@ -149,7 +150,7 @@ export function FeaturesSidebarPanel() {
         <button
           type="button"
           onClick={clearFilters}
-          className="flex w-full items-center justify-between border-b border-gray-200 px-4 py-3 text-left transition-colors hover:bg-gray-50"
+          className={`flex w-full items-center justify-between border-b border-gray-200 ${SIDEBAR_GUTTER} py-3 text-left transition-colors hover:bg-gray-50`}
         >
           <div>
             <p className={dataValue}>Clear Filters</p>

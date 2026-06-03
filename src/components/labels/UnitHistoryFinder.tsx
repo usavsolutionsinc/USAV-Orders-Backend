@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Clock } from '@/components/Icons';
 import { routeScan } from '@/lib/barcode-routing';
+import { SIDEBAR_GUTTER } from '@/components/layout/header-shell';
 
 const RECENTS_KEY = 'labels:history-recents:v1';
 const MAX_RECENTS = 10;
@@ -154,7 +155,7 @@ export function UnitHistoryFinder() {
       {/* Scan/paste input lives in the sidebar's top SearchBar now; we only
           surface lookup errors here. */}
       {error && (
-        <div className="shrink-0 border-b border-gray-100 bg-amber-50 px-3 py-2">
+        <div className={`shrink-0 border-b border-gray-100 bg-amber-50 ${SIDEBAR_GUTTER} py-2`}>
           <p className="text-micro font-semibold text-amber-700">{error}</p>
         </div>
       )}
@@ -173,7 +174,7 @@ export function UnitHistoryFinder() {
           </div>
         ) : (
           <>
-            <div className="flex items-center justify-between bg-gray-50 px-3 py-1.5">
+            <div className={`flex items-center justify-between bg-gray-50 ${SIDEBAR_GUTTER} py-1.5`}>
               <span className="text-eyebrow font-black uppercase tracking-[0.18em] text-gray-500">
                 {recentsLabel}
               </span>
@@ -191,7 +192,7 @@ export function UnitHistoryFinder() {
                   <button
                     type="button"
                     onClick={() => setHistoryId(r.key)}
-                    className={`flex w-full items-center gap-3 px-3 py-2 text-left transition-colors hover:bg-blue-50 ${
+                    className={`flex w-full items-center gap-3 ${SIDEBAR_GUTTER} py-2 text-left transition-colors hover:bg-blue-50 ${
                       currentId === r.key ? 'bg-blue-50' : ''
                     }`}
                   >

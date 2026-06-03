@@ -1,8 +1,11 @@
 import { normalizeUSPSStatus, normalizeTrackingNumber } from '../normalize';
 import type { CarrierTrackingEvent, CarrierTrackingResult } from '../types';
 
-const USPS_AUTH_URL = 'https://apis.usps.com/oauth2/v3/token';
-const USPS_TRACK_URL = 'https://apis.usps.com/tracking/v3/tracking';
+// Single host for all USPS APIs; expose the base so the subscription client
+// builds its URL from the same root (and so a sandbox host can be swapped in).
+export const USPS_BASE_URL = process.env.USPS_BASE_URL ?? 'https://apis.usps.com';
+const USPS_AUTH_URL = `${USPS_BASE_URL}/oauth2/v3/token`;
+const USPS_TRACK_URL = `${USPS_BASE_URL}/tracking/v3/tracking`;
 
 interface TokenCache {
   token: string;
@@ -52,7 +55,7 @@ async function fetchFreshToken(): Promise<string> {
   return tokenCache.token;
 }
 
-async function getAccessToken(forceRefresh = false): Promise<string> {
+export async function getAccessToken(forceRefresh = false): Promise<string> {
   if (!forceRefresh && tokenCache && tokenCache.expiresAt > Date.now() + 60_000) {
     return tokenCache.token;
   }
@@ -78,7 +81,7 @@ function parseUSPSDate(eventDate: string, eventTime: string): string | null {
   }
 }
 
-function parseUSPSEvent(raw: any): CarrierTrackingEvent {
+export function parseUSPSEvent(raw: any): CarrierTrackingEvent {
   const eventText = raw?.event ?? raw?.Event ?? '';
   const statusCategory = raw?.statusCategory ?? raw?.StatusCategory ?? null;
   const eventCode = raw?.eventCode ?? raw?.EventCode ?? null;
@@ -146,6 +149,80 @@ async function callUspsTrack(normalized: string, token: string): Promise<Respons
   );
 }
 
+/**
+ * Build a normalized result from a USPS payload. Shared by the polling path
+ * (trackByNumber) and the webhook receiver — USPS documents that webhook
+ * notification payloads follow the same modernized Tracking API response shape,
+ * so one parser serves both. Tolerant of three shapes:
+ *   1. Full tracking response — `trackSummary` + `trackDetail[]`.
+ *   2. Notification with a `trackingEvents[]` / `eventSummary[]` array.
+ *   3. A single bare event object (top-level `event`/`eventCode` fields).
+ *
+ * `normalizedOverride` supplies the tracking number when the payload omits it
+ * (the polling path already knows the number it queried).
+ *
+ * Returns null when no tracking number can be resolved.
+ */
+export function parseUSPSTrackingPayload(
+  payload: any,
+  normalizedOverride?: string,
+): CarrierTrackingResult | null {
+  const rawTracking =
+    payload?.trackingNumber ??
+    payload?.TrackingNumber ??
+    payload?.trackingNumberId ??
+    payload?.uniqueTrackingId ??
+    '';
+  const normalized = normalizedOverride
+    ? normalizeTrackingNumber(normalizedOverride)
+    : normalizeTrackingNumber(String(rawTracking));
+  if (!normalized) return null;
+
+  const summary = payload?.trackSummary ?? payload?.TrackSummary ?? null;
+  const details: unknown[] = Array.isArray(payload?.trackDetail ?? payload?.TrackDetail)
+    ? (payload?.trackDetail ?? payload?.TrackDetail)
+    : [];
+
+  let allRaw: unknown[];
+  if (summary || details.length > 0) {
+    // Shape 1: summary is always the latest, details follow.
+    allRaw = summary ? [summary, ...details] : details;
+  } else if (Array.isArray(payload?.trackingEvents ?? payload?.eventSummary)) {
+    // Shape 2: notification event array.
+    allRaw = payload?.trackingEvents ?? payload?.eventSummary;
+  } else if (payload?.event || payload?.eventCode || payload?.eventType) {
+    // Shape 3: a single bare event object.
+    allRaw = [payload];
+  } else {
+    allRaw = [];
+  }
+
+  const events: CarrierTrackingEvent[] = allRaw.map(parseUSPSEvent);
+
+  const topStatusCategory = payload?.statusCategory ?? payload?.StatusCategory ?? null;
+  const topStatus = normalizeUSPSStatus(
+    topStatusCategory,
+    summary?.event ?? summary?.Event ?? events[0]?.externalStatusDescription ?? null,
+  );
+
+  const deliveredEvent = events.find((e) => e.normalizedStatusCategory === 'DELIVERED');
+  const latestEventAt = events.map((e) => e.eventOccurredAt).filter(Boolean).sort().reverse()[0] ?? null;
+
+  return {
+    carrier: 'USPS',
+    trackingNumberNormalized: normalized,
+    latestStatusCategory: topStatus,
+    latestStatusCode: summary?.eventCode ?? summary?.EventCode ?? events[0]?.externalStatusCode ?? null,
+    latestStatusLabel: topStatusCategory ?? null,
+    latestStatusDescription: summary?.event ?? summary?.Event ?? events[0]?.externalStatusDescription ?? null,
+    latestEventAt,
+    deliveredAt: deliveredEvent?.eventOccurredAt ?? null,
+    metadata: extractUSPSMetadata(payload, summary, events),
+    events,
+    payload,
+  };
+}
+
 export async function trackByNumber(trackingNumber: string): Promise<CarrierTrackingResult> {
   const normalized = normalizeTrackingNumber(trackingNumber);
   let token = await getAccessToken();
@@ -168,34 +245,17 @@ export async function trackByNumber(trackingNumber: string): Promise<CarrierTrac
   }
 
   const payload = await res.json();
+  const result = parseUSPSTrackingPayload(payload, normalized);
+  if (result) return result;
 
-  const summary = payload?.trackSummary ?? payload?.TrackSummary;
-  const details: unknown[] = payload?.trackDetail ?? payload?.TrackDetail ?? [];
-
-  // Most-recent event first: summary is always the latest
-  const allRaw = summary ? [summary, ...details] : details;
-  const events: CarrierTrackingEvent[] = allRaw.map(parseUSPSEvent);
-
-  const topStatusCategory = payload?.statusCategory ?? payload?.StatusCategory ?? null;
-  const topStatus = normalizeUSPSStatus(
-    topStatusCategory,
-    summary?.event ?? summary?.Event ?? null
-  );
-
-  const deliveredEvent = events.find((e) => e.normalizedStatusCategory === 'DELIVERED');
-  const latestEventAt = events.map((e) => e.eventOccurredAt).filter(Boolean).sort().reverse()[0] ?? null;
-
+  // Payload had no recognisable events — return an UNKNOWN shell so the caller
+  // still records the check (mirrors the FedEx/UPS empty-result behaviour).
   return {
     carrier: 'USPS',
     trackingNumberNormalized: normalized,
-    latestStatusCategory: topStatus,
-    latestStatusCode: summary?.eventCode ?? summary?.EventCode ?? null,
-    latestStatusLabel: topStatusCategory ?? null,
-    latestStatusDescription: summary?.event ?? summary?.Event ?? null,
-    latestEventAt,
-    deliveredAt: deliveredEvent?.eventOccurredAt ?? null,
-    metadata: extractUSPSMetadata(payload, summary, events),
-    events,
+    latestStatusCategory: 'UNKNOWN',
+    metadata: { source: 'usps-tracking-v3' },
+    events: [],
     payload,
   };
 }

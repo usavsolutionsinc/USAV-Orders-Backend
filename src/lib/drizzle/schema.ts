@@ -96,6 +96,19 @@ export const staffRolesTable = pgTable('staff_roles', {
   roleIdx: index('idx_staff_roles_role').on(table.roleId),
 }));
 
+// Per-staff station assignments (primary + secondary). Governs which stations
+// the header goal chip shows/switches between. See 2026-06-02_staff_stations.sql.
+export const staffStations = pgTable('staff_stations', {
+  staffId: integer('staff_id').notNull().references(() => staff.id, { onDelete: 'cascade' }),
+  station: varchar('station', { length: 20 }).notNull(),
+  isPrimary: boolean('is_primary').notNull().default(false),
+  assignedAt: timestamp('assigned_at', { withTimezone: true }).notNull().defaultNow(),
+  assignedBy: integer('assigned_by').references(() => staff.id, { onDelete: 'set null' }),
+}, (table) => ({
+  pk: primaryKey({ columns: [table.staffId, table.station] }),
+  staffIdx: index('idx_staff_stations_staff').on(table.staffId),
+}));
+
 export const staffPasskeys = pgTable('staff_passkeys', {
   id: bigserial('id', { mode: 'number' }).primaryKey(),
   staffId: integer('staff_id').notNull().references(() => staff.id, { onDelete: 'cascade' }),

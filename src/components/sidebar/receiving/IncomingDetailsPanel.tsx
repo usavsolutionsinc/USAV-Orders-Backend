@@ -13,6 +13,10 @@ import { PaneHeaderTabs } from '@/components/ui/pane-header';
 import { SlideOverBackdrop } from '@/components/ui/SlideOverBackdrop';
 import { copyToClipboard } from '@/utils/_dom';
 import { toast } from '@/lib/toast';
+import { useAblyChannel } from '@/hooks/useAblyChannel';
+import { getStationChannelName } from '@/lib/realtime/channels';
+
+const STATION_CHANNEL = getStationChannelName();
 
 // ── Tab spec ────────────────────────────────────────────────────────────────
 type TabId = 'po' | 'shipment' | 'notes';
@@ -156,6 +160,7 @@ export interface IncomingDetailsPanelProps {
  */
 export function IncomingDetailsPanel({ zohoPurchaseOrderId, poNumberHint, onClose }: IncomingDetailsPanelProps) {
   const [tab, setTab] = useState<TabId>('po');
+  const queryClient = useQueryClient();
 
   // Reset to default tab when the PO changes (different row clicked).
   useEffect(() => setTab('po'), [zohoPurchaseOrderId]);
@@ -171,6 +176,22 @@ export function IncomingDetailsPanel({ zohoPurchaseOrderId, poNumberHint, onClos
       return res.json();
     },
     staleTime: 15_000,
+    // Polling fallback so the carrier status stays live (like the carrier's
+    // own site) even when realtime/Ably is unavailable. Only this open panel
+    // polls — one PO row per minute — and pauses when the tab is hidden, so the
+    // DB cost stays negligible.
+    refetchInterval: 60_000,
+    refetchIntervalInBackground: false,
+    refetchOnWindowFocus: true,
+  });
+
+  // Realtime: a carrier webhook (or poll) that updates this shipment fires
+  // `shipment.changed`; refresh the panel + the incoming list/summary instantly
+  // so the displayed status matches the carrier's live state without a reload.
+  useAblyChannel(STATION_CHANNEL, 'shipment.changed', () => {
+    queryClient.invalidateQueries({ queryKey: ['incoming-details', zohoPurchaseOrderId] });
+    queryClient.invalidateQueries({ queryKey: ['receiving-lines-table'] });
+    queryClient.invalidateQueries({ queryKey: ['receiving-lines-incoming-summary'] });
   });
 
   return (

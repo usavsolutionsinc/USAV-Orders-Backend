@@ -94,6 +94,12 @@ export interface ReceivingLineRow {
   created_at: string | null;
   /** Most-recent scan/receive time. Server sorts view=recent/all by this. */
   last_activity_at?: string | null;
+  /**
+   * Count of recorded testing verdicts for this line (view=testing only;
+   * null on other views). Scoped to the tester when the feed is. Drives the
+   * Testing rail's "tested k/N" without re-deriving from workflow_status.
+   */
+  tested_count?: number | null;
   image_url: string | null;
   source_platform: string | null;
   /**
@@ -160,6 +166,30 @@ function getStatusDotBg(
   if (value === 'PASSED' || value === 'DONE') return 'bg-emerald-500';
   if (value.startsWith('FAILED') || value === 'SCRAP' || value === 'RTV') return 'bg-rose-500';
   return 'bg-gray-400';
+}
+
+/**
+ * Activity timestamp the History feed groups + sorts by: the last scan/receive
+ * (`last_activity_at` — the same axis the Recent rail orders by, per its
+ * "Same as History" label), falling back to created_at. Grouping on created_at
+ * alone bucketed today's scans of older Zoho-PO lines into long-past weeks, so
+ * the current-week History view rendered its empty state while the rail was
+ * full of the very same activity.
+ */
+function receivingRowActivityTs(row: {
+  last_activity_at?: string | null;
+  created_at?: string | null;
+}): string | null {
+  return row.last_activity_at ?? row.created_at ?? null;
+}
+
+function receivingRowActivityMs(row: {
+  last_activity_at?: string | null;
+  created_at?: string | null;
+}): number {
+  const raw = receivingRowActivityTs(row);
+  const t = raw ? new Date(raw).getTime() : 0;
+  return Number.isFinite(t) ? t : 0;
 }
 
 export function ReceivingLineOrderRow({
@@ -636,7 +666,11 @@ export default function ReceivingLinesTable({ selectMode = false }: { selectMode
   const groupedRecords = useMemo(() => {
     const groups: Record<string, ReceivingLineRow[]> = {};
     for (const row of localRows) {
-      const sourceTs = isIncomingMode ? (row.po_date ?? row.created_at) : row.created_at;
+      // History/Receive group by the activity axis (last scan/receive) so the
+      // feed mirrors the Recent rail; Incoming groups by the Zoho PO date.
+      const sourceTs = isIncomingMode
+        ? (row.po_date ?? row.created_at)
+        : receivingRowActivityTs(row);
       let date = 'Unknown';
       try {
         date = toPSTDateKey(sourceTs) || 'Unknown';
@@ -668,11 +702,9 @@ export default function ReceivingLinesTable({ selectMode = false }: { selectMode
         .flatMap(([, dateRows]) =>
           isIncomingMode
             ? dateRows
-            : [...dateRows].sort((a, b) => {
-                const tA = new Date(a.created_at || 0).getTime();
-                const tB = new Date(b.created_at || 0).getTime();
-                return tB - tA;
-              }),
+            : [...dateRows].sort(
+                (a, b) => receivingRowActivityMs(b) - receivingRowActivityMs(a),
+              ),
         ),
     [filteredGroupedRecords, isIncomingMode],
   );
@@ -861,11 +893,9 @@ export default function ReceivingLinesTable({ selectMode = false }: { selectMode
                   // already drives it); other modes re-sort by local created_at.
                   const sortedRows = isIncomingMode
                     ? dateRows
-                    : [...dateRows].sort((a, b) => {
-                        const tA = new Date(a.created_at || 0).getTime();
-                        const tB = new Date(b.created_at || 0).getTime();
-                        return tB - tA;
-                      });
+                    : [...dateRows].sort(
+                        (a, b) => receivingRowActivityMs(b) - receivingRowActivityMs(a),
+                      );
                   return (
                     <div key={date} className="flex flex-col">
                       <DesktopDateGroupHeader date={date} total={dateRows.length} />

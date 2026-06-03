@@ -18,6 +18,7 @@ import {
     Cpu,
 } from './Icons';
 import { motion, AnimatePresence } from 'framer-motion';
+import { SIDEBAR_GUTTER } from '@/components/layout/header-shell';
 import { ShippedIntakeForm, type ShippedFormData } from './shipped';
 import { ShippedDetailsPanel } from './shipped/ShippedDetailsPanel';
 import { ShippedOrder } from '@/lib/neon/orders-queries';
@@ -297,7 +298,7 @@ Shipped: ${result.packed_at ? formatDateTimePST(result.packed_at) : 'Not Shipped
     ) : (
         <motion.div initial="hidden" animate="visible" variants={containerVariants} className="h-full flex flex-col overflow-hidden">
             {filterControl ? <motion.div variants={itemVariants} className="relative z-20">{filterControl}</motion.div> : null}
-            <div className={`h-full flex flex-col space-y-4 overflow-y-auto scrollbar-hide px-6 pb-6 ${filterControl ? 'pt-4' : 'pt-6'}`}>
+            <div className={`h-full flex flex-col space-y-4 overflow-y-auto scrollbar-hide ${SIDEBAR_GUTTER} pb-6 ${filterControl ? 'pt-4' : 'pt-6'}`}>
                     {!hideSectionHeader ? (
                         <motion.header variants={itemVariants}>
                             <h2 className="text-xl font-black tracking-tighter uppercase leading-none text-gray-900">
@@ -496,10 +497,6 @@ Shipped: ${result.packed_at ? formatDateTimePST(result.packed_at) : 'Not Shipped
                             />
                         )}
                     </motion.div>
-
-                    <motion.footer variants={itemVariants} className="mt-auto pt-4 border-t border-gray-200 opacity-30 text-center">
-                        <p className="text-eyebrow font-mono uppercase tracking-[0.2em] text-gray-500">USAV SHIPPED</p>
-                    </motion.footer>
             </div>
         </motion.div>
     );

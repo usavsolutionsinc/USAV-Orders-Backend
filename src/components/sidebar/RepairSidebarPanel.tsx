@@ -6,7 +6,8 @@ import { createPortal } from 'react-dom';
 import { Check, Clock, Loader2, Plus, Tool } from '@/components/Icons';
 import { SearchBar } from '@/components/ui/SearchBar';
 import { HorizontalButtonSlider, type HorizontalSliderItem } from '@/components/ui/HorizontalButtonSlider';
-import { sidebarHeaderPillRowClass, sidebarHeaderRowClass } from '@/components/layout/header-shell';
+import { sidebarHeaderPillRowClass, sidebarHeaderRowClass, SIDEBAR_GUTTER } from '@/components/layout/header-shell';
+import { useMasterNavEnabled } from '@/components/sidebar/master-nav';
 import { useBodyScrollLock } from '@/design-system/hooks';
 import { toast } from '@/lib/toast';
 
@@ -72,6 +73,7 @@ export function RepairSidebarPanel({ embedded = false, hideSectionHeader = false
   // retries (so a replay dedupes the Zendesk ticket) and is cleared on success.
   const repairIdemKey = useRef<string | null>(null);
 
+  const masterNavEnabled = useMasterNavEnabled();
   const rawTab = searchParams.get('tab');
   const activeTab: RepairTab = rawTab === 'incoming' ? 'incoming' : rawTab === 'done' ? 'done' : 'active';
 
@@ -201,7 +203,7 @@ export function RepairSidebarPanel({ embedded = false, hideSectionHeader = false
     <div className="flex h-full flex-col overflow-hidden bg-white">
       <div className="shrink-0">
         {!hideSectionHeader ? (
-          <div className="border-b border-gray-100 px-4 pt-4 pb-3">
+          <div className={`border-b border-gray-100 ${SIDEBAR_GUTTER} pt-4 pb-3`}>
             <p className={`${sectionLabel} text-orange-500`}>Repair Service</p>
             <h2 className={`mt-1 ${cardTitle}`}>Repairs</h2>
           </div>
@@ -240,25 +242,27 @@ export function RepairSidebarPanel({ embedded = false, hideSectionHeader = false
           />
         </div>
 
-        <div className={sidebarHeaderPillRowClass}>
-          <HorizontalButtonSlider
-            items={REPAIR_TAB_ITEMS}
-            value={activeTab}
-            onChange={(tab) =>
-              updateParams((params) => {
-                if (tab === 'active') params.delete('tab');
-                else params.set('tab', tab);
-              })
-            }
-            variant="nav"
-            dense
-            className="w-full"
-            aria-label="Repair queue"
-          />
-        </div>
+        {!masterNavEnabled && (
+          <div className={sidebarHeaderPillRowClass}>
+            <HorizontalButtonSlider
+              items={REPAIR_TAB_ITEMS}
+              value={activeTab}
+              onChange={(tab) =>
+                updateParams((params) => {
+                  if (tab === 'active') params.delete('tab');
+                  else params.set('tab', tab);
+                })
+              }
+              variant="nav"
+              dense
+              className="w-full"
+              aria-label="Repair queue"
+            />
+          </div>
+        )}
       </div>
 
-      <div className="relative flex-1 overflow-y-auto px-4 py-4">
+      <div className={`relative flex-1 overflow-y-auto ${SIDEBAR_GUTTER} py-4`}>
         {isFetchingFavorite && (
           <div className="absolute inset-0 z-10 flex items-center justify-center rounded-2xl bg-white/80 backdrop-blur-sm">
             <div className="flex items-center gap-2 text-orange-500">

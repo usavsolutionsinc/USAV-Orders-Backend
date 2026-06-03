@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { sidebarHeaderBandClass, sidebarHeaderRowClass } from '@/components/layout/header-shell';
+import { sidebarHeaderBandClass, sidebarHeaderRowClass, SIDEBAR_GUTTER } from '@/components/layout/header-shell';
 import { SearchBar } from '@/components/ui/SearchBar';
 import { FileText, ExternalLink } from '@/components/Icons';
 import { sectionLabel } from '@/design-system/tokens/typography/presets';
@@ -159,7 +159,7 @@ export function ManualsSidebar({ embedded = false }: { embedded?: boolean }) {
         </div>
       )}
 
-      <div className="flex-1 overflow-y-auto px-2 py-2">
+      <div className={`flex-1 overflow-y-auto ${SIDEBAR_GUTTER} py-2`}>
         {isLoading && manuals.length === 0 ? (
           <div className="flex items-center justify-center py-12">
             <div className="text-center space-y-2">
@@ -190,7 +190,7 @@ export function ManualsSidebar({ embedded = false }: { embedded?: boolean }) {
         )}
       </div>
 
-      <div className="border-t border-gray-100 bg-white px-3 py-2">
+      <div className={`border-t border-gray-100 bg-white ${SIDEBAR_GUTTER} py-2`}>
         <p className="text-eyebrow font-bold uppercase tracking-[0.2em] text-gray-500">
           {manuals.length} manual{manuals.length !== 1 ? 's' : ''}
           {localSearch.trim() ? ` for "${localSearch.trim()}"` : ' total'}

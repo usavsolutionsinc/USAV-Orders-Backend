@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { FileText, Loader2, Search, X, ChevronLeft } from '@/components/Icons';
 import { microBadge, tableHeader } from '@/design-system/tokens/typography/presets';
-import { sidebarHeaderBandClass, sidebarHeaderRowClass } from '@/components/layout/header-shell';
+import { sidebarHeaderBandClass, sidebarHeaderRowClass, SIDEBAR_GUTTER } from '@/components/layout/header-shell';
 import { HorizontalButtonSlider, type HorizontalSliderItem } from '@/components/ui/HorizontalButtonSlider';
 
 type StatusFilter = 'all' | 'unassigned' | 'assigned' | 'archived';
@@ -340,7 +340,7 @@ export function ManualsLibrarySidebar() {
       </div>
 
       {/* Mode slider */}
-      <div className="shrink-0 border-b border-gray-200 bg-white px-3 py-1.5">
+      <div className={`shrink-0 border-b border-gray-200 bg-white ${SIDEBAR_GUTTER} py-1.5`}>
         <HorizontalButtonSlider
           items={MODE_ITEMS}
           value="library"
@@ -352,7 +352,7 @@ export function ManualsLibrarySidebar() {
       </div>
 
       {/* Search */}
-      <div className="border-b border-gray-100 bg-white px-3 py-3">
+      <div className={`border-b border-gray-100 bg-white ${SIDEBAR_GUTTER} py-3`}>
         <div className="relative">
           <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
           <input
@@ -376,7 +376,7 @@ export function ManualsLibrarySidebar() {
       </div>
 
       {/* Status pills */}
-      <div className="flex shrink-0 gap-1 border-b border-gray-100 bg-white px-3 py-2">
+      <div className={`flex shrink-0 gap-1 border-b border-gray-100 bg-white ${SIDEBAR_GUTTER} py-2`}>
         {STATUS_OPTIONS.map((opt) => (
           <button
             key={opt.value}
@@ -395,7 +395,7 @@ export function ManualsLibrarySidebar() {
 
       {/* Breadcrumb (only when browsing, not searching) */}
       {!debouncedQuery && (
-        <div className="flex shrink-0 items-center gap-1 overflow-x-auto border-b border-gray-100 bg-white/80 px-3 py-2 backdrop-blur-sm">
+        <div className={`flex shrink-0 items-center gap-1 overflow-x-auto border-b border-gray-100 bg-white/80 ${SIDEBAR_GUTTER} py-2 backdrop-blur-sm`}>
           <button
             type="button"
             onClick={() => goToCrumb(0)}
@@ -428,7 +428,7 @@ export function ManualsLibrarySidebar() {
       )}
 
       {/* Body */}
-      <div className="min-h-0 flex-1 overflow-y-auto px-2.5 py-3">
+      <div className={`min-h-0 flex-1 overflow-y-auto ${SIDEBAR_GUTTER} py-3`}>
         {loading ? (
           <div className="flex items-center justify-center py-16">
             <Loader2 className="h-5 w-5 animate-spin text-gray-400" />

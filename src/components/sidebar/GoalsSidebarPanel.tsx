@@ -8,6 +8,7 @@ import { Loader2, RefreshCw, X } from '@/components/Icons';
 import { sectionLabel, dataValue, fieldLabel } from '@/design-system/tokens/typography/presets';
 import { getAllStaffGoals, invalidateStaffGoalsCache, type GoalRow } from '@/lib/staffGoalsCache';
 import { getStaffThemeById, stationThemeColors } from '@/utils/staff-colors';
+import { SIDEBAR_GUTTER } from '@/components/layout/header-shell';
 
 const GOAL_VIEW_OPTIONS = [
   { value: 'all', label: 'All Staff' },
@@ -316,7 +317,7 @@ export function GoalsSidebarPanel() {
         />
       </div>
 
-      <div className="border-b border-gray-200 px-3 py-3">
+      <div className={`border-b border-gray-200 ${SIDEBAR_GUTTER} py-3`}>
         <SearchBar
           value={searchValue}
           onChange={(value) => updateParams({ search: value })}
@@ -326,7 +327,7 @@ export function GoalsSidebarPanel() {
         />
       </div>
 
-      <div className="flex-1 overflow-y-auto px-3 py-4 space-y-5">
+      <div className={`flex-1 overflow-y-auto ${SIDEBAR_GUTTER} py-4 space-y-5`}>
         <section className="space-y-2">
           <div className="flex items-center justify-between px-1">
             <p className={sectionLabel}>Current Goals</p>

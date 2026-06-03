@@ -23,7 +23,7 @@ import {
 import { microBadge } from '@/design-system/tokens/typography/presets';
 import { SearchBar } from '@/components/ui/SearchBar';
 import { HorizontalButtonSlider, type HorizontalSliderItem } from '@/components/ui/HorizontalButtonSlider';
-import { sidebarHeaderRowClass, sidebarHeaderPillRowClass } from '@/components/layout/header-shell';
+import { sidebarHeaderRowClass, sidebarHeaderPillRowClass, SIDEBAR_GUTTER } from '@/components/layout/header-shell';
 import {
     INVENTORY_SEARCH_FIELDS,
     getInventorySearchPlaceholder,
@@ -273,7 +273,7 @@ export function InventorySidebar({ embedded = true }: InventorySidebarProps) {
             ) : null}
 
             {/* Scroll area: helper text + cross-tab + results + recent + footer */}
-            <motion.div variants={itemVariants} className="flex-1 overflow-y-auto scrollbar-hide px-5 pt-4 pb-5 space-y-4">
+            <motion.div variants={itemVariants} className={`flex-1 overflow-y-auto scrollbar-hide ${SIDEBAR_GUTTER} pt-4 pb-5 space-y-4`}>
                 <p className={`${microBadge} text-gray-500 px-1`}>
                     {getInventorySearchHelperText(tab, field)}
                 </p>

@@ -14,12 +14,13 @@
 
 import { useCallback, useMemo } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { sidebarHeaderBandClass } from '@/components/layout/header-shell';
+import { sidebarHeaderBandClass, SIDEBAR_GUTTER } from '@/components/layout/header-shell';
 import {
   HorizontalButtonSlider,
   type HorizontalSliderItem,
 } from '@/components/ui/HorizontalButtonSlider';
 import { LayoutDashboard, Box, Printer, MapPin, Layers } from '@/components/Icons';
+import { useMasterNavEnabled } from '@/components/sidebar/master-nav';
 import { useLocations } from '@/hooks/useLocations';
 import { SkuLocationFinder } from '@/components/warehouse/SkuLocationFinder';
 import { MapLegend, type MapViewMode } from '@/components/warehouse/WarehouseMap';
@@ -39,6 +40,7 @@ function parseTab(raw: string | null): InventoryTab {
 export function WarehouseSidebarPanel() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const masterNavEnabled = useMasterNavEnabled();
   const tab = parseTab(searchParams.get('tab'));
   const { rooms, bins } = useLocations();
 
@@ -83,14 +85,16 @@ export function WarehouseSidebarPanel() {
     <RoomFinderProvider>
       <div className="h-full flex flex-col overflow-hidden bg-white">
         <div className={sidebarHeaderBandClass}>
-          <div className="space-y-2 px-3 py-2">
-            <HorizontalButtonSlider
-              variant="nav"
-              items={tabItems}
-              value={tab}
-              onChange={(id) => setTab(id as InventoryTab)}
-              aria-label="Warehouse section"
-            />
+          <div className={`space-y-2 ${SIDEBAR_GUTTER} py-2`}>
+            {!masterNavEnabled && (
+              <HorizontalButtonSlider
+                variant="nav"
+                items={tabItems}
+                value={tab}
+                onChange={(id) => setTab(id as InventoryTab)}
+                aria-label="Warehouse section"
+              />
+            )}
             {isRoomFinderTab ? (
               <RoomFinderSearchBar tab={tab} />
             ) : (
@@ -160,7 +164,7 @@ function LabelsSidebarBody() {
       <div className="hidden lg:block">
         <BinLabelPrinter variant="sidebar" />
       </div>
-      <div className="space-y-3 p-4 lg:hidden">
+      <div className={`space-y-3 ${SIDEBAR_GUTTER} py-4 lg:hidden`}>
         <p className="text-caption text-gray-500">
           Build a bin label in the main workspace — pick a room, then drill into
           aisle, bay, level, and position. Live preview + QR render alongside the
@@ -182,7 +186,7 @@ function RacksSidebarBody() {
       <div className="hidden lg:block">
         <RackLabelPrinter variant="sidebar" />
       </div>
-      <div className="space-y-3 p-4 lg:hidden">
+      <div className={`space-y-3 ${SIDEBAR_GUTTER} py-4 lg:hidden`}>
         <p className="text-caption text-gray-500">
           Print a rack-level label in the main workspace — pick a room, then
           aisle, bay, and level. No position needed; one label covers the whole
@@ -201,7 +205,7 @@ function RacksSidebarBody() {
 
 function BinsSidebarBody() {
   return (
-    <div className="space-y-3 p-4">
+    <div className={`space-y-3 ${SIDEBAR_GUTTER} py-4`}>
       <p className="text-caption text-gray-500">
         Filter, sort, and select bins in the table to the right. Click any
         bin to see its full contents + history.
@@ -247,7 +251,7 @@ function MapSidebarBody() {
   };
 
   return (
-    <div className="space-y-4 p-4">
+    <div className={`space-y-4 ${SIDEBAR_GUTTER} py-4`}>
       <div>
         <h3 className="mb-2 text-micro font-bold uppercase tracking-[0.16em] text-gray-500">
           View by

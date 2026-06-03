@@ -1,17 +1,29 @@
 import {
   AlertCircle,
+  AlertTriangle,
+  Barcode,
   Box,
   Calendar,
+  Check,
   ClipboardList,
+  Clock,
   FileText,
+  Inbox,
+  Layers,
   LayoutDashboard,
+  Link2,
+  List,
   MapPin,
   MessageSquare,
   Monitor,
   Package,
+  PackageCheck,
+  Printer,
   Settings,
   ShieldCheck,
   ShoppingCart,
+  TrendingUp,
+  Truck,
   User,
   Wrench,
 } from '@/components/Icons';
@@ -211,4 +223,226 @@ export function permissionForPath(pathname: string): string | null {
     }
   }
   return null;
+}
+
+/* ════════════════════ MASTER SIDEBAR NAV — page + mode ════════════════════
+ *
+ * Single source of truth for the "master nav dropdown" (see
+ * docs/design-system/master-sidebar-nav-migration-plan.md). Each page that has
+ * an L2 mode row declares its modes here, plus the two halves of its URL
+ * contract:
+ *   • `to()`   — how navigating to a mode mutates the URL (the WRITE path).
+ *   • `resolveMode()` — how the active mode is read back from a location (the
+ *     READ path). This MIRRORS the panel's own derivation today so deep-links
+ *     resolve identically; panels will eventually import this instead of
+ *     re-implementing `getReceivingModeFromLocation` / `resolveFbaMode` / etc.
+ *
+ * P0 (this file) is pure data + pure functions — no components, no router.
+ * The round-trip invariant `resolveMode(apply(to(mode))) === mode` is enforced
+ * by sidebar-navigation.test.ts so the two halves can never silently diverge.
+ */
+
+/** A search-param delta map: value to set, or `null` to delete the key. */
+export type SearchParamDelta = Record<string, string | null>;
+
+export interface ModeNavTarget {
+  /** Absolute pathname to land on (a mode may live on a sub-path, e.g. unfound). */
+  pathname: string;
+  /** Search-param mutations applied on top of the current params. */
+  params?: SearchParamDelta;
+}
+
+export interface ModeLocation {
+  pathname: string;
+  params: Pick<URLSearchParams, 'get' | 'has'>;
+}
+
+export interface SidebarModeItem {
+  id: string;
+  label: string;
+  icon: SidebarIconComponent;
+  /** Build the nav target for this mode (relative to the page's base href). */
+  to: () => ModeNavTarget;
+  /** Optional per-mode permission gate (e.g. admin sub-sections). */
+  requires?: string;
+}
+
+export interface SidebarPageNav extends SidebarNavItem {
+  /** L2 modes. Omitted for single-surface pages (no mode row). */
+  modes?: SidebarModeItem[];
+  /**
+   * Read the active mode id from a location. Always returns an id present in
+   * `modes` (defaulting to the page's leftmost/default mode). Only defined for
+   * pages that have `modes`.
+   */
+  resolveMode?: (loc: ModeLocation) => string;
+}
+
+// Page hrefs are repeated from APP_SIDEBAR_NAV so each mode's `to()` is a pure,
+// self-contained literal (no closure over the array).
+const DASHBOARD = '/dashboard';
+const RECEIVING = '/receiving';
+const FBA = '/fba';
+const INVENTORY = '/inventory';
+const WAREHOUSE = '/warehouse';
+const PRODUCTS = '/products';
+const TECH = '/tech';
+const WALK_IN = '/walk-in';
+
+export const SIDEBAR_PAGE_NAV: SidebarPageNav[] = [
+  // ── Orders / Shipping ─────────────────────────────────────────────────────
+  // Bare presence params (`?pending` / `?shipped` / `?unshipped`); first match
+  // wins in the reader, default `pending`. (FBA order-view is its own page.)
+  {
+    id: 'dashboard', label: 'Orders / Shipping', href: DASHBOARD, icon: LayoutDashboard, kind: 'main', requires: 'dashboard.view',
+    modes: [
+      { id: 'pending',   label: 'Pending',  icon: Clock,        to: () => ({ pathname: DASHBOARD, params: { pending: '', shipped: null, unshipped: null, fba: null } }) },
+      { id: 'shipped',   label: 'Shipped',  icon: PackageCheck, to: () => ({ pathname: DASHBOARD, params: { shipped: '', pending: null, unshipped: null, fba: null } }) },
+      { id: 'unshipped', label: 'Awaiting', icon: AlertCircle,  to: () => ({ pathname: DASHBOARD, params: { unshipped: '', pending: null, shipped: null, fba: null } }) },
+    ],
+    resolveMode: ({ params }) => {
+      if (params.has('shipped')) return 'shipped';
+      if (params.has('unshipped')) return 'unshipped';
+      return 'pending';
+    },
+  },
+  // ── Receiving ─────────────────────────────────────────────────────────────
+  // `?mode=incoming|history|pickup`; `unfound` lives on the /receiving/unfound
+  // sub-path; default `receive` on the bare /receiving path.
+  {
+    id: 'receiving', label: 'Receiving', href: RECEIVING, icon: ClipboardList, kind: 'station', requires: 'receiving.view',
+    modes: [
+      { id: 'receive',  label: 'Receiving',    icon: ClipboardList,  to: () => ({ pathname: RECEIVING, params: { mode: null } }) },
+      { id: 'incoming', label: 'Incoming',     icon: Inbox,          to: () => ({ pathname: RECEIVING, params: { mode: 'incoming' } }) },
+      { id: 'history',  label: 'History',      icon: List,           to: () => ({ pathname: RECEIVING, params: { mode: 'history' } }) },
+      { id: 'unfound',  label: 'Unfound',      icon: AlertTriangle,  to: () => ({ pathname: `${RECEIVING}/unfound`, params: { mode: null } }) },
+      { id: 'pickup',   label: 'Local Pickup', icon: ShoppingCart,   to: () => ({ pathname: RECEIVING, params: { mode: 'pickup' } }) },
+    ],
+    resolveMode: ({ pathname, params }) => {
+      if (pathname.startsWith(`${RECEIVING}/unfound`)) return 'unfound';
+      const m = params.get('mode');
+      if (m === 'pickup') return 'pickup';
+      if (m === 'history') return 'history';
+      if (m === 'incoming') return 'incoming';
+      return 'receive';
+    },
+  },
+  // ── Amazon FBA ────────────────────────────────────────────────────────────
+  // `?mode=plan|combine|shipped`; default `combine` (param cleared).
+  {
+    id: 'fba', label: 'Amazon FBA', href: FBA, icon: Package, kind: 'station', requires: 'fba.view',
+    modes: [
+      { id: 'plan',    label: 'Plan',    icon: ClipboardList, to: () => ({ pathname: FBA, params: { mode: 'plan' } }) },
+      { id: 'combine', label: 'Combine', icon: Package,       to: () => ({ pathname: FBA, params: { mode: null } }) },
+      { id: 'shipped', label: 'Shipped', icon: Truck,         to: () => ({ pathname: FBA, params: { mode: 'shipped' } }) },
+    ],
+    resolveMode: ({ params }) => {
+      const v = String(params.get('mode') || '').trim().toLowerCase();
+      return v === 'plan' || v === 'shipped' ? v : 'combine';
+    },
+  },
+  // ── Inventory ─────────────────────────────────────────────────────────────
+  // `?section=replenish`; default `inventory` (param cleared).
+  {
+    id: 'inventory', label: 'Inventory', href: INVENTORY, icon: Package, kind: 'main', requires: 'sku_stock.view',
+    modes: [
+      { id: 'inventory', label: 'Inventory', icon: Package,     to: () => ({ pathname: INVENTORY, params: { section: null } }) },
+      { id: 'replenish', label: 'Replenish', icon: TrendingUp,  to: () => ({ pathname: INVENTORY, params: { section: 'replenish' } }) },
+    ],
+    resolveMode: ({ params }) => (params.get('section') === 'replenish' ? 'replenish' : 'inventory'),
+  },
+  // ── Warehouse ─────────────────────────────────────────────────────────────
+  // `?tab=labels|racks|rooms|bins|map`; default `labels` (param cleared).
+  {
+    id: 'warehouse', label: 'Warehouse', href: WAREHOUSE, icon: MapPin, kind: 'main', requires: 'sku_stock.view',
+    modes: [
+      { id: 'labels', label: 'Labels', icon: Printer,  to: () => ({ pathname: WAREHOUSE, params: { tab: null } }) },
+      { id: 'racks',  label: 'Racks',  icon: Layers,   to: () => ({ pathname: WAREHOUSE, params: { tab: 'racks' } }) },
+      { id: 'rooms',  label: 'Rooms',  icon: Box,      to: () => ({ pathname: WAREHOUSE, params: { tab: 'rooms' } }) },
+      { id: 'bins',   label: 'Bins',   icon: Package,  to: () => ({ pathname: WAREHOUSE, params: { tab: 'bins' } }) },
+      { id: 'map',    label: 'Map',    icon: MapPin,   to: () => ({ pathname: WAREHOUSE, params: { tab: 'map' } }) },
+    ],
+    resolveMode: ({ params }) => {
+      const t = params.get('tab');
+      return t === 'rooms' || t === 'bins' || t === 'racks' || t === 'map' ? t : 'labels';
+    },
+  },
+  // ── Products ──────────────────────────────────────────────────────────────
+  // `?view=manuals|labels|pairing|qc`; default `manuals` (param cleared).
+  {
+    id: 'products', label: 'Products', href: PRODUCTS, icon: Box, kind: 'main', requires: 'sku_stock.view',
+    modes: [
+      { id: 'manuals', label: 'Manuals', icon: FileText, to: () => ({ pathname: PRODUCTS, params: { view: null } }) },
+      { id: 'labels',  label: 'Labels',  icon: Barcode,  to: () => ({ pathname: PRODUCTS, params: { view: 'labels' } }) },
+      { id: 'pairing', label: 'Pairing', icon: Link2,    to: () => ({ pathname: PRODUCTS, params: { view: 'pairing' } }) },
+      { id: 'qc',      label: 'QC',      icon: Check,     to: () => ({ pathname: PRODUCTS, params: { view: 'qc' } }) },
+    ],
+    resolveMode: ({ params }) => {
+      const v = params.get('view');
+      return v === 'labels' || v === 'pairing' || v === 'qc' ? v : 'manuals';
+    },
+  },
+  // ── Testing ───────────────────────────────────────────────────────────────
+  // `?view=`: `testing` flips the top mode; pending/history are shipping
+  // sub-modes; default `shipped` (param cleared). Flattened per plan D3.
+  {
+    id: 'tech', label: 'Testing', href: TECH, icon: Wrench, kind: 'station', requires: 'tech.view',
+    modes: [
+      { id: 'shipped', label: 'Shipped', icon: Truck, to: () => ({ pathname: TECH, params: { view: null } }) },
+      { id: 'pending', label: 'Pending', icon: Clock, to: () => ({ pathname: TECH, params: { view: 'pending' } }) },
+      { id: 'history', label: 'History', icon: List,  to: () => ({ pathname: TECH, params: { view: 'history' } }) },
+      { id: 'testing', label: 'Testing', icon: Wrench, to: () => ({ pathname: TECH, params: { view: 'testing' } }) },
+    ],
+    resolveMode: ({ params }) => {
+      const v = params.get('view');
+      return v === 'pending' || v === 'history' || v === 'testing' ? v : 'shipped';
+    },
+  },
+  // ── Walk-In (Repair queue tabs) ───────────────────────────────────────────
+  // `?tab=incoming|active|done`; default `active`. /repair routes onto this
+  // page key too (see getSidebarRouteKey).
+  {
+    id: 'walk-in', label: 'Walk-In', href: WALK_IN, icon: ShoppingCart, kind: 'main', requires: 'walk_in.view',
+    modes: [
+      { id: 'incoming', label: 'Incoming', icon: Inbox,  to: () => ({ pathname: WALK_IN, params: { tab: 'incoming' } }) },
+      { id: 'active',   label: 'Active',   icon: Wrench, to: () => ({ pathname: WALK_IN, params: { tab: null } }) },
+      { id: 'done',     label: 'Done',     icon: Check,  to: () => ({ pathname: WALK_IN, params: { tab: 'done' } }) },
+    ],
+    resolveMode: ({ params }) => {
+      const t = params.get('tab');
+      return t === 'incoming' || t === 'done' ? t : 'active';
+    },
+  },
+];
+
+/** Lookup a page's nav entry (modes + resolver) by its route/page id. */
+export function getSidebarPageNav(pageId: string): SidebarPageNav | undefined {
+  return SIDEBAR_PAGE_NAV.find((page) => page.id === pageId);
+}
+
+/**
+ * Apply a mode's `ModeNavTarget` to the current location, returning the next
+ * `{ pathname, search }`. `search` has no leading `?`. Pure — does not touch the
+ * router. The eventual nav hook decides push-vs-replace around this.
+ */
+export function applyModeTarget(
+  current: { pathname: string; params: Pick<URLSearchParams, 'toString'> },
+  target: ModeNavTarget,
+): { pathname: string; search: string } {
+  const params = new URLSearchParams(current.params.toString());
+  for (const [key, value] of Object.entries(target.params ?? {})) {
+    if (value === null) params.delete(key);
+    else params.set(key, value);
+  }
+  return { pathname: target.pathname, search: params.toString() };
+}
+
+/**
+ * Read the active mode id for a page from a location. Returns `null` for
+ * single-surface pages (no modes). Mirrors each panel's own derivation.
+ */
+export function resolveSidebarMode(pageId: string, loc: ModeLocation): string | null {
+  const page = getSidebarPageNav(pageId);
+  if (!page?.resolveMode) return null;
+  return page.resolveMode(loc);
 }

@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { HorizontalButtonSlider, type HorizontalSliderItem } from '@/components/ui/HorizontalButtonSlider';
 import { SidebarRailShell } from '@/components/sidebar/SidebarRailShell';
+import { SIDEBAR_GUTTER } from '@/components/layout/header-shell';
 import { FbaActiveShipments } from '@/components/fba/sidebar/FbaActiveShipments';
 import { useFbaBoardSelection } from '@/components/fba/hooks/useFbaBoardSelection';
 import { FBA_STATUS_LABEL } from '@/lib/fba/status';
@@ -98,7 +99,7 @@ export function FbaPlanRail() {
   const [view, setView] = useState<'planned' | 'tested'>('planned');
   return (
     <div>
-      <div className="px-3 pt-2">
+      <div className={`${SIDEBAR_GUTTER} pt-2`}>
         <HorizontalButtonSlider items={PLAN_PILLS} value={view} onChange={(v) => setView(v as 'planned' | 'tested')} variant="nav" aria-label="Plan view" />
       </div>
       {view === 'planned'
@@ -124,7 +125,7 @@ export function FbaCombineRail({ stationTheme = 'green' }: { stationTheme?: Stat
   }, []);
   return (
     <div>
-      <div className="px-3 pt-2">
+      <div className={`${SIDEBAR_GUTTER} pt-2`}>
         <HorizontalButtonSlider items={COMBINE_PILLS} value={view} onChange={(v) => setView(v as 'recent' | 'packed')} variant="nav" aria-label="Combine view" />
       </div>
       {view === 'recent'

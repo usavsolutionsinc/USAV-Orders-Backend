@@ -184,6 +184,13 @@ export const Loader2 = ({ className = "w-6 h-6" }: { className?: string }) => (
     </svg>
 );
 
+// Funnel — the industry-standard "Filter" glyph.
+export const Filter = ({ className = "w-6 h-6" }: { className?: string }) => (
+    <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4h18l-7 8v6l-4 2v-8L3 4z" />
+    </svg>
+);
+
 export const Menu = ({ className = "w-6 h-6" }: { className?: string }) => (
     <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
@@ -432,6 +439,15 @@ export const Smartphone = ({ className = "w-6 h-6" }: { className?: string }) =>
     <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <rect x="5" y="2" width="14" height="20" rx="2" strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} />
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 18h.01" />
+    </svg>
+);
+
+export const QrCode = ({ className = "w-6 h-6" }: { className?: string }) => (
+    <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <rect x="3" y="3" width="7" height="7" rx="1" strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} />
+        <rect x="14" y="3" width="7" height="7" rx="1" strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} />
+        <rect x="3" y="14" width="7" height="7" rx="1" strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} />
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14 14h3v3M21 14v.01M14 21h3M21 17v4" />
     </svg>
 );
 

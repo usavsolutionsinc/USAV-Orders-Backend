@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { X } from '@/components/Icons';
+import { Trash2 } from '@/components/Icons';
 import { DetailsStackProps } from './types';
 import { ShippedDetailsPanelContent } from '../ShippedDetailsPanelContent';
 import { dispatchCloseShippedDetails, dispatchDashboardAndStationRefresh } from '@/utils/events';
@@ -158,7 +158,8 @@ export function TechDetailsStack({
   };
 
   return (
-    <div className="pb-8 pt-4 space-y-4">
+    <div className="flex min-h-full flex-col pb-8 pt-4">
+      <div className="flex-1">
       <ShippedDetailsPanelContent
         shipped={{
           ...shipped,
@@ -189,6 +190,7 @@ export function TechDetailsStack({
         showTestingInformation={false}
         activeSection={activeSection}
       />
+      </div>
 
       <section className="mx-8 pt-2">
         <button
@@ -197,12 +199,12 @@ export function TechDetailsStack({
           disabled={isDeleting}
           className="w-full h-10 inline-flex items-center justify-center gap-1.5 rounded-xl bg-red-600 hover:bg-red-700 text-white text-micro font-black uppercase tracking-wider disabled:opacity-50"
         >
-          <X className="w-3 h-3" />
+          <Trash2 className="w-3.5 h-3.5" />
           {isDeleting
             ? 'Deleting...'
             : isDeleteArmed
               ? 'Click Again To Confirm'
-              : 'Delete Tech Order'}
+              : 'Delete'}
         </button>
       </section>
     </div>

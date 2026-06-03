@@ -416,8 +416,7 @@ export function ShippedDetailsPanel({
         }
       />
 
-      <div className="flex-1 overflow-y-auto no-scrollbar">
-        <div className="pb-8 pt-4 space-y-4">
+      <div className="flex min-h-0 flex-1 flex-col overflow-y-auto no-scrollbar">
           {context === 'dashboard' || context === 'queue' ? (
             <DashboardDetailsStack
               shipped={shipped}
@@ -456,56 +455,57 @@ export function ShippedDetailsPanel({
               activeSection={activeSection}
             />
           ) : (
-            <>
-              <ShippedDetailsPanelContent
-                activeSection={activeSection}
-                shipped={{
-                  ...shipped,
-                  order_id: orderNumber,
-                  item_number: itemNumber,
-                  shipping_tracking_number: shippingTrackingNumber,
-                }}
-                durationData={durationData}
-                copiedAll={copiedAll}
-                onCopyAll={handleCopyAll}
-                onUpdate={_onUpdate}
-                editableShippingFields={{
-                  orderNumber,
-                  itemNumber,
-                  trackingNumber: shippingTrackingNumber,
-                  shipByDate,
-                  isSaving: isSavingInlineFields,
-                  isSavingShipByDate,
-                  onOrderNumberChange: setOrderNumber,
-                  onItemNumberChange: setItemNumber,
-                  onTrackingNumberChange: setShippingTrackingNumber,
-                  onShipByDateChange: setShipByDate,
-                  onBlur: () => { void saveInlineFields(); },
-                  onShipByDateBlur: () => { void saveShipByDate(shipByDate); },
-                }}
-                showShippingTimestamp={false}
-              />
-            </>
-          )}
+            <div className="flex min-h-full flex-col pb-8 pt-4">
+              <div className="flex-1 space-y-4">
+                <ShippedDetailsPanelContent
+                  activeSection={activeSection}
+                  shipped={{
+                    ...shipped,
+                    order_id: orderNumber,
+                    item_number: itemNumber,
+                    shipping_tracking_number: shippingTrackingNumber,
+                  }}
+                  durationData={durationData}
+                  copiedAll={copiedAll}
+                  onCopyAll={handleCopyAll}
+                  onUpdate={_onUpdate}
+                  editableShippingFields={{
+                    orderNumber,
+                    itemNumber,
+                    trackingNumber: shippingTrackingNumber,
+                    shipByDate,
+                    isSaving: isSavingInlineFields,
+                    isSavingShipByDate,
+                    onOrderNumberChange: setOrderNumber,
+                    onItemNumberChange: setItemNumber,
+                    onTrackingNumberChange: setShippingTrackingNumber,
+                    onShipByDateChange: setShipByDate,
+                    onBlur: () => { void saveInlineFields(); },
+                    onShipByDateBlur: () => { void saveShipByDate(shipByDate); },
+                  }}
+                  showShippingTimestamp={false}
+                />
+              </div>
 
-          {context === 'shipped' && (
-            <section className="mx-8 pt-2">
-              <button
-                type="button"
-                onClick={handleDeleteOrder}
-                disabled={isDeletingOrder}
-                className={`w-full h-10 inline-flex items-center justify-center gap-2 rounded-xl bg-red-600 hover:bg-red-700 ${sectionLabel} text-white tracking-wider disabled:opacity-50`}
-              >
-                <Trash2 className="w-3.5 h-3.5" />
-                {isDeletingOrder
-                  ? 'Deleting...'
-                  : isDeleteArmed
-                    ? 'Click Again To Confirm'
-                    : 'Delete Permanently'}
-              </button>
-            </section>
+              {context === 'shipped' && (
+                <section className="mx-8 pt-2">
+                  <button
+                    type="button"
+                    onClick={handleDeleteOrder}
+                    disabled={isDeletingOrder}
+                    className={`w-full h-10 inline-flex items-center justify-center gap-2 rounded-xl bg-red-600 hover:bg-red-700 ${sectionLabel} text-white tracking-wider disabled:opacity-50`}
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                    {isDeletingOrder
+                      ? 'Deleting...'
+                      : isDeleteArmed
+                        ? 'Click Again To Confirm'
+                        : 'Delete'}
+                  </button>
+                </section>
+              )}
+            </div>
           )}
-        </div>
       </div>
 
       <AnimatePresence>

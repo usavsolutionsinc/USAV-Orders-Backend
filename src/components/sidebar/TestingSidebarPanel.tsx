@@ -5,7 +5,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { toast } from '@/lib/toast';
 import { Barcode, ClipboardList, Clock, History, MapPin, Package } from '@/components/Icons';
 import { HorizontalButtonSlider, type HorizontalSliderItem } from '@/components/ui/HorizontalButtonSlider';
-import { sidebarHeaderBandClass, sidebarHeaderPillRowClass } from '@/components/layout/header-shell';
+import { sidebarHeaderBandClass, sidebarHeaderPillRowClass, SIDEBAR_GUTTER } from '@/components/layout/header-shell';
 import { TestingScanBar } from '@/components/sidebar/receiving/TestingScanBar';
 import { TestingRecentRail } from '@/components/sidebar/receiving/TestingRecentRail';
 import {
@@ -246,7 +246,7 @@ export function TestingSidebarPanel({
       {/* Scan bar — same chrome + mode toggles as the shipping StationScanBar.
           Tap Tracking / PO# / Serial to force the next scan's search type, or
           leave unarmed to auto-detect. */}
-      <div className="px-5 pt-4 pb-2">
+      <div className={`${SIDEBAR_GUTTER} pt-4 pb-2`}>
         <TestingScanBar
           value={scanValue}
           onChange={setScanValue}
@@ -278,7 +278,7 @@ export function TestingSidebarPanel({
 
       {/* Multi-line picker — tiny inline list when a PO has >1 receiving_line */}
       {picker ? (
-        <div className="border-b border-amber-200 bg-amber-50 px-3 py-2">
+        <div className={`border-b border-amber-200 bg-amber-50 ${SIDEBAR_GUTTER} py-2`}>
           <p className="mb-1 text-eyebrow font-black uppercase tracking-widest text-amber-700">
             {picker.via === 'serial'
               ? `Pick a unit — ${picker.rows.length} serial matches`

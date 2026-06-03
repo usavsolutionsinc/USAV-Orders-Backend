@@ -640,9 +640,6 @@ export default function MultiSkuSnBarcode({ layout = 'vertical' }: MultiSkuSnBar
 
                         {showSnCard && (
                             <section className="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-gray-200/60">
-                                <h3 className="mb-3 text-xs font-semibold uppercase tracking-[0.14em] text-gray-500">
-                                    Condition
-                                </h3>
                                 <ConditionPills
                                     value={condition}
                                     onChange={(next) => setCondition(next as ConditionGrade)}
@@ -1002,16 +999,13 @@ function SerialScanCard({
 
     return (
         <section className="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-gray-200/60">
-            <div className="mb-3 flex items-center justify-between">
-                <h3 className="text-xs font-semibold uppercase tracking-[0.14em] text-gray-500">
-                    Serial numbers
-                </h3>
-                {serialNumbers.length > 0 && (
+            {serialNumbers.length > 0 ? (
+                <div className="mb-3 flex justify-end">
                     <span className={`rounded-md px-2 py-0.5 text-caption font-bold tabular-nums ${accent.chip}`}>
                         {serialNumbers.length} added
                     </span>
-                )}
-            </div>
+                </div>
+            ) : null}
 
             <InlineSerialAdder
                 lineId={0}

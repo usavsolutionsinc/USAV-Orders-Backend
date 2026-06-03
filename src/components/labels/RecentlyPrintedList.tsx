@@ -4,6 +4,7 @@ import { Printer, Clock } from '@/components/Icons';
 import { timeAgo } from '@/utils/_date';
 import { useLabelPrintFeed, type LabelPrintFeedItem } from '@/hooks/useLabelPrintFeed';
 import { unitStatusBadgeClass } from '@/lib/unit-status';
+import { SIDEBAR_GUTTER } from '@/components/layout/header-shell';
 
 interface RecentlyPrintedListProps {
   /** Clicking a row fires this with the product SKU so the print workspace pre-fills. */
@@ -74,7 +75,7 @@ function RecentRow({ item, onPick }: { item: LabelPrintFeedItem; onPick: (sku: s
         type="button"
         onClick={() => skuForPick && onPick(skuForPick)}
         disabled={!skuForPick}
-        className="flex w-full items-start gap-3 px-3 py-2.5 text-left transition-colors hover:bg-blue-50 disabled:cursor-not-allowed disabled:opacity-60"
+        className={`flex w-full items-start gap-3 ${SIDEBAR_GUTTER} py-2.5 text-left transition-colors hover:bg-blue-50 disabled:cursor-not-allowed disabled:opacity-60`}
       >
         <span className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-md bg-gray-50 ring-1 ring-gray-200">
           {item.image_url ? (

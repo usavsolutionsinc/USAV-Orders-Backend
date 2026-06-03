@@ -1,8 +1,7 @@
 'use client';
 
-import { useState, type ReactNode } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { Barcode, Plus, X } from '@/components/Icons';
-import { SerialChipWithMenu } from '@/components/receiving/workspace/SerialCard';
 
 export interface UnitLike {
   id: number;
@@ -28,6 +27,8 @@ interface Props {
   onAddSerial: (index: number, serial: string) => void | Promise<void>;
   onDeleteSerial: (serial: UnitLike) => void;
   onReplaceSerial: (original: UnitLike, next: string) => void;
+  /** Edit from PO header {@link SerialChipWithMenu} → expanded unit scan input. */
+  serialEditTarget?: UnitLike | null;
 }
 
 function last4(sn: string): string {
@@ -39,7 +40,8 @@ function last4(sn: string): string {
  * Selectable per-unit list for multi-quantity lines. One unit is expanded
  * (the selected one) and shows its serial entry + an optional meta slot
  * (condition pills for receiving). Every other unit collapses to a single
- * clickable line — Unit n/N + serial + a compact meta (condition / verdict).
+ * clickable line — `n/N` + condition + serial (see collapsed rows).
+ * Expanded body is condition pills + scan input only (no duplicate title row).
  * Selecting a unit is what drives the workspace's print preview + print target.
  */
 export function UnitSlotList({
@@ -54,6 +56,7 @@ export function UnitSlotList({
   onAddSerial,
   onDeleteSerial,
   onReplaceSerial,
+  serialEditTarget = null,
 }: Props) {
   const count = Math.max(total, saved.length, 1);
   const rows = Array.from({ length: count }, (_, i) => ({ index: i, serial: saved[i] ?? null }));
@@ -64,12 +67,15 @@ export function UnitSlotList({
         index === selectedIndex ? (
           <ExpandedRow
             key={`selected-${index}-${serial?.id ?? 'empty'}`}
-            index={index}
-            total={count}
             serial={serial}
             disabled={disabled}
             isSubmitting={isSubmitting}
             meta={renderExpandedMeta?.(serial, index)}
+            serialEditTarget={
+              serialEditTarget?.id != null && serial?.id === serialEditTarget.id
+                ? serialEditTarget
+                : null
+            }
             onAddSerial={(sn) => onAddSerial(index, sn)}
             onDeleteSerial={onDeleteSerial}
             onReplaceSerial={onReplaceSerial}
@@ -85,6 +91,28 @@ export function UnitSlotList({
           />
         ),
       )}
+    </div>
+  );
+}
+
+function UnitRowTitle({
+  index,
+  total,
+  meta,
+  trailing,
+}: {
+  index: number;
+  total: number;
+  meta: ReactNode;
+  trailing?: ReactNode;
+}) {
+  return (
+    <div className="flex w-full items-center gap-2">
+      <span className="shrink-0 font-mono text-micro font-black tabular-nums text-gray-500">
+        {index + 1}/{total}
+      </span>
+      {meta ? <span className="inline-flex items-center">{meta}</span> : null}
+      {trailing ? <span className="ml-auto shrink-0">{trailing}</span> : null}
     </div>
   );
 }
@@ -113,51 +141,55 @@ function CollapsedRow({
           onSelect();
         }
       }}
-      className="flex w-full cursor-pointer items-center gap-2 px-1 py-2.5 text-left transition-colors hover:bg-gray-50"
+      className="w-full cursor-pointer px-1 py-2.5 text-left transition-colors hover:bg-gray-50"
     >
-      <span className="shrink-0 font-mono text-micro font-black tabular-nums text-gray-500">
-        {index + 1}/{total}
-      </span>
-      {/* Condition on the left, serial pushed to the right — keeps the
-          collapsed rows visually consistent with the expanded row's
-          condition-first layout. */}
-      {meta ? <span className="inline-flex items-center">{meta}</span> : null}
-      {serial ? (
-        <span className="ml-auto font-mono text-sm font-bold tracking-tight text-gray-900 underline decoration-emerald-500 decoration-2 underline-offset-2">
-          {last4(serial.serial_number)}
-        </span>
-      ) : (
-        <span className="ml-auto text-caption font-semibold uppercase tracking-widest text-gray-400">
-          Empty · tap to scan
-        </span>
-      )}
+      <UnitRowTitle
+        index={index}
+        total={total}
+        meta={meta}
+        trailing={
+          serial ? (
+            <span className="font-mono text-sm font-bold tracking-tight text-gray-900 underline decoration-emerald-500 decoration-2 underline-offset-2">
+              {last4(serial.serial_number)}
+            </span>
+          ) : (
+            <span className="text-caption font-semibold uppercase tracking-widest text-gray-400">
+              Empty · tap to scan
+            </span>
+          )
+        }
+      />
     </div>
   );
 }
 
 function ExpandedRow({
-  index,
-  total,
   serial,
   disabled,
   isSubmitting,
   meta,
+  serialEditTarget,
   onAddSerial,
   onDeleteSerial,
   onReplaceSerial,
 }: {
-  index: number;
-  total: number;
   serial: UnitLike | null;
   disabled: boolean;
   isSubmitting: boolean;
   meta: ReactNode;
+  serialEditTarget: UnitLike | null;
   onAddSerial: (serial: string) => void | Promise<void>;
   onDeleteSerial: (serial: UnitLike) => void;
   onReplaceSerial: (original: UnitLike, next: string) => void;
 }) {
   const [scan, setScan] = useState('');
   const [editing, setEditing] = useState(false);
+
+  useEffect(() => {
+    if (!serialEditTarget || serial?.id !== serialEditTarget.id) return;
+    setEditing(true);
+    setScan(serialEditTarget.serial_number);
+  }, [serial?.id, serialEditTarget]);
 
   const submit = () => {
     const v = scan.trim();
@@ -174,23 +206,6 @@ function ExpandedRow({
 
   return (
     <div className="px-1 py-2.5">
-      <div className="mb-2 flex items-center justify-between gap-2">
-        <span className="font-mono text-micro font-black uppercase tracking-widest text-blue-700">
-          Unit {index + 1}/{total}
-        </span>
-        {serial && !editing ? (
-          <SerialChipWithMenu
-            serial={serial}
-            isEditing={false}
-            onEdit={(s) => {
-              setEditing(true);
-              setScan(s.serial_number);
-            }}
-            onDelete={disabled ? undefined : (s) => onDeleteSerial(s as UnitLike)}
-          />
-        ) : null}
-      </div>
-
       {meta ? <div className="mb-2">{meta}</div> : null}
 
       <div className="flex items-stretch gap-2">

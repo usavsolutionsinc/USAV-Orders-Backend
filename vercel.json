@@ -26,6 +26,18 @@
       "schedule": "0 0 * * 2-6"
     },
     {
+      "path": "/api/cron/shipping/subscribe-fedex",
+      "schedule": "*/15 * * * *"
+    },
+    {
+      "path": "/api/cron/shipping/subscribe-ups",
+      "schedule": "*/15 * * * *"
+    },
+    {
+      "path": "/api/cron/shipping/subscribe-usps",
+      "schedule": "*/15 * * * *"
+    },
+    {
       "path": "/api/qstash/replenishment/sync",
       "schedule": "0 13 * * *"
     },

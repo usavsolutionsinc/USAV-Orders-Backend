@@ -2,6 +2,7 @@
 
 import { Bell, Smartphone } from '@/components/Icons';
 import { Row } from './Row';
+import { PhoneSignInQrButton } from './PhoneSignInQrButton';
 import { useActivityInbox } from '@/contexts/ActivityInboxContext';
 import type { ActionToggles } from '@/lib/quick-access/types';
 
@@ -55,6 +56,7 @@ export function ActionsSection({
             iconBg="bg-gray-900"
             label="Phone history"
             subLabel="Resume your recent packs"
+            trailing={<PhoneSignInQrButton />}
             onClick={onOpenHistoryPopover}
           />
         ) : null}

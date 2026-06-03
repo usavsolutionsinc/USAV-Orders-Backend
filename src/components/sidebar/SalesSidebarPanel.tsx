@@ -6,7 +6,7 @@ import { useMemo } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { Loader2, Minus, Plus, ShoppingCart, X } from '@/components/Icons';
 import { SearchBar } from '@/components/ui/SearchBar';
-import { sidebarHeaderPillRowClass, sidebarHeaderRowClass } from '@/components/layout/header-shell';
+import { sidebarHeaderPillRowClass, sidebarHeaderRowClass, SIDEBAR_GUTTER } from '@/components/layout/header-shell';
 import { SalesIntakeForm } from '@/components/walk-in/SalesIntakeForm';
 import { useSquareCatalog, type SquareCatalogItem } from '@/hooks/useSquareCatalog';
 import { useSquareCategories } from '@/hooks/useSquareCategories';
@@ -193,7 +193,7 @@ export function SalesSidebarPanel({ embedded = false }: SalesSidebarPanelProps) 
           </div>
 
           {/* Product results */}
-          <div className="flex-1 overflow-y-auto px-3 py-3">
+          <div className={`flex-1 overflow-y-auto ${SIDEBAR_GUTTER} py-3`}>
             {loadingCatalog ? (
               <div className="flex items-center justify-center py-10">
                 <Loader2 className="h-5 w-5 animate-spin text-emerald-500" />
@@ -258,7 +258,7 @@ export function SalesSidebarPanel({ embedded = false }: SalesSidebarPanelProps) 
         </>
       ) : (
         /* ── DEFAULT MODE: revenue summary + recent sales ── */
-        <div className="flex-1 overflow-y-auto px-4 py-4">
+        <div className={`flex-1 overflow-y-auto ${SIDEBAR_GUTTER} py-4`}>
           {/* Revenue card */}
           <div className="rounded-xl border border-emerald-200 bg-gradient-to-br from-emerald-50 to-green-50 p-4 mb-4">
             <p className={`${sectionLabel} text-emerald-600 mb-1`}>{weekLabel}</p>
@@ -305,7 +305,7 @@ export function SalesSidebarPanel({ embedded = false }: SalesSidebarPanelProps) 
 
       {/* Cart footer — visible in both modes when items are in cart */}
       {cart.length > 0 && (
-        <div className="shrink-0 border-t border-gray-200 bg-white px-3 py-3 space-y-2">
+        <div className={`shrink-0 border-t border-gray-200 bg-white ${SIDEBAR_GUTTER} py-3 space-y-2`}>
           <div className="space-y-1">
             {cart.map((c) => (
               <div key={c.variationId} className="flex items-center justify-between text-micro">
@@ -345,7 +345,7 @@ export function SalesSidebarPanel({ embedded = false }: SalesSidebarPanelProps) 
       )}
 
       {submitSuccess && cart.length === 0 && (
-        <div className="shrink-0 border-t border-emerald-200 bg-emerald-50 px-3 py-3 text-center">
+        <div className={`shrink-0 border-t border-emerald-200 bg-emerald-50 ${SIDEBAR_GUTTER} py-3 text-center`}>
           <p className="text-micro font-bold text-emerald-700">Sent to terminal — waiting for payment</p>
         </div>
       )}

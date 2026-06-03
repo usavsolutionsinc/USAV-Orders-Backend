@@ -3,6 +3,7 @@
 import { useHeader } from '@/contexts/HeaderContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { GlobalHeaderActions } from './GlobalHeaderActions';
+import { HeaderGoalChip } from './HeaderGoalChip';
 
 /**
  * Global desktop header — one persistent bar mounted once in
@@ -40,31 +41,37 @@ export function GlobalHeader({
     <header className="sticky top-0 z-40 flex h-[40px] w-full shrink-0 select-none items-center gap-3 border-b border-gray-300 bg-white/90 px-3 backdrop-blur-md sm:px-4">
       {/* Top-left sidebar toggle — collapses / restores the permanent sidebar. */}
       {canCollapseSidebar && onToggleSidebar && (
-        <button
-          type="button"
-          onClick={onToggleSidebar}
-          aria-label={sidebarCollapsed ? 'Show sidebar' : 'Hide sidebar'}
-          aria-pressed={!sidebarCollapsed}
-          title={sidebarCollapsed ? 'Show sidebar' : 'Hide sidebar'}
-          /* Pull flush to the content edge so the centered icon lines up with
-             the table's status-dot column (dot center ≈16px in). */
-          className="-ml-3 flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-gray-600 transition-colors hover:bg-gray-100 active:bg-gray-200 sm:-ml-4"
-        >
-          <svg
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth={2}
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            className="h-4 w-4"
-            aria-hidden
+        <>
+          <button
+            type="button"
+            onClick={onToggleSidebar}
+            aria-label={sidebarCollapsed ? 'Show sidebar' : 'Hide sidebar'}
+            aria-pressed={!sidebarCollapsed}
+            title={sidebarCollapsed ? 'Show sidebar' : 'Hide sidebar'}
+            /* Nudged slightly right of the flush content edge. */
+            className="-ml-1 flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-gray-600 transition-colors hover:bg-gray-100 active:bg-gray-200 sm:-ml-1.5"
           >
-            <rect width="18" height="18" x="3" y="3" rx="2" />
-            <path d="M9 3v18" />
-          </svg>
-        </button>
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth={2}
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              className="h-4 w-4"
+              aria-hidden
+            >
+              <rect width="18" height="18" x="3" y="3" rx="2" />
+              <path d="M9 3v18" />
+            </svg>
+          </button>
+          {/* Hairline divider between the sidebar toggle and the goal chip. */}
+          <span aria-hidden className="h-5 w-px shrink-0 bg-gray-200" />
+        </>
       )}
+
+      {/* Daily goal — pinned right of the sidebar toggle, persistent across pages. */}
+      <HeaderGoalChip />
 
       {/* Contextual zone — fed per page via useHeader()/usePageHeader(). */}
       <div className="flex min-w-0 flex-1 items-center">{panelContent}</div>

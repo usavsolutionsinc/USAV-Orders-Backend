@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useRef, type RefObject, type WheelEvent } from 'react';
+import { useCallback, useId, useRef, type RefObject, type WheelEvent } from 'react';
 import { motion } from 'framer-motion';
 import { framerTransition } from '@/design-system/foundations/motion-framer';
 
@@ -86,8 +86,12 @@ export type HorizontalButtonSliderProps = {
    *                  scale-up on the active pill so the eye locks onto it.
    *   - `floating` — borderless white pills with drop shadows that look like
    *                  Google Maps filter chips floating over content.
+   *   - `segmented` — icon-only tabs that split the width evenly (flex-1). The
+   *                  active tab is a filled blue square with a sliding indicator;
+   *                  inactive tabs are borderless grayed icons. The selection's
+   *                  name is meant to live in the sidebar header, not on the tab.
    */
-  variant?: 'fba' | 'slate' | 'nav' | 'floating';
+  variant?: 'fba' | 'slate' | 'nav' | 'floating' | 'segmented';
   size?: 'md' | 'lg';
   /**
    * Tighter vertical rhythm for the `nav` variant — drops the scroller's
@@ -119,6 +123,9 @@ export function HorizontalButtonSlider({
 }: HorizontalButtonSliderProps) {
   const scrollerRef = useRef<HTMLDivElement | null>(null);
   const onWheel = useHorizontalWheelScroll(scrollerRef);
+  // Stable per-instance id so each `segmented` slider animates its own indicator
+  // (sharing a layoutId across instances would make pills teleport between them).
+  const indicatorId = useId();
 
   const sizeCls =
     size === 'lg'
@@ -130,13 +137,19 @@ export function HorizontalButtonSlider({
   // so we give the scroller vertical breathing room.
   const scrollerPadY = variant === 'nav' ? (dense ? 'py-1' : 'py-2') : 'pb-0.5';
 
-  // `floating` pills always fit on a phone — skip the scroller entirely so
-  // the pill drop shadows aren't clipped by overflow-x-auto's implicit
-  // y-clip. Gives shadows a visible vertical bleed area instead.
-  const useScroller = variant !== 'floating';
-  const containerClass = useScroller
-    ? `-mx-1 overflow-x-auto overscroll-x-contain ${scrollerPadY} [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden`
-    : 'overflow-visible py-2';
+  // `floating` and `segmented` always fit (segmented splits the width evenly),
+  // so they skip the scroller — floating to avoid clipping pill shadows,
+  // segmented so flex-1 children can stretch instead of sitting min-w-max.
+  const isSegmented = variant === 'segmented';
+  const useScroller = variant !== 'floating' && !isSegmented;
+  const containerClass = isSegmented
+    ? // Recessed gray track (bg-surface-canvas + inset ring) so the active blue
+      // pill reads as raised — the depth the demo gets from its surface-canvas
+      // strip. p-1 + h-8 tabs = 40px, filling the host's fixed 40px band.
+      'rounded-xl bg-surface-canvas p-1 ring-1 ring-inset ring-border-soft'
+    : useScroller
+      ? `-mx-1 overflow-x-auto overscroll-x-contain ${scrollerPadY} [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden`
+      : 'overflow-visible py-2';
 
   return (
     <div className={className}>
@@ -154,13 +167,46 @@ export function HorizontalButtonSlider({
       >
         <div
           className={
-            useScroller
-              ? 'flex min-w-max snap-x snap-mandatory gap-2 px-1'
-              : 'flex flex-wrap gap-2'
+            isSegmented
+              ? 'flex gap-1'
+              : useScroller
+                ? 'flex min-w-max snap-x snap-mandatory gap-2 px-1'
+                : 'flex flex-wrap gap-2'
           }
         >
           {items.map((item) => {
             const isActive = value === item.id;
+            if (variant === 'segmented') {
+              const Icon = item.icon;
+              return (
+                <motion.button
+                  key={item.id}
+                  type="button"
+                  role="tab"
+                  aria-selected={isActive}
+                  aria-label={item.label}
+                  title={item.label}
+                  whileTap={{ scale: 0.94 }}
+                  transition={framerTransition.sliderIndicator}
+                  onClick={() => onChange(item.id)}
+                  className={`relative flex h-8 flex-1 items-center justify-center rounded-xl transition-colors ${
+                    isActive ? 'text-white' : 'text-text-muted hover:text-text-default'
+                  }`}
+                >
+                  {isActive ? (
+                    <motion.span
+                      layoutId={`${indicatorId}-seg`}
+                      className="absolute inset-0 rounded-xl bg-blue-600 shadow-sm shadow-blue-600/25"
+                      transition={framerTransition.sliderIndicator}
+                    />
+                  ) : null}
+                  {Icon ? <Icon className="relative z-10 h-[18px] w-[18px]" /> : null}
+                  {item.badge === 'dot' ? (
+                    <span className="absolute right-1.5 top-1.5 z-10 h-1.5 w-1.5 rounded-full bg-emerald-500" aria-hidden />
+                  ) : null}
+                </motion.button>
+              );
+            }
             if (variant === 'nav') {
               const Icon = item.icon;
               const isDisabled = !!item.disabled;

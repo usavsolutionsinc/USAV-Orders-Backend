@@ -28,11 +28,15 @@ interface Props {
   /** Remove a saved serial. Click target is the chip's Delete menu item / X icon. */
   onDelete?: (lineId: number, serial: SavedSerial) => void;
   /**
-   * Set the condition grade on an already-saved serial. When provided, each
-   * chip exposes a condition picker in its hover menu — condition lives on the
-   * serial (the item), independent of quantity.
+   * When false, saved serial chips are not rendered here — callers surface
+   * them in a parent header (e.g. {@link PoLinesAccordion}).
    */
-  onSetCondition?: (lineId: number, serial: SavedSerial, grade: string) => void;
+  showSavedChips?: boolean;
+  /**
+   * Controlled edit target from a parent header chip. Populates the scan input.
+   */
+  editingSerial?: SavedSerial | null;
+  onEditingSerialChange?: (serial: SavedSerial | null) => void;
   /**
    * Replace a saved serial with a new value (typo fix). When provided, each
    * saved chip exposes an Edit affordance in a hover dropdown — clicking it
@@ -72,7 +76,9 @@ export function InlineSerialAdder({
   onAdd,
   onDelete,
   onReplaceSerial,
-  onSetCondition,
+  showSavedChips = true,
+  editingSerial = null,
+  onEditingSerialChange,
   disabled = false,
   autoFocus = false,
 }: Props) {
@@ -94,11 +100,29 @@ export function InlineSerialAdder({
     if (editing && !saved.some((s) => s.id === editing.id)) {
       setEditing(null);
       setScan('');
+      onEditingSerialChange?.(null);
     }
-  }, [saved, editing]);
+  }, [saved, editing, onEditingSerialChange]);
+
+  useEffect(() => {
+    if (!editingSerial) {
+      setEditing(null);
+      return;
+    }
+    setEditing(editingSerial);
+    setScan(editingSerial.serial_number);
+    const t = window.setTimeout(() => {
+      const el = inputRef.current;
+      if (!el) return;
+      el.focus();
+      el.select();
+    }, 0);
+    return () => window.clearTimeout(t);
+  }, [editingSerial]);
 
   const beginEdit = (s: SavedSerial) => {
     setEditing(s);
+    onEditingSerialChange?.(s);
     setScan(s.serial_number);
     setTimeout(() => {
       const el = inputRef.current;
@@ -110,6 +134,7 @@ export function InlineSerialAdder({
 
   const cancelEdit = () => {
     setEditing(null);
+    onEditingSerialChange?.(null);
     setScan('');
   };
 
@@ -123,6 +148,7 @@ export function InlineSerialAdder({
         onReplaceSerial(lineId, editing, trimmed);
       }
       setEditing(null);
+      onEditingSerialChange?.(null);
       setScan('');
       return;
     }
@@ -144,30 +170,19 @@ export function InlineSerialAdder({
     // serial chips sit above the input's right edge — never above the button.
     <div className="flex items-end gap-2">
       <div className="min-w-0 flex-1 space-y-2">
-      <div className="flex items-start justify-between gap-2">
-        <span className="shrink-0 pt-0.5 text-eyebrow font-black uppercase tracking-widest text-gray-500">
-          Serial numbers
-        </span>
-        {count > 0 ? (
-          <div className="flex min-w-0 flex-1 flex-wrap items-center justify-end gap-1.5">
+      {showSavedChips && count > 0 ? (
+          <div className="flex min-w-0 flex-wrap items-center gap-1.5">
             {saved.map((s, idx) => {
               const sn = (s.serial_number || '').trim();
               if (!sn) return null;
               const isEditingThis = editing?.id === s.id;
               return onReplaceSerial ? (
-                // Receiving + testing parity: same hover Edit/Delete menu
-                // SerialCard ships, rendered straight in the row.
                 <SerialChipWithMenu
                   key={s.id ?? `${sn}-${idx}`}
                   serial={s}
                   isEditing={isEditingThis}
                   onEdit={beginEdit}
                   onDelete={onDelete ? (target) => onDelete(lineId, target) : undefined}
-                  onSetCondition={
-                    onSetCondition
-                      ? (target, grade) => onSetCondition(lineId, target, grade)
-                      : undefined
-                  }
                 />
               ) : (
                 // Adder without an edit handler — bare emerald chip with an X
@@ -196,7 +211,6 @@ export function InlineSerialAdder({
             })}
           </div>
         ) : null}
-      </div>
 
         <div className="relative">
           <Barcode

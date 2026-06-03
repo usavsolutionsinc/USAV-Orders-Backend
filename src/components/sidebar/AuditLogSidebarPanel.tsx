@@ -6,6 +6,7 @@ import { sectionLabel, cardTitle, fieldLabel } from '@/design-system/tokens/typo
 import { ClipboardList, Package, FileText, Search, User } from '@/components/Icons';
 import { HorizontalButtonSlider, type HorizontalSliderItem } from '@/components/ui/HorizontalButtonSlider';
 import { AuditLogFilterStrip } from '@/components/audit-log/AuditLogFilterStrip';
+import { SIDEBAR_GUTTER } from '@/components/layout/header-shell';
 
 // ─── Section nav ───────────────────────────────────────────────────────────
 
@@ -86,7 +87,7 @@ export function AuditLogSidebarPanel() {
   return (
     <div className="flex h-full flex-col overflow-hidden">
       {/* Section nav */}
-      <div className="border-b border-gray-100 px-3 py-3">
+      <div className={`border-b border-gray-100 ${SIDEBAR_GUTTER} py-3`}>
         <p className={`px-1 ${sectionLabel} text-emerald-600`}>Audit Log</p>
         <p className={`mt-1 px-1 text-caption font-semibold leading-snug text-gray-500`}>
           Every event captured per page — who, when, what changed.
@@ -186,7 +187,7 @@ function ReceivingPOPicker({
 
   return (
     <div className="flex h-full flex-col">
-      <div className="px-3 py-2">
+      <div className={`${SIDEBAR_GUTTER} py-2`}>
         <div className="relative">
           <Search className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
           <input
@@ -221,7 +222,7 @@ function ReceivingPOPicker({
                   <button
                     type="button"
                     onClick={() => onSelect(po.po_id)}
-                    className={`w-full px-3 py-2.5 text-left transition ${
+                    className={`w-full ${SIDEBAR_GUTTER} py-2.5 text-left transition ${
                       isSelected
                         ? 'bg-emerald-50/80 ring-1 ring-inset ring-emerald-200'
                         : 'hover:bg-gray-50'
@@ -308,7 +309,7 @@ function SidebarListPicker({
 
   return (
     <div className="flex h-full flex-col">
-      <div className="px-3 py-2">
+      <div className={`${SIDEBAR_GUTTER} py-2`}>
         <div className="relative">
           <Search className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
           <input
@@ -338,7 +339,7 @@ function SidebarListPicker({
                   <button
                     type="button"
                     onClick={() => onSelect(row.key)}
-                    className={`w-full px-3 py-2.5 text-left transition ${
+                    className={`w-full ${SIDEBAR_GUTTER} py-2.5 text-left transition ${
                       isSelected
                         ? 'bg-emerald-50/80 ring-1 ring-inset ring-emerald-200'
                         : 'hover:bg-gray-50'

@@ -1,9 +1,27 @@
 # Carrier Tracking Live-Sync Production Plan
 
-**Status:** Proposed
+**Status:** Phase 1–3 built (2026-06-02) — pending FedEx portal setup + endpoint confirmation
 **Created:** 2026-06-02
 **Owner:** TBD
 **Goal:** Eliminate stale carrier tracking displays (currently up to ~21h behind the carrier's own status) and keep FedEx/UPS/USPS tracking in near-real-time sync.
+
+> **Decision locked (2026-06-02):** We track only tracking numbers billed to
+> *other parties'* accounts, so **Account-level subscriptions do not apply** —
+> we use **per-tracking-number subscription** exclusively (FedEx: ≤1000/batch
+> async job).
+>
+> **Constraint locked (2026-06-02): the solution must be FREE.** This rules out
+> paid aggregators (Shippo ~$0.01/tracker, EasyPost ~$0.02–0.03/tracker, which
+> charge per *third-party* tracker). The free path = **direct carrier
+> webhooks + polling**:
+> - **FedEx** — tracking-number subscription webhook (free within 100k/day). ✅ built
+> - **USPS** — Tracking 3.2 **supports webhook subscription by tracking number**
+>   (free with a USPS developer account). ✅ **built** (receiver + subscribe cron + renewal)
+> - **UPS** — third-party push doubtful (account-only lineage); **polling is the
+>   free fallback**. Subscription pipeline built but may be a no-op for third-party.
+>
+> **Correction:** an earlier note called USPS "poll-only" — that is wrong; USPS
+> now offers tracking-number webhook subscriptions.
 
 ---
 
@@ -79,22 +97,37 @@ The architecture is largely correct — the gaps are **activation** and **freshn
 
 ## 4. Plan of work
 
-### Phase 1 — Activate carrier push (the high-impact fix)
-- [ ] **Verify FedEx subscription API contract** against `developer.fedex.com` (request/response shape, auth, batch semantics). *Not yet read — must confirm before coding.*
-- [ ] Confirm the FedEx account is **US-based** (required for webhooks at all).
-- [ ] Build a subscription registration step: when a FedEx tracking number is created/linked, call FedEx's **tracking-number subscription API** (batches up to 1,000) pointing at the existing `/api/webhooks/fedex` callback.
-- [ ] Do the same for UPS push subscription → `/api/webhooks/ups`.
-- [ ] Add a backfill job to subscribe all currently-active (non-terminal) shipments.
-- [ ] Store subscription state on the shipment row (subscribed flag + timestamp) so we don't double-subscribe.
+### Phase 1 — Activate FedEx push (the high-impact fix) ✅ built
+- [x] Verify FedEx subscription API contract — *shape* confirmed (async job, `action: ADD`, ≤1000 batch, OAuth bearer). Literal endpoint path is behind the authenticated console; left env-overridable (see §7).
+- [x] Subscription client `src/lib/shipping/providers/fedex-subscription.ts` — `subscribeTrackingNumbers(ADD/DELETE)` + `getSubscriptionJobStatus`, reusing OAuth from `fedex.ts`.
+- [x] DB subscription state — migration `2026-06-02_fedex_webhook_subscription.sql` adds `webhook_subscription_status / _job_id / _error`, `webhook_subscribed_at` + work-queue indexes (so we never double-subscribe).
+- [x] Subscription engine — `src/lib/jobs/fedex-subscribe-pending.ts` (Pass A associate, Pass B reconcile jobs) driven by cron `/api/cron/shipping/subscribe-fedex` (every 15 min). Handles both **backfill** of existing shipments and steady-state new ones.
+- [ ] **Manual (you):** create the FedEx webhook project in the portal — callback `https://…/api/webhooks/fedex`, security token → `FEDEX_WEBHOOK_SECRET`; set `FEDEX_WEBHOOK_PROJECT_ID`. Confirm US-based account.
+- [x] UPS push subscription → `/api/webhooks/ups` — built the same way (synchronous model; no async job). Client `ups-subscription.ts`, job `ups-subscribe-pending.ts`, cron `/api/cron/shipping/subscribe-ups`. Receiver hardened (credential echo + HMAC + bearer).
+  - ⚠️ **UPS third-party coverage unconfirmed.** UPS tracking push (Quantum View / Track Alert lineage) historically requires the shipment to be on *your* UPS account. We only track *others'* numbers, so UPS may reject/never push for them — unlike FedEx tracking-number subscription, which explicitly supports any number. **Verify with UPS before relying on it;** if unsupported, UPS stays polling-only and the cron is a harmless no-op.
 
 ### Phase 2 — Tighten the polling fallback
-- [ ] Reduce `LABEL_CREATED` interval in `normalize.ts:220-245` from 8h → ~1–2h. Quota math: ~1,000 active shipments polled hourly = 24k/day, well under the 100k FedEx cap.
+- [x] Reduce `LABEL_CREATED` interval in `normalize.ts` from 8h → **2h** (webhook fallback / missed-event recovery).
 - [ ] Verify cron `limit` ≥ steady-state non-terminal shipment count, or increase sweep frequency, so the oldest shipments don't starve.
 - [ ] Add alerting/reset for shipments that hit the `consecutive_error_count >= 5` cutoff (currently they silently stop updating forever).
 
+### Phase 3.5 — Live UI updates ✅ built (the display refreshes like the carrier site)
+The backend freshness (webhooks + poll) is only half of "live"; the *display* must
+re-render when the DB changes. Wired end-to-end:
+- `publishShipmentStatusChange()` now **always** emits a `shipment.changed` realtime
+  event (Ably, station channel) — not just for order-linked shipments — plus the
+  existing `order.changed` for dashboard/shipped views.
+- All four update paths fire it: the FedEx/UPS/USPS webhook receivers and the poll
+  (`sync-shipment.ts`, gated on new events so no-op sweeps don't spam clients).
+- Client: `useRealtimeInvalidation({ receiving:true })` (mounted in `ReceivingDashboard`)
+  + the open `IncomingDetailsPanel` both subscribe to `shipment.changed` and invalidate
+  the incoming list / summary / details queries → instant refresh.
+- Polling fallback: `IncomingDetailsPanel` query has `refetchInterval: 60s`
+  (foreground-only, single PO row) so the status stays live even if Ably is down.
+
 ### Phase 3 — Webhook hardening
-- [ ] Confirm event upsert is **idempotent on carrier event ID** (not shipment+timestamp), since at-least-once delivery guarantees duplicates.
-- [ ] Confirm receivers respond 2xx quickly and defer heavy work (cache invalidation, real-time publish) appropriately.
+- [x] Event upsert confirmed **idempotent** — `repository.ts` `upsertTrackingEvents` uses `ON CONFLICT (shipment_id, external_event_id, external_status_code, event_occurred_at) DO NOTHING`. At-least-once duplicates are absorbed. No change needed.
+- [x] Receiver `/api/webhooks/fedex` upgraded to **HMAC-SHA256 (base64) signature verification** over the raw body, keyed by `FEDEX_WEBHOOK_SECRET`; static bearer kept as dev/replay fallback.
 - [ ] Treat polling as the official recovery path for missed webhook events (FedEx replay window was refuted).
 
 ### Phase 4 (optional) — Evaluate aggregator
@@ -102,10 +135,70 @@ The architecture is largely correct — the gaps are **activation** and **freshn
 
 ---
 
+## 7. Implementation notes (2026-06-02 build)
+
+**Files added**
+- `src/lib/migrations/2026-06-02_carrier_webhook_subscription.sql` (carrier-agnostic: FedEx + UPS + USPS)
+- `src/lib/shipping/providers/fedex-subscription.ts`, `ups-subscription.ts`, `usps-subscription.ts`
+- `src/lib/jobs/fedex-subscribe-pending.ts`, `ups-subscribe-pending.ts`, `usps-subscribe-pending.ts`
+- `src/app/api/cron/shipping/subscribe-fedex/route.ts`, `subscribe-ups/route.ts`, `subscribe-usps/route.ts`
+- `src/app/api/webhooks/usps/route.ts` (new receiver — none existed before)
+- `src/lib/shipping/providers/usps-subscription.test.ts` (unit tests; `npm run test:shipping-usps`)
+
+**Files changed**
+- `src/lib/shipping/providers/fedex.ts` — export `getAccessToken`, `FEDEX_BASE_URL`
+- `src/lib/shipping/providers/ups.ts` — export `getAccessToken`, `UPS_BASE_URL`
+- `src/lib/shipping/providers/usps.ts` — export `getAccessToken`, `USPS_BASE_URL`; extract shared `parseUSPSTrackingPayload` (polling + webhook)
+- `src/lib/shipping/repository.ts` — carrier-agnostic subscription work-queue + reconcile + **renewal** helpers
+- `src/app/api/webhooks/fedex/route.ts` — HMAC signature verification
+- `src/app/api/webhooks/ups/route.ts` — credential-echo + HMAC verification
+- `src/lib/shipping/normalize.ts` — LABEL_CREATED 8h → 2h
+- `vercel.json` — subscribe-fedex + subscribe-ups + subscribe-usps crons (every 15 min)
+- `package.json` — `test:shipping-usps` script
+
+**USPS notes / limitations vs FedEx**
+- USPS is **per-tracking-number** (no documented bulk batch like FedEx's ≤1000) and **synchronous** (no async jobId to reconcile, like UPS).
+- USPS subscriptions **expire** → the job renews COMPLETED rows older than `USPS_SUBSCRIPTION_TTL_DAYS` (default 25). FedEx has no renewal step.
+- Webhook payload **follows the modernized Tracking response shape**, so the same parser serves polling + push. No new migration — the carrier-agnostic columns cover USPS (`webhook_subscription_job_id` repurposed to store the USPS subscription id when returned).
+
+**Env vars to set**
+| Var | Purpose |
+|-----|---------|
+| `FEDEX_WEBHOOK_SECRET` | Security token from the portal webhook project; HMAC verify |
+| `FEDEX_WEBHOOK_PROJECT_ID` | Project the tracking numbers associate to (sent in the ADD request) |
+| `FEDEX_SUBSCRIPTION_PATH` | Override if not `/track/v1/notifications/subscriptions` |
+| `FEDEX_SUBSCRIPTION_JOB_PATH` | Override if not `/track/v1/notifications/jobs` |
+| `FEDEX_WEBHOOK_SIGNATURE_HEADER` | Override if not `x-fdx-sc-signature` / `fdx-signature` / `x-fedex-signature` |
+| `UPS_WEBHOOK_SECRET` | Credential sent on subscribe + verified on callback |
+| `UPS_WEBHOOK_CALLBACK_URL` | Where UPS should POST events, e.g. `https://…/api/webhooks/ups` |
+| `UPS_SUBSCRIPTION_PATH` | Override if not `/api/track/v1/subscription` |
+| `UPS_WEBHOOK_CREDENTIAL_HEADER` | Override if not `credential` / `x-ups-credential` |
+| `UPS_BASE_URL` | Override host (e.g. CIE sandbox `https://wwwcie.ups.com`) |
+| `USPS_WEBHOOK_SECRET` | Shared secret sent on subscribe + verified on callback (HMAC / echo) |
+| `USPS_WEBHOOK_CALLBACK_URL` | Listener URL USPS pushes to, e.g. `https://…/api/webhooks/usps` |
+| `USPS_SUBSCRIPTION_PATH` | Override if not `/tracking/v3/subscriptions` |
+| `USPS_SUBSCRIPTION_TTL_DAYS` | Renewal window (default 25; 0 disables renewal) |
+| `USPS_SUBSCRIPTION_BATCH_LIMIT` | Max numbers (re)subscribed per cron run (default 200) |
+| `USPS_WEBHOOK_SIGNATURE_HEADER` / `USPS_WEBHOOK_SECRET_HEADER` | Override callback auth header names |
+| `USPS_BASE_URL` | Override USPS API host |
+| `CONSUMER_KEY` / `CONSUMER_SECRET` | USPS OAuth credentials (already used by polling) |
+
+**⚠️ Must confirm before go-live** (unknowns the public docs don't pin down):
+1. **FedEx** — subscription endpoint path + signature header name (env-overridable).
+2. **UPS** — (a) whether push works for **third-party** tracking numbers at all (may be account-only → polling-only fallback); (b) subscription endpoint path, request/response field names, and callback credential header (all env-overridable).
+3. **USPS** — (a) subscription endpoint path + request body field names (`trackingNumber`/`callbackUrl`/`sharedSecret` in `buildSubscriptionRequestBody`); (b) callback auth scheme + header name; (c) subscription TTL (tune `USPS_SUBSCRIPTION_TTL_DAYS`); (d) the **April 2026 "API Access Control" gating** — confirm eligibility. All env-overridable.
+
+**Apply the migration:** `npm run db:migrate` (dry-run: `npm run db:migrate:dry`).
+**Run USPS unit tests:** `npm run test:shipping-usps`.
+
+**Rollout order:** migrate DB → set env vars → create FedEx portal project / register USPS callback → deploy → watch `[cron.shipping.subscribe-fedex|ups|usps]` logs reach `completed` → confirm `/api/webhooks/<carrier>` receives signed pushes.
+
+---
+
 ## 5. Open questions
 
 1. Does FedEx plan to extend Shipment Visibility Webhook access to non-US accounts?
-2. Does USPS offer any push/webhook option, or is polling the only path? (Currently no USPS receiver.)
+2. ~~Does USPS offer any push/webhook option?~~ **Answered: yes** — USPS Tracking 3.2 supports webhook subscription by tracking number (free). No USPS receiver exists yet; building one the same way as FedEx is the free path to USPS push. Confirm the exact subscription endpoint/payload + the April 2026 "API Access Control" gating against developers.usps.com.
 3. Dual-source dedup strategy if direct webhooks + aggregator ever run simultaneously.
 4. Is there any documented FedEx backfill/replay for downtime windows? (7-day window claim was refuted — assume no.)
 

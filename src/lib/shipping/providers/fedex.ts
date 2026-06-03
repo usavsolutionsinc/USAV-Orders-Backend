@@ -1,7 +1,7 @@
 import { normalizeFedExStatus, normalizeTrackingNumber } from '../normalize';
 import type { CarrierTrackingEvent, CarrierTrackingResult } from '../types';
 
-const FEDEX_BASE_URL =
+export const FEDEX_BASE_URL =
   process.env.FEDEX_ENV === 'production'
     ? 'https://apis.fedex.com'
     : 'https://apis-sandbox.fedex.com';
@@ -52,7 +52,7 @@ async function fetchFreshToken(): Promise<string> {
   return tokenCache.token;
 }
 
-async function getAccessToken(forceRefresh = false): Promise<string> {
+export async function getAccessToken(forceRefresh = false): Promise<string> {
   if (!forceRefresh && tokenCache && tokenCache.expiresAt > Date.now() + 60_000) {
     return tokenCache.token;
   }

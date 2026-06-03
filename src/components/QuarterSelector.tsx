@@ -3,7 +3,7 @@
 import { motion } from 'framer-motion';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { ChevronRight, ExternalLink } from './Icons';
-import { mainStickyHeaderClass, mainStickyHeaderShellRowClass } from '@/components/layout/header-shell';
+import { mainStickyHeaderClass, mainStickyHeaderShellRowClass, SIDEBAR_GUTTER } from '@/components/layout/header-shell';
 
 export const QUARTER_OPTIONS = [
   { key: 'q4-25', label: "Q4 25'", sheetId: '1xzGV0cm7WEwX_vx8N-icA8SZQllNq9APhhILzCahww0' },
@@ -58,7 +58,7 @@ export function QuarterSidebar({ hideSectionHeader = false }: { hideSectionHeade
   };
 
   return (
-    <motion.div initial="hidden" animate="visible" variants={containerVariants} className="h-full overflow-y-auto bg-white px-6 py-4">
+    <motion.div initial="hidden" animate="visible" variants={containerVariants} className={`h-full overflow-y-auto bg-white ${SIDEBAR_GUTTER} py-4`}>
       {!hideSectionHeader ? (
         <motion.header variants={itemVariants} className="mb-6">
           <h2 className="text-2xl font-black tracking-tighter text-gray-900 uppercase">Quarters</h2>

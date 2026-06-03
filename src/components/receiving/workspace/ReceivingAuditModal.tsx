@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { X } from '@/components/Icons';
 import { useBodyScrollLock, useEscapeClose } from '@/design-system/hooks';
 import { formatDateTimePST } from '@/utils/date';
@@ -118,6 +119,11 @@ export function ReceivingAuditModal({ open, onClose, receivingId }: Props) {
   const [events, setEvents] = useState<ReceivingAuditEvent[]>([]);
   const [cartonLabel, setCartonLabel] = useState<string>('');
   const [error, setError] = useState<string | null>(null);
+  const [portalTarget, setPortalTarget] = useState<HTMLElement | null>(null);
+
+  useEffect(() => {
+    setPortalTarget(document.body);
+  }, []);
 
   useBodyScrollLock(open);
   useEscapeClose(open, onClose);
@@ -161,70 +167,66 @@ export function ReceivingAuditModal({ open, onClose, receivingId }: Props) {
     };
   }, [open, receivingId]);
 
-  if (!open) return null;
+  if (!open || !portalTarget) return null;
 
-  return (
+  return createPortal(
     <>
-      {/* Full-viewport dim — covers the page sidebar too. */}
+      {/* Portaled to body so the dim covers GlobalHeader + sidebar — fixed
+          positioning is trapped by Framer Motion transforms on the workspace. */}
       <div
         className="fixed inset-0 z-[198] bg-black/40 backdrop-blur-[1px]"
         onClick={onClose}
       />
-      {/* Dialog layer — absolute inset-0 anchors to the workspace overlay
-          (which fills the right-pane), centering the dialog over the
-          receiving content. The flex container passes clicks through; the
-          dialog itself stops them so backdrop dismissal still works. */}
-      <div
-        className="pointer-events-none absolute inset-0 z-[200] flex items-end justify-center p-0 sm:items-center sm:p-4"
-      >
-      <div
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="receiving-audit-title"
-        className="pointer-events-auto flex max-h-[min(85vh,640px)] w-full max-w-lg flex-col rounded-t-xl border border-slate-200 bg-white shadow-xl sm:rounded-xl"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="flex items-center justify-between border-b border-slate-200 px-3 py-2">
-          <div className="min-w-0">
-            <p
-              id="receiving-audit-title"
-              className="text-micro font-black uppercase tracking-[0.16em] text-slate-500"
+      <div className="pointer-events-none fixed inset-0 z-[200] flex items-end justify-center p-0 sm:items-center sm:p-4">
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="receiving-audit-title"
+          className="pointer-events-auto flex max-h-[min(85vh,640px)] w-full max-w-lg flex-col rounded-t-xl border border-slate-200 bg-white shadow-xl sm:rounded-xl"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <div className="flex items-center justify-between border-b border-slate-200 px-3 py-2">
+            <div className="min-w-0">
+              <p
+                id="receiving-audit-title"
+                className="text-micro font-black uppercase tracking-[0.16em] text-slate-500"
+              >
+                Audit log
+              </p>
+              <p className="truncate text-xs font-semibold text-slate-900">{cartonLabel}</p>
+            </div>
+            <button
+              type="button"
+              onClick={onClose}
+              aria-label="Close audit log"
+              className="rounded p-1 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-700"
             >
-              Audit log
-            </p>
-            <p className="truncate text-xs font-semibold text-slate-900">{cartonLabel}</p>
+              <X className="h-4 w-4" />
+            </button>
           </div>
-          <button
-            type="button"
-            onClick={onClose}
-            aria-label="Close audit log"
-            className="rounded p-1 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-700"
-          >
-            <X className="h-4 w-4" />
-          </button>
-        </div>
-        <div className="min-h-0 flex-1 overflow-y-auto px-3 py-2">
-          {loading ? (
-            <p className="py-6 text-center text-caption text-slate-500">Loading activity…</p>
-          ) : error ? (
-            <p className="py-6 text-center text-caption font-medium text-rose-600">{error}</p>
-          ) : events.length === 0 ? (
-            <p className="py-6 text-center text-caption text-slate-500">No activity recorded yet.</p>
-          ) : (
-            <ul className="space-y-2">
-              {groups.map((g) =>
-                g.kind === 'serial_batch' ? (
-                  <SerialBatchRow key={g.key} group={g} />
-                ) : (
-                  <EventRow key={g.event.id} ev={g.event} />
-                ),
-              )}
-            </ul>
-          )}
+          <div className="min-h-0 flex-1 overflow-y-auto px-3 py-2">
+            {loading ? (
+              <p className="py-6 text-center text-caption text-slate-500">Loading activity…</p>
+            ) : error ? (
+              <p className="py-6 text-center text-caption font-medium text-rose-600">{error}</p>
+            ) : events.length === 0 ? (
+              <p className="py-6 text-center text-caption text-slate-500">No activity recorded yet.</p>
+            ) : (
+              <ul className="space-y-2">
+                {groups.map((g) =>
+                  g.kind === 'serial_batch' ? (
+                    <SerialBatchRow key={g.key} group={g} />
+                  ) : (
+                    <EventRow key={g.event.id} ev={g.event} />
+                  ),
+                )}
+              </ul>
+            )}
+          </div>
         </div>
       </div>
-      </div>
-    </>
+    </>,
+    portalTarget,
   );
 }
 
