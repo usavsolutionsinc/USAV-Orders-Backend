@@ -38,6 +38,16 @@ const withPWA = withPWAInit({
 const nextConfig: NextConfig = {
     turbopack: {},
     outputFileTracingRoot: process.cwd(),
+    // Remote hosts allowed through the next/image optimizer. The mobile
+    // receiving gallery (PhotoGalleryView) renders photos with <Image>, which
+    // rejects any un-listed host. NAS photos are served over the Cloudflare
+    // Tunnel hostname; legacy receiving photos live in Vercel Blob.
+    images: {
+        remotePatterns: [
+            { protocol: 'https', hostname: 'nas-photos.michaelgarisek.com' },
+            { protocol: 'https', hostname: '*.public.blob.vercel-storage.com' },
+        ],
+    },
     // Allow cross-device dev access through Cloudflare quick tunnels
     // (pnpm dev:tunnel) and LAN IPs. Without this, Next 15+ blocks HMR and
     // dev asset requests from origins other than localhost.
