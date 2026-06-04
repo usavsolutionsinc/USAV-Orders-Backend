@@ -1,7 +1,77 @@
 {
-  "generatedAt": "2026-06-04T07:57:00.598Z",
+  "generatedAt": "2026-06-04T17:08:26.835Z",
   "count": 199,
   "commits": [
+    {
+      "sha": "acfaad014c817406cf799193f0cbe05c5770bf90",
+      "shortSha": "acfaad01",
+      "date": "2026-06-04T09:36:11-07:00",
+      "author": "usavsolutionsinc",
+      "subject": "NAS picker: fix prod thumbnails (q=75) + preview z-index",
+      "body": "- Next 16 only allows image quality 75 by default; the optimizer rejected\n  q=60 with HTTP 400, so every prod thumbnail was a broken image. Use q=75.\n- Raise the preview lightbox to z-[130] so it sits above the RightPaneOverlay\n  picker (z-120/121) instead of behind it.\n\nCo-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>",
+      "type": "other",
+      "title": "NAS picker: fix prod thumbnails (q=75) + preview z-index"
+    },
+    {
+      "sha": "55d1f93fcfb429b6ba174d7814c6a1cab34dc553",
+      "shortSha": "55d1f93f",
+      "date": "2026-06-04T09:20:24-07:00",
+      "author": "usavsolutionsinc",
+      "subject": "fixed all TS errors",
+      "body": "",
+      "type": "fix",
+      "title": "fixed all TS errors"
+    },
+    {
+      "sha": "34c527587795171ad15464530124bd82f92bb560",
+      "shortSha": "34c52758",
+      "date": "2026-06-04T08:38:03-07:00",
+      "author": "DENSENSE8",
+      "subject": "audit logs and filter button and warehouse flow mapping upgrades to inventory page",
+      "body": "",
+      "type": "other",
+      "title": "audit logs and filter button and warehouse flow mapping upgrades to inventory page"
+    },
+    {
+      "sha": "5c395a17088f5051eb32d9bd320e27006ca38a9a",
+      "shortSha": "5c395a17",
+      "date": "2026-06-04T01:47:13-07:00",
+      "author": "DENSENSE8",
+      "subject": "audit-trail: surface line-less label-print events in the SKU view (Q2)",
+      "body": "ADMIN label prints and other serial-only lifecycle events (LABELED, GRADED,\nPUTAWAY) carry ie.sku but no receiving_line_id, so they belong to no PO/line/\ntracking and were dropped by the SKU view's inner JOIN on receiving_lines.\n\nDecision: the SKU view is their home (they're SKU-scoped by nature; a synthetic\n\"unattached\" bucket in the PO/Tech timelines would contradict the Line-under-PO\nanchor). listSkus + getSkuDetail now LEFT JOIN receiving_lines and match on\nCOALESCE(rl.sku, ie.sku), so these events anchor to their SKU.\n\nQ4 (keep tracking as a fallback anchor) needs no code change — getTechSessionDetail\nalready tries tracking -> shipment_id first, then falls back to the PO anchor.\n\nVerified against the DB: SKU 00282 now surfaces 36 LABELED (+ GRADED/PUTAWAY)\nevents that the old inner JOIN dropped.\n\nCo-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>",
+      "type": "other",
+      "title": "audit-trail: surface line-less label-print events in the SKU view (Q2)"
+    },
+    {
+      "sha": "484ef4c846f0419b6f02378c8a50be254b7d2f99",
+      "shortSha": "484ef4c8",
+      "date": "2026-06-04T01:43:30-07:00",
+      "author": "DENSENSE8",
+      "subject": "audit-trail: finish unification — packing onto the spine, shared event card, latent-bug fixes",
+      "body": "Completes the audit-trail anchoring effort (docs/audit-trail-anchor-plan.md).\nThe earlier phases (shared inventory_events reader, Tech view fix + PO-anchored\npicker, verdict audit row) landed in 24cdba39; this commit is the remaining delta:\n\nPhase 4 — Packing onto the inventory_events spine:\n  - getPackingTrackingDetail surfaces the outbound lifecycle (ALLOCATED/PICKED/\n    PACKED/LABELED/STAGED/SHIPPED) for units allocated to the shipment, resolved\n    via order_unit_allocations -> orders.shipment_id.\n  - readInventorySpine gains an eventTypes filter.\n\nPhase 2 — shared renderer:\n  - New AuditEventCard (single KIND_TONE vocabulary + kindLabel/fmtTime +\n    AuditCenterMessage). Tech and Packing clients drop their near-identical local\n    EventRow/CenterMessage. Receiving keeps its richer bespoke renderer.\n\nLatent bug fixes (each silently broke an audit section that threw on open):\n  - staff-aggregator: ie.kind -> ie.event_type (inventory_events has no `kind`).\n  - packing-aggregator: pl.packer_photos_url did not exist; pack photos live in\n    the photos table (entity_type='PACKER_LOG') — rewired like receiving.\n\nVerified: tsc --noEmit clean; aggregators exercised against the DB\n(packing detail surfaces inventory_event:ALLOCATED; staff feed surfaces TEST_*).\n\nCo-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>",
+      "type": "other",
+      "title": "audit-trail: finish unification — packing onto the spine, shared event card, latent-bug fixes"
+    },
+    {
+      "sha": "24cdba39d60d3cbc4b49fc56b81f24d170c00b15",
+      "shortSha": "24cdba39",
+      "date": "2026-06-04T01:24:43-07:00",
+      "author": "DENSENSE8",
+      "subject": "Updated the dock the PDF upload so when you upload a Microsoft Word component, it will automatically convert it to PDF updating the SKU catalogue search for checklist for testing as well as the inventory page and the all-in-one filter component",
+      "body": "",
+      "type": "other",
+      "title": "Updated the dock the PDF upload so when you upload a Microsoft Word component, it will automatically convert it to PDF updating the SKU catalogue search for checklist for testing as well as the inventory page and the all-in-one filter component"
+    },
+    {
+      "sha": "e22e60f24ba7695a240a7117a9793e720dd4100c",
+      "shortSha": "e22e60f2",
+      "date": "2026-06-04T00:57:58-07:00",
+      "author": "DENSENSE8",
+      "subject": "workflow: add 5 more FBA-pattern flows to the Operations page (deep scan)",
+      "body": "Deep-scanned the codebase for other status-enum lifecycle flows that follow the\nFBA pattern (status column + ordered stages + a real UI page) and added them,\ngrounded in real code. Flows are now grouped into sections.\n\nNew flows:\n  PO intake (Gmail triage) — email_missing_purchase_orders.pile:\n    Inbox → Upload → Done (+Ignore); /api/admin/po-gmail/triage*\n  Replenishment (purchasing) — replenishment_status enum (src/lib/replenishment.ts):\n    Detected → Review → Plan PO → PO Sent → Awaiting Receipt → Fulfilled\n    (+Cancelled; +pick-face REQUESTED→IN_PROGRESS→COMPLETE noted)\n  Walk-in / local pickup — local_pickup_orders.status:\n    Draft → Completed (Zoho PO + receiving) (+Voided)\n  Cycle count — cycle_count_lines.status (src/lib/inventory/cycle-count.ts):\n    Pending → Counted → Pending Review → Approved (+Rejected; campaign open/closed)\n  Work assignments — assignment_status enum (work_assignments.status):\n    Open → Assigned → In Progress → Done (+Canceled)\n\nGrouped sections: Sourcing & intake, Outbound, Reverse & service, Inventory & ops.\nOpsFlow gains group/order; display renders section headers with counts. Skipped\nlocation_transfers / zoho_fulfillment_sync / stock_alerts (audit/internal, not\ndisplayed lifecycles). tsc clean; build ✓.\n\nCo-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>",
+      "type": "other",
+      "title": "workflow: add 5 more FBA-pattern flows to the Operations page (deep scan)"
+    },
     {
       "sha": "968c8879b31a4e0ad81d1e0b938237c796465151",
       "shortSha": "968c8879",
@@ -1921,76 +1991,6 @@
       "body": "",
       "type": "other",
       "title": "overall consistence UX and UI"
-    },
-    {
-      "sha": "3d571af5d69d3b4dcc790d525ba2f03d7e9cc03a",
-      "shortSha": "3d571af5",
-      "date": "2026-03-12T13:41:13-07:00",
-      "author": "usavsolutionsinc",
-      "subject": "all the same time zone formatting across all api points",
-      "body": "",
-      "type": "other",
-      "title": "all the same time zone formatting across all api points"
-    },
-    {
-      "sha": "5fa64b65203dac3c230de817458fb9b65d19db8b",
-      "shortSha": "5fa64b65",
-      "date": "2026-03-12T10:21:13-07:00",
-      "author": "usavsolutionsinc",
-      "subject": "updated all endpoints and tables tech packer and receiving for better integrity updated_at and created_at",
-      "body": "",
-      "type": "other",
-      "title": "updated all endpoints and tables tech packer and receiving for better integrity updated_at and created_at"
-    },
-    {
-      "sha": "91d9d64890d1b287eafe9520945f7408c61bc1b5",
-      "shortSha": "91d9d648",
-      "date": "2026-03-12T09:13:34-07:00",
-      "author": "usavsolutionsinc",
-      "subject": "updated the packer table and the station testing upnext orders",
-      "body": "",
-      "type": "other",
-      "title": "updated the packer table and the station testing upnext orders"
-    },
-    {
-      "sha": "1711049b83c0af63c335da04b9cc6e3aa1f3312c",
-      "shortSha": "1711049b",
-      "date": "2026-03-12T09:06:43-07:00",
-      "author": "usavsolutionsinc",
-      "subject": "updated tons of data management endpoints to only be lean in terms of DB table design",
-      "body": "",
-      "type": "other",
-      "title": "updated tons of data management endpoints to only be lean in terms of DB table design"
-    },
-    {
-      "sha": "64a33b8af9b7b2e26527ca91145925d6ed3f8cde",
-      "shortSha": "64a33b8a",
-      "date": "2026-03-11T17:01:45-07:00",
-      "author": "usavsolutionsinc",
-      "subject": "fix TS build error in FbaLabelQueue by replacing Set spread with Array.from",
-      "body": "Avoids 'Set can only be iterated with downlevelIteration' error when TypeScript\ntarget is below ES2015.\n\nMade-with: Cursor",
-      "type": "fix",
-      "title": "fix TS build error in FbaLabelQueue by replacing Set spread with Array.from"
-    },
-    {
-      "sha": "a2215394e6caddef4bd5168a735c53fc4458d045",
-      "shortSha": "a2215394",
-      "date": "2026-03-11T10:56:52-07:00",
-      "author": "usavsolutionsinc",
-      "subject": "fixed the tech station errors and updated the work orders assignments",
-      "body": "",
-      "type": "fix",
-      "title": "fixed the tech station errors and updated the work orders assignments"
-    },
-    {
-      "sha": "cc8d5db8f2bbde558062c811d8329567a7f5cdc4",
-      "shortSha": "cc8d5db8",
-      "date": "2026-03-11T09:50:55-07:00",
-      "author": "usavsolutionsinc",
-      "subject": "search bar fixed and added work_assignments page",
-      "body": "",
-      "type": "other",
-      "title": "search bar fixed and added work_assignments page"
     }
   ]
 }

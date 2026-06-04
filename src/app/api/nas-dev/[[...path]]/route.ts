@@ -133,7 +133,18 @@ export async function GET(
   if (thumbRaw && IMAGE_RE.test(target)) {
     const size = Math.min(512, Math.max(48, Number(thumbRaw) || 160));
     try {
-      const sharp = (await import('sharp')).default;
+      // Dynamic specifier ('sharp' as string) so the build does NOT statically
+      // type-resolve sharp: it's a dev-only optional dep, absent from the prod
+      // install under pnpm's strict node_modules (which broke `next build`).
+      // Resolved from node_modules at runtime in dev; in prod this route is
+      // disabled, and the catch below covers a missing module either way.
+      type SharpChain = {
+        rotate(): SharpChain;
+        resize(w: number, h: number, o: { fit: string }): SharpChain;
+        webp(o: { quality: number }): SharpChain;
+        toBuffer(): Promise<Buffer>;
+      };
+      const sharp = (await import('sharp' as string)).default as (input: Buffer) => SharpChain;
       const out = await sharp(buf)
         .rotate()
         .resize(size, size, { fit: 'cover' })

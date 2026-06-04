@@ -86,6 +86,16 @@ const nextConfig: NextConfig = {
         'nodemailer',
         'drizzle-orm',
         'drizzle-kit',
+        // sharp ships per-platform native binaries + an optional wasm32 fallback;
+        // letting webpack bundle it makes the build choke trying to resolve
+        // '@img/sharp-wasm32/versions'. Require it at runtime instead.
+        'sharp',
+        // isomorphic-dompurify pulls in jsdom, which reads data files (e.g.
+        // browser/default-stylesheet.css) via __dirname-relative fs calls.
+        // Bundling breaks those paths at page-data collection, so keep both
+        // external and let Node require them from node_modules at runtime.
+        'isomorphic-dompurify',
+        'jsdom',
     ],
 };
 

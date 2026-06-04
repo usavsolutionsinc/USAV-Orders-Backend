@@ -35,6 +35,9 @@ importers:
       '@simplewebauthn/server':
         specifier: ^11.0.0
         version: 11.0.0
+      '@simplewebauthn/types':
+        specifier: ^11.0.0
+        version: 11.0.0
       '@tanstack/react-query':
         specifier: ^5.0.0
         version: 5.101.0(react@19.2.7)
