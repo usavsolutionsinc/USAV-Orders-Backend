@@ -1,11 +1,11 @@
 /**
- * Shared, framework-agnostic data + helpers for the warehouse-map showroom
- * sections. Consumed by BOTH the react-konva canvas and the @xyflow/react
- * (React Flow) version so the two are an apples-to-apples comparison: same
- * zones, same bins, same fill tones, same trace SKUs — only the rendering
- * library differs.
+ * Shared, framework-agnostic data + helpers for the warehouse floor-plan
+ * showroom section (React Flow). Mock zones, bins, fill tones and trace SKUs
+ * that stand in for live `BinsOverviewRow` data in the prototype.
  *
- * No konva / react-flow imports here on purpose — just numbers and strings.
+ * No react-flow imports here on purpose — just numbers and strings — so the
+ * same layout/tone logic can be reused when this promotes to the real
+ * WarehouseFloorPlan (see docs/warehouse-map-react-flow-plan.md).
  */
 
 import type { Density } from './sections';

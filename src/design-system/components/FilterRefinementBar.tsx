@@ -21,6 +21,8 @@ export interface FilterRefinementBarProps {
   renderDropdown: (onClose: () => void) => ReactNode;
   /** Callback to clear all active filters */
   onClearAll?: () => void;
+  /** Whether to use the compact sidebar styling (40px height, flush borders) */
+  variant?: 'default' | 'sidebar';
   /** Additional styling for the container */
   className?: string;
   /** Additional styling for the trigger bar */
@@ -41,6 +43,7 @@ export function FilterRefinementBar({
   activeCount,
   renderDropdown,
   onClearAll,
+  variant = 'default',
   className = '',
   barClassName = '',
 }: FilterRefinementBarProps) {
@@ -48,6 +51,7 @@ export function FilterRefinementBar({
   const containerRef = useRef<HTMLDivElement>(null);
   const count = activeCount ?? refinements.length;
   const hasActive = count > 0;
+  const isSidebar = variant === 'sidebar';
 
   // Close on outside click
   useEffect(() => {
@@ -71,30 +75,36 @@ export function FilterRefinementBar({
     return () => document.removeEventListener('keydown', handleKey);
   }, [isOpen]);
 
+  const triggerClasses = isSidebar
+    ? `flex h-[40px] w-full items-center gap-2.5 bg-white px-3 transition-colors hover:bg-gray-50 ${
+        isOpen || hasActive ? 'text-blue-600' : 'text-gray-500'
+      }`
+    : `flex w-full items-center gap-3 rounded-2xl border px-5 py-3 text-[13px] font-bold tracking-tight transition-all ${
+        isOpen
+          ? 'border-blue-500/50 bg-white shadow-[0_0_20px_rgba(59,130,246,0.12)] ring-1 ring-blue-500/20'
+          : hasActive
+          ? 'border-blue-200 bg-blue-50/50 text-blue-700 hover:border-blue-300 hover:bg-blue-50'
+          : 'border-gray-200 bg-white text-gray-700 hover:border-gray-300 hover:bg-gray-50 shadow-sm'
+      }`;
+
   return (
-    <div ref={containerRef} className={`relative space-y-4 ${className}`}>
+    <div ref={containerRef} className={`relative ${isSidebar ? '' : 'space-y-4'} ${className}`}>
       {/* ── Trigger Bar ────────────────────────────────────────────── */}
       <motion.button
         type="button"
-        whileTap={{ scale: 0.985 }}
+        whileTap={{ scale: isSidebar ? 1 : 0.985 }}
         onClick={() => setIsOpen(!isOpen)}
         aria-expanded={isOpen}
         aria-haspopup="dialog"
-        className={`flex w-full items-center gap-3 rounded-2xl border px-5 py-3 text-[13px] font-bold tracking-tight transition-all ${
-          isOpen
-            ? 'border-blue-500/50 bg-white shadow-[0_0_20px_rgba(59,130,246,0.12)] ring-1 ring-blue-500/20'
-            : hasActive
-            ? 'border-blue-200 bg-blue-50/50 text-blue-700 hover:border-blue-300 hover:bg-blue-50'
-            : 'border-gray-200 bg-white text-gray-700 hover:border-gray-300 hover:bg-gray-50 shadow-sm'
-        } ${barClassName}`}
+        className={`${triggerClasses} ${barClassName}`}
       >
-        <div className={`flex h-6 w-6 items-center justify-center rounded-lg transition-colors ${
+        <div className={isSidebar ? 'shrink-0' : `flex h-6 w-6 items-center justify-center rounded-lg transition-colors ${
           isOpen || hasActive ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-400'
         }`}>
-          <Filter className="h-3.5 w-3.5" />
+          <Filter className={isSidebar ? 'h-4 w-4' : 'h-3.5 w-3.5'} />
         </div>
         
-        <span className="flex-1 text-left font-black uppercase tracking-wider text-[11px]">
+        <span className={`flex-1 text-left ${isSidebar ? 'text-micro font-black uppercase tracking-wider' : 'font-black uppercase tracking-wider text-[11px]'}`}>
           {label}
         </span>
 
@@ -102,14 +112,18 @@ export function FilterRefinementBar({
           <motion.span 
             initial={{ scale: 0.5, opacity: 0 }}
             animate={{ scale: 1, opacity: 1 }}
-            className="flex h-5 min-w-[20px] items-center justify-center rounded-full bg-blue-600 px-1.5 text-[10px] font-black text-white shadow-sm shadow-blue-600/20"
+            className={`flex items-center justify-center rounded-full bg-blue-600 font-black text-white shadow-sm shadow-blue-600/20 ${
+              isSidebar ? 'h-4 min-w-[16px] px-1 text-[9px]' : 'h-5 min-w-[20px] px-1.5 text-[10px]'
+            }`}
           >
             {count}
           </motion.span>
         )}
 
         <ChevronDown 
-          className={`h-4 w-4 shrink-0 transition-transform duration-300 ease-[0.22,1,0.36,1] ${isOpen ? 'rotate-180 text-blue-600' : 'text-gray-400'}`} 
+          className={`shrink-0 transition-transform duration-300 ease-[0.22,1,0.36,1] ${
+            isSidebar ? 'h-3.5 w-3.5' : 'h-4 w-4'
+          } ${isOpen ? 'rotate-180 text-blue-600' : 'text-gray-400'}`} 
         />
       </motion.button>
 

@@ -37,7 +37,7 @@ import {
     SHIPPED_SEARCH_FIELDS,
     type ShippedSearchField,
 } from '@/lib/shipped-search';
-import { ShippedCarrierFilters } from '@/components/shipping/ShippedFilterToolbar';
+import { ShippedCarrierFilters, useShippedFilterRefinements, ShippedFilterDropdown } from '@/components/shipping/ShippedFilterToolbar';
 import { ZohoSyncButton } from '@/components/shipped/ZohoSyncButton';
 import { PickupReportButton } from '@/components/shipped/PickupReportButton';
 
@@ -111,6 +111,9 @@ export default function ShippedSidebar({
     const trimmedQuery = debouncedQuery.trim();
     // The "search by" field pills are hidden until the search bar is focused.
     const [searchFocused, setSearchFocused] = useState(false);
+
+    // Filter Bar Integration
+    const { refinements, clearAll } = useShippedFilterRefinements();
 
     const searchResult = useShippedSearch({
         query: trimmedQuery,
@@ -387,11 +390,15 @@ Shipped: ${result.packed_at ? formatDateTimePST(result.packed_at) : 'Not Shipped
                     </AnimatePresence>
                 </div>
             )}
+            filter={{
+                label: 'Shipment Filters',
+                refinements,
+                onClearAll: clearAll,
+                renderDropdown: (onClose) => <ShippedFilterDropdown onClose={onClose} />,
+            }}
             bodyClassName="flex flex-col space-y-4 scrollbar-hide pb-6"
         >
                 <motion.div variants={itemVariants} className="space-y-4">
-                        <ShippedCarrierFilters layout="sidebar" />
-
                         {/* Manual Zoho fulfillment sync — gated by integrations.zoho */}
                         <ZohoSyncButton variant="sidebar" />
 

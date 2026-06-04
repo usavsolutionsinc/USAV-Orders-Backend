@@ -31,10 +31,12 @@ import {
 import { InventorySidebarTabs } from './InventorySidebarTabs';
 import { FIELD_ICON } from './inventory-sidebar-metadata';
 import { InventorySidebarFilters } from './InventorySidebarFilters';
+import { ViewDropdown, type ViewDropdownOption } from '@/components/ui/ViewDropdown';
 import { InventoryCrossTabHandoffCard } from './InventoryCrossTabHandoffCard';
 import { InventoryResultList } from './InventoryResultList';
 import { InventoryRecentSearches } from './InventoryRecentSearches';
 import { InventorySidebarFooter } from './InventorySidebarFooter';
+import { useMemo } from 'react';
 
 function detailRefForRow(row: InventoryResultRow): { kind: InventoryDetailKind; ref: string } | null {
     switch (row.kind) {
@@ -81,7 +83,7 @@ export interface InventorySidebarProps {
  */
 export function InventorySidebar({ embedded = true }: InventorySidebarProps) {
     const { sidebar, setSidebarUrl } = useInventoryUrlState();
-    const { tab, field, buckets, open: openKey, q: urlQuery } = sidebar;
+    const { mode, tab, field, buckets, open: openKey, q: urlQuery } = sidebar;
 
     const [inputValue, setInputValue] = useState<string>(urlQuery);
     const debouncedQuery = useDebounce(inputValue, 250);
@@ -216,10 +218,49 @@ export function InventorySidebar({ embedded = true }: InventorySidebarProps) {
 
     const activeBucketCount = buckets.length;
 
+    // Refinement Mapping
+    const refinements = useMemo(() => {
+        const out: Array<{ id: string; label: string; onRemove: () => void }> = [];
+        // Only show field as a refinement if it's NOT 'all'
+        if (field !== 'all') {
+            const fieldLabel = INVENTORY_SEARCH_FIELDS[tab].find((f) => f.id === field)?.label || field;
+            out.push({
+                id: 'field',
+                label: `By: ${fieldLabel}`,
+                onRemove: () => handleFieldChange('all'),
+            });
+        }
+        // Add status buckets
+        buckets.forEach((bId) => {
+            const bucketLabel = INVENTORY_BUCKETS[tab].find((b) => b.id === bId)?.label || bId;
+            out.push({
+                id: bId,
+                label: bucketLabel,
+                onRemove: () => handleBucketsChange(buckets.filter((v) => v !== bId)),
+            });
+        });
+        return out;
+    }, [field, buckets, tab, handleFieldChange, handleBucketsChange]);
+
+    const modeOptions: ReadonlyArray<ViewDropdownOption<any>> = [
+        { value: 'ledger', label: 'Inventory Ledger' },
+        { value: 'triage', label: 'Exception Triage' },
+        { value: 'pulse', label: 'Lifecycle Pulse' },
+    ];
+
     const panelContent = (
         <SidebarShell
             as={motion.div}
             containerProps={{ initial: 'hidden', animate: 'visible', variants: containerVariants }}
+            headerAbove={
+                <ViewDropdown
+                    options={modeOptions}
+                    value={mode}
+                    onChange={(m) => setSidebarUrl({ mode: m })}
+                    variant="boxy"
+                    buttonClassName="h-14 w-full border-b border-gray-200 bg-white px-4 pr-12 text-left text-xs uppercase tracking-[0.2em] font-black text-gray-900 outline-none transition-colors hover:bg-gray-50"
+                />
+            }
             search={{
                 value: inputValue,
                 onChange: setInputValue,
@@ -227,20 +268,31 @@ export function InventorySidebar({ embedded = true }: InventorySidebarProps) {
                 isSearching: search.isFetching,
                 variant: 'blue',
             }}
+            filter={{
+                label: 'Search Filters',
+                refinements,
+                onClearAll: () => {
+                    handleFieldChange('all');
+                    handleBucketsChange([]);
+                },
+                renderDropdown: (onClose) => (
+                    <InventoryFilterDropdown
+                        tab={tab}
+                        field={field}
+                        onFieldChange={handleFieldChange}
+                        buckets={buckets}
+                        onBucketsChange={handleBucketsChange}
+                        counts={search.counts}
+                        onClose={onClose}
+                    />
+                ),
+            }}
             headerRows={[
-                // Row: tab pills — ACTIVITY / BINS / SKUs / UNITS / …
-                <InventorySidebarTabs key="tabs" value={tab} onChange={handleTabChange} />,
-                // Unified Filter Popover: Search By (fields) + Status (buckets)
-                <InventorySidebarFilters
-                    key="filters"
-                    tab={tab}
-                    field={field}
-                    onFieldChange={handleFieldChange}
-                    buckets={buckets}
-                    onBucketsChange={handleBucketsChange}
-                    counts={search.counts}
-                />,
-            ]}
+                // Row: tab pills — only in ledger mode
+                mode === 'ledger' ? (
+                    <InventorySidebarTabs key="tabs" value={tab} onChange={handleTabChange} />
+                ) : null,
+            ].filter(Boolean) as React.ReactNode[]}
             bodyClassName="scrollbar-hide pb-5 space-y-4"
         >
             {/* Scroll area: helper text + cross-tab + results + recent + footer */}

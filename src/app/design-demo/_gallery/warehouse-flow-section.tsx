@@ -1,22 +1,22 @@
 'use client';
 
 /**
- * Interactive warehouse map — @xyflow/react (React Flow) version.
+ * Warehouse floor plan — @xyflow/react (React Flow) prototype.
  *
- * The exact same bins/zones/tones as the react-konva canvas (shared via
- * ./warehouse-map-data), rebuilt on React Flow so the two can be compared
- * head-to-head:
+ * Bins + zones laid out as a draggable floor-plan map (layout/tones shared via
+ * ./warehouse-map-data):
  *   • drag    — React Flow nodes are draggable out of the box
  *   • resize  — <NodeResizer> handles appear on the selected bin (expand/shrink)
  *   • trace   — select a bin + flip Trace: same-SKU bins highlight and React Flow
- *               draws real <Edge>s between them (this is React Flow's home turf)
+ *               draws real <Edge>s between them across zones
  *   • zoom/pan — built in, plus Controls + MiniMap for free
  *
- * Unlike konva, nodes are plain DOM, so they style straight off the
- * design-system Tailwind tokens and React Flow's own chrome themes via the
- * `colorMode` prop — no getComputedStyle color-sampling needed.
+ * Nodes are plain DOM, so they style straight off the design-system Tailwind
+ * tokens and React Flow's own chrome themes via the `colorMode` prop.
  *
- * Promotes to: src/components/warehouse/WarehouseFlowMap.tsx.
+ * This is the showroom model for the real /warehouse map mode. Production
+ * wiring plan: docs/warehouse-map-react-flow-plan.md.
+ * Promotes to: src/components/warehouse/WarehouseFloorPlan.tsx.
  */
 
 import { useEffect, useMemo, useState } from 'react';
@@ -311,13 +311,13 @@ export function WarehouseFlowSection({ density }: { density: Density }) {
     <div className="flex flex-col rounded-2xl border border-border-soft bg-surface-card p-4">
       <div className="mb-3 flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <h3 className="text-[13px] font-bold tracking-tight text-text-default">Interactive warehouse map · React Flow</h3>
+          <h3 className="text-[13px] font-bold tracking-tight text-text-default">Warehouse floor plan · React Flow</h3>
           <code className="mt-0.5 block truncate font-mono text-[10px] text-text-muted">
-            @/components/warehouse/WarehouseFlowMap · @xyflow/react
+            @/components/warehouse/WarehouseFloorPlan · @xyflow/react
           </code>
         </div>
-        <span className="inline-flex items-center rounded-full bg-violet-500/12 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-violet-600 ring-1 ring-violet-500/20">
-          2026 · Compare
+        <span className="inline-flex items-center rounded-full bg-emerald-500/12 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-emerald-600 ring-1 ring-emerald-500/20">
+          2026 · New
         </span>
       </div>
       <div className="rounded-xl bg-surface-canvas/60 p-4 ring-1 ring-border-soft/60">
@@ -326,11 +326,11 @@ export function WarehouseFlowSection({ density }: { density: Density }) {
         </ReactFlowProvider>
       </div>
       <p className="mt-2.5 text-[11px] leading-snug text-text-muted">
-        The same bins on <span className="font-semibold text-text-default">React Flow</span> instead of konva. Nodes are
-        real DOM (so they style off design tokens and theme for free), Trace draws actual graph{' '}
-        <span className="font-semibold text-text-default">edges</span> between same-SKU bins, and you get Controls + a
-        MiniMap out of the box. Compare against the konva canvas above — konva wins on raw shape count &amp; pixel
-        control; React Flow wins on edges/tracing, built-in chrome, and DOM theming.
+        Bins as a <span className="font-semibold text-text-default">floor-plan map</span> on React Flow. Nodes are real
+        DOM (they style off design tokens and theme for free), Trace draws actual graph{' '}
+        <span className="font-semibold text-text-default">edges</span> between same-SKU bins, and Controls + MiniMap come
+        out of the box. This prototype is the model for the real <span className="font-mono">/warehouse</span> map mode —
+        wiring plan in <span className="font-mono">docs/warehouse-map-react-flow-plan.md</span>.
       </p>
     </div>
   );

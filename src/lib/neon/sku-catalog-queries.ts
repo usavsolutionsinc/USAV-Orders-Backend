@@ -963,6 +963,16 @@ export async function createQcCheck(params: {
       params.sortOrder ?? 0,
     ],
   );
+
+  // Attaching a checklist makes the SKU relevant again — reactivate it so it
+  // surfaces in the QC view (and the rest of the catalog) even if it had been
+  // retired. Guarded so we only write when the flag is actually flipping.
+  await pool.query(
+    `UPDATE sku_catalog SET is_active = true, updated_at = NOW()
+     WHERE id = $1 AND is_active = false`,
+    [params.skuCatalogId],
+  );
+
   return result.rows[0];
 }
 

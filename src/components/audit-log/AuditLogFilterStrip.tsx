@@ -52,9 +52,180 @@ function presetFromParams(params: URLSearchParams): Preset {
   if (day === yest) return 'yesterday';
   return 'custom';
 }
+export function useAuditLogFilterRefinements() {
+  const router = useRouter();
+  const pathname = usePathname() || '/audit-log/receiving';
+  const searchParams = useSearchParams();
 
+  const preset = useMemo(
+    () => presetFromParams(new URLSearchParams(searchParams.toString())),
+    [searchParams],
+  );
+
+  const staffIdRaw = searchParams.get('staffId');
+  const staffId = staffIdRaw && /^\d+$/.test(staffIdRaw) ? Number(staffIdRaw) : null;
+
+  const replaceParams = (mutate: (p: URLSearchParams) => void) => {
+    const next = new URLSearchParams(searchParams.toString());
+    mutate(next);
+    const qs = next.toString();
+    router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
+  };
+
+  const applyPreset = (kind: Preset) => {
+    replaceParams((p) => {
+      p.delete('day');
+      p.delete('start');
+      p.delete('end');
+      if (kind === 'all') return;
+      if (kind === 'today') p.set('day', ymd(new Date()));
+      else if (kind === 'yesterday') {
+        const y = new Date();
+        y.setDate(y.getDate() - 1);
+        p.set('day', ymd(y));
+      } else if (kind === 'last7') {
+        const start = new Date();
+        start.setDate(start.getDate() - 6);
+        start.setHours(0, 0, 0, 0);
+        const end = new Date();
+        end.setHours(23, 59, 59, 999);
+        p.set('start', start.toISOString());
+        p.set('end', end.toISOString());
+      } else if (kind === 'custom') {
+        const { start, end } = localBounds(ymd(new Date()));
+        p.set('start', start);
+        p.set('end', end);
+      }
+    });
+  };
+
+  const setStaffId = (id: number | null) => {
+    replaceParams((p) => {
+      if (id == null) p.delete('staffId');
+      else p.set('staffId', String(id));
+    });
+  };
+
+  const refinements = useMemo(() => {
+    const out: Array<{ id: string; label: string; onRemove: () => void }> = [];
+
+    if (preset !== 'all') {
+      const label = preset === 'today' ? 'Today' : preset === 'yesterday' ? 'Yesterday' : preset === 'last7' ? 'Last 7 days' : 'Custom range';
+      out.push({ id: 'date', label, onRemove: () => applyPreset('all') });
+    }
+
+    if (staffId != null) {
+      out.push({ id: 'staff', label: `Staff: #${staffId}`, onRemove: () => setStaffId(null) });
+    }
+
+    return out;
+  }, [preset, staffId]);
+
+  return {
+    refinements,
+    clearAll: () => {
+      applyPreset('all');
+      setStaffId(null);
+    },
+    state: { preset, staffId, searchParams },
+    actions: { applyPreset, setStaffId, setCustomStart: (day: string) => {
+        if (!day) { replaceParams((p) => p.delete('start')); return; }
+        const { start } = localBounds(day);
+        replaceParams((p) => { p.delete('day'); p.set('start', start); });
+      }, setCustomEnd: (day: string) => {
+        if (!day) { replaceParams((p) => p.delete('end')); return; }
+        const { end } = localBounds(day);
+        replaceParams((p) => { p.delete('day'); p.set('end', end); });
+      }
+    }
+  };
+}
+
+export function AuditLogFilterDropdown({ onClose }: { onClose: () => void }) {
+  const { state, actions } = useAuditLogFilterRefinements();
+
+  const customStart = (() => {
+    const s = state.searchParams.get('start');
+    if (!s) return '';
+    const d = new Date(s);
+    return Number.isNaN(d.getTime()) ? '' : ymd(d);
+  })();
+  const customEnd = (() => {
+    const e = state.searchParams.get('end');
+    if (!e) return '';
+    const d = new Date(e);
+    return Number.isNaN(d.getTime()) ? '' : ymd(d);
+  })();
+
+  const presetOptions: Array<{ id: Preset; label: string }> = [
+    { id: 'all', label: 'All' },
+    { id: 'today', label: 'Today' },
+    { id: 'yesterday', label: 'Yest.' },
+    { id: 'last7', label: '7d' },
+    { id: 'custom', label: 'Custom' },
+  ];
+
+  return (
+    <div className="space-y-6">
+      <div>
+        <p className="mb-3 text-[11px] font-black uppercase tracking-[0.2em] text-gray-400">Date Range</p>
+        <div className="grid grid-cols-3 gap-2">
+          {presetOptions.map((opt) => (
+            <button
+              key={opt.id}
+              type="button"
+              onClick={() => actions.applyPreset(opt.id)}
+              className={`rounded-xl border px-3 py-2 text-micro font-bold uppercase tracking-wider transition-all ${
+                state.preset === opt.id
+                  ? 'border-blue-500 bg-blue-500 text-white shadow-md shadow-blue-500/20'
+                  : 'border-gray-100 bg-gray-50/50 text-gray-600 hover:border-gray-200 hover:bg-white'
+              }`}
+            >
+              {opt.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {state.preset === 'custom' && (
+        <div className="grid grid-cols-2 gap-2">
+          <input
+            type="date"
+            value={customStart}
+            onChange={(e) => actions.setCustomStart(e.target.value)}
+            className="h-10 rounded-xl border border-gray-100 bg-gray-50/50 px-3 text-caption font-bold text-gray-900 outline-none focus:border-blue-500 focus:bg-white focus:ring-4 focus:ring-blue-500/10"
+          />
+          <input
+            type="date"
+            value={customEnd}
+            onChange={(e) => actions.setCustomEnd(e.target.value)}
+            className="h-10 rounded-xl border border-gray-100 bg-gray-50/50 px-3 text-caption font-bold text-gray-900 outline-none focus:border-blue-500 focus:bg-white focus:ring-4 focus:ring-blue-500/10"
+          />
+        </div>
+      )}
+
+      <div>
+        <p className="mb-3 text-[11px] font-black uppercase tracking-[0.2em] text-gray-400">Staff Member</p>
+        <StaffCombobox value={state.staffId} onChange={actions.setStaffId} />
+      </div>
+
+      <div className="pt-2">
+        <button
+          onClick={onClose}
+          className="w-full rounded-2xl bg-gray-900 py-3.5 text-sm font-black uppercase tracking-widest text-white transition-all hover:bg-black"
+        >
+          Done
+        </button>
+      </div>
+    </div>
+  );
+}
+
+/** @deprecated Use {@link AuditLogFilterDropdown} in the new FilterRefinementBar pattern. */
 export function AuditLogFilterStrip() {
   const router = useRouter();
+...
+
   const pathname = usePathname() || '/audit-log/receiving';
   const searchParams = useSearchParams();
 

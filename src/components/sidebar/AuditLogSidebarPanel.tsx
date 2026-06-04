@@ -2,11 +2,12 @@
 
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useEffect, useMemo, useState } from 'react';
-import { sectionLabel, cardTitle, fieldLabel } from '@/design-system/tokens/typography/presets';
+import { sectionLabel, cardTitle, fieldLabel, microBadge } from '@/design-system/tokens/typography/presets';
 import { ClipboardList, Package, FileText, Search, User } from '@/components/Icons';
 import { HorizontalButtonSlider, type HorizontalSliderItem } from '@/components/ui/HorizontalButtonSlider';
-import { AuditLogFilterStrip } from '@/components/audit-log/AuditLogFilterStrip';
+import { AuditLogFilterStrip, useAuditLogFilterRefinements, AuditLogFilterDropdown } from '@/components/audit-log/AuditLogFilterStrip';
 import { SIDEBAR_GUTTER } from '@/components/layout/header-shell';
+import { SidebarShell } from '@/components/layout/SidebarShell';
 
 // ─── Section nav ───────────────────────────────────────────────────────────
 
@@ -76,6 +77,10 @@ export function AuditLogSidebarPanel() {
     (s) => s.available && (pathname === s.href || pathname.startsWith(`${s.href}/`)),
   );
 
+  const [searchQuery, setSearchQuery] = useState('');
+
+  const { refinements, clearAll } = useAuditLogFilterRefinements();
+
   const switchSection = (target: AuditSection) => {
     // Preserve shared filters (day/start/end/staffId) across section changes.
     const params = new URLSearchParams(searchParams.toString());
@@ -85,74 +90,91 @@ export function AuditLogSidebarPanel() {
   };
 
   return (
-    <div className="flex h-full flex-col overflow-hidden">
-      {/* Section nav */}
-      <div className={`border-b border-gray-100 ${SIDEBAR_GUTTER} py-3`}>
-        <p className={`px-1 ${sectionLabel} text-emerald-600`}>Audit Log</p>
-        <p className={`mt-1 px-1 text-caption font-semibold leading-snug text-gray-500`}>
-          Every event captured per page — who, when, what changed.
-        </p>
-        <div className="mt-3">
-          <HorizontalButtonSlider
-            items={AUDIT_SECTION_ITEMS}
-            value={activeSection?.id ?? 'receiving'}
-            onChange={(nextId) => {
-              const target = AUDIT_SECTIONS.find((s) => s.id === nextId);
-              if (target?.available) switchSection(target);
-            }}
-            variant="nav"
-            aria-label="Audit log section"
-          />
+    <SidebarShell
+      headerAbove={
+        <div className={`${SIDEBAR_GUTTER} py-3 border-b border-gray-100`}>
+          <p className={`px-1 ${sectionLabel} text-emerald-600`}>Audit Log</p>
+          <p className={`mt-1 px-1 text-caption font-semibold leading-snug text-gray-500`}>
+            Who, when, and what changed.
+          </p>
         </div>
-      </div>
-
-      {/* Shared filter strip (date + staff) */}
-      <AuditLogFilterStrip />
-
-      {/* Per-section picker */}
-      <div className="flex-1 overflow-hidden">
-        {activeSection?.id === 'receiving' ? (
-          <ReceivingPOPicker
-            selectedPo={searchParams.get('po')}
-            onSelect={(po) => {
-              const params = new URLSearchParams(searchParams.toString());
-              if (po) params.set('po', po);
-              else params.delete('po');
-              router.replace(
-                `/audit-log/receiving${params.toString() ? `?${params.toString()}` : ''}`,
-              );
-            }}
-          />
-        ) : activeSection?.id === 'packing' ? (
-          <PackingTrackingPicker />
-        ) : activeSection?.id === 'tech' ? (
-          <TechSessionPicker />
-        ) : activeSection?.id === 'sku' ? (
-          <SkuPicker />
-        ) : activeSection?.id === 'staff' ? (
-          <div className="px-4 py-6 text-center text-caption text-gray-400">
-            Pick a staff member above to load their cross-section audit feed.
+      }
+      search={{
+        value: searchQuery,
+        onChange: setSearchQuery,
+        placeholder: `Search ${activeSection?.label || 'audit'}...`,
+        variant: 'blue',
+      }}
+      filter={{
+        label: 'Audit Filters',
+        refinements,
+        onClearAll: clearAll,
+        renderDropdown: (onClose) => <AuditLogFilterDropdown onClose={onClose} />,
+      }}
+      headerRows={[
+        <HorizontalButtonSlider
+          key="sections"
+          items={AUDIT_SECTION_ITEMS}
+          value={activeSection?.id ?? 'receiving'}
+          onChange={(nextId) => {
+            const target = AUDIT_SECTIONS.find((s) => s.id === nextId);
+            if (target?.available) switchSection(target);
+          }}
+          variant="nav"
+          aria-label="Audit log section"
+        />,
+      ]}
+      bodyClassName="pt-0 pb-6"
+    >
+      {activeSection?.id === 'receiving' ? (
+        <ReceivingPOPicker
+          query={searchQuery}
+          selectedPo={searchParams.get('po')}
+          onSelect={(po) => {
+            const params = new URLSearchParams(searchParams.toString());
+            if (po) params.set('po', po);
+            else params.delete('po');
+            router.replace(
+              `/audit-log/receiving${params.toString() ? `?${params.toString()}` : ''}`,
+            );
+          }}
+        />
+      ) : activeSection?.id === 'packing' ? (
+        <PackingTrackingPicker query={searchQuery} />
+      ) : activeSection?.id === 'tech' ? (
+        <TechSessionPicker query={searchQuery} />
+      ) : activeSection?.id === 'sku' ? (
+        <SkuPicker query={searchQuery} />
+      ) : activeSection?.id === 'staff' ? (
+        <div className="px-4 py-8 text-center">
+          <div className="inline-flex h-12 w-12 items-center justify-center rounded-full bg-emerald-50 text-emerald-600 mb-3">
+            <User className="h-6 w-6" />
           </div>
-        ) : (
-          <div className="px-4 py-6 text-center text-xs text-gray-400">
-            Select a section above.
-          </div>
-        )}
-      </div>
-    </div>
+          <p className="text-caption font-bold text-gray-900 mb-1">Staff Audit Feed</p>
+          <p className="text-[11px] text-gray-500 max-w-[180px] mx-auto">
+            Select a staff member in the filters above to load their cross-section audit feed.
+          </p>
+        </div>
+      ) : (
+        <div className="px-4 py-6 text-center text-xs text-gray-400">
+          Select a section above.
+        </div>
+      )}
+    </SidebarShell>
   );
 }
 
 // ─── Receiving PO picker (lives inside the sidebar) ────────────────────────
 
 function ReceivingPOPicker({
+  query,
   selectedPo,
   onSelect,
 }: {
+  query: string;
   selectedPo: string | null;
   onSelect: (po: string | null) => void;
 }) {
-  const [query, setQuery] = useState('');
   const [debouncedQuery, setDebouncedQuery] = useState('');
   const [pos, setPos] = useState<POSummary[]>([]);
   const [loading, setLoading] = useState(true);
@@ -187,19 +209,6 @@ function ReceivingPOPicker({
 
   return (
     <div className="flex h-full flex-col">
-      <div className={`${SIDEBAR_GUTTER} py-2`}>
-        <div className="relative">
-          <Search className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
-          <input
-            type="text"
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search PO, SKU, item…"
-            className="w-full rounded-xl border border-gray-200 bg-white py-1.5 pl-8 pr-2.5 text-xs text-gray-800 placeholder:text-gray-400 focus:border-emerald-400 focus:outline-none focus:ring-2 focus:ring-emerald-100"
-          />
-        </div>
-      </div>
-
       <div className="flex-1 overflow-y-auto">
         {error ? (
           <div className="m-3 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-700">
@@ -285,42 +294,20 @@ interface ListRow {
 }
 
 function SidebarListPicker({
-  placeholder,
   rows,
   selectedKey,
   onSelect,
   loading,
   error,
-  onSearch,
 }: {
-  placeholder: string;
   rows: ListRow[];
   selectedKey: string | null;
   onSelect: (key: string) => void;
   loading: boolean;
   error: string | null;
-  onSearch: (q: string) => void;
 }) {
-  const [query, setQuery] = useState('');
-  useEffect(() => {
-    const t = setTimeout(() => onSearch(query.trim()), 250);
-    return () => clearTimeout(t);
-  }, [query, onSearch]);
-
   return (
     <div className="flex h-full flex-col">
-      <div className={`${SIDEBAR_GUTTER} py-2`}>
-        <div className="relative">
-          <Search className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
-          <input
-            type="text"
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder={placeholder}
-            className="w-full rounded-xl border border-gray-200 bg-white py-1.5 pl-8 pr-2.5 text-xs text-gray-800 placeholder:text-gray-400 focus:border-emerald-400 focus:outline-none focus:ring-2 focus:ring-emerald-100"
-          />
-        </div>
-      </div>
       <div className="flex-1 overflow-y-auto">
         {error ? (
           <div className="m-3 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-700">
@@ -393,7 +380,7 @@ interface PackingTrackingSummary {
   event_count: number;
 }
 
-function PackingTrackingPicker() {
+function PackingTrackingPicker({ query }: { query: string }) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const selected = searchParams.get('tracking');
@@ -401,14 +388,13 @@ function PackingTrackingPicker() {
   const [rows, setRows] = useState<PackingTrackingSummary[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [search, setSearch] = useState('');
 
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
     const url = new URL('/api/audit-log/packing', window.location.origin);
     if (sharedQS) for (const [k, v] of new URLSearchParams(sharedQS)) url.searchParams.set(k, v);
-    if (search) url.searchParams.set('q', search);
+    if (query) url.searchParams.set('q', query);
     url.searchParams.set('limit', '50');
     fetch(url.toString(), { credentials: 'include' })
       .then((r) => r.json())
@@ -422,7 +408,7 @@ function PackingTrackingPicker() {
     return () => {
       cancelled = true;
     };
-  }, [sharedQS, search]);
+  }, [sharedQS, query]);
 
   const listRows: ListRow[] = rows.map((r) => ({
     key: r.tracking,
@@ -436,7 +422,6 @@ function PackingTrackingPicker() {
 
   return (
     <SidebarListPicker
-      placeholder="Search tracking, SKU, packer…"
       rows={listRows}
       selectedKey={selected}
       onSelect={(key) => {
@@ -446,7 +431,6 @@ function PackingTrackingPicker() {
       }}
       loading={loading}
       error={error}
-      onSearch={setSearch}
     />
   );
 }
@@ -463,7 +447,7 @@ interface TechSessionSummary {
   sku_summary: string | null;
 }
 
-function TechSessionPicker() {
+function TechSessionPicker({ query }: { query: string }) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const selected = searchParams.get('session');
@@ -471,14 +455,13 @@ function TechSessionPicker() {
   const [rows, setRows] = useState<TechSessionSummary[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [search, setSearch] = useState('');
 
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
     const url = new URL('/api/audit-log/tech', window.location.origin);
     if (sharedQS) for (const [k, v] of new URLSearchParams(sharedQS)) url.searchParams.set(k, v);
-    if (search) url.searchParams.set('q', search);
+    if (query) url.searchParams.set('q', query);
     url.searchParams.set('limit', '50');
     fetch(url.toString(), { credentials: 'include' })
       .then((r) => r.json())
@@ -492,7 +475,7 @@ function TechSessionPicker() {
     return () => {
       cancelled = true;
     };
-  }, [sharedQS, search]);
+  }, [sharedQS, query]);
 
   const listRows: ListRow[] = rows.map((r) => ({
     key: r.session_key || r.tracking,
@@ -506,7 +489,6 @@ function TechSessionPicker() {
 
   return (
     <SidebarListPicker
-      placeholder="Search PO, tracking, serial, tester…"
       rows={listRows}
       selectedKey={selected}
       onSelect={(key) => {
@@ -516,7 +498,6 @@ function TechSessionPicker() {
       }}
       loading={loading}
       error={error}
-      onSearch={setSearch}
     />
   );
 }
@@ -530,7 +511,7 @@ interface SkuSummary {
   latest_event_at: string | null;
 }
 
-function SkuPicker() {
+function SkuPicker({ query }: { query: string }) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const selected = searchParams.get('sku');
@@ -538,14 +519,13 @@ function SkuPicker() {
   const [rows, setRows] = useState<SkuSummary[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [search, setSearch] = useState('');
 
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
     const url = new URL('/api/audit-log/sku', window.location.origin);
     if (sharedQS) for (const [k, v] of new URLSearchParams(sharedQS)) url.searchParams.set(k, v);
-    if (search) url.searchParams.set('q', search);
+    if (query) url.searchParams.set('q', query);
     url.searchParams.set('limit', '50');
     fetch(url.toString(), { credentials: 'include' })
       .then((r) => r.json())
@@ -559,7 +539,7 @@ function SkuPicker() {
     return () => {
       cancelled = true;
     };
-  }, [sharedQS, search]);
+  }, [sharedQS, query]);
 
   const listRows: ListRow[] = rows.map((r) => ({
     key: r.sku,
@@ -571,7 +551,6 @@ function SkuPicker() {
 
   return (
     <SidebarListPicker
-      placeholder="Search SKU or item name…"
       rows={listRows}
       selectedKey={selected}
       onSelect={(key) => {
@@ -581,7 +560,6 @@ function SkuPicker() {
       }}
       loading={loading}
       error={error}
-      onSearch={setSearch}
     />
   );
 }

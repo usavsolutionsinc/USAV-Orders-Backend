@@ -39,11 +39,12 @@ export function cx(...parts: Array<string | false | null | undefined>) {
 }
 
 /** Pill marking whether a component is new vs. already in the system. */
-function Tag({ kind }: { kind: 'new' | 'have' | 'upgrade' }) {
+function Tag({ kind }: { kind: 'new' | 'have' | 'upgrade' | 'standard' }) {
   const map = {
     new: ['bg-emerald-500/12 text-emerald-600 ring-emerald-500/20', '2026 · New'],
     upgrade: ['bg-violet-500/12 text-violet-600 ring-violet-500/20', '2026 · Upgrade'],
     have: ['bg-slate-500/10 text-text-muted ring-border-soft', 'In system'],
+    standard: ['bg-blue-500/12 text-blue-600 ring-blue-500/20', '2026 · Standard'],
   } as const;
   const [cls, label] = map[kind];
   return (
@@ -68,7 +69,7 @@ export function Bay({
 }: {
   title: string;
   promote: string;
-  tag?: 'new' | 'have' | 'upgrade';
+  tag?: 'new' | 'have' | 'upgrade' | 'standard';
   caption?: string;
   children: React.ReactNode;
   span?: 1 | 2;

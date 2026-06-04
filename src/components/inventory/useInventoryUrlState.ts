@@ -42,7 +42,10 @@ function readViewState(searchParams: URLSearchParams): InventoryViewState {
     return { view: 'pulse', sku: null, bin: null, unit: null, states, conditions };
 }
 
+export type InventoryMode = 'ledger' | 'triage' | 'pulse';
+
 export interface InventorySidebarUrlState {
+    mode: InventoryMode;
     tab: InventoryTab;
     /** Search input (committed/debounced value, mirrored upstream). */
     q: string;
@@ -87,10 +90,12 @@ export function useInventoryUrlState() {
     );
 
     const sidebar = useMemo<InventorySidebarUrlState>(() => {
+        const mode = (searchParams.get('mode') as InventoryMode) || 'ledger';
         const tab = inventoryTabFromPathname(pathname);
         const rawField = searchParams.get('field');
         const rawBuckets = searchParams.get('filter');
         return {
+            mode,
             tab,
             q: (searchParams.get('q') ?? '').trim(),
             field: normalizeSearchField(tab, rawField) as AnyInventorySearchField,
@@ -136,9 +141,18 @@ export function useInventoryUrlState() {
     );
 
     const setSidebarUrl = useCallback(
-        (next: SidebarUrlPatch) => {
+        (next: SidebarUrlPatch & { mode?: InventoryMode }) => {
             const sp = new URLSearchParams(searchParams.toString());
 
+            if (next.mode !== undefined) {
+                sp.set('mode', next.mode);
+                if (next.mode !== sidebar.mode) {
+                    sp.delete('field');
+                    sp.delete('filter');
+                    sp.delete('q');
+                    sp.delete('open');
+                }
+            }
             if (next.q !== undefined) {
                 if (next.q && next.q.trim().length > 0) sp.set('q', next.q.trim());
                 else sp.delete('q');

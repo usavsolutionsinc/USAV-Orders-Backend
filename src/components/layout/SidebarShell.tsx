@@ -2,8 +2,9 @@
 
 import type { ReactNode } from 'react';
 import { cn } from '@/utils/_cn';
-import { SIDEBAR_GUTTER, sidebarHeaderPillRowClass } from '@/components/layout/header-shell';
+import { SIDEBAR_GUTTER, sidebarHeaderPillRowClass, sidebarHeaderBandClass } from '@/components/layout/header-shell';
 import { SidebarSearchBar, type SidebarSearchBarProps } from '@/components/ui/SidebarSearchBar';
+import { FilterRefinementBar, type FilterRefinementBarProps } from '@/design-system/components/FilterRefinementBar';
 
 /** The search props the shell forwards to its internal `<SidebarSearchBar>`. */
 export type SidebarShellSearch = SidebarSearchBarProps;
@@ -42,6 +43,13 @@ export interface SidebarShellProps {
   search?: SidebarSearchBarProps;
 
   /**
+   * Optional configuration for a unified filter bar. When provided, the shell
+   * renders a `<FilterRefinementBar variant="sidebar">` directly below the
+   * search bar.
+   */
+  filter?: Omit<FilterRefinementBarProps, 'variant'>;
+
+  /**
    * Focus-grouping wrapper around the rendered search. Receives the shell's own
    * `<SidebarSearchBar>` node so a panel can keep `onFocus`/`onBlur` on a single
    * element that also contains anything the search reveals (e.g. Shipped's
@@ -78,6 +86,7 @@ export interface SidebarShellProps {
 
 export function SidebarShell({
   search,
+  filter,
   searchGroup,
   headerAbove,
   headerRows,
@@ -98,6 +107,12 @@ export function SidebarShell({
       {headerAbove}
 
       {searchBar ? (searchGroup ? searchGroup(searchBar) : searchBar) : null}
+
+      {filter && (
+        <div className={cn(sidebarHeaderBandClass, 'relative z-30')}>
+          <FilterRefinementBar {...filter} variant="sidebar" />
+        </div>
+      )}
 
       {headerRows?.map((row, i) =>
         row ? (

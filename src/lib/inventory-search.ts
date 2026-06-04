@@ -11,9 +11,11 @@ export type InventoryTab =
   | 'skus'
   | 'units'
   | 'alerts'
-  | 'counts';
+  | 'counts'
+  | 'triage'
+  | 'pulse';
 
-export const INVENTORY_TABS = ['activity', 'bins', 'skus', 'units', 'alerts', 'counts'] as const;
+export const INVENTORY_TABS = ['activity', 'bins', 'skus', 'units', 'alerts', 'counts', 'triage', 'pulse'] as const;
 
 // ─── Per-tab search-field unions ─────────────────────────────────────────────
 
@@ -23,6 +25,8 @@ export type UnitSearchField = 'all' | 'unit_id' | 'serial_number' | 'sku' | 'ord
 export type ActivitySearchField = 'all' | 'sku' | 'bin' | 'user' | 'event_type';
 export type AlertSearchField = 'all' | 'sku' | 'bin' | 'rule';
 export type CountSearchField = 'all' | 'campaign' | 'zone' | 'counter';
+export type TriageSearchField = 'all' | 'sku' | 'issue_id' | 'reporter';
+export type PulseSearchField = 'all' | 'unit_id' | 'serial_number' | 'sku' | 'user';
 
 export type SearchFieldForTab<T extends InventoryTab> =
     T extends 'bins' ? BinSearchField :
@@ -31,6 +35,8 @@ export type SearchFieldForTab<T extends InventoryTab> =
     T extends 'activity' ? ActivitySearchField :
     T extends 'alerts' ? AlertSearchField :
     T extends 'counts' ? CountSearchField :
+    T extends 'triage' ? TriageSearchField :
+    T extends 'pulse' ? PulseSearchField :
     never;
 
 export type AnyInventorySearchField =
@@ -39,7 +45,9 @@ export type AnyInventorySearchField =
     | UnitSearchField
     | ActivitySearchField
     | AlertSearchField
-    | CountSearchField;
+    | CountSearchField
+    | TriageSearchField
+    | PulseSearchField;
 
 // ─── Per-tab bucket-filter unions (multi-select) ─────────────────────────────
 

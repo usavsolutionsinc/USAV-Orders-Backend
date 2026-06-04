@@ -30,7 +30,6 @@ import {
   type Density,
 } from './_gallery/sections';
 import { ConditionPickerSection } from './_gallery/condition-picker-section';
-import { WarehouseMapSection } from './_gallery/warehouse-map-section';
 import { WarehouseFlowSection } from './_gallery/warehouse-flow-section';
 import { FilterBarSection } from './_gallery/filter-bar-section';
 
@@ -49,8 +48,7 @@ const SECTIONS: SectionDef[] = [
   { id: 'condition', index: '2d', label: 'Condition picker', icon: Package, blurb: 'Condensing the PO-items grade picker into one contextual row. Today it shows the full set of pills at all times; these variants keep the current grade on the left and reveal the rest only on demand — popover, inline slide-out, or a select dropdown. Each is shown inside a mock of the real line-edit card so you can compare in context and cherry-pick.', render: (d) => <ConditionPickerSection density={d} /> },
   { id: 'inputs', index: '03', label: 'Inputs', icon: Search, blurb: 'Floating-label fields and a spring toggle — consolidating the inconsistent form styling between sidebar and admin forms.', render: () => <InputsSection /> },
   { id: 'data', index: '04', label: 'Data display', icon: Database, blurb: 'A DataTable family (selection, status pills, density-aware rows) to retire the ~6 hand-rolled sticky-header tables.', render: (d) => <DataTableSection density={d} /> },
-  { id: 'warehouse-map', index: '05', label: 'Warehouse map · konva', icon: MapPin, blurb: 'The flat fill-% bin grid redrawn on a real canvas with react-konva — drag bins to reposition, select to resize (expand/shrink), scroll to zoom, drag empty space to pan, and flip Trace to follow one SKU across every zone it lives in. The spatial, "identify & move inventory" view the HTML table can\'t give you.', render: (d) => <WarehouseMapSection density={d} /> },
-  { id: 'warehouse-flow', index: '5b', label: 'Warehouse map · React Flow', icon: MapPin, blurb: 'The exact same bins/zones/tones on @xyflow/react instead of konva — a head-to-head comparison. Nodes are real DOM (theme for free), Trace draws actual graph edges between same-SKU bins, and Controls + MiniMap come built in. Konva wins on raw shape count & pixel control; React Flow wins on edges/tracing and batteries-included chrome.', render: (d) => <WarehouseFlowSection density={d} /> },
+  { id: 'warehouse-flow', index: '05', label: 'Warehouse floor plan', icon: MapPin, blurb: 'The bin grid as a true floor-plan map on @xyflow/react. Drag bins to match the physical floor, select to resize (expand/shrink), pan/zoom with built-in Controls + MiniMap, and flip Trace to draw graph edges from a bin to every other bin holding the same SKU. The spatial, "find & follow inventory" view the flat HTML table can\'t give you — and the basis for the real /warehouse map mode (see docs/warehouse-map-react-flow-plan.md).', render: (d) => <WarehouseFlowSection density={d} /> },
   { id: 'feedback', index: '06', label: 'Feedback', icon: Bell, blurb: 'A polished empty state and a consistent inline error/warning banner.', render: () => <FeedbackSection /> },
   { id: 'motion', index: '07', label: 'Motion lab', icon: Sparkles, blurb: 'Shared-element expand, spring press, and stagger reveals — the highest-impact "2026" upgrades, all from your existing Framer Motion presets.', render: () => <MotionSection /> },
 ];
