@@ -6,7 +6,6 @@ import {
   Calendar,
   Camera,
   ClipboardList,
-  Database,
   FileText,
   LayoutDashboard,
   Link2,
@@ -26,7 +25,7 @@ export type AdminSection =
   | 'goals' | 'staff' | 'access' | 'roles' | 'connections' | 'integrations' | 'fba'
   | 'manuals' | 'reason_codes' | 'sku_catalog' | 'locations' | 'repair_issues' | 'favorites' | 'features'
   | 'station_photos'
-  | 'logs' | 'jobs' | 'ai_chat' | 'architecture' | 'codebase'
+  | 'logs' | 'jobs' | 'ai_chat' | 'architecture'
   | 'photo_backup' | 'billing';
 
 export type AdminGroup = 'Performance' | 'People' | 'Data sources' | 'System' | 'Account';
@@ -68,7 +67,6 @@ export const ADMIN_SECTION_OPTIONS: AdminSectionOption[] = [
   { value: 'logs',         label: 'Logs',         description: 'Unified audit + station activity logs',                        group: 'System',      icon: FileText,     requires: 'admin.view_logs' },
   { value: 'ai_chat',      label: 'AI Chat',      description: 'Ops assistant + Bose service manual lookup',                   group: 'System',      icon: Zap },
   { value: 'architecture', label: 'Operations',   description: 'Visual flow of how items move through the system — live audit board', group: 'System',  icon: Share2 },
-  { value: 'codebase',     label: 'Codebase',     description: 'Live codebase diagrams — module deps, routes, recent commits', group: 'System',      icon: Database,     requires: 'admin.view_logs' },
 
   { value: 'billing',      label: 'Billing',      description: 'Plan, entitlements, and Stripe billing portal',                group: 'Account',     icon: ShieldCheck },
 ];

@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { selectionEventName } from '@/lib/selection/table-selection';
+import { onSelectionTotal, selectionEventName } from '@/lib/selection/table-selection';
 
 /**
  * Collect the current selection for a table `scope`.
@@ -41,4 +41,18 @@ export function useTableSelection<T>(
   }, [scope, getKey]);
 
   return rows;
+}
+
+/**
+ * Track the count of currently-selectable (visible) rows a table publishes via
+ * `emitSelectionTotal(scope, …)`. Lets a `<ContextualSelectionBar>` know when
+ * everything is selected so its select-all ring can fill. Defaults to `0` until
+ * the table broadcasts.
+ */
+export function useTableSelectionTotal(scope: string): number {
+  const [total, setTotal] = useState(0);
+
+  useEffect(() => onSelectionTotal(scope, setTotal), [scope]);
+
+  return total;
 }

@@ -19,8 +19,84 @@
  * production tables or chips; promotes to @/components/ui/RowMetaColumns.
  */
 
-import { useState, type ReactNode } from 'react';
+/* ════════════════════════════════════════════════════════════════════════════
+ *                    PROMOTION → SYSTEM · IMPLEMENTATION PLAN
+ * ────────────────────────────────────────────────────────────────────────────
+ * This section is the approved prototype for two reusable primitives + one
+ * pattern. Below is the step-by-step plan to land them in the real app. Work it
+ * top-to-bottom; each numbered step is independently shippable on `main`.
+ *
+ * ── WHAT WE'RE PROMOTING ────────────────────────────────────────────────────
+ *   A. RowMetaColumns + RowTitle  — the title row + its "qty · condition · rest"
+ *      subrow, indented so qty lines up under the TITLE text (not the dot),
+ *      qty/condition content-width with a pr-2.5 breather after qty so heavy
+ *      counts (100/100) stay clear. Left-side mirror of ChipColumns/CHIP_COL.
+ *   B. Delivery-state ICONS + tooltip — STALLED / NO TRACKING # / PENDING
+ *      CARRIER / DELIVERED·NOT SCANNED / ARRIVING TODAY / IN TRANSIT collapse
+ *      from text suffixes to one glyph with a SiteTooltipProvider hover label.
+ *   C. Staff initials as color-only letters + hover tooltip (tech / packer).
+ *
+ * ── STEP 1 · Land the primitive (no table changes yet) ──────────────────────
+ *   • New file  src/components/ui/RowMetaColumns.tsx  exporting:
+ *       - RowTitle({ dot, title, small?, dotTrack='w-5' })
+ *       - RowMetaColumns({ qty, condition, rest?, indent=META_COL.indent })
+ *       - META_COL = { indent: '1.25rem' }  (the default dot-track width)
+ *     Copy the JSX verbatim from this file's RowTitle / RowMetaColumns, minus
+ *     the `showGuides` prop (debug-only — drop it for production).
+ *   • Typography: swap the literal text-[10px]/text-[13px] for the real tokens
+ *       title  → text-label font-bold text-gray-900   (presets/typography)
+ *       meta   → text-micro font-bold text-gray-500 uppercase tracking-widest
+ *     so it matches the tokens OrdersQueue/Shipped already use.
+ *   • INVARIANT: RowMetaColumns `indent` MUST equal RowTitle `dotTrack` width
+ *     (w-5→1.25rem, w-7→1.75rem). Document this next to META_COL.
+ *
+ * ── STEP 2 · Delivery-state icon set (receiving) ────────────────────────────
+ *   • Add to the existing receiving display primitives (see memory:
+ *     receiving-display-primitives / src/components/station/receiving-constants
+ *     + ReceivingIdentityChips) a DELIVERY_STATE_ICON map keyed by the same
+ *     delivery_state union ReceivingLinesTable already switches on
+ *     (STALLED | AWAITING_TRACKING | PENDING_CARRIER | DELIVERED_UNOPENED |
+ *      ARRIVING_TODAY | IN_TRANSIT) → { Icon, tone, label }. Reuse the icon
+ *     choices proven here (AlertTriangle/Hash/Clock/Inbox/Truck/MapPin).
+ *   • New tiny shared helper IconWithTooltip (or fold into the chip layer):
+ *     wraps an icon with useSiteTooltipOptional() activate/scheduleClose and a
+ *     native `title` fallback — exactly the StateIcon/StaffInitial pattern here.
+ *
+ * ── STEP 3 · Migrate the five desktop tables (one PR each, in this order) ────
+ *   1. shipped/DashboardShippedTable.tsx   ← PILOT, pixel-identical refactor:
+ *        replace the inline grid-cols-[1.25rem_3rem_auto] block with
+ *        <RowMetaColumns rest={<StaffInitials …/>} />; switch StaffInitials to
+ *        color-only letters + tooltip (Step C). Validates the primitive.
+ *   2. dashboard/OrdersQueueTable.tsx       ← same swap; rest = days-late /
+ *        out-of-stock nodes. Should be visually identical.
+ *   3. TechTable.tsx  +  4. PackerTable.tsx ← VISIBLE change: drop the
+ *        "qty • condition" bullet + text-eyebrow/font-black + text-caption
+ *        title; route through RowTitle + RowMetaColumns (normalizes title to
+ *        text-label). This is the consistency win.
+ *   5. station/ReceivingLinesTable.tsx      ← RowTitle dotTrack="w-7",
+ *        RowMetaColumns indent="1.75rem" (fits "0/1"…"100/100"); rest = the
+ *        workflow icon + <DeliveryStateIcon> from Step 2 (delete the
+ *        deliveryStateMeta text-suffix branch).
+ *
+ * ── STEP 4 · Mobile parity (optional, separate pass) ────────────────────────
+ *   • mobile/packer/MobilePackingRow, mobile/receiving/MobileReceivingRow et al
+ *     render their own title/meta — adopt RowTitle/RowMetaColumns there too, or
+ *     leave as-is if the desktop unification is enough for now.
+ *
+ * ── STEP 5 · Guardrails & cleanup ───────────────────────────────────────────
+ *   • Co-locate META_COL next to CHIP_COL conceptually; cross-reference in both
+ *     files' comments so the left/right column systems stay in sync.
+ *   • Keep this /design-demo section as the living showroom (per the 2026
+ *     component-adoption initiative); update it if the primitive's API changes.
+ *   • SiteTooltipProvider already wraps the app (components/Providers.tsx) — no
+ *     wiring needed; the native-title fallback covers any isolated render.
+ *   • Verify against the audit set (the 5 tables above) — no other file renders
+ *     the title+meta subrow, so nothing else needs touching.
+ * ════════════════════════════════════════════════════════════════════════════ */
+
+import { useCallback, useId, useRef, useState, type ReactNode } from 'react';
 import { cx, type Density } from './sections';
+import { useSiteTooltipOptional } from '@/components/providers/SiteTooltipProvider';
 
 /* ════════════════════ candidate primitive (preview only) ═══════════════════ */
 
@@ -30,7 +106,7 @@ import { cx, type Density } from './sections';
  * trailing `auto` track holds whatever each table puts after condition (staff
  * initials, days-late, out-of-stock…). Promotes to @/components/ui/RowMetaColumns.
  */
-const META_COL = {
+export const META_COL = {
   qty: '1.25rem', // single qty digit / short count
   condition: '3rem', // USED / NEW / N/A
 } as const;
@@ -46,38 +122,40 @@ interface MetaColumn {
  * every table, so the subrow can never drift again. `showGuides` paints the
  * track boundaries so the lock is visible in the showroom.
  */
-function RowMetaColumns({
+export function RowMetaColumns({
   qty,
   condition,
   rest,
   showGuides,
+  indent = META_COL.qty,
 }: {
   qty: ReactNode;
   condition: ReactNode;
   rest?: ReactNode;
   showGuides?: boolean;
+  /**
+   * Left indent so the subrow's first item (qty) lines up with the TITLE text,
+   * not the dot. Pass the dot-track width used by RowTitle (w-5 → 1.25rem,
+   * w-7 → 1.75rem). qty stays left-aligned and content-width, so a wide count
+   * like "100/100" grows in place instead of forcing a big fixed gap.
+   */
+  indent?: string;
 }) {
   return (
     <div
-      className={cx(
-        'relative mt-0.5 grid items-center text-[10px] font-bold uppercase tracking-widest text-gray-500 min-w-0',
-      )}
-      style={{ gridTemplateColumns: `${META_COL.qty} ${META_COL.condition} auto` }}
+      className="relative mt-0.5 flex items-center gap-2 text-[10px] font-bold uppercase tracking-widest text-gray-500 min-w-0"
+      style={{ paddingLeft: indent }}
     >
       {showGuides ? (
-        <>
-          <span
-            className="pointer-events-none absolute inset-y-0 w-px bg-blue-400/50"
-            style={{ left: META_COL.qty }}
-          />
-          <span
-            className="pointer-events-none absolute inset-y-0 w-px bg-blue-400/50"
-            style={{ left: `calc(${META_COL.qty} + ${META_COL.condition})` }}
-          />
-        </>
+        <span
+          className="pointer-events-none absolute inset-y-0 w-px bg-blue-400/50"
+          style={{ left: indent }}
+        />
       ) : null}
-      <span className="truncate">{qty}</span>
-      <span className="truncate">{condition}</span>
+      {/* Extra right padding on qty so a heavy count (100/100) keeps clear air
+          before the condition, without reserving a fixed gap for small counts. */}
+      <span className="shrink-0 pr-2.5">{qty}</span>
+      <span className="shrink-0 truncate">{condition}</span>
       <span className="flex min-w-0 items-center gap-2 truncate">{rest}</span>
     </div>
   );
@@ -111,13 +189,23 @@ function PlatformPill({ label, tone }: { label: string; tone: string }) {
   );
 }
 
-function StaffDot({ initials, tone }: { initials: string; tone: string }) {
+/**
+ * Tech / packer staff — color-only initials (no filled chip), full name on hover
+ * via the site-wide SiteTooltipProvider. Falls back to a native title attribute
+ * when the provider isn't mounted (e.g. an isolated render).
+ */
+function StaffInitial({ initials, name, tone }: { initials: string; name: string; tone: string }) {
+  const anchorId = useId();
+  const ref = useRef<HTMLSpanElement | null>(null);
+  const ctx = useSiteTooltipOptional();
+  const getRect = useCallback(() => ref.current?.getBoundingClientRect() ?? null, []);
   return (
     <span
-      className={cx(
-        'inline-flex h-4 items-center rounded px-1 text-[9px] font-black tracking-wide',
-        tone,
-      )}
+      ref={ref}
+      onMouseEnter={() => ctx?.activate({ anchorId, value: name, getRect })}
+      onMouseLeave={() => ctx?.scheduleClose(anchorId)}
+      title={ctx ? undefined : name}
+      className={cx('cursor-default text-[11px] font-black tracking-wide', tone)}
     >
       {initials}
     </span>
@@ -168,10 +256,26 @@ function RowShell({
   );
 }
 
-function RowTitle({ dot, title, small }: { dot: string; title: string; small?: boolean }) {
+export function RowTitle({
+  dot,
+  title,
+  small,
+  dotTrack = 'w-5',
+}: {
+  dot: string;
+  title: string;
+  small?: boolean;
+  /** Width of the centered dot track — match the qty track so the dot and the
+   *  qty number share a center line. Default w-5 (1.25rem). */
+  dotTrack?: string;
+}) {
   return (
-    <div className="flex min-w-0 items-center gap-2">
-      <span className={cx('h-2 w-2 shrink-0 rounded-full', dot)} />
+    <div className="flex min-w-0 items-center">
+      {/* Dot centered inside the qty-track width so it shares the qty column's
+          center line — the qty number sits directly under the dot. */}
+      <span className={cx('flex shrink-0 items-center justify-center', dotTrack)}>
+        <span className={cx('h-2 w-2 rounded-full', dot)} />
+      </span>
       <div
         className={cx(
           'truncate font-bold text-gray-900',
@@ -221,8 +325,8 @@ const ROWS: RowData[] = [
     condition: 'USED',
     rest: (
       <>
-        <StaffDot initials="SA" tone="bg-violet-100 text-violet-700" />
-        <StaffDot initials="TH" tone="bg-rose-100 text-rose-700" />
+        <StaffInitial initials="SA" name="Sara Ahmed" tone="text-violet-600" />
+        <StaffInitial initials="TH" name="Tariq Hassan" tone="text-rose-600" />
       </>
     ),
     chips: [
@@ -380,7 +484,7 @@ export function RowMetaColumnsSection({ density }: { density: Density }) {
         </button>
         <p className="text-[11px] text-text-muted">
           {after
-            ? 'All five tables routed through one RowMetaColumns primitive — qty | condition | rest lock to the same tracks.'
+            ? 'All five tables routed through one RowMetaColumns primitive — the subrow indents to the title, qty is left-aligned and content-width, condition + rest flow after it.'
             : 'Current state: OrdersQueue + Shipped use a locked grid; Tech, Packer & Receiving free-flow the bullet — columns don’t line up.'}
         </p>
       </div>
@@ -423,24 +527,24 @@ export function RowMetaColumnsSection({ density }: { density: Density }) {
       {/* anatomy callout */}
       <div className="grid gap-3 sm:grid-cols-3">
         <div className="rounded-xl border border-border-soft bg-surface-card p-3">
-          <p className="font-mono text-[10px] text-text-muted">META_COL.qty</p>
-          <p className="mt-1 text-[12px] font-bold text-text-default">1.25rem track</p>
+          <p className="font-mono text-[10px] text-text-muted">indent</p>
+          <p className="mt-1 text-[12px] font-bold text-text-default">= dot-track width</p>
           <p className="mt-0.5 text-[11px] leading-snug text-text-muted">
-            Holds the count, tinted yellow when &gt; 1. Sits directly under the title.
+            The subrow starts at the title text, not the dot — qty lines up under the product name.
           </p>
         </div>
         <div className="rounded-xl border border-border-soft bg-surface-card p-3">
-          <p className="font-mono text-[10px] text-text-muted">META_COL.condition</p>
-          <p className="mt-1 text-[12px] font-bold text-text-default">3rem track</p>
+          <p className="font-mono text-[10px] text-text-muted">qty · condition</p>
+          <p className="mt-1 text-[12px] font-bold text-text-default">content-width, flow</p>
           <p className="mt-0.5 text-[11px] leading-snug text-text-muted">
-            NEW / USED / N/A — aligned column-to-column down every row.
+            Left-aligned and content-sized, so a wide count like 100/100 grows in place — no big reserved gap.
           </p>
         </div>
         <div className="rounded-xl border border-border-soft bg-surface-card p-3">
-          <p className="font-mono text-[10px] text-text-muted">auto · rest</p>
+          <p className="font-mono text-[10px] text-text-muted">rest</p>
           <p className="mt-1 text-[12px] font-bold text-text-default">flex track</p>
           <p className="mt-0.5 text-[11px] leading-snug text-text-muted">
-            Per-table extras: staff initials (Shipped), days-late / out-of-stock (Queue).
+            Per-table extras: staff initials (Shipped), days-late / out-of-stock (Queue), state icon (Receiving).
           </p>
         </div>
       </div>

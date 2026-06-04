@@ -15,7 +15,6 @@ import { LocationsManagementTab } from '@/components/admin/LocationsManagementTa
 import { AdminLogsTab } from '@/components/admin/AdminLogsTab';
 import { AdminJobsTab } from '@/components/admin/AdminJobsTab';
 import AiChatTab from '@/components/admin/AiChatTab';
-import { ArchitectureTab } from '@/components/admin/ArchitectureTab';
 import { OperationsFlowsDisplay } from '@/components/admin/workflow/OperationsFlowsDisplay';
 import { PhotoBackupTab } from '@/components/admin/PhotoBackupTab';
 import { StationNasFoldersTab } from '@/components/admin/StationNasFoldersTab';
@@ -52,7 +51,6 @@ function renderTab(
     case 'jobs':         return <AdminJobsTab />;
     case 'ai_chat':      return <AiChatTab />;
     case 'architecture': return <OperationsFlowsDisplay />;
-    case 'codebase':     return <ArchitectureTab />;
     case 'photo_backup': return <PhotoBackupTab />;
     case 'station_photos': return <StationNasFoldersTab />;
     case 'billing':      return <BillingTab />;

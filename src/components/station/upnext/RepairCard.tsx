@@ -52,6 +52,7 @@ export function RepairCard({ repair, techId, isExpanded, onToggleExpand, onRefre
         isSelected={isExpanded}
         tone="orange"
         variant="linear"
+        entrance="stagger"
         onClick={onToggleExpand}
       >
         {/* ── Row 1 — ticket id · customer · trailing chevron. ── */}

@@ -22,6 +22,7 @@ import { ReceivingDetailsStack, type ReceivingDetailsLog } from './station/Recei
 import { RepairDetailsPanel } from './repair/RepairDetailsPanel';
 import { ActiveOrderWorkspace } from './tech/ActiveOrderWorkspace';
 import { TechTestingWorkspace } from './tech/TechTestingWorkspace';
+import { RightPaneOverlayHost } from '@/components/ui/RightPaneOverlay';
 import type { RSRecord } from '@/lib/neon/repair-service-queries';
 import type { ActiveStationOrder, ResolvedProductManual } from '@/hooks/useStationTestingController';
 import type { Order } from '@/components/station/upnext/upnext-types';
@@ -390,7 +391,11 @@ export default function TechDashboard({ techId }: TechDashboardProps) {
     return (
         <div className="relative flex h-full w-full flex-col">
             <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden">
-                <div className="relative min-h-0 flex-1 overflow-hidden">
+                {/* Anchor for RightPaneOverlay surfaces (the Testing audit log
+                    slide-over) so they pin over THIS pane's right edge — the
+                    same placement Receiving gets from its own host — instead of
+                    degrading to a full-viewport drawer. */}
+                <RightPaneOverlayHost className="min-h-0 flex-1 overflow-hidden">
                     {rightPane}
                     {isTestingHistory ? (
                         <ContextualSelectionBar
@@ -399,7 +404,7 @@ export default function TechDashboard({ techId }: TechDashboardProps) {
                             actions={testingBulkActions}
                         />
                     ) : null}
-                </div>
+                </RightPaneOverlayHost>
             </div>
 
             <StationDetailsHandler viewMode="history" />

@@ -417,6 +417,49 @@ export default function ReceivingDashboard() {
     };
   }, [searchParams]);
 
+  // A receiving line deleted out from under the right pane must never strand the
+  // workspace on a dead id. The sidebar already closes the workspace when its
+  // `selectedLine` matches, but the right pane owns its own `workspace` state and
+  // can outlive that match — so close authoritatively here and, in Receive mode,
+  // drop straight onto the most-recent remaining activity line (the same line the
+  // Recent rail auto-selects). Falls back to an empty pane when nothing's left.
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const deletedId = (e as CustomEvent<{ id?: number }>).detail?.id;
+      if (typeof deletedId !== 'number') return;
+      if (workspaceRef.current?.row.id !== deletedId) return;
+      // Clear immediately so the dead line can't linger during the lookup.
+      setWorkspace(null);
+      setNav(null);
+      if ((searchParams.get('mode') ?? 'receive') !== 'receive') {
+        dispatchReceivingWorkspaceClose();
+        return;
+      }
+      void (async () => {
+        try {
+          const res = await fetch(
+            `/api/receiving-lines?limit=2&offset=0&view=activity&include=serials`,
+            { cache: 'no-store' },
+          );
+          const data = await res.json().catch(() => null);
+          const rows = Array.isArray(data?.receiving_lines)
+            ? (data.receiving_lines as ReceivingLineRow[])
+            : [];
+          // Guard against an eventually-consistent read still returning the
+          // just-deleted line — never re-open the id we just removed.
+          const next = rows.find((r) => r.id !== deletedId) ?? null;
+          if (workspaceRef.current) return; // operator already moved on
+          if (next) dispatchSelectLine(next);
+          else dispatchReceivingWorkspaceClose();
+        } catch {
+          dispatchReceivingWorkspaceClose();
+        }
+      })();
+    };
+    window.addEventListener('receiving-line-deleted', handler);
+    return () => window.removeEventListener('receiving-line-deleted', handler);
+  }, [searchParams]);
+
   useEffect(() => {
     const handler = (e: Event) => {
       const detail = (e as CustomEvent<{ receivingId: number }>).detail;
@@ -528,7 +571,17 @@ export default function ReceivingDashboard() {
         {/* Scan-in-flight skeleton loader. Shown the moment the operator
             submits a tracking scan; cleared 500ms after the response lands. */}
         {showScanLoader ? (
-          <div className="absolute inset-0 z-20 overflow-hidden">
+          // When a line workspace is already mounted behind the loader, start
+          // it BELOW that workspace's 80px header chrome (40px progress stepper
+          // + 40px utility toolbar) so those header rows stay visible and the
+          // loader reads as a clean white body panel rather than a translucent
+          // overlay covering the whole pane. With no workspace behind (cold
+          // start), fill the pane from the top.
+          <div
+            className={`absolute inset-x-0 bottom-0 z-20 overflow-hidden ${
+              showWorkspace ? 'top-[80px]' : 'top-0'
+            }`}
+          >
             <ReceivingScanLoader
               tracking={scanInFlight!.tracking}
               startedAt={scanInFlight!.startedAt}

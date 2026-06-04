@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { framerPresence, framerTransition, framerVariants, SkeletonBase, SkeletonList } from '@/design-system';
+import { framerPresence, framerTransition, staggerRevealContainer, SkeletonBase, SkeletonList } from '@/design-system';
 import confetti from 'canvas-confetti';
 import { AlertCircle, Barcode, ClipboardList, List, Package, ShoppingCart, Wrench } from './Icons';
 import { dispatchUpNextPreview } from '@/utils/events';
@@ -206,25 +206,28 @@ export default function UpNextOrder({ techId, onStart, onMissingParts, onAllComp
 
   const isFiltering = Boolean(searchText.trim() || (quickFilter !== 'all' && !SORT_FILTER_IDS.has(quickFilter)));
   const renderRows = useCallback(
-    (children: React.ReactNode) => (
-      isFiltering ? (
-        <div className="flex flex-col">
-          {children}
-        </div>
-      ) : (
+    (children: React.ReactNode) => {
+      if (isFiltering) {
+        return <div className="flex flex-col">{children}</div>;
+      }
+      // The container orchestrates the cascade; each card opts into the matching
+      // stagger-reveal entrance via `entrance="stagger"` on its CardShell, so the
+      // queue arrives with the same spring as the station scan bar.
+      return (
         <motion.div
-          variants={framerVariants.staggeredList}
-          initial="initial"
-          animate="animate"
-          exit="exit"
+          variants={staggerRevealContainer()}
+          initial="hidden"
+          animate="show"
           className="flex flex-col"
         >
-          <AnimatePresence initial={false} mode="popLayout">
+          {/* `initial` enabled so the first-load cascade plays; without it
+              AnimatePresence suppresses the children's initial mount animation. */}
+          <AnimatePresence mode="popLayout">
             {children}
           </AnimatePresence>
         </motion.div>
-      )
-    ),
+      );
+    },
     [isFiltering],
   );
 

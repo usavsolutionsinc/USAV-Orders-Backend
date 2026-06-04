@@ -9,6 +9,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ChevronDown } from '@/components/Icons';
 import { SIDEBAR_GUTTER } from '@/components/layout/header-shell';
+import { staggerRevealContainer, staggerRevealItem } from '@/design-system/primitives/StaggerReveal';
 
 /**
  * Generic sidebar "recent activity" rail skeleton. Owns the reusable shell —
@@ -53,6 +54,13 @@ export interface SidebarRailShellProps<TRow> {
   deleteEvent?: string;
   /** Events that trigger a full query invalidation. */
   refreshEvents?: string[];
+  /**
+   * When set, a CustomEvent<'prev' | 'next'> on this name steps the selection to
+   * the adjacent rendered row and fires `onSelect` — the wiring behind a detail
+   * pane's up/down header chevrons when there's no separate table to drive
+   * navigation (the Testing workspace has only this rail, not a history table).
+   */
+  navigateEvent?: string;
 
   selectedId: number | null;
   selectedRow?: TRow | null;
@@ -68,6 +76,12 @@ export interface SidebarRailShellProps<TRow> {
   autoSelectFirstWhenEmpty?: boolean;
   /** Optional guard — return false to skip auto-select (deep links, wrong mode). */
   canAutoSelectFirst?: () => boolean;
+  /**
+   * When true, rows cascade in (stagger reveal) the first time the feed loads,
+   * and freshly-arriving rows slide in individually. Off by default so callers
+   * opt in explicitly.
+   */
+  staggerReveal?: boolean;
 
   getId: (row: TRow) => number;
   /** Grouping key (e.g. receiving_id). Return null for no grouping. */
@@ -84,11 +98,12 @@ export interface SidebarRailShellProps<TRow> {
 }
 
 export function SidebarRailShell<TRow>({
-  queryKey, fetchFn, updateEvent, deleteEvent, refreshEvents,
+  queryKey, fetchFn, updateEvent, deleteEvent, refreshEvents, navigateEvent,
   selectedId, selectedRow = null, limit = 25,
   eyebrowTitle, eyebrowSuffix, emptyText = 'No recent activity yet.',
   autoSelectFirstWhenEmpty = false,
   canAutoSelectFirst,
+  staggerReveal = false,
   getId, getGroupId, getActivityAt, onSelect, getStatusDot,
   renderRowMain, renderPopover,
 }: SidebarRailShellProps<TRow>) {
@@ -234,6 +249,26 @@ export function SidebarRailShell<TRow>({
     return out;
   }, [rows.length, grouped, collapsedGroups]);
 
+  // Header chevrons (or any external prev/next source) dispatch `navigateEvent`.
+  // Walks the SAME visible order keyboard nav uses (skips collapsed group
+  // members) so a chevron press never lands selection on a hidden row. With
+  // nothing selected yet, prev/next both open the first rendered row.
+  useEffect(() => {
+    if (!navigateEvent) return;
+    const handler = (event: Event) => {
+      const direction = (event as CustomEvent<'prev' | 'next'>).detail;
+      if (direction !== 'prev' && direction !== 'next') return;
+      if (visibleIndices.length === 0) return;
+      const curPos = visibleIndices.findIndex((i) => getId(rows[i]) === selectedId);
+      if (curPos < 0) { onSelect(rows[visibleIndices[0]]); return; }
+      const nextRowIdx = visibleIndices[curPos + (direction === 'prev' ? -1 : 1)];
+      if (nextRowIdx == null) return; // already at an edge — no wrap
+      onSelect(rows[nextRowIdx]);
+    };
+    window.addEventListener(navigateEvent, handler);
+    return () => window.removeEventListener(navigateEvent, handler);
+  }, [navigateEvent, rows, visibleIndices, selectedId, getId, onSelect]);
+
   const autoSelectedRef = useRef(false);
   useEffect(() => {
     if (!autoSelectFirstWhenEmpty) return;
@@ -291,15 +326,20 @@ export function SidebarRailShell<TRow>({
       ) : rows.length === 0 ? (
         <p className={`${SIDEBAR_GUTTER} py-3 text-micro font-semibold text-gray-400`}>{emptyText}</p>
       ) : (
-        <ul
+        <motion.ul
           ref={listRef}
           className={`${SIDEBAR_GUTTER} py-1 outline-none`}
           role="listbox"
           aria-label={`${eyebrowTitle} activity`}
           tabIndex={0}
           onKeyDown={handleKeyDown}
+          {...(staggerReveal
+            ? { initial: 'hidden' as const, animate: 'show' as const, variants: staggerRevealContainer() }
+            : {})}
         >
-          <AnimatePresence initial={false}>
+          {/* `initial` enabled only for the reveal so the first-load cascade plays;
+              otherwise AnimatePresence suppresses the initial mount animation. */}
+          <AnimatePresence initial={staggerReveal}>
             {rows.flatMap((row, idx) => {
               const g = grouped[idx];
               const isCollapsed = g.groupId != null && collapsedGroups.has(g.groupId);
@@ -309,7 +349,7 @@ export function SidebarRailShell<TRow>({
               const nodes: React.ReactElement[] = [];
               if (showExpandedHeader) {
                 nodes.push(
-                  <PkgGroupHeader key={`pkg-${g.groupId}`} groupSize={g.groupSize} isCollapsed={false} onToggle={() => toggleGroup(g.groupId as number)} />,
+                  <PkgGroupHeader key={`pkg-${g.groupId}`} groupSize={g.groupSize} isCollapsed={false} staggerReveal={staggerReveal} onToggle={() => toggleGroup(g.groupId as number)} />,
                 );
               }
               nodes.push(
@@ -317,6 +357,7 @@ export function SidebarRailShell<TRow>({
                   key={getId(row)}
                   row={row}
                   index={idx}
+                  staggerReveal={staggerReveal}
                   isSelected={getId(row) === selectedId}
                   isFocused={idx === focusIndex}
                   groupSize={g.groupSize}
@@ -334,7 +375,7 @@ export function SidebarRailShell<TRow>({
               return nodes;
             })}
           </AnimatePresence>
-        </ul>
+        </motion.ul>
       )}
     </section>
   );
@@ -342,7 +383,7 @@ export function SidebarRailShell<TRow>({
 
 function RailRow<TRow>({
   row, index, isSelected, isFocused, groupSize, groupIndex, isCollapsed, showInlinePkgChip,
-  onToggleGroup, getStatusDot, getActivityAt, renderRowMain, renderPopover, onClick,
+  staggerReveal, onToggleGroup, getStatusDot, getActivityAt, renderRowMain, renderPopover, onClick,
 }: {
   row: TRow;
   index: number;
@@ -352,6 +393,7 @@ function RailRow<TRow>({
   groupIndex: number;
   isCollapsed: boolean;
   showInlinePkgChip: boolean;
+  staggerReveal: boolean;
   onToggleGroup?: () => void;
   getStatusDot: (row: TRow) => string;
   getActivityAt?: (row: TRow) => string | null | undefined;
@@ -410,15 +452,19 @@ function RailRow<TRow>({
 
   const activityAt = getActivityAt?.(row);
 
+  // Stagger mode: inherit the parent <ul>'s hidden→show timeline via variants
+  // (exit lives in the variant too). Default mode: opacity-only enter/exit with
+  // no initial mount animation, as before.
+  const motionProps = staggerReveal
+    ? { variants: staggerRevealItem }
+    : { initial: false as const, animate: { opacity: 1 }, exit: { opacity: 0 }, transition: { duration: 0.12, ease: [0.22, 1, 0.36, 1] as const } };
+
   return (
     <motion.li
       ref={rowRef}
       role="option"
       aria-selected={isSelected}
-      initial={false}
-      animate={{ opacity: 1 }}
-      exit={{ opacity: 0 }}
-      transition={{ duration: 0.12, ease: [0.22, 1, 0.36, 1] }}
+      {...motionProps}
       className="relative"
       onMouseEnter={scheduleOpen}
       onMouseLeave={scheduleClose}
@@ -466,14 +512,14 @@ function RailRow<TRow>({
   );
 }
 
-function PkgGroupHeader({ groupSize, isCollapsed, onToggle }: { groupSize: number; isCollapsed: boolean; onToggle: () => void }) {
+function PkgGroupHeader({ groupSize, isCollapsed, staggerReveal, onToggle }: { groupSize: number; isCollapsed: boolean; staggerReveal: boolean; onToggle: () => void }) {
+  const motionProps = staggerReveal
+    ? { variants: staggerRevealItem }
+    : { initial: false as const, animate: { opacity: 1 }, exit: { opacity: 0 }, transition: { duration: 0.12, ease: [0.22, 1, 0.36, 1] as const } };
   return (
     <motion.li
       role="presentation"
-      initial={false}
-      animate={{ opacity: 1 }}
-      exit={{ opacity: 0 }}
-      transition={{ duration: 0.12, ease: [0.22, 1, 0.36, 1] }}
+      {...motionProps}
       className="relative"
     >
       <button

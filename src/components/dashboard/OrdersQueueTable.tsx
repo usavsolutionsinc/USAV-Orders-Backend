@@ -8,6 +8,7 @@ import { Loader2 } from '@/components/Icons';
 import { mainStickyHeaderClass, mainStickyHeaderRowClass } from '@/components/layout/header-shell';
 import { OrderIdChip, OrderIdChipPlaceholder, TrackingOrSkuScanChip, PlatformChip, getLast4 } from '@/components/ui/CopyChip';
 import { ChipColumns, CHIP_COL, type ChipColumn } from '@/components/ui/ChipColumns';
+import { RowTitle, RowMetaColumns } from '@/components/ui/RowMetaColumns';
 import { PasteTrackingButton } from '@/components/ui/PasteTrackingButton';
 import { getOrderPlatformLabel, getOrderPlatformColor, getOrderPlatformBorderColor, isFbaOrder } from '@/utils/order-platform';
 import { getStaffThemeById, stationThemeColors } from '@/utils/staff-colors';
@@ -116,40 +117,36 @@ const OrdersQueueTableRow = memo(function OrdersQueueTableRow({
       aria-pressed={isSelected}
       aria-label={`Open order ${record.order_id || record.id}`}
       data-order-row-id={String(record.id)}
-      className={`${dashboardOrderRowShellClass(isMobile)} border-b border-gray-300 px-3 py-1.5 transition-all cursor-pointer hover:bg-blue-50/50 ${
-        isSelected ? 'bg-blue-50/80' : useAlternateStripe ? 'bg-white' : 'bg-gray-50/10'
+      className={`${dashboardOrderRowShellClass(isMobile)} border-b border-gray-100 px-3 py-1.5 transition-all cursor-pointer hover:bg-blue-50/50 ${
+        isSelected ? 'bg-blue-50/80' : useAlternateStripe ? 'bg-white' : 'bg-gray-50/40'
       }`}
     >
       <div className="flex flex-col min-w-0">
-        <div className="flex items-center gap-2 min-w-0">
-          {hasTechScan ? (
-            <span className="h-2 w-2 rounded-full bg-emerald-500 shrink-0" title="Scanned by tech" />
-          ) : hasOutOfStock ? (
-            <span className="h-2 w-2 rounded-full bg-red-500 shrink-0" title="Out of stock" />
-          ) : (
-            <span className="h-2 w-2 rounded-full bg-yellow-400 shrink-0" title="Pending order" />
-          )}
-          <div className="text-label font-bold text-gray-900 truncate">
-            {record.product_title || 'Unknown Product'}
-          </div>
-        </div>
-        {/* Fixed grid tracks (qty | condition | rest) keep the condition value aligned
-            in the same column down every row; the dots ride inside each track so the
-            separators stay but alignment holds. */}
-        <div className="mt-0.5 grid grid-cols-[1.25rem_3rem_auto] items-center text-micro font-bold text-gray-500 uppercase tracking-widest min-w-0 flex-1">
-          <span className={qtyClass}>{qty}</span>
-          <span className={`truncate ${String(record.condition || '').trim().toLowerCase() === 'new' ? 'text-yellow-600' : ''}`}>
-            {record.condition || 'N/A'}
-          </span>
-          <span className="flex items-center gap-2 truncate min-w-0">
-            {daysLate !== null ? (
-              <span className={getDaysLateTone(daysLate)}>{daysLate}</span>
-            ) : null}
-            {hasOutOfStock ? (
-              <span className="text-red-600">{outOfStockValue}</span>
-            ) : null}
-          </span>
-        </div>
+        <RowTitle
+          dot={hasTechScan ? 'bg-emerald-500' : hasOutOfStock ? 'bg-red-500' : 'bg-yellow-400'}
+          dotTitle={hasTechScan ? 'Scanned by tech' : hasOutOfStock ? 'Out of stock' : 'Pending order'}
+          title={record.product_title || 'Unknown Product'}
+        />
+        {/* qty · condition · (days-late / out-of-stock) — shared primitive so the
+            subrow aligns under the title across every dashboard table. */}
+        <RowMetaColumns
+          qty={<span className={qty > 1 ? 'text-yellow-600' : 'text-gray-500'}>{qty}</span>}
+          condition={
+            <span className={String(record.condition || '').trim().toLowerCase() === 'new' ? 'text-yellow-600' : 'text-gray-400'}>
+              {record.condition || 'N/A'}
+            </span>
+          }
+          rest={
+            <>
+              {daysLate !== null ? (
+                <span className={getDaysLateTone(daysLate)}>{daysLate}</span>
+              ) : null}
+              {hasOutOfStock ? (
+                <span className="text-red-600">{outOfStockValue}</span>
+              ) : null}
+            </>
+          }
+        />
       </div>
 
       {(() => {

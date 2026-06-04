@@ -80,18 +80,22 @@ export const GET = withAuth(async (req: NextRequest, ctx) => {
       AND RIGHT(regexp_replace(UPPER(stn.tracking_number_raw), '[^A-Z0-9]', '', 'g'), 18) =
           RIGHT(regexp_replace(UPPER(COALESCE(sal.scan_ref, sal_stn.tracking_number_raw, '')), '[^A-Z0-9]', '', 'g'), 18)
     `;
+    // NOT EXISTS(A OR B) ≡ NOT EXISTS(A) AND NOT EXISTS(B). Splitting lets the
+    // cheap, indexed shipment_id arm (idx_station_activity_logs_shipment_id) run
+    // first and short-circuit — most orders already have a linked shipment scan,
+    // so the expensive regex tracking-match arm is never evaluated for them.
     const noTechScanClause = `
       NOT EXISTS (
         SELECT 1
         FROM station_activity_logs sal
-        LEFT JOIN shipping_tracking_numbers sal_stn ON sal_stn.id = sal.shipment_id
-        WHERE (
-          sal.shipment_id IS NOT NULL
+        WHERE sal.shipment_id IS NOT NULL
           AND sal.shipment_id = o.shipment_id
-        )
-        OR (
-          ${techSalTrackingMatch}
-        )
+      )
+      AND NOT EXISTS (
+        SELECT 1
+        FROM station_activity_logs sal
+        LEFT JOIN shipping_tracking_numbers sal_stn ON sal_stn.id = sal.shipment_id
+        WHERE ${techSalTrackingMatch}
       )
     `;
 
@@ -126,16 +130,18 @@ export const GET = withAuth(async (req: NextRequest, ctx) => {
       ) wa_deadline ON TRUE
       LEFT JOIN staff staff_t ON staff_t.id = wa_t.assigned_tech_id
       LEFT JOIN LATERAL (
-        SELECT COUNT(*)::int AS scan_count
-        FROM station_activity_logs sal
-        LEFT JOIN shipping_tracking_numbers sal_stn ON sal_stn.id = sal.shipment_id
-        WHERE (
-          sal.shipment_id IS NOT NULL
-          AND sal.shipment_id = o.shipment_id
-        )
-        OR (
-          ${techSalTrackingMatch}
-        )
+        SELECT EXISTS (
+          SELECT 1
+          FROM station_activity_logs sal
+          LEFT JOIN shipping_tracking_numbers sal_stn ON sal_stn.id = sal.shipment_id
+          WHERE (
+            sal.shipment_id IS NOT NULL
+            AND sal.shipment_id = o.shipment_id
+          )
+          OR (
+            ${techSalTrackingMatch}
+          )
+        ) AS has_scan
       ) sal_scan ON true
     `;
 
@@ -158,18 +164,10 @@ export const GET = withAuth(async (req: NextRequest, ctx) => {
 
     const queryParams = outOfStock === 'false' ? [techIdScope] : [];
 
-    const totalPendingResult = await queryWithRetry(
-      () => pool.query(
-        `SELECT COUNT(DISTINCT o.id) AS count
-         FROM orders o
-         ${sharedJoins}
-         WHERE ${countConditions.join(' AND ')}`,
-        queryParams,
-      ),
-      { retries: 3, delayMs: 1000 },
-    );
-    const totalPending = parseInt(totalPendingResult.rows[0].count);
-
+    // The main query below is DISTINCT ON (o.id) over the exact same FROM/WHERE,
+    // so its row count equals COUNT(DISTINCT o.id). A separate COUNT pass would
+    // just double this endpoint's (expensive) DB work — it gates the Up Next
+    // skeleton — so we derive `all_completed` from the main result instead.
     const mainConditions = [...countConditions];
 
     const mainQuery = `
@@ -194,14 +192,14 @@ export const GET = withAuth(async (req: NextRequest, ctx) => {
         o.out_of_stock,
         wa_t.assigned_tech_id AS tester_id,
         staff_t.name          AS tester_name,
-        (COALESCE(sal_scan.scan_count, 0) > 0) AS has_tech_scan
+        COALESCE(sal_scan.has_scan, false) AS has_tech_scan
       FROM orders o
       ${sharedJoins}
       WHERE ${mainConditions.join(' AND ')}
       ORDER BY
         o.id,
         COALESCE(wa_deadline.deadline_at, o.created_at) ASC
-      ${!getAll ? 'LIMIT 1' : ''}
+      ${!getAll ? 'LIMIT 1' : 'LIMIT 500'}
     `;
 
     const result = await queryWithRetry(
@@ -210,7 +208,8 @@ export const GET = withAuth(async (req: NextRequest, ctx) => {
     );
 
     if (result.rows.length === 0) {
-      const payload = { order: null, orders: [], all_completed: totalPending === 0 };
+      // Same conditions as the (removed) COUNT pass — no rows ⟺ nothing pending.
+      const payload = { order: null, orders: [], all_completed: true };
       await setCachedJson('api:orders-next', cacheLookup, payload, 120, ['orders', 'orders-next']);
       return NextResponse.json(payload, { headers: { 'x-cache': 'MISS' } });
     }

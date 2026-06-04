@@ -7,7 +7,14 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { Plus, X } from '@/components/Icons';
 import { FbaFnskuScanToast } from '@/components/fba/sidebar/FbaFnskuScanToast';
 import { SearchBar } from '@/components/ui/SearchBar';
-import { sidebarHeaderBandClass, sidebarHeaderPillRowClass, SIDEBAR_GUTTER } from '@/components/layout/header-shell';
+import {
+  receivingScanBandClass,
+  sidebarHeaderBandClass,
+  sidebarHeaderPillRowClass,
+  SIDEBAR_GUTTER,
+} from '@/components/layout/header-shell';
+import { FBA_SCAN_BAND_HALO } from '@/components/fba/StationFbaInput';
+import { cn } from '@/utils/_cn';
 import { SidebarSection } from '@/components/layout/SidebarSection';
 import { HorizontalButtonSlider } from '@/components/ui/HorizontalButtonSlider';
 import { useAblyChannel } from '@/hooks/useAblyChannel';
@@ -19,10 +26,18 @@ import { useStationTheme } from '@/hooks/useStationTheme';
 import { useAuth } from '@/contexts/AuthContext';
 import { useMasterNavEnabled } from '@/components/sidebar/master-nav';
 import { FbaShippedTable } from '@/components/fba/FbaShippedTable';
-import { FbaPlanRail, FbaCombineRail } from '@/components/fba/sidebar/FbaSidebarRails';
+import {
+  FbaCombineRailBody,
+  FbaCombineRailPills,
+  FbaPlanRailBody,
+  FbaPlanRailPills,
+  type FbaCombineRailView,
+  type FbaPlanRailView,
+} from '@/components/fba/sidebar/FbaSidebarRails';
 import type { FbaBoardItem } from '@/components/fba/FbaBoardTable';
 import { useFbaBoardSelection } from '@/components/fba/hooks/useFbaBoardSelection';
 import {
+  FBA_COMBINE_STARTED,
   FBA_PAIRED_REVIEW_TOGGLE,
   FBA_SELECTION_ADJUSTED,
   FBA_SEND_SHIPMENT_TO_PAIRED_REVIEW,
@@ -267,6 +282,8 @@ function FbaWorkspaceSidebarInner() {
   const { theme: stationTheme } = useStationTheme({ staffId: staffIdNum });
 
   const [localSearch, setLocalSearch] = useState('');
+  const [planRailView, setPlanRailView] = useState<FbaPlanRailView>('planned');
+  const [combineRailView, setCombineRailView] = useState<FbaCombineRailView>('recent');
   const urlHydratedRef = useRef(false);
 
   const [pendingPlans, setPendingPlans] = useState<PendingPlan[]>([]);
@@ -452,6 +469,12 @@ function FbaWorkspaceSidebarInner() {
   // hidden in plan mode, which is just scan-to-add + the recent rail.
   const isCombine = activeMode === 'combine';
 
+  useEffect(() => {
+    const handler = () => setCombineRailView('packed');
+    window.addEventListener(FBA_COMBINE_STARTED, handler);
+    return () => window.removeEventListener(FBA_COMBINE_STARTED, handler);
+  }, []);
+
   // Mode pills with live stage-count badges: Plan = PLANNED, Combine = PACKED.
   const modeItems = useMemo(
     () =>
@@ -489,15 +512,35 @@ function FbaWorkspaceSidebarInner() {
           today's plan, Plan button only) and Select on combine (FNSKU selects
           packed items, Select button only). */}
       {isBoard && !editorActive && (
-        <div className={`${sidebarSubBandClass} ${SIDEBAR_GUTTER} py-2.5`}>
+        <div
+          className={cn(
+            receivingScanBandClass,
+            FBA_SCAN_BAND_HALO[stationTheme],
+            SIDEBAR_GUTTER,
+            'py-1',
+          )}
+        >
           <FbaWorkspaceScanField
             staffName={staffName}
             staffId={staffIdNum}
             showTrackingCard={false}
             scanMode={activeMode === 'plan' ? 'plan' : 'select'}
+            sidebarHeaderBand
           />
         </div>
       )}
+
+      {activeMode === 'plan' && !editorActive ? (
+        <div className={sidebarHeaderPillRowClass}>
+          <FbaPlanRailPills view={planRailView} onViewChange={setPlanRailView} />
+        </div>
+      ) : null}
+
+      {isCombine ? (
+        <div className={sidebarHeaderPillRowClass}>
+          <FbaCombineRailPills view={combineRailView} onViewChange={setCombineRailView} />
+        </div>
+      ) : null}
 
       {/* Single scroll container */}
       <div
@@ -505,20 +548,13 @@ function FbaWorkspaceSidebarInner() {
         className="min-h-0 flex-1 overflow-y-auto scrollbar-hide bg-white"
         style={{ ['--fba-sticky-top' as any]: '38px' }}
       >
-        {/* Plan: Planned/Testing pills + recent rail under the scan bar */}
-        {activeMode === 'plan' && !editorActive && <FbaPlanRail />}
+        {activeMode === 'plan' && !editorActive ? <FbaPlanRailBody view={planRailView} /> : null}
 
-        {/* Combine: Recent/Packed pills under the scan bar. Recent = active /
-            combined shipments (FbaActiveShipments, with its inline editor), so
-            it stays mounted while editing — only the scan bar hides. */}
-        {isCombine && <FbaCombineRail stationTheme={stationTheme} />}
+        {isCombine ? <FbaCombineRailBody view={combineRailView} stationTheme={stationTheme} /> : null}
 
         {/* Shipped: search filter */}
         {activeMode === 'shipped' && (
           <div className={`${sidebarSubBandClass} ${SIDEBAR_GUTTER} py-2.5`}>
-            <p className="mb-2 text-micro font-semibold uppercase tracking-widest text-gray-500">
-              Filter shipped list
-            </p>
             <SearchBar
               value={localSearch}
               onChange={setLocalSearch}

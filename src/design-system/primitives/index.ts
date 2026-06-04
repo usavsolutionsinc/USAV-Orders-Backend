@@ -20,3 +20,4 @@ export * from './StickyHeader';
 export * from './Spinner';
 export * from './EmptyState';
 export * from './ProgressBar';
+export * from './StaggerReveal';

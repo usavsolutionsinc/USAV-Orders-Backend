@@ -25,7 +25,7 @@ import {
   Settings,
 } from '@/components/Icons';
 
-import { Button, TextField, type ButtonVariant } from '@/design-system/primitives';
+import { Button, TextField, type ButtonVariant, StaggerReveal, StaggerRevealItem } from '@/design-system/primitives';
 
 /* ════════════════════════ shared gallery furniture ════════════════════════ */
 
@@ -357,7 +357,7 @@ export function MotionSection() {
           <Check className="h-5 w-5" />
         </motion.button>
       </Bay>
-      <Bay title="Stagger reveal" promote="staggerChildren" tag="new" caption="List items cascade in. For freshly-loaded queues.">
+      <Bay title="Stagger reveal" promote="@/design-system/primitives/StaggerReveal" tag="new" caption="List items cascade in. For freshly-loaded queues. Live on the receiving + testing rails.">
         <StaggerList />
       </Bay>
     </div>
@@ -404,18 +404,16 @@ function StaggerList() {
   const [key, setKey] = useState(0);
   return (
     <div className="w-full max-w-[180px]">
-      <motion.ul key={key} initial="hide" animate="show" variants={{ show: { transition: { staggerChildren: 0.08 } } }} className="space-y-1.5">
+      <StaggerReveal replayKey={key} step={0.08} className="space-y-1.5">
         {['SO-4821', 'SO-4822', 'SO-4823'].map((o) => (
-          <motion.li
+          <StaggerRevealItem
             key={o}
-            variants={{ hide: { opacity: 0, x: -12 }, show: { opacity: 1, x: 0 } }}
-            transition={softSpring}
             className="rounded-lg border border-border-soft bg-surface-card px-3 py-2 font-mono text-[11px] font-semibold text-text-default"
           >
             {o}
-          </motion.li>
+          </StaggerRevealItem>
         ))}
-      </motion.ul>
+      </StaggerReveal>
       <button onClick={() => setKey((k) => k + 1)} className="mt-2 text-[11px] font-semibold text-blue-600 hover:underline">
         Replay ↻
       </button>

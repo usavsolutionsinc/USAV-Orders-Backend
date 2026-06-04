@@ -63,7 +63,7 @@ const FBA_SCAN_FOCUS_RING: Record<StationTheme, string> = {
  * as the receiving sidebar's `bandHaloClass`, so the band feels light/airy
  * instead of a flat-fill block. Keyed by {@link StationTheme}.
  */
-const FBA_SCAN_BAND_HALO: Record<StationTheme, string> = {
+export const FBA_SCAN_BAND_HALO: Record<StationTheme, string> = {
   green: 'bg-gradient-to-r from-white via-emerald-50 to-white',
   blue: 'bg-gradient-to-r from-white via-blue-50 to-white',
   purple: 'bg-gradient-to-r from-white via-purple-50 to-white',
@@ -103,6 +103,11 @@ export interface StationFbaInputProps {
    * When omitted, both buttons show and the user can toggle (legacy).
    */
   scanMode?: 'plan' | 'select';
+  /**
+   * Sidebar header band (40px scan row + pills below). Drops the inner halo
+   * wrapper so the parent `receivingScanBandClass` owns tint + height.
+   */
+  sidebarHeaderBand?: boolean;
 }
 
 
@@ -115,6 +120,7 @@ export default function StationFbaInput({
   techStaffIdOverride,
   ignoreUrlPlan = false,
   scanMode,
+  sidebarHeaderBand = false,
 }: StationFbaInputProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -972,8 +978,15 @@ export default function StationFbaInput({
         : 'Review qty, then Update plan.'
       : 'Scan FNSKU (X00\u2026) or ASIN (B0\u2026) to add to today\u2019s plan.';
 
+  const hasSidebarStatusRow =
+    fbaScanOnly && (isFbaLoading || !!planHint || selectedCount > 0);
+  const hasPendingPlanQueue =
+    fbaScanOnly && fbaMode === 'plan' && !!pendingTodayPlanRows && pendingTodayPlanRows.length > 0;
+  const stackBelowScan =
+    !sidebarHeaderBand || hasSidebarStatusRow || hasPendingPlanQueue;
+
   return (
-    <div className={`space-y-2 ${className}`.trim()}>
+    <div className={`${stackBelowScan ? 'space-y-2' : ''} ${className}`.trim()}>
       {showLabels ? (
         <>
           {fbaScanOnly ? (
@@ -992,8 +1005,13 @@ export default function StationFbaInput({
         animate={{ opacity: 1, x: 0 }}
         transition={{ type: 'spring', damping: 25, stiffness: 120 }}
         // Soft staff-tint halo band \u2014 matches the receiving/testing sidebars so
-        // the FBA scan bar presents as the same station component.
-        className={fbaScanOnly ? `rounded-xl px-1.5 py-1 ${FBA_SCAN_BAND_HALO[stationTheme]}` : undefined}
+        // the FBA scan bar presents as the same station component. In the sidebar
+        // header band the parent row owns the halo + 40px height.
+        className={
+          fbaScanOnly && !sidebarHeaderBand
+            ? `rounded-xl px-1.5 py-1 ${FBA_SCAN_BAND_HALO[stationTheme]}`
+            : undefined
+        }
       >
         <StationScanBar
           value={inputValue}
@@ -1044,29 +1062,25 @@ export default function StationFbaInput({
         />
       </motion.div>
 
-      {fbaScanOnly ? (
+      {fbaScanOnly && (isFbaLoading || planHint || selectedCount > 0) ? (
         <div className="flex items-center gap-1.5">
           {isFbaLoading ? (
             <Loader2 className="h-3 w-3 shrink-0 animate-spin text-gray-400" />
           ) : null}
-          <p className={`text-micro font-bold uppercase tracking-widest ${
-            planHint
-              ? 'text-emerald-600'
-              : selectedCount > 0
-                ? 'text-blue-600'
-                : isFbaLoading
-                  ? 'text-gray-500'
-                  : 'text-gray-400'
-          }`}>
+          <p
+            className={`text-micro font-bold uppercase tracking-widest ${
+              planHint
+                ? 'text-emerald-600'
+                : selectedCount > 0
+                  ? 'text-blue-600'
+                  : 'text-gray-500'
+            }`}
+          >
             {isFbaLoading
               ? 'Updating plan\u2026'
               : planHint
                 ? planHint
-                : selectedCount > 0
-                  ? `${selectedCount} selected \u00b7 ${selectedQty} unit${selectedQty !== 1 ? 's' : ''}`
-                  : fbaMode === 'select'
-                    ? 'Scan FNSKU or ASIN to select'
-                    : 'Scan to add to today\u2019s plan'}
+                : `${selectedCount} selected \u00b7 ${selectedQty} unit${selectedQty !== 1 ? 's' : ''}`}
           </p>
         </div>
       ) : null}

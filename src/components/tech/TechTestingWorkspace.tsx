@@ -14,7 +14,7 @@ import { UnmatchedItemsSection } from '@/components/receiving/workspace/Unmatche
 import { ReceivingClaimModal } from '@/components/receiving/workspace/ReceivingClaimModal';
 import { ReceivingAuditModal } from '@/components/receiving/workspace/ReceivingAuditModal';
 import { PaneHeaderActionBar, type PaneHeaderActionBarAction } from '@/components/ui/pane-header';
-import { Copy, Info, ExternalLink, Link2 } from '@/components/Icons';
+import { Copy, History, ExternalLink, Link2 } from '@/components/Icons';
 import { SkuPairingModal } from '@/components/products/pairing/SkuPairingModal';
 import { buildReceivingCopyInfo } from '@/utils/copy-all-receiving';
 import { copyToClipboard } from '@/utils/_dom';
@@ -57,6 +57,28 @@ interface NextIdResponse {
 }
 
 const PRINT_QTY_OPTIONS = [1, 2, 3, 4, 5] as const;
+
+/**
+ * Like {@link dispatchLineUpdated}, but strips `last_activity_at` before it
+ * reaches the rail. The Testing rail orders + renders by the tester's verdict
+ * time (the API folds `tested_at` into `last_activity_at` for view=testing).
+ * The by-id / PATCH refreshes this workspace fires on every line-select can't
+ * reproduce that tester-scoped verdict time — they recompute `last_activity_at`
+ * from the carton's scan/receive/import time. Dispatching those rows verbatim
+ * clobbered the rail's "12h" with the scan time the instant a row was clicked,
+ * so the relative timestamp jumped to "something completely different".
+ * Omitting the field lets the merge keep the verdict time the rail already
+ * holds. (Receiving solved its own version of this server-side, by having the
+ * by-id query surface `last_scan_at` to match view=activity — but that axis is
+ * scan-based, not verdict-based, so it can't rescue the testing feed here.)
+ */
+function dispatchTestingLineUpdated(
+  row: Partial<ReceivingLineRow> & { id: number },
+) {
+  const patch = { ...row };
+  delete patch.last_activity_at;
+  dispatchLineUpdated(patch);
+}
 
 // ── Design-system surface tokens ───────────────────────────────────────────
 // One source of truth for card geometry so every panel on the page stays
@@ -299,7 +321,7 @@ export function TechTestingWorkspace({ staffId, selectedLineId, onSelectedLineCh
             ? ({ ...current, ...data.receiving_line } as ReceivingLineRow)
             : current,
         );
-        dispatchLineUpdated(data.receiving_line as ReceivingLineRow);
+        dispatchTestingLineUpdated(data.receiving_line as ReceivingLineRow);
       }
     } catch {
       /* silent — next manual action will retry */
@@ -323,7 +345,7 @@ export function TechTestingWorkspace({ staffId, selectedLineId, onSelectedLineCh
         });
         const data = await res.json();
         if (data?.success && data.receiving_line) {
-          dispatchLineUpdated(data.receiving_line);
+          dispatchTestingLineUpdated(data.receiving_line);
           setRow((current) =>
             current && current.id === row.id
               ? ({ ...current, ...data.receiving_line } as ReceivingLineRow)
@@ -952,48 +974,60 @@ export function TechTestingWorkspace({ staffId, selectedLineId, onSelectedLineCh
   return (
     <>
       <div className="flex h-full min-h-0 flex-col bg-gray-50">
+        {/* Frozen utility toolbar — the workspace's top header row, mirroring
+            LineEditPanel's third-row action bar (full-width 40px `header` band,
+            icon-only) so Testing reads identically to Receiving. Lives OUTSIDE
+            the scroll surface so it stays pinned while the body scrolls under
+            it. Trimmed to the actions a tech needs (Audit / Pair / Copy) —
+            Refresh/Share/Zoho are receiver concerns and stay on Receiving. The
+            up/down chevrons step the sidebar's "You Tested" rail (prev/next),
+            the same gesture Receiving's chevrons drive on the history table. */}
+        <PaneHeaderActionBar
+          variant="header"
+          iconOnly
+          actions={[
+            {
+              key: 'audit',
+              label: 'Audit',
+              // Clock glyph (same node Receiving's Audit uses) so the "view the
+              // timeline" affordance reads identically across both workspaces.
+              icon: <History className="h-3.5 w-3.5" />,
+              onClick: () => setAuditOpen(true),
+              disabled: !row.receiving_id,
+              title: 'Audit log (inventory events)',
+              ariaLabel: 'View audit log',
+            },
+            {
+              key: 'pair',
+              label: 'Pair',
+              icon: <Link2 className="h-3.5 w-3.5" />,
+              onClick: () => setPairOpen(true),
+              disabled: row.sku_catalog_id == null,
+              title:
+                row.sku_catalog_id == null
+                  ? 'SKU not in the catalog yet — nothing to pair'
+                  : 'Pair this Zoho SKU to Ecwid / eBay / Amazon / etc.',
+              ariaLabel: 'Pair SKUs',
+            },
+            {
+              key: 'copy',
+              label: 'Copy',
+              icon: <Copy className={`h-3.5 w-3.5 ${copyingAll ? 'animate-pulse' : ''}`} />,
+              onClick: () => void handleCopyAll(),
+              disabled: !row.receiving_id || copyingAll,
+              title: 'Copy carton + line details to clipboard',
+              ariaLabel: 'Copy all testing details',
+            },
+          ] satisfies PaneHeaderActionBarAction[]}
+          status={saving ? 'Saving' : undefined}
+          onPrev={() => window.dispatchEvent(new CustomEvent('testing-navigate-rail', { detail: 'prev' }))}
+          onNext={() => window.dispatchEvent(new CustomEvent('testing-navigate-rail', { detail: 'next' }))}
+          prevTitle="Previous recent line"
+          nextTitle="Next recent line"
+        />
+
         <div className="min-h-0 flex-1 overflow-y-auto">
           <div className="mx-auto w-full max-w-3xl space-y-3 px-4 py-5 pb-8 sm:px-6">
-            {/* Toolbar — Audit + Copy. Mirrors LineEditPanel's header bar but
-                trimmed to the two actions a tech actually needs. Refresh/
-                Share/Zoho are receiver concerns and stay on the receiving
-                page. */}
-            <PaneHeaderActionBar
-              actions={[
-                {
-                  key: 'audit',
-                  label: 'Audit',
-                  icon: <Info className="h-3.5 w-3.5" />,
-                  onClick: () => setAuditOpen(true),
-                  disabled: !row.receiving_id,
-                  title: 'Audit log (inventory events)',
-                  ariaLabel: 'View audit log',
-                },
-                {
-                  key: 'pair',
-                  label: 'Pair',
-                  icon: <Link2 className="h-3.5 w-3.5" />,
-                  onClick: () => setPairOpen(true),
-                  disabled: row.sku_catalog_id == null,
-                  title:
-                    row.sku_catalog_id == null
-                      ? 'SKU not in the catalog yet — nothing to pair'
-                      : 'Pair this Zoho SKU to Ecwid / eBay / Amazon / etc.',
-                  ariaLabel: 'Pair SKUs',
-                },
-                {
-                  key: 'copy',
-                  label: 'Copy',
-                  icon: <Copy className={`h-3.5 w-3.5 ${copyingAll ? 'animate-pulse' : ''}`} />,
-                  onClick: () => void handleCopyAll(),
-                  disabled: !row.receiving_id || copyingAll,
-                  title: 'Copy carton + line details to clipboard',
-                  ariaLabel: 'Copy all testing details',
-                },
-              ] satisfies PaneHeaderActionBarAction[]}
-              status={saving ? 'Saving' : undefined}
-            />
-
             {/* Carton header — photos + claim + listing/PO/tracking chips.
                 The ONE elevated surface on the page (SECTION_HERO) so the eye
                 anchors here first. */}

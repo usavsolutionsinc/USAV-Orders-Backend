@@ -114,12 +114,12 @@ export function conditionGradeTableLabel(code: string | null | undefined): strin
   const c = String(code || '').trim().toUpperCase();
   if (!c) return 'N/A';
   if (c === 'BRAND_NEW') return 'NEW';
-  if (c === 'LIKE_NEW') return 'LIKE-NEW';
-  if (c === 'REFURBISHED') return 'REFURB';
+  if (c === 'LIKE_NEW') return 'L-NEW';
+  if (c === 'REFURBISHED') return 'REF';
   if (c === 'PARTS') return 'PARTS';
-  if (c === 'USED_A') return 'USED-A';
-  if (c === 'USED_B') return 'USED-B';
-  if (c === 'USED_C') return 'USED-C';
+  if (c === 'USED_A') return 'A';
+  if (c === 'USED_B') return 'B';
+  if (c === 'USED_C') return 'C';
   return c.replace(/_/g, ' ');
 }
 

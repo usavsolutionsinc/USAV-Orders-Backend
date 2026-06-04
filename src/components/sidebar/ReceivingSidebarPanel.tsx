@@ -1198,8 +1198,13 @@ export function ReceivingSidebarPanel() {
           own dedicated sidebar (IncomingSidebarPanel) above this branch. */}
       {mode === 'history' ? null : (
         <ReceivingRecentRail
+          // Keep the (possibly negative) id so the rail's auto-select stays
+          // suppressed while a line/carton is open — but never hand it the
+          // synthetic unmatched-carton stub as a pinnable row. buildUnmatchedStubRow
+          // negates the id; pinning it surfaced a phantom "Line #-<recvId> 0/?"
+          // entry that lingered after the real line was deleted.
           selectedLineId={selectedLine?.id ?? null}
-          selectedRow={selectedLine ?? null}
+          selectedRow={selectedLine && selectedLine.id > 0 ? selectedLine : null}
         />
       )}
 

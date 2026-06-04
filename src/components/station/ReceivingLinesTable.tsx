@@ -5,10 +5,13 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useUIModeOptional } from '@/design-system/providers/UIModeProvider';
 import { Check, PackageCheck, Clock, Truck, Package } from '@/components/Icons';
-import { emitSelection, onToggleAll } from '@/lib/selection/table-selection';
+import { emitSelection, emitSelectionTotal, onToggleAll } from '@/lib/selection/table-selection';
 import { SkeletonList } from '@/design-system/components/Skeletons';
 import { conditionGradeTableLabel, workflowStatusTableLabel, getStatusDotBg } from '@/components/station/receiving-constants';
 import { ReceivingIdentityChips } from '@/components/receiving/ReceivingIdentityChips';
+import { RowTitle, RowMetaColumns, META_COL } from '@/components/ui/RowMetaColumns';
+import { DeliveryStateIcon } from '@/components/station/ReceivingDeliveryStateIcon';
+import { IconWithTooltip } from '@/components/ui/IconWithTooltip';
 import WeekHeader from '@/components/ui/WeekHeader';
 import { DesktopDateGroupHeader } from '@/components/ui/DesktopDateGroupHeader';
 import type { IncomingDeliveryState } from '@/components/sidebar/receiving/IncomingSidebarPanel';
@@ -227,27 +230,8 @@ export function ReceivingLineOrderRow({
   const trackingValue = (row.tracking_number || '').trim();
   const skuValue = (row.sku || '').trim();
   const poValue = (row.zoho_purchaseorder_number || row.zoho_purchaseorder_id || '').trim();
-  // Derived faceted state from /api/receiving-lines?view=incoming. Suffix-text
-  // chips (matching the NEEDS TEST pattern) — keeps the row compact while
-  // making the "delivered, nobody opened it" case visually shout.
-  const deliveryStateMeta: { label: string; tone: string } | null = (() => {
-    switch (row.delivery_state) {
-      case 'DELIVERED_UNOPENED':
-        return { label: 'DELIVERED · NOT SCANNED', tone: 'text-rose-600 font-black' };
-      case 'ARRIVING_TODAY':
-        return { label: 'ARRIVING TODAY', tone: 'text-amber-700 font-black' };
-      case 'STALLED':
-        return { label: 'STALLED', tone: 'text-orange-700 font-black' };
-      case 'IN_TRANSIT':
-        return { label: 'IN TRANSIT', tone: 'text-blue-700' };
-      case 'PENDING_CARRIER':
-        return { label: 'PENDING CARRIER', tone: 'text-gray-500' };
-      case 'AWAITING_TRACKING':
-        return { label: 'NO TRACKING #', tone: 'text-gray-500' };
-      default:
-        return null;
-    }
-  })();
+  // Derived faceted state (view=incoming) now renders as a compact icon with a
+  // hover label via <DeliveryStateIcon>, instead of a long text suffix.
   // Join all serials so SerialChip's CSV-aware helper picks the most recent and
   // shows its last 6 chars. Clipboard carries the full list for traceability.
   const serialsCsv = (row.serials ?? [])
@@ -270,53 +254,50 @@ export function ReceivingLineOrderRow({
       aria-checked={selectMode ? isSelected : undefined}
       aria-pressed={selectMode ? undefined : isSelected}
       aria-label={`Select receiving line ${row.id}`}
-      className={`${dashboardOrderRowShellClass(isMobile)} border-b border-gray-50 px-3 py-1.5 transition-colors cursor-pointer hover:bg-blue-50/50 ${
-        isSelected ? 'bg-blue-50/80' : index % 2 === 0 ? 'bg-white' : 'bg-gray-50/10'
+      className={`${dashboardOrderRowShellClass(isMobile)} border-b border-gray-100 px-3 py-1.5 transition-colors cursor-pointer hover:bg-blue-50/50 ${
+        isSelected ? 'bg-blue-50/80' : index % 2 === 1 ? 'bg-gray-50/40' : 'bg-white'
       }`}
     >
       <div className="flex min-w-0 flex-col">
-        <div className="flex min-w-0 items-center gap-2">
-          {selectMode && (
-            <span
-              className={`flex h-4 w-4 shrink-0 items-center justify-center rounded border transition-colors ${
-                isSelected ? 'border-blue-600 bg-blue-600 text-white' : 'border-gray-300 bg-white'
-              }`}
-            >
-              {isSelected && <Check className="h-3 w-3" />}
-            </span>
-          )}
-          <span
-            className={`h-2 w-2 shrink-0 rounded-full ${getStatusDotBg(row.workflow_status, row.quantity_received, row.quantity_expected)}`}
-            title={workflowLabel}
-          />
-          <div className="truncate text-sm font-bold text-gray-900">
-            {productTitle}
-          </div>
-        </div>
-        <div className="mt-0.5 flex items-center gap-2">
-          <div className="min-w-0 flex-1 truncate pl-4 text-caption font-black uppercase tracking-widest text-gray-500">
-            <span className={qtyExpected > 1 ? 'text-yellow-600' : row.quantity_expected && row.quantity_received >= row.quantity_expected ? 'text-emerald-600' : 'text-gray-700'}>
+        <RowTitle
+          leading={
+            selectMode ? (
+              <span
+                className={`flex h-4 w-4 shrink-0 items-center justify-center rounded border transition-colors ${
+                  isSelected ? 'border-blue-600 bg-blue-600 text-white' : 'border-gray-300 bg-white'
+                }`}
+              >
+                {isSelected && <Check className="h-3 w-3" />}
+              </span>
+            ) : undefined
+          }
+          dot={getStatusDotBg(row.workflow_status, row.quantity_received, row.quantity_expected)}
+          dotTitle={workflowLabel}
+          dotTrack={META_COL.dotTrackWide}
+          title={productTitle}
+        />
+        <RowMetaColumns
+          indent={META_COL.indentWide}
+          qtyCol={META_COL.qtyColWide}
+          qty={
+            <span className={qtyExpected > 1 ? 'text-yellow-600' : row.quantity_expected && row.quantity_received >= row.quantity_expected ? 'text-emerald-600' : 'text-gray-500'}>
               {quantityText}
             </span>
-            {' • '}
-            <span className={conditionColor}>{conditionLabel}</span>
-            {isIncoming ? null : (
-              <>
-                {' • '}
-                <span
-                  className="inline-flex align-text-bottom"
-                  title={workflowLabel}
-                  aria-label={workflowLabel}
-                >
-                  <WorkflowIcon className={`h-3.5 w-3.5 ${workflowIconTone}`} />
-                </span>
-              </>
-            )}
-            {deliveryStateMeta ? (
-              <span className={deliveryStateMeta.tone}>{' • ' + deliveryStateMeta.label}</span>
-            ) : null}
-          </div>
-        </div>
+          }
+          condition={<span className={condGrade === 'BRAND_NEW' ? 'text-yellow-600' : condGrade === 'PARTS' ? 'text-amber-800' : 'text-gray-400'}>{conditionLabel}</span>}
+          rest={
+            <div className="flex items-center gap-2">
+              {isIncoming ? null : (
+                <IconWithTooltip
+                  Icon={WorkflowIcon}
+                  label={workflowLabel}
+                  iconClassName={workflowIconTone}
+                />
+              )}
+              <DeliveryStateIcon state={row.delivery_state} />
+            </div>
+          }
+        />
       </div>
 
       <ReceivingIdentityChips
@@ -882,6 +863,15 @@ export default function ReceivingLinesTable({ selectMode = false }: { selectMode
       setSelectedIds(mode === 'all' ? new Set(orderedVisibleRows.map((r) => r.id)) : new Set());
     });
   }, [orderedVisibleRows]);
+
+  // Publish the selectable total so the action bar's select-all ring can fill.
+  // Zero outside select mode so a stale "all selected" never lingers.
+  useEffect(() => {
+    emitSelectionTotal(
+      RECEIVING_SELECTION_SCOPE,
+      selectMode ? orderedVisibleRows.length : 0,
+    );
+  }, [selectMode, orderedVisibleRows]);
 
   // Sidebar chevrons / arrow keys dispatch receiving-navigate-table.
   useEffect(() => {

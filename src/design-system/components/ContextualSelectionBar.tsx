@@ -1,6 +1,8 @@
 'use client';
 
-import { SelectionActionBar } from './SelectionActionBar';
+import { MobileSelectionBar, type MobileSelectionAction } from './MobileSelectionBar';
+import { useTableSelectionTotal } from '@/hooks/useTableSelection';
+import { emitToggleAll } from '@/lib/selection/table-selection';
 import {
   resolveSelectionAction,
   type SelectionAction,
@@ -11,59 +13,59 @@ interface ContextualSelectionBarProps<T> {
   scope: string;
   /** Selected rows, from `useTableSelection(scope)`. */
   rows: T[];
-  /** Per-page contextual actions. The first `primary` action (or the first
-   *  action) becomes the CTA; the rest fill the overflow menu. */
+  /** Per-page contextual actions. Each enabled action renders as one icon in
+   *  the glass capsule (icon-only — the label drives the tooltip/aria). */
   actions: SelectionAction<T>[];
 }
 
 /**
  * Contextual bulk-action bar — the page-agnostic shell that renders a
- * {@link SelectionAction} set on top of {@link SelectionActionBar}.
+ * {@link SelectionAction} set as the liquid-glass {@link MobileSelectionBar}
+ * capsule whenever rows are selected.
  *
- * It picks the primary CTA, pushes the remaining actions into the overflow
- * menu, and applies each action's selection-count / predicate constraints
- * (disabling with a tooltip reason) so a page only has to declare *what* the
- * actions are, not wire the chrome. Render it inside the table's `relative`
- * region — it pins to the bottom and auto-shows when rows are selected.
+ * It maps each action to an icon button (dropping any whose selection-count /
+ * predicate constraints aren't met, so the icon row stays free of dead
+ * buttons), and wires the capsule's select-all ring + clear to the shared
+ * toggle-all event bus. A page only declares *what* the actions are, not the
+ * chrome. Render it inside the table's `relative` region — the capsule pins to
+ * the bottom and auto-shows when rows are selected.
  */
 export function ContextualSelectionBar<T>({
   scope,
   rows,
   actions,
 }: ContextualSelectionBarProps<T>) {
+  const total = useTableSelectionTotal(scope);
+
   if (actions.length === 0) return null;
 
-  const primary = actions.find((a) => a.primary) ?? actions[0];
-  const others = actions.filter((a) => a !== primary);
+  const count = rows.length;
+  const allSelected = total > 0 && count >= total;
 
-  const primaryResolved = resolveSelectionAction(primary, rows);
-
-  const menu = others.map((a) => {
-    const { disabled, reason } = resolveSelectionAction(a, rows);
-    return {
+  // Only surface actions that can actually fire for the current selection
+  // (e.g. the single-row "ticket" icon shows at count 1; perpetually-disabled
+  // "coming soon" actions stay hidden) — the icon-only capsule has no disabled
+  // affordance, so we filter rather than render dead buttons.
+  const capsuleActions: MobileSelectionAction[] = actions
+    .filter((a) => !resolveSelectionAction(a, rows).disabled)
+    .map((a) => ({
+      key: a.key,
       label: a.label,
-      icon: a.icon,
-      disabled,
-      title: disabled ? reason : a.label,
-      onClick: (r: T[]) => {
-        if (!disabled) void a.run(r);
+      tone: a.tone === 'red' ? 'danger' : 'default',
+      icon: () => <>{a.icon}</>,
+      onTap: () => {
+        void a.run(rows);
       },
-    };
-  });
+    }));
 
   return (
-    <SelectionActionBar
-      scope={scope}
-      rows={rows}
-      primaryLabel={primary.label}
-      primaryIcon={primary.icon}
-      primaryTone={primary.tone ?? 'blue'}
-      primaryDisabled={primaryResolved.disabled}
-      primaryTitle={primaryResolved.disabled ? primaryResolved.reason : primary.label}
-      onPrimary={(r) => {
-        if (!primaryResolved.disabled) void primary.run(r);
-      }}
-      actions={menu}
+    <MobileSelectionBar
+      count={count}
+      total={total}
+      allSelected={allSelected}
+      onToggleAll={() => emitToggleAll(scope, allSelected ? 'none' : 'all')}
+      onClear={() => emitToggleAll(scope, 'none')}
+      actions={capsuleActions}
     />
   );
 }

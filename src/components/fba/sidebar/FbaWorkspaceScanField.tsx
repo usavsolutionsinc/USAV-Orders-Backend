@@ -36,6 +36,8 @@ export interface FbaWorkspaceScanFieldProps {
   showTrackingCard?: boolean;
   /** Locks the scan flow per page: 'plan' on the plan page, 'select' on combine. */
   scanMode?: 'plan' | 'select';
+  /** Fit scan input inside the shared 40px sidebar header band. */
+  sidebarHeaderBand?: boolean;
 }
 
 /** Sidebar: Welcome + FBA goal + scan, plus guarded plan pairing for the active print selection. */
@@ -45,6 +47,7 @@ export function FbaWorkspaceScanField({
   scanEnabled = true,
   showTrackingCard = true,
   scanMode,
+  sidebarHeaderBand = false,
 }: FbaWorkspaceScanFieldProps) {
   const { clearSelection, patchTracking, selection, trackingByPlan } = useFbaWorkspace();
 
@@ -193,7 +196,7 @@ export function FbaWorkspaceScanField({
   const shouldShowTrackingCard = showTrackingCard && scanEnabled && selectedCount > 0;
 
   return (
-    <div className="min-h-0 space-y-2">
+    <div className={shouldShowTrackingCard ? 'min-h-0 space-y-2' : 'min-h-0'}>
       {scanEnabled ? (
         <div className="min-w-0">
           <StationFbaInput
@@ -201,6 +204,7 @@ export function FbaWorkspaceScanField({
             showLabels={false}
             ignoreUrlPlan
             scanMode={scanMode}
+            sidebarHeaderBand={sidebarHeaderBand}
             workspaceTheme={stationTheme}
             techStaffIdOverride={effectiveStaffId ?? undefined}
           />

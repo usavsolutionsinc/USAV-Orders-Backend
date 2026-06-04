@@ -9,7 +9,7 @@ import {
   dispatchSelectLine,
   type ReceivingLineRow,
 } from '@/components/station/ReceivingLinesTable';
-import { emitSelection, onToggleAll } from '@/lib/selection/table-selection';
+import { emitSelection, emitSelectionTotal, onToggleAll } from '@/lib/selection/table-selection';
 
 /** Selection scope shared by the testing history list + its SelectionActionBar. */
 export const TESTING_SELECTION_SCOPE = 'testing' as const;
@@ -87,6 +87,11 @@ export function TestingHistoryList({ staffId, selectMode = false, onOpenLine }: 
       setSelectedIds(mode === 'all' ? new Set(rows.map((r) => r.id)) : new Set());
     });
   }, [rows]);
+
+  // Publish the selectable total so the action bar's select-all ring can fill.
+  useEffect(() => {
+    emitSelectionTotal(TESTING_SELECTION_SCOPE, selectMode ? rows.length : 0);
+  }, [selectMode, rows]);
 
   const selectModeRef = useRef(selectMode);
   useEffect(() => { selectModeRef.current = selectMode; }, [selectMode]);

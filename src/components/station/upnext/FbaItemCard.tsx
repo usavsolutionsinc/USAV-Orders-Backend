@@ -52,6 +52,7 @@ export function FbaItemCard({ item, isExpanded, onToggleExpand }: FbaItemCardPro
         isSelected={isExpanded}
         tone="purple"
         variant="linear"
+        entrance="stagger"
         onClick={onToggleExpand}
       >
         {/* ── Row 1 — FNSKU id · pending group · trailing chevron. ── */}

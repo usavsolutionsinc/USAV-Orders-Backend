@@ -10,6 +10,7 @@ import {
   framerTransitionMobile,
   framerGesture,
 } from '../foundations/motion-framer';
+import { staggerRevealItem } from './StaggerReveal';
 
 type CardTone = 'emerald' | 'red' | 'orange' | 'purple' | 'teal' | 'gray';
 
@@ -38,6 +39,14 @@ interface CardShellProps {
   isStock?: boolean;
   /** Desktop selected-state treatment. Defaults to `stripe`. */
   variant?: CardShellVariant;
+  /**
+   * Mount entrance.
+   * - `self` (default): the card runs its own fade/slide on mount.
+   * - `stagger`: the card inherits a parent stagger-reveal container's timeline
+   *   (see {@link staggerRevealItem}) instead, so a list of cards cascades in
+   *   together. Standalone (no orchestrating parent) it simply renders in place.
+   */
+  entrance?: 'self' | 'stagger';
   onClick?: () => void;
   className?: string;
 }
@@ -67,6 +76,7 @@ export function CardShell({
   tone = 'emerald',
   isStock = false,
   variant = 'stripe',
+  entrance = 'self',
   onClick,
   className = '',
 }: CardShellProps) {
@@ -124,15 +134,20 @@ export function CardShell({
   // rows don't jump and neighbours never shift. Hover state is bg-only.
   const hoverGesture = !isMobile && variant === 'linear' ? undefined : framerGesture.cardHover;
 
+  // `stagger`: omit own initial/animate/transition so the card inherits the
+  // parent stagger-reveal container's hidden→show timeline (the scan-bar spring
+  // lives in the variant). `self`: the card's original standalone entrance.
+  const entranceProps =
+    entrance === 'stagger'
+      ? { variants: staggerRevealItem, exit: 'exit' as const }
+      : { initial: presence.initial, animate: presence.animate, exit: presence.exit, transition };
+
   return (
     <motion.div
       layout
-      initial={presence.initial}
-      animate={presence.animate}
-      exit={presence.exit}
+      {...entranceProps}
       whileHover={hoverGesture}
       whileTap={framerGesture.tapPress}
-      transition={transition}
       onClick={onClick}
       className={`group ${isMobile ? mobileClasses : desktopClasses} ${className}`}
     >

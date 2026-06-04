@@ -15,7 +15,6 @@ import { GoalsSidebarPanel } from '@/components/sidebar/GoalsSidebarPanel';
 import { StaffAdminSidebarPanel } from '@/components/sidebar/StaffAdminSidebarPanel';
 import { FbaCatalogSidebarPanel } from './FbaCatalogSidebarPanel';
 import { FeaturesSidebarPanel } from '@/components/sidebar/FeaturesSidebarPanel';
-import { ArchitectureSidebarPanel } from './ArchitectureSidebarPanel';
 import { OperationsSidebarPanel } from './workflow/OperationsSidebarPanel';
 import { JobsSidebarPanel } from './JobsSidebarPanel';
 import { LogsSidebarPanel } from './LogsSidebarPanel';
@@ -38,7 +37,6 @@ function panelFor(section: AdminSection): JSX.Element | null {
     case 'features':     return <FeaturesSidebarPanel />;
     case 'connections':  return <ConnectionsSidebarPanel />;
     case 'architecture': return <OperationsSidebarPanel />;
-    case 'codebase':     return <ArchitectureSidebarPanel />;
     case 'jobs':         return <JobsSidebarPanel />;
     case 'logs':         return <LogsSidebarPanel />;
     default:             return null;

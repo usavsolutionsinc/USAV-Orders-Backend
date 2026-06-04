@@ -34,6 +34,8 @@ export interface RecentActivityRailBaseProps {
   /** Optimistic delete event ({ id }); drops the row from the rail immediately. */
   deleteEvent?: string;
   refreshEvents: string[];
+  /** prev/next CustomEvent name that steps rail selection — drives header chevrons. */
+  navigateEvent?: string;
 
   eyebrowTitle: string;
   eyebrowSuffix?: string;
@@ -76,6 +78,7 @@ export function RecentActivityRailBase({
   updateEvent,
   deleteEvent,
   refreshEvents,
+  navigateEvent,
   eyebrowTitle,
   eyebrowSuffix,
   autoSelectFirstWhenEmpty = false,
@@ -91,6 +94,7 @@ export function RecentActivityRailBase({
       updateEvent={updateEvent}
       deleteEvent={deleteEvent}
       refreshEvents={refreshEvents}
+      navigateEvent={navigateEvent}
       selectedId={selectedLineId}
       selectedRow={selectedRow}
       limit={limit}
@@ -100,6 +104,7 @@ export function RecentActivityRailBase({
       canAutoSelectFirst={
         autoSelectFirstWhenEmpty ? canAutoSelectReceivingRailFirst : undefined
       }
+      staggerReveal
       getId={getRowId}
       getGroupId={getRowGroupId}
       getActivityAt={getRowActivityAt}

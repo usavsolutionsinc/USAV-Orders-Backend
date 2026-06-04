@@ -2,7 +2,7 @@
 
 import { motion } from 'framer-motion';
 import { ExternalLink, Package } from '@/components/Icons';
-import { framerGesture } from '@/design-system';
+import { framerGesture, staggerRevealItem } from '@/design-system';
 import type { ReceivingQueueItem } from './upnext-types';
 import { workflowStatusTableLabel } from '@/components/station/receiving-constants';
 
@@ -45,9 +45,8 @@ export function ReceivingAssignmentCard({ item }: ReceivingAssignmentCardProps) 
   return (
     <motion.div
       key={`recv-${item.assignment_id}`}
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      exit={{ opacity: 0 }}
+      variants={staggerRevealItem}
+      exit="exit"
       whileHover={framerGesture.cardHover}
       whileTap={framerGesture.tapPress}
       onClick={openReceiving}

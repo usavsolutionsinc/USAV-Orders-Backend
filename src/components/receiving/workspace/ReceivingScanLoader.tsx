@@ -39,11 +39,12 @@ export function ReceivingScanLoader({ tracking, startedAt }: ReceivingScanLoader
     return () => window.clearInterval(interval);
   }, [startedAt]);
 
-  // pt clears the 40px progress-stepper band (header-shell.receivingScanBandClass)
-  // that stays mounted behind the loader, so the hero card lands below the
-  // headers instead of overlapping them.
+  // Opaque white surface (not a translucent overlay) so nothing behind bleeds
+  // through. The host (ReceivingDashboard) already offsets this below the
+  // workspace header chrome when one is mounted, so a plain top pad is all the
+  // breathing room the hero card needs.
   return (
-    <div className="flex h-full w-full items-start justify-center overflow-y-auto bg-gray-50/60 px-4 pb-6 pt-[calc(40px+1.5rem)]">
+    <div className="flex h-full w-full items-start justify-center overflow-y-auto bg-white px-4 pb-6 pt-6">
       <div className="w-full max-w-3xl space-y-4">
         {/* Hero card — the focal point: tracking + status + progress bar */}
         <div className="rounded-2xl border border-gray-200 bg-white px-6 py-7 shadow-sm">

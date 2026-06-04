@@ -1,7 +1,47 @@
 {
-  "generatedAt": "2026-06-04T05:31:15.299Z",
+  "generatedAt": "2026-06-04T06:53:18.206Z",
   "count": 199,
   "commits": [
+    {
+      "sha": "21da19638704c5ea3ddd0643256f720e07c36133",
+      "shortSha": "21da1963",
+      "date": "2026-06-03T23:13:19-07:00",
+      "author": "DENSENSE8",
+      "subject": "workflow: Operations main panel shows flows as a descriptive display",
+      "body": "Per feedback: the flows belong in the main (right) panel as a read-only\ndescriptive display of what the codebase actually does — not as interactive\nsidebar dropdowns or a click-to-spotlight graph. Interactivity is deferred.\n\n  OperationsFlowsDisplay.tsx (new, now the Operations main panel)\n    - all 5 flows shown in full, no dropdowns: ordered state → station → signal\n    - each step tagged with the REAL activity/event type (TRACKING_SCANNED,\n      SERIAL_ADDED, TEST_PASS, PACK_COMPLETED, LABEL_PRINTED, FBA_READY…)\n    - each flow lists the modules/routes that implement it (src/lib/receiving,\n      /api/orders/[id]/allocate, /api/serial-units/[id]/test, src/lib/fba…)\n    - live occupancy per state (\"N here now\") from flow-audit as annotation\n\n  operations-catalog.ts — flows enriched with `code` anchors + per-step `signal`\n\n  OperationsSidebarPanel.tsx — flows removed (they're in the main panel); now a\n    Stations + Identifiers reference; dropped the URL/board-spotlight coupling\n    (local state only)\n\nThe interactive React Flow board (OperationsFlowBoard.tsx) is retained, unwired,\nas the basis for the later interactive canvas (docs/NODE_UI_PLAN.md). tsc + build ✓.\n\nCo-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>",
+      "type": "other",
+      "title": "workflow: Operations main panel shows flows as a descriptive display"
+    },
+    {
+      "sha": "c20cb368a3c0a172e98905d60d9d1e5dbc0c9955",
+      "shortSha": "c20cb368",
+      "date": "2026-06-03T22:43:57-07:00",
+      "author": "DENSENSE8",
+      "subject": "workflow: Operations sidebar — stations, identifiers, flows + board spotlight",
+      "body": "Builds out the Operations sidebar into a detailed, schema-grounded reference of\nhow information moves through the system, and saves the rest of the node UI as a\nplan.\n\noperations-catalog.ts — curated, grounded content:\n  - 6 stations (RECEIVING/TECH/PACK/LABELS/FBA/ADMIN) with their REAL\n    station_activity_logs activity types + the lifecycle states they own\n  - 12 identifiers (serial #, inbound/outbound tracking #, SKU, Zoho item id,\n    order #, shipment id, FNSKU, FBA shipment, scan ref, bin, condition grade)\n    each with the table.column it lives in, how it travels station-by-station,\n    and what it links to\n  - 5 flows (receiving / shipping / FBA / repair / returns) as ordered,\n    state-by-state, station-tagged paths\n\nOperationsSidebarPanel.tsx — search + Flows/Stations/Info lenses, expandable\ndetail, cross-links that trace an identifier to its relations. Selection writes\n?ops=<key>; the flow board reads it and SPOTLIGHTS that path (dims the rest)\nwith a header badge. Wired into AdminSidebar for the Operations section.\n\ndocs/NODE_UI_PLAN.md — the deferred node-builder UI (OperationNode, palette,\neditable canvas, config panel, ItemTracker live dot, audit↔engine toggle,\ntemplates) captured for later; nothing there blocks today's audit board.\n\ntsc clean; production build ✓.\n\nCo-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>",
+      "type": "other",
+      "title": "workflow: Operations sidebar — stations, identifiers, flows + board spotlight"
+    },
+    {
+      "sha": "ce94f2e88bde391cb01fbecf7f4c38af8a078ff0",
+      "shortSha": "ce94f2e8",
+      "date": "2026-06-03T22:32:55-07:00",
+      "author": "DENSENSE8",
+      "subject": "recent receiving rail updates",
+      "body": "",
+      "type": "other",
+      "title": "recent receiving rail updates"
+    },
+    {
+      "sha": "25bfd736438e5962230e7bd2e7011f91ed81f769",
+      "shortSha": "25bfd736",
+      "date": "2026-06-03T22:32:31-07:00",
+      "author": "DENSENSE8",
+      "subject": "workflow: Operations item-flow audit board, replaces admin Architecture page",
+      "body": "Surfaces \"how information actually moves through the system\" as a visual,\nauditable React Flow board — the architecture doc's Phase-1 read-only floor-flow\nview. Built from REAL data, not the engine:\n\n  GET /api/workflow/flow-audit  (read-only, admin.view)\n    nodes = serial_units grouped by current_status (live occupancy)\n    edges = inventory_events prev_status→next_status, counted over a window\n            (30/90/365d); edge thickness + label = transition volume\n\n  OperationsFlowBoard.tsx — React Flow canvas w/ animated grid, hand-tuned\n    lifecycle layout, exception/branch rows, MiniMap. Synthesizes nodes for\n    edge endpoints that have no live occupancy so nothing is dropped.\n\nAdmin wiring (the \"replace the Architecture page\" ask):\n  - `architecture` section repurposed → \"Operations\" (the flow board)\n  - codebase-visualizer RELOCATED to a new `codebase` section (untouched:\n    ArchitectureTab, ArchitectureSidebarPanel, /api/architecture all stay,\n    now reached at ?section=codebase, gated admin.view_logs)\n\nAdds @xyflow/react. tsc clean; production build ✓.\n\nCo-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>",
+      "type": "other",
+      "title": "workflow: Operations item-flow audit board, replaces admin Architecture page"
+    },
     {
       "sha": "d99e813b763036eb7c6b537573b65ebacb5f1c66",
       "shortSha": "d99e813b",
@@ -1951,46 +1991,6 @@
       "body": "",
       "type": "other",
       "title": "updated wa table to include a deadline_at column for better work orders trackign number and the up next orders component for better edge to edge and order display"
-    },
-    {
-      "sha": "432cb9bf8db4b0b2a3cd3db04de9b73d34509617",
-      "shortSha": "432cb9bf",
-      "date": "2026-03-10T12:21:18-07:00",
-      "author": "usavsolutionsinc",
-      "subject": "updated the upnext order to include dismiss and fixed the stuck logic for active order and shipped orders display",
-      "body": "",
-      "type": "other",
-      "title": "updated the upnext order to include dismiss and fixed the stuck logic for active order and shipped orders display"
-    },
-    {
-      "sha": "aa7f7f12956ffd3fcf884fcabe298635bad632b2",
-      "shortSha": "aa7f7f12",
-      "date": "2026-03-10T11:14:45-07:00",
-      "author": "usavsolutionsinc",
-      "subject": "filter logic is all good.",
-      "body": "",
-      "type": "other",
-      "title": "filter logic is all good."
-    },
-    {
-      "sha": "280506c152c5790a96f840ae78fc61a5b1804e8c",
-      "shortSha": "280506c1",
-      "date": "2026-03-10T10:53:51-07:00",
-      "author": "usavsolutionsinc",
-      "subject": "fix: correct file casing for Linux case-sensitive filesystem",
-      "body": "Rename dashboarddetailsStack.tsx -> DashboardDetailsStack.tsx and\nadminDetailsStack.tsx -> AdminDetailsStack.tsx so Vercel (Linux) can\nresolve the imports that reference the PascalCase filenames.\n\nMade-with: Cursor",
-      "type": "fix",
-      "title": "correct file casing for Linux case-sensitive filesystem"
-    },
-    {
-      "sha": "ccf87a6b34ef8645b03657f3e87bc88f958aa2fe",
-      "shortSha": "ccf87a6b",
-      "date": "2026-03-10T10:49:53-07:00",
-      "author": "usavsolutionsinc",
-      "subject": "added a ton of changes, across zoho, tech orders and fba updates and upnext orders",
-      "body": "",
-      "type": "other",
-      "title": "added a ton of changes, across zoho, tech orders and fba updates and upnext orders"
     }
   ]
 }

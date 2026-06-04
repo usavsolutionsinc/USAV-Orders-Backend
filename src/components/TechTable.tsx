@@ -24,6 +24,7 @@ import { getStaffThemeById, stationThemeColors } from '@/utils/staff-colors';
 import { type TechRecord } from '@/hooks/useTechLogs';
 import { normalizeTrackingKey } from '@/lib/tracking-format';
 import { ChipColumns, CHIP_COL, type ChipColumn } from '@/components/ui/ChipColumns';
+import { RowTitle, RowMetaColumns } from '@/components/ui/RowMetaColumns';
 import { useTechTableController, hasUsableProductTitle, isFbaTechRecord } from '@/hooks/station/useTechTableController';
 
 interface TechTableProps {
@@ -277,22 +278,23 @@ export function TechTable({ testedBy }: TechTableProps) {
                             }`}
                           >
                             <div className="flex flex-col min-w-0">
-                              <div className="flex items-center gap-2 min-w-0">
-                                <span
-                                  className={`h-2 w-2 shrink-0 rounded-full ${SOURCE_DOT_BG[dotType]}`}
-                                  title={SOURCE_DOT_LABEL[dotType]}
-                                />
-                                <div className="text-caption font-bold text-gray-900 truncate">
-                                  {hasUsableProductTitle(record.product_title)
+                              <RowTitle
+                                dot={SOURCE_DOT_BG[dotType]}
+                                dotTitle={SOURCE_DOT_LABEL[dotType]}
+                                title={
+                                  hasUsableProductTitle(record.product_title)
                                     ? normalizeProductTitle(record.product_title)
-                                    : 'Unknown Product'}
-                                </div>
-                              </div>
-                              <div className="text-eyebrow font-black text-gray-500 uppercase tracking-widest truncate mt-0.5 pl-4">
-                                <span className={(parseInt(String(record.quantity || '1'), 10) || 1) > 1 ? 'text-yellow-600' : undefined}>
-                                  {parseInt(String(record.quantity || '1'), 10) || 1}
-                                </span> • {conditionLabel}
-                              </div>
+                                    : 'Unknown Product'
+                                }
+                              />
+                              <RowMetaColumns
+                                qty={
+                                  <span className={(parseInt(String(record.quantity || '1'), 10) || 1) > 1 ? 'text-yellow-600' : undefined}>
+                                    {parseInt(String(record.quantity || '1'), 10) || 1}
+                                  </span>
+                                }
+                                condition={conditionLabel}
+                              />
                             </div>
                             {(() => {
                               // Same fixed-column chip grid as the shipped table

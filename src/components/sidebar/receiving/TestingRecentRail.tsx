@@ -101,6 +101,7 @@ export function TestingRecentRail({
       fetchFn={fetchFn}
       updateEvent="receiving-line-updated"
       refreshEvents={TESTING_REFRESH_EVENTS}
+      navigateEvent="testing-navigate-rail"
       eyebrowTitle="Recent"
       eyebrowSuffix={hasTester ? 'You Tested' : 'Testing Feed'}
       getStatusDot={getTestingStatusDot}

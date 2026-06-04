@@ -106,6 +106,7 @@ export function OrderCard({
         isSelected={isSelected}
         isStock={card.isStockTab}
         variant="linear"
+        entrance="stagger"
         onClick={() => {
           dispatchUpNextPreview(isSelected ? null : { kind: 'order', order });
         }}

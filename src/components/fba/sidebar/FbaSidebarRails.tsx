@@ -3,7 +3,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { HorizontalButtonSlider, type HorizontalSliderItem } from '@/components/ui/HorizontalButtonSlider';
 import { SidebarRailShell } from '@/components/sidebar/SidebarRailShell';
-import { SIDEBAR_GUTTER } from '@/components/layout/header-shell';
 import { FbaActiveShipments } from '@/components/fba/sidebar/FbaActiveShipments';
 import { useFbaBoardSelection } from '@/components/fba/hooks/useFbaBoardSelection';
 import { FBA_STATUS_LABEL } from '@/lib/fba/status';
@@ -95,16 +94,42 @@ const PLAN_PILLS: HorizontalSliderItem[] = [
   { id: 'tested', label: 'Testing' },
 ];
 
+export type FbaPlanRailView = 'planned' | 'tested';
+
+export function FbaPlanRailPills({
+  view,
+  onViewChange,
+}: {
+  view: FbaPlanRailView;
+  onViewChange: (view: FbaPlanRailView) => void;
+}) {
+  return (
+    <HorizontalButtonSlider
+      items={PLAN_PILLS}
+      value={view}
+      onChange={(v) => onViewChange(v as FbaPlanRailView)}
+      variant="nav"
+      dense
+      className="w-full"
+      aria-label="Plan view"
+    />
+  );
+}
+
+export function FbaPlanRailBody({ view }: { view: FbaPlanRailView }) {
+  return view === 'planned' ? (
+    <FbaItemRail statuses={['PLANNED']} eyebrowTitle="Planned" />
+  ) : (
+    <FbaItemRail statuses={['TESTED']} eyebrowTitle="Tested" />
+  );
+}
+
 export function FbaPlanRail() {
-  const [view, setView] = useState<'planned' | 'tested'>('planned');
+  const [view, setView] = useState<FbaPlanRailView>('planned');
   return (
     <div>
-      <div className={`${SIDEBAR_GUTTER} pt-2`}>
-        <HorizontalButtonSlider items={PLAN_PILLS} value={view} onChange={(v) => setView(v as 'planned' | 'tested')} variant="nav" aria-label="Plan view" />
-      </div>
-      {view === 'planned'
-        ? <FbaItemRail statuses={['PLANNED']} eyebrowTitle="Planned" />
-        : <FbaItemRail statuses={['TESTED']} eyebrowTitle="Tested" />}
+      <FbaPlanRailPills view={view} onViewChange={setView} />
+      <FbaPlanRailBody view={view} />
     </div>
   );
 }
@@ -114,8 +139,44 @@ const COMBINE_PILLS: HorizontalSliderItem[] = [
   { id: 'packed', label: 'Packed' },
 ];
 
+export type FbaCombineRailView = 'recent' | 'packed';
+
+export function FbaCombineRailPills({
+  view,
+  onViewChange,
+}: {
+  view: FbaCombineRailView;
+  onViewChange: (view: FbaCombineRailView) => void;
+}) {
+  return (
+    <HorizontalButtonSlider
+      items={COMBINE_PILLS}
+      value={view}
+      onChange={(v) => onViewChange(v as FbaCombineRailView)}
+      variant="nav"
+      dense
+      className="w-full"
+      aria-label="Combine view"
+    />
+  );
+}
+
+export function FbaCombineRailBody({
+  view,
+  stationTheme = 'green',
+}: {
+  view: FbaCombineRailView;
+  stationTheme?: StationTheme;
+}) {
+  return view === 'recent' ? (
+    <FbaActiveShipments stationTheme={stationTheme} />
+  ) : (
+    <FbaItemRail statuses={['PACKED']} eyebrowTitle="Packed" />
+  );
+}
+
 export function FbaCombineRail({ stationTheme = 'green' }: { stationTheme?: StationTheme }) {
-  const [view, setView] = useState<'recent' | 'packed'>('recent');
+  const [view, setView] = useState<FbaCombineRailView>('recent');
   // Pressing "Combine items" on the board flips this rail to Packed so more
   // packed items are easy to select and add to the in-progress combine.
   useEffect(() => {
@@ -125,12 +186,8 @@ export function FbaCombineRail({ stationTheme = 'green' }: { stationTheme?: Stat
   }, []);
   return (
     <div>
-      <div className={`${SIDEBAR_GUTTER} pt-2`}>
-        <HorizontalButtonSlider items={COMBINE_PILLS} value={view} onChange={(v) => setView(v as 'recent' | 'packed')} variant="nav" aria-label="Combine view" />
-      </div>
-      {view === 'recent'
-        ? <FbaActiveShipments stationTheme={stationTheme} />
-        : <FbaItemRail statuses={['PACKED']} eyebrowTitle="Packed" />}
+      <FbaCombineRailPills view={view} onViewChange={setView} />
+      <FbaCombineRailBody view={view} stationTheme={stationTheme} />
     </div>
   );
 }

@@ -5,6 +5,7 @@ import { framerPresence, framerTransition, SkeletonList } from '@/design-system'
 import { Loader2 } from './Icons';
 import { FnskuChip, OrderIdChip, OrderIdChipPlaceholder, TrackingOrSkuScanChip, PlatformChip, getLast4 } from './ui/CopyChip';
 import { ChipColumns, CHIP_COL, type ChipColumn } from '@/components/ui/ChipColumns';
+import { RowTitle, RowMetaColumns } from '@/components/ui/RowMetaColumns';
 import { getOrderPlatformLabel, getOrderPlatformColor, getOrderPlatformBorderColor } from '@/utils/order-platform';
 import { getExternalUrlByItemNumber, skuScanPrefixBeforeColon } from '@/hooks/useExternalItemUrl';
 import WeekHeader from './ui/WeekHeader';
@@ -223,30 +224,24 @@ export function PackerTable({ packedBy }: PackerTableProps) {
                             }`}
                           >
                             <div className="flex min-w-0 flex-col">
-                              <div className="flex min-w-0 items-center gap-2">
-                                <span
-                                  className={`h-2 w-2 shrink-0 rounded-full ${SOURCE_DOT_BG[dotType]}`}
-                                  title={SOURCE_DOT_LABEL[dotType]}
-                                />
-                                <div className="truncate text-caption font-bold text-gray-900">
-                                  {record.product_title ||
-                                    record.item_number ||
-                                    record.sku ||
-                                    'Unknown Product'}
-                                </div>
-                              </div>
-                              <div className="mt-0.5 truncate pl-4 text-eyebrow font-black uppercase tracking-widest text-gray-500">
-                                <span
-                                  className={
-                                    (parseInt(String(record.quantity || '1'), 10) || 1) > 1
-                                      ? 'text-yellow-600'
-                                      : undefined
-                                  }
-                                >
-                                  {parseInt(String(record.quantity || '1'), 10) || 1}
-                                </span>{' '}
-                                • {displayValues.condition || 'No Condition'}
-                              </div>
+                              <RowTitle
+                                dot={SOURCE_DOT_BG[dotType]}
+                                dotTitle={SOURCE_DOT_LABEL[dotType]}
+                                title={
+                                  record.product_title ||
+                                  record.item_number ||
+                                  record.sku ||
+                                  'Unknown Product'
+                                }
+                              />
+                              <RowMetaColumns
+                                qty={
+                                  <span className={(parseInt(String(record.quantity || '1'), 10) || 1) > 1 ? 'text-yellow-600' : undefined}>
+                                    {parseInt(String(record.quantity || '1'), 10) || 1}
+                                  </span>
+                                }
+                                condition={displayValues.condition || 'No Condition'}
+                              />
                             </div>
                             {(() => {
                               // Fixed-column chip grid (platform / order-id /
