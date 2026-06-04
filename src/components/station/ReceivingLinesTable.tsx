@@ -309,8 +309,8 @@ export function ReceivingLineOrderRow({
         tracking={trackingValue}
         serialsCsv={serialsCsv}
         includeSerial={!isIncoming}
-        alignSerialEnd
-        className={`${dashboardOrderRowChipsClass(isMobile)}${isMobile ? '' : ' -mr-1.5'}`}
+        asColumns={!isMobile}
+        className={dashboardOrderRowChipsClass(isMobile)}
       />
     </div>
   );

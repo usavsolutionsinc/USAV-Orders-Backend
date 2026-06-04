@@ -313,11 +313,7 @@ export function SerialChipWithMenu({
           isEditing ? 'ring-2 ring-amber-400 ring-offset-1' : ''
         }`}
       >
-        <SerialChip
-          value={sn}
-          display={sn.length > 4 ? sn.slice(-4) : sn}
-          width="w-fit max-w-full"
-        />
+        <SerialChip value={sn} width="w-fit max-w-full" />
       </div>
       {hasActions ? (
         <div

@@ -41,8 +41,13 @@ export function ReceivingPoLabelPreview({
     : 'w-full rounded-lg border border-gray-200/80 bg-white px-3 py-3 shadow-sm';
   const inner = (
     <div className={innerShell}>
-      <div className="flex min-h-[6.5rem] flex-nowrap items-stretch gap-4">
-        <div className="min-w-0 flex flex-1 flex-col justify-between py-1">
+      {/* Row height is pinned to the 96px (6rem) data matrix so the text
+          column spans the exact same box. With no vertical padding, the
+          `justify-between` top row (platform · date) sits flush with the
+          matrix's top edge and the bottom row (condition · PO#) with its
+          bottom edge — the numbers line up with the QR code's edges. */}
+      <div className="flex min-h-[6rem] flex-nowrap items-stretch gap-4">
+        <div className="min-w-0 flex flex-1 flex-col justify-between">
           <div className="flex items-baseline justify-between gap-2 text-sm leading-none">
             <span className="truncate font-bold text-gray-700">{platform}</span>
             <span className="shrink-0 tabular-nums font-semibold text-gray-600">{date}</span>
@@ -69,7 +74,11 @@ export function ReceivingPoLabelPreview({
           </div>
         </div>
         <div className="flex shrink-0 items-center [&_svg]:block">
-          <Gs1DataMatrix value={qrPayload} size={96} symbology="datamatrix" />
+          {/* quietZone=0 makes the ink fill the 96px box edge-to-edge so the
+              top (date) and bottom (PO#) rows line up with the matrix's
+              visible top/bottom edges. This is a preview, not the scanned
+              symbol — the printed label keeps its scanner-safe quiet zone. */}
+          <Gs1DataMatrix value={qrPayload} size={96} symbology="datamatrix" quietZone={0} />
         </div>
       </div>
     </div>

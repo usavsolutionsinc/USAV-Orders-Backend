@@ -25,16 +25,24 @@ export interface RenderDataMatrixOptions {
   barcolor?: string;
   /** Background colour hex (no `#`). */
   backgroundcolor?: string;
+  /**
+   * Quiet-zone border in *modules* on every side. Defaults to 2 (scanner-safe
+   * for printed/scanned symbols). Set to 0 for on-screen previews where the
+   * symbol's ink edges must sit flush with its layout box so adjacent text can
+   * be aligned to the visible matrix edges.
+   */
+  quietZone?: number;
 }
 
 export function renderDataMatrixSvg(opts: RenderDataMatrixOptions): string {
+  const pad = opts.quietZone ?? 2;
   return bwipjs.toSVG({
     bcid: opts.symbology ?? 'gs1datamatrix',
     text: opts.value,
     scale: opts.scale ?? 4,
     includetext: false,
-    paddingwidth: 2,
-    paddingheight: 2,
+    paddingwidth: pad,
+    paddingheight: pad,
     rotate: 'N',
     backgroundcolor: opts.backgroundcolor ?? 'FFFFFF',
     barcolor: opts.barcolor ?? '000000',

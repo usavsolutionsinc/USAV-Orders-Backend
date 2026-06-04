@@ -28,7 +28,11 @@ export function ReceivingCartonStaffDropdown({ receivingId, staffId, onMakeClaim
         <button
           type="button"
           onClick={onMakeClaim}
-          className="inline-flex shrink-0 items-center gap-1 self-stretch rounded-lg bg-orange-500 px-3 text-micro font-black uppercase tracking-widest text-white shadow-sm transition-colors hover:bg-orange-600"
+          // Fixed `h-9` + `self-center` decouples the button's shape from the
+          // photo strip's variable height (loading text vs. loaded toolbar vs.
+          // NAS dropzone). It now matches the loaded toolbar's `min-h-9` and
+          // stays a stable pill across every strip state.
+          className="inline-flex h-9 shrink-0 items-center gap-1 self-center rounded-lg bg-orange-500 px-3 text-micro font-black uppercase tracking-widest text-white shadow-sm transition-colors hover:bg-orange-600"
           title="File a damage / wrong-item / missing claim for this package"
         >
           Claim →

@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { framerPresence, framerTransition, SkeletonList } from '@/design-system';
 import { Loader2 } from './Icons';
 import { FnskuChip, OrderIdChip, OrderIdChipPlaceholder, TrackingOrSkuScanChip, PlatformChip, getLast4 } from './ui/CopyChip';
+import { ChipColumns, CHIP_COL, type ChipColumn } from '@/components/ui/ChipColumns';
 import { getOrderPlatformLabel, getOrderPlatformColor, getOrderPlatformBorderColor } from '@/utils/order-platform';
 import { getExternalUrlByItemNumber, skuScanPrefixBeforeColon } from '@/hooks/useExternalItemUrl';
 import WeekHeader from './ui/WeekHeader';
@@ -247,40 +248,52 @@ export function PackerTable({ packedBy }: PackerTableProps) {
                                 • {displayValues.condition || 'No Condition'}
                               </div>
                             </div>
-                            <div className="flex shrink-0 items-center">
-                              {showFnskuChip ? (
-                                <FnskuChip value={fnskuValue} />
-                              ) : (() => {
-                                const plat = getOrderPlatformLabel(record.order_id || '', record.account_source);
-                                const scanForSku = String(record.scan_ref || record.shipping_tracking_number || '');
-                                const productUrl = getExternalUrlByItemNumber(
-                                  String(record.item_number || '').trim() || skuScanPrefixBeforeColon(scanForSku),
-                                );
-                                return (
-                                  <>
-                                    {plat ? (
-                                      <PlatformChip
-                                        label={plat}
-                                        underlineClass={getOrderPlatformBorderColor(plat)}
-                                        iconClass={productUrl ? getOrderPlatformColor(plat) : 'text-gray-500'}
-                                        onClick={() => {
-                                          if (productUrl) window.open(productUrl, '_blank', 'noopener,noreferrer');
-                                        }}
-                                      />
-                                    ) : null}
-                                    {!hideOrderIdChip ? (
-                                      <OrderIdChip
-                                        value={record.order_id || ''}
-                                        display={getLast4(record.order_id)}
-                                      />
-                                    ) : (
-                                      <OrderIdChipPlaceholder />
-                                    )}
-                                    <TrackingOrSkuScanChip value={record.shipping_tracking_number || ''} />
-                                  </>
-                                );
-                              })()}
-                            </div>
+                            {(() => {
+                              // Fixed-column chip grid (platform / order-id /
+                              // tracking) matching the shipped + tech tables.
+                              // No serial column on packer rows; FBA rows take
+                              // the tracking column for their FNSKU.
+                              if (showFnskuChip) {
+                                const fnskuColumns: ChipColumn[] = [
+                                  { key: 'platform', width: CHIP_COL.platform, node: null },
+                                  { key: 'orderid', width: CHIP_COL.id, node: null },
+                                  { key: 'tracking', width: CHIP_COL.tracking, node: <FnskuChip value={fnskuValue} /> },
+                                ];
+                                return <ChipColumns columns={fnskuColumns} />;
+                              }
+                              const plat = getOrderPlatformLabel(record.order_id || '', record.account_source);
+                              const scanForSku = String(record.scan_ref || record.shipping_tracking_number || '');
+                              const productUrl = getExternalUrlByItemNumber(
+                                String(record.item_number || '').trim() || skuScanPrefixBeforeColon(scanForSku),
+                              );
+                              const columns: ChipColumn[] = [
+                                {
+                                  key: 'platform',
+                                  width: CHIP_COL.platform,
+                                  node: plat ? (
+                                    <PlatformChip
+                                      label={plat}
+                                      underlineClass={getOrderPlatformBorderColor(plat)}
+                                      iconClass={productUrl ? getOrderPlatformColor(plat) : 'text-gray-500'}
+                                      onClick={() => {
+                                        if (productUrl) window.open(productUrl, '_blank', 'noopener,noreferrer');
+                                      }}
+                                    />
+                                  ) : null,
+                                },
+                                {
+                                  key: 'orderid',
+                                  width: CHIP_COL.id,
+                                  node: hideOrderIdChip ? (
+                                    <OrderIdChipPlaceholder />
+                                  ) : (
+                                    <OrderIdChip value={record.order_id || ''} display={getLast4(record.order_id)} />
+                                  ),
+                                },
+                                { key: 'tracking', width: CHIP_COL.tracking, node: <TrackingOrSkuScanChip value={record.shipping_tracking_number || ''} /> },
+                              ];
+                              return <ChipColumns columns={columns} />;
+                            })()}
                           </motion.div>
                         );
                       })}

@@ -7,7 +7,7 @@ import { getStaffThemeById, stationThemeColors } from '@/utils/staff-colors';
 import { Camera } from '@/components/Icons';
 import { conditionGradeTableLabel, workflowStatusTableLabel, WORKFLOW_BADGE } from '@/components/station/receiving-constants';
 import {
-  OrderIdChip, TrackingChip, SkuScanRefChip, SerialChip, getLast4, getLast4Serial,
+  OrderIdChip, TrackingChip, SkuScanRefChip, SerialChip, getLast4,
 } from '@/components/ui/CopyChip';
 import { dispatchSelectLine, type ReceivingLineRow } from '@/components/station/ReceivingLinesTable';
 import {
@@ -219,7 +219,7 @@ function ReceivingPopoverContent({
         <OrderIdChip value={poValue} display={getLast4(poValue)} />
         <SkuScanRefChip value={skuValue} display={getLast4(skuValue)} />
         <TrackingChip value={trackingValue} display={getLast4(trackingValue)} />
-        {serialsCsv ? <SerialChip value={serialsCsv} display={getLast4Serial(serialsCsv)} /> : null}
+        {serialsCsv ? <SerialChip value={serialsCsv} /> : null}
       </div>
 
       <div className="flex items-center justify-between border-t border-gray-100 pt-2.5">

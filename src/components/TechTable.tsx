@@ -11,7 +11,6 @@ import {
   SerialChip,
   PlatformChip,
   getLast4,
-  getLast4Serial,
 } from './ui/CopyChip';
 import { DesktopDateGroupHeader } from './ui/DesktopDateGroupHeader';
 import { getOrderPlatformLabel, getOrderPlatformColor, getOrderPlatformBorderColor } from '@/utils/order-platform';
@@ -24,6 +23,7 @@ import { getSourceDotType, isSkuSourceRecord, SOURCE_DOT_BG, SOURCE_DOT_LABEL } 
 import { getStaffThemeById, stationThemeColors } from '@/utils/staff-colors';
 import { type TechRecord } from '@/hooks/useTechLogs';
 import { normalizeTrackingKey } from '@/lib/tracking-format';
+import { ChipColumns, CHIP_COL, type ChipColumn } from '@/components/ui/ChipColumns';
 import { useTechTableController, hasUsableProductTitle, isFbaTechRecord } from '@/hooks/station/useTechTableController';
 
 interface TechTableProps {
@@ -255,11 +255,6 @@ export function TechTable({ testedBy }: TechTableProps) {
                           : displayValues.condition || 'No Condition';
                         const fnskuValue = String(record.fnsku || '').trim();
                         const isFnskuRow = Boolean(fnskuValue);
-                        const serialChipDisplay = record.serial_number
-                          ? getLast4Serial(record.serial_number)
-                          : record.source_kind === 'fba_scan' || record.source_kind === 'tech_scan'
-                            ? 'SERIAL'
-                            : '---';
                         const dotType = getSourceDotType({
                           orderId: record.order_id,
                           accountSource: record.account_source,
@@ -299,44 +294,55 @@ export function TechTable({ testedBy }: TechTableProps) {
                                 </span> • {conditionLabel}
                               </div>
                             </div>
-                            <div className="flex items-center shrink-0">
-                              {isFnskuRow ? (
-                                <>
-                                  <FnskuChip value={fnskuValue} />
-                                  <SerialChip value={record.serial_number || ''} display={serialChipDisplay} />
-                                </>
-                              ) : (() => {
-                                const plat = getOrderPlatformLabel(record.order_id || '', record.account_source);
-                                const productUrl = getExternalUrlByItemNumber(
-                                  String(record.item_number || '').trim() ||
-                                    skuScanPrefixBeforeColon(record.shipping_tracking_number),
-                                );
-                                return (
-                                  <>
-                                    {plat ? (
-                                      <PlatformChip
-                                        label={plat}
-                                        underlineClass={getOrderPlatformBorderColor(plat)}
-                                        iconClass={productUrl ? getOrderPlatformColor(plat) : 'text-gray-500'}
-                                        onClick={() => {
-                                          if (productUrl) window.open(productUrl, '_blank', 'noopener,noreferrer');
-                                        }}
-                                      />
-                                    ) : null}
-                                    {!hideOrderIdChip ? (
-                                      <OrderIdChip
-                                        value={record.order_id || ''}
-                                        display={getLast4(record.order_id)}
-                                      />
-                                    ) : (
-                                      <OrderIdChipPlaceholder />
-                                    )}
-                                    <TrackingOrSkuScanChip value={record.shipping_tracking_number || ''} />
-                                    <SerialChip value={record.serial_number || ''} display={serialChipDisplay} />
-                                  </>
-                                );
-                              })()}
-                            </div>
+                            {(() => {
+                              // Same fixed-column chip grid as the shipped table
+                              // so tech rows line up (platform / order-id /
+                              // tracking / serial); FNSKU rows take the
+                              // tracking+serial columns.
+                              const serialNode = <SerialChip value={record.serial_number || ''} align="end" />;
+                              if (isFnskuRow) {
+                                const fnskuColumns: ChipColumn[] = [
+                                  { key: 'platform', width: CHIP_COL.platform, node: null },
+                                  { key: 'orderid', width: CHIP_COL.id, node: null },
+                                  { key: 'tracking', width: CHIP_COL.tracking, node: <FnskuChip value={fnskuValue} /> },
+                                  { key: 'serial', width: CHIP_COL.serial, node: serialNode },
+                                ];
+                                return <ChipColumns columns={fnskuColumns} />;
+                              }
+                              const plat = getOrderPlatformLabel(record.order_id || '', record.account_source);
+                              const productUrl = getExternalUrlByItemNumber(
+                                String(record.item_number || '').trim() ||
+                                  skuScanPrefixBeforeColon(record.shipping_tracking_number),
+                              );
+                              const columns: ChipColumn[] = [
+                                {
+                                  key: 'platform',
+                                  width: CHIP_COL.platform,
+                                  node: plat ? (
+                                    <PlatformChip
+                                      label={plat}
+                                      underlineClass={getOrderPlatformBorderColor(plat)}
+                                      iconClass={productUrl ? getOrderPlatformColor(plat) : 'text-gray-500'}
+                                      onClick={() => {
+                                        if (productUrl) window.open(productUrl, '_blank', 'noopener,noreferrer');
+                                      }}
+                                    />
+                                  ) : null,
+                                },
+                                {
+                                  key: 'orderid',
+                                  width: CHIP_COL.id,
+                                  node: hideOrderIdChip ? (
+                                    <OrderIdChipPlaceholder />
+                                  ) : (
+                                    <OrderIdChip value={record.order_id || ''} display={getLast4(record.order_id)} />
+                                  ),
+                                },
+                                { key: 'tracking', width: CHIP_COL.tracking, node: <TrackingOrSkuScanChip value={record.shipping_tracking_number || ''} /> },
+                                { key: 'serial', width: CHIP_COL.serial, node: serialNode },
+                              ];
+                              return <ChipColumns columns={columns} />;
+                            })()}
                           </div>
                         );
                       })}

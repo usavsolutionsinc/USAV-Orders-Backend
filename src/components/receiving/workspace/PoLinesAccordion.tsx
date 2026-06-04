@@ -291,7 +291,6 @@ export function PoLinesAccordion({
                             <SerialChip
                               key={`${sn}-${i}`}
                               value={sn}
-                              display={sn.length > 4 ? sn.slice(-4) : sn}
                               width="w-fit max-w-full"
                             />
                           );

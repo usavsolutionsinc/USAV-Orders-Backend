@@ -167,6 +167,11 @@ export function CopyChip({
   };
 
   const outerPx = outerPad === 'flush' ? 'px-0' : 'px-1.5';
+  // `align='end'` only right-justifies the icon+value inside the chip's width
+  // box (used by the fixed-width SerialChip so its value hugs the box's right
+  // edge). Flushing the cluster to the day-count is the row's job (a negative
+  // right margin on the chip cluster) so it works for ANY trailing chip type,
+  // not just the serial.
   const justifyClass = align === 'end' ? 'justify-end' : 'justify-start';
   const textAlignClass = align === 'end' ? 'text-right' : 'text-left';
 
@@ -403,22 +408,29 @@ export function TrackingOrSkuScanChip({ value }: { value: string }) {
 }
 
 /**
- * Resolves the label a {@link SerialChip} shows from whatever the caller passes
- * as `display`. Callers are inconsistent about the "no serial" case — some pass
- * `''`/`null`, some pass the literal sentinel `'SERIAL'`, some pass `'---'`.
- * Running {@link getLast4Serial} blindly turned `'SERIAL'` into `'RIAL'`, so the
- * empty chip rendered differently across tables. Normalize all empties to the
- * single `'SERIAL'` placeholder; otherwise show the last-4 preview.
+ * The single source of truth for a serial chip's label. Derives the last-4
+ * preview from the raw serial (or CSV of serials), and collapses every "no
+ * serial" spelling callers used to pass — `''`/`null`, the literal sentinel
+ * `'SERIAL'`, or `'---'` — to one `'SERIAL'` placeholder. (Blindly running
+ * {@link getLast4Serial} on the `'SERIAL'` sentinel used to yield `'RIAL'`,
+ * which is why every table previously hand-rolled its own variant.)
  */
-function resolveSerialDisplay(display: string): string {
-  const raw = (display || '').trim();
+export function resolveSerialDisplay(value: string | null | undefined): string {
+  const raw = (value || '').trim();
   if (isEmptyDisplayValue(raw) || raw === '---' || raw.toUpperCase() === 'SERIAL') {
     return 'SERIAL';
   }
   return getLast4Serial(raw);
 }
 
-/** Device / unit serial number. Emerald / Barcode icon. */
+/**
+ * Device / unit serial number. Emerald / Barcode icon.
+ *
+ * The label is derived internally from `value` via {@link resolveSerialDisplay},
+ * so callers pass only the serial (or a comma-joined CSV) — no `getLast4Serial`
+ * / empty-state handling at the call site. `display` is an optional override and
+ * should almost never be needed.
+ */
 export const SerialChip = ({
   value,
   display,
@@ -427,7 +439,8 @@ export const SerialChip = ({
   disableTooltip = false,
 }: {
   value: string;
-  display: string;
+  /** Optional label override; normally derived from `value`. */
+  display?: string;
   /** Tailwind width utilities on the wrapper; default is a fixed width sized
    *  for the Barcode icon + 4-char mono value so every row aligns identically
    *  across all tables (tech / packer / shipped / receiving). */
@@ -438,7 +451,7 @@ export const SerialChip = ({
 }) => (
   <CopyChip
     value={value}
-    display={resolveSerialDisplay(display)}
+    display={resolveSerialDisplay(display ?? value)}
     icon={<Barcode className="h-4 w-4 shrink-0" />}
     underlineClass="border-emerald-500"
     iconClass="inline-flex items-center justify-center text-emerald-500"

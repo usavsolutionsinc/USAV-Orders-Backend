@@ -245,7 +245,12 @@ export function LineEditPanel({
   // surfaced in a sticky bottom-right toast. A ref guards against accidental
   // double-clicks while a request for this line is still in flight.
   const receiveInFlightRef = useRef(false);
-  const [sourcePlatform, setSourcePlatform] = useState<string>('');
+  // Seed from the row the table already loaded (`receiving_lines.source_platform`)
+  // so the platform pill paints its real value immediately instead of flashing
+  // the 'Unknown'/'Unfound' fallback while the reconcile fetch below is in flight.
+  const [sourcePlatform, setSourcePlatform] = useState<string>(
+    () => (row.source_platform || '').toLowerCase(),
+  );
   const [platformSaving, setPlatformSaving] = useState(false);
   type FlowSecKey = 'shipment' | 'item' | 'support';
   // All three sections expanded by default — including Support — so the user
@@ -599,17 +604,22 @@ export function LineEditPanel({
       setSourcePlatform('');
       return;
     }
+    // Re-seed synchronously from the row on every line change — no empty frame.
+    setSourcePlatform((row.source_platform || '').toLowerCase());
     let cancelled = false;
     fetch(`/api/receiving-lines?receiving_id=${row.receiving_id}`)
       .then((r) => r.json())
       .then((data) => {
         if (cancelled) return;
         const pkg = parseReceivingPackage(data?.receiving_package);
-        setSourcePlatform((pkg?.source_platform || '').toLowerCase());
+        const fetched = (pkg?.source_platform || '').toLowerCase();
+        // Only override with a non-empty reconcile value so we never blank the
+        // already-correct seeded platform (which would re-introduce the flash).
+        if (fetched) setSourcePlatform(fetched);
       })
       .catch(() => {});
     return () => { cancelled = true; };
-  }, [row.receiving_id]);
+  }, [row.receiving_id, row.source_platform]);
 
   const savePlatform = useCallback(async (next: string) => {
     if (row.receiving_id == null) return;
@@ -2165,7 +2175,7 @@ export function LineEditPanel({
               persists the ticket # to receiving_lines.zendesk_ticket. */}
 
           {scanValue || row.sku ? (
-            <WorkspaceCard label="Label preview">
+            <WorkspaceCard>
               {scanValue ? (
                 <ReceivingPoLabelPreview {...labelPayload} embedded />
               ) : row.sku ? (

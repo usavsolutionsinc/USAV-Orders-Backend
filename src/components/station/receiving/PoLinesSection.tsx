@@ -7,7 +7,6 @@ import {
   SkuScanRefChip,
   SerialChip,
   getLast4,
-  getLast4Serial,
 } from '@/components/ui/CopyChip';
 import {
   conditionGradeTableLabel,
@@ -118,7 +117,7 @@ function PoLineRow({ line }: { line: ReceivingLine }) {
             <SkuScanRefChip value={skuValue} display={getLast4(skuValue)} />
           ) : null}
           {serialsCsv ? (
-            <SerialChip value={serialsCsv} display={getLast4Serial(serialsCsv)} />
+            <SerialChip value={serialsCsv} />
           ) : null}
         </div>
       </div>

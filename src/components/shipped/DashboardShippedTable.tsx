@@ -19,8 +19,8 @@ import {
   SerialChip,
   PlatformChip,
   getLast4,
-  getLast4Serial,
 } from '@/components/ui/CopyChip';
+import { ChipColumns, CHIP_COL, type ChipColumn } from '@/components/ui/ChipColumns';
 import { isStalled } from '@/components/shipping/ShipmentStatusBadge';
 import {
   readShippedCarrierFilter,
@@ -74,7 +74,6 @@ import { getStaffName } from '@/utils/staff';
 import { getStaffThemeById, stationThemeColors } from '@/utils/staff-colors';
 import { getStaffTextColor } from '@/design-system/components/StaffBadge';
 import { OrderSearchEmptyState } from '@/components/dashboard/OrderSearchEmptyState';
-import { isEmptyDisplayValue } from '@/utils/empty-display-value';
 import { useUIModeOptional } from '@/design-system/providers/UIModeProvider';
 import {
   dashboardOrderRowChipsClass,
@@ -718,10 +717,6 @@ export function DashboardShippedTable({
                           const techColorClass = getStaffTextColor(techStaffId);
                           const packerColorClass = getStaffTextColor(packerStaffId);
                           const serialValue = String(record.serial_number || '').trim();
-                          const serialDisplay =
-                            isEmptyDisplayValue(serialValue) || serialValue === '---'
-                              ? 'SERIAL'
-                              : getLast4Serial(serialValue);
                           const platformLabel = getOrderPlatformLabel(record.order_id || '', record.account_source);
                           const orderIsFbaMeta = isFbaOrder(record.order_id, record.account_source);
                           const platformColor = platformLabel ? getOrderPlatformColor(platformLabel) : '';
@@ -790,40 +785,49 @@ export function DashboardShippedTable({
                                 </div>
                               </div>
 
-                              <div className={dashboardOrderRowChipsClass(isMobile)}>
-                                {rowIsFba ? (
-                                  <>
-                                    <FnskuChip value={fnskuValue} />
-                                    <SerialChip value={serialValue} display={serialDisplay} />
-                                  </>
+                              {(() => {
+                                // Shared chip nodes — laid out as aligned fixed
+                                // columns on desktop and a free-flow wrap row on
+                                // mobile. FBA rows occupy the tracking+serial
+                                // columns (fnsku where tracking would be) so they
+                                // line up under non-FBA rows.
+                                const platformNode = platformLabel && !orderIsFbaMeta ? (
+                                  <PlatformChip
+                                    label={platformLabel}
+                                    underlineClass={getOrderPlatformBorderColor(platformLabel)}
+                                    iconClass={productPageUrl ? platformColor : 'text-gray-500'}
+                                    onClick={() => {
+                                      if (productPageUrl) window.open(productPageUrl, '_blank', 'noopener,noreferrer');
+                                    }}
+                                  />
+                                ) : null;
+                                const orderIdNode = hideOrderIdChip ? (
+                                  <OrderIdChipPlaceholder />
                                 ) : (
-                                  <>
-                                    {platformLabel && !orderIsFbaMeta ? (
-                                      <PlatformChip
-                                        label={platformLabel}
-                                        underlineClass={getOrderPlatformBorderColor(platformLabel)}
-                                        iconClass={productPageUrl ? platformColor : 'text-gray-500'}
-                                        onClick={() => {
-                                          if (productPageUrl) window.open(productPageUrl, '_blank', 'noopener,noreferrer');
-                                        }}
-                                      />
-                                    ) : null}
-                                    {!hideOrderIdChip ? (
-                                      <OrderIdChip
-                                        value={record.order_id || ''}
-                                        display={getLast4(record.order_id)}
-                                      />
-                                    ) : (
-                                      <OrderIdChipPlaceholder />
-                                    )}
-                                    <TrackingOrSkuScanChip value={record.shipping_tracking_number || ''} />
-                                    <SerialChip
-                                      value={serialValue}
-                                      display={serialDisplay}
-                                    />
-                                  </>
-                                )}
-                              </div>
+                                  <OrderIdChip value={record.order_id || ''} display={getLast4(record.order_id)} />
+                                );
+                                const serialNode = <SerialChip value={serialValue} align="end" />;
+                                const columns: ChipColumn[] = rowIsFba
+                                  ? [
+                                      { key: 'platform', width: CHIP_COL.platform, node: null },
+                                      { key: 'orderid', width: CHIP_COL.id, node: null },
+                                      { key: 'tracking', width: CHIP_COL.tracking, node: <FnskuChip value={fnskuValue} /> },
+                                      { key: 'serial', width: CHIP_COL.serial, node: serialNode },
+                                    ]
+                                  : [
+                                      { key: 'platform', width: CHIP_COL.platform, node: platformNode },
+                                      { key: 'orderid', width: CHIP_COL.id, node: orderIdNode },
+                                      { key: 'tracking', width: CHIP_COL.tracking, node: <TrackingOrSkuScanChip value={record.shipping_tracking_number || ''} /> },
+                                      { key: 'serial', width: CHIP_COL.serial, node: serialNode },
+                                    ];
+                                return isMobile ? (
+                                  <div className={dashboardOrderRowChipsClass(true)}>
+                                    {columns.map((c) => c.node && <span key={c.key} className="contents">{c.node}</span>)}
+                                  </div>
+                                ) : (
+                                  <ChipColumns columns={columns} />
+                                );
+                              })()}
                             </div>
                           );
                         })}

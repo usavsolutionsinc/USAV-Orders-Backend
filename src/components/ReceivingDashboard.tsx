@@ -8,6 +8,7 @@ import { usePageSelection } from '@/hooks/usePageHeader';
 import { useTableSelection } from '@/hooks/useTableSelection';
 import { emitToggleAll } from '@/lib/selection/table-selection';
 import { ContextualSelectionBar } from '@/design-system/components/ContextualSelectionBar';
+import { RightPaneOverlayHost } from '@/components/ui/RightPaneOverlay';
 import type { SelectionAction } from '@/lib/selection/selection-actions';
 import { ReceivingClaimModal } from './receiving/workspace/ReceivingClaimModal';
 import { printProductLabel, printProductLabels } from '@/lib/print/printProductLabel';
@@ -496,15 +497,21 @@ export default function ReceivingDashboard() {
   //                             match opens ReceivingDetailsStack as a
   //                             right-side overlay (below).
   const showWorkspace = !!workspace && !isTableOnlyMode;
-  // Scan loader covers the gap between the operator's scan and the
-  // workspace mounting. There's no longer a separate "scan to start"
-  // placeholder — on mount we restore the last opened line from
-  // localStorage, so a fresh load lands directly in the workspace.
-  const showScanLoader = !!scanInFlight && !workspace && !isTableOnlyMode;
+  // Scan loader covers the gap between the operator's scan and the PO/line
+  // mounting. It must show on EVERY tracking scan — not just a cold start —
+  // because the dashboard restores the last opened line from localStorage, so
+  // a workspace is almost always already mounted. Gating on `!workspace` (the
+  // old behaviour) suppressed the loader for every scan after the first, which
+  // left only the scan-bar spinner. The loader is rendered above the workspace
+  // (z-20) so it overlays the previously-open line while the new PO resolves.
+  const showScanLoader = !!scanInFlight && !isTableOnlyMode;
 
   return (
     <div className="flex h-full w-full overflow-hidden bg-[linear-gradient(180deg,#f8fbfb_0%,#ffffff_16%)]">
-      <div className="relative flex min-w-0 flex-1 flex-col overflow-hidden">
+      {/* Right-pane overlay host: anchors RightPaneOverlay surfaces (audit log,
+          NAS picker, detail slide-overs) to THIS column so their dim + panel
+          stay scoped to the right pane instead of the whole viewport. */}
+      <RightPaneOverlayHost className="flex min-w-0 flex-1 flex-col overflow-hidden">
         {/* History list — always mounted to keep its react-query cache, the
             in-progress search results from a History scan, and its scroll
             position alive across tab flips. Hidden (not unmounted) when the
@@ -521,7 +528,7 @@ export default function ReceivingDashboard() {
         {/* Scan-in-flight skeleton loader. Shown the moment the operator
             submits a tracking scan; cleared 500ms after the response lands. */}
         {showScanLoader ? (
-          <div className="absolute inset-0 overflow-hidden">
+          <div className="absolute inset-0 z-20 overflow-hidden">
             <ReceivingScanLoader
               tracking={scanInFlight!.tracking}
               startedAt={scanInFlight!.startedAt}
@@ -602,7 +609,7 @@ export default function ReceivingDashboard() {
             actions={receivingBulkActions}
           />
         ) : null}
-      </div>
+      </RightPaneOverlayHost>
 
       <AnimatePresence>
         {overlayLog ? (

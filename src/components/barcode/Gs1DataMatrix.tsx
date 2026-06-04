@@ -38,6 +38,12 @@ interface Gs1DataMatrixProps {
   bgColor?: string;
   /** ARIA label for screen readers. */
   ariaLabel?: string;
+  /**
+   * Quiet-zone border in *modules*. Defaults to 2 (scanner-safe). Pass 0 for
+   * on-screen previews so the ink fills the {@link size} box edge-to-edge and
+   * adjacent text lines up with the visible matrix edges.
+   */
+  quietZone?: number;
 }
 
 export function Gs1DataMatrix({
@@ -47,6 +53,7 @@ export function Gs1DataMatrix({
   fgColor = '#000000',
   bgColor = '#FFFFFF',
   ariaLabel,
+  quietZone,
 }: Gs1DataMatrixProps) {
   const svgMarkup = useMemo(() => {
     try {
@@ -55,12 +62,13 @@ export function Gs1DataMatrix({
         symbology,
         barcolor: fgColor.replace('#', ''),
         backgroundcolor: bgColor.replace('#', ''),
+        quietZone,
       });
     } catch (err) {
       console.error('[Gs1DataMatrix] failed to render', err);
       return null;
     }
-  }, [value, symbology, fgColor, bgColor]);
+  }, [value, symbology, fgColor, bgColor, quietZone]);
 
   const label =
     ariaLabel ??

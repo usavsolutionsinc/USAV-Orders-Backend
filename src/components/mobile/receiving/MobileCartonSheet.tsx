@@ -9,7 +9,6 @@ import {
   TrackingChip,
   SerialChip,
   getLast4,
-  getLast4Serial,
 } from '@/components/ui/CopyChip';
 import { conditionGradeTableLabel, workflowStatusTableLabel } from '@/components/station/receiving-constants';
 import type { ReceivingLineRow } from '@/components/station/ReceivingLinesTable';
@@ -129,7 +128,7 @@ export function MobileCartonSheet({ row, staffId, open, onClose }: MobileCartonS
             <div className="ml-auto flex shrink-0 items-center gap-2">
               <OrderIdChip value={poValue} display={getLast4(poValue)} />
               <TrackingChip value={trackingValue} display={getLast4(trackingValue)} />
-              <SerialChip value={serialsCsv} display={getLast4Serial(serialsCsv)} />
+              <SerialChip value={serialsCsv} />
             </div>
           </div>
         </div>

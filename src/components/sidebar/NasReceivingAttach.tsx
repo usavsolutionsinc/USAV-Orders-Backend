@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
+import { RightPaneOverlay } from '@/components/ui/RightPaneOverlay';
 import { attachNasPhoto, listNasDir, nasConfigured, type NasEntry } from '@/lib/nas-photos';
 import { NasBreadcrumb, NasFolderCard, NasSectionLabel } from '@/components/nas/NasBrowserChrome';
 
@@ -117,15 +118,11 @@ interface Props {
  */
 export function NasReceivingAttach({ receivingId, poCreatedAt = null, initialFolder = '', onAttached, fullWidth = false, label }: Props) {
   const [open, setOpen] = useState(false);
-  // Anchors the picker over the right panel (the scroll surface this control
-  // lives in) instead of centering on the whole viewport — see NasPickerDialog.
-  const anchorRef = useRef<HTMLButtonElement>(null);
   if (!nasConfigured()) return null;
 
   return (
     <>
       <button
-        ref={anchorRef}
         type="button"
         onClick={() => setOpen(true)}
         title="Pair photos from the NAS to this PO"
@@ -142,7 +139,6 @@ export function NasReceivingAttach({ receivingId, poCreatedAt = null, initialFol
           receivingId={receivingId}
           poCreatedAt={poCreatedAt}
           initialFolder={initialFolder}
-          anchorRef={anchorRef}
           onClose={() => setOpen(false)}
           onAttached={onAttached}
         />
@@ -151,39 +147,16 @@ export function NasReceivingAttach({ receivingId, poCreatedAt = null, initialFol
   );
 }
 
-/**
- * Find the rect of the scrollable panel the picker lives in (the receiving
- * detail pane's `overflow-y-auto` surface), so the dialog can sit over THAT
- * panel rather than the whole viewport. Walks up from the trigger to the first
- * vertical-scroll surface (the panel's `overflow-y-auto`), stopping short of
- * <body> so page-level scroll doesn't count. Matches on the overflow style
- * alone (not current overflow) so a short, non-scrolling PO still anchors over
- * the panel. Returns null when there isn't one → caller falls back to centering.
- */
-function findPanelRect(anchor: HTMLElement | null): DOMRect | null {
-  let node = anchor?.parentElement ?? null;
-  while (node && node !== document.body) {
-    const oy = window.getComputedStyle(node).overflowY;
-    if (oy === 'auto' || oy === 'scroll' || oy === 'overlay') {
-      return node.getBoundingClientRect();
-    }
-    node = node.parentElement;
-  }
-  return null;
-}
-
 function NasPickerDialog({
   receivingId,
   poCreatedAt,
   initialFolder,
-  anchorRef,
   onClose,
   onAttached,
 }: {
   receivingId: number;
   poCreatedAt: string | null;
   initialFolder: string;
-  anchorRef: React.RefObject<HTMLButtonElement | null>;
   onClose: () => void;
   onAttached: () => void;
 }) {
@@ -212,45 +185,11 @@ function NasPickerDialog({
   const [sortKey, setSortKey] = useState<SortKey>('recent');
   const [page, setPage] = useState(0);
   const [portalTarget, setPortalTarget] = useState<HTMLElement | null>(null);
-  // When set, the card is positioned over the right panel; null = fall back to
-  // viewport-centered (no panel found, e.g. an unusual mount context).
-  const [cardStyle, setCardStyle] = useState<React.CSSProperties | null>(null);
 
-  // Portal to <body>: Framer Motion transforms on the receiving workspace make
-  // an ancestor the containing block for `position: fixed`, so `inset-0` would
-  // otherwise resolve to the content box (below GlobalHeader) and leave the
-  // header strip uncovered. Mounting on body lets the dim cover the full
-  // viewport — header + sidebar included.
+  // Portal target for the preview lightbox (RightPaneOverlay handles its own).
   useEffect(() => {
     setPortalTarget(document.body);
   }, []);
-
-  // Center the card horizontally over the receiving right panel rather than the
-  // whole viewport, so it never drifts left over the global nav. Recomputes on
-  // resize. Vertical stays viewport-centered (the panel scrolls).
-  useEffect(() => {
-    const compute = () => {
-      const rect = findPanelRect(anchorRef.current);
-      if (!rect || rect.width < 1) {
-        setCardStyle(null);
-        return;
-      }
-      const GAP = 16;
-      const maxW = 672; // matches max-w-2xl
-      const width = Math.max(280, Math.min(maxW, rect.width - GAP * 2));
-      setCardStyle({
-        position: 'fixed',
-        left: Math.round(rect.left + (rect.width - width) / 2),
-        width: Math.round(width),
-        top: '50%',
-        transform: 'translateY(-50%)',
-        maxHeight: '80vh',
-      });
-    };
-    compute();
-    window.addEventListener('resize', compute);
-    return () => window.removeEventListener('resize', compute);
-  }, [anchorRef]);
 
   // Esc closes the preview lightbox first (if open), otherwise the whole picker.
   // onClose is read through a ref so its changing identity doesn't re-subscribe
@@ -360,22 +299,15 @@ function NasPickerDialog({
   const safePage = Math.min(page, pageCount - 1); // clamp if the folder shrank
   const pagedFiles = files.slice(safePage * PAGE_SIZE, safePage * PAGE_SIZE + PAGE_SIZE);
 
-  if (!portalTarget) return null;
-
-  return createPortal(
+  return (
     <>
-    <div
-      role="dialog"
-      aria-modal="true"
-      className={`fixed inset-0 z-[100] bg-black/40 ${cardStyle ? '' : 'grid place-items-center p-4'}`}
-      onClick={onClose}
-    >
-      <div
-        onClick={(e) => e.stopPropagation()}
-        style={cardStyle ?? undefined}
-        className={`flex flex-col overflow-hidden rounded-2xl bg-white shadow-2xl ring-1 ring-gray-200 ${
-          cardStyle ? '' : 'max-h-[80vh] w-full max-w-2xl'
-        }`}
+      <RightPaneOverlay
+        open
+        onClose={onClose}
+        align="center"
+        closeOnEscape={false}
+        aria-label="Select from NAS, pair to PO"
+        className="w-[min(92%,42rem)] rounded-2xl border-0 shadow-2xl ring-1 ring-gray-200"
       >
         {/* Header */}
         <div className="flex items-center justify-between border-b border-gray-100 px-4 py-3">
@@ -565,12 +497,12 @@ function NasPickerDialog({
             {attaching ? 'Attaching…' : selected.size > 0 ? `Pair ${selected.size} to PO` : 'Pair to PO'}
           </button>
         </div>
-      </div>
-    </div>
+      </RightPaneOverlay>
 
       {/* Larger preview lightbox (opened from a row's thumbnail). A 1080px webp
-          via the optimizer — crisp but still far smaller than the original. */}
-      {preview ? (
+          via the optimizer — crisp but still far smaller than the original.
+          Portaled to <body> so it escapes the workspace's framer transforms. */}
+      {preview && portalTarget ? createPortal((
         <div
           role="dialog"
           aria-modal="true"
@@ -596,8 +528,7 @@ function NasPickerDialog({
             Close
           </button>
         </div>
-      ) : null}
-    </>,
-    portalTarget,
+      ), portalTarget) : null}
+    </>
   );
 }

@@ -6,6 +6,7 @@ import { useAblyChannel } from '@/hooks/useAblyChannel';
 import { PhotoGallery } from '@/components/shipped/PhotoGallery';
 import { NasReceivingAttach } from '@/components/sidebar/NasReceivingAttach';
 import { nasConfigured } from '@/lib/nas-photos';
+import { SkeletonBase } from '@/design-system/components/Skeletons';
 
 interface PhotoRow {
   id: number;
@@ -74,9 +75,18 @@ export const ReceivingPhotoStrip = memo(function ReceivingPhotoStrip({
   );
 
   if (isLoading && galleryPhotos.length === 0) {
+    // Mirror the loaded compact toolbar's footprint (`min-h-9`: thumbnail
+    // launcher · label · trailing action buttons) so the row keeps the exact
+    // same height once photos land — no reflow, and the sibling Claim button
+    // never shifts. Reuses the shared `SkeletonBase` shimmer for consistency.
     return (
-      <div className="text-micro font-bold text-gray-400 uppercase tracking-widest">
-        Loading photos…
+      <div className="flex min-h-9 items-center gap-2 py-0.5" aria-hidden>
+        <SkeletonBase width="28px" height="28px" className="rounded-lg" />
+        <SkeletonBase width="40%" height="0.625rem" />
+        <div className="ml-auto flex items-center gap-1.5">
+          <SkeletonBase width="28px" height="28px" className="rounded-lg" />
+          <SkeletonBase width="28px" height="28px" className="rounded-lg" />
+        </div>
       </div>
     );
   }

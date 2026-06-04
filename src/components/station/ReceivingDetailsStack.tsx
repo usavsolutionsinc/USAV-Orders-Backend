@@ -8,14 +8,9 @@ import { copyToClipboard } from '@/utils/_dom';
 import { formatDateTimePST } from '@/utils/date';
 import { ViewDropdown } from '@/components/ui/ViewDropdown';
 import { HorizontalButtonSlider, type HorizontalSliderItem } from '@/components/ui/HorizontalButtonSlider';
-import {
-  OrderIdChip,
-  TrackingChip,
-  ListingUrlChip,
-  getLast4,
-} from '@/components/ui/CopyChip';
+import { CopyableValueFieldBlock } from '@/components/shipped/details-panel/blocks/CopyableValueFieldBlock';
 import { SearchBar } from '@/components/ui/SearchBar';
-import { listingLinkPreview, listingUrlForOpen } from '@/components/sidebar/receiving/receiving-sidebar-shared';
+import { listingUrlForOpen } from '@/components/sidebar/receiving/receiving-sidebar-shared';
 import { getStaffThemeById, stationThemeColors } from '@/utils/staff-colors';
 import { toast } from '@/lib/toast';
 import { type ReceivingLineRow } from '@/components/station/ReceivingLinesTable';
@@ -117,6 +112,7 @@ export function ReceivingDetailsStack({ log, onClose, onUpdated, onDeleted }: Re
   const [isOpeningEditor, setIsOpeningEditor] = useState(false);
   const [activeTab, setActiveTab] = useState<ReceivingTab>('overview');
   const [isCopying, setIsCopying] = useState(false);
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
 
   const handleRefresh = () => {
     onUpdated();
@@ -203,13 +199,13 @@ export function ReceivingDetailsStack({ log, onClose, onUpdated, onDeleted }: Re
         animate={{ x: 0 }}
         exit={{ x: '100%' }}
         transition={{ type: 'spring', damping: 25, stiffness: 350, mass: 0.5 }}
-        className="fixed right-0 top-0 z-[100] h-screen w-[440px] overflow-y-auto border-l border-gray-200 bg-white shadow-[-20px_0_50px_rgba(0,0,0,0.05)]"
+        className="fixed right-0 top-0 z-[100] flex h-screen w-[440px] flex-col overflow-hidden border-l border-gray-200 bg-white shadow-[-20px_0_50px_rgba(0,0,0,0.05)]"
       >
       {/* Header — eyebrow + value identity, primary "Edit PO" action in the
           right slot, and segmented tabs in the dual-sticky belowSlot. Matches
           the 2026 ops convention (Vercel/Front/Stripe pattern). */}
       <PaneHeader
-        className="border-gray-100 bg-white/90 backdrop-blur-xl"
+        className="shrink-0 border-gray-100 bg-white/90 backdrop-blur-xl"
         rowClassName="px-6"
         leftSlot={
           <>
@@ -310,7 +306,7 @@ export function ReceivingDetailsStack({ log, onClose, onUpdated, onDeleted }: Re
         }
       />
 
-      <div className="min-h-[calc(100vh-100px)] px-6 py-5">
+      <div className="min-h-0 flex-1 overflow-y-auto px-6 py-5">
         <div className="space-y-4">
           {activeTab === 'overview' && (
             <ReceivingOverviewCard log={log} />
@@ -322,49 +318,21 @@ export function ReceivingDetailsStack({ log, onClose, onUpdated, onDeleted }: Re
 
           {activeTab === 'details' && (
             <>
-          {/* Copy chips — same vocabulary as the PO workspace; right-aligned.
-              Editable tracking lives in the SearchBar below (no duplicate full
-              number beside the chip row). */}
+          {/* Identifiers — labeled ledger rows (shipped / unfound pattern) so
+              last-4 chips cannot collide (e.g. tracking suffix vs warehouse id). */}
           {(() => {
-            const tr = (form.tracking || '').trim();
             const listingRaw = String(log.listing_url || '').trim();
             const poValue = String(
               log.zoho_purchaseorder_number || log.zoho_purchaseorder_id || '',
             ).trim();
+            const receiveId = String(log.zoho_purchase_receive_id || '').trim();
+            const warehouseId = String(log.zoho_warehouse_id || '').trim();
             return (
-              <>
-                <div className="flex w-full flex-wrap items-center justify-end gap-1.5">
-                  {listingRaw ? (
-                    <div className="min-w-0 max-w-[min(100%,220px)] shrink">
-                      <ListingUrlChip
-                        rawUrl={listingRaw}
-                        openHref={listingUrlForOpen(listingRaw)}
-                        previewDisplay={listingLinkPreview(listingRaw)}
-                      />
-                    </div>
-                  ) : null}
-                  {poValue ? (
-                    <OrderIdChip value={poValue} display={getLast4(poValue)} />
-                  ) : null}
-                  <TrackingChip
-                    value={tr}
-                    display={getLast4(tr)}
-                    disableCopy={!tr}
-                  />
-                  {log.zoho_purchase_receive_id ? (
-                    <OrderIdChip
-                      value={log.zoho_purchase_receive_id}
-                      display={getLast4(log.zoho_purchase_receive_id)}
-                    />
-                  ) : null}
-                  {log.zoho_warehouse_id ? (
-                    <OrderIdChip
-                      value={log.zoho_warehouse_id}
-                      display={getLast4(log.zoho_warehouse_id)}
-                    />
-                  ) : null}
-                </div>
-                <div className="group mt-3 min-w-0">
+              <section className="overflow-hidden rounded-2xl border border-gray-100 bg-white">
+                <div className="group min-w-0 border-b border-gray-100 px-4 py-3">
+                  <p className="text-eyebrow font-black uppercase tracking-widest text-gray-500 mb-2">
+                    Tracking
+                  </p>
                   <SearchBar
                     value={form.tracking}
                     onChange={form.setTracking}
@@ -377,7 +345,42 @@ export function ReceivingDetailsStack({ log, onClose, onUpdated, onDeleted }: Re
                     aria-label="Edit tracking number"
                   />
                 </div>
-              </>
+                {listingRaw ? (
+                  <CopyableValueFieldBlock
+                    label="Listing"
+                    value={listingRaw}
+                    externalUrl={listingUrlForOpen(listingRaw)}
+                    externalLabel="Open listing"
+                    variant="flat"
+                    twoLineValue
+                    noTruncate
+                    keepBottomDivider
+                  />
+                ) : null}
+                {poValue ? (
+                  <CopyableValueFieldBlock
+                    label="PO number"
+                    value={poValue}
+                    variant="flat"
+                    keepBottomDivider
+                  />
+                ) : null}
+                {receiveId ? (
+                  <CopyableValueFieldBlock
+                    label="Zoho receive"
+                    value={receiveId}
+                    variant="flat"
+                    keepBottomDivider
+                  />
+                ) : null}
+                {warehouseId ? (
+                  <CopyableValueFieldBlock
+                    label="Warehouse"
+                    value={warehouseId}
+                    variant="flat"
+                  />
+                ) : null}
+              </section>
             );
           })()}
 
@@ -482,27 +485,39 @@ export function ReceivingDetailsStack({ log, onClose, onUpdated, onDeleted }: Re
             </>
           )}
 
-          {activeTab === 'overview' && (
-            <>
-          {/* Delete */}
-          <div className="space-y-2 pb-4">
-            {form.saveState === 'error' && (
-              <p className="text-center text-micro font-black uppercase tracking-wider text-red-500">Save failed — check connection</p>
-            )}
-            <button
-              type="button"
-              onClick={form.handleDelete}
-              disabled={form.isDeleting}
-              className="inline-flex h-10 w-full items-center justify-center gap-2 rounded-xl bg-red-600 text-micro font-black uppercase tracking-wider text-white hover:bg-red-700 disabled:opacity-50"
-            >
-              <Trash2 className="h-3.5 w-3.5" />
-              {form.isDeleting ? 'Deleting...' : 'Delete Row'}
-            </button>
-          </div>
-            </>
-          )}
-
         </div>
+      </div>
+
+      {/* Footer — destructive action pinned to panel bottom (unfound / shipped pattern). */}
+      <div className="shrink-0 border-t border-gray-100 px-6 py-3">
+        {form.saveState === 'error' && (
+          <p className="mb-2 text-center text-micro font-black uppercase tracking-wider text-red-500">
+            Save failed — check connection
+          </p>
+        )}
+        <button
+          type="button"
+          onClick={() => {
+            if (!confirmingDelete) {
+              setConfirmingDelete(true);
+              window.setTimeout(() => setConfirmingDelete(false), 3000);
+              return;
+            }
+            setConfirmingDelete(false);
+            void form.handleDelete();
+          }}
+          disabled={form.isDeleting || form.isSaving}
+          className={`inline-flex h-10 w-full items-center justify-center gap-2 rounded-xl text-micro font-black uppercase tracking-wider text-white transition-colors disabled:opacity-50 ${
+            confirmingDelete ? 'bg-red-700 hover:bg-red-800' : 'bg-red-600 hover:bg-red-700'
+          }`}
+        >
+          <Trash2 className="h-3.5 w-3.5" />
+          {form.isDeleting
+            ? 'Deleting...'
+            : confirmingDelete
+              ? 'Click again to confirm delete'
+              : 'Delete receiving'}
+        </button>
       </div>
     </motion.div>
     </>

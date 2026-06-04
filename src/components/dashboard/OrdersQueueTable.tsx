@@ -7,6 +7,7 @@ import { sectionLabel, fieldLabel, SkeletonList } from '@/design-system';
 import { Loader2 } from '@/components/Icons';
 import { mainStickyHeaderClass, mainStickyHeaderRowClass } from '@/components/layout/header-shell';
 import { OrderIdChip, OrderIdChipPlaceholder, TrackingOrSkuScanChip, PlatformChip, getLast4 } from '@/components/ui/CopyChip';
+import { ChipColumns, CHIP_COL, type ChipColumn } from '@/components/ui/ChipColumns';
 import { PasteTrackingButton } from '@/components/ui/PasteTrackingButton';
 import { getOrderPlatformLabel, getOrderPlatformColor, getOrderPlatformBorderColor, isFbaOrder } from '@/utils/order-platform';
 import { getStaffThemeById, stationThemeColors } from '@/utils/staff-colors';
@@ -161,27 +162,52 @@ const OrdersQueueTableRow = memo(function OrdersQueueTableRow({
         </div>
       </div>
 
-      <div className={dashboardOrderRowChipsClass(isMobile)}>
-        {platformLabel && !isFba ? (
-          <PlatformChip
-            label={platformLabel}
-            underlineClass={platformLabel ? getOrderPlatformBorderColor(platformLabel) : ''}
-            iconClass={productPageUrl ? platformColor : 'text-gray-500'}
-            onClick={() => {
-              if (productPageUrl) window.open(productPageUrl, '_blank', 'noopener,noreferrer');
-            }}
-          />
-        ) : null}
-        {!hideOrderIdChip ? (
-          <OrderIdChip value={record.order_id || ''} display={getLast4(record.order_id)} />
+      {(() => {
+        // Fixed-column chip grid (platform / order-id / tracking) so the orders
+        // queue lines up the same way as the shipped + tech tables. No serial
+        // column here — these rows never carry one.
+        const columns: ChipColumn[] = [
+          {
+            key: 'platform',
+            width: CHIP_COL.platform,
+            node: platformLabel && !isFba ? (
+              <PlatformChip
+                label={platformLabel}
+                underlineClass={platformLabel ? getOrderPlatformBorderColor(platformLabel) : ''}
+                iconClass={productPageUrl ? platformColor : 'text-gray-500'}
+                onClick={() => {
+                  if (productPageUrl) window.open(productPageUrl, '_blank', 'noopener,noreferrer');
+                }}
+              />
+            ) : null,
+          },
+          {
+            key: 'orderid',
+            width: CHIP_COL.id,
+            node: hideOrderIdChip ? (
+              <OrderIdChipPlaceholder />
+            ) : (
+              <OrderIdChip value={record.order_id || ''} display={getLast4(record.order_id)} />
+            ),
+          },
+          {
+            key: 'tracking',
+            width: CHIP_COL.tracking,
+            node: trackingRaw ? (
+              <TrackingOrSkuScanChip value={trackingRaw} />
+            ) : (
+              <PasteTrackingButton orderId={Number(record.id)} />
+            ),
+          },
+        ];
+        return isMobile ? (
+          <div className={dashboardOrderRowChipsClass(true)}>
+            {columns.map((c) => c.node && <span key={c.key} className="contents">{c.node}</span>)}
+          </div>
         ) : (
-          <OrderIdChipPlaceholder />
-        )}
-        {trackingRaw
-          ? <TrackingOrSkuScanChip value={trackingRaw} />
-          : <PasteTrackingButton orderId={Number(record.id)} />
-        }
-      </div>
+          <ChipColumns columns={columns} />
+        );
+      })()}
     </motion.div>
   );
 }, (prev, next) => {

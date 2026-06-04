@@ -6,8 +6,8 @@ import {
   TrackingChip,
   SerialChip,
   getLast4,
-  getLast4Serial,
 } from '@/components/ui/CopyChip';
+import { ChipColumns, CHIP_COL, type ChipColumn } from '@/components/ui/ChipColumns';
 
 /**
  * The slim, color-coded, last-4 chip cluster shared by the desktop receiving
@@ -30,14 +30,13 @@ export interface ReceivingIdentityChipsProps {
   includeTracking?: boolean;
   includeSerial?: boolean;
   /**
-   * Right-align the trailing SerialChip's icon + value inside its fixed-width
-   * box. The desktop receiving table sets this so the last chip hugs the right
-   * edge (flush with the day-group count) while keeping the column a stable
-   * width — so the PO / SKU / tracking chips don't shift between rows that have
-   * a serial and rows that don't. Mobile detail headers leave it left-aligned.
+   * Desktop table mode: lay the chips out as fixed-width {@link ChipColumns} so
+   * PO / SKU / tracking / serial line up vertically across rows and the trailing
+   * chip is flush with the day-group count. Left off (default) the chips render
+   * as a free-flowing wrap row — used by the mobile receiving detail headers.
    */
-  alignSerialEnd?: boolean;
-  /** Wrapper layout classes — desktop passes its grid class, mobile a wrap row. */
+  asColumns?: boolean;
+  /** Wrapper layout classes for the free-flow (non-columns) layout. */
   className?: string;
 }
 
@@ -50,7 +49,7 @@ export function ReceivingIdentityChips({
   includeSku = true,
   includeTracking = true,
   includeSerial = true,
-  alignSerialEnd = false,
+  asColumns = false,
   className = 'flex flex-wrap items-center gap-1.5',
 }: ReceivingIdentityChipsProps) {
   const poValue = (po || '').trim();
@@ -58,18 +57,29 @@ export function ReceivingIdentityChips({
   const trackingValue = (tracking || '').trim();
   const serialsValue = (serialsCsv || '').trim();
 
+  if (asColumns) {
+    const columns: ChipColumn[] = [];
+    if (includePo) {
+      columns.push({ key: 'po', width: CHIP_COL.id, node: <OrderIdChip value={poValue} display={getLast4(poValue)} /> });
+    }
+    if (includeSku) {
+      columns.push({ key: 'sku', width: CHIP_COL.id, node: <SkuScanRefChip value={skuValue} display={getLast4(skuValue)} /> });
+    }
+    if (includeTracking) {
+      columns.push({ key: 'tracking', width: CHIP_COL.tracking, node: <TrackingChip value={trackingValue} display={getLast4(trackingValue)} /> });
+    }
+    if (includeSerial) {
+      columns.push({ key: 'serial', width: CHIP_COL.serial, node: <SerialChip value={serialsValue} align="end" /> });
+    }
+    return <ChipColumns columns={columns} />;
+  }
+
   return (
     <div className={className}>
       {includePo && <OrderIdChip value={poValue} display={getLast4(poValue)} />}
       {includeSku && <SkuScanRefChip value={skuValue} display={getLast4(skuValue)} />}
       {includeTracking && <TrackingChip value={trackingValue} display={getLast4(trackingValue)} />}
-      {includeSerial && (
-        <SerialChip
-          value={serialsValue}
-          display={getLast4Serial(serialsValue)}
-          align={alignSerialEnd ? 'end' : 'start'}
-        />
-      )}
+      {includeSerial && <SerialChip value={serialsValue} />}
     </div>
   );
 }
