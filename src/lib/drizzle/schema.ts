@@ -2052,3 +2052,107 @@ export const ragDocumentChunks = pgTable('rag_document_chunks', {
   docIdx: index('idx_rag_document_chunks_document_id').on(table.documentId),
 }));
 
+// ─── Workflow graph layer ─────────────────────────────────────
+//
+// Node-based "Operations" engine (see docs/NODE_WORKFLOW_ARCHITECTURE.md and
+// docs/NODE_WORKFLOW_IMPLEMENTATION_PLAN.md). These tables hold the GRAPH
+// definition (which node connects to which, with conditional routing) and a
+// pointer into the existing item state machine (serial_units +
+// station_activity_logs). They add no behavior on their own — the engine in
+// src/lib/workflow reads/writes them; domain logic stays in src/lib/*.
+
+// workflow_definitions — one named, versioned graph per org. Only one row per
+// (org, name) is is_active; publishing a new version flips the flag.
+export const workflowDefinitions = pgTable('workflow_definitions', {
+  id: serial('id').primaryKey(),
+  organizationId: orgIdCol(),
+  name: text('name').notNull(),
+  version: integer('version').notNull().default(1),
+  isActive: boolean('is_active').notNull().default(false),
+  createdBy: integer('created_by').references(() => staff.id, { onDelete: 'set null' }),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+}, (table) => ({
+  orgIdx: index('idx_workflow_definitions_organization_id').on(table.organizationId),
+  orgNameVersionIdx: uniqueIndex('ux_workflow_definitions_org_name_version').on(
+    table.organizationId,
+    table.name,
+    table.version,
+  ),
+}));
+
+// workflow_nodes — one row per node on the canvas. `type` is the registry key
+// (e.g. 'inspection'); `config` is the per-node form state; position is React
+// Flow coordinates.
+export const workflowNodes = pgTable('workflow_nodes', {
+  id: text('id').primaryKey(), // canvas node uuid (client-generated)
+  workflowDefinitionId: integer('workflow_definition_id')
+    .notNull()
+    .references(() => workflowDefinitions.id, { onDelete: 'cascade' }),
+  type: text('type').notNull(),
+  positionX: numeric('position_x').notNull(),
+  positionY: numeric('position_y').notNull(),
+  config: jsonb('config').notNull().default(sql`'{}'::jsonb`),
+}, (table) => ({
+  defIdx: index('idx_workflow_nodes_definition_id').on(table.workflowDefinitionId),
+}));
+
+// workflow_edges — a connection from a node's named output port to another
+// node. The (sourceNode, sourcePort) pair is what drives conditional routing:
+// an inspection node's 'fail' port edge points at the repair node.
+export const workflowEdges = pgTable('workflow_edges', {
+  id: text('id').primaryKey(),
+  workflowDefinitionId: integer('workflow_definition_id')
+    .notNull()
+    .references(() => workflowDefinitions.id, { onDelete: 'cascade' }),
+  sourceNode: text('source_node').notNull(),
+  sourcePort: text('source_port').notNull(),
+  targetNode: text('target_node').notNull(),
+}, (table) => ({
+  defIdx: index('idx_workflow_edges_definition_id').on(table.workflowDefinitionId),
+  sourceIdx: index('idx_workflow_edges_source').on(
+    table.workflowDefinitionId,
+    table.sourceNode,
+    table.sourcePort,
+  ),
+}));
+
+// item_workflow_state — where a given serial unit currently sits in its active
+// workflow. One active row per unit (the unique index enforces it). `context`
+// accumulates node outputs for downstream nodes to read.
+export const itemWorkflowState = pgTable('item_workflow_state', {
+  id: serial('id').primaryKey(),
+  organizationId: orgIdCol(),
+  serialUnitId: integer('serial_unit_id')
+    .notNull()
+    .references(() => serialUnits.id, { onDelete: 'cascade' }),
+  workflowDefinitionId: integer('workflow_definition_id')
+    .notNull()
+    .references(() => workflowDefinitions.id),
+  currentNodeId: text('current_node_id').notNull(),
+  status: text('status').notNull().default('active'), // active | blocked | done | error
+  context: jsonb('context').notNull().default(sql`'{}'::jsonb`),
+  enteredNodeAt: timestamp('entered_node_at', { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+}, (table) => ({
+  activeUnitIdx: uniqueIndex('ux_item_workflow_state_unit').on(table.serialUnitId),
+  orgIdx: index('idx_item_workflow_state_organization_id').on(table.organizationId),
+}));
+
+// workflow_runs — append-only log of every node execution, for observability
+// (time-in-node, fail rates, bottlenecks). Mirrors the pipeline_cycles pattern.
+export const workflowRuns = pgTable('workflow_runs', {
+  id: serial('id').primaryKey(),
+  organizationId: orgIdCol(),
+  serialUnitId: integer('serial_unit_id').notNull(),
+  workflowDefinitionId: integer('workflow_definition_id'),
+  nodeType: text('node_type').notNull(),
+  output: text('output'),
+  durationMs: integer('duration_ms'),
+  error: text('error'),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+}, (table) => ({
+  unitIdx: index('idx_workflow_runs_serial_unit_id').on(table.serialUnitId),
+  orgCreatedIdx: index('idx_workflow_runs_org_created').on(table.organizationId, table.createdAt),
+}));
+
