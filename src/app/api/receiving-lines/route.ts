@@ -699,8 +699,13 @@ export const GET = withAuth(async (request: NextRequest) => {
       }
     }
 
+    // Unmatched/unfound cartons live in the `receiving` table with no
+    // `receiving_lines` row yet, so they never come back from the main query.
+    // Append them as placeholder rows for `all` AND `activity` — a scanned
+    // unfound carton has been physically touched, so it belongs in the
+    // activity feed that backs both the History table and the recent rail.
     const includeUnmatchedPlaceholders =
-      view === 'all' &&
+      (view === 'all' || view === 'activity') &&
       searchScope !== 'zoho_po' &&
       !receivingHistorySkipsUnmatchedPlaceholders(searchField);
 
@@ -982,21 +987,27 @@ export const PATCH = withAuth(async (request: NextRequest, ctx) => {
     if (body?.needs_test !== undefined || body?.needsTest !== undefined) {
       const nextNeedsTest = !!(body?.needs_test ?? body?.needsTest);
       if (!nextNeedsTest) {
-        const existing = await pool.query<{ assigned_tech_id: number | null }>(
-          `SELECT assigned_tech_id FROM receiving_lines WHERE id = $1`,
+        const existing = await pool.query<{ needs_test: boolean | null; assigned_tech_id: number | null }>(
+          `SELECT needs_test, assigned_tech_id FROM receiving_lines WHERE id = $1`,
           [id],
         );
         if (existing.rows.length === 0) {
           return NextResponse.json({ success: false, error: 'receiving_line not found' }, { status: 404 });
         }
-        const effectiveTechId =
-          parsePositiveTechId(body?.assigned_tech_id ?? body?.assignedTechId) ??
-          parsePositiveTechId(existing.rows[0]?.assigned_tech_id);
-        if (!effectiveTechId) {
-          return NextResponse.json(
-            { success: false, error: 'needs_test can only be cleared after a technician is assigned' },
-            { status: 400 },
-          );
+        // Only enforce the tech-assignment guard when needs_test is actually being
+        // cleared (true -> false). Re-saving a line that is already needs_test=false
+        // is a no-op for this field and must not be blocked.
+        const wasNeedsTest = existing.rows[0]?.needs_test !== false;
+        if (wasNeedsTest) {
+          const effectiveTechId =
+            parsePositiveTechId(body?.assigned_tech_id ?? body?.assignedTechId) ??
+            parsePositiveTechId(existing.rows[0]?.assigned_tech_id);
+          if (!effectiveTechId) {
+            return NextResponse.json(
+              { success: false, error: 'needs_test can only be cleared after a technician is assigned' },
+              { status: 400 },
+            );
+          }
         }
       }
       updates.push(`needs_test = $${idx++}`);

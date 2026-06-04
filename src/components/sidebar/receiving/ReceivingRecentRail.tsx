@@ -66,6 +66,7 @@ export function ReceivingRecentRail({
       queryKey={queryKey}
       fetchFn={fetchFn}
       updateEvent="receiving-line-updated"
+      deleteEvent="receiving-line-deleted"
       refreshEvents={['receiving-entry-added', 'usav-refresh-data']}
       eyebrowTitle="Recent"
       eyebrowSuffix="Same as History"

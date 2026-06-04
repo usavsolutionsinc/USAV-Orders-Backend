@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useUIModeOptional } from '@/design-system/providers/UIModeProvider';
-import { Check } from '@/components/Icons';
+import { Check, PackageCheck, Clock, Truck, Package } from '@/components/Icons';
 import { emitSelection, onToggleAll } from '@/lib/selection/table-selection';
 import { SkeletonList } from '@/design-system/components/Skeletons';
 import { conditionGradeTableLabel, workflowStatusTableLabel, getStatusDotBg } from '@/components/station/receiving-constants';
@@ -203,6 +203,17 @@ export function ReceivingLineOrderRow({
   const quantityText = `${row.quantity_received}/${row.quantity_expected ?? '?'}`;
   const qtyExpected = row.quantity_expected ?? 0;
   const workflowLabel = workflowStatusTableLabel(row.workflow_status || 'EXPECTED');
+  // The workflow status renders as a compact icon (not text) — RECEIVED and
+  // EXPECTED are the dominant states; everything else falls back to a generic
+  // package glyph. The label rides along as the `title` for hover/a11y.
+  const { WorkflowIcon, workflowIconTone } =
+    workflowLabel === 'RECEIVED'
+      ? { WorkflowIcon: PackageCheck, workflowIconTone: 'text-emerald-600' }
+      : workflowLabel === 'EXPECTED'
+        ? { WorkflowIcon: Clock, workflowIconTone: 'text-amber-500' }
+        : workflowLabel === 'SCANNED'
+          ? { WorkflowIcon: Truck, workflowIconTone: 'text-blue-600' }
+          : { WorkflowIcon: Package, workflowIconTone: 'text-gray-400' };
   const condGrade = (row.condition_grade || '').toUpperCase();
   const conditionLabel = conditionGradeTableLabel(row.condition_grade);
   const conditionColor =
@@ -292,10 +303,15 @@ export function ReceivingLineOrderRow({
             {isIncoming ? null : (
               <>
                 {' • '}
-                {workflowLabel}
+                <span
+                  className="inline-flex align-text-bottom"
+                  title={workflowLabel}
+                  aria-label={workflowLabel}
+                >
+                  <WorkflowIcon className={`h-3.5 w-3.5 ${workflowIconTone}`} />
+                </span>
               </>
             )}
-            {row.needs_test ? <span className="text-orange-600">{' • NEEDS TEST'}</span> : null}
             {deliveryStateMeta ? (
               <span className={deliveryStateMeta.tone}>{' • ' + deliveryStateMeta.label}</span>
             ) : null}

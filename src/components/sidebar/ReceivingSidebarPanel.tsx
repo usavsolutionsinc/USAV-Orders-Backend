@@ -325,7 +325,10 @@ export function ReceivingSidebarPanel() {
     let cancelled = false;
     (async () => {
       try {
-        const res = await fetch(`/api/receiving-lines?receiving_id=${receivingId}`);
+        // `include=serials` so the sibling rows carry serial_units — without it
+        // the replacement row below has `serials: undefined`, which momentarily
+        // drops the stepper's serial count to 0 and flashes the Serial dot.
+        const res = await fetch(`/api/receiving-lines?receiving_id=${receivingId}&include=serials`);
         const data = await res.json();
         if (cancelled) return;
         const rows = Array.isArray(data?.receiving_lines)
@@ -336,7 +339,13 @@ export function ReceivingSidebarPanel() {
           setSelectedLine((prev) => {
             if (!prev) return prev;
             const hit = rows.find((r) => r.id === prev.id);
-            return hit ?? prev;
+            if (!hit) return prev;
+            // Guard: if this fetch somehow lacks serials, keep the ones the
+            // previously-selected row already had so the Serial step never
+            // flashes back to pending mid-swap.
+            return hit.serials == null && prev.serials != null
+              ? { ...hit, serials: prev.serials }
+              : hit;
           });
         }
       } catch { /* silent — nav stays disabled if fetch fails */ }
@@ -460,6 +469,26 @@ export function ReceivingSidebarPanel() {
     };
     window.addEventListener('receiving-workspace-close', handler);
     return () => window.removeEventListener('receiving-workspace-close', handler);
+  }, []);
+
+  // Line deleted (e.g. last item removed from a carton) → if it was the active
+  // line, converge both panes on empty so the Recent rail can't re-pin it from
+  // the stale `selectedLine`. Read the id from a ref to avoid re-subscribing on
+  // every selection change. The rail also drops the row optimistically via its
+  // own `deleteEvent` listener (SidebarRailShell).
+  const selectedLineRef = useRef<ReceivingLineRow | null>(selectedLine);
+  selectedLineRef.current = selectedLine;
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const id = (e as CustomEvent<{ id?: number }>).detail?.id;
+      if (typeof id !== 'number') return;
+      setScanMatchedRows((rows) => rows.filter((r) => r.id !== id));
+      if (selectedLineRef.current?.id === id) {
+        window.dispatchEvent(new CustomEvent('receiving-workspace-close'));
+      }
+    };
+    window.addEventListener('receiving-line-deleted', handler);
+    return () => window.removeEventListener('receiving-line-deleted', handler);
   }, []);
 
   // History-mode row clicks route through the `receiving-select-line` listener

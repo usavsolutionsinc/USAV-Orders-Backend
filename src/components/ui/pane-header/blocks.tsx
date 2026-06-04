@@ -406,7 +406,7 @@ export function PaneHeaderActionBar({
   if (variant === 'header') {
     return (
       <div className={cn('flex h-[40px] w-full shrink-0 items-center bg-white', receivingHeaderHairlineClass, className)}>
-        <div className="mx-auto flex w-full max-w-3xl items-center gap-1 px-4 sm:px-6">
+        <div className="mx-auto flex w-full max-w-3xl items-center gap-1 px-6 sm:px-8">
           {content}
         </div>
       </div>

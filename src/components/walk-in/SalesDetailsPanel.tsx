@@ -39,7 +39,7 @@ export function SalesDetailsPanel({
         animate={{ x: 0 }}
         exit={{ x: '100%' }}
         transition={{ type: 'spring', damping: 25, stiffness: 120 }}
-        className="fixed right-0 top-0 h-screen w-[400px] bg-white border-l border-gray-200 shadow-2xl z-[100] flex flex-col overflow-hidden"
+        className="fixed right-0 top-0 h-screen w-[420px] bg-white border-l border-gray-200 shadow-2xl z-[100] flex flex-col overflow-hidden"
       >
       {/* Header */}
       <div className="shrink-0 border-b border-gray-100 bg-white p-6">

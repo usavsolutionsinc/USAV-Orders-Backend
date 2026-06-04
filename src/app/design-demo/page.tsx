@@ -18,7 +18,7 @@
  */
 
 import { useRef, useState } from 'react';
-import { Database, Zap, Bell, Sparkles, Search, List, Wrench } from '@/components/Icons';
+import { Database, Zap, Bell, Sparkles, Search, List, Wrench, Package } from '@/components/Icons';
 import {
   ButtonsSection,
   InputsSection,
@@ -30,6 +30,8 @@ import {
   type Density,
 } from './_gallery/sections';
 import { TestingRailSection } from './_gallery/testing-rail-section';
+import { ConditionPickerSection } from './_gallery/condition-picker-section';
+import { RowMetaColumnsSection } from './_gallery/row-meta-columns-section';
 
 type SectionDef = {
   id: string;
@@ -43,6 +45,8 @@ type SectionDef = {
 const SECTIONS: SectionDef[] = [
   { id: 'buttons', index: '01', label: 'Buttons & actions', icon: Zap, blurb: 'A single Button primitive with spring-press feedback, async loading, and brand gradient — replacing the ad-hoc <button> markup repeated across sidebars and forms.', render: () => <ButtonsSection /> },
   { id: 'testing-rail', index: '2c', label: 'Testing recent rail', icon: Wrench, blurb: 'The forked, testing-specific “YOU TESTED” recent rail with corrected selection semantics: selecting a line highlights it in place instead of hoisting it to the top, and a line only rises when its testing state actually changes (a verdict is recorded). Click rows, hover Pass/Fail to record, and toggle the old hoist-on-select bug to feel the difference. Two off-window display variants: highlight-in-place vs a separate now-testing pin.', render: (d) => <TestingRailSection density={d} /> },
+  { id: 'condition', index: '2d', label: 'Condition picker', icon: Package, blurb: 'Condensing the PO-items grade picker into one contextual row. Today it shows the full set of pills at all times; these variants keep the current grade on the left and reveal the rest only on demand — popover, inline slide-out, or a select dropdown. Each is shown inside a mock of the real line-edit card so you can compare in context and cherry-pick.', render: (d) => <ConditionPickerSection density={d} /> },
+  { id: 'row-meta', index: '2e', label: 'Row meta-columns', icon: List, blurb: 'Locking the order-row "qty · condition · rest" subrow into fixed virtual columns — the left-side mirror of ChipColumns. Today OrdersQueue + Shipped use a locked grid while Tech, Packer & Receiving free-flow a "qty • condition" bullet, so nothing aligns row-to-row. This previews one RowMetaColumns primitive applied to all five desktop tables; flip Before/After and toggle the column guides to see qty sit directly under the title and the condition column lock down every row.', render: (d) => <RowMetaColumnsSection density={d} /> },
   { id: 'inputs', index: '03', label: 'Inputs', icon: Search, blurb: 'Floating-label fields and a spring toggle — consolidating the inconsistent form styling between sidebar and admin forms.', render: () => <InputsSection /> },
   { id: 'data', index: '04', label: 'Data display', icon: Database, blurb: 'A DataTable family (selection, status pills, density-aware rows) to retire the ~6 hand-rolled sticky-header tables.', render: (d) => <DataTableSection density={d} /> },
   { id: 'feedback', index: '06', label: 'Feedback', icon: Bell, blurb: 'A polished empty state and a consistent inline error/warning banner.', render: () => <FeedbackSection /> },

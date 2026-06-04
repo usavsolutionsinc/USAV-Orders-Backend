@@ -22,7 +22,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getCurrentUserBySid, type CurrentUser } from './current-user';
 import { SESSION_COOKIE_NAME } from './session';
 import { hasStepUp } from './stepup';
-import { requiresStepUp, type PermissionString } from './permissions';
+import { requiresStepUp, rolesIncludeAdmin, type PermissionString } from './permissions';
 import { audit } from './audit';
 import pool from '@/lib/db';
 import { recordAudit } from '@/lib/audit-logs';
@@ -221,7 +221,12 @@ export function withAuth(
       );
     }
 
-    const needsStepUp = opts.stepUp || (opts.permission ? requiresStepUp(opts.permission) : false);
+    // Admins are exempt from step-up (PIN / passkey) on destructive actions.
+    // They already hold every permission; requiring a re-auth prompt on top of
+    // that is friction the product doesn't want for the admin tier.
+    const isAdmin = rolesIncludeAdmin(user.roles);
+    const needsStepUp =
+      !isAdmin && (opts.stepUp || (opts.permission ? requiresStepUp(opts.permission) : false));
     if (needsStepUp) {
       const scope = opts.permission ?? 'destructive';
       const granted = await hasStepUp(user.session.sid, scope);

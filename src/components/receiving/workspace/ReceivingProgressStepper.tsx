@@ -119,14 +119,26 @@ export function ReceivingProgressStepper({ row, photoCount, serialCount, isCompl
       aria-label="Receiving progress"
       className={`${receivingScanBandClass} bg-white`}
     >
-      <ol className="mx-auto flex w-full max-w-3xl items-center justify-between gap-0.5">
+      {/* Shares the action toolbar's `px-6 sm:px-8` column so the row edges
+          line up. Each step's dot + label share one centered column so the
+          checkmark sits on the label's vertical axis. */}
+      <ol className="mx-auto flex w-full max-w-3xl items-center justify-between gap-0.5 px-6 sm:px-8">
         {STEPS.map((step, idx) => {
           const s = states[step.key];
           const isLast = idx === STEPS.length - 1;
           return (
-            <li key={step.key} className="flex min-w-0 flex-1 flex-col items-center justify-center gap-0.5">
+            <li
+              key={step.key}
+              // Half-width end cells (flexGrow 0.5 vs 1) so the 5 dots land at
+              // 0 / 25 / 50 / 75 / 100% with EQUAL connectors. With full-width
+              // end cells the edge-pinned SCAN/PRINT dots made the first/last
+              // gaps wider than the middle ones. Set via inline style (not the
+              // arbitrary `flex-[0.5]` utility, which the build didn't emit).
+              className="flex min-w-0 flex-1 flex-col justify-center"
+              style={{ flexBasis: 0, flexGrow: idx === 0 || isLast ? 0.5 : 1 }}
+            >
               <div className="flex w-full items-center">
-                <span className="flex-1" aria-hidden>
+                <span className={idx === 0 ? 'w-0 shrink-0' : 'min-w-0 flex-1'} aria-hidden>
                   {idx === 0 ? null : (
                     <span
                       className={`block h-px w-full ${
@@ -135,8 +147,21 @@ export function ReceivingProgressStepper({ row, photoCount, serialCount, isCompl
                     />
                   )}
                 </span>
-                <StepDot state={s} index={idx + 1} />
-                <span className="flex-1" aria-hidden>
+                <div className="flex shrink-0 flex-col items-center gap-0.5">
+                  <StepDot state={s} index={idx + 1} />
+                  <span
+                    className={`whitespace-nowrap text-center text-[10px] font-black uppercase leading-none tracking-[0.12em] ${
+                      s === 'done'
+                        ? 'text-blue-600'
+                        : s === 'active'
+                          ? 'text-gray-900'
+                          : 'text-gray-400'
+                    }`}
+                  >
+                    {step.label}
+                  </span>
+                </div>
+                <span className={isLast ? 'w-0 shrink-0' : 'min-w-0 flex-1'} aria-hidden>
                   {isLast ? null : (
                     <span
                       className={`block h-px w-full ${
@@ -146,17 +171,6 @@ export function ReceivingProgressStepper({ row, photoCount, serialCount, isCompl
                   )}
                 </span>
               </div>
-              <span
-                className={`text-[10px] font-black uppercase leading-none tracking-[0.12em] ${
-                  s === 'done'
-                    ? 'text-blue-600'
-                    : s === 'active'
-                      ? 'text-gray-900'
-                      : 'text-gray-400'
-                }`}
-              >
-                {step.label}
-              </span>
             </li>
           );
         })}

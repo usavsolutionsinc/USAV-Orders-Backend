@@ -69,7 +69,7 @@ export function ReceivingIdentityChips({
       columns.push({ key: 'tracking', width: CHIP_COL.tracking, node: <TrackingChip value={trackingValue} display={getLast4(trackingValue)} /> });
     }
     if (includeSerial) {
-      columns.push({ key: 'serial', width: CHIP_COL.serial, node: <SerialChip value={serialsValue} align="end" /> });
+      columns.push({ key: 'serial', width: CHIP_COL.serial, node: <SerialChip value={serialsValue} width="w-fit max-w-full" /> });
     }
     return <ChipColumns columns={columns} />;
   }

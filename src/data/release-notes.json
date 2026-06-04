@@ -1,7 +1,107 @@
 {
-  "generatedAt": "2026-06-03T21:12:12.073Z",
+  "generatedAt": "2026-06-04T05:31:15.299Z",
   "count": 199,
   "commits": [
+    {
+      "sha": "d99e813b763036eb7c6b537573b65ebacb5f1c66",
+      "shortSha": "d99e813b",
+      "date": "2026-06-03T22:20:03-07:00",
+      "author": "DENSENSE8",
+      "subject": "workflow: engine core — contract, registry, router, runtime, advance (Phase B)",
+      "body": "Pure-TypeScript node engine, no existing code touched. All collaborators are\ninjected so routing/advance are unit-testable without DB or Ably:\n\n  contract.ts  NodeDefinition/NodeContext/NodeResult + WorkflowStore boundary\n  registry.ts  node-type registry (register/get/list, palette meta)\n  router.ts    selectNextTarget — pure conditional routing over edges\n  runtime.ts   runNode — times a node, maps thrown errors to the `error` port\n  advance.ts   advanceItem — lock → run → record → emit → route/park/done\n  store.ts     Drizzle WorkflowStore; passes organizationId EXPLICITLY because\n               the neon-http client can't see the app.current_org GUC\n  events.ts    emitWorkflowEvent → existing publishDbEvent (no-ops w/o Ably)\n  index.ts     production wiring + registerBuiltins (nodes land in Phase C)\n\nThe concurrency lock is an injectable AdvanceLock (NULL_LOCK default); a real\nUpstash lock gets wired when the live advance route lands in Phase D.\n\nTests: 13 passing (router + advance: linear, fail→repair branch, terminal,\nawait-park, thrown error, unknown type, context merge, not-enrolled, terminal\nno-op, held-lock no double-advance). Added `npm run test:workflow`. tsc clean.\n\nCo-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>",
+      "type": "other",
+      "title": "workflow: engine core — contract, registry, router, runtime, advance (Phase B)"
+    },
+    {
+      "sha": "06ba00e34c1c46a8f8fede8ee11b3d3ee5097130",
+      "shortSha": "06ba00e3",
+      "date": "2026-06-03T22:14:07-07:00",
+      "author": "DENSENSE8",
+      "subject": "workflow: add graph + item-state tables (schema only, no behavior)",
+      "body": "Phase A of the node-based \"Operations\" engine. Adds the graph-definition\nlayer for the visual workflow builder without changing any existing\nbehavior:\n\n  - workflow_definitions / workflow_nodes / workflow_edges  (the graph)\n  - item_workflow_state  (a serial unit's current node; one active/unit)\n  - workflow_runs        (append-only node-execution log)\n\nTables follow repo conventions (orgIdCol() GUC default, withTimezone,\njsonb defaults). item_workflow_state references serial_units by id only —\nserial/SKU/condition stay canonical on serial_units. Migration is the\nhand-written SQL the run-pending-migrations runner applies (not\ndrizzle-kit), already applied + verified against Neon.\n\nReference + build plan: docs/NODE_WORKFLOW_ARCHITECTURE.md,\ndocs/NODE_WORKFLOW_IMPLEMENTATION_PLAN.md\n\nCo-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>",
+      "type": "other",
+      "title": "workflow: add graph + item-state tables (schema only, no behavior)"
+    },
+    {
+      "sha": "4a857d7020a78e574e7a0d50e38b34f6e6e2167b",
+      "shortSha": "4a857d70",
+      "date": "2026-06-03T21:13:58-07:00",
+      "author": "DENSENSE8",
+      "subject": " improving overall consistency of the design system",
+      "body": "",
+      "type": "other",
+      "title": " improving overall consistency of the design system"
+    },
+    {
+      "sha": "87124d580e667d4349492f933dc6179ce18d9988",
+      "shortSha": "87124d58",
+      "date": "2026-06-03T20:20:44-07:00",
+      "author": "DENSENSE8",
+      "subject": "overall consistency improvements for code base and cleaning up",
+      "body": "",
+      "type": "other",
+      "title": "overall consistency improvements for code base and cleaning up"
+    },
+    {
+      "sha": "76d0e3fd19a78a30a6b8509c1ed6dd4ab2ab11c0",
+      "shortSha": "76d0e3fd",
+      "date": "2026-06-03T17:00:30-07:00",
+      "author": "usavsolutionsinc",
+      "subject": "docs for ai upgrade and ton of other features as well",
+      "body": "",
+      "type": "docs",
+      "title": "docs for ai upgrade and ton of other features as well"
+    },
+    {
+      "sha": "14b5fbebbcbcc2220eb5c4c65ec66339b660083e",
+      "shortSha": "14b5fbeb",
+      "date": "2026-06-03T16:53:45-07:00",
+      "author": "usavsolutionsinc",
+      "subject": "Zendesk claim: archive photos to NAS via office agent + warn on failure",
+      "body": "The claim archive previously wrote to the local filesystem, which silently\nno-ops on Vercel (no NAS mount). Route it through the office archive agent\nover the tunnel when NAS_AGENT_URL/TOKEN are set (fall back to the direct\nfilesystem write on a LAN/dev box). Surface a toast warning in the claim\nresult when the archive is skipped/partial/fails, so a claim whose photos\ndidn't archive is no longer a silent success.\n\nCo-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>",
+      "type": "other",
+      "title": "Zendesk claim: archive photos to NAS via office agent + warn on failure"
+    },
+    {
+      "sha": "6faa66f0fc49693807e33c69799766fdcb6ac3ac",
+      "shortSha": "6faa66f0",
+      "date": "2026-06-03T16:33:04-07:00",
+      "author": "usavsolutionsinc",
+      "subject": "Receiving: NAS picker speed, claim popover align + prod NAS-archive test",
+      "body": "- NasReceivingAttach: page size 10; thumbnails via the Next image optimizer\n  for the public NAS tunnel (direct ?thumb for the auth-gated dev route).\n- ReceivingClaimModal: center the popover over the receiving panel (matching\n  the NAS picker) instead of the far edge.\n- Add a \"Test NAS folder\" button + POST /api/receiving/nas-archive-test that\n  proves the prod archive path: Vercel → tunnel → office archive agent → NAS\n  mkdir under \".../2 Zendesk 2026/<name>/\".\n\nCo-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>",
+      "type": "other",
+      "title": "Receiving: NAS picker speed, claim popover align + prod NAS-archive test"
+    },
+    {
+      "sha": "0e22d54e42ef193bb8b9bf7f1ea0cad4bedff4a0",
+      "shortSha": "0e22d54e",
+      "date": "2026-06-03T16:21:45-07:00",
+      "author": "usavsolutionsinc",
+      "subject": "updates to the receiving photos viewer and attachments",
+      "body": "",
+      "type": "other",
+      "title": "updates to the receiving photos viewer and attachments"
+    },
+    {
+      "sha": "f59d26d01379e066eb5046cdbd14d4b89b33807f",
+      "shortSha": "f59d26d0",
+      "date": "2026-06-03T15:02:17-07:00",
+      "author": "usavsolutionsinc",
+      "subject": "Allow NAS tunnel + Vercel Blob hosts through next/image",
+      "body": "The mobile receiving gallery (PhotoGalleryView) renders photos with\nnext/image, which rejects any host not in images.remotePatterns. Add the\nCloudflare Tunnel hostname that serves NAS receiving photos\n(nas-photos.michaelgarisek.com) and the Vercel Blob host for legacy\nreceiving photos, so both display on production.\n\nCo-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>",
+      "type": "other",
+      "title": "Allow NAS tunnel + Vercel Blob hosts through next/image"
+    },
+    {
+      "sha": "5f07e207ddd5b20762206432f6b224da702930fa",
+      "shortSha": "5f07e207",
+      "date": "2026-06-03T14:18:26-07:00",
+      "author": "usavsolutionsinc",
+      "subject": "updated the receiving flow and the testing flow",
+      "body": "",
+      "type": "other",
+      "title": "updated the receiving flow and the testing flow"
+    },
     {
       "sha": "81cdd833bfd4f7586a79df3414bde8668b1775d9",
       "shortSha": "81cdd833",
@@ -1891,106 +1991,6 @@
       "body": "",
       "type": "other",
       "title": "added a ton of changes, across zoho, tech orders and fba updates and upnext orders"
-    },
-    {
-      "sha": "7945c405966ee2dc18ccdff16a199e64d1211838",
-      "shortSha": "7945c405",
-      "date": "2026-03-09T13:08:50-07:00",
-      "author": "usavsolutionsinc",
-      "subject": "updated zoho endpoints to match docs",
-      "body": "",
-      "type": "other",
-      "title": "updated zoho endpoints to match docs"
-    },
-    {
-      "sha": "b02816d62d7843086a253175b1c45d7cbe6a5ca4",
-      "shortSha": "b02816d6",
-      "date": "2026-03-09T12:12:23-07:00",
-      "author": "usavsolutionsinc",
-      "subject": "improved zoho, station testing, station packing, order filtering in the dashboard pages",
-      "body": "",
-      "type": "other",
-      "title": "improved zoho, station testing, station packing, order filtering in the dashboard pages"
-    },
-    {
-      "sha": "75ef301840d870501127fcf253b2b6d329bbf90d",
-      "shortSha": "75ef3018",
-      "date": "2026-03-09T10:08:42-07:00",
-      "author": "usavsolutionsinc",
-      "subject": "api domain name for zoho inventory pull",
-      "body": "",
-      "type": "other",
-      "title": "api domain name for zoho inventory pull"
-    },
-    {
-      "sha": "954c5d2bec30318df7fca24180b55138ee12099b",
-      "shortSha": "954c5d2b",
-      "date": "2026-03-09T09:52:18-07:00",
-      "author": "usavsolutionsinc",
-      "subject": "fixed ts errors",
-      "body": "",
-      "type": "fix",
-      "title": "fixed ts errors"
-    },
-    {
-      "sha": "6bbacde26c8e845e71aa7dca01b538d3ab01e8d2",
-      "shortSha": "6bbacde2",
-      "date": "2026-03-09T09:45:19-07:00",
-      "author": "usavsolutionsinc",
-      "subject": "updated the connections for zoho and double tab slider in station testing and sku generator sn fix",
-      "body": "",
-      "type": "other",
-      "title": "updated the connections for zoho and double tab slider in station testing and sku generator sn fix"
-    },
-    {
-      "sha": "91fb693ca2996412a7e40a1655acf4f38d13dabd",
-      "shortSha": "91fb693c",
-      "date": "2026-03-06T16:40:56-08:00",
-      "author": "usavsolutionsinc",
-      "subject": "added a mark as shipped date",
-      "body": "",
-      "type": "other",
-      "title": "added a mark as shipped date"
-    },
-    {
-      "sha": "591eda80bd3d951410f893ee6754cc04e4098939",
-      "shortSha": "591eda80",
-      "date": "2026-03-06T16:33:16-08:00",
-      "author": "usavsolutionsinc",
-      "subject": "updated the product_manuals CRUD and fixed ts errors",
-      "body": "",
-      "type": "other",
-      "title": "updated the product_manuals CRUD and fixed ts errors"
-    },
-    {
-      "sha": "477031b706df4eab33304c28317378dcecedf8e1",
-      "shortSha": "477031b7",
-      "date": "2026-03-06T16:17:12-08:00",
-      "author": "usavsolutionsinc",
-      "subject": "added zoho integration",
-      "body": "",
-      "type": "other",
-      "title": "added zoho integration"
-    },
-    {
-      "sha": "906fa0931c8ce25dcd07a5768adbc52d9d2c7d00",
-      "shortSha": "906fa093",
-      "date": "2026-03-06T15:06:51-08:00",
-      "author": "usavsolutionsinc",
-      "subject": "updated ably, created a FBA page, updated the multisku form",
-      "body": "",
-      "type": "other",
-      "title": "updated ably, created a FBA page, updated the multisku form"
-    },
-    {
-      "sha": "c8c9cb54795f111fd2ebff63f8322c613dcf8293",
-      "shortSha": "c8c9cb54",
-      "date": "2026-03-06T13:20:47-08:00",
-      "author": "usavsolutionsinc",
-      "subject": "updated the up next order and receiving",
-      "body": "",
-      "type": "other",
-      "title": "updated the up next order and receiving"
     }
   ]
 }

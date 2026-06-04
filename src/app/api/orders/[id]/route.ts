@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireRoutePerm } from '@/lib/auth/dynamic-route-guard';
 import { hasStepUp } from '@/lib/auth/stepup';
+import { rolesIncludeAdmin } from '@/lib/auth/permissions-shared';
 import {
   getOrderById,
   updateOrder,
@@ -117,13 +118,16 @@ export async function DELETE(
     if (gate.denied) return gate.denied;
 
     // orders.void is step-up-protected. requireRoutePerm checks the permission
-    // but not the fresh step-up grant, so enforce that grant here too.
-    const granted = await hasStepUp(gate.ctx.session.sid, 'orders.void');
-    if (!granted) {
-      return NextResponse.json(
-        { error: 'STEPUP_REQUIRED', scope: 'orders.void', method_hint: 'pin' },
-        { status: 403 },
-      );
+    // but not the fresh step-up grant, so enforce that grant here too — except
+    // for admins, who are exempt from step-up (PIN / passkey) prompts.
+    if (!rolesIncludeAdmin(gate.ctx.user.roles)) {
+      const granted = await hasStepUp(gate.ctx.session.sid, 'orders.void');
+      if (!granted) {
+        return NextResponse.json(
+          { error: 'STEPUP_REQUIRED', scope: 'orders.void', method_hint: 'pin' },
+          { status: 403 },
+        );
+      }
     }
 
     const { id: rawId } = await params;

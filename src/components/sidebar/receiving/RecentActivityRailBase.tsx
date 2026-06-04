@@ -31,6 +31,8 @@ export interface RecentActivityRailBaseProps {
   queryKey: ReadonlyArray<unknown>;
   fetchFn: () => Promise<ApiResponse>;
   updateEvent: string;
+  /** Optimistic delete event ({ id }); drops the row from the rail immediately. */
+  deleteEvent?: string;
   refreshEvents: string[];
 
   eyebrowTitle: string;
@@ -72,6 +74,7 @@ export function RecentActivityRailBase({
   queryKey,
   fetchFn,
   updateEvent,
+  deleteEvent,
   refreshEvents,
   eyebrowTitle,
   eyebrowSuffix,
@@ -86,6 +89,7 @@ export function RecentActivityRailBase({
       queryKey={queryKey}
       fetchFn={async () => (await fetchFn()).receiving_lines ?? []}
       updateEvent={updateEvent}
+      deleteEvent={deleteEvent}
       refreshEvents={refreshEvents}
       selectedId={selectedLineId}
       selectedRow={selectedRow}

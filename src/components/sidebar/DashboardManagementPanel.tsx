@@ -567,21 +567,17 @@ export function DashboardManagementPanel({
                 }}
               />
             </motion.div>
-            <motion.div variants={itemVariants} className="space-y-4 px-4 pb-4 pt-0 bg-gray-50 rounded-2xl border border-gray-100">
-              <div className="space-y-3">
+            <motion.div variants={itemVariants} className="space-y-3">
                 {canImportOrders ? (
                 <>
-                <div className="space-y-1.5">
-                  <label className={`${microBadge} text-gray-500 px-1`}>Manual Sheet Name</label>
-                  <input
-                    type="text"
-                    value={manualSheetName}
-                    onChange={(e) => setManualSheetName(e.target.value)}
-                    placeholder="e.g., Sheet_01_14_2026"
-                    className="w-full px-3 py-2 bg-white border border-gray-200 rounded-xl text-caption font-mono text-gray-900 outline-none focus:border-blue-500 transition-all"
-                    disabled={isTransferring}
-                  />
-                </div>
+                <input
+                  type="text"
+                  value={manualSheetName}
+                  onChange={(e) => setManualSheetName(e.target.value)}
+                  placeholder="e.g., Sheet_01_14_2026"
+                  className="w-full px-3 py-2 bg-white border border-gray-200 rounded-xl text-caption font-mono text-gray-900 outline-none focus:border-blue-500 transition-all"
+                  disabled={isTransferring}
+                />
 
                 {isTransferring ? (
                   <button
@@ -641,8 +637,6 @@ export function DashboardManagementPanel({
                 </AnimatePresence>
                 </>
                 ) : null}
-
-              </div>
             </motion.div>
 
             <AnimatePresence mode="wait">

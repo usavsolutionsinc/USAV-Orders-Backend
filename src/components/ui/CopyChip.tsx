@@ -86,14 +86,6 @@ export interface CopyChipProps {
    * Outer wrapper horizontal padding — `flush` aligns with sidebar grids where the chip icon lives in another column.
    */
   outerPad?: 'chip' | 'flush';
-  /**
-   * Horizontal alignment of the icon + label within the chip's width box.
-   * `start` (default) keeps content left. `end` right-aligns it — use for the
-   * trailing chip in a fixed-width column so the value hugs the right edge
-   * (e.g. the receiving table's serial chip lining up under the day count)
-   * while the column stays a stable width (no inter-row jitter).
-   */
-  align?: 'start' | 'end';
   /** When true, skip the global hover copy tooltip (e.g. chip has its own action menu). */
   disableTooltip?: boolean;
 }
@@ -110,7 +102,6 @@ export function CopyChip({
   fitDisplayWidth = false,
   onCopy,
   outerPad = 'chip',
-  align = 'start',
   disableTooltip = false,
 }: CopyChipProps) {
   const anchorId = useId();
@@ -167,18 +158,11 @@ export function CopyChip({
   };
 
   const outerPx = outerPad === 'flush' ? 'px-0' : 'px-1.5';
-  // `align='end'` only right-justifies the icon+value inside the chip's width
-  // box (used by the fixed-width SerialChip so its value hugs the box's right
-  // edge). Flushing the cluster to the day-count is the row's job (a negative
-  // right margin on the chip cluster) so it works for ANY trailing chip type,
-  // not just the serial.
-  const justifyClass = align === 'end' ? 'justify-end' : 'justify-start';
-  const textAlignClass = align === 'end' ? 'text-right' : 'text-left';
 
   return (
     <div
       ref={chipRef}
-      className={`relative flex items-center ${justifyClass} ${outerPx} ${width}`}
+      className={`relative flex items-center justify-start ${outerPx} ${width}`}
       onMouseEnter={openTooltip}
       onMouseLeave={closeTooltip}
     >
@@ -193,13 +177,13 @@ export function CopyChip({
         title={!disableTooltip && !tooltipCtx && canCopy ? normalizedValue : undefined}
         className={
           fitDisplayWidth
-            ? `inline-flex w-auto max-w-full items-center ${justifyClass} gap-0.5 py-0 bg-transparent ${textAlignClass} text-black transition-all active:scale-95 disabled:opacity-30`
-            : `inline-flex w-full max-w-full items-center ${justifyClass} gap-0.5 py-0 bg-transparent ${textAlignClass} text-black transition-all active:scale-95 disabled:opacity-30`
+            ? 'inline-flex w-auto max-w-full items-center justify-start gap-0.5 py-0 bg-transparent text-left text-black transition-all active:scale-95 disabled:opacity-30'
+            : 'inline-flex w-full max-w-full items-center justify-start gap-0.5 py-0 bg-transparent text-left text-black transition-all active:scale-95 disabled:opacity-30'
         }
       >
         {icon ? <span className={`shrink-0 ${iconClass ?? ''}`}>{icon}</span> : null}
         <span
-          className={`${monoValue} tracking-tight leading-none border-b-2 pb-0.5 ${textAlignClass} ${displayOverflowClass} ${underlineClass} ${
+          className={`${monoValue} tracking-tight leading-none border-b-2 pb-0.5 text-left ${displayOverflowClass} ${underlineClass} ${
             fitDisplayWidth ? 'min-w-0 shrink-0' : 'min-w-0 flex-1'
           }`}
         >
@@ -411,14 +395,17 @@ export function TrackingOrSkuScanChip({ value }: { value: string }) {
  * The single source of truth for a serial chip's label. Derives the last-4
  * preview from the raw serial (or CSV of serials), and collapses every "no
  * serial" spelling callers used to pass — `''`/`null`, the literal sentinel
- * `'SERIAL'`, or `'---'` — to one `'SERIAL'` placeholder. (Blindly running
- * {@link getLast4Serial} on the `'SERIAL'` sentinel used to yield `'RIAL'`,
- * which is why every table previously hand-rolled its own variant.)
+ * `'SERIAL'`, or `'---'` — to one `'----'` placeholder that matches the empty
+ * state of the other id chips (OrderIdChip/TrackingChip), so an empty serial
+ * column reads like a 4-char value and lines up with filled rows instead of
+ * showing the wider `SERIAL` word. (Blindly running {@link getLast4Serial} on
+ * the `'SERIAL'` sentinel used to yield `'RIAL'`, which is why every table
+ * previously hand-rolled its own variant.)
  */
 export function resolveSerialDisplay(value: string | null | undefined): string {
   const raw = (value || '').trim();
   if (isEmptyDisplayValue(raw) || raw === '---' || raw.toUpperCase() === 'SERIAL') {
-    return 'SERIAL';
+    return '----';
   }
   return getLast4Serial(raw);
 }
@@ -435,18 +422,15 @@ export const SerialChip = ({
   value,
   display,
   width = 'w-[84px] shrink-0',
-  align = 'start',
   disableTooltip = false,
 }: {
   value: string;
   /** Optional label override; normally derived from `value`. */
   display?: string;
   /** Tailwind width utilities on the wrapper; default is a fixed width sized
-   *  for the Barcode icon + 4-char mono value so every row aligns identically
-   *  across all tables (tech / packer / shipped / receiving). */
+   *  for the Barcode icon + 4-char mono value. Table rows pass a content-fit
+   *  width so the serial column hugs its value like the other id chips. */
   width?: string;
-  /** Right-align the icon + value inside the fixed-width box (trailing column). */
-  align?: 'start' | 'end';
   disableTooltip?: boolean;
 }) => (
   <CopyChip
@@ -458,7 +442,6 @@ export const SerialChip = ({
     width={width}
     truncateDisplay={false}
     fitDisplayWidth
-    align={align}
     disableTooltip={disableTooltip}
   />
 );

@@ -6,7 +6,6 @@ import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { Loader2 } from '@/components/Icons';
 import { MobileDateGroupHeader } from '@/components/mobile/MobileDateGroupHeader';
 import { DateGroupHeader } from '@/components/shipped/DateGroupHeader';
-import { DayPickupPrintButton } from '@/components/shipped/PickupReportButton';
 import WeekHeader from '@/components/ui/WeekHeader';
 import { sectionLabel, fieldLabel } from '@/design-system/tokens/typography/presets';
 import type { DashboardSearchSectionProps } from '@/components/dashboard/DashboardSearchSectionProps';
@@ -72,7 +71,7 @@ function isExceptionPackerRecord(record: { row_source?: string | null; exception
 }
 import { getStaffName } from '@/utils/staff';
 import { getStaffThemeById, stationThemeColors } from '@/utils/staff-colors';
-import { getStaffTextColor } from '@/design-system/components/StaffBadge';
+import { StaffInitials } from '@/design-system/components/StaffBadge';
 import { OrderSearchEmptyState } from '@/components/dashboard/OrderSearchEmptyState';
 import { useUIModeOptional } from '@/design-system/providers/UIModeProvider';
 import {
@@ -678,11 +677,6 @@ export function DashboardShippedTable({
                           <DateGroupHeader
                             date={date}
                             total={dayRecords.length}
-                            actions={
-                              /^\d{4}-\d{2}-\d{2}$/.test(date) ? (
-                                <DayPickupPrintButton dateKey={date} />
-                              ) : undefined
-                            }
                           />
                         )}
                         {sortedRecords.map((record, index) => {
@@ -714,8 +708,6 @@ export function DashboardShippedTable({
                           const packerDisplay = normalizePersonName(packerName);
                           const techStaffId = (record as any).tested_by ?? (record as any).tester_id ?? null;
                           const packerStaffId = (record as any).packed_by ?? (record as any).packer_id ?? null;
-                          const techColorClass = getStaffTextColor(techStaffId);
-                          const packerColorClass = getStaffTextColor(packerStaffId);
                           const serialValue = String(record.serial_number || '').trim();
                           const platformLabel = getOrderPlatformLabel(record.order_id || '', record.account_source);
                           const orderIsFbaMeta = isFbaOrder(record.order_id, record.account_source);
@@ -751,7 +743,7 @@ export function DashboardShippedTable({
                               aria-pressed={selectedDetailId === detail.id}
                               aria-label={`Open shipped order ${record.order_id || record.id}`}
                               data-order-row-id={String(record.order_row_id || record.id)}
-                              className={`${dashboardOrderRowShellClass(isMobile)} border-b border-gray-50 px-3 py-1.5 transition-colors cursor-pointer hover:bg-blue-50/50 ${
+                              className={`${dashboardOrderRowShellClass(isMobile)} border-b border-gray-300 px-3 py-1.5 transition-colors cursor-pointer hover:bg-blue-50/50 ${
                                 selectedDetailId === detail.id ? 'bg-blue-50/80' : index % 2 === 0 ? 'bg-white' : 'bg-gray-50/10'
                               }`}
                             >
@@ -761,27 +753,27 @@ export function DashboardShippedTable({
                                     className={`h-2 w-2 shrink-0 rounded-full ${SOURCE_DOT_BG[dotType]}`}
                                     title={SOURCE_DOT_LABEL[dotType]}
                                   />
-                                  <div className="text-caption font-bold text-gray-900 truncate">
+                                  <div className="text-label font-bold text-gray-900 truncate">
                                     {record.product_title
                                       || record.item_number
                                       || record.sku
                                       || 'Unknown Product'}
                                   </div>
                                 </div>
-                                <div className="mt-0.5 flex items-center gap-2">
-                                  <div className="text-eyebrow font-black text-gray-500 uppercase tracking-widest truncate min-w-0 flex-1 pl-4">
-                                    <span className={(parseInt(String(record.quantity || '1'), 10) || 1) > 1 ? 'text-yellow-600' : undefined}>
-                                      {parseInt(String(record.quantity || '1'), 10) || 1}
-                                    </span>
-                                    {' • '}
+                                {/* Same fixed grid tracks as the pending (orders queue) table — qty |
+                                    condition | rest — so the columns align down every row. The rest track
+                                    holds the tester + packer initials (colored, full name on hover). */}
+                                <div className="mt-0.5 grid grid-cols-[1.25rem_3rem_auto] items-center text-micro font-bold text-gray-500 uppercase tracking-widest min-w-0 flex-1">
+                                  <span className={(parseInt(String(record.quantity || '1'), 10) || 1) > 1 ? 'text-yellow-600' : ''}>
+                                    {parseInt(String(record.quantity || '1'), 10) || 1}
+                                  </span>
+                                  <span className={`truncate ${String(displayValues.condition || '').trim().toLowerCase() === 'new' ? 'text-yellow-600' : ''}`}>
                                     {displayValues.condition || 'N/A'}
-                                    {' • '}
-                                    {displayValues.sku || 'N/A'}
-                                    {' • '}
-                                    <span className={techColorClass}>{techDisplay}</span>
-                                    {' • '}
-                                    <span className={packerColorClass}>{packerDisplay}</span>
-                                  </div>
+                                  </span>
+                                  <span className="flex items-center gap-2 truncate min-w-0">
+                                    <StaffInitials staffId={techStaffId} name={techDisplay} />
+                                    <StaffInitials staffId={packerStaffId} name={packerDisplay} />
+                                  </span>
                                 </div>
                               </div>
 
@@ -806,7 +798,7 @@ export function DashboardShippedTable({
                                 ) : (
                                   <OrderIdChip value={record.order_id || ''} display={getLast4(record.order_id)} />
                                 );
-                                const serialNode = <SerialChip value={serialValue} align="end" />;
+                                const serialNode = <SerialChip value={serialValue} width="w-fit max-w-full" />;
                                 const columns: ChipColumn[] = rowIsFba
                                   ? [
                                       { key: 'platform', width: CHIP_COL.platform, node: null },

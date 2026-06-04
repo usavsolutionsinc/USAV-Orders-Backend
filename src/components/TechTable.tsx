@@ -299,7 +299,7 @@ export function TechTable({ testedBy }: TechTableProps) {
                               // so tech rows line up (platform / order-id /
                               // tracking / serial); FNSKU rows take the
                               // tracking+serial columns.
-                              const serialNode = <SerialChip value={record.serial_number || ''} align="end" />;
+                              const serialNode = <SerialChip value={record.serial_number || ''} width="w-fit max-w-full" />;
                               if (isFnskuRow) {
                                 const fnskuColumns: ChipColumn[] = [
                                   { key: 'platform', width: CHIP_COL.platform, node: null },

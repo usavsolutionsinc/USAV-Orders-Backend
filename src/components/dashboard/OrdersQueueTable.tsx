@@ -76,8 +76,6 @@ const OrdersQueueTableRow = memo(function OrdersQueueTableRow({
   daysLate: number | null;
   onRowClick: (record: ShippedOrder) => void;
 }) {
-  const testerColorClass = getStaffTextColor(testerId);
-  const packerColorClass = getStaffTextColor(packerId);
   const qty = parseInt(String(record.quantity || '1'), 10) || 1;
   const qtyClass = qty > 1 ? 'text-yellow-600' : 'text-gray-500';
   const trackingRaw =
@@ -135,30 +133,22 @@ const OrdersQueueTableRow = memo(function OrdersQueueTableRow({
             {record.product_title || 'Unknown Product'}
           </div>
         </div>
-        <div className="mt-0.5 flex items-center gap-2">
-          <div className="text-micro font-bold text-gray-500 uppercase tracking-widest truncate min-w-0 flex-1">
-            <span className={qtyClass}>{qty}</span>
-            {' • '}
-            <span className={String(record.condition || '').trim().toLowerCase() === 'new' ? 'text-yellow-600' : undefined}>
-              {record.condition || 'N/A'}
-            </span>
-            {' • '}
-            <span className={testerColorClass}>{testerDisplay}</span>
-            {' • '}
-            <span className={packerColorClass}>{packerDisplay}</span>
+        {/* Fixed grid tracks (qty | condition | rest) keep the condition value aligned
+            in the same column down every row; the dots ride inside each track so the
+            separators stay but alignment holds. */}
+        <div className="mt-0.5 grid grid-cols-[1.25rem_3rem_auto] items-center text-micro font-bold text-gray-500 uppercase tracking-widest min-w-0 flex-1">
+          <span className={qtyClass}>{qty}</span>
+          <span className={`truncate ${String(record.condition || '').trim().toLowerCase() === 'new' ? 'text-yellow-600' : ''}`}>
+            {record.condition || 'N/A'}
+          </span>
+          <span className="flex items-center gap-2 truncate min-w-0">
             {daysLate !== null ? (
-              <>
-                {' • '}
-                <span className={getDaysLateTone(daysLate)}>{daysLate}</span>
-              </>
+              <span className={getDaysLateTone(daysLate)}>{daysLate}</span>
             ) : null}
             {hasOutOfStock ? (
-              <>
-                {' • '}
-                <span className="text-red-600">{outOfStockValue}</span>
-              </>
+              <span className="text-red-600">{outOfStockValue}</span>
             ) : null}
-          </div>
+          </span>
         </div>
       </div>
 

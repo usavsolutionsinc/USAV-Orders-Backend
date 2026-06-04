@@ -49,6 +49,8 @@ export interface SidebarRailShellProps<TRow> {
   fetchFn: () => Promise<TRow[]>;
   /** Optimistic update event ({ id, ...partial }); merged into the matching row. */
   updateEvent?: string;
+  /** Optimistic delete event ({ id }); the matching row is dropped immediately. */
+  deleteEvent?: string;
   /** Events that trigger a full query invalidation. */
   refreshEvents?: string[];
 
@@ -82,7 +84,7 @@ export interface SidebarRailShellProps<TRow> {
 }
 
 export function SidebarRailShell<TRow>({
-  queryKey, fetchFn, updateEvent, refreshEvents,
+  queryKey, fetchFn, updateEvent, deleteEvent, refreshEvents,
   selectedId, selectedRow = null, limit = 25,
   eyebrowTitle, eyebrowSuffix, emptyText = 'No recent activity yet.',
   autoSelectFirstWhenEmpty = false,
@@ -124,6 +126,34 @@ export function SidebarRailShell<TRow>({
     return () => window.removeEventListener(updateEvent, handlePatch);
   }, [updateEvent, getId]);
 
+  // Ids removed via `deleteEvent`. Tracked separately from `localRows` because
+  // the selected row can be hoisted back in from the `selectedRow` prop (the
+  // pin, below) — suppressing the id here stops a just-deleted active line from
+  // resurrecting on the rail until the refetch lands. Pruned once fresh data
+  // genuinely re-includes the id (e.g. it was re-created).
+  const [deletedIds, setDeletedIds] = useState<ReadonlySet<number>>(() => new Set());
+  useEffect(() => {
+    if (!deleteEvent) return;
+    const handleDelete = (event: Event) => {
+      const detail = (event as CustomEvent<{ id?: number }>).detail;
+      if (!detail || typeof detail.id !== 'number') return;
+      const id = detail.id;
+      setLocalRows((rows) => (rows ? rows.filter((r) => getId(r) !== id) : rows));
+      setDeletedIds((prev) => (prev.has(id) ? prev : new Set(prev).add(id)));
+    };
+    window.addEventListener(deleteEvent, handleDelete);
+    return () => window.removeEventListener(deleteEvent, handleDelete);
+  }, [deleteEvent, getId]);
+
+  useEffect(() => {
+    if (deletedIds.size === 0 || !Array.isArray(data)) return;
+    const present = new Set(data.map(getId));
+    let changed = false;
+    const next = new Set(deletedIds);
+    next.forEach((id) => { if (present.has(id)) { next.delete(id); changed = true; } });
+    if (changed) setDeletedIds(next);
+  }, [data, deletedIds, getId]);
+
   useEffect(() => {
     if (!refreshEvents || refreshEvents.length === 0) return;
     const handler = () => { queryClient.invalidateQueries({ queryKey }); };
@@ -134,7 +164,9 @@ export function SidebarRailShell<TRow>({
   // Defensive: a queryKey collision (another useQuery caching a different shape
   // under the same key) can hand us a non-array `data`. Never let that crash
   // the whole sidebar — coerce to [] and render empty instead.
-  const allRows = Array.isArray(localRows) ? localRows : [];
+  const allRows = (Array.isArray(localRows) ? localRows : []).filter(
+    (r) => !deletedIds.has(getId(r)),
+  );
   // `pinnedLead` marks that rows[0] is a selected row hoisted in from beyond the
   // top-N window (so the active line stays visible). `topCount` is the count of
   // genuine recent rows (excludes the pin) for the eyebrow headline.
@@ -142,12 +174,14 @@ export function SidebarRailShell<TRow>({
     const top = allRows.slice(0, limit);
     const base = { rows: top, topCount: top.length, pinnedLead: false };
     if (selectedId == null) return base;
+    // Never resurrect a just-deleted line via the pin.
+    if (deletedIds.has(selectedId)) return base;
     if (top.some((r) => getId(r) === selectedId)) return base;
     const fromDataset = allRows.find((r) => getId(r) === selectedId);
     const pin = fromDataset ?? selectedRow;
     if (!pin || getId(pin) !== selectedId) return base;
     return { rows: [pin, ...top], topCount: top.length, pinnedLead: true };
-  }, [allRows, limit, selectedId, selectedRow, getId]);
+  }, [allRows, limit, selectedId, selectedRow, getId, deletedIds]);
 
   const grouped = useMemo(() => {
     type Info = { groupSize: number; groupIndex: number; groupId: number | null };

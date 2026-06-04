@@ -21,8 +21,11 @@ export const CHIP_COL = {
   id: 'w-[64px]',
   /** TrackingChip / TrackingOrSkuScanChip / FnskuChip. */
   tracking: 'w-[64px]',
-  /** SerialChip (matches its long-standing fixed width). */
-  serial: 'w-[84px]',
+  /** SerialChip — same width as the other last-4 columns so the gap between
+   *  the tracking and serial values matches every other inter-column gap.
+   *  (Render the SerialChip content-width, not its default fixed 84px box, so
+   *  it doesn't reserve empty space on the left of this column.) */
+  serial: 'w-[64px]',
 } as const;
 
 export interface ChipColumn {

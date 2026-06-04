@@ -240,6 +240,13 @@ export function UnmatchedItemsSection({
           return;
         }
         toast.success('Item removed');
+        // Drop the line from the Recent rail immediately (and clear it from the
+        // workspace if it was the active line) — the rail otherwise re-pins the
+        // selected row from cache until the refetch lands. See SidebarRailShell
+        // deleteEvent + ReceivingSidebarPanel.
+        window.dispatchEvent(
+          new CustomEvent('receiving-line-deleted', { detail: { id: lineId } }),
+        );
         // Re-evaluate carton-level state: if the operator just removed the
         // last line, the carton goes back to "unfound" and the queue may
         // want to re-surface it.

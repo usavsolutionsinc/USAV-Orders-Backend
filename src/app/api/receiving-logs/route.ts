@@ -331,23 +331,30 @@ export const PATCH = withAuth(async (request: NextRequest, ctx) => {
         if (availableColumns.has('needs_test') && needsTestRaw !== undefined) {
             const nextNeedsTest = !!needsTestRaw;
             if (!nextNeedsTest && availableColumns.has('assigned_tech_id')) {
-                const currentRow = await pool.query<{ assigned_tech_id: number | null }>(
-                    `SELECT assigned_tech_id FROM receiving WHERE id = $1`,
+                const currentRow = await pool.query<{ needs_test: boolean | null; assigned_tech_id: number | null }>(
+                    `SELECT needs_test, assigned_tech_id FROM receiving WHERE id = $1`,
                     [id]
                 );
                 if (currentRow.rows.length === 0) {
                     return NextResponse.json({ error: 'Receiving log not found' }, { status: 404 });
                 }
-                const nextAssignedTechId = Number(assignedTechIdRaw);
-                const effectiveTechId =
-                    (Number.isFinite(nextAssignedTechId) && nextAssignedTechId > 0 ? nextAssignedTechId : null) ??
-                    currentRow.rows[0]?.assigned_tech_id ??
-                    null;
-                if (!effectiveTechId) {
-                    return NextResponse.json(
-                        { error: 'needs_test can only be cleared after a technician is assigned' },
-                        { status: 400 }
-                    );
+                // Only enforce the tech-assignment guard when needs_test is actually
+                // being cleared (true -> false). Re-saving a row that is already
+                // needs_test=false (e.g. local-pickup POs auto-saved on close) is a
+                // no-op for this field and must not be blocked.
+                const wasNeedsTest = currentRow.rows[0]?.needs_test !== false;
+                if (wasNeedsTest) {
+                    const nextAssignedTechId = Number(assignedTechIdRaw);
+                    const effectiveTechId =
+                        (Number.isFinite(nextAssignedTechId) && nextAssignedTechId > 0 ? nextAssignedTechId : null) ??
+                        currentRow.rows[0]?.assigned_tech_id ??
+                        null;
+                    if (!effectiveTechId) {
+                        return NextResponse.json(
+                            { error: 'needs_test can only be cleared after a technician is assigned' },
+                            { status: 400 }
+                        );
+                    }
                 }
             }
             updates.push(`needs_test = $${idx++}`);

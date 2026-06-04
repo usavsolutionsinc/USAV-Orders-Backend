@@ -2,7 +2,6 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { sidebarHeaderPillRowClass } from '@/components/layout/header-shell';
 import { SidebarShell } from '@/components/layout/SidebarShell';
 import { HorizontalButtonSlider, type HorizontalSliderItem } from '@/components/ui/HorizontalButtonSlider';
 import { sectionLabel, fieldLabel } from '@/design-system/tokens/typography/presets';
@@ -154,20 +153,6 @@ export function ReplenishSidebarPanel() {
   return (
     <SidebarShell
       className="font-dm-sans bg-white"
-      headerAbove={
-        /* Tab pills (2nd row) */
-        <div className={sidebarHeaderPillRowClass}>
-          <HorizontalButtonSlider
-            items={TAB_ITEMS}
-            value={activeTab}
-            onChange={(id) => updateTab(id as ReplenishTab)}
-            variant="nav"
-            dense
-            className="w-full"
-            aria-label="Replenish view"
-          />
-        </div>
-      }
       search={{
         value: localSearch,
         onChange: setLocalSearch,
@@ -176,6 +161,19 @@ export function ReplenishSidebarPanel() {
         variant: 'emerald',
         className: 'w-full',
       }}
+      headerRows={[
+        /* Tab pills — banded row directly below the search */
+        <HorizontalButtonSlider
+          key="tabs"
+          items={TAB_ITEMS}
+          value={activeTab}
+          onChange={(id) => updateTab(id as ReplenishTab)}
+          variant="nav"
+          dense
+          className="w-full"
+          aria-label="Replenish view"
+        />,
+      ]}
       bodyClassName="py-3"
     >
         {/* Refresh */}

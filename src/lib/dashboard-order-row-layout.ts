@@ -13,12 +13,9 @@ export function dashboardOrderRowShellClass(isMobile: boolean): string {
 
 export function dashboardOrderRowChipsClass(isMobile: boolean): string {
   const base = 'flex shrink-0 flex-wrap items-center gap-0.5';
-  // Desktop: the trailing chip carries a 6px right gutter (CopyChip's `px-1.5`).
-  // `-mr-1.5` pulls the cluster's right edge back by that gutter so whatever the
-  // last chip is — serial, tracking, FNSKU — its value lands flush with the
-  // day-group count above it (which sits at the same `pr-1` inset). Stays within
-  // the row's `px-3` padding, so no horizontal overflow.
+  // Desktop rows lay chips out as fixed columns via `ChipColumns` (which owns
+  // the flush-to-count). This free-flow variant is the mobile fallback.
   return isMobile
     ? `${base} w-full justify-end`
-    : `${base} justify-end pr-1 -mr-1.5`;
+    : `${base} justify-end pr-1`;
 }
