@@ -16,6 +16,7 @@
  */
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useSearchParams } from 'next/navigation';
 import {
   ReactFlow,
   Background,
@@ -27,6 +28,7 @@ import {
   type Node,
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
+import { highlightStatesFor, findCatalogItem } from './operations-catalog';
 
 interface FlowNode { status: string; count: number }
 interface FlowEdge { from: string; to: string; count: number; lastAt: string | null }
@@ -95,7 +97,10 @@ const LAYOUT: Record<string, { x: number; y: number; tone: Tone }> = {
 
 const WINDOWS = [30, 90, 365] as const;
 
-function buildGraph(data: Extract<FlowAuditResponse, { ok: true }>): {
+function buildGraph(
+  data: Extract<FlowAuditResponse, { ok: true }>,
+  highlight: Set<string> | null,
+): {
   nodes: Node[];
   edges: Edge[];
 } {
@@ -113,6 +118,7 @@ function buildGraph(data: Extract<FlowAuditResponse, { ok: true }>): {
     const pos = LAYOUT[status] ?? { x: -260, y: unmappedRow++ * 90, tone: 'slate' as Tone };
     const tone = TONE[pos.tone];
     const count = occupancy.get(status) ?? 0;
+    const spotlit = !highlight || highlight.has(status);
     return {
       id: status,
       position: { x: pos.x, y: pos.y },
@@ -131,7 +137,8 @@ function buildGraph(data: Extract<FlowAuditResponse, { ok: true }>): {
         borderRadius: 12,
         width: 132,
         padding: '8px 6px',
-        boxShadow: '0 1px 2px rgba(15,23,42,0.06)',
+        opacity: spotlit ? 1 : 0.22,
+        boxShadow: spotlit && highlight ? `0 0 0 3px ${tone.border}44` : '0 1px 2px rgba(15,23,42,0.06)',
       },
     };
   });
@@ -141,14 +148,15 @@ function buildGraph(data: Extract<FlowAuditResponse, { ok: true }>): {
     // Thickness scales with volume; thin edges still visible.
     const width = 1 + Math.round((e.count / maxCount) * 6);
     const hot = e.count / maxCount > 0.5;
+    const onPath = !highlight || (highlight.has(e.from) && highlight.has(e.to));
     return {
       id: `${e.from}->${e.to}`,
       source: e.from,
       target: e.to,
       label: String(e.count),
-      animated: hot,
+      animated: hot && onPath,
       markerEnd: { type: MarkerType.ArrowClosed, color: '#64748b' },
-      style: { stroke: hot ? '#475569' : '#94a3b8', strokeWidth: width, opacity: 0.85 },
+      style: { stroke: hot ? '#475569' : '#94a3b8', strokeWidth: width, opacity: onPath ? 0.85 : 0.12 },
       labelStyle: { fontSize: 11, fontWeight: 700, fill: '#334155' },
       labelBgStyle: { fill: '#ffffff', fillOpacity: 0.85 },
       labelBgPadding: [4, 2] as [number, number],
@@ -160,6 +168,8 @@ function buildGraph(data: Extract<FlowAuditResponse, { ok: true }>): {
 }
 
 export function OperationsFlowBoard() {
+  const searchParams = useSearchParams();
+  const selectedOps = searchParams.get('ops');
   const [days, setDays] = useState<number>(90);
   const [data, setData] = useState<FlowAuditResponse | null>(null);
   const [loading, setLoading] = useState(true);
@@ -180,7 +190,12 @@ export function OperationsFlowBoard() {
     void load(days);
   }, [load, days]);
 
-  const graph = useMemo(() => (data?.ok ? buildGraph(data) : { nodes: [], edges: [] }), [data]);
+  const highlight = useMemo(() => highlightStatesFor(selectedOps), [selectedOps]);
+  const spotlight = useMemo(() => findCatalogItem(selectedOps), [selectedOps]);
+  const graph = useMemo(
+    () => (data?.ok ? buildGraph(data, highlight) : { nodes: [], edges: [] }),
+    [data, highlight],
+  );
 
   return (
     <div className="flex h-full min-h-0 w-full flex-col bg-white">
@@ -188,7 +203,14 @@ export function OperationsFlowBoard() {
 
       <header className="flex items-center justify-between gap-3 border-b border-slate-200 px-5 py-3">
         <div className="min-w-0">
-          <h2 className="text-base font-bold tracking-tight text-slate-900">Operations · Item flow</h2>
+          <h2 className="text-base font-bold tracking-tight text-slate-900">
+            Operations · Item flow
+            {spotlight ? (
+              <span className="ml-2 rounded-full bg-blue-100 px-2 py-0.5 text-xs font-semibold text-blue-700">
+                Spotlight: {spotlight.item.label}
+              </span>
+            ) : null}
+          </h2>
           <p className="text-xs text-slate-500">
             How units actually move through the system, from real lifecycle events.
             {data?.ok ? (
