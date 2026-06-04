@@ -15,10 +15,13 @@
  * annotation, so the description reflects what's currently happening.
  */
 
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { FLOWS, type OpsFlow } from './operations-catalog';
 
 type Occupancy = Record<string, number>;
+
+/** Section order for the grouped flow display. */
+const GROUP_ORDER = ['Sourcing & intake', 'Outbound', 'Reverse & service', 'Inventory & ops'];
 
 export function OperationsFlowsDisplay() {
   const [occupancy, setOccupancy] = useState<Occupancy>({});
@@ -43,19 +46,42 @@ export function OperationsFlowsDisplay() {
     };
   }, []);
 
+  const sections = useMemo(() => {
+    const known = GROUP_ORDER.map((group) => ({
+      group,
+      flows: FLOWS.filter((f) => f.group === group).sort((a, b) => a.order - b.order),
+    }));
+    // Any flow whose group isn't in GROUP_ORDER still shows (defensive).
+    const extra = FLOWS.filter((f) => !GROUP_ORDER.includes(f.group));
+    if (extra.length) known.push({ group: 'Other', flows: extra.sort((a, b) => a.order - b.order) });
+    return known.filter((s) => s.flows.length > 0);
+  }, []);
+
   return (
     <div className="h-full min-h-0 w-full overflow-auto bg-slate-50">
       <header className="border-b border-slate-200 bg-white px-6 py-4">
         <h2 className="text-base font-bold tracking-tight text-slate-900">Operations · System flows</h2>
         <p className="mt-0.5 text-xs text-slate-500">
-          The item flows currently implemented in the codebase, end to end. Each step shows the lifecycle
-          state, the station that owns it, and the signal that marks it.
+          The {FLOWS.length} item flows currently implemented in the codebase, end to end. Each step shows the
+          lifecycle stage, the station that owns it, the signal that marks it, and the route that performs it.
         </p>
       </header>
 
-      <div className="mx-auto max-w-3xl space-y-5 px-6 py-6">
-        {FLOWS.map((flow) => (
-          <FlowCard key={flow.key} flow={flow} occupancy={occupancy} />
+      <div className="mx-auto max-w-3xl space-y-8 px-6 py-6">
+        {sections.map((section) => (
+          <div key={section.group}>
+            <h3 className="mb-3 flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-slate-400">
+              {section.group}
+              <span className="rounded-full bg-slate-200 px-1.5 py-0.5 text-[10px] font-semibold text-slate-500">
+                {section.flows.length}
+              </span>
+            </h3>
+            <div className="space-y-5">
+              {section.flows.map((flow) => (
+                <FlowCard key={flow.key} flow={flow} occupancy={occupancy} />
+              ))}
+            </div>
+          </div>
         ))}
       </div>
     </div>

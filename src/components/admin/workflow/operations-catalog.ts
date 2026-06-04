@@ -62,6 +62,10 @@ export interface OpsFlow {
   key: string;
   label: string;
   color: string;
+  /** Section the flow is grouped under in the display. */
+  group: string;
+  /** Sort order within the section. */
+  order: number;
   blurb: string;
   stations: string[];
   /** Where the status vocabulary is defined (file · enum/column). */
@@ -319,6 +323,8 @@ export const IDENTIFIERS: OpsIdentifier[] = [
 export const FLOWS: OpsFlow[] = [
   {
     key: 'receiving',
+    group: 'Sourcing & intake',
+    order: 13,
     label: 'Receiving flow',
     color: '#3b82f6',
     blurb: 'From a carton on the dock to a tested, finalized line. Stage = receiving_lines.workflow_status.',
@@ -343,6 +349,8 @@ export const FLOWS: OpsFlow[] = [
   },
   {
     key: 'fba',
+    group: 'Outbound',
+    order: 20,
     label: 'FBA flow',
     color: '#f59e0b',
     blurb: 'Scan FNSKUs → Planned → Tested (ready to go) → Packed → Combined → Shipped. Stage = fba_shipment_items.status.',
@@ -363,6 +371,8 @@ export const FLOWS: OpsFlow[] = [
   },
   {
     key: 'shipping',
+    group: 'Outbound',
+    order: 21,
     label: 'Outbound order flow',
     color: '#6366f1',
     blurb: 'From a stocked unit to a shipped customer order. Stage = order_unit_allocations.state.',
@@ -384,6 +394,8 @@ export const FLOWS: OpsFlow[] = [
   },
   {
     key: 'repair',
+    group: 'Reverse & service',
+    order: 30,
     label: 'Repair flow',
     color: '#f97316',
     blurb: 'Walk-in / mail-in repair service. Free-text status with Incoming / Active / Done tabs.',
@@ -402,6 +414,8 @@ export const FLOWS: OpsFlow[] = [
   },
   {
     key: 'returns',
+    group: 'Reverse & service',
+    order: 31,
     label: 'Returns / RMA flow',
     color: '#f43f5e',
     blurb: 'Customer return or vendor RTV; per-unit dispositions on receipt. Stage = rma_authorizations.status.',
@@ -419,6 +433,101 @@ export const FLOWS: OpsFlow[] = [
       { stage: 'Canceled', note: 'Cancelled before receipt' },
       { stage: 'Unmatched return', note: 'orders_exceptions: open → resolved when return tracking matches an order' },
     ],
+  },
+  {
+    key: 'po_intake',
+    group: 'Sourcing & intake',
+    order: 10,
+    label: 'PO intake (Gmail triage)',
+    color: '#0ea5e9',
+    blurb: 'Vendor PO emails triaged from Gmail into Zoho purchase orders. Stage = email_missing_purchase_orders.pile.',
+    stations: ['ADMIN'],
+    source: 'email_missing_purchase_orders.pile · 2026-05-24 po_mailbox_triage',
+    code: ['/api/admin/po-gmail/triage', '/api/admin/po-gmail/triage/[id]/extract', '/api/admin/po-gmail/triage/[id]/create-zoho-draft', 'src/lib/po-gmail'],
+    steps: [
+      { stage: 'Inbox', key: 'inbox', station: 'ADMIN', note: 'Email synced from Gmail, awaiting triage', signal: 'Gmail OAuth sync' },
+      { stage: 'Upload', key: 'upload', station: 'ADMIN', note: 'Triaged & fields extracted — queued for Zoho PO creation', by: '/api/admin/po-gmail/triage/[id]/extract' },
+      { stage: 'Done', key: 'done', station: 'ADMIN', note: 'Zoho PO draft created; email archived → feeds the Receiving flow', by: '/api/admin/po-gmail/triage/[id]/create-zoho-draft' },
+    ],
+    offPath: [{ stage: 'Ignore', note: 'Marked as noise / duplicate — excluded from the workflow' }],
+  },
+  {
+    key: 'replenishment',
+    group: 'Sourcing & intake',
+    order: 11,
+    label: 'Replenishment (purchasing)',
+    color: '#14b8a6',
+    blurb: 'Low stock detected → reviewed → PO created → received. Stage = replenishment_requests.status.',
+    stations: ['ADMIN', 'RECEIVING'],
+    source: 'replenishment_status enum · src/lib/replenishment.ts',
+    code: ['src/lib/replenishment.ts', '/api/need-to-order/[id]', '/api/replenish/bulk-create-po', '/api/qstash/replenishment/sync'],
+    steps: [
+      { stage: 'Detected', key: 'detected', station: 'ADMIN', note: 'An order hit insufficient stock → request auto-created', signal: 'auto-detect' },
+      { stage: 'Review', key: 'pending_review', station: 'ADMIN', note: 'Buyer reviews vendor / qty / cost' },
+      { stage: 'Plan PO', key: 'planned_for_po', station: 'ADMIN', note: 'Reviewed and staged for PO creation' },
+      { stage: 'PO Sent', key: 'po_created', station: 'ADMIN', note: 'Zoho PO created and sent to vendor', by: '/api/replenish/bulk-create-po' },
+      { stage: 'Awaiting Receipt', key: 'waiting_for_receipt', station: 'RECEIVING', note: 'PO open/confirmed in Zoho; goods in transit', signal: 'Zoho sync' },
+      { stage: 'Fulfilled', key: 'fulfilled', station: 'RECEIVING', note: 'Received & QA-passed → need satisfied', signal: 'reconcile' },
+    ],
+    offPath: [
+      { stage: 'Cancelled', note: 'Cancelled, or incoming stock already covers demand' },
+      { stage: 'Pick-face replenishment', note: 'Separate warehouse flow: REQUESTED → IN_PROGRESS → COMPLETE (/warehouse/replenishment, replenishment_tasks)' },
+    ],
+  },
+  {
+    key: 'walk_in',
+    group: 'Sourcing & intake',
+    order: 14,
+    label: 'Walk-in / local pickup',
+    color: '#a855f7',
+    blurb: 'Walk-in intake cart → Zoho PO + receiving record. Stage = local_pickup_orders.status.',
+    stations: ['ADMIN', 'RECEIVING'],
+    source: 'local_pickup_orders.status · 2026-04-13 create_local_pickup_orders',
+    code: ['/api/local-pickup-orders', '/api/local-pickup-orders/[id]/finalize', '/api/local-pickup-orders/[id]/void', 'src/components/work-orders/localPickupStore.ts'],
+    steps: [
+      { stage: 'Draft', key: 'DRAFT', station: 'ADMIN', note: 'Cart open — items being added (editable only while DRAFT)', by: 'POST /api/local-pickup-orders' },
+      { stage: 'Completed', key: 'COMPLETED', station: 'RECEIVING', note: 'Finalized → Zoho PO (LCPU-…) + receiving row created; label printable', by: '/api/local-pickup-orders/[id]/finalize' },
+    ],
+    offPath: [{ stage: 'Voided', note: 'Cancelled; items discarded (requires orders.void)' }],
+  },
+  {
+    key: 'cycle_count',
+    group: 'Inventory & ops',
+    order: 40,
+    label: 'Cycle count',
+    color: '#0891b2',
+    blurb: 'Bin audit: snapshot → count → variance review. Stage = cycle_count_lines.status.',
+    stations: ['RECEIVING', 'ADMIN'],
+    source: 'cycle_count_lines.status · src/lib/inventory/cycle-count.ts',
+    code: ['src/lib/inventory/cycle-count.ts', '/api/cycle-counts/campaigns', '/api/cycle-counts/lines/[id]', '/admin/inventory/cycle-counts'],
+    steps: [
+      { stage: 'Pending', key: 'pending', station: 'Floor', note: 'Bin snapshot created from bin_contents; awaiting count', by: 'createCampaign' },
+      { stage: 'Counted', key: 'counted', station: 'Floor', note: 'Count within variance tolerance → auto-approves on close', by: '/api/cycle-counts/lines/[id]' },
+      { stage: 'Pending Review', key: 'pending_review', station: 'Admin', note: 'Count exceeded tolerance → manual review' },
+      { stage: 'Approved', key: 'approved', station: 'Admin', note: 'Approved → bin_contents + sku_stock_ledger adjusted' },
+    ],
+    offPath: [
+      { stage: 'Rejected', note: 'Count rejected; no stock change applied' },
+      { stage: 'Campaign: open → closed', note: 'cycle_count_campaigns.status; closing auto-approves in-tolerance lines' },
+    ],
+  },
+  {
+    key: 'work_assignments',
+    group: 'Inventory & ops',
+    order: 41,
+    label: 'Work assignments',
+    color: '#64748b',
+    blurb: 'The task queue that routes work to techs/packers across stations. Stage = work_assignments.status.',
+    stations: ['TECH', 'PACK'],
+    source: 'assignment_status enum · work_assignments.status',
+    code: ['src/lib/neon/assignments-queries.ts', '/api/assignments', '/api/assignments/next', '/api/work-orders'],
+    steps: [
+      { stage: 'Open', key: 'OPEN', station: 'Queue', note: 'Work unit created, not yet claimed' },
+      { stage: 'Assigned', key: 'ASSIGNED', station: 'TECH / PACK', note: 'Claimed by staff; in their queue', signal: 'assigned_at' },
+      { stage: 'In Progress', key: 'IN_PROGRESS', station: 'TECH / PACK', note: 'Started — first scan / opened checklist', signal: 'started_at' },
+      { stage: 'Done', key: 'DONE', station: 'TECH / PACK', note: 'Work completed', signal: 'completed_at' },
+    ],
+    offPath: [{ stage: 'Canceled', note: 'Abandoned, or auto-canceled when the parent order/receiving row is deleted' }],
   },
 ];
 
