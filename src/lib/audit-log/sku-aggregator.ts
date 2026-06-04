@@ -96,14 +96,16 @@ export async function listSkus(opts: ListOpts): Promise<SkuSummary[]> {
         LEFT JOIN sku sk ON sk.id = tsn.source_sku_id
        WHERE COALESCE(sk.static_sku, '') <> ''
       UNION ALL
-      -- Receiving lifecycle.
+      -- Lifecycle spine. LEFT JOIN + COALESCE(rl.sku, ie.sku) so line-less
+      -- serial/SKU events (e.g. ADMIN label prints → LABELED, which carry
+      -- ie.sku but no receiving_line_id) still anchor to their SKU here.
       SELECT ie.occurred_at AS occurred_at,
              ie.actor_staff_id AS staff_id,
-             COALESCE(rl.sku, '') AS sku,
-             COALESCE(rl.item_name, NULL) AS item_name
+             COALESCE(rl.sku, ie.sku, '') AS sku,
+             rl.item_name AS item_name
         FROM inventory_events ie
-        JOIN receiving_lines rl ON rl.id = ie.receiving_line_id
-       WHERE COALESCE(rl.sku, '') <> ''
+        LEFT JOIN receiving_lines rl ON rl.id = ie.receiving_line_id
+       WHERE COALESCE(rl.sku, ie.sku, '') <> ''
     )
     SELECT sku,
            MAX(item_name) AS item_name,
@@ -209,11 +211,14 @@ export async function getSkuDetail(
     techParams,
   );
 
-  // 3) Receiving lifecycle.
+  // 3) Lifecycle spine. LEFT JOIN + COALESCE(rl.sku, ie.sku) so line-less
+  //    serial/SKU events (e.g. ADMIN label prints → LABELED, which carry
+  //    ie.sku but no receiving_line_id) surface under their SKU here — the
+  //    SKU view is the home for label-print activity that has no line/PO/tracking.
   const recParams: unknown[] = [sku];
   let p3 = buildDateClauses('ie.occurred_at', recParams.length);
   recParams.push(...p3.params);
-  let recWhere = `rl.sku = $1${p3.sql ? ` AND ${p3.sql}` : ''}`;
+  let recWhere = `COALESCE(rl.sku, ie.sku) = $1${p3.sql ? ` AND ${p3.sql}` : ''}`;
   if (staffId != null) {
     recParams.push(staffId);
     recWhere += ` AND ie.actor_staff_id = $${recParams.length}`;
@@ -228,7 +233,7 @@ export async function getSkuDetail(
             rl.receiving_id,
             rl.zoho_purchaseorder_id
        FROM inventory_events ie
-       JOIN receiving_lines rl ON rl.id = ie.receiving_line_id
+       LEFT JOIN receiving_lines rl ON rl.id = ie.receiving_line_id
        LEFT JOIN staff s ON s.id = ie.actor_staff_id
        WHERE ${recWhere}
        ORDER BY ie.occurred_at DESC

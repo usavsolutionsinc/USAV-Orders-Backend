@@ -114,9 +114,19 @@ too). The **Receiving** client keeps its own richer renderer (per-kind icons, wo
 badges, carton/line grouping) — intentionally not folded in (high risk, no benefit).
 `tsc` clean; no stale references.
 
-**Remaining (optional, not blocking):**
-- Product decisions: Q2 (where line-less ADMIN label-print rows surface) / Q4 (retire the
-  tracking anchor, or keep as fallback).
+**Resolved — Q2 (line-less ADMIN label-print rows → SKU view):** decided the SKU view is
+their home (they're SKU-scoped via `source_sku_id`/`ie.sku`; a synthetic "unattached"
+bucket in the PO/Tech timelines would contradict the Line-under-PO anchor). Implemented in
+`sku-aggregator.ts`: the lifecycle source now `LEFT JOIN receiving_lines` +
+`COALESCE(rl.sku, ie.sku)` (both `listSkus` and `getSkuDetail`), so line-less serial/SKU
+events (`LABELED`, `GRADED`, `PUTAWAY`, …) surface under their SKU. Verified: SKU `00282`
+now shows 36 `LABELED` (+ GRADED/PUTAWAY) events the old inner join dropped.
+
+**Resolved — Q4 (keep tracking anchor as fallback):** no change needed —
+`getTechSessionDetail` already resolves tracking → `shipment_id` first, then falls back to
+the PO anchor. Tracking stays as the fallback for standalone/FBA sessions.
+
+**Initiative complete.** All phases (0–4) + both product decisions shipped.
 - Cosmetic: an item tested via tracking AND present under a PO can appear as two sessions
   (one per anchor). Acceptable; de-dupe later if it bothers operators.
 
