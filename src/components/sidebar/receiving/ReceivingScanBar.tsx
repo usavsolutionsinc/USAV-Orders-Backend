@@ -2,7 +2,7 @@
 
 import { useEffect, useRef } from 'react';
 import { Barcode, Search } from '@/components/Icons';
-import { SidebarSearchBar } from '@/components/ui/SidebarSearchBar';
+import { SidebarShell } from '@/components/layout/SidebarShell';
 
 interface Props {
   /**
@@ -52,27 +52,29 @@ export function ReceivingScanBar({
   // pills row above already has a gray bottom border — adding a top border
   // here would stack on top of it and read as a doubled indigo+gray stripe.
   return (
-    <div className={`transition-colors ${searchMode ? 'bg-indigo-50/30' : ''}`}>
-      <SidebarSearchBar
-        key={scanBarKey}
-        value={value}
-        onChange={onChange}
-        onSearch={onSubmit}
-        onClear={() => onChange('')}
-        inputRef={inputRef}
-        placeholder={searchMode ? 'Search tracking or PO #…' : 'Scan tracking…'}
-        variant={searchMode ? 'purple' : 'blue'}
-        isSearching={isSearching}
-        leadingIcon={
-          searchMode ? (
-            <Search className="w-[14px] h-[14px]" />
-          ) : (
-            <Barcode className="w-[14px] h-[14px]" />
-          )
-        }
-        className="w-full"
-        autoFocus
-      />
-    </div>
+    // Header section (not a full panel): override the shell's h-full + overflow
+    // so it sizes to the 40px band. The `key` remounts the shell — and the
+    // search inside it — so the inner draft state resets after submit.
+    <SidebarShell
+      key={scanBarKey}
+      className={`h-auto overflow-visible transition-colors ${searchMode ? 'bg-indigo-50/30' : ''}`}
+      search={{
+        value,
+        onChange,
+        onSearch: onSubmit,
+        onClear: () => onChange(''),
+        inputRef,
+        placeholder: searchMode ? 'Search tracking or PO #…' : 'Scan tracking…',
+        variant: searchMode ? 'purple' : 'blue',
+        isSearching,
+        leadingIcon: searchMode ? (
+          <Search className="w-[14px] h-[14px]" />
+        ) : (
+          <Barcode className="w-[14px] h-[14px]" />
+        ),
+        className: 'w-full',
+        autoFocus: true,
+      }}
+    />
   );
 }

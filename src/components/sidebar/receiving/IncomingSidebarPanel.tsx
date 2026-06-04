@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import type { DateRange } from 'react-day-picker';
-import { SidebarSearchBar } from '@/components/ui/SidebarSearchBar';
+import { SidebarShell } from '@/components/layout/SidebarShell';
 import { DateRangePickerField } from '@/design-system/components/DateRangePickerField';
 import { Package, Truck, AlertTriangle, Clock, ChevronDown, RefreshCw, Filter } from '@/components/Icons';
 import { toast } from '@/lib/toast';
@@ -402,15 +402,13 @@ export function IncomingSidebarPanel() {
   const activeFilterCount = (state ? 1 : 0) + (poFrom ? 1 : 0);
 
   return (
-    <div className="flex h-full min-h-0 flex-col">
-      {/* Search sits flush in its 40px band (matches the pending/products
-          reference); the filter + refresh controls form a block below it. */}
-      <SidebarSearchBar
-        value={search}
-        onChange={setSearch}
-        placeholder="Search PO #, tracking, SKU…"
-      />
-      <div className="shrink-0 space-y-2 border-b border-gray-200 bg-white pb-2">
+    // overflow-visible so the filter popover (absolute) isn't clipped — this
+    // panel has no scroll body, only the search + filter/refresh controls.
+    <SidebarShell
+      className="overflow-visible"
+      search={{ value: search, onChange: setSearch, placeholder: 'Search PO #, tracking, SKU…' }}
+      headerBelow={
+        <div className="space-y-2 border-b border-gray-200 bg-white pb-2">
         {/* Single filter entry point — the delivery-state facet, PO purchase
             date range, and sort axis all condense into one popover below the
             search bar (mirrors the dashboard's ShippedCarrierFilters). */}
@@ -520,11 +518,8 @@ export function IncomingSidebarPanel() {
           {refreshing ? 'Refreshing tracking…' : 'Refresh tracking'}
         </button>
         </div>
-      </div>
-
-      {/* The "Delivered · needs receiving" boxes now render in the main pane —
-          ReceivingLinesTable remaps them onto the standard ReceivingLineOrderRow
-          when the "Delivered · not scanned" facet is selected. */}
-    </div>
+        </div>
+      }
+    />
   );
 }

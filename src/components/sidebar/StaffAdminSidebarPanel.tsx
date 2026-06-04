@@ -3,7 +3,6 @@
 import { useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { qk } from '@/queries/keys';
-import { SearchBar } from '@/components/ui/SearchBar';
 import {
   AdminSidebarShell,
   AdminFilterChips,
@@ -101,21 +100,17 @@ export function StaffAdminSidebarPanel() {
   // separators read cleanly.
   return (
     <AdminSidebarShell
-      search={
-        <SearchBar
-          value={search}
-          onChange={(v) =>
-            setParam((p) => {
-              if (v.trim()) p.set('search', v.trim());
-              else p.delete('search');
-            })
-          }
-          onClear={() => setParam((p) => p.delete('search'))}
-          placeholder="Search name or ID"
-          variant="blue"
-          className="w-full"
-        />
-      }
+      search={{
+        value: search,
+        onChange: (v) =>
+          setParam((p) => {
+            if (v.trim()) p.set('search', v.trim());
+            else p.delete('search');
+          }),
+        onClear: () => setParam((p) => p.delete('search')),
+        placeholder: 'Search name or ID',
+        variant: 'blue',
+      }}
       filters={
         <AdminFilterChips
           options={STAFF_VIEW_OPTIONS}

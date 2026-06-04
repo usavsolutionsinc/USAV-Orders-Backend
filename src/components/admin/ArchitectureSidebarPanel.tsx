@@ -11,7 +11,6 @@
  */
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { SearchBar } from '@/components/ui/SearchBar';
 import { AdminSidebarShell, AdminPickerRow, useAdminUrlState } from './shared';
 
 type DiagramPayload = { title: string; description: string; mermaid: string };
@@ -96,21 +95,17 @@ export function ArchitectureSidebarPanel() {
 
   return (
     <AdminSidebarShell
-      search={
-        <SearchBar
-          value={search}
-          onChange={(v) =>
-            setParam((p) => {
-              if (v.trim()) p.set('search', v.trim());
-              else p.delete('search');
-            })
-          }
-          onClear={() => setParam((p) => p.delete('search'))}
-          placeholder="Search diagrams"
-          variant="blue"
-          className="w-full"
-        />
-      }
+      search={{
+        value: search,
+        onChange: (v) =>
+          setParam((p) => {
+            if (v.trim()) p.set('search', v.trim());
+            else p.delete('search');
+          }),
+        onClear: () => setParam((p) => p.delete('search')),
+        placeholder: 'Search diagrams',
+        variant: 'blue',
+      }}
       stats={
         manifest ? (
           <div className="flex w-full flex-col gap-0.5">

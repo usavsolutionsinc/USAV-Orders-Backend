@@ -1,0 +1,53 @@
+/**
+ * Single source of truth for the `view` axis on `/api/receiving-lines`.
+ *
+ * Both the API route handler (which branches its SQL `WHERE` on the view) and
+ * the client table (which decides *which* view each display mode requests) MUST
+ * import from here. Previously each side declared its own literal union; they
+ * drifted — the server learned `activity`/`testing` while the client union
+ * still capped out at `incoming`, so the client literally could not request the
+ * view History needed. That drift is exactly what let "incoming orders" leak
+ * into the History tab. Keep this list authoritative and let the compiler
+ * enforce it on both ends.
+ */
+
+/**
+ * Every server-supported value of `?view=`.
+ *
+ * - `all`      — recent + received union; INCLUDES untouched-incoming EXPECTED
+ *                rows. The broad bucket used by the Receive workspace.
+ * - `recent`   — freshly scanned, not yet matched/received.
+ * - `received` — physically in the warehouse (MATCHED → DONE).
+ * - `incoming` — Zoho POs issued but not yet touched (EXPECTED, 0 received).
+ * - `activity` — `all` minus untouched-incoming. The "what was actually
+ *                scanned/unpacked" feed backing the History tab + recent rail.
+ * - `testing`  — lines with at least one recorded testing verdict.
+ */
+export const RECEIVING_VIEWS = [
+  'all',
+  'recent',
+  'received',
+  'incoming',
+  'activity',
+  'testing',
+] as const;
+
+export type ReceivingView = (typeof RECEIVING_VIEWS)[number];
+
+const RECEIVING_VIEW_SET: ReadonlySet<string> = new Set(RECEIVING_VIEWS);
+
+/** True when `value` is one of the known {@link RECEIVING_VIEWS}. */
+export function isReceivingView(value: unknown): value is ReceivingView {
+  return typeof value === 'string' && RECEIVING_VIEW_SET.has(value);
+}
+
+/**
+ * Parse a raw `?view=` query value. Returns the matched {@link ReceivingView},
+ * or `null` for anything unrecognized/absent (the server treats `null` as
+ * "fall back to week-range scoping").
+ */
+export function parseReceivingView(raw: string | null | undefined): ReceivingView | null {
+  if (!raw) return null;
+  const normalized = raw.trim().toLowerCase();
+  return isReceivingView(normalized) ? normalized : null;
+}

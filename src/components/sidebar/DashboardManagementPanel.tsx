@@ -20,8 +20,7 @@ import {
 } from '@/components/Icons';
 import { DashboardShippedSearchHandoffCard } from '@/components/dashboard/DashboardShippedSearchHandoffCard';
 import { RecentSearchesList } from '@/components/sidebar/RecentSearchesList';
-import { SidebarSearchBar } from '@/components/ui/SidebarSearchBar';
-import { SIDEBAR_GUTTER } from '@/components/layout/header-shell';
+import { SidebarShell } from '@/components/layout/SidebarShell';
 import { ShippedIntakeForm, type ShippedFormData } from '@/components/shipped';
 import { sectionLabel, fieldLabel, microBadge } from '@/design-system/tokens/typography/presets';
 import { dispatchUsavRefreshData, invalidateDashboardOrderQueries } from '@/lib/dashboard-query-invalidation';
@@ -517,32 +516,37 @@ export function DashboardManagementPanel({
   const visibleSearchHistory = showAllSearchHistory ? searchHistory : searchHistory.slice(0, 3);
   return (
     <>
-      <motion.div initial="hidden" animate="visible" variants={containerVariants} className="h-full flex flex-col overflow-hidden">
-        {filterControl ? (
-          <motion.div variants={itemVariants} className="relative z-20">
-            {filterControl}
-          </motion.div>
-        ) : null}
-        <SidebarSearchBar
-            value={searchQuery}
-            onChange={handleInputChange}
-            onClear={() => { setSearchQuery(''); handleSearch(''); }}
-            inputRef={searchInputRef}
-            placeholder="Search order ID, tracking, SKU, title, customer..."
-            variant="blue"
-            rightElement={
-              <button
-                type="button"
-                onClick={handleOpenIntakeForm}
-                className="rounded-xl bg-emerald-500 p-2.5 text-white transition-colors hover:bg-emerald-600 disabled:bg-gray-300"
-                title="New Order Entry"
-                aria-label="Open new order entry form"
-              >
-                <Plus className="h-5 w-5" />
-              </button>
-            }
-        />
-        <div className={`h-full flex flex-col space-y-6 overflow-y-auto scrollbar-hide ${SIDEBAR_GUTTER} pb-6 pt-4`}>
+      <SidebarShell
+        as={motion.div}
+        containerProps={{ initial: 'hidden', animate: 'visible', variants: containerVariants }}
+        headerAbove={
+          filterControl ? (
+            <motion.div variants={itemVariants} className="relative z-20">
+              {filterControl}
+            </motion.div>
+          ) : null
+        }
+        search={{
+          value: searchQuery,
+          onChange: handleInputChange,
+          onClear: () => { setSearchQuery(''); handleSearch(''); },
+          inputRef: searchInputRef,
+          placeholder: 'Search order ID, tracking, SKU, title, customer...',
+          variant: 'blue',
+          rightElement: (
+            <button
+              type="button"
+              onClick={handleOpenIntakeForm}
+              className="rounded-xl bg-emerald-500 p-2.5 text-white transition-colors hover:bg-emerald-600 disabled:bg-gray-300"
+              title="New Order Entry"
+              aria-label="Open new order entry form"
+            >
+              <Plus className="h-5 w-5" />
+            </button>
+          ),
+        }}
+        bodyClassName="flex flex-col space-y-6 scrollbar-hide pb-6"
+      >
           <div className="space-y-4">
             <motion.div variants={itemVariants} className="-mt-2">
               <DashboardShippedSearchHandoffCard
@@ -763,9 +767,7 @@ export function DashboardManagementPanel({
               ) : null}
             </AnimatePresence>
           </div>
-
-        </div>
-      </motion.div>
+        </SidebarShell>
 
       <OrderSyncDialog
         open={isSyncDialogOpen}

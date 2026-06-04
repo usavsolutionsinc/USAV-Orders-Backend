@@ -132,6 +132,28 @@ export function isFieldConfirmed(
   return Boolean(getFieldState(state, field)?.confirmed_at);
 }
 
+/**
+ * AI-suggested triage pile, written into triage_state.suggested_pile by the
+ * extract endpoint. Advisory only — the operator confirms before the email
+ * moves. The model never suggests the terminal `done` pile.
+ */
+export interface SuggestedPileState {
+  value: Exclude<TriagePile, 'done'>;
+  confidence: 'high' | 'medium' | 'low';
+  source: 'llm';
+  extracted_at: string;
+}
+
+export function getSuggestedPile(
+  state: Record<string, unknown>,
+): SuggestedPileState | undefined {
+  const sp = state?.suggested_pile;
+  if (!sp || typeof sp !== 'object') return undefined;
+  const value = (sp as Record<string, unknown>).value;
+  if (value !== 'upload' && value !== 'ignore' && value !== 'inbox') return undefined;
+  return sp as SuggestedPileState;
+}
+
 export function emptyPiles(): TriagePiles {
   return {
     inbox:  { items: [], count: 0, truncated: false },

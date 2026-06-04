@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { SIDEBAR_GUTTER } from '@/components/layout/header-shell';
-import { SidebarSearchBar } from '@/components/ui/SidebarSearchBar';
+import { SidebarShell } from '@/components/layout/SidebarShell';
 import { FileText, ExternalLink } from '@/components/Icons';
 import { sectionLabel } from '@/design-system/tokens/typography/presets';
 
@@ -144,18 +144,21 @@ export function ManualsSidebar({ embedded = false }: { embedded?: boolean }) {
   };
 
   return (
-    <div className="h-full flex flex-col overflow-hidden">
-      {!embedded && (
-        <SidebarSearchBar
-          value={localSearch}
-          onChange={handleSearchChange}
-          onClear={() => handleSearchChange('')}
-          placeholder="Search product name..."
-          variant="blue"
-          isSearching={isLoading}
-        />
-      )}
-
+    <SidebarShell
+      search={
+        embedded
+          ? undefined
+          : {
+              value: localSearch,
+              onChange: handleSearchChange,
+              onClear: () => handleSearchChange(''),
+              placeholder: 'Search product name...',
+              variant: 'blue',
+              isSearching: isLoading,
+            }
+      }
+      bodyClassName="flex flex-col overflow-hidden p-0"
+    >
       <div className={`flex-1 overflow-y-auto ${SIDEBAR_GUTTER} py-2`}>
         {isLoading && manuals.length === 0 ? (
           <div className="flex items-center justify-center py-12">
@@ -193,6 +196,6 @@ export function ManualsSidebar({ embedded = false }: { embedded?: boolean }) {
           {localSearch.trim() ? ` for "${localSearch.trim()}"` : ' total'}
         </p>
       </div>
-    </div>
+    </SidebarShell>
   );
 }

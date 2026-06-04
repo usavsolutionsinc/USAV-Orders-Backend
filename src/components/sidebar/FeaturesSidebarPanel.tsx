@@ -2,7 +2,7 @@
 
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Plus, X } from '@/components/Icons';
-import { SidebarSearchBar } from '@/components/ui/SidebarSearchBar';
+import { SidebarShell } from '@/components/layout/SidebarShell';
 import { ViewDropdown } from '@/components/ui/ViewDropdown';
 import { dataValue, fieldLabel } from '@/design-system/tokens/typography/presets';
 import { SIDEBAR_GUTTER } from '@/components/layout/header-shell';
@@ -88,49 +88,53 @@ export function FeaturesSidebarPanel() {
   };
 
   return (
-    <div className="flex h-full flex-col overflow-hidden bg-white">
-      <div className="border-b border-gray-200">
-        <ViewDropdown
-          options={FEATURE_TYPE_OPTIONS}
-          value={featureType}
-          onChange={(nextValue) => updateParams({ featureType: nextValue as FeatureTypeFilter })}
-          variant="boxy"
-          buttonClassName={`h-full w-full appearance-none bg-white px-4 py-3 pr-8 text-left ${fieldLabel} outline-none transition-all hover:bg-gray-50`}
-          optionClassName={fieldLabel}
-        />
-      </div>
+    <SidebarShell
+      className="bg-white"
+      headerAbove={
+        <>
+          <div className="border-b border-gray-200">
+            <ViewDropdown
+              options={FEATURE_TYPE_OPTIONS}
+              value={featureType}
+              onChange={(nextValue) => updateParams({ featureType: nextValue as FeatureTypeFilter })}
+              variant="boxy"
+              buttonClassName={`h-full w-full appearance-none bg-white px-4 py-3 pr-8 text-left ${fieldLabel} outline-none transition-all hover:bg-gray-50`}
+              optionClassName={fieldLabel}
+            />
+          </div>
 
-      <div className="border-b border-gray-200">
-        <ViewDropdown
-          options={FEATURE_STATUS_OPTIONS}
-          value={featureStatus}
-          onChange={(nextValue) => updateParams({ featureStatus: nextValue as FeatureStatusFilter })}
-          variant="boxy"
-          buttonClassName={`h-full w-full appearance-none bg-white px-4 py-3 pr-8 text-left ${fieldLabel} outline-none transition-all hover:bg-gray-50`}
-          optionClassName={fieldLabel}
-        />
-      </div>
+          <div className="border-b border-gray-200">
+            <ViewDropdown
+              options={FEATURE_STATUS_OPTIONS}
+              value={featureStatus}
+              onChange={(nextValue) => updateParams({ featureStatus: nextValue as FeatureStatusFilter })}
+              variant="boxy"
+              buttonClassName={`h-full w-full appearance-none bg-white px-4 py-3 pr-8 text-left ${fieldLabel} outline-none transition-all hover:bg-gray-50`}
+              optionClassName={fieldLabel}
+            />
+          </div>
 
-      <div className="border-b border-gray-200">
-        <ViewDropdown
-          options={FEATURE_ACTIVE_OPTIONS}
-          value={featureActive}
-          onChange={(nextValue) => updateParams({ featureActive: nextValue as FeatureActiveFilter })}
-          variant="boxy"
-          buttonClassName={`h-full w-full appearance-none bg-white px-4 py-3 pr-8 text-left ${fieldLabel} outline-none transition-all hover:bg-gray-50`}
-          optionClassName={fieldLabel}
-        />
-      </div>
-
-      <SidebarSearchBar
-        value={searchValue}
-        onChange={(value) => updateParams({ search: value })}
-        onClear={() => updateParams({ search: '' })}
-        placeholder="Search title or page"
-        variant="gray"
-      />
-
-      <div className="flex-1 overflow-y-auto">
+          <div className="border-b border-gray-200">
+            <ViewDropdown
+              options={FEATURE_ACTIVE_OPTIONS}
+              value={featureActive}
+              onChange={(nextValue) => updateParams({ featureActive: nextValue as FeatureActiveFilter })}
+              variant="boxy"
+              buttonClassName={`h-full w-full appearance-none bg-white px-4 py-3 pr-8 text-left ${fieldLabel} outline-none transition-all hover:bg-gray-50`}
+              optionClassName={fieldLabel}
+            />
+          </div>
+        </>
+      }
+      search={{
+        value: searchValue,
+        onChange: (value) => updateParams({ search: value }),
+        onClear: () => updateParams({ search: '' }),
+        placeholder: 'Search title or page',
+        variant: 'gray',
+      }}
+      bodyClassName="p-0"
+    >
         <button
           type="button"
           onClick={emitOpenAddFeature}
@@ -158,7 +162,6 @@ export function FeaturesSidebarPanel() {
             <X className="h-3.5 w-3.5" />
           </span>
         </button>
-      </div>
-    </div>
+    </SidebarShell>
   );
 }

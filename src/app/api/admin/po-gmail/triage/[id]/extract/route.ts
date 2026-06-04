@@ -46,6 +46,10 @@ interface StoredField {
 const LLM_FIELD_KEYS = ['vendor', 'po_date', 'total', 'currency', 'line_items_count', 'ship_to'] as const;
 type LlmFieldKey = (typeof LLM_FIELD_KEYS)[number];
 
+// Piles the model may suggest — excludes `done`, which is a Zoho-mirror
+// terminal state, not something to infer from an email body.
+const SUGGESTABLE_PILES = new Set(['upload', 'ignore', 'inbox']);
+
 function existingField(state: Record<string, unknown>, key: string): StoredField | null {
   const fields = state?.fields;
   if (!fields || typeof fields !== 'object') return null;
@@ -106,30 +110,58 @@ export async function POST(
       };
     }
 
-    // Persist via JSONB deep-merge (`||`) on `fields` only — we don't want
-    // to clobber sibling top-level keys (notes, etc).
-    const fieldsPatch = JSON.stringify({ fields: nextFields });
+    // Pile suggestion is advisory routing, not a PO field — store it under a
+    // sibling `suggested_pile` key (never the `pile` column). The UI surfaces
+    // it as a one-click confirm; the agent never moves the email itself.
+    // Re-running refreshes it freely (no sticky human state to protect).
+    const pileResult = llm.fields.triage_pile;
+    const suggestedPile =
+      pileResult && SUGGESTABLE_PILES.has(pileResult.value)
+        ? {
+            value: pileResult.value,
+            confidence: pileResult.confidence,
+            source: 'llm' as const,
+            extracted_at: now,
+          }
+        : null;
+
+    // Persist via JSONB deep-merge (`||`) on `fields`, plus a whole-value
+    // replace of `suggested_pile` when present. Sibling top-level keys
+    // (notes, etc.) are left untouched.
+    const fieldsPatch = JSON.stringify(nextFields);
+    const setExpr = suggestedPile
+      ? `jsonb_set(
+             jsonb_set(
+               triage_state, '{fields}',
+               COALESCE(triage_state->'fields', '{}'::jsonb) || ($2::jsonb), true
+             ),
+             '{suggested_pile}', ($3::jsonb), true
+           )`
+      : `jsonb_set(
+             triage_state, '{fields}',
+             COALESCE(triage_state->'fields', '{}'::jsonb) || ($2::jsonb), true
+           )`;
+    const sqlParams: unknown[] = suggestedPile
+      ? [id, fieldsPatch, JSON.stringify(suggestedPile)]
+      : [id, fieldsPatch];
+
     const { rows: updated } = await pool.query(
       `UPDATE email_missing_purchase_orders
-          SET triage_state = jsonb_set(
-              triage_state,
-              '{fields}',
-              COALESCE(triage_state->'fields', '{}'::jsonb) || ($2::jsonb)->'fields',
-              true
-          )
+          SET triage_state = ${setExpr}
         WHERE id = $1
         RETURNING id, gmail_msg_id, gmail_thread_id, po_numbers, po_numbers_norm,
                   email_subject, email_from, email_received, scanned_at,
                   pile, status, notes, assigned_to,
                   zoho_uploaded_po_number, zoho_uploaded_at,
                   triage_state, resolved_at`,
-      [id, fieldsPatch],
+      sqlParams,
     );
 
     return NextResponse.json({
       ok: true,
       row: updated[0],
       extracted: nextFields,
+      suggested_pile: suggestedPile,
       usage: llm.usage,
     });
   } catch (error) {

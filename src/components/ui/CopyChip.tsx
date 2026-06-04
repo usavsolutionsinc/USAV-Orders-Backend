@@ -86,6 +86,14 @@ export interface CopyChipProps {
    * Outer wrapper horizontal padding — `flush` aligns with sidebar grids where the chip icon lives in another column.
    */
   outerPad?: 'chip' | 'flush';
+  /**
+   * Horizontal alignment of the icon + label within the chip's width box.
+   * `start` (default) keeps content left. `end` right-aligns it — use for the
+   * trailing chip in a fixed-width column so the value hugs the right edge
+   * (e.g. the receiving table's serial chip lining up under the day count)
+   * while the column stays a stable width (no inter-row jitter).
+   */
+  align?: 'start' | 'end';
   /** When true, skip the global hover copy tooltip (e.g. chip has its own action menu). */
   disableTooltip?: boolean;
 }
@@ -102,6 +110,7 @@ export function CopyChip({
   fitDisplayWidth = false,
   onCopy,
   outerPad = 'chip',
+  align = 'start',
   disableTooltip = false,
 }: CopyChipProps) {
   const anchorId = useId();
@@ -158,11 +167,13 @@ export function CopyChip({
   };
 
   const outerPx = outerPad === 'flush' ? 'px-0' : 'px-1.5';
+  const justifyClass = align === 'end' ? 'justify-end' : 'justify-start';
+  const textAlignClass = align === 'end' ? 'text-right' : 'text-left';
 
   return (
     <div
       ref={chipRef}
-      className={`relative flex items-center justify-start ${outerPx} ${width}`}
+      className={`relative flex items-center ${justifyClass} ${outerPx} ${width}`}
       onMouseEnter={openTooltip}
       onMouseLeave={closeTooltip}
     >
@@ -177,13 +188,13 @@ export function CopyChip({
         title={!disableTooltip && !tooltipCtx && canCopy ? normalizedValue : undefined}
         className={
           fitDisplayWidth
-            ? 'inline-flex w-auto max-w-full items-center justify-start gap-0.5 py-0 bg-transparent text-left text-black transition-all active:scale-95 disabled:opacity-30'
-            : 'inline-flex w-full max-w-full items-center justify-start gap-0.5 py-0 bg-transparent text-left text-black transition-all active:scale-95 disabled:opacity-30'
+            ? `inline-flex w-auto max-w-full items-center ${justifyClass} gap-0.5 py-0 bg-transparent ${textAlignClass} text-black transition-all active:scale-95 disabled:opacity-30`
+            : `inline-flex w-full max-w-full items-center ${justifyClass} gap-0.5 py-0 bg-transparent ${textAlignClass} text-black transition-all active:scale-95 disabled:opacity-30`
         }
       >
         {icon ? <span className={`shrink-0 ${iconClass ?? ''}`}>{icon}</span> : null}
         <span
-          className={`${monoValue} tracking-tight leading-none border-b-2 pb-0.5 text-left ${displayOverflowClass} ${underlineClass} ${
+          className={`${monoValue} tracking-tight leading-none border-b-2 pb-0.5 ${textAlignClass} ${displayOverflowClass} ${underlineClass} ${
             fitDisplayWidth ? 'min-w-0 shrink-0' : 'min-w-0 flex-1'
           }`}
         >
@@ -391,11 +402,28 @@ export function TrackingOrSkuScanChip({ value }: { value: string }) {
   return <TrackingChip value={raw} display={display} />;
 }
 
+/**
+ * Resolves the label a {@link SerialChip} shows from whatever the caller passes
+ * as `display`. Callers are inconsistent about the "no serial" case — some pass
+ * `''`/`null`, some pass the literal sentinel `'SERIAL'`, some pass `'---'`.
+ * Running {@link getLast4Serial} blindly turned `'SERIAL'` into `'RIAL'`, so the
+ * empty chip rendered differently across tables. Normalize all empties to the
+ * single `'SERIAL'` placeholder; otherwise show the last-4 preview.
+ */
+function resolveSerialDisplay(display: string): string {
+  const raw = (display || '').trim();
+  if (isEmptyDisplayValue(raw) || raw === '---' || raw.toUpperCase() === 'SERIAL') {
+    return 'SERIAL';
+  }
+  return getLast4Serial(raw);
+}
+
 /** Device / unit serial number. Emerald / Barcode icon. */
 export const SerialChip = ({
   value,
   display,
   width = 'w-[84px] shrink-0',
+  align = 'start',
   disableTooltip = false,
 }: {
   value: string;
@@ -404,17 +432,20 @@ export const SerialChip = ({
    *  for the Barcode icon + 4-char mono value so every row aligns identically
    *  across all tables (tech / packer / shipped / receiving). */
   width?: string;
+  /** Right-align the icon + value inside the fixed-width box (trailing column). */
+  align?: 'start' | 'end';
   disableTooltip?: boolean;
 }) => (
   <CopyChip
     value={value}
-    display={isEmptyDisplayValue(display) ? 'SERIAL' : getLast4Serial(display)}
+    display={resolveSerialDisplay(display)}
     icon={<Barcode className="h-4 w-4 shrink-0" />}
     underlineClass="border-emerald-500"
     iconClass="inline-flex items-center justify-center text-emerald-500"
     width={width}
     truncateDisplay={false}
     fitDisplayWidth
+    align={align}
     disableTooltip={disableTooltip}
   />
 );

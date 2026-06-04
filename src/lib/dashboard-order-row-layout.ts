@@ -15,5 +15,5 @@ export function dashboardOrderRowChipsClass(isMobile: boolean): string {
   const base = 'flex shrink-0 flex-wrap items-center gap-0.5';
   return isMobile
     ? `${base} w-full justify-end`
-    : `${base} justify-end pr-2`;
+    : `${base} justify-end pr-1`;
 }

@@ -12,10 +12,12 @@ import { ReceivingIdentityChips } from '@/components/receiving/ReceivingIdentity
 import WeekHeader from '@/components/ui/WeekHeader';
 import { DesktopDateGroupHeader } from '@/components/ui/DesktopDateGroupHeader';
 import type { IncomingDeliveryState } from '@/components/sidebar/receiving/IncomingSidebarPanel';
+import { IncomingPaneHeader } from '@/components/sidebar/receiving/IncomingPaneHeader';
 import {
-  IncomingPaneHeader,
+  getReceivingModeDescriptor,
   INCOMING_PAGE_SIZE,
-} from '@/components/sidebar/receiving/IncomingPaneHeader';
+  type ReceivingModeContext,
+} from '@/lib/receiving/receiving-modes';
 import {
   computeWeekRange,
   formatDateWithOrdinal,
@@ -32,8 +34,11 @@ import {
   normalizeReceivingHistorySearchScope,
 } from '@/lib/receiving-history-search';
 
-/** Passed to `/api/receiving-lines` as `view`. The station dashboard uses a single full list. */
-export type ReceivingView = 'all' | 'recent' | 'received' | 'incoming';
+/**
+ * Passed to `/api/receiving-lines` as `view`. Re-exported from the shared
+ * contract so the server route and this client agree on the supported set.
+ */
+export type { ReceivingView } from '@/lib/receiving/receiving-views';
 
 export interface ReceivingLineRow {
   id: number;
@@ -304,7 +309,8 @@ export function ReceivingLineOrderRow({
         tracking={trackingValue}
         serialsCsv={serialsCsv}
         includeSerial={!isIncoming}
-        className={dashboardOrderRowChipsClass(isMobile)}
+        alignSerialEnd
+        className={`${dashboardOrderRowChipsClass(isMobile)}${isMobile ? '' : ' -mr-1.5'}`}
       />
     </div>
   );
@@ -411,12 +417,13 @@ export default function ReceivingLinesTable({ selectMode = false }: { selectMode
   const searchParams = useSearchParams();
   const { isMobile } = useUIModeOptional();
   const pageMode = searchParams.get('mode') ?? 'receive';
-  const isHistoryMode = pageMode === 'history';
-  const isIncomingMode = pageMode === 'incoming';
-  // Mode-driven view: Incoming filters server-side to EXPECTED Zoho POs
-  // with zero received. Other modes share the existing 'all' bucket which
-  // unions recent + received so the existing date grouping keeps working.
-  const view: ReceivingView = isIncomingMode ? 'incoming' : 'all';
+  // The active mode descriptor owns every data-layer decision (which API view
+  // to request, how to page/key/group/sort, the empty copy). Adding a mode =
+  // adding a registry entry; the component just delegates. isIncomingMode
+  // remains only for the presentational fork (Incoming's purpose-built header +
+  // row chips) and the incoming-only effects below.
+  const mode = getReceivingModeDescriptor(pageMode);
+  const isIncomingMode = mode.id === 'incoming';
 
   const historySearch = searchParams.get(RECEIVING_HISTORY_URL_PARAMS.q)?.trim() ?? '';
   const historySearchField = normalizeReceivingHistorySearchField(
@@ -457,16 +464,44 @@ export default function ReceivingLinesTable({ selectMode = false }: { selectMode
   const incomingPage =
     Number.isFinite(incomingPageRaw) && incomingPageRaw >= 1 ? Math.floor(incomingPageRaw) : 1;
 
-  /**
-   * History: text or source scope narrows globally — bypass PST week slicing
-   * so matches stay visible.
-   * Incoming: server-side filter already narrows to unreceived Zoho POs;
-   * client-side week slicing would hide POs issued more than a week ago.
-   */
-  const skipWeekFilter =
-    isIncomingMode ||
-    (isHistoryMode &&
-      (historySearch.length > 0 || historySearchScope !== 'all'));
+  // "Delivered · not scanned" is an Incoming sub-facet fed by a separate
+  // shipment-level query; it owns its own empty copy, so the descriptor needs
+  // to know about it. Derived early (only depends on incomingState) so it can
+  // flow into the mode context below.
+  const isDeliveredUnscannedFacet =
+    isIncomingMode && incomingState === 'DELIVERED_UNOPENED';
+
+  // Single bag of parsed URL state handed to the active descriptor for every
+  // data-layer decision. Memoized so the query key / params stay referentially
+  // stable across unrelated re-renders.
+  const modeContext = useMemo<ReceivingModeContext>(
+    () => ({
+      historySearch,
+      historySearchField,
+      historySearchScope,
+      incomingSearch,
+      incomingState,
+      incomingSort,
+      incomingPoFrom,
+      incomingPoTo,
+      incomingPage,
+      isDeliveredUnscannedFacet,
+    }),
+    [
+      historySearch,
+      historySearchField,
+      historySearchScope,
+      incomingSearch,
+      incomingState,
+      incomingSort,
+      incomingPoFrom,
+      incomingPoTo,
+      incomingPage,
+      isDeliveredUnscannedFacet,
+    ],
+  );
+
+  const skipWeekFilter = mode.skipWeekFilter(modeContext);
   const [selectedId, setSelectedId] = useState<number | null>(null);
   // Multi-select (bulk) state — only active when `selectMode` is on. Kept as a
   // Set of row ids; the resolved rows are broadcast on RECEIVING_SELECTION_SCOPE
@@ -477,64 +512,17 @@ export default function ReceivingLinesTable({ selectMode = false }: { selectMode
   const [stickyDate, setStickyDate] = useState<string>('');
   const [currentCount, setCurrentCount] = useState<number>(0);
   const scrollRef = useRef<HTMLDivElement>(null);
-  const LIMIT = 500;
 
   const weekRange = computeWeekRange(weekOffset);
 
-  const buildParams = useCallback(() => {
-    // Incoming paginates server-side at INCOMING_PAGE_SIZE; other modes
-    // keep the long 500-row scroll the historical tabs were tuned for.
-    const limit = isIncomingMode ? INCOMING_PAGE_SIZE : LIMIT;
-    const offset = isIncomingMode ? (incomingPage - 1) * INCOMING_PAGE_SIZE : 0;
-    const p = new URLSearchParams({ limit: String(limit), offset: String(offset) });
-    p.set('include', 'serials');
-    p.set('view', view);
-    if (isHistoryMode) {
-      if (historySearch) {
-        p.set('search', historySearch);
-      }
-      p.set('search_field', historySearchField);
-      p.set('search_scope', historySearchScope);
-    } else if (isIncomingMode) {
-      // Incoming reuses the same `?search=` / `?search_field=` machinery the
-      // server has for History — defaults to PO# matching, which matches
-      // Zoho's PO list search UX. `delivery_state` is incoming-only.
-      if (incomingSearch) {
-        p.set('search', incomingSearch);
-        p.set('search_field', 'po');
-      }
-      if (incomingState) {
-        p.set('delivery_state', incomingState);
-      }
-      if (incomingSort) p.set('sort', incomingSort);
-      if (incomingPoFrom) p.set('po_from', incomingPoFrom);
-      if (incomingPoTo) p.set('po_to', incomingPoTo);
-    }
-    return p.toString();
-  }, [
-    view,
-    isHistoryMode,
-    historySearch,
-    historySearchField,
-    historySearchScope,
-    isIncomingMode,
-    incomingSearch,
-    incomingState,
-    incomingSort,
-    incomingPoFrom,
-    incomingPoTo,
-    incomingPage,
-  ]);
-
-  const queryKey = isHistoryMode
-    ? (['receiving-lines-table', view, 'history', historySearch, historySearchField, historySearchScope] as const)
-    : isIncomingMode
-      ? (['receiving-lines-table', view, 'incoming', incomingSearch, incomingState ?? '', incomingSort, incomingPoFrom, incomingPoTo, incomingPage] as const)
-      : (['receiving-lines-table', view, 'receive'] as const);
+  // Query key + params both come from the active descriptor — see
+  // src/lib/receiving/receiving-modes.ts. The key varies with every
+  // server-affecting input so react-query refetches correctly on a facet flip.
+  const queryKey = mode.queryKey(modeContext);
   const { data, isLoading } = useQuery<ApiResponse>({
     queryKey,
     queryFn: async () => {
-      const res = await fetch(`/api/receiving-lines?${buildParams()}`);
+      const res = await fetch(`/api/receiving-lines?${mode.buildParams(modeContext).toString()}`);
       if (!res.ok) throw new Error('fetch failed');
       return res.json();
     },
@@ -548,9 +536,8 @@ export default function ReceivingLinesTable({ selectMode = false }: { selectMode
   // through the same grouping + ReceivingLineOrderRow render path as the rest of
   // the table (reusing the history components instead of a bespoke pane). Shares
   // the `incoming-delivered-unscanned` key so the sidebar's Refresh-tracking
-  // button still re-fetches it.
-  const isDeliveredUnscannedFacet =
-    isIncomingMode && incomingState === 'DELIVERED_UNOPENED';
+  // button still re-fetches it. (isDeliveredUnscannedFacet is derived up top so
+  // it can feed the mode context.)
   const { data: deliveredData } = useQuery<DeliveredUnscannedResponse>({
     queryKey: ['incoming-delivered-unscanned'],
     queryFn: async () => {
@@ -810,9 +797,10 @@ export default function ReceivingLinesTable({ selectMode = false }: { selectMode
     for (const row of dedupedRows) {
       // History/Receive group by the activity axis (last scan/receive) so the
       // feed mirrors the Recent rail; Incoming groups by the Zoho PO date.
-      const sourceTs = isIncomingMode
-        ? (row.po_date ?? row.created_at)
-        : receivingRowActivityTs(row);
+      const sourceTs =
+        mode.groupAxis === 'po_date'
+          ? (row.po_date ?? row.created_at)
+          : receivingRowActivityTs(row);
       let date = 'Unknown';
       try {
         date = toPSTDateKey(sourceTs) || 'Unknown';
@@ -823,7 +811,7 @@ export default function ReceivingLinesTable({ selectMode = false }: { selectMode
       groups[date].push(row);
     }
     return groups;
-  }, [dedupedRows, isIncomingMode]);
+  }, [dedupedRows, mode.groupAxis]);
 
   const filteredGroupedRecords = useMemo(() => {
     if (skipWeekFilter) return groupedRecords;
@@ -842,13 +830,13 @@ export default function ReceivingLinesTable({ selectMode = false }: { selectMode
       Object.entries(filteredGroupedRecords)
         .sort((a, b) => b[0].localeCompare(a[0]))
         .flatMap(([, dateRows]) =>
-          isIncomingMode
+          mode.serverSorted
             ? dateRows
             : [...dateRows].sort(
                 (a, b) => receivingRowActivityMs(b) - receivingRowActivityMs(a),
               ),
         ),
-    [filteredGroupedRecords, isIncomingMode],
+    [filteredGroupedRecords, mode.serverSorted],
   );
 
   // ── Bulk selection wiring ───────────────────────────────────────────────────
@@ -982,18 +970,10 @@ export default function ReceivingLinesTable({ selectMode = false }: { selectMode
 
   const formatHeaderDate = () => formatDateWithOrdinal(getCurrentPSTDateKey());
 
-  const emptyMessage = useMemo(() => {
-    if (isDeliveredUnscannedFacet) {
-      return 'Nothing delivered-and-unscanned right now.';
-    }
-    if (isHistoryMode && (historySearch || historySearchScope !== 'all')) {
-      return 'No lines match — try different text or widen source (All).';
-    }
-    if (isIncomingMode) {
-      return 'No incoming POs — Zoho says everything issued is already received.';
-    }
-    return 'No lines yet — start scanning to populate.';
-  }, [isDeliveredUnscannedFacet, isHistoryMode, isIncomingMode, historySearch, historySearchScope]);
+  const emptyMessage = useMemo(
+    () => mode.emptyMessage(modeContext),
+    [mode, modeContext],
+  );
 
   return (
     <div className="flex h-full min-w-0 overflow-hidden bg-white">
@@ -1036,7 +1016,7 @@ export default function ReceivingLinesTable({ selectMode = false }: { selectMode
                 .map(([date, dateRows]) => {
                   // Preserve server ORDER BY for incoming (the Sort control
                   // already drives it); other modes re-sort by local created_at.
-                  const sortedRows = isIncomingMode
+                  const sortedRows = mode.serverSorted
                     ? dateRows
                     : [...dateRows].sort(
                         (a, b) => receivingRowActivityMs(b) - receivingRowActivityMs(a),

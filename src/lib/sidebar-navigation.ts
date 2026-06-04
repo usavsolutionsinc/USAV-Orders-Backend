@@ -29,6 +29,7 @@ import {
   User,
   Wrench,
 } from '@/components/Icons';
+import { ADMIN_SECTION_OPTIONS } from '@/components/admin/admin-sections';
 
 export type SidebarRouteKey =
   | 'dashboard'
@@ -108,7 +109,9 @@ export const APP_SIDEBAR_NAV: SidebarNavItem[] = [
   { id: 'support',           label: 'Support',     href: '/support',            icon: AlertCircle,     kind: 'station', requires: 'integrations.zendesk' },
   { id: 'ai-chat',           label: 'AI Chat',     href: '/ai-chat',            icon: MessageSquare,   kind: 'bottom',  requires: 'dashboard.view' },
   { id: 'previous-quarters', label: 'Quarters',    href: '/previous-quarters',  icon: Calendar,        kind: 'bottom', requires: 'reports.view' },
-  { id: 'audit-log',         label: 'Audit Log',   href: '/settings/audit',     icon: FileText,        kind: 'bottom', requires: 'admin.view_logs' },
+  // Audit Log is no longer a top-level sidebar row — it lives under Admin › Logs
+  // (AdminLogsTab, with the Audit filter). The /settings/audit and /audit-log/*
+  // routes still resolve directly; only the nav row was removed.
   { id: 'admin',             label: 'Admin',       href: '/admin',              icon: ShieldCheck,     kind: 'bottom', requires: 'admin.view' },
   { id: 'settings',          label: 'Settings',    href: '/settings',           icon: Settings,        kind: 'bottom' },
 ];
@@ -267,6 +270,11 @@ export interface SidebarModeItem {
   to: () => ModeNavTarget;
   /** Optional per-mode permission gate (e.g. admin sub-sections). */
   requires?: string;
+  /**
+   * Optional group heading shown above this mode's row in the dropdown (e.g. the
+   * admin sections' People / Data sources / System). Omitted = no header.
+   */
+  group?: string;
 }
 
 export interface SidebarPageNav extends SidebarNavItem {
@@ -290,6 +298,7 @@ const WAREHOUSE = '/warehouse';
 const PRODUCTS = '/products';
 const TECH = '/tech';
 const WALK_IN = '/walk-in';
+const ADMIN = '/admin';
 
 export const SIDEBAR_PAGE_NAV: SidebarPageNav[] = [
   // ── Orders / Shipping ─────────────────────────────────────────────────────
@@ -421,11 +430,48 @@ export const SIDEBAR_PAGE_NAV: SidebarPageNav[] = [
       return t === 'done' ? t : 'active';
     },
   },
+  // ── Admin (grouped section rows — dropdown only, NO L2 rail) ───────────────
+  // 20+ sections derived from ADMIN_SECTION_OPTIONS (single source of truth), so
+  // every section is ≤2 taps from the header dropdown and the closed header shows
+  // the active section name. The AdminSidebar body keeps its own grouped/described
+  // list (not gated) — admin is intentionally absent from MASTER_NAV_RAIL_PAGES
+  // because 20+ icons don't fit the flush horizontal rail. `?section=<value>`;
+  // `overview` clears the param so deep-links land cleanly on overview.
+  {
+    id: 'admin', label: 'Admin', href: ADMIN, icon: ShieldCheck, kind: 'bottom', requires: 'admin.view',
+    modes: ADMIN_SECTION_OPTIONS.map((section) => ({
+      id: section.value,
+      label: section.label,
+      icon: section.icon as SidebarIconComponent,
+      group: section.group,
+      requires: section.requires,
+      to: () => ({ pathname: ADMIN, params: { section: section.value === 'overview' ? null : section.value } }),
+    })),
+    resolveMode: ({ params }) => {
+      const v = params.get('section');
+      return v && ADMIN_SECTION_OPTIONS.some((section) => section.value === v) ? v : 'overview';
+    },
+  },
 ];
 
 /** Lookup a page's nav entry (modes + resolver) by its route/page id. */
 export function getSidebarPageNav(pageId: string): SidebarPageNav | undefined {
   return SIDEBAR_PAGE_NAV.find((page) => page.id === pageId);
+}
+
+/**
+ * Canonical href for a page id. Modeful pages carry it in `SIDEBAR_PAGE_NAV`;
+ * modeless pages (operations, packer, support, ai-chat, previous-quarters,
+ * audit-log, admin, settings) live only in `APP_SIDEBAR_NAV`. Navigation must
+ * resolve through here so EVERY page — not just the eight modeful ones — lands
+ * on its real route. Returns null for an unknown id.
+ */
+export function getSidebarHref(pageId: string): string | null {
+  return (
+    getSidebarPageNav(pageId)?.href ??
+    APP_SIDEBAR_NAV.find((item) => item.id === pageId)?.href ??
+    null
+  );
 }
 
 /**

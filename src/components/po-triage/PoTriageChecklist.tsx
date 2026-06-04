@@ -18,6 +18,7 @@ import {
   TRIAGE_PILES,
   TRIAGE_PILE_META,
   getFieldState,
+  getSuggestedPile,
   isFieldConfirmed,
   type LlmFieldKey,
   type TriageDetail,
@@ -298,7 +299,7 @@ export function PoTriageChecklist({ detail, onRowUpdated, onClose }: PoTriageChe
                 onClick={runExtract}
                 disabled={extracting || saving}
                 className="inline-flex items-center gap-1 rounded-md border border-purple-200 bg-purple-50 px-2 py-0.5 text-[10.5px] font-medium text-purple-700 hover:bg-purple-100 disabled:cursor-not-allowed disabled:opacity-50"
-                title="Extract vendor, date, total, line items, ship-to with Claude"
+                title="Extract vendor, date, total, line items, ship-to — and suggest a triage pile"
               >
                 {extracting ? (
                   <Loader2 className="h-3 w-3 animate-spin" />
@@ -467,6 +468,13 @@ export function PoTriageChecklist({ detail, onRowUpdated, onClose }: PoTriageChe
           </a>
         )}
 
+        <SuggestedPileChip
+          triageState={row.triage_state}
+          currentPile={row.pile}
+          onApply={setPile}
+          disabled={saving}
+        />
+
         <PilePicker currentPile={row.pile} onPick={setPile} disabled={saving} />
 
         <div className="ml-auto flex items-center gap-2">
@@ -578,6 +586,43 @@ function PilePicker({
         </>
       )}
     </div>
+  );
+}
+
+/**
+ * One-click confirm for the AI's suggested pile. Reads triage_state.suggested_pile
+ * (written by the extract endpoint) and offers to move the email there. Hidden
+ * when there's no suggestion or the email already sits in the suggested pile —
+ * the operator stays in control; nothing moves until they click.
+ */
+function SuggestedPileChip({
+  triageState,
+  currentPile,
+  onApply,
+  disabled,
+}: {
+  triageState: Record<string, unknown>;
+  currentPile: TriagePile;
+  onApply: (pile: TriagePile) => void;
+  disabled?: boolean;
+}) {
+  const suggestion = getSuggestedPile(triageState);
+  if (!suggestion || suggestion.value === currentPile) return null;
+  const meta = TRIAGE_PILE_META[suggestion.value];
+  return (
+    <button
+      type="button"
+      onClick={() => onApply(suggestion.value)}
+      disabled={disabled}
+      title={`AI suggests moving to ${meta.label} (${suggestion.confidence} confidence). Click to confirm.`}
+      className="inline-flex items-center gap-1.5 rounded-md border border-purple-200 bg-purple-50 px-2.5 py-1.5 text-label font-medium text-purple-700 hover:bg-purple-100 disabled:cursor-not-allowed disabled:opacity-50"
+    >
+      <span className="rounded bg-purple-100 px-1 py-0.5 font-mono text-eyebrow font-semibold uppercase">
+        AI
+      </span>
+      Move to {meta.short}
+      <ConfidenceDot level={suggestion.confidence} />
+    </button>
   );
 }
 

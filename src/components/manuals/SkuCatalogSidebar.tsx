@@ -5,7 +5,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { AnimatePresence, motion } from 'framer-motion';
 import { ChevronDown, Link2, Check, Loader2, ExternalLink } from '@/components/Icons';
 import { SIDEBAR_GUTTER } from '@/components/layout/header-shell';
-import { SidebarSearchBar } from '@/components/ui/SidebarSearchBar';
+import { SidebarShell } from '@/components/layout/SidebarShell';
 import { HorizontalButtonSlider, type HorizontalSliderItem } from '@/components/ui/HorizontalButtonSlider';
 import { microBadge, tableHeader } from '@/design-system/tokens/typography/presets';
 import { getExternalUrlByPlatform, getPlatformLabelByItemNumber } from '@/hooks/useExternalItemUrl';
@@ -229,16 +229,17 @@ export function SkuCatalogSidebar({ basePath = '/manuals' }: { basePath?: string
   };
 
   return (
-    <div className="flex h-full flex-col overflow-hidden bg-white">
-      {/* Search */}
-      <SidebarSearchBar
-        value={localSearch}
-        onChange={handleSearchChange}
-        onClear={() => handleSearchChange('')}
-        placeholder="Search SKU catalog..."
-        variant="blue"
-      />
-
+    <SidebarShell
+      className="bg-white"
+      search={{
+        value: localSearch,
+        onChange: handleSearchChange,
+        onClear: () => handleSearchChange(''),
+        placeholder: 'Search SKU catalog...',
+        variant: 'blue',
+      }}
+      headerBelow={
+        <>
       {/* Sort slider */}
       <div className={`shrink-0 border-b border-gray-100 bg-white ${SIDEBAR_GUTTER} py-1`}>
         <HorizontalButtonSlider
@@ -287,9 +288,12 @@ export function SkuCatalogSidebar({ basePath = '/manuals' }: { basePath?: string
           </p>
         </div>
       )}
-
+        </>
+      }
+      bodyClassName="p-0"
+    >
       {detail && !loadingDetail && (
-        <div className="flex-1 overflow-y-auto">
+        <>
           <AccordionSection title="Platform Pairings" count={detail.platformIds.length}
             icon={<Link2 className="h-3.5 w-3.5" />} tone="blue" defaultOpen={false}>
             <PairingSection catalogId={detail.catalog.id} catalogSku={detail.catalog.sku} platformIds={detail.platformIds} onRefresh={loadDetail} />
@@ -299,8 +303,8 @@ export function SkuCatalogSidebar({ basePath = '/manuals' }: { basePath?: string
             icon={<Check className="h-3.5 w-3.5" />} tone="amber" defaultOpen={mode === 'qc'}>
             <QcChecklistSection catalogId={detail.catalog.id} qcChecks={detail.qcChecks} onRefresh={loadDetail} />
           </AccordionSection>
-        </div>
+        </>
       )}
-    </div>
+    </SidebarShell>
   );
 }

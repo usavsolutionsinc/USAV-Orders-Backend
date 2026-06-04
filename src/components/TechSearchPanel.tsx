@@ -2,7 +2,8 @@
 
 import { useState } from 'react';
 import { Search, Loader2, Package, Copy, Check } from './Icons';
-import { SidebarSearchBar } from './ui/SidebarSearchBar';
+import { SidebarShell } from '@/components/layout/SidebarShell';
+import { SIDEBAR_GUTTER } from '@/components/layout/header-shell';
 
 interface SearchResult {
     id: number;
@@ -52,46 +53,42 @@ export default function TechSearchPanel() {
     };
 
     return (
-        <div className="flex flex-col h-full bg-white border-r border-gray-200">
-            {/* Search Section */}
-            <div className="p-4 border-b border-gray-200">
-                <div className="flex items-center gap-2 mb-3">
+        <SidebarShell
+            className="bg-white border-r border-gray-200"
+            headerAbove={
+                <div className={`${SIDEBAR_GUTTER} flex items-center gap-2 pt-4 pb-1`}>
                     <Search className="w-5 h-5 text-blue-600" />
                     <h3 className="text-sm font-black uppercase tracking-tight text-gray-900">
                         Order Lookup
                     </h3>
                 </div>
-
-                <div className="space-y-2">
-                    <SidebarSearchBar
-                        value={searchQuery}
-                        onChange={setSearchQuery}
-                        onSearch={handleSearch}
-                        placeholder="Tracking, Order ID, Serial..."
-                        isSearching={isSearching}
-                        variant="blue"
-                        rightElement={
-                            <button
-                                type="button"
-                                onClick={handleSearch}
-                                disabled={isSearching || !searchQuery.trim()}
-                                className="rounded-xl bg-blue-600 p-2.5 text-white transition-colors hover:bg-blue-700 disabled:bg-gray-300 disabled:text-gray-400 disabled:cursor-not-allowed"
-                                title="Search Neon DB"
-                                aria-label="Search Neon DB"
-                            >
-                                {isSearching ? (
-                                    <Loader2 className="h-5 w-5 animate-spin" />
-                                ) : (
-                                    <Search className="h-5 w-5" />
-                                )}
-                            </button>
-                        }
-                    />
-                </div>
-            </div>
-
-            {/* Results Section */}
-            <div className="flex-1 overflow-y-auto p-4 space-y-3">
+            }
+            search={{
+                value: searchQuery,
+                onChange: setSearchQuery,
+                onSearch: handleSearch,
+                placeholder: 'Tracking, Order ID, Serial...',
+                isSearching,
+                variant: 'blue',
+                rightElement: (
+                    <button
+                        type="button"
+                        onClick={handleSearch}
+                        disabled={isSearching || !searchQuery.trim()}
+                        className="rounded-xl bg-blue-600 p-2.5 text-white transition-colors hover:bg-blue-700 disabled:bg-gray-300 disabled:text-gray-400 disabled:cursor-not-allowed"
+                        title="Search Neon DB"
+                        aria-label="Search Neon DB"
+                    >
+                        {isSearching ? (
+                            <Loader2 className="h-5 w-5 animate-spin" />
+                        ) : (
+                            <Search className="h-5 w-5" />
+                        )}
+                    </button>
+                ),
+            }}
+            bodyClassName="space-y-3 pb-4"
+        >
                 {results.length > 0 && (
                     <>
                         <p className="text-mini font-bold text-gray-500 uppercase tracking-widest">
@@ -199,7 +196,6 @@ export default function TechSearchPanel() {
                         </p>
                     </div>
                 )}
-            </div>
-        </div>
+        </SidebarShell>
     );
 }

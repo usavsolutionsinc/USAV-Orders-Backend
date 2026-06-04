@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { SidebarSearchBar } from '@/components/ui/SidebarSearchBar';
+import { SidebarShell } from '@/components/layout/SidebarShell';
 import { TabSwitch } from '@/components/ui/TabSwitch';
 import { Loader2 } from '@/components/Icons';
 import { SIDEBAR_GUTTER } from '@/components/layout/header-shell';
@@ -171,31 +171,31 @@ export function ManualAssignmentSidebarPanel() {
   };
 
   return (
-    <div className="flex h-full flex-col overflow-hidden">
-      {/* Search bar — always on top */}
-      <SidebarSearchBar
-        value={localSearch}
-        onChange={handleSearchChange}
-        onSearch={handleSearchChange}
-        onClear={() => handleSearchChange('')}
-        placeholder={mode === 'category' ? 'Search categories' : 'Search orders, items, or titles'}
-        isSearching={categoriesLoading || ordersLoading}
-        variant="blue"
-        className="w-full"
-      />
-
-      {/* Mode toggle — below search */}
-      <div className={`flex-shrink-0 ${SIDEBAR_GUTTER} pb-3`}>
-        <TabSwitch
-          tabs={MODE_TABS}
-          activeTab={mode}
-          onTabChange={handleModeChange}
-          className="w-full"
-        />
-      </div>
-
-      {/* List content */}
-      <div className={`flex-1 overflow-y-auto no-scrollbar ${SIDEBAR_GUTTER} pb-4 space-y-1`}>
+    <SidebarShell
+      /* Search bar — always on top */
+      search={{
+        value: localSearch,
+        onChange: handleSearchChange,
+        onSearch: handleSearchChange,
+        onClear: () => handleSearchChange(''),
+        placeholder: mode === 'category' ? 'Search categories' : 'Search orders, items, or titles',
+        isSearching: categoriesLoading || ordersLoading,
+        variant: 'blue',
+        className: 'w-full',
+      }}
+      headerBelow={
+        /* Mode toggle — below search */
+        <div className={`flex-shrink-0 ${SIDEBAR_GUTTER} pb-3`}>
+          <TabSwitch
+            tabs={MODE_TABS}
+            activeTab={mode}
+            onTabChange={handleModeChange}
+            className="w-full"
+          />
+        </div>
+      }
+      bodyClassName="no-scrollbar pt-0 pb-4 space-y-1"
+    >
         {mode === 'category' ? (
           categoriesLoading ? (
             <div className="flex items-center justify-center py-10">
@@ -292,7 +292,6 @@ export function ManualAssignmentSidebarPanel() {
             </div>
           ))
         )}
-      </div>
-    </div>
+    </SidebarShell>
   );
 }

@@ -2,13 +2,12 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { SidebarSearchBar } from '@/components/ui/SidebarSearchBar';
+import { SidebarShell } from '@/components/layout/SidebarShell';
 import { ViewDropdown } from '@/components/ui/ViewDropdown';
 import { Loader2, RefreshCw, X } from '@/components/Icons';
 import { sectionLabel, dataValue, fieldLabel } from '@/design-system/tokens/typography/presets';
 import { getAllStaffGoals, invalidateStaffGoalsCache, type GoalRow } from '@/lib/staffGoalsCache';
 import { getStaffThemeById, stationThemeColors } from '@/utils/staff-colors';
-import { SIDEBAR_GUTTER } from '@/components/layout/header-shell';
 
 const GOAL_VIEW_OPTIONS = [
   { value: 'all', label: 'All Staff' },
@@ -305,27 +304,29 @@ export function GoalsSidebarPanel() {
   }, [goalView, rows, searchValue]);
 
   return (
-    <div className="flex h-full flex-col overflow-hidden bg-white">
-      <div className="border-b border-gray-200">
-        <ViewDropdown
-          options={GOAL_VIEW_OPTIONS}
-          value={goalView}
-          onChange={(nextValue) => updateParams({ goalView: nextValue as GoalViewMode })}
-          variant="boxy"
-          buttonClassName={`h-full w-full appearance-none bg-white px-4 py-3 pr-8 text-left ${fieldLabel} outline-none transition-all hover:bg-gray-50`}
-          optionClassName={fieldLabel}
-        />
-      </div>
-
-      <SidebarSearchBar
-        value={searchValue}
-        onChange={(value) => updateParams({ search: value })}
-        onClear={() => updateParams({ search: '' })}
-        placeholder="Search staff or role"
-        variant="blue"
-      />
-
-      <div className={`flex-1 overflow-y-auto ${SIDEBAR_GUTTER} py-4 space-y-5`}>
+    <SidebarShell
+      className="bg-white"
+      headerAbove={
+        <div className="border-b border-gray-200">
+          <ViewDropdown
+            options={GOAL_VIEW_OPTIONS}
+            value={goalView}
+            onChange={(nextValue) => updateParams({ goalView: nextValue as GoalViewMode })}
+            variant="boxy"
+            buttonClassName={`h-full w-full appearance-none bg-white px-4 py-3 pr-8 text-left ${fieldLabel} outline-none transition-all hover:bg-gray-50`}
+            optionClassName={fieldLabel}
+          />
+        </div>
+      }
+      search={{
+        value: searchValue,
+        onChange: (value) => updateParams({ search: value }),
+        onClear: () => updateParams({ search: '' }),
+        placeholder: 'Search staff or role',
+        variant: 'blue',
+      }}
+      bodyClassName="pb-4 space-y-5"
+    >
         <section className="space-y-2">
           <div className="flex items-center justify-between px-1">
             <p className={sectionLabel}>Current Goals</p>
@@ -393,7 +394,6 @@ export function GoalsSidebarPanel() {
             </span>
           </button>
         </section>
-      </div>
-    </div>
+    </SidebarShell>
   );
 }

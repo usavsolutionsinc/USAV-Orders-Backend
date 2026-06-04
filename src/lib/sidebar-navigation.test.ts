@@ -6,6 +6,7 @@ import {
   isSidebarRouteMobileRestricted,
   SIDEBAR_PAGE_NAV,
   getSidebarPageNav,
+  getSidebarHref,
   applyModeTarget,
   resolveSidebarMode,
 } from '@/lib/sidebar-navigation';
@@ -111,6 +112,22 @@ test('SIDEBAR_PAGE_NAV pages are real APP_SIDEBAR_NAV routes with resolvers', ()
     assert.ok(navIds.has(page.id), `${page.id} is not in APP_SIDEBAR_NAV`);
     assert.equal(typeof page.resolveMode, 'function', `${page.id} missing resolveMode`);
   }
+});
+
+// getSidebarHref must resolve EVERY page id to its route — both the eight
+// modeful pages (from SIDEBAR_PAGE_NAV) and the modeless ones (which live only
+// in APP_SIDEBAR_NAV). This is the contract the master-nav write path relies on
+// so modeless rows don't no-op back to the current pathname.
+test('getSidebarHref resolves every sidebar page to its real route', () => {
+  for (const item of APP_SIDEBAR_NAV) {
+    assert.equal(getSidebarHref(item.id), item.href, `${item.id} href mismatch`);
+  }
+  // Modeless pages (not in SIDEBAR_PAGE_NAV) still resolve.
+  assert.equal(getSidebarHref('operations'), '/operations');
+  assert.equal(getSidebarHref('admin'), '/admin');
+  assert.equal(getSidebarHref('settings'), '/settings');
+  // Unknown ids resolve to null (caller falls back to current path).
+  assert.equal(getSidebarHref('nope'), null);
 });
 
 // resolveSidebarMode returns null for single-surface pages (no mode row).

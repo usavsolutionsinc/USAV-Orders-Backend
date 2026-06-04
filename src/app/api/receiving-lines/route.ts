@@ -13,6 +13,7 @@ import {
   type ReceivingHistorySearchField,
   type ReceivingHistorySearchScope,
 } from '@/lib/receiving-history-search';
+import { parseReceivingView } from '@/lib/receiving/receiving-views';
 
 type LineSerial = {
   id: number;
@@ -117,14 +118,10 @@ export const GET = withAuth(async (request: NextRequest) => {
           : sortRaw === 'recently_added'
             ? 'recently_added'
             : 'zoho_newest';
-    const view: 'all' | 'recent' | 'received' | 'incoming' | 'activity' | 'testing' | null =
-      viewRaw === 'recent' ? 'recent'
-        : viewRaw === 'received' ? 'received'
-        : viewRaw === 'all' ? 'all'
-        : viewRaw === 'incoming' ? 'incoming'
-        : viewRaw === 'activity' ? 'activity'
-        : viewRaw === 'testing' ? 'testing'
-        : null;
+    // Shared contract with the client (src/lib/receiving/receiving-views.ts) so
+    // the supported view set can't drift between the two ends. `null` = no/
+    // unknown view → fall back to week-range scoping below.
+    const view = parseReceivingView(viewRaw);
     // view=testing only: scope the recently-tested feed to one staff member.
     const testerId = Number(searchParams.get('tester'));
     const include     = String(searchParams.get('include') || '').trim().toLowerCase();
@@ -141,6 +138,12 @@ export const GET = withAuth(async (request: NextRequest) => {
                 r.zoho_purchaseorder_number  AS receiving_zoho_purchaseorder_number,
                 r.support_notes              AS receiving_support_notes,
                 r.listing_url                AS receiving_listing_url,
+                r.received_at::text          AS receiving_received_at,
+                -- Last physical scan against this carton. Must match the list
+                -- view (view=activity) so the single-line refresh dispatched on
+                -- every line-select doesn't clobber the rail's scan-based
+                -- "last touched" time with rl.created_at (the import date).
+                rs_agg.last_scan::text       AS last_scan_at,
                 stn.tracking_number_raw      AS shipment_tracking_number,
                 stn.carrier                  AS shipment_carrier,
                 stn.latest_status_category   AS shipment_status_category,
@@ -162,6 +165,11 @@ export const GET = withAuth(async (request: NextRequest) => {
                AND r.source = 'zoho_po'
                AND r.zoho_purchaseorder_id = rl.zoho_purchaseorder_id)
          )
+         LEFT JOIN LATERAL (
+            SELECT MAX(rs.scanned_at) AS last_scan
+            FROM receiving_scans rs
+            WHERE rs.receiving_id = r.id
+         ) rs_agg ON TRUE
          LEFT JOIN shipping_tracking_numbers stn ON stn.id = r.shipment_id
          LEFT JOIN sku_catalog sc                ON sc.sku = rl.sku
          WHERE rl.id = $1`,
@@ -195,6 +203,11 @@ export const GET = withAuth(async (request: NextRequest) => {
                   r.zoho_purchaseorder_number  AS receiving_zoho_purchaseorder_number,
                   r.support_notes              AS receiving_support_notes,
                   r.listing_url                AS receiving_listing_url,
+                  r.received_at::text          AS receiving_received_at,
+                  -- Scan-based "last touched" time, matching view=activity so
+                  -- package-sibling refreshes merged into the rail keep the
+                  -- correct timestamp (see single-row branch above).
+                  rs_agg.last_scan::text       AS last_scan_at,
                   stn.tracking_number_raw      AS shipment_tracking_number,
                   stn.carrier                  AS shipment_carrier,
                   stn.latest_status_category   AS shipment_status_category,
@@ -208,6 +221,11 @@ export const GET = withAuth(async (request: NextRequest) => {
                       AND p.entity_id = rl.receiving_id) AS photo_count
            FROM receiving_lines rl
            LEFT JOIN receiving r                   ON r.id  = rl.receiving_id
+           LEFT JOIN LATERAL (
+              SELECT MAX(rs.scanned_at) AS last_scan
+              FROM receiving_scans rs
+              WHERE rs.receiving_id = r.id
+           ) rs_agg ON TRUE
            LEFT JOIN shipping_tracking_numbers stn ON stn.id = r.shipment_id
            LEFT JOIN sku_catalog sc                ON sc.sku = rl.sku
            WHERE rl.receiving_id = $1
@@ -1078,6 +1096,10 @@ export const PATCH = withAuth(async (request: NextRequest, ctx) => {
               r.zoho_purchaseorder_number  AS receiving_zoho_purchaseorder_number,
               r.support_notes              AS receiving_support_notes,
               r.listing_url                AS receiving_listing_url,
+              r.received_at::text          AS receiving_received_at,
+              -- Scan-based "last touched" time, matching view=activity so the
+              -- post-save dispatchLineUpdated keeps the rail's timestamp intact.
+              rs_agg.last_scan::text       AS last_scan_at,
               stn.tracking_number_raw      AS shipment_tracking_number,
               stn.carrier                  AS shipment_carrier,
               stn.latest_status_category   AS shipment_status_category,
@@ -1085,6 +1107,11 @@ export const PATCH = withAuth(async (request: NextRequest, ctx) => {
               stn.delivered_at             AS shipment_delivered_at
          FROM receiving_lines rl
          LEFT JOIN receiving r                   ON r.id  = rl.receiving_id
+         LEFT JOIN LATERAL (
+            SELECT MAX(rs.scanned_at) AS last_scan
+            FROM receiving_scans rs
+            WHERE rs.receiving_id = r.id
+         ) rs_agg ON TRUE
          LEFT JOIN shipping_tracking_numbers stn ON stn.id = r.shipment_id
         WHERE rl.id = $1`,
       [id],

@@ -30,6 +30,7 @@ import {
   ClipboardList,
   Copy,
   ExternalLink,
+  History,
   Info,
   Link2,
   PackageCheck,
@@ -85,6 +86,7 @@ import {
   dispatchLineUpdated,
   type ReceivingLineRow,
 } from '@/components/station/ReceivingLinesTable';
+import { dispatchReceivingDetailsOverlay } from '@/utils/events';
 import {
   parseSerialFromLineDescription,
   parseZendeskListingFromPoNotes,
@@ -1519,15 +1521,28 @@ export function LineEditPanel({
   return (
     <>
     <div className="flex h-full min-h-0 flex-col bg-gray-50">
-      {/* Scroll surface — owns the centered hero column. Padding-bottom
-          clears the sticky action bar so the last card never hides under it. */}
-      <div className="min-h-0 flex-1 overflow-y-auto">
-        <div className="mx-auto w-full max-w-3xl space-y-4 px-4 py-5 pb-32 sm:px-6">
-          {/* Utility toolbar — refresh + share / audit / copy + prev/next.
-              Single consolidated row above the Staff card; backed by the
-              shared PaneHeaderActionBar so this shape stays consistent with
-              the rest of the detail-pane surfaces. */}
+      {/* Frozen utility toolbar — the third header row beneath the global
+          header + progress stepper. The `header` variant is a full-width 30px
+          band with a top hairline so it aligns with the other header rows, and
+          it lives OUTSIDE the scroll surface so it stays locked to the top
+          while the body scrolls under it. Icon-only (refresh / share / audit /
+          copy / Zoho + prev/next); the right-slot Info opens receiving details. */}
           <PaneHeaderActionBar
+            variant="header"
+            iconOnly
+            rightSlot={
+              row.receiving_id != null ? (
+                <button
+                  type="button"
+                  onClick={() => dispatchReceivingDetailsOverlay(row.receiving_id as number)}
+                  aria-label="Open receiving details"
+                  title="Receiving details"
+                  className="inline-flex h-7 w-7 items-center justify-center rounded-md text-slate-500 transition-colors hover:bg-slate-50 hover:text-slate-800"
+                >
+                  <Info className="h-4 w-4" />
+                </button>
+              ) : null
+            }
             actions={[
               {
                 key: 'refresh',
@@ -1550,7 +1565,7 @@ export function LineEditPanel({
               {
                 key: 'audit',
                 label: 'Audit',
-                icon: <Info className="h-3.5 w-3.5" />,
+                icon: <History className="h-3.5 w-3.5" />,
                 onClick: () => setAuditOpen(true),
                 disabled: cartonActionsDisabled,
                 title: 'Audit log (inventory events)',
@@ -1601,6 +1616,10 @@ export function LineEditPanel({
             nextTitle="Next recent line"
           />
 
+      {/* Scroll surface — owns the centered hero column. Padding-bottom
+          clears the bottom sticky save bar so the last card never hides under it. */}
+      <div className="min-h-0 flex-1 overflow-y-auto">
+        <div className="mx-auto w-full max-w-3xl space-y-4 px-4 py-5 pb-32 sm:px-6">
           {/* Photos + Claim + shipment context (listing, PO#, tracking,
               platform + type pills) share one WorkspaceCard so the operator
               sees a single bordered surface. */}

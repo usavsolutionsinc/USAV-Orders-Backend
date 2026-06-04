@@ -1,6 +1,6 @@
 'use client';
 
-import { forwardRef } from 'react';
+import { forwardRef, Fragment } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { ChevronDown } from '@/components/Icons';
 import type { SidebarNavItem, SidebarPageNav } from '@/lib/sidebar-navigation';
@@ -107,24 +107,33 @@ export const MasterNavDropdown = forwardRef<HTMLDivElement, MasterNavDropdownPro
               className="overflow-hidden"
             >
               <div className="space-y-0.5 py-1 pl-[34px] pr-1">
-                {page.modes.map((mode) => {
+                {page.modes.map((mode, i) => {
                   const ModeIcon = mode.icon;
                   const isModeActive = isPageActive && mode.id === highlightedModeId;
+                  // Heading shown once, above the first row of each group (admin
+                  // sections). Pages without grouped modes never render one.
+                  const showGroupHeader = mode.group && mode.group !== page.modes![i - 1]?.group;
                   return (
-                    <button
-                      key={mode.id}
-                      type="button"
-                      onClick={() => onNavigate(page.id, mode.id)}
-                      className={cn(
-                        'flex w-full items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-left text-[13px] font-medium transition-colors',
-                        isModeActive
-                          ? 'bg-blue-600 text-white'
-                          : 'text-text-default hover:bg-blue-600 hover:text-white',
+                    <Fragment key={mode.id}>
+                      {showGroupHeader && (
+                        <p className="px-2.5 pb-0.5 pt-2 text-[10px] font-bold uppercase tracking-widest text-text-muted/70">
+                          {mode.group}
+                        </p>
                       )}
-                    >
-                      <ModeIcon className="h-4 w-4 shrink-0 opacity-80" />
-                      <span className="min-w-0 flex-1 truncate">{mode.label}</span>
-                    </button>
+                      <button
+                        type="button"
+                        onClick={() => onNavigate(page.id, mode.id)}
+                        className={cn(
+                          'flex w-full items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-left text-[13px] font-medium transition-colors',
+                          isModeActive
+                            ? 'bg-blue-600 text-white'
+                            : 'text-text-default hover:bg-blue-600 hover:text-white',
+                        )}
+                      >
+                        <ModeIcon className="h-4 w-4 shrink-0 opacity-80" />
+                        <span className="min-w-0 flex-1 truncate">{mode.label}</span>
+                      </button>
+                    </Fragment>
                   );
                 })}
               </div>

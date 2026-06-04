@@ -8,6 +8,7 @@ import {
   PaneHeaderCount,
 } from '@/components/ui/pane-header';
 import { ChevronLeft, ChevronRight } from '@/components/Icons';
+import { INCOMING_PAGE_SIZE } from '@/lib/receiving/receiving-modes';
 
 /** Sort axis — kept here so the sidebar (which now owns the control) can import the same union. */
 export type IncomingSort =
@@ -23,8 +24,12 @@ export const INCOMING_SORT_LABELS: Record<IncomingSort, string> = {
   recently_added:   'Recently synced',
 };
 
-/** Server-side page size for Incoming. Single source of truth — referenced by the table + header. */
-export const INCOMING_PAGE_SIZE = 25;
+/**
+ * Server-side page size for Incoming. The single source of truth now lives in
+ * the mode registry (so the table, the descriptor's pagination math, and this
+ * header all agree); re-exported here for existing importers.
+ */
+export { INCOMING_PAGE_SIZE };
 
 export interface IncomingPaneHeaderProps {
   /** Visible-row count on the current page (post-filter). */

@@ -11,7 +11,6 @@
 import { useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { qk } from '@/queries/keys';
-import { SearchBar } from '@/components/ui/SearchBar';
 import {
   AdminSidebarShell,
   AdminPickerRow,
@@ -67,21 +66,17 @@ export function FbaCatalogSidebarPanel() {
 
   return (
     <AdminSidebarShell
-      search={
-        <SearchBar
-          value={search}
-          onChange={(v) =>
-            setParam((p) => {
-              if (v.trim()) p.set('search', v.trim());
-              else p.delete('search');
-            })
-          }
-          onClear={() => setParam((p) => p.delete('search'))}
-          placeholder="Search FNSKU, title, ASIN, SKU"
-          variant="blue"
-          className="w-full"
-        />
-      }
+      search={{
+        value: search,
+        onChange: (v) =>
+          setParam((p) => {
+            if (v.trim()) p.set('search', v.trim());
+            else p.delete('search');
+          }),
+        onClear: () => setParam((p) => p.delete('search')),
+        placeholder: 'Search FNSKU, title, ASIN, SKU',
+        variant: 'blue',
+      }}
       stats={
         <>
           <StatPill label="Total" value={stats.total} />

@@ -17,7 +17,7 @@ import {
   Filter,
   ChevronDown,
 } from '@/components/Icons';
-import { SidebarSearchBar } from '@/components/ui/SidebarSearchBar';
+import { SidebarShell } from '@/components/layout/SidebarShell';
 import { useDebounce } from '@/hooks';
 import {
   RECEIVING_HISTORY_SEARCH_FIELDS,
@@ -149,16 +149,17 @@ export function ReceivingHistorySearchSection({ onSwitchToReceiving }: Props) {
     }) > 0;
 
   return (
-    <div className="shrink-0 bg-white">
-      {/* Search sits flush in its 40px band (matches Incoming + the
-          pending/products reference); the filter control sits below it. */}
-      <SidebarSearchBar
-        value={draft}
-        onChange={setDraft}
-        placeholder={getReceivingHistoryPlaceholder(searchField)}
-        isSearching={tableFetching}
-        variant="blue"
-        rightElement={
+    // shrink-0 section (not a full panel) — override the shell's h-full +
+    // overflow-hidden so it sizes to content and the filter popover isn't clipped.
+    <SidebarShell
+      className="h-auto shrink-0 overflow-visible bg-white"
+      search={{
+        value: draft,
+        onChange: setDraft,
+        placeholder: getReceivingHistoryPlaceholder(searchField),
+        isSearching: tableFetching,
+        variant: 'blue',
+        rightElement: (
           <button
             type="button"
             onClick={() => {
@@ -173,9 +174,10 @@ export function ReceivingHistorySearchSection({ onSwitchToReceiving }: Props) {
           >
             <Plus className="h-5 w-5" />
           </button>
-        }
-      />
-      <div className="space-y-2 pb-2">
+        ),
+      }}
+      headerBelow={
+        <div className="space-y-2 pb-2">
         {/* Single filter entry point — the carton-source scope and the
             search-field axis condense into one popover below the search bar
             (mirrors IncomingSidebarPanel). */}
@@ -281,6 +283,7 @@ export function ReceivingHistorySearchSection({ onSwitchToReceiving }: Props) {
           ) : null}
         </div>
       </div>
-    </div>
+      }
+    />
   );
 }

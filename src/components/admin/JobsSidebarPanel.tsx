@@ -12,7 +12,6 @@
 
 import { useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { SearchBar } from '@/components/ui/SearchBar';
 import {
   AdminSidebarShell,
   AdminFilterChips,
@@ -129,21 +128,17 @@ export function JobsSidebarPanel() {
 
   return (
     <AdminSidebarShell
-      search={
-        <SearchBar
-          value={search}
-          onChange={(v) =>
-            setParam((p) => {
-              if (v.trim()) p.set('search', v.trim());
-              else p.delete('search');
-            })
-          }
-          onClear={() => setParam((p) => p.delete('search'))}
-          placeholder={tab === 'schedules' ? 'Search schedules' : 'Search logs'}
-          variant="blue"
-          className="w-full"
-        />
-      }
+      search={{
+        value: search,
+        onChange: (v) =>
+          setParam((p) => {
+            if (v.trim()) p.set('search', v.trim());
+            else p.delete('search');
+          }),
+        onClear: () => setParam((p) => p.delete('search')),
+        placeholder: tab === 'schedules' ? 'Search schedules' : 'Search logs',
+        variant: 'blue',
+      }}
       filters={
         <AdminFilterChips
           options={TAB_OPTIONS}

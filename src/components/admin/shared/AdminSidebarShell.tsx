@@ -1,15 +1,27 @@
 'use client';
 
 import type { ReactNode } from 'react';
+import { SidebarShell, type SidebarShellSearch } from '@/components/layout/SidebarShell';
+import { SIDEBAR_GUTTER } from '@/components/layout/header-shell';
 
 interface AdminSidebarShellProps {
-  search?: ReactNode;
+  search?: SidebarShellSearch;
   filters?: ReactNode;
   stats?: ReactNode;
   action?: ReactNode;
   children: ReactNode;
 }
 
+/**
+ * Admin sidebar layout — now a thin wrapper over the house {@link SidebarShell}.
+ *
+ * Every admin panel shares the SAME flush 40px search band, gutter
+ * ({@link SIDEBAR_GUTTER}), and scroll-body structure as every other sidebar.
+ * Panels pass search PROPS (not a `<SearchBar>` node); the shell renders
+ * `<SidebarSearchBar>` so the input height is locked and can't drift. The
+ * `filters` / `stats` / `action` slots are pinned, bordered rows below the
+ * search (rendered outside the scroll body so they stay put).
+ */
 export function AdminSidebarShell({
   search,
   filters,
@@ -18,27 +30,31 @@ export function AdminSidebarShell({
   children,
 }: AdminSidebarShellProps) {
   return (
-    <div className="flex h-full flex-col overflow-hidden bg-white">
-      {search ? (
-        // 40px flush search band — one source of truth for every admin panel's
-        // header search, matching the house 40px sidebar grid. Panels pass a plain
-        // <SearchBar> (no size); the band + height live HERE so they can't drift.
-        <div className="flex h-[40px] flex-shrink-0 items-center border-b border-gray-200 px-3">{search}</div>
-      ) : null}
-      {filters ? (
-        <div className="flex flex-shrink-0 items-center gap-1.5 border-b border-gray-200 px-3 py-2">
-          {filters}
-        </div>
-      ) : null}
-      {stats ? (
-        <div className="flex flex-shrink-0 flex-wrap items-center gap-1.5 border-b border-gray-200 px-3 py-2">
-          {stats}
-        </div>
-      ) : null}
-      {action ? (
-        <div className="flex-shrink-0 border-b border-gray-200 px-3 py-2.5">{action}</div>
-      ) : null}
-      <div className="min-h-0 flex-1 overflow-y-auto px-3 py-2">{children}</div>
-    </div>
+    <SidebarShell
+      className="bg-white"
+      search={search}
+      headerBelow={
+        filters || stats || action ? (
+          <>
+            {filters ? (
+              <div className={`flex items-center gap-1.5 border-b border-gray-200 ${SIDEBAR_GUTTER} py-2`}>
+                {filters}
+              </div>
+            ) : null}
+            {stats ? (
+              <div className={`flex flex-wrap items-center gap-1.5 border-b border-gray-200 ${SIDEBAR_GUTTER} py-2`}>
+                {stats}
+              </div>
+            ) : null}
+            {action ? (
+              <div className={`border-b border-gray-200 ${SIDEBAR_GUTTER} py-2.5`}>{action}</div>
+            ) : null}
+          </>
+        ) : null
+      }
+      bodyClassName="py-2"
+    >
+      {children}
+    </SidebarShell>
   );
 }

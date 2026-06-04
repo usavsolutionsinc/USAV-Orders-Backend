@@ -12,7 +12,6 @@
 
 import { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { SearchBar } from '@/components/ui/SearchBar';
 import {
   AdminSidebarShell,
   AdminFilterChips,
@@ -137,25 +136,22 @@ export function LogsSidebarPanel() {
 
   return (
     <AdminSidebarShell
-      search={
-        <SearchBar
-          value={search}
-          onChange={(v) => {
-            setOffset(0);
-            setParam((p) => {
-              if (v.trim()) p.set('search', v.trim());
-              else p.delete('search');
-            });
-          }}
-          onClear={() => {
-            setOffset(0);
-            setParam((p) => p.delete('search'));
-          }}
-          placeholder="Search action, source, entity"
-          variant="blue"
-          className="w-full"
-        />
-      }
+      search={{
+        value: search,
+        onChange: (v) => {
+          setOffset(0);
+          setParam((p) => {
+            if (v.trim()) p.set('search', v.trim());
+            else p.delete('search');
+          });
+        },
+        onClear: () => {
+          setOffset(0);
+          setParam((p) => p.delete('search'));
+        },
+        placeholder: 'Search action, source, entity',
+        variant: 'blue',
+      }}
       filters={
         <AdminFilterChips
           options={KIND_OPTIONS}

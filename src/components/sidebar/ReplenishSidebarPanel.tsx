@@ -2,8 +2,8 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { sidebarHeaderPillRowClass, SIDEBAR_GUTTER } from '@/components/layout/header-shell';
-import { SidebarSearchBar } from '@/components/ui/SidebarSearchBar';
+import { sidebarHeaderPillRowClass } from '@/components/layout/header-shell';
+import { SidebarShell } from '@/components/layout/SidebarShell';
 import { HorizontalButtonSlider, type HorizontalSliderItem } from '@/components/ui/HorizontalButtonSlider';
 import { sectionLabel, fieldLabel } from '@/design-system/tokens/typography/presets';
 import { AlertTriangle, Loader2, RefreshCw } from '@/components/Icons';
@@ -152,32 +152,32 @@ export function ReplenishSidebarPanel() {
   ];
 
   return (
-    <div className="font-dm-sans flex h-full flex-col overflow-hidden bg-white">
-      {/* Tab pills (2nd row) */}
-      <div className={sidebarHeaderPillRowClass}>
-        <HorizontalButtonSlider
-          items={TAB_ITEMS}
-          value={activeTab}
-          onChange={(id) => updateTab(id as ReplenishTab)}
-          variant="nav"
-          dense
-          className="w-full"
-          aria-label="Replenish view"
-        />
-      </div>
-
-      {/* Search */}
-      <SidebarSearchBar
-        value={localSearch}
-        onChange={setLocalSearch}
-        onClear={() => setLocalSearch('')}
-        placeholder="Search SKU or item name…"
-        variant="emerald"
-        className="w-full"
-      />
-
-      {/* Scrollable content */}
-      <div className={`min-h-0 flex-1 overflow-y-auto ${SIDEBAR_GUTTER} py-3`}>
+    <SidebarShell
+      className="font-dm-sans bg-white"
+      headerAbove={
+        /* Tab pills (2nd row) */
+        <div className={sidebarHeaderPillRowClass}>
+          <HorizontalButtonSlider
+            items={TAB_ITEMS}
+            value={activeTab}
+            onChange={(id) => updateTab(id as ReplenishTab)}
+            variant="nav"
+            dense
+            className="w-full"
+            aria-label="Replenish view"
+          />
+        </div>
+      }
+      search={{
+        value: localSearch,
+        onChange: setLocalSearch,
+        onClear: () => setLocalSearch(''),
+        placeholder: 'Search SKU or item name…',
+        variant: 'emerald',
+        className: 'w-full',
+      }}
+      bodyClassName="py-3"
+    >
         {/* Refresh */}
         <button
           type="button"
@@ -239,7 +239,6 @@ export function ReplenishSidebarPanel() {
             </p>
           </div>
         </div>
-      </div>
-    </div>
+    </SidebarShell>
   );
 }

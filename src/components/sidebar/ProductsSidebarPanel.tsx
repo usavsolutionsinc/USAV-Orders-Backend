@@ -2,8 +2,8 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { sidebarHeaderBandClass, sidebarHeaderPillRowClass, SIDEBAR_GUTTER } from '@/components/layout/header-shell';
-import { SidebarSearchBar } from '@/components/ui/SidebarSearchBar';
+import { sidebarHeaderPillRowClass, SIDEBAR_GUTTER } from '@/components/layout/header-shell';
+import { SidebarShell } from '@/components/layout/SidebarShell';
 import { HorizontalButtonSlider, type HorizontalSliderItem } from '@/components/ui/HorizontalButtonSlider';
 import { useMasterNavEnabled } from '@/components/sidebar/master-nav';
 import { BARCODE_MODES, type BarcodeMode } from '@/components/barcode/ModeSelector';
@@ -170,56 +170,53 @@ export function ProductsSidebarPanel() {
   // (main pane). QC delegates to the main pane. Labels/Pairing have their
   // own sidebar bodies below.
   return (
-    <div className="flex h-full flex-col overflow-hidden bg-white">
-      {!masterNavEnabled && (
-        <div className={sidebarHeaderPillRowClass}>
-          <HorizontalButtonSlider
-            items={viewItems}
-            value={view}
-            onChange={handleViewChange}
-            variant="nav"
-            dense
-            className="w-full"
-            aria-label="Products view"
-          />
-        </div>
-      )}
-
-      {/* Search bar — always mounted so it stays in position across all sub-views */}
-      <SidebarSearchBar
-          value={searchInput}
-          onChange={isHistory ? setSearchInput : handleSearchChange}
-          onSearch={
-            isHistory
-              ? (raw) => {
-                  const value = raw.trim();
-                  if (value) {
-                    window.dispatchEvent(
-                      new CustomEvent('unit-history:lookup', { detail: { raw: value } }),
-                    );
-                  }
-                  setSearchInput('');
-                }
-              : undefined
-          }
-          onClear={() => (isHistory ? setSearchInput('') : handleSearchChange(''))}
-          placeholder={
-            isHistory
-              ? 'Scan or paste a DataMatrix…'
-              : isLabels
-                ? 'Search SKU, title…'
-                : isPairing
-                  ? 'Search pairing queue…'
-                  : isManuals
-                    ? 'Fuzzy search folders & manuals…'
-                    : 'Search products…'
-          }
-          variant={isLabels ? 'blue' : 'gray'}
-        />
-
-      {/* Labels sub-tab row — Print / Recent / History. */}
-      {isLabels && (
-        <div className={sidebarHeaderPillRowClass}>
+    <SidebarShell
+      className="bg-white"
+      headerAbove={
+        !masterNavEnabled ? (
+          <div className={sidebarHeaderPillRowClass}>
+            <HorizontalButtonSlider
+              items={viewItems}
+              value={view}
+              onChange={handleViewChange}
+              variant="nav"
+              dense
+              className="w-full"
+              aria-label="Products view"
+            />
+          </div>
+        ) : null
+      }
+      /* Search bar — always mounted so it stays in position across all sub-views */
+      search={{
+        value: searchInput,
+        onChange: isHistory ? setSearchInput : handleSearchChange,
+        onSearch: isHistory
+          ? (raw) => {
+              const value = raw.trim();
+              if (value) {
+                window.dispatchEvent(
+                  new CustomEvent('unit-history:lookup', { detail: { raw: value } }),
+                );
+              }
+              setSearchInput('');
+            }
+          : undefined,
+        onClear: () => (isHistory ? setSearchInput('') : handleSearchChange('')),
+        placeholder: isHistory
+          ? 'Scan or paste a DataMatrix…'
+          : isLabels
+            ? 'Search SKU, title…'
+            : isPairing
+              ? 'Search pairing queue…'
+              : isManuals
+                ? 'Fuzzy search folders & manuals…'
+                : 'Search products…',
+        variant: isLabels ? 'blue' : 'gray',
+      }}
+      headerRows={[
+        // Labels sub-tab row — Print / Recent / History.
+        isLabels ? (
           <HorizontalButtonSlider
             items={LABELS_SUB_VIEW_ITEMS}
             value={labelsView}
@@ -229,19 +226,9 @@ export function ProductsSidebarPanel() {
             className="w-full"
             aria-label="Labels sub-view"
           />
-        </div>
-      )}
-
-      {/* Label-printer mode dropdown — only shown on the Print sub-view. */}
-      {isLabels && labelsView === 'print' && (
-        <div className={`shrink-0 border-b border-gray-100 bg-white ${SIDEBAR_GUTTER} py-2`}>
-          <ModeDropdown mode={mode} onChange={setMode} />
-        </div>
-      )}
-
-      {/* Pairing sort pills — second row for the Pairing view. */}
-      {isPairing && (
-        <div className={sidebarHeaderPillRowClass}>
+        ) : null,
+        // Pairing sort pills — second row for the Pairing view.
+        isPairing ? (
           <HorizontalButtonSlider
             items={PAIRING_SORT_ITEMS}
             value={pairingSort}
@@ -251,9 +238,18 @@ export function ProductsSidebarPanel() {
             className="w-full"
             aria-label="Pairing queue sort"
           />
-        </div>
-      )}
-
+        ) : null,
+      ]}
+      headerBelow={
+        // Label-printer mode dropdown — only shown on the Print sub-view.
+        isLabels && labelsView === 'print' ? (
+          <div className={`shrink-0 border-b border-gray-100 bg-white ${SIDEBAR_GUTTER} py-2`}>
+            <ModeDropdown mode={mode} onChange={setMode} />
+          </div>
+        ) : null
+      }
+      bodyClassName="flex flex-col overflow-hidden p-0"
+    >
       {isLabels ? (
         labelsView === 'recent' ? (
           <RecentlyPrintedList onPick={handleProductPick} />
@@ -271,7 +267,7 @@ export function ProductsSidebarPanel() {
       ) : isManuals ? (
         <LibraryBrowser query={searchInput} basePath="/products" />
       ) : null}
-    </div>
+    </SidebarShell>
   );
 }
 

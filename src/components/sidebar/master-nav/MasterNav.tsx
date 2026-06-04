@@ -20,6 +20,17 @@ function toPageNav(item: SidebarNavItem): SidebarPageNav {
 }
 
 /**
+ * Drop modes the user can't access (per-mode `requires`, e.g. admin sub-sections)
+ * so the dropdown matches the page body's own permission filtering. Modes without
+ * `requires` are always visible; gated modes need the permission present.
+ */
+function filterPageModes(page: SidebarPageNav, permissions?: ReadonlySet<string>): SidebarPageNav {
+  if (!page.modes) return page;
+  const modes = page.modes.filter((mode) => !mode.requires || (permissions?.has(mode.requires) ?? false));
+  return modes.length === page.modes.length ? page : { ...page, modes };
+}
+
+/**
  * Router-wired master nav container (plan §3). Reads the active page+mode from
  * the URL, writes navigation through `useSidebarModeNav`, and pins recents. This
  * is what P2 mounts into `DashboardSidebar`; P1 exercises it behind a flag.
@@ -76,7 +87,7 @@ export function MasterNav({
   }, [pageId, modeId]);
 
   const pages = useMemo(
-    () => getSidebarNavItems({ permissions, mobileRestricted }).map(toPageNav),
+    () => getSidebarNavItems({ permissions, mobileRestricted }).map(toPageNav).map((page) => filterPageModes(page, permissions)),
     [permissions, mobileRestricted],
   );
 

@@ -18,14 +18,11 @@
  */
 
 import { useRef, useState } from 'react';
-import { Layers, Layout, Database, Zap, Bell, Sparkles, Search, List, SlidersHorizontal, Wrench } from '@/components/Icons';
+import { Database, Zap, Bell, Sparkles, Search, List, Wrench } from '@/components/Icons';
 import {
   ButtonsSection,
-  SegmentedTabsSection,
-  SubPageNavSection,
   InputsSection,
   DataTableSection,
-  OverlaysSection,
   FeedbackSection,
   MotionSection,
   SectionHeading,
@@ -45,13 +42,10 @@ type SectionDef = {
 
 const SECTIONS: SectionDef[] = [
   { id: 'buttons', index: '01', label: 'Buttons & actions', icon: Zap, blurb: 'A single Button primitive with spring-press feedback, async loading, and brand gradient — replacing the ad-hoc <button> markup repeated across sidebars and forms.', render: () => <ButtonsSection /> },
-  { id: 'tabs', index: '02', label: 'Segmented tabs', icon: Layout, blurb: 'The TabSwitch hard-rule component upgraded with a Framer layoutId sliding indicator — the active pill glides between tabs instead of snapping.', render: () => <SegmentedTabsSection /> },
-  { id: 'subnav', index: '2b', label: 'Sub-page nav', icon: SlidersHorizontal, blurb: 'How to expose sub-pages inside one section (Products → Manuals / Labels / Pairing) on a mobile-first rail. Four industry-standard variants — underline strip, segmented control, two-axis tabs+chips, single-row pills — plus the two-identical-rows anti-pattern from the current screenshot, for contrast.', render: () => <SubPageNavSection /> },
   { id: 'testing-rail', index: '2c', label: 'Testing recent rail', icon: Wrench, blurb: 'The forked, testing-specific “YOU TESTED” recent rail with corrected selection semantics: selecting a line highlights it in place instead of hoisting it to the top, and a line only rises when its testing state actually changes (a verdict is recorded). Click rows, hover Pass/Fail to record, and toggle the old hoist-on-select bug to feel the difference. Two off-window display variants: highlight-in-place vs a separate now-testing pin.', render: (d) => <TestingRailSection density={d} /> },
-  { id: 'inputs', index: '03', label: 'Inputs', icon: Search, blurb: 'Floating-label fields, a clearable search input, and a spring toggle — consolidating the inconsistent form styling between sidebar and admin forms.', render: () => <InputsSection /> },
-  { id: 'data', index: '04', label: 'Data display', icon: Database, blurb: 'A DataTable family (selection, status pills, density-aware rows) to retire the ~6 hand-rolled tables, plus stat cards with animated counters and sparklines.', render: (d) => <DataTableSection density={d} /> },
-  { id: 'overlays', index: '05', label: 'Overlays', icon: Layers, blurb: 'The biggest gap: a real Dialog primitive (replacing every fixed inset-0 z-[80] copy), a surfaced ⌘K command palette, Popover, and Tooltip.', render: () => <OverlaysSection /> },
-  { id: 'feedback', index: '06', label: 'Feedback', icon: Bell, blurb: 'Sonner toasts (already wired, never demoed), shimmer skeletons, a polished empty state, and a consistent inline error/warning banner.', render: () => <FeedbackSection /> },
+  { id: 'inputs', index: '03', label: 'Inputs', icon: Search, blurb: 'Floating-label fields and a spring toggle — consolidating the inconsistent form styling between sidebar and admin forms.', render: () => <InputsSection /> },
+  { id: 'data', index: '04', label: 'Data display', icon: Database, blurb: 'A DataTable family (selection, status pills, density-aware rows) to retire the ~6 hand-rolled sticky-header tables.', render: (d) => <DataTableSection density={d} /> },
+  { id: 'feedback', index: '06', label: 'Feedback', icon: Bell, blurb: 'A polished empty state and a consistent inline error/warning banner.', render: () => <FeedbackSection /> },
   { id: 'motion', index: '07', label: 'Motion lab', icon: Sparkles, blurb: 'Shared-element expand, spring press, and stagger reveals — the highest-impact "2026" upgrades, all from your existing Framer Motion presets.', render: () => <MotionSection /> },
 ];
 
@@ -157,15 +151,6 @@ export default function DesignDemoPage() {
 
         {/* ── content ──────────────────────────────────────────────────── */}
         <main className="min-w-0 flex-1 space-y-12">
-          <div>
-            <h1 className="text-2xl font-bold tracking-tight text-text-default">Pick your 2026 components</h1>
-            <p className="mt-1.5 max-w-2xl text-[13px] leading-relaxed text-text-muted">
-              Every component below is live — click, hover, press, type <span className="rounded border border-border-soft bg-surface-card px-1 font-mono text-[11px]">⌘K</span>. Flip
-              <span className="font-semibold text-text-default"> Light/Dark</span> and <span className="font-semibold text-text-default">density</span> in the toolbar to stress-test theming.
-              Tell me which Bays you want and I'll promote them into the design system and start replacing the hand-rolled versions.
-            </p>
-          </div>
-
           {SECTIONS.map((s) => (
             <section key={s.id} id={`sec-${s.id}`} className="scroll-mt-[80px]">
               <SectionHeading index={s.index} title={s.label} blurb={s.blurb} />

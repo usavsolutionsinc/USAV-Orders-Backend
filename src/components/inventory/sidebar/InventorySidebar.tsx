@@ -21,9 +21,8 @@ import {
     type NavigateInventoryDetailsPayload,
 } from '@/lib/inventory-events-channel';
 import { microBadge } from '@/design-system/tokens/typography/presets';
-import { SidebarSearchBar } from '@/components/ui/SidebarSearchBar';
+import { SidebarShell } from '@/components/layout/SidebarShell';
 import { HorizontalButtonSlider, type HorizontalSliderItem } from '@/components/ui/HorizontalButtonSlider';
-import { sidebarHeaderPillRowClass, SIDEBAR_GUTTER } from '@/components/layout/header-shell';
 import {
     INVENTORY_SEARCH_FIELDS,
     getInventorySearchPlaceholder,
@@ -225,29 +224,22 @@ export function InventorySidebar({ embedded = true }: InventorySidebarProps) {
     }));
 
     const panelContent = (
-        <motion.div
-            initial="hidden"
-            animate="visible"
-            variants={containerVariants}
-            className="h-full flex flex-col overflow-hidden"
-        >
-            {/* Row 2: search bar — always mounted above tabs */}
-            <SidebarSearchBar
-                    value={inputValue}
-                    onChange={setInputValue}
-                    placeholder={getInventorySearchPlaceholder(tab, field)}
-                    isSearching={search.isFetching}
-                    variant="blue"
-                />
-
-            {/* Row 3: tab pills — ACTIVITY / BINS / SKUs / UNITS / … */}
-            <div className={sidebarHeaderPillRowClass}>
-                <InventorySidebarTabs value={tab} onChange={handleTabChange} />
-            </div>
-
-            {/* Row 4: field-scope pills — ALL / SKU / BIN / USER / … */}
-            <div className={sidebarHeaderPillRowClass}>
+        <SidebarShell
+            as={motion.div}
+            containerProps={{ initial: 'hidden', animate: 'visible', variants: containerVariants }}
+            search={{
+                value: inputValue,
+                onChange: setInputValue,
+                placeholder: getInventorySearchPlaceholder(tab, field),
+                isSearching: search.isFetching,
+                variant: 'blue',
+            }}
+            headerRows={[
+                // Row: tab pills — ACTIVITY / BINS / SKUs / UNITS / …
+                <InventorySidebarTabs key="tabs" value={tab} onChange={handleTabChange} />,
+                // Row: field-scope pills — ALL / SKU / BIN / USER / …
                 <HorizontalButtonSlider
+                    key="field"
                     items={fieldItems}
                     value={field}
                     onChange={(id) => handleFieldChange(id as AnyInventorySearchField)}
@@ -255,23 +247,22 @@ export function InventorySidebar({ embedded = true }: InventorySidebarProps) {
                     dense
                     className="w-full"
                     aria-label={`${tab} search field`}
-                />
-            </div>
-
-            {/* Row 5: bucket filter chips (conditional) */}
-            {hasBucketFilters ? (
-                <div className={sidebarHeaderPillRowClass}>
+                />,
+                // Row: bucket filter chips (conditional)
+                hasBucketFilters ? (
                     <InventoryBucketFilterChips
+                        key="buckets"
                         tab={tab}
                         value={buckets}
                         onChange={handleBucketsChange}
                         counts={search.counts}
                     />
-                </div>
-            ) : null}
-
+                ) : null,
+            ]}
+            bodyClassName="scrollbar-hide pb-5 space-y-4"
+        >
             {/* Scroll area: helper text + cross-tab + results + recent + footer */}
-            <motion.div variants={itemVariants} className={`flex-1 overflow-y-auto scrollbar-hide ${SIDEBAR_GUTTER} pt-4 pb-5 space-y-4`}>
+            <motion.div variants={itemVariants} initial="hidden" animate="visible" className="contents">
                 <p className={`${microBadge} text-gray-500 px-1`}>
                     {getInventorySearchHelperText(tab, field)}
                 </p>
@@ -314,7 +305,7 @@ export function InventorySidebar({ embedded = true }: InventorySidebarProps) {
                 />
                 <InventorySidebarFooter />
             </motion.div>
-        </motion.div>
+        </SidebarShell>
     );
 
     if (embedded) return panelContent;

@@ -44,6 +44,14 @@ const SYSTEM_PROMPT = [
   '    high   = stated explicitly with a clear label ("Total: $4,820.00")',
   '    medium = inferred from layout/context (e.g. last $-amount line)',
   '    low    = guessed from partial info',
+  '- triage_pile suggests where this email belongs:',
+  '    upload = a genuine purchase order to enter into Zoho — it has a PO#,',
+  '             line items, a vendor, or clear order/confirmation language.',
+  '    ignore = clearly not a PO to enter — marketing, a newsletter, a shipping',
+  '             or delivery notification, a plain receipt, or an obvious duplicate.',
+  '    inbox  = you genuinely cannot tell; leave it for a human to triage.',
+  '  Only choose upload or ignore at high/medium confidence. When unsure, return',
+  '  inbox. This is only a suggestion — a human confirms before the email moves.',
   '',
   'Call the `report_extracted_fields` tool exactly once and stop. Do not',
   'reply with prose.',
@@ -115,6 +123,19 @@ const REPORT_TOOL = {
           },
           required: ['value', 'confidence'],
         },
+        triage_pile: {
+          type: 'object',
+          additionalProperties: false,
+          properties: {
+            value: {
+              type: 'string',
+              enum: ['upload', 'ignore', 'inbox'],
+              description: 'Suggested triage pile for this email',
+            },
+            confidence: { type: 'string', enum: ['high', 'medium', 'low'] },
+          },
+          required: ['value', 'confidence'],
+        },
       },
     },
   },
@@ -125,6 +146,14 @@ export interface LlmFieldResult {
   confidence: 'high' | 'medium' | 'low';
 }
 
+/** Triage piles the model is allowed to suggest (omits the terminal `done`). */
+export type LlmTriagePile = 'upload' | 'ignore' | 'inbox';
+
+export interface LlmPileResult {
+  value: LlmTriagePile;
+  confidence: 'high' | 'medium' | 'low';
+}
+
 export interface LlmExtractedFields {
   vendor?: LlmFieldResult;
   po_date?: LlmFieldResult;
@@ -132,6 +161,8 @@ export interface LlmExtractedFields {
   currency?: LlmFieldResult;
   line_items_count?: LlmFieldResult;
   ship_to?: LlmFieldResult;
+  /** Suggested triage pile (advisory only; a human confirms the move). */
+  triage_pile?: LlmPileResult;
 }
 
 export interface ExtractWithLlmInput {

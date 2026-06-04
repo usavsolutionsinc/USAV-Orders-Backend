@@ -4,6 +4,7 @@ import { useCallback } from 'react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import {
   applyModeTarget,
+  getSidebarHref,
   getSidebarPageNav,
   getSidebarRouteKey,
 } from '@/lib/sidebar-navigation';
@@ -28,9 +29,12 @@ export function useSidebarModeNav() {
       const samePage = getSidebarRouteKey(pathname) === pageId;
 
       // Single-surface page, unknown page, or "just go there": bare href.
+      // Resolve through `getSidebarHref` so modeless pages (operations, admin,
+      // settings, …) — which aren't in SIDEBAR_PAGE_NAV — still land on their
+      // real route instead of falling back to the current pathname (no-op).
       if (!page || !modeId) {
-        const href = page?.href ?? pathname ?? '/';
         if (samePage && !modeId) return; // already here, nothing to do
+        const href = getSidebarHref(pageId) ?? pathname ?? '/';
         router.push(href);
         return;
       }

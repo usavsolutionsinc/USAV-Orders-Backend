@@ -3,6 +3,7 @@
 import type { ComponentType, ReactNode, SVGProps } from 'react';
 import { ChevronDown, ChevronLeft, ChevronRight, ChevronUp, X } from '../../Icons';
 import { cn } from '@/utils/_cn';
+import { receivingHeaderHairlineClass } from '@/components/layout/header-shell';
 
 type IconComponent = ComponentType<SVGProps<SVGSVGElement>>;
 
@@ -301,10 +302,16 @@ interface PaneHeaderActionBarProps {
   nextDisabled?: boolean;
   prevTitle?: string;
   nextTitle?: string;
-  /** Card = rounded pill with subtle border + shadow. Flat = no chrome. */
-  variant?: 'card' | 'flat';
+  /**
+   * Card = rounded pill with subtle border + shadow. Flat = no chrome.
+   * Header = full-width 30px band with a top hairline, matching the house
+   * header rows (e.g. the workspace toolbar pinned beneath the stepper).
+   */
+  variant?: 'card' | 'flat' | 'header';
   /** Icon-only mode — hides text labels but preserves them as aria-label/title for accessibility. */
   iconOnly?: boolean;
+  /** Custom node pinned to the right, before the prev/next chevrons (e.g. an Info button). */
+  rightSlot?: ReactNode;
   className?: string;
 }
 
@@ -325,6 +332,7 @@ export function PaneHeaderActionBar({
   nextTitle = 'Next',
   variant = 'card',
   iconOnly = false,
+  rightSlot,
   className,
 }: PaneHeaderActionBarProps) {
   const shell =
@@ -335,8 +343,8 @@ export function PaneHeaderActionBar({
   const renderText = (value: ReactNode): string | undefined =>
     typeof value === 'string' ? value : undefined;
 
-  return (
-    <div className={cn(shell, className)}>
+  const content = (
+    <>
       {actions.map((action) => (
         <button
           key={action.key}
@@ -362,7 +370,8 @@ export function PaneHeaderActionBar({
           {status}
         </span>
       ) : null}
-      {(onPrev || onNext) && <div className="flex-1" />}
+      {(onPrev || onNext || rightSlot) && <div className="flex-1" />}
+      {rightSlot}
       {onPrev ? (
         <button
           type="button"
@@ -387,8 +396,24 @@ export function PaneHeaderActionBar({
           <ChevronDown className="h-4 w-4" />
         </button>
       ) : null}
-    </div>
+    </>
   );
+
+  // Header = full-width 40px white band with the house bottom hairline (matches
+  // the other header rows for consistency). Its content sits in the SAME
+  // centered max-w-3xl column as the stepper + body cards so the icons (left)
+  // and chevrons (right) line up with the rest of the workspace.
+  if (variant === 'header') {
+    return (
+      <div className={cn('flex h-[40px] w-full shrink-0 items-center bg-white', receivingHeaderHairlineClass, className)}>
+        <div className="mx-auto flex w-full max-w-3xl items-center gap-1 px-4 sm:px-6">
+          {content}
+        </div>
+      </div>
+    );
+  }
+
+  return <div className={cn(shell, className)}>{content}</div>;
 }
 
 // ─── PaneHeaderWeekNav ──────────────────────────────────────────────────────

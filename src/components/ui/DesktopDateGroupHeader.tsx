@@ -25,7 +25,7 @@ export function DesktopDateGroupHeader({
       data-date={date}
       data-count={total}
       className={cn(
-        'z-10 flex items-center justify-between border-b border-gray-300 bg-gray-50/80 px-3 py-1',
+        'z-10 flex items-center justify-between border-y border-gray-300 bg-gray-50/80 px-3 py-1',
         className,
       )}
     >

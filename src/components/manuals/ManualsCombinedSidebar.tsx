@@ -4,7 +4,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { HorizontalButtonSlider, type HorizontalSliderItem } from '@/components/ui/HorizontalButtonSlider';
 import { SIDEBAR_GUTTER } from '@/components/layout/header-shell';
-import { SidebarSearchBar } from '@/components/ui/SidebarSearchBar';
+import { SidebarShell } from '@/components/layout/SidebarShell';
 import { ManualsSidebar } from '@/components/manuals/ManualsSidebar';
 import { SkuPairingMovedCard } from '@/components/manuals/SkuPairingMovedCard';
 
@@ -30,83 +30,62 @@ export function ManualsCombinedSidebar() {
     router.replace(query ? `/manuals?${query}` : '/manuals');
   }, [router, searchParams]);
 
-  return (
-    <div className="flex h-full flex-col overflow-hidden bg-white">
-      {/* Search bar (shared) — each sub-bar supplies its own SidebarSearchBar band */}
-      {viewMode === 'manuals' ? (
-        <ManualsSearchBar />
-      ) : (
-        <SkuPairingSearchBar />
-      )}
-
-      {/* Slider below search */}
-      <div className={`shrink-0 border-b border-gray-200 bg-white ${SIDEBAR_GUTTER} py-1.5`}>
-        <HorizontalButtonSlider
-          items={VIEW_SLIDER_ITEMS}
-          value={viewMode}
-          onChange={handleViewChange}
-          variant="fba"
-          size="md"
-          aria-label="Manuals view"
-        />
-      </div>
-
-      {/* Content */}
-      <div className="flex-1 overflow-hidden">
-        {viewMode === 'sku-pairing' ? (
-          <SkuPairingMovedCard />
-        ) : (
-          <ManualsSidebar embedded />
-        )}
-      </div>
-    </div>
-  );
-}
-
-// ─── Search bars (extracted to keep state isolated per view) ─────────────────
-
-function ManualsSearchBar() {
-  const router = useRouter();
-  const searchParams = useSearchParams();
-  const [localSearch, setLocalSearch] = useState(searchParams.get('q') || '');
-
+  // Manuals view search → URL ?q (was the extracted ManualsSearchBar).
   const urlQ = searchParams.get('q') || '';
-  useEffect(() => { setLocalSearch(urlQ); }, [urlQ]);
-
-  const handleChange = (value: string) => {
-    setLocalSearch(value);
+  const [manualsSearch, setManualsSearch] = useState(urlQ);
+  useEffect(() => { setManualsSearch(urlQ); }, [urlQ]);
+  const handleManualsChange = (value: string) => {
+    setManualsSearch(value);
     const params = new URLSearchParams(searchParams.toString());
     if (value.trim()) params.set('q', value.trim());
     else params.delete('q');
     router.replace(`/manuals?${params.toString()}`);
   };
 
-  return (
-    <SidebarSearchBar
-      value={localSearch}
-      onChange={handleChange}
-      onClear={() => handleChange('')}
-      placeholder="Search manuals..."
-      variant="blue"
-    />
-  );
-}
-
-function SkuPairingSearchBar() {
-  const [value, setValue] = useState('');
-
-  const handleChange = (v: string) => {
-    setValue(v);
+  // SKU-pairing view search → local state + broadcast event (was SkuPairingSearchBar).
+  const [pairingSearch, setPairingSearch] = useState('');
+  const handlePairingChange = (v: string) => {
+    setPairingSearch(v);
     window.dispatchEvent(new CustomEvent('sku-pairing-search', { detail: v }));
   };
 
+  const isManuals = viewMode === 'manuals';
+
   return (
-    <SidebarSearchBar
-      value={value}
-      onChange={handleChange}
-      onClear={() => handleChange('')}
-      placeholder="Search unpaired items..."
-      variant="blue"
-    />
+    <SidebarShell
+      className="bg-white"
+      search={
+        isManuals
+          ? {
+              value: manualsSearch,
+              onChange: handleManualsChange,
+              onClear: () => handleManualsChange(''),
+              placeholder: 'Search manuals...',
+              variant: 'blue',
+            }
+          : {
+              value: pairingSearch,
+              onChange: handlePairingChange,
+              onClear: () => handlePairingChange(''),
+              placeholder: 'Search unpaired items...',
+              variant: 'blue',
+            }
+      }
+      headerBelow={
+        <div className={`border-b border-gray-200 bg-white ${SIDEBAR_GUTTER} py-1.5`}>
+          <HorizontalButtonSlider
+            items={VIEW_SLIDER_ITEMS}
+            value={viewMode}
+            onChange={handleViewChange}
+            variant="fba"
+            size="md"
+            aria-label="Manuals view"
+          />
+        </div>
+      }
+      bodyClassName="overflow-hidden p-0"
+    >
+      {viewMode === 'sku-pairing' ? <SkuPairingMovedCard /> : <ManualsSidebar embedded />}
+    </SidebarShell>
   );
 }

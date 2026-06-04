@@ -29,6 +29,14 @@ export interface ReceivingIdentityChipsProps {
   includeSku?: boolean;
   includeTracking?: boolean;
   includeSerial?: boolean;
+  /**
+   * Right-align the trailing SerialChip's icon + value inside its fixed-width
+   * box. The desktop receiving table sets this so the last chip hugs the right
+   * edge (flush with the day-group count) while keeping the column a stable
+   * width — so the PO / SKU / tracking chips don't shift between rows that have
+   * a serial and rows that don't. Mobile detail headers leave it left-aligned.
+   */
+  alignSerialEnd?: boolean;
   /** Wrapper layout classes — desktop passes its grid class, mobile a wrap row. */
   className?: string;
 }
@@ -42,6 +50,7 @@ export function ReceivingIdentityChips({
   includeSku = true,
   includeTracking = true,
   includeSerial = true,
+  alignSerialEnd = false,
   className = 'flex flex-wrap items-center gap-1.5',
 }: ReceivingIdentityChipsProps) {
   const poValue = (po || '').trim();
@@ -54,7 +63,13 @@ export function ReceivingIdentityChips({
       {includePo && <OrderIdChip value={poValue} display={getLast4(poValue)} />}
       {includeSku && <SkuScanRefChip value={skuValue} display={getLast4(skuValue)} />}
       {includeTracking && <TrackingChip value={trackingValue} display={getLast4(trackingValue)} />}
-      {includeSerial && <SerialChip value={serialsValue} display={getLast4Serial(serialsValue)} />}
+      {includeSerial && (
+        <SerialChip
+          value={serialsValue}
+          display={getLast4Serial(serialsValue)}
+          align={alignSerialEnd ? 'end' : 'start'}
+        />
+      )}
     </div>
   );
 }

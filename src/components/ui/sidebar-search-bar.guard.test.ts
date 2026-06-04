@@ -16,6 +16,24 @@ import { test } from 'node:test';
 
 const SRC_ROOT = join(process.cwd(), 'src');
 const SEARCH_BAND_TOKEN = 'sidebarHeaderSearchRowClass';
+const SEARCHBAR_SYMBOL = 'SidebarSearchBar';
+
+// The END STATE: <SidebarSearchBar> may be imported ONLY by <SidebarShell>, the
+// single component that renders the sidebar header search. The shell owns the
+// flush position + 40px band + scroll-body structure, so no panel can hand-wrap
+// or misposition the search again (that was the alignment-drift bug).
+//
+// MIGRATION IN PROGRESS: the panels below still render <SidebarSearchBar>
+// directly and are being moved onto <SidebarShell> phase by phase. Delete each
+// line as its panel is migrated; when only the three permanent entries remain,
+// the consolidation is complete.
+const SEARCHBAR_IMPORT_ALLOWLIST = new Set([
+  // <SidebarSearchBar> is now rendered ONLY by <SidebarShell>. Every sidebar
+  // panel passes search props to <SidebarShell> instead of rendering the bar.
+  'components/ui/SidebarSearchBar.tsx', // the definition
+  'components/ui/sidebar-search-bar.guard.test.ts', // this guard names the symbol
+  'components/layout/SidebarShell.tsx', // the ONE renderer
+]);
 
 // The ONLY files allowed to mention the 40px search band: the token's own
 // definition and the single component that wraps it. Everything else must go
@@ -51,6 +69,24 @@ test('the 40px sidebar search band is referenced ONLY by SidebarSearchBar', () =
     `Do not hand-wrap the sidebar search band. Use <SidebarSearchBar> instead of ` +
       `\`<div className={${SEARCH_BAND_TOKEN}}><SearchBar .../></div>\`. Offending files:\n` +
       offenders.map((f) => `  - ${f}`).join('\n'),
+  );
+});
+
+test('SidebarSearchBar is imported ONLY through SidebarShell (no direct renders)', () => {
+  const offenders: string[] = [];
+  // Match an import statement that pulls in the symbol — not incidental mentions.
+  const importRe = /import[^;]*\bSidebarSearchBar\b[^;]*from/;
+  for (const file of ALL_SOURCE_FILES) {
+    const rel = relative(SRC_ROOT, file).split('\\').join('/');
+    if (SEARCHBAR_IMPORT_ALLOWLIST.has(rel)) continue;
+    if (importRe.test(readFileSync(file, 'utf8'))) offenders.push(rel);
+  }
+  assert.deepEqual(
+    offenders,
+    [],
+    `Do not render <${SEARCHBAR_SYMBOL}> directly. Pass search props to ` +
+      `<SidebarShell search={{…}} /> so the band + flush position can't drift. ` +
+      `Offending files:\n` + offenders.map((f) => `  - ${f}`).join('\n'),
   );
 });
 

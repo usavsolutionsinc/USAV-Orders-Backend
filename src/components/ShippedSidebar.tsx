@@ -22,7 +22,7 @@ import { SIDEBAR_GUTTER } from '@/components/layout/header-shell';
 import { ShippedIntakeForm, type ShippedFormData } from './shipped';
 import { ShippedDetailsPanel } from './shipped/ShippedDetailsPanel';
 import { ShippedOrder } from '@/lib/neon/orders-queries';
-import { SidebarSearchBar } from './ui/SidebarSearchBar';
+import { SidebarShell } from '@/components/layout/SidebarShell';
 import { HorizontalButtonSlider, type HorizontalSliderItem } from './ui/HorizontalButtonSlider';
 import { useShippedSearch } from '@/hooks/useShippedSearch';
 import { useDebounce } from '@/hooks';
@@ -298,94 +298,97 @@ Shipped: ${result.packed_at ? formatDateTimePST(result.packed_at) : 'Not Shipped
             onSubmit={onFormSubmit || (() => {})}
         />
     ) : (
-        <motion.div initial="hidden" animate="visible" variants={containerVariants} className="h-full flex flex-col overflow-hidden">
-            {filterControl ? <motion.div variants={itemVariants} className="relative z-20">{filterControl}</motion.div> : null}
-            {!hideSectionHeader ? (
-                <motion.header variants={itemVariants} className={`${SIDEBAR_GUTTER} ${filterControl ? 'pt-2' : 'pt-6'}`}>
-                    <h2 className="text-xl font-black tracking-tighter uppercase leading-none text-gray-900">
-                        Shipped Orders
-                    </h2>
-                    <p className={`${microBadge} text-blue-600 mt-1`}>
-                        Search Database
-                    </p>
-                </motion.header>
-            ) : null}
-
-            {/* Search + the "search by" field pills it reveals — hoisted to a flush
-                direct child of the flex column (matches the Pending reference). It must
-                NOT sit inside the overflow-y scroll body, or the band double-insets and
-                negative margins get clamped by overflow-x. Focus events bubble to this
-                wrapper so the pills stay open while focus moves to a pill. */}
-            <div
-                onFocus={() => setSearchFocused(true)}
-                onBlur={(e) => {
-                    if (!e.currentTarget.contains(e.relatedTarget as Node | null)) {
-                        setSearchFocused(false);
-                    }
-                }}
-            >
-                <SidebarSearchBar
-                    value={inputValue}
-                    onChange={setInputValue}
-                    placeholder={getShippedSearchPlaceholder(shippedSearchField)}
-                    isSearching={isSearching}
-                    variant="blue"
-                    autoFocus={Boolean(embedded && autoFocusSearch)}
-                    rightElement={
-                        <button
-                            type="button"
-                            onClick={() => {
-                                const params = new URLSearchParams(searchParams.toString());
-                                params.set('new', 'true');
-                                const nextSearch = params.toString();
-                                router.replace(nextSearch ? `${pathname || '/dashboard'}?${nextSearch}` : pathname || '/dashboard');
-                            }}
-                            className="rounded-xl bg-emerald-500 p-2.5 text-white transition-colors hover:bg-emerald-600 disabled:bg-gray-300"
-                            title="New Order Entry"
-                            aria-label="Open new order entry form"
-                        >
-                            <Plus className="h-5 w-5" />
-                        </button>
-                    }
-                />
-
-                {/* "Search by" field pills — hidden until the search bar is
-                    focused, then they slide down into view from the top. */}
-                <AnimatePresence initial={false}>
-                    {onShippedSearchFieldChange && searchFocused ? (
-                        <motion.div
-                            key="shipped-search-by"
-                            initial={{ height: 0, opacity: 0, y: -8 }}
-                            animate={{ height: 'auto', opacity: 1, y: 0 }}
-                            exit={{ height: 0, opacity: 0, y: -8 }}
-                            transition={{ duration: 0.2, ease: 'easeOut' }}
-                            className="overflow-hidden"
-                        >
-                            <div className={`space-y-2 pt-3 ${SIDEBAR_GUTTER}`}>
-                                <HorizontalButtonSlider
-                                    items={SHIPPED_SEARCH_FIELDS.map((field) => ({
-                                        id: field.id,
-                                        label: field.label,
-                                        icon: SHIPPED_SEARCH_FIELD_ICONS[field.id],
-                                    }))}
-                                    value={shippedSearchField}
-                                    onChange={(id) => onShippedSearchFieldChange(id as ShippedSearchField)}
-                                    variant="nav"
-                                    size="md"
-                                    aria-label="Shipped search field"
-                                    // Left inset so the first pill isn't flush to the edge at min scroll.
-                                    className="pl-3"
-                                />
-                                <p className={`${microBadge} text-gray-500 px-1`}>
-                                    {getShippedSearchHelperText(shippedSearchField)}
-                                </p>
-                            </div>
-                        </motion.div>
+        <SidebarShell
+            as={motion.div}
+            containerProps={{ initial: 'hidden', animate: 'visible', variants: containerVariants }}
+            headerAbove={
+                <>
+                    {filterControl ? <motion.div variants={itemVariants} className="relative z-20">{filterControl}</motion.div> : null}
+                    {!hideSectionHeader ? (
+                        <motion.header variants={itemVariants} className={`${SIDEBAR_GUTTER} ${filterControl ? 'pt-2' : 'pt-6'}`}>
+                            <h2 className="text-xl font-black tracking-tighter uppercase leading-none text-gray-900">
+                                Shipped Orders
+                            </h2>
+                            <p className={`${microBadge} text-blue-600 mt-1`}>
+                                Search Database
+                            </p>
+                        </motion.header>
                     ) : null}
-                </AnimatePresence>
-            </div>
+                </>
+            }
+            search={{
+                value: inputValue,
+                onChange: setInputValue,
+                placeholder: getShippedSearchPlaceholder(shippedSearchField),
+                isSearching,
+                variant: 'blue',
+                autoFocus: Boolean(embedded && autoFocusSearch),
+                rightElement: (
+                    <button
+                        type="button"
+                        onClick={() => {
+                            const params = new URLSearchParams(searchParams.toString());
+                            params.set('new', 'true');
+                            const nextSearch = params.toString();
+                            router.replace(nextSearch ? `${pathname || '/dashboard'}?${nextSearch}` : pathname || '/dashboard');
+                        }}
+                        className="rounded-xl bg-emerald-500 p-2.5 text-white transition-colors hover:bg-emerald-600 disabled:bg-gray-300"
+                        title="New Order Entry"
+                        aria-label="Open new order entry form"
+                    >
+                        <Plus className="h-5 w-5" />
+                    </button>
+                ),
+            }}
+            searchGroup={(searchBar) => (
+                <div
+                    onFocus={() => setSearchFocused(true)}
+                    onBlur={(e) => {
+                        if (!e.currentTarget.contains(e.relatedTarget as Node | null)) {
+                            setSearchFocused(false);
+                        }
+                    }}
+                >
+                    {searchBar}
 
-            <div className={`h-full flex flex-col space-y-4 overflow-y-auto scrollbar-hide ${SIDEBAR_GUTTER} pb-6 pt-4`}>
+                    {/* "Search by" field pills — hidden until the search bar is
+                        focused, then they slide down into view from the top. */}
+                    <AnimatePresence initial={false}>
+                        {onShippedSearchFieldChange && searchFocused ? (
+                            <motion.div
+                                key="shipped-search-by"
+                                initial={{ height: 0, opacity: 0, y: -8 }}
+                                animate={{ height: 'auto', opacity: 1, y: 0 }}
+                                exit={{ height: 0, opacity: 0, y: -8 }}
+                                transition={{ duration: 0.2, ease: 'easeOut' }}
+                                className="overflow-hidden"
+                            >
+                                <div className={`space-y-2 pt-3 ${SIDEBAR_GUTTER}`}>
+                                    <HorizontalButtonSlider
+                                        items={SHIPPED_SEARCH_FIELDS.map((field) => ({
+                                            id: field.id,
+                                            label: field.label,
+                                            icon: SHIPPED_SEARCH_FIELD_ICONS[field.id],
+                                        }))}
+                                        value={shippedSearchField}
+                                        onChange={(id) => onShippedSearchFieldChange(id as ShippedSearchField)}
+                                        variant="nav"
+                                        size="md"
+                                        aria-label="Shipped search field"
+                                        // Left inset so the first pill isn't flush to the edge at min scroll.
+                                        className="pl-3"
+                                    />
+                                    <p className={`${microBadge} text-gray-500 px-1`}>
+                                        {getShippedSearchHelperText(shippedSearchField)}
+                                    </p>
+                                </div>
+                            </motion.div>
+                        ) : null}
+                    </AnimatePresence>
+                </div>
+            )}
+            bodyClassName="flex flex-col space-y-4 scrollbar-hide pb-6"
+        >
                 <motion.div variants={itemVariants} className="space-y-4">
                         <ShippedCarrierFilters layout="sidebar" />
 
@@ -507,8 +510,7 @@ Shipped: ${result.packed_at ? formatDateTimePST(result.packed_at) : 'Not Shipped
                             />
                         )}
                     </motion.div>
-            </div>
-        </motion.div>
+        </SidebarShell>
     );
 
     const sidebarShell = embedded ? (

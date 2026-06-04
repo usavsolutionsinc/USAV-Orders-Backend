@@ -4,9 +4,9 @@ import { useEffect, useRef, useState } from 'react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { createPortal } from 'react-dom';
 import { Check, Loader2, Plus, Tool } from '@/components/Icons';
-import { SidebarSearchBar } from '@/components/ui/SidebarSearchBar';
+import { SidebarShell } from '@/components/layout/SidebarShell';
 import { HorizontalButtonSlider, type HorizontalSliderItem } from '@/components/ui/HorizontalButtonSlider';
-import { sidebarHeaderPillRowClass, SIDEBAR_GUTTER } from '@/components/layout/header-shell';
+import { SIDEBAR_GUTTER } from '@/components/layout/header-shell';
 import { useMasterNavEnabled } from '@/components/sidebar/master-nav';
 import { useBodyScrollLock } from '@/design-system/hooks';
 import { toast } from '@/lib/toast';
@@ -201,66 +201,64 @@ export function RepairSidebarPanel({ embedded = false, hideSectionHeader = false
   };
 
   const content = (
-    <div className="flex h-full flex-col overflow-hidden bg-white">
-      <div className="shrink-0">
-        {!hideSectionHeader ? (
+    <SidebarShell
+      className="bg-white"
+      headerAbove={
+        !hideSectionHeader ? (
           <div className={`border-b border-gray-100 ${SIDEBAR_GUTTER} pt-4 pb-3`}>
             <p className={`${sectionLabel} text-orange-500`}>Repair Service</p>
             <h2 className={`mt-1 ${cardTitle}`}>Repairs</h2>
           </div>
-        ) : null}
-
-        <SidebarSearchBar
-            value={searchValue}
-            onChange={setSearchValue}
-            onSearch={() =>
+        ) : null
+      }
+      search={{
+        value: searchValue,
+        onChange: setSearchValue,
+        onSearch: () =>
+          updateParams((params) => {
+            if (searchValue.trim()) params.set('search', searchValue.trim());
+            else params.delete('search');
+          }),
+        onClear: handleClearSearch,
+        placeholder: 'Search repairs, tickets, SKU…',
+        variant: 'orange',
+        rightElement: (
+          <button
+            type="button"
+            onClick={() => {
+              setIntakeDraft(undefined);
+              setSelectedFavoriteId(null);
+              setShowIntakeForm(true);
+            }}
+            disabled={isSubmitting}
+            className="rounded-xl bg-orange-500 p-2.5 text-white transition-colors hover:bg-orange-600 disabled:bg-gray-400"
+            title="New repair"
+            aria-label="Open new repair order form"
+          >
+            <Plus className="h-5 w-5" />
+          </button>
+        ),
+      }}
+      headerRows={[
+        !masterNavEnabled ? (
+          <HorizontalButtonSlider
+            items={REPAIR_TAB_ITEMS}
+            value={activeTab}
+            onChange={(tab) =>
               updateParams((params) => {
-                if (searchValue.trim()) params.set('search', searchValue.trim());
-                else params.delete('search');
+                if (tab === 'active') params.delete('tab');
+                else params.set('tab', tab);
               })
             }
-            onClear={handleClearSearch}
-            placeholder="Search repairs, tickets, SKU…"
-            variant="orange"
-            rightElement={
-              <button
-                type="button"
-                onClick={() => {
-                  setIntakeDraft(undefined);
-                  setSelectedFavoriteId(null);
-                  setShowIntakeForm(true);
-                }}
-                disabled={isSubmitting}
-                className="rounded-xl bg-orange-500 p-2.5 text-white transition-colors hover:bg-orange-600 disabled:bg-gray-400"
-                title="New repair"
-                aria-label="Open new repair order form"
-              >
-                <Plus className="h-5 w-5" />
-              </button>
-            }
+            variant="nav"
+            dense
+            className="w-full"
+            aria-label="Repair queue"
           />
-
-        {!masterNavEnabled && (
-          <div className={sidebarHeaderPillRowClass}>
-            <HorizontalButtonSlider
-              items={REPAIR_TAB_ITEMS}
-              value={activeTab}
-              onChange={(tab) =>
-                updateParams((params) => {
-                  if (tab === 'active') params.delete('tab');
-                  else params.set('tab', tab);
-                })
-              }
-              variant="nav"
-              dense
-              className="w-full"
-              aria-label="Repair queue"
-            />
-          </div>
-        )}
-      </div>
-
-      <div className={`relative flex-1 overflow-y-auto ${SIDEBAR_GUTTER} py-4`}>
+        ) : null,
+      ]}
+      bodyClassName="relative pb-4"
+    >
         {isFetchingFavorite && (
           <div className="absolute inset-0 z-10 flex items-center justify-center rounded-2xl bg-white/80 backdrop-blur-sm">
             <div className="flex items-center gap-2 text-orange-500">
@@ -287,8 +285,7 @@ export function RepairSidebarPanel({ embedded = false, hideSectionHeader = false
             searchResultsMaxHeightClass="max-h-72"
           />
         )}
-      </div>
-    </div>
+    </SidebarShell>
   );
 
   const intakeOverlay =

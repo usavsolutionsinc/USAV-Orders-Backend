@@ -14,7 +14,7 @@
 
 import { useCallback, useMemo } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { sidebarHeaderBandClass, SIDEBAR_GUTTER } from '@/components/layout/header-shell';
+import { sidebarHeaderPillRowClass, SIDEBAR_GUTTER } from '@/components/layout/header-shell';
 import {
   HorizontalButtonSlider,
   type HorizontalSliderItem,
@@ -28,7 +28,7 @@ import { RoomsSidebarList } from '@/components/warehouse/RoomsSidebarList';
 import { BinLabelPrinter } from '@/components/barcode/BinLabelPrinter';
 import { RackLabelPrinter } from '@/components/barcode/RackLabelPrinter';
 import { RoomFinderProvider, useRoomFinder } from '@/components/warehouse/roomFinderContext';
-import { SidebarSearchBar } from '@/components/ui/SidebarSearchBar';
+import { SidebarShell } from '@/components/layout/SidebarShell';
 
 type InventoryTab = 'rooms' | 'bins' | 'labels' | 'racks' | 'map';
 
@@ -38,11 +38,22 @@ function parseTab(raw: string | null): InventoryTab {
 }
 
 export function WarehouseSidebarPanel() {
+  // The room-finder query lives in RoomFinderContext; the inner panel reads it
+  // (via the shell's `search` slot) so it must mount BELOW the provider.
+  return (
+    <RoomFinderProvider>
+      <WarehouseSidebarInner />
+    </RoomFinderProvider>
+  );
+}
+
+function WarehouseSidebarInner() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const masterNavEnabled = useMasterNavEnabled();
   const tab = parseTab(searchParams.get('tab'));
   const { rooms, bins } = useLocations();
+  const { query, setQuery } = useRoomFinder();
 
   const setTab = useCallback(
     (next: InventoryTab) => {
@@ -80,73 +91,68 @@ export function WarehouseSidebarPanel() {
   // beats two stacked search inputs both visually and for keyboard /
   // screen-reader navigation.
   const isRoomFinderTab = tab === 'rooms' || tab === 'labels' || tab === 'racks';
+  const roomFinderPlaceholder =
+    tab === 'labels'
+      ? 'Search rooms to label by name or zone…'
+      : tab === 'racks'
+        ? 'Search rooms to print racks for…'
+        : 'Search rooms by name or zone…';
 
   return (
-    <RoomFinderProvider>
-      <div className="h-full flex flex-col overflow-hidden bg-white">
-        <div className={sidebarHeaderBandClass}>
-          <div className={`space-y-2 ${SIDEBAR_GUTTER} py-2`}>
-            {!masterNavEnabled && (
+    <SidebarShell
+      className="bg-white"
+      headerAbove={
+        <>
+          {!masterNavEnabled && (
+            <div className={sidebarHeaderPillRowClass}>
               <HorizontalButtonSlider
                 variant="nav"
                 items={tabItems}
                 value={tab}
                 onChange={(id) => setTab(id as InventoryTab)}
                 aria-label="Warehouse section"
+                className="w-full"
               />
-            )}
-            {isRoomFinderTab ? (
-              <RoomFinderSearchBar tab={tab} />
-            ) : (
+            </div>
+          )}
+          {/* Non-room tabs swap the room search for the full SKU/bin finder. */}
+          {!isRoomFinderTab && (
+            <div className={`${SIDEBAR_GUTTER} py-2`}>
               <SkuLocationFinder />
-            )}
-          </div>
+            </div>
+          )}
+        </>
+      }
+      search={
+        isRoomFinderTab
+          ? {
+              value: query,
+              onChange: setQuery,
+              onClear: () => setQuery(''),
+              placeholder: roomFinderPlaceholder,
+              variant: 'blue',
+            }
+          : undefined
+      }
+      bodyClassName="flex flex-col overflow-hidden p-0"
+    >
+      {tab === 'rooms' ? (
+        <div className="min-h-0 min-w-0 flex-1 overflow-hidden">
+          <RoomsSidebarList />
         </div>
+      ) : (
+        <div className="min-h-0 min-w-0 flex-1 overflow-y-auto scrollbar-hide">
+          {tab === 'bins'   && <BinsSidebarBody />}
+          {tab === 'labels' && <LabelsSidebarBody />}
+          {tab === 'racks'  && <RacksSidebarBody />}
+          {tab === 'map'    && <MapSidebarBody />}
+        </div>
+      )}
 
-        {tab === 'rooms' ? (
-          <div className="min-h-0 min-w-0 flex-1 overflow-hidden">
-            <RoomsSidebarList />
-          </div>
-        ) : (
-          <div className="min-h-0 min-w-0 flex-1 overflow-y-auto scrollbar-hide">
-            {tab === 'bins'   && <BinsSidebarBody />}
-            {tab === 'labels' && <LabelsSidebarBody />}
-            {tab === 'racks'  && <RacksSidebarBody />}
-            {tab === 'map'    && <MapSidebarBody />}
-          </div>
-        )}
-
-        <footer className="p-4 border-t border-gray-100 opacity-30 mt-auto text-center">
-          <p className="text-eyebrow font-mono uppercase tracking-[0.2em] text-gray-500">USAV INV</p>
-        </footer>
-      </div>
-    </RoomFinderProvider>
-  );
-}
-
-// ── Room finder — shared search bar for Rooms / Labels / Racks tabs ─────
-//
-// Lives in the header band so each tab gets exactly one search affordance.
-// Writes into RoomFinderContext; the list body for the active tab reads
-// from the same context and filters locally.
-
-function RoomFinderSearchBar({ tab }: { tab: InventoryTab }) {
-  const { query, setQuery } = useRoomFinder();
-  const placeholder =
-    tab === 'labels'
-      ? 'Search rooms to label by name or zone…'
-      : tab === 'racks'
-        ? 'Search rooms to print racks for…'
-        : 'Search rooms by name or zone…';
-  return (
-    <SidebarSearchBar
-      value={query}
-      onChange={setQuery}
-      onClear={() => setQuery('')}
-      placeholder={placeholder}
-      variant="blue"
-      hideUnderline
-    />
+      <footer className="p-4 border-t border-gray-100 opacity-30 mt-auto text-center">
+        <p className="text-eyebrow font-mono uppercase tracking-[0.2em] text-gray-500">USAV INV</p>
+      </footer>
+    </SidebarShell>
   );
 }
 

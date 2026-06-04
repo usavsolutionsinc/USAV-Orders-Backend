@@ -11,11 +11,6 @@ interface DateGroupHeaderProps {
 
 export function DateGroupHeader({ date, total, actions }: DateGroupHeaderProps) {
   return (
-    <DesktopDateGroupHeader
-      date={date}
-      total={total}
-      actions={actions}
-      className="border-t border-gray-300"
-    />
+    <DesktopDateGroupHeader date={date} total={total} actions={actions} />
   );
 }
