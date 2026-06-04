@@ -46,7 +46,10 @@ function compareEntries(a: NasEntry, b: NasEntry, key: SortKey, anchor: number |
 //   • Public NAS tunnel (absolute https) → the Next.js image optimizer, which
 //     downscales to a tiny cached webp. Works because the tunnel is
 //     unauthenticated (CORS-open) and its host is allowlisted in next.config
-//     `images.remotePatterns`. `size` must be an allowed Next width.
+//     `images.remotePatterns`. `size` must be an allowed Next width, and `q`
+//     must be an allowed quality — Next 16 rejects anything but 75 by default
+//     (q=60 → HTTP 400 / broken image), so keep q=75 unless next.config sets
+//     `images.qualities`.
 //   • Dev route (/api/nas-dev, same-origin) → fetch directly with ?thumb. The
 //     optimizer can't be used here: that route is behind the session auth gate
 //     and the optimizer fetches server-side WITHOUT the browser cookie (→ 401,
@@ -55,7 +58,7 @@ function compareEntries(a: NasEntry, b: NasEntry, key: SortKey, anchor: number |
 // The full-res `url` is always what gets attached to the PO.
 function thumbUrl(url: string, size = 128): string {
   if (/^https?:\/\//i.test(url)) {
-    return `/_next/image?url=${encodeURIComponent(url)}&w=${size}&q=60`;
+    return `/_next/image?url=${encodeURIComponent(url)}&w=${size}&q=75`;
   }
   return url + (url.includes('?') ? '&' : '?') + `thumb=${size}`;
 }
@@ -506,7 +509,7 @@ function NasPickerDialog({
         <div
           role="dialog"
           aria-modal="true"
-          className="fixed inset-0 z-[110] flex flex-col items-center justify-center gap-3 bg-black/85 p-4"
+          className="fixed inset-0 z-[130] flex flex-col items-center justify-center gap-3 bg-black/85 p-4"
           onClick={() => setPreview(null)}
         >
           {/* eslint-disable-next-line @next/next/no-img-element */}
