@@ -13,6 +13,22 @@
 import 'server-only';
 import pool from '@/lib/db';
 import type { AuditLogFilters } from './filters';
+import { readInventorySpine } from './inventory-spine';
+
+/**
+ * Outbound lifecycle event types surfaced in the packing timeline. Scoped to
+ * fulfillment so we don't pull a unit's full receiving/testing history (which
+ * lives in the receiving/tech views) into the packing audit.
+ */
+const OUTBOUND_EVENT_TYPES = [
+  'ALLOCATED',
+  'RELEASED',
+  'PICKED',
+  'PACKED',
+  'LABELED',
+  'STAGED',
+  'SHIPPED',
+] as const;
 
 export interface PackingTrackingSummary {
   tracking: string;
@@ -27,7 +43,7 @@ export interface PackingTrackingSummary {
 export interface PackingEvent {
   id: string;
   occurred_at: string;
-  source: 'packer_log' | 'station_activity_log' | 'audit_log' | 'photo';
+  source: 'packer_log' | 'station_activity_log' | 'audit_log' | 'photo' | 'inventory_event';
   kind: string;
   actor_staff_id: number | null;
   actor_name: string | null;
@@ -160,8 +176,7 @@ export async function getPackingTrackingDetail(
             pl.created_at AS pack_date_time,
             pl.packed_by AS packed_by_id,
             s.name AS packed_by_name,
-            pl.tracking_type,
-            pl.packer_photos_url
+            pl.tracking_type
        FROM packer_logs pl
        LEFT JOIN staff s ON s.id = pl.packed_by
        WHERE pl.shipment_id = $1
@@ -170,6 +185,26 @@ export async function getPackingTrackingDetail(
   );
 
   const packerLogIds = packerLogsRes.rows.map((r: Record<string, unknown>) => r.id as number);
+
+  // Pack photos live in the shared `photos` table (entity_type='PACKER_LOG'),
+  // not a column on packer_logs. Group them by packer_log id.
+  const packerPhotosRes =
+    packerLogIds.length > 0
+      ? await pool.query(
+          `SELECT entity_id, url
+             FROM photos
+            WHERE entity_type = 'PACKER_LOG' AND entity_id = ANY($1::int[])
+            ORDER BY created_at ASC, id ASC`,
+          [packerLogIds],
+        )
+      : { rows: [] as Record<string, unknown>[] };
+  const photosByPackerLog = new Map<number, string[]>();
+  for (const p of packerPhotosRes.rows as Record<string, unknown>[]) {
+    const lid = p.entity_id as number;
+    const list = photosByPackerLog.get(lid) ?? [];
+    if (typeof p.url === 'string') list.push(p.url);
+    photosByPackerLog.set(lid, list);
+  }
 
   // SAL events linked to any of these packer_logs.
   const salParams: unknown[] = [packerLogIds.length > 0 ? packerLogIds : [-1]];
@@ -233,7 +268,47 @@ export async function getPackingTrackingDetail(
     ],
   );
 
+  // ── Outbound lifecycle spine (inventory_events) ──────────────────────────
+  // Units allocated to orders on this shipment carry PICKED/PACKED/SHIPPED/…
+  // events on the shared inventory_events spine. Surface them so the packing
+  // timeline reflects the real fulfillment lifecycle, not just the packer_logs
+  // row + SAL scans. Resolved via order_unit_allocations → orders.shipment_id
+  // (inventory_events has no shipment column of its own).
+  const allocUnitsRes = await pool.query(
+    `SELECT DISTINCT oua.serial_unit_id
+       FROM order_unit_allocations oua
+       JOIN orders o ON o.id = oua.order_id
+      WHERE o.shipment_id = $1
+        AND oua.serial_unit_id IS NOT NULL`,
+    [shipmentId],
+  );
+  const allocUnitIds = allocUnitsRes.rows.map(
+    (r: Record<string, unknown>) => r.serial_unit_id as number,
+  );
+  const spineRows = await readInventorySpine({
+    serialUnitIds: allocUnitIds,
+    staffId: filters.staffId,
+    eventTypes: [...OUTBOUND_EVENT_TYPES],
+    order: 'asc',
+  });
+
   const events: PackingEvent[] = [];
+
+  for (const r of spineRows) {
+    events.push({
+      id: `inv:${r.id}`,
+      occurred_at: r.occurred_at,
+      source: 'inventory_event',
+      kind: r.event_type,
+      actor_staff_id: r.actor_staff_id,
+      actor_name: r.actor_name,
+      station: r.station,
+      notes: r.notes,
+      before: r.prev_status ? { status: r.prev_status } : null,
+      after: r.next_status ? { status: r.next_status } : null,
+      detail: { serial_number: r.serial_number, sku: r.sku, ...(r.payload ?? {}) },
+    });
+  }
 
   for (const pl of packerLogsRes.rows) {
     if (pl.pack_date_time) {
@@ -251,9 +326,7 @@ export async function getPackingTrackingDetail(
         detail: { tracking_type: pl.tracking_type, packer_log_id: pl.id },
       });
     }
-    const photoUrls = Array.isArray(pl.packer_photos_url)
-      ? (pl.packer_photos_url as unknown[]).filter((u): u is string => typeof u === 'string')
-      : [];
+    const photoUrls = photosByPackerLog.get(pl.id as number) ?? [];
     for (let i = 0; i < photoUrls.length; i++) {
       events.push({
         id: `photo:${pl.id}:${i}`,
@@ -345,9 +418,7 @@ export async function getPackingTrackingDetail(
       packed_by_id: pl.packed_by_id as number | null,
       packed_by_name: pl.packed_by_name as string | null,
       tracking_type: pl.tracking_type as string | null,
-      photo_urls: Array.isArray(pl.packer_photos_url)
-        ? (pl.packer_photos_url as unknown[]).filter((u): u is string => typeof u === 'string')
-        : [],
+      photo_urls: photosByPackerLog.get(pl.id as number) ?? [],
     })),
     events: filteredEvents,
     sku_summary: (skuRes.rows[0]?.sku_summary as string | null) ?? null,

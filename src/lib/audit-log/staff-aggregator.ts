@@ -97,7 +97,7 @@ export async function getStaffDetail(
   const recRes = await pool.query(
     `SELECT ie.id,
             ie.occurred_at,
-            ie.kind,
+            ie.event_type,
             rl.sku,
             rl.item_name,
             rl.zoho_purchaseorder_id
@@ -142,7 +142,7 @@ export async function getStaffDetail(
       id: `ie:${r.id}`,
       occurred_at: r.occurred_at as string,
       station: 'receiving',
-      kind: r.kind as string,
+      kind: r.event_type as string,
       tracking: null,
       sku: r.sku as string | null,
       serial_number: null,

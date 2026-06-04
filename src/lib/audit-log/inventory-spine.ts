@@ -48,6 +48,8 @@ export interface ReadInventorySpineOpts {
   cartonIds?: number[];
   /** Restrict to a single actor. */
   staffId?: number | null;
+  /** Restrict to specific event_type values (e.g. the outbound lifecycle). */
+  eventTypes?: string[];
   /** Timeline direction. Default 'asc' (oldest-first). */
   order?: 'asc' | 'desc';
   /** Row cap. Omit for unbounded. */
@@ -87,6 +89,10 @@ export async function readInventorySpine(
   if (opts.staffId != null) {
     params.push(opts.staffId);
     where.push(`ie.actor_staff_id = $${params.length}`);
+  }
+  if (opts.eventTypes && opts.eventTypes.length > 0) {
+    params.push(opts.eventTypes);
+    where.push(`ie.event_type = ANY($${params.length}::text[])`);
   }
 
   const order = opts.order === 'desc' ? 'DESC' : 'ASC';

@@ -66,12 +66,64 @@ batched `inventory_events` read with staff + serial_units joins, keyed on any id
   (PO) both return the same events as before — `TEST_PASS 069234P62022378AE` present in
   each.
 
+**Shipped — Phase 3 (write-path consistency):** the testing verdict route
+(`src/app/api/serial-units/[id]/test/route.ts`) now writes a first-class `audit_logs`
+row via `recordAudit` — the verdict route was the only state-mutating route with no
+audit-ledger entry.
+- New canonical verbs in `src/lib/audit-logs.ts`: `TECH_QC_PASS` / `TECH_QC_RETEST` /
+  `TECH_QC_FAIL` (`tech.qc.pass|retest|fail`).
+- Tagged `entity_type = serial_unit` (mirrors `receiving.scan-serial`), with
+  before→after status and `metadata.{verdict, receiving_line_id, serial_number, sku,
+  inventory_event_id}`. **Deliberately NOT `receiving_line`** (the plan's first guess):
+  the PO and tech timelines already render the verdict from `inventory_events`, so a
+  `receiving_line` audit row would double-render. The `serial_unit` row is the
+  compliance/mutation-ledger record; it's archival (no current timeline reads
+  `serial_unit` audit rows), by design, to avoid duplication.
+- **Bug fix (Staff audit view was broken):** `staff-aggregator.ts` read a non-existent
+  `ie.kind` column — the Staff section's receiving query threw, so the whole Staff feed
+  errored. Fixed to `ie.event_type`. Net effect: a tester's `TEST_*` verdicts now appear
+  in their Staff audit feed (via `inventory_events`, actor-scoped) — verified 43 TEST_*
+  events surfaced for staff #1.
+- Verified: `createAuditLog` write validated in a rolled-back transaction (id minted,
+  `action=tech.qc.pass`, `entity_type=serial_unit`, before/after correct; nothing
+  persisted).
+
+**Shipped — Phase 4 (Packing onto the spine):** `getPackingTrackingDetail`
+(`packing-aggregator.ts`) now surfaces the outbound lifecycle for units in the shipment.
+- Resolves units via `order_unit_allocations → orders.shipment_id` (inventory_events has
+  no shipment column), then `readInventorySpine({ serialUnitIds, eventTypes })` filtered
+  to the outbound set (`ALLOCATED/RELEASED/PICKED/PACKED/LABELED/STAGED/SHIPPED`) so the
+  packing view stays scoped to fulfillment, not a unit's full receiving/testing history.
+- Added an `eventTypes?: string[]` filter to `readInventorySpine` (generic).
+- Client (`AuditLogPackingClient`) got the `inventory_event` source + tones for the
+  outbound kinds.
+- **Bug fix (Packing detail view was broken):** the aggregator selected
+  `pl.packer_photos_url`, a column that does not exist on `packer_logs` — so
+  `getPackingTrackingDetail` threw on every call. Pack photos actually live in the shared
+  `photos` table (`entity_type='PACKER_LOG'`); rewired to read from there (same pattern
+  as receiving). The packing detail view now works at all.
+- Verified: packing detail for `1Z1A375J0335482484` returns `PACK_COMPLETED` (×2 sources)
+  + `inventory_event:ALLOCATED` (serial 019158900240341AC, sku 00001-BK, order 2572).
+
+**Shipped — Phase 2 (shared renderer):** extracted
+`src/components/audit-log/AuditEventCard.tsx` — one `AuditEventCard` + `AuditCenterMessage`
++ single `KIND_TONE` vocabulary + `kindLabel`/`fmtTime`. The Tech and Packing clients now
+use it (their near-identical local `EventRow`/`CenterMessage`/tone maps were deleted).
+The card reads serial/sku from top-level **or** `detail` (so Packing spine rows show them
+too). The **Receiving** client keeps its own richer renderer (per-kind icons, workflow
+badges, carton/line grouping) — intentionally not folded in (high risk, no benefit).
+`tsc` clean; no stale references.
+
 **Remaining (optional, not blocking):**
-- Phase 3 — emit a first-class `audit_logs` row from the testing verdict route
-  (`serial-units/[id]/test`); today testing is captured via `inventory_events` only.
-- Phase 4 — converge the Staff/Packing views onto the same `inventory_events` spine.
-- Cosmetic: an item tested via tracking AND present under a PO can appear as two
-  sessions (one per anchor). Acceptable; de-dupe later if it bothers operators.
+- Product decisions: Q2 (where line-less ADMIN label-print rows surface) / Q4 (retire the
+  tracking anchor, or keep as fallback).
+- Cosmetic: an item tested via tracking AND present under a PO can appear as two sessions
+  (one per anchor). Acceptable; de-dupe later if it bothers operators.
+
+**Bonus bugs fixed along the way** (all the same class — wrong column name silently
+breaking an audit section): `sku-aggregator` + `staff-aggregator` read `ie.kind`
+(→ `ie.event_type`); `packing-aggregator` read `pl.packer_photos_url` (→ `photos` table).
+The SKU, Staff, and Packing detail views were each throwing before these fixes.
 
 ---
 

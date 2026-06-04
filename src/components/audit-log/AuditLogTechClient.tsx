@@ -2,9 +2,9 @@
 
 import { useEffect, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
-import { formatPSTTimestamp } from '@/utils/date';
-import { FileText, User as UserIcon } from '@/components/Icons';
+import { FileText } from '@/components/Icons';
 import { AuditLogDailyReport } from './AuditLogDailyReport';
+import { AuditEventCard, AuditCenterMessage } from './AuditEventCard';
 
 interface TechEvent {
   id: string;
@@ -37,33 +37,6 @@ interface TechDetail {
   serials: TechSerial[];
   events: TechEvent[];
   sku_summary: string | null;
-}
-
-function fmtTime(iso: string | null | undefined): string {
-  if (!iso) return '—';
-  try {
-    return formatPSTTimestamp(new Date(iso));
-  } catch {
-    return iso;
-  }
-}
-
-const KIND_TONE: Record<string, string> = {
-  SERIAL_TESTED: 'bg-emerald-50 text-emerald-700 ring-emerald-200',
-  SERIAL_ADDED: 'bg-sky-50 text-sky-700 ring-sky-200',
-  FNSKU_SCANNED: 'bg-amber-50 text-amber-700 ring-amber-200',
-  FBA_READY: 'bg-violet-50 text-violet-700 ring-violet-200',
-  // Lifecycle spine (inventory_events) — mirrors the receiving timeline tones.
-  RECEIVED: 'bg-sky-50 text-sky-700 ring-sky-200',
-  TEST_START: 'bg-amber-50 text-amber-700 ring-amber-200',
-  TEST_PASS: 'bg-emerald-50 text-emerald-700 ring-emerald-200',
-  TEST_FAIL: 'bg-rose-50 text-rose-700 ring-rose-200',
-  PUTAWAY: 'bg-violet-50 text-violet-700 ring-violet-200',
-  MOVED: 'bg-slate-100 text-slate-700 ring-slate-200',
-};
-
-function kindLabel(kind: string): string {
-  return kind.replace(/_/g, ' ').toLowerCase().replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
 export function AuditLogTechClient() {
@@ -104,13 +77,13 @@ export function AuditLogTechClient() {
     return <AuditLogDailyReport section="tech" />;
   }
   if (loading) {
-    return <CenterMessage label="Loading tech timeline…" />;
+    return <AuditCenterMessage label="Loading tech timeline…" />;
   }
   if (error) {
-    return <CenterMessage label={error} tone="error" />;
+    return <AuditCenterMessage label={error} tone="error" />;
   }
   if (!detail) {
-    return <CenterMessage label="Pick a session from the sidebar." />;
+    return <AuditCenterMessage label="Pick a session from the sidebar." />;
   }
 
   return (
@@ -146,82 +119,13 @@ export function AuditLogTechClient() {
       <div className="min-h-0 flex-1 overflow-auto px-6 py-6">
         <div className="mx-auto max-w-3xl space-y-3">
           {detail.events.length === 0 ? (
-            <CenterMessage label="No events match the current filters." />
+            <AuditCenterMessage label="No events match the current filters." />
           ) : (
-            detail.events.map((ev) => <EventRow key={ev.id} event={ev} />)
+            detail.events.map((ev) => <AuditEventCard key={ev.id} event={ev} />)
           )}
         </div>
       </div>
     </section>
-  );
-}
-
-function EventRow({ event }: { event: TechEvent }) {
-  const tone = KIND_TONE[event.kind] ?? 'bg-slate-100 text-slate-700 ring-slate-200';
-  return (
-    <div className="rounded-xl border border-gray-200 bg-white p-3">
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          <div className="flex items-center gap-2">
-            <span
-              className={`inline-flex items-center rounded-full px-2 py-0.5 text-micro font-bold uppercase tracking-wider ring-1 ${tone}`}
-            >
-              {kindLabel(event.kind)}
-            </span>
-            {event.station && (
-              <span className="text-micro text-gray-500">{event.station}</span>
-            )}
-          </div>
-          <div className="mt-1 flex items-center gap-1 text-caption text-gray-500">
-            <UserIcon className="h-3 w-3" />
-            {event.actor_name ?? (event.actor_staff_id ? `#${event.actor_staff_id}` : 'System')}
-          </div>
-          {(event.serial_number || event.sku) && (
-            <div className="mt-1 flex flex-wrap items-center gap-2 text-micro text-gray-500">
-              {event.serial_number && (
-                <span className="font-mono font-semibold text-gray-700">
-                  {event.serial_number}
-                </span>
-              )}
-              {event.sku && <span>SKU: {event.sku}</span>}
-            </div>
-          )}
-        </div>
-        <div className="shrink-0 text-micro text-gray-400">{fmtTime(event.occurred_at)}</div>
-      </div>
-
-      {event.notes && (
-        <p className="mt-2 whitespace-pre-wrap break-words text-label text-gray-700">
-          {event.notes}
-        </p>
-      )}
-
-      {(event.before || event.after) && (
-        <pre className="mt-2 overflow-x-auto rounded-md bg-gray-50 p-2 text-micro text-gray-700">
-          {JSON.stringify({ before: event.before, after: event.after }, null, 2)}
-        </pre>
-      )}
-    </div>
-  );
-}
-
-function CenterMessage({
-  label,
-  tone = 'neutral',
-}: {
-  label: string;
-  tone?: 'neutral' | 'error';
-}) {
-  return (
-    <div className="flex h-full items-center justify-center p-6">
-      <p
-        className={`text-center text-label ${
-          tone === 'error' ? 'text-rose-600' : 'text-gray-400'
-        }`}
-      >
-        {label}
-      </p>
-    </div>
   );
 }
 
