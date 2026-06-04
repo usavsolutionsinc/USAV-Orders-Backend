@@ -16,6 +16,7 @@ import { AdminLogsTab } from '@/components/admin/AdminLogsTab';
 import { AdminJobsTab } from '@/components/admin/AdminJobsTab';
 import AiChatTab from '@/components/admin/AiChatTab';
 import { ArchitectureTab } from '@/components/admin/ArchitectureTab';
+import { OperationsFlowBoard } from '@/components/admin/workflow/OperationsFlowBoard';
 import { PhotoBackupTab } from '@/components/admin/PhotoBackupTab';
 import { StationNasFoldersTab } from '@/components/admin/StationNasFoldersTab';
 import { BillingTab } from '@/components/admin/BillingTab';
@@ -50,7 +51,8 @@ function renderTab(
     case 'logs':         return <AdminLogsTab initialSearch={args.searchValue} />;
     case 'jobs':         return <AdminJobsTab />;
     case 'ai_chat':      return <AiChatTab />;
-    case 'architecture': return <ArchitectureTab />;
+    case 'architecture': return <OperationsFlowBoard />;
+    case 'codebase':     return <ArchitectureTab />;
     case 'photo_backup': return <PhotoBackupTab />;
     case 'station_photos': return <StationNasFoldersTab />;
     case 'billing':      return <BillingTab />;

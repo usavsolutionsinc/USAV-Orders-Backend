@@ -36,7 +36,7 @@ function panelFor(section: AdminSection): JSX.Element | null {
     case 'fba':          return <FbaCatalogSidebarPanel />;
     case 'features':     return <FeaturesSidebarPanel />;
     case 'connections':  return <ConnectionsSidebarPanel />;
-    case 'architecture': return <ArchitectureSidebarPanel />;
+    case 'codebase':     return <ArchitectureSidebarPanel />;
     case 'jobs':         return <JobsSidebarPanel />;
     case 'logs':         return <LogsSidebarPanel />;
     default:             return null;

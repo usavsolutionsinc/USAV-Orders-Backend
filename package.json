@@ -91,6 +91,7 @@
     "@upstash/qstash": "^2.9.0",
     "@upstash/redis": "^1.36.2",
     "@vercel/blob": "^0.27.0",
+    "@xyflow/react": "^12.11.0",
     "@zxing/browser": "^0.1.5",
     "@zxing/library": "^0.21.3",
     "ably": "^2.19.0",
