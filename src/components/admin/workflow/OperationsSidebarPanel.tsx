@@ -1,66 +1,50 @@
 'use client';
 
 /**
- * OperationsSidebarPanel — the reference map beside the Operations flow board.
+ * OperationsSidebarPanel — the reference map beside the Operations flows panel.
  *
- * Three lenses on the same system, driven by the operations-catalog:
- *   Flows       — receiving / shipping / FBA / repair / returns, step by step
+ * Two lenses on the system, as a read-only reference:
  *   Stations    — RECEIVING / TECH / PACK / LABELS / FBA / ADMIN + what they do
  *   Identifiers — tracking #, serial #, Zoho SKU, order #, FNSKU, shipment id…
  *                 with where each lives and how it travels through the system
  *
- * Selecting any item writes `?ops=<key>` to the URL; the flow board reads it to
- * spotlight that item's path. Cross-links (a station's identifiers, an
- * identifier's relations) jump between entries so you can trace information.
+ * Flows live in the main panel now (OperationsFlowsDisplay), shown in full as a
+ * descriptive display rather than as sidebar dropdowns. Cross-links between a
+ * station and the identifiers it handles still jump within the sidebar so you
+ * can trace a piece of information; the canvas spotlight is a later phase.
  */
 
 import { useMemo, useState } from 'react';
-import { AdminSidebarShell, useAdminUrlState } from '@/components/admin/shared';
+import { AdminSidebarShell } from '@/components/admin/shared';
 import {
-  FLOWS,
   STATIONS,
   IDENTIFIERS,
-  findCatalogItem,
-  type OpsFlow,
   type OpsStation,
   type OpsIdentifier,
 } from './operations-catalog';
 
-type Lens = 'all' | 'flow' | 'station' | 'identifier';
+type Lens = 'all' | 'station' | 'identifier';
 
 const LENSES: ReadonlyArray<{ value: Lens; label: string }> = [
   { value: 'all', label: 'All' },
-  { value: 'flow', label: 'Flows' },
   { value: 'station', label: 'Stations' },
   { value: 'identifier', label: 'Info' },
 ];
 
 export function OperationsSidebarPanel() {
-  const { searchParams, setParam } = useAdminUrlState();
-  const selected = searchParams.get('ops');
+  const [selected, setSelected] = useState<string | null>(null);
   const [lens, setLens] = useState<Lens>('all');
   const [query, setQuery] = useState('');
 
-  const select = (key: string) =>
-    setParam((p) => {
-      if (p.get('ops') === key) p.delete('ops');
-      else p.set('ops', key);
-    });
-
-  // Jump to a cross-linked entry: open it and make sure its lens is visible.
+  const toggle = (key: string) => setSelected((cur) => (cur === key ? null : key));
   const jumpTo = (key: string) => {
-    const hit = findCatalogItem(key);
-    if (hit) setLens('all');
-    setParam((p) => p.set('ops', key));
+    setLens('all');
+    setSelected(key);
   };
 
   const q = query.trim().toLowerCase();
   const match = (text: string) => !q || text.toLowerCase().includes(q);
 
-  const flows = useMemo(
-    () => FLOWS.filter((f) => match(`${f.label} ${f.blurb} ${f.states.join(' ')}`)),
-    [q],
-  );
   const stations = useMemo(
     () => STATIONS.filter((s) => match(`${s.label} ${s.blurb} ${s.activityTypes.join(' ')}`)),
     [q],
@@ -78,29 +62,21 @@ export function OperationsSidebarPanel() {
         value: query,
         onChange: setQuery,
         onClear: () => setQuery(''),
-        placeholder: 'Search stations, info, flows',
+        placeholder: 'Search stations & info',
         variant: 'blue',
       }}
       filters={<FilterChips value={lens} onChange={setLens} />}
       stats={
         <p className="text-micro font-bold uppercase tracking-wider text-gray-500">
-          {STATIONS.length} stations · {IDENTIFIERS.length} identifiers · {FLOWS.length} flows
+          {STATIONS.length} stations · {IDENTIFIERS.length} identifiers
         </p>
       }
     >
       <div className="space-y-4 px-1">
-        {show('flow') && flows.length > 0 && (
-          <Group title="Flows">
-            {flows.map((f) => (
-              <FlowRow key={f.key} flow={f} open={selected === f.key} onToggle={() => select(f.key)} onJump={jumpTo} />
-            ))}
-          </Group>
-        )}
-
         {show('station') && stations.length > 0 && (
           <Group title="Stations">
             {stations.map((s) => (
-              <StationRow key={s.key} station={s} open={selected === s.key} onToggle={() => select(s.key)} onJump={jumpTo} />
+              <StationRow key={s.key} station={s} open={selected === s.key} onToggle={() => toggle(s.key)} onJump={jumpTo} />
             ))}
           </Group>
         )}
@@ -108,12 +84,12 @@ export function OperationsSidebarPanel() {
         {show('identifier') && identifiers.length > 0 && (
           <Group title="Identifiers — how information travels">
             {identifiers.map((i) => (
-              <IdentifierRow key={i.key} id={i} open={selected === i.key} onToggle={() => select(i.key)} onJump={jumpTo} />
+              <IdentifierRow key={i.key} id={i} open={selected === i.key} onToggle={() => toggle(i.key)} onJump={jumpTo} />
             ))}
           </Group>
         )}
 
-        {flows.length === 0 && stations.length === 0 && identifiers.length === 0 && (
+        {stations.length === 0 && identifiers.length === 0 && (
           <p className="px-2 py-6 text-center text-xs text-gray-400">No matches.</p>
         )}
       </div>
@@ -206,33 +182,6 @@ function DetailBlock({ label, children }: { label: string; children: React.React
       <p className="mb-1 text-micro font-bold uppercase tracking-wider text-gray-400">{label}</p>
       <div className="flex flex-wrap gap-1">{children}</div>
     </div>
-  );
-}
-
-function FlowRow({ flow, open, onToggle, onJump }: { flow: OpsFlow; open: boolean; onToggle: () => void; onJump: (k: string) => void }) {
-  return (
-    <RowShell color={flow.color} title={flow.label} subtitle={flow.blurb} open={open} onToggle={onToggle}>
-      <DetailBlock label="Stations">
-        {flow.stations.map((s) => (
-          <Chip key={s} label={s} onClick={() => onJump(s)} />
-        ))}
-      </DetailBlock>
-      <div>
-        <p className="mb-1 text-micro font-bold uppercase tracking-wider text-gray-400">Path</p>
-        <ol className="space-y-1">
-          {flow.steps.map((step, idx) => (
-            <li key={`${step.state}-${idx}`} className="flex items-start gap-2">
-              <span className="mt-0.5 w-5 shrink-0 text-right text-[10px] font-bold text-gray-400">{idx + 1}</span>
-              <span>
-                <span className="font-mono text-[11px] font-semibold text-gray-800">{step.state}</span>
-                <span className="text-gray-400"> · {step.station}</span>
-                <span className="block text-[11px] text-gray-500">{step.note}</span>
-              </span>
-            </li>
-          ))}
-        </ol>
-      </div>
-    </RowShell>
   );
 }
 

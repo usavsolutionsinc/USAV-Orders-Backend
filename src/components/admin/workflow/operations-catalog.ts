@@ -49,9 +49,11 @@ export interface OpsFlow {
   color: string;
   blurb: string;
   stations: string[];
+  /** The modules / routes in the codebase that actually implement this flow. */
+  code: string[];
   /** Ordered board node ids the flow passes through (incl. branches). */
   states: string[];
-  steps: { state: string; station: string; note: string }[];
+  steps: { state: string; station: string; note: string; signal?: string }[];
 }
 
 // ─── Stations ────────────────────────────────────────────────
@@ -304,17 +306,18 @@ export const FLOWS: OpsFlow[] = [
     color: '#3b82f6',
     blurb: 'From a carton on the dock to a tested, stocked unit.',
     stations: ['RECEIVING', 'TECH'],
+    code: ['src/lib/receiving', '/api/receiving-lines', '/api/serial-units/[id]/test', 'src/lib/tech'],
     states: ['EXPECTED', 'ARRIVED', 'MATCHED', 'UNBOXED', 'RECEIVED', 'IN_TEST', 'TESTED', 'ON_HOLD', 'STOCKED'],
     steps: [
       { state: 'EXPECTED', station: 'RECEIVING', note: 'PO/order says the box is coming' },
-      { state: 'ARRIVED', station: 'RECEIVING', note: 'carton scanned in (TRACKING_SCANNED)' },
-      { state: 'MATCHED', station: 'RECEIVING', note: 'matched to a PO/order' },
-      { state: 'UNBOXED', station: 'RECEIVING', note: 'opened; contents confirmed' },
-      { state: 'RECEIVED', station: 'RECEIVING', note: 'serial unit created (SERIAL_ADDED)' },
-      { state: 'IN_TEST', station: 'TECH', note: 'on the test bench' },
-      { state: 'TESTED', station: 'TECH', note: 'PASS verdict → ready to stock' },
-      { state: 'ON_HOLD', station: 'TECH', note: 'FAIL → routed to repair/returns' },
-      { state: 'STOCKED', station: 'RECEIVING', note: 'PUTAWAY into a bin' },
+      { state: 'ARRIVED', station: 'RECEIVING', note: 'carton scanned in', signal: 'TRACKING_SCANNED' },
+      { state: 'MATCHED', station: 'RECEIVING', note: 'matched to a PO/order', signal: 'WS_RECEIVING_CHANGED' },
+      { state: 'UNBOXED', station: 'RECEIVING', note: 'opened; contents confirmed', signal: 'WS_RECEIVING_CHANGED' },
+      { state: 'RECEIVED', station: 'RECEIVING', note: 'serial unit created', signal: 'SERIAL_ADDED' },
+      { state: 'IN_TEST', station: 'TECH', note: 'on the test bench', signal: 'TEST_START' },
+      { state: 'TESTED', station: 'TECH', note: 'PASS verdict → ready to stock', signal: 'TEST_PASS' },
+      { state: 'ON_HOLD', station: 'TECH', note: 'FAIL → routed to repair/returns', signal: 'TEST_FAIL' },
+      { state: 'STOCKED', station: 'RECEIVING', note: 'put away into a bin', signal: 'PUTAWAY' },
     ],
   },
   {
@@ -323,13 +326,14 @@ export const FLOWS: OpsFlow[] = [
     color: '#6366f1',
     blurb: 'From a stocked unit to a shipped customer order.',
     stations: ['PACK', 'LABELS', 'FBA'],
+    code: ['/api/orders/[id]/allocate', '/api/orders/[id]/pick-tasks', 'src/lib/picking', 'src/lib/shipping'],
     states: ['STOCKED', 'ALLOCATED', 'PICKED', 'PACKED', 'LABELED', 'SHIPPED'],
     steps: [
       { state: 'STOCKED', station: 'PACK', note: 'available stock' },
-      { state: 'ALLOCATED', station: 'PACK', note: 'reserved to an order' },
+      { state: 'ALLOCATED', station: 'PACK', note: 'reserved to an order', signal: 'ALLOCATED' },
       { state: 'PICKED', station: 'PACK', note: 'pulled from the bin' },
-      { state: 'PACKED', station: 'PACK', note: 'PACK_COMPLETED into a box/shipment' },
-      { state: 'LABELED', station: 'LABELS', note: 'LABEL_PRINTED — outbound tracking minted' },
+      { state: 'PACKED', station: 'PACK', note: 'packed into a box/shipment', signal: 'PACK_COMPLETED' },
+      { state: 'LABELED', station: 'LABELS', note: 'outbound tracking minted', signal: 'LABEL_PRINTED' },
       { state: 'SHIPPED', station: 'FBA', note: 'handed to the carrier' },
     ],
   },
@@ -339,12 +343,13 @@ export const FLOWS: OpsFlow[] = [
     color: '#f59e0b',
     blurb: 'Stocked unit → FNSKU-labeled → inbound FBA shipment → Amazon.',
     stations: ['FBA', 'LABELS'],
+    code: ['src/lib/fba', '/api/fba'],
     states: ['STOCKED', 'ALLOCATED', 'LABELED', 'SHIPPED'],
     steps: [
       { state: 'STOCKED', station: 'FBA', note: 'eligible stock selected for FBA' },
-      { state: 'ALLOCATED', station: 'FBA', note: 'FNSKU_SCANNED → tied to an FBA plan' },
-      { state: 'LABELED', station: 'LABELS', note: 'FNSKU label printed' },
-      { state: 'SHIPPED', station: 'FBA', note: 'FBA_READY — shipment sent to Amazon' },
+      { state: 'ALLOCATED', station: 'FBA', note: 'tied to an FBA plan', signal: 'WS_FBA_SCAN' },
+      { state: 'LABELED', station: 'LABELS', note: 'FNSKU label printed', signal: 'FNSKU_SCANNED' },
+      { state: 'SHIPPED', station: 'FBA', note: 'shipment sent to Amazon', signal: 'FBA_READY' },
     ],
   },
   {
@@ -353,14 +358,15 @@ export const FLOWS: OpsFlow[] = [
     color: '#f97316',
     blurb: 'A failed test routes to triage, repair, and re-test.',
     stations: ['TECH'],
+    code: ['src/lib/repair', 'repair_service table'],
     states: ['ON_HOLD', 'TRIAGED', 'IN_REPAIR', 'REPAIR_DONE', 'IN_TEST', 'TESTED'],
     steps: [
-      { state: 'ON_HOLD', station: 'TECH', note: 'failed testing' },
-      { state: 'TRIAGED', station: 'TECH', note: 'issue diagnosed' },
-      { state: 'IN_REPAIR', station: 'TECH', note: 'being repaired' },
-      { state: 'REPAIR_DONE', station: 'TECH', note: 'repair complete' },
-      { state: 'IN_TEST', station: 'TECH', note: 're-tested' },
-      { state: 'TESTED', station: 'TECH', note: 'passes → back to stock' },
+      { state: 'ON_HOLD', station: 'TECH', note: 'failed testing', signal: 'TEST_FAIL' },
+      { state: 'TRIAGED', station: 'TECH', note: 'issue diagnosed', signal: 'WS_REPAIR_CHANGED' },
+      { state: 'IN_REPAIR', station: 'TECH', note: 'being repaired', signal: 'WS_REPAIR_CHANGED' },
+      { state: 'REPAIR_DONE', station: 'TECH', note: 'repair complete', signal: 'WS_REPAIR_CHANGED' },
+      { state: 'IN_TEST', station: 'TECH', note: 're-tested', signal: 'TEST_START' },
+      { state: 'TESTED', station: 'TECH', note: 'passes → back to stock', signal: 'TEST_PASS' },
     ],
   },
   {
@@ -369,13 +375,14 @@ export const FLOWS: OpsFlow[] = [
     color: '#f43f5e',
     blurb: 'A shipped item comes back, gets inspected, and is restocked or scrapped.',
     stations: ['RECEIVING', 'TECH'],
+    code: ['src/lib/rma', '/api/orders-exceptions', 'orders_exceptions table'],
     states: ['SHIPPED', 'RETURNED', 'RMA', 'IN_TEST', 'STOCKED', 'SCRAPPED'],
     steps: [
       { state: 'SHIPPED', station: 'RECEIVING', note: 'item was shipped' },
       { state: 'RETURNED', station: 'RECEIVING', note: 'customer return received' },
       { state: 'RMA', station: 'TECH', note: 'RMA opened / inspected' },
-      { state: 'IN_TEST', station: 'TECH', note: 're-tested' },
-      { state: 'STOCKED', station: 'RECEIVING', note: 'restocked if good' },
+      { state: 'IN_TEST', station: 'TECH', note: 're-tested', signal: 'TEST_START' },
+      { state: 'STOCKED', station: 'RECEIVING', note: 'restocked if good', signal: 'PUTAWAY' },
       { state: 'SCRAPPED', station: 'TECH', note: 'scrapped if not' },
     ],
   },
