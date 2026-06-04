@@ -3,9 +3,9 @@
 import { Activity, AlertTriangle, Barcode, Box, ClipboardList, Tool } from '@/components/Icons';
 import { microBadge, sectionLabel } from '@/design-system/tokens/typography/presets';
 import type { InventoryTab } from '@/lib/inventory-search';
-import type { InventoryCrossTabCounts } from '@/hooks/useInventoryCrossTabCounts';
+import type { InventoryCrossTabCounts, CrossTabCountTab } from '@/hooks/useInventoryCrossTabCounts';
 
-const TAB_LABEL: Record<InventoryTab, string> = {
+const TAB_LABEL: Record<CrossTabCountTab, string> = {
     activity: 'Activity',
     bins: 'Bins',
     skus: 'SKUs',
@@ -14,7 +14,7 @@ const TAB_LABEL: Record<InventoryTab, string> = {
     counts: 'Counts',
 };
 
-const TAB_ICON: Record<InventoryTab, (p: { className?: string }) => JSX.Element> = {
+const TAB_ICON: Record<CrossTabCountTab, (p: { className?: string }) => JSX.Element> = {
     activity: Activity,
     bins: Box,
     skus: Barcode,
@@ -46,9 +46,9 @@ export function InventoryCrossTabHandoffCard({
     const candidates = (Object.entries(counts) as Array<[string, number | null]>)
         .filter(([k]) => k !== 'capped' && k !== 'isFetching' && k !== currentTab)
         .map(([tab, count]) => ({
-            tab: tab as InventoryTab,
+            tab: tab as CrossTabCountTab,
             count: typeof count === 'number' ? count : 0,
-            capped: Boolean(counts.capped?.[tab as InventoryTab]),
+            capped: Boolean(counts.capped?.[tab as CrossTabCountTab]),
         }))
         .filter((c) => c.count > currentCount)
         .sort((a, b) => b.count - a.count)

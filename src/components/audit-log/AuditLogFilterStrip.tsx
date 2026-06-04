@@ -224,7 +224,6 @@ export function AuditLogFilterDropdown({ onClose }: { onClose: () => void }) {
 /** @deprecated Use {@link AuditLogFilterDropdown} in the new FilterRefinementBar pattern. */
 export function AuditLogFilterStrip() {
   const router = useRouter();
-...
 
   const pathname = usePathname() || '/audit-log/receiving';
   const searchParams = useSearchParams();

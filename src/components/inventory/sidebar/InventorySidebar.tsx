@@ -30,7 +30,7 @@ import {
 } from '@/lib/inventory-search';
 import { InventorySidebarTabs } from './InventorySidebarTabs';
 import { FIELD_ICON } from './inventory-sidebar-metadata';
-import { InventorySidebarFilters } from './InventorySidebarFilters';
+import { InventoryFilterDropdown } from './InventorySidebarFilters';
 import { ViewDropdown, type ViewDropdownOption } from '@/components/ui/ViewDropdown';
 import { InventoryCrossTabHandoffCard } from './InventoryCrossTabHandoffCard';
 import { InventoryResultList } from './InventoryResultList';

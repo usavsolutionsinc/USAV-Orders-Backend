@@ -132,8 +132,6 @@ export function InventoryFilterDropdown({
 /** @deprecated Use {@link InventoryFilterDropdown} in the new FilterRefinementBar pattern. */
 export function InventorySidebarFilters({
     tab,
-...
-
     field,
     onFieldChange,
     buckets,

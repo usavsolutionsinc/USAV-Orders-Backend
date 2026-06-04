@@ -125,6 +125,19 @@ export const INVENTORY_SEARCH_FIELDS: Record<InventoryTab, InventoryFieldConfig[
         { id: 'zone',     label: 'Zone',     placeholder: 'Zone letter',           helperText: 'Filters counts to one zone.' },
         { id: 'counter',  label: 'Counter',  placeholder: 'Staff name',            helperText: 'Filters counts by assigned counter.' },
     ],
+    triage: [
+        { id: 'all',       label: 'All',       placeholder: 'Search triage issues',  helperText: 'Coming soon — feed is read-only stub for now.' },
+        { id: 'sku',       label: 'SKU',       placeholder: 'Issues for SKU',         helperText: 'Filters triage issues to one SKU.' },
+        { id: 'issue_id',  label: 'Issue ID',  placeholder: 'Numeric issue id',       helperText: 'Exact match on triage issue id.' },
+        { id: 'reporter',  label: 'Reporter',  placeholder: 'Staff name',             helperText: 'Filters issues by the staff member who reported them.' },
+    ],
+    pulse: [
+        { id: 'all',           label: 'All',       placeholder: 'Search live pulse',  helperText: 'Coming soon — feed is read-only stub for now.' },
+        { id: 'unit_id',       label: 'Unit ID',   placeholder: 'Numeric unit id',    helperText: 'Exact match on internal serial_unit id.' },
+        { id: 'serial_number', label: 'Serial #',  placeholder: 'Serial number',      helperText: 'Substring match across serial numbers.' },
+        { id: 'sku',           label: 'SKU',       placeholder: 'Filter pulse by SKU', helperText: 'Exact (case-insensitive) SKU filter.' },
+        { id: 'user',          label: 'User',      placeholder: 'Show events by staff name', helperText: 'Filters pulse events by the staff member who performed them.' },
+    ],
 };
 
 // ─── Bucket configs (multi-select pills) ─────────────────────────────────────
@@ -180,6 +193,8 @@ export const INVENTORY_BUCKETS: Record<InventoryTab, InventoryBucketConfig[]> = 
         { id: 'reconciling',  label: 'Reconciling' },
         { id: 'closed',       label: 'Closed' },
     ],
+    triage: [],
+    pulse: [],
 };
 
 // ─── Bucket → serial_status / condition_grade mapping (Units tab) ────────────

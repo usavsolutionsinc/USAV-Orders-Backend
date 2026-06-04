@@ -3,6 +3,9 @@
 import { useQueries } from '@tanstack/react-query';
 import type { InventoryTab } from '@/lib/inventory-search';
 
+/** The subset of inventory tabs that expose a cheap count-probe endpoint. */
+export type CrossTabCountTab = 'bins' | 'skus' | 'units' | 'activity' | 'alerts' | 'counts';
+
 /**
  * Lightweight count probes across non-current inventory tabs.
  *
@@ -24,10 +27,10 @@ export interface InventoryCrossTabCounts {
     isFetching: boolean;
 }
 
-const TABS: InventoryTab[] = ['bins', 'skus', 'units', 'activity', 'alerts', 'counts'];
+const TABS: CrossTabCountTab[] = ['bins', 'skus', 'units', 'activity', 'alerts', 'counts'];
 
 async function probeTab(
-    tab: InventoryTab,
+    tab: CrossTabCountTab,
     query: string,
     signal?: AbortSignal,
 ): Promise<{ count: number | null; capped: boolean }> {
