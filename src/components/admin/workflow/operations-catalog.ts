@@ -43,17 +43,34 @@ export interface OpsIdentifier {
   relatedTo: string[];
 }
 
+export interface OpsFlowStep {
+  /** Display label exactly as the real UI shows it (e.g. "Combined"). */
+  stage: string;
+  /** The real status key / enum value backing it (e.g. LABEL_ASSIGNED), if any. */
+  key?: string;
+  /** Owning station. */
+  station: string;
+  /** One-line meaning. */
+  note: string;
+  /** Real activity / event type that marks this step. */
+  signal?: string;
+  /** The route / function that performs the transition. */
+  by?: string;
+}
+
 export interface OpsFlow {
   key: string;
   label: string;
   color: string;
   blurb: string;
   stations: string[];
+  /** Where the status vocabulary is defined (file · enum/column). */
+  source: string;
   /** The modules / routes in the codebase that actually implement this flow. */
   code: string[];
-  /** Ordered board node ids the flow passes through (incl. branches). */
-  states: string[];
-  steps: { state: string; station: string; note: string; signal?: string }[];
+  steps: OpsFlowStep[];
+  /** Off-happy-path / terminal branches (failures, cancels, carrier statuses). */
+  offPath?: { stage: string; note: string }[];
 }
 
 // ─── Stations ────────────────────────────────────────────────
@@ -304,86 +321,103 @@ export const FLOWS: OpsFlow[] = [
     key: 'receiving',
     label: 'Receiving flow',
     color: '#3b82f6',
-    blurb: 'From a carton on the dock to a tested, stocked unit.',
+    blurb: 'From a carton on the dock to a tested, finalized line. Stage = receiving_lines.workflow_status.',
     stations: ['RECEIVING', 'TECH'],
-    code: ['src/lib/receiving', '/api/receiving-lines', '/api/serial-units/[id]/test', 'src/lib/tech'],
-    states: ['EXPECTED', 'ARRIVED', 'MATCHED', 'UNBOXED', 'RECEIVED', 'IN_TEST', 'TESTED', 'ON_HOLD', 'STOCKED'],
+    source: 'inbound_workflow_status_enum · src/lib/receiving/workflow-stages.ts',
+    code: ['src/lib/receiving/workflow-stages.ts', '/api/receiving/match', 'src/lib/receiving/receive-line.ts', '/api/serial-units/[id]/test'],
     steps: [
-      { state: 'EXPECTED', station: 'RECEIVING', note: 'PO/order says the box is coming' },
-      { state: 'ARRIVED', station: 'RECEIVING', note: 'carton scanned in', signal: 'TRACKING_SCANNED' },
-      { state: 'MATCHED', station: 'RECEIVING', note: 'matched to a PO/order', signal: 'WS_RECEIVING_CHANGED' },
-      { state: 'UNBOXED', station: 'RECEIVING', note: 'opened; contents confirmed', signal: 'WS_RECEIVING_CHANGED' },
-      { state: 'RECEIVED', station: 'RECEIVING', note: 'serial unit created', signal: 'SERIAL_ADDED' },
-      { state: 'IN_TEST', station: 'TECH', note: 'on the test bench', signal: 'TEST_START' },
-      { state: 'TESTED', station: 'TECH', note: 'PASS verdict → ready to stock', signal: 'TEST_PASS' },
-      { state: 'ON_HOLD', station: 'TECH', note: 'FAIL → routed to repair/returns', signal: 'TEST_FAIL' },
-      { state: 'STOCKED', station: 'RECEIVING', note: 'put away into a bin', signal: 'PUTAWAY' },
+      { stage: 'Incoming', key: 'EXPECTED', station: 'RECEIVING', note: 'On a PO from Zoho — not yet scanned at the dock', signal: 'Zoho PO sync' },
+      { stage: 'Scanned', key: 'ARRIVED', station: 'RECEIVING', note: 'Carton scanned in, not yet matched to a PO', signal: 'TRACKING_SCANNED' },
+      { stage: 'Matched', key: 'MATCHED', station: 'RECEIVING', note: 'Line linked to a PO/order (shows as “Scanned” in tables)', signal: 'WS_RECEIVING_CHANGED', by: '/api/receiving/match' },
+      { stage: 'Unboxed', key: 'UNBOXED', station: 'RECEIVING', note: 'Units counted out; qty_received ≥ qty_expected', signal: 'SERIAL_ADDED', by: 'receiveLineUnits' },
+      { stage: 'Awaiting Test', key: 'AWAITING_TEST', station: 'TECH', note: 'Queued for QA (display state; row stays UNBOXED until first verdict)' },
+      { stage: 'Testing', key: 'IN_TEST', station: 'TECH', note: 'A tech is actively testing the line', signal: 'TEST_START', by: '/api/serial-units/[id]/test' },
+      { stage: 'Passed', key: 'PASSED', station: 'TECH', note: 'All units TESTED, no failures → ready to finalize', signal: 'TEST_PASS' },
+      { stage: 'Done', key: 'DONE', station: 'RECEIVING', note: 'Line finalized, put away (shows as “Received”)', signal: 'PUTAWAY' },
     ],
-  },
-  {
-    key: 'shipping',
-    label: 'Shipping / outbound flow',
-    color: '#6366f1',
-    blurb: 'From a stocked unit to a shipped customer order.',
-    stations: ['PACK', 'LABELS', 'FBA'],
-    code: ['/api/orders/[id]/allocate', '/api/orders/[id]/pick-tasks', 'src/lib/picking', 'src/lib/shipping'],
-    states: ['STOCKED', 'ALLOCATED', 'PICKED', 'PACKED', 'LABELED', 'SHIPPED'],
-    steps: [
-      { state: 'STOCKED', station: 'PACK', note: 'available stock' },
-      { state: 'ALLOCATED', station: 'PACK', note: 'reserved to an order', signal: 'ALLOCATED' },
-      { state: 'PICKED', station: 'PACK', note: 'pulled from the bin' },
-      { state: 'PACKED', station: 'PACK', note: 'packed into a box/shipment', signal: 'PACK_COMPLETED' },
-      { state: 'LABELED', station: 'LABELS', note: 'outbound tracking minted', signal: 'LABEL_PRINTED' },
-      { state: 'SHIPPED', station: 'FBA', note: 'handed to the carrier' },
+    offPath: [
+      { stage: 'Failed', note: 'Any unit ON_HOLD → FAILED / FAILED_FUNCTIONAL (claim flow)' },
+      { stage: 'RTV', note: 'Disposition = return to vendor' },
+      { stage: 'Scrap', note: 'Disposition = scrapped / claimed' },
     ],
   },
   {
     key: 'fba',
     label: 'FBA flow',
     color: '#f59e0b',
-    blurb: 'Stocked unit → FNSKU-labeled → inbound FBA shipment → Amazon.',
-    stations: ['FBA', 'LABELS'],
-    code: ['src/lib/fba', '/api/fba'],
-    states: ['STOCKED', 'ALLOCATED', 'LABELED', 'SHIPPED'],
+    blurb: 'Scan FNSKUs → Planned → Tested (ready to go) → Packed → Combined → Shipped. Stage = fba_shipment_items.status.',
+    stations: ['FBA', 'TECH', 'PACK', 'LABELS'],
+    source: 'fba_shipment_status_enum · src/lib/fba/status.ts',
+    code: ['src/lib/fba/status.ts', '/api/tech/scan', '/api/fba/items/ready', '/api/fba/items/scan', '/api/fba/labels/bind', '/api/fba/shipments/mark-shipped'],
     steps: [
-      { state: 'STOCKED', station: 'FBA', note: 'eligible stock selected for FBA' },
-      { state: 'ALLOCATED', station: 'FBA', note: 'tied to an FBA plan', signal: 'WS_FBA_SCAN' },
-      { state: 'LABELED', station: 'LABELS', note: 'FNSKU label printed', signal: 'FNSKU_SCANNED' },
-      { state: 'SHIPPED', station: 'FBA', note: 'shipment sent to Amazon', signal: 'FBA_READY' },
+      { stage: 'Planned', key: 'PLANNED', station: 'FBA', note: 'FNSKU first scanned → added to today’s FBA plan', signal: 'FNSKU_SCANNED', by: '/api/tech/scan' },
+      { stage: 'Tested', key: 'TESTED', station: 'TECH', note: 'Tech validated the unit — “ready to go” to the packer', signal: 'FBA_READY', by: '/api/fba/items/ready' },
+      { stage: 'Packed', key: 'PACKED', station: 'PACK', note: 'Packer scanned the FNSKU into a box', signal: 'FBA_READY', by: '/api/fba/items/scan' },
+      { stage: 'Combined', key: 'LABEL_ASSIGNED', station: 'LABELS', note: 'Shipping-label barcode bound — items combined under one FBA shipment', signal: 'ASSIGNED', by: '/api/fba/labels/bind' },
+      { stage: 'Shipped', key: 'SHIPPED', station: 'PACK', note: 'UPS tracking scanned → carrier handoff; shipment auto-closes', by: '/api/fba/shipments/mark-shipped' },
+    ],
+    offPath: [
+      { stage: 'Out of Stock', note: 'Marked unavailable during planning' },
+      { stage: 'Closed', note: 'Plan / shipment archived' },
+    ],
+  },
+  {
+    key: 'shipping',
+    label: 'Outbound order flow',
+    color: '#6366f1',
+    blurb: 'From a stocked unit to a shipped customer order. Stage = order_unit_allocations.state.',
+    stations: ['PACK', 'LABELS'],
+    source: 'order_unit_allocations.state + serial_status_enum',
+    code: ['src/lib/inventory/allocate.ts', '/api/orders/[id]/allocate', '/api/pick/scan', '/api/pack/ship', 'src/lib/shipping'],
+    steps: [
+      { stage: 'Allocated', key: 'ALLOCATED', station: 'PACK', note: 'Stocked unit reserved to an order (FIFO)', signal: 'ALLOCATED', by: '/api/orders/[id]/allocate' },
+      { stage: 'Picked', key: 'PICKED', station: 'PACK', note: 'Pulled from its bin', signal: 'PICKED', by: '/api/pick/scan' },
+      { stage: 'Packed', key: 'PACKED', station: 'PACK', note: 'Scanned into a box at the pack station', signal: 'PACK_COMPLETED', by: '/api/pack/ship' },
+      { stage: 'Labeled', key: 'LABELED', station: 'LABELS', note: 'Carrier label printed; tracking minted', signal: 'LABEL_PRINTED' },
+      { stage: 'Shipped', key: 'SHIPPED', station: 'PACK', note: 'Handed to the carrier; orders.status = shipped', signal: 'SHIPPED', by: '/api/pack/ship' },
+    ],
+    offPath: [
+      { stage: 'Released', note: 'Allocation unwound → unit returns to STOCKED' },
+      { stage: 'Carrier: Accepted → In Transit → Out for Delivery → Delivered', note: 'Live carrier tracking on the Shipped page (ShipmentStatusBadge)' },
+      { stage: 'UI buckets', note: 'Awaiting Tracking (no shipment_id) → Pending (label, no carrier scan) → Shipped (carrier accepted)' },
     ],
   },
   {
     key: 'repair',
     label: 'Repair flow',
     color: '#f97316',
-    blurb: 'A failed test routes to triage, repair, and re-test.',
-    stations: ['TECH'],
-    code: ['src/lib/repair', 'repair_service table'],
-    states: ['ON_HOLD', 'TRIAGED', 'IN_REPAIR', 'REPAIR_DONE', 'IN_TEST', 'TESTED'],
+    blurb: 'Walk-in / mail-in repair service. Free-text status with Incoming / Active / Done tabs.',
+    stations: ['RECEIVING', 'TECH', 'ADMIN'],
+    source: 'repair_service.status (free-text) · src/lib/neon/repair-service-queries.ts',
+    code: ['src/lib/neon/repair-service-queries.ts', '/api/repair-service', '/api/repair-service/repaired'],
     steps: [
-      { state: 'ON_HOLD', station: 'TECH', note: 'failed testing', signal: 'TEST_FAIL' },
-      { state: 'TRIAGED', station: 'TECH', note: 'issue diagnosed', signal: 'WS_REPAIR_CHANGED' },
-      { state: 'IN_REPAIR', station: 'TECH', note: 'being repaired', signal: 'WS_REPAIR_CHANGED' },
-      { state: 'REPAIR_DONE', station: 'TECH', note: 'repair complete', signal: 'WS_REPAIR_CHANGED' },
-      { state: 'IN_TEST', station: 'TECH', note: 're-tested', signal: 'TEST_START' },
-      { state: 'TESTED', station: 'TECH', note: 'passes → back to stock', signal: 'TEST_PASS' },
+      { stage: 'Incoming Shipment', station: 'RECEIVING', note: 'Inbound repair awaiting intake (Incoming tab)' },
+      { stage: 'Pending Repair', station: 'TECH', note: 'Default — queued for a technician', signal: 'WS_REPAIR_CHANGED' },
+      { stage: 'Awaiting Parts', station: 'TECH', note: 'Blocked on part availability' },
+      { stage: 'Repaired, Contact Customer', station: 'TECH', note: 'Work done — reach out to the customer', by: '/api/repair-service/repaired' },
+      { stage: 'Awaiting Pickup / Payment', station: 'ADMIN', note: 'Done; awaiting customer pickup or payment' },
+      { stage: 'Picked Up / Shipped', station: 'ADMIN', note: 'Closed out (Done tab)' },
     ],
+    offPath: [{ stage: 'Cancelled', note: 'Soft-deleted; hidden from all tabs' }],
   },
   {
     key: 'returns',
     label: 'Returns / RMA flow',
     color: '#f43f5e',
-    blurb: 'A shipped item comes back, gets inspected, and is restocked or scrapped.',
-    stations: ['RECEIVING', 'TECH'],
-    code: ['src/lib/rma', '/api/orders-exceptions', 'orders_exceptions table'],
-    states: ['SHIPPED', 'RETURNED', 'RMA', 'IN_TEST', 'STOCKED', 'SCRAPPED'],
+    blurb: 'Customer return or vendor RTV; per-unit dispositions on receipt. Stage = rma_authorizations.status.',
+    stations: ['ADMIN', 'RECEIVING', 'TECH'],
+    source: 'rma_authorizations.status (enum) · src/lib/rma/authorizations.ts',
+    code: ['src/lib/rma/authorizations.ts', '/api/rma', 'return_dispositions table', 'src/lib/orders-exceptions.ts'],
     steps: [
-      { state: 'SHIPPED', station: 'RECEIVING', note: 'item was shipped' },
-      { state: 'RETURNED', station: 'RECEIVING', note: 'customer return received' },
-      { state: 'RMA', station: 'TECH', note: 'RMA opened / inspected' },
-      { state: 'IN_TEST', station: 'TECH', note: 're-tested', signal: 'TEST_START' },
-      { state: 'STOCKED', station: 'RECEIVING', note: 'restocked if good', signal: 'PUTAWAY' },
-      { state: 'SCRAPPED', station: 'TECH', note: 'scrapped if not' },
+      { stage: 'Authorized', key: 'AUTHORIZED', station: 'ADMIN', note: 'RMA number issued; return expected (INBOUND_FROM_CUSTOMER or OUTBOUND_TO_VENDOR)' },
+      { stage: 'Received', key: 'RECEIVED', station: 'RECEIVING', note: 'Return carton arrived at the warehouse', by: '/api/rma/[id]/mark-received' },
+      { stage: 'Dispositioned', key: 'DISPOSITIONED', station: 'TECH', note: 'Per-unit verdict recorded: ACCEPT / HOLD / RTV / REWORK / SCRAP' },
+      { stage: 'Closed', key: 'CLOSED', station: 'ADMIN', note: 'All units dispositioned; RMA finalized' },
+    ],
+    offPath: [
+      { stage: 'Expired', note: 'Authorization lapsed past expires_at' },
+      { stage: 'Canceled', note: 'Cancelled before receipt' },
+      { stage: 'Unmatched return', note: 'orders_exceptions: open → resolved when return tracking matches an order' },
     ],
   },
 ];
@@ -411,7 +445,10 @@ export function highlightStatesFor(key: string | null): Set<string> | null {
   const found = findCatalogItem(key);
   if (!found) return null;
 
-  if (found.category === 'flow') return new Set((found.item as OpsFlow).states);
+  if (found.category === 'flow') {
+    const keys = (found.item as OpsFlow).steps.map((s) => s.key).filter((k): k is string => !!k);
+    return keys.length ? new Set(keys) : null;
+  }
   if (found.category === 'station') return new Set((found.item as OpsStation).states);
 
   // Identifier → union the states of every station that handles it.
