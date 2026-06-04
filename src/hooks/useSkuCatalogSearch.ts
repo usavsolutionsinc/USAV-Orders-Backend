@@ -22,6 +22,8 @@ export interface UseSkuCatalogSearchOptions {
   allowEmpty?: boolean;
   /** When true, restrict to SKUs that have an active ECWID pairing row. */
   ecwidOnly?: boolean;
+  /** When true, restrict to SKUs that have QC checklist items linked. */
+  hasQc?: boolean;
   /** Exclude SKUs whose sku ends with this suffix (e.g. '-RS' for repairs). */
   excludeSkuSuffix?: string;
   /** Which field to search: ecwid_sku (default), zoho_sku, or title (display_name). */
@@ -33,14 +35,15 @@ export function useSkuCatalogSearch(
   limitOrOptions: number | UseSkuCatalogSearchOptions = 20,
 ) {
   const options: Required<
-    Pick<UseSkuCatalogSearchOptions, 'limit' | 'allowEmpty' | 'ecwidOnly' | 'excludeSkuSuffix' | 'searchField'>
+    Pick<UseSkuCatalogSearchOptions, 'limit' | 'allowEmpty' | 'ecwidOnly' | 'hasQc' | 'excludeSkuSuffix' | 'searchField'>
   > =
     typeof limitOrOptions === 'number'
-      ? { limit: limitOrOptions, allowEmpty: false, ecwidOnly: false, excludeSkuSuffix: '', searchField: 'ecwid_sku' }
+      ? { limit: limitOrOptions, allowEmpty: false, ecwidOnly: false, hasQc: false, excludeSkuSuffix: '', searchField: 'ecwid_sku' }
       : {
           limit: limitOrOptions.limit ?? 20,
           allowEmpty: !!limitOrOptions.allowEmpty,
           ecwidOnly: !!limitOrOptions.ecwidOnly,
+          hasQc: !!limitOrOptions.hasQc,
           excludeSkuSuffix: limitOrOptions.excludeSkuSuffix ?? '',
           searchField: limitOrOptions.searchField ?? 'ecwid_sku',
         };
@@ -52,6 +55,7 @@ export function useSkuCatalogSearch(
       options.limit,
       options.allowEmpty,
       options.ecwidOnly,
+      options.hasQc,
       options.excludeSkuSuffix,
       options.searchField,
     ],
@@ -59,6 +63,7 @@ export function useSkuCatalogSearch(
     queryFn: async () => {
       const params = new URLSearchParams({ q, limit: String(options.limit) });
       if (options.ecwidOnly) params.set('ecwidOnly', 'true');
+      if (options.hasQc) params.set('hasQc', 'true');
       if (options.excludeSkuSuffix) params.set('excludeSkuSuffix', options.excludeSkuSuffix);
       if (options.searchField !== 'ecwid_sku') params.set('searchField', options.searchField);
       const res = await fetch(`/api/sku-catalog/search?${params.toString()}`);

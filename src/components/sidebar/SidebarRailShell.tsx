@@ -52,6 +52,12 @@ export interface SidebarRailShellProps<TRow> {
   updateEvent?: string;
   /** Optimistic delete event ({ id }); the matching row is dropped immediately. */
   deleteEvent?: string;
+  /**
+   * Optimistic group-delete event (detail = group id, e.g. a receiving_id).
+   * Every row whose `getGroupId` matches is dropped immediately — used when a
+   * whole carton/log is removed and all its lines should vanish from the rail.
+   */
+  deleteGroupEvent?: string;
   /** Events that trigger a full query invalidation. */
   refreshEvents?: string[];
   /**
@@ -98,7 +104,7 @@ export interface SidebarRailShellProps<TRow> {
 }
 
 export function SidebarRailShell<TRow>({
-  queryKey, fetchFn, updateEvent, deleteEvent, refreshEvents, navigateEvent,
+  queryKey, fetchFn, updateEvent, deleteEvent, deleteGroupEvent, refreshEvents, navigateEvent,
   selectedId, selectedRow = null, limit = 25,
   eyebrowTitle, eyebrowSuffix, emptyText = 'No recent activity yet.',
   autoSelectFirstWhenEmpty = false,
@@ -141,12 +147,20 @@ export function SidebarRailShell<TRow>({
     return () => window.removeEventListener(updateEvent, handlePatch);
   }, [updateEvent, getId]);
 
-  // Ids removed via `deleteEvent`. Tracked separately from `localRows` because
-  // the selected row can be hoisted back in from the `selectedRow` prop (the
-  // pin, below) — suppressing the id here stops a just-deleted active line from
-  // resurrecting on the rail until the refetch lands. Pruned once fresh data
-  // genuinely re-includes the id (e.g. it was re-created).
+  // Ids removed via `deleteEvent`/`deleteGroupEvent`. These MUST outlive the
+  // refetch: `usav-refresh-data` invalidates the query right after a delete, but
+  // that refetch can race the server (eventually-consistent read / GET cache not
+  // yet evicted for this view) and hand back the just-deleted rows. The
+  // data-mirror effect would then write them straight back into `localRows`. So
+  // we keep a sticky suppression set and filter against it in `allRows`/the pin
+  // below — display stays correct no matter what the refetch returns. Receiving
+  // ids/receiving_ids are monotonic DB serials (never reused), so suppressing
+  // for the lifetime of the mounted rail is safe; the set resets on remount.
+  // Events only fire on a CONFIRMED server delete, so a suppressed id is never a
+  // false positive.
   const [deletedIds, setDeletedIds] = useState<ReadonlySet<number>>(() => new Set());
+  const [deletedGroupIds, setDeletedGroupIds] = useState<ReadonlySet<number>>(() => new Set());
+
   useEffect(() => {
     if (!deleteEvent) return;
     const handleDelete = (event: Event) => {
@@ -160,14 +174,21 @@ export function SidebarRailShell<TRow>({
     return () => window.removeEventListener(deleteEvent, handleDelete);
   }, [deleteEvent, getId]);
 
+  // Whole-carton delete: drop every row sharing the removed group id at once.
+  // Carries the group id (e.g. receiving_id) as a bare-number detail, so a
+  // carton removed from the detail panel clears all its lines from the rail
+  // immediately instead of waiting for the refetch.
   useEffect(() => {
-    if (deletedIds.size === 0 || !Array.isArray(data)) return;
-    const present = new Set(data.map(getId));
-    let changed = false;
-    const next = new Set(deletedIds);
-    next.forEach((id) => { if (present.has(id)) { next.delete(id); changed = true; } });
-    if (changed) setDeletedIds(next);
-  }, [data, deletedIds, getId]);
+    if (!deleteGroupEvent || !getGroupId) return;
+    const handleGroupDelete = (event: Event) => {
+      const groupId = Number((event as CustomEvent<unknown>).detail);
+      if (!Number.isFinite(groupId)) return;
+      setLocalRows((rows) => (rows ? rows.filter((r) => getGroupId(r) !== groupId) : rows));
+      setDeletedGroupIds((prev) => (prev.has(groupId) ? prev : new Set(prev).add(groupId)));
+    };
+    window.addEventListener(deleteGroupEvent, handleGroupDelete);
+    return () => window.removeEventListener(deleteGroupEvent, handleGroupDelete);
+  }, [deleteGroupEvent, getGroupId]);
 
   useEffect(() => {
     if (!refreshEvents || refreshEvents.length === 0) return;
@@ -179,8 +200,19 @@ export function SidebarRailShell<TRow>({
   // Defensive: a queryKey collision (another useQuery caching a different shape
   // under the same key) can hand us a non-array `data`. Never let that crash
   // the whole sidebar — coerce to [] and render empty instead.
+  const isRowDeleted = useCallback(
+    (r: TRow) => {
+      if (deletedIds.has(getId(r))) return true;
+      if (getGroupId) {
+        const g = getGroupId(r);
+        if (g != null && deletedGroupIds.has(g)) return true;
+      }
+      return false;
+    },
+    [deletedIds, deletedGroupIds, getId, getGroupId],
+  );
   const allRows = (Array.isArray(localRows) ? localRows : []).filter(
-    (r) => !deletedIds.has(getId(r)),
+    (r) => !isRowDeleted(r),
   );
   // `pinnedLead` marks that rows[0] is a selected row hoisted in from beyond the
   // top-N window (so the active line stays visible). `topCount` is the count of
@@ -189,14 +221,17 @@ export function SidebarRailShell<TRow>({
     const top = allRows.slice(0, limit);
     const base = { rows: top, topCount: top.length, pinnedLead: false };
     if (selectedId == null) return base;
-    // Never resurrect a just-deleted line via the pin.
+    // Never resurrect a just-deleted line via the pin — covers both a directly
+    // deleted line and the synthetic stub of a deleted carton (whose group id is
+    // suppressed even though its negative stub id never hit `deletedIds`).
     if (deletedIds.has(selectedId)) return base;
     if (top.some((r) => getId(r) === selectedId)) return base;
     const fromDataset = allRows.find((r) => getId(r) === selectedId);
     const pin = fromDataset ?? selectedRow;
     if (!pin || getId(pin) !== selectedId) return base;
+    if (isRowDeleted(pin)) return base;
     return { rows: [pin, ...top], topCount: top.length, pinnedLead: true };
-  }, [allRows, limit, selectedId, selectedRow, getId, deletedIds]);
+  }, [allRows, limit, selectedId, selectedRow, getId, deletedIds, isRowDeleted]);
 
   const grouped = useMemo(() => {
     type Info = { groupSize: number; groupIndex: number; groupId: number | null };

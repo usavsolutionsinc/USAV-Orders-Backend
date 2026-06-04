@@ -173,8 +173,16 @@ export const Settings = ({ className = "w-6 h-6" }: { className?: string }) => (
 );
 
 export const SlidersHorizontal = ({ className = "w-6 h-6" }: { className?: string }) => (
-    <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 21v-7m0-4V3m0 11h6m-6 0H3m1-7h10M14 7V3m0 18v-4m0 0h7m-7 0h-2m12-7v11m0-15V3m0 7h-8m8 0h1" />
+    <svg
+        className={className}
+        fill="none"
+        stroke="currentColor"
+        viewBox="0 0 24 24"
+        strokeWidth={2}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+    >
+        <path d="M21 4h-7M10 4H3M12 2v4M21 12H11M7 12H3M9 10v4M21 20H7M3 20h0M5 18v4" />
     </svg>
 );
 

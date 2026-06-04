@@ -491,6 +491,24 @@ export function ReceivingSidebarPanel() {
     return () => window.removeEventListener('receiving-line-deleted', handler);
   }, []);
 
+  // Whole carton (receiving log) deleted from the detail panel → if the active
+  // line belongs to it, converge both panes on empty so the Recent rail can
+  // auto-select the most-recent survivor. `receiving-entry-deleted` carries the
+  // carton id as its detail; the rail drops the carton's rows via its own
+  // `deleteGroupEvent` listener (SidebarRailShell).
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const cartonId = Number((e as CustomEvent<unknown>).detail);
+      if (!Number.isFinite(cartonId)) return;
+      setScanMatchedRows((rows) => rows.filter((r) => r.receiving_id !== cartonId));
+      if (selectedLineRef.current?.receiving_id === cartonId) {
+        window.dispatchEvent(new CustomEvent('receiving-workspace-close'));
+      }
+    };
+    window.addEventListener('receiving-entry-deleted', handler);
+    return () => window.removeEventListener('receiving-entry-deleted', handler);
+  }, []);
+
   // History-mode row clicks route through the `receiving-select-line` listener
   // below — they fire `receiving-open-details-overlay` directly instead of
   // touching `selectedLine`, so no mode-bounce effect is needed here.

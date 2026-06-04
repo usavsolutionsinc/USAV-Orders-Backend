@@ -19,6 +19,7 @@
 
 import 'server-only';
 import pool from '@/lib/db';
+import { readInventorySpine } from './inventory-spine';
 
 export interface AuditEvent {
   /** Stable synthetic id: `${source}:${id}` so React keys stay unique. */
@@ -376,14 +377,15 @@ export async function getReceivingAuditPO(poId: string): Promise<AuditPODetail |
           )
         : Promise.resolve({ rows: [] }),
 
-      pool.query(
-        `SELECT * FROM inventory_events
-          WHERE receiving_line_id = ANY($1::int[])
-             OR (receiving_id IS NOT NULL AND receiving_id = ANY($2::int[]))
-          ORDER BY occurred_at DESC, id DESC
-          LIMIT 1000`,
-        [lineIds, cartonIds.length > 0 ? cartonIds : [-1]],
-      ),
+      // Lifecycle spine via the shared reader (Phase 0). Keyed on this PO's
+      // lines + cartons; receiving does its own staff/bin/serial enrichment
+      // from batched maps below, so the reader's joined fields are ignored here.
+      readInventorySpine({
+        lineIds,
+        cartonIds,
+        order: 'desc',
+        limit: 1000,
+      }),
 
       pool.query(
         `SELECT * FROM audit_logs
@@ -425,7 +427,7 @@ export async function getReceivingAuditPO(poId: string): Promise<AuditPODetail |
     ]);
 
   const cartonsRes = { rows: cartonsResRaw.rows as ReceivingRow[] };
-  const eventsRes = { rows: eventsResRaw.rows as InventoryEventRow[] };
+  const eventsRes = { rows: eventsResRaw as InventoryEventRow[] };
   const auditLogsRes = { rows: auditLogsResRaw.rows as AuditLogRow[] };
   const photosRes = { rows: photosResRaw.rows as PhotoRow[] };
   const serialsRes = { rows: serialsResRaw.rows as SerialRow[] };

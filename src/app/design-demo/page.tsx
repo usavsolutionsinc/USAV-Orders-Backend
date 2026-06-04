@@ -18,7 +18,7 @@
  */
 
 import { useRef, useState } from 'react';
-import { Database, Zap, Bell, Sparkles, Search, List, Wrench, Package, Smartphone } from '@/components/Icons';
+import { Database, Zap, Bell, Sparkles, Search, List, Package, MapPin } from '@/components/Icons';
 import {
   ButtonsSection,
   InputsSection,
@@ -29,12 +29,10 @@ import {
   cx,
   type Density,
 } from './_gallery/sections';
-import { TestingRailSection } from './_gallery/testing-rail-section';
 import { ConditionPickerSection } from './_gallery/condition-picker-section';
-import { RowMetaColumnsSection } from './_gallery/row-meta-columns-section';
-import { ReceivingHistorySection } from './_gallery/receiving-history-section';
-import { ReceivingMotionSection } from './_gallery/receiving-motion-section';
-import { MobileSelectionBarSection } from './_gallery/mobile-selection-bar-section';
+import { WarehouseMapSection } from './_gallery/warehouse-map-section';
+import { WarehouseFlowSection } from './_gallery/warehouse-flow-section';
+import { FilterBarSection } from './_gallery/filter-bar-section';
 
 type SectionDef = {
   id: string;
@@ -47,14 +45,12 @@ type SectionDef = {
 
 const SECTIONS: SectionDef[] = [
   { id: 'buttons', index: '01', label: 'Buttons & actions', icon: Zap, blurb: 'A single Button primitive with spring-press feedback, async loading, and brand gradient — replacing the ad-hoc <button> markup repeated across sidebars and forms.', render: () => <ButtonsSection /> },
-  { id: 'receiving-motion', index: '2b', label: 'Receiving motion', icon: Sparkles, blurb: 'Modernized motion patterns for the receiving flow: laser scans, hero morphs, and spring physics feedback to make the workspace feel reactive and production-grade.', render: () => <ReceivingMotionSection /> },
-  { id: 'testing-rail', index: '2c', label: 'Testing recent rail', icon: Wrench, blurb: 'The forked, testing-specific “YOU TESTED” recent rail with corrected selection semantics: selecting a line highlights it in place instead of hoisting it to the top, and a line only rises when its testing state actually changes (a verdict is recorded). Click rows, hover Pass/Fail to record, and toggle the old hoist-on-select bug to feel the difference. Two off-window display variants: highlight-in-place vs a separate now-testing pin.', render: (d) => <TestingRailSection density={d} /> },
+  { id: 'filters', index: '02', label: 'Filter bars', icon: Search, blurb: 'Unified search + pills + advanced popovers. Consolidating the collapsible UpNext bar, the popover-heavy Shipped toolbar, and the inline Bins chips into a single polymorphic component.', render: () => <FilterBarSection /> },
   { id: 'condition', index: '2d', label: 'Condition picker', icon: Package, blurb: 'Condensing the PO-items grade picker into one contextual row. Today it shows the full set of pills at all times; these variants keep the current grade on the left and reveal the rest only on demand — popover, inline slide-out, or a select dropdown. Each is shown inside a mock of the real line-edit card so you can compare in context and cherry-pick.', render: (d) => <ConditionPickerSection density={d} /> },
-  { id: 'row-meta', index: '2e', label: 'Row meta-columns', icon: List, blurb: 'Locking the order-row "qty · condition · rest" subrow into fixed virtual columns — the left-side mirror of ChipColumns. Today OrdersQueue + Shipped use a locked grid while Tech, Packer & Receiving free-flow a "qty • condition" bullet, so nothing aligns row-to-row. This previews one RowMetaColumns primitive applied to all five desktop tables; flip Before/After and toggle the column guides to see qty sit directly under the title and the condition column lock down every row.', render: (d) => <RowMetaColumnsSection density={d} /> },
-  { id: 'receiving-history', index: '2f', label: 'Receiving history', icon: Package, blurb: 'The receiving/inbound rows in the same locked meta-columns, plus the key move: delivery states (STALLED, NO TRACKING #, PENDING CARRIER, DELIVERED · NOT SCANNED, ARRIVING TODAY, IN TRANSIT) collapse from long text suffixes into a single icon with a hover tooltip for the full context — so the row stays compact and the qty | condition | state columns line up. Flip Before/After and toggle the guides.', render: (d) => <ReceivingHistorySection density={d} /> },
   { id: 'inputs', index: '03', label: 'Inputs', icon: Search, blurb: 'Floating-label fields and a spring toggle — consolidating the inconsistent form styling between sidebar and admin forms.', render: () => <InputsSection /> },
   { id: 'data', index: '04', label: 'Data display', icon: Database, blurb: 'A DataTable family (selection, status pills, density-aware rows) to retire the ~6 hand-rolled sticky-header tables.', render: (d) => <DataTableSection density={d} /> },
-  { id: 'mobile-selection', index: '4m', label: 'Mobile selection bar', icon: Smartphone, blurb: 'The thumb-first counterpart to the DataTable bulk bar, in Apple liquid glass. One LiquidCapsule — an ultra-thin, full-round, compact pill in darker graphite glass — floats up the moment you highlight a row: Select-all pinned far-left, the mass actions (share · highlight · quote) on the right, sitting OVER the list so the rows blur through it. Two travelling-light options to compare: A · the fast station scan-sweep (the skewed, blurred blue→purple beam reused from StationScanBar) and B · a slower aurora drift (two wide multi-color bands crossing like an aurora). Scroll the list behind the pill to feel the transparency. Drives off the Light/Dark + density toggles.', render: (d) => <MobileSelectionBarSection density={d} /> },
+  { id: 'warehouse-map', index: '05', label: 'Warehouse map · konva', icon: MapPin, blurb: 'The flat fill-% bin grid redrawn on a real canvas with react-konva — drag bins to reposition, select to resize (expand/shrink), scroll to zoom, drag empty space to pan, and flip Trace to follow one SKU across every zone it lives in. The spatial, "identify & move inventory" view the HTML table can\'t give you.', render: (d) => <WarehouseMapSection density={d} /> },
+  { id: 'warehouse-flow', index: '5b', label: 'Warehouse map · React Flow', icon: MapPin, blurb: 'The exact same bins/zones/tones on @xyflow/react instead of konva — a head-to-head comparison. Nodes are real DOM (theme for free), Trace draws actual graph edges between same-SKU bins, and Controls + MiniMap come built in. Konva wins on raw shape count & pixel control; React Flow wins on edges/tracing and batteries-included chrome.', render: (d) => <WarehouseFlowSection density={d} /> },
   { id: 'feedback', index: '06', label: 'Feedback', icon: Bell, blurb: 'A polished empty state and a consistent inline error/warning banner.', render: () => <FeedbackSection /> },
   { id: 'motion', index: '07', label: 'Motion lab', icon: Sparkles, blurb: 'Shared-element expand, spring press, and stagger reveals — the highest-impact "2026" upgrades, all from your existing Framer Motion presets.', render: () => <MotionSection /> },
 ];

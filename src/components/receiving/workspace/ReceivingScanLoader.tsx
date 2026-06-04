@@ -21,6 +21,7 @@
  */
 
 import { useEffect, useState } from 'react';
+import { motion } from 'framer-motion';
 
 export interface ReceivingScanLoaderProps {
   /** Tracking number the operator scanned. Shown verbatim in monospace. */
@@ -38,6 +39,11 @@ export function ReceivingScanLoader({ tracking, startedAt }: ReceivingScanLoader
     }, 250);
     return () => window.clearInterval(interval);
   }, [startedAt]);
+
+  // Monotonic progress: starts at 15%, grows by 15% per second for the first 3s,
+  // then slows down (asymptotic) so it never quite hits 100% until the PO 
+  // actually resolves and the loader unmounts. Never goes backward.
+  const progress = Math.min(98, 15 + (elapsed < 3 ? elapsed * 15 : 45 + (elapsed - 3) * 2));
 
   // Opaque white surface (not a translucent overlay) so nothing behind bleeds
   // through. The host (ReceivingDashboard) already offsets this below the
@@ -63,8 +69,24 @@ export function ReceivingScanLoader({ tracking, startedAt }: ReceivingScanLoader
             </span>
           </div>
 
-          <div className="mt-4 h-1.5 w-full overflow-hidden rounded-full bg-gray-100">
-            <div className="recv-indet-bar h-full w-1/3 rounded-full bg-blue-500" />
+          <div className="mt-4 h-2 w-full overflow-hidden rounded-full bg-gray-100 ring-1 ring-black/[0.03]">
+            <motion.div 
+              animate={{ width: `${progress}%` }}
+              transition={{ 
+                type: 'spring',
+                stiffness: 100,
+                damping: 20,
+                restDelta: 0.001
+              }}
+              className="relative h-full rounded-full bg-blue-600"
+            >
+              {/* Aurora sweep — high-performance liquid gradient */}
+              <motion.div
+                animate={{ left: ['-100%', '200%'] }}
+                transition={{ duration: 2.5, repeat: Infinity, ease: 'linear' }}
+                className="absolute inset-y-0 w-1/2 bg-gradient-to-r from-transparent via-white/40 to-transparent skew-x-12"
+              />
+            </motion.div>
           </div>
         </div>
 

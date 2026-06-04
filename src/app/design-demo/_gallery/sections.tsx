@@ -58,7 +58,7 @@ function Tag({ kind }: { kind: 'new' | 'have' | 'upgrade' }) {
  * caption. The dashed promote path is the whole point — it tells you where the
  * component lands the moment you cherry-pick it.
  */
-function Bay({
+export function Bay({
   title,
   promote,
   tag = 'new',

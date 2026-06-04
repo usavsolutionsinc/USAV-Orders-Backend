@@ -208,6 +208,15 @@ export function UploadManualModal({
   const [error, setError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  // Word docs get converted to PDF server-side, which adds a few seconds —
+  // surface that in the submit button so the wait doesn't read as a hang.
+  const isWordDoc = useMemo(() => {
+    if (!file) return false;
+    return /\.docx?$/i.test(file.name)
+      || file.type === 'application/msword'
+      || file.type === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+  }, [file]);
+
   // Reset state whenever the modal (re)opens.
   useEffect(() => {
     if (!open) return;
@@ -287,7 +296,7 @@ export function UploadManualModal({
         <>
           <SecondaryButton disabled={busy} onClick={onClose}>Cancel</SecondaryButton>
           <PrimaryButton busy={busy} disabled={!file} onClick={submit}>
-            {isReplace ? 'Replace' : 'Upload'}
+            {busy && isWordDoc ? 'Converting…' : isReplace ? 'Replace' : 'Upload'}
           </PrimaryButton>
         </>
       }
@@ -317,15 +326,15 @@ export function UploadManualModal({
           </>
         ) : (
           <>
-            <p className="text-caption font-black text-zinc-700">Drop a PDF here, or click to pick</p>
-            <p className="text-micro font-semibold text-zinc-500">Max 50MB</p>
+            <p className="text-caption font-black text-zinc-700">Drop a PDF or Word doc here, or click to pick</p>
+            <p className="text-micro font-semibold text-zinc-500">Word files (.doc/.docx) are converted to PDF automatically · Max 50MB</p>
           </>
         )}
         <input
           id="manual-upload-file"
           ref={fileInputRef}
           type="file"
-          accept=".pdf,application/pdf,image/*"
+          accept=".pdf,application/pdf,.doc,.docx,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,image/*"
           className="hidden"
           onChange={(e) => handleFile(e.target.files?.[0] || null)}
         />

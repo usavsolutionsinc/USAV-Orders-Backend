@@ -221,7 +221,7 @@ export async function getSkuDetail(
   const recRes = await pool.query(
     `SELECT ie.id,
             ie.occurred_at,
-            ie.kind,
+            ie.event_type,
             ie.actor_staff_id,
             s.name AS actor_name,
             rl.item_name,
@@ -277,7 +277,7 @@ export async function getSkuDetail(
       occurred_at: r.occurred_at as string,
       source: 'inventory_event',
       station: 'receiving',
-      kind: r.kind as string,
+      kind: r.event_type as string,
       actor_staff_id: r.actor_staff_id as number | null,
       actor_name: r.actor_name as string | null,
       tracking: null,

@@ -33,6 +33,8 @@ export interface RecentActivityRailBaseProps {
   updateEvent: string;
   /** Optimistic delete event ({ id }); drops the row from the rail immediately. */
   deleteEvent?: string;
+  /** Optimistic group-delete event (detail = receiving_id); drops the whole carton's rows. */
+  deleteGroupEvent?: string;
   refreshEvents: string[];
   /** prev/next CustomEvent name that steps rail selection — drives header chevrons. */
   navigateEvent?: string;
@@ -77,6 +79,7 @@ export function RecentActivityRailBase({
   fetchFn,
   updateEvent,
   deleteEvent,
+  deleteGroupEvent,
   refreshEvents,
   navigateEvent,
   eyebrowTitle,
@@ -93,6 +96,7 @@ export function RecentActivityRailBase({
       fetchFn={async () => (await fetchFn()).receiving_lines ?? []}
       updateEvent={updateEvent}
       deleteEvent={deleteEvent}
+      deleteGroupEvent={deleteGroupEvent}
       refreshEvents={refreshEvents}
       navigateEvent={navigateEvent}
       selectedId={selectedLineId}

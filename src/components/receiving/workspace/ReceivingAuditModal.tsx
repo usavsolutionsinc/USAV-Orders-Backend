@@ -159,7 +159,7 @@ export function ReceivingAuditModal({ open, onClose, receivingId }: Props) {
   }, [open, receivingId]);
 
   return (
-    <RightPaneOverlay open={open} onClose={onClose} align="right" aria-labelledby="receiving-audit-title">
+    <RightPaneOverlay open={open} onClose={onClose} align="right" anchor="viewport" aria-labelledby="receiving-audit-title">
       <div className="flex items-center justify-between border-b border-slate-200 px-3 py-2">
         <div className="min-w-0">
           <p

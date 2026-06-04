@@ -108,6 +108,10 @@ export const AUDIT_ACTION = {
   SERIAL_SCAN:   'serial.scan',
   SERIAL_CREATE: 'serial.create',
   SERIAL_DELETE: 'serial.delete',
+  // Tech / QC verdicts (per-unit testing outcomes)
+  TECH_QC_PASS:   'tech.qc.pass',
+  TECH_QC_RETEST: 'tech.qc.retest',
+  TECH_QC_FAIL:   'tech.qc.fail',
   // Receiving (scanner-driven matching)
   PO_LOOKUP:        'po.lookup',
   RECEIVING_MATCH:  'receiving.match',

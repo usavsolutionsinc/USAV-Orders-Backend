@@ -32,6 +32,15 @@ const UnitHistoryWorkspace = dynamic(
   },
 );
 
+// Lazy-load the QC checklist workspace — only mounts when view=qc.
+const QcChecklistWorkspace = dynamic(
+  () => import('./QcChecklistWorkspace').then((m) => m.QcChecklistWorkspace),
+  {
+    ssr: false,
+    loading: () => <div className="p-6 text-sm text-gray-400">Loading QC checklist…</div>,
+  },
+);
+
 export function ProductsWorkspace() {
   const searchParams = useSearchParams();
   const view = searchParams.get('view');
@@ -45,8 +54,11 @@ export function ProductsWorkspace() {
     return <MultiSkuSnBarcode layout="horizontal" />;
   }
   if (view === 'pairing') return <ProductsPairingShell />;
-  // Manuals (default) + QC both render the PDF viewer in the main pane —
-  // selection comes from the sidebar's LibraryBrowser (`?id=`).
+  // QC view: right pane shows the selected SKU's QC checklist (selection comes
+  // from the sidebar's QcProductPicker via `?skuId=`).
+  if (view === 'qc') return <QcChecklistWorkspace />;
+  // Manuals (default) renders the PDF viewer in the main pane — selection
+  // comes from the sidebar's LibraryBrowser (`?id=`).
   return <ManualLibrary />;
 }
 

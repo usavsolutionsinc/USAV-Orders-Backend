@@ -61,6 +61,13 @@ interface RightPaneOverlayProps {
    * right  → full-height slide-over from the pane's right edge (detail panels).
    */
   align?: RightPaneOverlayAlign;
+  /**
+   * pane (default) → pin over the nearest {@link RightPaneOverlayHost}'s rect, so
+   * the surface sits inside the right content column (below the global header).
+   * viewport → ignore any host and span the full viewport, so an `align="right"`
+   * drawer runs top-to-bottom over the global header too (the audit log).
+   */
+  anchor?: 'pane' | 'viewport';
   /** Slide-over width in px for `align="right"`. Ignored for `center`. */
   width?: number;
   /** Dim + click-to-close layer. Covers the WHOLE viewport (sidebar + header). Default true. */
@@ -94,6 +101,7 @@ export function RightPaneOverlay({
   open,
   onClose,
   align = 'center',
+  anchor = 'pane',
   width = 440,
   backdrop = true,
   lockScroll = true,
@@ -103,7 +111,10 @@ export function RightPaneOverlay({
   'aria-label': ariaLabel,
   'aria-labelledby': ariaLabelledby,
 }: RightPaneOverlayProps) {
-  const host = useRightPaneHost();
+  // `anchor="viewport"` opts out of host pinning so the panel fills the whole
+  // viewport (rect stays null → full-screen frame below).
+  const hostFromContext = useRightPaneHost();
+  const host = anchor === 'viewport' ? null : hostFromContext;
   useBodyScrollLock(open && lockScroll);
   useEscapeClose(open && closeOnEscape, onClose);
 

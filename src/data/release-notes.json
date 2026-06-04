@@ -1,7 +1,27 @@
 {
-  "generatedAt": "2026-06-04T06:53:18.206Z",
+  "generatedAt": "2026-06-04T07:57:00.598Z",
   "count": 199,
   "commits": [
+    {
+      "sha": "968c8879b31a4e0ad81d1e0b938237c796465151",
+      "shortSha": "968c8879",
+      "date": "2026-06-04T00:29:47-07:00",
+      "author": "DENSENSE8",
+      "subject": "updated the good base to favor more consistency across all the different design components and animation components",
+      "body": "",
+      "type": "other",
+      "title": "updated the good base to favor more consistency across all the different design components and animation components"
+    },
+    {
+      "sha": "e74d02073333bce96d446a80ef00504b69bbdacd",
+      "shortSha": "e74d0207",
+      "date": "2026-06-03T23:54:12-07:00",
+      "author": "DENSENSE8",
+      "subject": "workflow: flows display now mirrors the REAL codebase stages (deep scan)",
+      "body": "Deep-scanned each flow's actual status vocabulary and rebuilt the descriptive\nflows panel to match how the real pages display them — not generic lifecycle\nstates. Each step now carries the display label, the real status key, the\nstation, the activity/event signal, and the route that performs the transition.\n\nFBA (fba_shipment_status_enum · src/lib/fba/status.ts):\n  Planned(PLANNED, FNSKU_SCANNED, /api/tech/scan)\n  → Tested(\"ready to go\", /api/fba/items/ready)\n  → Packed(/api/fba/items/scan)\n  → Combined(LABEL_ASSIGNED — UI label is \"Combined\" — /api/fba/labels/bind)\n  → Shipped(/api/fba/shipments/mark-shipped); +Out of Stock / Closed\n\nReceiving (inbound_workflow_status_enum · workflow-stages.ts):\n  Incoming → Scanned → Matched → Unboxed → Awaiting Test → Testing → Passed\n  → Done; +Failed / RTV / Scrap\n\nOutbound (order_unit_allocations.state):\n  Allocated → Picked → Packed → Labeled → Shipped; +Released, carrier\n  Accepted→In Transit→Delivered, and the Awaiting/Pending/Shipped UI buckets\n\nRepair (repair_service.status, free-text): Incoming Shipment → Pending Repair\n  → Awaiting Parts → Repaired, Contact Customer → Awaiting Pickup/Payment\n  → Picked Up/Shipped; +Cancelled\n\nReturns/RMA (rma_authorizations.status): Authorized → Received → Dispositioned\n  (ACCEPT/HOLD/RTV/REWORK/SCRAP) → Closed; +Expired/Canceled, orders_exceptions\n\nDisplay adds: per-flow source file, numbered step rail, real status-key chips,\nsignal + route annotations, and a \"branches & terminal states\" footer. Still\nread-only (interactivity deferred). tsc clean; build ✓.\n\nCo-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>",
+      "type": "other",
+      "title": "workflow: flows display now mirrors the REAL codebase stages (deep scan)"
+    },
     {
       "sha": "21da19638704c5ea3ddd0643256f720e07c36133",
       "shortSha": "21da1963",
@@ -1971,26 +1991,6 @@
       "body": "",
       "type": "other",
       "title": "search bar fixed and added work_assignments page"
-    },
-    {
-      "sha": "754d95590661f75d19cade2b3c81247dd680d115",
-      "shortSha": "754d9559",
-      "date": "2026-03-10T15:33:15-07:00",
-      "author": "usavsolutionsinc",
-      "subject": "adding a unified shipping_tracking_numbers table",
-      "body": "",
-      "type": "other",
-      "title": "adding a unified shipping_tracking_numbers table"
-    },
-    {
-      "sha": "5ca7616d1308b8cc8f16eb1cc20ec360cecfc2bf",
-      "shortSha": "5ca7616d",
-      "date": "2026-03-10T13:55:00-07:00",
-      "author": "usavsolutionsinc",
-      "subject": "updated wa table to include a deadline_at column for better work orders trackign number and the up next orders component for better edge to edge and order display",
-      "body": "",
-      "type": "other",
-      "title": "updated wa table to include a deadline_at column for better work orders trackign number and the up next orders component for better edge to edge and order display"
     }
   ]
 }

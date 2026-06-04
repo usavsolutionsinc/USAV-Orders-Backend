@@ -8,6 +8,7 @@ export const GET = withAuth(async (req: NextRequest) => {
     const q = (searchParams.get('q') || '').trim();
     const category = (searchParams.get('category') || '').trim();
     const ecwidOnly = searchParams.get('ecwidOnly') === 'true';
+    const hasQc = searchParams.get('hasQc') === 'true';
     const excludeSkuSuffix = (searchParams.get('excludeSkuSuffix') || '').trim();
     const searchField = (searchParams.get('searchField') || 'ecwid_sku') as
       | 'ecwid_sku'
@@ -15,6 +16,13 @@ export const GET = withAuth(async (req: NextRequest) => {
       | 'title'
       | 'zoho_catalog';
     const limit = Math.min(Math.max(Number(searchParams.get('limit') || 20), 1), 100);
+
+    // QC view: restrict to SKUs that have QC checklist items directly linked
+    // (qc_check_templates.sku_catalog_id). Searches sku + title regardless of
+    // searchField so the QC picker only ever shows products with a checklist.
+    if (hasQc) {
+      return NextResponse.json(await searchSkusWithQcChecks(q, limit));
+    }
 
     if (searchField === 'ecwid_sku' || searchField === 'title') {
       return NextResponse.json(
@@ -211,6 +219,68 @@ async function searchFromZohoCatalog(
       ],
     })),
   };
+}
+
+/**
+ * SKUs that have at least one QC check step directly linked
+ * (qc_check_templates.sku_catalog_id = sc.id). Category-scoped templates
+ * (sku_catalog_id IS NULL) are intentionally excluded — "linked to the SKU"
+ * means a direct link. Image/title prefer the ECWID platform row, matching
+ * the rest of the catalog search.
+ */
+async function searchSkusWithQcChecks(q: string, limit: number) {
+  const params: unknown[] = [];
+  // No is_active filter here: a SKU that has a checklist should always be
+  // manageable from the QC view, even if it's been retired from sale. The
+  // EXISTS clause already keeps this to the small, deliberately-curated set of
+  // SKUs that have QC steps linked.
+  const filterClauses: string[] = [
+    'EXISTS (SELECT 1 FROM qc_check_templates qc WHERE qc.sku_catalog_id = sc.id)',
+  ];
+
+  let exactIdx: number | null = null;
+  if (q) {
+    params.push(`%${q}%`);
+    const likeIdx = params.length;
+    params.push(q);
+    exactIdx = params.length;
+    filterClauses.push(`(sc.sku ILIKE $${likeIdx} OR sc.product_title ILIKE $${likeIdx})`);
+  }
+
+  params.push(limit);
+  const limitIdx = params.length;
+
+  const orderBy = exactIdx
+    ? `CASE WHEN UPPER(sc.sku) = UPPER($${exactIdx}) THEN 0 ELSE 1 END, sc.product_title ASC`
+    : 'sc.product_title ASC';
+
+  const result = await pool.query(
+    `SELECT
+       sc.id,
+       sc.sku,
+       sc.sku AS zoho_sku,
+       COALESCE(sp_ecwid.display_name, sc.product_title) AS product_title,
+       sc.category,
+       sc.upc,
+       COALESCE(sp_ecwid.image_url, sc.image_url) AS image_url,
+       sc.is_active
+     FROM sku_catalog sc
+     LEFT JOIN LATERAL (
+       SELECT image_url, display_name
+       FROM sku_platform_ids
+       WHERE (sku_catalog_id = sc.id OR platform_sku = sc.sku)
+         AND platform = 'ecwid'
+         AND is_active = true
+       ORDER BY created_at DESC NULLS LAST
+       LIMIT 1
+     ) sp_ecwid ON TRUE
+     WHERE ${filterClauses.join(' AND ')}
+     ORDER BY ${orderBy}
+     LIMIT $${limitIdx}`,
+    params,
+  );
+
+  return { success: true, items: result.rows };
 }
 
 async function searchFromCatalog(

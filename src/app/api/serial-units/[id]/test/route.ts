@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { withAuth } from '@/lib/auth/withAuth';
 import pool from '@/lib/db';
 import { appendInventoryEvent } from '@/lib/repositories/inventory/inventoryEvents';
+import { recordAudit, AUDIT_ACTION, AUDIT_ENTITY } from '@/lib/audit-logs';
 
 /**
  * POST /api/serial-units/[id]/test
@@ -41,6 +42,18 @@ const VERDICT_TO_STATUS: Record<Verdict, VerdictMapping> = {
   PASS: { nextStatus: 'TESTED', eventType: 'TEST_PASS' },
   TEST_AGAIN: { nextStatus: 'IN_TEST', eventType: 'TEST_START' },
   TESTING_FAILED: { nextStatus: 'ON_HOLD', eventType: 'TEST_FAIL' },
+};
+
+// Formal audit-log verb per verdict. The verdict's timeline display comes from
+// the inventory_events row above; this audit_logs row is the compliance record
+// (actor/role/ip/request-id + before→after) and is what surfaces the verdict in
+// the per-staff audit feed. Tagged entity_type=serial_unit (mirrors
+// receiving.scan-serial) so it does NOT double-render in the PO/tech timelines,
+// which already show the verdict via inventory_events.
+const VERDICT_TO_AUDIT_ACTION: Record<Verdict, string> = {
+  PASS: AUDIT_ACTION.TECH_QC_PASS,
+  TEST_AGAIN: AUDIT_ACTION.TECH_QC_RETEST,
+  TESTING_FAILED: AUDIT_ACTION.TECH_QC_FAIL,
 };
 
 export const POST = withAuth(async (request, ctx) => {
@@ -197,6 +210,29 @@ export const POST = withAuth(async (request, ctx) => {
     } catch (err) {
       console.warn('[test] testing_results insert failed (non-fatal):', err);
     }
+
+    // 4c. Formal audit-log row. recordAudit pulls actor/role/ip/request-id from
+    //     the auth context + headers and never throws (failures are logged and
+    //     dropped), so it can't break the verdict. entity=serial_unit keeps it
+    //     out of the PO/tech timelines (which render the verdict from
+    //     inventory_events) while surfacing it in the per-staff audit feed.
+    await recordAudit(pool, ctx, request, {
+      source: 'tech.qc-verdict',
+      action: VERDICT_TO_AUDIT_ACTION[verdict],
+      entityType: AUDIT_ENTITY.SERIAL_UNIT,
+      entityId: unit.id,
+      method: 'manual',
+      before: { status: prev.current_status },
+      after: { status: mapping.nextStatus },
+      note: notes,
+      extra: {
+        verdict,
+        receiving_line_id: lineId,
+        serial_number: unit.serial_number,
+        sku: unit.sku,
+        inventory_event_id: event.id,
+      },
+    });
 
     // 5. Line rollup. Only runs when the unit has a parent line.
     let lineRollup: {

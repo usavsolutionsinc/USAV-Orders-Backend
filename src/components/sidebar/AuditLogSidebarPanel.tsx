@@ -454,6 +454,7 @@ function PackingTrackingPicker() {
 // ─── Tech session picker ───────────────────────────────────────────────────
 
 interface TechSessionSummary {
+  session_key: string;
   tracking: string;
   tester_id: number | null;
   tester_name: string | null;
@@ -494,7 +495,7 @@ function TechSessionPicker() {
   }, [sharedQS, search]);
 
   const listRows: ListRow[] = rows.map((r) => ({
-    key: r.tracking,
+    key: r.session_key || r.tracking,
     title: r.tracking,
     subtitle: r.sku_summary ?? '—',
     meta: `${r.serial_count} serial${r.serial_count === 1 ? '' : 's'}${
@@ -505,7 +506,7 @@ function TechSessionPicker() {
 
   return (
     <SidebarListPicker
-      placeholder="Search tracking, serial, tester…"
+      placeholder="Search PO, tracking, serial, tester…"
       rows={listRows}
       selectedKey={selected}
       onSelect={(key) => {

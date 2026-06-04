@@ -9,7 +9,7 @@ import { AuditLogDailyReport } from './AuditLogDailyReport';
 interface TechEvent {
   id: string;
   occurred_at: string;
-  source: 'tech_serial_number' | 'station_activity_log' | 'audit_log';
+  source: 'tech_serial_number' | 'station_activity_log' | 'audit_log' | 'inventory_event';
   kind: string;
   actor_staff_id: number | null;
   actor_name: string | null;
@@ -53,6 +53,13 @@ const KIND_TONE: Record<string, string> = {
   SERIAL_ADDED: 'bg-sky-50 text-sky-700 ring-sky-200',
   FNSKU_SCANNED: 'bg-amber-50 text-amber-700 ring-amber-200',
   FBA_READY: 'bg-violet-50 text-violet-700 ring-violet-200',
+  // Lifecycle spine (inventory_events) — mirrors the receiving timeline tones.
+  RECEIVED: 'bg-sky-50 text-sky-700 ring-sky-200',
+  TEST_START: 'bg-amber-50 text-amber-700 ring-amber-200',
+  TEST_PASS: 'bg-emerald-50 text-emerald-700 ring-emerald-200',
+  TEST_FAIL: 'bg-rose-50 text-rose-700 ring-rose-200',
+  PUTAWAY: 'bg-violet-50 text-violet-700 ring-violet-200',
+  MOVED: 'bg-slate-100 text-slate-700 ring-slate-200',
 };
 
 function kindLabel(kind: string): string {

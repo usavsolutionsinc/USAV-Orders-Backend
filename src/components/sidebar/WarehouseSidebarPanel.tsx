@@ -19,12 +19,13 @@ import {
   HorizontalButtonSlider,
   type HorizontalSliderItem,
 } from '@/components/ui/HorizontalButtonSlider';
-import { LayoutDashboard, Box, Printer, MapPin, Layers } from '@/components/Icons';
+import { LayoutDashboard, Box, Printer, MapPin, Layers, Database, Package } from '@/components/Icons';
 import { useMasterNavEnabled } from '@/components/sidebar/master-nav';
 import { useLocations } from '@/hooks/useLocations';
-import { SkuLocationFinder } from '@/components/warehouse/SkuLocationFinder';
+import { useWarehouseSkuSearch, looksLikeBinBarcode } from '@/hooks/useWarehouseSkuSearch';
 import { MapLegend, type MapViewMode } from '@/components/warehouse/WarehouseMap';
 import { RoomsSidebarList } from '@/components/warehouse/RoomsSidebarList';
+import { WarehouseSkuSearchResults } from '@/components/warehouse/WarehouseSkuSearchResults';
 import { BinLabelPrinter } from '@/components/barcode/BinLabelPrinter';
 import { RackLabelPrinter } from '@/components/barcode/RackLabelPrinter';
 import { RoomFinderProvider, useRoomFinder } from '@/components/warehouse/roomFinderContext';
@@ -53,7 +54,8 @@ function WarehouseSidebarInner() {
   const masterNavEnabled = useMasterNavEnabled();
   const tab = parseTab(searchParams.get('tab'));
   const { rooms, bins } = useLocations();
-  const { query, setQuery } = useRoomFinder();
+  const { query: roomQuery, setQuery: setRoomQuery } = useRoomFinder();
+  const skuSearch = useWarehouseSkuSearch();
 
   const setTab = useCallback(
     (next: InventoryTab) => {
@@ -78,8 +80,8 @@ function WarehouseSidebarInner() {
     () => [
       { id: 'labels', label: 'Labels', icon: Printer },
       { id: 'racks',  label: 'Racks',  icon: Layers },
-      { id: 'rooms',  label: 'Rooms',  icon: LayoutDashboard, count: rooms.length },
-      { id: 'bins',   label: 'Bins',   icon: Box,             count: bins.length },
+      { id: 'rooms',  label: 'Rooms',  icon: Database, count: rooms.length },
+      { id: 'bins',   label: 'Bins',   icon: Package,             count: bins.length },
       { id: 'map',    label: 'Map',    icon: MapPin },
     ],
     [rooms.length, bins.length],
@@ -115,23 +117,43 @@ function WarehouseSidebarInner() {
               />
             </div>
           )}
-          {/* Non-room tabs swap the room search for the full SKU/bin finder. */}
-          {!isRoomFinderTab && (
-            <div className={`${SIDEBAR_GUTTER} py-2`}>
-              <SkuLocationFinder />
-            </div>
-          )}
         </>
       }
       search={
         isRoomFinderTab
           ? {
-              value: query,
-              onChange: setQuery,
-              onClear: () => setQuery(''),
+              value: roomQuery,
+              onChange: setRoomQuery,
+              onClear: () => setRoomQuery(''),
               placeholder: roomFinderPlaceholder,
               variant: 'blue',
             }
+          : {
+              value: skuSearch.value,
+              onChange: (v) => { skuSearch.setValue(v); skuSearch.setOpen(true); },
+              onSearch: skuSearch.handleSearch,
+              onClear: skuSearch.handleClear,
+              placeholder: 'Find product, SKU, or bin barcode…',
+              variant: 'blue',
+              isSearching: skuSearch.loading,
+            }
+      }
+      searchGroup={
+        !isRoomFinderTab
+          ? (searchBar) => (
+              <div className="space-y-2">
+                {searchBar}
+                {skuSearch.open && skuSearch.value.trim() && !looksLikeBinBarcode(skuSearch.value) && (
+                  <div className={SIDEBAR_GUTTER}>
+                    <WarehouseSkuSearchResults
+                      loading={skuSearch.loading}
+                      hits={skuSearch.hits}
+                      onSelect={() => skuSearch.setOpen(false)}
+                    />
+                  </div>
+                )}
+              </div>
+            )
           : undefined
       }
       bodyClassName="flex flex-col overflow-hidden p-0"

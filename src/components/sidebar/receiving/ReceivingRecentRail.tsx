@@ -67,7 +67,8 @@ export function ReceivingRecentRail({
       fetchFn={fetchFn}
       updateEvent="receiving-line-updated"
       deleteEvent="receiving-line-deleted"
-      refreshEvents={['receiving-entry-added', 'usav-refresh-data']}
+      deleteGroupEvent="receiving-entry-deleted"
+      refreshEvents={['receiving-entry-added', 'receiving-entry-deleted', 'usav-refresh-data']}
       eyebrowTitle="Recent"
       eyebrowSuffix="Same as History"
       autoSelectFirstWhenEmpty

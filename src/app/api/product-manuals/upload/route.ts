@@ -1,11 +1,17 @@
 import { NextResponse } from 'next/server';
 import { put, del } from '@vercel/blob';
 import { withAuth } from '@/lib/auth/withAuth';
+import { docxToPdf } from '@/lib/manuals/docxToPdf';
 import {
   upsertProductManual,
   updateProductManual,
   getProductManualById,
 } from '@/lib/neon/product-manuals-queries';
+
+// LibreOffice conversion runs in a Vercel Sandbox and can take several
+// seconds (longer on a cold sandbox), so we need Node + a generous ceiling.
+export const runtime = 'nodejs';
+export const maxDuration = 120;
 
 /**
  * POST /api/product-manuals/upload
@@ -23,8 +29,13 @@ import {
  * public URL. This route owns the Blob lifecycle so the UI can hand a File
  * straight from `<input type="file">`.
  *
+ * Word docs (.doc/.docx) are auto-converted to PDF via headless LibreOffice
+ * (see lib/manuals/docxToPdf) before upload — the stored blob is always the
+ * PDF; the source Word file is not retained. Applies to both create and
+ * replace, so "Replace file" on a PDF manual accepts a Word doc too.
+ *
  * Form fields:
- *   file          required — the PDF/binary
+ *   file          required — PDF, image, or Word doc (.doc/.docx → converted)
  *   id            optional — when present, replaces the existing manual's blob
  *   displayName   optional — defaults to the file's name (stripped of .pdf)
  *   folderPath    optional — '/'-separated; pre-filled to current breadcrumb
@@ -83,11 +94,37 @@ export const POST = withAuth(
       .replace(/[/\\]/g, '_')
       .replace(/\s+/g, '_')
       .replace(/[^a-zA-Z0-9._-]/g, '');
-    const blobKey = `product-manuals/${Date.now()}_${safeName || 'manual.pdf'}`;
-    const contentType = file.type || 'application/pdf';
+
+    // Word docs (.doc/.docx) are converted to PDF server-side via headless
+    // LibreOffice before they ever touch Blob — the library only ever stores
+    // and previews PDFs, so the .docx is transient (we don't keep the source).
+    const isWordDoc =
+      /\.docx?$/i.test(file.name)
+      || file.type === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+      || file.type === 'application/msword';
 
     try {
-      const buffer = Buffer.from(await file.arrayBuffer());
+      let buffer: Buffer = Buffer.from(await file.arrayBuffer());
+      // Final blob name/type — rewritten to .pdf when we convert a Word doc.
+      let outName = safeName || 'manual.pdf';
+      let contentType = file.type || 'application/pdf';
+
+      if (isWordDoc) {
+        try {
+          buffer = await docxToPdf(buffer);
+        } catch (err) {
+          const detail = err instanceof Error ? err.message : 'conversion failed';
+          console.error('[product-manuals/upload] docx→pdf conversion failed:', err);
+          return NextResponse.json(
+            { success: false, error: `Word→PDF conversion failed: ${detail}` },
+            { status: 502 },
+          );
+        }
+        outName = (safeName || 'manual').replace(/\.docx?$/i, '') + '.pdf';
+        contentType = 'application/pdf';
+      }
+
+      const blobKey = `product-manuals/${Date.now()}_${outName}`;
 
       // Replace flow: load the existing row first so we can clean up its blob.
       let previousSourceUrl: string | null = null;
@@ -142,9 +179,10 @@ export const POST = withAuth(
             itemNumber,
             status,
             thumbnailUrl,
-            // Use the uploaded blob's basename as the file_name so the search
-            // matcher can match against it.
-            fileName: file.name,
+            // Use the stored file's name so the search matcher can match
+            // against it — for converted Word docs that's the .pdf, not the
+            // transient .docx the operator dropped in.
+            fileName: isWordDoc ? file.name.replace(/\.docx?$/i, '') + '.pdf' : file.name,
           });
 
       if (!id && sku) {

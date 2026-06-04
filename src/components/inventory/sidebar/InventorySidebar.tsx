@@ -29,8 +29,8 @@ import {
     getInventorySearchHelperText,
 } from '@/lib/inventory-search';
 import { InventorySidebarTabs } from './InventorySidebarTabs';
-import { FIELD_ICON } from './InventoryScopedSearchBar';
-import { InventoryBucketFilterChips } from './InventoryBucketFilterChips';
+import { FIELD_ICON } from './inventory-sidebar-metadata';
+import { InventorySidebarFilters } from './InventorySidebarFilters';
 import { InventoryCrossTabHandoffCard } from './InventoryCrossTabHandoffCard';
 import { InventoryResultList } from './InventoryResultList';
 import { InventoryRecentSearches } from './InventoryRecentSearches';
@@ -215,13 +215,6 @@ export function InventorySidebar({ embedded = true }: InventorySidebarProps) {
     };
 
     const activeBucketCount = buckets.length;
-    const hasBucketFilters = INVENTORY_BUCKETS[tab].length > 0;
-
-    const fieldItems: HorizontalSliderItem[] = INVENTORY_SEARCH_FIELDS[tab].map((f) => ({
-        id: f.id,
-        label: f.label,
-        icon: FIELD_ICON[f.id],
-    }));
 
     const panelContent = (
         <SidebarShell
@@ -237,27 +230,16 @@ export function InventorySidebar({ embedded = true }: InventorySidebarProps) {
             headerRows={[
                 // Row: tab pills — ACTIVITY / BINS / SKUs / UNITS / …
                 <InventorySidebarTabs key="tabs" value={tab} onChange={handleTabChange} />,
-                // Row: field-scope pills — ALL / SKU / BIN / USER / …
-                <HorizontalButtonSlider
-                    key="field"
-                    items={fieldItems}
-                    value={field}
-                    onChange={(id) => handleFieldChange(id as AnyInventorySearchField)}
-                    variant="nav"
-                    dense
-                    className="w-full"
-                    aria-label={`${tab} search field`}
+                // Unified Filter Popover: Search By (fields) + Status (buckets)
+                <InventorySidebarFilters
+                    key="filters"
+                    tab={tab}
+                    field={field}
+                    onFieldChange={handleFieldChange}
+                    buckets={buckets}
+                    onBucketsChange={handleBucketsChange}
+                    counts={search.counts}
                 />,
-                // Row: bucket filter chips (conditional)
-                hasBucketFilters ? (
-                    <InventoryBucketFilterChips
-                        key="buckets"
-                        tab={tab}
-                        value={buckets}
-                        onChange={handleBucketsChange}
-                        counts={search.counts}
-                    />
-                ) : null,
             ]}
             bodyClassName="scrollbar-hide pb-5 space-y-4"
         >

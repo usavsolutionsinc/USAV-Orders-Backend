@@ -417,17 +417,15 @@ export default function ReceivingDashboard() {
     };
   }, [searchParams]);
 
-  // A receiving line deleted out from under the right pane must never strand the
-  // workspace on a dead id. The sidebar already closes the workspace when its
-  // `selectedLine` matches, but the right pane owns its own `workspace` state and
-  // can outlive that match — so close authoritatively here and, in Receive mode,
-  // drop straight onto the most-recent remaining activity line (the same line the
-  // Recent rail auto-selects). Falls back to an empty pane when nothing's left.
-  useEffect(() => {
-    const handler = (e: Event) => {
-      const deletedId = (e as CustomEvent<{ id?: number }>).detail?.id;
-      if (typeof deletedId !== 'number') return;
-      if (workspaceRef.current?.row.id !== deletedId) return;
+  // Recover the right pane after the line it's showing is removed — either the
+  // single line itself, or the whole carton (receiving log) it belongs to. The
+  // sidebar closes the workspace when its own `selectedLine` matches, but the
+  // right pane owns its `workspace` state and can outlive that match, so recover
+  // authoritatively here. In Receive mode, drop straight onto the most-recent
+  // remaining activity line (the same line the Recent rail auto-selects),
+  // skipping anything just deleted; otherwise fall back to an empty pane.
+  const recoverRightPane = useCallback(
+    (isDeleted: (row: ReceivingLineRow) => boolean) => {
       // Clear immediately so the dead line can't linger during the lookup.
       setWorkspace(null);
       setNav(null);
@@ -438,7 +436,7 @@ export default function ReceivingDashboard() {
       void (async () => {
         try {
           const res = await fetch(
-            `/api/receiving-lines?limit=2&offset=0&view=activity&include=serials`,
+            `/api/receiving-lines?limit=5&offset=0&view=activity&include=serials`,
             { cache: 'no-store' },
           );
           const data = await res.json().catch(() => null);
@@ -446,8 +444,8 @@ export default function ReceivingDashboard() {
             ? (data.receiving_lines as ReceivingLineRow[])
             : [];
           // Guard against an eventually-consistent read still returning the
-          // just-deleted line — never re-open the id we just removed.
-          const next = rows.find((r) => r.id !== deletedId) ?? null;
+          // just-deleted line/carton — never re-open something we removed.
+          const next = rows.find((r) => !isDeleted(r)) ?? null;
           if (workspaceRef.current) return; // operator already moved on
           if (next) dispatchSelectLine(next);
           else dispatchReceivingWorkspaceClose();
@@ -455,10 +453,35 @@ export default function ReceivingDashboard() {
           dispatchReceivingWorkspaceClose();
         }
       })();
+    },
+    [searchParams],
+  );
+
+  // Single line removed (e.g. last item pulled from an unmatched carton).
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const deletedId = (e as CustomEvent<{ id?: number }>).detail?.id;
+      if (typeof deletedId !== 'number') return;
+      if (workspaceRef.current?.row.id !== deletedId) return;
+      recoverRightPane((r) => r.id === deletedId);
     };
     window.addEventListener('receiving-line-deleted', handler);
     return () => window.removeEventListener('receiving-line-deleted', handler);
-  }, [searchParams]);
+  }, [recoverRightPane]);
+
+  // Whole carton (receiving log) removed via the detail panel — `DELETE
+  // /api/receiving-logs`. Carries the carton id as a bare-number detail. If the
+  // line on screen belongs to that carton, jump to the most-recent survivor.
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const cartonId = Number((e as CustomEvent<unknown>).detail);
+      if (!Number.isFinite(cartonId)) return;
+      if (workspaceRef.current?.row.receiving_id !== cartonId) return;
+      recoverRightPane((r) => r.receiving_id === cartonId);
+    };
+    window.addEventListener('receiving-entry-deleted', handler);
+    return () => window.removeEventListener('receiving-entry-deleted', handler);
+  }, [recoverRightPane]);
 
   useEffect(() => {
     const handler = (e: Event) => {

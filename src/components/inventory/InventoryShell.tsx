@@ -10,6 +10,8 @@ import { useInventoryUrlState } from './useInventoryUrlState';
 import { InventoryDetailsOverlay } from './panels/InventoryDetailsOverlay';
 import { ReplenishWorkspace } from '@/components/replenish/ReplenishWorkspace';
 import { PageHeader } from '@/components/ui/pane-header';
+import { cn } from '@/utils/_cn';
+import { receivingHeaderHairlineClass } from '@/components/layout/header-shell';
 
 export function InventoryShell() {
     const { state, sidebar, clearAll } = useInventoryUrlState();
@@ -46,7 +48,7 @@ export function InventoryShell() {
     return (
         <div className="flex h-full min-h-0 flex-col bg-gray-50">
             <PageHeader
-                className="border-gray-200 bg-white"
+                className={cn('border-transparent bg-white', receivingHeaderHairlineClass)}
                 maxWidth="5xl"
                 title="Inventory"
                 rightSlot={

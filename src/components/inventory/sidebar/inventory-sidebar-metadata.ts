@@ -1,0 +1,37 @@
+import {
+    Activity,
+    AlertTriangle,
+    Barcode,
+    Box,
+    ClipboardList,
+    FileText,
+    Layers,
+    Layout,
+    List,
+    MapPin,
+    Package,
+    Tool,
+    User,
+} from '@/components/Icons';
+import type { HorizontalSliderItem } from '@/components/ui/HorizontalButtonSlider';
+
+export const FIELD_ICON: Record<string, HorizontalSliderItem['icon']> = {
+    all: Layers,
+    bin_barcode: Barcode,
+    zone: MapPin,
+    room: Layout,
+    sku_contained: Barcode,
+    sku: Barcode,
+    product_title: FileText,
+    brand: Layout,
+    unit_id: List,
+    serial_number: Tool,
+    order_id: ClipboardList,
+    tracking: Package,
+    bin: Box,
+    user: User,
+    event_type: Activity,
+    rule: AlertTriangle,
+    campaign: ClipboardList,
+    counter: User,
+};
