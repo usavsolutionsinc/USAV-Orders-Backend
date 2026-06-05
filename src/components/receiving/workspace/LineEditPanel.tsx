@@ -27,7 +27,7 @@ import {
 import { ReceiveResponsePanel } from './ReceiveResponsePanel';
 import { ReceivingAuditModal } from './ReceivingAuditModal';
 import { markConditionSet } from './ReceivingProgressStepper';
-import { useSerialLookup } from './SerialMatchResult';
+import { useSerialLookup, type SerialMatchedOrder } from './SerialMatchResult';
 import { PoLinesAccordion } from './PoLinesAccordion';
 import { takeSerialEditHandoff } from './serialEditHandoff';
 import { UnmatchedItemsSection } from './UnmatchedItemsSection';
@@ -126,6 +126,13 @@ export function LineEditPanel({
   // the returned TK # back into the Support FlowSection's existing zendesk
   // field via dispatchLineUpdated.
   const [claimModalOpen, setClaimModalOpen] = useState(false);
+  // RETURN flow: when a scanned serial matches a shipped order, the match band's
+  // "File return claim" CTA seeds this so the claim modal opens pre-populated
+  // with the matched order + serial. Cleared on modal close.
+  const [returnClaimPrefill, setReturnClaimPrefill] = useState<string | null>(null);
+  // Guards the auto-bind-PO# effect so a matched order is only written to the
+  // carton's PO# once (not on every re-render of the found match band).
+  const autoBoundOrderRef = useRef<string | null>(null);
   const [extraTrackings, setExtraTrackings] = useState<string[]>([]);
   const [extraSerials, setExtraSerials] = useState<string[]>([]);
   const serialRef = useRef<HTMLInputElement>(null);
@@ -485,6 +492,51 @@ export function LineEditPanel({
   const filledExtraTrackingsCount = extraTrackings.filter((t) => t.trim().length > 0).length;
   const listingPreviewLabel = listingLinkPreview(listingLink);
 
+  // RETURN flow: pair the carton with the shipped order a scanned serial
+  // matched. We write the matched sales-order # into the carton's PO# (when it
+  // has none yet) so an unfound return "graduates" to a matched carton — the
+  // same mechanism the Ecwid repair-service link uses. Guarded by a ref so a
+  // lingering "found" match band doesn't re-PATCH on every render.
+  useEffect(() => {
+    if (receivingType !== 'RETURN') return;
+    if (serialLookup.state !== 'found') return;
+    const orderNo = (serialLookup.matchedOrder?.order_id || '').trim();
+    if (!orderNo) return;
+    if (poNumber) return; // never overwrite an operator/Zoho-set PO#
+    if (autoBoundOrderRef.current === orderNo) return;
+    autoBoundOrderRef.current = orderNo;
+    void persistPoNumber(orderNo);
+  }, [receivingType, serialLookup.state, serialLookup.matchedOrder, poNumber, persistPoNumber]);
+
+  // Reset the auto-bind guard when the line changes so a new carton can bind
+  // its own matched order.
+  useEffect(() => {
+    autoBoundOrderRef.current = null;
+  }, [row.id]);
+
+  // "File return claim" CTA from the serial-match band: ensure the order is
+  // paired (auto-bind covers the case where the effect was skipped), then open
+  // the claim modal pre-filled with the matched order + serial for review.
+  const handleFileReturnClaim = useCallback(
+    (matchedOrder: SerialMatchedOrder | null, explicitSerial?: string) => {
+      const orderNo = (matchedOrder?.order_id || '').trim();
+      const title = (matchedOrder?.product_title || '').trim();
+      const sn = (explicitSerial ?? serialLookup.serial).trim();
+      if (orderNo && !poNumber) {
+        autoBoundOrderRef.current = orderNo;
+        void persistPoNumber(orderNo);
+      }
+      const lines = ['Return received and matched to a previously shipped order.'];
+      if (title) lines.push(`Item: ${title}.`);
+      if (orderNo) lines.push(`Original order: ${orderNo}.`);
+      if (matchedOrder?.tracking_number) lines.push(`Shipped tracking: ${matchedOrder.tracking_number}.`);
+      if (sn) lines.push(`Serial: ${sn}.`);
+      setReturnClaimPrefill(lines.join(' '));
+      setClaimModalOpen(true);
+    },
+    [serialLookup.serial, poNumber, persistPoNumber],
+  );
+
   const { zohoSyncing, syncWithZoho } = useZohoSync(row, {
     staffId,
     listingLink,
@@ -670,9 +722,11 @@ export function LineEditPanel({
             row.receiving_source === 'unmatched' ? (
               <UnmatchedItemsSection
                 receivingId={row.receiving_id}
+                staffId={staffId}
                 sourcePlatformHint={sourcePlatform || undefined}
                 receivingTypeHint={receivingType}
                 listingUrlHint={listingLink || undefined}
+                onFileReturnClaim={handleFileReturnClaim}
               />
             ) : (
               <PoLinesAccordion
@@ -703,6 +757,7 @@ export function LineEditPanel({
                     serialSubmitting={serialSubmitting}
                     editingSerial={headerSerialEdit}
                     serialLookup={serialLookup}
+                    onFileReturnClaim={handleFileReturnClaim}
                     onSubmitSerial={(sn, grade) => void submitSerial(sn, grade)}
                     onDeleteSerialUnit={(id, lineId) => void deleteSerialUnit(id, lineId)}
                     onReplaceSerialUnit={(original, next) => void replaceSerialUnit(original, next)}
@@ -787,7 +842,11 @@ export function LineEditPanel({
     <ReceivingClaimModal
       open={claimModalOpen}
       row={row}
-      onClose={() => setClaimModalOpen(false)}
+      prefillReason={returnClaimPrefill ?? undefined}
+      onClose={() => {
+        setClaimModalOpen(false);
+        setReturnClaimPrefill(null);
+      }}
       onTicketCreated={(tk) => {
         // Keep the in-memory zendesk value in sync (persisted to the line by
         // the claim route + the Receive/patch save flow). The header pill reads

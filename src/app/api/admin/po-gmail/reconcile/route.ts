@@ -19,7 +19,7 @@ import pool from '@/lib/db';
 import { withAuth } from '@/lib/auth/withAuth';
 import { errorResponse } from '@/lib/api';
 import { listMessageIds, fetchMessagesByIds } from '@/lib/po-gmail/messages';
-import { extractOrderNumbers, extractTrackingNumbers } from '@/lib/po-gmail/extract';
+import { extractOrderNumbers, extractTrackingNumbers, isOrderDeliveredSubject } from '@/lib/po-gmail/extract';
 import {
   fetchMatchesByNormalizedPoNumbers,
   classifyMatches,
@@ -58,6 +58,8 @@ interface ReconcileItem {
   matches: MatchRow[];
   matchedPoNumbers: string[];
   status: ReconciledStatus;
+  /** Subject signals delivery ("ORDER DELIVERED") — logs an email_delivery_signal. */
+  delivered: boolean;
 }
 
 export const GET = withAuth(async (req: NextRequest) => {
@@ -126,6 +128,7 @@ export const GET = withAuth(async (req: NextRequest) => {
         matches,
         matchedPoNumbers: Array.from(matchedPoNumbers),
         status,
+        delivered: isOrderDeliveredSubject(m.subject),
       };
     });
 
@@ -133,6 +136,9 @@ export const GET = withAuth(async (req: NextRequest) => {
     // any existing pending row for the same gmail_msg_id to resolved.
     let upserted = 0;
     let resolved = 0;
+    // "ORDER DELIVERED" emails → email_delivery_signals (drives the Incoming
+    // "Delivered · not scanned" email path). Counted across the run.
+    let deliverySignals = 0;
     // Aggregate Gmail-leg tracking-link counts so the response surfaces
     // exactly how many shipment_id stamps this run produced.
     let trackingLinked = 0;
@@ -144,6 +150,39 @@ export const GET = withAuth(async (req: NextRequest) => {
         await client.query('BEGIN');
 
         for (const item of items) {
+          // Delivery signal is independent of match status: a delivered eBay
+          // order is usually already in receiving (matched), just not scanned
+          // at the dock — so we log it whether or not it's in the worklist.
+          if (item.delivered) {
+            const deliveredAt = item.internalDate ? new Date(Number(item.internalDate)) : null;
+            for (const ord of item.extracted.all) {
+              const ordNorm = normalizeOrderNumber(ord);
+              if (!ordNorm) continue;
+              const { rowCount } = await client.query(
+                `INSERT INTO email_delivery_signals
+                   (gmail_msg_id, gmail_thread_id, order_number, order_number_norm,
+                    email_subject, email_from, snippet, delivered_at)
+                 VALUES ($1, $2, $3, $4, $5, $6, $7, COALESCE($8, NOW()))
+                 ON CONFLICT (organization_id, gmail_msg_id, order_number_norm) DO UPDATE
+                   SET email_subject = EXCLUDED.email_subject,
+                       email_from    = EXCLUDED.email_from,
+                       snippet       = EXCLUDED.snippet,
+                       delivered_at  = EXCLUDED.delivered_at`,
+                [
+                  item.id,
+                  item.threadId,
+                  ord,
+                  ordNorm,
+                  item.subject || null,
+                  item.from || null,
+                  item.snippet || null,
+                  deliveredAt,
+                ],
+              );
+              deliverySignals += rowCount ?? 0;
+            }
+          }
+
           if (item.status === 'missing') {
             const { rowCount } = await client.query(
               `INSERT INTO email_missing_purchase_orders
@@ -247,6 +286,7 @@ export const GET = withAuth(async (req: NextRequest) => {
         ? {
             upserted,
             resolved,
+            delivery_signals: deliverySignals,
             tracking_linked: trackingLinked,
             tracking_already_linked: trackingAlreadyLinked,
             tracking_rejected: trackingRejected,

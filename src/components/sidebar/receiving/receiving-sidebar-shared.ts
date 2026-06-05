@@ -10,7 +10,6 @@
 
 import { COND_LABEL } from '@/components/station/receiving-constants';
 import {
-  AlertTriangle,
   ClipboardList,
   List,
   Package,
@@ -21,13 +20,15 @@ import type { ReceivingLineRow } from '@/components/station/ReceivingLinesTable'
 
 // ── Sidebar mode switcher ───────────────────────────────────────────────────
 
-export type ReceivingMode = 'receive' | 'incoming' | 'history' | 'pickup' | 'unfound';
+export type ReceivingMode = 'receive' | 'incoming' | 'history' | 'pickup';
 
-// Sidebar order: Receiving → Incoming → History → Local Pickup → Unfound.
-// `unfound` is a route-switch (navigates to /receiving/unfound and mounts
-// UnfoundQueueTable as the workspace surface); the other four flip the
-// `?mode=` URL param. updateMode in ReceivingSidebarPanel handles the
-// routing branch so the pill UX stays continuous across the section.
+// Sidebar order: Receiving → Incoming → History → Local Pickup. Each flips the
+// `?mode=` URL param (default `receive` on the bare path).
+//
+// The former `unfound` mode was relocated to Admin › PO Mailbox
+// (?section=po_mailbox) — the email-PO / unmatched triage queue is no longer a
+// receiving mode. Unmatched cartons are still handled inline in the workspace
+// (the synthesized "Unfound" source-platform pill).
 //
 // `incoming` is fed by the /api/cron/zoho/incoming-po-sync delta poller —
 // PO lines Zoho says are issued but not yet received locally. Rows drop
@@ -38,7 +39,6 @@ export const RECEIVING_MODE_ITEMS: HorizontalSliderItem[] = [
   { id: 'incoming', label: 'Incoming',     icon: Package },
   { id: 'history',  label: 'History',      icon: List },
   { id: 'pickup',   label: 'Local Pickup', icon: ShoppingCart },
-  { id: 'unfound',  label: 'Unfound',      icon: AlertTriangle },
 ];
 
 // ── Carton scratch (localStorage) ───────────────────────────────────────────
@@ -155,6 +155,7 @@ export const SOURCE_PLATFORM_OPTS: Array<{ value: string; label: string }> = [
   { value: '',           label: 'Unknown' },
   { value: 'ebay',       label: 'eBay' },
   { value: 'amazon',     label: 'Amazon' },
+  { value: 'fba',        label: 'FBA' },
   { value: 'aliexpress', label: 'AliExp' },
   { value: 'walmart',    label: 'Walmart' },
   { value: 'goodwill',   label: 'Goodwill' },
@@ -169,6 +170,7 @@ export const SOURCE_PLATFORM_OPTS: Array<{ value: string; label: string }> = [
 export const SOURCE_PLATFORM_LABELS: Record<string, string> = {
   ebay: 'eBay',
   amazon: 'Amazon',
+  fba: 'FBA',
   aliexpress: 'AliExpress',
   walmart: 'Walmart',
   goodwill: 'Goodwill',

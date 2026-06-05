@@ -31,6 +31,10 @@ const LABELED_PATTERNS: RegExp[] = [
   /\bReference\s*(?:#|No\.?|Number)?\s*:?\s*([A-Z0-9][A-Z0-9\-_/]{3,20})\b/gi,
   // "Confirmation #: 12345"
   /\bConfirmation\s*(?:#|No\.?|Number)?\s*:?\s*([A-Z0-9][A-Z0-9\-_/]{3,20})\b/gi,
+  // eBay order number — legacy "12-34567-89012" (2-5-5). Distinctive enough to
+  // treat as high-confidence (labeled tier) even when printed bare, because
+  // eBay "Order delivered" emails often show the order# without a label word.
+  /\b(\d{2}-\d{5}-\d{5})\b/g,
 ];
 
 // Unlabeled fallbacks. Only run if labeled patterns found nothing, to
@@ -116,6 +120,20 @@ export function extractTrackingNumbers(text: string): string[] {
     }
   }
   return Array.from(seen);
+}
+
+/**
+ * True when an email subject signals a delivery ("ORDER DELIVERED"). eBay's
+ * delivery notifications phrase this a few ways ("Your order was delivered",
+ * "Order delivered", "Delivered: …"), so we require both tokens rather than an
+ * exact phrase — order# extraction from the body is what actually anchors the
+ * match, so a loose subject gate is safe (a non-delivery email with both words
+ * just yields no new delivery signal once its order# is already scanned).
+ */
+export function isOrderDeliveredSubject(subject: string | null | undefined): boolean {
+  if (!subject) return false;
+  const s = subject.toLowerCase();
+  return s.includes('delivered') && s.includes('order');
 }
 
 export function extractOrderNumbers(text: string): ExtractedOrderNumbers {

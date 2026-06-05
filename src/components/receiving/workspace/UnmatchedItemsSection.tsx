@@ -21,8 +21,15 @@ import {
   EcwidProductSearchPopover,
   type EcwidProductPopoverMode,
 } from '@/components/receiving/unfound/EcwidProductSearchPopover';
-import { ConditionPills } from '@/components/receiving/workspace/ConditionPills';
+import { SerialCard } from '@/components/receiving/workspace/SerialCard';
+import {
+  SerialMatchResult,
+  useSerialLookup,
+  type SerialMatchedOrder,
+  type SerialMatchUnit,
+} from '@/components/receiving/workspace/SerialMatchResult';
 import { markConditionSet } from '@/components/receiving/workspace/ReceivingProgressStepper';
+import { dispatchLineUpdated } from '@/components/station/ReceivingLinesTable';
 import { SkuScanRefChip, getLast4 } from '@/components/ui/CopyChip';
 
 export interface UnfoundLine {
@@ -50,15 +57,22 @@ export interface UnmatchedLineRenderHelpers {
 
 export interface UnmatchedItemsSectionProps {
   receivingId: number;
+  /** Staff id for serial scans (POST /api/receiving/scan-serial). */
+  staffId?: string;
   sourcePlatformHint?: string;
   receivingTypeHint?: string;
   listingUrlHint?: string;
   /**
+   * RETURN flow: a per-line serial that matched a shipped order fires this so
+   * the parent can pair the order with the carton + open a prefilled claim.
+   */
+  onFileReturnClaim?: (matchedOrder: SerialMatchedOrder | null, serial: string) => void;
+  /**
    * Optional render override for the per-line action area (replaces the
-   * default `ConditionPills`). Use this from the testing workspace to drop
-   * in `TestingStatusPills` + `InlineSerialAdder` per line so an unmatched
-   * carton's items can be tested without round-tripping through receiving.
-   * When omitted, the section keeps its default receiving behavior.
+   * default `ConditionPills` + serial card). Use this from the testing
+   * workspace to drop in `TestingStatusPills` + `InlineSerialAdder` per line so
+   * an unmatched carton's items can be tested without round-tripping through
+   * receiving. When omitted, the section keeps its default receiving behavior.
    */
   renderLineActions?: (line: UnfoundLine, helpers: UnmatchedLineRenderHelpers) => React.ReactNode;
 }
@@ -71,15 +85,30 @@ interface CartonResponse {
 
 export function UnmatchedItemsSection({
   receivingId,
+  staffId,
   sourcePlatformHint,
   receivingTypeHint = 'PO',
   listingUrlHint,
+  onFileReturnClaim,
   renderLineActions,
 }: UnmatchedItemsSectionProps) {
   const [lines, setLines] = useState<UnfoundLine[]>([]);
   const [loading, setLoading] = useState(false);
   /** null = closed; 'search' | 'repair_service' = which mode the popover is in. */
   const [popoverMode, setPopoverMode] = useState<EcwidProductPopoverMode | null>(null);
+
+  // Carton-level serial matcher. An unfound carton has no lines until something
+  // is added, so this lets the operator scan a serial directly: on a
+  // shipped-serial match we create a line populated from the matched sales order
+  // (title + sku, classified intake_type='return') and attach the serial — no
+  // manual Add-item step.
+  const [returnScanBusy, setReturnScanBusy] = useState(false);
+  const [returnMatch, setReturnMatch] = useState<{
+    state: 'found' | 'not-found';
+    unit: SerialMatchUnit | null;
+    serial: string;
+    matchedOrder: SerialMatchedOrder | null;
+  } | null>(null);
 
   const refreshLines = useCallback(async () => {
     setLoading(true);
@@ -102,6 +131,82 @@ export function UnmatchedItemsSection({
   useEffect(() => {
     void refreshLines();
   }, [refreshLines]);
+
+  // Scan a returned serial against the whole carton. Looks the serial up; on a
+  // shipped match it creates a return line populated from the matched order and
+  // attaches the serial, so the receiving record shows the right product +
+  // classification with no manual Add-item step.
+  const handleReturnSerialScan = useCallback(
+    async (rawSerial: string) => {
+      const serial = rawSerial.trim();
+      if (!serial || returnScanBusy) return;
+      setReturnScanBusy(true);
+      try {
+        const res = await fetch(
+          `/api/serial-units/lookup?serial=${encodeURIComponent(serial)}`,
+          { cache: 'no-store' },
+        );
+        const data = await res.json().catch(() => null);
+        const found = !!data?.found;
+        const matchedOrder: SerialMatchedOrder | null = data?.matched_order ?? null;
+        const unit: SerialMatchUnit | null = data?.unit ?? null;
+        setReturnMatch({ state: found ? 'found' : 'not-found', unit, serial, matchedOrder });
+
+        if (!found) {
+          toast.error('No shipped match for this serial — use Add item to record it manually.');
+          return;
+        }
+
+        // Create the return line, populated from the matched sales order.
+        const itemName = matchedOrder?.product_title || `Returned serial ${serial}`;
+        const clientEventId = `unfound-return-${receivingId}-${serial}`;
+        const addRes = await fetch('/api/receiving/add-unmatched-line', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Idempotency-Key': clientEventId },
+          body: JSON.stringify({
+            receiving_id: receivingId,
+            item_name: itemName,
+            sku: matchedOrder?.sku || unit?.sku || undefined,
+            intake_type: 'return',
+            client_event_id: clientEventId,
+          }),
+        });
+        const addBody = await addRes.json().catch(() => ({}));
+        if (!addRes.ok || !addBody?.success || !addBody?.line?.id) {
+          toast.error(addBody?.error || 'Could not create the return line');
+          return;
+        }
+
+        // Attach the scanned serial to the new line.
+        const scanRes = await fetch('/api/receiving/scan-serial', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            receiving_id: receivingId,
+            receiving_line_id: addBody.line.id,
+            serial_number: serial,
+            staff_id: Number(staffId) || undefined,
+          }),
+        });
+        const scanBody = await scanRes.json().catch(() => ({}));
+        if (!scanRes.ok || !scanBody?.success) {
+          toast.error(scanBody?.error || 'Line created, but the serial scan failed');
+        }
+
+        await refreshLines();
+        toast.success(
+          matchedOrder?.product_title
+            ? `Matched return: ${matchedOrder.product_title}`
+            : 'Return matched',
+        );
+      } catch (err) {
+        toast.error(err instanceof Error ? err.message : 'Match failed');
+      } finally {
+        setReturnScanBusy(false);
+      }
+    },
+    [receivingId, refreshLines, returnScanBusy, staffId],
+  );
 
   const handleAddLine = useCallback(
     async (selection: {
@@ -306,18 +411,58 @@ export function UnmatchedItemsSection({
       }
     >
       <div className="space-y-2">
+        {/* Primary entry for an unfound carton: scan a serial. On a shipped-serial
+            match we pull the product details and create + populate the line — no
+            manual Add-item step. Always shown (Add item stays as the fallback for
+            serials with no match). */}
+        <div className="rounded-xl border border-emerald-200 bg-emerald-50/50 p-3">
+          <p className="mb-1 text-micro font-black uppercase tracking-[0.14em] text-emerald-700">
+            Scan a serial number
+          </p>
+          <p className="mb-2 text-micro font-medium leading-snug text-emerald-700/80">
+            Pulls the product details from the order it shipped on and adds the line for you.
+          </p>
+          <SerialCard
+            embedded
+            saved={[]}
+            expected={null}
+            isSubmitting={returnScanBusy}
+            showSavedChips={false}
+            onAdd={(sn) => handleReturnSerialScan(sn)}
+            resultSlot={
+              returnMatch ? (
+                <SerialMatchResult
+                  state={returnMatch.state}
+                  unit={returnMatch.unit}
+                  serial={returnMatch.serial}
+                  matchedOrder={returnMatch.matchedOrder}
+                  onFileClaim={
+                    onFileReturnClaim
+                      ? (mo) => onFileReturnClaim(mo, returnMatch.serial)
+                      : undefined
+                  }
+                />
+              ) : undefined
+            }
+          />
+        </div>
         {lines.length === 0 && !loading && (
           <p className="py-6 text-center text-label text-gray-500">
-            No items yet. Click <span className="font-semibold">Add item</span> to
-            search the Ecwid catalog and pick a product.
+            No items yet. Scan a serial above, or click{' '}
+            <span className="font-semibold">Add item</span> to search the Zoho
+            catalog and pick a product.
           </p>
         )}
         {lines.map((line) => (
           <UnmatchedLineRow
             key={line.id}
             line={line}
+            receivingId={receivingId}
+            staffId={staffId}
+            receivingType={receivingTypeHint}
             onConditionChange={handleConditionChange}
             onRemove={handleRemoveLine}
+            onFileReturnClaim={onFileReturnClaim}
             renderActions={
               renderLineActions
                 ? (helpers) => renderLineActions(line, helpers)
@@ -332,6 +477,10 @@ export function UnmatchedItemsSection({
         <EcwidProductSearchPopover
           receivingId={receivingId}
           popoverMode={popoverMode}
+          // "Add item" searches the Zoho catalog (items source of truth), not
+          // Ecwid titles/SKUs. Only affects 'search' mode; 'repair_service'
+          // still loads recent Ecwid -RS orders.
+          searchFieldOverride="zoho_catalog"
           onSelect={handleAddLine}
           onClose={() => setPopoverMode(null)}
         />
@@ -342,8 +491,12 @@ export function UnmatchedItemsSection({
 
 interface UnmatchedLineRowProps {
   line: UnfoundLine;
+  receivingId: number;
+  staffId?: string;
+  receivingType: string;
   onConditionChange: (lineId: number, condition: string) => Promise<void>;
   onRemove: (lineId: number) => Promise<void>;
+  onFileReturnClaim?: (matchedOrder: SerialMatchedOrder | null, serial: string) => void;
   /**
    * When provided, replaces the default ConditionPills with a caller-rendered
    * action area. Receives the same helpers the default renderer uses so the
@@ -355,12 +508,84 @@ interface UnmatchedLineRowProps {
 
 function UnmatchedLineRow({
   line,
+  receivingId,
+  staffId,
+  receivingType,
   onConditionChange,
   onRemove,
+  onFileReturnClaim,
   renderActions,
   refresh,
 }: UnmatchedLineRowProps) {
   const [updating, setUpdating] = useState(false);
+  const [serialSubmitting, setSerialSubmitting] = useState(false);
+  // Per-line serial-match lookup for the RETURN flow — mirrors the matched
+  // carton's SerialCard behavior so an unfound return can be paired to the
+  // order it shipped on.
+  const serialLookup = useSerialLookup();
+  const isReturn = String(receivingType || '').toUpperCase() === 'RETURN';
+  const saved = (line.serials ?? []) as Array<{ id: number; serial_number: string }>;
+
+  // Submit a serial against this unfound line. Runs the return lookup first
+  // (so it reflects prior inventory, not the row we're about to write), then
+  // POSTs the scan and refreshes the carton so the new chip + qty land.
+  const submitSerial = useCallback(
+    async (raw: string) => {
+      const serial = raw.trim();
+      if (!serial || serialSubmitting) return;
+      setSerialSubmitting(true);
+      try {
+        if (isReturn) await serialLookup.check(serial);
+        const res = await fetch('/api/receiving/scan-serial', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            receiving_id: receivingId,
+            receiving_line_id: line.id,
+            serial_number: serial,
+            staff_id: Number(staffId) || undefined,
+            condition_grade: line.condition_grade || undefined,
+          }),
+        });
+        const json = await res.json().catch(() => ({}));
+        if (!res.ok || !json?.success) {
+          toast.error(json?.error || 'Scan failed');
+          return;
+        }
+        dispatchLineUpdated({ id: line.id });
+        refresh();
+      } catch (err) {
+        toast.error(err instanceof Error ? err.message : 'Scan failed');
+      } finally {
+        setSerialSubmitting(false);
+      }
+    },
+    [isReturn, line.condition_grade, line.id, receivingId, refresh, serialLookup, serialSubmitting, staffId],
+  );
+
+  const deleteSerial = useCallback(
+    async (serial: { id?: number; serial_number: string }) => {
+      if (serial.id == null) return;
+      if (!window.confirm(`Remove serial ${serial.serial_number}?`)) return;
+      try {
+        const res = await fetch('/api/receiving/scan-serial', {
+          method: 'DELETE',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ serial_unit_id: serial.id, receiving_line_id: line.id }),
+        });
+        const json = await res.json().catch(() => ({}));
+        if (!res.ok || !json?.success) {
+          toast.error(json?.error || 'Could not remove serial');
+          return;
+        }
+        refresh();
+      } catch (err) {
+        toast.error(err instanceof Error ? err.message : 'Could not remove serial');
+      }
+    },
+    [line.id, refresh],
+  );
+
   const handleCondition = useCallback(
     async (next: string) => {
       if (next === line.condition_grade) return;
@@ -431,12 +656,36 @@ function UnmatchedLineRow({
               refresh,
             })
           ) : (
-            <ConditionPills
-              value={line.condition_grade}
-              onChange={(next) => {
+            // Full serial card per line — integrated condition picker + serial
+            // scan + (RETURN) the serial-match band. This is why an unfound
+            // carton can now capture serials the same way a matched line does.
+            <SerialCard
+              embedded
+              saved={saved}
+              expected={line.quantity_expected ?? null}
+              isSubmitting={serialSubmitting}
+              condition={line.condition_grade}
+              onConditionChange={(next) => {
                 markConditionSet(line.id);
                 void handleCondition(next);
               }}
+              onAdd={(sn) => submitSerial(sn)}
+              onDeleteSerial={(s) => void deleteSerial(s)}
+              resultSlot={
+                isReturn ? (
+                  <SerialMatchResult
+                    state={serialLookup.state}
+                    unit={serialLookup.unit}
+                    serial={serialLookup.serial}
+                    matchedOrder={serialLookup.matchedOrder}
+                    onFileClaim={
+                      onFileReturnClaim
+                        ? (mo) => onFileReturnClaim(mo, serialLookup.serial)
+                        : undefined
+                    }
+                  />
+                ) : undefined
+              }
             />
           )}
         </div>

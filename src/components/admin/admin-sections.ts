@@ -6,6 +6,7 @@ import {
   LayoutDashboard,
   Link2,
   Lock,
+  Mail,
   MapPin,
   Package,
   ShieldCheck,
@@ -20,7 +21,7 @@ export type AdminSection =
   | 'overview'
   | 'goals' | 'staff' | 'access' | 'roles' | 'connections' | 'integrations' | 'fba'
   | 'reason_codes' | 'locations' | 'repair_issues' | 'favorites'
-  | 'station_photos'
+  | 'station_photos' | 'po_mailbox'
   | 'logs' | 'architecture'
   | 'billing';
 
@@ -53,6 +54,7 @@ export const ADMIN_SECTION_OPTIONS: AdminSectionOption[] = [
   { value: 'repair_issues',label: 'Repair Issues',description: 'Global repair issue checklist templates',                       group: 'Data sources', icon: Wrench,       requires: 'repair.intake' },
   { value: 'favorites',    label: 'Favorites',    description: 'Quick-pick SKU shortcuts per workspace',                       group: 'Data sources', icon: Star,         requires: 'sku_stock.manage' },
   { value: 'station_photos',label: 'Receiving Photos', description: 'Per-station NAS folder the photo picker opens to',          group: 'Data sources', icon: Camera },
+  { value: 'po_mailbox',   label: 'PO Mailbox',   description: 'Triage emailed POs not in Zoho, unmatched cartons, and exceptions', group: 'Data sources', icon: Mail, requires: 'receiving.view' },
 
   { value: 'logs',         label: 'Logs',         description: 'Unified audit + station activity logs',                        group: 'System',      icon: FileText,     requires: 'admin.view_logs' },
   { value: 'architecture', label: 'Operations',   description: 'Visual flow of how items move through the system — live audit board', group: 'System',  icon: Share2 },

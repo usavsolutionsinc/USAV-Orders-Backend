@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useLocalStorage } from '@/hooks';
 import { motion } from 'framer-motion';
-import { usePathname, useRouter, useSearchParams } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { toast } from '@/lib/toast';
 import {
   receivingScanBandClass,
@@ -36,7 +36,6 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useMasterNavEnabled } from '@/components/sidebar/master-nav';
 import { printProductLabel } from '@/lib/print/printProductLabel';
 import { LocalPickupSidebarList } from '@/components/work-orders/LocalPickupSidebarList';
-import { UnfoundQueueSidebarToolbar } from '@/components/receiving/unfound/UnfoundQueueSidebarToolbar';
 import {
   type ReceivingLineRow,
 } from '@/components/station/ReceivingLinesTable';
@@ -112,16 +111,11 @@ function buildUnmatchedStubRow(
 export function ReceivingSidebarPanel() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const pathname = usePathname();
   const { isMobile } = useUIModeOptional();
   const masterNavEnabled = useMasterNavEnabled();
   const rawMode = searchParams.get('mode');
-  // /receiving/unfound owns its own mode — pathname takes precedence over
-  // ?mode= so the Unfound pill stays highlighted on the dedicated route.
-  const isUnfoundRoute = pathname?.startsWith('/receiving/unfound') ?? false;
-  const mode: ReceivingMode = isUnfoundRoute
-    ? 'unfound'
-    : rawMode === 'pickup'
+  const mode: ReceivingMode =
+    rawMode === 'pickup'
       ? 'pickup'
       : rawMode === 'history'
         ? 'history'
@@ -873,20 +867,11 @@ export function ReceivingSidebarPanel() {
   }, []);
 
   const updateMode = (nextMode: ReceivingMode) => {
-    // 'unfound' is its own route, not a query-param mode.
-    if (nextMode === 'unfound') {
-      router.push('/receiving/unfound');
-      return;
-    }
     const nextParams = new URLSearchParams(searchParams.toString());
     nextParams.set('mode', nextMode);
     const finalParams =
       nextMode !== 'history' ? clearReceivingHistoryUrlParams(nextParams) : nextParams;
-    // Coming back from /receiving/unfound — push to /receiving so the
-    // workspace mounts; for in-section mode flips, replace preserves history.
-    const target = `/receiving?${finalParams.toString()}`;
-    if (isUnfoundRoute) router.push(target);
-    else router.replace(target);
+    router.replace(`/receiving?${finalParams.toString()}`);
   };
 
   const updateStaff = (id: number) => {
@@ -917,13 +902,6 @@ export function ReceivingSidebarPanel() {
       {mode === 'pickup' ? (
         <div className="min-h-0 flex-1 overflow-hidden">
           <LocalPickupSidebarList />
-        </div>
-      ) : mode === 'unfound' ? (
-        // Unfound queue lives in the right pane (UnfoundQueueTable). The
-        // sidebar carries the toolbar (filter pills + search + refresh) so
-        // the right pane is pure data and the sidebar is pure control.
-        <div className="min-h-0 flex-1 overflow-y-auto">
-          <UnfoundQueueSidebarToolbar />
         </div>
       ) : mode === 'incoming' ? (
         // Incoming = Zoho-sourced expected work. Sidebar owns the search +

@@ -238,14 +238,17 @@ export function EcwidProductSearchPopover({
     async (item: SearchItem) => {
       const displaySku = item.sku ?? item.zoho_sku ?? '';
       if (!displaySku && !item.product_title) return;
+      // Zoho-catalog search rows key on `sku_catalog.id` (the search borrows it),
+      // whereas Ecwid title/SKU rows key on `sku_platform_ids.id`. Map each to
+      // the right field so add-unmatched-line stores the correct FK.
+      const isZohoCatalog = popoverMode === 'search' && searchFieldOverride === 'zoho_catalog';
       setSubmittingId(item.id);
       try {
         await onSelect({
-          sku_platform_id_row: item.id,
-          // sku_catalog_id isn't returned by the platform-search branch; the
-          // server-side add-unmatched-line endpoint accepts null here and can
-          // resolve it from sku_platform_id_row at insert time.
-          sku_catalog_id: null,
+          // For platform rows, the server resolves sku_catalog_id from
+          // sku_platform_id_row at insert time; for Zoho rows we already have it.
+          sku_platform_id_row: isZohoCatalog ? null : item.id,
+          sku_catalog_id: isZohoCatalog ? item.id : null,
           sku: displaySku,
           item_name: item.product_title,
           image_url: item.image_url,
@@ -261,7 +264,7 @@ export function EcwidProductSearchPopover({
         setSubmittingId(null);
       }
     },
-    [onSelect, popoverMode],
+    [onSelect, popoverMode, searchFieldOverride],
   );
 
   const handleManualTitleSubmit = useCallback(async () => {
@@ -357,7 +360,7 @@ export function EcwidProductSearchPopover({
             }}
             className={`${microBadge} rounded px-2 py-1 text-blue-700 transition-colors hover:bg-blue-50`}
           >
-            ← Back to Ecwid search
+            {searchFieldOverride === 'zoho_catalog' ? '← Back to Zoho search' : '← Back to Ecwid search'}
           </button>
         ) : (
           <span className={`${microBadge} text-gray-700`}>

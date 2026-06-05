@@ -1,9 +1,9 @@
 {
   "version": 1,
-  "generatedAt": "2026-06-05T11:29:25Z",
-  "totalRoutes": 510,
+  "generatedAt": "2026-06-05T21:01:16Z",
+  "totalRoutes": 512,
   "summary": {
-    "permissionGated": 426,
+    "permissionGated": 428,
     "authenticatedNoPermission": 18,
     "anonymousIntentional": 45,
     "serviceToService": 3,
@@ -2792,9 +2792,27 @@
       "exemptReason": null
     },
     {
+      "path": "/api/receiving-lines/incoming/refresh/stream/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "gate": "withAuth",
+      "permission": "receiving.view",
+      "exemptReason": null
+    },
+    {
       "path": "/api/receiving-lines/incoming/summary/route.ts",
       "methods": [
         "GET"
+      ],
+      "gate": "withAuth",
+      "permission": "receiving.view",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/receiving-lines/incoming/zoho-refresh/route.ts",
+      "methods": [
+        "POST"
       ],
       "gate": "withAuth",
       "permission": "receiving.view",

@@ -143,9 +143,10 @@ test('resolver matches existing panel derivations for known deep-links', () => {
   const at = (pathname: string, search = '') =>
     ({ pathname, params: new URLSearchParams(search) });
 
-  // Receiving: unfound is a sub-path; mode param drives the rest.
-  assert.equal(resolveSidebarMode('receiving', at('/receiving/unfound')), 'unfound');
+  // Receiving: mode param drives it; default receive. (The former unfound
+  // sub-path was relocated to Admin › PO Mailbox.)
   assert.equal(resolveSidebarMode('receiving', at('/receiving', 'mode=incoming')), 'incoming');
+  assert.equal(resolveSidebarMode('receiving', at('/receiving', 'mode=pickup')), 'pickup');
   assert.equal(resolveSidebarMode('receiving', at('/receiving')), 'receive');
   // FBA defaults to combine, not the leftmost-listed plan.
   assert.equal(resolveSidebarMode('fba', at('/fba')), 'combine');

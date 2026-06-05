@@ -25,6 +25,12 @@ function claimThumb(url: string): string {
 interface Props {
   open: boolean;
   row: ReceivingLineRow;
+  /**
+   * Seeds the "What happened?" note when the modal opens. Used by the RETURN
+   * serial-match CTA to pre-populate the matched order + serial context so the
+   * operator only has to review and submit.
+   */
+  prefillReason?: string;
   onClose: () => void;
   /** Called with the formatted ticket number on success ("#12345"). */
   onTicketCreated: (ticketNumber: string) => void;
@@ -40,7 +46,7 @@ interface Props {
  * Operator can still manually paste a # via the existing affordance if the
  * bridge fails or returns no number.
  */
-export function ReceivingClaimModal({ open, row, onClose, onTicketCreated }: Props) {
+export function ReceivingClaimModal({ open, row, prefillReason, onClose, onTicketCreated }: Props) {
   // Auto-select 'unfound' when the carton has no Zoho match — support's
   // routing for unmatched-tracking claims is different from damage/missing.
   const initialClaimType: ClaimType =
@@ -79,7 +85,9 @@ export function ReceivingClaimModal({ open, row, onClose, onTicketCreated }: Pro
   // different row doesn't show stale template text.
   useEffect(() => {
     if (!open) return;
-    setReason('');
+    // Seed the operator note from a return-match prefill when present so the
+    // claim opens populated; otherwise start blank.
+    setReason(prefillReason ?? '');
     setDraftBody(null);
     setSubject('');
     setDescription('');
@@ -91,7 +99,7 @@ export function ReceivingClaimModal({ open, row, onClose, onTicketCreated }: Pro
     idempotencyKey.current = crypto.randomUUID();
     setPhotos([]);
     setSelectedPhotoIds(new Set());
-  }, [open, row.receiving_id, row.id, row.receiving_source]);
+  }, [open, row.receiving_id, row.id, row.receiving_source, prefillReason]);
 
   // Load the carton's photos so the operator can pick which to attach. Defaults
   // to all selected — attaching everything is the common case; deselect to trim.

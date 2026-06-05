@@ -19,10 +19,11 @@ import { getStationChannelName } from '@/lib/realtime/channels';
 const STATION_CHANNEL = getStationChannelName();
 
 // ── Tab spec ────────────────────────────────────────────────────────────────
-type TabId = 'po' | 'shipment' | 'notes';
+type TabId = 'po' | 'shipment' | 'email' | 'notes';
 const TABS: Array<{ value: TabId; label: string }> = [
   { value: 'po',       label: 'PO' },
   { value: 'shipment', label: 'Shipment' },
+  { value: 'email',    label: 'Email' },
   { value: 'notes',    label: 'Notes' },
 ];
 
@@ -102,6 +103,15 @@ interface DetailsResponse {
     email_received: string | null;
     status: string | null;
     scanned_at: string | null;
+  }>;
+  delivered_emails: Array<{
+    gmail_msg_id: string;
+    gmail_thread_id: string | null;
+    order_number: string;
+    email_subject: string | null;
+    email_from: string | null;
+    snippet: string | null;
+    delivered_at: string | null;
   }>;
   zoho_activity: Array<{
     timestamp: string | null;
@@ -253,6 +263,7 @@ export function IncomingDetailsPanel({ zohoPurchaseOrderId, poNumberHint, onClos
           <div className="p-4">
             {tab === 'po' && <PoTab data={data} />}
             {tab === 'shipment' && <ShipmentTab data={data} />}
+            {tab === 'email' && <EmailTab data={data} />}
             {tab === 'notes' && (
               <NotesTab
                 receivingId={data.receiving?.id ?? null}
@@ -409,6 +420,72 @@ function ShipmentTab({ data }: { data: DetailsResponse }) {
           </ol>
         )}
       </div>
+    </div>
+  );
+}
+
+// Simplified delivery view: just the email(s). An "ORDER DELIVERED" email
+// (eBay) is the delivery signal for the email-driven Delivered · not scanned
+// surface; this tab shows the raw email so the operator can eyeball it. Falls
+// back to any PO-mailbox worklist emails when there's no delivery signal yet.
+function EmailTab({ data }: { data: DetailsResponse }) {
+  const delivered = data.delivered_emails ?? [];
+  const worklist = data.gmail ?? [];
+
+  if (delivered.length === 0 && worklist.length === 0) {
+    return <Empty msg="No PO-mailbox email matched this order yet." />;
+  }
+
+  return (
+    <div className="space-y-3">
+      {delivered.map((e) => (
+        <div key={`d-${e.gmail_msg_id}`} className="rounded-lg border border-rose-200 bg-rose-50 p-3">
+          <div className="flex items-center gap-2">
+            <span className="inline-flex items-center rounded-full bg-rose-600 px-2 py-0.5 text-eyebrow font-black uppercase tracking-wide text-white">
+              Order delivered
+            </span>
+            <span className="tabular-nums text-caption font-bold text-gray-700">{e.order_number}</span>
+            <span className="ml-auto text-eyebrow font-semibold text-gray-500">{fmtDateTime(e.delivered_at)}</span>
+          </div>
+          {e.email_subject ? (
+            <div className="mt-2 text-label font-bold text-gray-900">{e.email_subject}</div>
+          ) : null}
+          {e.email_from ? (
+            <div className="mt-0.5 text-caption font-semibold text-gray-600">{e.email_from}</div>
+          ) : null}
+          {e.snippet ? (
+            <p className="mt-2 whitespace-pre-wrap text-caption leading-relaxed text-gray-700">{e.snippet}</p>
+          ) : null}
+        </div>
+      ))}
+
+      {worklist.length > 0 ? (
+        <div className="space-y-2">
+          {delivered.length > 0 ? (
+            <div className="pt-1 text-eyebrow font-black uppercase tracking-wide text-gray-400">
+              PO mailbox
+            </div>
+          ) : null}
+          {worklist.map((e) => (
+            <div key={`w-${e.gmail_msg_id}`} className="rounded-lg border border-gray-200 bg-white p-3">
+              <div className="flex items-center gap-2">
+                {e.status ? (
+                  <span className="inline-flex items-center rounded-full bg-gray-100 px-2 py-0.5 text-eyebrow font-bold uppercase tracking-wide text-gray-600">
+                    {e.status}
+                  </span>
+                ) : null}
+                <span className="ml-auto text-eyebrow font-semibold text-gray-500">{fmtDateTime(e.email_received)}</span>
+              </div>
+              {e.email_subject ? (
+                <div className="mt-1.5 text-label font-bold text-gray-900">{e.email_subject}</div>
+              ) : null}
+              {e.email_from ? (
+                <div className="mt-0.5 text-caption font-semibold text-gray-600">{e.email_from}</div>
+              ) : null}
+            </div>
+          ))}
+        </div>
+      ) : null}
     </div>
   );
 }

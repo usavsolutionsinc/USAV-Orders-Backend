@@ -1,7 +1,77 @@
 {
-  "generatedAt": "2026-06-04T17:08:26.835Z",
+  "generatedAt": "2026-06-05T20:50:08.652Z",
   "count": 199,
   "commits": [
+    {
+      "sha": "565f85f9cbce93a1e577ef1bfbeb1adff755e3a3",
+      "shortSha": "565f85f9",
+      "date": "2026-06-05T08:43:13-07:00",
+      "author": "DENSENSE8",
+      "subject": "edits to the mobile UI and UX and the components connection",
+      "body": "",
+      "type": "other",
+      "title": "edits to the mobile UI and UX and the components connection"
+    },
+    {
+      "sha": "ed6b2b214ebeb0c9ea5fb3031d1e1189e0462d4d",
+      "shortSha": "ed6b2b21",
+      "date": "2026-06-05T05:39:45-07:00",
+      "author": "DENSENSE8",
+      "subject": "updated the mobile app display to be usable in terms of all the UI and UX flows",
+      "body": "",
+      "type": "other",
+      "title": "updated the mobile app display to be usable in terms of all the UI and UX flows"
+    },
+    {
+      "sha": "4a57370f0c14b6733f4b837a4f7e499324fc2fb3",
+      "shortSha": "4a57370f",
+      "date": "2026-06-05T03:51:16-07:00",
+      "author": "DENSENSE8",
+      "subject": "making updates to the mobile app display for ease of use and better overall UX and UI",
+      "body": "",
+      "type": "other",
+      "title": "making updates to the mobile app display for ease of use and better overall UX and UI"
+    },
+    {
+      "sha": "a0b915c20a2eb81c812dcedc886d5fa6e1b66a2c",
+      "shortSha": "a0b915c2",
+      "date": "2026-06-05T02:18:27-07:00",
+      "author": "DENSENSE8",
+      "subject": "cleaning up the admin page and adding more to the support for the mobiles pages",
+      "body": "",
+      "type": "other",
+      "title": "cleaning up the admin page and adding more to the support for the mobiles pages"
+    },
+    {
+      "sha": "0a5b7d639e61825b3743793708597a9baf8c43ac",
+      "shortSha": "0a5b7d63",
+      "date": "2026-06-04T23:48:10-07:00",
+      "author": "DENSENSE8",
+      "subject": "cleaned up the god components",
+      "body": "",
+      "type": "other",
+      "title": "cleaned up the god components"
+    },
+    {
+      "sha": "ed53df1383931e803196d733a372f43880f52d02",
+      "shortSha": "ed53df13",
+      "date": "2026-06-04T23:05:10-07:00",
+      "author": "DENSENSE8",
+      "subject": "updates to the shipping display logic and the inventory and receiving mobile page",
+      "body": "",
+      "type": "other",
+      "title": "updates to the shipping display logic and the inventory and receiving mobile page"
+    },
+    {
+      "sha": "456088096a3887d265e01cbf7b8639083bd9d415",
+      "shortSha": "45608809",
+      "date": "2026-06-04T10:09:59-07:00",
+      "author": "usavsolutionsinc",
+      "subject": "updated all the packages for a successful build",
+      "body": "",
+      "type": "other",
+      "title": "updated all the packages for a successful build"
+    },
     {
       "sha": "acfaad014c817406cf799193f0cbe05c5770bf90",
       "shortSha": "acfaad01",
@@ -1921,76 +1991,6 @@
       "body": "",
       "type": "other",
       "title": "added cron jobs fixed bugs"
-    },
-    {
-      "sha": "b236ef7010b0262d08426b479651499abae5b235",
-      "shortSha": "b236ef70",
-      "date": "2026-03-17T09:16:26-07:00",
-      "author": "usavsolutionsinc",
-      "subject": "updated ably and details panel to include better styling",
-      "body": "",
-      "type": "other",
-      "title": "updated ably and details panel to include better styling"
-    },
-    {
-      "sha": "f480274cb50fa7c689c6844fdc9785e520a1bb9c",
-      "shortSha": "f480274c",
-      "date": "2026-03-16T15:10:12-07:00",
-      "author": "usavsolutionsinc",
-      "subject": "fixed the tech station",
-      "body": "",
-      "type": "fix",
-      "title": "fixed the tech station"
-    },
-    {
-      "sha": "ceb53d15801915767b09415cd523bfe3bf3083df",
-      "shortSha": "ceb53d15",
-      "date": "2026-03-16T13:09:25-07:00",
-      "author": "usavsolutionsinc",
-      "subject": "tech history fix",
-      "body": "",
-      "type": "other",
-      "title": "tech history fix"
-    },
-    {
-      "sha": "b4f1abb33a2e28b5a066d7a85b36b6b14976e12f",
-      "shortSha": "b4f1abb3",
-      "date": "2026-03-16T12:05:16-07:00",
-      "author": "usavsolutionsinc",
-      "subject": "added ably websocket support and updated the @upnext orders display a ton",
-      "body": "",
-      "type": "other",
-      "title": "added ably websocket support and updated the @upnext orders display a ton"
-    },
-    {
-      "sha": "80df8ae20dc2be0012606c57537f96fd884f1908",
-      "shortSha": "80df8ae2",
-      "date": "2026-03-16T09:02:59-07:00",
-      "author": "usavsolutionsinc",
-      "subject": "updated the work flow for up next orders and pages",
-      "body": "",
-      "type": "other",
-      "title": "updated the work flow for up next orders and pages"
-    },
-    {
-      "sha": "a1e771b346337c4bb20e1f839a31d146482ed9f5",
-      "shortSha": "a1e771b3",
-      "date": "2026-03-13T17:02:01-07:00",
-      "author": "usavsolutionsinc",
-      "subject": "Refine work order details panel workflow",
-      "body": "",
-      "type": "other",
-      "title": "Refine work order details panel workflow"
-    },
-    {
-      "sha": "a26d55ed35db49169b537f23bb1f35fecb048842",
-      "shortSha": "a26d55ed",
-      "date": "2026-03-13T09:06:05-07:00",
-      "author": "usavsolutionsinc",
-      "subject": "overall consistence UX and UI",
-      "body": "",
-      "type": "other",
-      "title": "overall consistence UX and UI"
     }
   ]
 }

@@ -11,6 +11,7 @@ import { LocationsManagementTab } from '@/components/admin/LocationsManagementTa
 import { AdminLogsTab } from '@/components/admin/AdminLogsTab';
 import { OperationsSection } from '@/components/admin/workflow/OperationsSection';
 import { StationNasFoldersTab } from '@/components/admin/StationNasFoldersTab';
+import { PoMailboxAdminSection } from '@/components/admin/PoMailboxAdminSection';
 import { BillingTab } from '@/components/admin/BillingTab';
 import { AdminOverviewTab } from '@/components/admin/AdminOverviewTab';
 import { getAdminSection, type AdminSection } from '@/components/admin/admin-sections';
@@ -41,6 +42,7 @@ function renderTab(
     case 'logs':         return <AdminLogsTab initialSearch={args.searchValue} />;
     case 'architecture': return <OperationsSection mode={args.mode} canManageStock={args.canManageStock} />;
     case 'station_photos': return <StationNasFoldersTab />;
+    case 'po_mailbox':   return <PoMailboxAdminSection />;
     case 'billing':      return <BillingTab />;
     case 'repair_issues': return <RepairIssuesManagementTab />;
     case 'favorites':    return <FavoritesManagementTab />;

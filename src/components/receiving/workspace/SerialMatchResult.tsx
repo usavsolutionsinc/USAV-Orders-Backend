@@ -37,6 +37,20 @@ export interface SerialMatchUnit {
   is_return: boolean;
 }
 
+/**
+ * The original sales order a returned serial was shipped on, resolved by
+ * `/api/serial-units/lookup` (order_unit_allocations → orders). Present only
+ * when the matched unit is a genuine return AND we can trace its order.
+ */
+export interface SerialMatchedOrder {
+  order_id: string | null;
+  product_title: string | null;
+  sku: string | null;
+  condition: string | null;
+  tracking_number: string | null;
+  allocation_state: string | null;
+}
+
 /** Human label for an enum-ish value (current_status / condition_grade). */
 function prettyEnum(value: string): string {
   return value
@@ -62,6 +76,8 @@ export function SerialMatchResult({
   state,
   unit,
   serial,
+  matchedOrder,
+  onFileClaim,
   className,
 }: {
   state: SerialMatchState;
@@ -69,6 +85,14 @@ export function SerialMatchResult({
   unit?: SerialMatchUnit | null;
   /** The serial that was searched — echoed on the not-found row. */
   serial?: string;
+  /** Original shipped order for a returned serial (found + is_return). */
+  matchedOrder?: SerialMatchedOrder | null;
+  /**
+   * When provided and the match is a genuine return, renders a "File return
+   * claim" CTA. The caller pairs the order with the carton + opens the
+   * prefilled claim modal.
+   */
+  onFileClaim?: (matchedOrder: SerialMatchedOrder | null) => void;
   className?: string;
 }) {
   if (state === 'idle') return null;
@@ -127,14 +151,51 @@ export function SerialMatchResult({
       }
     >
       {unit ? (
-        <div className="flex flex-wrap items-center gap-1.5">
-          <MetaPill label="Status" value={prettyEnum(unit.current_status)} />
-          {unit.sku ? <MetaPill label="SKU" value={unit.sku} /> : null}
-          {unit.condition_grade ? (
-            <MetaPill label="Grade" value={prettyEnum(unit.condition_grade)} />
+        <div className="space-y-2">
+          {/* Originating order — the headline of a return match. Shows the
+              product title we shipped + the order # so the operator can
+              confirm the pairing before filing a claim. */}
+          {isReturn && matchedOrder && (matchedOrder.product_title || matchedOrder.order_id) ? (
+            <div className="rounded-lg bg-white/70 px-2.5 py-2 ring-1 ring-inset ring-emerald-200">
+              {matchedOrder.product_title ? (
+                <p className="truncate text-label font-bold text-emerald-900" title={matchedOrder.product_title}>
+                  {matchedOrder.product_title}
+                </p>
+              ) : null}
+              <div className="mt-1 flex flex-wrap items-center gap-1.5">
+                {matchedOrder.order_id ? (
+                  <MetaPill label="Order" value={matchedOrder.order_id} />
+                ) : null}
+                {matchedOrder.condition ? (
+                  <MetaPill label="Sold as" value={prettyEnum(matchedOrder.condition)} />
+                ) : null}
+                {matchedOrder.tracking_number ? (
+                  <MetaPill label="Shipped" value={matchedOrder.tracking_number.slice(-8)} />
+                ) : null}
+              </div>
+            </div>
           ) : null}
-          {unit.current_location ? (
-            <MetaPill label="Bin" value={unit.current_location} />
+          <div className="flex flex-wrap items-center gap-1.5">
+            <MetaPill label="Status" value={prettyEnum(unit.current_status)} />
+            {unit.sku ? <MetaPill label="SKU" value={unit.sku} /> : null}
+            {unit.condition_grade ? (
+              <MetaPill label="Grade" value={prettyEnum(unit.condition_grade)} />
+            ) : null}
+            {unit.current_location ? (
+              <MetaPill label="Bin" value={unit.current_location} />
+            ) : null}
+          </div>
+          {/* Return CTA — pairs the order with the carton + opens a prefilled
+              claim for the operator to review. Only for genuine returns. */}
+          {isReturn && onFileClaim ? (
+            <button
+              type="button"
+              onClick={() => onFileClaim(matchedOrder ?? null)}
+              className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-600 px-3 py-1.5 text-micro font-black uppercase tracking-wider text-white shadow-sm transition-colors hover:bg-emerald-700"
+            >
+              File return claim
+              <span aria-hidden>→</span>
+            </button>
           ) : null}
         </div>
       ) : (
@@ -151,6 +212,7 @@ interface SerialLookupResponse {
   found?: boolean;
   is_return?: boolean;
   unit?: SerialMatchUnit | null;
+  matched_order?: SerialMatchedOrder | null;
 }
 
 /**
@@ -162,6 +224,7 @@ interface SerialLookupResponse {
 export function useSerialLookup() {
   const [state, setState] = useState<SerialMatchState>('idle');
   const [unit, setUnit] = useState<SerialMatchUnit | null>(null);
+  const [matchedOrder, setMatchedOrder] = useState<SerialMatchedOrder | null>(null);
   const [serial, setSerial] = useState('');
   const abortRef = useRef<AbortController | null>(null);
 
@@ -170,6 +233,7 @@ export function useSerialLookup() {
     abortRef.current = null;
     setState('idle');
     setUnit(null);
+    setMatchedOrder(null);
     setSerial('');
   }, []);
 
@@ -188,6 +252,7 @@ export function useSerialLookup() {
     setSerial(trimmed);
     setState('searching');
     setUnit(null);
+    setMatchedOrder(null);
     try {
       const res = await fetch(
         `/api/serial-units/lookup?serial=${encodeURIComponent(trimmed)}`,
@@ -203,9 +268,11 @@ export function useSerialLookup() {
       }
       if (data.found && data.unit) {
         setUnit({ ...data.unit, is_return: !!data.is_return });
+        setMatchedOrder(data.matched_order ?? null);
         setState('found');
       } else {
         setUnit(null);
+        setMatchedOrder(null);
         setState('not-found');
       }
     } catch (err) {
@@ -219,5 +286,5 @@ export function useSerialLookup() {
   // Abort any in-flight request on unmount.
   useEffect(() => () => abortRef.current?.abort(), []);
 
-  return { state, unit, serial, check, reset };
+  return { state, unit, matchedOrder, serial, check, reset };
 }

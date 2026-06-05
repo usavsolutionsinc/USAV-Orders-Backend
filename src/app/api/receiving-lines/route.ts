@@ -14,6 +14,7 @@ import {
   type ReceivingHistorySearchScope,
 } from '@/lib/receiving-history-search';
 import { parseReceivingView } from '@/lib/receiving/receiving-views';
+import { NOT_ZOHO_RECEIVED_PREDICATE } from '@/lib/receiving/delivered-unscanned';
 
 type LineSerial = {
   id: number;
@@ -457,7 +458,10 @@ export const GET = withAuth(async (request: NextRequest) => {
       conditions.push(
         `rl.workflow_status = 'EXPECTED'
          AND COALESCE(rl.quantity_received, 0) = 0
-         AND rl.zoho_purchaseorder_id IS NOT NULL`,
+         AND rl.zoho_purchaseorder_id IS NOT NULL
+         -- Hide POs Zoho now reports received/closed/cancelled (mirror status),
+         -- so a received order drops off Incoming after a Refresh-Zoho sync.
+         AND ${NOT_ZOHO_RECEIVED_PREDICATE}`,
       );
 
       // Optional delivery_state facet filter. Each bucket is the exact same
@@ -470,6 +474,21 @@ export const GET = withAuth(async (request: NextRequest) => {
         // "this box is here but nobody has touched it" signal.
         conditions.push(
           `stn.is_delivered = true
+           AND NOT EXISTS (
+             SELECT 1 FROM receiving_scans rs WHERE rs.receiving_id = r.id
+           )`,
+        );
+      } else if (deliveryStateFilter === 'DELIVERED_EMAIL') {
+        // Email-driven counterpart to DELIVERED_UNOPENED: an "ORDER DELIVERED"
+        // email logged a delivery signal for this PO's order#, and it hasn't
+        // been scanned at the dock yet. Same normalized-order# join key the
+        // summary's getEmailDeliveredUnscannedCount uses, so list === count.
+        conditions.push(
+          `EXISTS (
+             SELECT 1 FROM email_delivery_signals eds
+              WHERE eds.order_number_norm = rl.zoho_purchaseorder_number_norm
+                AND eds.delivered_at > NOW() - interval '30 days'
+           )
            AND NOT EXISTS (
              SELECT 1 FROM receiving_scans rs WHERE rs.receiving_id = r.id
            )`,

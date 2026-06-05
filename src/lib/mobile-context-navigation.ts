@@ -43,7 +43,6 @@ const RECEIVING_MODE_OPTIONS: MobileContextOption[] = [
   { id: 'receive', label: 'Receiving' },
   { id: 'history', label: 'History' },
   { id: 'pickup', label: 'Local Pick Up' },
-  { id: 'unfound', label: 'Unfound' },
 ];
 
 const WALK_IN_MODE_OPTIONS: MobileContextOption[] = [
@@ -115,12 +114,9 @@ export function getMobileContextRowConfig(
       };
     }
     case 'receiving': {
-      const onUnfound =
-        pathname === '/receiving/unfound' || pathname?.startsWith('/receiving/unfound/');
       const qsMode = searchParams.get('mode');
-      const activeId = onUnfound
-        ? 'unfound'
-        : qsMode === 'pickup'
+      const activeId =
+        qsMode === 'pickup'
           ? 'pickup'
           : qsMode === 'history'
             ? 'history'
@@ -131,10 +127,6 @@ export function getMobileContextRowConfig(
         activeId,
         options: RECEIVING_MODE_OPTIONS,
         onSelect: (id) => {
-          if (id === 'unfound') {
-            navigate('/receiving/unfound');
-            return;
-          }
           const params = new URLSearchParams(searchParams.toString());
           if (id === 'pickup') {
             params.set('mode', 'pickup');

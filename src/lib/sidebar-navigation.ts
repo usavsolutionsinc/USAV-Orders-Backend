@@ -1,6 +1,5 @@
 import {
   AlertCircle,
-  AlertTriangle,
   Barcode,
   Box,
   Calendar,
@@ -319,8 +318,8 @@ export const SIDEBAR_PAGE_NAV: SidebarPageNav[] = [
     },
   },
   // ── Receiving ─────────────────────────────────────────────────────────────
-  // `?mode=incoming|history|pickup`; `unfound` lives on the /receiving/unfound
-  // sub-path; default `receive` on the bare /receiving path.
+  // `?mode=incoming|history|pickup`; default `receive` on the bare /receiving
+  // path. The former `unfound` mode was relocated to Admin › PO Mailbox.
   {
     id: 'receiving', label: 'Receiving', href: RECEIVING, icon: ClipboardList, kind: 'station', requires: 'receiving.view',
     modes: [
@@ -328,10 +327,8 @@ export const SIDEBAR_PAGE_NAV: SidebarPageNav[] = [
       { id: 'incoming', label: 'Incoming',     icon: Inbox,          to: () => ({ pathname: RECEIVING, params: { mode: 'incoming' } }) },
       { id: 'history',  label: 'History',      icon: List,           to: () => ({ pathname: RECEIVING, params: { mode: 'history' } }) },
       { id: 'pickup',   label: 'Local Pickup', icon: ShoppingCart,   to: () => ({ pathname: RECEIVING, params: { mode: 'pickup' } }) },
-      { id: 'unfound',  label: 'Unfound',      icon: AlertTriangle,  to: () => ({ pathname: `${RECEIVING}/unfound`, params: { mode: null } }) },
     ],
-    resolveMode: ({ pathname, params }) => {
-      if (pathname.startsWith(`${RECEIVING}/unfound`)) return 'unfound';
+    resolveMode: ({ params }) => {
       const m = params.get('mode');
       if (m === 'pickup') return 'pickup';
       if (m === 'history') return 'history';

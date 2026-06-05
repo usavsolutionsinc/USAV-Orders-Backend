@@ -218,6 +218,32 @@ export const GET = withAuth(async (req: NextRequest) => {
       gmail = gm.rows as typeof gmail;
     }
 
+    // ── Delivery emails ("ORDER DELIVERED" signals for this PO's order#) ────
+    // The simplified Incoming details view: just show the delivery email(s).
+    // Joined on the same normalized order# the delivered-unscanned predicate
+    // uses, so a row that's "Delivered (email)" in the list has its email here.
+    let delivered_emails: Array<{
+      gmail_msg_id: string;
+      gmail_thread_id: string | null;
+      order_number: string;
+      email_subject: string | null;
+      email_from: string | null;
+      snippet: string | null;
+      delivered_at: string | null;
+    }> = [];
+    if (poNumberNorm) {
+      const de = await pool.query(
+        `SELECT gmail_msg_id, gmail_thread_id, order_number, email_subject,
+                email_from, snippet, delivered_at::text
+           FROM email_delivery_signals
+          WHERE order_number_norm = $1
+          ORDER BY delivered_at DESC
+          LIMIT 25`,
+        [poNumberNorm],
+      );
+      delivered_emails = de.rows as typeof delivered_emails;
+    }
+
     // ── Zoho activity (pulled from the raw jsonb if present) ───────────────
     // Zoho Inventory's PO detail sometimes exposes `activity_log` (custom)
     // and almost always exposes `history` or `tax_total`-adjacent timeline
@@ -281,6 +307,7 @@ export const GET = withAuth(async (req: NextRequest) => {
         : null,
       receive_events: receiveEvents,
       gmail,
+      delivered_emails,
       zoho_activity,
       notes: recv?.support_notes ?? null,
     });

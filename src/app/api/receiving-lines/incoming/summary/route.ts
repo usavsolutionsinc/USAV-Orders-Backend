@@ -30,7 +30,9 @@ import { withAuth } from '@/lib/auth/withAuth';
 import {
   getDeliveredUnscannedCount,
   getDeliveredUnscannedByCarrier,
+  getEmailDeliveredUnscannedCount,
   INBOUND_SHIPMENT_PREDICATE,
+  NOT_ZOHO_RECEIVED_PREDICATE,
 } from '@/lib/receiving/delivered-unscanned';
 
 export const dynamic = 'force-dynamic';
@@ -98,7 +100,10 @@ export const GET = withAuth(async (_request: NextRequest) => {
        LEFT JOIN zoho_po_mirror mirror ON mirror.zoho_purchaseorder_id = rl.zoho_purchaseorder_id
        WHERE rl.workflow_status = 'EXPECTED'
          AND COALESCE(rl.quantity_received, 0) = 0
-         AND rl.zoho_purchaseorder_id IS NOT NULL`,
+         AND rl.zoho_purchaseorder_id IS NOT NULL
+         -- Drop POs Zoho now reports received/closed/cancelled, so a
+         -- received order leaves Incoming after a Refresh-Zoho mirror sync.
+         AND ${NOT_ZOHO_RECEIVED_PREDICATE}`,
     );
 
     const row = r.rows[0] ?? {
@@ -121,6 +126,12 @@ export const GET = withAuth(async (_request: NextRequest) => {
     // main delivery_state, so the tile count, the list length, and the row
     // badges agree by construction.
     row.delivered_unopened = await getDeliveredUnscannedCount(pool);
+
+    // Email-driven delivered-unscanned: orders an "ORDER DELIVERED" email
+    // flagged that map to a still-incoming, unscanned receiving line. Shown
+    // alongside the carrier signal (both surface a delivered-but-not-scanned
+    // box; email catches the ones carrier polling misses or can't reach).
+    const deliveredEmail = await getEmailDeliveredUnscannedCount(pool);
 
     // E4 per-carrier breakdown — "USPS: 12 unavailable, FedEx: 3 delivered-
     // unscanned". delivered_unscanned reuses the deduped canonical base (sums to
@@ -153,7 +164,7 @@ export const GET = withAuth(async (_request: NextRequest) => {
       in_transit: aggByCarrier.get(carrier)?.in_transit ?? 0,
     }));
 
-    return NextResponse.json({ success: true, ...row, by_carrier });
+    return NextResponse.json({ success: true, ...row, delivered_email: deliveredEmail, by_carrier });
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Failed to compute summary';
     console.error('receiving-lines/incoming/summary failed:', error);

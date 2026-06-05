@@ -15,7 +15,7 @@
  */
 
 import { useCallback, useRef, useState } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { Mail, RefreshCw, Search } from '@/components/Icons';
 import { toast } from '@/lib/toast';
 import {
@@ -37,6 +37,10 @@ function parseKind(raw: string | null): QueueKind {
 export function UnfoundQueueSidebarToolbar() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  // Stay on the current route (now Admin › PO Mailbox) when writing filter
+  // params — `next` already carries the other params (e.g. ?section=), so we
+  // only swap the pathname-hardcode for the live one.
+  const pathname = usePathname();
 
   const kind = parseKind(searchParams.get('uf_kind'));
   const q = searchParams.get('uf_q') ?? '';
@@ -65,9 +69,9 @@ export function UnfoundQueueSidebarToolbar() {
       const next = new URLSearchParams(searchParams.toString());
       if (value == null || value === '') next.delete(key);
       else next.set(key, value);
-      router.replace(`/receiving/unfound?${next.toString()}`, { scroll: false });
+      router.replace(`${pathname}?${next.toString()}`, { scroll: false });
     },
-    [router, searchParams],
+    [router, searchParams, pathname],
   );
 
   const onKind = useCallback(

@@ -7,7 +7,7 @@
  */
 import React, { MouseEvent, useCallback, useEffect, useId, useRef } from 'react';
 import { isEmptyDisplayValue } from '@/utils/empty-display-value';
-import { Check, Copy, MapPin, Barcode, Settings, Package, ExternalLink, Pencil } from '../Icons';
+import { Check, Copy, MapPin, Barcode, Package, ExternalLink, Pencil } from '../Icons';
 import { monoValue } from '@/design-system/tokens/typography/presets';
 import { useSiteTooltipOptional, type SiteTooltipContextValue } from '@/components/providers/SiteTooltipProvider';
 import { skuScanPrefixBeforeColon, getExternalUrlByItemNumber } from '@/hooks/useExternalItemUrl';
@@ -488,7 +488,7 @@ export const TicketChip = ({ value, display }: { value: string; display: string 
   <CopyChip
     value={value}
     display={display}
-    icon={<Settings className="h-4 w-4 shrink-0" />}
+    icon={<HashIcon />}
     underlineClass="border-orange-500"
     iconClass="text-orange-500"
   />

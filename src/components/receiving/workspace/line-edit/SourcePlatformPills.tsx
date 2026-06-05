@@ -8,6 +8,7 @@ const PLATFORM_ORDER = [
   'ebay',
   'goodwill',
   'amazon',
+  'fba',
   'aliexpress',
   'walmart',
   'ecwid',

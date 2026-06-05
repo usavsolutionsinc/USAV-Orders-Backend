@@ -3,11 +3,14 @@
 import { type ComponentProps } from 'react';
 import { ConditionPills } from '../ConditionPills';
 import { SerialCard } from '../SerialCard';
-import { SerialMatchResult } from '../SerialMatchResult';
+import { SerialMatchResult, type SerialMatchedOrder } from '../SerialMatchResult';
 import { ReceivingUnitRows, type UnitSerial } from '../ReceivingUnitRows';
 import type { ActiveRowSerial } from '../PoLinesAccordion';
 
-type SerialLookupView = Pick<ComponentProps<typeof SerialMatchResult>, 'state' | 'unit' | 'serial'>;
+type SerialLookupView = Pick<
+  ComponentProps<typeof SerialMatchResult>,
+  'state' | 'unit' | 'serial' | 'matchedOrder'
+>;
 
 /**
  * Body rendered inside the active PO line's `activeRowSlot` (PoLinesAccordion).
@@ -31,6 +34,7 @@ export function ActiveLineConditionSerial({
   serialSubmitting,
   editingSerial,
   serialLookup,
+  onFileReturnClaim,
   onSubmitSerial,
   onDeleteSerialUnit,
   onReplaceSerialUnit,
@@ -48,6 +52,8 @@ export function ActiveLineConditionSerial({
   serialSubmitting: boolean;
   editingSerial: ActiveRowSerial | null;
   serialLookup: SerialLookupView;
+  /** RETURN match CTA — pair the order + open the prefilled claim. */
+  onFileReturnClaim?: (matchedOrder: SerialMatchedOrder | null) => void;
   onSubmitSerial: (raw?: string, conditionGrade?: string | null) => void;
   onDeleteSerialUnit: (serialUnitId: number, lineId?: number) => void;
   onReplaceSerialUnit: (
@@ -66,6 +72,8 @@ export function ActiveLineConditionSerial({
         state={serialLookup.state}
         unit={serialLookup.unit}
         serial={serialLookup.serial}
+        matchedOrder={serialLookup.matchedOrder}
+        onFileClaim={onFileReturnClaim}
       />
     ) : undefined;
 

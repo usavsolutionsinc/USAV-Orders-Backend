@@ -6,7 +6,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import type { DateRange } from 'react-day-picker';
 import { SidebarShell } from '@/components/layout/SidebarShell';
 import { DateRangePickerField } from '@/design-system/components/DateRangePickerField';
-import { Package, Truck, AlertTriangle, Clock, ChevronDown, RefreshCw, Filter } from '@/components/Icons';
+import { Package, Truck, AlertTriangle, Clock, ChevronDown, RefreshCw, Filter, Mail } from '@/components/Icons';
 import { toast } from '@/lib/toast';
 import { RECEIVING_HISTORY_URL_PARAMS } from '@/lib/receiving-history-search';
 import {
@@ -24,6 +24,7 @@ import type { CarrierSyncResult, CarrierSyncStreamEvent } from '@/lib/carrier-sy
 /** Facet bucket — mirrors the SQL CASE in /api/receiving-lines view=incoming. */
 export type IncomingDeliveryState =
   | 'DELIVERED_UNOPENED'
+  | 'DELIVERED_EMAIL'
   | 'ARRIVING_TODAY'
   | 'STALLED'
   | 'IN_TRANSIT'
@@ -41,6 +42,7 @@ export interface IncomingCarrierBreakdown {
 export interface IncomingSummary {
   issued: number;
   delivered_unopened: number;
+  delivered_email: number;
   arriving_today: number;
   stalled: number;
   in_transit: number;
@@ -78,6 +80,15 @@ const TILES: TileSpec[] = [
     icon: AlertTriangle,
     title:
       'Carrier marked the box delivered AND no operator has scanned the tracking# at the receiving station yet (no receiving_scans row). Physically here, untouched — top priority.',
+  },
+  {
+    state: 'DELIVERED_EMAIL',
+    label: 'Delivered (email)',
+    key: 'delivered_email',
+    tone: 'rose',
+    icon: Mail,
+    title:
+      'An "ORDER DELIVERED" email (eBay) reported this order delivered AND no operator has scanned it at the receiving station yet. The email-driven counterpart to the carrier signal — catches boxes carrier polling misses.',
   },
   {
     state: 'ARRIVING_TODAY',
@@ -220,7 +231,8 @@ export function IncomingSidebarPanel() {
   const searchParams = useSearchParams();
   const queryClient = useQueryClient();
   const [refreshing, setRefreshing] = useState(false);
-  const [reloading, setReloading] = useState(false);
+  const [zohoRefreshing, setZohoRefreshing] = useState(false);
+  const [rescanning, setRescanning] = useState(false);
 
   // Live "Sync carriers" popover — per-carrier tabs streamed from the
   // /refresh/stream endpoint. Mirrors the dashboard's Order Sync dialog.
@@ -246,20 +258,71 @@ export function IncomingSidebarPanel() {
     ]);
   }, [queryClient]);
 
-  // Cheap "update the display" — re-reads the DB (tiles + rows) WITHOUT calling
-  // any carrier API. This is what reflects cron-poll changes that already landed
-  // server-side; instant and free, so it can be hit liberally.
-  const refreshData = useCallback(async () => {
-    if (reloading) return;
-    setReloading(true);
+  // "Refresh Zoho" — re-pull issued POs AND refresh mirror status, so newly
+  // issued POs appear and *received* ones disappear (the server filter hides
+  // POs Zoho now reports received/closed once the mirror status catches up).
+  const refreshZoho = useCallback(async () => {
+    if (zohoRefreshing) return;
+    setZohoRefreshing(true);
     try {
+      const res = await fetch('/api/receiving-lines/incoming/zoho-refresh', { method: 'POST' });
+      if (!res.ok) throw new Error('zoho refresh failed');
+      const data = await res.json();
       await invalidateIncoming();
-      toast.success('Display updated');
+      const created = data?.issued?.created ?? 0;
+      const updated = data?.issued?.updated ?? 0;
+      const statusUpdates = data?.mirror?.upserted ?? 0;
+      setSyncReport({
+        title: 'Zoho refreshed',
+        ok: true,
+        lines: [
+          `${created} new PO${created === 1 ? '' : 's'} added`,
+          `${updated} PO${updated === 1 ? '' : 's'} refreshed`,
+          `${statusUpdates} Zoho status update${statusUpdates === 1 ? '' : 's'} — received POs cleared`,
+        ],
+      });
+      setSyncReportOpen(true);
+    } catch {
+      setSyncReport({ title: 'Zoho refresh failed', ok: false, lines: ['Could not reach Zoho. Try again.'] });
+      setSyncReportOpen(true);
     } finally {
-      // Brief spin so the action reads as "did something" even when instant.
-      setTimeout(() => setReloading(false), 350);
+      setZohoRefreshing(false);
     }
-  }, [reloading, invalidateIncoming]);
+  }, [zohoRefreshing, invalidateIncoming]);
+
+  // "Rescan PO email" — re-run the mailbox reconcile, which now also logs
+  // "ORDER DELIVERED" emails as delivery signals feeding the email-driven
+  // Delivered · not scanned surface.
+  const rescanEmail = useCallback(async () => {
+    if (rescanning) return;
+    setRescanning(true);
+    try {
+      const res = await fetch('/api/admin/po-gmail/reconcile?limit=50', { cache: 'no-store' });
+      if (!res.ok) throw new Error('rescan failed');
+      const data = await res.json();
+      await invalidateIncoming();
+      const sig = data?.persisted?.delivery_signals ?? 0;
+      const upserted = data?.persisted?.upserted ?? 0;
+      const resolved = data?.persisted?.resolved ?? 0;
+      const trackingLinked = data?.persisted?.tracking_linked ?? 0;
+      setSyncReport({
+        title: 'PO mailbox rescanned',
+        ok: true,
+        lines: [
+          `${sig} "Order delivered" signal${sig === 1 ? '' : 's'} logged`,
+          `${upserted} missing PO${upserted === 1 ? '' : 's'} added`,
+          `${resolved} resolved`,
+          `${trackingLinked} tracking #${trackingLinked === 1 ? '' : 's'} linked`,
+        ],
+      });
+      setSyncReportOpen(true);
+    } catch {
+      setSyncReport({ title: 'PO email rescan failed', ok: false, lines: ['Could not reach the PO mailbox. Try again.'] });
+      setSyncReportOpen(true);
+    } finally {
+      setRescanning(false);
+    }
+  }, [rescanning, invalidateIncoming]);
 
   // Single-filter popover (mirrors the dashboard's ShippedCarrierFilters):
   // every refinement — the delivery-state facet, the PO date range, and the
@@ -286,6 +349,33 @@ export function IncomingSidebarPanel() {
       document.removeEventListener('keydown', onKey);
     };
   }, [filtersOpen]);
+
+  // Sync-result popover: after a Zoho / Email sync, summarize what landed in the
+  // system (new POs, status updates, delivery signals) in a popover below the
+  // sync buttons. Tracking keeps its own richer streaming dialog.
+  const [syncReport, setSyncReport] = useState<
+    { title: string; ok: boolean; lines: string[] } | null
+  >(null);
+  const [syncReportOpen, setSyncReportOpen] = useState(false);
+  const syncReportRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!syncReportOpen) return;
+    const onClick = (e: MouseEvent) => {
+      const target = e.target as HTMLElement;
+      if (syncReportRef.current && !syncReportRef.current.contains(target)) {
+        setSyncReportOpen(false);
+      }
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setSyncReportOpen(false);
+    };
+    document.addEventListener('mousedown', onClick);
+    document.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('mousedown', onClick);
+      document.removeEventListener('keydown', onKey);
+    };
+  }, [syncReportOpen]);
 
   const handleCancelSync = useCallback(() => {
     syncAbortRef.current?.abort();
@@ -497,6 +587,7 @@ export function IncomingSidebarPanel() {
     ? {
         issued: summaryData.issued,
         delivered_unopened: summaryData.delivered_unopened,
+        delivered_email: summaryData.delivered_email ?? 0,
         arriving_today: summaryData.arriving_today,
         stalled: summaryData.stalled ?? 0,
         in_transit: summaryData.in_transit,
@@ -553,38 +644,10 @@ export function IncomingSidebarPanel() {
       search={{ value: search, onChange: setSearch, placeholder: 'Search PO #, tracking, SKU…' }}
       headerBelow={
         <div className="space-y-2 border-b border-gray-200 bg-white pb-2">
-        {/* Two-action refresh row, ABOVE the Filters button so the (absolute,
-            downward) filter popover never overlays it:
-              • Refresh — re-reads the DB (tiles + rows) only; reflects changes
-                the carrier-poll cron already landed. Instant, no carrier calls.
-              • Sync carriers — re-polls UPS/USPS/FedEx for every active tracking
-                number, then re-reads. Slower; rate-limited server-side. */}
-        <div className="flex items-stretch gap-1.5 px-1.5">
-          <button
-            type="button"
-            onClick={() => void refreshData()}
-            disabled={reloading}
-            title="Re-read the latest incoming data (no carrier calls)"
-            className="flex flex-1 items-center justify-center gap-1.5 rounded-md border border-gray-200 bg-white px-2 py-1.5 text-caption font-bold text-gray-700 transition-colors hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-60"
-          >
-            <RefreshCw className={`h-3.5 w-3.5 ${reloading ? 'animate-spin' : ''}`} />
-            {reloading ? 'Updating…' : 'Refresh'}
-          </button>
-          <button
-            type="button"
-            onClick={() => void refreshTracking()}
-            disabled={refreshing}
-            title="Re-poll UPS / USPS / FedEx for all active tracking numbers, then refresh"
-            className="flex flex-1 items-center justify-center gap-1.5 rounded-md border border-blue-200 bg-blue-50 px-2 py-1.5 text-caption font-bold text-blue-700 transition-colors hover:bg-blue-100 disabled:cursor-not-allowed disabled:opacity-60"
-          >
-            <Truck className={`h-3.5 w-3.5 ${refreshing ? 'animate-pulse' : ''}`} />
-            {refreshing ? 'Syncing…' : 'Sync carriers'}
-          </button>
-        </div>
-
         {/* Single filter entry point — the delivery-state facet, PO purchase
             date range, and sort axis all condense into one popover below the
-            search bar (mirrors the dashboard's ShippedCarrierFilters). */}
+            search bar (mirrors the dashboard's ShippedCarrierFilters). Sits
+            ABOVE the sync buttons per the layout: filter first, sync below. */}
         <div className="relative px-1.5" ref={popoverRef}>
           <button
             type="button"
@@ -711,6 +774,87 @@ export function IncomingSidebarPanel() {
                   Clear filters
                 </button>
               ) : null}
+            </div>
+          ) : null}
+        </div>
+
+        {/* Three sync actions, BELOW the filter button. Each refreshes a
+            distinct upstream and re-reads the tiles + rows; Zoho/Email then
+            reveal a popover summarizing what landed in the system:
+              • Zoho — re-pull issued POs + refresh mirror status. New POs
+                appear; received/closed ones drop off the Incoming display.
+              • Tracking — re-poll UPS/USPS/FedEx (streams into its own dialog).
+              • Email — rescan the PO mailbox for "ORDER DELIVERED" emails. */}
+        <div className="relative px-1.5" ref={syncReportRef}>
+          <div className="flex items-stretch gap-1.5">
+            <button
+              type="button"
+              onClick={() => void refreshZoho()}
+              disabled={zohoRefreshing}
+              title="Re-sync Zoho issued POs + mirror status. Received POs clear from Incoming."
+              className="flex flex-1 items-center justify-center gap-1.5 rounded-md border border-emerald-200 bg-emerald-50 px-2 py-1.5 text-caption font-bold text-emerald-700 transition-colors hover:bg-emerald-100 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              <RefreshCw className={`h-3.5 w-3.5 ${zohoRefreshing ? 'animate-spin' : ''}`} />
+              {zohoRefreshing ? 'Zoho…' : 'Zoho'}
+            </button>
+            <button
+              type="button"
+              onClick={() => void refreshTracking()}
+              disabled={refreshing}
+              title="Re-poll UPS / USPS / FedEx for all active tracking numbers, then refresh"
+              className="flex flex-1 items-center justify-center gap-1.5 rounded-md border border-blue-200 bg-blue-50 px-2 py-1.5 text-caption font-bold text-blue-700 transition-colors hover:bg-blue-100 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              <Truck className={`h-3.5 w-3.5 ${refreshing ? 'animate-pulse' : ''}`} />
+              {refreshing ? 'Tracking…' : 'Tracking'}
+            </button>
+            <button
+              type="button"
+              onClick={() => void rescanEmail()}
+              disabled={rescanning}
+              title="Rescan the PO mailbox for ORDER DELIVERED emails, then refresh"
+              className="flex flex-1 items-center justify-center gap-1.5 rounded-md border border-violet-200 bg-violet-50 px-2 py-1.5 text-caption font-bold text-violet-700 transition-colors hover:bg-violet-100 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              <Mail className={`h-3.5 w-3.5 ${rescanning ? 'animate-pulse' : ''}`} />
+              {rescanning ? 'Email…' : 'Email'}
+            </button>
+          </div>
+
+          {/* What-was-updated popover — opens after a Zoho / Email sync. */}
+          {syncReportOpen && syncReport ? (
+            <div
+              role="status"
+              aria-live="polite"
+              className="absolute left-1.5 right-1.5 top-full z-[60] mt-1 rounded-xl border border-gray-200 bg-white p-3 shadow-xl ring-1 ring-black/5"
+            >
+              <div className="flex items-center gap-2">
+                <span
+                  className={`inline-flex h-5 w-5 items-center justify-center rounded-full ${
+                    syncReport.ok ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700'
+                  }`}
+                >
+                  {syncReport.ok ? (
+                    <RefreshCw className="h-3 w-3" />
+                  ) : (
+                    <AlertTriangle className="h-3 w-3" />
+                  )}
+                </span>
+                <span className="flex-1 text-label font-black text-gray-900">{syncReport.title}</span>
+                <button
+                  type="button"
+                  onClick={() => setSyncReportOpen(false)}
+                  className="text-eyebrow font-bold text-gray-400 hover:text-gray-700"
+                >
+                  Close
+                </button>
+              </div>
+              <ul className="mt-2 space-y-1">
+                {syncReport.lines.map((line, i) => (
+                  <li key={i} className="flex items-start gap-1.5 text-caption font-semibold text-gray-600">
+                    <span className="mt-1 h-1 w-1 shrink-0 rounded-full bg-gray-300" />
+                    <span className="tabular-nums">{line}</span>
+                  </li>
+                ))}
+              </ul>
             </div>
           ) : null}
         </div>

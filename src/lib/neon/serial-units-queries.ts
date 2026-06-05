@@ -126,6 +126,99 @@ export async function findByNormalizedSerial(
   return result.rows[0] ?? null;
 }
 
+/**
+ * The shipped order a serial unit was last allocated to. Joins
+ * `order_unit_allocations` (the inventory-v2 link written by `/api/pack/ship`)
+ * back to `orders` and the carton's tracking. Used by the RETURN receiving
+ * flow: when a scanned serial belongs to something we shipped, this resolves
+ * the original sales order so the workspace can pair the return with it and
+ * pre-fill a claim.
+ *
+ * Prefers a SHIPPED allocation, then the most recently allocated one. Scoped to
+ * the caller's organization so a serial can't leak another tenant's order.
+ * Returns null for serials that were never allocated to an order (e.g. legacy
+ * tech_serial_numbers ships that pre-date allocations).
+ */
+export interface MatchedOrderForSerial {
+  order_pk: number;
+  order_id: string | null;
+  product_title: string | null;
+  sku: string | null;
+  condition: string | null;
+  quantity: string | number | null;
+  tracking_number: string | null;
+  allocation_state: string;
+  allocated_at: string | null;
+}
+
+export async function findShippedOrderForSerialUnit(
+  serialUnitId: number,
+  options?: { organizationId?: string | null },
+): Promise<MatchedOrderForSerial | null> {
+  if (!Number.isFinite(serialUnitId)) return null;
+  const orgId = options?.organizationId ?? null;
+  const result = await pool.query<MatchedOrderForSerial>(
+    `SELECT o.id                    AS order_pk,
+            o.order_id              AS order_id,
+            o.product_title         AS product_title,
+            o.sku                   AS sku,
+            o.condition             AS condition,
+            o.quantity              AS quantity,
+            stn.tracking_number_raw AS tracking_number,
+            oua.state               AS allocation_state,
+            oua.allocated_at        AS allocated_at
+       FROM order_unit_allocations oua
+       JOIN orders o ON o.id = oua.order_id
+       LEFT JOIN shipping_tracking_numbers stn ON stn.id = o.shipment_id
+      WHERE oua.serial_unit_id = $1
+        AND ($2::uuid IS NULL OR o.organization_id = $2::uuid)
+      ORDER BY (oua.state = 'SHIPPED') DESC, oua.allocated_at DESC
+      LIMIT 1`,
+    [serialUnitId, orgId],
+  );
+  return result.rows[0] ?? null;
+}
+
+/**
+ * Legacy ship path: resolve the sales order a serial shipped on via
+ * `tech_serial_numbers.shipment_id → orders.shipment_id`. Most serials we
+ * shipped before inventory-v2 (and FBA/tech ships today) are recorded only in
+ * `tech_serial_numbers`, never in `serial_units` — so `findByNormalizedSerial`
+ * misses them. This is the fallback the RETURN lookup uses when the v2
+ * allocation path comes up empty. A serial with a `shipment_id` was attached to
+ * an outbound shipment ⇒ it shipped ⇒ scanning it at receiving is a return.
+ */
+export async function findShippedOrderByTsnSerial(
+  serial: string,
+  options?: { organizationId?: string | null },
+): Promise<(MatchedOrderForSerial & { serial_number: string }) | null> {
+  const normalized = normalizeSerial(serial);
+  if (!normalized) return null;
+  const orgId = options?.organizationId ?? null;
+  const result = await pool.query<MatchedOrderForSerial & { serial_number: string }>(
+    `SELECT o.id                    AS order_pk,
+            o.order_id              AS order_id,
+            o.product_title         AS product_title,
+            o.sku                   AS sku,
+            o.condition             AS condition,
+            o.quantity              AS quantity,
+            stn.tracking_number_raw AS tracking_number,
+            'SHIPPED'               AS allocation_state,
+            t.created_at            AS allocated_at,
+            t.serial_number         AS serial_number
+       FROM tech_serial_numbers t
+       JOIN orders o ON o.shipment_id = t.shipment_id
+       LEFT JOIN shipping_tracking_numbers stn ON stn.id = o.shipment_id
+      WHERE UPPER(t.serial_number) = $1
+        AND t.shipment_id IS NOT NULL
+        AND ($2::uuid IS NULL OR o.organization_id = $2::uuid)
+      ORDER BY t.created_at DESC
+      LIMIT 1`,
+    [normalized, orgId],
+  );
+  return result.rows[0] ?? null;
+}
+
 export async function listByReceivingLine(
   receivingLineId: number,
 ): Promise<SerialUnitRow[]> {

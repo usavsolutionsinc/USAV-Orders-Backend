@@ -1,37 +1,13 @@
-'use client';
-
 /**
- * /receiving/unfound — flat queue of unmatched tracking exceptions.
+ * /receiving/unfound — relocated.
  *
- * Uses the same RouteShell + ReceivingSidebarPanel chrome as /receiving so
- * the Unfound pill (added to RECEIVING_MODE_ITEMS) stays highlighted and
- * operators can flip back to Receive / History / Pickup without leaving
- * the section.
- *
- * Phase 2 baseline shows only `unmatched_receiving` rows. Phase 2.5 will
- * fold in the email_po source (replacing the inventory PO Mailbox UI).
+ * The Unfound queue (email-PO / unmatched triage) is no longer a receiving
+ * mode; it lives at Admin › PO Mailbox. This route now permanently redirects
+ * so old links / bookmarks keep working.
  */
 
-import { Suspense } from 'react';
-import { RouteShell } from '@/design-system/components/RouteShell';
-import { ReceivingSidebarPanel } from '@/components/sidebar/ReceivingSidebarPanel';
-import { UnfoundQueueTable } from '@/components/receiving/unfound/UnfoundQueueTable';
-
-function UnfoundPageInner() {
-  return (
-    <div className="flex h-full min-h-0 w-full flex-col overflow-hidden bg-[linear-gradient(180deg,#f5fbfa_0%,#ffffff_22%)]">
-      <RouteShell
-        actions={<ReceivingSidebarPanel />}
-        history={<UnfoundQueueTable />}
-      />
-    </div>
-  );
-}
+import { redirect } from 'next/navigation';
 
 export default function UnfoundPage() {
-  return (
-    <Suspense>
-      <UnfoundPageInner />
-    </Suspense>
-  );
+  redirect('/admin?section=po_mailbox');
 }
