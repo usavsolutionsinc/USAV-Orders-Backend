@@ -11,6 +11,7 @@ export const getInitialAuthUser = cache(async (): Promise<AuthSessionUser | null
 
   return {
     staffId: current.staffId,
+    name: current.name,
     role: current.role,
     permissions: Array.from(current.permissions),
     mobileDisplayConfig: current.mobileDisplayConfig,

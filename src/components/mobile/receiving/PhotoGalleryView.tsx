@@ -7,6 +7,7 @@ import { MobileTopBar } from '@/components/mobile/receiving/MobileTopBar';
 import { useUploadQueue, photoUploadQueue, type PhotoScope } from '@/components/mobile/receiving/PhotoUploadQueue';
 import { NasPhotoPicker } from '@/components/mobile/receiving/NasPhotoPicker';
 import { nasConfigured } from '@/lib/nas-photos';
+import { useNasConfig } from '@/hooks/useNasConfig';
 import { useRealtimeInvalidation } from '@/hooks/useRealtimeInvalidation';
 
 interface PhotoRow {
@@ -34,6 +35,8 @@ interface GalleryProps {
  */
 export function PhotoGalleryView({ title, subtitle, backHref, scope, captureHref }: GalleryProps) {
   const qc = useQueryClient();
+  // Seed the active NAS base URL so the "NAS" picker button shows at runtime.
+  useNasConfig();
   const queryKey = ['receiving-photos', scope.receivingId, scope.receivingLineId ?? 'po'];
   const queueEntries = useUploadQueue(scope);
   const [zoom, setZoom] = useState<string | null>(null);

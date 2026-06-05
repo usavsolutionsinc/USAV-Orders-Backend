@@ -88,4 +88,14 @@ export const qk = {
     all: ['locations-admin'] as const,
     bins: () => ['locations-admin', 'bins'] as const,
   },
+  staffAccess: {
+    /** Broad invalidation prefix — matches the list and every staff detail. */
+    all: ['staff-access'] as const,
+    /** The sidebar roster (admin?section=access). */
+    list: ['staff-access', 'list'] as const,
+    /** One staffer's detail envelope (identity, roles, perms, creds, audit). */
+    detail: (staffId: number) => ['staff-access', 'detail', staffId] as const,
+    /** One staffer's station assignment (header goal chip). */
+    stations: (staffId: number) => ['staff-access', 'stations', staffId] as const,
+  },
 } as const;

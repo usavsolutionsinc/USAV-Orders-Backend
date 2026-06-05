@@ -28,6 +28,7 @@ import {
 export interface CurrentUser {
   session: SessionRow;
   staffId: number;
+  name: string;
   /** Active tenant for this request — propagated from staff_sessions. */
   organizationId: string;
   /** Primary role key (lowest-position assigned role, or the staff.role column if none). */
@@ -42,6 +43,7 @@ export interface CurrentUser {
 }
 
 interface StaffOverrideRow {
+  name: string | null;
   role: string | null;
   permissions_added: string[] | null;
   permissions_removed: string[] | null;
@@ -51,7 +53,7 @@ interface StaffOverrideRow {
 async function loadStaffOverrides(staffId: number): Promise<StaffOverrideRow | null> {
   try {
     const r = await pool.query(
-      `SELECT role, permissions_added, permissions_removed, mobile_display_config
+      `SELECT name, role, permissions_added, permissions_removed, mobile_display_config
          FROM staff
         WHERE id = $1
         LIMIT 1`,
@@ -104,6 +106,7 @@ async function buildCurrentUser(session: SessionRow | null): Promise<CurrentUser
   return {
     session,
     staffId: session.staffId,
+    name: overrides?.name ?? 'Unknown',
     organizationId: session.organizationId,
     role,
     roles,

@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useMemo } from 'react';
+import { useCallback, useEffect, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   MobilePackerSpamCamera,
@@ -12,6 +12,7 @@ import {
   useUploadQueue,
   type PhotoScope,
 } from '@/components/mobile/receiving/PhotoUploadQueue';
+import { useNasConfig } from '@/hooks/useNasConfig';
 
 interface PhotoCaptureSurfaceProps {
   /** PO receiving package id — required (every photo binds to a receiving row). */
@@ -48,6 +49,13 @@ export function PhotoCaptureSurface({
 }: PhotoCaptureSurfaceProps) {
   const router = useRouter();
   useClearDoneOnUnmount();
+
+  // Point the upload queue at the active (test/prod) NAS + this operator's
+  // folder so captured photos write straight to the NAS share.
+  const nas = useNasConfig();
+  useEffect(() => {
+    if (nas) photoUploadQueue.configureNas(nas);
+  }, [nas]);
 
   const scope = useMemo<PhotoScope>(
     () => ({ receivingId, receivingLineId }),

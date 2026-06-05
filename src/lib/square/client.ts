@@ -36,21 +36,41 @@ function resolveSquareBaseUrl(): string {
   return SQUARE_PRODUCTION_BASE_URL;
 }
 
-export function getSquareConfig(): SquareConfig {
+/**
+ * Build a SquareConfig. With no override, all fields come from env (the
+ * original single-tenant behavior — throws if token/location missing).
+ *
+ * When `accessTokenOverride` is supplied (e.g. a Nango-managed token for a
+ * per-tenant connection), the token is taken from the override and the
+ * non-secret fields (base URL, version, currency, location) still come from
+ * env defaults. locationId is best-effort in that mode rather than required,
+ * since per-tenant location resolution is a follow-up — see
+ * src/lib/square/server.ts.
+ */
+export function buildSquareConfig(accessTokenOverride?: string): SquareConfig {
   return {
     baseUrl: resolveSquareBaseUrl(),
-    accessToken: requiredEnvAny('SQUARE_ACCESS_TOKEN', [
+    accessToken: accessTokenOverride ?? requiredEnvAny('SQUARE_ACCESS_TOKEN', [
       'SQUARE_TOKEN',
       'SQUARE_API_TOKEN',
       'NEXT_PUBLIC_SQUARE_ACCESS_TOKEN',
     ]),
     version: process.env.SQUARE_VERSION || '2024-01-18',
-    locationId: requiredEnvAny('SQUARE_LOCATION_ID', [
-      'SQUARE_DEFAULT_LOCATION_ID',
-      'NEXT_PUBLIC_SQUARE_LOCATION_ID',
-    ]),
+    locationId: accessTokenOverride
+      ? (process.env.SQUARE_LOCATION_ID?.trim()
+        || process.env.SQUARE_DEFAULT_LOCATION_ID?.trim()
+        || process.env.NEXT_PUBLIC_SQUARE_LOCATION_ID?.trim()
+        || '')
+      : requiredEnvAny('SQUARE_LOCATION_ID', [
+        'SQUARE_DEFAULT_LOCATION_ID',
+        'NEXT_PUBLIC_SQUARE_LOCATION_ID',
+      ]),
     currency: (process.env.SQUARE_CURRENCY || 'USD').trim().toUpperCase(),
   };
+}
+
+export function getSquareConfig(): SquareConfig {
+  return buildSquareConfig();
 }
 
 export function formatSquareErrors(errors: SquareError[] | undefined): string {

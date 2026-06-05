@@ -37,6 +37,20 @@ export const OrgSettingsSchema = z.object({
   // Admin-configured (see StationNasFoldersTab); resolved per-operator via
   // their primary station.
   stationNasPhotoFolders: z.record(z.string(), z.string()).default({}),
+  // Receiving photos are written straight to the office NAS over WebDAV — the
+  // browser PUTs to whichever base URL is `active`. Two slots so an admin can
+  // keep a testing NAS and the production NAS configured and flip between them
+  // without retyping. Values are the base URL of the (Cloudflare-fronted) NAS
+  // file server, no trailing slash, e.g. "https://nas.usav.example". Admin-
+  // configured (see StationNasFoldersTab); the active URL is surfaced to the
+  // client via GET /api/nas-config.
+  nasPhotoServers: z
+    .object({
+      test: z.string().default(''),
+      prod: z.string().default(''),
+      active: z.enum(['test', 'prod']).default('prod'),
+    })
+    .default({ test: '', prod: '', active: 'prod' }),
 }).passthrough();
 
 export type OrgSettings = z.infer<typeof OrgSettingsSchema>;
@@ -46,4 +60,29 @@ export function parseOrgSettings(raw: unknown): OrgSettings {
   // than crashing the request that needs them.
   const result = OrgSettingsSchema.safeParse(raw ?? {});
   return result.success ? result.data : OrgSettingsSchema.parse({});
+}
+
+/**
+ * The base URL the browser should write/read receiving photos against, picked
+ * from whichever NAS slot (`test` | `prod`) the admin has marked active. Empty
+ * string when nothing is configured. No trailing slash.
+ */
+export function getActiveNasBaseUrl(settings: OrgSettings): string {
+  const servers = settings.nasPhotoServers;
+  if (!servers) return '';
+  const url = servers.active === 'test' ? servers.test : servers.prod;
+  return (url || '').trim().replace(/\/+$/, '');
+}
+
+/**
+ * Every configured NAS base URL (test + prod), used as the server-side origin
+ * allowlist when accepting a `photoUrl` on /api/receiving-photos. No trailing
+ * slashes; empties dropped.
+ */
+export function getAllNasBaseUrls(settings: OrgSettings): string[] {
+  const servers = settings.nasPhotoServers;
+  if (!servers) return [];
+  return [servers.test, servers.prod]
+    .map((u) => (u || '').trim().replace(/\/+$/, ''))
+    .filter(Boolean);
 }

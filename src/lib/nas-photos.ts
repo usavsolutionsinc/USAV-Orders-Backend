@@ -16,8 +16,22 @@
 import type { PhotoScope } from '@/components/mobile/receiving/PhotoUploadQueue';
 
 // Base URL of the NAS file server, e.g. "https://nas.usav.local" or, for local
-// dev, "http://192.168.1.50:8088". No trailing slash.
-const BASE = (process.env.NEXT_PUBLIC_NAS_PHOTOS_BASE_URL || '').replace(/\/+$/, '');
+// dev, "http://192.168.1.50:8088" / "/api/nas-dev". No trailing slash.
+//
+// This used to be a build-time constant from NEXT_PUBLIC_NAS_PHOTOS_BASE_URL.
+// It's now a RUNTIME value so an admin can flip between a test and a production
+// NAS without a rebuild: the active URL comes from org settings via
+// GET /api/nas-config and is pushed in with `setNasBaseUrl()` (see
+// `useEnsureNasConfig`). The env var is kept only as an initial dev seed.
+let runtimeBase = (process.env.NEXT_PUBLIC_NAS_PHOTOS_BASE_URL || '').replace(/\/+$/, '');
+
+export function setNasBaseUrl(url: string | null | undefined): void {
+  runtimeBase = (url || '').replace(/\/+$/, '');
+}
+
+export function getNasBaseUrl(): string {
+  return runtimeBase;
+}
 
 // Only web-renderable formats. HEIC (iPhone default) is intentionally excluded
 // — Chrome/Android can't display it, and we attach by URL with no transcode.
@@ -25,7 +39,7 @@ const BASE = (process.env.NEXT_PUBLIC_NAS_PHOTOS_BASE_URL || '').replace(/\/+$/,
 const IMAGE_RE = /\.(jpe?g|png|webp|gif)$/i;
 
 export function nasConfigured(): boolean {
-  return BASE.length > 0;
+  return getNasBaseUrl().length > 0;
 }
 
 export interface NasEntry {
@@ -65,7 +79,7 @@ function rawMtime(e: RawEntry): string | undefined {
 function joinUrl(relPath: string): string {
   // Encode each segment but keep the slashes so nested folders resolve.
   const encoded = relPath.split('/').map(encodeURIComponent).join('/');
-  return `${BASE}/${encoded}`;
+  return `${getNasBaseUrl()}/${encoded}`;
 }
 
 /**
@@ -74,10 +88,11 @@ function joinUrl(relPath: string): string {
  * Throws a receiver-friendly message on the common failure modes.
  */
 export async function listNasDir(relDir: string): Promise<NasEntry[]> {
-  if (!BASE) throw new Error('NAS photo server is not configured.');
+  const base = getNasBaseUrl();
+  if (!base) throw new Error('NAS photo server is not configured.');
   const clean = relDir.replace(/^\/+|\/+$/g, '');
   // autoindex only triggers on a trailing slash.
-  const url = `${BASE}/${clean ? `${clean.split('/').map(encodeURIComponent).join('/')}/` : ''}`;
+  const url = `${base}/${clean ? `${clean.split('/').map(encodeURIComponent).join('/')}/` : ''}`;
 
   let res: Response;
   try {
@@ -122,6 +137,8 @@ export interface AttachResult {
   url: string;
   ok: boolean;
   duplicate: boolean;
+  /** photos.id of the created/looked-up row, when the endpoint returned it. */
+  photoId?: number | null;
   error?: string;
 }
 
@@ -132,7 +149,7 @@ export interface AttachResult {
  * benign no-op so re-selecting the same shot doesn't error.
  *
  * Note: deleting such a photo later removes only the DB row — the original file
- * stays on the NAS (the delete route only purges Vercel Blob URLs).
+ * stays on the NAS.
  */
 export async function attachNasPhoto(scope: PhotoScope, photoUrl: string): Promise<AttachResult> {
   let res: Response;
@@ -154,5 +171,80 @@ export async function attachNasPhoto(scope: PhotoScope, photoUrl: string): Promi
     const data = await res.json().catch(() => null);
     return { url: photoUrl, ok: false, duplicate: false, error: data?.error || `HTTP ${res.status}` };
   }
-  return { url: photoUrl, ok: true, duplicate: false };
+  const data = await res.json().catch(() => null);
+  const photoId = Number(data?.photo?.id ?? data?.id ?? 0) || null;
+  return { url: photoUrl, ok: true, duplicate: false, photoId };
+}
+
+/**
+ * Build the NAS destination URL for a freshly captured receiving photo. The PO
+ * (and line) is encoded into the FILENAME, written flat into the operator's
+ * configured folder — NOT a per-PO subfolder. WebDAV `PUT` returns 409 when the
+ * parent collection doesn't exist (it won't auto-create `PO_123/`), so a flat
+ * name keeps writes working against a plain WebDAV server and the dev proxy
+ * alike, while still grouping by PO when a human sorts the folder by name:
+ *   {baseUrl}/{folder}/PO_{receivingId}[_L{lineId}]__{filename}
+ * `filename` is derived from a stable per-capture id, so a Retry overwrites the
+ * same path (idempotent) instead of littering duplicates.
+ */
+export function buildNasPhotoUrl(opts: {
+  baseUrl: string;
+  folder: string;
+  scope: PhotoScope;
+  filename: string;
+}): string {
+  const { baseUrl, folder, scope, filename } = opts;
+  const prefix =
+    scope.receivingLineId != null
+      ? `PO_${scope.receivingId}_L${scope.receivingLineId}__`
+      : `PO_${scope.receivingId}__`;
+  const segments: string[] = [];
+  const cleanFolder = (folder || '').replace(/^\/+|\/+$/g, '');
+  if (cleanFolder) segments.push(...cleanFolder.split('/'));
+  segments.push(`${prefix}${filename}`);
+  const encoded = segments.map(encodeURIComponent).join('/');
+  return `${baseUrl.replace(/\/+$/, '')}/${encoded}`;
+}
+
+export interface PutResult {
+  ok: boolean;
+  /** Canonical URL the file now lives at — store this as the photoUrl. */
+  url: string;
+  error?: string;
+}
+
+/**
+ * Write one captured photo straight to the NAS over WebDAV (HTTP PUT). The app
+ * is Vercel-hosted and can't reach the LAN, so the BROWSER does this PUT against
+ * the Cloudflare-fronted NAS endpoint. `credentials: 'include'` lets a Cloudflare
+ * Access cookie ride along when the endpoint is protected.
+ *
+ * The NAS file server must allow PUT for this path and answer the CORS preflight
+ * (Access-Control-Allow-Methods: PUT, Allow-Origin: <app origin>) — see the
+ * deploy notes. Returns the destination URL on success so the caller can attach
+ * it to the receiving row.
+ */
+export async function putNasPhoto(url: string, blob: Blob): Promise<PutResult> {
+  let res: Response;
+  try {
+    res = await fetch(url, {
+      method: 'PUT',
+      body: blob,
+      headers: { 'Content-Type': blob.type || 'image/jpeg' },
+      credentials: 'include',
+      cache: 'no-store',
+    });
+  } catch {
+    // Network error, CORS rejection, or mixed-content block all land here.
+    return {
+      ok: false,
+      url,
+      error:
+        "Can't reach the NAS to save the photo. Check you're on the office " +
+        'network and the NAS is reachable (and served over HTTPS on the live site).',
+    };
+  }
+  // 200/201 (created) and 204 (overwritten) are all success for WebDAV PUT.
+  if (res.ok || res.status === 201 || res.status === 204) return { ok: true, url };
+  return { ok: false, url, error: `NAS write failed (HTTP ${res.status}).` };
 }

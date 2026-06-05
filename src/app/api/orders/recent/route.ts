@@ -29,7 +29,7 @@ interface DateGroup {
 /**
  * GET /api/orders/recent?days=7
  * Returns all orders (shipped + unshipped) from the last N days,
- * grouped by creation date descending. Used by ManualAssignmentSidebarPanel.
+ * grouped by creation date descending.
  */
 export const GET = withAuth(async (req: NextRequest) => {
   const startedAt = Date.now();

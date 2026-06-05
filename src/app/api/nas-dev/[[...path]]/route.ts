@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { stat, readdir, readFile } from 'node:fs/promises';
-import { join, resolve, sep, extname } from 'node:path';
+import { stat, readdir, readFile, writeFile, mkdir } from 'node:fs/promises';
+import { join, resolve, sep, extname, dirname } from 'node:path';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -164,4 +164,53 @@ export async function GET(
       'Cache-Control': 'no-store',
     },
   });
+}
+
+/**
+ * Write one captured photo to the mounted NAS folder (the local-dev equivalent
+ * of a WebDAV PUT against the real NAS). Same enable gate + path-traversal guard
+ * as GET, and restricted to image files so this can't be turned into a general
+ * file drop. Parent folders (e.g. PO_123/) are created on demand.
+ *
+ * This mirrors the production write path so the mobile capture flow is testable
+ * end-to-end locally: the browser PUTs same-origin to /api/nas-dev/<path>, and
+ * the file lands on the SMB mount.
+ */
+export async function PUT(
+  req: NextRequest,
+  { params }: { params: Promise<{ path?: string[] }> },
+) {
+  if (!ENABLED) {
+    return NextResponse.json(
+      { error: 'nas-dev is disabled (set NAS_DEV_ROOT to enable in a production build)' },
+      { status: 404 },
+    );
+  }
+
+  const { path: segments = [] } = await params;
+  const target = resolve(ROOT, segments.join('/'));
+
+  // Path-traversal guard: the resolved path must stay inside ROOT, and we only
+  // accept web-renderable image files (no arbitrary writes).
+  if (!target.startsWith(ROOT + sep)) {
+    return NextResponse.json({ error: 'forbidden' }, { status: 403 });
+  }
+  if (!IMAGE_RE.test(target)) {
+    return NextResponse.json({ error: 'only image files are allowed' }, { status: 400 });
+  }
+
+  const body = await req.arrayBuffer();
+  if (body.byteLength === 0) {
+    return NextResponse.json({ error: 'empty body' }, { status: 400 });
+  }
+
+  try {
+    await mkdir(dirname(target), { recursive: true });
+    await writeFile(target, Buffer.from(body));
+  } catch {
+    return NextResponse.json({ error: 'write failed' }, { status: 500 });
+  }
+
+  // 201 Created — the nas-photos client treats 200/201/204 as success.
+  return new NextResponse(null, { status: 201 });
 }

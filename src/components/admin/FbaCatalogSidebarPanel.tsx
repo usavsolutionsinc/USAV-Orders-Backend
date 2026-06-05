@@ -12,9 +12,13 @@ import { useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { qk } from '@/queries/keys';
 import {
+  HorizontalButtonSlider,
+  type HorizontalSliderItem,
+} from '@/components/ui/HorizontalButtonSlider';
+import { AlertTriangle, Check, Layers } from '@/components/Icons';
+import {
   AdminSidebarShell,
   AdminPickerRow,
-  StatPill,
   useAdminUrlState,
 } from './shared';
 
@@ -23,6 +27,20 @@ interface FbaFnskuRow {
   asin: string | null;
   sku: string | null;
   fnsku: string | null;
+}
+
+type FbaFilter = 'all' | 'hydrated' | 'stubs';
+
+function asFilter(value: string | null): FbaFilter {
+  return value === 'hydrated' || value === 'stubs' ? value : 'all';
+}
+
+function isStubRow(r: FbaFnskuRow): boolean {
+  return (
+    !String(r.product_title || '').trim() &&
+    !String(r.asin || '').trim() &&
+    !String(r.sku || '').trim()
+  );
 }
 
 function emitOpenAddFba() {
@@ -37,6 +55,7 @@ export function FbaCatalogSidebarPanel() {
   const { searchParams, setParam } = useAdminUrlState();
   const search = searchParams.get('search') ?? '';
   const selected = searchParams.get('fnsku') ?? '';
+  const filter = asFilter(searchParams.get('fbaFilter'));
 
   const { data, isLoading } = useQuery<{ rows: FbaFnskuRow[] }>({
     queryKey: qk.adminFbaFnskus.list(search),
@@ -53,16 +72,28 @@ export function FbaCatalogSidebarPanel() {
 
   const rows = useMemo(() => data?.rows ?? [], [data]);
 
+  // Counts always reflect the full (search-scoped) result set so the pills
+  // keep showing totals even while a filter narrows the visible list.
   const stats = useMemo(() => {
     const total = rows.length;
-    const stubs = rows.filter(
-      (r) =>
-        !String(r.product_title || '').trim() &&
-        !String(r.asin || '').trim() &&
-        !String(r.sku || '').trim(),
-    ).length;
+    const stubs = rows.filter(isStubRow).length;
     return { total, stubs, hydrated: total - stubs };
   }, [rows]);
+
+  const visibleRows = useMemo(() => {
+    if (filter === 'hydrated') return rows.filter((r) => !isStubRow(r));
+    if (filter === 'stubs') return rows.filter(isStubRow);
+    return rows;
+  }, [rows, filter]);
+
+  const filterItems = useMemo<HorizontalSliderItem[]>(
+    () => [
+      { id: 'all', label: 'All', icon: Layers, count: stats.total },
+      { id: 'hydrated', label: 'Hydrated', icon: Check, count: stats.hydrated },
+      { id: 'stubs', label: 'Stubs', icon: AlertTriangle, count: stats.stubs },
+    ],
+    [stats],
+  );
 
   return (
     <AdminSidebarShell
@@ -77,12 +108,21 @@ export function FbaCatalogSidebarPanel() {
         placeholder: 'Search FNSKU, title, ASIN, SKU',
         variant: 'blue',
       }}
-      stats={
-        <>
-          <StatPill label="Total" value={stats.total} />
-          <StatPill label="Hydrated" value={stats.hydrated} tone="green" />
-          {stats.stubs > 0 ? <StatPill label="Stubs" value={stats.stubs} tone="purple" /> : null}
-        </>
+      filters={
+        <HorizontalButtonSlider
+          items={filterItems}
+          value={filter}
+          onChange={(next) =>
+            setParam((p) => {
+              if (next === 'all') p.delete('fbaFilter');
+              else p.set('fbaFilter', next);
+            })
+          }
+          variant="nav"
+          dense
+          className="w-full"
+          aria-label="FNSKU catalog filter"
+        />
       }
       action={
         <div className="grid grid-cols-2 gap-2">
@@ -130,16 +170,15 @@ export function FbaCatalogSidebarPanel() {
     >
       {isLoading ? (
         <div className="px-2 py-6 text-center text-xs text-gray-400">Loading catalog…</div>
-      ) : rows.length === 0 ? (
-        <div className="px-2 py-6 text-center text-xs text-gray-400">No FNSKUs.</div>
+      ) : visibleRows.length === 0 ? (
+        <div className="px-2 py-6 text-center text-xs text-gray-400">
+          {rows.length === 0 ? 'No FNSKUs.' : `No ${filter} FNSKUs.`}
+        </div>
       ) : (
         <ul className="space-y-1.5">
-          {rows.map((row, i) => {
+          {visibleRows.map((row, i) => {
             const fnsku = row.fnsku ?? '';
-            const isStub =
-              !String(row.product_title || '').trim() &&
-              !String(row.asin || '').trim() &&
-              !String(row.sku || '').trim();
+            const isStub = isStubRow(row);
             return (
               <li key={`${fnsku}-${i}`}>
                 <AdminPickerRow

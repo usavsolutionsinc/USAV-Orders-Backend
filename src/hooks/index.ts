@@ -8,10 +8,12 @@
  *   _storage.ts    useLocalStorage, useSessionStorage
  *   _ui.ts         useScrollPosition, useWindowSize, useToggle, useInView, useClickOutside, useMediaQuery, useIsMobile, useDeviceMode
  *   useKeyboard.ts useKeyboard (mobile virtual keyboard detection via Visual Viewport API)
- *   _data.ts       useFetch, useMutation
+ *   _data.ts       useFetch, useMutation (legacy local-state; NOT TanStack)
  *   _auth.ts       useAuthToken, usePermissions
  *   _cache.ts      useCache
  *   _form.ts       useAutoSaveForm, useUnsavedWarning
+ *   _mutations.ts  useResourceMutation, useConfirmedAction, jsonOrThrow, HttpError (TanStack)
+ *   _events.ts     useEventBridge, emitAppEvent (window CustomEvent bus)
  */
 
 // ─── New consolidated category hooks ──────────────────────────────────────────
@@ -22,6 +24,8 @@ export * from './_data';
 export * from './_auth';
 export * from './_cache';
 export * from './_form';
+export * from './_mutations';
+export * from './_events';
 
 // ─── Existing domain hooks ─────────────────────────────────────────────────────
 export { useCamera } from './useCamera';

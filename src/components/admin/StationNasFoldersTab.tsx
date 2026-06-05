@@ -3,7 +3,8 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from '@/lib/toast';
-import { listNasDir, nasConfigured, type NasEntry } from '@/lib/nas-photos';
+import { listNasDir, nasConfigured, setNasBaseUrl, type NasEntry } from '@/lib/nas-photos';
+import { useNasConfig } from '@/hooks/useNasConfig';
 import { NasBreadcrumb, NasFolderCard, NasSectionLabel } from '@/components/nas/NasBrowserChrome';
 
 /**
@@ -31,13 +32,23 @@ const STATIONS: { key: string; label: string; hint: string }[] = [
 ];
 
 type FolderMap = Record<string, string>;
+type NasServers = { test: string; prod: string; active: 'test' | 'prod' };
+const EMPTY_SERVERS: NasServers = { test: '', prod: '', active: 'prod' };
+
+interface SettingsResponse {
+  stationNasPhotoFolders: FolderMap;
+  nasPhotoServers: NasServers;
+}
 
 export function StationNasFoldersTab() {
   const queryClient = useQueryClient();
   const [draft, setDraft] = useState<FolderMap>({});
   const [picking, setPicking] = useState<string | null>(null); // station key being browsed
+  // Seed the module base URL from the active saved server so Browse targets the
+  // currently-active NAS.
+  useNasConfig();
 
-  const { data, isLoading } = useQuery<{ stationNasPhotoFolders: FolderMap }>({
+  const { data, isLoading } = useQuery<SettingsResponse>({
     queryKey: ['org-station-nas-folders'],
     queryFn: async () => {
       const res = await fetch('/api/admin/organization/settings', { cache: 'no-store' });
@@ -85,21 +96,126 @@ export function StationNasFoldersTab() {
     setDraft((prev) => ({ ...prev, [station]: value }));
   }, []);
 
+  // ── NAS server addresses (test/prod + active) ───────────────────────────
+  const [servers, setServers] = useState<NasServers>(EMPTY_SERVERS);
+  useEffect(() => {
+    if (data?.nasPhotoServers) setServers({ ...EMPTY_SERVERS, ...data.nasPhotoServers });
+  }, [data]);
+
+  const savedServers = data?.nasPhotoServers ?? EMPTY_SERVERS;
+  const serversDirty =
+    (savedServers.test || '') !== (servers.test || '') ||
+    (savedServers.prod || '') !== (servers.prod || '') ||
+    savedServers.active !== servers.active;
+
+  const saveServers = useMutation({
+    mutationFn: async (next: NasServers) => {
+      const res = await fetch('/api/admin/organization/settings', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ nasPhotoServers: next }),
+      });
+      if (!res.ok) {
+        const j = await res.json().catch(() => ({}));
+        throw new Error(j?.error || `HTTP ${res.status}`);
+      }
+      return res.json();
+    },
+    onSuccess: (_data, next) => {
+      // Update the live module base URL so Browse uses the just-saved active
+      // server without a page reload (useNasConfig is fetched once per load).
+      setNasBaseUrl(next.active === 'test' ? next.test : next.prod);
+      toast.success('NAS address saved');
+      queryClient.invalidateQueries({ queryKey: ['org-station-nas-folders'] });
+    },
+    onError: (e) => toast.error(e instanceof Error ? e.message : 'Save failed'),
+  });
+
   return (
     <div className="h-full overflow-y-auto bg-gray-50 p-6">
       <div className="mx-auto max-w-2xl space-y-5">
         <div>
           <h1 className="text-lg font-black text-gray-900">Receiving Photos</h1>
           <p className="mt-1 text-caption text-gray-500">
-            Set the NAS folder the photo picker opens to for each station. Operators on a
-            station land directly in its folder when pairing photos to a PO.
+            Phones write receiving photos straight to the NAS. Set the NAS address below
+            (and flip between your testing and production NAS), then set the folder each
+            station opens to.
           </p>
+        </div>
+
+        {/* ── NAS server address (test / prod + active toggle) ───────────── */}
+        <div className="space-y-3 rounded-2xl border border-gray-200 bg-white p-4">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <p className="text-label font-black text-gray-800">NAS address</p>
+              <p className="mt-0.5 text-micro text-gray-400">
+                Base URL of the NAS file server (Cloudflare-fronted, no trailing slash).
+                Photos are written and read against the active one.
+              </p>
+            </div>
+            <div className="flex shrink-0 overflow-hidden rounded-lg border border-gray-200">
+              {(['test', 'prod'] as const).map((slot) => (
+                <button
+                  key={slot}
+                  type="button"
+                  onClick={() => setServers((p) => ({ ...p, active: slot }))}
+                  className={`px-3 py-1.5 text-micro font-black uppercase tracking-widest transition-colors ${
+                    servers.active === slot
+                      ? 'bg-blue-600 text-white'
+                      : 'bg-white text-gray-500 hover:bg-gray-50'
+                  }`}
+                >
+                  {slot === 'test' ? 'Testing' : 'Production'}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {(['prod', 'test'] as const).map((slot) => (
+            <div key={slot} className="flex items-center gap-3">
+              <div className="w-24 shrink-0">
+                <p className="text-label font-black text-gray-800">
+                  {slot === 'prod' ? 'Production' : 'Testing'}
+                </p>
+                {servers.active === slot ? (
+                  <span className="text-micro font-black uppercase tracking-widest text-emerald-600">
+                    ● Active
+                  </span>
+                ) : null}
+              </div>
+              <input
+                type="url"
+                inputMode="url"
+                value={servers[slot]}
+                onChange={(e) => setServers((p) => ({ ...p, [slot]: e.target.value }))}
+                placeholder="https://nas.example.com"
+                className="min-w-0 flex-1 rounded-lg border border-gray-200 bg-white px-3 py-2 text-caption text-gray-800 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-200"
+              />
+            </div>
+          ))}
+
+          <div className="flex items-center justify-end gap-3">
+            {serversDirty ? (
+              <span className="text-micro font-bold uppercase tracking-widest text-amber-600">
+                Unsaved changes
+              </span>
+            ) : null}
+            <button
+              type="button"
+              disabled={!serversDirty || saveServers.isPending || isLoading}
+              onClick={() => saveServers.mutate(servers)}
+              className="inline-flex h-9 items-center rounded-lg bg-blue-600 px-4 text-caption font-black uppercase tracking-widest text-white shadow-sm transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              {saveServers.isPending ? 'Saving…' : 'Save address'}
+            </button>
+          </div>
         </div>
 
         {!nasConfigured() ? (
           <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-caption font-semibold text-amber-800">
-            The NAS photo server isn’t configured in this build (NEXT_PUBLIC_NAS_PHOTOS_BASE_URL),
-            so Browse is unavailable here — you can still type a folder path manually.
+            No active NAS address is set, so phones can’t save photos and Browse is
+            unavailable. Enter the {servers.active === 'test' ? 'Testing' : 'Production'} URL
+            above and Save.
           </div>
         ) : null}
 

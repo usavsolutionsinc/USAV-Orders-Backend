@@ -6,11 +6,10 @@
  *   - getAccessToken(): refreshes when expired, persists the new token
  *   - poGmailFetch(): Bearer-authed wrapper around fetch() for Gmail API
  *
- * Mirrors src/lib/google-photos/client.ts so that the OAuth lifecycle
- * (refresh, needs_reconnect, store back) behaves identically across our
- * two Google integrations. Gmail-specific helpers (list messages, modify
- * labels, etc.) live in a separate file that's added when we wire the
- * email-reconcile pipeline — this module is auth only.
+ * Implements the standard OAuth lifecycle (refresh, needs_reconnect, store
+ * back) against the shared google_oauth_tokens table. Gmail-specific helpers
+ * (list messages, modify labels, etc.) live in a separate file that's added
+ * when we wire the email-reconcile pipeline — this module is auth only.
  */
 
 import pool from '@/lib/db';

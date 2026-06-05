@@ -2,10 +2,7 @@
 
 import { GoalsCard } from './overview/cards/GoalsCard';
 import { StaffCard } from './overview/cards/StaffCard';
-import { PhotoBackupCard } from './overview/cards/PhotoBackupCard';
-import { JobsCard } from './overview/cards/JobsCard';
 import { ConnectionsCard } from './overview/cards/ConnectionsCard';
-import { FeaturesCard } from './overview/cards/FeaturesCard';
 import { RecentAuditCard } from './overview/cards/RecentAuditCard';
 
 export function AdminOverviewTab() {
@@ -22,10 +19,7 @@ export function AdminOverviewTab() {
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
           <GoalsCard />
           <StaffCard />
-          <PhotoBackupCard />
-          <JobsCard />
           <ConnectionsCard />
-          <FeaturesCard />
           <RecentAuditCard />
         </div>
       </div>

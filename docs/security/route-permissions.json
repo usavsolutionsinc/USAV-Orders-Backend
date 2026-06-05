@@ -1,14 +1,14 @@
 {
   "version": 1,
-  "generatedAt": "2026-06-03T05:25:46Z",
-  "totalRoutes": 499,
+  "generatedAt": "2026-06-05T09:05:02Z",
+  "totalRoutes": 509,
   "summary": {
-    "permissionGated": 417,
-    "authenticatedNoPermission": 17,
-    "anonymousIntentional": 44,
+    "permissionGated": 425,
+    "authenticatedNoPermission": 18,
+    "anonymousIntentional": 45,
     "serviceToService": 3,
-    "ungatedRead": 18,
-    "ungatedWrite": 0
+    "ungatedRead": 17,
+    "ungatedWrite": 1
   },
   "routes": [
     {
@@ -90,97 +90,6 @@
       "exemptReason": null
     },
     {
-      "path": "/api/admin/google-photos/backup-stream/route.ts",
-      "methods": [
-        "GET"
-      ],
-      "gate": "withAuth",
-      "permission": "admin.view",
-      "exemptReason": null
-    },
-    {
-      "path": "/api/admin/google-photos/backup/route.ts",
-      "methods": [
-        "POST"
-      ],
-      "gate": "withAuth",
-      "permission": "admin.view",
-      "exemptReason": null
-    },
-    {
-      "path": "/api/admin/google-photos/cleanup/route.ts",
-      "methods": [
-        "POST"
-      ],
-      "gate": "withAuth",
-      "permission": "admin.view",
-      "exemptReason": null
-    },
-    {
-      "path": "/api/admin/google-photos/connect/route.ts",
-      "methods": [
-        "GET"
-      ],
-      "gate": "withAuth",
-      "permission": "admin.view",
-      "exemptReason": null
-    },
-    {
-      "path": "/api/admin/google-photos/disconnect/route.ts",
-      "methods": [
-        "POST"
-      ],
-      "gate": "withAuth",
-      "permission": "admin.view",
-      "exemptReason": null
-    },
-    {
-      "path": "/api/admin/google-photos/oauth-callback/route.ts",
-      "methods": [
-        "GET"
-      ],
-      "gate": "withAuth",
-      "permission": "admin.view",
-      "exemptReason": null
-    },
-    {
-      "path": "/api/admin/google-photos/pending/route.ts",
-      "methods": [
-        "GET"
-      ],
-      "gate": "withAuth",
-      "permission": "admin.view",
-      "exemptReason": null
-    },
-    {
-      "path": "/api/admin/google-photos/runs/route.ts",
-      "methods": [
-        "GET"
-      ],
-      "gate": "withAuth",
-      "permission": "admin.view",
-      "exemptReason": null
-    },
-    {
-      "path": "/api/admin/google-photos/settings/route.ts",
-      "methods": [
-        "GET",
-        "POST"
-      ],
-      "gate": "withAuth",
-      "permission": "admin.view",
-      "exemptReason": null
-    },
-    {
-      "path": "/api/admin/google-photos/status/route.ts",
-      "methods": [
-        "GET"
-      ],
-      "gate": "withAuth",
-      "permission": "admin.view",
-      "exemptReason": null
-    },
-    {
       "path": "/api/admin/integrations/delete/route.ts",
       "methods": [
         "POST"
@@ -229,6 +138,16 @@
       "path": "/api/admin/org/export/route.ts",
       "methods": [
         "POST"
+      ],
+      "gate": "withAuth",
+      "permission": "admin.view",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/admin/organization/settings/route.ts",
+      "methods": [
+        "GET",
+        "PATCH"
       ],
       "gate": "withAuth",
       "permission": "admin.view",
@@ -677,15 +596,6 @@
       "exemptReason": null
     },
     {
-      "path": "/api/architecture/route.ts",
-      "methods": [
-        "GET"
-      ],
-      "gate": "NONE",
-      "permission": null,
-      "exemptReason": null
-    },
-    {
       "path": "/api/assignments/next/route.ts",
       "methods": [
         "GET"
@@ -1004,6 +914,24 @@
         "POST"
       ],
       "gate": "isQStashOrigin",
+      "permission": null,
+      "exemptReason": "cron endpoint"
+    },
+    {
+      "path": "/api/cron/shipping/metrics/route.ts",
+      "methods": [
+        "GET"
+      ],
+      "gate": "NONE",
+      "permission": null,
+      "exemptReason": "cron endpoint"
+    },
+    {
+      "path": "/api/cron/shipping/reconcile-delivered/route.ts",
+      "methods": [
+        "GET"
+      ],
+      "gate": "NONE",
       "permission": null,
       "exemptReason": "cron endpoint"
     },
@@ -1697,6 +1625,24 @@
       "exemptReason": null
     },
     {
+      "path": "/api/integrations/nango/connected/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "gate": "withAuth",
+      "permission": "admin.manage_features",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/integrations/nango/session/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "gate": "withAuth",
+      "permission": "admin.manage_features",
+      "exemptReason": null
+    },
+    {
       "path": "/api/inventory-events/route.ts",
       "methods": [
         "GET"
@@ -1779,6 +1725,15 @@
     },
     {
       "path": "/api/local-pickup-orders/[id]/complete/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "gate": "requireRoutePerm",
+      "permission": "walk_in.intake",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/local-pickup-orders/[id]/finalize/route.ts",
       "methods": [
         "POST"
       ],
@@ -1973,6 +1928,25 @@
       ],
       "gate": "withAuth",
       "permission": "admin.manage_features",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/nas-config/route.ts",
+      "methods": [
+        "GET"
+      ],
+      "gate": "withAuth",
+      "permission": "receiving.view",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/nas-dev/[[...path]]/route.ts",
+      "methods": [
+        "GET",
+        "PUT"
+      ],
+      "gate": "NONE",
+      "permission": null,
       "exemptReason": null
     },
     {
@@ -2604,16 +2578,6 @@
       "exemptReason": "qstash (gated by isQStashOrigin)"
     },
     {
-      "path": "/api/qstash/google-photos/daily/route.ts",
-      "methods": [
-        "GET",
-        "POST"
-      ],
-      "gate": "isQStashOrigin",
-      "permission": null,
-      "exemptReason": "qstash (gated by isQStashOrigin)"
-    },
-    {
       "path": "/api/qstash/google-sheets/transfer-orders/route.ts",
       "methods": [
         "GET",
@@ -2911,6 +2875,15 @@
       "exemptReason": null
     },
     {
+      "path": "/api/receiving/disposition-suggest/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "gate": "withAuth",
+      "permission": "receiving.mark_received",
+      "exemptReason": null
+    },
+    {
       "path": "/api/receiving/lines/[id]/condition/route.ts",
       "methods": [
         "PATCH"
@@ -2993,6 +2966,15 @@
       "exemptReason": null
     },
     {
+      "path": "/api/receiving/nas-archive-test/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "gate": "withAuth",
+      "permission": "receiving.upload_photo",
+      "exemptReason": null
+    },
+    {
       "path": "/api/receiving/pending-unboxing/route.ts",
       "methods": [
         "GET"
@@ -3041,6 +3023,15 @@
       "exemptReason": null
     },
     {
+      "path": "/api/receiving/unfound-queue/[kind]/[id]/push-to-zendesk/draft/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "gate": "withAuth",
+      "permission": "receiving.view",
+      "exemptReason": null
+    },
+    {
       "path": "/api/receiving/unfound-queue/[kind]/[id]/push-to-zendesk/route.ts",
       "methods": [
         "POST"
@@ -3066,6 +3057,24 @@
       ],
       "gate": "withAuth",
       "permission": "receiving.view",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/receiving/zendesk-claim/classify/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "gate": "withAuth",
+      "permission": "receiving.mark_received",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/receiving/zendesk-claim/draft/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "gate": "withAuth",
+      "permission": "receiving.mark_received",
       "exemptReason": null
     },
     {
@@ -3431,6 +3440,15 @@
       "exemptReason": null
     },
     {
+      "path": "/api/scan/history/route.ts",
+      "methods": [
+        "GET"
+      ],
+      "gate": "withAuth",
+      "permission": "sku_stock.view",
+      "exemptReason": null
+    },
+    {
       "path": "/api/scan/resolve/route.ts",
       "methods": [
         "GET",
@@ -3511,6 +3529,15 @@
       ],
       "gate": "withAuth",
       "permission": "tech.qc_pass",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/serial-units/lookup/route.ts",
+      "methods": [
+        "GET"
+      ],
+      "gate": "withAuth (no permission)",
+      "permission": null,
       "exemptReason": null
     },
     {
@@ -3669,11 +3696,12 @@
       "path": "/api/sku-catalog/[id]/qc-checks/route.ts",
       "methods": [
         "DELETE",
+        "GET",
         "POST",
         "PUT"
       ],
       "gate": "requireRoutePerm",
-      "permission": "sku_stock.manage",
+      "permission": "sku_stock.view",
       "exemptReason": null
     },
     {
@@ -3685,6 +3713,52 @@
       ],
       "gate": "requireRoutePerm",
       "permission": "sku_stock.view",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/sku-catalog/graph/[skuId]/children/route.ts",
+      "methods": [
+        "GET"
+      ],
+      "gate": "requireRoutePerm",
+      "permission": "sku_stock.view",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/sku-catalog/graph/[skuId]/parents/route.ts",
+      "methods": [
+        "GET"
+      ],
+      "gate": "requireRoutePerm",
+      "permission": "sku_stock.view",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/sku-catalog/graph/[skuId]/tree/route.ts",
+      "methods": [
+        "GET"
+      ],
+      "gate": "requireRoutePerm",
+      "permission": "sku_stock.view",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/sku-catalog/graph/relationships/[id]/route.ts",
+      "methods": [
+        "DELETE",
+        "PATCH"
+      ],
+      "gate": "requireRoutePerm",
+      "permission": "sku_stock.manage",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/sku-catalog/graph/relationships/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "gate": "withAuth",
+      "permission": "sku_stock.manage",
       "exemptReason": null
     },
     {
@@ -3772,6 +3846,15 @@
     },
     {
       "path": "/api/sku-catalog/search/route.ts",
+      "methods": [
+        "GET"
+      ],
+      "gate": "withAuth",
+      "permission": "sku_stock.view",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/sku-catalog/suggest-for-item/route.ts",
       "methods": [
         "GET"
       ],
@@ -4439,6 +4522,15 @@
       ],
       "gate": "withAuth",
       "permission": "work_orders.view",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/workflow/flow-audit/route.ts",
+      "methods": [
+        "GET"
+      ],
+      "gate": "withAuth",
+      "permission": "admin.view",
       "exemptReason": null
     },
     {

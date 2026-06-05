@@ -413,7 +413,7 @@ export async function receiveLineUnits(
         client_event_id: input.client_event_id
           ? `${input.client_event_id}:unit-${ordinal}-supplemental`
           : null,
-        notes: `Supplemental serial ${serial.toUpperCase()} (beyond expected qty)`,
+        notes: `Serial ${serial.toUpperCase()}`,
         payload: {
           unit_ordinal: ordinal,
           supplemental: true,

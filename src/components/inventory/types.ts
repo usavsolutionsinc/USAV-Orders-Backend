@@ -6,6 +6,8 @@ export interface PulseEventRow {
     actor_name: string | null;
     station: string | null;
     sku: string | null;
+    /** Resolved from sku_catalog by the /api/inventory-events enrichment. */
+    product_title?: string | null;
     serial_unit_id: number | null;
     serial_number: string | null;
     bin_id: number | null;

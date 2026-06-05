@@ -34,6 +34,7 @@ snapshot*.txt
 *.bak.*
 .env.bak*
 .env*.tmp
+.env.nango
 receiving_lines_cleanup_backup_*.json
 
 # vercel

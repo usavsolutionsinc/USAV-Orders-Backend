@@ -18,7 +18,7 @@
  */
 
 import { useRef, useState } from 'react';
-import { Database, Zap, Bell, Sparkles, Search, List, Package, MapPin, Barcode } from '@/components/Icons';
+import { Database, Zap, Bell, Sparkles, Search, List, Package, MapPin, Barcode, Camera } from '@/components/Icons';
 import {
   ButtonsSection,
   InputsSection,
@@ -33,6 +33,7 @@ import { ConditionPickerSection } from './_gallery/condition-picker-section';
 import { WarehouseFlowSection } from './_gallery/warehouse-flow-section';
 import { FilterBarSection } from './_gallery/filter-bar-section';
 import { SerialMatchSection } from './_gallery/serial-match-section';
+import { MobileReceivingSection } from './_gallery/mobile-receiving-section';
 
 type SectionDef = {
   id: string;
@@ -45,14 +46,15 @@ type SectionDef = {
 
 const SECTIONS: SectionDef[] = [
   { id: 'buttons', index: '01', label: 'Buttons & actions', icon: Zap, blurb: 'A single Button primitive with spring-press feedback, async loading, and brand gradient — replacing the ad-hoc <button> markup repeated across sidebars and forms.', render: () => <ButtonsSection /> },
-  { id: 'filters', index: '02', label: 'Filter bars', icon: Search, blurb: 'Unified search + pills + advanced popovers. Consolidating the collapsible UpNext bar, the popover-heavy Shipped toolbar, and the inline Bins chips into a single polymorphic component.', render: () => <FilterBarSection /> },
+  { id: 'mobile-receiving', index: '02', label: 'Mobile Receiving', icon: Camera, blurb: 'Modernized photo capture for PO receiving. Immersive, gesture-ready, and optimized for rapid one-handed scanning in the warehouse.', render: (d) => <MobileReceivingSection density={d} /> },
+  { id: 'filters', index: '03', label: 'Filter bars', icon: Search, blurb: 'Unified search + pills + advanced popovers. Consolidating the collapsible UpNext bar, the popover-heavy Shipped toolbar, and the inline Bins chips into a single polymorphic component.', render: () => <FilterBarSection /> },
   { id: 'condition', index: '2d', label: 'Condition picker', icon: Package, blurb: 'Condensing the PO-items grade picker into one contextual row. Today it shows the full set of pills at all times; these variants keep the current grade on the left and reveal the rest only on demand — popover, inline slide-out, or a select dropdown. Each is shown inside a mock of the real line-edit card so you can compare in context and cherry-pick.', render: (d) => <ConditionPickerSection density={d} /> },
-  { id: 'inputs', index: '03', label: 'Inputs', icon: Search, blurb: 'Floating-label fields and a spring toggle — consolidating the inconsistent form styling between sidebar and admin forms.', render: () => <InputsSection /> },
-  { id: 'data', index: '04', label: 'Data display', icon: Database, blurb: 'A DataTable family (selection, status pills, density-aware rows) to retire the ~6 hand-rolled sticky-header tables.', render: (d) => <DataTableSection density={d} /> },
-  { id: 'warehouse-flow', index: '05', label: 'Warehouse floor plan', icon: MapPin, blurb: 'The bin grid as a true floor-plan map on @xyflow/react. Drag bins to match the physical floor, select to resize (expand/shrink), pan/zoom with built-in Controls + MiniMap, and flip Trace to draw graph edges from a bin to every other bin holding the same SKU. The spatial, "find & follow inventory" view the flat HTML table can\'t give you — and the basis for the real /warehouse map mode (see docs/warehouse-map-react-flow-plan.md).', render: (d) => <WarehouseFlowSection density={d} /> },
-  { id: 'feedback', index: '06', label: 'Feedback', icon: Bell, blurb: 'A polished empty state and a consistent inline error/warning banner.', render: () => <FeedbackSection /> },
-  { id: 'motion', index: '07', label: 'Motion lab', icon: Sparkles, blurb: 'Shared-element expand, spring press, and stagger reveals — the highest-impact "2026" upgrades, all from your existing Framer Motion presets.', render: () => <MotionSection /> },
-  { id: 'serial-match', index: '08', label: 'Serial match check', icon: Barcode, blurb: 'The RETURN receiving auto-lookup. When a line\'s type is Return, committing a serial (Enter / scan) checks it against serial_units and shows "Match found" — with the unit\'s status, SKU, and bin, plus a "Returned item" flag when it was previously shipped — or "No match found". Scan one of the seeded serials to compare states.', render: () => <SerialMatchSection /> },
+  { id: 'inputs', index: '04', label: 'Inputs', icon: Search, blurb: 'Floating-label fields and a spring toggle — consolidating the inconsistent form styling between sidebar and admin forms.', render: () => <InputsSection /> },
+  { id: 'data', index: '05', label: 'Data display', icon: Database, blurb: 'A DataTable family (selection, status pills, density-aware rows) to retire the ~6 hand-rolled sticky-header tables.', render: (d) => <DataTableSection density={d} /> },
+  { id: 'warehouse-flow', index: '06', label: 'Warehouse floor plan', icon: MapPin, blurb: 'The bin grid as a true floor-plan map on @xyflow/react. Drag bins to match the physical floor, select to resize (expand/shrink), pan/zoom with built-in Controls + MiniMap, and flip Trace to draw graph edges from a bin to every other bin holding the same SKU. The spatial, "find & follow inventory" view the flat HTML table can\'t give you — and the basis for the real /warehouse map mode (see docs/warehouse-map-react-flow-plan.md).', render: (d) => <WarehouseFlowSection density={d} /> },
+  { id: 'feedback', index: '07', label: 'Feedback', icon: Bell, blurb: 'A polished empty state and a consistent inline error/warning banner.', render: () => <FeedbackSection /> },
+  { id: 'motion', index: '08', label: 'Motion lab', icon: Sparkles, blurb: 'Shared-element expand, spring press, and stagger reveals — the highest-impact "2026" upgrades, all from your existing Framer Motion presets.', render: () => <MotionSection /> },
+  { id: 'serial-match', index: '09', label: 'Serial match check', icon: Barcode, blurb: 'The RETURN receiving auto-lookup. When a line\'s type is Return, committing a serial (Enter / scan) checks it against serial_units and shows "Match found" — with the unit\'s status, SKU, and bin, plus a "Returned item" flag when it was previously shipped — or "No match found". Scan one of the seeded serials to compare states.', render: () => <SerialMatchSection /> },
 ];
 
 const DENSITIES: Density[] = ['compact', 'cozy', 'comfortable'];

@@ -58,10 +58,6 @@
       "schedule": "0 * * * *"
     },
     {
-      "path": "/api/qstash/google-photos/daily",
-      "schedule": "0 2 * * *"
-    },
-    {
       "path": "/api/cron/zoho/incoming-po-sync",
       "schedule": "*/15 * * * *"
     },

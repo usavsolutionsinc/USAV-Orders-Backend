@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { RightPaneOverlay } from '@/components/ui/RightPaneOverlay';
 import { attachNasPhoto, listNasDir, nasConfigured, type NasEntry } from '@/lib/nas-photos';
+import { useNasConfig } from '@/hooks/useNasConfig';
 import { NasBreadcrumb, NasFolderCard, NasSectionLabel } from '@/components/nas/NasBrowserChrome';
 
 type SortKey = 'po' | 'recent' | 'oldest' | 'name';
@@ -121,6 +122,9 @@ interface Props {
  */
 export function NasReceivingAttach({ receivingId, poCreatedAt = null, initialFolder = '', onAttached, fullWidth = false, label }: Props) {
   const [open, setOpen] = useState(false);
+  // Seed the active NAS base URL at runtime (admin test/prod setting) so the
+  // control appears and Browse works even when the build has no NAS env var.
+  useNasConfig();
   if (!nasConfigured()) return null;
 
   return (

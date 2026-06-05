@@ -1,11 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { put, del } from '@vercel/blob';
 import pool from '@/lib/db';
 import { ApiError, errorResponse } from '@/lib/api';
 import { withAuth } from '@/lib/auth/withAuth';
 import { getOrganization } from '@/lib/tenancy/organizations';
+import { getActiveNasBaseUrl, getAllNasBaseUrls } from '@/lib/tenancy/settings';
 import type { OrgId } from '@/lib/tenancy/constants';
-import { getStaffStations } from '@/lib/neon/staff-stations-queries';
+import { resolveOperatorNasFolder } from '@/lib/nas-photos-server';
 
 export const dynamic = 'force-dynamic';
 
@@ -16,6 +16,11 @@ export const dynamic = 'force-dynamic';
  * for PACKER_LOG, SKU, BIN_ADJUSTMENT, etc.:
  *   PO-level photo   → entity_type='RECEIVING',      entity_id=receiving.id
  *   Item-level photo → entity_type='RECEIVING_LINE', entity_id=receiving_lines.id
+ *
+ * Photos live on the office NAS, not Vercel Blob. The browser writes the file
+ * straight to the NAS over WebDAV (the Vercel server can't reach the LAN) and
+ * then POSTs the resulting `photoUrl` here to link it — so this route only ever
+ * stores a URL, never bytes.
  *
  * The POST body still talks in `receivingId` / `receivingLineId` because that's
  * how the mobile client thinks of scope; we translate to (entity_type,
@@ -141,45 +146,31 @@ export const GET = withAuth(async (req: NextRequest, ctx) => {
       [receivingId],
     );
 
-    // Resolve the folder the picker should auto-open for THIS operator: their
-    // primary station → the org's admin-configured `stationNasPhotoFolders`
-    // (set in StationNasFoldersTab). '' = open at the NAS root. Best-effort —
-    // never let a settings/station hiccup break the photo strip.
+    // Resolve the folder the picker should auto-open for THIS operator (their
+    // primary station → the org's admin-configured `stationNasPhotoFolders`),
+    // plus the active NAS base URL. Shared with GET /api/nas-config. '' folder =
+    // open at the NAS root. Best-effort — never let a settings/station hiccup
+    // break the photo strip.
     let initialNasFolder = '';
+    let nasBaseUrl = '';
     try {
-      const [org, stations] = await Promise.all([
-        getOrganization(ctx.organizationId as OrgId),
-        getStaffStations(ctx.staffId),
+      const orgId = ctx.organizationId as OrgId;
+      const [org, folder] = await Promise.all([
+        getOrganization(orgId),
+        resolveOperatorNasFolder(orgId, ctx.staffId),
       ]);
-      const primary = stations.find((s) => s.is_primary)?.station ?? stations[0]?.station;
-      const map = (org?.settings.stationNasPhotoFolders ?? {}) as Record<string, string>;
-      // Prefer the operator's station folder; fall back to a DEFAULT folder that
-      // applies to everyone. The fallback matters because staff_stations can be
-      // empty (no per-staff station assigned) — without it the picker would
-      // always open at the root even when a folder is configured.
-      // Resolution order:
-      //   1. the operator's primary-station folder (needs a staff_stations row),
-      //   2. an explicit DEFAULT (all-stations) folder,
-      //   3. if exactly one distinct folder is configured across every station,
-      //      use it — covers orgs that set the same folder everywhere and don't
-      //      assign per-staff stations (so it "just works" without staff_stations).
-      const distinct = [
-        ...new Set(Object.values(map).map((v) => (v || '').trim()).filter(Boolean)),
-      ];
-      const resolved =
-        (primary && map[primary]) ||
-        map.DEFAULT ||
-        (distinct.length === 1 ? distinct[0] : '') ||
-        '';
-      if (typeof resolved === 'string') initialNasFolder = resolved;
+      initialNasFolder = folder;
+      nasBaseUrl = org ? getActiveNasBaseUrl(org.settings) : '';
     } catch {
       initialNasFolder = '';
+      nasBaseUrl = '';
     }
 
     return NextResponse.json({
       photos: result.rows.map(mapRow),
       receivingCreatedAt: cartonRes.rows[0]?.created_at ?? null,
       initialNasFolder,
+      nasBaseUrl,
     });
   } catch (error) {
     return errorResponse(error, 'GET /api/receiving-photos');
@@ -197,8 +188,7 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
       receivingLineIdRaw != null && receivingLineIdRaw !== ''
         ? Number(receivingLineIdRaw)
         : null;
-    const photoBase64: string | undefined = body?.photoBase64;
-    const photoUrl: string | undefined = body?.photoUrl;
+    const photoUrl: string = String(body?.photoUrl || '').trim();
     const caption = String(body?.caption || '').trim() || null;
     // Server-trusted actor — body.uploadedBy is ignored.
     const uploadedBy = ctx.staffId;
@@ -209,25 +199,33 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
     if (receivingLineId != null && (!Number.isFinite(receivingLineId) || receivingLineId <= 0)) {
       throw ApiError.badRequest('Valid receivingLineId is required when provided');
     }
-    if (!photoBase64 && !photoUrl) {
-      throw ApiError.badRequest('Either photoBase64 or photoUrl is required');
+    if (!photoUrl) {
+      throw ApiError.badRequest('photoUrl is required');
+    }
+
+    // Origin allowlist: once a NAS base is known for this org, a receiving photo
+    // URL must point at it (test or prod) — or the same-origin dev proxy. This is
+    // the security boundary now that the route trusts a client-supplied URL
+    // instead of uploading bytes itself: it stops arbitrary external URLs from
+    // being pinned onto a PO. When NOTHING is configured (no settings slot, no
+    // env), we stay permissive so un-migrated orgs keep working.
+    const org = await getOrganization(ctx.organizationId as OrgId);
+    const allowedBases = org ? getAllNasBaseUrls(org.settings) : [];
+    const envBase = (process.env.NEXT_PUBLIC_NAS_PHOTOS_BASE_URL || '').replace(/\/+$/, '');
+    if (envBase && !envBase.startsWith('/')) allowedBases.push(envBase);
+    const isSameOrigin = photoUrl.startsWith('/'); // e.g. /api/nas-dev (dev proxy)
+    const isAllowed =
+      allowedBases.length === 0 ||
+      isSameOrigin ||
+      allowedBases.some((base) => photoUrl === base || photoUrl.startsWith(`${base}/`));
+    if (!isAllowed) {
+      throw ApiError.badRequest('photoUrl must point at the configured NAS address');
     }
 
     const entityType = receivingLineId != null ? 'RECEIVING_LINE' : 'RECEIVING';
     const entityId = receivingLineId ?? receivingId;
 
-    let finalUrl = photoUrl || '';
-    if (photoBase64) {
-      const base64Data = photoBase64.replace(/^data:image\/\w+;base64,/, '');
-      const buffer = Buffer.from(base64Data, 'base64');
-      const scopeFolder = receivingLineId != null
-        ? `line_${receivingLineId}`
-        : `po_${receivingId}`;
-      const filename = `receiving_photos/${scopeFolder}/photo_${Date.now()}.jpg`;
-      const blob = await put(filename, buffer, { access: 'public', contentType: 'image/jpeg' });
-      finalUrl = blob.url;
-    }
-
+    const finalUrl = photoUrl;
     const photoType = caption || (receivingLineId != null ? 'receiving_item' : 'receiving');
 
     const inserted = await pool.query(
@@ -272,12 +270,11 @@ export const DELETE = withAuth(async (req: NextRequest) => {
     );
     if (existing.rowCount === 0) throw ApiError.notFound('photo', id);
 
-    const photoUrl: string = existing.rows[0].url;
+    // Photos live on the NAS now. Deleting just unlinks the DB row; the file
+    // stays on the NAS share (same behavior the NAS picker has always had).
+    // Legacy rows may still hold a Vercel Blob URL from before the migration —
+    // those are left untouched too.
     await pool.query(`DELETE FROM photos WHERE id = $1`, [id]);
-
-    if (photoUrl.includes('blob.vercel-storage.com') || photoUrl.includes('vercel-storage')) {
-      try { await del(photoUrl); } catch { /* non-fatal */ }
-    }
 
     return NextResponse.json({ success: true, id });
   } catch (error) {

@@ -7,16 +7,13 @@ import { SidebarSectionList, type SidebarSection } from '@/components/sidebar/Si
 import { useAuth } from '@/contexts/AuthContext';
 import { ADMIN_SECTION_OPTIONS, type AdminSection } from './admin-sections';
 
-import { ManualAssignmentSidebarPanel } from './ManualAssignmentSidebarPanel';
 import { AccessSidebarPanel } from './AccessSidebarPanel';
 import { RolesSidebarPanel } from './RolesSidebarPanel';
 import { ConnectionsSidebarPanel } from '@/components/sidebar/ConnectionsSidebarPanel';
 import { GoalsSidebarPanel } from '@/components/sidebar/GoalsSidebarPanel';
 import { StaffAdminSidebarPanel } from '@/components/sidebar/StaffAdminSidebarPanel';
 import { FbaCatalogSidebarPanel } from './FbaCatalogSidebarPanel';
-import { FeaturesSidebarPanel } from '@/components/sidebar/FeaturesSidebarPanel';
 import { OperationsSidebarPanel } from './workflow/OperationsSidebarPanel';
-import { JobsSidebarPanel } from './JobsSidebarPanel';
 import { LogsSidebarPanel } from './LogsSidebarPanel';
 
 interface AdminSidebarProps {
@@ -28,16 +25,13 @@ const ICON_CLS = 'h-4 w-4 shrink-0';
 
 function panelFor(section: AdminSection): JSX.Element | null {
   switch (section) {
-    case 'manuals':      return <ManualAssignmentSidebarPanel />;
     case 'goals':        return <GoalsSidebarPanel />;
     case 'staff':        return <StaffAdminSidebarPanel />;
     case 'access':       return <AccessSidebarPanel />;
     case 'roles':        return <RolesSidebarPanel />;
     case 'fba':          return <FbaCatalogSidebarPanel />;
-    case 'features':     return <FeaturesSidebarPanel />;
     case 'connections':  return <ConnectionsSidebarPanel />;
     case 'architecture': return <OperationsSidebarPanel />;
-    case 'jobs':         return <JobsSidebarPanel />;
     case 'logs':         return <LogsSidebarPanel />;
     default:             return null;
   }

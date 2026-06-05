@@ -1,10 +1,9 @@
 'use client';
 
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { useSearchParams } from 'next/navigation';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { qk } from '@/queries/keys';
-import { AdminEmptyDetail } from './shared';
+import { AdminEmptyDetail, useAdminUrlState } from './shared';
 
 interface FbaFnskuRow {
   product_title: string | null;
@@ -21,12 +20,13 @@ interface FBAManagementTabProps {
 }
 
 export function FBAManagementTab(_props: FBAManagementTabProps = {}) {
-  const searchParams = useSearchParams();
+  const { searchParams, setParam } = useAdminUrlState();
   const queryClient = useQueryClient();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [isAddOpen, setIsAddOpen] = useState(false);
   const [isUploadInfoOpen, setIsUploadInfoOpen] = useState(false);
+  const [isDeleteOpen, setIsDeleteOpen] = useState(false);
   const [productTitle, setProductTitle] = useState('');
   const [asin, setAsin] = useState('');
   const [sku, setSku] = useState('');
@@ -47,7 +47,9 @@ export function FBAManagementTab(_props: FBAManagementTabProps = {}) {
       const res = await fetch(`/api/admin/fba-fnskus/${encodeURIComponent(selectedFnsku)}`);
       if (!res.ok) throw new Error('Failed to fetch FNSKU detail');
       const json = await res.json();
-      return (json?.row ?? json) as FbaFnskuRow;
+      // API responds with { success, fnsku: <row> }. Fall back to legacy
+      // shapes (`row`, or a bare row) so we never hand the envelope to render.
+      return (json?.fnsku ?? json?.row ?? json) as FbaFnskuRow;
     },
     enabled: Boolean(selectedFnsku),
   });
@@ -98,6 +100,25 @@ export function FBAManagementTab(_props: FBAManagementTabProps = {}) {
       queryClient.invalidateQueries({ queryKey: qk.adminFbaFnskus.all });
       queryClient.invalidateQueries({ queryKey: ['admin-fba-fnsku-detail', selectedFnsku] });
       setIsEditing(false);
+    },
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: async () => {
+      if (!selectedFnsku) return;
+      const res = await fetch(`/api/admin/fba-fnskus/${encodeURIComponent(selectedFnsku)}`, {
+        method: 'DELETE',
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(json?.error || 'Failed to delete');
+      return json;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: qk.adminFbaFnskus.all });
+      queryClient.removeQueries({ queryKey: ['admin-fba-fnsku-detail', selectedFnsku] });
+      setIsDeleteOpen(false);
+      // Clear the selection so the detail pane returns to the empty state.
+      setParam((p) => p.delete('fnsku'));
     },
   });
 
@@ -174,13 +195,35 @@ export function FBAManagementTab(_props: FBAManagementTabProps = {}) {
                   {detail.fnsku}
                 </h2>
               </div>
-              <span
-                className={`inline-flex flex-shrink-0 rounded-full px-2.5 py-1 text-micro font-bold uppercase tracking-wider ${
-                  isStub ? 'bg-amber-50 text-amber-700' : 'bg-emerald-50 text-emerald-700'
-                }`}
-              >
-                {isStub ? 'Stub' : 'Hydrated'}
-              </span>
+              <div className="flex flex-shrink-0 items-center gap-2">
+                <span
+                  className={`inline-flex rounded-full px-2.5 py-1 text-micro font-bold uppercase tracking-wider ${
+                    isStub ? 'bg-amber-50 text-amber-700' : 'bg-emerald-50 text-emerald-700'
+                  }`}
+                >
+                  {isStub ? 'Stub' : 'Hydrated'}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setIsDeleteOpen(true)}
+                  className="inline-flex items-center gap-1 rounded-lg border border-red-200 bg-white px-2.5 py-1 text-micro font-bold uppercase tracking-wider text-red-600 hover:border-red-300 hover:bg-red-50"
+                >
+                  <svg
+                    className="h-3 w-3"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2.5"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  >
+                    <path d="M3 6h18" />
+                    <path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+                    <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
+                  </svg>
+                  Delete
+                </button>
+              </div>
             </header>
 
             <div className="rounded-xl border border-gray-200 bg-white p-4 space-y-3">
@@ -242,6 +285,49 @@ export function FBAManagementTab(_props: FBAManagementTabProps = {}) {
                   </button>
                 </div>
               ) : null}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {isDeleteOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <button
+            type="button"
+            className="absolute inset-0 bg-black/30"
+            onClick={() => setIsDeleteOpen(false)}
+            aria-label="Close delete confirmation"
+          />
+          <div className="relative w-full max-w-md rounded-2xl border border-gray-200 bg-white p-5 space-y-4">
+            <h3 className="text-label font-bold uppercase tracking-wider text-gray-900">
+              Delete FNSKU
+            </h3>
+            <p className="text-label text-gray-700 leading-relaxed">
+              Remove <span className="font-mono font-bold">{selectedFnsku}</span> from the catalog?
+              It will no longer appear in the FNSKU directory. Re-adding or re-uploading the same
+              FNSKU restores it.
+            </p>
+            {deleteMutation.isError ? (
+              <p className="text-caption font-semibold text-red-600">
+                {(deleteMutation.error as Error)?.message || 'Failed to delete.'}
+              </p>
+            ) : null}
+            <div className="flex items-center justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setIsDeleteOpen(false)}
+                className="rounded-xl bg-gray-100 px-3 py-2 text-label font-semibold text-gray-700 hover:bg-gray-200"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={deleteMutation.isPending}
+                onClick={() => deleteMutation.mutate()}
+                className="rounded-xl bg-red-600 px-3 py-2 text-label font-semibold text-white hover:bg-red-700 disabled:opacity-50"
+              >
+                {deleteMutation.isPending ? 'Deleting…' : 'Delete'}
+              </button>
             </div>
           </div>
         </div>

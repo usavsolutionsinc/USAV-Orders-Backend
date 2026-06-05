@@ -8,7 +8,7 @@
  * roving focus, arrow-key navigation, and group rendering; this component
  * provides the visual shell (framer-motion modal + backdrop blur),
  * server-side fuzzy search via /api/global-search, recents in localStorage,
- * and an "Ask AI" affordance that deep-links into /admin?section=ai_chat with the query.
+ * and an "Ask AI" affordance that deep-links into /ai-chat with the query.
  *
  * `shouldFilter={false}` because we mix two filtering sources:
  *  - static nav items (filtered manually below by query.includes)
@@ -258,7 +258,7 @@ export function CommandBar() {
 
   const handleAskAi = useCallback(() => {
     const q = query.trim();
-    const href = q ? `/admin?section=ai_chat&q=${encodeURIComponent(q)}` : '/admin?section=ai_chat';
+    const href = q ? `/ai-chat?q=${encodeURIComponent(q)}` : '/ai-chat';
     router.push(href);
     setOpen(false);
   }, [query, router]);

@@ -1,5 +1,5 @@
 /**
- * AI Chat — POST endpoint backing AiChatPanel.tsx and admin/AiChatTab.tsx.
+ * AI Chat — POST endpoint backing AiChatPanel.tsx and AiChatWorkspace.tsx.
  * The backend is the local Hermes gateway on 127.0.0.1:8642
  * (NousResearch/hermes-agent), reached from Vercel via Cloudflare tunnel.
  */

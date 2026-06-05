@@ -5,37 +5,29 @@ import { ConnectionsManagementTab } from '@/components/admin/ConnectionsManageme
 import { IntegrationsTab } from '@/components/admin/IntegrationsTab';
 import { GoalsAnalyticsTab } from '@/components/admin/GoalsAnalyticsTab';
 import { FBAManagementTab } from '@/components/admin/FBAManagementTab';
-import { FeaturesManagementTab } from '@/components/admin/FeaturesManagementTab';
-import { ManualAssignmentTab } from '@/components/admin/ManualAssignmentTab';
-import { ReasonCodesManagementTab } from '@/components/admin/ReasonCodesManagementTab';
-import { SkuCatalogManagementTab } from '@/components/admin/SkuCatalogManagementTab';
 import { RepairIssuesManagementTab } from '@/components/admin/RepairIssuesManagementTab';
 import { FavoritesManagementTab } from '@/components/admin/FavoritesManagementTab';
 import { LocationsManagementTab } from '@/components/admin/LocationsManagementTab';
 import { AdminLogsTab } from '@/components/admin/AdminLogsTab';
-import { AdminJobsTab } from '@/components/admin/AdminJobsTab';
-import AiChatTab from '@/components/admin/AiChatTab';
-import { OperationsFlowsDisplay } from '@/components/admin/workflow/OperationsFlowsDisplay';
-import { PhotoBackupTab } from '@/components/admin/PhotoBackupTab';
+import { OperationsSection } from '@/components/admin/workflow/OperationsSection';
 import { StationNasFoldersTab } from '@/components/admin/StationNasFoldersTab';
 import { BillingTab } from '@/components/admin/BillingTab';
 import { AdminOverviewTab } from '@/components/admin/AdminOverviewTab';
 import { getAdminSection, type AdminSection } from '@/components/admin/admin-sections';
 import { requirePermission } from '@/lib/auth/page-guard';
+import { redirect } from 'next/navigation';
 
 interface AdminPageProps {
   searchParams: Promise<{
     section?: string;
     search?: string;
-    manualMode?: string;
-    categoryId?: string;
-    orderId?: string;
+    mode?: string;
   }>;
 }
 
 function renderTab(
   activeTab: AdminSection,
-  args: { searchValue: string; manualMode: 'category' | 'orders'; categoryId: string; orderId: string },
+  args: { searchValue: string; mode?: string; canManageStock: boolean },
 ) {
   switch (activeTab) {
     case 'overview':     return <AdminOverviewTab />;
@@ -46,50 +38,35 @@ function renderTab(
     case 'connections':  return <ConnectionsManagementTab />;
     case 'integrations': return <IntegrationsTab />;
     case 'fba':          return <FBAManagementTab searchTerm={args.searchValue} />;
-    case 'features':     return <FeaturesManagementTab />;
     case 'logs':         return <AdminLogsTab initialSearch={args.searchValue} />;
-    case 'jobs':         return <AdminJobsTab />;
-    case 'ai_chat':      return <AiChatTab />;
-    case 'architecture': return <OperationsFlowsDisplay />;
-    case 'photo_backup': return <PhotoBackupTab />;
+    case 'architecture': return <OperationsSection mode={args.mode} canManageStock={args.canManageStock} />;
     case 'station_photos': return <StationNasFoldersTab />;
     case 'billing':      return <BillingTab />;
-    case 'reason_codes': return <ReasonCodesManagementTab />;
-    case 'sku_catalog':  return <SkuCatalogManagementTab />;
     case 'repair_issues': return <RepairIssuesManagementTab />;
     case 'favorites':    return <FavoritesManagementTab />;
     case 'locations':    return <LocationsManagementTab />;
-    case 'manuals':
-      return (
-        <ManualAssignmentTab
-          manualMode={args.manualMode}
-          categoryId={args.categoryId}
-          orderId={args.orderId}
-          searchValue={args.searchValue}
-        />
-      );
   }
 }
 
 export default async function AdminPage({ searchParams }: AdminPageProps) {
-  await requirePermission('admin.view', { enforce: true });
+  const user = await requirePermission('admin.view', { enforce: true });
 
   const params = await searchParams;
+
+  // Reason Codes folded into Operations — preserve old deep links.
+  if (String(params.section || '').toLowerCase() === 'reason_codes') {
+    redirect('/admin?section=architecture&mode=reasons');
+  }
+
   const activeTab = getAdminSection(params.section);
   const sidebarSearch = (params.search || '').trim();
-  const manualMode = params.manualMode === 'orders' ? 'orders' : 'category';
-  const categoryId = (params.categoryId || '').trim();
-  const orderId = (params.orderId || '').trim();
-
-  const isManuals = activeTab === 'manuals';
-  const containerClass = `flex h-full w-full bg-gray-50 ${isManuals ? 'overflow-hidden' : ''}`;
-  const innerClass = `flex-1 min-w-0 ${isManuals ? 'overflow-hidden flex flex-col' : 'overflow-hidden'}`;
+  const canManageStock = user.permissions.has('sku_stock.manage');
 
   return (
-    <div className={containerClass}>
-      <div className={innerClass}>
+    <div className="flex h-full w-full bg-gray-50">
+      <div className="flex-1 min-w-0 overflow-hidden">
         <div className="h-full min-h-0 w-full">
-          {renderTab(activeTab, { searchValue: sidebarSearch, manualMode, categoryId, orderId })}
+          {renderTab(activeTab, { searchValue: sidebarSearch, mode: params.mode, canManageStock })}
         </div>
       </div>
     </div>

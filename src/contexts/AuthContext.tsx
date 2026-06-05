@@ -43,6 +43,7 @@ function isClientPublicPath(pathname: string | null): boolean {
 
 export interface AuthSessionUser {
   staffId: number;
+  name: string;
   role: string;
   permissions: string[];
   mobileDisplayConfig?: MobileDisplayConfig;

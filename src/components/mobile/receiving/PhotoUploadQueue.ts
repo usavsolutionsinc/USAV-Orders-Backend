@@ -5,6 +5,12 @@ import {
   blobToBase64DataUrl,
   downscaleImageTo720,
 } from '@/lib/image/downscale';
+import {
+  attachNasPhoto,
+  buildNasPhotoUrl,
+  getNasBaseUrl,
+  putNasPhoto,
+} from '@/lib/nas-photos';
 
 /**
  * Module-singleton store for in-flight receiving photo uploads.
@@ -63,6 +69,11 @@ interface PersistedEntry {
 }
 
 // ─── State + subscribers ────────────────────────────────────────────────────
+// Active NAS upload target (base URL + this operator's folder), pushed in from
+// the capture surface via configureNas() once GET /api/nas-config resolves.
+// Falls back to the nas-photos module base URL (env seed) if never configured.
+let nasUploadConfig: { baseUrl: string; folder: string } | null = null;
+
 const state: QueueState = { entries: [] };
 const listeners = new Set<() => void>();
 // Original (post-downscale) blob ref so Retry doesn't re-prompt the user.
@@ -171,28 +182,33 @@ function rehydrate(): void {
 }
 
 // ─── Upload pipeline ────────────────────────────────────────────────────────
+// Capture flow now writes straight to the office NAS over WebDAV (no Vercel
+// Blob): the browser PUTs the downscaled JPEG to the NAS, then links the
+// resulting URL to the receiving row via POST /api/receiving-photos. A stable
+// per-entry filename makes a Retry overwrite the same path instead of duping.
 async function postPhoto(
   entry: UploadEntry,
   blob: Blob,
 ): Promise<{ id: number; url: string }> {
-  const dataUrl = await blobToBase64DataUrl(blob);
-  const res = await fetch('/api/receiving-photos', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      receivingId: entry.scope.receivingId,
-      receivingLineId: entry.scope.receivingLineId ?? null,
-      photoBase64: dataUrl,
-    }),
-  });
-  const data = await res.json().catch(() => null);
-  if (!res.ok) {
-    const msg = data?.error || `HTTP ${res.status}`;
-    throw new Error(msg);
+  const baseUrl = nasUploadConfig?.baseUrl || getNasBaseUrl();
+  if (!baseUrl) {
+    throw new Error('NAS not configured — set the NAS address in Admin → Receiving Photos.');
   }
-  const id = Number(data?.photo?.id ?? data?.id ?? 0);
-  const url = String(data?.photo?.photoUrl ?? data?.photoUrl ?? '');
-  return { id, url };
+  const folder = nasUploadConfig?.folder ?? '';
+  const targetUrl = buildNasPhotoUrl({
+    baseUrl,
+    folder,
+    scope: entry.scope,
+    filename: `photo_${entry.id}.jpg`,
+  });
+
+  const put = await putNasPhoto(targetUrl, blob);
+  if (!put.ok) throw new Error(put.error || 'NAS write failed');
+
+  const attach = await attachNasPhoto(entry.scope, put.url);
+  if (!attach.ok) throw new Error(attach.error || 'Failed to link photo to PO');
+
+  return { id: attach.photoId ?? 0, url: put.url };
 }
 
 async function processEntry(id: string, blob: Blob): Promise<void> {
@@ -240,6 +256,13 @@ async function prepareAndUpload(id: string, rawBlob: Blob): Promise<void> {
 
 // ─── Public API ─────────────────────────────────────────────────────────────
 export const photoUploadQueue = {
+  /**
+   * Point the queue at the active NAS (base URL + the operator's folder). Called
+   * by the capture surface once GET /api/nas-config resolves. Pass null to clear.
+   */
+  configureNas(cfg: { baseUrl: string; folder: string } | null) {
+    nasUploadConfig = cfg;
+  },
   enqueue(scope: PhotoScope, blob: Blob, previewUrl: string): string {
     rehydrate();
     const id = randomId();

@@ -10,6 +10,8 @@ import {
 } from '@/components/mobile/station/MobilePackerSpamCamera';
 import { PhotoCaptureSurface } from '@/components/mobile/receiving/PhotoCaptureSurface';
 import { compressPhotoForUpload } from '@/lib/image/compress-for-upload';
+import { useNasConfig } from '@/hooks/useNasConfig';
+import { attachNasPhoto, buildNasPhotoUrl, getNasBaseUrl, putNasPhoto } from '@/lib/nas-photos';
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -44,6 +46,9 @@ function PhotoPageInner() {
   const staffId = user?.staffId ?? 0;
   const requestId = searchParams.get('requestId');
   const { getClient } = useAblyClient();
+  // Active NAS (test/prod) + this operator's folder — captured photos write
+  // straight to the NAS share, no Vercel Blob.
+  const nas = useNasConfig();
 
   const [stage, setStage] = useState<'camera' | 'uploading' | 'done'>('camera');
   const [entries, setEntries] = useState<UploadEntry[]>([]);
@@ -82,26 +87,27 @@ function PhotoPageInner() {
         prev.map((e) => (e.id === entry.id ? { ...e, state: 'uploading', error: null } : e)),
       );
       try {
+        const baseUrl = nas?.baseUrl || getNasBaseUrl();
+        if (!baseUrl) {
+          throw new Error('NAS not configured — set the NAS address in Admin → Receiving Photos.');
+        }
         // Defense-in-depth: shots from MobilePackerSpamCamera are already
         // compressed, but if this page is ever entered with a raw blob the
         // helper short-circuits via its passthrough for already-small files.
         const compressed = await compressPhotoForUpload(entry.blob, { source: 'm-receiving' });
-        const base64 = compressed.base64;
-        const res = await fetch('/api/receiving-photos', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            receivingId,
-            photoBase64: base64,
-            uploadedBy: staffId,
-          }),
+        const scope = { receivingId };
+        const targetUrl = buildNasPhotoUrl({
+          baseUrl,
+          folder: nas?.folder ?? '',
+          scope,
+          filename: `photo_${entry.id}.jpg`,
         });
-        const data = await res.json();
-        if (!res.ok) throw new Error(data?.error || `HTTP ${res.status}`);
-        const photoId = Number(data?.id ?? data?.photo?.id ?? data?.photos?.[0]?.id ?? 0) || 0;
-        const photoUrl = String(
-          data?.photoUrl ?? data?.url ?? data?.photo?.photoUrl ?? '',
-        );
+        const put = await putNasPhoto(targetUrl, compressed.blob);
+        if (!put.ok) throw new Error(put.error || 'NAS write failed');
+        const attach = await attachNasPhoto(scope, put.url);
+        if (!attach.ok) throw new Error(attach.error || 'Failed to link photo to PO');
+        const photoId = attach.photoId ?? 0;
+        const photoUrl = put.url;
         setEntries((prev) =>
           prev.map((e) =>
             e.id === entry.id
@@ -119,7 +125,7 @@ function PhotoPageInner() {
         );
       }
     },
-    [publishUpload, receivingId, staffId],
+    [publishUpload, receivingId, staffId, nas],
   );
 
   // ── Camera "Done" → upload sequentially so we can publish in order ──

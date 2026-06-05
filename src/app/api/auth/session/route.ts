@@ -79,6 +79,7 @@ export async function GET() {
     {
       user: {
         staffId: user.staffId,
+        name: user.name,
         role: user.role,
         permissions: Array.from(user.permissions),
         mobileDisplayConfig: user.mobileDisplayConfig,

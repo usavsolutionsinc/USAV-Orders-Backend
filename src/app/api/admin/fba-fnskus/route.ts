@@ -10,14 +10,19 @@ export const GET = withAuth(async (req: NextRequest) => {
     const limit = Number.isFinite(limitParam) ? Math.max(1, Math.min(1000, Math.floor(limitParam))) : 200;
 
     const hasQuery = q.length > 0;
+    // Deactivated rows (is_active = FALSE, set by DELETE) are hidden from the
+    // catalog. NULL is treated as active so legacy rows still show.
     const whereSql = hasQuery
       ? `
-        WHERE COALESCE(product_title, '') ILIKE $1
-           OR COALESCE(asin, '') ILIKE $1
-           OR COALESCE(sku, '') ILIKE $1
-           OR COALESCE(fnsku, '') ILIKE $1
+        WHERE is_active IS NOT FALSE
+          AND (
+            COALESCE(product_title, '') ILIKE $1
+            OR COALESCE(asin, '') ILIKE $1
+            OR COALESCE(sku, '') ILIKE $1
+            OR COALESCE(fnsku, '') ILIKE $1
+          )
       `
-      : '';
+      : `WHERE is_active IS NOT FALSE`;
     const params = hasQuery ? [`%${q}%`, limit] : [limit];
 
     const orderSql = `

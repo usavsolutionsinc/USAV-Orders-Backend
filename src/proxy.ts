@@ -73,6 +73,18 @@ function extractTenantSlug(host: string | null): string | null {
   // subdomain there is the project, not a tenant. Cheap heuristic: any host
   // ending in .vercel.app skips slug extraction.
   if (cleaned.endsWith('.vercel.app')) return null;
+  // Dev tunnel hostnames (Cloudflare quick tunnels, ngrok) carry a random
+  // subdomain that is not a tenant. Without this, e.g. quiet-frog-1234 from
+  // quiet-frog-1234.trycloudflare.com resolves to an unknown org and every
+  // org-scoped query (staff picker, etc.) comes back empty on the phone.
+  if (
+    cleaned.endsWith('.trycloudflare.com') ||
+    cleaned.endsWith('.ngrok-free.app') ||
+    cleaned.endsWith('.ngrok.app') ||
+    cleaned.endsWith('.ngrok.io')
+  ) {
+    return null;
+  }
   return candidate;
 }
 

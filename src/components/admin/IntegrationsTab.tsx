@@ -1,6 +1,8 @@
 import { getCurrentUser } from '@/lib/auth/current-user';
 import pool from '@/lib/db';
 import { IntegrationCard } from './IntegrationCard';
+import { isNangoConfigured } from '@/lib/integrations/nango';
+import { isNangoBackedProvider } from '@/lib/integrations/nango-providers';
 
 const PROVIDER_CATALOG = [
   { key: 'ebay',          label: 'eBay',          description: 'Storefront sync + token refresh.' },
@@ -42,6 +44,8 @@ export async function IntegrationsTab() {
     if (!byProvider.has(row.provider)) byProvider.set(row.provider, row);
   }
 
+  const nangoReady = isNangoConfigured();
+
   return (
     <div className="min-h-screen bg-gray-50 antialiased">
       <div className="mx-auto max-w-5xl space-y-6 px-6 py-10">
@@ -60,6 +64,8 @@ export async function IntegrationsTab() {
               providerLabel={p.label}
               description={p.description}
               row={byProvider.get(p.key) ?? null}
+              nangoBacked={isNangoBackedProvider(p.key)}
+              nangoReady={nangoReady}
             />
           ))}
         </div>

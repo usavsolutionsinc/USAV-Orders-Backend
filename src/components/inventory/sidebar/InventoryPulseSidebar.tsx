@@ -6,6 +6,7 @@ import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
 import { useDebounce } from '@/hooks';
 import { SidebarShell } from '@/components/layout/SidebarShell';
+import { getLast4, SerialChip, SkuScanRefChip } from '@/components/ui/CopyChip';
 import { microBadge } from '@/design-system/tokens/typography/presets';
 import { inventoryStatusBadgeClass } from '@/components/inventory/status-classes';
 import type { UnitListRow, UnitListResponse } from '@/components/inventory/types';
@@ -97,24 +98,35 @@ export function InventoryPulseSidebar() {
             <ul className="space-y-1">
                 {rows.map((row) => {
                     const active = String(row.id) === openId;
+                    const meta = row.current_location || row.condition_grade || '';
                     return (
                         <li key={row.id}>
-                            <button
-                                type="button"
+                            {/* Clickable div (not a <button>) so the copy chips —
+                                themselves <button>s — can nest without invalid markup. */}
+                            <div
+                                role="button"
+                                tabIndex={0}
                                 onClick={() => select(row.id)}
+                                onKeyDown={(e) => {
+                                    if (e.key === 'Enter' || e.key === ' ') {
+                                        e.preventDefault();
+                                        select(row.id);
+                                    }
+                                }}
                                 className={cn(
-                                    'flex w-full flex-col items-start gap-1 rounded-lg px-2.5 py-2 text-left transition-colors',
+                                    'flex w-full cursor-pointer flex-col gap-1.5 rounded-lg px-2.5 py-2 text-left transition-colors',
                                     active ? 'bg-blue-50 ring-1 ring-inset ring-blue-200' : 'hover:bg-gray-50',
                                 )}
                             >
-                                <div className="flex w-full items-center justify-between gap-2">
+                                {/* Title on top + status */}
+                                <div className="flex w-full items-start justify-between gap-2">
                                     <span
                                         className={cn(
-                                            'truncate font-mono text-[12px] font-semibold',
+                                            'min-w-0 flex-1 truncate text-[13px] font-bold',
                                             active ? 'text-blue-900' : 'text-gray-900',
                                         )}
                                     >
-                                        {row.serial_number}
+                                        {row.product_title || row.sku || row.serial_number}
                                     </span>
                                     <span
                                         className={cn(
@@ -125,16 +137,17 @@ export function InventoryPulseSidebar() {
                                         {row.current_status}
                                     </span>
                                 </div>
-                                <div className="flex w-full items-center justify-between gap-2 text-[11px] text-gray-500">
-                                    <span className="truncate">
-                                        {row.sku ? `${row.sku} · ` : ''}
-                                        {row.product_title || '—'}
+                                {/* SKU + serial copy chips, flush right */}
+                                <div className="flex w-full items-center justify-between gap-2">
+                                    <span className="min-w-0 truncate font-mono text-[11px] text-gray-400">
+                                        {meta}
                                     </span>
-                                    {row.current_location ? (
-                                        <span className="shrink-0 font-mono">{row.current_location}</span>
-                                    ) : null}
+                                    <div className="flex shrink-0 items-center gap-1.5">
+                                        {row.sku ? <SkuScanRefChip value={row.sku} display={getLast4(row.sku)} /> : null}
+                                        <SerialChip value={row.serial_number} />
+                                    </div>
                                 </div>
-                            </button>
+                            </div>
                         </li>
                     );
                 })}

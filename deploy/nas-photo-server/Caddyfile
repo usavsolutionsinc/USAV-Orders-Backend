@@ -1,30 +1,64 @@
-# Caddy config for the receiving "Select from NAS" picker — the method
-# actually deployed on the Ugreen DH2300 (which can't run Docker easily; see
-# README.md "Why Caddy and not Docker").
+# Caddy config for the receiving "Select from NAS" + direct-capture feature —
+# the method actually deployed on the Ugreen DH2300.
 #
-# Single static binary, no root needed:
-#   curl -fsSL "https://caddyserver.com/api/download?os=linux&arch=arm64" -o ~/caddy && chmod +x ~/caddy
+# This serves ONE sandboxed photos folder with BOTH:
+#   • read  — JSON/HTML directory browse + file serving (the picker), and
+#   • write — WebDAV PUT so the mobile capture flow writes photos straight here.
+#
+# Requires a Caddy build that INCLUDES the webdav module (the stock binary does
+# not). Download one in a single step from Caddy's build server:
+#   curl -fsSL "https://caddyserver.com/api/download?os=linux&arch=arm64&p=github.com/mholt/caddy-webdav" -o ~/caddy
+#   chmod +x ~/caddy
 #   ~/caddy run --config ~/nas-photos.Caddyfile --adapter caddyfile
 #
-# Serves ONE sandboxed folder, read-only, with a JSON directory listing
-# (returned when the client sends `Accept: application/json`) and CORS so the
-# Vercel-hosted app can read the listing from the browser.
+# Sanity check from a LAN machine:
+#   curl -H "Accept: application/json" http://<nas-ip>:8088/             # JSON listing
+#   curl -X PUT --data-binary @some.jpg http://<nas-ip>:8088/test.jpg    # 201 Created
+#   curl -I http://<nas-ip>:8088/test.jpg                                # 200, image/*
+
+{
+	# We listen on a plain HTTP port only; TLS for the live site is terminated
+	# upstream by the Cloudflare tunnel. Never let Caddy try to grab 80/443 —
+	# UGOS already owns those.
+	auto_https off
+}
 
 :8088 {
 	# The photos folder ONLY. Never point this at the home root (secrets live
 	# there). Path quoted because it contains a space.
 	root * "/volume1/@home/Michael Garisek/Photos"
 
-	# CORS — the picker fetches this listing cross-origin from the app's domain.
-	# A simple no-credentials GET, so "*" exposes nothing beyond filenames.
+	# CORS. The app reads the listing AND PUTs captured photos cross-origin from
+	# its own domain, with credentials:'include' (so a Cloudflare Access cookie
+	# can ride along). The CORS spec forbids "*" when credentials are allowed, so
+	# reflect the caller's Origin and allow credentials. `defer` writes these on
+	# every response (preflight, browse, file serve, and webdav PUT alike).
 	header {
-		Access-Control-Allow-Origin "*"
-		Access-Control-Allow-Methods "GET, HEAD, OPTIONS"
+		Access-Control-Allow-Origin "{http.request.header.Origin}"
+		Access-Control-Allow-Credentials "true"
+		Access-Control-Allow-Methods "GET, HEAD, PUT, OPTIONS"
+		Access-Control-Allow-Headers "Content-Type"
 		Vary Origin
+		defer
 	}
-	@opt method OPTIONS
-	respond @opt 204
 
-	# `browse` returns a JSON array on `Accept: application/json`, else HTML.
-	file_server browse
+	# Named matchers (defined at site level, referenced inside the route below).
+	@preflight method OPTIONS
+	@put method PUT
+
+	# One ordered route so method dispatch is deterministic:
+	#   OPTIONS → 204 preflight (MUST be first, or file_server 404s the preflight),
+	#   PUT     → WebDAV create/overwrite a single file,
+	#   else    → read-only file server with JSON/HTML browse.
+	# DELETE/MOVE/MKCOL never reach webdav, so the share is writable (new photos)
+	# but can't be wiped over HTTP. Capture writes flat filenames into existing
+	# folders (no per-PO subdir), because plain WebDAV PUT 409s when a parent
+	# collection is missing.
+	route {
+		respond @preflight 204
+		webdav @put {
+			root "/volume1/@home/Michael Garisek/Photos"
+		}
+		file_server browse
+	}
 }

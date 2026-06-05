@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import { getLast4, OrderIdChip, SerialChip, SkuScanRefChip } from '@/components/ui/CopyChip';
 import type { PulseEventRow } from './types';
 import { inventoryStatusBadgeClass } from './status-classes';
 
@@ -11,6 +12,15 @@ interface EventRowProps {
 function statusBadgeClass(status: string | null): string {
     if (!status) return 'bg-gray-100 text-gray-500';
     return inventoryStatusBadgeClass(status);
+}
+
+// Legacy rows stored extra serials as "Supplemental serial <SN> (beyond
+// expected qty)". Multiple serials per line/qty is normal, so display them as
+// a plain "Serial <SN>" — matches how new scans are recorded.
+function displayNotes(notes: string): string {
+    const match = notes.match(/^Supplemental serial (\S+) \(beyond expected qty\)$/i);
+    if (match) return `Serial ${match[1]}`;
+    return notes;
 }
 
 function relativeTime(iso: string): string {
@@ -38,12 +48,7 @@ export function EventRow({ event }: EventRowProps) {
               hour12: true,
           });
 
-    const skuHref = event.sku ? `/inventory?sku=${encodeURIComponent(event.sku)}` : null;
     const binHref = event.bin_name ? `/inventory?bin=${encodeURIComponent(event.bin_name)}` : null;
-    const unitHref =
-        event.serial_unit_id != null
-            ? `/admin/inventory/units/${event.serial_unit_id}`
-            : null;
 
     return (
         <li className="flex items-start gap-3 border-b border-gray-100 px-4 py-2.5 hover:bg-blue-50/40 sm:px-6">
@@ -73,25 +78,20 @@ export function EventRow({ event }: EventRowProps) {
                     ) : null}
                 </div>
 
-                <div className="mt-1 flex flex-wrap items-baseline gap-x-3 gap-y-1 text-sm">
-                    {skuHref ? (
-                        <Link
-                            href={skuHref}
-                            className="truncate font-mono text-xs text-blue-700 hover:underline"
-                            onClick={(e) => e.stopPropagation()}
-                        >
-                            {event.sku}
-                        </Link>
+                {/* Identifiers as copy chips (click to copy the full value) — SKU
+                    + internal unit id + serial — instead of dumping raw strings. */}
+                <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm">
+                    {event.sku ? (
+                        <SkuScanRefChip value={event.sku} display={getLast4(event.sku)} />
                     ) : null}
-                    {unitHref ? (
-                        <Link
-                            href={unitHref}
-                            className="font-mono text-xs text-gray-600 hover:underline"
-                            onClick={(e) => e.stopPropagation()}
-                        >
-                            #{event.serial_unit_id}
-                            {event.serial_number ? ` · ${event.serial_number}` : ''}
-                        </Link>
+                    {event.serial_unit_id != null ? (
+                        <OrderIdChip
+                            value={String(event.serial_unit_id)}
+                            display={getLast4(String(event.serial_unit_id))}
+                        />
+                    ) : null}
+                    {event.serial_number ? (
+                        <SerialChip value={event.serial_number} width="w-auto shrink-0" />
                     ) : null}
                     {binHref ? (
                         <Link
@@ -108,7 +108,7 @@ export function EventRow({ event }: EventRowProps) {
                 </div>
 
                 {event.notes ? (
-                    <div className="mt-1 truncate text-xs text-gray-500">{event.notes}</div>
+                    <div className="mt-1 truncate text-xs text-gray-500">{displayNotes(event.notes)}</div>
                 ) : null}
             </div>
 

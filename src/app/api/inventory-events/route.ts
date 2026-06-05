@@ -50,10 +50,14 @@ export const GET = withAuth(async (request: NextRequest) => {
     const serialIds = Array.from(
       new Set(rawEvents.map((e) => e.serial_unit_id).filter((v): v is number => v != null)),
     );
+    const skus = Array.from(
+      new Set(rawEvents.map((e) => e.sku).filter((v): v is string => !!v)),
+    );
 
     const staffMap = new Map<number, string>();
     const binMap = new Map<number, string>();
     const serialMap = new Map<number, string>();
+    const skuTitleMap = new Map<string, string>();
 
     if (staffIds.length > 0) {
       const r = await pool.query<{ id: number; name: string }>(
@@ -76,6 +80,13 @@ export const GET = withAuth(async (request: NextRequest) => {
       );
       for (const row of r.rows) serialMap.set(row.id, row.serial_number);
     }
+    if (skus.length > 0) {
+      const r = await pool.query<{ sku: string; product_title: string | null }>(
+        `SELECT sku, product_title FROM sku_catalog WHERE sku = ANY($1::text[])`,
+        [skus],
+      );
+      for (const row of r.rows) skuTitleMap.set(row.sku, row.product_title ?? '');
+    }
 
     const events = rawEvents.map((e) => ({
       id: e.id,
@@ -86,6 +97,7 @@ export const GET = withAuth(async (request: NextRequest) => {
         e.actor_staff_id != null ? staffMap.get(e.actor_staff_id) ?? null : null,
       station: e.station,
       sku: e.sku,
+      product_title: e.sku ? skuTitleMap.get(e.sku) ?? null : null,
       serial_unit_id: e.serial_unit_id,
       serial_number:
         e.serial_unit_id != null ? serialMap.get(e.serial_unit_id) ?? null : null,

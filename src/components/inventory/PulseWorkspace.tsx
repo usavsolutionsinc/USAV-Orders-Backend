@@ -3,6 +3,7 @@
 import { useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { History, Loader2, MapPin, Package } from '@/components/Icons';
+import { getLast4, SerialChip, SkuScanRefChip } from '@/components/ui/CopyChip';
 import { EventRow } from './EventRow';
 import { inventoryStatusBadgeClass } from './status-classes';
 import type { PulseEventRow, PulseEventsResponse } from './types';
@@ -42,6 +43,8 @@ export function PulseWorkspace({ unitId }: PulseWorkspaceProps) {
     const currentLocation = events.find((e) => e.bin_name)?.bin_name ?? null;
     const serial = latest?.serial_number ?? null;
     const sku = latest?.sku ?? null;
+    const productTitle = events.find((e) => e.product_title)?.product_title ?? null;
+    const heroTitle = productTitle || serial || `Unit #${unitId}`;
 
     if (!unitId) {
         return (
@@ -82,12 +85,19 @@ export function PulseWorkspace({ unitId }: PulseWorkspaceProps) {
                         <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-blue-600 text-white shadow-lg shadow-blue-200">
                             <Package className="h-7 w-7" />
                         </div>
-                        <div className="space-y-1">
-                            <h1 className="font-mono text-2xl font-black tracking-tight text-gray-900">
-                                {serial ?? `Unit #${unitId}`}
+                        <div className="min-w-0 space-y-2">
+                            {/* Product title on top; serial + SKU are copy chips
+                                (last-4, click to copy the full value) below. */}
+                            <h1 className="truncate text-2xl font-black tracking-tight text-gray-900">
+                                {heroTitle}
                             </h1>
-                            <div className="flex items-center gap-3 text-sm">
-                                {sku ? <span className="font-mono text-gray-500">{sku}</span> : null}
+                            <div className="flex flex-wrap items-center gap-2 text-sm">
+                                {sku ? (
+                                    <SkuScanRefChip value={sku} display={getLast4(sku)} />
+                                ) : null}
+                                {serial ? (
+                                    <SerialChip value={serial} width="w-auto shrink-0" />
+                                ) : null}
                                 {currentStatus ? (
                                     <span
                                         className={cn(

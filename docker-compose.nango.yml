@@ -1,0 +1,70 @@
+# Self-hosted Nango — auth + proxy sidecar (lightweight, free tier).
+#
+# Three services only: server + Postgres + Redis. Syncs/Actions/Webhooks
+# (Temporal, Elasticsearch, jobs/runner, object storage) are deliberately NOT
+# here — those are Enterprise features and heavier ops. This footprint covers
+# OAuth + token storage/refresh + authenticated proxy, which is all the app's
+# additive layer uses.
+#
+# Usage:
+#   create .env.nango (template is in docs/nango-sidecar-setup.md), then:
+#   docker compose -f docker-compose.nango.yml --env-file .env.nango up -d
+#
+# See docs/nango-sidecar-setup.md for the full walkthrough.
+
+services:
+  nango-server:
+    image: nangohq/nango-server:hosted
+    restart: unless-stopped
+    ports:
+      - '3003:3003'
+    environment:
+      NANGO_SERVER_URL: ${NANGO_SERVER_URL:-http://localhost:3003}
+      # Persisted credential encryption key (base64-encoded 32 bytes).
+      NANGO_ENCRYPTION_KEY: ${NANGO_ENCRYPTION_KEY}
+      # Dashboard/admin login for the self-hosted UI.
+      NANGO_DASHBOARD_USERNAME: ${NANGO_DASHBOARD_USERNAME:-admin}
+      NANGO_DASHBOARD_PASSWORD: ${NANGO_DASHBOARD_PASSWORD}
+      # Postgres (the bundled DB below, or point at a managed/Neon instance).
+      NANGO_DB_HOST: ${NANGO_DB_HOST:-nango-db}
+      NANGO_DB_PORT: ${NANGO_DB_PORT:-5432}
+      NANGO_DB_NAME: ${NANGO_DB_NAME:-nango}
+      NANGO_DB_USER: ${NANGO_DB_USER:-nango}
+      NANGO_DB_PASSWORD: ${NANGO_DB_PASSWORD:-nango}
+      NANGO_DB_SSL: ${NANGO_DB_SSL:-false}
+      # Redis.
+      NANGO_REDIS_URL: ${NANGO_REDIS_URL:-redis://nango-redis:6379}
+      # Provider OAuth callback base — must be publicly reachable for OAuth.
+      NANGO_CALLBACK_URL: ${NANGO_CALLBACK_URL:-http://localhost:3003/oauth/callback}
+      FLAG_AUTH_ENABLED: 'true'
+    depends_on:
+      nango-db:
+        condition: service_healthy
+      nango-redis:
+        condition: service_started
+
+  nango-db:
+    image: postgres:16.0-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${NANGO_DB_NAME:-nango}
+      POSTGRES_USER: ${NANGO_DB_USER:-nango}
+      POSTGRES_PASSWORD: ${NANGO_DB_PASSWORD:-nango}
+    volumes:
+      - nango-db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U ${NANGO_DB_USER:-nango}']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  nango-redis:
+    image: redis:7.2.4
+    restart: unless-stopped
+    volumes:
+      - nango-redis-data:/data
+
+volumes:
+  nango-db-data:
+  nango-redis-data:
+</content>

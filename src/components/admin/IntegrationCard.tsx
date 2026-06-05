@@ -17,6 +17,10 @@ interface IntegrationCardProps {
   providerLabel: string;
   description: string;
   row: IntegrationRow | null;
+  /** Provider is mapped to a Nango integration (see nango-providers.ts). */
+  nangoBacked?: boolean;
+  /** Nango sidecar is configured server-side (NANGO_SECRET_KEY present). */
+  nangoReady?: boolean;
 }
 
 const STATUS_STYLES: Record<string, { dot: string; text: string; bg: string }> = {
@@ -25,7 +29,7 @@ const STATUS_STYLES: Record<string, { dot: string; text: string; bg: string }> =
   revoked: { dot: 'bg-gray-400',    text: 'text-gray-600',    bg: 'bg-gray-100' },
 };
 
-export function IntegrationCard({ providerKey, providerLabel, description, row }: IntegrationCardProps) {
+export function IntegrationCard({ providerKey, providerLabel, description, row, nangoBacked, nangoReady }: IntegrationCardProps) {
   const [open, setOpen] = useState(false);
   const [payload, setPayload] = useState<string>('{}');
   const [busy, setBusy] = useState(false);
@@ -33,6 +37,62 @@ export function IntegrationCard({ providerKey, providerLabel, description, row }
 
   const status = row?.status ?? 'not-configured';
   const style = STATUS_STYLES[status] ?? { dot: 'bg-gray-300', text: 'text-gray-500', bg: 'bg-gray-50' };
+
+  // OAuth via the self-hosted Nango Connect UI, for Nango-backed providers.
+  const useOAuth = Boolean(nangoBacked && nangoReady);
+
+  const connectViaNango = useCallback(async () => {
+    setBusy(true);
+    setError(null);
+    try {
+      const r = await fetch('/api/integrations/nango/session', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ provider: providerKey }),
+      });
+      const data = await r.json();
+      if (!r.ok) {
+        setError(data.error || `HTTP ${r.status}`);
+        return;
+      }
+      const { default: Nango } = await import('@nangohq/frontend');
+      const nango = new Nango();
+      nango.openConnectUI({
+        sessionToken: data.token,
+        ...(process.env.NEXT_PUBLIC_NANGO_CONNECT_BASE_URL
+          ? { baseURL: process.env.NEXT_PUBLIC_NANGO_CONNECT_BASE_URL }
+          : {}),
+        ...(process.env.NEXT_PUBLIC_NANGO_API_URL
+          ? { apiURL: process.env.NEXT_PUBLIC_NANGO_API_URL }
+          : {}),
+        onEvent: async (event) => {
+          if (event.type === 'connect') {
+            const m = await fetch('/api/integrations/nango/connected', {
+              method: 'POST',
+              headers: { 'content-type': 'application/json' },
+              body: JSON.stringify({
+                provider: providerKey,
+                providerConfigKey: event.payload.providerConfigKey,
+                connectionId: event.payload.connectionId,
+              }),
+            });
+            if (m.ok) {
+              window.location.reload();
+            } else {
+              const md = await m.json().catch(() => ({}));
+              setError(md.error || 'failed to record connection');
+            }
+          } else if (event.type === 'error') {
+            setError(event.payload.errorMessage || 'connection failed');
+          }
+        },
+      });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'connect failed');
+    } finally {
+      setBusy(false);
+    }
+  }, [providerKey]);
 
   const upsert = useCallback(async () => {
     setBusy(true);
@@ -101,10 +161,13 @@ export function IntegrationCard({ providerKey, providerLabel, description, row }
       <div className="mt-3 flex items-center justify-between">
         <button
           type="button"
-          onClick={() => setOpen(true)}
-          className="text-[11.5px] font-medium text-slate-900 hover:underline"
+          onClick={useOAuth ? connectViaNango : () => setOpen(true)}
+          disabled={busy}
+          className="text-[11.5px] font-medium text-slate-900 hover:underline disabled:opacity-50"
         >
-          {row ? 'Update credentials' : 'Connect'}
+          {useOAuth
+            ? (row ? 'Reconnect with OAuth' : 'Connect with OAuth')
+            : (row ? 'Update credentials' : 'Connect')}
         </button>
         {row && (
           <button
@@ -117,6 +180,10 @@ export function IntegrationCard({ providerKey, providerLabel, description, row }
           </button>
         )}
       </div>
+
+      {useOAuth && error && !open && (
+        <div className="mt-2 rounded-md bg-red-50 px-2 py-1 text-[11px] font-medium text-red-700">{error}</div>
+      )}
 
       {open && (
         <div className="fixed inset-0 z-50 flex items-center justify-center px-4">
