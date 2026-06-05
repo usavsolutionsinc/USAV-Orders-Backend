@@ -1,6 +1,5 @@
 'use client';
 
-import { motion, useReducedMotion } from 'framer-motion';
 import Link from 'next/link';
 import {
   OrderIdChip,
@@ -8,9 +7,11 @@ import {
   SerialChip,
   getLast4,
 } from '@/components/ui/CopyChip';
+import { ChipColumns, CHIP_COL } from '@/components/ui/ChipColumns';
 import { Camera, Check, Package, PackageCheck, Box, AlertCircle, Loader2 } from '@/components/Icons';
 import { conditionGradeTableLabel, workflowStatusTableLabel } from '@/components/station/receiving-constants';
 import type { ReceivingLineRow } from '@/components/station/ReceivingLinesTable';
+import { MobileRowCard } from '@/components/mobile/feed/MobileRowCard';
 
 interface MobileReceivingRowProps {
   row: ReceivingLineRow;
@@ -100,7 +101,6 @@ function PhotoChip({ count, isAction = false }: { count: number; isAction?: bool
  * Row 2: [Qty 1/1] [PO Chip] [SKU Chip] [Tracking Chip] ... [Photo Action]
  */
 export function MobileReceivingRow({ row, variant, fresh = false, onTap, photosHref }: MobileReceivingRowProps) {
-  const reduceMotion = useReducedMotion();
   const productTitle = row.item_name || row.zoho_item_id || 'Unnamed inbound line';
   const poValue = (row.zoho_purchaseorder_number || row.zoho_purchaseorder_id || '').trim();
   const trackingValue = (row.tracking_number || '').trim();
@@ -125,34 +125,12 @@ export function MobileReceivingRow({ row, variant, fresh = false, onTap, photosH
   const isExpanded = variant === 'expanded';
 
   return (
-    <div
-      data-line-row-id={row.id}
-      className={`relative transition-all ${
-        isExpanded 
-          ? 'mx-3 mb-3 mt-2 rounded-2xl border border-blue-100 bg-white p-4 shadow-[0_8px_24px_-12px_rgba(15,23,42,0.18)]' 
-          : 'flex w-full flex-col border-b border-gray-100 px-3 py-3 active:bg-blue-50 bg-white transition-colors'
-      }`}
+    <MobileRowCard
+      variant={variant}
+      fresh={fresh}
+      onTap={onTap}
+      dataAttr={{ name: 'line-row-id', value: row.id }}
     >
-      {/* Tap area for the sheet overlay */}
-      <button 
-        type="button" 
-        onClick={onTap} 
-        className="absolute inset-0 z-0 h-full w-full active:bg-blue-50/30" 
-      />
-
-      {/* Fresh-arrival ring pulse (only for expanded) */}
-      {isExpanded && fresh && !reduceMotion && (
-        <motion.span
-          aria-hidden
-          initial={{ opacity: 0.55, scale: 1 }}
-          animate={{ opacity: 0, scale: 1.04 }}
-          transition={{ duration: 1.8, ease: [0.22, 1, 0.36, 1] }}
-          className="pointer-events-none absolute inset-0 z-0 rounded-2xl ring-2 ring-blue-400/70"
-        />
-      )}
-
-      {/* Content Layer */}
-      <div className="relative z-10 pointer-events-none flex flex-col">
         {/* Row 1: Status Dot + Product Title */}
         <div className="flex items-center gap-3">
           <span
@@ -186,11 +164,16 @@ export function MobileReceivingRow({ row, variant, fresh = false, onTap, photosH
             </span>
           </span>
 
-          <div className="ml-auto flex min-w-0 items-center gap-2 pointer-events-auto">
-            {poValue && <OrderIdChip value={poValue} display={getLast4(poValue)} />}
-            {trackingValue && <TrackingChip value={trackingValue} display={getLast4(trackingValue)} />}
-            <SerialChip value={serialsCsv} />
-          </div>
+          {/* Even-column chip grid — fixed widths so PO/tracking/serial line up
+              row-to-row; always rendered (empty → '----') for a stable table. */}
+          <ChipColumns
+            className="ml-auto pointer-events-auto"
+            columns={[
+              { key: 'po', width: CHIP_COL.id, node: <OrderIdChip value={poValue} display={getLast4(poValue)} /> },
+              { key: 'tracking', width: CHIP_COL.tracking, node: <TrackingChip value={trackingValue} display={getLast4(trackingValue)} /> },
+              { key: 'serial', width: CHIP_COL.serial, node: <SerialChip value={serialsCsv} width="w-auto" /> },
+            ]}
+          />
 
           {!isExpanded && (
             <Link
@@ -239,7 +222,6 @@ export function MobileReceivingRow({ row, variant, fresh = false, onTap, photosH
             <span className="ml-1 text-white tabular-nums">x{photoCount}</span>
           </Link>
         )}
-      </div>
-    </div>
+    </MobileRowCard>
   );
 }

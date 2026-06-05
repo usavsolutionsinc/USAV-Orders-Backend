@@ -1,16 +1,14 @@
 'use client';
 
-import { motion, useReducedMotion } from 'framer-motion';
 import Link from 'next/link';
 import {
   OrderIdChip,
-  SkuScanRefChip,
   TrackingChip,
-  SerialChip,
   getLast4,
 } from '@/components/ui/CopyChip';
 import { Camera, Check } from '@/components/Icons';
 import type { PackerLogRow } from '@/components/mobile/packer/types';
+import { MobileRowCard } from '@/components/mobile/feed/MobileRowCard';
 
 interface MobilePackingRowProps {
   row: PackerLogRow;
@@ -56,14 +54,11 @@ function PhotoChip({ count, isAction = false }: { count: number; isAction?: bool
  *   Row 2: [qty • condition] ... [chips] [photo chip]
  */
 export function MobilePackingRow({ row, variant, fresh = false, onTap, photosHref }: MobilePackingRowProps) {
-  const reduceMotion = useReducedMotion();
   const productTitle = row.product_title || row.item_number || row.sku || 'Unnamed pack line';
   const quantity = parseInt(String(row.quantity || '1'), 10) || 1;
   const orderId = (row.order_id || '').trim();
-  const skuValue = (row.sku || '').trim();
   const trackingValue = (row.shipping_tracking_number || row.scan_ref || '').trim();
-  const serialValue = (row.serial_number || '').trim();
-  const conditionLabel = (row.condition || '').trim().toUpperCase() || 'NO COND';
+  const conditionLabel = (row.condition || '').trim().toUpperCase() || 'N/A';
   const condColor =
     conditionLabel === 'BRAND_NEW' || conditionLabel === 'BRAND NEW'
       ? 'text-yellow-600'
@@ -75,31 +70,12 @@ export function MobilePackingRow({ row, variant, fresh = false, onTap, photosHre
   const isExpanded = variant === 'expanded';
 
   return (
-    <div
-      data-packer-row-id={row.id}
-      className={`relative transition-all ${
-        isExpanded
-          ? 'mx-3 mb-3 mt-2 rounded-2xl border border-blue-100 bg-white p-4 shadow-[0_8px_24px_-12px_rgba(15,23,42,0.18)]'
-          : 'flex w-full flex-col border-b border-gray-100 px-3 py-3 active:bg-blue-50 bg-white transition-colors'
-      }`}
+    <MobileRowCard
+      variant={variant}
+      fresh={fresh}
+      onTap={onTap}
+      dataAttr={{ name: 'packer-row-id', value: row.id }}
     >
-      <button
-        type="button"
-        onClick={onTap}
-        className="absolute inset-0 z-0 h-full w-full active:bg-blue-50/30"
-      />
-
-      {isExpanded && fresh && !reduceMotion && (
-        <motion.span
-          aria-hidden
-          initial={{ opacity: 0.55, scale: 1 }}
-          animate={{ opacity: 0, scale: 1.04 }}
-          transition={{ duration: 1.8, ease: [0.22, 1, 0.36, 1] }}
-          className="pointer-events-none absolute inset-0 z-0 rounded-2xl ring-2 ring-blue-400/70"
-        />
-      )}
-
-      <div className="relative z-10 pointer-events-none flex flex-col">
         <div className="flex items-center gap-3">
           <span
             className={`${isExpanded ? 'h-2.5 w-2.5' : 'h-2 w-2'} shrink-0 rounded-full ${getSourceDotBg(row)}`}
@@ -120,9 +96,7 @@ export function MobilePackingRow({ row, variant, fresh = false, onTap, photosHre
 
           <div className="ml-auto flex min-w-0 items-center gap-2 pointer-events-auto">
             {orderId && <OrderIdChip value={orderId} display={getLast4(orderId)} />}
-            {skuValue && <SkuScanRefChip value={skuValue} display={getLast4(skuValue)} />}
             {trackingValue && <TrackingChip value={trackingValue} display={getLast4(trackingValue)} />}
-            <SerialChip value={serialValue} />
           </div>
 
           <Link
@@ -134,7 +108,6 @@ export function MobilePackingRow({ row, variant, fresh = false, onTap, photosHre
             <PhotoChip count={photoCount} isAction={isExpanded} />
           </Link>
         </div>
-      </div>
-    </div>
+    </MobileRowCard>
   );
 }

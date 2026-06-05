@@ -19,6 +19,8 @@ import { fbaPaths } from '@/lib/fba/api-paths';
 import { deleteFbaItem } from '@/lib/fba/patch';
 import { FBA_ACTIVE_SHIPMENTS_REFRESH, USAV_REFRESH_DATA, FBA_FNSKU_SAVED } from '@/lib/fba/events';
 import { useFbaEvent } from '@/components/fba/hooks/useFbaEvent';
+import { useFnskuSearch, type FnskuSearchResult } from '@/components/fba/hooks/useFnskuSearch';
+import { emitAppEvent, useResourceMutation } from '@/hooks';
 import type { StationTheme } from '@/utils/staff-colors';
 import { fbaSidebarThemeChrome } from '@/utils/staff-colors';
 import type { ActiveShipment, ShipmentCardItem } from '@/lib/fba/types';
@@ -64,16 +66,20 @@ function saveUndoStack(shipmentId: number, stack: UndoEntry[]) {
   } catch { /* ignore */ }
 }
 
-// ── FNSKU search ─────────────────────────────────────────────────────────────
-
-interface FnskuSearchResult {
-  fnsku: string;
-  product_title: string | null;
-  asin: string | null;
-  sku: string | null;
-}
-
 // ── Helpers ──────────────────────────────────────────────────────────────────
+
+/** Normalize the /plan-items API rows into the editor's working item shape. */
+function mapPlanItems(rows: unknown[], shipmentId: number): ShipmentCardItem[] {
+  return (rows as Array<Record<string, unknown>>).map((i) => ({
+    item_id: Number(i.id),
+    fnsku: String(i.fnsku ?? ''),
+    display_title: String(i.display_title || i.product_title || i.fnsku || ''),
+    expected_qty: Number(i.expected_qty) || 0,
+    actual_qty: Number(i.actual_qty) || 0,
+    status: i.status as ShipmentCardItem['status'],
+    shipment_id: shipmentId,
+  }));
+}
 
 function buildInitialBundles(shipment: ActiveShipment): TrackingBundleDraft[] {
   return shipment.bundles.map((b) => ({
@@ -238,8 +244,56 @@ export function FbaShipmentEditorForm({
   const [bundles, setBundles] = useState<TrackingBundleDraft[]>(() => buildInitialBundles(shipment));
   const [items, setItems] = useState<ShipmentCardItem[]>(shipment.items);
   const [removedItemIds, setRemovedItemIds] = useState<Set<number>>(new Set());
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+
+  // ── Save (multi-step write) ──
+  const saveMut = useResourceMutation(
+    async () => {
+      // Every write below is checked: a non-OK response throws so the modal
+      // surfaces the failure instead of closing as if the save succeeded.
+      const ensureOk = async (res: Response, fallback: string) => {
+        if (res.ok) return;
+        const data = await res.json().catch(() => ({} as { error?: string }));
+        throw new Error(String(data?.error || `${fallback} (${res.status})`));
+      };
+      const newAmazon = amazonShipmentId.trim().toUpperCase();
+      if (newAmazon !== (shipment.amazon_shipment_id || '').trim().toUpperCase()) {
+        const res = await fetch(fbaPaths.plan(shipment.id), { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ amazon_shipment_id: newAmazon || null }) });
+        await ensureOk(res, 'Failed to update FBA Shipment ID');
+      }
+      const currentLinkIds = new Set(bundles.map((b) => b.link_id).filter(Boolean));
+      for (const ob of shipment.bundles) {
+        if (!currentLinkIds.has(ob.link_id)) {
+          const res = await fetch(`${fbaPaths.planTracking(shipment.id)}?link_id=${ob.link_id}`, { method: 'DELETE' });
+          await ensureOk(res, 'Failed to remove tracking');
+        }
+      }
+      for (const bundle of bundles) {
+        const allocations = bundle.allocations.map((a) => ({ shipment_item_id: a.item_id, qty: a.qty }));
+        if (bundle.link_id) {
+          const res = await fetch(fbaPaths.planTracking(shipment.id), { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ link_id: bundle.link_id, tracking_number: bundle.tracking_number.trim(), carrier: bundle.carrier || 'UPS', allocations }) });
+          await ensureOk(res, 'Failed to update tracking');
+        } else if (bundle.tracking_number.trim()) {
+          const res = await fetch(fbaPaths.planTracking(shipment.id), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ tracking_number: bundle.tracking_number.trim(), carrier: bundle.carrier || 'UPS', allocations }) });
+          await ensureOk(res, 'Failed to add tracking');
+        }
+      }
+      for (const itemId of removedItemIds) {
+        const result = await deleteFbaItem(shipment.id, itemId);
+        if (!result.ok) throw new Error(result.error || 'Failed to remove item');
+      }
+      saveUndoStack(shipment.id, []);
+    },
+    {
+      onSuccess: () => {
+        emitAppEvent(FBA_ACTIVE_SHIPMENTS_REFRESH);
+        emitAppEvent(USAV_REFRESH_DATA);
+        onChanged();
+        onClose();
+      },
+    },
+  );
+  const saving = saveMut.isPending;
+  const saveError = saveMut.error?.message ?? null;
 
   // ── Multi-select ──
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
@@ -326,59 +380,45 @@ export function FbaShipmentEditorForm({
   // ── FNSKU search ──
   const [fnskuSearchOpen, setFnskuSearchOpen] = useState(false);
   const [fnskuQuery, setFnskuQuery] = useState('');
-  const [fnskuResults, setFnskuResults] = useState<FnskuSearchResult[]>([]);
-  const [fnskuSearching, setFnskuSearching] = useState(false);
   const [addingFnsku, setAddingFnsku] = useState<string | null>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
-  const searchDebounceRef = useRef<ReturnType<typeof setTimeout>>();
+  const { results: fnskuResults, searching: fnskuSearching } = useFnskuSearch(fnskuQuery, fnskuSearchOpen);
 
   useEffect(() => {
     if (fnskuSearchOpen) setTimeout(() => searchInputRef.current?.focus(), 40);
-    else { setFnskuQuery(''); setFnskuResults([]); }
+    else setFnskuQuery('');
   }, [fnskuSearchOpen]);
 
-  useEffect(() => {
-    if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current);
-    const q = fnskuQuery.trim();
-    if (!q || q.length < 2) { setFnskuResults([]); setFnskuSearching(false); return; }
-    setFnskuSearching(true);
-    searchDebounceRef.current = setTimeout(async () => {
-      try {
-        const res = await fetch(`/api/fba/fnskus/search?q=${encodeURIComponent(q)}&limit=8`);
-        const data = await res.json();
-        if (data.success && Array.isArray(data.items)) setFnskuResults(data.items);
-      } catch { /* ignore */ }
-      setFnskuSearching(false);
-    }, 250);
-    return () => { if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current); };
-  }, [fnskuQuery]);
+  // Reload the canonical plan-items list into the editor's working state.
+  const reloadItems = useCallback(async () => {
+    const res = await fetch(fbaPaths.planItems(shipment.id), { cache: 'no-store' });
+    const data = await res.json();
+    if (data.success && Array.isArray(data.items)) setItems(mapPlanItems(data.items, shipment.id));
+  }, [shipment.id]);
+
+  const addItemMut = useResourceMutation((result: FnskuSearchResult) =>
+    fetch(fbaPaths.planItems(shipment.id), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ fnsku: result.fnsku, expected_qty: 1, product_title: result.product_title, asin: result.asin, sku: result.sku }),
+    }).then((r) => r.json() as Promise<{ success?: boolean }>),
+  );
 
   const handleAddFnskuToShipment = useCallback(
     async (result: FnskuSearchResult) => {
       if (items.some((i) => i.fnsku.toUpperCase() === result.fnsku.toUpperCase())) return;
       setAddingFnsku(result.fnsku);
       try {
-        const res = await fetch(fbaPaths.planItems(shipment.id), {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ fnsku: result.fnsku, expected_qty: 1, product_title: result.product_title, asin: result.asin, sku: result.sku }),
-        });
-        const data = await res.json();
+        const data = await addItemMut.mutateAsync(result);
         if (data.success) {
-          const itemsRes = await fetch(fbaPaths.planItems(shipment.id), { cache: 'no-store' });
-          const itemsData = await itemsRes.json();
-          if (itemsData.success && Array.isArray(itemsData.items)) {
-            setItems(itemsData.items.map((i: any) => ({
-              item_id: Number(i.id), fnsku: i.fnsku, display_title: i.display_title || i.product_title || i.fnsku,
-              expected_qty: Number(i.expected_qty) || 0, actual_qty: Number(i.actual_qty) || 0, status: i.status, shipment_id: shipment.id,
-            })));
-          }
-          setFnskuQuery(''); setFnskuResults([]); setFnskuSearchOpen(false);
+          await reloadItems();
+          setFnskuQuery('');
+          setFnskuSearchOpen(false);
         }
-      } catch { /* ignore */ }
+      } catch { /* ignore — the original add flow swallowed errors too */ }
       setAddingFnsku(null);
     },
-    [items, shipment.id],
+    [items, addItemMut, reloadItems],
   );
 
   // ── DnD ──
@@ -396,22 +436,11 @@ export function FbaShipmentEditorForm({
     setItems(shipment.items);
     setRemovedItemIds(new Set());
     setSelectedIds(new Set());
-    setError(null);
+    saveMut.reset();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [shipment]);
 
-  useFbaEvent(FBA_FNSKU_SAVED, () => {
-    fetch(fbaPaths.planItems(shipment.id), { cache: 'no-store' })
-      .then((r) => r.json())
-      .then((data) => {
-        if (data.success && Array.isArray(data.items)) {
-          setItems(data.items.map((i: any) => ({
-            item_id: Number(i.id), fnsku: i.fnsku, display_title: i.display_title || i.product_title || i.fnsku,
-            expected_qty: Number(i.expected_qty) || 0, actual_qty: Number(i.actual_qty) || 0, status: i.status, shipment_id: shipment.id,
-          })));
-        }
-      })
-      .catch(() => {});
-  });
+  useFbaEvent(FBA_FNSKU_SAVED, () => { void reloadItems(); });
 
   // ── Derived ──
   const unallocatedItems = useMemo(() => {
@@ -742,51 +771,6 @@ export function FbaShipmentEditorForm({
 
   const dragCount = activeItemId != null && selectedIds.has(activeItemId) && selectedIds.size > 1 ? selectedIds.size : 1;
 
-  // ── Save ──
-  const handleSave = async () => {
-    setSaving(true); setError(null);
-    // Every write below is checked: a non-OK response throws so the modal
-    // surfaces the failure instead of closing as if the save succeeded.
-    const ensureOk = async (res: Response, fallback: string) => {
-      if (res.ok) return;
-      const data = await res.json().catch(() => ({} as { error?: string }));
-      throw new Error(String(data?.error || `${fallback} (${res.status})`));
-    };
-    try {
-      const newAmazon = amazonShipmentId.trim().toUpperCase();
-      if (newAmazon !== (shipment.amazon_shipment_id || '').trim().toUpperCase()) {
-        const res = await fetch(fbaPaths.plan(shipment.id), { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ amazon_shipment_id: newAmazon || null }) });
-        await ensureOk(res, 'Failed to update FBA Shipment ID');
-      }
-      const currentLinkIds = new Set(bundles.map((b) => b.link_id).filter(Boolean));
-      for (const ob of shipment.bundles) {
-        if (!currentLinkIds.has(ob.link_id)) {
-          const res = await fetch(`${fbaPaths.planTracking(shipment.id)}?link_id=${ob.link_id}`, { method: 'DELETE' });
-          await ensureOk(res, 'Failed to remove tracking');
-        }
-      }
-      for (const bundle of bundles) {
-        const allocations = bundle.allocations.map((a) => ({ shipment_item_id: a.item_id, qty: a.qty }));
-        if (bundle.link_id) {
-          const res = await fetch(fbaPaths.planTracking(shipment.id), { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ link_id: bundle.link_id, tracking_number: bundle.tracking_number.trim(), carrier: bundle.carrier || 'UPS', allocations }) });
-          await ensureOk(res, 'Failed to update tracking');
-        } else if (bundle.tracking_number.trim()) {
-          const res = await fetch(fbaPaths.planTracking(shipment.id), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ tracking_number: bundle.tracking_number.trim(), carrier: bundle.carrier || 'UPS', allocations }) });
-          await ensureOk(res, 'Failed to add tracking');
-        }
-      }
-      for (const itemId of removedItemIds) {
-        const result = await deleteFbaItem(shipment.id, itemId);
-        if (!result.ok) throw new Error(result.error || 'Failed to remove item');
-      }
-      saveUndoStack(shipment.id, []);
-      window.dispatchEvent(new CustomEvent(FBA_ACTIVE_SHIPMENTS_REFRESH));
-      window.dispatchEvent(new CustomEvent(USAV_REFRESH_DATA));
-      onChanged(); onClose();
-    } catch (err: any) { setError(err?.message || 'Failed to save changes'); }
-    finally { setSaving(false); }
-  };
-
   // ── Render ──
   return (
     <div className="flex h-full min-h-0 flex-col bg-white">
@@ -1093,8 +1077,8 @@ export function FbaShipmentEditorForm({
 
       {/* Footer */}
       <div className="border-t border-gray-200 bg-white px-3 py-2">
-        {error && <p className="mb-1.5 text-micro font-semibold text-red-600">{error}</p>}
-        <button type="button" onClick={() => void handleSave()} disabled={saving} className={chrome.primaryButton}>
+        {saveError && <p className="mb-1.5 text-micro font-semibold text-red-600">{saveError}</p>}
+        <button type="button" onClick={() => saveMut.mutate()} disabled={saving} className={chrome.primaryButton}>
           {saving
             ? <span className="flex items-center justify-center gap-2"><Loader2 className="h-3.5 w-3.5 animate-spin" /><span className="text-micro">Saving...</span></span>
             : <span className="text-micro">Save Changes</span>}

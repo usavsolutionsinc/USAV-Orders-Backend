@@ -180,6 +180,7 @@ export function GlobalHeaderActions({ variant = 'desktop' }: { variant?: 'deskto
               onClose={() => setPopover('none')}
               onOpenHistoryPopover={() => setPopover('history')}
               onOpenInboxPopover={() => setPopover('inbox')}
+              compact={isMobile}
             />
           </div>
         )}

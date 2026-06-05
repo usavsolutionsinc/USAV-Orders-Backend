@@ -1,23 +1,20 @@
 'use client';
 
-import { useState, useCallback, useEffect, useRef } from 'react';
+import { useState, useCallback, useEffect, useRef, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
-  ChevronRight,
-  Package,
-  Hash,
   History,
   Camera,
   Search,
-  Loader2,
 } from '@/components/Icons';
 import {
-  MobileCard,
   TOKENS,
   SectionHeader,
   GlassButton,
 } from '@/components/mobile/redesign/DesignSystem';
-import { MobileTopBar } from '@/components/mobile/redesign/MobileTopBar';
+import { MobileFeed } from '@/components/mobile/feed/MobileFeed';
+import { useFeedWindow } from '@/components/mobile/feed/useMobileFeed';
+import { ScanResultRow, type ScanFeedItem } from '@/components/mobile/feed/rows/ScanResultRow';
 import { useBarcodeScanner } from '@/hooks/useBarcodeScanner';
 import { useFeedback } from '@/hooks/useFeedback';
 import { useRouter } from 'next/navigation';
@@ -111,10 +108,31 @@ export default function RedesignedMobileUniversalScan() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [scanner.lastScannedValue]);
 
-  return (
-    <div className={`min-h-[100dvh] ${TOKENS.colors.background} flex flex-col`}>
-      <MobileTopBar title="Universal Scan" eyebrow="Search" icon={Search} />
+  // Map the local resolve-scan rows onto the shared scan-feed shape.
+  const feedItems = useMemo<ScanFeedItem[]>(
+    () =>
+      scans.map((s) => ({
+        id: s.id,
+        primary: s.raw,
+        at: s.at,
+        state:
+          s.status === 'pending' ? 'pending' : s.status === 'none' ? 'error' : s.status === 'multi' ? 'warn' : 'ok',
+        statusLabel:
+          s.status === 'pending'
+            ? 'Resolving…'
+            : s.status === 'resolved'
+              ? s.label ? `Matched ${s.label}` : 'Matched'
+              : s.status === 'multi'
+                ? 'Multiple matches'
+                : 'No match',
+        href: s.route,
+      })),
+    [scans],
+  );
+  const { rows: feedRows, scrollRef } = useFeedWindow(feedItems, { limit: 12, anchor: 'top', freshPulse: false });
 
+  return (
+    <div className={`h-full ${TOKENS.colors.background} flex flex-col`}>
       {/* Input Section */}
       <div className="px-6 pt-4 pb-4">
         {/* Input Bar */}
@@ -182,80 +200,24 @@ export default function RedesignedMobileUniversalScan() {
         )}
       </AnimatePresence>
 
-      {/* History Tray */}
-      <div className="flex-1 bg-slate-50 px-6 pt-8 pb-32 overflow-y-auto">
-        <SectionHeader title="Recent Scans" />
-
-        <div className="flex flex-col gap-3">
-          <AnimatePresence initial={false}>
-            {scans.length === 0 ? (
-              <div className="py-12 text-center opacity-40">
-                <History className="h-10 w-10 mx-auto mb-3 text-blue-200" />
-                <p className="text-xs font-black uppercase tracking-widest text-blue-300">Waiting for first scan...</p>
-              </div>
-            ) : (
-              scans.map((scan) => {
-                const ok = scan.status === 'resolved' || scan.status === 'multi';
-                return (
-                  <motion.div key={scan.id} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} layout>
-                    <MobileCard
-                      onClick={scan.route ? () => router.push(scan.route as string) : undefined}
-                      className="group py-3.5"
-                    >
-                      <div className="flex items-center justify-between gap-4">
-                        <div className="flex items-center gap-4 min-w-0">
-                          <div
-                            className={`h-11 w-11 rounded-2xl flex items-center justify-center shrink-0 shadow-sm ${
-                              scan.status === 'pending'
-                                ? 'bg-blue-50 text-blue-400'
-                                : ok
-                                  ? 'bg-blue-50 text-blue-600'
-                                  : 'bg-slate-100 text-slate-400'
-                            }`}
-                          >
-                            {scan.status === 'pending' ? (
-                              <Loader2 className="h-5 w-5 animate-spin" />
-                            ) : ok ? (
-                              <Package className="h-5 w-5" />
-                            ) : (
-                              <Hash className="h-5 w-5" />
-                            )}
-                          </div>
-                          <div className="min-w-0">
-                            <p className="text-sm font-black text-blue-950 font-mono truncate tracking-tight">{scan.raw}</p>
-                            <div className="flex items-center gap-2 mt-0.5">
-                              <span
-                                className={`text-[9px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded ${
-                                  scan.status === 'pending'
-                                    ? 'bg-blue-50 text-blue-500'
-                                    : ok
-                                      ? 'bg-blue-100 text-blue-700'
-                                      : 'bg-slate-200 text-slate-500'
-                                }`}
-                              >
-                                {scan.status === 'pending'
-                                  ? 'Resolving…'
-                                  : scan.status === 'resolved'
-                                    ? scan.label ? `Matched ${scan.label}` : 'Matched'
-                                    : scan.status === 'multi'
-                                      ? 'Multiple matches'
-                                      : 'No Match'}
-                              </span>
-                              <span className="text-[9px] font-bold text-blue-200 uppercase">
-                                {scan.at.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                              </span>
-                            </div>
-                          </div>
-                        </div>
-                        {scan.route && <ChevronRight className="h-4 w-4 text-blue-100" />}
-                      </div>
-                    </MobileCard>
-                  </motion.div>
-                );
-              })
-            )}
-          </AnimatePresence>
+      {/* History Tray — shared feed, newest at the top. */}
+      <div className="flex min-h-0 flex-1 flex-col bg-slate-50 pt-6">
+        <div className="px-6">
+          <SectionHeader title="Recent Scans" />
         </div>
+        <MobileFeed<ScanFeedItem>
+          rows={feedRows}
+          expandLast={false}
+          scrollRef={scrollRef}
+          className="px-3 pb-32"
+          empty={
+            <div className="py-12 text-center opacity-40">
+              <History className="mx-auto mb-3 h-10 w-10 text-blue-200" />
+              <p className="text-xs font-black uppercase tracking-widest text-blue-300">Waiting for first scan...</p>
+            </div>
+          }
+          renderRow={(item) => <ScanResultRow item={item} />}
+        />
       </div>
     </div>
   );

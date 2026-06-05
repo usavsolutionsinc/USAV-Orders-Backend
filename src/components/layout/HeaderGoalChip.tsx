@@ -532,7 +532,7 @@ export function HeaderGoalChip() {
         )}
       >
         <GoalRing percent={view.percent} color={tone.ring} />
-        <span className="hidden flex-col items-start leading-none sm:flex">
+        <span className="flex flex-col items-start leading-none">
           <span className="text-[11px] font-bold tracking-tight text-gray-900">{STATION_LABEL[active]}</span>
           <span className="mt-0.5 text-[9px] font-semibold tabular-nums text-gray-500">
             {chipCount.value}/{chipCount.total} {chipCount.unit}

@@ -22,6 +22,8 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { motion } from 'framer-motion';
+import { jsonOrThrow, useResourceMutation } from '@/hooks';
+import { useUnfoundTriageDetail } from './useUnfoundTriageDetail';
 import {
   Check,
   ExternalLink,
@@ -137,97 +139,47 @@ export function UnfoundQueueDetailsPanel({
     [row.context],
   );
 
-  // Email-specific detail (body + Zoho compare + the full triage row). Only
-  // fetched for kind === 'email_po'; other kinds get a single-tab view.
-  const [detail, setDetail] = useState<TriageDetail | null>(null);
-  const [detailLoading, setDetailLoading] = useState(false);
-  const [detailError, setDetailError] = useState<string | null>(null);
+  // Email-specific detail (body + Zoho compare + the full triage row). Owned by
+  // the query hook — fetched only for kind === 'email_po'.
+  const { isEmailPo, detail: detailQuery, patchTriage, updateTriageRow } =
+    useUnfoundTriageDetail(row);
+  const detail = detailQuery.data ?? null;
 
   const [activeTab, setActiveTab] = useState<DetailsTab>('overview');
-  const [pushing, setPushing] = useState(false);
-  const [deleting, setDeleting] = useState(false);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
 
-  const isEmailPo = row.kind === 'email_po';
   const canHardDelete = row.kind !== 'unmatched_receiving';
 
-  useEffect(() => {
-    if (!isEmailPo) return;
-    let cancelled = false;
-    setDetailLoading(true);
-    setDetailError(null);
-    void (async () => {
-      try {
-        const res = await fetch(
-          `/api/admin/po-gmail/triage/${encodeURIComponent(row.source_id)}/detail`,
-          { cache: 'no-store' },
-        );
-        if (!res.ok)
-          throw new Error(`${res.status}: ${(await res.text()).slice(0, 200)}`);
-        const data = (await res.json()) as TriageDetail;
-        if (!cancelled) setDetail(data);
-      } catch (err) {
-        if (!cancelled)
-          setDetailError(err instanceof Error ? err.message : 'load failed');
-      } finally {
-        if (!cancelled) setDetailLoading(false);
-      }
-    })();
-    return () => {
-      cancelled = true;
+  const pushMut = useResourceMutation<
+    { ticketNumber: string; ticketUrl?: string | null },
+    { subject: string; description: string } | undefined
+  >(async (overrides) => {
+    const res = await fetch(
+      `/api/receiving/unfound-queue/${row.kind}/${encodeURIComponent(row.source_id)}/push-to-zendesk`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: overrides ? JSON.stringify(overrides) : undefined,
+      },
+    );
+    const body = (await res.json().catch(() => ({}))) as {
+      success?: boolean;
+      ticketNumber?: string;
+      ticketUrl?: string | null;
+      error?: string;
     };
-  }, [isEmailPo, row.source_id]);
-
-  // ─── Mutations ──────────────────────────────────────────────────────────────
-  const updateTriageRow = useCallback((next: TriageRow) => {
-    setDetail((prev) => (prev ? { ...prev, row: next } : prev));
-  }, []);
-
-  const patchTriage = useCallback(
-    async (body: Record<string, unknown>) => {
-      if (!detail) return;
-      try {
-        const res = await fetch(
-          `/api/admin/po-gmail/triage/${encodeURIComponent(row.source_id)}`,
-          {
-            method: 'PATCH',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(body),
-          },
-        );
-        if (!res.ok)
-          throw new Error(`${res.status}: ${(await res.text()).slice(0, 200)}`);
-        const data = (await res.json()) as { row: TriageRow };
-        updateTriageRow(data.row);
-      } catch (err) {
-        toast.error(err instanceof Error ? err.message : 'Update failed');
-      }
-    },
-    [detail, row.source_id, updateTriageRow],
-  );
+    if (!res.ok || !body.success || !body.ticketNumber) {
+      throw new Error(body.error ?? `push failed (${res.status})`);
+    }
+    return { ticketNumber: body.ticketNumber, ticketUrl: body.ticketUrl };
+  });
+  const pushing = pushMut.isPending;
 
   const handlePushToZendesk = useCallback(async (overrides?: { subject: string; description: string }) => {
-    if (pushing || row.zendesk_ticket_id) return;
-    setPushing(true);
+    if (pushMut.isPending || row.zendesk_ticket_id) return;
     const toastId = toast.loading('Pushing to Zendesk…');
     try {
-      const res = await fetch(
-        `/api/receiving/unfound-queue/${row.kind}/${encodeURIComponent(row.source_id)}/push-to-zendesk`,
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: overrides ? JSON.stringify(overrides) : undefined,
-        },
-      );
-      const body = (await res.json().catch(() => ({}))) as {
-        success?: boolean;
-        ticketNumber?: string;
-        ticketUrl?: string | null;
-        error?: string;
-      };
-      if (!res.ok || !body.success || !body.ticketNumber) {
-        throw new Error(body.error ?? `push failed (${res.status})`);
-      }
+      const body = await pushMut.mutateAsync(overrides);
       toast.success(`Zendesk ticket ${body.ticketNumber} created`, {
         id: toastId,
         action: body.ticketUrl
@@ -237,10 +189,18 @@ export function UnfoundQueueDetailsPanel({
       onPushedToZendesk?.(row, body.ticketNumber);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Push failed', { id: toastId });
-    } finally {
-      setPushing(false);
     }
-  }, [pushing, row, onPushedToZendesk]);
+  }, [pushMut, row, onPushedToZendesk]);
+
+  const deleteMut = useResourceMutation(async () => {
+    const res = await fetch(
+      `/api/receiving/unfound-queue/${row.kind}/${encodeURIComponent(row.source_id)}`,
+      { method: 'DELETE' },
+    );
+    const body = (await res.json().catch(() => ({}))) as { success?: boolean; error?: string };
+    if (!res.ok || !body.success) throw new Error(body.error ?? `delete failed (${res.status})`);
+  });
+  const deleting = deleteMut.isPending;
 
   const handleDelete = useCallback(async () => {
     if (!confirmingDelete) {
@@ -248,31 +208,18 @@ export function UnfoundQueueDetailsPanel({
       window.setTimeout(() => setConfirmingDelete(false), 4000);
       return;
     }
-    if (deleting) return;
-    setDeleting(true);
+    if (deleteMut.isPending) return;
     const toastId = toast.loading('Deleting row…');
     try {
-      const res = await fetch(
-        `/api/receiving/unfound-queue/${row.kind}/${encodeURIComponent(row.source_id)}`,
-        { method: 'DELETE' },
-      );
-      const body = (await res.json().catch(() => ({}))) as {
-        success?: boolean;
-        error?: string;
-      };
-      if (!res.ok || !body.success) {
-        throw new Error(body.error ?? `delete failed (${res.status})`);
-      }
+      await deleteMut.mutateAsync();
       toast.success('Row deleted', { id: toastId });
       onDeleted(row);
       onClose();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Delete failed', { id: toastId });
       setConfirmingDelete(false);
-    } finally {
-      setDeleting(false);
     }
-  }, [confirmingDelete, deleting, row, onDeleted, onClose]);
+  }, [confirmingDelete, deleteMut, row, onDeleted, onClose]);
 
   const handleCopyAll = useCallback(async () => {
     const lines = [
@@ -396,10 +343,10 @@ export function UnfoundQueueDetailsPanel({
           ) : null}
 
           {isEmailPo && activeTab === 'extract' ? (
-            detailLoading && !detail ? (
+            detailQuery.isLoading && !detail ? (
               <LoadingBlock />
-            ) : detailError ? (
-              <ErrorBlock message={detailError} />
+            ) : detailQuery.error ? (
+              <ErrorBlock message={detailQuery.error.message} />
             ) : detail ? (
               <ExtractTab
                 detail={detail}
@@ -411,10 +358,10 @@ export function UnfoundQueueDetailsPanel({
           ) : null}
 
           {isEmailPo && activeTab === 'email' ? (
-            detailLoading && !detail ? (
+            detailQuery.isLoading && !detail ? (
               <LoadingBlock />
-            ) : detailError ? (
-              <ErrorBlock message={detailError} />
+            ) : detailQuery.error ? (
+              <ErrorBlock message={detailQuery.error.message} />
             ) : detail ? (
               <EmailTab detail={detail} />
             ) : null
@@ -505,33 +452,37 @@ function ZendeskPushSection({
   onPush: (overrides?: { subject: string; description: string }) => void;
 }) {
   const [open, setOpen] = useState(false);
-  const [drafting, setDrafting] = useState(false);
   const [subject, setSubject] = useState('');
   const [description, setDescription] = useState('');
 
+  const draftMut = useResourceMutation<
+    { subject?: string; description?: string; degraded?: boolean },
+    boolean
+  >(async (ai) => {
+    const res = await fetch(
+      `/api/receiving/unfound-queue/${row.kind}/${encodeURIComponent(row.source_id)}/push-to-zendesk/draft`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ai }),
+      },
+    );
+    const data = (await res.json().catch(() => null)) as {
+      success?: boolean;
+      subject?: string;
+      description?: string;
+      degraded?: boolean;
+      error?: string;
+    } | null;
+    if (!res.ok || !data?.success) throw new Error(data?.error || 'Could not generate ticket');
+    return data;
+  });
+  const drafting = draftMut.isPending;
+
   const fetchDraft = useCallback(
     async (ai: boolean) => {
-      setDrafting(true);
       try {
-        const res = await fetch(
-          `/api/receiving/unfound-queue/${row.kind}/${encodeURIComponent(row.source_id)}/push-to-zendesk/draft`,
-          {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ ai }),
-          },
-        );
-        const data = (await res.json().catch(() => null)) as {
-          success?: boolean;
-          subject?: string;
-          description?: string;
-          degraded?: boolean;
-          error?: string;
-        } | null;
-        if (!res.ok || !data?.success) {
-          toast.error(data?.error || 'Could not generate ticket');
-          return;
-        }
+        const data = await draftMut.mutateAsync(ai);
         setSubject(data.subject ?? '');
         setDescription(data.description ?? '');
         setOpen(true);
@@ -542,11 +493,9 @@ function ZendeskPushSection({
         }
       } catch (err) {
         toast.error(err instanceof Error ? err.message : 'Network error');
-      } finally {
-        setDrafting(false);
       }
     },
-    [row.kind, row.source_id],
+    [draftMut],
   );
 
   if (!open) {
@@ -782,7 +731,6 @@ interface ExtractTabProps {
 }
 
 function ExtractTab({ detail, rowId, patchTriage, onRowUpdated }: ExtractTabProps) {
-  const [extracting, setExtracting] = useState(false);
   const [zohoUploaded, setZohoUploaded] = useState(
     detail.row.zoho_uploaded_po_number ?? '',
   );
@@ -793,19 +741,15 @@ function ExtractTab({ detail, rowId, patchTriage, onRowUpdated }: ExtractTabProp
     setNotes(detail.row.notes ?? '');
   }, [detail.row.zoho_uploaded_po_number, detail.row.notes]);
 
+  const extractMut = useResourceMutation(() =>
+    fetch(`/api/admin/po-gmail/triage/${encodeURIComponent(rowId)}/extract`, { method: 'POST' })
+      .then((r) => jsonOrThrow<{ row: TriageRow; extracted: Record<string, TriageFieldState> }>(r)),
+  );
+  const extracting = extractMut.isPending;
+
   const runExtract = useCallback(async () => {
-    setExtracting(true);
     try {
-      const res = await fetch(
-        `/api/admin/po-gmail/triage/${encodeURIComponent(rowId)}/extract`,
-        { method: 'POST' },
-      );
-      if (!res.ok)
-        throw new Error(`${res.status}: ${(await res.text()).slice(0, 200)}`);
-      const data = (await res.json()) as {
-        row: TriageRow;
-        extracted: Record<string, TriageFieldState>;
-      };
+      const data = await extractMut.mutateAsync();
       onRowUpdated(data.row);
       const n = Object.keys(data.extracted).length;
       toast.success(
@@ -813,10 +757,8 @@ function ExtractTab({ detail, rowId, patchTriage, onRowUpdated }: ExtractTabProp
       );
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Extraction failed');
-    } finally {
-      setExtracting(false);
     }
-  }, [rowId, onRowUpdated]);
+  }, [extractMut, onRowUpdated]);
 
   const toggleFieldConfirmed = useCallback(
     (field: LlmFieldKey | string) => {

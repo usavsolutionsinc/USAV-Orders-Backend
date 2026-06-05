@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useRef, type WheelEvent, useState, useEffect } from 'react';
+import { Fragment, useCallback, useRef, type WheelEvent, useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 
 interface Props {
@@ -52,17 +52,18 @@ const USED_GRADES = [
   { value: 'USED_C', label: 'C' },
 ];
 
-// Label shown on the single collapsed pill, keyed by selected grade. Mirrors
-// the pill labels in the full row so the collapsed chip reads identically.
-const COLLAPSED_LABEL: Record<string, string> = {
-  BRAND_NEW: 'NEW',
-  LIKE_NEW: 'L-New',
-  REFURBISHED: 'REFURB',
-  USED_A: 'A',
-  USED_B: 'B',
-  USED_C: 'C',
-  PARTS: 'PARTS',
-};
+// "NEW+" groups the non-used, retail-ready grades behind one parent pill that
+// expands to its members — exactly like the USED group expands to A/B/C.
+const NEW_GRADES = [
+  { value: 'BRAND_NEW', label: 'NEW' },
+  { value: 'LIKE_NEW', label: 'L-New' },
+  { value: 'REFURBISHED', label: 'REFURB' },
+];
+const NEW_GROUP_VALUES = NEW_GRADES.map((g) => g.value);
+
+// Spring that drives the inline slide-out width — mirrors the design-demo
+// variant C (condition-picker-section.tsx) that this collapse is modeled on.
+const SLIDE_SPRING = { type: 'spring', stiffness: 420, damping: 36 } as const;
 
 /**
  * Bare, mobile-first condition picker. Renders grades as a horizontally-scrolling
@@ -73,14 +74,25 @@ export function ConditionPills({ value, onChange, collapsible = false }: Props) 
   const selected = String(value || '').trim().toUpperCase();
   const scrollerRef = useRef<HTMLDivElement | null>(null);
   const [isExpanded, setIsExpanded] = useState(false);
+  // Collapsible (line-edit) variant: is the inline slide-out open?
+  const [collapsedOpen, setCollapsedOpen] = useState(false);
 
   const isUsed = selected.startsWith('USED_');
   const usedGrade = isUsed ? selected.split('_')[1] : null;
+
+  const isNewGroup = NEW_GROUP_VALUES.includes(selected);
+  const newGradeLabel = NEW_GRADES.find((g) => g.value === selected)?.label ?? null;
+  const [isNewExpanded, setIsNewExpanded] = useState(false);
 
   // Collapse if we switch away from USED via external props
   useEffect(() => {
     if (!isUsed) setIsExpanded(false);
   }, [isUsed]);
+
+  // Same for the NEW+ group.
+  useEffect(() => {
+    if (!isNewGroup) setIsNewExpanded(false);
+  }, [isNewGroup]);
 
   const onWheel = useCallback((e: WheelEvent<HTMLDivElement>) => {
     const el = scrollerRef.current;
@@ -96,6 +108,15 @@ export function ConditionPills({ value, onChange, collapsible = false }: Props) 
       setIsExpanded(true);
     } else {
       setIsExpanded(!isExpanded);
+    }
+  };
+
+  const handleNewMainClick = () => {
+    if (!isNewGroup) {
+      onChange('BRAND_NEW');
+      setIsNewExpanded(true);
+    } else {
+      setIsNewExpanded(!isNewExpanded);
     }
   };
 
@@ -128,6 +149,85 @@ export function ConditionPills({ value, onChange, collapsible = false }: Props) 
     );
   };
 
+  // ── The three top-level groups, each its own element so they can be reused
+  //    by both the always-on full row and the collapsible per-group reveal. ──
+  const newGroup = (
+    <div className="flex shrink-0 items-center gap-1.5">
+      {/* The NEW+ parent hides while expanded — its members replace it. (USED
+          keeps its parent because the bare A/B/C grades need the "USED" label;
+          NEW / L-New / REFURB are self-explanatory, so "NEW+" is redundant.) */}
+      {!isNewExpanded && (
+        <Pill
+          label={isNewGroup && newGradeLabel ? newGradeLabel : 'NEW+'}
+          isActive={isNewGroup}
+          toneKey={isNewGroup ? selected : 'BRAND_NEW'}
+          onClick={handleNewMainClick}
+        />
+      )}
+      <AnimatePresence initial={false}>
+        {isNewExpanded && (
+          <motion.div
+            initial={{ width: 0, opacity: 0, x: -10 }}
+            animate={{ width: 'auto', opacity: 1, x: 0 }}
+            exit={{ width: 0, opacity: 0, x: -10 }}
+            className="flex gap-1.5 overflow-hidden"
+          >
+            {NEW_GRADES.map((g) => (
+              <Pill
+                key={g.value}
+                label={g.label}
+                isActive={selected === g.value}
+                toneKey={g.value}
+                onClick={() => {
+                  onChange(g.value);
+                  setIsNewExpanded(false);
+                }}
+              />
+            ))}
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+
+  const usedGroup = (
+    <div className="flex shrink-0 items-center gap-1.5">
+      <Pill
+        label={isUsed && !isExpanded && usedGrade ? usedGrade : 'USED'}
+        isActive={isUsed}
+        toneKey={isUsed ? selected : 'USED_B'}
+        onClick={handleUsedMainClick}
+      />
+      <AnimatePresence initial={false}>
+        {isExpanded && (
+          <motion.div
+            initial={{ width: 0, opacity: 0, x: -10 }}
+            animate={{ width: 'auto', opacity: 1, x: 0 }}
+            exit={{ width: 0, opacity: 0, x: -10 }}
+            className="flex gap-1.5 overflow-hidden"
+          >
+            {USED_GRADES.map((g) => (
+              <Pill
+                key={g.value}
+                label={g.label}
+                isActive={selected === g.value}
+                toneKey={g.value}
+                onClick={() => {
+                  onChange(g.value);
+                  setIsExpanded(false);
+                }}
+              />
+            ))}
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+
+  const partsPill = (
+    <Pill label="PARTS" isActive={selected === 'PARTS'} toneKey="PARTS" onClick={() => onChange('PARTS')} />
+  );
+
   const fullRow = (
     <div
       ref={scrollerRef}
@@ -136,90 +236,57 @@ export function ConditionPills({ value, onChange, collapsible = false }: Props) 
       aria-label="Condition grade"
       className="-mx-1 flex items-center gap-1.5 overflow-x-auto overscroll-x-contain px-1 py-1 [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden"
     >
-      {/* BRAND NEW */}
-      <Pill
-        label="NEW"
-        isActive={selected === 'BRAND_NEW'}
-        toneKey="BRAND_NEW"
-        onClick={() => onChange('BRAND_NEW')}
-      />
-
-      {/* LIKE NEW */}
-      <Pill
-        label="L-New"
-        isActive={selected === 'LIKE_NEW'}
-        toneKey="LIKE_NEW"
-        onClick={() => onChange('LIKE_NEW')}
-      />
-
-      {/* REFURBISHED */}
-      <Pill
-        label="REFURB"
-        isActive={selected === 'REFURBISHED'}
-        toneKey="REFURBISHED"
-        onClick={() => onChange('REFURBISHED')}
-      />
-
-      {/* USED GROUP */}
-      <div className="flex shrink-0 items-center gap-1.5">
-        <Pill
-          label={isUsed && !isExpanded && usedGrade ? usedGrade : 'USED'}
-          isActive={isUsed}
-          toneKey={isUsed ? selected : 'USED_B'}
-          onClick={handleUsedMainClick}
-        />
-
-        <AnimatePresence initial={false}>
-          {isExpanded && (
-            <motion.div
-              initial={{ width: 0, opacity: 0, x: -10 }}
-              animate={{ width: 'auto', opacity: 1, x: 0 }}
-              exit={{ width: 0, opacity: 0, x: -10 }}
-              className="flex gap-1.5 overflow-hidden"
-            >
-              {USED_GRADES.map((g) => (
-                <Pill
-                  key={g.value}
-                  label={g.label}
-                  isActive={selected === g.value}
-                  toneKey={g.value}
-                  onClick={() => {
-                    onChange(g.value);
-                    setIsExpanded(false);
-                  }}
-                />
-              ))}
-            </motion.div>
-          )}
-        </AnimatePresence>
-      </div>
-
-      {/* PARTS */}
-      <Pill
-        label="PARTS"
-        isActive={selected === 'PARTS'}
-        toneKey="PARTS"
-        onClick={() => onChange('PARTS')}
-      />
+      {newGroup}
+      {usedGroup}
+      {partsPill}
     </div>
   );
 
-  // Default: the full pill row is always shown.
-  const collapsedLabel = COLLAPSED_LABEL[selected];
-  if (!collapsible || !collapsedLabel) return fullRow;
+  // Default (non-collapsible) and "no grade picked yet": show the full row so a
+  // grade can be chosen.
+  const selectedGroup = isNewGroup ? 'NEW' : isUsed ? 'USED' : selected === 'PARTS' ? 'PARTS' : null;
+  if (!collapsible || !selectedGroup) return fullRow;
 
-  // Collapsed: show only the selected pill, so the row stays compact and the
-  // serial input grows to fill the space. Hovering this spot expands the full
-  // row IN FLOW (grid 0fr→1fr) — it pushes the input over rather than overlaying
-  // it. Hover is scoped to this group, so only this exact spot re-expands.
+  // Collapsible (line-edit) variant: the SELECTED group's pill is pinned at the
+  // far left and always mounted (so the row collapses to e.g. "B"); hovering it
+  // springs a hairline + the OTHER two groups out to its right. One width-spring
+  // drives the whole reveal and the pinned pill never unmounts, so open/close
+  // stay smooth — no display swap, no grid-track animation.
+  const groupEl = { NEW: newGroup, USED: usedGroup, PARTS: partsPill };
+  const others = (['NEW', 'USED', 'PARTS'] as const).filter((k) => k !== selectedGroup);
+
   return (
-    <div className="group/cond flex items-center">
-      <div className="shrink-0 group-hover/cond:hidden">
-        <Pill label={collapsedLabel} isActive toneKey={selected} onClick={() => {}} />
-      </div>
-      <div className="grid grid-cols-[0fr] transition-[grid-template-columns] duration-500 ease-out group-hover/cond:grid-cols-[1fr]">
-        <div className="overflow-hidden">{fullRow}</div>
-      </div>
+    <div
+      role="radiogroup"
+      aria-label="Condition grade"
+      className="flex w-fit items-center gap-1.5"
+      onPointerEnter={() => setCollapsedOpen(true)}
+      onPointerLeave={() => {
+        // Collapse back to just the selected pill — also fold any open sub-grade
+        // expansion so it returns to e.g. "NEW" rather than the members.
+        setCollapsedOpen(false);
+        setIsNewExpanded(false);
+        setIsExpanded(false);
+      }}
+    >
+      {groupEl[selectedGroup]}
+      <AnimatePresence initial={false}>
+        {collapsedOpen && (
+          <motion.div
+            initial={{ width: 0, opacity: 0 }}
+            animate={{ width: 'auto', opacity: 1 }}
+            exit={{ width: 0, opacity: 0 }}
+            transition={SLIDE_SPRING}
+            className="flex items-center gap-1.5 overflow-hidden"
+          >
+            {/* Hairline between the pinned selected pill and the rest. */}
+            <span aria-hidden className="h-7 w-px shrink-0 bg-gray-200" />
+            {others.map((k) => (
+              <Fragment key={k}>{groupEl[k]}</Fragment>
+            ))}
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

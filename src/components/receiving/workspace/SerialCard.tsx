@@ -266,7 +266,7 @@ export function SerialCard({
           className={`inline-flex h-11 shrink-0 items-center justify-center rounded-xl px-4 text-label font-black uppercase tracking-wider text-white shadow-sm transition-colors disabled:cursor-not-allowed disabled:bg-gray-300 ${
             editing
               ? 'bg-amber-500 hover:bg-amber-600'
-              : 'bg-blue-600 hover:bg-blue-700'
+              : 'bg-emerald-600 hover:bg-emerald-700'
           }`}
         >
           {showSavingLabel && isSubmitting ? (

@@ -47,16 +47,19 @@ function parseSort(raw: string | null): SortKey {
 }
 
 function orderByClause(sort: SortKey): string {
+  // COALESCE the debt columns — they're LEFT JOINed now (a search can surface
+  // catalog rows with no suggestions), so they may be NULL. `sc.id` is a stable
+  // tiebreaker so paging stays deterministic.
   switch (sort) {
     case 'confidence':
-      return 'd.top_confidence DESC NULLS LAST, d.suggestion_count DESC, sc.product_title ASC';
+      return 'COALESCE(d.top_confidence, 0) DESC, COALESCE(d.suggestion_count, 0) DESC, sc.product_title ASC, sc.id';
     case 'count':
-      return 'd.suggestion_count DESC, d.top_confidence DESC NULLS LAST, sc.product_title ASC';
+      return 'COALESCE(d.suggestion_count, 0) DESC, COALESCE(d.top_confidence, 0) DESC, sc.product_title ASC, sc.id';
     case 'title':
       return 'sc.product_title ASC NULLS LAST, sc.sku ASC';
     case 'volume':
     default:
-      return 'COALESCE(oc.order_count, 0) DESC, d.top_confidence DESC NULLS LAST, d.suggestion_count DESC';
+      return 'COALESCE(oc.order_count, 0) DESC, COALESCE(d.top_confidence, 0) DESC, COALESCE(d.suggestion_count, 0) DESC, sc.id';
   }
 }
 
@@ -68,74 +71,120 @@ export const GET = withAuth(
     const limit = Math.min(Math.max(Number(url.searchParams.get('limit') || 100), 1), 500);
     const offset = Math.max(Number(url.searchParams.get('offset') || 0), 0);
 
-    const params: unknown[] = [];
-    let qClause = '';
-    if (q) {
-      params.push(`%${q}%`);
-      qClause = `AND (sc.sku ILIKE $${params.length} OR sc.product_title ILIKE $${params.length})`;
-    }
+    // ── Search semantics ──────────────────────────────────────────────────────
+    // Default (no `q`): show the suggestion backlog — canonical SKUs that carry at
+    // least one open pairing suggestion (the "needs review" queue).
+    // With `q`: search the FULL active catalog, matching the canonical SKU/title OR
+    // any account-source identifier mapped to it via sku_platform_ids
+    // (platform_sku / platform_item_id). That lets an operator paste an Amazon
+    // ASIN, eBay/Walmart item id, or Ecwid SKU and land on the canonical product —
+    // even when it's already paired and has no outstanding suggestion.
+    const searching = q.length > 0;
 
-    params.push(limit);
-    const limitIdx = params.length;
-    params.push(offset);
-    const offsetIdx = params.length;
+    const params: unknown[] = [];
+    let searchClause = '';
+    let matchedViaSelect = ', NULL::json AS "matchedVia"';
+    if (searching) {
+      params.push(`%${q}%`);
+      const i = `$${params.length}`;
+      // Ecwid's platform_item_id is an internal numeric product id — exclude it
+      // from matching so a search only ever hits the meaningful SKU for Ecwid.
+      searchClause = `AND (
+        sc.sku ILIKE ${i}
+        OR sc.product_title ILIKE ${i}
+        OR EXISTS (
+          SELECT 1 FROM sku_platform_ids sp
+           WHERE sp.sku_catalog_id = sc.id
+             AND (sp.platform_sku ILIKE ${i}
+                  OR (sp.platform <> 'ecwid' AND sp.platform_item_id ILIKE ${i}))
+        )
+      )`;
+      // Surface WHICH platform identifier matched, but only when the hit came from
+      // a platform id (a canonical SKU/title match is self-evident from the row).
+      matchedViaSelect = `, (
+        SELECT json_build_object(
+          'platform', sp.platform,
+          'platformSku', sp.platform_sku,
+          'platformItemId', sp.platform_item_id
+        )
+        FROM sku_platform_ids sp
+        WHERE sp.sku_catalog_id = sc.id
+          AND (sp.platform_sku ILIKE ${i}
+               OR (sp.platform <> 'ecwid' AND sp.platform_item_id ILIKE ${i}))
+          AND NOT (sc.sku ILIKE ${i} OR sc.product_title ILIKE ${i})
+        ORDER BY sp.is_active DESC, sp.id
+        LIMIT 1
+      ) AS "matchedVia"`;
+    }
+    // The backlog gate only applies to the default (non-search) view.
+    const debtGate = searching ? '' : 'AND d.sku_catalog_id IS NOT NULL';
+    // ~85% of sku_catalog is is_active=false (inactive Zoho items that are still
+    // valid pairing targets). The default backlog stays active-only, but a search
+    // must reach inactive rows too — otherwise pasting most ASINs finds nothing.
+    // Inactive hits are flagged in the response (`isActive`) so the UI can badge them.
+    const activeGate = searching ? '' : 'AND sc.is_active = true';
+
+    const debtCte = `
+      debt AS (
+        SELECT
+          s.sku_catalog_id,
+          COUNT(*)::int                    AS suggestion_count,
+          MAX(s.confidence)::int           AS top_confidence,
+          ARRAY_AGG(DISTINCT sp.platform ORDER BY sp.platform) AS platforms
+        FROM sku_pairing_suggestions s
+        JOIN sku_platform_ids sp ON sp.id = s.platform_id_row_id
+        GROUP BY s.sku_catalog_id
+      )`;
+
+    const whereSql = `WHERE TRUE ${activeGate} ${searchClause} ${debtGate}`;
 
     try {
+      const listParams = [...params, limit, offset];
+      const limitIdx = `$${listParams.length - 1}`;
+      const offsetIdx = `$${listParams.length}`;
+
       const listSql = `
-        WITH debt AS (
-          SELECT
-            s.sku_catalog_id,
-            COUNT(*)::int                    AS suggestion_count,
-            MAX(s.confidence)::int           AS top_confidence,
-            ARRAY_AGG(DISTINCT sp.platform ORDER BY sp.platform) AS platforms
-          FROM sku_pairing_suggestions s
-          JOIN sku_platform_ids sp ON sp.id = s.platform_id_row_id
-          GROUP BY s.sku_catalog_id
-        )
+        WITH ${debtCte}
         SELECT
           sc.id                AS "skuCatalogId",
           sc.sku,
           sc.product_title     AS "productTitle",
           sc.image_url         AS "imageUrl",
-          d.suggestion_count   AS "suggestionCount",
-          d.top_confidence     AS "topConfidence",
-          d.platforms,
-          COALESCE(oc.order_count, 0)::int AS "orderCount",
+          sc.is_active         AS "isActive",
+          COALESCE(d.suggestion_count, 0)        AS "suggestionCount",
+          COALESCE(d.top_confidence, 0)          AS "topConfidence",
+          COALESCE(d.platforms, ARRAY[]::text[]) AS platforms,
+          COALESCE(oc.order_count, 0)::int       AS "orderCount",
           (
             SELECT COUNT(*)::int FROM sku_platform_ids sp
              WHERE (sp.sku_catalog_id = sc.id OR sp.platform_sku = sc.sku)
                AND sp.is_active = true
           ) AS "confirmedCount"
-        FROM debt d
-        JOIN sku_catalog sc ON sc.id = d.sku_catalog_id
+          ${matchedViaSelect}
+        FROM sku_catalog sc
+        LEFT JOIN debt d ON d.sku_catalog_id = sc.id
         LEFT JOIN (
           SELECT sku_catalog_id, COUNT(*)::int AS order_count
             FROM orders
            WHERE sku_catalog_id IS NOT NULL
            GROUP BY sku_catalog_id
         ) oc ON oc.sku_catalog_id = sc.id
-        WHERE sc.is_active = true
-        ${qClause}
+        ${whereSql}
         ORDER BY ${orderByClause(sort)}
-        LIMIT $${limitIdx} OFFSET $${offsetIdx}
+        LIMIT ${limitIdx} OFFSET ${offsetIdx}
       `;
 
       const countSql = `
+        WITH ${debtCte}
         SELECT COUNT(*)::int AS total
-          FROM sku_pairing_suggestions s
-          JOIN sku_catalog sc ON sc.id = s.sku_catalog_id
-         WHERE sc.is_active = true
-         ${qClause ? qClause.replace(/^AND/, 'AND') : ''}
+        FROM sku_catalog sc
+        LEFT JOIN debt d ON d.sku_catalog_id = sc.id
+        ${whereSql}
       `;
 
-      const countParams = params.slice(0, params.length - 2);
-
       const [listResult, countResult] = await Promise.all([
-        pool.query(listSql, params),
-        pool.query(`SELECT COUNT(DISTINCT s.sku_catalog_id)::int AS total
-                      FROM sku_pairing_suggestions s
-                      JOIN sku_catalog sc ON sc.id = s.sku_catalog_id
-                     WHERE sc.is_active = true ${qClause}`, countParams),
+        pool.query(listSql, listParams),
+        pool.query(countSql, params),
       ]);
 
       return NextResponse.json({

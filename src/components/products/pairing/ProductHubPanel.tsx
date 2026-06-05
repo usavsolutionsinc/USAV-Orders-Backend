@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useState } from 'react';
 import {
   Check,
   X,
@@ -11,7 +11,9 @@ import {
   AlertCircle,
   ChevronDown,
   Plus,
+  Clipboard,
 } from '@/components/Icons';
+import { TextField } from '@/design-system/primitives/TextField';
 import { PRODUCT_HUB_PLATFORMS, platformStyle } from './platform-style';
 import { useProductHub } from './useProductHub';
 import type { HubCandidate, HubConfirmed } from './types';
@@ -49,16 +51,6 @@ export function ProductHubPanel({ skuCatalogId, allowManualPair = false }: Produ
   const openPreview = useCallback((url: string, label: string) => {
     setPreview({ url, label });
   }, []);
-
-  // All hooks must run on every render — compute totals up-front and let the
-  // JSX branches consume them. Returning early before useMemo trips React's
-  // "different hooks rendered" guard.
-  const hasAnyContent = useMemo(() => {
-    if (!snapshot) return false;
-    const c = Object.values(snapshot.confirmed).flat().length;
-    const s = Object.values(snapshot.suggestions).flat().length;
-    return c + s > 0;
-  }, [snapshot]);
 
   if (hub.loading && !snapshot) {
     return (
@@ -100,34 +92,25 @@ export function ProductHubPanel({ skuCatalogId, allowManualPair = false }: Produ
         {allowManualPair ? (
           <ManualPairForm skuCatalogId={skuCatalogId} onAdded={hub.refresh} />
         ) : null}
-        {!hasAnyContent ? (
-          <div className="flex flex-col items-center py-16 text-center">
-            <div className="flex h-12 w-12 items-center justify-center rounded-full border border-emerald-200 bg-emerald-50">
-              <Check className="h-6 w-6 text-emerald-600" />
-            </div>
-            <p className="mt-3 text-sm font-bold text-gray-700">All channels paired</p>
-            <p className="mt-1 text-xs text-gray-500">
-              No outstanding suggestions for this product.
-            </p>
-          </div>
-        ) : (
-          <div className="divide-y divide-gray-100">
-            {PRODUCT_HUB_PLATFORMS.map((platform) => (
-              <ChannelSection
-                key={platform}
-                platform={platform}
-                confirmed={snapshot.confirmed[platform] || []}
-                suggestions={snapshot.suggestions[platform] || []}
-                pendingByRowId={hub.pendingByRowId}
-                onAccept={hub.toggleAccept}
-                onReject={hub.toggleReject}
-                onUnpair={hub.toggleUnpair}
-                onPreview={openPreview}
-                activePreviewUrl={preview?.url ?? null}
-              />
-            ))}
-          </div>
-        )}
+        <div className="divide-y divide-gray-100">
+          {PRODUCT_HUB_PLATFORMS.map((platform) => (
+            <ChannelSection
+              key={platform}
+              platform={platform}
+              confirmed={snapshot.confirmed[platform] || []}
+              suggestions={snapshot.suggestions[platform] || []}
+              canonicalTitle={snapshot.canonicalTitle}
+              skuCatalogId={skuCatalogId}
+              onAdded={hub.refresh}
+              pendingByRowId={hub.pendingByRowId}
+              onAccept={hub.toggleAccept}
+              onReject={hub.toggleReject}
+              onUnpair={hub.toggleUnpair}
+              onPreview={openPreview}
+              activePreviewUrl={preview?.url ?? null}
+            />
+          ))}
+        </div>
       </div>
 
       <PendingFooter
@@ -167,21 +150,15 @@ function HubHeader({
   suggestionTotal: number;
 }) {
   return (
-    <header className="shrink-0 border-b border-gray-200 bg-white px-4 py-3">
-      <div className="flex items-baseline gap-2">
-        <span className="font-mono text-lg font-black tracking-tight text-gray-900">{sku}</span>
-        <span className="inline-flex items-center rounded-md border border-red-200 bg-red-50 px-1.5 py-0.5 text-micro font-semibold uppercase tracking-wider text-red-700">
-          Zoho
-        </span>
-      </div>
-      <p className="mt-1 text-sm font-bold leading-snug text-gray-900">{title || '—'}</p>
-      <div className="mt-2 flex flex-wrap items-center gap-3 text-micro font-semibold uppercase tracking-wider text-gray-500">
-        <span>
-          <span className="text-emerald-600">✓ {confirmedTotal}</span> confirmed
-        </span>
-        <span>
-          <span className="text-amber-600">⌛ {suggestionTotal}</span> suggested
-        </span>
+    <header className="flex h-10 shrink-0 items-center gap-2 border-b border-gray-200 bg-white px-4">
+      <span className="shrink-0 font-mono text-sm font-black tracking-tight text-gray-900">{sku}</span>
+      <span className="inline-flex shrink-0 items-center rounded-md border border-red-200 bg-red-50 px-1.5 py-0.5 text-eyebrow font-semibold uppercase tracking-wider text-red-700">
+        Zoho
+      </span>
+      <p className="min-w-0 flex-1 truncate text-caption font-bold text-gray-900">{title || '—'}</p>
+      <div className="flex shrink-0 items-center gap-2.5 text-micro font-semibold uppercase tracking-wider text-gray-500">
+        <span className="text-emerald-600">✓ {confirmedTotal}</span>
+        <span className="text-amber-600">⌛ {suggestionTotal}</span>
       </div>
     </header>
   );
@@ -193,6 +170,9 @@ function ChannelSection({
   platform,
   confirmed,
   suggestions,
+  canonicalTitle,
+  skuCatalogId,
+  onAdded,
   pendingByRowId,
   onAccept,
   onReject,
@@ -203,6 +183,9 @@ function ChannelSection({
   platform: string;
   confirmed: HubConfirmed[];
   suggestions: HubCandidate[];
+  canonicalTitle: string | null;
+  skuCatalogId: number;
+  onAdded: () => void;
   pendingByRowId: Map<number, { kind: 'accept' | 'reject' | 'unpair' }>;
   onAccept: (c: HubCandidate) => void;
   onReject: (c: HubCandidate) => void;
@@ -224,6 +207,7 @@ function ChannelSection({
           </span>
           <span className="text-micro text-gray-400">empty</span>
         </div>
+        <ChannelManualAdd platform={platform} skuCatalogId={skuCatalogId} onAdded={onAdded} />
       </section>
     );
   }
@@ -246,6 +230,7 @@ function ChannelSection({
           <ConfirmedRow
             key={`c-${c.platformIdRowId}`}
             confirmed={c}
+            canonicalTitle={canonicalTitle}
             pending={pendingByRowId.get(c.platformIdRowId)?.kind}
             onUnpair={onUnpair}
             onPreview={onPreview}
@@ -256,6 +241,7 @@ function ChannelSection({
           <SuggestionRow
             key={`s-${c.platformIdRowId}`}
             candidate={c}
+            canonicalTitle={canonicalTitle}
             pending={pendingByRowId.get(c.platformIdRowId)?.kind}
             onAccept={onAccept}
             onReject={onReject}
@@ -274,28 +260,63 @@ function ChannelSection({
           See {moreCount} more <ChevronDown className="h-3 w-3" />
         </button>
       )}
+
+      <ChannelManualAdd platform={platform} skuCatalogId={skuCatalogId} onAdded={onAdded} />
     </section>
   );
 }
 
 // ─── Rows ───────────────────────────────────────────────────────────────────
 
+/**
+ * A platform mapping can carry two identifiers — a merchant SKU (platform_sku)
+ * and a marketplace item id (platform_item_id, e.g. an Amazon ASIN). Show BOTH
+ * when present, joined by a dot: the SKU as the primary token, the raw item id
+ * second. `primary` doubles as the preview-pane label.
+ *
+ * Ecwid is the exception: its platform_item_id is an internal numeric product id
+ * (e.g. 739085920) that's noise to the operator — show the SKU only.
+ */
+function identifierParts(
+  platform: string,
+  platformSku: string | null,
+  platformItemId: string | null,
+): { primary: string; secondary: string | null } {
+  const sku = platformSku?.trim() || '';
+  const item = platformItemId?.trim() || '';
+  if (platform === 'ecwid') {
+    return { primary: sku || item || '—', secondary: null };
+  }
+  const primary = sku || item || '—';
+  const hasBoth = !!sku && !!item && sku.toUpperCase() !== item.toUpperCase();
+  return { primary, secondary: hasBoth ? item : null };
+}
+
+
 function ConfirmedRow({
   confirmed,
+  canonicalTitle,
   pending,
   onUnpair,
   onPreview,
   isPreviewing,
 }: {
   confirmed: HubConfirmed;
+  canonicalTitle: string | null;
   pending: 'accept' | 'reject' | 'unpair' | undefined;
   onUnpair: (c: HubConfirmed) => void;
   onPreview: (url: string, label: string) => void;
   isPreviewing: boolean;
 }) {
   const willUnpair = pending === 'unpair';
-  const value =
-    confirmed.platformSku?.trim() || confirmed.platformItemId?.trim() || '—';
+  const { primary: value, secondary } = identifierParts(
+    confirmed.platform,
+    confirmed.platformSku,
+    confirmed.platformItemId,
+  );
+  // Always show a product title. Marketplace rows (notably Ecwid) often have no
+  // listing_title/display_name of their own — fall back to the canonical title.
+  const rowTitle = confirmed.listingTitle?.trim() || canonicalTitle?.trim() || '';
   return (
     <div
       className={`flex items-center gap-2 rounded-md border px-2 py-1.5 ${
@@ -307,15 +328,17 @@ function ConfirmedRow({
       <Check className={`h-3.5 w-3.5 shrink-0 ${willUnpair ? 'text-orange-500' : 'text-emerald-600'}`} />
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-1.5">
-          <span className="truncate font-mono text-xs font-bold text-gray-900">{value}</span>
+          <span className="truncate font-mono text-xs font-bold text-gray-900">
+            {value}{secondary ? <span className="text-gray-400"> · </span> : null}{secondary}
+          </span>
           {confirmed.accountName && (
             <span className="truncate text-micro font-medium uppercase tracking-wider text-gray-500">
               {confirmed.accountName}
             </span>
           )}
         </div>
-        {confirmed.listingTitle && (
-          <p className="truncate text-micro text-gray-500">{confirmed.listingTitle}</p>
+        {rowTitle && (
+          <p className="truncate text-micro text-gray-500">{rowTitle}</p>
         )}
       </div>
       {confirmed.listingUrl && (
@@ -353,6 +376,7 @@ function ConfirmedRow({
 
 function SuggestionRow({
   candidate,
+  canonicalTitle,
   pending,
   onAccept,
   onReject,
@@ -360,14 +384,19 @@ function SuggestionRow({
   isPreviewing,
 }: {
   candidate: HubCandidate;
+  canonicalTitle: string | null;
   pending: 'accept' | 'reject' | 'unpair' | undefined;
   onAccept: (c: HubCandidate) => void;
   onReject: (c: HubCandidate) => void;
   onPreview: (url: string, label: string) => void;
   isPreviewing: boolean;
 }) {
-  const value =
-    candidate.platformSku?.trim() || candidate.platformItemId?.trim() || '—';
+  const { primary: value, secondary } = identifierParts(
+    candidate.platform,
+    candidate.platformSku,
+    candidate.platformItemId,
+  );
+  const rowTitle = candidate.listingTitle?.trim() || canonicalTitle?.trim() || '';
   const tone =
     pending === 'accept'
       ? 'border-blue-300 bg-blue-50'
@@ -391,7 +420,9 @@ function SuggestionRow({
         />
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-1.5">
-            <span className="truncate font-mono text-xs font-bold text-gray-900">{value}</span>
+            <span className="truncate font-mono text-xs font-bold text-gray-900">
+              {value}{secondary ? <span className="text-gray-400"> · </span> : null}{secondary}
+            </span>
             {candidate.accountName && (
               <span className="truncate text-micro font-medium uppercase tracking-wider text-gray-500">
                 {candidate.accountName}
@@ -401,8 +432,8 @@ function SuggestionRow({
               {candidate.confidence}
             </span>
           </div>
-          {candidate.listingTitle && (
-            <p className="truncate text-micro text-gray-600">{candidate.listingTitle}</p>
+          {rowTitle && (
+            <p className="truncate text-micro text-gray-600">{rowTitle}</p>
           )}
           <p className="truncate text-eyebrow font-medium uppercase tracking-wider text-gray-400">
             {candidate.reason}
@@ -452,6 +483,156 @@ function SuggestionRow({
             <X className="h-3.5 w-3.5" />
           </button>
         </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Paste button (clipboard → field) ───────────────────────────────────────
+
+function PasteButton({ onPaste }: { onPaste: (value: string) => void }) {
+  return (
+    <button
+      type="button"
+      onClick={async () => {
+        try {
+          const text = await navigator.clipboard.readText();
+          if (text) onPaste(text.trim());
+        } catch {
+          /* clipboard blocked — operator can still type */
+        }
+      }}
+      className="flex h-7 w-7 items-center justify-center rounded-lg text-gray-400 transition-colors hover:bg-gray-100 hover:text-blue-600"
+      title="Paste from clipboard"
+      aria-label="Paste from clipboard"
+    >
+      <Clipboard className="h-3.5 w-3.5" />
+    </button>
+  );
+}
+
+// ─── Per-platform manual add ─────────────────────────────────────────────────
+
+/**
+ * Inline "add an identifier to THIS platform" control, shown on every channel
+ * row (including empty ones). Lets the operator hand-enter an item number and/or
+ * a SKU for the platform and link it — uses the TextField primitive with a paste
+ * button on each entry. Posts a single manual accept to /api/sku-catalog/pair-batch
+ * (the same atomic + audited path Save uses), then refreshes the hub.
+ */
+function ChannelManualAdd({
+  platform,
+  skuCatalogId,
+  onAdded,
+}: {
+  platform: string;
+  skuCatalogId: number;
+  onAdded: () => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [itemNumber, setItemNumber] = useState('');
+  const [sku, setSku] = useState('');
+  const [account, setAccount] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const close = useCallback(() => {
+    setItemNumber('');
+    setSku('');
+    setAccount('');
+    setError(null);
+    setOpen(false);
+  }, []);
+
+  const submit = useCallback(async () => {
+    const trimmedItem = itemNumber.trim();
+    const trimmedSku = sku.trim();
+    if (!trimmedItem && !trimmedSku) {
+      setError('Enter an item number or SKU');
+      return;
+    }
+    setSaving(true);
+    setError(null);
+    try {
+      const res = await fetch('/api/sku-catalog/pair-batch', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'same-origin',
+        body: JSON.stringify({
+          skuCatalogId,
+          accept: [
+            {
+              platform,
+              platformItemId: trimmedItem || null,
+              platformSku: trimmedSku || null,
+              accountName: account.trim() || null,
+              confidence: 100,
+              reason: 'manual_add',
+            },
+          ],
+          reject: [],
+          unpair: [],
+        }),
+      });
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok || !body?.success) throw new Error(body?.error || `HTTP ${res.status}`);
+      window.dispatchEvent(new CustomEvent('sku-pairing-updated'));
+      close();
+      onAdded();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to add');
+    } finally {
+      setSaving(false);
+    }
+  }, [account, close, itemNumber, onAdded, platform, sku, skuCatalogId]);
+
+  if (!open) {
+    return (
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        className="mt-1.5 inline-flex items-center gap-1 text-eyebrow font-bold uppercase tracking-wider text-gray-400 transition-colors hover:text-blue-600"
+      >
+        <Plus className="h-3 w-3" /> Add {platformStyle(platform).label} identifier
+      </button>
+    );
+  }
+
+  return (
+    <div className="mt-2 space-y-2 rounded-lg border border-blue-200 bg-blue-50/40 p-2.5">
+      <TextField
+        label="Item number"
+        value={itemNumber}
+        onChange={setItemNumber}
+        mono
+        trailing={<PasteButton onPaste={setItemNumber} />}
+      />
+      <TextField
+        label="SKU"
+        value={sku}
+        onChange={setSku}
+        mono
+        trailing={<PasteButton onPaste={setSku} />}
+      />
+      <TextField label="Account (optional)" value={account} onChange={setAccount} />
+      {error ? <p className="text-micro font-semibold text-red-600">{error}</p> : null}
+      <div className="flex items-center justify-end gap-2">
+        <button
+          type="button"
+          onClick={close}
+          className="rounded-lg px-2.5 py-1.5 text-micro font-bold uppercase tracking-wider text-gray-500 transition-colors hover:bg-white"
+        >
+          Cancel
+        </button>
+        <button
+          type="button"
+          onClick={() => void submit()}
+          disabled={saving || (!itemNumber.trim() && !sku.trim())}
+          className="inline-flex items-center gap-1.5 rounded-lg bg-blue-600 px-3 py-1.5 text-micro font-bold uppercase tracking-wider text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Link2 className="h-3.5 w-3.5" />}
+          Add
+        </button>
       </div>
     </div>
   );

@@ -49,7 +49,7 @@ function ReceivingPageInner() {
             </div>
           </div>
 
-          <MobileReceivingList />
+          <MobileReceivingList limit={20} />
         </div>
       </div>
 

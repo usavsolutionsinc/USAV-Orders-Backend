@@ -3,22 +3,22 @@
 import { useCallback, useEffect, useState } from 'react';
 import {
   Package,
-  MapPin,
   Clock,
-  User,
   Check,
   Clipboard,
   Copy,
   X,
+  ExternalLink,
 } from '@/components/Icons';
 import {
   MobileCard,
-  MobilePageHeader,
   TOKENS,
   BentoItem,
   SectionHeader,
   GlassButton,
 } from '@/components/mobile/redesign/DesignSystem';
+import { OrderIdChip, getLast4 } from '@/components/ui/CopyChip';
+import { getExternalUrlByItemNumber } from '@/hooks/useExternalItemUrl';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 
@@ -204,10 +204,29 @@ export default function RedesignedMobileOrderDetail({ orderId }: { orderId: stri
         </div>
       </div>
 
-      <MobilePageHeader
-        title={order.orderId}
-        subtitle={`${order.source ? `Channel: ${order.source} • ` : ''}Created ${fmtDate(order.createdAt)}`}
-      />
+      <header className="px-1 pt-1 pb-3">
+        <div className="flex items-center gap-1.5">
+          <OrderIdChip value={order.orderId} display={getLast4(order.orderId)} />
+          {(() => {
+            const extUrl = getExternalUrlByItemNumber(order.sku);
+            return (
+              <button
+                type="button"
+                disabled={!extUrl}
+                onClick={() => extUrl && window.open(extUrl, '_blank', 'noopener,noreferrer')}
+                aria-label="Open listing in new tab"
+                title={extUrl ? 'Open listing' : 'No listing link'}
+                className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-blue-500 transition hover:bg-blue-50 disabled:cursor-not-allowed disabled:opacity-30"
+              >
+                <ExternalLink className="h-4 w-4" />
+              </button>
+            );
+          })()}
+        </div>
+        <p className="mt-1.5 text-sm font-medium text-blue-700/60">
+          {`${order.source ? `Channel: ${order.source} • ` : ''}Created ${fmtDate(order.createdAt)}`}
+        </p>
+      </header>
 
       <div className="grid grid-cols-2 gap-4 mt-2">
         {/* Product Card */}
@@ -228,26 +247,6 @@ export default function RedesignedMobileOrderDetail({ orderId }: { orderId: stri
               </span>
             )}
           </div>
-        </BentoItem>
-
-        {/* Customer Card */}
-        <BentoItem title="Customer" icon={User}>
-          <p className="text-sm font-black text-blue-950 tracking-tight truncate">
-            {order.customerName || 'Not on file'}
-          </p>
-          <p className="text-[10px] text-blue-300 font-bold uppercase tracking-widest mt-1.5">
-            {order.source || 'Direct'}
-          </p>
-        </BentoItem>
-
-        {/* Location Card */}
-        <BentoItem title="Destination" icon={MapPin}>
-          <p className="text-sm font-black text-blue-950 tracking-tight truncate">
-            {order.address || 'No address'}
-          </p>
-          <p className="text-[10px] text-blue-300 font-bold uppercase tracking-widest mt-1.5">
-            {order.shipByDate ? `Ship by ${fmtDate(order.shipByDate)}` : 'Standard'}
-          </p>
         </BentoItem>
 
         {/* Timeline */}
@@ -287,8 +286,8 @@ export default function RedesignedMobileOrderDetail({ orderId }: { orderId: stri
         </div>
       </div>
 
-      {/* Sticky Bottom Actions */}
-      <div className="fixed bottom-0 left-0 right-0 z-50 px-6 pb-[max(1.5rem,env(safe-area-inset-bottom))] bg-gradient-to-t from-slate-50 via-slate-50/95 to-transparent pt-16 pointer-events-none">
+      {/* Sticky Bottom Actions — sit ABOVE the fixed bottom nav (h-16 + safe area). */}
+      <div className="fixed inset-x-0 bottom-[calc(4rem+env(safe-area-inset-bottom))] z-50 px-6 pb-3 pt-16 bg-gradient-to-t from-slate-50 via-slate-50/95 to-transparent pointer-events-none">
         <div className="flex gap-3 pointer-events-auto">
           <GlassButton
             variant="secondary"

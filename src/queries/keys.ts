@@ -50,6 +50,7 @@ export const qk = {
     logs: ['fba-logs'] as const,
     shipments: ['fba-shipments'] as const,
     fnskus: ['fba-fnskus'] as const,
+    fnskuSearch: (q: string) => ['fba-fnskus', 'search', q] as const,
   },
   staff: {
     all: ['staff'] as const,
@@ -87,6 +88,12 @@ export const qk = {
     /** Broad invalidation prefix — matches every bins-admin query. */
     all: ['locations-admin'] as const,
     bins: () => ['locations-admin', 'bins'] as const,
+  },
+  triage: {
+    /** Broad invalidation prefix — matches every PO-triage detail query. */
+    all: ['triage'] as const,
+    /** One unfound-queue email_po row's detail envelope (body + Zoho compare). */
+    detail: (sourceId: string) => ['triage', 'detail', sourceId] as const,
   },
   staffAccess: {
     /** Broad invalidation prefix — matches the list and every staff detail. */

@@ -27,7 +27,7 @@ const TAB_META: Record<MobileNavTabId, TabMeta> = {
   home: { label: 'Recent', icon: History, href: '/m/home' },
   receiving: { label: 'Receiving', icon: Truck, href: '/m/receiving' },
   scan: { label: 'Scan', icon: Barcode, href: '/m/scan', isFab: true },
-  packing: { label: 'Packing', icon: Box, href: '/packer' },
+  packing: { label: 'Packing', icon: Box, href: '/m/pack' },
   picks: { label: 'Picks', icon: ShoppingCart, href: '/m/pick' },
   signout: { label: 'Sign out', icon: Lock, href: '/signin' },
 };
@@ -35,7 +35,7 @@ const TAB_META: Record<MobileNavTabId, TabMeta> = {
 export const RedesignedBottomNav = () => {
   const pathname = usePathname();
   const router = useRouter();
-  const { signOut } = useAuth();
+  const { user, signOut } = useAuth();
 
   const handleTabClick = async (tabId: string, href: string) => {
     if (tabId === 'signout') {
@@ -57,6 +57,11 @@ export const RedesignedBottomNav = () => {
     id,
     ...TAB_META[id]
   })).filter(t => t.label);
+
+  // No app nav until someone's signed in. Guards the mobile sign-in screen,
+  // which the edge proxy serves under the /m shell via rewrite (so the path is
+  // '/signin' and the route is /m/signin) — without this the bar flashes there.
+  if (!user) return null;
 
   return (
     <nav className="fixed inset-x-0 bottom-0 z-[100] pointer-events-none">

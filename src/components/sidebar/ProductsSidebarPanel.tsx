@@ -14,7 +14,9 @@ import { detectSkuCatalogSearchField } from '@/lib/detectSearchField';
 import { ChevronDown, Printer, FileText, Link2, Check, Clock, History, Package } from '@/components/Icons';
 import { successFeedback } from '@/lib/feedback/confirm';
 import { PairingQueueList } from '@/components/products/pairing/PairingQueueList';
-import type { PairingQueueItem, PairingSort } from '@/components/products/pairing/types';
+import { PairingUnmatchedSection } from '@/components/products/pairing/PairingUnmatchedSection';
+import { AddOrPairSkuModal } from '@/components/products/pairing/AddOrPairSkuModal';
+import type { PairingQueueItem, PairingSort, UnmappedPlatformId } from '@/components/products/pairing/types';
 import { LibraryBrowser } from '@/components/manuals/LibraryBrowser';
 import { RecentlyPrintedList } from '@/components/labels/RecentlyPrintedList';
 import { UnitHistoryFinder } from '@/components/labels/UnitHistoryFinder';
@@ -209,7 +211,7 @@ export function ProductsSidebarPanel() {
           : isLabels
             ? 'Search SKU, title…'
             : isPairing
-              ? 'Search pairing queue…'
+              ? 'Search SKU, title, or any platform ID…'
               : isManuals
                 ? 'Fuzzy search folders & manuals…'
                 : 'Search products…',
@@ -289,23 +291,48 @@ function PairingSidebarQueue({ query, sort }: { query: string; sort: PairingSort
   const searchParams = useSearchParams();
   const selectedSku = searchParams.get('sku') || null;
 
-  const handleSelect = useCallback(
-    (item: PairingQueueItem) => {
+  // Add/pair modal state — opened from the "not in the queue" section for an
+  // unmapped identifier (`pending` set) or to create a brand-new Zoho SKU.
+  const [modalOpen, setModalOpen] = useState(false);
+  const [pending, setPending] = useState<UnmappedPlatformId | null>(null);
+
+  const openSku = useCallback(
+    (sku: string) => {
       const params = new URLSearchParams(searchParams.toString());
       params.set('view', 'pairing');
-      params.set('sku', item.sku);
+      params.set('sku', sku);
       router.replace(`/products?${params.toString()}`);
     },
     [router, searchParams],
   );
 
+  const handleSelect = useCallback((item: PairingQueueItem) => openSku(item.sku), [openSku]);
+
   return (
-    <PairingQueueList
-      query={query}
-      sort={sort}
-      selectedSku={selectedSku}
-      onSelect={handleSelect}
-    />
+    <div className="flex h-full min-h-0 flex-col">
+      <PairingUnmatchedSection
+        query={query}
+        onPairIdentifier={(id) => { setPending(id); setModalOpen(true); }}
+        onAddSku={() => { setPending(null); setModalOpen(true); }}
+      />
+
+      <div className="min-h-0 flex-1">
+        <PairingQueueList
+          query={query}
+          sort={sort}
+          selectedSku={selectedSku}
+          onSelect={handleSelect}
+        />
+      </div>
+
+      <AddOrPairSkuModal
+        open={modalOpen}
+        onClose={() => setModalOpen(false)}
+        query={query}
+        pending={pending}
+        onDone={(sku) => { setModalOpen(false); openSku(sku); }}
+      />
+    </div>
   );
 }
 

@@ -119,6 +119,14 @@ function PairingQueueRow({
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-1.5">
             <span className="truncate font-mono text-xs font-bold text-gray-900">{item.sku}</span>
+            {item.isActive === false && (
+              <span
+                className="inline-flex shrink-0 items-center rounded bg-gray-100 px-1 text-eyebrow font-bold uppercase tracking-wider text-gray-500 ring-1 ring-gray-200"
+                title="This canonical SKU is inactive in the catalog"
+              >
+                inactive
+              </span>
+            )}
             <ConfidenceDot value={item.topConfidence} />
             {item.orderCount > 0 && (
               <span
@@ -135,6 +143,16 @@ function PairingQueueRow({
           <p className="mt-0.5 line-clamp-2 text-caption leading-tight text-gray-600">
             {item.productTitle || '—'}
           </p>
+          {item.matchedVia && (
+            <p className="mt-0.5 truncate text-eyebrow font-semibold uppercase tracking-wider text-blue-600">
+              matched {platformStyle(item.matchedVia.platform).label}:{' '}
+              <span className="font-mono normal-case tracking-normal text-gray-700">
+                {item.matchedVia.platform === 'ecwid'
+                  ? item.matchedVia.platformSku || item.matchedVia.platformItemId
+                  : item.matchedVia.platformItemId || item.matchedVia.platformSku}
+              </span>
+            </p>
+          )}
           <div className="mt-1 flex flex-wrap gap-1">
             {item.platforms.map((p) => {
               const style = platformStyle(p);

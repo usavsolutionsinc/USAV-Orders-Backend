@@ -42,6 +42,10 @@ import { useZohoSync } from './line-edit/hooks/useZohoSync';
 import { usePoBinding } from './line-edit/hooks/usePoBinding';
 import { useReceiveAction } from './line-edit/hooks/useReceiveAction';
 import { useSourcePlatform } from './line-edit/hooks/useSourcePlatform';
+import { useLineSerials } from './line-edit/hooks/useLineSerials';
+import { useZohoLinePrefill } from './line-edit/hooks/useZohoLinePrefill';
+import { useReceivingPackageSync } from './line-edit/hooks/useReceivingPackageSync';
+import { useResourceMutation } from '@/hooks';
 import { WorkspaceCard } from '@/design-system/components';
 import { printProductLabel } from '@/lib/print/printProductLabel';
 import { buildReceivingCopyInfo } from '@/utils/copy-all-receiving';
@@ -52,10 +56,6 @@ import {
   type ReceivingLineRow,
 } from '@/components/station/ReceivingLinesTable';
 import {
-  parseSerialFromLineDescription,
-  parseZendeskListingFromPoNotes,
-} from '@/lib/zoho-po-prefill';
-import {
   SOURCE_PLATFORM_LABELS,
   readReceivingLineDetailsScratch,
   writeReceivingLineDetailsScratch,
@@ -63,28 +63,6 @@ import {
   listingLinkPreview,
   receivingShareUrl,
 } from '@/components/sidebar/receiving/receiving-sidebar-shared';
-
-/** Append a serial_units row to the line's `serials` snapshot (deduped by id + normalized sn). */
-function mergeSerialIntoLineSerials(
-  prev: ReceivingLineRow['serials'] | undefined,
-  serialUnit: { id?: number; serial_number?: string | null } | null | undefined,
-): NonNullable<ReceivingLineRow['serials']> {
-  if (!serialUnit?.id) return [...(prev ?? [])];
-  const sn = String(serialUnit.serial_number ?? '').trim();
-  if (!sn) return [...(prev ?? [])];
-  const norm = sn.toUpperCase();
-  const list = [...(prev ?? [])];
-  if (
-    list.some(
-      (s) =>
-        s.id === serialUnit.id ||
-        String(s.serial_number || '').trim().toUpperCase() === norm,
-    )
-  ) {
-    return list;
-  }
-  return [...list, { id: serialUnit.id, serial_number: sn }];
-}
 
 export function LineEditPanel({
   row,
@@ -136,8 +114,6 @@ export function LineEditPanel({
   // not the row we're about to write.
   const serialLookup = useSerialLookup();
   const [listingLink, setListingLink] = useState('');
-  const [saving, setSaving] = useState(false);
-  const [serialSubmitting, setSerialSubmitting] = useState(false);
   const [headerSerialEdit, setHeaderSerialEdit] = useState<{
     id?: number;
     serial_number: string;
@@ -278,58 +254,7 @@ export function LineEditPanel({
   }, [row.id]);
 
   // Prefill Zendesk, listing, and serial from Zoho PO notes + line description.
-  useEffect(() => {
-    const poId = (row.zoho_purchaseorder_id || '').trim();
-    if (!poId) return;
-
-    let cancelled = false;
-    (async () => {
-      try {
-        const res = await fetch(
-          `/api/zoho/purchase-orders?purchaseorder_id=${encodeURIComponent(poId)}`,
-        );
-        const data = await res.json();
-        if (cancelled || !data?.success || !data.purchaseorder) return;
-
-        const po = data.purchaseorder as {
-          notes?: string | null;
-          line_items?: Array<{ line_item_id?: string; description?: string | null }>;
-        };
-
-        const rid = row.receiving_id;
-        const scratch = readReceivingLineDetailsScratch(rid);
-        const { zendesk: zPo, listing: lPo } = parseZendeskListingFromPoNotes(po.notes ?? '');
-        if (!scratch.zendesk.trim() && zPo) setZendesk(zPo);
-        // Listing URL: DB column (`receiving.listing_url`) is the source of
-        // truth — never overwrite an existing DB value or a per-browser
-        // scratch override with the Zoho-parsed value. When both are empty
-        // and Zoho has one, set it locally and the debounced PATCH effect
-        // will persist it to the DB.
-        const currentListing =
-          (row.receiving_listing_url || '').trim() || scratch.listing.trim();
-        if (!currentListing && lPo) setListingLink(lPo);
-
-        const lineItemId = (row.zoho_line_item_id || '').trim();
-        if (!lineItemId || !Array.isArray(po.line_items)) return;
-        const li = po.line_items.find(
-          (l) => String(l.line_item_id || '').trim() === lineItemId,
-        );
-        // Local serials (from serial_units via receiving-lines `include=serials`)
-        // win over the Zoho PO description. Only fall back to Zoho when the
-        // line has no local serial on file yet.
-        const hasLocalSerial = (row.serials ?? []).some((s) => (s.serial_number || '').trim());
-        if (hasLocalSerial) return;
-        const sn = parseSerialFromLineDescription(li?.description ?? null);
-        if (sn) setSerialInput(sn);
-      } catch {
-        /* Zoho unavailable — fields stay empty */
-      }
-    })();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [row.id, row.receiving_id, row.zoho_purchaseorder_id, row.zoho_line_item_id]);
+  useZohoLinePrefill({ row, setZendesk, setListingLink, setSerialInput });
 
   // Persist scratch per carton. Skip one write right after receiving_id
   // changes (flush already saved the previous carton; load will hydrate this one).
@@ -380,182 +305,44 @@ export function LineEditPanel({
     }
   }, [row.id, row.zendesk_ticket, row.notes, zendesk]);
 
-  // Persist the listing URL to the carton (`receiving.listing_url`) so other
-  // surfaces — notably the tech testing workspace running in another browser
-  // — see it without re-parsing Zoho PO notes. Debounced so paste-then-type
-  // doesn't thrash PATCH. Guard against round-tripping the same value we just
-  // hydrated from the DB.
-  useEffect(() => {
-    if (row.receiving_id == null) return;
-    const trimmed = listingLink.trim();
-    const dbValue = (row.receiving_listing_url || '').trim();
-    if (trimmed === dbValue) return;
-    const rid = row.receiving_id;
-    const t = window.setTimeout(() => {
-      void fetch(`/api/receiving/${rid}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ listing_url: trimmed || null }),
-      }).then(async (res) => {
-        const data = await res.json().catch(() => ({}));
-        if (!data?.success) return;
-        window.dispatchEvent(new CustomEvent('receiving-package-updated', {
-          detail: {
-            receiving_id: rid,
-            listing_url: (data.receiving?.listing_url as string | null) ?? null,
-          },
-        }));
-      }).catch(() => {
-        /* silent — scratch keeps the value locally until next attempt */
-      });
-    }, 450);
-    return () => window.clearTimeout(t);
-  }, [listingLink, row.receiving_id, row.receiving_listing_url]);
+  // Persist listing_url to the carton (debounced) + mirror listing/platform
+  // changed on other surfaces for this carton.
+  useReceivingPackageSync({ row, listingLink, setListingLink, setSourcePlatform });
 
-  // Keep this inspector in sync when the platform is changed elsewhere
-  // (top PO card, another open inspector for the same receiving row).
-  useEffect(() => {
-    if (row.receiving_id == null) return;
-    const handler = (e: Event) => {
-      const detail = (e as CustomEvent<{
-        receiving_id?: number;
-        source_platform?: string | null;
-        listing_url?: string | null;
-      }>).detail;
-      if (!detail || detail.receiving_id !== row.receiving_id) return;
-      if (detail.source_platform !== undefined) {
-        setSourcePlatform((detail.source_platform || '').toLowerCase());
-      }
-      if (detail.listing_url !== undefined) {
-        setListingLink(detail.listing_url || '');
-      }
-    };
-    window.addEventListener('receiving-package-updated', handler);
-    return () => window.removeEventListener('receiving-package-updated', handler);
-  }, [row.receiving_id]);
+  const patchMut = useResourceMutation(async (fields: Record<string, unknown>) => {
+    const res = await fetch('/api/receiving-lines', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: row.id, ...fields }),
+    });
+    const data = await res.json();
+    if (data?.success && data.receiving_line) dispatchLineUpdated(data.receiving_line);
+    return data;
+  });
+  const saving = patchMut.isPending;
+  const patchMutate = patchMut.mutate;
+  // Fire-and-forget line patch (callers don't await). Stable identity so the
+  // CartonContextCard children don't re-render on every keystroke.
+  const patch = useCallback(
+    (fields: Record<string, unknown>) => { patchMutate(fields); },
+    [patchMutate],
+  );
 
-  const patch = useCallback(async (fields: Record<string, unknown>) => {
-    setSaving(true);
-    try {
-      const res = await fetch('/api/receiving-lines', {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id: row.id, ...fields }),
-      });
-      const data = await res.json();
-      if (data?.success && data.receiving_line) {
-        dispatchLineUpdated(data.receiving_line);
-      }
-    } catch { /* silent */ } finally {
-      setSaving(false);
-    }
-  }, [row.id]);
-
-  const refreshLineWithSerials = useCallback(async (lineId: number = row.id) => {
-    try {
-      const res = await fetch(`/api/receiving-lines?id=${lineId}&include=serials`);
-      const data = await res.json();
-      if (data?.success && data.receiving_line) {
-        // dispatchLineUpdated patches the accordion's matching row, so editing
-        // a serial on a non-active sibling refreshes that sibling's chips too.
-        dispatchLineUpdated(data.receiving_line as ReceivingLineRow);
-      }
-    } catch {
-      /* silent */
-    }
-  }, [row.id]);
-
-  // Parent list (table / sibling accordion) may have stale `row.serials` —
-  // it's fetched on a different cadence than the per-line workspace. Pull
-  // fresh serials whenever the active line changes so SerialCard's chips +
-  // "X/Y SCANNED" tally always agree with what the DB has for this line.
-  useEffect(() => {
-    void refreshLineWithSerials();
-  }, [refreshLineWithSerials]);
-
-  const submitSerial = useCallback(async (raw?: string, conditionGrade?: string | null) => {
-    const serial = (raw ?? serialInput).trim();
-    if (!serial || !row.receiving_id || serialSubmitting) return;
-    setSerialSubmitting(true);
-    try {
-      // Serials are sidecar metadata: scanning attaches a serial_unit (the item
-      // identity + its condition) to the line. Unlimited per line — a unit may
-      // carry several serials. It does NOT change quantity_received or stock;
-      // those are owned by the PO line item via the Receive action.
-
-      // RETURN flow: surface whether this serial already exists in our records
-      // (a genuine return matches a previously-shipped unit). The lookup MUST
-      // run before the upsert below — otherwise it would match the row we're
-      // about to write and always report "Match found".
-      if (receivingType === 'RETURN') {
-        await serialLookup.check(serial);
-      }
-
-      const postScan = async () => {
-        const res = await fetch('/api/receiving/scan-serial', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            receiving_id: row.receiving_id,
-            receiving_line_id: row.id,
-            serial_number: serial,
-            staff_id: Number(staffId),
-            // Per-unit grade (multi-qty rows stamp each scan with the grade
-            // chosen for that slot). Omitted for the single-block path.
-            condition_grade: conditionGrade ?? undefined,
-          }),
-        });
-        const json = await res.json().catch(() => null);
-        return { res, data: json };
-      };
-
-      const { res, data } = await postScan();
-
-      if (!res.ok || !data?.success) {
-        toast.error(data?.error || `Scan failed (${res.status})`);
-        return;
-      }
-
-      // Same serial already on this line — friendly no-op.
-      if (data.already_attached) {
-        toast.info(`Already added — ${serial}`);
-        return;
-      }
-
-      if (data.line_state && typeof data.line_state.id === 'number') {
-        setSerialInput('');
-        dispatchLineUpdated({
-          id: data.line_state.id,
-          serials: mergeSerialIntoLineSerials(row.serials, data.serial_unit),
-        });
-        window.dispatchEvent(new CustomEvent('receiving-serial-scanned', {
-          detail: {
-            line_id: row.id,
-            serial_unit: data.serial_unit,
-            is_return: !!data.is_return,
-          },
-        }));
-        setTimeout(() => serialRef.current?.focus(), 40);
-        void refreshLineWithSerials();
-      }
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Network error scanning serial');
-    } finally {
-      setSerialSubmitting(false);
-    }
-  }, [
-    serialInput,
-    row.receiving_id,
-    row.id,
-    row.quantity_expected,
-    row.quantity_received,
-    staffId,
+  const {
     serialSubmitting,
-    refreshLineWithSerials,
-    row.serials,
+    submitSerial,
+    deleteSerialUnit,
+    replaceSerialUnit,
+    setUnitGrade,
+  } = useLineSerials({
+    row,
+    staffId,
     receivingType,
+    serialInput,
+    setSerialInput,
     serialLookup,
-  ]);
+    serialInputRef: serialRef,
+  });
 
   const submitExtraSerial = useCallback(async (idx: number) => {
     const serial = (extraSerials[idx] ?? '').trim();
@@ -563,84 +350,6 @@ export function LineEditPanel({
     await submitSerial(serial);
     setExtraSerials((xs) => xs.filter((_, j) => j !== idx));
   }, [extraSerials, submitSerial]);
-
-  // Remove a single serial_unit from the line (X / Delete on a chip or unit
-  // row). Shared by the single-block adder and the multi-qty unit rows.
-  const deleteSerialUnit = useCallback(
-    async (serialUnitId: number, lineId: number = row.id) => {
-      if (serialUnitId == null) return;
-      const res = await fetch('/api/receiving/scan-serial', {
-        method: 'DELETE',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          serial_unit_id: serialUnitId,
-          // Route to the chip's own line — the endpoint only removes a unit
-          // that still points at this line, so a sibling's serial would 404
-          // if we sent the active row's id.
-          receiving_line_id: lineId,
-        }),
-      });
-      const data = await res.json().catch(() => null);
-      if (!res.ok || !data?.success) {
-        toast.error(data?.error || 'Could not remove serial');
-        return;
-      }
-      toast.success('Serial removed');
-      // Removing a serial is metadata-only — quantity_received is unchanged.
-      await refreshLineWithSerials(lineId);
-    },
-    [row.id, refreshLineWithSerials],
-  );
-
-  // Replace a serial in place (typo fix): delete then re-scan, preserving the
-  // unit's condition grade so the corrected serial keeps its grade.
-  const replaceSerialUnit = useCallback(
-    async (original: { id: number; serial_number: string; condition_grade?: string | null }, nextSerial: string) => {
-      if (original.id == null) return;
-      const next = (nextSerial ?? '').trim();
-      if (!next || next === original.serial_number) return;
-      const res = await fetch('/api/receiving/scan-serial', {
-        method: 'DELETE',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          serial_unit_id: original.id,
-          receiving_line_id: row.id,
-        }),
-      });
-      const data = await res.json().catch(() => null);
-      if (!res.ok || !data?.success) {
-        toast.error(data?.error || 'Could not replace serial');
-        return;
-      }
-      await submitSerial(next, original.condition_grade ?? null);
-    },
-    [row.id, submitSerial],
-  );
-
-  // Persist a per-unit condition grade on an already-scanned serial_unit via
-  // the dedicated grade endpoint (writes serial_units.condition_grade +
-  // GRADED audit). 409 means "no change" — silently ignored.
-  const setUnitGrade = useCallback(
-    async (serialUnitId: number, grade: string) => {
-      try {
-        const res = await fetch(`/api/serial-units/${serialUnitId}/grade`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ new_grade: grade }),
-        });
-        if (res.status === 409) return;
-        const data = await res.json().catch(() => null);
-        if (!res.ok || !data?.ok) {
-          toast.error(data?.error || 'Could not set unit condition');
-          return;
-        }
-        await refreshLineWithSerials();
-      } catch (err) {
-        toast.error(err instanceof Error ? err.message : 'Condition save failed');
-      }
-    },
-    [refreshLineWithSerials],
-  );
 
   const {
     lastReceiveResponse,

@@ -23,6 +23,12 @@ interface QuickAccessPopoverProps {
   onClose: () => void;
   onOpenHistoryPopover: () => void;
   onOpenInboxPopover: () => void;
+  /**
+   * Mobile: collapse the popover to just the staff identity row (avatar, name,
+   * settings, sign-out). The actions / pinned / recent / install-app sections
+   * are desktop-only — on a phone the bottom row is the only relevant content.
+   */
+  compact?: boolean;
 }
 
 /**
@@ -30,7 +36,7 @@ interface QuickAccessPopoverProps {
  * The signed-in staff card lives at the very bottom, just above the
  * "Manage in Settings" footer, with sign-out only (no staff switch).
  */
-export function QuickAccessPopover({ onClose, onOpenHistoryPopover, onOpenInboxPopover }: QuickAccessPopoverProps) {
+export function QuickAccessPopover({ onClose, onOpenHistoryPopover, onOpenInboxPopover, compact = false }: QuickAccessPopoverProps) {
   const { settings } = useQuickAccess();
   const router = useRouter();
   const { user, signOut } = useAuth();
@@ -81,21 +87,27 @@ export function QuickAccessPopover({ onClose, onOpenHistoryPopover, onOpenInboxP
       aria-label="Quick access"
       className="flex max-h-[calc(100vh-6rem)] w-[340px] flex-col overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-xl"
     >
-      <div className="min-h-0 flex-1 divide-y divide-gray-100 overflow-y-auto overscroll-contain">
-        <ActionsSection
-          actions={settings.actions}
-          onAction={onClose}
-          onOpenHistoryPopover={onOpenHistoryPopover}
-          onOpenInboxPopover={onOpenInboxPopover}
-        />
-        <PinnedSection onNavigate={onClose} />
-        {settings.showRecent && <RecentSection onNavigate={onClose} />}
-      </div>
+      {/* Desktop-only sections — hidden on mobile, where the staff row below is
+          the only relevant content. */}
+      {!compact && (
+        <>
+          <div className="min-h-0 flex-1 divide-y divide-gray-100 overflow-y-auto overscroll-contain">
+            <ActionsSection
+              actions={settings.actions}
+              onAction={onClose}
+              onOpenHistoryPopover={onOpenHistoryPopover}
+              onOpenInboxPopover={onOpenInboxPopover}
+            />
+            <PinnedSection onNavigate={onClose} />
+            {settings.showRecent && <RecentSection onNavigate={onClose} />}
+          </div>
 
-      {/* Bright "Install desktop app" CTA — only renders when viewing in a
-          browser (not Electron) and the user hasn't disabled it in settings. */}
-      {settings.actions.installDesktopApp !== false && (
-        <DesktopAppInstallBanner onAction={onClose} />
+          {/* Bright "Install desktop app" CTA — only renders when viewing in a
+              browser (not Electron) and the user hasn't disabled it in settings. */}
+          {settings.actions.installDesktopApp !== false && (
+            <DesktopAppInstallBanner onAction={onClose} />
+          )}
+        </>
       )}
 
       {/* Staff sign-in section — moved to the bottom, just above the footer. */}

@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useLocalStorage } from '@/hooks';
 import { motion } from 'framer-motion';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { toast } from '@/lib/toast';
@@ -47,11 +48,11 @@ import {
   readSelectLineDetail,
   type ReceivingMode,
   type PoLineSummary,
-  type ReceivingPackageMeta,
   type PoContext,
-  type OpenException,
   type ReceivingSelectLineDetail,
 } from '@/components/sidebar/receiving/receiving-sidebar-shared';
+import { useReceivingLineNavigation } from '@/components/sidebar/receiving/useReceivingLineNavigation';
+import { useReceivingSourcePlatform } from '@/components/sidebar/receiving/useReceivingSourcePlatform';
 import { clearReceivingHistoryUrlParams } from '@/lib/receiving-history-search';
 import { resolveReceivingCodeToLine } from '@/lib/testing/resolve-testing-scan';
 import { useStationTheme } from '@/hooks/useStationTheme';
@@ -227,61 +228,6 @@ export function ReceivingSidebarPanel() {
   }, []);
   /** Spin the scan-field loader while `/api/receiving/lookup-po` is in flight */
   const [trackingLookupInFlight, setTrackingLookupInFlight] = useState(0);
-  const [openExceptions, setOpenExceptions] = useState<OpenException[]>([]);
-  const [refreshingExceptionIds, setRefreshingExceptionIds] = useState<Set<number>>(new Set());
-
-  const fetchOpenExceptions = useCallback(async () => {
-    try {
-      const res = await fetch('/api/tracking-exceptions?domain=receiving&status=open&limit=50', {
-        cache: 'no-store',
-      });
-      const data = await res.json();
-      if (!data?.success) return;
-      const rows = Array.isArray(data.rows) ? data.rows : [];
-      setOpenExceptions(
-        rows.map((r: Record<string, unknown>) => ({
-          id: Number(r.id),
-          tracking_number: String(r.tracking_number || ''),
-          exception_reason: String(r.exception_reason || 'not_found'),
-          created_at: String(r.created_at || ''),
-          last_zoho_check_at: r.last_zoho_check_at ? String(r.last_zoho_check_at) : null,
-          zoho_check_count: Number(r.zoho_check_count || 0),
-        })),
-      );
-    } catch {
-      /* silent — sidebar keeps prior list */
-    }
-  }, []);
-
-  useEffect(() => {
-    void fetchOpenExceptions();
-  }, [fetchOpenExceptions]);
-
-  const refreshException = useCallback(
-    async (exceptionId: number) => {
-      setRefreshingExceptionIds((prev) => {
-        const next = new Set(prev);
-        next.add(exceptionId);
-        return next;
-      });
-      try {
-        const res = await fetch(`/api/tracking-exceptions/${exceptionId}/refresh`, {
-          method: 'POST',
-        });
-        await res.json().catch(() => null);
-      } catch {
-        /* ignore — fetchOpenExceptions below reflects whatever state is real */
-      } finally {
-        setRefreshingExceptionIds((prev) => {
-          const next = new Set(prev);
-          next.delete(exceptionId);
-          return next;
-        });
-        await fetchOpenExceptions();
-      }
-    },
-    [fetchOpenExceptions],
-  );
   const [selectedLine, setSelectedLine] = useState<ReceivingLineRow | null>(null);
   /** `'all'` when the line was chosen from the main table — expands sidebar FlowSections. */
   const [lineAccordionBootstrap, setLineAccordionBootstrap] = useState<'default' | 'all'>(
@@ -301,11 +247,9 @@ export function ReceivingSidebarPanel() {
   const [serialSubmitting, setSerialSubmitting] = useState(false);
   const [returns, setReturns] = useState<ReturnEvent[]>([]);
   const [pendingCandidates, setPendingCandidates] = useState<PoLineSummary[]>([]);
-  const [printOnScan, setPrintOnScan] = useState(() => {
-    if (typeof window === 'undefined') return true;
-    const stored = window.localStorage.getItem('receiving.printOnScan');
-    return stored === null ? true : stored === 'true';
-  });
+  // Read-only setting (no toggle in this panel); persisted format is compatible
+  // with the prior hand-rolled 'true'/'false' string.
+  const [printOnScan] = useLocalStorage('receiving.printOnScan', true);
   const serialInputRef = useRef<HTMLInputElement>(null);
 
   const armedLine = useMemo<PoLineSummary | null>(() => {
@@ -313,117 +257,21 @@ export function ReceivingSidebarPanel() {
     return poContext.lines.find((l) => l.id === armedLineId) ?? null;
   }, [armedLineId, poContext]);
 
-  // When the user row-clicks a line in the dashboard table, scanMatchedRows
-  // is empty — which would disable the up/down nav. Populate it lazily by
-  // fetching all sibling lines for the same receiving_id. Skipped when
-  // scanMatchedRows already contains the selected line (scan-driven entry
-  // or a prior fetch).
-  useEffect(() => {
-    const receivingId = selectedLine?.receiving_id;
-    if (!receivingId) return;
-    if (scanMatchedRows.some((r) => r.id === selectedLine.id)) return;
-    let cancelled = false;
-    (async () => {
-      try {
-        // `include=serials` so the sibling rows carry serial_units — without it
-        // the replacement row below has `serials: undefined`, which momentarily
-        // drops the stepper's serial count to 0 and flashes the Serial dot.
-        const res = await fetch(`/api/receiving-lines?receiving_id=${receivingId}&include=serials`);
-        const data = await res.json();
-        if (cancelled) return;
-        const rows = Array.isArray(data?.receiving_lines)
-          ? (data.receiving_lines as ReceivingLineRow[])
-          : [];
-        if (rows.length > 0) {
-          setScanMatchedRows(rows);
-          setSelectedLine((prev) => {
-            if (!prev) return prev;
-            const hit = rows.find((r) => r.id === prev.id);
-            if (!hit) return prev;
-            // Guard: if this fetch somehow lacks serials, keep the ones the
-            // previously-selected row already had so the Serial step never
-            // flashes back to pending mid-swap.
-            return hit.serials == null && prev.serials != null
-              ? { ...hit, serials: prev.serials }
-              : hit;
-          });
-        }
-      } catch { /* silent — nav stays disabled if fetch fails */ }
-    })();
-    return () => { cancelled = true; };
-  }, [selectedLine, scanMatchedRows]);
-
-  // Navigation + progress derived from the full sibling-line list. Counter
-  // sums *units* across every matched line (received vs expected) so the pill
-  // mirrors the table row's quantityText (e.g. 0/5) instead of a line count
-  // (0/1). A line with workflow_status=DONE is treated as fully received even
-  // if quantity_received lags behind the expectation.
-  const { currentIndex, canPrev, canNext, progressReceived, progressTotal } = useMemo(() => {
-    if (!selectedLine || scanMatchedRows.length === 0) {
-      return { currentIndex: -1, canPrev: false, canNext: false, progressReceived: 0, progressTotal: 0 };
-    }
-    const idx = scanMatchedRows.findIndex((r) => r.id === selectedLine.id);
-    let receivedUnits = 0;
-    let totalUnits = 0;
-    for (const r of scanMatchedRows) {
-      const expected = Math.max(0, Number(r.quantity_expected ?? 0));
-      const received = Math.max(0, Number(r.quantity_received ?? 0));
-      const isDone = String(r.workflow_status || '').toUpperCase() === 'DONE';
-      const expectedSafe = expected > 0 ? expected : 1;
-      totalUnits += expectedSafe;
-      receivedUnits += isDone ? expectedSafe : Math.min(received, expectedSafe);
-    }
-    return {
-      currentIndex: idx,
-      canPrev: idx > 0,
-      canNext: idx >= 0 && idx < scanMatchedRows.length - 1,
-      progressReceived: receivedUnits,
-      progressTotal: totalUnits,
-    };
-  }, [selectedLine, scanMatchedRows]);
-
-  // Prev/next flips the local selectedLine and fires the dedicated
-  // receiving-highlight-line event so the dashboard table's blue row
-  // indicator follows along. We avoid dispatching receiving-select-line
-  // because that handler wipes scanMatchedRows (row-click semantics) and
-  // would break subsequent nav.
-  const goPrevLine = useCallback(() => {
-    if (currentIndex <= 0) return;
-    const target = scanMatchedRows[currentIndex - 1];
-    if (target) {
-      setLineAccordionBootstrap('default');
-      setSelectedLine(target);
-      window.dispatchEvent(new CustomEvent('receiving-highlight-line', { detail: target.id }));
-    }
-  }, [currentIndex, scanMatchedRows]);
-
-  const goNextLine = useCallback(() => {
-    if (currentIndex < 0 || currentIndex >= scanMatchedRows.length - 1) return;
-    const target = scanMatchedRows[currentIndex + 1];
-    if (target) {
-      setLineAccordionBootstrap('default');
-      setSelectedLine(target);
-      window.dispatchEvent(new CustomEvent('receiving-highlight-line', { detail: target.id }));
-    }
-  }, [currentIndex, scanMatchedRows]);
-
-  // Arrow keys move the main table selection (same as carton header chevrons).
-  useEffect(() => {
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key !== 'ArrowUp' && event.key !== 'ArrowDown') return;
-      if (!selectedLine) return;
-      const target = event.target as HTMLElement | null;
-      if (target?.closest('input, textarea, select, [contenteditable="true"]')) return;
-      event.preventDefault();
-      window.dispatchEvent(
-        new CustomEvent('receiving-navigate-table', {
-          detail: event.key === 'ArrowUp' ? 'prev' : 'next',
-        }),
-      );
-    };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [selectedLine]);
+  const {
+    currentIndex,
+    canPrev,
+    canNext,
+    progressReceived,
+    progressTotal,
+    goPrevLine,
+    goNextLine,
+  } = useReceivingLineNavigation({
+    selectedLine,
+    scanMatchedRows,
+    setSelectedLine,
+    setScanMatchedRows,
+    setLineAccordionBootstrap,
+  });
 
   // ── Right-pane workspace bridge ────────────────────────────────────────
   //
@@ -512,11 +360,6 @@ export function ReceivingSidebarPanel() {
   // History-mode row clicks route through the `receiving-select-line` listener
   // below — they fire `receiving-open-details-overlay` directly instead of
   // touching `selectedLine`, so no mode-bounce effect is needed here.
-
-  useEffect(() => {
-    if (typeof window === 'undefined') return;
-    window.localStorage.setItem('receiving.printOnScan', String(printOnScan));
-  }, [printOnScan]);
 
   useEffect(() => {
     if (mode === 'pickup') {
@@ -808,8 +651,6 @@ export function ReceivingSidebarPanel() {
           void publishPhotoRequestFor(ctx.receiving_id, trackingNumber);
           setTimeout(() => serialInputRef.current?.focus(), 60);
 
-          // Matched path may have resolved a prior open exception; refresh list.
-          void fetchOpenExceptions();
           // Tell the right-pane loader we're done — workspace open will
           // cover the swap once the line picker resolves.
           window.dispatchEvent(new CustomEvent('receiving-scan-resolved'));
@@ -829,9 +670,6 @@ export function ReceivingSidebarPanel() {
               detail: { id: String(data.receiving_id), tracking: trackingNumber },
             }),
           );
-          // Unmatched path always upserts into tracking_exceptions — surface it.
-          void fetchOpenExceptions();
-
           // Auto-open the unfound workspace so the operator can immediately
           // add items via the Ecwid popover — no extra click on the NO PO
           // chip. Fetch any existing lines (a re-scan of the same tracking
@@ -878,7 +716,7 @@ export function ReceivingSidebarPanel() {
         setTrackingLookupInFlight((n) => Math.max(0, n - 1));
       }
     })();
-  }, [bulkTracking, staffId, fetchOpenExceptions]);
+  }, [bulkTracking, staffId]);
 
   // Phone-paired scans: incoming `phone_scan` messages route straight through
   // the same submitTrackingScan flow as if the desktop scanner had fired it.
@@ -1028,55 +866,7 @@ export function ReceivingSidebarPanel() {
     setSerialInput('');
   }, []);
 
-  const updateSourcePlatform = useCallback(async (next: string) => {
-    if (!poContext) return;
-    const normalized = (next || '').toLowerCase();
-    const packageUpdate: ReceivingPackageMeta = {
-      received_at: poContext.receiving_package?.received_at ?? null,
-      unboxed_at: poContext.receiving_package?.unboxed_at ?? null,
-      created_at: poContext.receiving_package?.created_at ?? null,
-      return_platform: poContext.receiving_package?.return_platform ?? null,
-      source_platform: normalized || null,
-      is_return: poContext.receiving_package?.is_return ?? false,
-    };
-    setPoContext((prev) => (prev ? { ...prev, receiving_package: packageUpdate } : prev));
-    const receivingId = poContext.receiving_id;
-    try {
-      await fetch(`/api/receiving/${receivingId}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ source_platform: normalized || null }),
-      });
-      window.dispatchEvent(new CustomEvent('receiving-package-updated', {
-        detail: { receiving_id: receivingId, source_platform: normalized || null },
-      }));
-    } catch {
-      /* silent — realtime invalidation will reconcile */
-    }
-  }, [poContext]);
-
-  // Mirror platform changes originating from a line inspector back into the
-  // top PO card's context so the label + dropdown reflect immediately.
-  useEffect(() => {
-    const handler = (e: Event) => {
-      const detail = (e as CustomEvent<{ receiving_id?: number; source_platform?: string | null }>).detail;
-      if (!detail || detail.source_platform === undefined) return;
-      setPoContext((prev) => {
-        if (!prev || prev.receiving_id !== detail.receiving_id) return prev;
-        const nextPkg: ReceivingPackageMeta = {
-          received_at: prev.receiving_package?.received_at ?? null,
-          unboxed_at: prev.receiving_package?.unboxed_at ?? null,
-          created_at: prev.receiving_package?.created_at ?? null,
-          return_platform: prev.receiving_package?.return_platform ?? null,
-          source_platform: (detail.source_platform || '').toLowerCase() || null,
-          is_return: prev.receiving_package?.is_return ?? false,
-        };
-        return { ...prev, receiving_package: nextPkg };
-      });
-    };
-    window.addEventListener('receiving-package-updated', handler);
-    return () => window.removeEventListener('receiving-package-updated', handler);
-  }, []);
+  const { updateSourcePlatform } = useReceivingSourcePlatform({ poContext, setPoContext });
 
   const dismissReturn = useCallback((id: string) => {
     setReturns((prev) => prev.filter((r) => r.id !== id));

@@ -1,48 +1,35 @@
 'use client';
 
-import type { ComponentType, ReactNode } from 'react';
+import type { ReactNode } from 'react';
 import { ChevronLeft } from '@/components/Icons';
 import { GlobalHeaderActions } from '@/components/layout/GlobalHeaderActions';
 import { HeaderGoalChip } from '@/components/layout/HeaderGoalChip';
 
 /**
  * Shared top bar for every primary mobile page (/m/home, /m/receiving,
- * /m/scan, /m/receive, /m/pick) so the header is identical across the app
- * instead of each page hand-rolling its own app bar.
+ * /m/scan, /m/receive, /m/pick, /m/pack).
  *
- * Layout is always:
- *   [back | icon tile]  Eyebrow / Title          [page actions] [goal] [global]
- *
- * The right zone always ends with {@link GlobalHeaderActions} (the inbox +
- * account FAB) so the global controls follow the user onto every page. Pages
- * pass their own `actions` (e.g. a refresh button) which sit to the left of the
- * global controls. `showGoal` adds the daily-goal ring chip (dashboard).
+ * Deliberately title-less: mobile pages never show a page title in the top-left.
+ * The daily-goal chip is pinned to the far left on EVERY mobile page (it
+ * self-hides when the staffer has no station goals); the global controls
+ * (inbox + account FAB) sit on the right, with an optional back button left.
  *
  * Full-bleed by design — render it as a direct child at the top of the page,
- * BEFORE any horizontally-padded body wrapper, so it spans edge to edge and
- * sticks to the top of the scroll container.
+ * before any padded body wrapper, so it sticks to the top of the scroll
+ * container.
  */
 export const MobileTopBar = ({
-  title,
-  eyebrow,
-  icon: Icon,
   onBack,
   actions,
-  showGoal = false,
 }: {
-  title: string;
-  eyebrow?: string;
-  icon?: ComponentType<{ className?: string }>;
-  /** When provided, renders a back button on the far left instead of the icon tile. */
+  /** When provided, renders a back button on the far left. */
   onBack?: () => void;
   /** Page-specific controls, placed left of the global actions. */
   actions?: ReactNode;
-  /** Show the daily-goal ring chip (used on the dashboard). */
-  showGoal?: boolean;
 }) => (
   <header className="sticky top-0 z-30 flex w-full shrink-0 items-center justify-between gap-2 border-b border-blue-100/50 bg-slate-50/90 px-4 py-2.5 backdrop-blur-xl">
-    <div className="flex min-w-0 items-center gap-3">
-      {onBack ? (
+    <div className="flex min-w-0 items-center gap-2">
+      {onBack && (
         <button
           onClick={onBack}
           aria-label="Back"
@@ -50,26 +37,13 @@ export const MobileTopBar = ({
         >
           <ChevronLeft className="h-5 w-5" />
         </button>
-      ) : Icon ? (
-        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-blue-600 text-white shadow-lg shadow-blue-600/20">
-          <Icon className="h-5 w-5" />
-        </div>
-      ) : null}
-      <div className="min-w-0">
-        {eyebrow && (
-          <p className="text-[10px] font-black uppercase leading-none tracking-[0.18em] text-blue-400">
-            {eyebrow}
-          </p>
-        )}
-        <p className="mt-0.5 truncate text-base font-black leading-tight tracking-tight text-blue-950">
-          {title}
-        </p>
-      </div>
+      )}
+      {/* Daily-goal chip pinned to the far left of every mobile page. */}
+      <HeaderGoalChip />
     </div>
 
     <div className="flex shrink-0 items-center gap-2">
       {actions}
-      {showGoal && <HeaderGoalChip />}
       <GlobalHeaderActions variant="mobile" />
     </div>
   </header>

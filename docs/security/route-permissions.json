@@ -1,9 +1,9 @@
 {
   "version": 1,
-  "generatedAt": "2026-06-05T09:05:02Z",
-  "totalRoutes": 509,
+  "generatedAt": "2026-06-05T11:29:25Z",
+  "totalRoutes": 510,
   "summary": {
-    "permissionGated": 425,
+    "permissionGated": 426,
     "authenticatedNoPermission": 18,
     "anonymousIntentional": 45,
     "serviceToService": 3,
@@ -3842,6 +3842,15 @@
       ],
       "gate": "withAuth",
       "permission": "admin.manage_features",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/sku-catalog/search-unmatched/route.ts",
+      "methods": [
+        "GET"
+      ],
+      "gate": "withAuth",
+      "permission": "sku_stock.view",
       "exemptReason": null
     },
     {
