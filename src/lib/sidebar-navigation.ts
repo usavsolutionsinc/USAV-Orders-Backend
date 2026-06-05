@@ -358,14 +358,19 @@ export const SIDEBAR_PAGE_NAV: SidebarPageNav[] = [
   {
     id: 'inventory', label: 'Inventory', href: INVENTORY, icon: Package, kind: 'main', requires: 'sku_stock.view',
     modes: [
-      { id: 'ledger',    label: 'Ledger',    icon: Package,    to: () => ({ pathname: INVENTORY, params: { mode: null, section: null } }) },
-      { id: 'triage',    label: 'Triage',    icon: Zap,        to: () => ({ pathname: INVENTORY, params: { mode: 'triage', section: null } }) },
-      { id: 'pulse',     label: 'Pulse',     icon: TrendingUp, to: () => ({ pathname: INVENTORY, params: { mode: 'pulse', section: null } }) },
-      { id: 'graph',     label: 'Graph',     icon: Layers,     to: () => ({ pathname: `${INVENTORY}/graph`, params: { mode: null, section: null } }) },
-      { id: 'replenish', label: 'Replenish', icon: History,    to: () => ({ pathname: INVENTORY, params: { section: 'replenish', mode: null } }) },
+      // `open: null` on every switch so a selection (exception/unit id) from one
+      // mode never leaks into another's right pane.
+      { id: 'ledger',    label: 'Ledger',    icon: Package,    to: () => ({ pathname: INVENTORY, params: { mode: null, section: null, open: null } }) },
+      { id: 'triage',    label: 'Triage',    icon: Zap,        to: () => ({ pathname: `${INVENTORY}/triage`, params: { mode: null, section: null, open: null } }) },
+      { id: 'pulse',     label: 'Pulse',     icon: TrendingUp, to: () => ({ pathname: `${INVENTORY}/pulse`, params: { mode: null, section: null, open: null } }) },
+      { id: 'graph',     label: 'Graph',     icon: Layers,     to: () => ({ pathname: `${INVENTORY}/graph`, params: { mode: null, section: null, open: null } }) },
+      { id: 'replenish', label: 'Replenish', icon: History,    to: () => ({ pathname: INVENTORY, params: { section: 'replenish', mode: null, open: null } }) },
     ],
     resolveMode: ({ pathname, params }) => {
+      // Path-based modes (consistent with graph). Legacy `?mode=` still resolves.
       if (pathname.startsWith(`${INVENTORY}/graph`)) return 'graph';
+      if (pathname.startsWith(`${INVENTORY}/triage`)) return 'triage';
+      if (pathname.startsWith(`${INVENTORY}/pulse`)) return 'pulse';
       if (params.get('section') === 'replenish') return 'replenish';
       const m = params.get('mode');
       if (m === 'triage') return 'triage';

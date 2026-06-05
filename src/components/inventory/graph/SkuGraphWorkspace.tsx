@@ -106,7 +106,6 @@ export function SkuGraphWorkspace() {
         mode={mode}
         onModeChange={(m) => writeUrl({ view: m })}
         focusedLabel={focused ? `${focused.sku}` : null}
-        onFocusSku={onFocusSku}
         onAddConnection={() => setModalOpen(true)}
         canAdd={!!focused}
       />
@@ -116,7 +115,7 @@ export function SkuGraphWorkspace() {
           {!focused ? (
             <div className="flex h-full items-center justify-center text-center">
               <p className="max-w-xs text-[13px] text-gray-400">
-                Search for a SKU above to explore its parents, children, or full BOM tree.
+                Search for a SKU in the sidebar to explore its parents, children, or full BOM tree.
               </p>
             </div>
           ) : (

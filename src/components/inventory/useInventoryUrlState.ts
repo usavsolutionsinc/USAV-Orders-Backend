@@ -92,8 +92,18 @@ export function useInventoryUrlState() {
     const sidebar = useMemo<InventorySidebarUrlState>(() => {
         const rawMode = searchParams.get('mode');
         const section = searchParams.get('section');
-        const mode = (section === 'replenish' ? 'replenish' : (rawMode as InventoryMode)) || 'ledger';
-        const tab = inventoryTabFromPathname(pathname);
+        const pathTab = inventoryTabFromPathname(pathname);
+        // `triage`/`pulse` are now their own routes (/inventory/triage,
+        // /inventory/pulse) — consistent with /inventory/graph — but they reuse
+        // the default (activity) search scope in the sidebar, so keep `tab`
+        // neutral on those mode-routes. The legacy `?mode=` form still resolves.
+        const pathMode: InventoryMode | null =
+            pathTab === 'triage' ? 'triage' : pathTab === 'pulse' ? 'pulse' : null;
+        const mode =
+            (section === 'replenish'
+                ? 'replenish'
+                : (rawMode as InventoryMode) || pathMode) || 'ledger';
+        const tab = pathMode ? 'activity' : pathTab;
         const rawField = searchParams.get('field');
         const rawBuckets = searchParams.get('filter');
         return {
@@ -147,24 +157,26 @@ export function useInventoryUrlState() {
             const sp = new URLSearchParams(searchParams.toString());
 
             if (next.mode !== undefined) {
-                if (next.mode === 'ledger') sp.delete('mode');
-                else sp.set('mode', next.mode);
+                // Mode now lives in the PATH (/inventory/triage, /inventory/pulse)
+                // or the base route (ledger) — never a `?mode=` param — so the
+                // route exists and the master-nav rail resolves it. Clearing the
+                // param here also scrubs any legacy `?mode=` left in the URL.
+                sp.delete('mode');
 
                 if (next.mode !== sidebar.mode) {
                     sp.delete('field');
                     sp.delete('filter');
                     sp.delete('q');
                     sp.delete('open');
-                    
-                    // If moving to a special mode, push that tab too.
-                    // If moving back to ledger, go to activity.
-                    const nextTab = (next.mode === 'triage' || next.mode === 'pulse') 
-                        ? next.mode 
-                        : 'activity';
-                        
-                    const targetPath = tabBasePath(nextTab as InventoryTab);
-                    const url = sp.toString() ? `${targetPath}?${sp.toString()}` : targetPath;
-                    router.push(url);
+
+                    const targetPath =
+                        next.mode === 'triage'
+                            ? `${INVENTORY_PATH}/triage`
+                            : next.mode === 'pulse'
+                              ? `${INVENTORY_PATH}/pulse`
+                              : INVENTORY_PATH;
+                    const qs = sp.toString();
+                    router.push(qs ? `${targetPath}?${qs}` : targetPath);
                     return;
                 }
             }

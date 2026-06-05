@@ -18,108 +18,51 @@ import {
   useLayoutEffect,
   useRef,
   useState,
-  type WheelEvent,
 } from 'react';
-import {
-  Barcode,
-  Clipboard,
-  Copy,
-  ExternalLink,
-  History,
-  Info,
-  Link2,
-  PackageCheck,
-  Pencil,
-  Plus,
-  Printer,
-  RefreshCw,
-} from '@/components/Icons';
 import { toast } from '@/lib/toast';
-import { ListingUrlChip, TrackingChip, OrderIdChip, TicketChip, getLast4 } from '@/components/ui/CopyChip';
-import { SearchBar } from '@/components/ui/SearchBar';
-import { ReceivingCartonStaffDropdown } from '@/components/sidebar/receiving/ReceivingCartonStaffDropdown';
 import {
   printReceivingLabel,
   type ReceivingLabelPayload,
 } from './receiving-label-helpers';
-import { ReceivingPoLabelPreview } from './ReceivingPoLabelPreview';
-import { ReceivingProductLabelPreview } from './ReceivingProductLabelPreview';
 import { ReceiveResponsePanel } from './ReceiveResponsePanel';
 import { ReceivingAuditModal } from './ReceivingAuditModal';
-import { ConditionPills } from './ConditionPills';
 import { markConditionSet } from './ReceivingProgressStepper';
-import { SerialCard } from './SerialCard';
-import { SerialMatchResult, useSerialLookup } from './SerialMatchResult';
-import { ReceivingUnitRows, type UnitSerial } from './ReceivingUnitRows';
+import { useSerialLookup } from './SerialMatchResult';
 import { PoLinesAccordion } from './PoLinesAccordion';
 import { takeSerialEditHandoff } from './serialEditHandoff';
 import { UnmatchedItemsSection } from './UnmatchedItemsSection';
 import { ReceivingClaimModal } from './ReceivingClaimModal';
+import { LineNotesCard } from './line-edit/LineNotesCard';
+import { LineLabelPreviewCard } from './line-edit/LineLabelPreviewCard';
+import { LineReceiveActionBar } from './line-edit/LineReceiveActionBar';
+import { ActiveLineConditionSerial } from './line-edit/ActiveLineConditionSerial';
+import { LineEditToolbar } from './line-edit/LineEditToolbar';
+import { CartonContextCard } from './line-edit/CartonContextCard';
+import { useZohoSync } from './line-edit/hooks/useZohoSync';
+import { usePoBinding } from './line-edit/hooks/usePoBinding';
+import { useReceiveAction } from './line-edit/hooks/useReceiveAction';
+import { useSourcePlatform } from './line-edit/hooks/useSourcePlatform';
 import { WorkspaceCard } from '@/design-system/components';
-import { TextField } from '@/design-system/primitives';
-import { StickyActionBar } from '@/design-system/components/StickyActionBar';
-import { PaneHeaderActionBar, type PaneHeaderActionBarAction } from '@/components/ui/pane-header';
 import { printProductLabel } from '@/lib/print/printProductLabel';
 import { buildReceivingCopyInfo } from '@/utils/copy-all-receiving';
 import { copyToClipboard } from '@/utils/_dom';
 import { zendeskTicketUrl } from '@/lib/zendesk-ticket-url';
-import { getStaffThemeById, stationThemeColors } from '@/utils/staff-colors';
 import {
   dispatchLineUpdated,
   type ReceivingLineRow,
 } from '@/components/station/ReceivingLinesTable';
-import { dispatchReceivingDetailsOverlay } from '@/utils/events';
 import {
   parseSerialFromLineDescription,
   parseZendeskListingFromPoNotes,
 } from '@/lib/zoho-po-prefill';
 import {
   SOURCE_PLATFORM_LABELS,
-  SOURCE_PLATFORM_OPTS,
-  detectPlatformFromUrl,
-  RECEIVING_TYPE_OPTS,
-  FLOW_SECTION_LABEL,
-  RECEIVING_SCAN_RULE_LINE_CLASS,
-  RECEIVING_TRAIL_SLOT_CLASS,
-  TRACKING_ADD_BTN_CLASS,
-  RECEIVING_CHIP_EDIT_BTN_CLASS,
   readReceivingLineDetailsScratch,
   writeReceivingLineDetailsScratch,
-  parseReceivingPackage,
-  randomId,
   listingUrlForOpen,
   listingLinkPreview,
   receivingShareUrl,
 } from '@/components/sidebar/receiving/receiving-sidebar-shared';
-
-/**
- * Sticky progress card shown in the bottom-right toast while the Receive →
- * Zoho roundtrip is in flight. Renders an indeterminate bar (CSS keyframes
- * live in globals.css under `.recv-indet-bar`) and an elapsed-seconds
- * counter so the operator knows the request is still alive even when Zoho
- * is slow.
- */
-function ReceiveProgressToast({ startedAt, intent }: { startedAt: number; intent: 'zoho_receive' | 'scan_only' }) {
-  const [elapsed, setElapsed] = useState(0);
-  useEffect(() => {
-    const t = window.setInterval(() => {
-      setElapsed(Math.max(0, Math.floor((Date.now() - startedAt) / 1000)));
-    }, 250);
-    return () => window.clearInterval(t);
-  }, [startedAt]);
-  const label = intent === 'scan_only' ? 'Marking as scanned…' : 'Receiving in Zoho…';
-  return (
-    <div className="flex min-w-[260px] flex-col gap-2">
-      <div className="flex items-center justify-between text-label font-semibold text-gray-900">
-        <span>{label}</span>
-        <span className="tabular-nums text-gray-500">{elapsed}s</span>
-      </div>
-      <div className="h-1.5 w-full overflow-hidden rounded-full bg-gray-200/70">
-        <div className="recv-indet-bar h-full w-1/3 rounded-full bg-blue-500" />
-      </div>
-    </div>
-  );
-}
 
 /** Append a serial_units row to the line's `serials` snapshot (deduped by id + normalized sn). */
 function mergeSerialIntoLineSerials(
@@ -200,18 +143,6 @@ export function LineEditPanel({
     serial_number: string;
     condition_grade?: string | null;
   } | null>(null);
-  // Receive runs as a fire-and-forget background task (Zoho roundtrip can
-  // take many seconds). The button does NOT visually lock — progress is
-  // surfaced in a sticky bottom-right toast. A ref guards against accidental
-  // double-clicks while a request for this line is still in flight.
-  const receiveInFlightRef = useRef(false);
-  // Seed from the row the table already loaded (`receiving_lines.source_platform`)
-  // so the platform pill paints its real value immediately instead of flashing
-  // the 'Unknown'/'Unfound' fallback while the reconcile fetch below is in flight.
-  const [sourcePlatform, setSourcePlatform] = useState<string>(
-    () => (row.source_platform || '').toLowerCase(),
-  );
-  const [platformSaving, setPlatformSaving] = useState(false);
   // Claim modal — opened from PhotosCard's "Make a claim" CTA. The modal
   // creates a Zendesk ticket via /api/receiving/zendesk-claim and auto-pops
   // the returned TK # back into the Support FlowSection's existing zendesk
@@ -219,37 +150,7 @@ export function LineEditPanel({
   const [claimModalOpen, setClaimModalOpen] = useState(false);
   const [extraTrackings, setExtraTrackings] = useState<string[]>([]);
   const [extraSerials, setExtraSerials] = useState<string[]>([]);
-  const [zohoSyncing, setZohoSyncing] = useState(false);
-  /**
-   * Last response from POST /api/receiving/mark-received-po. Surfaced in the
-   * UI directly below the print preview so operators can see exactly why a
-   * Zoho receive succeeded, was skipped (missing zoho ids), or failed
-   * (rate_limit, circuit_open, api, other). No more silent failures.
-   */
-  type ReceiveResponseRecord = {
-    at: number;
-    /** ms wall-clock from POST → response */
-    durationMs: number;
-    httpStatus: number;
-    ok: boolean;
-    /** Raw JSON body returned from the API. */
-    body: unknown;
-    /** Network-level error message (thrown before/after the fetch). */
-    networkError?: string;
-  };
-  const [lastReceiveResponse, setLastReceiveResponse] =
-    useState<ReceiveResponseRecord | null>(null);
-  const [responseExpanded, setResponseExpanded] = useState(false);
   const serialRef = useRef<HTMLInputElement>(null);
-  const platformScrollerRef = useRef<HTMLDivElement | null>(null);
-  const onPlatformPillsWheel = useCallback((e: WheelEvent<HTMLDivElement>) => {
-    const el = platformScrollerRef.current;
-    if (!el) return;
-    if (Math.abs(e.deltaY) <= Math.abs(e.deltaX)) return;
-    el.scrollLeft += e.deltaY;
-    e.preventDefault();
-  }, []);
-  const listingRef = useRef<HTMLInputElement>(null);
   /** Tracking inline editor — collapsed by default; pencil expands. Chip alone owns the visible display. */
   const [trackingEditorsOpen, setTrackingEditorsOpen] = useState(false);
   /** Full listing SearchBar — collapsed by default; pencil expands to paste/edit. */
@@ -260,14 +161,12 @@ export function LineEditPanel({
    * is the operator's most likely next action. Matched cartons keep the
    * compact chip + pencil affordance until the operator opts in.
    */
-  const [poEditorOpen, setPoEditorOpen] = useState(() => {
-    const poVal = (row.zoho_purchaseorder_number || row.zoho_purchaseorder_id || '').trim();
-    return row.receiving_source === 'unmatched' || !poVal;
-  });
-  const [poNumberEdit, setPoNumberEdit] = useState(
-    (row.zoho_purchaseorder_number || row.zoho_purchaseorder_id || '').trim(),
+  const { poEditorOpen, setPoEditorOpen, poNumberEdit, setPoNumberEdit, persistPoNumber } =
+    usePoBinding(row);
+  const { sourcePlatform, setSourcePlatform, platformSaving, savePlatform } = useSourcePlatform(
+    row,
+    { listingLink },
   );
-  const poInputRef = useRef<HTMLInputElement>(null);
   const [auditOpen, setAuditOpen] = useState(false);
   const [copyingAll, setCopyingAll] = useState(false);
 
@@ -289,16 +188,6 @@ export function LineEditPanel({
   }, []);
 
   useEffect(() => {
-    // Re-arm the PO# editor for unmatched / un-bound rows so the operator
-    // doesn't have to click the pencil after each switch. Don't auto-close
-    // for matched rows — the operator may have deliberately opened it.
-    const poVal = (row.zoho_purchaseorder_number || row.zoho_purchaseorder_id || '').trim();
-    if (row.receiving_source === 'unmatched' || !poVal) {
-      setPoEditorOpen(true);
-    }
-  }, [compact, row.id, accordionBootstrap, row.receiving_source, row.zoho_purchaseorder_number, row.zoho_purchaseorder_id]);
-
-  useEffect(() => {
     setReceivingType(row.receiving_type || 'PO');
     setQa(!row.qa_status || row.qa_status === 'PENDING' ? 'PASSED' : row.qa_status);
     setDisp(!row.disposition_code || row.disposition_code === 'HOLD' ? 'ACCEPT' : row.disposition_code);
@@ -307,73 +196,7 @@ export function LineEditPanel({
     // ReceivingUnitRows (if multi-qty) re-reports its selection on mount.
     setUnitLabelCondition(null);
     setTrackingEdit(row.tracking_number || '');
-    setPoNumberEdit((row.zoho_purchaseorder_number || row.zoho_purchaseorder_id || '').trim());
-  }, [row.id, row.qa_status, row.disposition_code, row.condition_grade, row.tracking_number, row.receiving_type, row.zoho_purchaseorder_number, row.zoho_purchaseorder_id]);
-
-  /**
-   * Save the operator-typed PO# to the carton AND every existing
-   * receiving_line for it. /api/receiving/[id] auto-flips
-   * `receiving.source` 'unmatched' → 'zoho_po' on a non-null PO# write,
-   * so the carton drops off the Unfound queue. Fanning out to lines
-   * means mark-received-po + line lookups + the PO accordion all see
-   * the link without waiting for a refresh round-trip.
-   */
-  const persistPoNumber = useCallback(
-    async (nextRaw: string) => {
-      if (row.receiving_id == null) return;
-      const next = String(nextRaw || '').trim();
-      try {
-        const res = await fetch(`/api/receiving/${row.receiving_id}`, {
-          method: 'PATCH',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ zoho_purchaseorder_number: next || null }),
-        });
-        const data = await res.json().catch(() => ({}));
-        if (!res.ok || !data?.success) {
-          toast.error(data?.error ?? `PO# save failed (${res.status})`);
-          return;
-        }
-        try {
-          const linesRes = await fetch(
-            `/api/receiving-lines?receiving_id=${row.receiving_id}`,
-          );
-          const linesData = await linesRes.json();
-          const rows = Array.isArray(linesData?.receiving_lines)
-            ? linesData.receiving_lines
-            : [];
-          await Promise.all(
-            rows.map((r: { id?: number }) =>
-              r?.id != null
-                ? fetch('/api/receiving-lines', {
-                    method: 'PATCH',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                      id: r.id,
-                      zoho_purchaseorder_number: next || null,
-                    }),
-                  }).catch(() => null)
-                : null,
-            ),
-          );
-        } catch {
-          /* line fan-out is best-effort; the carton write is source of truth */
-        }
-        toast.success(next ? `PO# saved (${next})` : 'PO# cleared');
-        window.dispatchEvent(new CustomEvent('usav-refresh-data'));
-        window.dispatchEvent(
-          new CustomEvent('receiving-package-updated', {
-            detail: {
-              receiving_id: row.receiving_id,
-              zoho_purchaseorder_number: next || null,
-            },
-          }),
-        );
-      } catch (err) {
-        toast.error(err instanceof Error ? err.message : 'PO# save failed');
-      }
-    },
-    [row.receiving_id],
-  );
+  }, [row.id, row.qa_status, row.disposition_code, row.condition_grade, row.tracking_number, row.receiving_type]);
 
   // When the carton changes, flush scratch for the previous receiving_id
   // so localStorage is not lost before loading the next carton’s scratch.
@@ -534,64 +357,6 @@ export function LineEditPanel({
     });
   }, [zendesk, listingLink, extraTrackings, row.receiving_id]);
 
-  // Load the parent receiving row's source_platform so the dropdown reflects
-  // the current shipment-level override (platform is per-carton, not per-line).
-  useEffect(() => {
-    if (row.receiving_id == null) {
-      setSourcePlatform('');
-      return;
-    }
-    // Re-seed synchronously from the row on every line change — no empty frame.
-    setSourcePlatform((row.source_platform || '').toLowerCase());
-    let cancelled = false;
-    fetch(`/api/receiving-lines?receiving_id=${row.receiving_id}`)
-      .then((r) => r.json())
-      .then((data) => {
-        if (cancelled) return;
-        const pkg = parseReceivingPackage(data?.receiving_package);
-        const fetched = (pkg?.source_platform || '').toLowerCase();
-        // Only override with a non-empty reconcile value so we never blank the
-        // already-correct seeded platform (which would re-introduce the flash).
-        if (fetched) setSourcePlatform(fetched);
-      })
-      .catch(() => {});
-    return () => { cancelled = true; };
-  }, [row.receiving_id, row.source_platform]);
-
-  const savePlatform = useCallback(async (next: string) => {
-    if (row.receiving_id == null) return;
-    setPlatformSaving(true);
-    try {
-      await fetch(`/api/receiving/${row.receiving_id}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ source_platform: next || null }),
-      });
-      window.dispatchEvent(new CustomEvent('receiving-package-updated', {
-        detail: { receiving_id: row.receiving_id, source_platform: next || null },
-      }));
-    } catch {
-      /* silent */
-    } finally {
-      setPlatformSaving(false);
-    }
-  }, [row.receiving_id]);
-
-  // Auto-detect platform from the listing URL when the operator hasn't set
-  // one yet. Only fires when sourcePlatform is empty so we never clobber a
-  // manual choice. Debounced lightly so paste-then-type doesn't thrash the
-  // PATCH endpoint.
-  useEffect(() => {
-    if (row.receiving_id == null) return;
-    if (sourcePlatform) return;
-    const detected = detectPlatformFromUrl(listingLink);
-    if (!detected) return;
-    const t = window.setTimeout(() => {
-      setSourcePlatform(detected);
-      void savePlatform(detected);
-    }, 350);
-    return () => window.clearTimeout(t);
-  }, [listingLink, sourcePlatform, row.receiving_id, savePlatform]);
 
   // Persist the Zendesk ticket # onto the line (`receiving_lines.zendesk_ticket`)
   // so it survives reloads and shows on other surfaces (e.g. the tech workspace).
@@ -877,262 +642,22 @@ export function LineEditPanel({
     [refreshLineWithSerials],
   );
 
-  const handleReceive = useCallback(
-    (receiveIntent: 'zoho_receive' | 'scan_only' = 'zoho_receive') => {
-      if (receiveInFlightRef.current) return;
-      if (row.receiving_id == null) {
-        toast.error('Cannot receive — link this item to a shipment first.', {
-          description: 'Scan tracking or use lookup so this line has a receiving (package) id.',
-          duration: 6000,
-        });
-        return;
-      }
-      receiveInFlightRef.current = true;
-      const startedAt = Date.now();
-      // Stable per-click id used as both the Idempotency-Key header and the
-      // body's client_event_id so api_idempotency_responses replays the
-      // cached response on retry / double-click instead of re-running the
-      // receive flow (which would double-call Zoho).
-      const clientEventId = randomId();
-      // Sticky progress toast (bottom-right via the global <Toaster>). Same
-      // id is reused on settle so success/error replaces the loading card
-      // in place instead of stacking another card on top.
-      const toastId = toast.loading(
-        <ReceiveProgressToast startedAt={startedAt} intent={receiveIntent} />,
-        { duration: Infinity, closeButton: false },
-      );
-
-      // Fire-and-forget — operator keeps working while Zoho responds. The
-      // print popup was opened synchronously by the caller (runPrintLabel)
-      // before we got here, so no await blocks it.
-      void (async () => {
-        try {
-          // Circuit-breaker pre-check: if Zoho is in cooldown, bail with a
-          // specific "retry in Ns" message instead of firing the receive
-          // (which would either skip Zoho silently or wait for the
-          // background after() to fail). Only relevant for the zoho_receive
-          // intent — scan_only doesn't touch Zoho. The check is best-effort
-          // and never blocks the receive on its own failure.
-          if (receiveIntent === 'zoho_receive') {
-            try {
-              const healthRes = await fetch('/api/zoho/health', {
-                signal: AbortSignal.timeout(3_000),
-              });
-              const healthData = await healthRes.json().catch(() => null);
-              const circuit = healthData?.zoho?.circuit as
-                | { isOpen?: boolean; retryAfterMs?: number; consecutiveFailures?: number }
-                | undefined;
-              if (circuit?.isOpen) {
-                const secs = Math.max(1, Math.ceil((circuit.retryAfterMs ?? 0) / 1000));
-                toast.error(`Zoho cooldown — retry in ~${secs}s.`, {
-                  id: toastId,
-                  description: `Circuit breaker open after ${circuit.consecutiveFailures ?? 0} recent Zoho failures. The PO will NOT be marked received until Zoho recovers.`,
-                  duration: 7000,
-                });
-                setLastReceiveResponse({
-                  at: Date.now(),
-                  durationMs: Date.now() - startedAt,
-                  httpStatus: 0,
-                  ok: false,
-                  body: { skip_reason: 'zoho_circuit_open', circuit },
-                });
-                setResponseExpanded(true);
-                return;
-              }
-            } catch {
-              /* health check itself failed — fall through; the real
-                 receive call below surfaces any genuine error */
-            }
-          }
-
-          const perLineNotes = notes.trim() || null;
-
-          const markRes = await fetch('/api/receiving/mark-received-po', {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'Idempotency-Key': clientEventId,
-            },
-            body: JSON.stringify({
-              receiving_id: row.receiving_id,
-              receiving_line_id: row.id,
-              receive_intent: receiveIntent,
-              qa_status: qa,
-              disposition_code: disp,
-              condition_grade: cond,
-              serial_number: serialInput.trim() || undefined,
-              zendesk_ticket: zendesk.trim() || undefined,
-              listing_link: listingLink.trim() || undefined,
-              notes: perLineNotes || undefined,
-              staff_id: Number(staffId),
-              client_event_id: clientEventId,
-            }),
-            // Hard ceiling so a server-side hang can never re-pin the
-            // loading toast. The handler returns optimistically within a
-            // few seconds; anything past 30s is a real failure and the
-            // operator should retry — the same Idempotency-Key replays
-            // the cached response if the server actually did complete.
-            signal: AbortSignal.timeout(30_000),
-          });
-          const markData = await markRes.json().catch(() => null);
-
-          const respRecord: ReceiveResponseRecord = {
-            at: Date.now(),
-            durationMs: Date.now() - startedAt,
-            httpStatus: markRes.status,
-            ok: markRes.ok && Boolean(markData?.success),
-            body: markData,
-          };
-          setLastReceiveResponse(respRecord);
-
-          if (!markRes.ok || !markData?.success) {
-            console.error('receiving/mark-received-po failed', { status: markRes.status, error: markData?.error });
-            toast.error(markData?.error || `Receive failed (HTTP ${markRes.status})`, {
-              id: toastId,
-              duration: 6000,
-            });
-            setResponseExpanded(true);
-          } else {
-            const zoho = markData?.zoho as
-              | {
-                  attempted?: number;
-                  ok?: boolean;
-                  pending?: boolean;
-                  rate_limited?: boolean;
-                  error?: string | null;
-                  skip_reason?: string | null;
-                  results?: Array<{ purchaseorder_id?: string; receive_id: string | null; error: string | null; error_kind?: string | null }>;
-                }
-              | undefined;
-            if (zoho?.attempted) {
-              // Optimistic flow: server already committed locally; Zoho sync
-              // is running in the background. UI shows immediate success;
-              // any Zoho-side failure surfaces via the receiving-logs
-              // realtime channel and a follow-up refresh.
-              if (zoho.pending) {
-                toast.success('Marked as received — Zoho sync in progress', {
-                  id: toastId,
-                  duration: 4500,
-                });
-                setResponseExpanded(false);
-              } else if (zoho.rate_limited) {
-                toast.error('Zoho daily API quota exhausted — PO was NOT marked received in Zoho. Lines stay in Scanned until Zoho succeeds.', {
-                  id: toastId,
-                  description: 'Wait for the daily reset or reduce other Zoho-touching workflows for now.',
-                  duration: 8000,
-                });
-                setResponseExpanded(true);
-              } else if (!zoho.ok) {
-                // Treat "already received in Zoho" as success — Zoho is ahead
-                // of us, local SoT now matches.
-                const alreadyReceived = /already\s+created\s+a\s+receive\s+for\s+all\s+the\s+items/i.test(
-                  String(zoho.error || ''),
-                );
-                if (alreadyReceived) {
-                  toast.success('Already marked as received in Zoho', {
-                    id: toastId,
-                    description: 'Local state now matches the Zoho dashboard.',
-                    duration: 5000,
-                  });
-                  setResponseExpanded(false);
-                } else {
-                  toast.error(`Zoho receive failed: ${zoho.error || 'unknown error'}`, {
-                    id: toastId,
-                    duration: 6000,
-                  });
-                  setResponseExpanded(true);
-                }
-              } else if (zoho.skip_reason === 'zoho_already_fully_received') {
-                toast.success('Zoho already shows this PO as fully received.', {
-                  id: toastId,
-                  description: 'Purchase receive was not needed; inventory matches the dashboard.',
-                  duration: 5000,
-                });
-                setResponseExpanded(false);
-              } else {
-                toast.success(
-                  <div className="flex flex-col gap-1 text-left">
-                    <span className="leading-snug">Successfully added SN# & notes to PO item</span>
-                    <span className="leading-snug">Successfully marked the PO as Received</span>
-                  </div>,
-                  { id: toastId, duration: 6000 },
-                );
-                setResponseExpanded(false);
-              }
-            } else {
-              const skipReason = zoho?.skip_reason;
-              if (skipReason === 'scan_only') {
-                toast.success('Marked as scanned locally (Zoho not updated). Run Receive when ready to sync inventory.', {
-                  id: toastId,
-                  duration: 6500,
-                });
-                setResponseExpanded(false);
-              } else if (skipReason === 'zoho_already_fully_received') {
-                toast.success('Zoho already shows this PO as fully received.', {
-                  id: toastId,
-                  description: 'Purchase receive was not needed; inventory matches the dashboard.',
-                  duration: 5000,
-                });
-                setResponseExpanded(false);
-              } else if (skipReason === 'no_receiving_lines') {
-                toast.message('No receiving lines on this shipment.', { id: toastId, duration: 5000 });
-                setResponseExpanded(true);
-              } else {
-                toast.error('Lines saved locally — Zoho was NOT updated (no PO link found).', {
-                  id: toastId,
-                  description: 'Sync with Zoho first (refresh icon) to link this package to a PO.',
-                  duration: 7000,
-                });
-                setResponseExpanded(true);
-              }
-            }
-          }
-
-          window.dispatchEvent(new CustomEvent('receiving-entry-added'));
-          window.dispatchEvent(new CustomEvent('usav-refresh-data'));
-
-          // Fire-and-forget refresh AFTER the toast has settled. The
-          // /api/receiving-lines query can run 10–30s under load and used
-          // to be awaited inline, which pinned "Receiving in Zoho…" on
-          // screen for the full statement_timeout window even when the
-          // receive itself had already succeeded. The receiving-logs
-          // realtime channel and the usav-refresh-data event above
-          // reconcile the row independently if this refresh is slow.
-          if (markRes.ok) {
-            void (async () => {
-              try {
-                const linesRes = await fetch(
-                  `/api/receiving-lines?receiving_id=${row.receiving_id}&include=serials`,
-                  { signal: AbortSignal.timeout(15_000) },
-                );
-                const lineData = await linesRes.json();
-                const rows = Array.isArray(lineData?.receiving_lines) ? lineData.receiving_lines : [];
-                for (const r of rows) {
-                  dispatchLineUpdated(r as ReceivingLineRow);
-                }
-              } catch { /* table may still reflect partial state — realtime channel reconciles */ }
-            })();
-          }
-        } catch (err) {
-          console.error('receiving/mark-received-po threw', err);
-          const message = err instanceof Error ? err.message : 'Receive failed';
-          toast.error(message, { id: toastId, duration: 6000 });
-          setLastReceiveResponse({
-            at: Date.now(),
-            durationMs: Date.now() - startedAt,
-            httpStatus: 0,
-            ok: false,
-            body: null,
-            networkError: message,
-          });
-          setResponseExpanded(true);
-        } finally {
-          receiveInFlightRef.current = false;
-        }
-      })();
-    },
-    [row.receiving_id, row.id, qa, disp, cond, notes, zendesk, listingLink, serialInput, staffId],
-  );
+  const {
+    lastReceiveResponse,
+    setLastReceiveResponse,
+    responseExpanded,
+    setResponseExpanded,
+    handleReceive,
+  } = useReceiveAction(row, {
+    qa,
+    disp,
+    cond,
+    notes,
+    zendesk,
+    listingLink,
+    serialInput,
+    staffId,
+  });
 
   const poNumber = (row.zoho_purchaseorder_number || row.zoho_purchaseorder_id || '').trim();
   const scanValue = poNumber || (row.receiving_id != null ? `RCV-${row.receiving_id}` : '');
@@ -1231,8 +756,6 @@ export function LineEditPanel({
         ? 'Print label (if available), then receive this line'
         : 'Print label (if available), then receive every open line on this PO';
 
-  const recordedSerials = row.serials ?? [];
-
   const listingOpenHref = listingUrlForOpen(listingLink);
   // Zendesk ticket chip — surfaced inline in the chip row (between the listing
   // link and the PO#) whenever a ticket is on file. Display strips a leading
@@ -1249,136 +772,13 @@ export function LineEditPanel({
   const filledExtraTrackingsCount = extraTrackings.filter((t) => t.trim().length > 0).length;
   const listingPreviewLabel = listingLinkPreview(listingLink);
 
-  // Refresh ↔ Zoho. Always searches by tracking# (PO# search is a future upd).
-  // Flow:
-  //   1. find-po by tracking# — Zoho is the source of truth.
-  //   2. Reconcile the line: if Zoho's purchaseorder_id or number differs
-  //      from the local line, PATCH /api/receiving-lines. No-op on match.
-  //   3. Reconcile the carton (receiving row): PATCH with PO# + tracking#
-  //      when `receiving_id` is set. Otherwise fall back to /api/receiving/
-  //      lookup-po which creates/links a carton from the tracking#.
-  const syncWithZoho = useCallback(async () => {
-    if (zohoSyncing) return;
-    const tracking = (row.tracking_number || '').trim();
-    if (!tracking) return;
-    setZohoSyncing(true);
-    try {
-      const knownPoId = (row.zoho_purchaseorder_id || '').trim();
-
-      // Fast path: PO ID already known — skip the slow find-po search and
-      // go straight to the single-PO fetch for notes/listing prefill.
-      if (knownPoId) {
-        // Re-fetch the line to pick up any server-side changes.
-        const lineRes = await fetch(`/api/receiving-lines?id=${row.id}`);
-        const lineData = await lineRes.json();
-        if (lineData?.success && lineData.receiving_line) {
-          dispatchLineUpdated(lineData.receiving_line as ReceivingLineRow);
-        }
-
-        // Fetch full PO for notes → prefill listing / zendesk.
-        try {
-          const poRes = await fetch(
-            `/api/zoho/purchase-orders?purchaseorder_id=${encodeURIComponent(knownPoId)}`,
-          );
-          const poData = await poRes.json();
-          if (poData?.success && poData.purchaseorder) {
-            const poNotes = (poData.purchaseorder as { notes?: string | null }).notes ?? '';
-            const parsed = parseZendeskListingFromPoNotes(poNotes);
-            if (!listingLink.trim() && parsed.listing) setListingLink(parsed.listing);
-            if (!zendesk.trim() && parsed.zendesk) setZendesk(parsed.zendesk);
-          }
-        } catch { /* PO fetch failed — fields stay as-is */ }
-        return;
-      }
-
-      // Slow path: no PO ID yet — search Zoho by tracking number.
-      const findRes = await fetch('/api/zoho/find-po', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ trackingNumber: tracking }),
-      });
-      const findData = await findRes.json();
-      const po = findData?.success && findData.matched ? findData.purchase_order : null;
-
-      // Reconcile the line's PO#/number only if Zoho disagrees.
-      if (po) {
-        const zohoId = (po.zoho_purchaseorder_id || '').trim() || null;
-        const zohoNum = (po.zoho_purchaseorder_number || '').trim() || null;
-        const localId = (row.zoho_purchaseorder_id || '').trim() || null;
-        const localNum = (row.zoho_purchaseorder_number || '').trim() || null;
-        const patchBody: Record<string, unknown> = { id: row.id };
-        if (zohoId && zohoId !== localId) patchBody.zoho_purchaseorder_id = zohoId;
-        if (zohoNum && zohoNum !== localNum) patchBody.zoho_purchaseorder_number = zohoNum;
-        if (Object.keys(patchBody).length > 1) {
-          await fetch('/api/receiving-lines', {
-            method: 'PATCH',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(patchBody),
-          });
-        }
-      }
-
-      // Reconcile the carton.
-      if (row.receiving_id) {
-        if (po) {
-          await fetch(`/api/receiving/${row.receiving_id}`, {
-            method: 'PATCH',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              zoho_purchaseorder_id: po.zoho_purchaseorder_id || null,
-              zoho_purchaseorder_number: po.zoho_purchaseorder_number || null,
-              reference_number: po.reference_number || tracking,
-            }),
-          });
-        }
-      } else {
-        await fetch('/api/receiving/lookup-po', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ trackingNumber: tracking, staffId: Number(staffId) }),
-        });
-        window.dispatchEvent(new CustomEvent('usav-refresh-data'));
-      }
-
-      // Re-fetch the line so sidebar + table pick up every change.
-      const lineRes = await fetch(`/api/receiving-lines?id=${row.id}`);
-      const lineData = await lineRes.json();
-      if (lineData?.success && lineData.receiving_line) {
-        dispatchLineUpdated(lineData.receiving_line as ReceivingLineRow);
-      }
-
-      // Prefill listing / zendesk from PO notes if still empty.
-      const resolvedPoId = (po?.zoho_purchaseorder_id || '').trim();
-      if (resolvedPoId) {
-        try {
-          const poRes = await fetch(
-            `/api/zoho/purchase-orders?purchaseorder_id=${encodeURIComponent(resolvedPoId)}`,
-          );
-          const poData = await poRes.json();
-          if (poData?.success && poData.purchaseorder) {
-            const poNotes = (poData.purchaseorder as { notes?: string | null }).notes ?? '';
-            const parsed = parseZendeskListingFromPoNotes(poNotes);
-            if (!listingLink.trim() && parsed.listing) setListingLink(parsed.listing);
-            if (!zendesk.trim() && parsed.zendesk) setZendesk(parsed.zendesk);
-          }
-        } catch { /* PO fetch failed — fields stay as-is */ }
-      }
-    } catch {
-      /* silent — user can retry */
-    } finally {
-      setZohoSyncing(false);
-    }
-  }, [zohoSyncing, row.id, row.receiving_id, row.tracking_number,
-      row.zoho_purchaseorder_id, row.zoho_purchaseorder_number, staffId,
-      listingLink, zendesk]);
-
-  // Workspace header's Refresh button dispatches this so we don't need a
-  // prop-drilled ref or to lift syncWithZoho up to the workspace.
-  useEffect(() => {
-    const handler = () => { void syncWithZoho(); };
-    window.addEventListener('receiving-workspace-refresh-line', handler);
-    return () => window.removeEventListener('receiving-workspace-refresh-line', handler);
-  }, [syncWithZoho]);
+  const { zohoSyncing, syncWithZoho } = useZohoSync(row, {
+    staffId,
+    listingLink,
+    zendesk,
+    setListingLink,
+    setZendesk,
+  });
 
   const handleShare = useCallback(async () => {
     if (!row.receiving_id) {
@@ -1433,105 +833,21 @@ export function LineEditPanel({
     }
   }, [row, staffId, zendesk, listingLink, extraTrackings]);
 
-  const cartonActionsDisabled = !row.receiving_id;
-
   return (
     <>
     <div className="flex h-full min-h-0 flex-col bg-gray-50">
-      {/* Frozen utility toolbar — the third header row beneath the global
-          header + progress stepper. The `header` variant is a full-width 30px
-          band with a top hairline so it aligns with the other header rows, and
-          it lives OUTSIDE the scroll surface so it stays locked to the top
-          while the body scrolls under it. Icon-only (refresh / share / audit /
-          copy / Zoho + prev/next); the right-slot Info opens receiving details. */}
-          <PaneHeaderActionBar
-            variant="header"
-            iconOnly
-            rightSlot={
-              row.receiving_id != null ? (
-                <button
-                  type="button"
-                  onClick={() => dispatchReceivingDetailsOverlay(row.receiving_id as number)}
-                  aria-label="Open receiving details"
-                  title="Receiving details"
-                  className="inline-flex h-7 w-7 items-center justify-center rounded-md text-slate-500 transition-colors hover:bg-slate-50 hover:text-slate-800"
-                >
-                  <Info className="h-4 w-4" />
-                </button>
-              ) : null
-            }
-            actions={[
-              {
-                key: 'refresh',
-                label: 'Refresh',
-                icon: <RefreshCw className={`h-3.5 w-3.5 ${zohoSyncing ? 'animate-spin' : ''}`} />,
-                onClick: syncWithZoho,
-                disabled: zohoSyncing,
-                title: 'Sync with Zoho by tracking number',
-                ariaLabel: 'Refresh line from Zoho',
-              },
-              {
-                key: 'share',
-                label: 'Share',
-                icon: <Link2 className="h-3.5 w-3.5" />,
-                onClick: () => void handleShare(),
-                disabled: cartonActionsDisabled,
-                title: 'Copy link to open this package on Receiving',
-                ariaLabel: 'Share receiving link',
-              },
-              {
-                key: 'audit',
-                label: 'Audit',
-                icon: <History className="h-3.5 w-3.5" />,
-                onClick: () => setAuditOpen(true),
-                disabled: cartonActionsDisabled,
-                title: 'Audit log (inventory events)',
-                ariaLabel: 'View audit log',
-              },
-              {
-                key: 'copy',
-                label: 'Copy',
-                icon: <Copy className={`h-3.5 w-3.5 ${copyingAll ? 'animate-pulse' : ''}`} />,
-                onClick: () => void handleCopyAll(),
-                disabled: cartonActionsDisabled || copyingAll,
-                title: 'Copy package + PO details to clipboard',
-                ariaLabel: 'Copy all receiving details',
-              },
-              {
-                key: 'open-zoho',
-                label: 'Zoho',
-                icon: <ExternalLink className="h-3.5 w-3.5" />,
-                onClick: () => {
-                  // Right-pane Zoho viewer (ZohoSplitPane) listens for this
-                  // event and slides in. Never opens a new browser window —
-                  // browser tabs get an "Open externally" link inside the
-                  // pane instead. Keeps the operator's flow in one window.
-                  window.dispatchEvent(
-                    new CustomEvent('open-zoho-pane', {
-                      detail: {
-                        poId: String(row.zoho_purchaseorder_id || '').trim(),
-                        poNumber: String(row.zoho_purchaseorder_number || '').trim(),
-                      },
-                    }),
-                  );
-                },
-                disabled: cartonActionsDisabled,
-                title: 'Open this PO in Zoho (right pane)',
-                ariaLabel: 'Open in Zoho',
-              },
-            ] satisfies PaneHeaderActionBarAction[]}
-            status={
-              zohoSyncing
-                ? 'Syncing'
-                : (saving || platformSaving)
-                ? 'Saving'
-                : undefined
-            }
-            onPrev={() => window.dispatchEvent(new CustomEvent('receiving-navigate-table', { detail: 'prev' }))}
-            onNext={() => window.dispatchEvent(new CustomEvent('receiving-navigate-table', { detail: 'next' }))}
-            prevTitle="Previous recent line"
-            nextTitle="Next recent line"
-          />
+      <LineEditToolbar
+        receivingId={row.receiving_id ?? null}
+        zohoSyncing={zohoSyncing}
+        busy={saving || platformSaving}
+        copyingAll={copyingAll}
+        poId={String(row.zoho_purchaseorder_id || '')}
+        poNumber={String(row.zoho_purchaseorder_number || '')}
+        onRefresh={() => void syncWithZoho()}
+        onShare={() => void handleShare()}
+        onAudit={() => setAuditOpen(true)}
+        onCopy={() => void handleCopyAll()}
+      />
 
       {/* Scroll surface — owns the centered hero column. Padding-bottom
           clears the bottom sticky save bar so the last card never hides under it. */}
@@ -1540,408 +856,55 @@ export function LineEditPanel({
           {/* Photos + Claim + shipment context (listing, PO#, tracking,
               platform + type pills) share one WorkspaceCard so the operator
               sees a single bordered surface. */}
-          <WorkspaceCard bodyClassName="px-0 py-0">
-            <ReceivingCartonStaffDropdown
-              receivingId={row.receiving_id}
-              staffId={staffId}
-              onMakeClaim={() => setClaimModalOpen(true)}
-            />
-            {/* Padding + top rule separate the photo strip from chips; keeps
-                pill focus rings from clipping vs a tight body. */}
-            <div className="space-y-2 border-t border-gray-100 px-4 pt-2 pb-3">
-            <div className="flex min-w-0 flex-col gap-y-1">
-              {/* Chip row uses items-center so listing URL chip, PO chip,
-                  and tracking chip share the same vertical baseline
-                  regardless of their internal height differences.
-
-                  Layout decisions:
-                  - Listing chip is hidden when the URL is empty AND the
-                    editor isn't open — unmatched cartons have no listing
-                    until a PO# binds them, so the empty chip is just
-                    noise.
-                  - When PO# editor is open AND the listing chip is gone,
-                    the PO# input promotes from a compact chip+pencil to
-                    a full-width inline `SearchBar` that fills the freed
-                    flex slot. That's the "scan/type a PO#" call-to-action
-                    for unmatched cartons. The below-row PO# editor is
-                    skipped in that case (avoids the duplicate input). */}
-              {(() => {
-                const poVal = (row.zoho_purchaseorder_number || row.zoho_purchaseorder_id || '').trim();
-                const showListing = listingLink.trim().length > 0 || listingEditorOpen;
-                const inlinePoInput = poEditorOpen && !showListing;
-                return (
-                  <div className="flex min-w-0 items-center gap-2">
-                    {showListing ? (
-                      <div className="flex min-w-0 flex-1 basis-0 items-center gap-1">
-                        <ListingUrlChip
-                          rawUrl={listingLink}
-                          openHref={listingOpenHref}
-                          previewDisplay={listingPreviewLabel}
-                        />
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setListingEditorOpen((v) => {
-                              const next = !v;
-                              if (next) queueMicrotask(() => listingRef.current?.focus());
-                              return next;
-                            });
-                          }}
-                          aria-expanded={listingEditorOpen}
-                          aria-label={listingEditorOpen ? 'Collapse listing URL editor' : 'Edit listing URL'}
-                          title={listingEditorOpen ? 'Done editing listing' : 'Edit listing URL'}
-                          className={RECEIVING_CHIP_EDIT_BTN_CLASS}
-                        >
-                          <Pencil className="h-3 w-3" />
-                        </button>
-                      </div>
-                    ) : null}
-                    {zendeskTrimmed ? (
-                      <div className="flex shrink-0 items-center justify-end gap-1">
-                        {zendeskHref ? (
-                          <a
-                            href={zendeskHref}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            aria-label="Open Zendesk ticket"
-                            title="Open in Zendesk"
-                            className="inline-flex h-[22px] w-[22px] shrink-0 items-center justify-center rounded text-slate-400 transition-colors hover:bg-slate-100 hover:text-blue-600"
-                          >
-                            <ExternalLink className="h-3.5 w-3.5 shrink-0" />
-                          </a>
-                        ) : null}
-                        <TicketChip value={zendeskTrimmed} display={zendeskChipDisplay} />
-                      </div>
-                    ) : null}
-                    {inlinePoInput ? (
-                      <div className="flex min-w-0 flex-1 basis-0 items-center gap-1">
-                        <div className="group min-w-0 flex-1">
-                          <SearchBar
-                            value={poNumberEdit}
-                            onChange={setPoNumberEdit}
-                            onSearch={(v) => {
-                              const trimmed = v.trim();
-                              const current = (row.zoho_purchaseorder_number || row.zoho_purchaseorder_id || '').trim();
-                              if (trimmed !== current) {
-                                void persistPoNumber(trimmed);
-                              }
-                            }}
-                            inputRef={poInputRef}
-                            placeholder="Enter PO# to bind this carton (e.g. PO-1234)"
-                            variant="blue"
-                            size="compact"
-                            hideUnderline
-                            pasteOnlyTrailing
-                            className="w-full"
-                          />
-                          <div className={RECEIVING_SCAN_RULE_LINE_CLASS} aria-hidden />
-                        </div>
-                      </div>
-                    ) : (
-                      <div className="flex shrink-0 items-center gap-1">
-                        <OrderIdChip
-                          value={poVal}
-                          display={poVal ? getLast4(poVal) : '----'}
-                        />
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setPoEditorOpen((v) => {
-                              const next = !v;
-                              if (next) queueMicrotask(() => poInputRef.current?.focus());
-                              return next;
-                            });
-                          }}
-                          aria-expanded={poEditorOpen}
-                          aria-label={poEditorOpen ? 'Collapse PO# editor' : 'Edit PO#'}
-                          title={poEditorOpen ? 'Done editing PO#' : 'Edit PO#'}
-                          className={RECEIVING_CHIP_EDIT_BTN_CLASS}
-                        >
-                          <Pencil className="h-3 w-3" />
-                        </button>
-                      </div>
-                    )}
-                    <div className="flex shrink-0 items-center gap-1">
-                      <div className="flex items-center gap-1">
-                        <div className="min-w-0 max-w-full [&_.relative]:max-w-full">
-                          <TrackingChip
-                            value={primaryTrackingTrimmed}
-                            display={getLast4(primaryTrackingTrimmed)}
-                            disableCopy={!primaryTrackingTrimmed}
-                            width="min-w-0 max-w-full"
-                          />
-                        </div>
-                        {filledExtraTrackingsCount > 0 ? (
-                          <span className="shrink-0 rounded bg-slate-200/90 px-1 py-px text-eyebrow font-black tabular-nums text-slate-700">
-                            +{filledExtraTrackingsCount}
-                          </span>
-                        ) : null}
-                        <button
-                          type="button"
-                          onClick={toggleTrackingEditors}
-                          aria-expanded={trackingEditorsOpen}
-                          aria-label={trackingEditorsOpen ? 'Collapse tracking editors' : 'Edit tracking numbers'}
-                          title={trackingEditorsOpen ? 'Done editing tracking' : 'Edit tracking'}
-                          className={RECEIVING_CHIP_EDIT_BTN_CLASS}
-                        >
-                          <Pencil className="h-3 w-3" />
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                );
-              })()}
-
-              {(() => {
-                // The PO# editor is rendered inline in the chip row above
-                // when the listing slot is free — so this below-row block
-                // would render a duplicate input. Skip the PO# block (and
-                // the whole wrapper, if nothing else is open) in that case.
-                const poBelow =
-                  poEditorOpen &&
-                  (listingLink.trim().length > 0 || listingEditorOpen);
-                const anyBelow = trackingEditorsOpen || listingEditorOpen || poBelow;
-                if (!anyBelow) return null;
-                return (
-                  <div className="mt-2 space-y-2.5 border-t border-slate-100 pt-2">
-                    {poBelow ? (
-                      <div>
-                        <span className={`${FLOW_SECTION_LABEL} mb-1 leading-none`}>PO number</span>
-                        <div className="group">
-                          <SearchBar
-                            value={poNumberEdit}
-                            onChange={setPoNumberEdit}
-                            onSearch={(v) => {
-                              const trimmed = v.trim();
-                              const current = (row.zoho_purchaseorder_number || row.zoho_purchaseorder_id || '').trim();
-                              if (trimmed !== current) {
-                                void persistPoNumber(trimmed);
-                              }
-                            }}
-                            inputRef={poInputRef}
-                            placeholder="PO-1234"
-                            variant="blue"
-                            size="compact"
-                            hideUnderline
-                            pasteOnlyTrailing
-                            className="w-full"
-                          />
-                          <div className={RECEIVING_SCAN_RULE_LINE_CLASS} aria-hidden />
-                        </div>
-                      </div>
-                    ) : null}
-                  {trackingEditorsOpen ? (
-                    <>
-                      <div className="flex items-center justify-between gap-2">
-                        <span className={`${FLOW_SECTION_LABEL} mb-0 leading-none`}>Tracking number</span>
-                        <span className={RECEIVING_TRAIL_SLOT_CLASS}>
-                          <button
-                            type="button"
-                            onClick={() =>
-                              setExtraTrackings((xs) => (xs.length >= 1 ? xs : [...xs, '']))
-                            }
-                            disabled={extraTrackings.length >= 1}
-                            aria-label="Add second tracking number row"
-                            title={
-                              extraTrackings.length >= 1
-                                ? 'Only one extra tracking row'
-                                : 'Add tracking number'
-                            }
-                            className={TRACKING_ADD_BTN_CLASS}
-                          >
-                            <Plus className="h-3 w-3" />
-                          </button>
-                        </span>
-                      </div>
-                      <div className="group min-w-0">
-                        <SearchBar
-                          value={trackingEdit}
-                          onChange={setTrackingEdit}
-                          onSearch={(v) => {
-                            const trimmed = v.trim();
-                            if (trimmed !== (row.tracking_number || '').trim()) {
-                              patch({ zoho_reference_number: trimmed || null });
-                            }
-                          }}
-                          placeholder="Tracking"
-                          variant="blue"
-                          size="compact"
-                          hideUnderline
-                          pasteOnlyTrailing
-                          leadingIcon={<Barcode className="h-[14px] w-[14px]" />}
-                          className="w-full min-w-0"
-                        />
-                        <div className={RECEIVING_SCAN_RULE_LINE_CLASS} aria-hidden />
-                      </div>
-                      {extraTrackings.map((t, i) => (
-                        <div key={i} className="group min-w-0">
-                          <SearchBar
-                            value={t}
-                            onChange={(v) =>
-                              setExtraTrackings((xs) => xs.map((x, j) => (j === i ? v : x)))
-                            }
-                            placeholder="Tracking"
-                            variant="blue"
-                            size="compact"
-                            hideUnderline
-                            debounceMs={0}
-                            pasteOnlyTrailing
-                            leadingIcon={<Barcode className="h-[14px] w-[14px]" />}
-                            className="w-full min-w-0"
-                          />
-                          <div className={RECEIVING_SCAN_RULE_LINE_CLASS} aria-hidden />
-                        </div>
-                      ))}
-                    </>
-                  ) : null}
-                  {listingEditorOpen ? (
-                    <>
-                      <div className="flex items-center justify-between gap-2">
-                        <span className={`${FLOW_SECTION_LABEL} mb-0 leading-none`}>Listing URL</span>
-                        <span className={RECEIVING_TRAIL_SLOT_CLASS} aria-hidden />
-                      </div>
-                      <div className="group">
-                        <SearchBar
-                          value={listingLink}
-                          onChange={setListingLink}
-                          onClear={() => setListingLink('')}
-                          inputRef={listingRef}
-                          placeholder="Listing URL"
-                          variant="blue"
-                          size="compact"
-                          hideUnderline
-                          leadingIcon={
-                            <button
-                              type="button"
-                              onClick={(e) => {
-                                e.preventDefault();
-                                if (listingOpenHref) {
-                                  window.open(listingOpenHref, '_blank', 'noopener,noreferrer');
-                                }
-                              }}
-                              disabled={listingOpenHref == null}
-                              aria-label="Open listing URL in new tab"
-                              title={listingOpenHref ? 'Open link' : 'Enter a valid URL'}
-                              className="-m-0.5 rounded p-0.5 text-inherit transition-colors hover:text-blue-600 disabled:cursor-not-allowed disabled:opacity-35"
-                            >
-                              <ExternalLink className="h-[14px] w-[14px]" />
-                            </button>
-                          }
-                          className="w-full"
-                        />
-                        <div className={RECEIVING_SCAN_RULE_LINE_CLASS} aria-hidden />
-                      </div>
-                    </>
-                  ) : null}
-                  </div>
-                );
-              })()}
-            </div>
-
-            {/* Platform (left, scrolls) + Type (right). */}
-            <div className="flex min-w-0 flex-nowrap items-center gap-3">
-              <div
-                aria-disabled={row.receiving_id == null || undefined}
-                className={`min-w-0 flex-1 overflow-hidden ${row.receiving_id == null ? 'pointer-events-none opacity-50' : ''}`}
-              >
-                <div
-                  ref={platformScrollerRef}
-                  onWheel={onPlatformPillsWheel}
-                  role="radiogroup"
-                  aria-label="Source platform"
-                  className="-mx-1 overflow-x-auto overscroll-x-contain px-1 py-1 [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden"
-                >
-                  <div className="flex w-max items-center gap-1.5">
-                  {/* Synthesized 'Unfound' pill — only for unmatched cartons,
-                      auto-active until the operator picks a real platform.
-                      Front-end only: never written to source_platform. */}
-                  {row.receiving_source === 'unmatched' ? (() => {
-                    const isActive = !sourcePlatform;
-                    return (
-                      <button
-                        key="unfound"
-                        type="button"
-                        role="radio"
-                        aria-checked={isActive}
-                        onClick={() => {
-                          setSourcePlatform('');
-                          void savePlatform('');
-                        }}
-                        title="No Zoho PO matched this carton"
-                        className={`inline-flex h-8 shrink-0 snap-start items-center whitespace-nowrap rounded-full border px-3 text-micro font-black uppercase tracking-wide transition-colors ${
-                          isActive
-                            ? 'border-amber-600 bg-amber-500 text-white'
-                            : 'border-amber-200 bg-amber-50 text-amber-700 hover:border-amber-300 hover:bg-amber-100'
-                        }`}
-                      >
-                        Unfound
-                      </button>
-                    );
-                  })() : null}
-                  {(['ebay', 'goodwill', 'amazon', 'aliexpress', 'walmart', 'ecwid', 'other'] as const)
-                    .map((id) => SOURCE_PLATFORM_OPTS.find((o) => o.value === id))
-                    .filter((o): o is (typeof SOURCE_PLATFORM_OPTS)[number] => !!o)
-                    .map((opt) => {
-                      const isActive = (sourcePlatform || '') === opt.value;
-                      return (
-                        <button
-                          key={opt.value}
-                          type="button"
-                          role="radio"
-                          aria-checked={isActive}
-                          onClick={() => {
-                            setSourcePlatform(opt.value);
-                            void savePlatform(opt.value);
-                          }}
-                          className={`inline-flex h-8 shrink-0 snap-start items-center whitespace-nowrap rounded-full border px-3 text-micro font-black uppercase tracking-wide transition-colors ${
-                            isActive
-                              ? 'border-blue-600 bg-blue-600 text-white'
-                              : 'border-gray-200 bg-white text-gray-600 hover:border-gray-300 hover:bg-gray-50'
-                          }`}
-                        >
-                          {opt.label}
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-              </div>
-              <span className="h-6 w-px shrink-0 self-center bg-slate-200" aria-hidden />
-              <div className="shrink-0 text-right">
-                <div
-                  role="radiogroup"
-                  aria-label="Receiving type"
-                  className="flex flex-wrap items-center justify-end gap-1.5"
-                >
-                  {RECEIVING_TYPE_OPTS
-                    .filter((opt) => opt.value !== 'PICKUP')
-                    .map((opt) => {
-                      const isActive = receivingType === opt.value;
-                      return (
-                        <button
-                          key={opt.value}
-                          type="button"
-                          role="radio"
-                          aria-checked={isActive}
-                          onClick={() => {
-                            setReceivingType(opt.value);
-                            patch({ receiving_type: opt.value });
-                          }}
-                          className={`inline-flex h-8 items-center whitespace-nowrap rounded-full border px-3 text-micro font-black uppercase tracking-wide transition-colors ${
-                            isActive
-                              ? 'border-blue-600 bg-blue-600 text-white'
-                              : 'border-gray-200 bg-white text-gray-600 hover:border-gray-300 hover:bg-gray-50'
-                          }`}
-                        >
-                          {opt.label}
-                        </button>
-                      );
-                    })}
-                </div>
-              </div>
-            </div>
-          </div>
-          </WorkspaceCard>
+          <CartonContextCard
+            receivingId={row.receiving_id ?? null}
+            staffId={staffId}
+            isUnmatched={row.receiving_source === 'unmatched'}
+            onMakeClaim={() => setClaimModalOpen(true)}
+            listingLink={listingLink}
+            setListingLink={setListingLink}
+            listingEditorOpen={listingEditorOpen}
+            setListingEditorOpen={setListingEditorOpen}
+            listingOpenHref={listingOpenHref}
+            listingPreviewLabel={listingPreviewLabel}
+            poDisplay={poNumber}
+            poEditorOpen={poEditorOpen}
+            setPoEditorOpen={setPoEditorOpen}
+            poNumberEdit={poNumberEdit}
+            setPoNumberEdit={setPoNumberEdit}
+            onCommitPoNumber={(v) => {
+              const trimmed = v.trim();
+              const current = (row.zoho_purchaseorder_number || row.zoho_purchaseorder_id || '').trim();
+              if (trimmed !== current) void persistPoNumber(trimmed);
+            }}
+            zendeskTrimmed={zendeskTrimmed}
+            zendeskHref={zendeskHref}
+            zendeskChipDisplay={zendeskChipDisplay}
+            primaryTrackingTrimmed={primaryTrackingTrimmed}
+            filledExtraTrackingsCount={filledExtraTrackingsCount}
+            trackingEditorsOpen={trackingEditorsOpen}
+            onToggleTrackingEditors={toggleTrackingEditors}
+            trackingEdit={trackingEdit}
+            setTrackingEdit={setTrackingEdit}
+            onCommitTracking={(v) => {
+              const trimmed = v.trim();
+              if (trimmed !== (row.tracking_number || '').trim()) {
+                patch({ zoho_reference_number: trimmed || null });
+              }
+            }}
+            extraTrackings={extraTrackings}
+            setExtraTrackings={setExtraTrackings}
+            platformValue={sourcePlatform}
+            onPlatformSelect={(next) => {
+              setSourcePlatform(next);
+              void savePlatform(next);
+            }}
+            receivingType={receivingType}
+            onTypeSelect={(next) => {
+              setReceivingType(next);
+              patch({ receiving_type: next });
+            }}
+          />
 
           {/* PO Items card — title + qty + sku + serial chips per row, with
               the active row's bubble carrying an integrated condition-pill
@@ -1980,95 +943,28 @@ export function LineEditPanel({
                   },
                 }}
                 activeRowSlot={({ serials }) => (
-                  <div className="space-y-3">
-                    {(row.quantity_expected ?? 0) > 1 ? (
-                      // Multi-qty same-product line: split into one selectable
-                      // row per physical unit, each with its own condition grade
-                      // and serial (divided by a thin line). The selected unit's
-                      // grade is reported up via onActiveConditionChange so the
-                      // header badge + label preview track that unit.
-                      <>
-                      <ReceivingUnitRows
-                        lineId={row.id}
-                        saved={serials as UnitSerial[]}
-                        quantityExpected={row.quantity_expected ?? 1}
-                        lineCondition={cond}
-                        disabled={!row.receiving_id}
-                        isSubmitting={serialSubmitting}
-                        serialEditTarget={
-                          headerSerialEdit?.id != null ? (headerSerialEdit as UnitSerial) : null
-                        }
-                        onAddSerial={(sn, grade) => submitSerial(sn, grade)}
-                        onDeleteSerial={(id) => {
-                          if (!window.confirm('Remove this serial?')) return;
-                          void deleteSerialUnit(id);
-                        }}
-                        onReplaceSerial={(original, next) => void replaceSerialUnit(original, next)}
-                        onSetUnitGrade={(id, grade) => setUnitGrade(id, grade)}
-                        onActiveConditionChange={setUnitLabelCondition}
-                      />
-                      {/* RETURN-only: serial-match result under the unit rows. */}
-                      {receivingType === 'RETURN' ? (
-                        <SerialMatchResult
-                          state={serialLookup.state}
-                          unit={serialLookup.unit}
-                          serial={serialLookup.serial}
-                        />
-                      ) : null}
-                      </>
-                    ) : (
-                      // Single-qty line (incl. a PARTS product carrying several
-                      // part-serials under one unit): one condition picker + a
-                      // flat serial list.
-                      <>
-                        <ConditionPills
-                          value={cond}
-                          onChange={(next) => {
-                            setCond(next);
-                            markConditionSet(row.id);
-                            void patch({ condition_grade: next });
-                          }}
-                        />
-                        <SerialCard
-                          key={`serial-card-${row.id}`}
-                          saved={serials}
-                          expected={row.quantity_expected ?? null}
-                          isSubmitting={serialSubmitting}
-                          disabled={!row.receiving_id}
-                          embedded
-                          showSavedChips={false}
-                          editingSerial={headerSerialEdit}
-                          onEditingSerialChange={setHeaderSerialEdit}
-                          resultSlot={
-                            receivingType === 'RETURN' ? (
-                              <SerialMatchResult
-                                state={serialLookup.state}
-                                unit={serialLookup.unit}
-                                serial={serialLookup.serial}
-                              />
-                            ) : undefined
-                          }
-                          onAdd={(sn) => submitSerial(sn, cond)}
-                          onReplaceSerial={(original, nextSerial) => {
-                            if (original.id == null) return;
-                            void replaceSerialUnit(
-                              {
-                                id: original.id,
-                                serial_number: original.serial_number,
-                                condition_grade: original.condition_grade,
-                              },
-                              nextSerial,
-                            );
-                          }}
-                          onDeleteSerial={(s) => {
-                            if (s.id == null) return;
-                            if (!window.confirm(`Remove serial ${s.serial_number}?`)) return;
-                            void deleteSerialUnit(s.id);
-                          }}
-                        />
-                      </>
-                    )}
-                  </div>
+                  <ActiveLineConditionSerial
+                    serials={serials}
+                    lineId={row.id}
+                    receivingId={row.receiving_id ?? null}
+                    quantityExpected={row.quantity_expected ?? null}
+                    cond={cond}
+                    receivingType={receivingType}
+                    serialSubmitting={serialSubmitting}
+                    editingSerial={headerSerialEdit}
+                    serialLookup={serialLookup}
+                    onSubmitSerial={(sn, grade) => void submitSerial(sn, grade)}
+                    onDeleteSerialUnit={(id, lineId) => void deleteSerialUnit(id, lineId)}
+                    onReplaceSerialUnit={(original, next) => void replaceSerialUnit(original, next)}
+                    onSetUnitGrade={(id, grade) => void setUnitGrade(id, grade)}
+                    onActiveConditionChange={setUnitLabelCondition}
+                    onConditionChange={(next) => {
+                      setCond(next);
+                      markConditionSet(row.id);
+                      void patch({ condition_grade: next });
+                    }}
+                    onEditingSerialChange={setHeaderSerialEdit}
+                  />
                 )}
               />
             )
@@ -2077,43 +973,24 @@ export function LineEditPanel({
           {/* Notes card — standalone so the operator can leave context next
               to the photos + chips without it nesting inside the active PO
               row. Saves on blur (same contract SerialCard used). */}
-          <section className="rounded-2xl bg-white p-4 shadow-sm ring-1 ring-gray-200/60">
-            <TextField
-              multiline
-              rows={2}
-              label="Notes"
-              value={notes}
-              onChange={setNotes}
-              onBlur={() => {
-                if (notes !== (row.notes || '')) void patch({ notes });
-              }}
-            />
-          </section>
+          <LineNotesCard
+            value={notes}
+            onChange={setNotes}
+            onBlur={() => {
+              if (notes !== (row.notes || '')) void patch({ notes });
+            }}
+          />
 
           {/* Photos + Make a Claim are co-located inside the Staff card
               above — no standalone PhotosCard is needed in the column. */}
 
-          {/* Shipment PO moved above (under the ContextCard); Item removed
-              entirely as its fields are surfaced as top-of-workspace cards. */}
-
-          {/* Support (Zendesk # + notes) removed from the column — the Zendesk
-              ticket is shown as a pill in the top header. The claim flow still
-              persists the ticket # to receiving_lines.zendesk_ticket. */}
-
-          {scanValue || row.sku ? (
-            <WorkspaceCard>
-              {scanValue ? (
-                <ReceivingPoLabelPreview {...labelPayload} embedded />
-              ) : row.sku ? (
-                <ReceivingProductLabelPreview
-                  sku={row.sku}
-                  title={row.item_name ?? ''}
-                  serialNumber={serialInput.trim()}
-                  embedded
-                />
-              ) : null}
-            </WorkspaceCard>
-          ) : null}
+          <LineLabelPreviewCard
+            scanValue={scanValue}
+            labelPayload={labelPayload}
+            sku={row.sku}
+            itemName={row.item_name}
+            serialNumber={serialInput.trim()}
+          />
 
           {lastReceiveResponse ? (
             <WorkspaceCard label="Last receive" bodyClassName="px-0 py-0">
@@ -2131,51 +1008,24 @@ export function LineEditPanel({
         </div>
       </div>
 
-      {(() => {
-        const techTheme = row.assigned_tech_id != null
-          ? stationThemeColors[getStaffThemeById(row.assigned_tech_id)]
-          : null;
-        return (
-          <StickyActionBar
-            primaryFullWidth
-            primary={{
-              label: printReceivePrimaryLabel,
-              onClick: () => void handlePrintAndReceive(),
-              disabled: combinedReviewDisabled,
-              title: printThenReceiveTitle,
-              icon: <Printer className="h-4 w-4 shrink-0" />,
-              toneClasses: {
-                bg: techTheme?.bg ?? 'bg-emerald-600',
-                hover: techTheme?.hover ?? 'hover:bg-emerald-700',
-              },
-              menuLabel: splitMenuAriaLabel,
-              menuTitle: splitMenuHoverTitle,
-              menu: [
-                {
-                  label: 'Print only',
-                  icon: <Printer className="h-3.5 w-3.5 shrink-0" />,
-                  onClick: () => runPrintLabel(),
-                  disabled: !canPrintReview,
-                },
-                {
-                  label: 'Mark as scanned',
-                  icon: <Clipboard className="h-3.5 w-3.5 shrink-0" />,
-                  onClick: () => void handleReceive('scan_only'),
-                  disabled: !canReceiveReview,
-                  title: 'Save quantities as Scanned only; skip Zoho purchase receive (no print)',
-                },
-                {
-                  label: receiveMenuLabel,
-                  icon: <PackageCheck className="h-3.5 w-3.5 shrink-0" />,
-                  onClick: () => void handleReceive('zoho_receive'),
-                  disabled: !canReceiveReview,
-                  title: row.receiving_id == null ? 'Line must be linked to a shipment' : undefined,
-                },
-              ],
-            }}
-          />
-        );
-      })()}
+      <LineReceiveActionBar
+        assignedTechId={row.assigned_tech_id}
+        primaryLabel={printReceivePrimaryLabel}
+        primaryTitle={printThenReceiveTitle}
+        primaryDisabled={combinedReviewDisabled}
+        splitMenuAriaLabel={splitMenuAriaLabel}
+        splitMenuHoverTitle={splitMenuHoverTitle}
+        canPrint={canPrintReview}
+        canReceive={canReceiveReview}
+        receiveMenuLabel={receiveMenuLabel}
+        receiveMenuTitle={
+          row.receiving_id == null ? 'Line must be linked to a shipment' : undefined
+        }
+        onPrintAndReceive={() => void handlePrintAndReceive()}
+        onPrintOnly={() => runPrintLabel()}
+        onMarkScanned={() => void handleReceive('scan_only')}
+        onReceive={() => void handleReceive('zoho_receive')}
+      />
     </div>
     {row.receiving_id != null ? (
       <ReceivingAuditModal

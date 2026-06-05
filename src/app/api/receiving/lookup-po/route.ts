@@ -263,6 +263,57 @@ async function createUnmatchedReceiving(
   };
 }
 
+// ── Test / demo shortcut ─────────────────────────────────────────────────────
+// A tracking that starts with "TEST" (e.g. TEST123) skips Zoho and instantly
+// creates a matched test carton + one line, so the door-scan → unbox flow can
+// be exercised end-to-end without a real PO. Fully idempotent: re-scanning
+// returns the same carton/line and NEVER resets unbox progress — the line
+// insert is ON CONFLICT DO NOTHING, and received_at/unboxed_at are each only
+// set once (received_at on first scan, unboxed_at via mark-received's COALESCE).
+const TEST_TRACKING_RE = /^TEST/i;
+
+function isTestTracking(tracking: string): boolean {
+  return TEST_TRACKING_RE.test(tracking.trim());
+}
+
+/** Stable synthetic PO id for a test tracking, e.g. "TEST123" → "TEST-PO-TEST123". */
+function testPoIdFor(trackingNumber: string): string {
+  const key =
+    trackingNumber.trim().toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 32) || 'TEST';
+  return `TEST-PO-${key}`;
+}
+
+async function createOrGetTestReceiving(
+  trackingNumber: string,
+  carrier: string,
+  staffId: number | null,
+): Promise<{ receivingId: number; scanId: number; preexisting: boolean; poId: string }> {
+  const poId = testPoIdFor(trackingNumber);
+  const key = poId.slice('TEST-PO-'.length);
+  const zohoItemId = `TEST-ITEM-${key}`;
+  const zohoLineItemId = `TEST-LINE-${key}`;
+
+  const { receivingId, preexisting } = await upsertMatchedReceiving(poId, carrier, staffId);
+  const scanId = await recordScan(receivingId, trackingNumber, carrier, staffId, 'zoho_po');
+
+  // DO NOTHING on conflict so a re-scan can't wipe the quantity_received /
+  // workflow_status the unbox step wrote (order-independence of scan vs unbox).
+  await pool.query(
+    `INSERT INTO receiving_lines
+       (receiving_id, zoho_item_id, zoho_line_item_id, zoho_purchaseorder_id,
+        item_name, sku, quantity_expected, quantity_received, workflow_status,
+        qa_status, disposition_code, condition_grade, needs_test, updated_at)
+     VALUES ($1, $2, $3, $4, $5, 'TEST-SKU', 1, 0, 'MATCHED',
+        'PENDING', 'HOLD', 'BRAND_NEW', true, NOW())
+     ON CONFLICT (zoho_purchaseorder_id, zoho_line_item_id)
+       WHERE zoho_purchaseorder_id IS NOT NULL AND zoho_line_item_id IS NOT NULL
+     DO NOTHING`,
+    [receivingId, zohoItemId, zohoLineItemId, poId, `Test item · ${key}`],
+  );
+
+  return { receivingId, scanId, preexisting, poId };
+}
+
 async function recordScan(
   receivingId: number,
   trackingNumber: string,
@@ -364,6 +415,73 @@ export const POST = withAuth(async (request: NextRequest, ctx) => {
       // promotes this same row instead of creating a duplicate.
       preassignedReceivingId = existingScan.receiving_id;
       preassignedScanId = existingScan.scan_id;
+    }
+
+    // 1b. TEST / demo shortcut — instant matched carton, no Zoho. Lets the
+    //     door-scan → unbox flow be tested with a typed tracking like TEST123.
+    if (isTestTracking(trackingNumber)) {
+      const { receivingId, scanId, preexisting, poId } = await createOrGetTestReceiving(
+        trackingNumber,
+        carrier,
+        staffId,
+      );
+      const [lines, receiving_package] = await Promise.all([
+        fetchLines(receivingId),
+        fetchReceivingPackage(receivingId),
+      ]);
+      const pendingOrderSkus = await computePendingOrderSkus(ctx.organizationId, lines);
+      after(async () => {
+        try {
+          await invalidateCacheTags(['receiving-logs', 'receiving-lines', 'pending-unboxing']);
+        } catch (err) {
+          console.warn('[lookup-po.test] cache invalidation failed', errMessage(err));
+        }
+        try {
+          await publishReceivingLogChanged({
+            action: 'insert',
+            rowId: String(receivingId),
+            source: 'receiving.lookup-po.test',
+          });
+        } catch (err) {
+          console.warn('[lookup-po.test] realtime publish failed', errMessage(err));
+        }
+        if (pendingOrderSkus.length > 0) {
+          try {
+            await publishPriorityUnbox({
+              staffId,
+              trackingNumber,
+              receivingId,
+              skus: pendingOrderSkus,
+              source: 'receiving.lookup-po.test',
+            });
+          } catch (err) {
+            console.warn('[lookup-po.test] priority-unbox publish failed', errMessage(err));
+          }
+        }
+      });
+      return NextResponse.json({
+        success: true,
+        receiving_id: receivingId,
+        scan_id: scanId,
+        preexisting,
+        deduped: false,
+        matched: true,
+        po_matched: true,
+        is_test: true,
+        po_ids: [poId],
+        pending_order_skus: pendingOrderSkus,
+        receiving_package,
+        lines: lines.map((l) => ({
+          id: l.id,
+          sku: l.sku,
+          item_name: l.item_name,
+          image_url: l.image_url,
+          zoho_item_id: l.zoho_item_id,
+          zoho_purchaseorder_id: l.zoho_purchaseorder_id,
+          quantity_expected: l.quantity_expected,
+          quantity_received: l.quantity_received,
+        })),
+      });
     }
 
     // 2. Zoho lookup for PO ids. Single search key: last 8 digits of the

@@ -68,7 +68,8 @@ export async function classifyClaimWithLlm(reason: string): Promise<ClaimClassif
   const { args, model } = await hermesToolCall<ClassifyToolArgs>({
     systemPrompt: SYSTEM_PROMPT,
     userText: `Operator's note (what happened):\n${note}`,
-    maxTokens: 256,
+    // Headroom for "thinking" models that emit reasoning before the tool call.
+    maxTokens: 768,
     tool: {
       name: TOOL_NAME,
       description: 'Report the suggested claim type and severity for this note.',

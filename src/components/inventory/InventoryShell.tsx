@@ -32,6 +32,25 @@ export function InventoryShell() {
         );
     }
 
+    // Triage/Pulse are full-pane workspaces driven by the sidebar's `?open=`
+    // selection (an exception id / serial-unit id). They MUST be handled before
+    // the ledger `hasOpenDetail` overlay below — otherwise any `?open=` would be
+    // swallowed by the ledger detail overlay and these would never render.
+    if (mode === 'triage') {
+        return (
+            <div className="flex h-full min-h-0 flex-col bg-white">
+                <TriageWorkspace selectedId={sidebar.open} />
+            </div>
+        );
+    }
+    if (mode === 'pulse') {
+        return (
+            <div className="flex h-full min-h-0 flex-col bg-white">
+                <PulseWorkspace unitId={sidebar.open} />
+            </div>
+        );
+    }
+
     const hasNonFilterTarget =
         state.view === 'by-sku' || state.view === 'by-bin' || state.view === 'by-unit';
     const hasAnyTarget = hasNonFilterTarget || state.view === 'by-filter';
@@ -68,11 +87,7 @@ export function InventoryShell() {
             />
 
             <div className="mx-auto w-full max-w-5xl flex-1 overflow-y-auto">
-                {mode === 'triage' ? (
-                    <TriageWorkspace selectedId={sidebar.open} />
-                ) : mode === 'pulse' ? (
-                    <PulseWorkspace unitId={sidebar.open} />
-                ) : state.view === 'by-sku' && state.sku ? (
+                {state.view === 'by-sku' && state.sku ? (
                     <BySkuView sku={state.sku} />
                 ) : state.view === 'by-bin' && state.bin ? (
                     <ByBinView barcode={state.bin} />

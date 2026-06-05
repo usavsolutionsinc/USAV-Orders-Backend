@@ -100,9 +100,13 @@ export async function hermesToolCall<T = unknown>(
         },
       },
     ],
-    // Force the tool — without this, small models occasionally answer with
-    // prose ("Sure! Here's what I found:") instead of calling the tool.
-    tool_choice: { type: 'function', function: { name: input.tool.name } },
+    // Force a tool call — without this, small models occasionally answer with
+    // prose ("Sure! Here's what I found:") instead of calling the tool. We send
+    // exactly one tool, so `"required"` forces *that* tool. We use the string
+    // form (not `{type:'function',function:{name}}`) because it's portable:
+    // LM Studio only accepts none|auto|required, while OpenAI-compatible
+    // gateways accept "required" too.
+    tool_choice: 'required',
   };
 
   const res = await fetch(`${baseUrl.replace(/\/$/, '')}/chat/completions`, {

@@ -1084,7 +1084,7 @@ interface MobileCardProps {
 const TAB_LABELS: Record<MobileNavTabId, string> = {
   home: 'Home',
   scan: 'Scan (centre)',
-  receive: 'Receive (centre)',
+  receiving: 'Receiving',
   picks: 'Picks',
   signout: 'Sign out',
 };

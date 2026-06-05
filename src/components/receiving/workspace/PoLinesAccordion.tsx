@@ -20,7 +20,7 @@ interface ApiResponse {
 
 // `id` is optional to stay structurally compatible with the chip menu's
 // `SavedSerial` (whose id is optional). Callbacks guard with `if (s.id == null)`.
-type ActiveRowSerial = { id?: number; serial_number: string; condition_grade?: string | null };
+export type ActiveRowSerial = { id?: number; serial_number: string; condition_grade?: string | null };
 
 export interface PoLineSerialActions {
   editingSerialId?: number | null;

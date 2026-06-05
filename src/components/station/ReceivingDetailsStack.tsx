@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { motion } from 'framer-motion';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { Barcode, Copy, Edit, Loader2, Package, RefreshCw, Trash2, X } from '@/components/Icons';
+import { Barcode, Copy, Edit, Loader2, Package, RefreshCw, Sparkles, Trash2, X } from '@/components/Icons';
 import { copyToClipboard } from '@/utils/_dom';
 import { formatDateTimePST } from '@/utils/date';
 import { ViewDropdown } from '@/components/ui/ViewDropdown';
@@ -113,6 +113,36 @@ export function ReceivingDetailsStack({ log, onClose, onUpdated, onDeleted }: Re
   const [activeTab, setActiveTab] = useState<ReceivingTab>('overview');
   const [isCopying, setIsCopying] = useState(false);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
+  const [suggestingDisp, setSuggestingDisp] = useState(false);
+
+  // B3: suggest a disposition from the QA status + condition + return reason.
+  // Pre-fills the picker; the operator still confirms or overrides before save.
+  const suggestDisposition = async () => {
+    if (suggestingDisp) return;
+    setSuggestingDisp(true);
+    try {
+      const res = await fetch('/api/receiving/disposition-suggest', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          qaStatus: form.qaStatus,
+          conditionGrade: form.conditionGrade,
+          notes: form.returnReason,
+        }),
+      });
+      const data = await res.json().catch(() => null);
+      if (!res.ok || !data?.success) {
+        toast.error(data?.error || 'Could not suggest a disposition');
+        return;
+      }
+      form.setDispositionCode(data.dispositionCode);
+      toast.success(`AI: ${data.dispositionCode} (${data.confidence} confidence)`);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Network error');
+    } finally {
+      setSuggestingDisp(false);
+    }
+  };
 
   const handleRefresh = () => {
     onUpdated();
@@ -474,7 +504,23 @@ export function ReceivingDetailsStack({ log, onClose, onUpdated, onDeleted }: Re
           {/* Disposition + QA Status */}
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5">
-              <label className="text-eyebrow font-black uppercase tracking-widest text-gray-500">Disposition</label>
+              <div className="flex items-center justify-between gap-2">
+                <label className="text-eyebrow font-black uppercase tracking-widest text-gray-500">Disposition</label>
+                <button
+                  type="button"
+                  onClick={suggestDisposition}
+                  disabled={suggestingDisp}
+                  title="Suggest a disposition from QA status, condition, and notes (local AI). You can still change it."
+                  className="inline-flex items-center gap-1 rounded-md border border-purple-200 bg-purple-50 px-1.5 py-0.5 text-eyebrow font-bold uppercase tracking-wider text-purple-700 transition-colors hover:bg-purple-100 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {suggestingDisp ? (
+                    <Loader2 className="h-2.5 w-2.5 animate-spin" />
+                  ) : (
+                    <Sparkles className="h-2.5 w-2.5" />
+                  )}
+                  Suggest
+                </button>
+              </div>
               <ViewDropdown options={DISPOSITION_OPTS} value={form.dispositionCode} onChange={form.setDispositionCode} borderRadius="12px" backgroundColor="#f9fafb" fontSize="11px" />
             </div>
             <div className="space-y-1.5">

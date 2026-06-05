@@ -253,9 +253,11 @@ export async function extractWithLlm(
       { role: 'user', content: buildUserText(input) },
     ],
     tools: [REPORT_TOOL],
-    // Force the tool — without this, small models occasionally answer
-    // with prose ("Sure! Here's what I found:") instead of calling the tool.
-    tool_choice: { type: 'function', function: { name: TOOL_NAME } },
+    // Force a tool call. We send exactly one tool, so `"required"` forces it.
+    // The string form is portable (LM Studio only accepts none|auto|required;
+    // OpenAI-compatible gateways accept "required" too) — unlike the
+    // `{type:'function',function:{name}}` object form LM Studio rejects.
+    tool_choice: 'required',
   };
 
   const res = await fetch(`${baseUrl.replace(/\/$/, '')}/chat/completions`, {

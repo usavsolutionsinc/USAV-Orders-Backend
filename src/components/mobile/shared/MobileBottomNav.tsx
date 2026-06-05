@@ -11,15 +11,14 @@
  *
  * The tab set is also per-staff configurable. Available tab IDs:
  *
- *   • home    — back to the /m/home cockpit (recent scans)
- *   • scan    — raised centre: opens `/m/scan` (universal order scanner); on
- *     that route toggles camera preview (`/m/scan` vs `/m/scan?cam=off`).
- *   • receive — raised centre: opens `/m/receive` (receiving-door scan); same
- *     camera-toggle behaviour on its own route. Mutually exclusive with `scan`
- *     — whichever is configured owns the centre slot, regardless of array
- *     position. The sanitizer guarantees exactly one center tab.
- *   • picks   — picker queue at /m/pick
- *   • signout — exits the session
+ *   • home      — back to the /m/home cockpit (recent scans)
+ *   • scan      — raised centre: opens `/m/scan` (universal QR/barcode
+ *     scanner); on that route toggles camera preview (`/m/scan?cam=off`).
+ *     Always rendered centre when present, regardless of array position.
+ *   • receiving — normal tab: opens `/m/receive` (receiving-door scan — scan a
+ *     tracking to receive it in at the dock).
+ *   • picks     — picker queue at /m/pick
+ *   • signout   — exits the session
  *
  * Stations (Receiving / Testing) are reached from tiles on /m/home —
  * they're role-gated and the cockpit is the right place to choose.
@@ -100,14 +99,11 @@ function MobileBottomNavInner({ tabs }: { tabs: ReadonlyArray<MobileNavTabId> })
     router.replace('/signin');
   }, [signOut, router]);
 
-  // The center tab ('scan' or 'receive') owns the raised centre slot regardless
-  // of order. Five-column grid: [left] [left] [center] [other] [signout]. Sign
-  // out is always the rightmost cell when present; other tabs fill left first,
-  // then one slot immediately right of center.
-  const centerTab = (tabs.find((t) => t === 'scan' || t === 'receive') ?? null) as
-    | 'scan'
-    | 'receive'
-    | null;
+  // The 'scan' tab owns the raised centre slot regardless of order — it's the
+  // universal QR/barcode scanner. Five-column grid:
+  // [left] [left] [center] [other] [signout]. Sign out is always the rightmost
+  // cell when present; other tabs fill left first, then one slot right of center.
+  const centerTab = (tabs.find((t) => t === 'scan') ?? null) as 'scan' | null;
   const nonCenter = tabs.filter((t) => t !== centerTab);
   const showCenter = centerTab !== null;
   const hasSignout = nonCenter.includes('signout');
@@ -115,11 +111,8 @@ function MobileBottomNavInner({ tabs }: { tabs: ReadonlyArray<MobileNavTabId> })
   const leftTabs = others.slice(0, 2);
   const rightTabBeforeSignout = others[2];
 
-  // Route + chrome for whichever tab owns the centre slot.
-  const centerMeta =
-    centerTab === 'receive'
-      ? { route: '/m/receive', Icon: PackageCheck, openLabel: 'Open receiving scanner' }
-      : { route: '/m/scan', Icon: Barcode, openLabel: 'Open scanner' };
+  // Big centre button = the universal scanner.
+  const centerMeta = { route: '/m/scan', Icon: Barcode, openLabel: 'Open scanner' };
   const centerActive = isActive(centerMeta.route);
 
   const renderTab = (id: MobileNavTabId, key: string) => {
@@ -132,6 +125,16 @@ function MobileBottomNavInner({ tabs }: { tabs: ReadonlyArray<MobileNavTabId> })
             icon={LayoutDashboard}
             active={isActive('/m/home')}
             onClick={() => router.push('/m/home')}
+          />
+        );
+      case 'receiving':
+        return (
+          <NavTab
+            key={key}
+            label="Receiving"
+            icon={PackageCheck}
+            active={isActive('/m/receive')}
+            onClick={() => router.push('/m/receive')}
           />
         );
       case 'picks':

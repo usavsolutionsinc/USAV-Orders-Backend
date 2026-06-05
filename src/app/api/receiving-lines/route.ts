@@ -415,15 +415,19 @@ export const GET = withAuth(async (request: NextRequest) => {
         `(rl.workflow_status IS NULL OR rl.workflow_status IN ('EXPECTED','ARRIVED','MATCHED','UNBOXED','AWAITING_TEST','IN_TEST','PASSED','DONE'))`,
       );
     } else if (view === 'activity') {
-      // "Activity" = the recent-activity rail feed: everything that has actually
-      // been physically touched. Identical to `view=all` EXCEPT it drops the
-      // untouched-incoming rows (EXPECTED with nothing received yet) that belong
-      // in the Incoming view — those leak into the rail under `all`. A line shows
-      // here once it has been scanned/received (quantity_received > 0) OR its
-      // workflow has advanced past EXPECTED.
+      // "Activity" = the recent-activity rail feed: items in the UNBOXING
+      // pipeline only. A carton merely scanned at the door (workflow MATCHED /
+      // ARRIVED with nothing received and no unbox timestamp) is intentionally
+      // EXCLUDED — door scans belong only in History, not the rail (the rail
+      // drives the unboxing workspace / LineEditPanel). A line qualifies once it
+      // has actually been unboxed/received: workflow advanced to UNBOXED or
+      // beyond, OR quantity_received > 0, OR its carton has an unboxed_at stamp.
       conditions.push(
-        `(rl.workflow_status IS NULL OR rl.workflow_status IN ('EXPECTED','ARRIVED','MATCHED','UNBOXED','AWAITING_TEST','IN_TEST','PASSED','DONE'))
-         AND NOT (rl.workflow_status = 'EXPECTED' AND COALESCE(rl.quantity_received, 0) = 0)`,
+        `(
+           rl.workflow_status IN ('UNBOXED','AWAITING_TEST','IN_TEST','PASSED','DONE')
+           OR COALESCE(rl.quantity_received, 0) > 0
+           OR r.unboxed_at IS NOT NULL
+         )`,
       );
     } else if (view === 'testing') {
       // "Testing" = the recently-tested feed, backed by the testing_results

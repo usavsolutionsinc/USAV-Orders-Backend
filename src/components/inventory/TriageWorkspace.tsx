@@ -1,211 +1,277 @@
 'use client';
 
-import { useState } from 'react';
-import { 
-    Search, 
-    Filter, 
-    AlertTriangle, 
-    ArrowRight, 
-    Plus, 
-    Clock, 
-    CheckCircle2, 
-    XCircle, 
-    MessageSquare,
-    ChevronDown,
-    Flag,
-    Zap,
-    Tag,
-    Box,
-    ExternalLink
-} from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import {
+    AlertTriangle,
+    Barcode,
+    Check,
+    Clock,
+    Loader2,
+    RotateCcw,
+    Truck,
+    User,
+    X,
+} from '@/components/Icons';
 import { cn } from '@/utils/_cn';
 
-// In a real implementation, these would come from an API/hook.
-const MOCK_EXCEPTIONS = [
-    { 
-        id: 'EXP-101', 
-        type: 'Damaged', 
-        sku: 'SNY-PS5-DISC', 
-        severity: 'high', 
-        title: 'Box crushed during forklift move', 
-        date: '10m ago',
-        reporter: 'Michael K.',
-        location: 'A-01-02',
-        status: 'inbox',
-        notes: 3
-    },
-    { 
-        id: 'EXP-104', 
-        type: 'Mismatch', 
-        sku: 'MSF-XBS-X', 
-        severity: 'high', 
-        title: 'Label says Black, Unit is White Edition', 
-        date: '5h ago',
-        reporter: 'Michael K.',
-        location: 'Receiving',
-        status: 'pending-action',
-        notes: 5
-    },
-];
+/** Full `tracking_exceptions` row (GET /api/tracking-exceptions/[id]). */
+interface ExceptionDetail {
+    id: number;
+    tracking_number: string;
+    domain: string;
+    source_station: string | null;
+    staff_id: number | null;
+    staff_name: string | null;
+    staff_display_name: string | null;
+    exception_reason: string | null;
+    notes: string | null;
+    status: string;
+    receiving_id: number | null;
+    receiving_source: string | null;
+    receiving_carrier: string | null;
+    zoho_check_count: number | null;
+    last_zoho_check_at: string | null;
+    resolved_at: string | null;
+    created_at: string;
+    updated_at: string;
+}
 
 interface TriageWorkspaceProps {
+    /** `?open=` — the tracking_exception id selected in the sidebar. */
     selectedId: string | null;
 }
 
-export function TriageWorkspace({ selectedId }: TriageWorkspaceProps) {
-    const activeException = MOCK_EXCEPTIONS.find(ex => ex.id === selectedId) || MOCK_EXCEPTIONS[0];
+const STATUS_TONE: Record<string, string> = {
+    open: 'bg-amber-50 text-amber-700',
+    resolved: 'bg-emerald-50 text-emerald-700',
+    discarded: 'bg-gray-100 text-gray-500',
+};
 
-    if (!selectedId && MOCK_EXCEPTIONS.length > 0) {
+function formatWhen(iso: string | null): string {
+    if (!iso) return '—';
+    const d = new Date(iso);
+    if (Number.isNaN(d.getTime())) return '—';
+    return d.toLocaleString('en-US', {
+        month: 'short',
+        day: 'numeric',
+        year: 'numeric',
+        hour: 'numeric',
+        minute: '2-digit',
+        hour12: true,
+    });
+}
+
+export function TriageWorkspace({ selectedId }: TriageWorkspaceProps) {
+    const queryClient = useQueryClient();
+
+    const { data, isLoading, isError, error } = useQuery<ExceptionDetail>({
+        queryKey: ['triage-exception', selectedId],
+        enabled: !!selectedId,
+        queryFn: async ({ signal }) => {
+            const res = await fetch(`/api/tracking-exceptions/${selectedId}`, {
+                signal,
+                credentials: 'same-origin',
+            });
+            if (!res.ok) throw new Error(`HTTP ${res.status}`);
+            const body = await res.json();
+            return body.exception as ExceptionDetail;
+        },
+    });
+
+    const [notes, setNotes] = useState('');
+    useEffect(() => {
+        setNotes(data?.notes ?? '');
+    }, [data?.id, data?.notes]);
+
+    const patch = useMutation({
+        mutationFn: async (patchBody: Record<string, unknown>) => {
+            const res = await fetch(`/api/tracking-exceptions/${selectedId}`, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                credentials: 'same-origin',
+                body: JSON.stringify(patchBody),
+            });
+            if (!res.ok) throw new Error(`HTTP ${res.status}`);
+            return res.json();
+        },
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ['triage-exception', selectedId] });
+            queryClient.invalidateQueries({ queryKey: ['triage-exceptions'] });
+        },
+    });
+
+    if (!selectedId) {
         return (
             <div className="flex h-full w-full items-center justify-center bg-gray-50 text-gray-400">
-                <div className="text-center space-y-2">
-                    <AlertTriangle className="h-12 w-12 mx-auto opacity-20" />
+                <div className="space-y-2 text-center">
+                    <AlertTriangle className="mx-auto h-12 w-12 opacity-20" />
                     <p className="text-sm font-medium">Select an issue from the sidebar to begin triage</p>
                 </div>
             </div>
         );
     }
 
+    if (isLoading) {
+        return (
+            <div className="flex h-full w-full items-center justify-center bg-gray-50 text-gray-400">
+                <Loader2 className="h-5 w-5 animate-spin" />
+                <span className="ml-2 text-sm">Loading issue…</span>
+            </div>
+        );
+    }
+
+    if (isError || !data) {
+        return (
+            <div className="flex h-full w-full items-center justify-center bg-gray-50">
+                <div className="mx-6 rounded-md border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
+                    {error instanceof Error ? error.message : 'Failed to load this issue.'}
+                </div>
+            </div>
+        );
+    }
+
+    const reporter = data.staff_display_name || data.staff_name || 'Unknown';
+    const isOpen = data.status === 'open';
+
     return (
-        <div className="flex h-full w-full flex-col min-w-0 bg-white">
-            {/* Header Row */}
-            <header className="h-14 shrink-0 border-b border-gray-100 flex items-center justify-between px-6 bg-white/50 backdrop-blur-sm">
+        <div className="flex h-full w-full min-w-0 flex-col bg-white">
+            {/* Header */}
+            <header className="flex h-14 shrink-0 items-center justify-between border-b border-gray-100 bg-white/50 px-6 backdrop-blur-sm">
                 <div className="flex items-center gap-3">
-                    <div className="flex items-center gap-2 px-3 py-1 bg-gray-50 rounded-full border border-gray-200">
-                        <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Status</span>
-                        <span className="h-1.5 w-1.5 rounded-full bg-blue-500 animate-pulse" />
-                        <span className="text-[11px] font-bold text-gray-900 uppercase tracking-wider">{activeException.status.replace('-', ' ')}</span>
-                        <ChevronDown className="h-3 w-3 text-gray-400" />
-                    </div>
-                    <div className="h-4 w-px bg-gray-200 mx-1" />
-                    <div className="flex items-center gap-2">
+                    <span
+                        className={cn(
+                            'rounded-full px-3 py-1 text-[11px] font-bold uppercase tracking-wider',
+                            STATUS_TONE[data.status] ?? 'bg-gray-100 text-gray-500',
+                        )}
+                    >
+                        {data.status}
+                    </span>
+                    <div className="mx-1 h-4 w-px bg-gray-200" />
+                    <div className="flex items-center gap-2 text-[11px] font-bold text-gray-500">
                         <Clock className="h-3.5 w-3.5 text-gray-400" />
-                        <span className="text-[11px] font-bold text-gray-500">Open for 1 hour 12 minutes</span>
+                        Opened {formatWhen(data.created_at)}
                     </div>
                 </div>
                 <div className="flex items-center gap-2">
-                    <button className="flex items-center gap-2 rounded-lg px-3 py-1.5 text-xs font-bold text-gray-500 hover:bg-gray-100">
-                        <Flag className="h-3.5 w-3.5" /> Flag
-                    </button>
-                    <button className="flex items-center gap-2 rounded-lg px-3 py-1.5 text-xs font-bold text-gray-500 hover:bg-gray-100">
-                        <Zap className="h-3.5 w-3.5" /> Assign
-                    </button>
+                    {isOpen ? (
+                        <>
+                            <button
+                                type="button"
+                                onClick={() => patch.mutate({ status: 'resolved' })}
+                                disabled={patch.isPending}
+                                className="flex items-center gap-2 rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-emerald-700 disabled:opacity-60"
+                            >
+                                <Check className="h-3.5 w-3.5" /> Resolve
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => patch.mutate({ status: 'discarded' })}
+                                disabled={patch.isPending}
+                                className="flex items-center gap-2 rounded-lg px-3 py-1.5 text-xs font-bold text-gray-500 hover:bg-gray-100 disabled:opacity-60"
+                            >
+                                <X className="h-3.5 w-3.5" /> Discard
+                            </button>
+                        </>
+                    ) : (
+                        <button
+                            type="button"
+                            onClick={() => patch.mutate({ status: 'open' })}
+                            disabled={patch.isPending}
+                            className="flex items-center gap-2 rounded-lg px-3 py-1.5 text-xs font-bold text-gray-500 hover:bg-gray-100 disabled:opacity-60"
+                        >
+                            <RotateCcw className="h-3.5 w-3.5" /> Reopen
+                        </button>
+                    )}
                 </div>
             </header>
 
             <div className="flex-1 overflow-y-auto p-8">
-                <div className="max-w-4xl mx-auto space-y-8">
-                    {/* Summary Block */}
-                    <div className="flex items-start justify-between">
-                        <div className="space-y-4 flex-1">
-                            <div className="space-y-1">
-                                <div className="flex items-center gap-3">
-                                    <h1 className="text-3xl font-black text-gray-900 tracking-tight">{activeException.sku}</h1>
-                                    <button className="p-1.5 hover:bg-gray-100 rounded-lg text-gray-400"><ExternalLink className="h-5 w-5" /></button>
-                                </div>
-                                <p className="text-lg font-bold text-gray-500">{activeException.title}</p>
-                            </div>
-                            <div className="flex flex-wrap gap-6">
-                                <div className="space-y-1">
-                                    <p className="text-[10px] font-black uppercase tracking-widest text-gray-400">Location Found</p>
-                                    <div className="flex items-center gap-2">
-                                        <Tag className="h-3.5 w-3.5 text-blue-600" />
-                                        <span className="text-sm font-black text-gray-900">{activeException.location}</span>
-                                    </div>
-                                </div>
-                                <div className="space-y-1">
-                                    <p className="text-[10px] font-black uppercase tracking-widest text-gray-400">Reported By</p>
-                                    <div className="flex items-center gap-2">
-                                        <div className="h-4 w-4 rounded-full bg-blue-500 flex items-center justify-center text-[7px] font-bold text-white">MK</div>
-                                        <span className="text-sm font-black text-gray-900">{activeException.reporter}</span>
-                                    </div>
-                                </div>
-                                <div className="space-y-1">
-                                    <p className="text-[10px] font-black uppercase tracking-widest text-gray-400">Issue Type</p>
-                                    <span className="flex items-center gap-2">
-                                        <AlertTriangle className="h-3.5 w-3.5 text-rose-500" />
-                                        <span className="text-sm font-black text-gray-900 uppercase">{activeException.type}</span>
-                                    </span>
-                                </div>
-                            </div>
-                        </div>
-                        <div className="h-24 w-24 rounded-3xl bg-gray-50 border border-gray-100 flex items-center justify-center text-gray-200">
-                            <Box className="h-10 w-10" />
-                        </div>
+                <div className="mx-auto max-w-4xl space-y-8">
+                    {/* Summary */}
+                    <div className="space-y-1">
+                        <h1 className="font-mono text-3xl font-black tracking-tight text-gray-900">
+                            {data.tracking_number}
+                        </h1>
+                        <p className="text-lg font-bold text-gray-500">
+                            {data.exception_reason || 'Exception'}
+                        </p>
                     </div>
 
-                    {/* Action Grid */}
-                    <div className="grid grid-cols-3 gap-4">
-                        <button className="flex flex-col items-center justify-center gap-3 rounded-2xl border-2 border-emerald-100 bg-emerald-50/30 p-6 transition-all hover:bg-emerald-50 group">
-                            <div className="h-12 w-12 rounded-xl bg-emerald-500 flex items-center justify-center text-white shadow-lg shadow-emerald-200 group-hover:scale-110 transition-transform">
-                                <CheckCircle2 className="h-6 w-6" />
-                            </div>
-                            <div className="text-center">
-                                <p className="text-xs font-black uppercase tracking-widest text-emerald-700">Approve Fix</p>
-                                <p className="text-[10px] font-bold text-emerald-600 opacity-60">Move to Resolved</p>
-                            </div>
-                        </button>
-                        <button className="flex flex-col items-center justify-center gap-3 rounded-2xl border-2 border-blue-100 bg-blue-50/30 p-6 transition-all hover:bg-blue-50 group">
-                            <div className="h-12 w-12 rounded-xl bg-blue-600 flex items-center justify-center text-white shadow-lg shadow-blue-200 group-hover:scale-110 transition-transform">
-                                <ArrowRight className="h-6 w-6" />
-                            </div>
-                            <div className="text-center">
-                                <p className="text-xs font-black uppercase tracking-widest text-blue-700">Transfer Unit</p>
-                                <p className="text-[10px] font-bold text-blue-600 opacity-60">Redirect to RTV</p>
-                            </div>
-                        </button>
-                        <button className="flex flex-col items-center justify-center gap-3 rounded-2xl border-2 border-rose-100 bg-rose-50/30 p-6 transition-all hover:bg-rose-50 group">
-                            <div className="h-12 w-12 rounded-xl bg-rose-600 flex items-center justify-center text-white shadow-lg shadow-rose-200 group-hover:scale-110 transition-transform">
-                                <XCircle className="h-6 w-6" />
-                            </div>
-                            <div className="text-center">
-                                <p className="text-xs font-black uppercase tracking-widest text-rose-700">Write Off</p>
-                                <p className="text-[10px] font-bold text-rose-600 opacity-60">Mark as Scrapped</p>
-                            </div>
-                        </button>
+                    <div className="flex flex-wrap gap-8">
+                        <Field label="Reported by" icon={<User className="h-3.5 w-3.5 text-blue-600" />}>
+                            {reporter}
+                        </Field>
+                        <Field label="Source station" icon={<Barcode className="h-3.5 w-3.5 text-blue-600" />}>
+                            {data.source_station || '—'}
+                        </Field>
+                        <Field label="Domain" icon={<AlertTriangle className="h-3.5 w-3.5 text-rose-500" />}>
+                            {data.domain}
+                        </Field>
+                        {data.receiving_carrier ? (
+                            <Field label="Carrier" icon={<Truck className="h-3.5 w-3.5 text-blue-600" />}>
+                                {data.receiving_carrier}
+                            </Field>
+                        ) : null}
+                        {data.receiving_source ? (
+                            <Field label="Receiving source">{data.receiving_source}</Field>
+                        ) : null}
+                        {data.resolved_at ? (
+                            <Field label="Resolved">{formatWhen(data.resolved_at)}</Field>
+                        ) : null}
+                        {data.zoho_check_count != null ? (
+                            <Field label="Zoho checks">
+                                {`${data.zoho_check_count}${
+                                    data.last_zoho_check_at ? ` · ${formatWhen(data.last_zoho_check_at)}` : ''
+                                }`}
+                            </Field>
+                        ) : null}
                     </div>
 
-                    {/* Discussion / Timeline */}
-                    <div className="space-y-4">
-                        <h3 className="text-xs font-black uppercase tracking-widest text-gray-400 flex items-center gap-2">
-                            <MessageSquare className="h-4 w-4" /> Discussion & History
-                        </h3>
-                        <div className="space-y-4 relative pl-8 before:absolute before:left-3 before:top-2 before:bottom-2 before:w-px before:bg-gray-100">
-                            <div className="relative">
-                                <div className="absolute -left-6 top-1 h-3 w-3 rounded-full border-2 border-white bg-blue-500 shadow-sm" />
-                                <div className="bg-gray-50 rounded-2xl p-4 border border-gray-100">
-                                    <div className="flex items-center justify-between mb-2">
-                                        <span className="text-xs font-black text-gray-900">Michael K. <span className="font-bold text-gray-400 ml-2">Reported Issue</span></span>
-                                        <span className="text-[10px] font-bold text-gray-400">10m ago</span>
-                                    </div>
-                                    <p className="text-sm text-gray-600">While moving unit from receiving to A-01-02, the corner of the box was crushed by the adjacent rack. Damage is aesthetic but might affect resale grade.</p>
-                                </div>
-                            </div>
-                            <div className="relative">
-                                <div className="absolute -left-6 top-1 h-3 w-3 rounded-full border-2 border-white bg-amber-500 shadow-sm" />
-                                <div className="bg-gray-50 rounded-2xl p-4 border border-gray-100">
-                                    <div className="flex items-center justify-between mb-2">
-                                        <span className="text-xs font-black text-gray-900">John D. <span className="font-bold text-gray-400 ml-2">Investigated</span></span>
-                                        <span className="text-[10px] font-bold text-gray-400">2m ago</span>
-                                    </div>
-                                    <p className="text-sm text-gray-600">Inspected unit. The seal is intact. We should probably downgrade this to 'USED_A' and list it as open-box.</p>
-                                </div>
-                            </div>
-                            
-                            <div className="pt-2">
-                                <div className="relative">
-                                    <textarea 
-                                        placeholder="Add a note or instruction..."
-                                        className="w-full rounded-2xl border border-gray-200 bg-white p-4 text-sm focus:border-blue-500 focus:outline-none min-h-[100px] shadow-sm"
-                                    />
-                                    <div className="absolute bottom-3 right-3 flex gap-2">
-                                        <button className="rounded-lg bg-gray-900 px-4 py-1.5 text-xs font-black uppercase tracking-widest text-white shadow-lg">Post Note</button>
-                                    </div>
-                                </div>
-                            </div>
+                    {/* Notes */}
+                    <div className="space-y-3">
+                        <h3 className="text-xs font-black uppercase tracking-widest text-gray-400">Notes</h3>
+                        <textarea
+                            value={notes}
+                            onChange={(e) => setNotes(e.target.value)}
+                            placeholder="Add triage notes…"
+                            className="min-h-[120px] w-full rounded-2xl border border-gray-200 bg-white p-4 text-sm shadow-sm focus:border-blue-500 focus:outline-none"
+                        />
+                        <div className="flex items-center gap-3">
+                            <button
+                                type="button"
+                                onClick={() => patch.mutate({ notes: notes.trim() || null })}
+                                disabled={patch.isPending || notes === (data.notes ?? '')}
+                                className="rounded-lg bg-gray-900 px-4 py-1.5 text-xs font-black uppercase tracking-widest text-white shadow-lg disabled:opacity-40"
+                            >
+                                {patch.isPending ? 'Saving…' : 'Save note'}
+                            </button>
+                            {patch.isError ? (
+                                <span className="text-xs font-medium text-rose-600">Save failed.</span>
+                            ) : null}
                         </div>
                     </div>
                 </div>
+            </div>
+        </div>
+    );
+}
+
+function Field({
+    label,
+    icon,
+    children,
+}: {
+    label: string;
+    icon?: React.ReactNode;
+    children: React.ReactNode;
+}) {
+    return (
+        <div className="space-y-1">
+            <p className="text-[10px] font-black uppercase tracking-widest text-gray-400">{label}</p>
+            <div className="flex items-center gap-2">
+                {icon}
+                <span className="text-sm font-black text-gray-900">{children}</span>
             </div>
         </div>
     );

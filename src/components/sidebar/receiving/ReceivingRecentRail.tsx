@@ -49,9 +49,11 @@ export function ReceivingRecentRail({
   const fetchFn = async (): Promise<ApiResponse> => {
     const params = new URLSearchParams({ limit: '500', offset: '0' });
     params.set('include', 'serials');
-    // 'activity' = lines that have actually been scanned/received. Excludes
-    // untouched-incoming (EXPECTED, nothing received) so the rail shows what's
-    // been worked, not what's still en route — those live in the Incoming view.
+    // 'activity' = the UNBOXING pipeline only: lines that have been unboxed /
+    // received (qty > 0, workflow past MATCHED, or an unbox timestamp). Cartons
+    // merely scanned at the door (phone /m/receive or desktop "mark scanned")
+    // are excluded — they live in History, not this rail, which drives the
+    // unboxing workspace (LineEditPanel).
     params.set('view', 'activity');
     const res = await fetch(`/api/receiving-lines?${params.toString()}`);
     if (!res.ok) throw new Error('fetch failed');
@@ -70,7 +72,7 @@ export function ReceivingRecentRail({
       deleteGroupEvent="receiving-entry-deleted"
       refreshEvents={['receiving-entry-added', 'receiving-entry-deleted', 'usav-refresh-data']}
       eyebrowTitle="Recent"
-      eyebrowSuffix="Same as History"
+      eyebrowSuffix="Unboxing"
       autoSelectFirstWhenEmpty
       getStatusDot={getReceivingStatusDot}
       renderQuantity={(row) => (

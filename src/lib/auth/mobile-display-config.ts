@@ -24,28 +24,24 @@
  * for this staff" is one decision, not a per-field decision).
  */
 
-export type MobileNavTabId = 'home' | 'scan' | 'receive' | 'picks' | 'signout';
+export type MobileNavTabId = 'home' | 'scan' | 'receiving' | 'picks' | 'signout';
 
 export const MOBILE_NAV_TAB_IDS: ReadonlyArray<MobileNavTabId> = [
   'home',
   'scan',
-  'receive',
+  'receiving',
   'picks',
   'signout',
 ];
 
 /**
- * Tabs that occupy the raised center slot in the bottom nav. Exactly one is
- * shown (the headline action). 'scan' = universal order scanner (/m/scan);
- * 'receive' = receiving-door scan (/m/receive). They are mutually exclusive in
- * the rendered bar — the sanitizer keeps only the first configured one.
+ * Tabs that occupy the raised center slot in the bottom nav. The big center
+ * button is the universal QR/barcode scanner ('scan' → /m/scan). 'receiving'
+ * is a normal tab (→ /m/receive, the receiving-door scan), NOT a center tab.
  */
-export const MOBILE_NAV_CENTER_TAB_IDS: ReadonlyArray<MobileNavTabId> = [
-  'scan',
-  'receive',
-];
+export const MOBILE_NAV_CENTER_TAB_IDS: ReadonlyArray<MobileNavTabId> = ['scan'];
 
-/** Default center tab when none is configured. */
+/** Default center tab when none is configured — the universal scanner. */
 const DEFAULT_CENTER_TAB: MobileNavTabId = 'scan';
 
 export interface MobileBottomNavConfig {
@@ -67,7 +63,7 @@ export type MobileDisplayConfigInput = Partial<{
 export const DEFAULT_MOBILE_DISPLAY_CONFIG: MobileDisplayConfig = {
   bottomNav: {
     enabled: false,
-    tabs: ['home', 'scan', 'picks', 'signout'],
+    tabs: ['home', 'receiving', 'scan', 'picks', 'signout'],
   },
 };
 
@@ -88,15 +84,15 @@ export function sanitizeMobileDisplayConfig(
     const next: Partial<MobileBottomNavConfig> = {};
     if (typeof bn.enabled === 'boolean') next.enabled = bn.enabled;
     if (Array.isArray(bn.tabs)) {
-      const seen = new Set<string>();
       const centers = MOBILE_NAV_CENTER_TAB_IDS as ReadonlyArray<string>;
+      const seen = new Set<string>();
       let hasCenter = false;
       const tabs: MobileNavTabId[] = [];
       for (const t of bn.tabs) {
         if (typeof t !== 'string') continue;
         if (!(MOBILE_NAV_TAB_IDS as ReadonlyArray<string>).includes(t)) continue;
         if (seen.has(t)) continue;
-        // Only one center tab may be rendered — keep the first, drop the rest.
+        // Only one center tab may render — keep the first, drop any others.
         if (centers.includes(t)) {
           if (hasCenter) continue;
           hasCenter = true;
