@@ -321,7 +321,11 @@ export function ReceivingLineOrderRow({
           title={productTitle}
         />
         <RowMetaColumns
-          indent={META_COL.indentWide}
+          // In select mode the title row gains a leading checkbox (w-4 + mr-2 =
+          // 1.5rem), shifting the title text right. Add that same offset to the
+          // meta indent so the qty · condition · rest subrow stays aligned under
+          // the title instead of stranding at the original (un-shifted) x.
+          indent={selectMode ? `calc(${META_COL.indentWide} + 1.5rem)` : META_COL.indentWide}
           qtyCol={META_COL.qtyColWide}
           qty={
             <span className={qtyExpected > 1 ? 'text-yellow-600' : row.quantity_expected && row.quantity_received >= row.quantity_expected ? 'text-emerald-600' : 'text-gray-500'}>

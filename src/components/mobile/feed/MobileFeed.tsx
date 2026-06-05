@@ -70,7 +70,15 @@ export function MobileFeed<T>({
   const lastIndex = rows.length - 1;
 
   return (
-    <div ref={scrollRef} className={`min-h-0 flex-1 overflow-y-auto ${className}`}>
+    // Bottom-anchored feeds (expandLast) use flex-col + an mt-auto spacer so a
+    // SHORT list pins to the bottom (newest just above the nav) instead of
+    // stranding at the top with a big gap — scrollTo(bottom) only works once the
+    // list overflows, so the spacer covers the short-list case.
+    <div
+      ref={scrollRef}
+      className={`min-h-0 flex-1 overflow-y-auto ${expandLast ? 'flex flex-col' : ''} ${className}`}
+    >
+      {expandLast && <div className="mt-auto shrink-0" aria-hidden />}
       <LayoutGroup>
         <AnimatePresence initial={false}>
           {rows.map((row, i) => {

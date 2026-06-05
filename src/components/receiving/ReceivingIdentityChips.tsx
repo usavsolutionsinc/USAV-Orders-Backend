@@ -38,6 +38,8 @@ export interface ReceivingIdentityChipsProps {
   asColumns?: boolean;
   /** Wrapper layout classes for the free-flow (non-columns) layout. */
   className?: string;
+  /** Smaller chip font + narrower columns — keeps all chips on one line on mobile rows. */
+  dense?: boolean;
 }
 
 export function ReceivingIdentityChips({
@@ -51,35 +53,41 @@ export function ReceivingIdentityChips({
   includeSerial = true,
   asColumns = false,
   className = 'flex flex-wrap items-center gap-1.5',
+  dense = false,
 }: ReceivingIdentityChipsProps) {
   const poValue = (po || '').trim();
   const skuValue = (sku || '').trim();
   const trackingValue = (tracking || '').trim();
   const serialsValue = (serialsCsv || '').trim();
+  // Dense columns are ~12px narrower so the full PO·SKU·tracking·serial set
+  // stays on one line in a phone row.
+  const idCol = dense ? 'w-[52px]' : CHIP_COL.id;
+  const trackCol = dense ? 'w-[52px]' : CHIP_COL.tracking;
+  const serialCol = dense ? 'w-[52px]' : CHIP_COL.serial;
 
   if (asColumns) {
     const columns: ChipColumn[] = [];
     if (includePo) {
-      columns.push({ key: 'po', width: CHIP_COL.id, node: <OrderIdChip value={poValue} display={getLast4(poValue)} /> });
+      columns.push({ key: 'po', width: idCol, node: <OrderIdChip value={poValue} display={getLast4(poValue)} dense={dense} /> });
     }
     if (includeSku) {
-      columns.push({ key: 'sku', width: CHIP_COL.id, node: <SkuScanRefChip value={skuValue} display={getLast4(skuValue)} /> });
+      columns.push({ key: 'sku', width: idCol, node: <SkuScanRefChip value={skuValue} display={getLast4(skuValue)} dense={dense} /> });
     }
     if (includeTracking) {
-      columns.push({ key: 'tracking', width: CHIP_COL.tracking, node: <TrackingChip value={trackingValue} display={getLast4(trackingValue)} /> });
+      columns.push({ key: 'tracking', width: trackCol, node: <TrackingChip value={trackingValue} display={getLast4(trackingValue)} dense={dense} /> });
     }
     if (includeSerial) {
-      columns.push({ key: 'serial', width: CHIP_COL.serial, node: <SerialChip value={serialsValue} width="w-fit max-w-full" /> });
+      columns.push({ key: 'serial', width: serialCol, node: <SerialChip value={serialsValue} width="w-fit max-w-full" dense={dense} /> });
     }
     return <ChipColumns columns={columns} />;
   }
 
   return (
     <div className={className}>
-      {includePo && <OrderIdChip value={poValue} display={getLast4(poValue)} />}
-      {includeSku && <SkuScanRefChip value={skuValue} display={getLast4(skuValue)} />}
-      {includeTracking && <TrackingChip value={trackingValue} display={getLast4(trackingValue)} />}
-      {includeSerial && <SerialChip value={serialsValue} />}
+      {includePo && <OrderIdChip value={poValue} display={getLast4(poValue)} dense={dense} />}
+      {includeSku && <SkuScanRefChip value={skuValue} display={getLast4(skuValue)} dense={dense} />}
+      {includeTracking && <TrackingChip value={trackingValue} display={getLast4(trackingValue)} dense={dense} />}
+      {includeSerial && <SerialChip value={serialsValue} dense={dense} />}
     </div>
   );
 }

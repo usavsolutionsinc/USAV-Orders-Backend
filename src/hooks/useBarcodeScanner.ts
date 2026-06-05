@@ -141,10 +141,23 @@ export function useBarcodeScanner(options: UseBarcodeOptions = {}): UseBarcodeSc
       setError(null);
       pausedRef.current = false;
 
-      // decodeFromVideoDevice handles camera acquisition + continuous decode loop.
-      // Pass undefined as deviceId to let it pick the best available camera.
-      const controls = await reader.decodeFromVideoDevice(
-        undefined,
+      // Acquire the rear camera at high resolution with CONTINUOUS autofocus —
+      // small DataMatrix labels (prepacked SKU+serial) won't decode on the
+      // browser default (low-res, fixed/locked focus): the lens never sharpens
+      // on a close label. decodeFromConstraints lets us tune the stream; we then
+      // also applyConstraints on the live track since `focusMode` in the initial
+      // getUserMedia is widely ignored.
+      const constraints: MediaStreamConstraints = {
+        video: {
+          facingMode: { ideal: 'environment' },
+          width: { ideal: 1920 },
+          height: { ideal: 1080 },
+          // focusMode isn't in the TS MediaTrackConstraints type yet.
+          advanced: [{ focusMode: 'continuous' } as MediaTrackConstraintSet],
+        },
+      };
+      const controls = await reader.decodeFromConstraints(
+        constraints,
         video,
         (result, _err) => {
           if (pausedRef.current) return;
@@ -168,6 +181,24 @@ export function useBarcodeScanner(options: UseBarcodeOptions = {}): UseBarcodeSc
 
       controlsRef.current = controls;
       log('Scanning started');
+
+      // Force continuous autofocus on the live track (the lens keeps hunting to
+      // sharpen on whatever's in frame, including a small label held close).
+      // getCapabilities/focusMode aren't in the TS lib types; guard + ignore on
+      // browsers (Safari) that don't support programmatic focus control.
+      try {
+        const stream = video.srcObject as MediaStream | null;
+        const track = stream?.getVideoTracks?.()[0];
+        const caps = (track?.getCapabilities?.() ?? {}) as Record<string, unknown>;
+        const focusModes = (caps.focusMode as string[] | undefined) ?? [];
+        if (track && focusModes.includes('continuous')) {
+          await (track as MediaStreamTrack).applyConstraints({
+            advanced: [{ focusMode: 'continuous' } as MediaTrackConstraintSet],
+          });
+        }
+      } catch {
+        /* focus control unsupported — fall back to the camera's default */
+      }
     } catch (err: any) {
       setScanStatus('error');
       controlsRef.current = null;

@@ -88,6 +88,8 @@ export interface CopyChipProps {
   outerPad?: 'chip' | 'flush';
   /** When true, skip the global hover copy tooltip (e.g. chip has its own action menu). */
   disableTooltip?: boolean;
+  /** Smaller label + icons (mobile rows that must keep all chips on one line). */
+  dense?: boolean;
 }
 
 export function CopyChip({
@@ -103,6 +105,7 @@ export function CopyChip({
   onCopy,
   outerPad = 'chip',
   disableTooltip = false,
+  dense = false,
 }: CopyChipProps) {
   const anchorId = useId();
   const chipRef = useRef<HTMLDivElement | null>(null);
@@ -181,9 +184,9 @@ export function CopyChip({
             : 'inline-flex w-full max-w-full items-center justify-start gap-0.5 py-0 bg-transparent text-left text-black transition-all active:scale-95 disabled:opacity-30'
         }
       >
-        {icon ? <span className={`shrink-0 ${iconClass ?? ''}`}>{icon}</span> : null}
+        {icon ? <span className={`shrink-0 ${dense ? '[&_svg]:h-3 [&_svg]:w-3' : ''} ${iconClass ?? ''}`}>{icon}</span> : null}
         <span
-          className={`${monoValue} tracking-tight leading-none border-b-2 pb-0.5 text-left ${displayOverflowClass} ${underlineClass} ${
+          className={`${dense ? 'text-[11px] font-bold font-mono text-gray-900' : monoValue} tracking-tight leading-none border-b-2 pb-0.5 text-left ${displayOverflowClass} ${underlineClass} ${
             fitDisplayWidth ? 'min-w-0 shrink-0' : 'min-w-0 flex-1'
           }`}
         >
@@ -197,13 +200,14 @@ export function CopyChip({
 // --- Pre-configured chips ---
 
 /** Internal order ID. Gray / Hash icon. Do NOT use for tracking numbers or FNSKUs. */
-export const OrderIdChip = ({ value, display }: { value: string; display: string }) => (
+export const OrderIdChip = ({ value, display, dense }: { value: string; display: string; dense?: boolean }) => (
   <CopyChip
     value={value}
     display={isEmptyDisplayValue(display) || String(display || '').trim() === '---' ? '----' : display}
     icon={<HashIcon />}
     underlineClass="border-gray-500"
     iconClass="text-gray-500"
+    dense={dense}
   />
 );
 
@@ -272,6 +276,7 @@ export const TrackingChip = ({
    * sits in a wide grid/flex slot (e.g. FBA tracking bundle header beside “N SKUs · M units”).
    */
   fitDisplayWidth = true,
+  dense,
 }: {
   value: string;
   display: string;
@@ -280,6 +285,7 @@ export const TrackingChip = ({
   width?: string;
   showIcon?: boolean;
   fitDisplayWidth?: boolean;
+  dense?: boolean;
 }) => (
   <CopyChip
     value={value}
@@ -293,6 +299,7 @@ export const TrackingChip = ({
     disableCopy={disableCopy}
     outerPad={showIcon ? 'chip' : 'flush'}
     fitDisplayWidth={fitDisplayWidth}
+    dense={dense}
   />
 );
 
@@ -346,10 +353,12 @@ export const SkuScanRefChip = ({
   value,
   display,
   onCopy,
+  dense,
 }: {
   value: string;
   display: string;
   onCopy?: (value: string) => void;
+  dense?: boolean;
 }) => (
   <CopyChip
     value={value}
@@ -358,6 +367,7 @@ export const SkuScanRefChip = ({
     underlineClass="border-yellow-500"
     iconClass="inline-flex items-center justify-center text-yellow-600"
     onCopy={onCopy}
+    dense={dense}
   />
 );
 
@@ -423,6 +433,7 @@ export const SerialChip = ({
   display,
   width = 'w-[84px] shrink-0',
   disableTooltip = false,
+  dense,
 }: {
   value: string;
   /** Optional label override; normally derived from `value`. */
@@ -432,6 +443,7 @@ export const SerialChip = ({
    *  width so the serial column hugs its value like the other id chips. */
   width?: string;
   disableTooltip?: boolean;
+  dense?: boolean;
 }) => (
   <CopyChip
     value={value}
@@ -443,6 +455,7 @@ export const SerialChip = ({
     truncateDisplay={false}
     fitDisplayWidth
     disableTooltip={disableTooltip}
+    dense={dense}
   />
 );
 

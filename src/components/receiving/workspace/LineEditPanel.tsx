@@ -46,6 +46,7 @@ import { useLineSerials } from './line-edit/hooks/useLineSerials';
 import { useZohoLinePrefill } from './line-edit/hooks/useZohoLinePrefill';
 import { useReceivingPackageSync } from './line-edit/hooks/useReceivingPackageSync';
 import { useResourceMutation } from '@/hooks';
+import { useAblyClient } from '@/contexts/AblyContext';
 import { WorkspaceCard } from '@/design-system/components';
 import { printProductLabel } from '@/lib/print/printProductLabel';
 import { buildReceivingCopyInfo } from '@/utils/copy-all-receiving';
@@ -62,6 +63,7 @@ import {
   listingUrlForOpen,
   listingLinkPreview,
   receivingShareUrl,
+  randomId,
 } from '@/components/sidebar/receiving/receiving-sidebar-shared';
 
 export function LineEditPanel({
@@ -145,6 +147,8 @@ export function LineEditPanel({
   );
   const [auditOpen, setAuditOpen] = useState(false);
   const [copyingAll, setCopyingAll] = useState(false);
+  const [phoneSharing, setPhoneSharing] = useState(false);
+  const { getClient: getAblyClient } = useAblyClient();
 
   const persistZendeskRef = useRef(zendesk);
   const persistListingRef = useRef(listingLink);
@@ -510,6 +514,43 @@ export function LineEditPanel({
     else toast.error('Could not copy link');
   }, [row.receiving_id, row.zoho_purchaseorder_number, row.id]);
 
+  // Push a "Shared from computer" sheet to the operator's paired phone. Publishes
+  // `receiving_share_to_phone` on `station:{staffId}` — implicit pairing, the
+  // channel name is the gate. ReceivingShareToPhoneSheet (mounted in the mobile
+  // shell) pops the sheet + Take photos CTA to the existing capture page.
+  const handleSharePhone = useCallback(async () => {
+    if (!row.receiving_id) {
+      toast.error('No receiving package linked yet');
+      return;
+    }
+    const staffIdNum = Number(staffId) || 0;
+    if (staffIdNum <= 0) {
+      toast.error('Sign in to share to your phone');
+      return;
+    }
+    setPhoneSharing(true);
+    try {
+      const client = await getAblyClient();
+      if (!client) {
+        toast.error('Realtime unavailable — try again');
+        return;
+      }
+      const ch = client.channels.get(`station:${staffIdNum}`);
+      await ch.publish('receiving_share_to_phone', {
+        receiving_id: row.receiving_id,
+        po_label: row.zoho_purchaseorder_number || `Package #${row.receiving_id}`,
+        tracking: (row.tracking_number || '').trim() || null,
+        request_id: randomId(),
+        requested_by_staff_id: staffIdNum,
+      });
+      toast.success('Shared to your phone');
+    } catch {
+      toast.error('Could not share to phone');
+    } finally {
+      setPhoneSharing(false);
+    }
+  }, [row.receiving_id, row.zoho_purchaseorder_number, row.tracking_number, staffId, getAblyClient]);
+
   const handleCopyAll = useCallback(async () => {
     if (!row.receiving_id) {
       toast.error('No receiving package linked yet');
@@ -550,10 +591,10 @@ export function LineEditPanel({
         zohoSyncing={zohoSyncing}
         busy={saving || platformSaving}
         copyingAll={copyingAll}
-        poId={String(row.zoho_purchaseorder_id || '')}
-        poNumber={String(row.zoho_purchaseorder_number || '')}
+        phoneSharing={phoneSharing}
         onRefresh={() => void syncWithZoho()}
         onShare={() => void handleShare()}
+        onSharePhone={() => void handleSharePhone()}
         onAudit={() => setAuditOpen(true)}
         onCopy={() => void handleCopyAll()}
       />

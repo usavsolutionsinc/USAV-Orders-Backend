@@ -54,6 +54,109 @@ export async function syncShipmentsByIds(
   return { synced, terminal, errors, durationMs: Date.now() - start };
 }
 
+/** A shipment to re-poll, carrying the pre-sync context the UI displays. */
+export interface ShipmentSyncRow {
+  id: number;
+  carrier: string;
+  tracking?: string | null;
+  previousStatus?: string | null;
+}
+
+/** Per-shipment outcome handed to {@link syncShipmentsByIdsStreaming}'s callback. */
+export interface ShipmentSyncOutcome {
+  shipmentId: number;
+  carrier: string;
+  tracking: string | null;
+  previousStatus: string | null;
+  newStatus: string | null;
+  eventsInserted: number;
+  kind: 'delivered' | 'updated' | 'unchanged' | 'error';
+  error?: string;
+}
+
+interface StreamingSyncCallbacks {
+  concurrency?: number;
+  onCarrierStart?: (carrier: string, total: number) => void;
+  onShipment?: (outcome: ShipmentSyncOutcome) => void;
+  onCarrierDone?: (carrier: string) => void;
+}
+
+/**
+ * Streaming variant of {@link syncShipmentsByIds}: same carrier-grouped,
+ * rate-limit-respecting sweep, but invokes callbacks as each carrier starts and
+ * each shipment resolves so callers (the Incoming "Sync carriers" popover) can
+ * surface live per-shipment progress. Still returns the aggregate counts.
+ */
+export async function syncShipmentsByIdsStreaming(
+  rows: ShipmentSyncRow[],
+  callbacks: StreamingSyncCallbacks = {},
+): Promise<SchedulerResult> {
+  const concurrency = callbacks.concurrency ?? 5;
+  const start = Date.now();
+  if (rows.length === 0) {
+    return { synced: 0, terminal: 0, errors: 0, durationMs: Date.now() - start };
+  }
+
+  const byCarrier: Record<string, ShipmentSyncRow[]> = {};
+  for (const row of rows) {
+    (byCarrier[row.carrier] ??= []).push(row);
+  }
+
+  let synced = 0;
+  let terminal = 0;
+  let errors = 0;
+
+  for (const [carrier, carrierRows] of Object.entries(byCarrier)) {
+    callbacks.onCarrierStart?.(carrier, carrierRows.length);
+    for (let i = 0; i < carrierRows.length; i += concurrency) {
+      const chunk = carrierRows.slice(i, i + concurrency);
+      const results = await Promise.allSettled(
+        chunk.map((row) => syncShipment({ shipmentId: row.id })),
+      );
+      results.forEach((r, idx) => {
+        const src = chunk[idx];
+        const base = {
+          shipmentId: src.id,
+          carrier,
+          tracking: src.tracking ?? null,
+          previousStatus: src.previousStatus ?? null,
+        };
+        if (r.status === 'fulfilled' && r.value.ok) {
+          const newStatus = r.value.status ?? null;
+          const isTerminal = newStatus === 'DELIVERED' || newStatus === 'RETURNED';
+          const eventsInserted = r.value.eventsInserted ?? 0;
+          if (isTerminal) terminal++;
+          else synced++;
+          callbacks.onShipment?.({
+            ...base,
+            newStatus,
+            eventsInserted,
+            kind: isTerminal ? 'delivered' : eventsInserted > 0 ? 'updated' : 'unchanged',
+          });
+        } else {
+          errors++;
+          const error =
+            r.status === 'fulfilled'
+              ? r.value.error
+              : r.reason instanceof Error
+                ? r.reason.message
+                : 'Sync failed';
+          callbacks.onShipment?.({
+            ...base,
+            newStatus: null,
+            eventsInserted: 0,
+            kind: 'error',
+            error: error ?? 'Sync failed',
+          });
+        }
+      });
+    }
+    callbacks.onCarrierDone?.(carrier);
+  }
+
+  return { synced, terminal, errors, durationMs: Date.now() - start };
+}
+
 export async function runDueShipments(options?: {
   limit?: number;
   concurrency?: number;

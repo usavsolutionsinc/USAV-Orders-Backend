@@ -5,15 +5,20 @@ import type { SyncStreamEvent } from '@/lib/orders-sync/types';
 /**
  * Fetches an NDJSON endpoint and invokes `onEvent` for each parsed event.
  *
- * Each line of the response body is one JSON-encoded `SyncStreamEvent`. The
- * server keeps the connection open until the job finishes, so events arrive
- * incrementally — this lets the UI update per phase / per row without waiting
- * for the whole job to complete.
+ * Each line of the response body is one JSON-encoded event. The server keeps
+ * the connection open until the job finishes, so events arrive incrementally —
+ * this lets the UI update per phase / per row without waiting for the whole job
+ * to complete.
+ *
+ * Defaults to the orders-sync `SyncStreamEvent` contract but is generic so
+ * other feeds (e.g. carrier-sync) can reuse it with their own event union;
+ * transport-level failures are surfaced as a `{ type: 'error', error }` line,
+ * which every such union includes.
  */
-export async function streamNdjson(
+export async function streamNdjson<T = SyncStreamEvent>(
   url: string,
   init: RequestInit,
-  onEvent: (event: SyncStreamEvent) => void,
+  onEvent: (event: T) => void,
 ): Promise<void> {
   const response = await fetch(url, init);
   if (!response.ok || !response.body) {
@@ -25,7 +30,7 @@ export async function streamNdjson(
     } catch {
       // ignore
     }
-    onEvent({ type: 'error', error: text || `HTTP ${response.status}` });
+    onEvent({ type: 'error', error: text || `HTTP ${response.status}` } as T);
     return;
   }
 
@@ -44,11 +49,11 @@ export async function streamNdjson(
       buffer = buffer.slice(newlineIdx + 1);
       if (line) {
         try {
-          onEvent(JSON.parse(line) as SyncStreamEvent);
+          onEvent(JSON.parse(line) as T);
         } catch {
           // Malformed line — surface as an error event but keep reading so a
           // single bad line doesn't kill the rest of the stream.
-          onEvent({ type: 'error', error: `Malformed sync event: ${line.slice(0, 120)}` });
+          onEvent({ type: 'error', error: `Malformed sync event: ${line.slice(0, 120)}` } as T);
         }
       }
       newlineIdx = buffer.indexOf('\n');
@@ -59,9 +64,9 @@ export async function streamNdjson(
   const trailing = buffer.trim();
   if (trailing) {
     try {
-      onEvent(JSON.parse(trailing) as SyncStreamEvent);
+      onEvent(JSON.parse(trailing) as T);
     } catch {
-      onEvent({ type: 'error', error: `Malformed trailing sync event` });
+      onEvent({ type: 'error', error: `Malformed trailing sync event` } as T);
     }
   }
 }

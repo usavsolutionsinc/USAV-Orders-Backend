@@ -1,6 +1,6 @@
 'use client';
 
-import { Copy, ExternalLink, History, Info, Link2, RefreshCw } from '@/components/Icons';
+import { Copy, History, Info, Link2, RefreshCw, Smartphone } from '@/components/Icons';
 import {
   PaneHeaderActionBar,
   type PaneHeaderActionBarAction,
@@ -9,22 +9,23 @@ import { dispatchReceivingDetailsOverlay } from '@/utils/events';
 
 /**
  * Frozen utility toolbar — the third header row beneath the global header +
- * progress stepper. Icon-only (refresh / share / audit / copy / Zoho +
+ * progress stepper. Icon-only (refresh / share / audit / copy / phone +
  * prev/next); the right-slot Info opens receiving details. Lives outside the
  * scroll surface so it stays locked to the top while the body scrolls under it.
  *
- * Prev/Next and the Zoho/details actions dispatch the same window events the
- * panel used inline, so this component needs no navigation props.
+ * Prev/Next and the details action dispatch the same window events the panel
+ * used inline, so this component needs no navigation props. The phone action
+ * pushes a "Shared from computer" sheet to the operator's paired phone.
  */
 export function LineEditToolbar({
   receivingId,
   zohoSyncing,
   busy,
   copyingAll,
-  poId,
-  poNumber,
+  phoneSharing = false,
   onRefresh,
   onShare,
+  onSharePhone,
   onAudit,
   onCopy,
 }: {
@@ -33,10 +34,11 @@ export function LineEditToolbar({
   /** saving || platformSaving — surfaces the "Saving" status pill. */
   busy: boolean;
   copyingAll: boolean;
-  poId: string;
-  poNumber: string;
+  /** Publish-in-flight for the share-to-phone action — disables the button. */
+  phoneSharing?: boolean;
   onRefresh: () => void;
   onShare: () => void;
+  onSharePhone: () => void;
   onAudit: () => void;
   onCopy: () => void;
 }) {
@@ -96,23 +98,13 @@ export function LineEditToolbar({
           ariaLabel: 'Copy all receiving details',
         },
         {
-          key: 'open-zoho',
-          label: 'Zoho',
-          icon: <ExternalLink className="h-3.5 w-3.5" />,
-          onClick: () => {
-            // Right-pane Zoho viewer (ZohoSplitPane) listens for this event and
-            // slides in. Never opens a new browser window — browser tabs get an
-            // "Open externally" link inside the pane instead. Keeps the
-            // operator's flow in one window.
-            window.dispatchEvent(
-              new CustomEvent('open-zoho-pane', {
-                detail: { poId: poId.trim(), poNumber: poNumber.trim() },
-              }),
-            );
-          },
-          disabled,
-          title: 'Open this PO in Zoho (right pane)',
-          ariaLabel: 'Open in Zoho',
+          key: 'share-phone',
+          label: 'Phone',
+          icon: <Smartphone className="h-3.5 w-3.5" />,
+          onClick: onSharePhone,
+          disabled: disabled || phoneSharing,
+          title: 'Share to your phone to take photos',
+          ariaLabel: 'Share to phone',
         },
       ] satisfies PaneHeaderActionBarAction[]}
       status={zohoSyncing ? 'Syncing' : busy ? 'Saving' : undefined}

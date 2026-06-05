@@ -13,6 +13,13 @@ import {
   INCOMING_SORT_LABELS,
   type IncomingSort,
 } from '@/components/sidebar/receiving/IncomingPaneHeader';
+import {
+  CarrierSyncDialog,
+  EMPTY_CARRIER_TABS,
+  type CarrierTabsState,
+} from '@/components/sidebar/receiving/CarrierSyncDialog';
+import { streamNdjson } from '@/lib/orders-sync/client';
+import type { CarrierSyncResult, CarrierSyncStreamEvent } from '@/lib/carrier-sync/types';
 
 /** Facet bucket — mirrors the SQL CASE in /api/receiving-lines view=incoming. */
 export type IncomingDeliveryState =
@@ -215,6 +222,20 @@ export function IncomingSidebarPanel() {
   const [refreshing, setRefreshing] = useState(false);
   const [reloading, setReloading] = useState(false);
 
+  // Live "Sync carriers" popover — per-carrier tabs streamed from the
+  // /refresh/stream endpoint. Mirrors the dashboard's Order Sync dialog.
+  const [syncDialogOpen, setSyncDialogOpen] = useState(false);
+  const [carrierTabs, setCarrierTabs] = useState<CarrierTabsState>(EMPTY_CARRIER_TABS);
+  const [syncResult, setSyncResult] = useState<CarrierSyncResult | null>(null);
+  const [syncElapsedMs, setSyncElapsedMs] = useState(0);
+  const syncTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const syncAbortRef = useRef<AbortController | null>(null);
+
+  useEffect(() => () => {
+    if (syncTimerRef.current) clearInterval(syncTimerRef.current);
+    syncAbortRef.current?.abort();
+  }, []);
+
   // The three query keys this view (tiles + row list + delivered-unscanned
   // facet) reads from. Both refresh actions invalidate exactly these.
   const invalidateIncoming = useCallback(async () => {
@@ -266,32 +287,99 @@ export function IncomingSidebarPanel() {
     };
   }, [filtersOpen]);
 
-  // Re-poll carrier tracking for the incoming set, then refetch the tiles +
-  // row list so just-delivered packages stop showing a stale transit status.
+  const handleCancelSync = useCallback(() => {
+    syncAbortRef.current?.abort();
+  }, []);
+
+  // Re-poll carrier tracking for the incoming set, streaming live per-carrier
+  // progress into the Carrier Sync popover, then refetch the tiles + row list
+  // so just-delivered packages stop showing a stale transit status.
   const refreshTracking = useCallback(async () => {
     if (refreshing) return;
     setRefreshing(true);
+    setSyncResult(null);
+    setCarrierTabs(EMPTY_CARRIER_TABS);
+    setSyncElapsedMs(0);
+    setSyncDialogOpen(true);
+
+    const t0 = Date.now();
+    if (syncTimerRef.current) clearInterval(syncTimerRef.current);
+    syncTimerRef.current = setInterval(() => setSyncElapsedMs(Date.now() - t0), 100);
+
+    const abort = new AbortController();
+    syncAbortRef.current = abort;
+
+    let streamError: string | null = null;
+    let result: CarrierSyncResult | null = null;
+
     try {
-      const res = await fetch('/api/receiving-lines/incoming/refresh', { method: 'POST' });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok || data?.ok === false) {
-        toast.error(data?.error || `Refresh failed (${res.status})`);
-        return;
-      }
-      await invalidateIncoming();
-      if (data.throttled) {
-        toast.success('Just refreshed — showing the latest tracking');
-      } else {
-        const parts = [`${data.scanned ?? 0} polled`];
-        if (data.delivered) parts.push(`${data.delivered} delivered`);
-        if (data.errors) parts.push(`${data.errors} errors`);
-        toast.success(`Tracking refreshed · ${parts.join(' · ')}`);
-      }
+      await streamNdjson<CarrierSyncStreamEvent>(
+        '/api/receiving-lines/incoming/refresh/stream',
+        { method: 'POST', signal: abort.signal },
+        (event) => {
+          if (event.type === 'carrier-start') {
+            setCarrierTabs((prev) => ({
+              ...prev,
+              [event.carrier]: { ...prev[event.carrier], status: 'running', total: event.total },
+            }));
+          } else if (event.type === 'detail') {
+            setCarrierTabs((prev) => {
+              const tab = prev[event.carrier];
+              return {
+                ...prev,
+                [event.carrier]: { ...tab, status: 'running', rows: [...tab.rows, event.row] },
+              };
+            });
+          } else if (event.type === 'carrier-done') {
+            setCarrierTabs((prev) => ({
+              ...prev,
+              [event.carrier]: { ...prev[event.carrier], status: 'done' },
+            }));
+          } else if (event.type === 'result') {
+            result = event.result;
+          } else if (event.type === 'error') {
+            streamError = event.error;
+          }
+        },
+      );
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Refresh failed');
+      streamError = (err as Error)?.name === 'AbortError'
+        ? 'Cancelled'
+        : err instanceof Error ? err.message : 'Sync failed';
     } finally {
+      if (syncTimerRef.current) {
+        clearInterval(syncTimerRef.current);
+        syncTimerRef.current = null;
+      }
+      syncAbortRef.current = null;
       setRefreshing(false);
     }
+
+    // Settle each carrier tab: finish running ones, surface a hard error that
+    // fired before any carrier started, and flag throttled (cooldown) sweeps.
+    setCarrierTabs((prev) => {
+      const anyRan = Object.values(prev).some((t) => t.status !== 'idle');
+      const next = { ...prev };
+      (Object.keys(next) as Array<keyof CarrierTabsState>).forEach((k) => {
+        const tab = next[k];
+        if (tab.status === 'running') {
+          next[k] = { ...tab, status: streamError ? 'error' : 'done', error: streamError ?? tab.error };
+        } else if (tab.status === 'idle') {
+          if (streamError && !anyRan) {
+            next[k] = { ...tab, status: 'error', error: streamError };
+          } else if (result?.throttled) {
+            next[k] = { ...tab, status: 'done', summary: 'Just refreshed' };
+          }
+        }
+      });
+      return next;
+    });
+
+    if (result) setSyncResult(result);
+    if (streamError && streamError !== 'Cancelled') toast.error(streamError);
+
+    // Re-read the tables so freshly-delivered packages flip in the list/tiles.
+    await invalidateIncoming();
   }, [refreshing, invalidateIncoming]);
 
   const search = searchParams.get(RECEIVING_HISTORY_URL_PARAMS.q)?.trim() ?? '';
@@ -454,9 +542,12 @@ export function IncomingSidebarPanel() {
   const activeTile = state ? TILES.find((t) => t.state === state) ?? null : null;
   const activeFilterCount = (state ? 1 : 0) + (poFrom ? 1 : 0);
 
+  const isSyncing = refreshing;
+
   return (
-    // overflow-visible so the filter popover (absolute) isn't clipped — this
-    // panel has no scroll body, only the search + filter/refresh controls.
+    <>
+    {/* overflow-visible so the filter popover (absolute) isn't clipped — this
+        panel has no scroll body, only the search + filter/refresh controls. */}
     <SidebarShell
       className="overflow-visible"
       search={{ value: search, onChange: setSearch, placeholder: 'Search PO #, tracking, SKU…' }}
@@ -627,5 +718,15 @@ export function IncomingSidebarPanel() {
         </div>
       }
     />
+    <CarrierSyncDialog
+      open={syncDialogOpen}
+      onClose={() => setSyncDialogOpen(false)}
+      isRunning={isSyncing}
+      elapsedMs={syncElapsedMs}
+      onCancel={handleCancelSync}
+      carriers={carrierTabs}
+      result={syncResult}
+    />
+    </>
   );
 }

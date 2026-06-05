@@ -5,6 +5,7 @@ import { usePathname } from 'next/navigation';
 import { RedesignedBottomNav } from './RedesignedBottomNav';
 import { MobileTopBar } from './MobileTopBar';
 import { TOKENS } from './DesignSystem';
+import { ReceivingShareToPhoneSheet } from '@/components/mobile/receiving/ReceivingShareToPhoneSheet';
 
 /**
  * Global Mobile Shell for 2026 Redesign
@@ -32,7 +33,10 @@ export const RedesignedMobileShell = ({ children }: { children: React.ReactNode 
     '/m/signin',
   ];
 
-  const showNav = !hideNavPaths.some(p => pathname?.startsWith(p));
+  // Capture flows (any `…/photos` route) are full-screen camera surfaces — hide
+  // the bottom nav so it never shows behind/over the camera or the upload list.
+  const isCaptureRoute = !!pathname && pathname.endsWith('/photos');
+  const showNav = !isCaptureRoute && !hideNavPaths.some(p => pathname?.startsWith(p));
   const showHeader = !!pathname && HEADER_ROUTES.has(pathname);
 
   return (
@@ -61,6 +65,10 @@ export const RedesignedMobileShell = ({ children }: { children: React.ReactNode 
 
       {/* Shared Bottom Nav */}
       {showNav && <RedesignedBottomNav />}
+
+      {/* Phone-side receiver for the desktop "share to phone" action — pops a
+          "Shared from computer" sheet with a Take photos CTA. */}
+      <ReceivingShareToPhoneSheet />
     </div>
   );
 };

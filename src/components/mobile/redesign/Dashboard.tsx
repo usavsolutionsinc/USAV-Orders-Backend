@@ -19,7 +19,7 @@ export default function RedesignedMobileDashboard() {
       {/* Header lives in the shell. pb-20 keeps the newest (bottom-pinned) row
           clear of the fixed nav. */}
       <div className="min-h-0 flex-1 pb-20">
-        <MobileReceivingList limit={8} />
+        <MobileReceivingList limit={25} />
       </div>
     </div>
   );

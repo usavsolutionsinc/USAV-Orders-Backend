@@ -1,11 +1,58 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
+import { motion } from 'framer-motion';
 import { RightPaneOverlay } from '@/components/ui/RightPaneOverlay';
 import { attachNasPhoto, listNasDir, nasConfigured, type NasEntry } from '@/lib/nas-photos';
 import { useNasConfig } from '@/hooks/useNasConfig';
+import { useMediaQuery } from '@/hooks/_ui';
 import { NasBreadcrumb, NasFolderCard, NasSectionLabel } from '@/components/nas/NasBrowserChrome';
+
+/**
+ * Shell for the NAS picker: a centered modal on desktop, a slide-up bottom
+ * sheet on mobile (so it stacks naturally over the carton sheet / photo flow).
+ */
+function NasPickerShell({
+  isMobile,
+  onClose,
+  children,
+}: {
+  isMobile: boolean;
+  onClose: () => void;
+  children: ReactNode;
+}) {
+  if (!isMobile) {
+    return (
+      <RightPaneOverlay
+        open
+        onClose={onClose}
+        align="center"
+        closeOnEscape={false}
+        aria-label="Select from NAS, pair to PO"
+        className="w-[min(92%,42rem)] rounded-2xl border-0 shadow-2xl ring-1 ring-gray-200"
+      >
+        {children}
+      </RightPaneOverlay>
+    );
+  }
+  return createPortal(
+    <div className="fixed inset-0 z-[210] flex flex-col justify-end" role="dialog" aria-modal="true" aria-label="Select from NAS, pair to PO">
+      <div className="absolute inset-0 bg-black/40 backdrop-blur-[1px]" onClick={onClose} aria-hidden />
+      <motion.div
+        initial={{ y: '100%' }}
+        animate={{ y: 0 }}
+        exit={{ y: '100%' }}
+        transition={{ type: 'spring', damping: 32, stiffness: 340 }}
+        className="relative flex max-h-[88vh] min-h-0 flex-col rounded-t-2xl bg-white shadow-2xl pb-[env(safe-area-inset-bottom)]"
+      >
+        <div className="mx-auto mb-1 mt-2 h-1 w-10 shrink-0 rounded-full bg-gray-300" />
+        {children}
+      </motion.div>
+    </div>,
+    document.body,
+  );
+}
 
 type SortKey = 'po' | 'recent' | 'oldest' | 'name';
 // Photos shown per page in the picker list (paged to avoid loading every
@@ -192,6 +239,9 @@ function NasPickerDialog({
   const [sortKey, setSortKey] = useState<SortKey>('recent');
   const [page, setPage] = useState(0);
   const [portalTarget, setPortalTarget] = useState<HTMLElement | null>(null);
+  // Viewport-based (not UA) so the bottom-sheet reliably triggers on phones —
+  // UA detection was returning desktop and falling back to the centered modal.
+  const isMobile = useMediaQuery('(max-width: 767px)');
 
   // Portal target for the preview lightbox (RightPaneOverlay handles its own).
   useEffect(() => {
@@ -308,14 +358,7 @@ function NasPickerDialog({
 
   return (
     <>
-      <RightPaneOverlay
-        open
-        onClose={onClose}
-        align="center"
-        closeOnEscape={false}
-        aria-label="Select from NAS, pair to PO"
-        className="w-[min(92%,42rem)] rounded-2xl border-0 shadow-2xl ring-1 ring-gray-200"
-      >
+      <NasPickerShell isMobile={isMobile} onClose={onClose}>
         {/* Header */}
         <div className="flex items-center justify-between border-b border-gray-100 px-4 py-3">
           <div className="min-w-0">
@@ -504,7 +547,7 @@ function NasPickerDialog({
             {attaching ? 'Attaching…' : selected.size > 0 ? `Pair ${selected.size} to PO` : 'Pair to PO'}
           </button>
         </div>
-      </RightPaneOverlay>
+      </NasPickerShell>
 
       {/* Larger preview lightbox (opened from a row's thumbnail). A 1080px webp
           via the optimizer — crisp but still far smaller than the original.

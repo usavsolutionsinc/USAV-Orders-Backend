@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   framerPresenceMobile,
@@ -194,7 +195,14 @@ export function MobilePackerSpamCamera({
   const remaining = maxPhotos - shots.length;
   const atCap = remaining <= 0;
 
-  return (
+  // Portal to <body> so the fullscreen camera escapes the mobile shell's
+  // animated (transformed) page wrapper. A transformed ancestor becomes the
+  // containing block for this `fixed inset-0` overlay, which would otherwise
+  // clip it to the content area and let the bottom nav show through.
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
+
+  const cameraUi = (
     <motion.div
       initial={framerPresenceMobile.camera.initial}
       animate={framerPresenceMobile.camera.animate}
@@ -393,4 +401,6 @@ export function MobilePackerSpamCamera({
       </AnimatePresence>
     </motion.div>
   );
+
+  return mounted ? createPortal(cameraUi, document.body) : null;
 }

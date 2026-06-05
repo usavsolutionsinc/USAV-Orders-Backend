@@ -20,7 +20,7 @@ export default function RedesignedMobilePack() {
       {/* pb-20 keeps the newest (bottom-pinned) pack card clear of the fixed nav. */}
       <div className="min-h-0 flex-1 pb-20">
         {packerId ? (
-          <MobilePackingList packerId={packerId} />
+          <MobilePackingList packerId={packerId} limit={25} />
         ) : (
           <div className="flex h-full items-center justify-center text-xs font-black uppercase tracking-widest text-blue-300">
             Sign in to view packing
