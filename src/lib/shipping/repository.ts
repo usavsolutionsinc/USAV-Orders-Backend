@@ -1,6 +1,7 @@
 import pool from '../db';
 import type { CarrierCode, CarrierTrackingEvent, CarrierTrackingResult, ShipmentRow, TrackingEventRow } from './types';
 import { computeNextCheckAt, normalizeTrackingNumber } from './normalize';
+import { ENABLED_SYNC_CARRIERS } from './enabled-carriers';
 
 // ─── Upsert shipment master record ───────────────────────────────────────────
 
@@ -73,11 +74,14 @@ export async function getDueShipments(
   const client = await pool.connect();
   try {
     const params: Array<number | string[]> = [];
+    // Only carriers we actively poll (USPS is disabled pending OAuth — see
+    // enabled-carriers.ts). Also excludes UNKNOWN, which has no API to call.
+    params.push([...ENABLED_SYNC_CARRIERS]);
+    const enabledCarrierParam = `$${params.length}::text[]`;
     const where: string[] = [
       `is_terminal = false`,
       `(next_check_at IS NULL OR next_check_at <= now())`,
-      // Never try to sync UNKNOWN carrier — no API to call
-      `carrier IN ('UPS','USPS','FEDEX')`,
+      `carrier = ANY(${enabledCarrierParam})`,
       // Stop retrying after 5 consecutive failures (dead tracking numbers)
       `consecutive_error_count < 5`,
     ];

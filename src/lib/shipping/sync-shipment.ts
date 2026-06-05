@@ -9,6 +9,7 @@ import {
   updateShipmentError,
 } from './repository';
 import { publishShipmentStatusChange } from './publish-on-status-change';
+import { isCarrierSyncEnabled } from './enabled-carriers';
 import * as ups from './providers/ups';
 import * as usps from './providers/usps';
 import * as fedex from './providers/fedex';
@@ -84,6 +85,19 @@ export async function syncShipment(input: SyncShipmentInput): Promise<SyncShipme
   }
 
   const carrier = shipment.carrier as CarrierCode;
+
+  // USPS is disabled pending OAuth (see enabled-carriers.ts). Skip without
+  // calling the provider or recording an error so disabled-carrier shipments
+  // never count against the consecutive-error cap or surface as sync failures.
+  if (!isCarrierSyncEnabled(carrier)) {
+    return {
+      ok: true,
+      shipmentId: shipment.id,
+      status: shipment.latest_status_category ?? 'PENDING',
+      eventsInserted: 0,
+    };
+  }
+
   const provider = getProvider(carrier);
 
   try {
