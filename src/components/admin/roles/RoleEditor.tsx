@@ -487,6 +487,7 @@ export function RoleEditor({ roleId }: RoleEditorProps) {
 const TAB_LABELS: Record<MobileNavTabId, string> = {
   home: 'Home',
   scan: 'Scan (centre)',
+  receive: 'Receive (centre)',
   picks: 'Picks',
   signout: 'Sign out',
 };

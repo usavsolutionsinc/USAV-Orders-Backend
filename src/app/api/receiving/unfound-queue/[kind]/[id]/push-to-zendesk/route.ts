@@ -19,66 +19,25 @@ import { invalidateCacheTags } from '@/lib/cache/upstash-cache';
 import { after } from 'next/server';
 import { createTicket, ZendeskNotConfiguredError } from '@/lib/zendesk';
 import { zendeskTicketUrl } from '@/lib/zendesk-ticket-url';
-
-const ALLOWED_KINDS = new Set(['email_po', 'unmatched_receiving', 'station_exception']);
+import {
+  ALLOWED_UNFOUND_KINDS,
+  buildUnfoundTicket,
+  loadUnfoundQueueRow,
+  unfoundParamsFromUrl,
+} from '@/lib/unfound-ticket';
 
 interface PushBody {
   subject?: string;
   description?: string;
 }
 
-interface QueueRow {
-  kind: string;
-  source_id: string;
-  product_title: string | null;
-  serial_numbers: string | null;
-  context: string | null;
-  usa_team_note: string | null;
-  vietnam_team_note: string | null;
-  zendesk_ticket_id: string | null;
-}
-
-function paramsFromUrl(url: URL): { kind: string; sourceId: string } | null {
-  const segs = url.pathname.split('/');
-  const idx = segs.indexOf('unfound-queue');
-  if (idx < 0 || idx + 2 >= segs.length) return null;
-  return {
-    kind: decodeURIComponent(segs[idx + 1]!),
-    sourceId: decodeURIComponent(segs[idx + 2]!),
-  };
-}
-
-function buildDefaultTicket(row: QueueRow): { subject: string; description: string } {
-  const kindLabel =
-    row.kind === 'email_po'
-      ? 'PO Mailbox'
-      : row.kind === 'unmatched_receiving'
-      ? 'Unmatched Tracking'
-      : 'Station Exception';
-
-  const subjectIdentifier =
-    row.product_title ?? row.context ?? row.source_id ?? '(no identifier)';
-  const subject = `[${kindLabel}] ${subjectIdentifier}`.slice(0, 200);
-
-  const lines: string[] = [];
-  lines.push(`Source kind: ${row.kind}`);
-  lines.push(`Source id: ${row.source_id}`);
-  if (row.context) lines.push(`Context: ${row.context}`);
-  if (row.product_title) lines.push(`Product: ${row.product_title}`);
-  if (row.serial_numbers) lines.push(`Serials: ${row.serial_numbers}`);
-  if (row.usa_team_note) lines.push('', 'USA Team Note:', row.usa_team_note);
-  if (row.vietnam_team_note) lines.push('', 'Vietnam Team Note:', row.vietnam_team_note);
-
-  return { subject, description: lines.join('\n') };
-}
-
 export const POST = withAuth(async (request: NextRequest, ctx) => {
-  const parsed = paramsFromUrl(request.nextUrl);
+  const parsed = unfoundParamsFromUrl(request.nextUrl);
   if (!parsed) {
     return NextResponse.json({ success: false, error: 'invalid path' }, { status: 400 });
   }
   const { kind, sourceId } = parsed;
-  if (!ALLOWED_KINDS.has(kind)) {
+  if (!ALLOWED_UNFOUND_KINDS.has(kind)) {
     return NextResponse.json({ success: false, error: `invalid kind: ${kind}` }, { status: 400 });
   }
 
@@ -92,15 +51,7 @@ export const POST = withAuth(async (request: NextRequest, ctx) => {
   // Load the queue row through v_unfound_queue so we get the same composed
   // shape the UI displays — including notes the operator may have written
   // before clicking Push.
-  const rowRes = await pool.query<QueueRow>(
-    `SELECT kind, source_id, product_title, serial_numbers, context,
-            usa_team_note, vietnam_team_note, zendesk_ticket_id
-       FROM v_unfound_queue
-      WHERE organization_id = $1 AND kind = $2 AND source_id = $3
-      LIMIT 1`,
-    [ctx.organizationId, kind, sourceId],
-  );
-  const row = rowRes.rows[0];
+  const row = await loadUnfoundQueueRow(ctx.organizationId, kind, sourceId);
   if (!row) {
     return NextResponse.json(
       { success: false, error: 'queue row not found' },
@@ -117,7 +68,7 @@ export const POST = withAuth(async (request: NextRequest, ctx) => {
     });
   }
 
-  const generated = buildDefaultTicket(row);
+  const generated = buildUnfoundTicket(row);
   const subject = (body.subject?.trim() || generated.subject).slice(0, 250);
   const description = body.description?.trim() || generated.description;
 

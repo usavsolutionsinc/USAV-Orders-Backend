@@ -78,6 +78,7 @@ export const AUDIT_ENTITY = {
   SERIAL_UNIT: 'serial_unit',
   TECH_SERIAL: 'tech_serial_number',
   SKU: 'sku',
+  SKU_RELATIONSHIP: 'sku_relationship',
   SKU_STOCK: 'sku_stock',
   BIN: 'bin',
   SHIPMENT: 'shipment',
@@ -126,6 +127,10 @@ export const AUDIT_ACTION = {
   SKU_CATALOG_CREATE: 'sku_catalog.create',
   SKU_CATALOG_UPDATE: 'sku_catalog.update',
   SKU_CATALOG_DELETE: 'sku_catalog.delete',
+  // SKU relationship graph (parent→child edges)
+  SKU_RELATIONSHIP_CREATE: 'sku_relationship.create',
+  SKU_RELATIONSHIP_UPDATE: 'sku_relationship.update',
+  SKU_RELATIONSHIP_DELETE: 'sku_relationship.delete',
   // Reason codes (CRUD)
   REASON_CODE_CREATE: 'reason_code.create',
   REASON_CODE_UPDATE: 'reason_code.update',

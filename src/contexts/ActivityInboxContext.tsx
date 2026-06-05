@@ -17,13 +17,15 @@ import React, {
 import { useQueryClient } from '@tanstack/react-query';
 import { qk } from '@/queries/keys';
 import { useAuth } from '@/contexts/AuthContext';
+import { useAblyChannel } from '@/hooks/useAblyChannel';
+import { getInboxChannelName } from '@/lib/realtime/channels';
 import { toast } from '@/lib/toast';
 
 const MAX_ITEMS = 20;
 /** Time window during which Undo is offered for reversible items */
 export const ACTIVITY_INBOX_UNDO_MS = 60_000;
 
-export type ActivityInboxItemKind = 'repair_status';
+export type ActivityInboxItemKind = 'repair_status' | 'priority_unbox';
 
 export interface ActivityInboxItem {
   id: string;
@@ -37,6 +39,10 @@ export interface ActivityInboxItem {
   nextStatus?: string;
   undone?: boolean;
   undoFailed?: boolean;
+  // priority_unbox
+  sku?: string;
+  trackingNumber?: string;
+  receivingId?: number;
 }
 
 type PushRepairStatusArgs = {
@@ -46,11 +52,18 @@ type PushRepairStatusArgs = {
   nextStatus: string;
 };
 
+type PushPriorityUnboxArgs = {
+  skus: string[];
+  trackingNumber?: string | null;
+  receivingId?: number | null;
+};
+
 interface ActivityInboxContextValue {
   items: ActivityInboxItem[];
   /** Id of inbox row currently executing undo (if any). */
   pendingUndoId: string | null;
   pushRepairStatusChange: (args: PushRepairStatusArgs) => void;
+  pushPriorityUnbox: (args: PushPriorityUnboxArgs) => void;
   undoItem: (id: string) => Promise<void>;
   dismissItem: (id: string) => void;
   clear: () => void;
@@ -107,6 +120,55 @@ export function ActivityInboxProvider({
       setItems((prevItems) => [item, ...prevItems].slice(0, MAX_ITEMS));
     },
     [user],
+  );
+
+  const pushPriorityUnbox = useCallback(
+    ({ skus, trackingNumber, receivingId }: PushPriorityUnboxArgs) => {
+      if (!user) return;
+      const cleanSkus = (skus ?? []).filter(
+        (s) => typeof s === 'string' && s.trim().length > 0,
+      );
+      if (cleanSkus.length === 0) return;
+
+      const now = Date.now();
+      const skuLabel =
+        cleanSkus.length === 1
+          ? cleanSkus[0]
+          : `${cleanSkus[0]} +${cleanSkus.length - 1}`;
+      const item: ActivityInboxItem = {
+        id: newId(),
+        kind: 'priority_unbox',
+        title: `Unbox first · ${truncateLabel(skuLabel, 40)}`,
+        subtitle: trackingNumber
+          ? `On a pending order · ${truncateLabel(trackingNumber, 40)}`
+          : 'On a pending order — unbox this one first',
+        createdAt: now,
+        undoUntil: now, // alerts aren't reversible
+        sku: cleanSkus[0],
+        trackingNumber: trackingNumber ?? undefined,
+        receivingId: receivingId ?? undefined,
+      };
+
+      setItems((prevItems) => [item, ...prevItems].slice(0, MAX_ITEMS));
+    },
+    [user],
+  );
+
+  // Receiving-door scans that hit a pending order are pushed to inbox:{staffId}
+  // server-side; mirror them into the inbox wherever this staff is signed in.
+  const inboxChannel = getInboxChannelName(user?.staffId ?? 'none');
+  useAblyChannel(
+    inboxChannel,
+    'priority_unbox',
+    (msg: { data?: { skus?: unknown; trackingNumber?: unknown; receivingId?: unknown } }) => {
+      const d = msg?.data ?? {};
+      pushPriorityUnbox({
+        skus: Array.isArray(d.skus) ? (d.skus as string[]) : [],
+        trackingNumber: typeof d.trackingNumber === 'string' ? d.trackingNumber : null,
+        receivingId: typeof d.receivingId === 'number' ? d.receivingId : null,
+      });
+    },
+    Boolean(user?.staffId),
   );
 
   const undoItem = useCallback(
@@ -176,6 +238,7 @@ export function ActivityInboxProvider({
       items,
       pendingUndoId,
       pushRepairStatusChange,
+      pushPriorityUnbox,
       undoItem,
       dismissItem,
       clear,
@@ -184,6 +247,7 @@ export function ActivityInboxProvider({
       items,
       pendingUndoId,
       pushRepairStatusChange,
+      pushPriorityUnbox,
       undoItem,
       dismissItem,
       clear,

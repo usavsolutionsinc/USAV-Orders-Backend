@@ -42,7 +42,7 @@ function readViewState(searchParams: URLSearchParams): InventoryViewState {
     return { view: 'pulse', sku: null, bin: null, unit: null, states, conditions };
 }
 
-export type InventoryMode = 'ledger' | 'triage' | 'pulse';
+export type InventoryMode = 'ledger' | 'triage' | 'pulse' | 'replenish';
 
 export interface InventorySidebarUrlState {
     mode: InventoryMode;
@@ -90,7 +90,9 @@ export function useInventoryUrlState() {
     );
 
     const sidebar = useMemo<InventorySidebarUrlState>(() => {
-        const mode = (searchParams.get('mode') as InventoryMode) || 'ledger';
+        const rawMode = searchParams.get('mode');
+        const section = searchParams.get('section');
+        const mode = (section === 'replenish' ? 'replenish' : (rawMode as InventoryMode)) || 'ledger';
         const tab = inventoryTabFromPathname(pathname);
         const rawField = searchParams.get('field');
         const rawBuckets = searchParams.get('filter');
@@ -145,12 +147,25 @@ export function useInventoryUrlState() {
             const sp = new URLSearchParams(searchParams.toString());
 
             if (next.mode !== undefined) {
-                sp.set('mode', next.mode);
+                if (next.mode === 'ledger') sp.delete('mode');
+                else sp.set('mode', next.mode);
+
                 if (next.mode !== sidebar.mode) {
                     sp.delete('field');
                     sp.delete('filter');
                     sp.delete('q');
                     sp.delete('open');
+                    
+                    // If moving to a special mode, push that tab too.
+                    // If moving back to ledger, go to activity.
+                    const nextTab = (next.mode === 'triage' || next.mode === 'pulse') 
+                        ? next.mode 
+                        : 'activity';
+                        
+                    const targetPath = tabBasePath(nextTab as InventoryTab);
+                    const url = sp.toString() ? `${targetPath}?${sp.toString()}` : targetPath;
+                    router.push(url);
+                    return;
                 }
             }
             if (next.q !== undefined) {

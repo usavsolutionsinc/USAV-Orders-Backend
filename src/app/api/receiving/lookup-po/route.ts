@@ -3,10 +3,11 @@ import pool from '@/lib/db';
 import { formatPSTTimestamp } from '@/utils/date';
 import { getCarrier, normalizeTrackingNumber } from '@/lib/tracking-format';
 import { invalidateCacheTags } from '@/lib/cache/upstash-cache';
-import { publishReceivingLogChanged } from '@/lib/realtime/publish';
+import { publishReceivingLogChanged, publishPriorityUnbox } from '@/lib/realtime/publish';
 import { searchPurchaseOrdersByTracking, searchPurchaseReceivesByTracking } from '@/lib/zoho';
 import { importZohoPurchaseOrderToReceiving } from '@/lib/zoho-receiving-sync';
 import { ensureSkuCatalogEntry } from '@/lib/neon/sku-catalog-queries';
+import { findPendingOrderSkuMatches } from '@/lib/receiving/pending-order-match';
 import { registerShipmentPermissive } from '@/lib/shipping/sync-shipment';
 import {
   upsertOpenTrackingException,
@@ -32,6 +33,26 @@ function zohoErrCode(err: unknown): string | null {
 }
 function errMessage(err: unknown): string {
   return err instanceof Error ? err.message : String(err);
+}
+
+/**
+ * Which of this carton's line SKUs are needed by a currently-pending order.
+ * Read-only enhancement — never fails the scan; on error returns [].
+ */
+async function computePendingOrderSkus(
+  organizationId: string,
+  lines: ReadonlyArray<{ sku: string | null; zoho_item_id: string | null }>,
+): Promise<string[]> {
+  try {
+    return await findPendingOrderSkuMatches(
+      organizationId,
+      lines.map((l) => l.sku),
+      lines.map((l) => l.zoho_item_id),
+    );
+  } catch (err) {
+    console.warn('lookup-po: pending-order match failed', errMessage(err));
+    return [];
+  }
 }
 function isZohoNoMatch(err: unknown): boolean {
   const status = zohoErrStatus(err);
@@ -300,6 +321,22 @@ export const POST = withAuth(async (request: NextRequest, ctx) => {
         for (const l of lines) {
           if (l.zoho_purchaseorder_id) poIdsSet.add(l.zoho_purchaseorder_id);
         }
+        const pendingOrderSkus = await computePendingOrderSkus(ctx.organizationId, lines);
+        if (pendingOrderSkus.length > 0) {
+          after(async () => {
+            try {
+              await publishPriorityUnbox({
+                staffId,
+                trackingNumber,
+                receivingId: existingScan.receiving_id,
+                skus: pendingOrderSkus,
+                source: 'receiving.lookup-po',
+              });
+            } catch (err) {
+              console.warn('lookup-po: priority-unbox publish failed', errMessage(err));
+            }
+          });
+        }
         return NextResponse.json({
           success: true,
           receiving_id: existingScan.receiving_id,
@@ -309,6 +346,7 @@ export const POST = withAuth(async (request: NextRequest, ctx) => {
           matched: true,
           po_matched: true,
           po_ids: Array.from(poIdsSet),
+          pending_order_skus: pendingOrderSkus,
           receiving_package,
           lines: lines.map((l) => ({
             id: l.id,
@@ -575,6 +613,23 @@ export const POST = withAuth(async (request: NextRequest, ctx) => {
         }
       });
 
+      const pendingOrderSkus = await computePendingOrderSkus(ctx.organizationId, lines);
+      if (pendingOrderSkus.length > 0) {
+        after(async () => {
+          try {
+            await publishPriorityUnbox({
+              staffId,
+              trackingNumber,
+              receivingId: primaryReceivingId,
+              skus: pendingOrderSkus,
+              source: 'receiving.lookup-po',
+            });
+          } catch (err) {
+            console.warn('lookup-po: priority-unbox publish failed', errMessage(err));
+          }
+        });
+      }
+
       return NextResponse.json({
         success: true,
         receiving_id: primaryReceivingId,
@@ -584,6 +639,7 @@ export const POST = withAuth(async (request: NextRequest, ctx) => {
         matched: true,
         po_matched: true,
         po_ids: poIds,
+        pending_order_skus: pendingOrderSkus,
         // Secondary POs each get their own receiving row but lines from them
         // aren't part of the primary carton view. Surface them so the client
         // can prompt the operator to triage rather than silently miss them.

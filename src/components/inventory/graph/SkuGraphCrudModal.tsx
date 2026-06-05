@@ -1,0 +1,201 @@
+'use client';
+
+import { useState } from 'react';
+import { Search, Trash2, X } from '@/components/Icons';
+import { Button } from '@/design-system/primitives/Button';
+import { cn } from '@/utils/_cn';
+import { useSkuCatalogSearch, type SkuCatalogItem } from '@/hooks/useSkuCatalogSearch';
+import { useSkuChildren, useSkuParents, useSkuRelationshipMutations } from './useSkuGraph';
+import type { RelationshipDirection } from './types';
+
+interface SkuGraphCrudModalProps {
+  focused: { sku_id: number; sku: string; product_title: string };
+  onClose: () => void;
+}
+
+export function SkuGraphCrudModal({ focused, onClose }: SkuGraphCrudModalProps) {
+  const { create, update, remove } = useSkuRelationshipMutations();
+  const { data: parents = [] } = useSkuParents(focused.sku_id);
+  const { data: children = [] } = useSkuChildren(focused.sku_id);
+
+  const [direction, setDirection] = useState<RelationshipDirection>('child');
+  const [picked, setPicked] = useState<SkuCatalogItem | null>(null);
+  const [query, setQuery] = useState('');
+  const [qty, setQty] = useState(1);
+  const [notes, setNotes] = useState('');
+  const [error, setError] = useState<string | null>(null);
+
+  const { data: results = [] } = useSkuCatalogSearch(picked ? '' : query, { limit: 10 });
+
+  const submit = async () => {
+    if (!picked) return;
+    setError(null);
+    const payload =
+      direction === 'child'
+        ? { parentSkuId: focused.sku_id, childSkuId: picked.id, qty, notes: notes || null }
+        : { parentSkuId: picked.id, childSkuId: focused.sku_id, qty, notes: notes || null };
+    try {
+      await create.mutateAsync(payload);
+      setPicked(null);
+      setQuery('');
+      setQty(1);
+      setNotes('');
+    } catch (e: any) {
+      setError(e?.message || 'Failed to add connection');
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={onClose}>
+      <div
+        className="flex max-h-[85vh] w-full max-w-lg flex-col overflow-hidden rounded-2xl bg-white shadow-xl"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <header className="flex items-center justify-between border-b border-gray-100 px-5 py-3.5">
+          <div>
+            <h2 className="text-[14px] font-bold text-gray-900">Edit Connections</h2>
+            <p className="text-[12px] text-gray-500">{focused.sku}</p>
+          </div>
+          <button type="button" onClick={onClose} className="rounded-lg p-1.5 text-gray-400 hover:bg-gray-100">
+            <X className="h-4 w-4" />
+          </button>
+        </header>
+
+        <div className="flex-1 overflow-y-auto px-5 py-4">
+          {/* Add */}
+          <section className="space-y-3">
+            <div className="inline-flex rounded-xl border border-gray-200 bg-gray-50 p-0.5">
+              {(['child', 'parent'] as RelationshipDirection[]).map((d) => (
+                <button
+                  key={d}
+                  type="button"
+                  onClick={() => setDirection(d)}
+                  className={cn(
+                    'rounded-lg px-3 py-1.5 text-[12px] font-medium capitalize transition-colors',
+                    direction === d ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-800',
+                  )}
+                >
+                  {d === 'child' ? 'Add child' : 'Add parent'}
+                </button>
+              ))}
+            </div>
+
+            {picked ? (
+              <div className="flex items-center justify-between rounded-xl border border-blue-200 bg-blue-50 px-3 py-2">
+                <span className="min-w-0">
+                  <span className="block truncate text-[13px] font-semibold text-gray-900">{picked.sku}</span>
+                  <span className="block truncate text-[11px] text-gray-500">{picked.product_title}</span>
+                </span>
+                <button type="button" onClick={() => setPicked(null)} className="text-[11px] text-blue-700 underline">
+                  Change
+                </button>
+              </div>
+            ) : (
+              <div className="relative">
+                <Search className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+                <input
+                  value={query}
+                  onChange={(e) => setQuery(e.target.value)}
+                  placeholder={`Search SKU to add as ${direction}…`}
+                  className="h-9 w-full rounded-xl border border-gray-200 bg-gray-50 pl-8 pr-3 text-[13px] outline-none focus:border-blue-400 focus:bg-white"
+                />
+                {query.trim().length > 0 && results.length > 0 && (
+                  <ul className="absolute z-10 mt-1 max-h-56 w-full overflow-y-auto rounded-xl border border-gray-200 bg-white py-1 shadow-lg">
+                    {results
+                      .filter((r) => r.id !== focused.sku_id)
+                      .map((r) => (
+                        <li key={r.id}>
+                          <button
+                            type="button"
+                            onClick={() => setPicked(r)}
+                            className="flex w-full flex-col items-start px-3 py-1.5 text-left hover:bg-gray-50"
+                          >
+                            <span className="text-[13px] font-semibold text-gray-900">{r.sku}</span>
+                            <span className="line-clamp-1 text-[11px] text-gray-500">{r.product_title}</span>
+                          </button>
+                        </li>
+                      ))}
+                  </ul>
+                )}
+              </div>
+            )}
+
+            <div className="flex items-center gap-3">
+              <label className="flex items-center gap-2 text-[12px] text-gray-600">
+                Qty
+                <input
+                  type="number"
+                  min={1}
+                  value={qty}
+                  onChange={(e) => setQty(Math.max(1, Number(e.target.value) || 1))}
+                  className="h-8 w-16 rounded-lg border border-gray-200 px-2 text-[13px] tabular-nums outline-none focus:border-blue-400"
+                />
+              </label>
+              <input
+                value={notes}
+                onChange={(e) => setNotes(e.target.value)}
+                placeholder="Notes (optional)"
+                className="h-8 flex-1 rounded-lg border border-gray-200 px-2.5 text-[13px] outline-none focus:border-blue-400"
+              />
+            </div>
+
+            {error && <p className="text-[12px] text-rose-600">{error}</p>}
+
+            <Button size="sm" variant="primary" onClick={submit} disabled={!picked || create.isPending} loading={create.isPending}>
+              Add {direction}
+            </Button>
+          </section>
+
+          {/* Existing */}
+          <section className="mt-6 space-y-4">
+            {[
+              { title: 'Parents', items: parents },
+              { title: 'Children', items: children },
+            ].map(({ title, items }) => (
+              <div key={title}>
+                <h3 className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-gray-400">{title}</h3>
+                {items.length === 0 ? (
+                  <p className="text-[12px] text-gray-400">None</p>
+                ) : (
+                  <ul className="space-y-1">
+                    {items.map((it) => (
+                      <li
+                        key={it.relationship_id}
+                        className="flex items-center justify-between rounded-lg border border-gray-100 px-2.5 py-1.5"
+                      >
+                        <span className="min-w-0">
+                          <span className="block truncate text-[12px] font-medium text-gray-900">{it.sku}</span>
+                          <span className="block truncate text-[11px] text-gray-500">{it.product_title}</span>
+                        </span>
+                        <div className="flex items-center gap-2">
+                          <input
+                            type="number"
+                            min={1}
+                            defaultValue={it.qty}
+                            onBlur={(e) => {
+                              const next = Math.max(1, Number(e.target.value) || 1);
+                              if (next !== it.qty) update.mutate({ id: it.relationship_id, qty: next });
+                            }}
+                            className="h-7 w-14 rounded-md border border-gray-200 px-1.5 text-[12px] tabular-nums outline-none focus:border-blue-400"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => remove.mutate(it.relationship_id)}
+                            className="rounded-md p-1 text-gray-400 hover:bg-rose-50 hover:text-rose-600"
+                            aria-label="Remove connection"
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </button>
+                        </div>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            ))}
+          </section>
+        </div>
+      </div>
+    </div>
+  );
+}

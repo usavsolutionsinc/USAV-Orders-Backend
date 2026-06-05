@@ -12,9 +12,12 @@ import { ReplenishWorkspace } from '@/components/replenish/ReplenishWorkspace';
 import { PageHeader } from '@/components/ui/pane-header';
 import { cn } from '@/utils/_cn';
 import { receivingHeaderHairlineClass } from '@/components/layout/header-shell';
+import { TriageWorkspace } from './TriageWorkspace';
+import { PulseWorkspace } from './PulseWorkspace';
 
 export function InventoryShell() {
     const { state, sidebar, clearAll } = useInventoryUrlState();
+    const { mode } = sidebar;
     const searchParams = useSearchParams();
 
     // `?section=replenish` swaps the whole right pane over to the replenish
@@ -65,7 +68,11 @@ export function InventoryShell() {
             />
 
             <div className="mx-auto w-full max-w-5xl flex-1 overflow-y-auto">
-                {state.view === 'by-sku' && state.sku ? (
+                {mode === 'triage' ? (
+                    <TriageWorkspace selectedId={sidebar.open} />
+                ) : mode === 'pulse' ? (
+                    <PulseWorkspace unitId={sidebar.open} />
+                ) : state.view === 'by-sku' && state.sku ? (
                     <BySkuView sku={state.sku} />
                 ) : state.view === 'by-bin' && state.bin ? (
                     <ByBinView barcode={state.bin} />

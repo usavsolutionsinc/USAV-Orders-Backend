@@ -18,6 +18,11 @@ const DELIVERY_STATE_ICON = {
   DELIVERED_UNOPENED: { Icon: Inbox, tone: 'text-rose-600', label: 'Delivered but not scanned in yet' },
   ARRIVING_TODAY: { Icon: Truck, tone: 'text-amber-600', label: 'Arriving today' },
   IN_TRANSIT: { Icon: MapPin, tone: 'text-blue-600', label: 'In transit' },
+  TRACKING_UNAVAILABLE: {
+    Icon: AlertTriangle,
+    tone: 'text-violet-600',
+    label: 'Carrier tracking unavailable (access blocked) — delivered status unobtainable',
+  },
 } as const;
 
 type KnownState = keyof typeof DELIVERY_STATE_ICON;

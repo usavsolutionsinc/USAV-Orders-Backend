@@ -27,6 +27,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 import pool from '@/lib/db';
 import { withAuth } from '@/lib/auth/withAuth';
+import {
+  getDeliveredUnscannedCount,
+  getDeliveredUnscannedByCarrier,
+  INBOUND_SHIPMENT_PREDICATE,
+} from '@/lib/receiving/delivered-unscanned';
 
 export const dynamic = 'force-dynamic';
 
@@ -39,6 +44,7 @@ export const GET = withAuth(async (_request: NextRequest) => {
       stalled: number;
       in_transit: number;
       pending_carrier: number;
+      tracking_unavailable: number;
       awaiting_tracking: number;
       expected_today: number;
     }>(
@@ -68,8 +74,13 @@ export const GET = withAuth(async (_request: NextRequest) => {
          )::int AS in_transit,
          COUNT(DISTINCT rl.zoho_purchaseorder_id) FILTER (
            WHERE stn.id IS NOT NULL
+             AND stn.tracking_blocked_reason IS NULL
              AND (stn.latest_status_category IS NULL OR stn.latest_status_category = 'UNKNOWN')
          )::int AS pending_carrier,
+         COUNT(DISTINCT rl.zoho_purchaseorder_id) FILTER (
+           WHERE stn.tracking_blocked_reason IS NOT NULL
+             AND COALESCE(stn.is_delivered, false) = false
+         )::int AS tracking_unavailable,
          COUNT(DISTINCT rl.zoho_purchaseorder_id) FILTER (
            WHERE stn.id IS NULL
          )::int AS awaiting_tracking,
@@ -97,42 +108,52 @@ export const GET = withAuth(async (_request: NextRequest) => {
       stalled: 0,
       in_transit: 0,
       pending_carrier: 0,
+      tracking_unavailable: 0,
       awaiting_tracking: 0,
       expected_today: 0,
     };
 
     // `delivered_unopened` is shipment-anchored, not PO-line-anchored: the
     // packages that matter (carrier-delivered, no dock scan yet) are mostly
-    // shipments registered from a PO reference# that never got a receiving
-    // row, so the PO-line FILTER above misses them and always reads ~0. Scope
-    // to INBOUND only (has a receiving row OR a receiving-origin source_system)
-    // so outbound order/packer tracking can't leak in. Deduped by normalized
-    // tracking#, windowed to stay actionable. Mirrors the list returned by
-    // /api/receiving-lines/incoming/delivered-unscanned (same predicate) so the
-    // tile count and that section always agree.
-    const deliveredUnopened = await pool.query<{ n: number }>(
-      `SELECT COUNT(*)::int AS n FROM (
-         SELECT DISTINCT ON (stn.tracking_number_normalized) stn.id
-           FROM shipping_tracking_numbers stn
-          WHERE stn.is_delivered = true
-            AND stn.delivered_at > NOW() - interval '30 days'
-            AND (
-              EXISTS (SELECT 1 FROM receiving r WHERE r.shipment_id = stn.id)
-              OR stn.source_system IN (
-                'zoho_po','receiving_lookup_po','receiving_lines_patch','receiving.link-po','receiving_entry'
-              )
-            )
-            AND NOT EXISTS (
-              SELECT 1 FROM receiving r2
-              JOIN receiving_scans rs ON rs.receiving_id = r2.id
-              WHERE r2.shipment_id = stn.id
-            )
-          ORDER BY stn.tracking_number_normalized, stn.delivered_at DESC
-       ) d`,
-    );
-    row.delivered_unopened = Number(deliveredUnopened.rows[0]?.n ?? 0);
+    // shipments registered from a PO reference# that never got a receiving row,
+    // so the PO-line FILTER above misses them and always reads ~0. The canonical
+    // count lives in one helper (Phase B) shared with the list endpoint and the
+    // main delivery_state, so the tile count, the list length, and the row
+    // badges agree by construction.
+    row.delivered_unopened = await getDeliveredUnscannedCount(pool);
 
-    return NextResponse.json({ success: true, ...row });
+    // E4 per-carrier breakdown — "USPS: 12 unavailable, FedEx: 3 delivered-
+    // unscanned". delivered_unscanned reuses the deduped canonical base (sums to
+    // the tile); blocked/in_transit are per-STN over the inbound predicate.
+    const [duByCarrier, carrierAgg] = await Promise.all([
+      getDeliveredUnscannedByCarrier(pool),
+      pool.query<{ carrier: string; tracking_unavailable: number; in_transit: number }>(
+        `SELECT stn.carrier,
+                COUNT(*) FILTER (
+                  WHERE stn.tracking_blocked_reason IS NOT NULL
+                    AND COALESCE(stn.is_delivered, false) = false
+                )::int AS tracking_unavailable,
+                COUNT(*) FILTER (
+                  WHERE COALESCE(stn.is_terminal, false) = false
+                    AND stn.latest_status_category IN ('IN_TRANSIT','ACCEPTED','LABEL_CREATED')
+                )::int AS in_transit
+           FROM shipping_tracking_numbers stn
+          WHERE stn.carrier IN ('UPS','USPS','FEDEX')
+            AND ${INBOUND_SHIPMENT_PREDICATE}
+          GROUP BY stn.carrier`,
+      ),
+    ]);
+
+    const carriers: Array<'UPS' | 'USPS' | 'FEDEX'> = ['UPS', 'USPS', 'FEDEX'];
+    const aggByCarrier = new Map(carrierAgg.rows.map((r) => [r.carrier, r]));
+    const by_carrier = carriers.map((carrier) => ({
+      carrier,
+      delivered_unscanned: duByCarrier[carrier] ?? 0,
+      tracking_unavailable: aggByCarrier.get(carrier)?.tracking_unavailable ?? 0,
+      in_transit: aggByCarrier.get(carrier)?.in_transit ?? 0,
+    }));
+
+    return NextResponse.json({ success: true, ...row, by_carrier });
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Failed to compute summary';
     console.error('receiving-lines/incoming/summary failed:', error);

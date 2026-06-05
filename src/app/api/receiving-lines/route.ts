@@ -118,6 +118,14 @@ export const GET = withAuth(async (request: NextRequest) => {
           : sortRaw === 'recently_added'
             ? 'recently_added'
             : 'zoho_newest';
+    // Sort axis for the receiving-history feed (view=recent/all/activity).
+    // Lets the history UI sort by scanned-at (door) or unboxed-at.
+    const historySort: 'scanned_newest' | 'scanned_oldest' | 'unboxed_newest' =
+      sortRaw === 'scanned_oldest'
+        ? 'scanned_oldest'
+        : sortRaw === 'unboxed_newest'
+          ? 'unboxed_newest'
+          : 'scanned_newest';
     // Shared contract with the client (src/lib/receiving/receiving-views.ts) so
     // the supported view set can't drift between the two ends. `null` = no/
     // unknown view → fall back to week-range scoping below.
@@ -159,12 +167,23 @@ export const GET = withAuth(async (request: NextRequest) => {
          -- Soft JOIN: direct FK when set, else PO#-based fallback. Partial
          -- unique index ux_receiving_zoho_po_matched (source='zoho_po') ensures
          -- at most one PO-matched receiving row per PO, so no dedup needed.
-         LEFT JOIN receiving r ON (
-              r.id = rl.receiving_id
-           OR (rl.receiving_id IS NULL
-               AND r.source = 'zoho_po'
-               AND r.zoho_purchaseorder_id = rl.zoho_purchaseorder_id)
-         )
+         -- D1 wrong-shipment guard: a direct receiving FK, else a PO#-based
+         -- fallback. When a line has no FK and its PO has multiple zoho_po
+         -- receiving rows, the old ON-clause matched them all (row
+         -- multiplication / arbitrary shipment). LATERAL + LIMIT 1 picks exactly
+         -- one, deterministically: direct FK wins, else prefer a row that
+         -- actually carries a shipment, else the newest.
+         LEFT JOIN LATERAL (
+           SELECT r.* FROM receiving r
+            WHERE r.id = rl.receiving_id
+               OR (rl.receiving_id IS NULL
+                   AND r.source = 'zoho_po'
+                   AND r.zoho_purchaseorder_id = rl.zoho_purchaseorder_id)
+            ORDER BY (r.id = rl.receiving_id) DESC,
+                     (r.shipment_id IS NOT NULL) DESC,
+                     r.id DESC
+            LIMIT 1
+         ) r ON TRUE
          LEFT JOIN LATERAL (
             SELECT MAX(rs.scanned_at) AS last_scan
             FROM receiving_scans rs
@@ -536,7 +555,11 @@ export const GET = withAuth(async (request: NextRequest) => {
       view === 'incoming'
         ? incomingOrderBy
         : view === 'recent' || view === 'all' || view === 'activity'
-          ? `ORDER BY COALESCE(rs_agg.last_scan::text, r.received_at::text, rl.created_at::text) DESC, rl.id DESC`
+          ? (historySort === 'unboxed_newest'
+              ? `ORDER BY r.unboxed_at::text DESC NULLS LAST, rl.id DESC`
+              : historySort === 'scanned_oldest'
+                ? `ORDER BY COALESCE(rs_agg.last_scan::text, r.received_at::text, rl.created_at::text) ASC, rl.id ASC`
+                : `ORDER BY COALESCE(rs_agg.last_scan::text, r.received_at::text, rl.created_at::text) DESC, rl.id DESC`)
           : view === 'testing'
             // Sort the "tested" feed by the SAME verdict time the rail renders
             // (tr_agg.tested_at) so the timeline reads monotonically. Ordering by
@@ -612,6 +635,9 @@ export const GET = withAuth(async (request: NextRequest) => {
                              AND stn.latest_event_at < (NOW() - interval '72 hours'))
                        )
                     THEN 'STALLED'
+                  WHEN stn.tracking_blocked_reason IS NOT NULL
+                       AND COALESCE(stn.is_delivered, false) = false
+                    THEN 'TRACKING_UNAVAILABLE'
                   WHEN stn.latest_status_category IN ('IN_TRANSIT','ACCEPTED','LABEL_CREATED')
                     THEN 'IN_TRANSIT'
                   WHEN stn.id IS NULL
@@ -620,6 +646,7 @@ export const GET = withAuth(async (request: NextRequest) => {
                     THEN 'PENDING_CARRIER'
                   ELSE 'UNKNOWN'
                 END AS delivery_state,
+                stn.tracking_blocked_reason          AS shipment_blocked_reason,
                 stn.has_exception                    AS shipment_has_exception,
                 stn.latest_event_at::text            AS shipment_latest_event_at,
                 stn.is_terminal                      AS shipment_is_terminal,
@@ -638,6 +665,14 @@ export const GET = withAuth(async (request: NextRequest) => {
                 r.receiving_tracking_number,
                 r.carrier,
                 r.received_at::text          AS receiving_received_at,
+                r.unboxed_at::text           AS receiving_unboxed_at,
+                r.received_by                AS receiving_received_by,
+                r.unboxed_by                 AS receiving_unboxed_by,
+                staff_rb.name                AS received_by_name,
+                staff_ub.name                AS unboxed_by_name,
+                scan_first.scanned_at::text  AS first_scanned_at,
+                scan_first.scanned_by        AS first_scanned_by,
+                staff_sb.name                AS scanned_by_name,
                 r.source                     AS receiving_source,
                 r.source_platform            AS receiving_source_platform,
                 r.zoho_purchaseorder_number  AS receiving_zoho_purchaseorder_number,
@@ -659,14 +694,35 @@ export const GET = withAuth(async (request: NextRequest) => {
                 ${incomingExtrasSelect}
          FROM receiving_lines rl
          -- Soft JOIN: direct FK when set, else PO#-based fallback (see note above).
-         LEFT JOIN receiving r ON (
-              r.id = rl.receiving_id
-           OR (rl.receiving_id IS NULL
-               AND r.source = 'zoho_po'
-               AND r.zoho_purchaseorder_id = rl.zoho_purchaseorder_id)
-         )
+         -- D1 wrong-shipment guard: a direct receiving FK, else a PO#-based
+         -- fallback. When a line has no FK and its PO has multiple zoho_po
+         -- receiving rows, the old ON-clause matched them all (row
+         -- multiplication / arbitrary shipment). LATERAL + LIMIT 1 picks exactly
+         -- one, deterministically: direct FK wins, else prefer a row that
+         -- actually carries a shipment, else the newest.
+         LEFT JOIN LATERAL (
+           SELECT r.* FROM receiving r
+            WHERE r.id = rl.receiving_id
+               OR (rl.receiving_id IS NULL
+                   AND r.source = 'zoho_po'
+                   AND r.zoho_purchaseorder_id = rl.zoho_purchaseorder_id)
+            ORDER BY (r.id = rl.receiving_id) DESC,
+                     (r.shipment_id IS NOT NULL) DESC,
+                     r.id DESC
+            LIMIT 1
+         ) r ON TRUE
          LEFT JOIN shipping_tracking_numbers stn ON stn.id = r.shipment_id
          LEFT JOIN sku_catalog sc                ON sc.sku = rl.sku
+         LEFT JOIN staff staff_rb                ON staff_rb.id = r.received_by
+         LEFT JOIN staff staff_ub                ON staff_ub.id = r.unboxed_by
+         LEFT JOIN LATERAL (
+           SELECT rs.scanned_at, rs.scanned_by
+           FROM receiving_scans rs
+           WHERE rs.receiving_id = r.id
+           ORDER BY rs.scanned_at ASC NULLS LAST, rs.id ASC
+           LIMIT 1
+         ) scan_first ON TRUE
+         LEFT JOIN staff staff_sb                ON staff_sb.id = scan_first.scanned_by
          ${recentScansJoin}
          ${testedAggJoin}
          ${incomingExtrasJoin}
@@ -677,12 +733,23 @@ export const GET = withAuth(async (request: NextRequest) => {
       ),
       pool.query(
         `SELECT COUNT(*) AS total FROM receiving_lines rl
-         LEFT JOIN receiving r ON (
-              r.id = rl.receiving_id
-           OR (rl.receiving_id IS NULL
-               AND r.source = 'zoho_po'
-               AND r.zoho_purchaseorder_id = rl.zoho_purchaseorder_id)
-         )
+         -- D1 wrong-shipment guard: a direct receiving FK, else a PO#-based
+         -- fallback. When a line has no FK and its PO has multiple zoho_po
+         -- receiving rows, the old ON-clause matched them all (row
+         -- multiplication / arbitrary shipment). LATERAL + LIMIT 1 picks exactly
+         -- one, deterministically: direct FK wins, else prefer a row that
+         -- actually carries a shipment, else the newest.
+         LEFT JOIN LATERAL (
+           SELECT r.* FROM receiving r
+            WHERE r.id = rl.receiving_id
+               OR (rl.receiving_id IS NULL
+                   AND r.source = 'zoho_po'
+                   AND r.zoho_purchaseorder_id = rl.zoho_purchaseorder_id)
+            ORDER BY (r.id = rl.receiving_id) DESC,
+                     (r.shipment_id IS NOT NULL) DESC,
+                     r.id DESC
+            LIMIT 1
+         ) r ON TRUE
          LEFT JOIN shipping_tracking_numbers stn ON stn.id = r.shipment_id
          ${incomingExtrasJoin}
          ${where}`,
@@ -1322,6 +1389,16 @@ function normalizeRow(row: Record<string, unknown>) {
     shipment_latest_event_at: (row.shipment_latest_event_at as string | null) ?? null,
     shipment_is_terminal:     row.shipment_is_terminal == null ? null : !!row.shipment_is_terminal,
     receiving_type:            (row.receiving_type as string | null) ?? 'PO',
+    // Door-scan vs unbox split (history columns). received_at/scanned_at are the
+    // "arrived at the door" event; unboxed_at is when items were extracted.
+    // *_by_name resolve the staff who performed each (null on views that omit
+    // the joins / unmatched stubs).
+    received_at:              (row.receiving_received_at as string | null) ?? null,
+    received_by_name:         (row.received_by_name as string | null) ?? null,
+    unboxed_at:               (row.receiving_unboxed_at as string | null) ?? null,
+    unboxed_by_name:          (row.unboxed_by_name as string | null) ?? null,
+    scanned_at:               (row.first_scanned_at as string | null) ?? null,
+    scanned_by_name:          (row.scanned_by_name as string | null) ?? null,
     created_at:               (row.created_at as string | null) ?? null,
     // Most-recent activity timestamp matching the server's sort order. For
     // view=testing this leads with tested_at (the verdict time the feed is

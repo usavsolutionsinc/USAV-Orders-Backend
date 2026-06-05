@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { toast } from '@/lib/toast';
-import { Loader2, X } from '@/components/Icons';
+import { Loader2, Sparkles, X } from '@/components/Icons';
 import { RightPaneOverlay } from '@/components/ui/RightPaneOverlay';
 import {
   CLAIM_TYPE_OPTIONS,
@@ -49,6 +49,8 @@ export function ReceivingClaimModal({ open, row, onClose, onTicketCreated }: Pro
   const [severity, setSeverity] = useState<ClaimSeverity>('medium');
   const [reason, setReason] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const [drafting, setDrafting] = useState(false);
+  const [classifying, setClassifying] = useState(false);
   const [draftBody, setDraftBody] = useState<string | null>(null);
   // Photos to attach to the Zendesk ticket as real files (default: none — pick
   // the ones to send; all PO photos are archived to the ticket folder regardless).
@@ -174,6 +176,78 @@ export function ReceivingClaimModal({ open, row, onClose, onTicketCreated }: Pro
     () => CLAIM_SEVERITY_OPTIONS.map((opt) => ({ id: opt.value, label: opt.label })),
     [],
   );
+
+  // B2: classify the operator's note into a claim type + severity and pre-fill
+  // the pickers. Suggestion only — the operator can still change either.
+  const runClassify = async () => {
+    const note = reason.trim();
+    if (classifying || !note) return;
+    setClassifying(true);
+    try {
+      const res = await fetch('/api/receiving/zendesk-claim/classify', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ reason: note }),
+      });
+      const data = await res.json().catch(() => null);
+      if (!res.ok || !data?.success) {
+        toast.error(data?.error || 'Could not suggest a type');
+        return;
+      }
+      setClaimType(data.claimType as ClaimType);
+      setSeverity(data.severity as ClaimSeverity);
+      const typeLabel =
+        CLAIM_TYPE_OPTIONS.find((o) => o.value === data.claimType)?.label ?? data.claimType;
+      const sevLabel =
+        CLAIM_SEVERITY_OPTIONS.find((o) => o.value === data.severity)?.label ?? data.severity;
+      toast.success(`AI: ${typeLabel} · ${sevLabel} (${data.confidence} confidence)`);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Network error');
+    } finally {
+      setClassifying(false);
+    }
+  };
+
+  // A1: ask the local Hermes model to rewrite the static template into a
+  // clearer, professional subject + body. The draft lands in the same editable
+  // fields — the operator still reviews and edits before the ticket is filed.
+  const runAiDraft = async () => {
+    if (drafting || !row.receiving_id) return;
+    setDrafting(true);
+    try {
+      const res = await fetch('/api/receiving/zendesk-claim/draft', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          receivingId: row.receiving_id,
+          lineId: row.id,
+          claimType,
+          severity,
+          reason: reason.trim(),
+        }),
+      });
+      const data = await res.json().catch(() => null);
+      if (!res.ok || !data?.success) {
+        toast.error(data?.error || 'Could not draft with AI');
+        return;
+      }
+      // Mark touched BEFORE writing so the debounced preview effect won't
+      // overwrite the AI draft with the static template.
+      subjectTouched.current = true;
+      descriptionTouched.current = true;
+      if (typeof data.subject === 'string') setSubject(data.subject);
+      if (typeof data.description === 'string') setDescription(data.description);
+      if (data.degraded) {
+        toast.warning('AI draft dropped a reference — kept the template. Edit as needed.');
+      } else {
+        toast.success('Drafted with AI — review and edit before sending');
+      }
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Network error');
+    } finally {
+      setDrafting(false);
+    }
+  };
 
   const submit = async () => {
     if (submitting || !row.receiving_id) return;
@@ -338,12 +412,28 @@ export function ReceivingClaimModal({ open, row, onClose, onTicketCreated }: Pro
               </div>
 
               <div>
-                <label
-                  htmlFor="claim-reason"
-                  className="mb-1.5 block text-micro font-black uppercase tracking-[0.14em] text-gray-500"
-                >
-                  What happened?
-                </label>
+                <div className="mb-1.5 flex items-center justify-between gap-2">
+                  <label
+                    htmlFor="claim-reason"
+                    className="text-micro font-black uppercase tracking-[0.14em] text-gray-500"
+                  >
+                    What happened?
+                  </label>
+                  <button
+                    type="button"
+                    onClick={runClassify}
+                    disabled={classifying || !reason.trim()}
+                    title="Suggest the claim type & severity from your note (local AI). You can still change them."
+                    className="inline-flex items-center gap-1 rounded-md border border-purple-200 bg-purple-50 px-2 py-0.5 text-micro font-bold uppercase tracking-wider text-purple-700 transition-colors hover:bg-purple-100 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    {classifying ? (
+                      <Loader2 className="h-3 w-3 animate-spin" />
+                    ) : (
+                      <Sparkles className="h-3 w-3" />
+                    )}
+                    Suggest type
+                  </button>
+                </div>
                 <textarea
                   id="claim-reason"
                   value={reason}
@@ -424,20 +514,36 @@ export function ReceivingClaimModal({ open, row, onClose, onTicketCreated }: Pro
                   <p className="text-micro font-black uppercase tracking-[0.14em] text-gray-500">
                     Ticket preview {previewLoading ? '(updating…)' : '(editable)'}
                   </p>
-                  {(subjectTouched.current || descriptionTouched.current) ? (
+                  <div className="flex items-center gap-2">
                     <button
                       type="button"
-                      onClick={() => {
-                        subjectTouched.current = false;
-                        descriptionTouched.current = false;
-                        // Nudge the preview effect to re-run with current inputs.
-                        setReason((r) => r);
-                      }}
-                      className="text-micro font-bold uppercase tracking-wider text-gray-500 hover:text-gray-900"
+                      onClick={runAiDraft}
+                      disabled={drafting || previewLoading || submitting || !row.receiving_id}
+                      title="Rewrite the subject and body into a clearer, professional ticket (local AI). You can still edit before sending."
+                      className="inline-flex items-center gap-1 rounded-md border border-purple-200 bg-purple-50 px-2 py-0.5 text-micro font-bold uppercase tracking-wider text-purple-700 transition-colors hover:bg-purple-100 disabled:cursor-not-allowed disabled:opacity-50"
                     >
-                      Reset to template
+                      {drafting ? (
+                        <Loader2 className="h-3 w-3 animate-spin" />
+                      ) : (
+                        <Sparkles className="h-3 w-3" />
+                      )}
+                      Draft with AI
                     </button>
-                  ) : null}
+                    {(subjectTouched.current || descriptionTouched.current) ? (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          subjectTouched.current = false;
+                          descriptionTouched.current = false;
+                          // Nudge the preview effect to re-run with current inputs.
+                          setReason((r) => r);
+                        }}
+                        className="text-micro font-bold uppercase tracking-wider text-gray-500 hover:text-gray-900"
+                      >
+                        Reset to template
+                      </button>
+                    ) : null}
+                  </div>
                 </div>
 
                 <label

@@ -18,7 +18,7 @@
  */
 
 import { useRef, useState } from 'react';
-import { Database, Zap, Bell, Sparkles, Search, List, Package, MapPin } from '@/components/Icons';
+import { Database, Zap, Bell, Sparkles, Search, List, Package, MapPin, Barcode } from '@/components/Icons';
 import {
   ButtonsSection,
   InputsSection,
@@ -32,6 +32,7 @@ import {
 import { ConditionPickerSection } from './_gallery/condition-picker-section';
 import { WarehouseFlowSection } from './_gallery/warehouse-flow-section';
 import { FilterBarSection } from './_gallery/filter-bar-section';
+import { SerialMatchSection } from './_gallery/serial-match-section';
 
 type SectionDef = {
   id: string;
@@ -51,6 +52,7 @@ const SECTIONS: SectionDef[] = [
   { id: 'warehouse-flow', index: '05', label: 'Warehouse floor plan', icon: MapPin, blurb: 'The bin grid as a true floor-plan map on @xyflow/react. Drag bins to match the physical floor, select to resize (expand/shrink), pan/zoom with built-in Controls + MiniMap, and flip Trace to draw graph edges from a bin to every other bin holding the same SKU. The spatial, "find & follow inventory" view the flat HTML table can\'t give you — and the basis for the real /warehouse map mode (see docs/warehouse-map-react-flow-plan.md).', render: (d) => <WarehouseFlowSection density={d} /> },
   { id: 'feedback', index: '06', label: 'Feedback', icon: Bell, blurb: 'A polished empty state and a consistent inline error/warning banner.', render: () => <FeedbackSection /> },
   { id: 'motion', index: '07', label: 'Motion lab', icon: Sparkles, blurb: 'Shared-element expand, spring press, and stagger reveals — the highest-impact "2026" upgrades, all from your existing Framer Motion presets.', render: () => <MotionSection /> },
+  { id: 'serial-match', index: '08', label: 'Serial match check', icon: Barcode, blurb: 'The RETURN receiving auto-lookup. When a line\'s type is Return, committing a serial (Enter / scan) checks it against serial_units and shows "Match found" — with the unit\'s status, SKU, and bin, plus a "Returned item" flag when it was previously shipped — or "No match found". Scan one of the seeded serials to compare states.', render: () => <SerialMatchSection /> },
 ];
 
 const DENSITIES: Density[] = ['compact', 'cozy', 'comfortable'];

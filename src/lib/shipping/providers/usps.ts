@@ -240,7 +240,14 @@ export async function trackByNumber(trackingNumber: string): Promise<CarrierTrac
   if (!res.ok) {
     const body = await res.text().catch(() => '');
     throw Object.assign(new Error(`USPS track failed: ${res.status} ${body}`), {
-      code: res.status === 404 ? 'NOT_FOUND' : 'HTTP_ERROR',
+      // 403 = USPS "Tracking API Access Controls" gate (IP Agreement pending);
+      // 401 after a token refresh = persistent auth failure. Both are access
+      // blocks, not transient — surfaced as a distinct code so the shipment is
+      // marked TRACKING_UNAVAILABLE rather than retried into the quota wall.
+      code: res.status === 404 ? 'NOT_FOUND'
+          : res.status === 403 ? 'ACCESS_CONTROL'
+          : res.status === 401 ? 'AUTH_ERROR'
+          : 'HTTP_ERROR',
     });
   }
 

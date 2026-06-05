@@ -43,6 +43,11 @@ export async function runUpsSubscribeJob(
   const { limit } = normalizeUpsSubscribePayload(payload);
   const start = Date.now();
 
+  // No push without a configured callback — skip; polling is the free path.
+  if (!process.env.UPS_WEBHOOK_CALLBACK_URL) {
+    return { ok: true, completed: 0, failed: 0, durationMs: Date.now() - start };
+  }
+
   let completed = 0;
   let failed = 0;
 

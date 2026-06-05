@@ -243,6 +243,16 @@ interface SkuPairingDetailProps {
   onPaired: () => void;
 }
 
+interface SkuSuggestion {
+  id: number;
+  sku: string;
+  product_title: string;
+  category: string | null;
+  image_url: string | null;
+  confidence: number;
+  reason: string;
+}
+
 export function SkuPairingDetail({ item, onClose, onPaired }: SkuPairingDetailProps) {
   const [searchQuery, setSearchQuery] = useState('');
   const [results, setResults] = useState<SkuCatalogResult[]>([]);
@@ -251,7 +261,24 @@ export function SkuPairingDetail({ item, onClose, onPaired }: SkuPairingDetailPr
   const [pairing, setPairing] = useState(false);
   const [pairResult, setPairResult] = useState<{ ordersUpdated: number; manualsUpdated: number } | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [suggestions, setSuggestions] = useState<SkuSuggestion[]>([]);
   const searchTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Suggested catalog matches for this unpaired item (C5). Scored by title
+  // similarity server-side; the operator clicks one to select it, then confirms
+  // with the existing Pair button — no pairing is written without confirmation.
+  useEffect(() => {
+    const title = (item.product_title || '').trim();
+    if (!title) { setSuggestions([]); return; }
+    const ctrl = new AbortController();
+    fetch(`/api/sku-catalog/suggest-for-item?title=${encodeURIComponent(title)}&limit=5`, {
+      signal: ctrl.signal,
+    })
+      .then((r) => r.json().catch(() => null))
+      .then((d) => { if (d?.success) setSuggestions(d.suggestions || []); })
+      .catch(() => { /* suggestions are best-effort; manual search still works */ });
+    return () => ctrl.abort();
+  }, [item.item_number, item.product_title]);
 
   // Auto-search with product title
   useEffect(() => {
@@ -363,6 +390,65 @@ export function SkuPairingDetail({ item, onClose, onPaired }: SkuPairingDetailPr
           </button>
         </div>
       </div>
+
+      {/* Suggested matches (C5) — scored by title similarity; click to select,
+          then confirm with the Pair button below. */}
+      {suggestions.length > 0 && (
+        <div className="shrink-0 border-b border-gray-100 bg-purple-50/30 px-4 py-3">
+          <p className={`${tableHeader} mb-2 text-purple-600`}>Suggested matches</p>
+          <div className="space-y-1.5">
+            {suggestions.map((s) => {
+              const isSel = selectedCatalog?.id === s.id;
+              const dot =
+                s.confidence >= 80 ? 'bg-emerald-500'
+                : s.confidence >= 60 ? 'bg-amber-500'
+                : 'bg-gray-400';
+              return (
+                <button
+                  key={s.id}
+                  type="button"
+                  title={s.reason}
+                  onClick={() =>
+                    setSelectedCatalog(
+                      isSel
+                        ? null
+                        : {
+                            id: s.id,
+                            sku: s.sku,
+                            product_title: s.product_title,
+                            category: s.category,
+                            upc: null,
+                            image_url: s.image_url,
+                            platform_ids: [],
+                          },
+                    )
+                  }
+                  className={`flex w-full items-center gap-2 rounded-lg border px-2.5 py-2 text-left transition-colors ${
+                    isSel
+                      ? 'border-emerald-300 bg-emerald-50'
+                      : 'border-purple-100 bg-white hover:bg-purple-50'
+                  }`}
+                >
+                  {isSel ? (
+                    <Check className="h-3.5 w-3.5 shrink-0 text-emerald-600" />
+                  ) : (
+                    <span className={`h-2 w-2 shrink-0 rounded-full ${dot}`} />
+                  )}
+                  <div className="min-w-0 flex-1">
+                    <span className="text-label font-black text-gray-900">{s.sku}</span>
+                    <p className="truncate text-micro font-semibold text-gray-500">
+                      {s.product_title}
+                    </p>
+                  </div>
+                  <span className="shrink-0 font-mono text-caption font-black tabular-nums text-gray-700">
+                    {s.confidence}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       {/* Search Zoho products */}
       <div className="shrink-0 border-b border-gray-100 px-4 py-3">

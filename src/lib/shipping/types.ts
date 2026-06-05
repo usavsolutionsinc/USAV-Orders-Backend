@@ -72,6 +72,7 @@ export interface ShipmentRow {
   consecutive_error_count: number;
   last_error_code: string | null;
   last_error_message: string | null;
+  tracking_blocked_reason: string | null;
   latest_payload: unknown;
   metadata: Record<string, unknown>;
   created_at: string;

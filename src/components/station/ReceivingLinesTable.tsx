@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { formatDistanceToNowStrict } from 'date-fns';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useUIModeOptional } from '@/design-system/providers/UIModeProvider';
@@ -92,6 +93,7 @@ export interface ReceivingLineRow {
     | 'ARRIVING_TODAY'
     | 'STALLED'
     | 'IN_TRANSIT'
+    | 'TRACKING_UNAVAILABLE'
     | 'PENDING_CARRIER'
     | 'AWAITING_TRACKING'
     | 'RECEIVED'
@@ -106,6 +108,18 @@ export interface ReceivingLineRow {
   created_at: string | null;
   /** Most-recent scan/receive time. Server sorts view=recent/all by this. */
   last_activity_at?: string | null;
+  /** Door-scan ("scanned at") timestamp — receiving.received_at (view=recent/all/received). */
+  received_at?: string | null;
+  /** Staff who recorded the door scan (receiving.received_by → staff.name). */
+  received_by_name?: string | null;
+  /** Unbox timestamp — receiving.unboxed_at; null until the carton is unboxed. */
+  unboxed_at?: string | null;
+  /** Staff who unboxed (receiving.unboxed_by → staff.name). */
+  unboxed_by_name?: string | null;
+  /** First tracking scan time (receiving_scans, earliest). */
+  scanned_at?: string | null;
+  /** Staff who first scanned the tracking (receiving_scans.scanned_by → staff.name). */
+  scanned_by_name?: string | null;
   /**
    * Count of recorded testing verdicts for this line (view=testing only;
    * null on other views). Scoped to the tester when the feed is. Drives the
@@ -179,6 +193,36 @@ function receivingRowActivityMs(row: {
   const raw = receivingRowActivityTs(row);
   const t = raw ? new Date(raw).getTime() : 0;
   return Number.isFinite(t) ? t : 0;
+}
+
+/** Compact carrier label for incoming chips. */
+function shortCarrier(carrier: string | null | undefined): string {
+  const c = (carrier || '').toUpperCase();
+  if (c.includes('FEDEX')) return 'FedEx';
+  if (c.includes('USPS')) return 'USPS';
+  if (c.includes('UPS')) return 'UPS';
+  return carrier ? String(carrier) : '';
+}
+
+/** "4h ago" — relative age of a delivered-not-scanned carton (E2). */
+function deliveredAgoLabel(deliveredAt: string | null | undefined): string | null {
+  if (!deliveredAt) return null;
+  const d = new Date(deliveredAt);
+  if (Number.isNaN(d.getTime())) return null;
+  return `${formatDistanceToNowStrict(d)} ago`;
+}
+
+/** Short absolute "M/D h:mm" for the history scanned/unboxed timeline. */
+function fmtShortTs(ts?: string | null): string | null {
+  if (!ts) return null;
+  const d = new Date(ts.includes('T') ? ts : ts.replace(' ', 'T'));
+  if (Number.isNaN(d.getTime())) return null;
+  return d.toLocaleString(undefined, {
+    month: 'numeric',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+  });
 }
 
 export function ReceivingLineOrderRow({
@@ -287,6 +331,40 @@ export function ReceivingLineOrderRow({
           condition={<span className={condGrade === 'BRAND_NEW' ? 'text-yellow-600' : condGrade === 'PARTS' ? 'text-amber-800' : 'text-gray-400'}>{conditionLabel}</span>}
           rest={
             <div className="flex items-center gap-2">
+              {/* History timeline: door-scan ("scanned at") and unbox times +
+                  who. Gated on data so incoming/expected rows stay clean.
+                  Desktop-only — the mobile table isn't the history surface. */}
+              {!isIncoming && (row.scanned_at || row.received_at || row.unboxed_at) ? (
+                <span
+                  className="hidden items-center gap-1.5 text-eyebrow font-semibold text-gray-400 sm:inline-flex"
+                  title={[
+                    fmtShortTs(row.scanned_at ?? row.received_at)
+                      ? `Scanned ${fmtShortTs(row.scanned_at ?? row.received_at)}${row.scanned_by_name ? ` by ${row.scanned_by_name}` : ''}`
+                      : '',
+                    fmtShortTs(row.unboxed_at)
+                      ? `Unboxed ${fmtShortTs(row.unboxed_at)}${row.unboxed_by_name ? ` by ${row.unboxed_by_name}` : ''}`
+                      : '',
+                  ].filter(Boolean).join(' · ')}
+                >
+                  {fmtShortTs(row.scanned_at ?? row.received_at) ? (
+                    <span>↓ {fmtShortTs(row.scanned_at ?? row.received_at)}{row.scanned_by_name ? ` · ${row.scanned_by_name}` : ''}</span>
+                  ) : null}
+                  {fmtShortTs(row.unboxed_at) ? (
+                    <span>📦 {fmtShortTs(row.unboxed_at)}{row.unboxed_by_name ? ` · ${row.unboxed_by_name}` : ''}</span>
+                  ) : null}
+                </span>
+              ) : null}
+              {/* E2: delivered-not-scanned prominence — carrier + how long ago it
+                  was delivered, so the rose facet reads "USPS · 4h ago" at a glance. */}
+              {row.delivery_state === 'DELIVERED_UNOPENED' && deliveredAgoLabel(row.delivered_at) ? (
+                <span
+                  className="inline-flex items-center gap-1 rounded-full bg-rose-50 px-1.5 py-0.5 text-eyebrow font-bold text-rose-700"
+                  title={`${shortCarrier(row.carrier)} delivered ${deliveredAgoLabel(row.delivered_at)} — not scanned in yet`}
+                >
+                  {shortCarrier(row.carrier) ? <span>{shortCarrier(row.carrier)} ·</span> : null}
+                  <span>{deliveredAgoLabel(row.delivered_at)}</span>
+                </span>
+              ) : null}
               {isIncoming ? null : (
                 <IconWithTooltip
                   Icon={WorkflowIcon}
@@ -443,6 +521,7 @@ export default function ReceivingLinesTable({ selectMode = false }: { selectMode
       || incomingStateRaw === 'ARRIVING_TODAY'
       || incomingStateRaw === 'STALLED'
       || incomingStateRaw === 'IN_TRANSIT'
+      || incomingStateRaw === 'TRACKING_UNAVAILABLE'
       || incomingStateRaw === 'PENDING_CARRIER'
       || incomingStateRaw === 'AWAITING_TRACKING'
       ? (incomingStateRaw as IncomingDeliveryState)

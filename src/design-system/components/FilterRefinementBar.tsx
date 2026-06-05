@@ -23,6 +23,11 @@ export interface FilterRefinementBarProps {
   onClearAll?: () => void;
   /** Whether to use the compact sidebar styling (40px height, flush borders) */
   variant?: 'default' | 'sidebar';
+  /**
+   * Dim/blur the page behind the open popover. Defaults to false — the overlay
+   * stays a transparent click-catcher so the rest of the page isn't grayed out.
+   */
+  dimBackdrop?: boolean;
   /** Additional styling for the container */
   className?: string;
   /** Additional styling for the trigger bar */
@@ -44,6 +49,7 @@ export function FilterRefinementBar({
   renderDropdown,
   onClearAll,
   variant = 'default',
+  dimBackdrop = false,
   className = '',
   barClassName = '',
 }: FilterRefinementBarProps) {
@@ -135,7 +141,11 @@ export function FilterRefinementBar({
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              className="fixed inset-0 z-40 bg-black/5 backdrop-blur-[2px]"
+              // Transparent click-catcher by default: it isolates the dismiss
+              // click (so an outside click closes the popover without also
+              // triggering whatever sits underneath) but does NOT gray out the
+              // page. Opt into the old dim/blur via `dimBackdrop`.
+              className={`fixed inset-0 z-40 ${dimBackdrop ? 'bg-black/5 backdrop-blur-[2px]' : ''}`}
               onClick={() => setIsOpen(false)}
             />
             <motion.div

@@ -1,4 +1,5 @@
 import pool from '@/lib/db';
+import { conditionLabel } from '@/components/receiving/zoho-po-types';
 
 export type ClaimType =
   | 'damage'
@@ -89,10 +90,13 @@ export async function buildReceivingClaimTemplate(
       | undefined;
     if (line) {
       const title = line.item_name || line.sku || `Line #${lineId}`;
-      const qty = line.quantity_expected != null
-        ? `${line.quantity_received}/${line.quantity_expected}`
-        : `${line.quantity_received}`;
-      lineSummary = `Item: ${title} · qty ${qty} · condition ${line.condition_grade || 'PENDING'}`;
+      const qtyText = line.quantity_expected != null
+        ? `received ${line.quantity_received} of ${line.quantity_expected}`
+        : `received ${line.quantity_received}`;
+      const condText = line.condition_grade
+        ? conditionLabel(line.condition_grade)
+        : 'not yet graded';
+      lineSummary = `Item: ${title} — ${condText}, ${qtyText}`;
     }
   }
 
@@ -115,22 +119,22 @@ export async function buildReceivingClaimTemplate(
 
   const trimmedReason = String(reason ?? '').trim();
   const descriptionLines: string[] = [
-    `Type: ${CLAIM_TYPE_LABEL[claimType]}`,
+    `Issue: ${CLAIM_TYPE_LABEL[claimType]}`,
     `Severity: ${CLAIM_SEVERITY_LABEL[severity]}`,
-    `PO: ${poRef}`,
+    `Purchase Order: ${poRef}`,
     `Tracking: ${trackingRef}`,
-    lineSummary ? lineSummary : `Package-wide claim (no specific line)`,
+    lineSummary ? lineSummary : `Scope: package-wide (no specific item)`,
     '',
   ];
   if (trimmedReason) {
-    descriptionLines.push('Receiving Notes:', trimmedReason, '');
+    descriptionLines.push('What happened:', trimmedReason, '');
   }
   // Photos ride along as real Zendesk attachments (uploaded at submit from the
   // operator's selection) rather than inlined URLs. A link back to the carton's
   // receiving record gives the agent full context.
-  descriptionLines.push('Photos: attached as files (selected in receiving).');
+  descriptionLines.push('Photos are attached as files (the ones selected during receiving).');
   if (poReceivingLink) {
-    descriptionLines.push(`View PO receiving: ${poReceivingLink}`);
+    descriptionLines.push(`View the receiving record: ${poReceivingLink}`);
   }
 
   return { subject, description: descriptionLines.join('\n') };

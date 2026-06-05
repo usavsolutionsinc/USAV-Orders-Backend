@@ -4,18 +4,9 @@ import { ReactNode, useState, useEffect, useRef } from 'react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import {
     Search,
-    ChevronLeft,
-    ChevronRight,
     Copy,
     Check,
-    AlertTriangle,
     Plus,
-    Barcode,
-    Layers,
-    FileText,
-    Hash,
-    Truck,
-    Cpu,
 } from './Icons';
 import { motion, AnimatePresence } from 'framer-motion';
 import { SIDEBAR_GUTTER } from '@/components/layout/header-shell';
@@ -23,7 +14,6 @@ import { ShippedIntakeForm, type ShippedFormData } from './shipped';
 import { ShippedDetailsPanel } from './shipped/ShippedDetailsPanel';
 import { ShippedOrder } from '@/lib/neon/orders-queries';
 import { SidebarShell } from '@/components/layout/SidebarShell';
-import { HorizontalButtonSlider, type HorizontalSliderItem } from './ui/HorizontalButtonSlider';
 import { useShippedSearch } from '@/hooks/useShippedSearch';
 import { useDebounce } from '@/hooks';
 import { formatDateTimePST } from '@/utils/date';
@@ -32,12 +22,10 @@ import { RecentSearchesList } from '@/components/sidebar/RecentSearchesList';
 import { getStaffName } from '@/utils/staff';
 import { sectionLabel, microBadge } from '@/design-system/tokens/typography/presets';
 import {
-    getShippedSearchHelperText,
     getShippedSearchPlaceholder,
-    SHIPPED_SEARCH_FIELDS,
     type ShippedSearchField,
 } from '@/lib/shipped-search';
-import { ShippedCarrierFilters, useShippedFilterRefinements, ShippedFilterDropdown } from '@/components/shipping/ShippedFilterToolbar';
+import { useShippedFilterRefinements, ShippedFilterDropdown } from '@/components/shipping/ShippedFilterToolbar';
 import { ZohoSyncButton } from '@/components/shipped/ZohoSyncButton';
 import { PickupReportButton } from '@/components/shipped/PickupReportButton';
 
@@ -68,18 +56,6 @@ interface ShippedSidebarProps {
 }
 
 
-const SHIPPED_SEARCH_FIELD_ICONS: Record<
-    ShippedSearchField,
-    NonNullable<HorizontalSliderItem['icon']>
-> = {
-    all: Layers,
-    order_id: Hash,
-    tracking: Truck,
-    product_title: FileText,
-    sku: Barcode,
-    serial_number: Cpu,
-};
-
 export default function ShippedSidebar({
     showIntakeForm = false,
     onCloseForm,
@@ -109,8 +85,6 @@ export default function ShippedSidebar({
     const [inputValue, setInputValue] = useState(searchValue);
     const debouncedQuery = useDebounce(inputValue, 250);
     const trimmedQuery = debouncedQuery.trim();
-    // The "search by" field pills are hidden until the search bar is focused.
-    const [searchFocused, setSearchFocused] = useState(false);
 
     // Filter Bar Integration
     const { refinements, clearAll } = useShippedFilterRefinements();
@@ -343,58 +317,19 @@ Shipped: ${result.packed_at ? formatDateTimePST(result.packed_at) : 'Not Shipped
                     </button>
                 ),
             }}
-            searchGroup={(searchBar) => (
-                <div
-                    onFocus={() => setSearchFocused(true)}
-                    onBlur={(e) => {
-                        if (!e.currentTarget.contains(e.relatedTarget as Node | null)) {
-                            setSearchFocused(false);
-                        }
-                    }}
-                >
-                    {searchBar}
-
-                    {/* "Search by" field pills — hidden until the search bar is
-                        focused, then they slide down into view from the top. */}
-                    <AnimatePresence initial={false}>
-                        {onShippedSearchFieldChange && searchFocused ? (
-                            <motion.div
-                                key="shipped-search-by"
-                                initial={{ height: 0, opacity: 0, y: -8 }}
-                                animate={{ height: 'auto', opacity: 1, y: 0 }}
-                                exit={{ height: 0, opacity: 0, y: -8 }}
-                                transition={{ duration: 0.2, ease: 'easeOut' }}
-                                className="overflow-hidden"
-                            >
-                                <div className={`space-y-2 pt-3 ${SIDEBAR_GUTTER}`}>
-                                    <HorizontalButtonSlider
-                                        items={SHIPPED_SEARCH_FIELDS.map((field) => ({
-                                            id: field.id,
-                                            label: field.label,
-                                            icon: SHIPPED_SEARCH_FIELD_ICONS[field.id],
-                                        }))}
-                                        value={shippedSearchField}
-                                        onChange={(id) => onShippedSearchFieldChange(id as ShippedSearchField)}
-                                        variant="nav"
-                                        size="md"
-                                        aria-label="Shipped search field"
-                                        // Left inset so the first pill isn't flush to the edge at min scroll.
-                                        className="pl-3"
-                                    />
-                                    <p className={`${microBadge} text-gray-500 px-1`}>
-                                        {getShippedSearchHelperText(shippedSearchField)}
-                                    </p>
-                                </div>
-                            </motion.div>
-                        ) : null}
-                    </AnimatePresence>
-                </div>
-            )}
             filter={{
                 label: 'Shipment Filters',
                 refinements,
                 onClearAll: clearAll,
-                renderDropdown: (onClose) => <ShippedFilterDropdown onClose={onClose} />,
+                // The "Search by" field picker now lives at the top of the filter
+                // dropdown (it used to slide down on search-bar focus).
+                renderDropdown: (onClose) => (
+                    <ShippedFilterDropdown
+                        onClose={onClose}
+                        searchField={shippedSearchField}
+                        onSearchFieldChange={onShippedSearchFieldChange}
+                    />
+                ),
             }}
             bodyClassName="flex flex-col space-y-4 scrollbar-hide pb-6"
         >

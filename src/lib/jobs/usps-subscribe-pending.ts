@@ -51,6 +51,11 @@ export async function runUspsSubscribeJob(
   const { limit } = normalizeUspsSubscribePayload(payload);
   const start = Date.now();
 
+  // No push without a configured callback — skip; polling is the free path.
+  if (!process.env.USPS_WEBHOOK_CALLBACK_URL) {
+    return { ok: true, completed: 0, failed: 0, renewed: 0, durationMs: Date.now() - start };
+  }
+
   // Pending first; fill any remaining budget with renewals.
   const pending = await getShipmentsPendingSubscription('USPS', limit);
   const renewalBudget = Math.max(0, limit - pending.length);

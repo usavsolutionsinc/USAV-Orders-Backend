@@ -233,7 +233,10 @@ export async function trackByNumber(trackingNumber: string): Promise<CarrierTrac
   if (!res.ok) {
     const body = await res.text().catch(() => '');
     throw Object.assign(new Error(`UPS track failed: ${res.status} ${body}`), {
-      code: res.status === 404 ? 'NOT_FOUND' : 'HTTP_ERROR',
+      code: res.status === 404 ? 'NOT_FOUND'
+          : res.status === 403 ? 'ACCESS_CONTROL'
+          : res.status === 401 ? 'AUTH_ERROR'
+          : 'HTTP_ERROR',
     });
   }
 

@@ -1084,6 +1084,7 @@ interface MobileCardProps {
 const TAB_LABELS: Record<MobileNavTabId, string> = {
   home: 'Home',
   scan: 'Scan (centre)',
+  receive: 'Receive (centre)',
   picks: 'Picks',
   signout: 'Sign out',
 };
@@ -1246,6 +1247,7 @@ function MobileDisplayCard({ sc, rolesForResolve, staffOverride, busy, onSave, o
 const MOBILE_LANDING_OPTIONS: Array<{ value: string; label: string }> = [
   { value: '/m/home',      label: 'Home (hub)' },
   { value: '/m/scan',      label: 'Scan' },
+  { value: '/m/receive',   label: 'Receive (door scan)' },
   { value: '/m/receiving', label: 'Receiving' },
   { value: '/m/pick',      label: 'Pick' },
 ];

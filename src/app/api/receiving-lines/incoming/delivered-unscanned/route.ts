@@ -22,18 +22,13 @@
 import { NextRequest, NextResponse } from 'next/server';
 import pool from '@/lib/db';
 import { withAuth } from '@/lib/auth/withAuth';
+import {
+  deliveredUnscannedBaseSql,
+  DELIVERED_UNSCANNED_WINDOW_DAYS as WINDOW_DAYS,
+  DELIVERED_UNSCANNED_CAP as CAP,
+} from '@/lib/receiving/delivered-unscanned';
 
 export const dynamic = 'force-dynamic';
-
-const WINDOW_DAYS = 30;
-const CAP = 100;
-
-const INBOUND = `(
-  EXISTS (SELECT 1 FROM receiving r WHERE r.shipment_id = stn.id)
-  OR stn.source_system IN (
-    'zoho_po','receiving_lookup_po','receiving_lines_patch','receiving.link-po','receiving_entry'
-  )
-)`;
 
 export const GET = withAuth(async (_req: NextRequest) => {
   try {
@@ -60,44 +55,37 @@ export const GET = withAuth(async (_req: NextRequest) => {
       first_item_name: string | null;
       item_count: number | null;
     }>(
+      // `base` is the canonical delivered-unscanned set (Phase B) — identical to
+      // the count's, so count === list length. PO context is resolved in the
+      // outer query (adding columns can't change the row count): the PO id comes
+      // from the linked receiving row, else by matching the normalized tracking#
+      // back to zoho_po_mirror.reference_number.
       `WITH base AS (
-         SELECT DISTINCT ON (stn.tracking_number_normalized)
-                stn.id                       AS shipment_id,
-                stn.carrier,
-                stn.tracking_number_raw,
-                stn.tracking_number_normalized,
-                stn.delivered_at::text       AS delivered_at,
-                stn.source_system,
+         ${deliveredUnscannedBaseSql('$1')}
+       ),
+       enriched AS (
+         SELECT base.*,
                 COALESCE(
                   (SELECT r.zoho_purchaseorder_id
                      FROM receiving r
-                    WHERE r.shipment_id = stn.id
+                    WHERE r.shipment_id = base.shipment_id
                       AND r.zoho_purchaseorder_id IS NOT NULL
                     ORDER BY r.id LIMIT 1),
                   (SELECT m.zoho_purchaseorder_id
                      FROM zoho_po_mirror m
                     WHERE COALESCE(m.reference_number, '') <> ''
                       AND regexp_replace(upper(m.reference_number), '[^A-Z0-9]', '', 'g')
-                          = stn.tracking_number_normalized
+                          = base.tracking_number_normalized
                     LIMIT 1)
                 )                            AS zoho_purchaseorder_id
-           FROM shipping_tracking_numbers stn
-          WHERE stn.is_delivered = true
-            AND stn.delivered_at > NOW() - ($1 || ' days')::interval
-            AND ${INBOUND}
-            AND NOT EXISTS (
-              SELECT 1 FROM receiving r2
-              JOIN receiving_scans rs ON rs.receiving_id = r2.id
-              WHERE r2.shipment_id = stn.id
-            )
-          ORDER BY stn.tracking_number_normalized, stn.delivered_at DESC
+           FROM base
        )
-       SELECT base.*,
+       SELECT enriched.*,
               COALESCE(
                 m.zoho_purchaseorder_number,
                 (SELECT r.zoho_purchaseorder_number
                    FROM receiving r
-                  WHERE r.shipment_id = base.shipment_id
+                  WHERE r.shipment_id = enriched.shipment_id
                     AND r.zoho_purchaseorder_number IS NOT NULL
                   ORDER BY r.id LIMIT 1)
               )                              AS po_number,
@@ -106,13 +94,13 @@ export const GET = withAuth(async (_req: NextRequest) => {
               m.po_date::text                AS po_date,
               agg.first_item_name,
               agg.item_count
-         FROM base
-         LEFT JOIN zoho_po_mirror m ON m.zoho_purchaseorder_id = base.zoho_purchaseorder_id
+         FROM enriched
+         LEFT JOIN zoho_po_mirror m ON m.zoho_purchaseorder_id = enriched.zoho_purchaseorder_id
          LEFT JOIN LATERAL (
            SELECT (array_agg(rl.item_name ORDER BY rl.id))[1] AS first_item_name,
                   COUNT(*)::int                                AS item_count
              FROM receiving_lines rl
-            WHERE rl.zoho_purchaseorder_id = base.zoho_purchaseorder_id
+            WHERE rl.zoho_purchaseorder_id = enriched.zoho_purchaseorder_id
               AND COALESCE(rl.item_name, '') <> ''
          ) agg ON TRUE`,
       [String(WINDOW_DAYS)],

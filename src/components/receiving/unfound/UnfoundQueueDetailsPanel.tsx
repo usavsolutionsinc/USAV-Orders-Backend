@@ -29,6 +29,7 @@ import {
   Mail,
   Package,
   RefreshCw,
+  Sparkles,
   Trash2,
   X,
 } from '@/components/Icons';
@@ -205,14 +206,18 @@ export function UnfoundQueueDetailsPanel({
     [detail, row.source_id, updateTriageRow],
   );
 
-  const handlePushToZendesk = useCallback(async () => {
+  const handlePushToZendesk = useCallback(async (overrides?: { subject: string; description: string }) => {
     if (pushing || row.zendesk_ticket_id) return;
     setPushing(true);
     const toastId = toast.loading('Pushing to Zendesk…');
     try {
       const res = await fetch(
         `/api/receiving/unfound-queue/${row.kind}/${encodeURIComponent(row.source_id)}/push-to-zendesk`,
-        { method: 'POST', headers: { 'Content-Type': 'application/json' } },
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: overrides ? JSON.stringify(overrides) : undefined,
+        },
       );
       const body = (await res.json().catch(() => ({}))) as {
         success?: boolean;
@@ -480,8 +485,158 @@ interface OverviewTabProps {
   subjectPrefix: string;
   poNumbers: string[];
   pushing: boolean;
-  onPushToZendesk: () => void;
+  onPushToZendesk: (overrides?: { subject: string; description: string }) => void;
   detail: TriageDetail | null;
+}
+
+/**
+ * Push-to-Zendesk control with an optional AI draft + review step (A2).
+ * Fast path: one-click "Push to Zendesk" uses the server's humanized template.
+ * Review path: "Draft with AI" (or "Review & edit") opens an editable preview;
+ * pushing then sends the edited subject/body as overrides. Operator keeps the pen.
+ */
+function ZendeskPushSection({
+  row,
+  pushing,
+  onPush,
+}: {
+  row: UnfoundQueueDetailsRow;
+  pushing: boolean;
+  onPush: (overrides?: { subject: string; description: string }) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [drafting, setDrafting] = useState(false);
+  const [subject, setSubject] = useState('');
+  const [description, setDescription] = useState('');
+
+  const fetchDraft = useCallback(
+    async (ai: boolean) => {
+      setDrafting(true);
+      try {
+        const res = await fetch(
+          `/api/receiving/unfound-queue/${row.kind}/${encodeURIComponent(row.source_id)}/push-to-zendesk/draft`,
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ ai }),
+          },
+        );
+        const data = (await res.json().catch(() => null)) as {
+          success?: boolean;
+          subject?: string;
+          description?: string;
+          degraded?: boolean;
+          error?: string;
+        } | null;
+        if (!res.ok || !data?.success) {
+          toast.error(data?.error || 'Could not generate ticket');
+          return;
+        }
+        setSubject(data.subject ?? '');
+        setDescription(data.description ?? '');
+        setOpen(true);
+        if (ai && data.degraded) {
+          toast.warning('AI draft dropped a reference — kept the template. Edit as needed.');
+        } else if (ai) {
+          toast.success('Drafted with AI — review and edit before pushing');
+        }
+      } catch (err) {
+        toast.error(err instanceof Error ? err.message : 'Network error');
+      } finally {
+        setDrafting(false);
+      }
+    },
+    [row.kind, row.source_id],
+  );
+
+  if (!open) {
+    return (
+      <div className="flex flex-wrap items-center gap-2">
+        <button
+          type="button"
+          onClick={() => onPush()}
+          disabled={pushing || drafting}
+          className="inline-flex items-center gap-1.5 rounded-md border border-blue-200 bg-blue-50 px-2.5 py-1 text-micro font-bold uppercase tracking-wider text-blue-700 hover:bg-blue-100 disabled:cursor-not-allowed disabled:opacity-60"
+        >
+          {pushing ? <Loader2 className="h-3 w-3 animate-spin" /> : <ExternalLink className="h-3 w-3" />}
+          {pushing ? 'Pushing…' : 'Push to Zendesk'}
+        </button>
+        <button
+          type="button"
+          onClick={() => void fetchDraft(true)}
+          disabled={pushing || drafting}
+          title="Generate a clearer ticket with local AI, then review and edit before pushing"
+          className="inline-flex items-center gap-1.5 rounded-md border border-purple-200 bg-purple-50 px-2.5 py-1 text-micro font-bold uppercase tracking-wider text-purple-700 hover:bg-purple-100 disabled:cursor-not-allowed disabled:opacity-60"
+        >
+          {drafting ? <Loader2 className="h-3 w-3 animate-spin" /> : <Sparkles className="h-3 w-3" />}
+          Draft with AI
+        </button>
+        <button
+          type="button"
+          onClick={() => void fetchDraft(false)}
+          disabled={pushing || drafting}
+          className="text-micro font-bold uppercase tracking-wider text-gray-500 hover:text-gray-900 disabled:opacity-60"
+        >
+          Review &amp; edit
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-2">
+      <div>
+        <label className="mb-1 block text-eyebrow font-black uppercase tracking-widest text-gray-400">
+          Subject
+        </label>
+        <input
+          type="text"
+          value={subject}
+          onChange={(e) => setSubject(e.target.value)}
+          className="block w-full rounded-md border border-gray-200 bg-white px-2.5 py-1.5 text-label font-semibold text-gray-900 outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
+        />
+      </div>
+      <div>
+        <label className="mb-1 block text-eyebrow font-black uppercase tracking-widest text-gray-400">
+          Body
+        </label>
+        <textarea
+          value={description}
+          onChange={(e) => setDescription(e.target.value)}
+          rows={8}
+          className="block w-full resize-y rounded-md border border-gray-200 bg-white px-2.5 py-1.5 font-mono text-micro leading-snug text-gray-900 outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
+        />
+      </div>
+      <div className="flex flex-wrap items-center gap-2">
+        <button
+          type="button"
+          onClick={() => onPush({ subject: subject.trim(), description: description.trim() })}
+          disabled={pushing || drafting || !subject.trim() || !description.trim()}
+          className="inline-flex items-center gap-1.5 rounded-md bg-blue-600 px-2.5 py-1 text-micro font-black uppercase tracking-wider text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
+        >
+          {pushing ? <Loader2 className="h-3 w-3 animate-spin" /> : <ExternalLink className="h-3 w-3" />}
+          {pushing ? 'Pushing…' : 'Push this ticket'}
+        </button>
+        <button
+          type="button"
+          onClick={() => void fetchDraft(true)}
+          disabled={pushing || drafting}
+          className="inline-flex items-center gap-1.5 rounded-md border border-purple-200 bg-purple-50 px-2.5 py-1 text-micro font-bold uppercase tracking-wider text-purple-700 hover:bg-purple-100 disabled:opacity-60"
+        >
+          {drafting ? <Loader2 className="h-3 w-3 animate-spin" /> : <Sparkles className="h-3 w-3" />}
+          Redraft
+        </button>
+        <button
+          type="button"
+          onClick={() => setOpen(false)}
+          disabled={pushing || drafting}
+          className="text-micro font-bold uppercase tracking-wider text-gray-500 hover:text-gray-900 disabled:opacity-60"
+        >
+          Cancel
+        </button>
+      </div>
+    </div>
+  );
 }
 
 function OverviewTab({
@@ -571,19 +726,7 @@ function OverviewTab({
             )}
           </div>
         ) : (
-          <button
-            type="button"
-            onClick={onPushToZendesk}
-            disabled={pushing}
-            className="inline-flex items-center gap-1.5 rounded-md border border-blue-200 bg-blue-50 px-2.5 py-1 text-micro font-bold uppercase tracking-wider text-blue-700 hover:bg-blue-100 disabled:cursor-not-allowed disabled:opacity-60"
-          >
-            {pushing ? (
-              <Loader2 className="h-3 w-3 animate-spin" />
-            ) : (
-              <ExternalLink className="h-3 w-3" />
-            )}
-            {pushing ? 'Pushing…' : 'Push to Zendesk'}
-          </button>
+          <ZendeskPushSection row={row} pushing={pushing} onPush={onPushToZendesk} />
         )}
       </Section>
 

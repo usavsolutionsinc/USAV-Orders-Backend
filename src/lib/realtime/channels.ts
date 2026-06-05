@@ -52,6 +52,14 @@ export const getStaffChannelName = () =>
     DEFAULT_STAFF_CHANNEL
   );
 
+/**
+ * Per-staff inbox channel. The server pushes priority alerts (e.g. a
+ * receiving-door scan that matches a pending order) on inbox:{staffId}; the
+ * signed-in client subscribes to its own. Token grants 'inbox:*'.
+ */
+export const getInboxChannelName = (staffId: number | string) =>
+  normalizeChannelName(`inbox:${staffId}`, 'inbox:none');
+
 export const DEFAULT_FBA_CHANNEL = 'fba:changes';
 export const DEFAULT_DASHBOARD_CHANNEL = 'dashboard:operations';
 

@@ -1,9 +1,31 @@
 # Carrier Tracking Live-Sync Production Plan
 
-**Status:** Phase 1–3 built (2026-06-02) — pending FedEx portal setup + endpoint confirmation
+**Status:** Shipped as **free cron-polling** (2026-06-04). Webhook code retained but dormant (see pivot below).
 **Created:** 2026-06-02
 **Owner:** TBD
 **Goal:** Eliminate stale carrier tracking displays (currently up to ~21h behind the carrier's own status) and keep FedEx/UPS/USPS tracking in near-real-time sync.
+
+> **PIVOT — free cron-polling is the chosen method (2026-06-04).** Live probing
+> confirmed FedEx's Shipment Visibility Webhook is a **paid** product (the
+> subscription endpoint 404s without the paid/gated project; OAuth itself is
+> fine), and UPS third-party push is unavailable. Since the solution **must be
+> free**, we do **not** use carrier webhooks. The free method:
+> - **Adaptive cron polling** (`/api/cron/shipping/sync-due`) is the sole data
+>   source. Rolling sweep now runs **every 15 min** (was 2h); `computeNextCheckAt`
+>   gates per-shipment frequency by status (OFD 30m, IN_TRANSIT 2h, …). Free
+>   within carrier quotas (FedEx 100k/day; **USPS 60/hr default is the binding
+>   limit** — request a quota bump, see §USPS upgrade).
+> - The realtime UI publish + `IncomingDetailsPanel` 60s refetch (Phase 3.5)
+>   surface poll updates live, so the display refreshes without reload.
+> - **Webhook subscription code (FedEx/UPS/USPS clients, crons, receivers) is
+>   kept but dormant** — `subscribe-*` crons removed from `vercel.json`; the jobs
+>   no-op unless `*_WEBHOOK_PROJECT_ID`/`*_WEBHOOK_CALLBACK_URL` is set. If a paid
+>   FedEx webhook project is ever provisioned, set the env vars + re-add the cron
+>   and push activates with no further code.
+>
+> Probe results (2026-06-04): FedEx `381810204793` & UPS `1Z035CX1YW26393235`
+> both poll live = LABEL_CREATED; both subscription endpoints returned **404**
+> (paths are placeholders / product not entitled).
 
 > **Decision locked (2026-06-02):** We track only tracking numbers billed to
 > *other parties'* accounts, so **Account-level subscriptions do not apply** —

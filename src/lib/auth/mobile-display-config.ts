@@ -24,19 +24,34 @@
  * for this staff" is one decision, not a per-field decision).
  */
 
-export type MobileNavTabId = 'home' | 'scan' | 'picks' | 'signout';
+export type MobileNavTabId = 'home' | 'scan' | 'receive' | 'picks' | 'signout';
 
 export const MOBILE_NAV_TAB_IDS: ReadonlyArray<MobileNavTabId> = [
   'home',
   'scan',
+  'receive',
   'picks',
   'signout',
 ];
 
+/**
+ * Tabs that occupy the raised center slot in the bottom nav. Exactly one is
+ * shown (the headline action). 'scan' = universal order scanner (/m/scan);
+ * 'receive' = receiving-door scan (/m/receive). They are mutually exclusive in
+ * the rendered bar — the sanitizer keeps only the first configured one.
+ */
+export const MOBILE_NAV_CENTER_TAB_IDS: ReadonlyArray<MobileNavTabId> = [
+  'scan',
+  'receive',
+];
+
+/** Default center tab when none is configured. */
+const DEFAULT_CENTER_TAB: MobileNavTabId = 'scan';
+
 export interface MobileBottomNavConfig {
   /** When false, the bar is suppressed entirely. */
   enabled: boolean;
-  /** Tab IDs in display order. The center 'scan' button is always raised. */
+  /** Tab IDs in display order. The center tab ('scan' or 'receive') is raised. */
   tabs: ReadonlyArray<MobileNavTabId>;
 }
 
@@ -74,18 +89,25 @@ export function sanitizeMobileDisplayConfig(
     if (typeof bn.enabled === 'boolean') next.enabled = bn.enabled;
     if (Array.isArray(bn.tabs)) {
       const seen = new Set<string>();
+      const centers = MOBILE_NAV_CENTER_TAB_IDS as ReadonlyArray<string>;
+      let hasCenter = false;
       const tabs: MobileNavTabId[] = [];
       for (const t of bn.tabs) {
         if (typeof t !== 'string') continue;
         if (!(MOBILE_NAV_TAB_IDS as ReadonlyArray<string>).includes(t)) continue;
         if (seen.has(t)) continue;
+        // Only one center tab may be rendered — keep the first, drop the rest.
+        if (centers.includes(t)) {
+          if (hasCenter) continue;
+          hasCenter = true;
+        }
         seen.add(t);
         tabs.push(t as MobileNavTabId);
       }
-      // Always keep at least 'scan' if any tabs are present — the raised
-      // center button is the headline action. If the admin somehow saves an
-      // empty list we treat it as "fall back to defaults".
-      if (tabs.length > 0 && !tabs.includes('scan')) tabs.unshift('scan');
+      // Always keep a center tab if any tabs are present — the raised center
+      // button is the headline action. If the admin somehow saves an empty
+      // list we treat it as "fall back to defaults".
+      if (tabs.length > 0 && !hasCenter) tabs.unshift(DEFAULT_CENTER_TAB);
       if (tabs.length > 0) next.tabs = tabs;
     }
     if (Object.keys(next).length > 0) out.bottomNav = next;

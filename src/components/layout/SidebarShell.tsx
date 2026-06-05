@@ -2,7 +2,7 @@
 
 import type { ReactNode } from 'react';
 import { cn } from '@/utils/_cn';
-import { SIDEBAR_GUTTER, sidebarHeaderPillRowClass, sidebarHeaderBandClass } from '@/components/layout/header-shell';
+import { SIDEBAR_GUTTER, sidebarHeaderPillRowClass } from '@/components/layout/header-shell';
 import { SidebarSearchBar, type SidebarSearchBarProps } from '@/components/ui/SidebarSearchBar';
 import { FilterRefinementBar, type FilterRefinementBarProps } from '@/design-system/components/FilterRefinementBar';
 
@@ -109,8 +109,10 @@ export function SidebarShell({
       {searchBar ? (searchGroup ? searchGroup(searchBar) : searchBar) : null}
 
       {filter && (
-        <div className={cn(sidebarHeaderBandClass, 'relative z-30')}>
-          <FilterRefinementBar {...filter} variant="sidebar" />
+        // Default (glassmorphic pill) variant, floated with the house gutter —
+        // matches the /design-demo showroom exactly, not the old flat 40px band.
+        <div className={cn('relative z-30 shrink-0 bg-white py-2', SIDEBAR_GUTTER)}>
+          <FilterRefinementBar {...filter} />
         </div>
       )}
 

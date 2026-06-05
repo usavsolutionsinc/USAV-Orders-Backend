@@ -12,9 +12,12 @@
  * The tab set is also per-staff configurable. Available tab IDs:
  *
  *   • home    — back to the /m/home cockpit (recent scans)
- *   • scan    — raised centre: opens `/m/scan`; on that route toggles camera
- *     preview (`/m/scan` vs `/m/scan?cam=off`). Always rendered centre when
- *     present in the list, regardless of its position in the array.
+ *   • scan    — raised centre: opens `/m/scan` (universal order scanner); on
+ *     that route toggles camera preview (`/m/scan` vs `/m/scan?cam=off`).
+ *   • receive — raised centre: opens `/m/receive` (receiving-door scan); same
+ *     camera-toggle behaviour on its own route. Mutually exclusive with `scan`
+ *     — whichever is configured owns the centre slot, regardless of array
+ *     position. The sanitizer guarantees exactly one center tab.
  *   • picks   — picker queue at /m/pick
  *   • signout — exits the session
  *
@@ -29,6 +32,7 @@ import {
   Barcode,
   LayoutDashboard,
   Lock,
+  PackageCheck,
   ShoppingCart,
 } from '@/components/Icons';
 import { useAuth } from '@/contexts/AuthContext';
@@ -96,16 +100,27 @@ function MobileBottomNavInner({ tabs }: { tabs: ReadonlyArray<MobileNavTabId> })
     router.replace('/signin');
   }, [signOut, router]);
 
-  // Scan owns the centre slot regardless of order. Five-column grid:
-  // [left] [left] [scan] [other] [signout]. Sign out is always the
-  // rightmost cell when present; other tabs fill left first, then one
-  // slot immediately right of scan.
-  const nonScan = tabs.filter((t) => t !== 'scan');
-  const showScan = tabs.includes('scan');
-  const hasSignout = nonScan.includes('signout');
-  const others = nonScan.filter((t) => t !== 'signout');
+  // The center tab ('scan' or 'receive') owns the raised centre slot regardless
+  // of order. Five-column grid: [left] [left] [center] [other] [signout]. Sign
+  // out is always the rightmost cell when present; other tabs fill left first,
+  // then one slot immediately right of center.
+  const centerTab = (tabs.find((t) => t === 'scan' || t === 'receive') ?? null) as
+    | 'scan'
+    | 'receive'
+    | null;
+  const nonCenter = tabs.filter((t) => t !== centerTab);
+  const showCenter = centerTab !== null;
+  const hasSignout = nonCenter.includes('signout');
+  const others = nonCenter.filter((t) => t !== 'signout');
   const leftTabs = others.slice(0, 2);
   const rightTabBeforeSignout = others[2];
+
+  // Route + chrome for whichever tab owns the centre slot.
+  const centerMeta =
+    centerTab === 'receive'
+      ? { route: '/m/receive', Icon: PackageCheck, openLabel: 'Open receiving scanner' }
+      : { route: '/m/scan', Icon: Barcode, openLabel: 'Open scanner' };
+  const centerActive = isActive(centerMeta.route);
 
   const renderTab = (id: MobileNavTabId, key: string) => {
     switch (id) {
@@ -169,35 +184,37 @@ function MobileBottomNavInner({ tabs }: { tabs: ReadonlyArray<MobileNavTabId> })
       <div className="grid grid-cols-5 items-end px-1 pt-1.5">
         {leftCells}
 
-        {/* Raised centre — Scan */}
-        {showScan ? (
+        {/* Raised centre — Scan or Receive */}
+        {showCenter ? (
           <div className="flex items-end justify-center">
             <button
               type="button"
               onClick={() => {
-                if (pathname === '/m/scan') {
-                  router.replace(scanCamOff ? '/m/scan' : '/m/scan?cam=off');
+                if (pathname === centerMeta.route) {
+                  router.replace(
+                    scanCamOff ? centerMeta.route : `${centerMeta.route}?cam=off`,
+                  );
                   return;
                 }
-                router.push('/m/scan');
+                router.push(centerMeta.route);
               }}
-              aria-current={isActive('/m/scan') ? 'page' : undefined}
+              aria-current={centerActive ? 'page' : undefined}
               aria-label={
-                pathname === '/m/scan'
+                pathname === centerMeta.route
                   ? scanCamOff
                     ? 'Turn camera preview on'
                     : 'Turn camera preview off'
-                  : 'Open scanner'
+                  : centerMeta.openLabel
               }
               className={`
                 -mt-7 flex h-16 w-16 items-center justify-center rounded-full
                 bg-gradient-to-br from-blue-500 to-blue-700 text-white
                 shadow-[0_8px_24px_rgba(37,99,235,0.45)] ring-4 ring-white
                 transition-transform active:scale-95
-                ${isActive('/m/scan') ? 'scale-[1.04]' : ''}
+                ${centerActive ? 'scale-[1.04]' : ''}
               `.trim()}
             >
-              <Barcode className="h-7 w-7" />
+              <centerMeta.Icon className="h-7 w-7" />
             </button>
           </div>
         ) : (

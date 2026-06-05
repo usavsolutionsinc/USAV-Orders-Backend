@@ -2,8 +2,8 @@
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "crons": [
     {
-      "path": "/api/cron/shipping/sync-due?limit=100&concurrency=5",
-      "schedule": "0 */2 * * *"
+      "path": "/api/cron/shipping/sync-due?limit=150&concurrency=8",
+      "schedule": "*/15 * * * *"
     },
     {
       "path": "/api/qstash/google-sheets/transfer-orders",
@@ -26,16 +26,12 @@
       "schedule": "0 0 * * 2-6"
     },
     {
-      "path": "/api/cron/shipping/subscribe-fedex",
-      "schedule": "*/15 * * * *"
+      "path": "/api/cron/shipping/reconcile-delivered",
+      "schedule": "20 * * * *"
     },
     {
-      "path": "/api/cron/shipping/subscribe-ups",
-      "schedule": "*/15 * * * *"
-    },
-    {
-      "path": "/api/cron/shipping/subscribe-usps",
-      "schedule": "*/15 * * * *"
+      "path": "/api/cron/shipping/metrics",
+      "schedule": "*/30 * * * *"
     },
     {
       "path": "/api/qstash/replenishment/sync",

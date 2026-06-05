@@ -4,10 +4,26 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
 import type { DateRange } from 'react-day-picker';
-import { AlertTriangle, ChevronDown, Filter, Truck, X } from '@/components/Icons';
+import {
+  AlertTriangle,
+  Barcode,
+  ChevronDown,
+  Cpu,
+  FileText,
+  Filter,
+  Hash,
+  Layers,
+  Truck,
+  X,
+} from '@/components/Icons';
 import type { HorizontalSliderItem } from '@/components/ui/HorizontalButtonSlider';
 import { DateRangePickerField } from '@/design-system/components/DateRangePickerField';
 import type { CarrierCode, ShipmentStatusCategory } from '@/components/shipping/ShipmentStatusBadge';
+import {
+  SHIPPED_SEARCH_FIELDS,
+  getShippedSearchHelperText,
+  type ShippedSearchField,
+} from '@/lib/shipped-search';
 
 const CARRIERS: ReadonlyArray<{ value: CarrierCode; label: string }> = [
   { value: 'UPS', label: 'UPS' },
@@ -218,7 +234,26 @@ export function useShippedFilterRefinements() {
   };
 }
 
-export function ShippedFilterDropdown({ onClose }: { onClose: () => void }) {
+const SHIPPED_FIELD_ICONS: Record<ShippedSearchField, React.FC<{ className?: string }>> = {
+  all: Layers,
+  order_id: Hash,
+  tracking: Truck,
+  product_title: FileText,
+  sku: Barcode,
+  serial_number: Cpu,
+};
+
+export function ShippedFilterDropdown({
+  onClose,
+  searchField,
+  onSearchFieldChange,
+}: {
+  onClose: () => void;
+  /** Optional "Search by" axis — when provided, surfaces a field picker at the
+   *  top of the dropdown (replaces the search bar's focus-reveal pills). */
+  searchField?: ShippedSearchField;
+  onSearchFieldChange?: (next: ShippedSearchField) => void;
+}) {
   const { state, actions } = useShippedFilterRefinements();
   const selectClass =
     'h-9 w-full cursor-pointer appearance-none rounded-md border border-gray-200 bg-white pl-2.5 pr-7 text-caption font-semibold text-gray-900 hover:border-blue-300 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20';
@@ -228,6 +263,37 @@ export function ShippedFilterDropdown({ onClose }: { onClose: () => void }) {
 
   return (
     <div className="space-y-3">
+      {onSearchFieldChange && searchField !== undefined ? (
+        <div>
+          <span className={labelClass}>Search field</span>
+          <div className="flex flex-wrap gap-1.5">
+            {SHIPPED_SEARCH_FIELDS.map((field) => {
+              const Icon = SHIPPED_FIELD_ICONS[field.id];
+              const active = searchField === field.id;
+              return (
+                <button
+                  key={field.id}
+                  type="button"
+                  onClick={() => onSearchFieldChange(field.id)}
+                  aria-pressed={active}
+                  className={`inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-caption font-bold ring-1 ring-inset transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500/40 ${
+                    active
+                      ? 'bg-blue-600 text-white ring-blue-600'
+                      : 'bg-white text-gray-700 ring-gray-200 hover:bg-gray-50'
+                  }`}
+                >
+                  <Icon className="h-3.5 w-3.5 shrink-0" />
+                  {field.label}
+                </button>
+              );
+            })}
+          </div>
+          <p className="mt-1.5 px-0.5 text-[11px] font-medium text-gray-500">
+            {getShippedSearchHelperText(searchField)}
+          </p>
+        </div>
+      ) : null}
+
       <NeedsAttentionButton active={state.exceptionsOnly} onClick={actions.toggleExceptions} />
 
       <label className="block">

@@ -63,6 +63,9 @@ async function createTokenRequest(req: NextRequest) {
     // Mobile packer wizard publishes step transitions; desktop display
     // subscribes to mirror state (scan → confirm → camera → review → success).
     'packer:*': ['subscribe', 'publish'],
+    // Per-staff inbox alerts (e.g. receiving-door scan hits a pending order).
+    // Server publishes on inbox:{staffId}; the signed-in client subscribes.
+    'inbox:*': ['subscribe', 'publish'],
   };
 
   if (aiSessionChannel) {

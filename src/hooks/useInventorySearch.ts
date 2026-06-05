@@ -57,7 +57,8 @@ export type InventoryResultRow =
     | { kind: 'unit'; row: UnitListRow; key: string }
     | { kind: 'event'; row: PulseEventRow; key: string }
     | { kind: 'alert'; row: AlertRow; key: string }
-    | { kind: 'count'; row: CountRow; key: string };
+    | { kind: 'count'; row: CountRow; key: string }
+    | { kind: 'triage'; row: any; key: string };
 
 export type InventoryResultKind = InventoryResultRow['kind'];
 
@@ -339,6 +340,19 @@ export function useInventorySearch(params: UseInventorySearchParams): UseInvento
                     });
                     return { kind: 'counts' as const, rows: data.items, counts: data.counts };
                 }
+                case 'triage': {
+                    return {
+                        kind: 'triage' as const,
+                        rows: [
+                            { id: 'EXP-101', sku: 'SNY-PS5-DISC', type: 'Damaged', severity: 'high', title: 'Box crushed', reporter: 'Michael K.', date: '10m ago' },
+                            { id: 'EXP-104', sku: 'MSF-XBS-X', type: 'Mismatch', severity: 'high', title: 'Wrong Edition', reporter: 'Michael K.', date: '5h ago' },
+                        ],
+                    };
+                }
+                case 'pulse': {
+                    const rows = await fetchActivity({ q: trimmed, field, signal });
+                    return { kind: 'activity' as const, rows };
+                }
                 default:
                     return { kind: 'activity' as const, rows: [] as PulseEventRow[] };
             }
@@ -368,6 +382,8 @@ export function useInventorySearch(params: UseInventorySearchParams): UseInvento
                 return data.rows.map((row) => ({ kind: 'alert' as const, row, key: String(row.id) }));
             case 'counts':
                 return data.rows.map((row) => ({ kind: 'count' as const, row, key: String(row.id) }));
+            case 'triage':
+                return data.rows.map((row: any) => ({ kind: 'triage' as const, row, key: row.id }));
         }
     })();
 

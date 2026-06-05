@@ -119,6 +119,17 @@ function renderBody(row: InventoryResultRow): {
                 copyText: r.name,
             };
         }
+        case 'triage': {
+            const r = row.row;
+            const tone = r.severity === 'high' ? 'red' : r.severity === 'medium' ? 'amber' : 'blue';
+            return {
+                title: r.sku,
+                subtitle: r.title,
+                meta: `${r.id} · ${r.reporter} · ${r.date}`,
+                badge: { label: r.type, tone: tone as any },
+                copyText: r.id,
+            };
+        }
     }
 }
 

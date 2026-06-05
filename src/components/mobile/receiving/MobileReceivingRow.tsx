@@ -59,6 +59,19 @@ function getStatusDotBg(
   return 'bg-gray-400';
 }
 
+/** Short local "M/D h:mm" for the scanned/unboxed timeline; null on bad input. */
+function fmtShort(ts?: string | null): string | null {
+  if (!ts) return null;
+  const d = new Date(ts.includes('T') ? ts : ts.replace(' ', 'T'));
+  if (Number.isNaN(d.getTime())) return null;
+  return d.toLocaleString(undefined, {
+    month: 'numeric',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+  });
+}
+
 function PhotoChip({ count, isAction = false }: { count: number; isAction?: boolean }) {
   const has = count > 0;
   return (
@@ -190,6 +203,29 @@ export function MobileReceivingRow({ row, variant, fresh = false, onTap, photosH
             </Link>
           )}
         </div>
+
+        {/* Row 3: door-scan / unbox timeline (history). Hidden when neither set. */}
+        {(() => {
+          const scannedShort = fmtShort(row.scanned_at ?? row.received_at);
+          const unboxedShort = fmtShort(row.unboxed_at);
+          if (!scannedShort && !unboxedShort) return null;
+          return (
+            <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-micro font-semibold text-gray-400">
+              {scannedShort && (
+                <span>
+                  Scanned {scannedShort}
+                  {row.scanned_by_name ? ` · ${row.scanned_by_name}` : ''}
+                </span>
+              )}
+              {unboxedShort && (
+                <span>
+                  Unboxed {unboxedShort}
+                  {row.unboxed_by_name ? ` · ${row.unboxed_by_name}` : ''}
+                </span>
+              )}
+            </div>
+          );
+        })()}
 
         {isExpanded && (
           <Link

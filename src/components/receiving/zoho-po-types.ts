@@ -47,6 +47,30 @@ export const CONDITION_OPTIONS = [
   { value: 'PARTS',     label: 'Parts' },
 ] as const;
 
+// Friendly labels for every condition grade (CONDITION_GRADE_VALUES), used
+// anywhere a raw enum like `BRAND_NEW` would otherwise leak to a human —
+// ticket bodies, exports, etc. Pure + dependency-free so it's safe to import
+// from server code (e.g. Zendesk ticket templates).
+const CONDITION_GRADE_LABEL: Record<string, string> = {
+  BRAND_NEW:   'Brand New',
+  LIKE_NEW:    'Like New',
+  REFURBISHED: 'Refurbished',
+  USED_A:      'Used — A',
+  USED_B:      'Used — B',
+  USED_C:      'Used — C',
+  PARTS:       'For Parts',
+};
+
+export function conditionLabel(code: string | null | undefined): string {
+  const c = String(code ?? '').trim().toUpperCase();
+  if (!c) return '';
+  return (
+    CONDITION_GRADE_LABEL[c] ??
+    // Unknown grade: title-case the raw value so it still reads cleanly.
+    c.replace(/_/g, ' ').toLowerCase().replace(/\b\w/g, (m) => m.toUpperCase())
+  );
+}
+
 export const CHANNEL_OPTIONS = [
   { value: '',       label: 'No Channel' },
   { value: 'ORDERS', label: 'Orders' },

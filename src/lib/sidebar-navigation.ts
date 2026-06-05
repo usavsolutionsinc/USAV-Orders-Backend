@@ -28,6 +28,7 @@ import {
   Truck,
   User,
   Wrench,
+  Zap,
 } from '@/components/Icons';
 import { ADMIN_SECTION_OPTIONS } from '@/components/admin/admin-sections';
 
@@ -353,14 +354,24 @@ export const SIDEBAR_PAGE_NAV: SidebarPageNav[] = [
     },
   },
   // ── Inventory ─────────────────────────────────────────────────────────────
-  // `?section=replenish`; default `inventory` (param cleared).
+  // `?mode=triage|pulse` or `?section=replenish`; default `ledger`.
   {
     id: 'inventory', label: 'Inventory', href: INVENTORY, icon: Package, kind: 'main', requires: 'sku_stock.view',
     modes: [
-      { id: 'inventory', label: 'Inventory', icon: Package,     to: () => ({ pathname: INVENTORY, params: { section: null } }) },
-      { id: 'replenish', label: 'Replenish', icon: TrendingUp,  to: () => ({ pathname: INVENTORY, params: { section: 'replenish' } }) },
+      { id: 'ledger',    label: 'Ledger',    icon: Package,    to: () => ({ pathname: INVENTORY, params: { mode: null, section: null } }) },
+      { id: 'triage',    label: 'Triage',    icon: Zap,        to: () => ({ pathname: INVENTORY, params: { mode: 'triage', section: null } }) },
+      { id: 'pulse',     label: 'Pulse',     icon: TrendingUp, to: () => ({ pathname: INVENTORY, params: { mode: 'pulse', section: null } }) },
+      { id: 'graph',     label: 'Graph',     icon: Layers,     to: () => ({ pathname: `${INVENTORY}/graph`, params: { mode: null, section: null } }) },
+      { id: 'replenish', label: 'Replenish', icon: History,    to: () => ({ pathname: INVENTORY, params: { section: 'replenish', mode: null } }) },
     ],
-    resolveMode: ({ params }) => (params.get('section') === 'replenish' ? 'replenish' : 'inventory'),
+    resolveMode: ({ pathname, params }) => {
+      if (pathname.startsWith(`${INVENTORY}/graph`)) return 'graph';
+      if (params.get('section') === 'replenish') return 'replenish';
+      const m = params.get('mode');
+      if (m === 'triage') return 'triage';
+      if (m === 'pulse') return 'pulse';
+      return 'ledger';
+    },
   },
   // ── Warehouse ─────────────────────────────────────────────────────────────
   // `?tab=labels|racks|rooms|bins|map`; default `labels` (param cleared).

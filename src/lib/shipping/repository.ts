@@ -191,7 +191,33 @@ export async function updateShipmentSummary(
   const client = await pool.connect();
   try {
     const status = result.latestStatusCategory;
-    const isTerminal = status === 'DELIVERED' || status === 'RETURNED';
+
+    // ─── A1: derive delivered from the append-only event log, not just the
+    // latest snapshot. Callers (poll + every webhook) upsert events *before*
+    // calling this, so the log is authoritative and immune to out-of-order /
+    // late-arriving events that leave `latest_status_category` on an in-transit
+    // value even though a DELIVERED scan exists. Earliest such event time is the
+    // honest delivered_at.
+    const logAgg = await client.query<{ has_delivered: boolean; first_delivered_at: string | null }>(
+      `SELECT
+         bool_or(normalized_status_category = 'DELIVERED')                                  AS has_delivered,
+         min(event_occurred_at) FILTER (WHERE normalized_status_category = 'DELIVERED')     AS first_delivered_at
+       FROM shipment_tracking_events
+       WHERE shipment_id = $1`,
+      [shipmentId]
+    );
+    const deliveredFromLog = logAgg.rows[0]?.has_delivered === true;
+    const firstDeliveredAt = logAgg.rows[0]?.first_delivered_at ?? null;
+
+    // Delivered if the log has it, the snapshot says so, or the carrier handed
+    // us an explicit delivered timestamp. The SQL OR with the stored column
+    // (A2) makes it monotonic — a stray later in-transit event can't un-deliver.
+    const deliveredNow = deliveredFromLog || status === 'DELIVERED' || result.deliveredAt != null;
+    // Earliest known delivery instant from any source. NULL is fine — the SQL
+    // coheres it to now() under the A4 invariant when delivered is true.
+    const deliveredAtValue = firstDeliveredAt ?? result.deliveredAt ?? null;
+    // Terminal is sticky: delivered (now or previously) or a fresh RETURNED.
+    const isTerminal = deliveredNow || status === 'RETURNED';
     const nextCheck = isTerminal ? null : computeNextCheckAt(status, 0);
 
     await client.query(
@@ -205,15 +231,24 @@ export async function updateShipmentSummary(
          is_carrier_accepted  = (is_carrier_accepted OR $6::boolean),
          is_in_transit        = (is_in_transit        OR $7::boolean),
          is_out_for_delivery  = (is_out_for_delivery  OR $8::boolean),
-         is_delivered         = $9::boolean,
+         -- A2: monotonic delivered — never flips back to false once observed.
+         is_delivered         = (is_delivered OR $9::boolean),
          has_exception        = $10::boolean,
-         is_terminal          = $11::boolean,
+         -- A2: monotonic terminal — a delivered shipment stays terminal.
+         is_terminal          = (is_terminal OR $11::boolean),
 
          label_created_at    = CASE WHEN $12::boolean AND label_created_at IS NULL    THEN now() ELSE label_created_at    END,
          carrier_accepted_at = CASE WHEN $13::boolean AND carrier_accepted_at IS NULL THEN now() ELSE carrier_accepted_at END,
          first_in_transit_at = CASE WHEN $14::boolean AND first_in_transit_at IS NULL THEN now() ELSE first_in_transit_at END,
          out_for_delivery_at = CASE WHEN $15::boolean THEN now() ELSE out_for_delivery_at END,
-         delivered_at        = CASE WHEN $16::boolean AND delivered_at IS NULL THEN COALESCE($17::timestamptz, now()) ELSE delivered_at END,
+         -- A4 coherence: is_delivered ⇒ delivered_at IS NOT NULL. Keep the
+         -- earliest known instant; only ever fill, never push it later.
+         delivered_at        = CASE
+                                 WHEN $16::boolean
+                                   THEN LEAST(COALESCE(delivered_at, $17::timestamptz, now()),
+                                              COALESCE($17::timestamptz, delivered_at, now()))
+                                 ELSE delivered_at
+                               END,
          exception_at        = CASE WHEN $18::boolean THEN now() ELSE exception_at END,
 
          latest_event_at          = COALESCE($19::timestamptz, latest_event_at),
@@ -223,6 +258,8 @@ export async function updateShipmentSummary(
          consecutive_error_count  = 0,
          last_error_code          = NULL,
          last_error_message       = NULL,
+         -- C1: a successful sync clears any prior carrier-blocked marker.
+         tracking_blocked_reason  = NULL,
          latest_payload           = $21::jsonb,
          metadata                 = COALESCE(metadata, '{}'::jsonb) || $22::jsonb,
          updated_at               = now()
@@ -237,7 +274,7 @@ export async function updateShipmentSummary(
         status === 'ACCEPTED',                         // $6  is_carrier_accepted
         status === 'IN_TRANSIT',                       // $7  is_in_transit
         status === 'OUT_FOR_DELIVERY',                 // $8  is_out_for_delivery
-        status === 'DELIVERED',                        // $9  is_delivered
+        deliveredNow,                                  // $9  is_delivered (log-derived, monotonic)
         status === 'EXCEPTION',                        // $10 has_exception
         isTerminal,                                    // $11 is_terminal
 
@@ -245,8 +282,8 @@ export async function updateShipmentSummary(
         status === 'ACCEPTED',                         // $13 carrier_accepted_at gate
         status === 'IN_TRANSIT',                       // $14 first_in_transit_at gate
         status === 'OUT_FOR_DELIVERY',                 // $15 out_for_delivery_at gate
-        status === 'DELIVERED',                        // $16 delivered_at gate
-        result.deliveredAt ?? null,                    // $17 delivered_at value
+        deliveredNow,                                  // $16 delivered_at gate (log-derived)
+        deliveredAtValue,                              // $17 delivered_at value (earliest from log/result)
         status === 'EXCEPTION',                        // $18 exception_at gate
 
         result.latestEventAt ?? null,                  // $19
@@ -264,7 +301,8 @@ export async function updateShipmentSummary(
       status === 'ACCEPTED' ||
       status === 'IN_TRANSIT' ||
       status === 'OUT_FOR_DELIVERY' ||
-      status === 'DELIVERED'
+      status === 'DELIVERED' ||
+      deliveredNow
     ) {
       try {
         await emitShippedLedgerForShipment(client, shipmentId, {
@@ -284,10 +322,22 @@ export async function updateShipmentSummary(
 export async function updateShipmentError(
   shipmentId: number,
   errorCode: string,
-  errorMessage: string
+  errorMessage: string,
+  carrier?: CarrierCode | string | null,
 ): Promise<void> {
   const client = await pool.connect();
   try {
+    // C1/C2: an auth/access-control rejection (USPS 403 IP-Agreement gate, or a
+    // carrier that keeps returning 401/403) is not a transient error — polling
+    // can't fix it. Record a distinct `tracking_blocked_reason` so the UI can
+    // show TRACKING_UNAVAILABLE instead of leaving the shipment silently stuck
+    // pre-delivered, and push next_check_at ~24h out so we stop burning the
+    // (e.g. USPS 60/hr) quota re-failing until access clears.
+    const isAccessBlocked = errorCode === 'ACCESS_CONTROL' || errorCode === 'AUTH_ERROR';
+    const blockedReason = isAccessBlocked
+      ? `${(carrier ?? 'CARRIER')}_ACCESS_CONTROL`
+      : null;
+
     await client.query(
       `UPDATE shipping_tracking_numbers SET
          consecutive_error_count = consecutive_error_count + 1,
@@ -295,12 +345,14 @@ export async function updateShipmentError(
          last_checked_at         = now(),
          last_error_code         = $1,
          last_error_message      = $2,
-         next_check_at           = now() + (
-           INTERVAL '1 hour' * LEAST(POWER(2, consecutive_error_count), 16)
-         ),
+         tracking_blocked_reason = CASE WHEN $4::boolean THEN $5::text ELSE tracking_blocked_reason END,
+         next_check_at           = CASE
+                                     WHEN $4::boolean THEN now() + INTERVAL '24 hours'
+                                     ELSE now() + (INTERVAL '1 hour' * LEAST(POWER(2, consecutive_error_count), 16))
+                                   END,
          updated_at              = now()
        WHERE id = $3`,
-      [errorCode, errorMessage.slice(0, 1000), shipmentId]
+      [errorCode, errorMessage.slice(0, 1000), shipmentId, isAccessBlocked, blockedReason]
     );
   } finally {
     client.release();

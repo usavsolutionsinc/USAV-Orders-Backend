@@ -114,7 +114,7 @@ export async function syncShipment(input: SyncShipmentInput): Promise<SyncShipme
   } catch (err: any) {
     const code = err?.code ?? 'SYNC_ERROR';
     const message = err?.message ?? 'Unknown sync error';
-    await updateShipmentError(shipment.id, code, message);
+    await updateShipmentError(shipment.id, code, message, carrier);
 
     return {
       ok: false,

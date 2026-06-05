@@ -22,7 +22,6 @@ import {
 } from '@/lib/inventory-events-channel';
 import { microBadge } from '@/design-system/tokens/typography/presets';
 import { SidebarShell } from '@/components/layout/SidebarShell';
-import { HorizontalButtonSlider, type HorizontalSliderItem } from '@/components/ui/HorizontalButtonSlider';
 import {
     INVENTORY_SEARCH_FIELDS,
     getInventorySearchPlaceholder,
@@ -30,8 +29,7 @@ import {
 } from '@/lib/inventory-search';
 import { InventorySidebarTabs } from './InventorySidebarTabs';
 import { FIELD_ICON } from './inventory-sidebar-metadata';
-import { InventoryFilterDropdown } from './InventorySidebarFilters';
-import { ViewDropdown, type ViewDropdownOption } from '@/components/ui/ViewDropdown';
+import { InventorySidebarFilters, InventoryFilterDropdown } from './InventorySidebarFilters';
 import { InventoryCrossTabHandoffCard } from './InventoryCrossTabHandoffCard';
 import { InventoryResultList } from './InventoryResultList';
 import { InventoryRecentSearches } from './InventoryRecentSearches';
@@ -242,25 +240,10 @@ export function InventorySidebar({ embedded = true }: InventorySidebarProps) {
         return out;
     }, [field, buckets, tab, handleFieldChange, handleBucketsChange]);
 
-    const modeOptions: ReadonlyArray<ViewDropdownOption<any>> = [
-        { value: 'ledger', label: 'Inventory Ledger' },
-        { value: 'triage', label: 'Exception Triage' },
-        { value: 'pulse', label: 'Lifecycle Pulse' },
-    ];
-
     const panelContent = (
         <SidebarShell
             as={motion.div}
             containerProps={{ initial: 'hidden', animate: 'visible', variants: containerVariants }}
-            headerAbove={
-                <ViewDropdown
-                    options={modeOptions}
-                    value={mode}
-                    onChange={(m) => setSidebarUrl({ mode: m })}
-                    variant="boxy"
-                    buttonClassName="h-14 w-full border-b border-gray-200 bg-white px-4 pr-12 text-left text-xs uppercase tracking-[0.2em] font-black text-gray-900 outline-none transition-colors hover:bg-gray-50"
-                />
-            }
             search={{
                 value: inputValue,
                 onChange: setInputValue,

@@ -16,18 +16,13 @@ import {
   useCallback,
   useEffect,
   useLayoutEffect,
-  useMemo,
   useRef,
   useState,
-  type ReactNode,
   type WheelEvent,
 } from 'react';
-import { createPortal } from 'react-dom';
-import { renderToStaticMarkup } from 'react-dom/server';
 import {
   Barcode,
   Clipboard,
-  ClipboardList,
   Copy,
   ExternalLink,
   History,
@@ -38,17 +33,11 @@ import {
   Plus,
   Printer,
   RefreshCw,
-  ShoppingCart,
-  X,
 } from '@/components/Icons';
 import { toast } from '@/lib/toast';
-import { receivingLabelPoCornerDisplay } from '@/lib/print/printReceivingLabel';
 import { ListingUrlChip, TrackingChip, OrderIdChip, TicketChip, getLast4 } from '@/components/ui/CopyChip';
 import { SearchBar } from '@/components/ui/SearchBar';
-import { HorizontalButtonSlider, type HorizontalSliderItem } from '@/components/ui/HorizontalButtonSlider';
-import { ReceivingPhotoStrip } from '@/components/sidebar/ReceivingPhotoStrip';
 import { ReceivingCartonStaffDropdown } from '@/components/sidebar/receiving/ReceivingCartonStaffDropdown';
-import { FlowSection } from './FlowSection';
 import {
   printReceivingLabel,
   type ReceivingLabelPayload,
@@ -60,6 +49,7 @@ import { ReceivingAuditModal } from './ReceivingAuditModal';
 import { ConditionPills } from './ConditionPills';
 import { markConditionSet } from './ReceivingProgressStepper';
 import { SerialCard } from './SerialCard';
+import { SerialMatchResult, useSerialLookup } from './SerialMatchResult';
 import { ReceivingUnitRows, type UnitSerial } from './ReceivingUnitRows';
 import { PoLinesAccordion } from './PoLinesAccordion';
 import { takeSerialEditHandoff } from './serialEditHandoff';
@@ -70,18 +60,10 @@ import { TextField } from '@/design-system/primitives';
 import { StickyActionBar } from '@/design-system/components/StickyActionBar';
 import { PaneHeaderActionBar, type PaneHeaderActionBarAction } from '@/components/ui/pane-header';
 import { printProductLabel } from '@/lib/print/printProductLabel';
-import { mobileQrUrl } from '@/lib/barcode-routing';
-import { loadBarcodeLibrary, renderBarcode } from '@/utils/barcode';
-import { formatDatePST, formatDateTimePST, formatTime12hPST } from '@/utils/date';
 import { buildReceivingCopyInfo } from '@/utils/copy-all-receiving';
 import { copyToClipboard } from '@/utils/_dom';
 import { zendeskTicketUrl } from '@/lib/zendesk-ticket-url';
-import { getStaffName } from '@/utils/staff';
 import { getStaffThemeById, stationThemeColors } from '@/utils/staff-colors';
-import {
-  CONDITION_OPTS,
-  COND_LABEL,
-} from '@/components/station/receiving-constants';
 import {
   dispatchLineUpdated,
   type ReceivingLineRow,
@@ -92,48 +74,22 @@ import {
   parseZendeskListingFromPoNotes,
 } from '@/lib/zoho-po-prefill';
 import {
-  RETURN_PLATFORM_LABELS,
   SOURCE_PLATFORM_LABELS,
   SOURCE_PLATFORM_OPTS,
   detectPlatformFromUrl,
   RECEIVING_TYPE_OPTS,
-  INPUT_CLASS,
-  TYPE_PRODUCT_TITLE_CLASS,
-  TYPE_PRODUCT_TITLE_COMPACT_CLASS,
-  TYPE_SECTION_TITLE_CLASS,
-  TYPE_FIELD_LABEL_CLASS,
-  TYPE_HEADER_SUMMARY_CLASS,
-  TYPE_INPUT_INLINE_CLASS,
-  FLOW_SECTION_BTN_CLASS,
-  FLOW_SECTION_TITLE_CLASS,
-  FLOW_SECTION_SUMMARY_CLASS,
   FLOW_SECTION_LABEL,
-  FLOW_SECTION_SUMMARY_SEP_CLASS,
   RECEIVING_SCAN_RULE_LINE_CLASS,
   RECEIVING_TRAIL_SLOT_CLASS,
-  RECEIVING_TRAIL_BTN_CLASS,
-  TRACKING_REMOVE_BTN_CLASS,
   TRACKING_ADD_BTN_CLASS,
-  TRACKING_ROW_LEADING_ICON_CLASS,
   RECEIVING_CHIP_EDIT_BTN_CLASS,
-  FLOW_SECTION_TONE_STYLES,
-  RECEIVING_LINE_DETAILS_STORAGE_KEY,
   readReceivingLineDetailsScratch,
   writeReceivingLineDetailsScratch,
   parseReceivingPackage,
-  mapApiLineToPoSummary,
-  platformLabel,
-  formatPackageUnboxDate,
-  resolvePoScanValue,
-  conditionShort,
   randomId,
   listingUrlForOpen,
   listingLinkPreview,
   receivingShareUrl,
-  type PoLineSummary,
-  type ReceivingPackageMeta,
-  type PoContext,
-  type FlowSectionTone,
 } from '@/components/sidebar/receiving/receiving-sidebar-shared';
 
 /**
@@ -228,10 +184,14 @@ export function LineEditPanel({
   // selected item rather than the line-level grade. Null on single-qty lines.
   const [unitLabelCondition, setUnitLabelCondition] = useState<string | null>(null);
   const [notes, setNotes] = useState('');
-  const [supportNotes, setSupportNotes] = useState('');
   const [trackingEdit, setTrackingEdit] = useState(row.tracking_number || '');
   const [zendesk, setZendesk] = useState('');
   const [serialInput, setSerialInput] = useState('');
+  // RETURN flow: on serial commit we check the serial against serial_units and
+  // surface "Match found" / "No match found" under the scan card. The read runs
+  // before the scan upsert (see submitSerial) so it reflects prior inventory,
+  // not the row we're about to write.
+  const serialLookup = useSerialLookup();
   const [listingLink, setListingLink] = useState('');
   const [saving, setSaving] = useState(false);
   const [serialSubmitting, setSerialSubmitting] = useState(false);
@@ -252,26 +212,11 @@ export function LineEditPanel({
     () => (row.source_platform || '').toLowerCase(),
   );
   const [platformSaving, setPlatformSaving] = useState(false);
-  type FlowSecKey = 'shipment' | 'item' | 'support';
-  // All three sections expanded by default — including Support — so the user
-  // sees every field at a glance without an extra click. Per-section color
-  // tinting (see FlowSection `tone` prop) keeps them visually distinct.
-  const [flowOpen, setFlowOpen] = useState<Record<FlowSecKey, boolean>>(() => ({
-    shipment: true,
-    item: true,
-    support: true,
-  }));
   // Claim modal — opened from PhotosCard's "Make a claim" CTA. The modal
   // creates a Zendesk ticket via /api/receiving/zendesk-claim and auto-pops
   // the returned TK # back into the Support FlowSection's existing zendesk
   // field via dispatchLineUpdated.
   const [claimModalOpen, setClaimModalOpen] = useState(false);
-  // Support FlowSection is hidden by default — it surfaces only after a
-  // claim is filed (so the operator can review the auto-populated ZD ticket
-  // #) or when an existing zendesk_ticket/support note is already saved on
-  // the line. Keeps the default workspace lean: condition + serial + photos
-  // are what the operator sees first.
-  const [showSupportOverride, setShowSupportOverride] = useState(false);
   const [extraTrackings, setExtraTrackings] = useState<string[]>([]);
   const [extraSerials, setExtraSerials] = useState<string[]>([]);
   const [zohoSyncing, setZohoSyncing] = useState(false);
@@ -333,10 +278,6 @@ export function LineEditPanel({
   persistListingRef.current = listingLink;
   persistExtraTrackingsRef.current = extraTrackings;
 
-  const toggleFlow = useCallback((key: FlowSecKey) => {
-    setFlowOpen((prev) => ({ ...prev, [key]: !prev[key] }));
-  }, []);
-
   const toggleTrackingEditors = useCallback(() => {
     setTrackingEditorsOpen((prev) => {
       const next = !prev;
@@ -348,12 +289,6 @@ export function LineEditPanel({
   }, []);
 
   useEffect(() => {
-    // Keep every section expanded across row changes — including Support —
-    // so the user never has to re-open them after switching lines.
-    setFlowOpen({ shipment: true, item: true, support: true });
-    // Reset Support visibility when the operator switches lines — the new
-    // line's own zendesk/notes will re-reveal it if needed.
-    setShowSupportOverride(false);
     // Re-arm the PO# editor for unmatched / un-bound rows so the operator
     // doesn't have to click the pencil after each switch. Don't auto-close
     // for matched rows — the operator may have deliberately opened it.
@@ -492,10 +427,6 @@ export function LineEditPanel({
     setNotes(row.notes ?? '');
   }, [row.id, row.notes]);
 
-  useEffect(() => {
-    setSupportNotes(row.receiving_support_notes || '');
-  }, [row.id, row.receiving_id, row.receiving_support_notes]);
-
   // Serial is per line; when moving between lines, prefill from the row's
   // already-recorded serials (most recent wins) so the sidebar reflects what
   // the table chip shows. Falls back to empty when the line has none.
@@ -506,6 +437,12 @@ export function LineEditPanel({
       : '';
     setSerialInput(latest);
   }, [row.id, row.serials]);
+
+  // Clear any RETURN match result when switching lines so a prior line's
+  // "Match found"/"No match" band doesn't linger on the new line.
+  useEffect(() => {
+    serialLookup.reset();
+  }, [row.id, serialLookup.reset]);
 
   useEffect(() => {
     // Consume a handoff queued by Edit on a non-active accordion row. This panel
@@ -656,28 +593,6 @@ export function LineEditPanel({
     return () => window.clearTimeout(t);
   }, [listingLink, sourcePlatform, row.receiving_id, savePlatform]);
 
-  const saveSupportNotes = useCallback(async () => {
-    if (row.receiving_id == null) return;
-    const trimmed = supportNotes.trim();
-    const prev = (row.receiving_support_notes || '').trim();
-    if (trimmed === prev) return;
-    try {
-      const res = await fetch(`/api/receiving/${row.receiving_id}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ support_notes: trimmed || null }),
-      });
-      const data = await res.json().catch(() => ({}));
-      if (!data?.success) return;
-      const nextSn = (data.receiving?.support_notes as string | null) ?? null;
-      window.dispatchEvent(new CustomEvent('receiving-package-updated', {
-        detail: { receiving_id: row.receiving_id, support_notes: nextSn },
-      }));
-    } catch {
-      /* silent */
-    }
-  }, [row.receiving_id, row.receiving_support_notes, supportNotes]);
-
   // Persist the Zendesk ticket # onto the line (`receiving_lines.zendesk_ticket`)
   // so it survives reloads and shows on other surfaces (e.g. the tech workspace).
   // Claims write this server-side too; this covers manual edits to the field.
@@ -740,15 +655,11 @@ export function LineEditPanel({
       const detail = (e as CustomEvent<{
         receiving_id?: number;
         source_platform?: string | null;
-        support_notes?: string | null;
         listing_url?: string | null;
       }>).detail;
       if (!detail || detail.receiving_id !== row.receiving_id) return;
       if (detail.source_platform !== undefined) {
         setSourcePlatform((detail.source_platform || '').toLowerCase());
-      }
-      if (detail.support_notes !== undefined) {
-        setSupportNotes(detail.support_notes || '');
       }
       if (detail.listing_url !== undefined) {
         setListingLink(detail.listing_url || '');
@@ -806,6 +717,14 @@ export function LineEditPanel({
       // identity + its condition) to the line. Unlimited per line — a unit may
       // carry several serials. It does NOT change quantity_received or stock;
       // those are owned by the PO line item via the Receive action.
+
+      // RETURN flow: surface whether this serial already exists in our records
+      // (a genuine return matches a previously-shipped unit). The lookup MUST
+      // run before the upsert below — otherwise it would match the row we're
+      // about to write and always report "Match found".
+      if (receivingType === 'RETURN') {
+        await serialLookup.check(serial);
+      }
 
       const postScan = async () => {
         const res = await fetch('/api/receiving/scan-serial', {
@@ -869,6 +788,8 @@ export function LineEditPanel({
     serialSubmitting,
     refreshLineWithSerials,
     row.serials,
+    receivingType,
+    serialLookup,
   ]);
 
   const submitExtraSerial = useCallback(async (idx: number) => {
@@ -1249,18 +1170,6 @@ export function LineEditPanel({
     date: labelDate,
   };
 
-  const inboundSummary = (
-    <>
-      <span className="min-w-0 truncate" title={trackingHint || undefined}>
-        {trackingHint ? getLast4(trackingHint) : '—'}
-      </span>
-      <span className={FLOW_SECTION_SUMMARY_SEP_CLASS} aria-hidden>
-        ·
-      </span>
-      <span className="min-w-0 max-w-full break-words text-right">{labelPlatform}</span>
-    </>
-  );
-
   const runPrintLabel = useCallback(() => {
     let didPrint = false;
     if (scanValue.trim()) {
@@ -1524,8 +1433,6 @@ export function LineEditPanel({
     }
   }, [row, staffId, zendesk, listingLink, extraTrackings]);
 
-  const hasItemNav = typeof itemIndex === 'number' && typeof itemTotal === 'number' && itemTotal > 0;
-  const itemCountSummary = hasItemNav && (itemTotal ?? 0) > 1 ? `${itemTotal} items` : undefined;
   const cartonActionsDisabled = !row.receiving_id;
 
   return (
@@ -2080,6 +1987,7 @@ export function LineEditPanel({
                       // and serial (divided by a thin line). The selected unit's
                       // grade is reported up via onActiveConditionChange so the
                       // header badge + label preview track that unit.
+                      <>
                       <ReceivingUnitRows
                         lineId={row.id}
                         saved={serials as UnitSerial[]}
@@ -2099,6 +2007,15 @@ export function LineEditPanel({
                         onSetUnitGrade={(id, grade) => setUnitGrade(id, grade)}
                         onActiveConditionChange={setUnitLabelCondition}
                       />
+                      {/* RETURN-only: serial-match result under the unit rows. */}
+                      {receivingType === 'RETURN' ? (
+                        <SerialMatchResult
+                          state={serialLookup.state}
+                          unit={serialLookup.unit}
+                          serial={serialLookup.serial}
+                        />
+                      ) : null}
+                      </>
                     ) : (
                       // Single-qty line (incl. a PARTS product carrying several
                       // part-serials under one unit): one condition picker + a
@@ -2122,6 +2039,15 @@ export function LineEditPanel({
                           showSavedChips={false}
                           editingSerial={headerSerialEdit}
                           onEditingSerialChange={setHeaderSerialEdit}
+                          resultSlot={
+                            receivingType === 'RETURN' ? (
+                              <SerialMatchResult
+                                state={serialLookup.state}
+                                unit={serialLookup.unit}
+                                serial={serialLookup.serial}
+                              />
+                            ) : undefined
+                          }
                           onAdd={(sn) => submitSerial(sn, cond)}
                           onReplaceSerial={(original, nextSerial) => {
                             if (original.id == null) return;

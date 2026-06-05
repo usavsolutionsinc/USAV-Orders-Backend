@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { X } from '@/components/Icons';
 import { SerialChip } from '@/components/ui/CopyChip';
 import { TextField } from '@/design-system/primitives';
@@ -45,6 +45,12 @@ interface Props {
   notesId?: string;
   /** When false, chips stay in the PO header only (no duplicate list below input). */
   showSavedChips?: boolean;
+  /**
+   * Slot rendered directly under the SERIAL input row (above any saved chips).
+   * Used by the RETURN flow to show the serial-match result inline with the
+   * scan field.
+   */
+  resultSlot?: ReactNode;
   /** Nested inside {@link PoLinesAccordion} — skip duplicate card chrome. */
   embedded?: boolean;
   /** Controlled edit target from the PO item header chip. */
@@ -77,6 +83,7 @@ export function SerialCard({
   embedded = false,
   editingSerial = null,
   onEditingSerialChange,
+  resultSlot,
 }: Props) {
   const showNotes = typeof notes === 'string' && typeof onNotesChange === 'function';
   const [scan, setScan] = useState('');
@@ -228,6 +235,10 @@ export function SerialCard({
           {showSavingLabel && isSubmitting ? 'Saving…' : editing ? 'Save' : 'Add'}
         </button>
       </div>
+
+      {/* Inline slot directly under the scan field — the RETURN flow renders
+          its serial-match result here (found / not found). */}
+      {resultSlot ? <div className="mt-3">{resultSlot}</div> : null}
 
       {/* Saved serials — rendered BELOW the input as emerald copy-chips.
           Each chip exposes Edit / Delete in a hover menu below the chip;

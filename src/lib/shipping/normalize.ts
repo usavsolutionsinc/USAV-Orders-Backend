@@ -7,6 +7,30 @@ import {
 // Re-export canonical implementations from tracking-format.ts
 export { normalizeTrackingNumber };
 
+// ─── Shared delivered text-fallback (carrier-agnostic) ───────────────────────
+// One place that knows what "delivered" reads like across carriers, so the
+// per-carrier text fallbacks stay in lock-step (Phase A3). A delivery the
+// carrier phrases without the literal word "delivered" — "Left at front door",
+// "Received by", picked up from a locker — must still map to DELIVERED, because
+// the delivered signal is derived from *any* event in the log (Phase A1) and a
+// missed mapping here means a delivered box never surfaces in the tile.
+const DELIVERED_TEXT_MARKERS = [
+  'DELIVERED',
+  'LEFT AT',
+  'LEFT WITH',
+  'LEFT IN MAILBOX',
+  'LEFT IN MAIL',
+  'SIGNED FOR BY',
+  'PICKED UP BY CUSTOMER',
+];
+
+/** True when free-text describes a completed delivery, in any carrier's phrasing. */
+export function looksDelivered(text: string | null | undefined): boolean {
+  if (!text) return false;
+  const t = text.toUpperCase();
+  return DELIVERED_TEXT_MARKERS.some((m) => t.includes(m));
+}
+
 /** Carrier detection re-exported with CarrierCode return type for shipping layer. */
 export function detectCarrier(normalized: string): CarrierCode | null {
   const c = _detectCarrier(normalized);
@@ -46,7 +70,7 @@ export function normalizeUPSStatus(
 
 function normalizeUPSByText(description: string): NormalizedShipmentStatus {
   const text = description.toUpperCase();
-  if (text.includes('DELIVERED')) return 'DELIVERED';
+  if (looksDelivered(text)) return 'DELIVERED';
   if (text.includes('OUT FOR DELIVERY')) return 'OUT_FOR_DELIVERY';
   if (
     text.includes('PICKUP') ||
@@ -111,7 +135,7 @@ export function normalizeUSPSStatus(
 
 function normalizeUSPSByText(event: string): NormalizedShipmentStatus {
   const e = event.toUpperCase();
-  if (e.includes('DELIVERED')) return 'DELIVERED';
+  if (looksDelivered(e)) return 'DELIVERED';
   if (e.includes('OUT FOR DELIVERY')) return 'OUT_FOR_DELIVERY';
   if (
     e.includes('ACCEPTED') ||
@@ -193,7 +217,7 @@ export function normalizeFedExStatus(
 
 function normalizeFedExByText(description: string): NormalizedShipmentStatus {
   const text = description.toUpperCase();
-  if (text.includes('DELIVERED')) return 'DELIVERED';
+  if (looksDelivered(text)) return 'DELIVERED';
   if (text.includes('OUT FOR DELIVERY') || text.includes('ON FEDEX VEHICLE FOR DELIVERY')) return 'OUT_FOR_DELIVERY';
   if (text.includes('PICKED UP') || text.includes('ACCEPTED')) return 'ACCEPTED';
   if (text.includes('RETURN')) return 'RETURNED';
@@ -231,7 +255,10 @@ export function computeNextCheckAt(
     LABEL_CREATED: 2 * 60 * 60 * 1000,
     ACCEPTED: 4 * 60 * 60 * 1000,
     IN_TRANSIT: 2 * 60 * 60 * 1000,
-    OUT_FOR_DELIVERY: 45 * 60 * 1000,
+    // Delivery day is what users watch most closely — poll OFD every 30m so the
+    // free cron-poll feels "live" through the last mile. The 15-min sweep then
+    // picks it up within ~15m of becoming due.
+    OUT_FOR_DELIVERY: 30 * 60 * 1000,
     DELIVERED: 0,
     EXCEPTION: 3 * 60 * 60 * 1000,
     RETURNED: 12 * 60 * 60 * 1000,

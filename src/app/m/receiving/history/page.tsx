@@ -29,6 +29,7 @@ interface ApiResponse {
 }
 
 type FilterKey = 'all' | 'open' | 'received' | 'today';
+type SortKey = 'scanned_newest' | 'scanned_oldest' | 'unboxed_newest';
 
 const FILTERS: HorizontalSliderItem[] = [
   { id: 'all',      label: 'All',      icon: Box },
@@ -37,12 +38,19 @@ const FILTERS: HorizontalSliderItem[] = [
   { id: 'today',    label: 'Today',    icon: Calendar },
 ];
 
+const SORTS: HorizontalSliderItem[] = [
+  { id: 'scanned_newest', label: 'Newest scan', icon: Clock },
+  { id: 'scanned_oldest', label: 'Oldest scan', icon: Clock },
+  { id: 'unboxed_newest', label: 'Unboxed',     icon: PackageCheck },
+];
+
 function openDrawer() {
   window.dispatchEvent(new CustomEvent('open-mobile-drawer'));
 }
 
 export default function MobileReceivingPipelinePage() {
   const [filter, setFilter] = useState<FilterKey>('all');
+  const [sort, setSort] = useState<SortKey>('scanned_newest');
   const [search, setSearch] = useState('');
   const [scanOpen, setScanOpen] = useState(false);
   const [sheetRow, setSheetRow] = useState<ReceivingLineRow | null>(null);
@@ -55,12 +63,13 @@ export default function MobileReceivingPipelinePage() {
   const queryView = filter === 'received' ? 'received' : 'all';
 
   const { data, isLoading, error } = useQuery<ApiResponse>({
-    queryKey: ['mobile-receiving-search', queryView, search],
+    queryKey: ['mobile-receiving-search', queryView, sort, search],
     queryFn: async () => {
       const params = new URLSearchParams({
         limit: '200',
         offset: '0',
         view: queryView,
+        sort,
         include: 'serials',
       });
       if (search.trim()) params.set('search', search.trim());
@@ -165,6 +174,17 @@ export default function MobileReceivingPipelinePage() {
               variant="floating"
               size="lg"
               aria-label="Receiving status filter"
+            />
+          </div>
+
+          <div className="pointer-events-auto">
+            <HorizontalButtonSlider
+              items={SORTS}
+              value={sort}
+              onChange={(id) => setSort(id as SortKey)}
+              variant="floating"
+              size="md"
+              aria-label="Receiving sort order"
             />
           </div>
         </div>

@@ -5,6 +5,7 @@ import {
   getAiAssistSessionChannelName,
   getDashboardChannelName,
   getFbaChannelName,
+  getInboxChannelName,
   getOrdersChannelName,
   getRepairsChannelName,
   getStaffChannelName,
@@ -328,6 +329,36 @@ export async function publishRepairChanged(payload: RepairChangedPayload) {
   await publishEvent(getRepairsChannelName(), 'repair.changed', {
     type: 'repair.changed',
     repairIds: normalizedIds,
+    source: payload.source,
+    timestamp: formatPSTTimestamp(),
+  });
+}
+
+export type PriorityUnboxPayload = {
+  staffId: number;
+  trackingNumber: string;
+  receivingId: number | null;
+  skus: string[];
+  source: string;
+};
+
+/**
+ * Push a "unbox this first" alert to one staff member's inbox channel. Fired
+ * when a receiving-door scan matches a SKU needed by a currently-pending order.
+ * No-op when there's nothing to alert about.
+ */
+export async function publishPriorityUnbox(payload: PriorityUnboxPayload) {
+  const staffId = Number(payload.staffId);
+  if (!Number.isFinite(staffId) || staffId <= 0) return;
+  const skus = (payload.skus || []).filter((s) => typeof s === 'string' && s.length > 0);
+  if (skus.length === 0) return;
+
+  await publishEvent(getInboxChannelName(staffId), 'priority_unbox', {
+    type: 'priority_unbox',
+    staffId,
+    trackingNumber: payload.trackingNumber,
+    receivingId: payload.receivingId,
+    skus,
     source: payload.source,
     timestamp: formatPSTTimestamp(),
   });

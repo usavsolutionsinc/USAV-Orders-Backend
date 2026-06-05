@@ -56,6 +56,12 @@ export async function runFedExSubscribeJob(
   const { limit, jobLimit } = normalizeFedExSubscribePayload(payload);
   const start = Date.now();
 
+  // Webhook push is a paid FedEx product and requires a portal webhook project.
+  // Without it configured, skip entirely — polling (sync-due) is the free path.
+  if (!process.env.FEDEX_WEBHOOK_PROJECT_ID) {
+    return { ok: true, submitted: 0, completed: 0, failed: 0, jobsReconciled: 0, durationMs: Date.now() - start };
+  }
+
   let submitted = 0;
   let completed = 0;
   let failed = 0;

@@ -20,8 +20,16 @@ export type IncomingDeliveryState =
   | 'ARRIVING_TODAY'
   | 'STALLED'
   | 'IN_TRANSIT'
+  | 'TRACKING_UNAVAILABLE'
   | 'PENDING_CARRIER'
   | 'AWAITING_TRACKING';
+
+export interface IncomingCarrierBreakdown {
+  carrier: 'UPS' | 'USPS' | 'FEDEX' | string;
+  delivered_unscanned: number;
+  tracking_unavailable: number;
+  in_transit: number;
+}
 
 export interface IncomingSummary {
   issued: number;
@@ -30,15 +38,17 @@ export interface IncomingSummary {
   stalled: number;
   in_transit: number;
   pending_carrier: number;
+  tracking_unavailable: number;
   awaiting_tracking: number;
   expected_today: number;
+  by_carrier?: IncomingCarrierBreakdown[];
 }
 
 interface TileSpec {
   state: IncomingDeliveryState | null; // null = "All"
   label: string;
   key: keyof IncomingSummary;
-  tone: 'rose' | 'amber' | 'blue' | 'gray' | 'slate' | 'orange';
+  tone: 'rose' | 'amber' | 'blue' | 'gray' | 'slate' | 'orange' | 'violet';
   icon: React.FC<{ className?: string }>;
   /** Tooltip / `aria-description` — the *why* this bucket exists. */
   title: string;
@@ -95,6 +105,15 @@ const TILES: TileSpec[] = [
     icon: Clock,
     title:
       'Tracking# is registered with a known carrier, but the carrier sync has not returned a status yet (UNKNOWN / NULL). USPS shipments often land here while the sync adapter is rate-limited.',
+  },
+  {
+    state: 'TRACKING_UNAVAILABLE',
+    label: 'Tracking unavailable',
+    key: 'tracking_unavailable',
+    tone: 'violet',
+    icon: AlertTriangle,
+    title:
+      'The carrier is refusing tracking requests for these (e.g. USPS access-control 403 while the IP Agreement is pending). Delivered status is unobtainable until access clears — not "not delivered".',
   },
   {
     state: 'AWAITING_TRACKING',
@@ -157,6 +176,13 @@ const TONE: Record<
     iconActive: 'text-white',
     iconInactive: 'text-slate-500',
   },
+  violet: {
+    active: 'bg-violet-600 text-white ring-violet-600',
+    inactive: 'bg-white text-violet-700 ring-violet-200 hover:bg-violet-50',
+    ring: 'focus:ring-violet-500/40',
+    iconActive: 'text-white',
+    iconInactive: 'text-violet-500',
+  },
 };
 
 /**
@@ -187,6 +213,32 @@ export function IncomingSidebarPanel() {
   const searchParams = useSearchParams();
   const queryClient = useQueryClient();
   const [refreshing, setRefreshing] = useState(false);
+  const [reloading, setReloading] = useState(false);
+
+  // The three query keys this view (tiles + row list + delivered-unscanned
+  // facet) reads from. Both refresh actions invalidate exactly these.
+  const invalidateIncoming = useCallback(async () => {
+    await Promise.all([
+      queryClient.invalidateQueries({ queryKey: ['receiving-lines-incoming-summary'] }),
+      queryClient.invalidateQueries({ queryKey: ['receiving-lines-table'] }),
+      queryClient.invalidateQueries({ queryKey: ['incoming-delivered-unscanned'] }),
+    ]);
+  }, [queryClient]);
+
+  // Cheap "update the display" — re-reads the DB (tiles + rows) WITHOUT calling
+  // any carrier API. This is what reflects cron-poll changes that already landed
+  // server-side; instant and free, so it can be hit liberally.
+  const refreshData = useCallback(async () => {
+    if (reloading) return;
+    setReloading(true);
+    try {
+      await invalidateIncoming();
+      toast.success('Display updated');
+    } finally {
+      // Brief spin so the action reads as "did something" even when instant.
+      setTimeout(() => setReloading(false), 350);
+    }
+  }, [reloading, invalidateIncoming]);
 
   // Single-filter popover (mirrors the dashboard's ShippedCarrierFilters):
   // every refinement — the delivery-state facet, the PO date range, and the
@@ -226,9 +278,7 @@ export function IncomingSidebarPanel() {
         toast.error(data?.error || `Refresh failed (${res.status})`);
         return;
       }
-      queryClient.invalidateQueries({ queryKey: ['receiving-lines-incoming-summary'] });
-      queryClient.invalidateQueries({ queryKey: ['receiving-lines-table'] });
-      queryClient.invalidateQueries({ queryKey: ['incoming-delivered-unscanned'] });
+      await invalidateIncoming();
       if (data.throttled) {
         toast.success('Just refreshed — showing the latest tracking');
       } else {
@@ -242,7 +292,7 @@ export function IncomingSidebarPanel() {
     } finally {
       setRefreshing(false);
     }
-  }, [refreshing, queryClient]);
+  }, [refreshing, invalidateIncoming]);
 
   const search = searchParams.get(RECEIVING_HISTORY_URL_PARAMS.q)?.trim() ?? '';
   const stateRaw = (searchParams.get('state') || '').trim().toUpperCase();
@@ -251,6 +301,7 @@ export function IncomingSidebarPanel() {
       || stateRaw === 'ARRIVING_TODAY'
       || stateRaw === 'STALLED'
       || stateRaw === 'IN_TRANSIT'
+      || stateRaw === 'TRACKING_UNAVAILABLE'
       || stateRaw === 'PENDING_CARRIER'
       || stateRaw === 'AWAITING_TRACKING'
       ? (stateRaw as IncomingDeliveryState)
@@ -362,8 +413,10 @@ export function IncomingSidebarPanel() {
         stalled: summaryData.stalled ?? 0,
         in_transit: summaryData.in_transit,
         pending_carrier: summaryData.pending_carrier ?? 0,
+        tracking_unavailable: summaryData.tracking_unavailable ?? 0,
         awaiting_tracking: summaryData.awaiting_tracking,
         expected_today: summaryData.expected_today,
+        by_carrier: summaryData.by_carrier,
       }
     : null;
 
@@ -409,6 +462,35 @@ export function IncomingSidebarPanel() {
       search={{ value: search, onChange: setSearch, placeholder: 'Search PO #, tracking, SKU…' }}
       headerBelow={
         <div className="space-y-2 border-b border-gray-200 bg-white pb-2">
+        {/* Two-action refresh row, ABOVE the Filters button so the (absolute,
+            downward) filter popover never overlays it:
+              • Refresh — re-reads the DB (tiles + rows) only; reflects changes
+                the carrier-poll cron already landed. Instant, no carrier calls.
+              • Sync carriers — re-polls UPS/USPS/FedEx for every active tracking
+                number, then re-reads. Slower; rate-limited server-side. */}
+        <div className="flex items-stretch gap-1.5 px-1.5">
+          <button
+            type="button"
+            onClick={() => void refreshData()}
+            disabled={reloading}
+            title="Re-read the latest incoming data (no carrier calls)"
+            className="flex flex-1 items-center justify-center gap-1.5 rounded-md border border-gray-200 bg-white px-2 py-1.5 text-caption font-bold text-gray-700 transition-colors hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            <RefreshCw className={`h-3.5 w-3.5 ${reloading ? 'animate-spin' : ''}`} />
+            {reloading ? 'Updating…' : 'Refresh'}
+          </button>
+          <button
+            type="button"
+            onClick={() => void refreshTracking()}
+            disabled={refreshing}
+            title="Re-poll UPS / USPS / FedEx for all active tracking numbers, then refresh"
+            className="flex flex-1 items-center justify-center gap-1.5 rounded-md border border-blue-200 bg-blue-50 px-2 py-1.5 text-caption font-bold text-blue-700 transition-colors hover:bg-blue-100 disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            <Truck className={`h-3.5 w-3.5 ${refreshing ? 'animate-pulse' : ''}`} />
+            {refreshing ? 'Syncing…' : 'Sync carriers'}
+          </button>
+        </div>
+
         {/* Single filter entry point — the delivery-state facet, PO purchase
             date range, and sort axis all condense into one popover below the
             search bar (mirrors the dashboard's ShippedCarrierFilters). */}
@@ -449,6 +531,44 @@ export function IncomingSidebarPanel() {
                 </span>
                 <div className="space-y-1.5">{tiles}</div>
               </div>
+
+              {/* E4 per-carrier breakdown — at-a-glance "USPS: 12 unavailable,
+                  FedEx: 3 delivered-unscanned" so the team can see which carrier
+                  is driving the actionable buckets. Only the non-zero columns. */}
+              {summary?.by_carrier?.some(
+                (c) => c.delivered_unscanned || c.tracking_unavailable || c.in_transit,
+              ) ? (
+                <div>
+                  <span className="mb-1 block text-eyebrow font-black uppercase tracking-wider text-gray-500">
+                    By carrier
+                  </span>
+                  <div className="overflow-hidden rounded-lg ring-1 ring-inset ring-gray-200">
+                    <div className="grid grid-cols-[1fr_auto_auto_auto] items-center gap-x-2 bg-gray-50 px-2 py-1 text-mini font-black uppercase tracking-wide text-gray-400">
+                      <span>Carrier</span>
+                      <span className="text-right" title="Delivered · not scanned">Deliv</span>
+                      <span className="text-right" title="Tracking unavailable">Unav</span>
+                      <span className="text-right" title="In transit">Trans</span>
+                    </div>
+                    {summary.by_carrier!.map((c) => (
+                      <div
+                        key={c.carrier}
+                        className="grid grid-cols-[1fr_auto_auto_auto] items-center gap-x-2 border-t border-gray-100 px-2 py-1 text-caption"
+                      >
+                        <span className="font-bold text-gray-700">{c.carrier}</span>
+                        <span className={`text-right font-bold tabular-nums ${c.delivered_unscanned ? 'text-rose-600' : 'text-gray-300'}`}>
+                          {c.delivered_unscanned}
+                        </span>
+                        <span className={`text-right font-bold tabular-nums ${c.tracking_unavailable ? 'text-violet-600' : 'text-gray-300'}`}>
+                          {c.tracking_unavailable}
+                        </span>
+                        <span className={`text-right font-bold tabular-nums ${c.in_transit ? 'text-blue-600' : 'text-gray-300'}`}>
+                          {c.in_transit}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ) : null}
 
               {/* PO purchase-date range — maps to `zoho_po_mirror.po_date` via
                   `?po_from=` / `?po_to=`; the list endpoint narrows server-side. */}
@@ -504,20 +624,6 @@ export function IncomingSidebarPanel() {
           ) : null}
         </div>
 
-        {/* Re-poll carrier tracking for incoming POs on demand — flips
-            just-delivered packages so the counts below are dependable. */}
-        <div className="px-1.5">
-        <button
-          type="button"
-          onClick={() => void refreshTracking()}
-          disabled={refreshing}
-          title="Re-poll UPS / USPS / FedEx for all active tracking numbers"
-          className="flex w-full items-center justify-center gap-1.5 rounded-md border border-gray-200 bg-white px-2.5 py-1.5 text-caption font-bold text-gray-700 transition-colors hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-60"
-        >
-          <RefreshCw className={`h-3.5 w-3.5 ${refreshing ? 'animate-spin' : ''}`} />
-          {refreshing ? 'Refreshing tracking…' : 'Refresh tracking'}
-        </button>
-        </div>
         </div>
       }
     />

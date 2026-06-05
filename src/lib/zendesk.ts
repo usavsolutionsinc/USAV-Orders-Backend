@@ -200,13 +200,26 @@ export async function createZendeskTicket(
     // 2. Calculate due date
     const dueDate = calculateDueDate(new Date());
 
-    // 3. Build description — formatted like the repair service paper
-    let description = `RS Table ID: ${repairServiceId}\nRS Number: ${repairServiceNumber}\n\nProduct Title: ${productTitle}\n\nSN & Issue: ${serialNumber}, ${issue}\n\nContact Info: ${contactInfo}\n\nDue Date: ${dueDate}`;
+    // 3. Build description — clean, human-readable layout. Each fact gets its
+    //    own labeled line (the old one crammed serial + issue onto a single
+    //    "SN & Issue:" line and led with the internal table id). All the same
+    //    data support relied on is still here, just easier to scan.
+    const descriptionLines = [
+        `Repair Service ${repairServiceNumber} (ID ${repairServiceId})`,
+        '',
+        `Product: ${productTitle}`,
+        `Serial Number: ${serialNumber}`,
+        `Reported Issue: ${issue}`,
+        '',
+        `Customer Contact: ${contactInfo}`,
+        `Estimated Due Date: ${dueDate}`,
+    ];
 
     // Add notes at the end if present
     if (notes) {
-        description += `\n\n${notes}`;
+        descriptionLines.push('', 'Additional Notes:', notes);
     }
+    const description = descriptionLines.join('\n');
 
     // 4. Create the ticket directly via the Zendesk REST API. external_id links
     //    it to the repair entity so the support workspace can resolve photos.

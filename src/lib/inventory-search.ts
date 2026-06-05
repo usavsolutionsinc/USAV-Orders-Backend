@@ -193,8 +193,20 @@ export const INVENTORY_BUCKETS: Record<InventoryTab, InventoryBucketConfig[]> = 
         { id: 'reconciling',  label: 'Reconciling' },
         { id: 'closed',       label: 'Closed' },
     ],
-    triage: [],
-    pulse: [],
+    triage: [
+        { id: 'critical',      label: 'Critical' },
+        { id: 'inbox',         label: 'Inbox' },
+        { id: 'investigating', label: 'Investigating' },
+        { id: 'pending',       label: 'Pending' },
+        { id: 'resolved',      label: 'Resolved' },
+    ],
+    pulse: [
+        { id: 'ship',    label: 'Ship' },
+        { id: 'pack',    label: 'Pack' },
+        { id: 'pick',    label: 'Pick' },
+        { id: 'move',    label: 'Move' },
+        { id: 'receive', label: 'Receive' },
+    ],
 };
 
 // ─── Bucket → serial_status / condition_grade mapping (Units tab) ────────────
