@@ -3,6 +3,7 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import { Plus, X } from '@/components/Icons';
 import { TextField } from '@/design-system/primitives';
+import { ConditionBadge } from './ReceivingUnitRows';
 
 export interface UnitLike {
   id: number;
@@ -185,6 +186,7 @@ function ExpandedRow({
 }) {
   const [scan, setScan] = useState('');
   const [editing, setEditing] = useState(false);
+  const [isFocused, setIsFocused] = useState(false);
 
   useEffect(() => {
     if (!serialEditTarget || serial?.id !== serialEditTarget.id) return;
@@ -206,57 +208,81 @@ function ExpandedRow({
   };
 
   return (
-    <div className="px-1 py-2.5">
-      {meta ? <div className="mb-2">{meta}</div> : null}
+    <div className="px-1 py-2.5 group">
+      <div className="flex items-center gap-2">
+        {meta ? (
+          <div 
+            className={`flex items-center gap-2 transition-all duration-700 ease-in-out overflow-hidden ${
+              isFocused || isSubmitting || scan.length > 0
+                ? 'max-w-[600px] opacity-100 mr-1'
+                : 'max-w-[48px] opacity-100 group-hover:max-w-[600px] group-hover:mr-1'
+            }`}
+          >
+            <div className={`${isFocused || isSubmitting || scan.length > 0 ? 'hidden' : 'block group-hover:hidden'}`}>
+              <ConditionBadge grade={serial?.condition_grade} />
+            </div>
+            <div className={`${isFocused || isSubmitting || scan.length > 0 ? 'block' : 'hidden group-hover:block'}`}>
+              <div className="inline-flex items-center">
+                {meta}
+              </div>
+            </div>
+            <div className={`h-8 w-px bg-gray-100 shrink-0 ${isFocused || isSubmitting || scan.length > 0 ? 'block' : 'hidden group-hover:block'}`} />
+          </div>
+        ) : null}
 
-      <div className="flex items-stretch gap-2">
-        <TextField
-          label="Serial"
-          value={scan}
-          onChange={setScan}
-          tone={editing ? 'amber' : 'blue'}
-          mono
-          className="flex-1"
-          disabled={disabled || isSubmitting}
-          autoComplete="off"
-          spellCheck={false}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter') {
-              e.preventDefault();
-              submit();
-            } else if (e.key === 'Escape' && editing) {
-              e.preventDefault();
-              setEditing(false);
-              setScan('');
+        <div className="flex-1 min-w-0">
+          <TextField
+            label="Serial"
+            value={scan}
+            onChange={setScan}
+            tone={editing ? 'amber' : 'blue'}
+            mono
+            disabled={disabled || isSubmitting}
+            autoComplete="off"
+            spellCheck={false}
+            onFocus={() => setIsFocused(true)}
+            onBlur={() => setIsFocused(false)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                e.preventDefault();
+                submit();
+              } else if (e.key === 'Escape' && editing) {
+                e.preventDefault();
+                setEditing(false);
+                setScan('');
+              }
+            }}
+            trailing={
+              scan ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setScan('');
+                    setEditing(false);
+                  }}
+                  aria-label={editing ? 'Cancel edit' : 'Clear'}
+                  className="rounded-md p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-700"
+                >
+                  <X className="h-3.5 w-3.5" />
+                </button>
+              ) : undefined
             }
-          }}
-          trailing={
-            scan ? (
-              <button
-                type="button"
-                onClick={() => {
-                  setScan('');
-                  setEditing(false);
-                }}
-                aria-label={editing ? 'Cancel edit' : 'Clear'}
-                className="rounded-md p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-700"
-              >
-                <X className="h-3 w-3" />
-              </button>
-            ) : undefined
-          }
-        />
+          />
+        </div>
+
         <button
           type="button"
           onClick={submit}
           disabled={!scan.trim() || isSubmitting || disabled}
           aria-label={editing ? 'Save serial' : 'Add serial'}
           title={editing ? 'Save serial' : 'Add serial'}
-          className={`inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-lg text-white shadow-sm transition-colors disabled:cursor-not-allowed disabled:bg-gray-300 ${
+          className={`inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-xl text-white shadow-sm transition-colors disabled:cursor-not-allowed disabled:bg-gray-300 ${
             editing ? 'bg-amber-500 hover:bg-amber-600' : 'bg-blue-600 hover:bg-blue-700'
           }`}
         >
-          <Plus className="h-4 w-4" />
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" className="h-5 w-5">
+            <path d="M12 5v14M5 12h14" strokeLinecap="round" />
+          </svg>
         </button>
       </div>
     </div>

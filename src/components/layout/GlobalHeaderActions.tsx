@@ -31,8 +31,14 @@ function initials(name: string): string {
  * and account menu — each owning its own popover. The popovers themselves
  * (QuickAccessPopover, ActivityInboxPopover, PhoneHistoryPopover) are reused
  * verbatim so there's no duplicated launcher logic.
+ *
+ * `variant="mobile"` renders the condensed set used by the mobile dashboard
+ * top bar — just the notifications inbox and the account FAB. The ⌘K search
+ * (a keyboard surface) and the per-page selection pencil are desktop-only and
+ * are dropped on mobile.
  */
-export function GlobalHeaderActions() {
+export function GlobalHeaderActions({ variant = 'desktop' }: { variant?: 'desktop' | 'mobile' } = {}) {
+  const isMobile = variant === 'mobile';
   const pathname = usePathname();
   const { user } = useAuth();
   const { selection } = useHeader();
@@ -92,7 +98,7 @@ export function GlobalHeaderActions() {
     <div ref={wrapperRef} className="flex items-center gap-2">
       {/* Selection toggle — registered per page via usePageSelection(). A
           pencil that flips the active surface into select mode. */}
-      {selection && (
+      {!isMobile && selection && (
         <button
           type="button"
           onClick={selection.onToggle}
@@ -109,16 +115,18 @@ export function GlobalHeaderActions() {
       )}
 
       {/* Search — opens the ⌘K command bar (same as the keyboard shortcut),
-          not the quick-access surface. */}
-      <button
-        type="button"
-        onClick={() => window.dispatchEvent(new CustomEvent('usav-command-bar-open'))}
-        aria-label="Open command bar"
-        title="Search (⌘K)"
-        className="flex h-9 w-9 items-center justify-center rounded-full text-gray-600 transition-colors hover:bg-gray-100 active:scale-95"
-      >
-        <Search className="h-4 w-4" />
-      </button>
+          not the quick-access surface. Desktop-only (no keyboard on mobile). */}
+      {!isMobile && (
+        <button
+          type="button"
+          onClick={() => window.dispatchEvent(new CustomEvent('usav-command-bar-open'))}
+          aria-label="Open command bar"
+          title="Search (⌘K)"
+          className="flex h-9 w-9 items-center justify-center rounded-full text-gray-600 transition-colors hover:bg-gray-100 active:scale-95"
+        >
+          <Search className="h-4 w-4" />
+        </button>
+      )}
 
       {/* Notifications */}
       <div className="relative">

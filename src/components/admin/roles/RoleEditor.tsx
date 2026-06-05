@@ -488,6 +488,7 @@ const TAB_LABELS: Record<MobileNavTabId, string> = {
   home: 'Home',
   scan: 'Scan (centre)',
   receiving: 'Receiving',
+  packing: 'Packing',
   picks: 'Picks',
   signout: 'Sign out',
 };

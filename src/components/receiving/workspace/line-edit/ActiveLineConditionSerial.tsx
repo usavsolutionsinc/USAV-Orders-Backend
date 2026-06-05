@@ -99,39 +99,38 @@ export function ActiveLineConditionSerial({
         </>
       ) : (
         // Single-qty line (incl. a PARTS product carrying several part-serials
-        // under one unit): one condition picker + a flat serial list.
-        <>
-          <ConditionPills value={cond} onChange={onConditionChange} />
-          <SerialCard
-            key={`serial-card-${lineId}`}
-            saved={serials}
-            expected={quantityExpected ?? null}
-            isSubmitting={serialSubmitting}
-            disabled={!receivingId}
-            embedded
-            showSavedChips={false}
-            editingSerial={editingSerial}
-            onEditingSerialChange={onEditingSerialChange}
-            resultSlot={matchResult}
-            onAdd={(sn) => onSubmitSerial(sn, cond)}
-            onReplaceSerial={(original, nextSerial) => {
-              if (original.id == null) return;
-              onReplaceSerialUnit(
-                {
-                  id: original.id,
-                  serial_number: original.serial_number,
-                  condition_grade: original.condition_grade,
-                },
-                nextSerial,
-              );
-            }}
-            onDeleteSerial={(s) => {
-              if (s.id == null) return;
-              if (!window.confirm(`Remove serial ${s.serial_number}?`)) return;
-              onDeleteSerialUnit(s.id);
-            }}
-          />
-        </>
+        // under one unit): integrated condition picker + serial card.
+        <SerialCard
+          key={`serial-card-${lineId}`}
+          saved={serials}
+          expected={quantityExpected ?? null}
+          isSubmitting={serialSubmitting}
+          disabled={!receivingId}
+          embedded
+          showSavedChips={false}
+          editingSerial={editingSerial}
+          onEditingSerialChange={onEditingSerialChange}
+          resultSlot={matchResult}
+          condition={cond}
+          onConditionChange={onConditionChange}
+          onAdd={(sn) => onSubmitSerial(sn, cond)}
+          onReplaceSerial={(original, nextSerial) => {
+            if (original.id == null) return;
+            onReplaceSerialUnit(
+              {
+                id: original.id,
+                serial_number: original.serial_number,
+                condition_grade: original.condition_grade,
+              },
+              nextSerial,
+            );
+          }}
+          onDeleteSerial={(s) => {
+            if (s.id == null) return;
+            if (!window.confirm(`Remove serial ${s.serial_number}?`)) return;
+            onDeleteSerialUnit(s.id);
+          }}
+        />
       )}
     </div>
   );

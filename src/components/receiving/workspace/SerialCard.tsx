@@ -5,6 +5,7 @@ import { X } from '@/components/Icons';
 import { SerialChip } from '@/components/ui/CopyChip';
 import { TextField } from '@/design-system/primitives';
 import { ConditionPills } from './ConditionPills';
+import { ConditionBadge } from './ReceivingUnitRows';
 
 interface SavedSerial {
   id?: number;
@@ -35,6 +36,9 @@ interface Props {
    * original and add the new one.
    */
   onReplaceSerial?: (original: SavedSerial, nextSerial: string) => void;
+  /** Optional condition picker integrated into the scan row. */
+  condition?: string | null | undefined;
+  onConditionChange?: (grade: string) => void;
   /** PO-line notes — co-located here so operators see them while scanning. */
   notes?: string;
   /** Notes change handler (controlled). */
@@ -75,6 +79,8 @@ export function SerialCard({
   disabled = false,
   onDeleteSerial,
   onReplaceSerial,
+  condition,
+  onConditionChange,
   notes,
   onNotesChange,
   onNotesBlur,
@@ -92,6 +98,20 @@ export function SerialCard({
   const [showSavingLabel, setShowSavingLabel] = useState(false);
   const inputRef = useRef<HTMLInputElement | null>(null);
   const count = saved.length;
+
+  /**
+   * Pick a condition grade, then jump focus straight to the serial input so
+   * the operator can scan without a second click. Deferred a tick so focus
+   * lands after the grade-change re-render (input is enabled by then).
+   */
+  const handleConditionPick = (grade: string) => {
+    onConditionChange?.(grade);
+    setTimeout(() => {
+      const el = inputRef.current;
+      if (!el || el.disabled) return;
+      el.focus();
+    }, 0);
+  };
 
   // If the underlying saved list changes while editing (e.g. the original
   // chip got deleted from elsewhere), clear the edit state so we don't try
@@ -181,58 +201,83 @@ export function SerialCard({
 
   const Shell = embedded ? 'div' : 'section';
   const shellClass = embedded
-    ? 'w-full'
-    : 'rounded-2xl bg-white p-4 shadow-sm ring-1 ring-gray-200/60';
+    ? 'w-full group'
+    : 'rounded-2xl bg-white p-4 shadow-sm ring-1 ring-gray-200/60 group';
 
   return (
     <Shell className={shellClass}>
-      <div className="flex items-stretch gap-2">
-        <TextField
-          ref={inputRef}
-          label="Serial"
-          value={scan}
-          onChange={setScan}
-          tone={editing ? 'amber' : 'blue'}
-          mono
-          className="flex-1"
-          disabled={disabled || isSubmitting}
-          autoComplete="off"
-          spellCheck={false}
-          // eslint-disable-next-line jsx-a11y/no-autofocus -- scan-focused workflow
-          autoFocus
-          onKeyDown={(e) => {
-            if (e.key === 'Enter') {
-              e.preventDefault();
-              submit();
-            } else if (e.key === 'Escape' && editing) {
-              e.preventDefault();
-              cancelEdit();
+      <div className="flex items-center gap-2">
+        {onConditionChange ? (
+          // Condition picker: full pills until a grade is picked, then it
+          // collapses (collapsible) to just the selected pill — hover it to
+          // re-expand. Picking a grade auto-focuses the serial input via
+          // handleConditionPick; min-w-0 keeps the row from crowding the input.
+          <div className="flex min-w-0 items-center gap-2">
+            <ConditionPills value={condition} onChange={handleConditionPick} collapsible />
+            <div className="h-8 w-px shrink-0 bg-gray-100" />
+          </div>
+        ) : condition ? (
+          <div className="shrink-0">
+            <ConditionBadge grade={condition} />
+          </div>
+        ) : null}
+
+        <div className="flex-1 min-w-0">
+          <TextField
+            ref={inputRef}
+            label="Serial"
+            value={scan}
+            onChange={setScan}
+            tone={editing ? 'amber' : 'blue'}
+            mono
+            disabled={disabled || isSubmitting}
+            autoComplete="off"
+            spellCheck={false}
+            // eslint-disable-next-line jsx-a11y/no-autofocus -- scan-focused workflow
+            autoFocus
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                e.preventDefault();
+                submit();
+              } else if (e.key === 'Escape' && editing) {
+                e.preventDefault();
+                cancelEdit();
+              }
+            }}
+            trailing={
+              scan || editing ? (
+                <button
+                  type="button"
+                  onClick={() => (editing ? cancelEdit() : setScan(''))}
+                  aria-label={editing ? 'Cancel edit' : 'Clear input'}
+                  className="rounded-md p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-700"
+                >
+                  <X className="h-3.5 w-3.5" />
+                </button>
+              ) : undefined
             }
-          }}
-          trailing={
-            scan || editing ? (
-              <button
-                type="button"
-                onClick={() => (editing ? cancelEdit() : setScan(''))}
-                aria-label={editing ? 'Cancel edit' : 'Clear input'}
-                className="rounded-md p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-700"
-              >
-                <X className="h-3.5 w-3.5" />
-              </button>
-            ) : undefined
-          }
-        />
+          />
+        </div>
+
         <button
           type="button"
           onClick={submit}
           disabled={!scan.trim() || isSubmitting || disabled}
-          className={`inline-flex h-11 items-center justify-center rounded-xl px-4 text-label font-black uppercase tracking-wider text-white shadow-sm transition-colors disabled:cursor-not-allowed disabled:bg-gray-300 ${
+          className={`inline-flex h-11 shrink-0 items-center justify-center rounded-xl px-4 text-label font-black uppercase tracking-wider text-white shadow-sm transition-colors disabled:cursor-not-allowed disabled:bg-gray-300 ${
             editing
               ? 'bg-amber-500 hover:bg-amber-600'
               : 'bg-blue-600 hover:bg-blue-700'
           }`}
         >
-          {showSavingLabel && isSubmitting ? 'Saving…' : editing ? 'Save' : 'Add'}
+          {showSavingLabel && isSubmitting ? (
+            'Saving…'
+          ) : editing ? (
+            'Save'
+          ) : (
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" className="h-5 w-5">
+              <path d="M12 5v14M5 12h14" strokeLinecap="round" />
+            </svg>
+          )}
         </button>
       </div>
 

@@ -24,12 +24,13 @@
  * for this staff" is one decision, not a per-field decision).
  */
 
-export type MobileNavTabId = 'home' | 'scan' | 'receiving' | 'picks' | 'signout';
+export type MobileNavTabId = 'home' | 'scan' | 'receiving' | 'packing' | 'picks' | 'signout';
 
 export const MOBILE_NAV_TAB_IDS: ReadonlyArray<MobileNavTabId> = [
   'home',
   'scan',
   'receiving',
+  'packing',
   'picks',
   'signout',
 ];
@@ -43,6 +44,22 @@ export const MOBILE_NAV_CENTER_TAB_IDS: ReadonlyArray<MobileNavTabId> = ['scan']
 
 /** Default center tab when none is configured — the universal scanner. */
 const DEFAULT_CENTER_TAB: MobileNavTabId = 'scan';
+
+/**
+ * The single, canonical bottom-nav layout rendered for every signed-in staffer:
+ * Recent · Receiving · [Scan centre] · Packing · Picks. The bar must look the
+ * same regardless of which roles a staffer holds, so {@link RedesignedBottomNav}
+ * renders this fixed list rather than the per-row `tabs` blob (which could drift
+ * between roles / stale rows). 'signout' is intentionally absent — sign-out
+ * lives in the account FAB.
+ */
+export const CANONICAL_MOBILE_NAV_TABS: ReadonlyArray<MobileNavTabId> = [
+  'home',
+  'receiving',
+  'scan',
+  'packing',
+  'picks',
+];
 
 export interface MobileBottomNavConfig {
   /** When false, the bar is suppressed entirely. */
@@ -63,7 +80,8 @@ export type MobileDisplayConfigInput = Partial<{
 export const DEFAULT_MOBILE_DISPLAY_CONFIG: MobileDisplayConfig = {
   bottomNav: {
     enabled: false,
-    tabs: ['home', 'receiving', 'scan', 'picks', 'signout'],
+    // Layout: Recent · Incoming · [Scan centre] · Packing · Picks.
+    tabs: ['home', 'receiving', 'scan', 'packing', 'picks'],
   },
 };
 

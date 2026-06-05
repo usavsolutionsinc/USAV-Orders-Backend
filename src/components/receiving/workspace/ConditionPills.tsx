@@ -6,6 +6,12 @@ import { motion, AnimatePresence } from 'framer-motion';
 interface Props {
   value: string | null | undefined;
   onChange: (next: string) => void;
+  /**
+   * When set, once a grade is selected the picker collapses to show ONLY the
+   * selected pill on the left; hovering that pill re-expands the full row.
+   * With nothing selected the full row stays visible so a grade can be picked.
+   */
+  collapsible?: boolean;
 }
 
 // Per-grade visual tone — selected = filled, unselected = soft outline.
@@ -46,12 +52,24 @@ const USED_GRADES = [
   { value: 'USED_C', label: 'C' },
 ];
 
+// Label shown on the single collapsed pill, keyed by selected grade. Mirrors
+// the pill labels in the full row so the collapsed chip reads identically.
+const COLLAPSED_LABEL: Record<string, string> = {
+  BRAND_NEW: 'NEW',
+  LIKE_NEW: 'L-New',
+  REFURBISHED: 'REFURB',
+  USED_A: 'A',
+  USED_B: 'B',
+  USED_C: 'C',
+  PARTS: 'PARTS',
+};
+
 /**
  * Bare, mobile-first condition picker. Renders grades as a horizontally-scrolling
  * row of pills. "USED" options are nested: selecting USED expands sub-grades
  * (A, B, C) with a smooth animation.
  */
-export function ConditionPills({ value, onChange }: Props) {
+export function ConditionPills({ value, onChange, collapsible = false }: Props) {
   const selected = String(value || '').trim().toUpperCase();
   const scrollerRef = useRef<HTMLDivElement | null>(null);
   const [isExpanded, setIsExpanded] = useState(false);
@@ -110,7 +128,7 @@ export function ConditionPills({ value, onChange }: Props) {
     );
   };
 
-  return (
+  const fullRow = (
     <div
       ref={scrollerRef}
       onWheel={onWheel}
@@ -128,7 +146,7 @@ export function ConditionPills({ value, onChange }: Props) {
 
       {/* LIKE NEW */}
       <Pill
-        label="LIKE NEW"
+        label="L-New"
         isActive={selected === 'LIKE_NEW'}
         toneKey="LIKE_NEW"
         onClick={() => onChange('LIKE_NEW')}
@@ -183,6 +201,25 @@ export function ConditionPills({ value, onChange }: Props) {
         toneKey="PARTS"
         onClick={() => onChange('PARTS')}
       />
+    </div>
+  );
+
+  // Default: the full pill row is always shown.
+  const collapsedLabel = COLLAPSED_LABEL[selected];
+  if (!collapsible || !collapsedLabel) return fullRow;
+
+  // Collapsed: show only the selected pill, so the row stays compact and the
+  // serial input grows to fill the space. Hovering this spot expands the full
+  // row IN FLOW (grid 0fr→1fr) — it pushes the input over rather than overlaying
+  // it. Hover is scoped to this group, so only this exact spot re-expands.
+  return (
+    <div className="group/cond flex items-center">
+      <div className="shrink-0 group-hover/cond:hidden">
+        <Pill label={collapsedLabel} isActive toneKey={selected} onClick={() => {}} />
+      </div>
+      <div className="grid grid-cols-[0fr] transition-[grid-template-columns] duration-500 ease-out group-hover/cond:grid-cols-[1fr]">
+        <div className="overflow-hidden">{fullRow}</div>
+      </div>
     </div>
   );
 }

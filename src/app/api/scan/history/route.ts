@@ -46,6 +46,10 @@ export const GET = withAuth(async (req: NextRequest, ctx) => {
           type: mapped.type,
           typeLabel: mapped.typeLabel,
           desktopHref: mapped.desktopHref,
+          // `routed_to` is already the mobile route the scan resolved to
+          // (/m/r/…, /m/l/…, /m/u/…) — surface it so the mobile dashboard's
+          // Recent Activity can deep-link back into the phone flow.
+          mobileHref: (row.routed_to as string) || mapped.desktopHref,
         };
       })
       .filter(Boolean);

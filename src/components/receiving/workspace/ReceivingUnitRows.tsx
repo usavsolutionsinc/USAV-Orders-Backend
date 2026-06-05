@@ -129,7 +129,7 @@ export function ReceivingUnitRows({
   );
 }
 
-function ConditionBadge({ grade }: { grade: string | null | undefined }) {
+export function ConditionBadge({ grade }: { grade: string | null | undefined }) {
   const g = String(grade || '').trim().toUpperCase();
   if (!g || g === 'PENDING') {
     return <span className="text-micro font-bold uppercase tracking-widest text-gray-400">pending</span>;
