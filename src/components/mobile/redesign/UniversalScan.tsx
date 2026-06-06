@@ -8,7 +8,7 @@ import {
   Search,
   ClipboardList,
   ShieldCheck,
-  Database,
+  Box,
 } from '@/components/Icons';
 import {
   TOKENS,
@@ -28,7 +28,7 @@ import { useRouter } from 'next/navigation';
 const MODES: Array<{ id: ScanMode; label: string; icon: (p: { className?: string }) => JSX.Element; placeholder: string }> = [
   { id: 'receiving', label: 'Receiving Scans', icon: ClipboardList, placeholder: 'Scan a tracking number…' },
   { id: 'testing', label: 'Testing Orders', icon: ShieldCheck, placeholder: 'Scan a PO label (R-####)…' },
-  { id: 'cms', label: 'Prepacked Products', icon: Database, placeholder: 'Scan a product / unit label…' },
+  { id: 'cms', label: 'Prepacked Products', icon: Box, placeholder: 'Scan a product / unit label…' },
 ];
 
 export default function RedesignedMobileUniversalScan() {
@@ -36,7 +36,11 @@ export default function RedesignedMobileUniversalScan() {
   const [mode, setMode] = useState<ScanMode>('receiving');
   const [cameraActive, setCameraActive] = useState(false);
   const [input, setInput] = useState('');
-  const [scans, setScans] = useState<ScanFeedItem[]>([]);
+  // Each mode keeps its own history — a receiving door-scan and a prepacked
+  // product lookup are different lists and must not bleed into each other.
+  const [receivingScans, setReceivingScans] = useState<ScanFeedItem[]>([]);
+  const [cmsScans, setCmsScans] = useState<ScanFeedItem[]>([]);
+  const [testingScans, setTestingScans] = useState<ScanFeedItem[]>([]);
   const [testingQuery, setTestingQuery] = useState('');
   const scanner = useBarcodeScanner({ dedupMs: 2000 });
   const feedback = useFeedback();
@@ -138,14 +142,23 @@ export default function RedesignedMobileUniversalScan() {
       try {
         if (target === 'testing') {
           setTestingQuery(raw);
+          // Keep a recent-scans history for testing too (its own list), so the
+          // mode matches Receiving/Prepacked. De-dupe the active label to top.
+          setTestingScans((prev) =>
+            [
+              { id: `${Date.now()}-${raw}`, primary: raw, at: new Date(), state: 'ok', statusLabel: 'PO label', href: null } as ScanFeedItem,
+              ...prev.filter((s) => s.primary !== raw),
+            ].slice(0, 12),
+          );
           return;
         }
         const id = `${Date.now()}-${raw}`;
-        setScans((prev) =>
+        const setList = target === 'cms' ? setCmsScans : setReceivingScans;
+        setList((prev) =>
           [{ id, primary: raw, at: new Date(), state: 'pending', statusLabel: 'Resolving…', href: null } as ScanFeedItem, ...prev].slice(0, 12),
         );
         const patch = (p: Partial<ScanFeedItem>) =>
-          setScans((prev) => prev.map((s) => (s.id === id ? { ...s, ...p } : s)));
+          setList((prev) => prev.map((s) => (s.id === id ? { ...s, ...p } : s)));
         if (target === 'receiving') await runReceiving(raw, patch);
         else await runCms(raw, patch);
       } finally {
@@ -155,18 +168,25 @@ export default function RedesignedMobileUniversalScan() {
     [mode, feedback, runReceiving, runCms],
   );
 
+  // Start/stop strictly off `cameraActive`. Depending on the whole `scanner`
+  // object (a fresh literal each render) re-ran this on every state change and
+  // could leave the camera live after Close — a stop racing an in-flight async
+  // start. The start/stop callbacks are stable, so this only fires on toggle.
+  const { startScanning, stopScanning } = scanner;
   useEffect(() => {
-    if (cameraActive) scanner.startScanning();
-    else scanner.stopScanning();
-    return () => { scanner.stopScanning(); };
-  }, [cameraActive, scanner]);
+    if (cameraActive) void startScanning();
+    else void stopScanning();
+    return () => { void stopScanning(); };
+  }, [cameraActive, startScanning, stopScanning]);
 
   useEffect(() => {
     if (scanner.lastScannedValue) void dispatch(scanner.lastScannedValue);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [scanner.lastScannedValue]);
 
-  const { rows: feedRows, scrollRef } = useFeedWindow(scans, { limit: 12, anchor: 'top', freshPulse: false });
+  // Show only the active mode's own history (receiving vs prepacked products).
+  const activeScans = mode === 'cms' ? cmsScans : receivingScans;
+  const { rows: feedRows, scrollRef } = useFeedWindow(activeScans, { limit: 12, anchor: 'top', freshPulse: false });
 
   return (
     <div className={`h-full ${TOKENS.colors.background} flex flex-col`}>
@@ -250,18 +270,38 @@ export default function RedesignedMobileUniversalScan() {
         >
           {mode === 'testing' ? (
             <div className="min-h-0 flex-1 overflow-y-auto pt-3">
+              {/* Recent Scans — testing mode keeps its own history under the
+                  scan bar, matching Receiving/Prepacked. The active PO's items
+                  render below in the testing panel. */}
+              <div className="px-6">
+                <SectionHeader title="Recent Scans" />
+              </div>
+              {testingScans.length === 0 ? (
+                <div className="py-8 text-center opacity-40">
+                  <History className="mx-auto mb-3 h-10 w-10 text-blue-200" />
+                  <p className="text-xs font-black uppercase tracking-widest text-blue-300">
+                    Scan a PO label to begin…
+                  </p>
+                </div>
+              ) : (
+                <div className="pb-2">
+                  {testingScans.map((item) => (
+                    <ScanResultRow key={item.id} item={item} />
+                  ))}
+                </div>
+              )}
               <ScanTestingPanel query={testingQuery} />
             </div>
           ) : (
-            <div className="flex min-h-0 flex-1 flex-col pt-6">
+            <div className="flex min-h-0 flex-1 flex-col pt-3">
               <div className="px-6">
-                <SectionHeader title={mode === 'receiving' ? 'Recent Receipts' : 'Recent Scans'} />
+                <SectionHeader title="Recent Scans" />
               </div>
               <MobileFeed<ScanFeedItem>
                 rows={feedRows}
                 expandLast={false}
                 scrollRef={scrollRef}
-                className="px-3 pb-32"
+                className="pb-32"
                 empty={
                   <div className="py-12 text-center opacity-40">
                     <History className="mx-auto mb-3 h-10 w-10 text-blue-200" />
@@ -278,7 +318,7 @@ export default function RedesignedMobileUniversalScan() {
       </AnimatePresence>
 
       {/* Camera toggle pinned just above the bottom nav. */}
-      <div className="pointer-events-none fixed inset-x-0 bottom-[calc(4rem+env(safe-area-inset-bottom))] z-40 px-6">
+      <div className="pointer-events-none fixed inset-x-0 bottom-[calc(5rem+env(safe-area-inset-bottom))] z-40 px-6">
         <GlassButton
           variant={cameraActive ? 'primary' : 'secondary'}
           className={`pointer-events-auto w-full !rounded-[24px] shadow-xl ${cameraActive ? 'bg-blue-600 border-blue-500 shadow-blue-600/20' : 'shadow-blue-950/10'}`}

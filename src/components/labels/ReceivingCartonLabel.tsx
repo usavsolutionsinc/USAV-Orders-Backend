@@ -2,6 +2,7 @@
 
 import { Gs1DataMatrix } from '@/components/barcode/Gs1DataMatrix';
 import {
+  receivingLabelPlatformDisplay,
   receivingLabelPoCornerDisplay,
   resolveReceivingQrValue,
   type ReceivingLabelPayload,
@@ -23,7 +24,9 @@ export function ReceivingCartonLabel(payload: ReceivingLabelPayload) {
       <div className="flex flex-nowrap items-stretch gap-3 min-h-[5rem]">
         <div className="min-w-0 flex-1 flex flex-col justify-between py-0.5">
           <div className="flex items-baseline justify-between gap-2 text-label leading-none">
-            <span className="truncate font-bold text-gray-700">{payload.platform}</span>
+            <span className="truncate font-bold text-gray-700">
+              {receivingLabelPlatformDisplay(payload)}
+            </span>
             <span className="shrink-0 tabular-nums font-semibold text-gray-600">
               {payload.date}
             </span>

@@ -4,10 +4,10 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useUIModeOptional } from '@/design-system/providers/UIModeProvider';
-import { Check, PackageCheck, Clock, Truck, Package } from '@/components/Icons';
+import { Check } from '@/components/Icons';
 import { emitSelection, emitSelectionTotal, onToggleAll } from '@/lib/selection/table-selection';
 import { SkeletonList } from '@/design-system/components/Skeletons';
-import { conditionGradeTableLabel, workflowStatusTableLabel, getStatusDotBg } from '@/components/station/receiving-constants';
+import { conditionGradeTableLabel, workflowStatusTableLabel, getStatusDotBg, getWorkflowIconMeta, shouldShowWorkflowStatusIcon } from '@/components/station/receiving-constants';
 import { ReceivingIdentityChips } from '@/components/receiving/ReceivingIdentityChips';
 import { OrderIdChip, TrackingChip, SerialChip, SkuCountChip, SerialCountChip, getLast4 } from '@/components/ui/CopyChip';
 import { ChipColumns, CHIP_COL, type ChipColumn } from '@/components/ui/ChipColumns';
@@ -270,14 +270,7 @@ export function ReceivingLineOrderRow({
   // The workflow status renders as a compact icon (not text) — RECEIVED and
   // EXPECTED are the dominant states; everything else falls back to a generic
   // package glyph. The label rides along as the `title` for hover/a11y.
-  const { WorkflowIcon, workflowIconTone } =
-    workflowLabel === 'RECEIVED'
-      ? { WorkflowIcon: PackageCheck, workflowIconTone: 'text-emerald-600' }
-      : workflowLabel === 'EXPECTED'
-        ? { WorkflowIcon: Clock, workflowIconTone: 'text-amber-500' }
-        : workflowLabel === 'SCANNED'
-          ? { WorkflowIcon: Truck, workflowIconTone: 'text-blue-600' }
-          : { WorkflowIcon: Package, workflowIconTone: 'text-gray-400' };
+  const { Icon: WorkflowIcon, tone: workflowIconTone } = getWorkflowIconMeta(workflowLabel);
   const condGrade = (row.condition_grade || '').toUpperCase();
   const conditionLabel = conditionGradeTableLabel(row.condition_grade);
   const conditionColor =
@@ -382,13 +375,13 @@ export function ReceivingLineOrderRow({
                   hidden in History (received is implied; EXPECTED doesn't apply
                   since unfound is still received) and in Incoming. This also
                   drops the testing verdict (FAILED box) from the unbox history. */}
-              {isIncoming || isHistory ? null : (
+              {shouldShowWorkflowStatusIcon({ isHistory, isIncoming }) ? (
                 <IconWithTooltip
                   Icon={WorkflowIcon}
                   label={workflowLabel}
                   iconClassName={workflowIconTone}
                 />
-              )}
+              ) : null}
               <DeliveryStateIcon state={row.delivery_state} />
             </div>
           }
@@ -1209,7 +1202,9 @@ export default function ReceivingLinesTable({ selectMode = false }: { selectMode
     let activeCount = 0;
     for (let i = 0; i < headers.length; i++) {
       const header = headers[i] as HTMLElement;
-      if (header.offsetTop - scrollRef.current.offsetTop <= scrollTop + 5) {
+      // Promote the next day as its band reaches the 40px sticky header edge,
+      // keeping the WeekHeader date in step with the band hiding under it.
+      if (header.offsetTop - scrollRef.current.offsetTop <= scrollTop + 40) {
         activeDate = header.getAttribute('data-date') || '';
         activeCount = parseInt(header.getAttribute('data-count') || '0', 10);
       } else {

@@ -6,6 +6,7 @@ import {
   Check,
   ClipboardList,
   Clock,
+  Cms,
   DollarSign,
   FileText,
   History,
@@ -60,6 +61,8 @@ export interface SidebarNavItem {
   label: string;
   href: string;
   icon: SidebarIconComponent;
+  /** Optional desktop-only icon override (master nav on lg+). */
+  desktopIcon?: SidebarIconComponent;
   kind?: 'main' | 'station' | 'bottom';
   /**
    * Permission required to see this item. If omitted, the item is visible
@@ -103,8 +106,8 @@ export const APP_SIDEBAR_NAV: SidebarNavItem[] = [
   { id: 'inventory',         label: 'Inventory',   href: '/inventory',          icon: Package,         kind: 'main',    requires: 'sku_stock.view' },
   { id: 'warehouse',         label: 'Warehouse',   href: '/warehouse',          icon: MapPin,          kind: 'main',    requires: 'sku_stock.view' },
   { id: 'receiving',         label: 'Receiving',   href: '/receiving',          icon: ClipboardList,   kind: 'station', requires: 'receiving.view' },
-  { id: 'fba',               label: 'Amazon FBA',  href: '/fba',                icon: Package,         kind: 'station', requires: 'fba.view' },
   { id: 'tech',              label: 'Testing',     href: '/tech',               icon: Wrench,          kind: 'station', requires: 'tech.view' },
+  { id: 'fba',               label: 'Amazon FBA',  href: '/fba',                icon: Package,         kind: 'station', requires: 'fba.view' },
   { id: 'packer',            label: 'Packing',     href: '/packer',             icon: User,            kind: 'station', requires: 'packing.view' },
   { id: 'support',           label: 'Support',     href: '/support',            icon: AlertCircle,     kind: 'station', requires: 'integrations.zendesk' },
   { id: 'ai-chat',           label: 'AI Chat',     href: '/ai-chat',            icon: MessageSquare,   kind: 'bottom',  requires: 'dashboard.view' },
@@ -136,6 +139,10 @@ export function getSidebarNavItems(opts: GetSidebarNavItemsOpts = {}): SidebarNa
   let items: SidebarNavItem[] = APP_SIDEBAR_NAV;
   if (mobileRestricted) {
     items = items.filter((item) => !isSidebarRouteMobileRestricted(item.id as SidebarRouteKey));
+  } else {
+    items = items.map((item) =>
+      item.desktopIcon ? { ...item, icon: item.desktopIcon } : item,
+    );
   }
   if (permissions) {
     items = items.filter((item) => !item.requires || permissions.has(item.requires));
@@ -328,7 +335,7 @@ export const SIDEBAR_PAGE_NAV: SidebarPageNav[] = [
     modes: [
       { id: 'incoming', label: 'Incoming',     icon: Inbox,          to: () => ({ pathname: RECEIVING, params: { mode: 'incoming' } }) },
       { id: 'triage',   label: 'Receiving',    icon: ClipboardList,  to: () => ({ pathname: RECEIVING, params: { mode: 'triage' } }) },
-      { id: 'receive',  label: 'Unbox',        icon: Box,            to: () => ({ pathname: RECEIVING, params: { mode: null } }) },
+      { id: 'receive',  label: 'Unbox',        icon: Cms,            to: () => ({ pathname: RECEIVING, params: { mode: null } }) },
       { id: 'history',  label: 'History',      icon: List,           to: () => ({ pathname: RECEIVING, params: { mode: 'history' } }) },
       { id: 'pickup',   label: 'Local Pickup', icon: ShoppingCart,   to: () => ({ pathname: RECEIVING, params: { mode: 'pickup' } }) },
     ],

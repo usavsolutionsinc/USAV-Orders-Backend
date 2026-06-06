@@ -601,8 +601,13 @@ export const PlatformChip = ({
 
   const getRect = useCallback(() => chipRef.current?.getBoundingClientRect() ?? null, []);
 
+  const isEmpty =
+    isEmptyDisplayValue(label) || String(label || '').trim() === '---';
+  const resolvedUnderline = isEmpty ? 'border-gray-500' : underlineClass;
+  const resolvedIconClass = isEmpty ? 'text-gray-500' : iconClass;
+
   const openTooltip = () => {
-    if (!tooltipCtx) return;
+    if (isEmpty || !tooltipCtx) return;
     tooltipCtx.activate({ anchorId, value: 'product page', getRect });
   };
 
@@ -621,19 +626,24 @@ export const PlatformChip = ({
     >
       <button
         type="button"
+        disabled={isEmpty}
         onClick={(e) => {
           e.stopPropagation();
+          if (isEmpty) return;
           onClick(e);
         }}
-        className="inline-flex w-fit max-w-full items-center justify-start gap-0.5 py-0 bg-transparent text-left text-black transition-all active:scale-95"
+        className="inline-flex w-fit max-w-full items-center justify-start gap-0.5 py-0 bg-transparent text-left text-black transition-all active:scale-95 disabled:opacity-30"
       >
-        <span className={`inline-flex shrink-0 items-center ${iconClass}`}>
+        <span className={`inline-flex shrink-0 items-center ${resolvedIconClass}`}>
           <ExternalLink className="h-4 w-4 shrink-0" />
         </span>
         <span
-          className={`min-w-[60px] whitespace-nowrap border-b-2 pb-0.5 text-center font-dm-sans text-sm font-bold lowercase leading-none tracking-tight text-black ${underlineClass}`}
+          className={`min-w-[60px] whitespace-nowrap border-b-2 pb-0.5 text-center font-dm-sans text-sm font-bold leading-none tracking-tight ${resolvedUnderline} ${
+            isEmpty ? 'text-transparent select-none' : 'lowercase text-black'
+          }`}
+          aria-hidden={isEmpty}
         >
-          {label}
+          {isEmpty ? '\u00a0' : label}
         </span>
       </button>
     </div>

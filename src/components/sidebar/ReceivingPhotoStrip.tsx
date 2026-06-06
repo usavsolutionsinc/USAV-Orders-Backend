@@ -1,10 +1,10 @@
 'use client';
 
-import { memo, useCallback, useMemo } from 'react';
+import { memo, useCallback, useMemo, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useAblyChannel } from '@/hooks/useAblyChannel';
 import { PhotoGallery } from '@/components/shipped/PhotoGallery';
-import { NasReceivingAttach } from '@/components/sidebar/NasReceivingAttach';
+import { NasReceivingAttach, NasPickerDialog } from '@/components/sidebar/NasReceivingAttach';
 import { nasConfigured } from '@/lib/nas-photos';
 import { SkeletonBase } from '@/design-system/components/Skeletons';
 
@@ -40,6 +40,9 @@ export const ReceivingPhotoStrip = memo(function ReceivingPhotoStrip({
 }: ReceivingPhotoStripProps) {
   const queryClient = useQueryClient();
   const queryKey = ['receiving-photos', receivingId];
+  // NAS picker for adding more photos once some already exist. Owned here (not
+  // inside PhotoGallery) so it portals above the fullscreen viewer.
+  const [pickerOpen, setPickerOpen] = useState(false);
 
   const { data, isLoading, error } = useQuery<PhotosPayload>({
     queryKey,
@@ -121,16 +124,29 @@ export const ReceivingPhotoStrip = memo(function ReceivingPhotoStrip({
     );
   }
 
-  // Once photos exist we don't repeat the "Select from NAS" button here — the
-  // gallery's own toolbar covers viewing, and the NAS picker is offered in the
-  // empty state. (Keeps the workspace photo row from showing two add controls.)
+  // With photos present, the gallery's own toolbar (and the fullscreen viewer)
+  // surface an "Add photos" button when the NAS is configured. The picker dialog
+  // is rendered here so it layers above the gallery's fullscreen viewer.
+  const canAdd = nasConfigured();
   return (
-    <PhotoGallery
-      photos={galleryPhotos}
-      orderId={`RCV-${receivingId}`}
-      launcherLayout="toolbar"
-      compact
-      onPhotoDeleted={refresh}
-    />
+    <>
+      <PhotoGallery
+        photos={galleryPhotos}
+        orderId={`RCV-${receivingId}`}
+        launcherLayout="toolbar"
+        compact
+        onPhotoDeleted={refresh}
+        onAddPhotos={canAdd ? () => setPickerOpen(true) : undefined}
+      />
+      {canAdd && pickerOpen ? (
+        <NasPickerDialog
+          receivingId={receivingId}
+          poCreatedAt={poCreatedAt}
+          initialFolder={initialFolder}
+          onClose={() => setPickerOpen(false)}
+          onAttached={refresh}
+        />
+      ) : null}
+    </>
   );
 });

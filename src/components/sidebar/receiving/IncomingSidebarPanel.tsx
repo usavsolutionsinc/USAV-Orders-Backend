@@ -258,6 +258,18 @@ const TONE: Record<
  *   │ [⏰ Awaiting tr… 554]  │
  *   └────────────────────────┘
  */
+// Sync-result popover model. `updated` = things that actually changed in the
+// system this run; `synced` = work that ran but found nothing to change (the
+// "already in sync" reassurance line); `emptyNote` = an error message, or the
+// "already up to date" note when nothing changed.
+interface SyncReport {
+  title: string;
+  ok: boolean;
+  updated: string[];
+  synced: string[];
+  emptyNote: string | null;
+}
+
 export function IncomingSidebarPanel() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -298,24 +310,40 @@ export function IncomingSidebarPanel() {
     setZohoRefreshing(true);
     try {
       const res = await fetch('/api/receiving-lines/incoming/zoho-refresh', { method: 'POST' });
-      if (!res.ok) throw new Error('zoho refresh failed');
-      const data = await res.json();
+      const data = await res.json().catch(() => null);
+      if (!res.ok || !data) throw new Error(data?.error || `Zoho refresh failed (${res.status})`);
       await invalidateIncoming();
       const created = data?.issued?.created ?? 0;
       const updated = data?.issued?.updated ?? 0;
+      const linked = data?.issued?.linked ?? 0;
+      const processed = data?.issued?.processed ?? 0;
       const statusUpdates = data?.mirror?.upserted ?? 0;
+      const fetched = data?.mirror?.fetched ?? 0;
+      const nothingChanged = created + updated + linked + statusUpdates === 0;
       setSyncReport({
         title: 'Zoho refreshed',
         ok: true,
-        lines: [
-          `${created} new PO${created === 1 ? '' : 's'} added`,
-          `${updated} PO${updated === 1 ? '' : 's'} refreshed`,
-          `${statusUpdates} Zoho status update${statusUpdates === 1 ? '' : 's'} — received POs cleared`,
+        updated: [
+          created > 0 ? `${created} new PO${created === 1 ? '' : 's'} added` : null,
+          updated > 0 ? `${updated} PO${updated === 1 ? '' : 's'} refreshed` : null,
+          linked > 0 ? `${linked} PO${linked === 1 ? '' : 's'} linked to a shipment` : null,
+          statusUpdates > 0 ? `${statusUpdates} status update${statusUpdates === 1 ? '' : 's'} — received POs cleared` : null,
+        ].filter(Boolean) as string[],
+        synced: [
+          `${processed} issued PO${processed === 1 ? '' : 's'} checked`,
+          `${fetched} mirror record${fetched === 1 ? '' : 's'} scanned`,
         ],
+        emptyNote: nothingChanged ? 'Already up to date — no Zoho changes since last sync.' : null,
       });
       setSyncReportOpen(true);
-    } catch {
-      setSyncReport({ title: 'Zoho refresh failed', ok: false, lines: ['Could not reach Zoho. Try again.'] });
+    } catch (err) {
+      setSyncReport({
+        title: 'Zoho refresh failed',
+        ok: false,
+        updated: [],
+        synced: [],
+        emptyNote: err instanceof Error ? err.message : 'Could not reach Zoho. Try again.',
+      });
       setSyncReportOpen(true);
     } finally {
       setZohoRefreshing(false);
@@ -329,27 +357,49 @@ export function IncomingSidebarPanel() {
     if (rescanning) return;
     setRescanning(true);
     try {
-      const res = await fetch('/api/admin/po-gmail/reconcile?limit=50', { cache: 'no-store' });
-      if (!res.ok) throw new Error('rescan failed');
-      const data = await res.json();
+      // Receiving-scoped endpoint (gated `receiving.view`, same as the Zoho /
+      // Tracking siblings). The old admin reconcile route was `admin.view`, so
+      // floor staff got a silent 403 — this returns counts only, no PII.
+      const res = await fetch('/api/receiving-lines/incoming/email-rescan?limit=50', {
+        method: 'POST',
+        cache: 'no-store',
+      });
+      const data = await res.json().catch(() => null);
+      if (!res.ok || !data?.success) {
+        throw new Error(data?.error || `Rescan failed (${res.status})`);
+      }
       await invalidateIncoming();
+      const scanned = data?.scanned ?? 0;
       const sig = data?.persisted?.delivery_signals ?? 0;
       const upserted = data?.persisted?.upserted ?? 0;
       const resolved = data?.persisted?.resolved ?? 0;
       const trackingLinked = data?.persisted?.tracking_linked ?? 0;
+      const trackingAlready = data?.persisted?.tracking_already_linked ?? 0;
+      const nothingChanged = sig + upserted + resolved + trackingLinked === 0;
       setSyncReport({
         title: 'PO mailbox rescanned',
         ok: true,
-        lines: [
-          `${sig} "Order delivered" signal${sig === 1 ? '' : 's'} logged`,
-          `${upserted} missing PO${upserted === 1 ? '' : 's'} added`,
-          `${resolved} resolved`,
-          `${trackingLinked} tracking #${trackingLinked === 1 ? '' : 's'} linked`,
-        ],
+        updated: [
+          sig > 0 ? `${sig} “Order delivered” signal${sig === 1 ? '' : 's'} logged` : null,
+          upserted > 0 ? `${upserted} missing PO${upserted === 1 ? '' : 's'} added to worklist` : null,
+          resolved > 0 ? `${resolved} worklist row${resolved === 1 ? '' : 's'} resolved` : null,
+          trackingLinked > 0 ? `${trackingLinked} tracking #${trackingLinked === 1 ? '' : 's'} linked` : null,
+        ].filter(Boolean) as string[],
+        synced: [
+          `${scanned} email${scanned === 1 ? '' : 's'} scanned`,
+          trackingAlready > 0 ? `${trackingAlready} tracking # already linked` : null,
+        ].filter(Boolean) as string[],
+        emptyNote: nothingChanged ? 'Already up to date — nothing new in the mailbox.' : null,
       });
       setSyncReportOpen(true);
-    } catch {
-      setSyncReport({ title: 'PO email rescan failed', ok: false, lines: ['Could not reach the PO mailbox. Try again.'] });
+    } catch (err) {
+      setSyncReport({
+        title: 'PO email rescan failed',
+        ok: false,
+        updated: [],
+        synced: [],
+        emptyNote: err instanceof Error ? err.message : 'Could not reach the PO mailbox. Try again.',
+      });
       setSyncReportOpen(true);
     } finally {
       setRescanning(false);
@@ -359,9 +409,7 @@ export function IncomingSidebarPanel() {
   // Sync-result popover: after a Zoho / Email sync, summarize what landed in the
   // system (new POs, status updates, delivery signals) in a popover below the
   // sync buttons. Tracking keeps its own richer streaming dialog.
-  const [syncReport, setSyncReport] = useState<
-    { title: string; ok: boolean; lines: string[] } | null
-  >(null);
+  const [syncReport, setSyncReport] = useState<SyncReport | null>(null);
   const [syncReportOpen, setSyncReportOpen] = useState(false);
   const syncReportRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
@@ -839,14 +887,47 @@ export function IncomingSidebarPanel() {
                   Close
                 </button>
               </div>
-              <ul className="mt-2 space-y-1">
-                {syncReport.lines.map((line, i) => (
-                  <li key={i} className="flex items-start gap-1.5 text-caption font-semibold text-gray-600">
-                    <span className="mt-1 h-1 w-1 shrink-0 rounded-full bg-gray-300" />
-                    <span className="tabular-nums">{line}</span>
-                  </li>
-                ))}
-              </ul>
+
+              {/* Updated — what actually changed in the system this run. */}
+              {syncReport.updated.length > 0 ? (
+                <div className="mt-2.5">
+                  <div className="text-eyebrow font-black uppercase tracking-wider text-emerald-600">Updated</div>
+                  <ul className="mt-1 space-y-1">
+                    {syncReport.updated.map((line, i) => (
+                      <li key={i} className="flex items-start gap-1.5 text-caption font-semibold text-gray-700">
+                        <span className="mt-1 h-1.5 w-1.5 shrink-0 rounded-full bg-emerald-500" />
+                        <span className="tabular-nums">{line}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ) : null}
+
+              {/* In sync — work that ran but found nothing to change. */}
+              {syncReport.ok && syncReport.synced.length > 0 ? (
+                <div className="mt-2.5">
+                  <div className="text-eyebrow font-black uppercase tracking-wider text-gray-400">In sync</div>
+                  <ul className="mt-1 space-y-1">
+                    {syncReport.synced.map((line, i) => (
+                      <li key={i} className="flex items-start gap-1.5 text-caption font-medium text-gray-500">
+                        <span className="mt-1 h-1 w-1 shrink-0 rounded-full bg-gray-300" />
+                        <span className="tabular-nums">{line}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ) : null}
+
+              {/* Empty / error note. */}
+              {syncReport.emptyNote ? (
+                <p
+                  className={`mt-2.5 text-caption font-semibold ${
+                    syncReport.ok ? 'text-gray-500' : 'text-rose-600'
+                  }`}
+                >
+                  {syncReport.emptyNote}
+                </p>
+              ) : null}
             </div>
           ) : null}
         </div>

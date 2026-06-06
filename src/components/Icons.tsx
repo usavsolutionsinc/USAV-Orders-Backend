@@ -261,6 +261,15 @@ export const Box = ({ className = "w-6 h-6" }: { className?: string }) => (
     </svg>
 );
 
+/** 3D package — physical unbox / prepacked-product scans (not the Products master-nav CMS icon). */
+export const Cms = ({ className = "w-6 h-6" }: { className?: string }) => (
+    <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z" />
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="m3.3 7 8.7 5 8.7-5" />
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 22V12" />
+    </svg>
+);
+
 export const ClipboardList = ({ className = "w-6 h-6" }: { className?: string }) => (
     <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" />

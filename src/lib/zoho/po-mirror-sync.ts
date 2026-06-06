@@ -19,7 +19,7 @@
  */
 
 import pool from '@/lib/db';
-import { paginateZohoList } from '@/lib/zoho';
+import { paginateZohoList, getPurchaseOrderById } from '@/lib/zoho';
 import type { ZohoPurchaseOrder } from '@/lib/zoho';
 
 export interface SyncReport {
@@ -118,6 +118,25 @@ async function upsertOne(po: ZohoPurchaseOrder): Promise<boolean> {
     ],
   );
   return true;
+}
+
+/**
+ * Refresh a single PO in the mirror by id — fetches the full PO header from
+ * Zoho and UPSERTs it. Powers the Incoming details panel's per-order "Sync"
+ * button: an operator who suspects one PO is stale can re-pull just that one
+ * without running the whole delta sweep. Returns whether the PO was found +
+ * its fresh Zoho status (so the caller can tell the operator "now received").
+ */
+export async function syncOnePoMirror(
+  zohoPurchaseOrderId: string,
+): Promise<{ found: boolean; status: string | null }> {
+  const id = (zohoPurchaseOrderId || '').trim();
+  if (!id) return { found: false, status: null };
+  const res = await getPurchaseOrderById(id);
+  const po = res?.purchaseorder;
+  if (!po) return { found: false, status: null };
+  const ok = await upsertOne(po);
+  return { found: ok, status: asString(po.status) };
 }
 
 export async function syncZohoPoMirror(opts: SyncOptions): Promise<SyncReport> {

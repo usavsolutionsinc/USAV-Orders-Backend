@@ -1,7 +1,9 @@
 // Shared constants for all receiving-related components.
 // Import from here instead of defining inline in each component.
 
+import type { ComponentType } from 'react';
 import { WORKFLOW_STAGES } from '@/lib/receiving/workflow-stages';
+import { PackageCheck, Clock, Truck, Package } from '@/components/Icons';
 
 // ─── Dropdown option arrays ───────────────────────────────────────────────────
 
@@ -194,4 +196,43 @@ export function getStatusDotBg(
   if (value === 'PASSED' || value === 'DONE') return 'bg-emerald-500';
   if (value.startsWith('FAILED') || value === 'SCRAP' || value === 'RTV') return 'bg-rose-500';
   return 'bg-gray-400';
+}
+
+// ─── Shared row-display contract (desktop ⇄ mobile) ──────────────────────────
+// One source of truth for the receiving ROW display decisions that both the
+// desktop table (ReceivingLinesTable) and the mobile feed (MobileReceivingRow)
+// make, so they can't drift. Pass the same `ReceivingRowDisplay` to both.
+
+/** Per-surface display flags for a receiving row. */
+export interface ReceivingRowDisplay {
+  /** History/recent surface: "received" is implied, so the workflow status
+   *  icon is suppressed (desktop history mode + the mobile recent/receiving feed). */
+  isHistory?: boolean;
+  /** Incoming/expected surface: workflow status doesn't apply yet → also hidden. */
+  isIncoming?: boolean;
+}
+
+/**
+ * Workflow status → its compact glyph + tone. Single source for the icon
+ * mapping that desktop (ReceivingLinesTable) and mobile (MobileReceivingRow)
+ * previously copy-pasted. `label` is the value from {@link workflowStatusTableLabel}.
+ */
+export function getWorkflowIconMeta(label: string): {
+  Icon: ComponentType<{ className?: string }>;
+  tone: string;
+} {
+  if (label === 'RECEIVED') return { Icon: PackageCheck, tone: 'text-emerald-600' };
+  if (label === 'EXPECTED') return { Icon: Clock, tone: 'text-amber-500' };
+  if (label === 'SCANNED') return { Icon: Truck, tone: 'text-blue-600' };
+  return { Icon: Package, tone: 'text-gray-400' };
+}
+
+/**
+ * Whether the workflow status icon should render for this row. History and
+ * incoming surfaces suppress it (received is implied / status N/A). The mobile
+ * receiving feed is a history surface, so it passes `{ isHistory: true }` and
+ * gets the same suppression the desktop history table does — for free.
+ */
+export function shouldShowWorkflowStatusIcon(display: ReceivingRowDisplay = {}): boolean {
+  return !(display.isHistory || display.isIncoming);
 }

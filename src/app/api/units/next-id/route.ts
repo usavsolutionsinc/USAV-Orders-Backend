@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
-import { queryOne } from '@/lib/neon-client';
 import { withAuth } from '@/lib/auth/withAuth';
 import { allocateNextUnitId } from '@/lib/inventory/unit-id';
+import { resolveSkuCatalogRow } from '@/lib/inventory/resolve-sku-catalog';
 import { getOrCreateInternalGtin } from '@/lib/inventory/internal-gtin';
 import { buildGs1UnitUrl } from '@/lib/scan-resolver';
 import { getAppBaseUrl } from '@/lib/qstash';
@@ -67,30 +67,7 @@ export const POST = withAuth(async (request) => {
     //    exact (case/trim) → leading-zero-stripped → platform_sku crosswalk.
     //    Without this, an input like "1103" misses a catalog row stored as
     //    "01103" and the print flow silently 404s.
-    const row = explicitId
-      ? await queryOne<{ id: number; sku: string; product_title: string; gtin: string | null }>`
-          SELECT id, sku, product_title, gtin FROM sku_catalog WHERE id = ${explicitId} LIMIT 1`
-      : await queryOne<{ id: number; sku: string; product_title: string; gtin: string | null }>`
-          SELECT id, sku, product_title, gtin FROM sku_catalog
-           WHERE UPPER(TRIM(sku)) = UPPER(TRIM(${skuInput}))
-              OR regexp_replace(UPPER(TRIM(sku)), '^0+', '') = regexp_replace(UPPER(TRIM(${skuInput})), '^0+', '')
-           ORDER BY (UPPER(TRIM(sku)) = UPPER(TRIM(${skuInput}))) DESC
-           LIMIT 1`;
-
-    // Platform-sku crosswalk fallback (e.g. user scanned an Ecwid SKU that
-    // maps to a different canonical sku_catalog.sku).
-    const resolved = row
-      ? row
-      : await queryOne<{ id: number; sku: string; product_title: string; gtin: string | null }>`
-          SELECT sc.id, sc.sku, sc.product_title, sc.gtin
-            FROM sku_platform_ids sp
-            JOIN sku_catalog sc ON sc.id = sp.sku_catalog_id
-           WHERE sp.is_active = true
-             AND (
-               UPPER(TRIM(sp.platform_sku)) = UPPER(TRIM(${skuInput}))
-               OR regexp_replace(UPPER(TRIM(COALESCE(sp.platform_sku,''))), '^0+', '') = regexp_replace(UPPER(TRIM(${skuInput})), '^0+', '')
-             )
-           LIMIT 1`;
+    const resolved = await resolveSkuCatalogRow(skuInput, explicitId);
 
     if (!resolved) {
       return NextResponse.json(

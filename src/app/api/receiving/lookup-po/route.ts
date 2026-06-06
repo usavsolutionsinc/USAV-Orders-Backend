@@ -355,18 +355,32 @@ async function createOrGetTestReceiving(
   const { receivingId, preexisting } = await upsertMatchedReceiving(poId, carrier, staffId);
   const scanId = await recordScan(receivingId, trackingNumber, carrier, staffId, 'zoho_po');
 
+  // A scanned test carton belongs in receiving triage as a SCANNED line — NOT
+  // the tech testing queue. The testing queue (/api/work-orders) keys on the
+  // receiving HEADER's needs_test, which upsertMatchedReceiving sets true for
+  // real POs; clear it here (also heals an older test carton on re-scan).
+  await pool.query(`UPDATE receiving SET needs_test = false WHERE id = $1`, [receivingId]);
+
   // DO NOTHING on conflict so a re-scan can't wipe the quantity_received /
   // workflow_status the unbox step wrote (order-independence of scan vs unbox).
+  // needs_test=false: a scanned test carton is a SCANNED receiving line (lands
+  // in the receiving triage page, workflow_status MATCHED → "SCANNED" label) —
+  // NOT a testing work-order. The tech testing queue keys on needs_test=true
+  // (work-orders route), so flagging it there is what wrongly pulled the test
+  // carton into the testing display queue instead of receiving triage.
   await pool.query(
     `INSERT INTO receiving_lines
        (receiving_id, zoho_item_id, zoho_line_item_id, zoho_purchaseorder_id,
         item_name, sku, quantity_expected, quantity_received, workflow_status,
         qa_status, disposition_code, condition_grade, needs_test, updated_at)
      VALUES ($1, $2, $3, $4, $5, 'TEST-SKU', 1, 0, 'MATCHED',
-        'PENDING', 'HOLD', 'BRAND_NEW', true, NOW())
+        'PENDING', 'HOLD', 'BRAND_NEW', false, NOW())
      ON CONFLICT (zoho_purchaseorder_id, zoho_line_item_id)
        WHERE zoho_purchaseorder_id IS NOT NULL AND zoho_line_item_id IS NOT NULL
-     DO NOTHING`,
+     -- Heal only needs_test on re-scan (clears any older test carton wrongly
+     -- flagged for testing) WITHOUT touching quantity_received / workflow_status,
+     -- so unbox progress survives a re-scan.
+     DO UPDATE SET needs_test = false`,
     [receivingId, zohoItemId, zohoLineItemId, poId, `Test item · ${key}`],
   );
 

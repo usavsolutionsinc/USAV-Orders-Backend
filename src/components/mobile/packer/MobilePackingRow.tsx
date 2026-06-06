@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { Camera } from '@/components/Icons';
-import { RowTitle, RowMetaColumns } from '@/components/ui/RowMetaColumns';
+import { RowTitle, RowMetaColumns, META_COL } from '@/components/ui/RowMetaColumns';
 import { ReceivingIdentityChips } from '@/components/receiving/ReceivingIdentityChips';
 import type { PackerLogRow } from '@/components/mobile/packer/types';
 import { MobileRowCard } from '@/components/mobile/feed/MobileRowCard';
@@ -46,11 +46,13 @@ export function MobilePackingRow({ row, variant, fresh = false, onTap, photosHre
 
   return (
     <MobileRowCard variant={variant} fresh={fresh} onTap={onTap} dataAttr={{ name: 'packer-row-id', value: row.id }}>
-      <RowTitle dot={getSourceDotBg(row)} title={productTitle} />
+      <RowTitle dot={getSourceDotBg(row)} dotTrack={META_COL.dotTrackWide} title={productTitle} />
 
       <div className="pointer-events-auto mt-0.5 flex items-center gap-2">
         <RowMetaColumns
           className="!mt-0 shrink-0"
+          indent={META_COL.indentWide}
+          qtyCol={META_COL.qtyColWide}
           qty={<span className={quantity > 1 ? 'text-yellow-600' : 'text-gray-900'}>{quantity}</span>}
           condition={<span className={condColor}>{conditionLabel}</span>}
         />

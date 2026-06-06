@@ -8,6 +8,8 @@ import {
   FileText,
   X,
   Copy as CopyIcon,
+  RefreshCw,
+  Trash2,
 } from '@/components/Icons';
 import { PaneHeaderTabs } from '@/components/ui/pane-header';
 import { SlideOverBackdrop } from '@/components/ui/SlideOverBackdrop';
@@ -185,10 +187,88 @@ export interface IncomingDetailsPanelProps {
  */
 export function IncomingDetailsPanel({ zohoPurchaseOrderId, poNumberHint, onClose }: IncomingDetailsPanelProps) {
   const [tab, setTab] = useState<TabId>('po');
+  const [syncing, setSyncing] = useState(false);
+  // Two-step armed delete: first click arms (auto-disarms after 4s), second
+  // click executes. Mirrors the UnfoundQueueDetailsPanel / ShippedDetailsPanel
+  // destructive-action pattern so a misclick can't wipe a PO's lines.
+  const [deleteArmed, setDeleteArmed] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const queryClient = useQueryClient();
 
-  // Reset to default tab when the PO changes (different row clicked).
-  useEffect(() => setTab('po'), [zohoPurchaseOrderId]);
+  // Reset to default tab + disarm delete when the PO changes (different row).
+  useEffect(() => {
+    setTab('po');
+    setDeleteArmed(false);
+  }, [zohoPurchaseOrderId]);
+
+  // Auto-disarm the delete button if the operator doesn't confirm quickly.
+  useEffect(() => {
+    if (!deleteArmed) return;
+    const t = setTimeout(() => setDeleteArmed(false), 4000);
+    return () => clearTimeout(t);
+  }, [deleteArmed]);
+
+  const invalidateIncoming = useCallback(() => {
+    queryClient.invalidateQueries({ queryKey: ['incoming-details', zohoPurchaseOrderId] });
+    queryClient.invalidateQueries({ queryKey: ['receiving-lines-table'] });
+    queryClient.invalidateQueries({ queryKey: ['receiving-lines-incoming-summary'] });
+    queryClient.invalidateQueries({ queryKey: ['incoming-delivered-unscanned'] });
+  }, [queryClient, zohoPurchaseOrderId]);
+
+  // Per-order Sync — re-pull this one PO's Zoho header/status + re-poll its
+  // shipment, without running the whole Incoming sweep.
+  const syncOne = useCallback(async () => {
+    if (syncing) return;
+    setSyncing(true);
+    try {
+      const res = await fetch('/api/receiving-lines/incoming/sync-one', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ po_id: zohoPurchaseOrderId }),
+      });
+      const body = await res.json().catch(() => null);
+      if (!res.ok || !body?.success) {
+        toast.error(body?.error || `Sync failed (${res.status})`);
+        return;
+      }
+      const status = body?.mirror?.status as string | null;
+      const polled = body?.shipment?.polled as boolean | undefined;
+      toast.success(
+        `Synced${status ? ` · Zoho: ${status}` : ''}${polled ? ' · carrier re-polled' : ''}`,
+      );
+      invalidateIncoming();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Sync failed');
+    } finally {
+      setSyncing(false);
+    }
+  }, [syncing, zohoPurchaseOrderId, invalidateIncoming]);
+
+  // Delete — removes EVERY receiving_line for this PO, i.e. the Incoming row.
+  // Zoho is untouched; a future sync may re-add it if the PO is still issued.
+  const deletePo = useCallback(async () => {
+    if (deleting) return;
+    setDeleting(true);
+    try {
+      const res = await fetch(
+        `/api/receiving-lines?po_id=${encodeURIComponent(zohoPurchaseOrderId)}`,
+        { method: 'DELETE' },
+      );
+      const body = await res.json().catch(() => null);
+      if (!res.ok || !body?.success) {
+        toast.error(body?.error || `Delete failed (${res.status})`);
+        return;
+      }
+      toast.success(`Removed from Incoming (${body?.deleted ?? 0} line${body?.deleted === 1 ? '' : 's'})`);
+      invalidateIncoming();
+      onClose();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Delete failed');
+    } finally {
+      setDeleting(false);
+      setDeleteArmed(false);
+    }
+  }, [deleting, zohoPurchaseOrderId, invalidateIncoming, onClose]);
 
   const { data, isLoading, isError } = useQuery<DetailsResponse>({
     queryKey: ['incoming-details', zohoPurchaseOrderId],
@@ -245,6 +325,17 @@ export function IncomingDetailsPanel({ zohoPurchaseOrderId, poNumberHint, onClos
           </div>
           <button
             type="button"
+            onClick={() => void syncOne()}
+            disabled={syncing}
+            aria-label="Sync this PO"
+            title="Re-pull this PO from Zoho + re-poll its shipment"
+            className="inline-flex h-7 items-center gap-1 rounded-md border border-emerald-200 bg-emerald-50 px-2 text-eyebrow font-black uppercase tracking-wider text-emerald-700 transition-colors hover:bg-emerald-100 disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            <RefreshCw className={`h-3.5 w-3.5 ${syncing ? 'animate-spin' : ''}`} />
+            {syncing ? 'Syncing' : 'Sync'}
+          </button>
+          <button
+            type="button"
             onClick={onClose}
             aria-label="Close details panel"
             className="inline-flex h-7 w-7 items-center justify-center rounded-md text-gray-500 hover:bg-gray-100 hover:text-gray-900"
@@ -286,6 +377,44 @@ export function IncomingDetailsPanel({ zohoPurchaseOrderId, poNumberHint, onClos
               />
             )}
           </div>
+        )}
+      </div>
+
+      {/* Footer — destructive action. Two-step armed delete removes every
+          receiving_line for this PO (the Incoming row). Zoho is untouched. */}
+      <div className="shrink-0 border-t border-gray-200 bg-white px-4 py-2.5">
+        {deleteArmed ? (
+          <div className="flex items-center gap-2">
+            <span className="flex-1 text-caption font-semibold text-rose-700">
+              Remove {poNumberHint || data?.po?.zoho_purchaseorder_number || 'this PO'} from Incoming?
+            </span>
+            <button
+              type="button"
+              onClick={() => setDeleteArmed(false)}
+              disabled={deleting}
+              className="inline-flex h-7 items-center rounded-md px-2 text-eyebrow font-black uppercase tracking-wider text-gray-500 hover:bg-gray-100 disabled:opacity-50"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={() => void deletePo()}
+              disabled={deleting}
+              className="inline-flex h-7 items-center gap-1 rounded-md bg-rose-600 px-2.5 text-eyebrow font-black uppercase tracking-wider text-white hover:bg-rose-700 disabled:opacity-50"
+            >
+              <Trash2 className="h-3.5 w-3.5" />
+              {deleting ? 'Deleting…' : 'Confirm'}
+            </button>
+          </div>
+        ) : (
+          <button
+            type="button"
+            onClick={() => setDeleteArmed(true)}
+            className="inline-flex h-8 w-full items-center justify-center gap-1.5 rounded-md border border-rose-200 bg-rose-50 text-caption font-bold text-rose-700 transition-colors hover:bg-rose-100"
+          >
+            <Trash2 className="h-3.5 w-3.5" />
+            Delete from Incoming
+          </button>
         )}
       </div>
       </motion.div>

@@ -111,7 +111,6 @@ export function DashboardShippedTable({
   const [stickyDate, setStickyDate] = useState('');
   const [currentCount, setCurrentCount] = useState(0);
   const [activeDateKey, setActiveDateKey] = useState('');
-  const [isScrolled, setIsScrolled] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
 
   const shippedSearchField = normalizeShippedSearchField(searchParams.get('shippedSearchField'));
@@ -462,7 +461,10 @@ export function DashboardShippedTable({
 
       for (let i = 0; i < headers.length; i += 1) {
         const header = headers[i] as HTMLElement;
-        if (header.offsetTop - scrollRef.current.offsetTop <= scrollTop + 5) {
+        // Hand off to the next day the moment its band reaches the 40px sticky
+        // header edge — not after it has slid fully behind it — so the WeekHeader
+        // date updates in step with the band that's disappearing under it.
+        if (header.offsetTop - scrollRef.current.offsetTop <= scrollTop + 40) {
           activeDate = header.getAttribute('data-date') || '';
           activeCount = parseInt(header.getAttribute('data-count') || '0', 10);
         } else break;
@@ -478,9 +480,6 @@ export function DashboardShippedTable({
         setStickyDate(firstDate);
         setCurrentCount(sortedGroupedEntries[0][1].length);
       }
-      
-      const scrolled = scrollTop > 10;
-      setIsScrolled((prev) => (prev === scrolled ? prev : scrolled));
     });
   }, [sortedGroupedEntries]);
 
@@ -576,6 +575,8 @@ export function DashboardShippedTable({
           ref={scrollRef}
           className={cn(
             "flex-1 min-h-0 overflow-x-auto overflow-y-auto no-scrollbar w-full z-10",
+            // Pull the scroll area up under the 40px WeekHeader so each day band docks
+            // *behind* the opaque header instead of flashing on top as it scrolls past.
             !bannerTitle && !normalizedSearch && !anyCarrierFilter && "-mt-[40px] pt-[40px]"
           )}
         >
@@ -620,13 +621,13 @@ export function DashboardShippedTable({
                   const timeB = new Date(b.created_at || 0).getTime();
                   return timeB - timeA;
                 });
-                const hidePinnedDayHeader = date === activeDateKey && isScrolled;
+                const isDuplicateOfHeader = date === activeDateKey;
                 return (
                   <div key={date} className="flex flex-col">
                     {embedded ? (
-                      <MobileDateGroupHeader date={date} total={dayRecords.length} hidden={hidePinnedDayHeader} />
+                      <MobileDateGroupHeader date={date} total={dayRecords.length} hidden={isDuplicateOfHeader} />
                     ) : (
-                      <DateGroupHeader date={date} total={dayRecords.length} hidden={hidePinnedDayHeader} />
+                      <DateGroupHeader date={date} total={dayRecords.length} hidden={isDuplicateOfHeader} />
                     )}
                     {sortedRecords.map((record, index) => {
                       const detail = toDetailRecord(record);
@@ -663,8 +664,8 @@ export function DashboardShippedTable({
                             />
                           </div>
                           {(() => {
-                            const platformNode = platformLabel && !orderIsFbaMeta ? (
-                              <PlatformChip label={platformLabel} underlineClass={getOrderPlatformBorderColor(platformLabel)} iconClass={productPageUrl ? getOrderPlatformColor(platformLabel) : 'text-gray-500'} onClick={() => { if (productPageUrl) window.open(productPageUrl, '_blank', 'noopener,noreferrer'); }} />
+                            const platformNode = !orderIsFbaMeta ? (
+                              <PlatformChip label={platformLabel} underlineClass={getOrderPlatformBorderColor(platformLabel)} iconClass={platformLabel && productPageUrl ? getOrderPlatformColor(platformLabel) : 'text-gray-500'} onClick={() => { if (productPageUrl) window.open(productPageUrl, '_blank', 'noopener,noreferrer'); }} />
                             ) : null;
                             const orderIdNode = hideOrderIdChip ? <OrderIdChipPlaceholder /> : <OrderIdChip value={record.order_id || ''} display={getLast4(record.order_id)} />;
                             const serialNode = <SerialChip value={String(record.serial_number || '').trim()} width="w-fit max-w-full" />;

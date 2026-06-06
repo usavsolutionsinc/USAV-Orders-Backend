@@ -201,7 +201,7 @@ export function NasReceivingAttach({ receivingId, poCreatedAt = null, initialFol
   );
 }
 
-function NasPickerDialog({
+export function NasPickerDialog({
   receivingId,
   poCreatedAt,
   initialFolder,

@@ -1,11 +1,14 @@
 'use client';
 
 import Link from 'next/link';
-import { Camera, Package, PackageCheck, Clock, Truck } from '@/components/Icons';
+import { Camera } from '@/components/Icons';
 import {
   conditionGradeTableLabel,
   workflowStatusTableLabel,
   getStatusDotBg,
+  getWorkflowIconMeta,
+  shouldShowWorkflowStatusIcon,
+  type ReceivingRowDisplay,
 } from '@/components/station/receiving-constants';
 import { RowTitle, RowMetaColumns, META_COL } from '@/components/ui/RowMetaColumns';
 import { ReceivingIdentityChips } from '@/components/receiving/ReceivingIdentityChips';
@@ -20,6 +23,12 @@ interface MobileReceivingRowProps {
   onTap: () => void;
   /** Path the camera FAB navigates to. Pre-built by parent so we can carry staffId, etc. */
   photosHref: string;
+  /**
+   * Shared desktop⇄mobile display flags. The mobile receiving feed is the
+   * recent/history surface, so it defaults to `{ isHistory: true }` — which
+   * suppresses the workflow status icon exactly like the desktop history table.
+   */
+  display?: ReceivingRowDisplay;
 }
 
 /**
@@ -31,19 +40,14 @@ interface MobileReceivingRowProps {
  * expanded card adds a big "Take Photos" CTA; collapsed rows show a compact
  * photo-count chip.
  */
-export function MobileReceivingRow({ row, variant, fresh = false, onTap, photosHref }: MobileReceivingRowProps) {
+export function MobileReceivingRow({ row, variant, fresh = false, onTap, photosHref, display = { isHistory: true } }: MobileReceivingRowProps) {
   const productTitle = row.item_name || row.zoho_item_id || 'Unnamed inbound line';
   const quantityText = `${row.quantity_received}/${row.quantity_expected ?? '?'}`;
   const qtyExpected = row.quantity_expected ?? 0;
   const workflowLabel = workflowStatusTableLabel(row.workflow_status || 'EXPECTED');
-  const { WorkflowIcon, workflowIconTone } =
-    workflowLabel === 'RECEIVED'
-      ? { WorkflowIcon: PackageCheck, workflowIconTone: 'text-emerald-600' }
-      : workflowLabel === 'EXPECTED'
-        ? { WorkflowIcon: Clock, workflowIconTone: 'text-amber-500' }
-        : workflowLabel === 'SCANNED'
-          ? { WorkflowIcon: Truck, workflowIconTone: 'text-blue-600' }
-          : { WorkflowIcon: Package, workflowIconTone: 'text-gray-400' };
+  // Icon mapping + show/hide are the SAME shared decision the desktop table uses.
+  const { Icon: WorkflowIcon, tone: workflowIconTone } = getWorkflowIconMeta(workflowLabel);
+  const showWorkflowIcon = shouldShowWorkflowStatusIcon(display);
 
   const condGrade = (row.condition_grade || '').toUpperCase();
   const conditionLabel = conditionGradeTableLabel(row.condition_grade);
@@ -89,9 +93,11 @@ export function MobileReceivingRow({ row, variant, fresh = false, onTap, photosH
           }
           condition={<span className={conditionColor}>{conditionLabel}</span>}
           rest={
-            <span title={workflowLabel} className="inline-flex items-center">
-              <WorkflowIcon className={`h-3.5 w-3.5 ${workflowIconTone}`} />
-            </span>
+            showWorkflowIcon ? (
+              <span title={workflowLabel} className="inline-flex items-center">
+                <WorkflowIcon className={`h-3.5 w-3.5 ${workflowIconTone}`} />
+              </span>
+            ) : undefined
           }
         />
         <div className="ml-auto min-w-0">

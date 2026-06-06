@@ -70,7 +70,6 @@ export const RedesignedBottomNav = () => {
         ${TOKENS.colors.surface}
         flex items-center justify-around px-2
         border-t border-slate-200/70 backdrop-blur-3xl
-        shadow-[0_-8px_24px_rgba(0,0,0,0.06)]
         pointer-events-auto
       `}>
         {tabs.map((tab) => {

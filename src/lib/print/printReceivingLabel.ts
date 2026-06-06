@@ -29,7 +29,44 @@ export interface ReceivingLabelPayload {
   /** Support / line notes shown in the center of the label (any free text). */
   notes: string;
   conditionCode: string;
+  /** Receiving type (PO / RETURN / TRADE_IN / PICKUP) — shown after the platform as "Platform - Type". */
+  receivingType?: string | null;
   date: string;
+}
+
+/**
+ * Human label for the receiving type shown after the platform in the
+ * label's top-left. Mirrors `RECEIVING_TYPE_OPTS`' labels. Returns '' for
+ * an empty/unknown type so the top-left collapses back to just the platform.
+ */
+export function receivingLabelTypeDisplay(code: string | null | undefined): string {
+  const c = String(code ?? '').trim().toUpperCase();
+  switch (c) {
+    case 'PO':
+      return 'PO';
+    case 'RETURN':
+      return 'Return';
+    case 'TRADE_IN':
+      return 'Trade In';
+    case 'PICKUP':
+      return 'Pick Up';
+    case '':
+      return '';
+    default:
+      return c.replace(/_/g, ' ');
+  }
+}
+
+/**
+ * Top-left label face — "Platform - Type" (e.g. "eBay - Return"), or just
+ * the platform when no receiving type is set.
+ */
+export function receivingLabelPlatformDisplay(
+  payload: Pick<ReceivingLabelPayload, 'platform' | 'receivingType'>,
+): string {
+  const platform = String(payload.platform ?? '').trim();
+  const type = receivingLabelTypeDisplay(payload.receivingType);
+  return type ? `${platform} - ${type}` : platform;
 }
 
 /**
@@ -112,7 +149,7 @@ export function printReceivingLabel(payload: ReceivingLabelPayload): void {
 
   const infoHtml = `
     <div class="row">
-      <span class="platform">${escapeLabelHtml(payload.platform)}</span>
+      <span class="platform">${escapeLabelHtml(receivingLabelPlatformDisplay(payload))}</span>
       <span class="date">${escapeLabelHtml(payload.date)}</span>
     </div>
     <div class="notes">${escapeLabelHtml((payload.notes || '').trim())}</div>

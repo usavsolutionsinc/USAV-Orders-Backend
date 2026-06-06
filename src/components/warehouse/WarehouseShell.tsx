@@ -19,7 +19,6 @@ import { LabelPrintWorkspace } from './LabelPrintWorkspace';
 import { RackLabelWorkspace } from './RackLabelWorkspace';
 import { RackDetailView } from './RackDetailView';
 import { WarehouseMap, type MapViewMode } from './WarehouseMap';
-import { PageHeader } from '@/components/ui/pane-header';
 
 type InventoryTab = 'rooms' | 'bins' | 'labels' | 'racks' | 'map';
 
@@ -71,15 +70,6 @@ function BinsTabBody() {
 
   return (
     <>
-      <PageHeader
-        title="Bins"
-        count={visibleRows.length}
-        metaSlot={
-          <span className="text-xs text-gray-500">
-            {loading ? 'Loading…' : `of ${counts.total}`}
-          </span>
-        }
-      />
       <div className="space-y-4 px-4 pt-4 sm:px-6">
         <BinsFilterBar
           counts={counts}
@@ -133,14 +123,8 @@ function MapTabBody() {
 
   return (
     <>
-      <PageHeader
-        title="Warehouse map"
-        metaSlot={
-          <span className="text-xs text-gray-500">
-            {loading ? 'Loading…' : `by ${mode === 'fill' ? 'fill %' : mode === 'age' ? 'last counted' : 'issues'}`}
-          </span>
-        }
-        rightSlot={
+      <div className="space-y-4 px-4 pt-4 sm:px-6">
+        <div className="flex justify-end">
           <button
             type="button"
             onClick={toggleEmpty}
@@ -153,9 +137,7 @@ function MapTabBody() {
           >
             {showEmpty ? 'Hide' : 'Show'} empty bins
           </button>
-        }
-      />
-      <div className="space-y-4 px-4 pt-4 sm:px-6">
+        </div>
         <WarehouseMap
           rows={rows}
           loading={loading}

@@ -115,7 +115,12 @@ export function MasterNavView({
             same one the workspace/global header uses, so it lines up. Hidden
             while open so it doesn't double with the dropdown's own border. */}
         <div ref={headerRef} className={cn('shrink-0', !open && receivingHeaderHairlineClass)}>
-          <MasterNavHeader icon={activePage.icon} label={headerLabel} open={open} onToggle={onToggleOpen} />
+          <MasterNavHeader
+            icon={activeMode?.icon ?? activePage.icon}
+            label={headerLabel}
+            open={open}
+            onToggle={onToggleOpen}
+          />
         </div>
         {rail}
         <div className="relative z-0 min-h-0 flex-1 overflow-hidden">{renderContext()}</div>
@@ -127,7 +132,12 @@ export function MasterNavView({
   return (
     <div className={cn('relative flex min-h-0 flex-col', className)}>
       <div ref={headerRef} className={cn('relative z-30 shrink-0', !open && receivingHeaderHairlineClass)}>
-        <MasterNavHeader icon={activePage.icon} label={headerLabel} open={open} onToggle={onToggleOpen} />
+        <MasterNavHeader
+          icon={activeMode?.icon ?? activePage.icon}
+          label={headerLabel}
+          open={open}
+          onToggle={onToggleOpen}
+        />
         <AnimatePresence>
           {open && (
             <MasterNavDropdown

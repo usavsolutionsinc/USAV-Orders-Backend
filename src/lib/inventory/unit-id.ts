@@ -62,6 +62,23 @@ export function isoWeekParts(date: Date): { isoYear: number; isoWeek: number } {
   return { isoYear: d.getUTCFullYear(), isoWeek };
 }
 
+/**
+ * Inverse of {@link formatUnitId} — split a `{SKU_SHORT}-{YYWW}-{SEQ6}` unit
+ * id back into its parts. The last two dash-segments are always a 4-digit
+ * YYWW and a 6-digit zero-padded sequence, so the base SKU (which may itself
+ * contain dashes, e.g. `IPH13-128-BLU`) is everything before them.
+ *
+ * Returns null for legacy (`{base}:A01`) or otherwise non-conforming ids so
+ * callers can fall back. No DB call.
+ */
+export function parseUnitId(
+  unitId: string,
+): { baseSku: string; yyww: string; seq: number } | null {
+  const m = /^(.+)-(\d{4})-(\d{6})$/.exec(String(unitId ?? '').trim());
+  if (!m) return null;
+  return { baseSku: m[1], yyww: m[2], seq: Number(m[3]) };
+}
+
 export function formatUnitId(
   skuShort: string,
   isoYear: number,

@@ -10,7 +10,6 @@ import { BARCODE_MODES, type BarcodeMode } from '@/components/barcode/ModeSelect
 import { useBarcodeMode } from '@/hooks/useBarcodeMode';
 import { useLabelRecents } from '@/hooks/useLabelRecents';
 import { useSkuCatalogSearch, type SkuCatalogItem } from '@/hooks/useSkuCatalogSearch';
-import { detectSkuCatalogSearchField } from '@/lib/detectSearchField';
 import { ChevronDown, Printer, FileText, Link2, Check, Clock, History, Package } from '@/components/Icons';
 import { successFeedback } from '@/lib/feedback/confirm';
 import { PairingQueueList } from '@/components/products/pairing/PairingQueueList';
@@ -81,7 +80,7 @@ function LabelsSubViewPlaceholder({ title, body }: { title: string; body: string
  *     search + sort + mode pills + selected-product accordion sections.
  *   - Labels view: second pill row (Print · Recent · History) writes
  *     `?labelsView=`. Print is the default sub-view and shows the mode
- *     dropdown + SearchBar + Ecwid product picker list; picking a row
+ *     dropdown + SearchBar + Zoho product picker list; picking a row
  *     dispatches `sku:fill` for the MultiSkuSnBarcode workspace. Recent
  *     and History sub-views host their own bodies (no shared search bar).
  *   - Pairing view: PairingQueueList; selection writes ?sku=.
@@ -544,17 +543,15 @@ interface ProductPickerListProps {
 }
 
 function ProductPickerList({ query, recents, onPick }: ProductPickerListProps) {
-  // Pulls from sku_platform_ids (platform = 'ecwid') via the catalog search
-  // API. allowEmpty fetches the top page when the user hasn't typed yet so
-  // there's always something to click. searchField switches between
-  // platform_sku and display_name based on the shape of the query — typing a
-  // product title like "bose speaker" now matches by name instead of failing
-  // silently against the SKU column.
-  const searchField = detectSkuCatalogSearchField(query);
+  // Sources from the Zoho `items` mirror (canonical Zoho SKU + Zoho name) via
+  // the catalog search API's `zoho_catalog` field — NOT the Ecwid platform
+  // table. That single query matches on Zoho SKU OR name, so no per-shape field
+  // detection is needed. allowEmpty fetches the top page when the user hasn't
+  // typed yet so there's always something to click.
   const { data, isLoading, isError } = useSkuCatalogSearch(query, {
     limit: 50,
     allowEmpty: true,
-    searchField,
+    searchField: 'zoho_catalog',
   });
 
   const items = data ?? [];
@@ -584,7 +581,7 @@ function ProductPickerList({ query, recents, onPick }: ProductPickerListProps) {
         </div>
       ) : items.length === 0 ? (
         <div className="px-4 py-6 text-center text-caption font-semibold text-gray-400">
-          {trimmedQuery ? 'No matches.' : 'No Ecwid products available.'}
+          {trimmedQuery ? 'No matches.' : 'No products available.'}
         </div>
       ) : (
         <ul className="divide-y divide-gray-100">

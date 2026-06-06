@@ -11,7 +11,7 @@ import type { BinsOverviewRow } from '@/hooks/useBinsOverview';
 import { AuditTimeline } from '@/components/audit/AuditTimeline';
 import { FillBar } from './FillBar';
 import { StatusChips } from './StatusChip';
-import { X, ExternalLink } from '@/components/Icons';
+import { X, ExternalLink, Trash2 } from '@/components/Icons';
 
 interface BinContentRow {
   id: number;
@@ -26,11 +26,53 @@ interface BinContentRow {
 interface Props {
   row: BinsOverviewRow | null;
   onClose: () => void;
+  /** Called after a successful delete so the parent can refetch its list. */
+  onDeleted?: () => void;
 }
 
-export function BinDetailFlyout({ row, onClose }: Props) {
+export function BinDetailFlyout({ row, onClose, onDeleted }: Props) {
   const [contents, setContents] = useState<BinContentRow[]>([]);
   const [loading, setLoading] = useState(false);
+  // Two-step armed delete (soft-delete; endpoint refuses non-empty bins).
+  const [deleteArmed, setDeleteArmed] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+
+  useEffect(() => {
+    setDeleteArmed(false);
+    setDeleteError(null);
+  }, [row?.barcode]);
+
+  useEffect(() => {
+    if (!deleteArmed) return;
+    const t = setTimeout(() => setDeleteArmed(false), 4000);
+    return () => clearTimeout(t);
+  }, [deleteArmed]);
+
+  const handleDelete = async () => {
+    if (!row?.barcode || deleting) return;
+    setDeleting(true);
+    setDeleteError(null);
+    try {
+      const res = await fetch(`/api/locations/${encodeURIComponent(row.barcode)}`, {
+        method: 'DELETE',
+      });
+      const body = await res.json().catch(() => null);
+      if (!res.ok || !body?.success) {
+        // 409 = bin still holds stock; surface the message inline.
+        setDeleteError(body?.error || `Delete failed (${res.status})`);
+        setDeleteArmed(false);
+        return;
+      }
+      onDeleted?.();
+      onClose();
+    } catch (err) {
+      setDeleteError(err instanceof Error ? err.message : 'Delete failed');
+      setDeleteArmed(false);
+    } finally {
+      setDeleting(false);
+    }
+  };
 
   useEffect(() => {
     if (!row?.barcode) return;
@@ -177,6 +219,48 @@ export function BinDetailFlyout({ row, onClose }: Props) {
             </section>
           </div>
         </div>
+
+        {/* Footer — soft-delete this bin (endpoint refuses non-empty bins). */}
+        {row.barcode ? (
+          <div className="shrink-0 border-t border-gray-200 bg-white px-4 py-3">
+            {deleteError ? (
+              <p className="mb-2 text-caption font-semibold text-rose-600">{deleteError}</p>
+            ) : null}
+            {deleteArmed ? (
+              <div className="flex items-center gap-2">
+                <span className="flex-1 text-caption font-semibold text-rose-700">
+                  Delete bin {row.barcode}?
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setDeleteArmed(false)}
+                  disabled={deleting}
+                  className="inline-flex h-8 items-center rounded-md px-2 text-eyebrow font-black uppercase tracking-wider text-gray-500 hover:bg-gray-100 disabled:opacity-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={handleDelete}
+                  disabled={deleting}
+                  className="inline-flex h-8 items-center gap-1 rounded-md bg-rose-600 px-2.5 text-eyebrow font-black uppercase tracking-wider text-white hover:bg-rose-700 disabled:opacity-50"
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                  {deleting ? 'Deleting…' : 'Confirm'}
+                </button>
+              </div>
+            ) : (
+              <button
+                type="button"
+                onClick={() => setDeleteArmed(true)}
+                className="inline-flex h-9 w-full items-center justify-center gap-1.5 rounded-md border border-rose-200 bg-rose-50 text-caption font-bold text-rose-700 transition-colors hover:bg-rose-100"
+              >
+                <Trash2 className="h-3.5 w-3.5" />
+                Delete bin
+              </button>
+            )}
+          </div>
+        ) : null}
       </aside>
     </>
   );

@@ -255,7 +255,9 @@ export default function ReceivingLogs({ onSelectLog, selectedLogId }: ReceivingL
         let activeCount = 0;
         for (let i = 0; i < headers.length; i++) {
             const header = headers[i] as HTMLElement;
-            if (header.offsetTop - scrollRef.current.offsetTop <= scrollTop + 5) {
+            // Promote the next day as its band reaches the 40px sticky header edge,
+            // keeping the WeekHeader date in step with the band hiding under it.
+            if (header.offsetTop - scrollRef.current.offsetTop <= scrollTop + 40) {
                 activeDate = header.getAttribute('data-date') || '';
                 activeCount = parseInt(header.getAttribute('data-count') || '0');
             } else break;
@@ -309,7 +311,7 @@ export default function ReceivingLogs({ onSelectLog, selectedLogId }: ReceivingL
                     <div className="flex flex-col">
                         {sortedEntries.map(([date, logs]) => (
                             <div key={date} className="flex flex-col">
-                                <DateGroupHeader date={date} total={groupedTotals[date] || 0} />
+                                <DateGroupHeader date={date} total={groupedTotals[date] || 0} hidden={formatDate(date) === stickyDate} />
                                 {logs.map((log, index) => (
                                     <motion.div
                                         initial={{ opacity: 0 }}

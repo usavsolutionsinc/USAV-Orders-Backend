@@ -2,7 +2,10 @@
 
 import { receivingHandle } from '@/lib/barcode-routing';
 import { renderDataMatrixSvg } from '@/lib/barcode/dataMatrixSvg';
-import { receivingLabelPoCornerDisplay } from '@/lib/print/printReceivingLabel';
+import {
+  receivingLabelPlatformDisplay,
+  receivingLabelPoCornerDisplay,
+} from '@/lib/print/printReceivingLabel';
 import {
   conditionShort,
 } from '@/components/sidebar/receiving/receiving-sidebar-shared';
@@ -23,6 +26,8 @@ export type ReceivingLabelPayload = {
   /** Support / carton notes printed in the label center — any free text. */
   notes: string;
   conditionCode: string;
+  /** Receiving type (PO / RETURN / TRADE_IN / PICKUP) — shown after the platform as "Platform - Type". */
+  receivingType?: string | null;
   date: string;
 };
 
@@ -80,7 +85,7 @@ export function printReceivingLabel(payload: ReceivingLabelPayload) {
 <div class="wrap">
   <div class="info">
     <div class="row">
-      <span class="platform">${escapeHtml(payload.platform)}</span>
+      <span class="platform">${escapeHtml(receivingLabelPlatformDisplay(payload))}</span>
       <span class="date">${escapeHtml(payload.date)}</span>
     </div>
     <div class="notes">${escapeHtml((payload.notes || '').trim())}</div>

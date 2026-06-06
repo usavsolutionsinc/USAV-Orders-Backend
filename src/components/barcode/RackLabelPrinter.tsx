@@ -466,20 +466,10 @@ export function RackLabelPrinter({ variant = 'main' }: RackLabelPrinterProps) {
   const desktopBuilder = (
     <div className="flex flex-col gap-4">
       <header className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          <p className="text-micro font-bold uppercase tracking-[0.16em] text-blue-600">
-            Rack Label Printer
-          </p>
-          <h1 className="mt-0.5 truncate text-2xl font-bold tracking-tight text-gray-900">
-            {selectedRoom ?? 'Pick a room to start'}
-          </h1>
-          <p className="mt-1 max-w-[60ch] text-[12.5px] leading-snug text-gray-500">
-            {selectedRoom
-              ? 'Drill into aisle, bay, and level. Prints one large rack-level label per row.'
-              : 'Choose a room in the sidebar — the remaining steps unlock here.'}
-          </p>
-        </div>
-        <div className="flex items-center gap-2">
+        <h1 className="min-w-0 truncate text-2xl font-bold tracking-tight text-gray-900">
+          {selectedRoom ?? 'Pick a room to start'}
+        </h1>
+        <div className="flex shrink-0 items-center gap-2">
           {(selectedRoom || aisle != null) && (
             <button
               type="button"
@@ -575,7 +565,6 @@ export function RackLabelPrinter({ variant = 'main' }: RackLabelPrinterProps) {
 
       <GiantRackPreviewPanel
         zoneLetter={zoneLetter}
-        roomName={selectedRoom}
         aisle={aisle}
         bay={bay}
         level={level}
@@ -1123,7 +1112,6 @@ function NumField({ label, value, onChange }: { label: string; value: number; on
 
 interface GiantRackPreviewPanelProps {
   zoneLetter?: string;
-  roomName?: string;
   aisle?: number;
   bay?: number;
   level?: number;
@@ -1131,7 +1119,7 @@ interface GiantRackPreviewPanelProps {
 }
 
 function GiantRackPreviewPanel({
-  zoneLetter, roomName, aisle, bay, level, gln,
+  zoneLetter, aisle, bay, level, gln,
 }: GiantRackPreviewPanelProps) {
   const segments: RackSegments | null = zoneLetter && aisle != null && bay != null && level != null
     ? { zone: zoneLetter, aisle, bay, level }
@@ -1159,11 +1147,6 @@ function GiantRackPreviewPanel({
               <p className="mt-2 whitespace-nowrap font-mono text-4xl font-black leading-none tracking-tight text-gray-900">
                 {code}
               </p>
-              {roomName && (
-                <p className="mt-3 text-base font-bold text-gray-800">
-                  {roomName}
-                </p>
-              )}
               <p className="mt-2 text-label font-semibold leading-snug text-gray-600">
                 {humanReadable({ zone: zoneLetter, aisle, bay, level })}
               </p>

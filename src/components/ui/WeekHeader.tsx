@@ -1,8 +1,6 @@
 'use client';
 
-import { ReactNode, useMemo } from 'react';
-import { motion } from 'framer-motion';
-import { cn } from '@/utils/_cn';
+import { ReactNode } from 'react';
 import {
   PaneHeader,
   PaneHeaderTitle,
@@ -49,7 +47,6 @@ interface WeekHeaderProps {
   onPrevWeek?: () => void;
   onNextWeek?: () => void;
   rightSlot?: ReactNode;
-  className?: string;
 }
 
 export default function WeekHeader({
@@ -62,7 +59,6 @@ export default function WeekHeader({
   onPrevWeek,
   onNextWeek,
   rightSlot,
-  className,
 }: WeekHeaderProps) {
   const getTodayPSTDisplay = () => {
     try {
@@ -82,19 +78,8 @@ export default function WeekHeader({
     }
   })();
 
-  const dateLineDisplay = useMemo(() => {
-    if (!stickyDate) return getTodayPSTDisplay();
-    // If it's already formatted (contains comma or ordinal suffix), return as is.
-    if (stickyDate.includes(',') || stickyDate.includes('th') || stickyDate.includes('st') || stickyDate.includes('nd') || stickyDate.includes('rd')) {
-      return stickyDate;
-    }
-    try {
-      return formatDateWithOrdinal(stickyDate);
-    } catch {
-      return stickyDate;
-    }
-  }, [stickyDate, fallbackDate]);
-
+  const formattedStickyDate = stickyDate ? formatDateWithOrdinal(stickyDate) : '';
+  const dateLineDisplay = formattedStickyDate || getTodayPSTDisplay();
   const stickyDateLabel =
     formattedTodayPST && dateLineDisplay === formattedTodayPST ? 'Today' : dateLineDisplay;
 
@@ -114,23 +99,13 @@ export default function WeekHeader({
       // Draw the divider as an inner line on the row (gray-300, matching the
       // sidebar bands + day-group rows) instead of the faint outer border on
       // the translucent sticky shell — keeps it aligned across columns.
-      // Force bg-white to ensure it's opaque and covers docked headers.
-      className={cn("border-b-0 bg-white shadow-sm", className)}
+      className="border-b-0"
       rowClassName="border-b border-gray-300"
       leftSlot={
         <>
           {leftSlot ? <div className="shrink-0">{leftSlot}</div> : null}
-          <PaneHeaderTitle className="flex">
-            <motion.span 
-              key={stickyDateLabel}
-              layoutId={stickyDate ? `date-${stickyDate}` : undefined}
-            >
-              {stickyDateLabel}
-            </motion.span>
-          </PaneHeaderTitle>
-          <motion.div layoutId={stickyDate ? `count-${stickyDate}` : undefined}>
-            <PaneHeaderCount count={count} />
-          </motion.div>
+          <PaneHeaderTitle>{stickyDateLabel}</PaneHeaderTitle>
+          <PaneHeaderCount count={count} />
         </>
       }
       rightSlot={resolvedRightSlot}

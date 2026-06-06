@@ -16,7 +16,8 @@ import type { ReactNode } from 'react';
 
 /** Merge a flat nav item with its mode metadata (if the page has modes). */
 function toPageNav(item: SidebarNavItem): SidebarPageNav {
-  return getSidebarPageNav(item.id) ?? item;
+  const page = getSidebarPageNav(item.id);
+  return page ? { ...page, icon: item.icon } : item;
 }
 
 /**

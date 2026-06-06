@@ -1294,9 +1294,31 @@ export const PATCH = withAuth(async (request: NextRequest, ctx) => {
 export const DELETE = withAuth(async (request: NextRequest) => {
   try {
     const { searchParams } = new URL(request.url);
-    const id = Number(searchParams.get('id'));
+    const idParam = searchParams.get('id');
+    // `po_id` (zoho_purchaseorder_id) deletes EVERY receiving_line for that PO
+    // — that's one Incoming-table row, which dedupes lines to 1 per PO. The
+    // single-`id` path stays for callers that target one specific line.
+    const poId = (searchParams.get('po_id') || '').trim();
+
+    if (poId) {
+      const result = await pool.query(
+        `DELETE FROM receiving_lines WHERE zoho_purchaseorder_id = $1 RETURNING id`,
+        [poId],
+      );
+      if (result.rows.length === 0) {
+        return NextResponse.json(
+          { success: false, error: 'No receiving lines found for that PO' },
+          { status: 404 },
+        );
+      }
+      await invalidateCacheTags(['receiving-logs', 'receiving-lines']);
+      await publishReceivingLogChanged({ action: 'delete', rowId: poId, source: 'receiving-lines.delete' });
+      return NextResponse.json({ success: true, po_id: poId, deleted: result.rows.length });
+    }
+
+    const id = Number(idParam);
     if (!Number.isFinite(id) || id <= 0) {
-      return NextResponse.json({ success: false, error: 'Valid id is required' }, { status: 400 });
+      return NextResponse.json({ success: false, error: 'Valid id or po_id is required' }, { status: 400 });
     }
 
     const result = await pool.query(`DELETE FROM receiving_lines WHERE id = $1 RETURNING id`, [id]);

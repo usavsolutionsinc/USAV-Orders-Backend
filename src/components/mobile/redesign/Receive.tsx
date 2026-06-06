@@ -186,12 +186,16 @@ export default function RedesignedMobileReceive() {
     [feedback],
   );
 
-  // Feed camera-decoded values into the same lookup path.
+  // Feed camera-decoded values into the same lookup path. Start/stop strictly
+  // off `cameraActive` using the stable callbacks — depending on the whole
+  // `scanner` object re-ran this every render and could leave the camera live
+  // after Close (a stop racing an in-flight async start).
+  const { startScanning, stopScanning } = scanner;
   useEffect(() => {
-    if (cameraActive) scanner.startScanning();
-    else scanner.stopScanning();
-    return () => { scanner.stopScanning(); };
-  }, [cameraActive, scanner]);
+    if (cameraActive) void startScanning();
+    else void stopScanning();
+    return () => { void stopScanning(); };
+  }, [cameraActive, startScanning, stopScanning]);
 
   useEffect(() => {
     if (scanner.lastScannedValue) void lookup(scanner.lastScannedValue);
@@ -389,7 +393,7 @@ export default function RedesignedMobileReceive() {
           rows={feedRows}
           expandLast={false}
           scrollRef={scrollRef}
-          className="px-3 pb-32"
+          className="pb-32"
           empty={
             <div className="py-12 text-center opacity-40">
               <PackageCheck className="mx-auto mb-3 h-10 w-10 text-blue-200" />

@@ -419,6 +419,7 @@ export function LineEditPanel({
     trackingNumber: trackingHint || null,
     notes: notes.trim(),
     conditionCode: labelConditionCode,
+    receivingType,
     date: labelDate,
   };
 

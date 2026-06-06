@@ -149,11 +149,11 @@ const OrdersQueueTableRow = memo(function OrdersQueueTableRow({
           {
             key: 'platform',
             width: CHIP_COL.platform,
-            node: platformLabel && !isFba ? (
+            node: !isFba ? (
               <PlatformChip
                 label={platformLabel}
                 underlineClass={getOrderPlatformBorderColor(platformLabel)}
-                iconClass={productPageUrl ? platformColor : 'text-gray-500'}
+                iconClass={platformLabel && productPageUrl ? platformColor : 'text-gray-500'}
                 onClick={() => {
                   if (productPageUrl) window.open(productPageUrl, '_blank', 'noopener,noreferrer');
                 }}
@@ -259,8 +259,6 @@ export function OrdersQueueTable({
   const { getStaffName } = useStaffNameMap();
   const [selectedRecord, setSelectedRecord] = useState<ShippedOrder | null>(null);
   const [stickyDate, setStickyDate] = useState('');
-  const [activeDateKey, setActiveDateKey] = useState('');
-  const [isScrolled, setIsScrolled] = useState(false);
   const [currentCount, setCurrentCount] = useState(0);
   const scrollRef = useRef<HTMLDivElement>(null);
   const scrollRafRef = useRef(0);
@@ -376,7 +374,9 @@ export function OrdersQueueTable({
 
       for (let i = 0; i < headers.length; i += 1) {
         const header = headers[i] as HTMLElement;
-        if (header.offsetTop - scrollRef.current.offsetTop <= scrollTop + 5) {
+        // Promote the next day as its band reaches the 40px sticky header edge,
+        // keeping the WeekHeader date in step with the band hiding under it.
+        if (header.offsetTop - scrollRef.current.offsetTop <= scrollTop + 40) {
           activeDate = header.getAttribute('data-date') || '';
           activeCount = parseInt(header.getAttribute('data-count') || '0', 10);
         } else {
@@ -384,14 +384,8 @@ export function OrdersQueueTable({
         }
       }
 
-      if (activeDate) {
-        setActiveDateKey(activeDate);
-        setStickyDate(activeDate);
-      }
+      if (activeDate) setStickyDate(activeDate);
       if (activeCount) setCurrentCount(activeCount);
-      
-      const scrolled = scrollTop > 10;
-      setIsScrolled((prev) => (prev === scrolled ? prev : scrolled));
     });
   }, []);
 
@@ -407,7 +401,6 @@ export function OrdersQueueTable({
   useEffect(() => {
     if (sortedGroupedEntries.length > 0) {
       const firstDate = sortedGroupedEntries[0][0];
-      setActiveDateKey(firstDate);
       setStickyDate(firstDate);
       setCurrentCount(sortedGroupedEntries[0][1].length);
     }
@@ -513,11 +506,9 @@ export function OrdersQueueTable({
                     return timeA - timeB;
                   });
 
-                  const hidePinnedDayHeader = date === activeDateKey && isScrolled;
-
                   return (
                     <div key={date} className="flex flex-col">
-                      <DateGroupHeader date={date} total={dayRecords.length} hidden={hidePinnedDayHeader} />
+                      <DateGroupHeader date={date} total={dayRecords.length} hidden={date === stickyDate} />
                       {sortedRecords.map((record, index) => {
                         const r = record as QueueRowRecord;
                         const testerName = useWaForDisplay

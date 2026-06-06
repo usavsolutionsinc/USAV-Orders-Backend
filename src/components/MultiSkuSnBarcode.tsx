@@ -14,7 +14,7 @@ import { InlineSerialAdder } from '@/components/receiving/workspace/InlineSerial
 
 // Import utilities
 import { normalizeSku, getSerialLast6 } from '@/utils/sku';
-import { printProductLabels, buildUnitPayload } from '@/lib/print/printProductLabel';
+import { printProductLabel, printProductLabels, buildUnitPayload } from '@/lib/print/printProductLabel';
 import { useLabelRecents } from '@/hooks/useLabelRecents';
 import { useBarcodeMode } from '@/hooks/useBarcodeMode';
 import { CONDITION_OPTIONS } from '@/components/receiving/zoho-po-types';
@@ -139,6 +139,76 @@ export default function MultiSkuSnBarcode({ layout = 'vertical' }: MultiSkuSnBar
         return data as { unitId: string; gtin: string; qrUrl: string };
     }, []);
 
+    /**
+     * Reprint path — the SKU field holds an existing full unit id (scanned off
+     * a previously-printed label, e.g. `00098-2621-000142`). Resolve its gtin +
+     * GS1 qrUrl server-side via /api/units/resolve-id (no sequence allocation)
+     * so the reprinted DataMatrix is byte-identical to the original /
+     * tech-testing label. Falls back to a plain SKU lookup for legacy ids that
+     * don't resolve — those print with the bare unit id encoded.
+     */
+    const resolveReprintUnit = useCallback(async (unitIdInput: string) => {
+        const trimmed = unitIdInput.trim();
+        if (!trimmed) return;
+        setIsLoadingTitle(true);
+        try {
+            const res = await fetch('/api/units/resolve-id', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ unitId: trimmed }),
+            });
+            const data = await res.json();
+            if (res.ok && data?.ok) {
+                setUniqueSku(trimmed);
+                setGtin(data.gtin ?? "");
+                setQrUrl(data.qrUrl ?? "");
+                // Enrich with stock/location/image from the canonical SKU;
+                // fall back to the catalog title resolve-id already returned.
+                try {
+                    const info = await fetch(`/api/get-title-by-sku?sku=${encodeURIComponent(normalizeSku(data.sku))}`);
+                    const infoData = await info.json();
+                    setTitle(infoData.title || data.productTitle || "Not found");
+                    setStock(infoData.stock || "0");
+                    setCurrentLocation(infoData.location || "");
+                    setLocation(infoData.location || "");
+                    setImageUrl(infoData.imageUrl || "");
+                    setSkuCatalogId(
+                        typeof infoData.skuCatalogId === 'number'
+                            ? infoData.skuCatalogId
+                            : typeof data.skuCatalogId === 'number'
+                              ? data.skuCatalogId
+                              : null,
+                    );
+                } catch {
+                    setTitle(data.productTitle || "Not found");
+                }
+                return;
+            }
+            throw new Error(data?.error || 'resolve-id failed');
+        } catch {
+            // Legacy / unresolved id — look up by the raw input and print the
+            // bare unit id (no gtin/qrUrl available).
+            const baseSku = trimmed.includes(':') ? trimmed.split(':')[0] : trimmed;
+            try {
+                const res = await fetch(`/api/get-title-by-sku?sku=${encodeURIComponent(normalizeSku(baseSku))}`);
+                const data = await res.json();
+                setTitle(data.title || "Not found");
+                setStock(data.stock || "0");
+                setCurrentLocation(data.location || "");
+                setLocation(data.location || "");
+                setImageUrl(data.imageUrl || "");
+                setSkuCatalogId(typeof data.skuCatalogId === 'number' ? data.skuCatalogId : null);
+            } catch {
+                setTitle("Error loading info");
+            }
+            setUniqueSku(trimmed);
+            setGtin("");
+            setQrUrl("");
+        } finally {
+            setIsLoadingTitle(false);
+        }
+    }, []);
+
     // Called when a SKU is injected from the right panel or clipboard paste
     const handleSkuFillAndSearch = useCallback(async (value: string) => {
         const trimmed = value.trim();
@@ -159,24 +229,9 @@ export default function MultiSkuSnBarcode({ layout = 'vertical' }: MultiSkuSnBar
         await new Promise(r => setTimeout(r, 0));
 
         if (mode === 'reprint') {
-            // Reprint doesn't allocate a new unit id; only fetch product info.
-            setIsLoadingTitle(true);
-            try {
-                const baseSku = trimmed.includes(':') ? trimmed.split(':')[0] : trimmed;
-                const res = await fetch(`/api/get-title-by-sku?sku=${encodeURIComponent(normalizeSku(baseSku))}`);
-                const data = await res.json();
-                setTitle(data.title || "Not found");
-                setStock(data.stock || "0");
-                setCurrentLocation(data.location || "");
-                setLocation(data.location || "");
-                setImageUrl(data.imageUrl || "");
-                setSkuCatalogId(typeof data.skuCatalogId === 'number' ? data.skuCatalogId : null);
-            } catch {
-                setTitle("Error loading info");
-            } finally {
-                setIsLoadingTitle(false);
-            }
-            setUniqueSku(trimmed);
+            // Reprint doesn't allocate a new unit id; it resolves the scanned
+            // unit id's gtin + qrUrl so the DataMatrix matches the original.
+            await resolveReprintUnit(trimmed);
             setStep(3);
             return;
         }
@@ -225,7 +280,7 @@ export default function MultiSkuSnBarcode({ layout = 'vertical' }: MultiSkuSnBar
 
         setStep(2);
         setTimeout(() => snInputRef.current?.focus(), 100);
-    }, [mode, fetchNextUnitId]);
+    }, [mode, fetchNextUnitId, resolveReprintUnit]);
 
     // Listen for sku:fill events dispatched by the right-panel SKU table
     useEffect(() => {
@@ -264,14 +319,16 @@ export default function MultiSkuSnBarcode({ layout = 'vertical' }: MultiSkuSnBar
             setError("SKU required");
             return;
         }
-        const catalogIdHint = await fetchProductInfo(sku);
 
         if (mode === 'reprint') {
-            // Reprint exact same label value; no increment/current backend calls.
-            setUniqueSku(sku.trim());
+            // Reprint: the field holds an existing unit id — resolve its gtin +
+            // qrUrl so the reprinted DataMatrix is identical to the original.
+            await resolveReprintUnit(sku.trim());
             setStep(3);
             return;
         }
+
+        const catalogIdHint = await fetchProductInfo(sku);
 
         if (mode === 'print' && !uniqueSku) {
             setIsGenerating(true);
@@ -397,10 +454,12 @@ export default function MultiSkuSnBarcode({ layout = 'vertical' }: MultiSkuSnBar
 
     const handleFinalAction = async () => {
         if (mode === 'reprint') {
-            // Just print, no DB/Sheet updates. Reprint uses the SKU itself
-            // as the unit ID (legacy behavior); no GTIN/QR override
-            // available because we don't know which unit it was.
-            printProductLabels({ sku: uniqueSku, title, serialNumbers });
+            // Just print, no DB/Sheet updates. Reproduces one existing unit
+            // label: the DataMatrix encodes the GS1 Digital Link rebuilt from
+            // the scanned unit id (qrUrl), byte-identical to the original /
+            // tech-testing label. When resolve failed (legacy id) qrUrl is
+            // empty and buildUnitPayload falls back to the bare unit id.
+            printProductLabel({ sku: uniqueSku, title, qrPayload: qrUrl || undefined });
             pushRecent({ sku: uniqueSku || sku, sn: serialNumbers[0], title });
             setStep(1);
             setSku("");
@@ -671,31 +730,14 @@ export default function MultiSkuSnBarcode({ layout = 'vertical' }: MultiSkuSnBar
                         ) : (
                             <PreviewPlaceholder mode={mode} sku={sku} />
                         )}
-
-                        {/* Inline primary CTA. Mirrors the sticky bar so the
-                         * action is always reachable even when the viewport
-                         * crops the sticky footer (short desktop windows,
-                         * iPad split-view, browser zoom). Disabled state is
-                         * intentionally bold so packers can see *why* they
-                         * can't click. */}
-                        <button
-                            type="button"
-                            onClick={primaryAction}
-                            disabled={primaryDisabled}
-                            className={`flex w-full items-center justify-center gap-2 rounded-xl px-6 py-3 text-sm font-bold text-white shadow-sm transition-colors ${
-                                primaryDisabled
-                                    ? 'cursor-not-allowed bg-gray-300'
-                                    : `${accent.ctaBg} ${accent.ctaHover}`
-                            }`}
-                        >
-                            <Check className="h-4 w-4" />
-                            {primaryLabel}
-                        </button>
                     </div>
                 </div>
 
-                {/* Sticky action bar */}
+                {/* Floating action bar — same primitive as the receiving unbox
+                 * bar; the `floating` variant hovers the CTA above the scroll
+                 * surface with no bar chrome (no background/border/backdrop). */}
                 <StickyActionBar
+                    floating
                     primary={{
                         label: primaryLabel,
                         onClick: primaryAction,
@@ -705,12 +747,6 @@ export default function MultiSkuSnBarcode({ layout = 'vertical' }: MultiSkuSnBar
                         toneClasses: { bg: accent.ctaBg, hover: accent.ctaHover },
                         tone: accent.tone,
                     }}
-                    hints={[
-                        { key: '⏎', label: 'Continue' },
-                        ...((mode === 'print' || mode === 'reprint') && previewIsReady
-                            ? [{ key: '⌘P', label: 'Print' }]
-                            : []),
-                    ]}
                 />
 
                 <RecentsStrip

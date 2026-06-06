@@ -13,6 +13,7 @@ import { formatDateWithOrdinal } from '@/utils/date';
 interface MobileDateGroupHeaderProps {
   date: string;
   total: number;
+  /** Hide the visible band (keep the scroll markers) when its day duplicates the pinned WeekHeader. */
   hidden?: boolean;
 }
 
@@ -39,8 +40,8 @@ export function MobileDateGroupHeader({
             aria-hidden={hidden}
           >
             <div className={cn(weekHeaderInnerRowClass, weekDayGroupBandClass)}>
-              <motion.p layoutId={`date-${date}`} className={weekDayGroupDateClass}>{formatDateWithOrdinal(date)}</motion.p>
-              <motion.p layoutId={`count-${date}`} className={weekDayGroupCountClass}>{total}</motion.p>
+              <p className={weekDayGroupDateClass}>{formatDateWithOrdinal(date)}</p>
+              <p className={weekDayGroupCountClass}>{total}</p>
             </div>
           </motion.div>
         )}

@@ -1,9 +1,9 @@
 {
   "version": 1,
-  "generatedAt": "2026-06-06T15:08:12Z",
-  "totalRoutes": 512,
+  "generatedAt": "2026-06-06T22:52:06Z",
+  "totalRoutes": 515,
   "summary": {
-    "permissionGated": 428,
+    "permissionGated": 431,
     "authenticatedNoPermission": 18,
     "anonymousIntentional": 45,
     "serviceToService": 3,
@@ -2783,6 +2783,15 @@
       "exemptReason": null
     },
     {
+      "path": "/api/receiving-lines/incoming/email-rescan/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "gate": "withAuth",
+      "permission": "receiving.view",
+      "exemptReason": null
+    },
+    {
       "path": "/api/receiving-lines/incoming/refresh/route.ts",
       "methods": [
         "POST"
@@ -2804,6 +2813,15 @@
       "path": "/api/receiving-lines/incoming/summary/route.ts",
       "methods": [
         "GET"
+      ],
+      "gate": "withAuth",
+      "permission": "receiving.view",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/receiving-lines/incoming/sync-one/route.ts",
+      "methods": [
+        "POST"
       ],
       "gate": "withAuth",
       "permission": "receiving.view",
@@ -4374,6 +4392,15 @@
     },
     {
       "path": "/api/units/next-id/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "gate": "withAuth",
+      "permission": "print.label",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/units/resolve-id/route.ts",
       "methods": [
         "POST"
       ],
