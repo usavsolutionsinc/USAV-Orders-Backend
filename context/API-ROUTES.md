@@ -148,7 +148,6 @@
 | Route | Purpose |
 |-------|---------|
 | `GET /api/db/ping` | Database health check |
-| `POST /api/setup-db` | Initialize schema |
-| `POST /api/drizzle-setup` | Drizzle setup |
+(Legacy schema bootstrap routes removed; see DEAD_CODE_CLEANUP_PLAN.md. Use `npm run db:migrate` + drizzle-kit for changes.)
 | `POST /api/diagnose-migration` | Migration diagnostics |
 | `GET /api/get-title-by-sku` | SKU title lookup |

@@ -21,7 +21,7 @@ This plan is **concrete and executable**. It prioritizes low-risk, high-signal w
 - **Knip reports**: 182 unused files (many require triage — mobile components, old receiving modes, admin sub-pieces, FBA table fragments, etc.).
 - **No root ESLint config**: `eslint-plugin-unused-imports` is installed but inert.
 - **Obvious surface junk**: `apps/desktop/` (11k node_modules files), huge committed logs + JSON backups, old token scripts, root plan docs, one-off diag scripts.
-- **Legacy surface**: Setup/bootstrap routes (`setup-db`, `drizzle-setup`, etc.) still exist and are heavily gated.
+- **Legacy surface**: Setup/bootstrap routes (`setup-db`, `drizzle-setup`, etc.) removed in Phase 2 (historical only; modern path is `npm run db:migrate` + pending migrations runner).
 - **Dual paths**: Many Inventory V1 implementations behind `isInventoryV2*` flags.
 - **Deprecated structures**: Old "Shipped table" references in schema + comments.
 - **Good existing signals**: `dependency-cruiser` (with `no-orphans` rule), rich `context/` and `docs/` explaining historical refactors.
@@ -370,12 +370,19 @@ See `docs/dead-code-triage.md` for the full living list.
 
 ---
 
-**Progress**: Phase 0 tooling + initial reports completed. **First Phase 1 surface junk wave executed** (root junk files removed from disk, `apps/desktop/` cleaned, `src/app/design-demo/` git-deleted, historical root plans moved to `docs/archive/plans/` with README). See `docs/dead-code-triage.md` for details and `git status`.
+**Progress** (as of latest):
+- Phase 0 tooling fully built (eslint.config, improved knip, report script, triage log).
+- Multiple waves executed and committed:
+  - Wave 1: Surface junk (apps/desktop/, design-demo/, root logs/JSONs/scripts, archived root plans).
+  - Waves 2-4: ~14+ components from knip "Unused files" list deleted after grep verification (electron UI, activity, barcode, FBA top, admin tables).
+- Knip unused files reduced from ~182 baseline → 164.
+- Dedicated hygiene commits on main (see `git log --oneline | grep hygiene`).
+- Triage log kept up to date.
 
-**Next actions**: 
-- Commit the wave as a reviewable set of changes.
-- Continue triaging the remaining knip list (176 files).
-- Run `npm run lint` to start addressing unused imports now that the config is live.
-- Proceed to Phase 2 (legacy routes) or more waves from Phase 3.
+**Current focus**: Continuing Phase 3 knip-driven file deletions with verification. ESLint for imports is partially active (direct runs have loader quirks; knip is primary signal).
+
+See `docs/dead-code-triage.md` for full living list and wave details.
+
+**Next actions**: Keep waves going on remaining high-signal items (admin cards, fba remnants, manuals pieces, mobile, etc.). Run `npm run dead-code:report` for summaries.
 
 This plan was built from direct codebase inspection (knip output, schema comments, feature flag structure, sidebar source of truth, existing audit scripts, and internal documentation).

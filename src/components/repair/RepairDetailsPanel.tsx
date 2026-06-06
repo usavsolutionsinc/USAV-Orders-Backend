@@ -13,6 +13,7 @@ import { printRepairLabel } from '@/lib/print/printRepairLabel';
 import { RepairPickupFlow } from '@/components/repair/RepairPickupFlow';
 import { useActivityInboxOptional } from '@/contexts/ActivityInboxContext';
 import { SlideOverBackdrop } from '@/components/ui/SlideOverBackdrop';
+import DeleteButton from '@/components/ui/DeleteButton';
 
 interface RepairDetailsPanelProps {
   repair: RSRecord;
@@ -55,44 +56,23 @@ export function RepairDetailsPanel({
   const [updatingStatus, setUpdatingStatus] = useState(false);
   const [showPickupFlow, setShowPickupFlow] = useState(false);
   const [isMounted, setIsMounted] = useState(false);
-  // Two-step armed delete (soft-cancel) — first click arms, auto-disarms in 4s.
-  const [deleteArmed, setDeleteArmed] = useState(false);
-  const [deleting, setDeleting] = useState(false);
   const ticketInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     setIsMounted(true);
   }, []);
 
-  useEffect(() => {
-    setDeleteArmed(false);
-  }, [repair.id]);
-
-  useEffect(() => {
-    if (!deleteArmed) return;
-    const t = setTimeout(() => setDeleteArmed(false), 4000);
-    return () => clearTimeout(t);
-  }, [deleteArmed]);
-
   // Delete = soft-cancel (status → 'Cancelled'); the row stays for audit but
   // drops out of every queue tab. Repairs link to documents/history, so a hard
-  // delete is intentionally not offered.
+  // delete is intentionally not offered. Throws on failure so the shared
+  // DeleteButton skips its onDeleted (close).
   const handleDelete = async () => {
-    if (deleting) return;
-    setDeleting(true);
-    try {
-      const res = await fetch(`/api/repair-service/${repair.id}`, { method: 'DELETE' });
-      const body = await res.json().catch(() => null);
-      if (!res.ok || !body?.success) {
-        throw new Error(body?.error || `Delete failed (${res.status})`);
-      }
-      onUpdate();
-      onClose();
-    } catch (error) {
-      console.error('Error deleting repair:', error);
-      setDeleting(false);
-      setDeleteArmed(false);
+    const res = await fetch(`/api/repair-service/${repair.id}`, { method: 'DELETE' });
+    const body = await res.json().catch(() => null);
+    if (!res.ok || !body?.success) {
+      throw new Error(body?.error || `Delete failed (${res.status})`);
     }
+    onUpdate();
   };
 
   const PICKUP_STATUSES = useMemo(
@@ -466,39 +446,15 @@ export function RepairDetailsPanel({
           )}
         </section>
 
-        {/* Danger zone — soft-cancel (delete) this repair. */}
+        {/* Danger zone — soft-cancel (delete) this repair via shared DeleteButton. */}
         <section className="border-t border-gray-200 pt-4">
-          {deleteArmed ? (
-            <div className="flex items-center gap-2">
-              <span className="flex-1 text-sm font-bold text-rose-700">
-                Delete this repair?
-              </span>
-              <button
-                type="button"
-                onClick={() => setDeleteArmed(false)}
-                disabled={deleting}
-                className="px-3 py-2 rounded-lg text-xs font-black uppercase tracking-wider text-gray-500 hover:bg-gray-100 disabled:opacity-50"
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                onClick={handleDelete}
-                disabled={deleting}
-                className="px-4 py-2 rounded-lg bg-rose-600 text-white text-xs font-black uppercase tracking-wider hover:bg-rose-700 disabled:opacity-50"
-              >
-                {deleting ? 'Deleting…' : 'Confirm'}
-              </button>
-            </div>
-          ) : (
-            <button
-              type="button"
-              onClick={() => setDeleteArmed(true)}
-              className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-lg border border-rose-200 bg-rose-50 text-rose-700 text-sm font-black uppercase tracking-wider transition-all hover:bg-rose-100 hover:border-rose-300"
-            >
-              Delete Repair
-            </button>
-          )}
+          <DeleteButton
+            onConfirm={handleDelete}
+            onDeleted={onClose}
+            label="Delete Repair"
+            armedLabel="Click again to confirm"
+            className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-lg border border-rose-200 bg-rose-50 text-rose-700 text-sm font-black uppercase tracking-wider transition-all hover:bg-rose-100 hover:border-rose-300 disabled:opacity-50 disabled:cursor-not-allowed"
+          />
         </section>
       </div>
 

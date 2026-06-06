@@ -46,7 +46,7 @@ export function WarehouseShell() {
 function BinsTabBody() {
   const { status, room, q, onParamChange } = useBinsFilterParams();
   const { rooms } = useLocations();
-  const { rows, counts, loading } = useBinsOverview({ room, q });
+  const { rows, counts, loading, refetch } = useBinsOverview({ room, q });
   const [selected, setSelected] = useState<Set<number>>(new Set());
   const [flyoutRow, setFlyoutRow] = useState<BinsOverviewRow | null>(null);
 
@@ -97,6 +97,7 @@ function BinsTabBody() {
       <BinDetailFlyout
         row={flyoutRow}
         onClose={() => setFlyoutRow(null)}
+        onDeleted={refetch}
       />
     </>
   );
@@ -110,7 +111,7 @@ function MapTabBody() {
   const searchParams = useSearchParams();
   const mode = parseMapMode(searchParams.get('view'));
   const showEmpty = searchParams.get('showEmpty') === '1';
-  const { rows, loading } = useBinsOverview({ pollMs: 60_000 });
+  const { rows, loading, refetch } = useBinsOverview({ pollMs: 60_000 });
   const [flyoutRow, setFlyoutRow] = useState<BinsOverviewRow | null>(null);
 
   const toggleEmpty = () => {
@@ -150,6 +151,7 @@ function MapTabBody() {
       <BinDetailFlyout
         row={flyoutRow}
         onClose={() => setFlyoutRow(null)}
+        onDeleted={refetch}
       />
     </>
   );

@@ -119,7 +119,7 @@ graph TB
         MG[/"local-pickups · local-pickup-orders"/]
         MH[/"pipeline/{feedback,promote,status,trigger}"/]
         MI[/"realtime/token · replenish · work-orders"/]
-        MJ[/"support/overview · db · setup-db · drizzle-setup · test-db"/]
+        MJ[/"support/overview · db · test-db (legacy setup routes removed)"/]
     end
 
     WEBHOOK -->|triggers| ORDERS

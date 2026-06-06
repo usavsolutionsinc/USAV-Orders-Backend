@@ -30,7 +30,7 @@
 | `src/app/design-demo/` | Component | High | Self-documenting + knip + no imports | deleted (this wave) | The page itself says: "Throwaway route — not imported by the app. Delete src/app/design-demo anytime." No production code imports from it. Git-deleted. |
 | Root `*_PLAN.md` files (ARCHITECTURE_PLAN.md, COMPONENT_DEDUP_PLAN.md, FBA_*, etc.) | Docs | Medium | Manual | archived (this wave) | Moved via git mv to `docs/archive/plans/`. Added explanatory README. |
 
-**Wave 1 completed**: 2026-06 — First safe surface cleanup wave executed (root junk, apps/desktop, design-demo, archived plans). Committed as "chore(hygiene): introduce dead code cleanup plan + tooling + first surface wave".
+**Wave 1 completed**: 2026-06 — Surface junk + infrastructure (apps/desktop, design-demo, root junk, archived plans). Also Phase 2: legacy setup routes (setup-db/*, drizzle-setup, migrate-process, diagnose-migration, setup-source-db) + guard removed. Docs/references cleaned. Modern: `npm run db:migrate`.
 
 **Wave 2 (follow-up from knip triage)**: Deleted 5 more high-confidence unused components with zero import references:
 - src/components/DocxUploader.tsx
@@ -135,11 +135,8 @@ These are often good candidates once you verify they aren't used by the current 
 
 | Path | Category | Confidence | Detection | Status | Notes / Evidence |
 |------|----------|------------|-----------|--------|------------------|
-| `src/app/api/setup-db/route.ts` | Route | Medium | plan-docs + auth-coverage.md + README | new | Heavy schema bootstrap. Triple-gated but still dangerous. Prefer deletion or 410. |
-| `src/app/api/drizzle-setup/route.ts` | Route | Medium | same | new | Historical. |
-| `src/app/api/migrate-process/route.ts` | Route | Medium | same | new | Historical. |
-| `src/app/api/diagnose-migration/route.ts` | Route | Medium | same | new | Diagnostic. |
-| `src/app/api/setup-source-db/route.ts` | Route | Medium | same | new | Historical. |
+| `src/app/api/setup-db/route.ts` (and related) | Route | Medium | plan-docs + auth-coverage.md + README | deleted (this wave) | Legacy schema bootstrap routes removed. Modern path is `npm run db:migrate` + drizzle-kit. Guard also removed. All doc references cleaned. |
+| `src/lib/setup-guard.ts` | Lib | Medium | — | deleted (this wave) | Only protected the above routes. |
 | `src/lib/setup-guard.ts` | Lib | Low | — | new | Only needed while the above routes exist. Can be deleted with them. |
 
 ---

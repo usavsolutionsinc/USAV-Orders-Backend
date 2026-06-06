@@ -19,6 +19,11 @@ import {
   EMPTY_CARRIER_TABS,
   type CarrierTabsState,
 } from '@/components/sidebar/receiving/CarrierSyncDialog';
+import {
+  IncomingSyncDialog,
+  type IncomingSyncKind,
+  type IncomingSyncResult,
+} from '@/components/sidebar/receiving/IncomingSyncDialog';
 import { streamNdjson } from '@/lib/orders-sync/client';
 import type { CarrierSyncResult, CarrierSyncStreamEvent } from '@/lib/carrier-sync/types';
 
@@ -258,18 +263,6 @@ const TONE: Record<
  *   │ [⏰ Awaiting tr… 554]  │
  *   └────────────────────────┘
  */
-// Sync-result popover model. `updated` = things that actually changed in the
-// system this run; `synced` = work that ran but found nothing to change (the
-// "already in sync" reassurance line); `emptyNote` = an error message, or the
-// "already up to date" note when nothing changed.
-interface SyncReport {
-  title: string;
-  ok: boolean;
-  updated: string[];
-  synced: string[];
-  emptyNote: string | null;
-}
-
 export function IncomingSidebarPanel() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -286,6 +279,42 @@ export function IncomingSidebarPanel() {
   const [syncElapsedMs, setSyncElapsedMs] = useState(0);
   const syncTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const syncAbortRef = useRef<AbortController | null>(null);
+
+  // Zoho / Email sync dialog — the single-shot sibling of the carrier dialog.
+  // Same rich layout (stat tiles + breakdown), but driven by one POST result
+  // rather than a stream.
+  const [incSyncOpen, setIncSyncOpen] = useState(false);
+  const [incSyncKind, setIncSyncKind] = useState<IncomingSyncKind>('zoho');
+  const [incSyncRunning, setIncSyncRunning] = useState(false);
+  const [incSyncResult, setIncSyncResult] = useState<IncomingSyncResult | null>(null);
+  const [incSyncElapsedMs, setIncSyncElapsedMs] = useState(0);
+  const incSyncTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  // Open the dialog in a running state + start its elapsed timer.
+  const beginIncSync = useCallback((kind: IncomingSyncKind) => {
+    setIncSyncKind(kind);
+    setIncSyncResult(null);
+    setIncSyncRunning(true);
+    setIncSyncElapsedMs(0);
+    setIncSyncOpen(true);
+    const t0 = Date.now();
+    if (incSyncTimerRef.current) clearInterval(incSyncTimerRef.current);
+    incSyncTimerRef.current = setInterval(() => setIncSyncElapsedMs(Date.now() - t0), 100);
+  }, []);
+
+  // Settle the dialog with its result + stop the timer.
+  const finishIncSync = useCallback((result: IncomingSyncResult) => {
+    if (incSyncTimerRef.current) {
+      clearInterval(incSyncTimerRef.current);
+      incSyncTimerRef.current = null;
+    }
+    setIncSyncRunning(false);
+    setIncSyncResult(result);
+  }, []);
+
+  useEffect(() => () => {
+    if (incSyncTimerRef.current) clearInterval(incSyncTimerRef.current);
+  }, []);
 
   useEffect(() => () => {
     if (syncTimerRef.current) clearInterval(syncTimerRef.current);
@@ -308,6 +337,7 @@ export function IncomingSidebarPanel() {
   const refreshZoho = useCallback(async () => {
     if (zohoRefreshing) return;
     setZohoRefreshing(true);
+    beginIncSync('zoho');
     try {
       const res = await fetch('/api/receiving-lines/incoming/zoho-refresh', { method: 'POST' });
       const data = await res.json().catch(() => null);
@@ -317,38 +347,57 @@ export function IncomingSidebarPanel() {
       const updated = data?.issued?.updated ?? 0;
       const linked = data?.issued?.linked ?? 0;
       const processed = data?.issued?.processed ?? 0;
+      const failed = data?.issued?.failed ?? 0;
       const statusUpdates = data?.mirror?.upserted ?? 0;
       const fetched = data?.mirror?.fetched ?? 0;
+      const mirrorMode = data?.mirror?.mode ?? '—';
+      const mirrorErrors: string[] = Array.isArray(data?.mirror?.errors) ? data.mirror.errors : [];
       const nothingChanged = created + updated + linked + statusUpdates === 0;
-      setSyncReport({
-        title: 'Zoho refreshed',
+      finishIncSync({
         ok: true,
+        tiles: [
+          { label: 'New', value: created, tone: 'emerald' },
+          { label: 'Refreshed', value: updated, tone: 'blue' },
+          { label: 'Cleared', value: statusUpdates, tone: 'gray' },
+          { label: 'Errors', value: failed + mirrorErrors.length, tone: 'red' },
+        ],
         updated: [
           created > 0 ? `${created} new PO${created === 1 ? '' : 's'} added` : null,
           updated > 0 ? `${updated} PO${updated === 1 ? '' : 's'} refreshed` : null,
           linked > 0 ? `${linked} PO${linked === 1 ? '' : 's'} linked to a shipment` : null,
-          statusUpdates > 0 ? `${statusUpdates} status update${statusUpdates === 1 ? '' : 's'} — received POs cleared` : null,
+          statusUpdates > 0 ? `${statusUpdates} received PO${statusUpdates === 1 ? '' : 's'} cleared from Incoming` : null,
         ].filter(Boolean) as string[],
-        synced: [
-          `${processed} issued PO${processed === 1 ? '' : 's'} checked`,
-          `${fetched} mirror record${fetched === 1 ? '' : 's'} scanned`,
+        sections: [
+          { label: 'Issued sync', rows: [
+            { k: 'Checked', v: processed },
+            { k: 'Created', v: created },
+            { k: 'Updated', v: updated },
+            { k: 'Linked', v: linked },
+            { k: 'Failed', v: failed },
+          ] },
+          { label: 'Mirror sync', rows: [
+            { k: 'Mode', v: mirrorMode },
+            { k: 'Fetched', v: fetched },
+            { k: 'Updated', v: statusUpdates },
+            { k: 'Errors', v: mirrorErrors.length },
+          ] },
         ],
-        emptyNote: nothingChanged ? 'Already up to date — no Zoho changes since last sync.' : null,
+        errors: mirrorErrors,
+        note: nothingChanged ? 'Already up to date — no Zoho changes since last sync.' : null,
       });
-      setSyncReportOpen(true);
     } catch (err) {
-      setSyncReport({
-        title: 'Zoho refresh failed',
+      finishIncSync({
         ok: false,
+        tiles: [],
         updated: [],
-        synced: [],
-        emptyNote: err instanceof Error ? err.message : 'Could not reach Zoho. Try again.',
+        sections: [],
+        errors: [],
+        note: err instanceof Error ? err.message : 'Could not reach Zoho. Try again.',
       });
-      setSyncReportOpen(true);
     } finally {
       setZohoRefreshing(false);
     }
-  }, [zohoRefreshing, invalidateIncoming]);
+  }, [zohoRefreshing, invalidateIncoming, beginIncSync, finishIncSync]);
 
   // "Rescan PO email" — re-run the mailbox reconcile, which now also logs
   // "ORDER DELIVERED" emails as delivery signals feeding the email-driven
@@ -356,6 +405,7 @@ export function IncomingSidebarPanel() {
   const rescanEmail = useCallback(async () => {
     if (rescanning) return;
     setRescanning(true);
+    beginIncSync('email');
     try {
       // Receiving-scoped endpoint (gated `receiving.view`, same as the Zoho /
       // Tracking siblings). The old admin reconcile route was `admin.view`, so
@@ -375,61 +425,53 @@ export function IncomingSidebarPanel() {
       const resolved = data?.persisted?.resolved ?? 0;
       const trackingLinked = data?.persisted?.tracking_linked ?? 0;
       const trackingAlready = data?.persisted?.tracking_already_linked ?? 0;
+      const trackingRejected = data?.persisted?.tracking_rejected ?? 0;
+      const counts = data?.counts ?? {};
       const nothingChanged = sig + upserted + resolved + trackingLinked === 0;
-      setSyncReport({
-        title: 'PO mailbox rescanned',
+      finishIncSync({
         ok: true,
+        tiles: [
+          { label: 'Delivered', value: sig, tone: 'emerald' },
+          { label: 'Added', value: upserted, tone: 'blue' },
+          { label: 'Resolved', value: resolved, tone: 'gray' },
+          { label: 'Tracking', value: trackingLinked, tone: 'emerald' },
+        ],
         updated: [
           sig > 0 ? `${sig} “Order delivered” signal${sig === 1 ? '' : 's'} logged` : null,
           upserted > 0 ? `${upserted} missing PO${upserted === 1 ? '' : 's'} added to worklist` : null,
           resolved > 0 ? `${resolved} worklist row${resolved === 1 ? '' : 's'} resolved` : null,
           trackingLinked > 0 ? `${trackingLinked} tracking #${trackingLinked === 1 ? '' : 's'} linked` : null,
         ].filter(Boolean) as string[],
-        synced: [
-          `${scanned} email${scanned === 1 ? '' : 's'} scanned`,
-          trackingAlready > 0 ? `${trackingAlready} tracking # already linked` : null,
-        ].filter(Boolean) as string[],
-        emptyNote: nothingChanged ? 'Already up to date — nothing new in the mailbox.' : null,
+        sections: [
+          { label: 'Mailbox scan', rows: [
+            { k: 'Scanned', v: scanned },
+            { k: 'Missing', v: counts?.missing ?? 0 },
+            { k: 'In Zoho', v: counts?.in_zoho ?? 0 },
+            { k: 'Received', v: counts?.received ?? 0 },
+            { k: 'No match', v: counts?.no_match ?? 0 },
+          ] },
+          { label: 'Tracking', rows: [
+            { k: 'Linked', v: trackingLinked },
+            { k: 'Already linked', v: trackingAlready },
+            { k: 'Rejected', v: trackingRejected },
+          ] },
+        ],
+        errors: [],
+        note: nothingChanged ? 'Already up to date — nothing new in the mailbox.' : null,
       });
-      setSyncReportOpen(true);
     } catch (err) {
-      setSyncReport({
-        title: 'PO email rescan failed',
+      finishIncSync({
         ok: false,
+        tiles: [],
         updated: [],
-        synced: [],
-        emptyNote: err instanceof Error ? err.message : 'Could not reach the PO mailbox. Try again.',
+        sections: [],
+        errors: [],
+        note: err instanceof Error ? err.message : 'Could not reach the PO mailbox. Try again.',
       });
-      setSyncReportOpen(true);
     } finally {
       setRescanning(false);
     }
-  }, [rescanning, invalidateIncoming]);
-
-  // Sync-result popover: after a Zoho / Email sync, summarize what landed in the
-  // system (new POs, status updates, delivery signals) in a popover below the
-  // sync buttons. Tracking keeps its own richer streaming dialog.
-  const [syncReport, setSyncReport] = useState<SyncReport | null>(null);
-  const [syncReportOpen, setSyncReportOpen] = useState(false);
-  const syncReportRef = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    if (!syncReportOpen) return;
-    const onClick = (e: MouseEvent) => {
-      const target = e.target as HTMLElement;
-      if (syncReportRef.current && !syncReportRef.current.contains(target)) {
-        setSyncReportOpen(false);
-      }
-    };
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') setSyncReportOpen(false);
-    };
-    document.addEventListener('mousedown', onClick);
-    document.addEventListener('keydown', onKey);
-    return () => {
-      document.removeEventListener('mousedown', onClick);
-      document.removeEventListener('keydown', onKey);
-    };
-  }, [syncReportOpen]);
+  }, [rescanning, invalidateIncoming, beginIncSync, finishIncSync]);
 
   const handleCancelSync = useCallback(() => {
     syncAbortRef.current?.abort();
@@ -818,14 +860,13 @@ export function IncomingSidebarPanel() {
       }}
       headerBelow={
         <div className="space-y-2 border-b border-gray-200 bg-white pb-2">
-        {/* Three sync actions, BELOW the filter bar. Each refreshes a
-            distinct upstream and re-reads the tiles + rows; Zoho/Email then
-            reveal a popover summarizing what landed in the system:
-              • Zoho — re-pull issued POs + refresh mirror status. New POs
-                appear; received/closed ones drop off the Incoming display.
-              • Tracking — re-poll UPS/USPS/FedEx (streams into its own dialog).
-              • Email — rescan the PO mailbox for "ORDER DELIVERED" emails. */}
-        <div className="relative px-1.5" ref={syncReportRef}>
+        {/* Three sync actions, BELOW the filter bar. Each refreshes a distinct
+            upstream and re-reads the tiles + rows, then opens its own result
+            dialog summarizing what landed in the system:
+              • Zoho — re-pull issued POs + refresh mirror status (IncomingSyncDialog).
+              • Tracking — re-poll UPS/USPS/FedEx (streams into CarrierSyncDialog).
+              • Email — rescan the PO mailbox for "ORDER DELIVERED" emails (IncomingSyncDialog). */}
+        <div className="relative px-1.5">
           <div className="flex items-stretch gap-1.5">
             <button
               type="button"
@@ -858,78 +899,6 @@ export function IncomingSidebarPanel() {
               {rescanning ? 'Email…' : 'Email'}
             </button>
           </div>
-
-          {/* What-was-updated popover — opens after a Zoho / Email sync. */}
-          {syncReportOpen && syncReport ? (
-            <div
-              role="status"
-              aria-live="polite"
-              className="absolute left-1.5 right-1.5 top-full z-[60] mt-1 rounded-xl border border-gray-200 bg-white p-3 shadow-xl ring-1 ring-black/5"
-            >
-              <div className="flex items-center gap-2">
-                <span
-                  className={`inline-flex h-5 w-5 items-center justify-center rounded-full ${
-                    syncReport.ok ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700'
-                  }`}
-                >
-                  {syncReport.ok ? (
-                    <RefreshCw className="h-3 w-3" />
-                  ) : (
-                    <AlertTriangle className="h-3 w-3" />
-                  )}
-                </span>
-                <span className="flex-1 text-label font-black text-gray-900">{syncReport.title}</span>
-                <button
-                  type="button"
-                  onClick={() => setSyncReportOpen(false)}
-                  className="text-eyebrow font-bold text-gray-400 hover:text-gray-700"
-                >
-                  Close
-                </button>
-              </div>
-
-              {/* Updated — what actually changed in the system this run. */}
-              {syncReport.updated.length > 0 ? (
-                <div className="mt-2.5">
-                  <div className="text-eyebrow font-black uppercase tracking-wider text-emerald-600">Updated</div>
-                  <ul className="mt-1 space-y-1">
-                    {syncReport.updated.map((line, i) => (
-                      <li key={i} className="flex items-start gap-1.5 text-caption font-semibold text-gray-700">
-                        <span className="mt-1 h-1.5 w-1.5 shrink-0 rounded-full bg-emerald-500" />
-                        <span className="tabular-nums">{line}</span>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              ) : null}
-
-              {/* In sync — work that ran but found nothing to change. */}
-              {syncReport.ok && syncReport.synced.length > 0 ? (
-                <div className="mt-2.5">
-                  <div className="text-eyebrow font-black uppercase tracking-wider text-gray-400">In sync</div>
-                  <ul className="mt-1 space-y-1">
-                    {syncReport.synced.map((line, i) => (
-                      <li key={i} className="flex items-start gap-1.5 text-caption font-medium text-gray-500">
-                        <span className="mt-1 h-1 w-1 shrink-0 rounded-full bg-gray-300" />
-                        <span className="tabular-nums">{line}</span>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              ) : null}
-
-              {/* Empty / error note. */}
-              {syncReport.emptyNote ? (
-                <p
-                  className={`mt-2.5 text-caption font-semibold ${
-                    syncReport.ok ? 'text-gray-500' : 'text-rose-600'
-                  }`}
-                >
-                  {syncReport.emptyNote}
-                </p>
-              ) : null}
-            </div>
-          ) : null}
         </div>
 
         </div>
@@ -943,6 +912,14 @@ export function IncomingSidebarPanel() {
       onCancel={handleCancelSync}
       carriers={carrierTabs}
       result={syncResult}
+    />
+    <IncomingSyncDialog
+      open={incSyncOpen}
+      kind={incSyncKind}
+      isRunning={incSyncRunning}
+      elapsedMs={incSyncElapsedMs}
+      result={incSyncResult}
+      onClose={() => setIncSyncOpen(false)}
     />
     </>
   );

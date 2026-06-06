@@ -9,10 +9,10 @@ import {
   X,
   Copy as CopyIcon,
   RefreshCw,
-  Trash2,
 } from '@/components/Icons';
 import { PaneHeaderTabs } from '@/components/ui/pane-header';
 import { SlideOverBackdrop } from '@/components/ui/SlideOverBackdrop';
+import DeleteButton from '@/components/ui/DeleteButton';
 import { copyToClipboard } from '@/utils/_dom';
 import { toast } from '@/lib/toast';
 import { useAblyChannel } from '@/hooks/useAblyChannel';
@@ -188,25 +188,10 @@ export interface IncomingDetailsPanelProps {
 export function IncomingDetailsPanel({ zohoPurchaseOrderId, poNumberHint, onClose }: IncomingDetailsPanelProps) {
   const [tab, setTab] = useState<TabId>('po');
   const [syncing, setSyncing] = useState(false);
-  // Two-step armed delete: first click arms (auto-disarms after 4s), second
-  // click executes. Mirrors the UnfoundQueueDetailsPanel / ShippedDetailsPanel
-  // destructive-action pattern so a misclick can't wipe a PO's lines.
-  const [deleteArmed, setDeleteArmed] = useState(false);
-  const [deleting, setDeleting] = useState(false);
   const queryClient = useQueryClient();
 
-  // Reset to default tab + disarm delete when the PO changes (different row).
-  useEffect(() => {
-    setTab('po');
-    setDeleteArmed(false);
-  }, [zohoPurchaseOrderId]);
-
-  // Auto-disarm the delete button if the operator doesn't confirm quickly.
-  useEffect(() => {
-    if (!deleteArmed) return;
-    const t = setTimeout(() => setDeleteArmed(false), 4000);
-    return () => clearTimeout(t);
-  }, [deleteArmed]);
+  // Reset to default tab when the PO changes (different row).
+  useEffect(() => setTab('po'), [zohoPurchaseOrderId]);
 
   const invalidateIncoming = useCallback(() => {
     queryClient.invalidateQueries({ queryKey: ['incoming-details', zohoPurchaseOrderId] });
@@ -246,29 +231,21 @@ export function IncomingDetailsPanel({ zohoPurchaseOrderId, poNumberHint, onClos
 
   // Delete — removes EVERY receiving_line for this PO, i.e. the Incoming row.
   // Zoho is untouched; a future sync may re-add it if the PO is still issued.
+  // Throws on failure so the shared DeleteButton skips its onDeleted (close).
   const deletePo = useCallback(async () => {
-    if (deleting) return;
-    setDeleting(true);
-    try {
-      const res = await fetch(
-        `/api/receiving-lines?po_id=${encodeURIComponent(zohoPurchaseOrderId)}`,
-        { method: 'DELETE' },
-      );
-      const body = await res.json().catch(() => null);
-      if (!res.ok || !body?.success) {
-        toast.error(body?.error || `Delete failed (${res.status})`);
-        return;
-      }
-      toast.success(`Removed from Incoming (${body?.deleted ?? 0} line${body?.deleted === 1 ? '' : 's'})`);
-      invalidateIncoming();
-      onClose();
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Delete failed');
-    } finally {
-      setDeleting(false);
-      setDeleteArmed(false);
+    const res = await fetch(
+      `/api/receiving-lines?po_id=${encodeURIComponent(zohoPurchaseOrderId)}`,
+      { method: 'DELETE' },
+    );
+    const body = await res.json().catch(() => null);
+    if (!res.ok || !body?.success) {
+      const msg = body?.error || `Delete failed (${res.status})`;
+      toast.error(msg);
+      throw new Error(msg);
     }
-  }, [deleting, zohoPurchaseOrderId, invalidateIncoming, onClose]);
+    toast.success(`Removed from Incoming (${body?.deleted ?? 0} line${body?.deleted === 1 ? '' : 's'})`);
+    invalidateIncoming();
+  }, [zohoPurchaseOrderId, invalidateIncoming]);
 
   const { data, isLoading, isError } = useQuery<DetailsResponse>({
     queryKey: ['incoming-details', zohoPurchaseOrderId],
@@ -380,42 +357,17 @@ export function IncomingDetailsPanel({ zohoPurchaseOrderId, poNumberHint, onClos
         )}
       </div>
 
-      {/* Footer — destructive action. Two-step armed delete removes every
-          receiving_line for this PO (the Incoming row). Zoho is untouched. */}
+      {/* Footer — destructive action. The shared DeleteButton's two-step
+          armed-confirm removes every receiving_line for this PO (the Incoming
+          row). Zoho is untouched. */}
       <div className="shrink-0 border-t border-gray-200 bg-white px-4 py-2.5">
-        {deleteArmed ? (
-          <div className="flex items-center gap-2">
-            <span className="flex-1 text-caption font-semibold text-rose-700">
-              Remove {poNumberHint || data?.po?.zoho_purchaseorder_number || 'this PO'} from Incoming?
-            </span>
-            <button
-              type="button"
-              onClick={() => setDeleteArmed(false)}
-              disabled={deleting}
-              className="inline-flex h-7 items-center rounded-md px-2 text-eyebrow font-black uppercase tracking-wider text-gray-500 hover:bg-gray-100 disabled:opacity-50"
-            >
-              Cancel
-            </button>
-            <button
-              type="button"
-              onClick={() => void deletePo()}
-              disabled={deleting}
-              className="inline-flex h-7 items-center gap-1 rounded-md bg-rose-600 px-2.5 text-eyebrow font-black uppercase tracking-wider text-white hover:bg-rose-700 disabled:opacity-50"
-            >
-              <Trash2 className="h-3.5 w-3.5" />
-              {deleting ? 'Deleting…' : 'Confirm'}
-            </button>
-          </div>
-        ) : (
-          <button
-            type="button"
-            onClick={() => setDeleteArmed(true)}
-            className="inline-flex h-8 w-full items-center justify-center gap-1.5 rounded-md border border-rose-200 bg-rose-50 text-caption font-bold text-rose-700 transition-colors hover:bg-rose-100"
-          >
-            <Trash2 className="h-3.5 w-3.5" />
-            Delete from Incoming
-          </button>
-        )}
+        <DeleteButton
+          onConfirm={deletePo}
+          onDeleted={onClose}
+          label="Delete from Incoming"
+          armedLabel="Click again to remove from Incoming"
+          className="inline-flex h-8 w-full items-center justify-center gap-1.5 rounded-md border border-rose-200 bg-rose-50 text-caption font-bold text-rose-700 transition-colors hover:bg-rose-100 disabled:cursor-not-allowed disabled:opacity-60"
+        />
       </div>
       </motion.div>
     </>
