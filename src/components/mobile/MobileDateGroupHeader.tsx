@@ -26,21 +26,21 @@ export function MobileDateGroupHeader({
       data-day-header
       data-date={date}
       data-count={total}
-      className="relative"
+      className="sticky top-0 z-10"
     >
       <AnimatePresence initial={false}>
         {!hidden && (
           <motion.div
-            initial={{ height: 0, opacity: 0 }}
-            animate={{ height: 'auto', opacity: 1 }}
-            exit={{ height: 0, opacity: 0 }}
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
             transition={{ duration: 0.2, ease: 'easeInOut' }}
             className="overflow-hidden"
             aria-hidden={hidden}
           >
             <div className={cn(weekHeaderInnerRowClass, weekDayGroupBandClass)}>
-              <p className={weekDayGroupDateClass}>{formatDateWithOrdinal(date)}</p>
-              <p className={weekDayGroupCountClass}>{total}</p>
+              <motion.p layoutId={`date-${date}`} className={weekDayGroupDateClass}>{formatDateWithOrdinal(date)}</motion.p>
+              <motion.p layoutId={`count-${date}`} className={weekDayGroupCountClass}>{total}</motion.p>
             </div>
           </motion.div>
         )}

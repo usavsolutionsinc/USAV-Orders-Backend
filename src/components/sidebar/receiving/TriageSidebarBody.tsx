@@ -13,6 +13,7 @@
 
 import { useRouter, useSearchParams } from 'next/navigation';
 import type { ReceivingLineRow } from '@/components/station/ReceivingLinesTable';
+import { AlertTriangle, Flag } from '@/components/Icons';
 import {
   HorizontalButtonSlider,
   type HorizontalSliderItem,
@@ -51,12 +52,13 @@ export function TriageSidebarBody({
     router.replace(`/receiving?${params.toString()}`);
   };
 
-  // Shared slider (variant="fba" — the per-item colored tone). URL value stays
-  // `triview=found`; the operator-facing label reads "Prioritize" since that
-  // rail is the priority-sorted work view.
+  // Shared slider (variant="nav" — filled-active nav pills with icons, matching
+  // the inventory ledger tabs). URL value stays `triview=found`; the
+  // operator-facing label reads "Prioritize" since that rail is the
+  // priority-sorted work view.
   const TABS: HorizontalSliderItem[] = [
-    { id: 'unfound', label: 'Unfound', tone: 'orange' },
-    { id: 'found', label: 'Prioritize', tone: 'emerald' },
+    { id: 'unfound', label: 'Unfound', icon: AlertTriangle },
+    { id: 'found', label: 'Prioritize', icon: Flag },
   ];
 
   return (
@@ -66,7 +68,8 @@ export function TriageSidebarBody({
           items={TABS}
           value={view}
           onChange={(id) => setView(id as TriageView)}
-          variant="fba"
+          variant="nav"
+          dense
           aria-label="Triage view"
         />
       </div>

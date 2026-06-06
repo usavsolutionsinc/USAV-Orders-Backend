@@ -30,7 +30,16 @@
 | `src/app/design-demo/` | Component | High | Self-documenting + knip + no imports | deleted (this wave) | The page itself says: "Throwaway route — not imported by the app. Delete src/app/design-demo anytime." No production code imports from it. Git-deleted. |
 | Root `*_PLAN.md` files (ARCHITECTURE_PLAN.md, COMPONENT_DEDUP_PLAN.md, FBA_*, etc.) | Docs | Medium | Manual | archived (this wave) | Moved via git mv to `docs/archive/plans/`. Added explanatory README. |
 
-**Wave completed**: 2026-06 — First safe surface cleanup wave executed. See git changes for renames (plans) + deletes (design-demo). Other junk cleaned from working tree via rm (were effectively untracked due to .gitignore).
+**Wave 1 completed**: 2026-06 — First safe surface cleanup wave executed (root junk, apps/desktop, design-demo, archived plans). Committed as "chore(hygiene): introduce dead code cleanup plan + tooling + first surface wave".
+
+**Wave 2 (follow-up from knip triage)**: Deleted 5 more high-confidence unused components with zero import references:
+- src/components/DocxUploader.tsx
+- src/components/StaffSelector.tsx
+- src/components/TechSearchPanel.tsx
+- src/components/electron/ElectronTitleBar.tsx
+- src/components/electron/UpdaterButton.tsx
+
+(ElectronDragStrip remains as it is imported in layout.tsx. These were from the initial knip "Unused files" list.)
 
 ---
 

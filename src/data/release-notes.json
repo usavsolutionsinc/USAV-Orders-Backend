@@ -1,7 +1,37 @@
 {
-  "generatedAt": "2026-06-05T20:50:08.652Z",
+  "generatedAt": "2026-06-06T19:14:47.992Z",
   "count": 199,
   "commits": [
+    {
+      "sha": "2808cfb7ffd2c52b8a1aa6c3dc59b6b40f47998e",
+      "shortSha": "2808cfb7",
+      "date": "2026-06-06T11:57:57-07:00",
+      "author": "DENSENSE8",
+      "subject": "updating the receiving flow and the making it more priority based",
+      "body": "",
+      "type": "other",
+      "title": "updating the receiving flow and the making it more priority based"
+    },
+    {
+      "sha": "cacdbddc8a6a9a8f2d7eb361a218c32e78c9312f",
+      "shortSha": "cacdbddc",
+      "date": "2026-06-05T15:06:01-07:00",
+      "author": "usavsolutionsinc",
+      "subject": "updated and simplfied the recieving pipeline and the incoming display",
+      "body": "",
+      "type": "other",
+      "title": "updated and simplfied the recieving pipeline and the incoming display"
+    },
+    {
+      "sha": "973b207df5c80dcafc59ef2758c68cc157fc66bf",
+      "shortSha": "973b207d",
+      "date": "2026-06-05T14:14:15-07:00",
+      "author": "usavsolutionsinc",
+      "subject": "fix: sync pnpm-lock.yaml with package.json to unblock prod deploys",
+      "body": "package.json added 6 deps (cytoscape, cytoscape-dagre, @types/cytoscape,\n@nangohq/frontend, @nangohq/node, server-only) without regenerating the\nlockfile. Vercel CI installs with --frozen-lockfile, so every production\nbuild was failing at the install step (ERR_PNPM_OUTDATED_LOCKFILE) before\ncompiling. Regenerated the lockfile; frozen install now passes.\n\nCo-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>",
+      "type": "fix",
+      "title": "sync pnpm-lock.yaml with package.json to unblock prod deploys"
+    },
     {
       "sha": "565f85f9cbce93a1e577ef1bfbeb1adff755e3a3",
       "shortSha": "565f85f9",
@@ -1961,36 +1991,6 @@
       "body": "",
       "type": "other",
       "title": "removed cron jobs"
-    },
-    {
-      "sha": "3112d5e6040419bda3c1d854974fd2725be2f0e9",
-      "shortSha": "3112d5e6",
-      "date": "2026-03-18T13:12:04-07:00",
-      "author": "usavsolutionsinc",
-      "subject": "updated Zoho and station testing",
-      "body": "",
-      "type": "other",
-      "title": "updated Zoho and station testing"
-    },
-    {
-      "sha": "094f66cd355790d9eaacafd4f295296607a37ab4",
-      "shortSha": "094f66cd",
-      "date": "2026-03-17T13:44:11-07:00",
-      "author": "usavsolutionsinc",
-      "subject": "changed cron jobs to qstash jobs and updated the ECWID to RS Table",
-      "body": "",
-      "type": "other",
-      "title": "changed cron jobs to qstash jobs and updated the ECWID to RS Table"
-    },
-    {
-      "sha": "a31697ec698e03e5239e57d9787dc632c66c6fcb",
-      "shortSha": "a31697ec",
-      "date": "2026-03-17T11:47:35-07:00",
-      "author": "usavsolutionsinc",
-      "subject": "added cron jobs fixed bugs",
-      "body": "",
-      "type": "other",
-      "title": "added cron jobs fixed bugs"
     }
   ]
 }

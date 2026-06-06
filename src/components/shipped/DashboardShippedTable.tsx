@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { Loader2 } from '@/components/Icons';
+import { cn } from '@/utils/_cn';
 import { MobileDateGroupHeader } from '@/components/mobile/MobileDateGroupHeader';
 import { DateGroupHeader } from '@/components/shipped/DateGroupHeader';
 import WeekHeader from '@/components/ui/WeekHeader';
@@ -43,6 +44,14 @@ import {
   readShippedFilterPreference,
   writeShippedFilterPreference,
 } from '@/utils/dashboard-preferences';
+import { getStaffName } from '@/utils/staff';
+import { StaffInitials } from '@/design-system/components/StaffBadge';
+import { OrderSearchEmptyState } from '@/components/dashboard/OrderSearchEmptyState';
+import { useUIModeOptional } from '@/design-system/providers/UIModeProvider';
+import {
+  dashboardOrderRowChipsClass,
+  dashboardOrderRowShellClass,
+} from '@/lib/dashboard-order-row-layout';
 
 // FBA records are identified by scan_ref matching Amazon's FBA shipment ID format
 // (FBAxxxxxxxx) or by tracking_type being 'FBA' / 'FNSKU'.
@@ -70,15 +79,6 @@ function isExceptionPackerRecord(record: { row_source?: string | null; exception
   return String(record.row_source || '').trim().toLowerCase() === 'exception'
     || !!String(record.exception_reason || '').trim();
 }
-import { getStaffName } from '@/utils/staff';
-import { getStaffThemeById, stationThemeColors } from '@/utils/staff-colors';
-import { StaffInitials } from '@/design-system/components/StaffBadge';
-import { OrderSearchEmptyState } from '@/components/dashboard/OrderSearchEmptyState';
-import { useUIModeOptional } from '@/design-system/providers/UIModeProvider';
-import {
-  dashboardOrderRowChipsClass,
-  dashboardOrderRowShellClass,
-} from '@/lib/dashboard-order-row-layout';
 
 export interface DashboardShippedTableProps {
   packedBy?: number;
@@ -111,6 +111,7 @@ export function DashboardShippedTable({
   const [stickyDate, setStickyDate] = useState('');
   const [currentCount, setCurrentCount] = useState(0);
   const [activeDateKey, setActiveDateKey] = useState('');
+  const [isScrolled, setIsScrolled] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
 
   const shippedSearchField = normalizeShippedSearchField(searchParams.get('shippedSearchField'));
@@ -132,13 +133,10 @@ export function DashboardShippedTable({
   const weekRange = getWeekRangeForOffset(weekOffset);
   const formatDate = useCallback((dateStr: string) => formatDateWithOrdinal(dateStr), []);
 
-  // Read refinements early so we can broaden the query scope when any is active.
   const exceptionsOnly = readShippedExceptionsFilter(searchParams);
   const carrierFilter = readShippedCarrierFilter(searchParams);
   const statusFilter = readShippedStatusFilter(searchParams);
 
-  // Packer / tester come from props (tech & packer pages) OR the URL (dashboard
-  // sidebar filter). An explicit prop wins when both are present.
   const parseStaffParam = (raw: string | null): number | undefined => {
     const n = Number(raw);
     return Number.isFinite(n) && n > 0 ? n : undefined;
@@ -146,15 +144,11 @@ export function DashboardShippedTable({
   const effPackedBy = packedBy ?? parseStaffParam(searchParams.get('packedBy'));
   const effTestedBy = testedBy ?? parseStaffParam(searchParams.get('testedBy'));
 
-  // Explicit date range (sidebar filter) overrides week-by-week browsing.
   const dateFrom = (searchParams.get('dateFrom') || '').trim();
   const dateTo = (searchParams.get('dateTo') || '').trim();
   const hasDateRange =
     /^\d{4}-\d{2}-\d{2}$/.test(dateFrom) && /^\d{4}-\d{2}-\d{2}$/.test(dateTo);
 
-  // Browse by week (newest first), navigated with the WeekHeader. A carrier/
-  // status/exception filter — or an explicit date range — drops the week window
-  // so the full recent dataset is searchable, not just this week's slice.
   const anyCarrierFilter = exceptionsOnly || !!carrierFilter || !!statusFilter;
   const effectiveWeekStart = hasDateRange ? dateFrom : anyCarrierFilter ? '' : weekRange.startStr;
   const effectiveWeekEnd   = hasDateRange ? dateTo   : anyCarrierFilter ? '' : weekRange.endStr;
@@ -170,15 +164,10 @@ export function DashboardShippedTable({
       testedBy: effTestedBy,
       shippedFilter,
     }),
-    // When a search is active, packer_logs is bypassed and we drive
-    // from /api/shipped via the universal `useShippedSearch` hook — same TanStack
-    // Query cache key as `ShippedSidebar`, so both views show identical results.
     enabled: !normalizedSearch,
     placeholderData: (previousData) => previousData,
   });
 
-  // Universal search subscription. Same params as ShippedSidebar → shared cache,
-  // one network call total. Disabled when search is empty.
   const searchResult = useShippedSearch({
     query: search,
     shippedFilter,
@@ -198,10 +187,8 @@ export function DashboardShippedTable({
       queryClient.invalidateQueries({ queryKey: ['dashboard-table', 'shipped'] });
       queryClient.invalidateQueries({ queryKey: ['shipped-table'] });
     };
-
     window.addEventListener('usav-refresh-data' as any, handleRefresh as any);
     window.addEventListener('dashboard-refresh' as any, handleRefresh as any);
-
     return () => {
       window.removeEventListener('usav-refresh-data' as any, handleRefresh as any);
       window.removeEventListener('dashboard-refresh' as any, handleRefresh as any);
@@ -215,10 +202,8 @@ export function DashboardShippedTable({
       setSelectedDetailId(Number.isFinite(nextId) ? nextId : null);
     };
     const handleClose = () => setSelectedDetailId(null);
-
     window.addEventListener('open-shipped-details' as any, handleOpen as any);
     window.addEventListener('close-shipped-details' as any, handleClose as any);
-
     return () => {
       window.removeEventListener('open-shipped-details' as any, handleOpen as any);
       window.removeEventListener('close-shipped-details' as any, handleClose as any);
@@ -296,11 +281,6 @@ export function DashboardShippedTable({
 
   const toSearchResultRecord = useCallback((record: ShippedOrder): PackerRecord => ({
     id: Number(record.id),
-    // The shipped table groups by pack scan time, not DB-insert time. orders.created_at
-    // can lag the pack event when an order row is inserted by a later sheet sync, which
-    // makes the panel timestamp appear "after" the pack itself. Prefer the actual pack
-    // activity (SAL.created_at), then packer_logs.created_at, then fall back to the
-    // order's created_at only when neither pack-event timestamp is available.
     created_at: record.pack_activity_at || record.packed_at || record.created_at || null,
     scan_ref: record.shipping_tracking_number || '',
     shipping_tracking_number: record.shipping_tracking_number || '',
@@ -353,8 +333,6 @@ export function DashboardShippedTable({
     return Array.from(seen.values());
   }, [rawRecords]);
 
-  // Client-side guard — server already filters by shippedFilter, but this prevents
-  // stale cached records from a prior filter mode appearing while the new fetch loads.
   const typeFilteredRecords = useMemo(() =>
     shippedFilter === 'fba'
       ? dedupedRecords.filter(isFbaPackerRecord)
@@ -363,8 +341,6 @@ export function DashboardShippedTable({
         : shippedFilter === 'sku'
           ? dedupedRecords.filter(isSkuPackerRecord)
           : dedupedRecords.filter((r) => {
-              // "all" = actually shipped: orders + FBA + unmatched exceptions.
-              // SKU-only rows are prepacked (not shipped) — use SKU tab.
               if (isSkuPackerRecord(r)) return false;
               if (isFbaPackerRecord(r)) return true;
               return hasLinkedOrder(r) || isExceptionPackerRecord(r);
@@ -390,10 +366,6 @@ export function DashboardShippedTable({
     });
   }, [typeFilteredRecords, exceptionsOnly, carrierFilter, statusFilter]);
 
-  // Single source of truth for what the table renders.
-  //   - Searching: render the universal hook's `/api/shipped` result, mapped into the table's
-  //     PackerRecord shape. Same cache key as ShippedSidebar = identical rows, one fetch.
-  //   - Not searching: show this week's packer_logs scoped by shippedFilter + carrier filters.
   const searchRecords = useMemo<PackerRecord[]>(
     () => (searchResult.data?.records ?? []).map(toSearchResultRecord),
     [searchResult.data, toSearchResultRecord],
@@ -425,9 +397,6 @@ export function DashboardShippedTable({
   const handleRowClick = useCallback((record: PackerRecord) => {
     const detail = toDetailRecord(record);
     const detailId = getDetailId(record);
-    // Single state writer: dispatch the event and let the listener (line ~172)
-    // update `selectedDetailId`. Writing it here too caused two state updates
-    // per click and was the visible "duplicate open/close function".
     if (selectedDetailId !== null && detailId === selectedDetailId) {
       dispatchCloseShippedDetails();
       return;
@@ -440,14 +409,10 @@ export function DashboardShippedTable({
     records.forEach((record) => {
       const dateSource = record.created_at;
       if (!dateSource || dateSource === '1') return;
-
       let date = '';
       try {
         date = toPSTDateKey(String(dateSource)) || 'Unknown';
-      } catch {
-        date = 'Unknown';
-      }
-
+      } catch { date = 'Unknown'; }
       if (!groups[date]) groups[date] = [];
       groups[date].push(record);
     });
@@ -470,19 +435,14 @@ export function DashboardShippedTable({
   useEffect(() => {
     const handleNavigate = (e: CustomEvent<{ direction?: 'up' | 'down' }>) => {
       if (selectedDetailId === null || orderedRecords.length === 0) return;
-
       const currentIndex = orderedRecords.findIndex((record) => getDetailId(record) === selectedDetailId);
       if (currentIndex < 0) return;
-
       const step = e.detail?.direction === 'up' ? -1 : 1;
       const nextRecord = orderedRecords[currentIndex + step];
       if (!nextRecord) return;
-
       const nextDetail = toDetailRecord(nextRecord);
-      // Listener at line ~172 will sync `selectedDetailId` from this event.
       dispatchOpenShippedDetails(nextDetail, 'shipped');
     };
-
     window.addEventListener('navigate-shipped-details' as any, handleNavigate as any);
     return () => {
       window.removeEventListener('navigate-shipped-details' as any, handleNavigate as any);
@@ -505,23 +465,24 @@ export function DashboardShippedTable({
         if (header.offsetTop - scrollRef.current.offsetTop <= scrollTop + 5) {
           activeDate = header.getAttribute('data-date') || '';
           activeCount = parseInt(header.getAttribute('data-count') || '0', 10);
-        } else {
-          break;
-        }
+        } else break;
       }
 
       if (activeDate) {
         setActiveDateKey((prev) => (prev === activeDate ? prev : activeDate));
-        setStickyDate(formatDate(activeDate));
+        setStickyDate(activeDate);
         setCurrentCount(activeCount);
       } else if (sortedGroupedEntries.length > 0) {
         const firstDate = sortedGroupedEntries[0][0];
         setActiveDateKey((prev) => (prev === firstDate ? prev : firstDate));
-        setStickyDate(formatDate(firstDate));
+        setStickyDate(firstDate);
         setCurrentCount(sortedGroupedEntries[0][1].length);
       }
+      
+      const scrolled = scrollTop > 10;
+      setIsScrolled((prev) => (prev === scrolled ? prev : scrolled));
     });
-  }, [formatDate, sortedGroupedEntries]);
+  }, [sortedGroupedEntries]);
 
   useEffect(() => {
     const container = scrollRef.current;
@@ -529,20 +490,18 @@ export function DashboardShippedTable({
     if (sortedGroupedEntries.length > 0) {
       const firstDate = sortedGroupedEntries[0][0];
       setActiveDateKey(firstDate);
-      setStickyDate(formatDate(firstDate));
+      setStickyDate(firstDate);
       setCurrentCount(sortedGroupedEntries[0][1].length);
       return;
     }
-
     setActiveDateKey('');
-
     setStickyDate(
       weekOffset > 0
-        ? `${formatDate(weekRange.startStr)} - ${formatDate(weekRange.endStr)}`
-        : formatDate(getCurrentPSTDateKey())
+        ? `${weekRange.startStr} - ${weekRange.endStr}`
+        : getCurrentPSTDateKey()
     );
     setCurrentCount(0);
-  }, [formatDate, sortedGroupedEntries, weekOffset, weekRange.endStr, weekRange.startStr]);
+  }, [sortedGroupedEntries, weekOffset, weekRange.endStr, weekRange.startStr]);
 
   useEffect(() => {
     const container = scrollRef.current;
@@ -559,13 +518,8 @@ export function DashboardShippedTable({
       ? `${formatDate(weekRange.startStr)} - ${formatDate(weekRange.endStr)}`
       : formatDate(getCurrentPSTDateKey());
   const normalizePersonName = (value: unknown): string => {
-    const text = String(value ?? '')
-      .replace(/^tech:\s*/i, '')
-      .replace(/^packer:\s*/i, '')
-      .trim();
-    if (!text) return '---';
-    if (/^(not specified|n\/a|null|undefined)$/i.test(text)) return '---';
-    if (/^staff\s*#\d+$/i.test(text)) return '---';
+    const text = String(value ?? '').replace(/^tech:\s*/i, '').replace(/^packer:\s*/i, '').trim();
+    if (!text || /^(not specified|n\/a|null|undefined|staff\s*#\d+)$/i.test(text)) return '---';
     return text;
   };
 
@@ -582,33 +536,30 @@ export function DashboardShippedTable({
 
   const shippedTableInner = (
     <>
-          {bannerTitle ? (
-            <div className={mainStickyHeaderClass}>
-              <div className={mainStickyHeaderRowClass}>
-                <div>
-                  <p className={`${sectionLabel} text-blue-700`}>{bannerTitle}</p>
-                  {bannerSubtitle ? (
-                    <p className={`mt-0.5 ${fieldLabel}`}>{bannerSubtitle}</p>
-                  ) : null}
-                </div>
-                <div className="min-w-[18px] flex items-center justify-end">
-                  {((query.isFetching && !query.isLoading) || isResolvingSearch) ? <Loader2 className="h-3.5 w-3.5 animate-spin text-blue-500" /> : null}
-                </div>
+      <div className="flex-1 flex flex-col min-h-0 relative">
+        {bannerTitle ? (
+          <div className={mainStickyHeaderClass}>
+            <div className={mainStickyHeaderRowClass}>
+              <div>
+                <p className={`${sectionLabel} text-blue-700`}>{bannerTitle}</p>
+                {bannerSubtitle ? <p className={`mt-0.5 ${fieldLabel}`}>{bannerSubtitle}</p> : null}
+              </div>
+              <div className="min-w-[18px] flex items-center justify-end">
+                {((query.isFetching && !query.isLoading) || isResolvingSearch) ? <Loader2 className="h-3.5 w-3.5 animate-spin text-blue-500" /> : null}
               </div>
             </div>
-          ) : (normalizedSearch || anyCarrierFilter) ? (
-            // Search or carrier/status/exception filter active — plain count, no week nav.
-            <div className={mainStickyHeaderClass}>
-              <div className={mainStickyHeaderRowClass}>
-                <p className={`${sectionLabel} text-gray-700`}>
-                  {totalCount} result{totalCount !== 1 ? 's' : ''}
-                </p>
-                <div className="min-w-[18px] flex items-center justify-end">
-                  {((query.isFetching && !query.isLoading) || isResolvingSearch) ? <Loader2 className="h-3.5 w-3.5 animate-spin text-blue-500" /> : null}
-                </div>
+          </div>
+        ) : (normalizedSearch || anyCarrierFilter) ? (
+          <div className={mainStickyHeaderClass}>
+            <div className={mainStickyHeaderRowClass}>
+              <p className={`${sectionLabel} text-gray-700`}>{totalCount} result{totalCount !== 1 ? 's' : ''}</p>
+              <div className="min-w-[18px] flex items-center justify-end">
+                {((query.isFetching && !query.isLoading) || isResolvingSearch) ? <Loader2 className="h-3.5 w-3.5 animate-spin text-blue-500" /> : null}
               </div>
             </div>
-          ) : (
+          </div>
+        ) : (
+          <div className="relative z-20">
             <WeekHeader
               stickyDate={stickyDate}
               fallbackDate={fallbackDate}
@@ -618,243 +569,130 @@ export function DashboardShippedTable({
               onPrevWeek={() => setWeekOffsetInUrl(weekOffset + 1)}
               onNextWeek={() => setWeekOffsetInUrl(Math.max(0, weekOffset - 1))}
             />
-          )}
-
-          <div ref={scrollRef} className="flex-1 min-h-0 overflow-x-auto overflow-y-auto no-scrollbar w-full">
-            {Object.keys(groupedRecords).length === 0 ? (
-              <div className="flex flex-col items-center justify-center py-40 text-center">
-                {search ? (
-                  <>
-                    <OrderSearchEmptyState
-                      query={search}
-                      title={searchEmptyTitle}
-                      resultLabel={searchResultLabel}
-                      clearLabel={clearSearchLabel}
-                      onClear={clearSearch}
-                    />
-                    {searchMeta?.outOfScope && searchMeta.outOfScopeSuggestion ? (
-                      <button
-                        type="button"
-                        onClick={() => {
-                          const params = new URLSearchParams(searchParams.toString());
-                          params.set('shippedFilter', searchMeta.outOfScopeSuggestion!.filter);
-                          const nextSearch = params.toString();
-                          const nextPath = pathname || '/dashboard';
-                          router.replace(
-                            nextSearch ? `${nextPath}?${nextSearch}` : nextPath,
-                            { scroll: false },
-                          );
-                        }}
-                        className="mt-4 rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-800 hover:bg-amber-100"
-                      >
-                        Found {searchMeta.outOfScopeSuggestion.count} match
-                        {searchMeta.outOfScopeSuggestion.count === 1 ? '' : 'es'} in the{' '}
-                        <span className="uppercase">{searchMeta.outOfScopeSuggestion.filter}</span>{' '}
-                        tab — switch?
-                      </button>
-                    ) : null}
-                  </>
-                ) : (
-                  <div className="max-w-xs mx-auto animate-in fade-in zoom-in duration-300">
-                    <p className="text-gray-500 font-semibold italic opacity-20">No shipped records for this week</p>
-                  </div>
-                )}
-              </div>
-            ) : (
-              <div className="flex flex-col w-full">
-                {sortedGroupedEntries.map(([date, dayRecords]) => {
-                    const sortedRecords = [...dayRecords].sort((a, b) => {
-                      const timeA = new Date(a.created_at || 0).getTime();
-                      const timeB = new Date(b.created_at || 0).getTime();
-                      return timeB - timeA;
-                    });
-                    const hidePinnedDayHeader = date === activeDateKey;
-
-                    return (
-                      <div key={date} className="flex flex-col">
-                        {embedded ? (
-                          <MobileDateGroupHeader
-                            date={date}
-                            total={dayRecords.length}
-                            hidden={hidePinnedDayHeader}
-                          />
-                        ) : (
-                          <DateGroupHeader
-                            date={date}
-                            total={dayRecords.length}
-                            hidden={hidePinnedDayHeader}
-                          />
-                        )}
-                        {sortedRecords.map((record, index) => {
-                          const detail = toDetailRecord(record);
-                          const displayValues = getOrderDisplayValues({
-                            sku: record.sku,
-                            condition: record.condition,
-                            trackingNumber: record.shipping_tracking_number,
-                          });
-                          const dotType = getSourceDotType({
-                            orderId: record.order_id,
-                            accountSource: record.account_source,
-                            trackingType: record.tracking_type,
-                            scanRef: record.scan_ref,
-                          });
-                          const rowIsFba = isFbaPackerRecord(record);
-                          const fnskuValue = String(record.scan_ref || '').trim();
-                          const techName = String(
-                            (record as any).tested_by_name
-                            || (record as any).tester_name
-                            || getStaffName((record as any).tested_by ?? (record as any).tester_id ?? null)
-                          ).trim();
-                          const packerName = String(
-                            (record as any).packed_by_name
-                            || (record as any).packer_name
-                            || getStaffName((record as any).packed_by ?? (record as any).packer_id ?? null)
-                          ).trim();
-                          const techDisplay = normalizePersonName(techName);
-                          const packerDisplay = normalizePersonName(packerName);
-                          const techStaffId = (record as any).tested_by ?? (record as any).tester_id ?? null;
-                          const packerStaffId = (record as any).packed_by ?? (record as any).packer_id ?? null;
-                          const serialValue = String(record.serial_number || '').trim();
-                          const platformLabel = getOrderPlatformLabel(record.order_id || '', record.account_source);
-                          const orderIsFbaMeta = isFbaOrder(record.order_id, record.account_source);
-                          const platformColor = platformLabel ? getOrderPlatformColor(platformLabel) : '';
-                          const scanForSku =
-                            String((record as { scan_ref?: string | null }).scan_ref || '').trim() ||
-                            String(record.shipping_tracking_number || '').trim();
-                          const productPageUrl = getExternalUrlByItemNumber(
-                            String(record.item_number || '').trim() || skuScanPrefixBeforeColon(scanForSku),
-                          );
-                          const hideOrderIdChip = isSkuSourceRecord({
-                            orderId: record.order_id,
-                            accountSource: record.account_source,
-                            trackingType: record.tracking_type,
-                            scanRef:
-                              String((record as { scan_ref?: string | null }).scan_ref || '').trim() ||
-                              record.shipping_tracking_number ||
-                              null,
-                          });
-
-                          return (
-                            <div
-                              key={record.id}
-                              onClick={() => handleRowClick(record)}
-                              onKeyDown={(event) => {
-                                if (event.key === 'Enter' || event.key === ' ') {
-                                  event.preventDefault();
-                                  handleRowClick(record);
-                                }
-                              }}
-                              role="button"
-                              tabIndex={0}
-                              aria-pressed={selectedDetailId === detail.id}
-                              aria-label={`Open shipped order ${record.order_id || record.id}`}
-                              data-order-row-id={String(record.order_row_id || record.id)}
-                              className={`${dashboardOrderRowShellClass(isMobile)} border-b border-gray-100 px-3 py-1.5 transition-colors cursor-pointer hover:bg-blue-50/50 ${
-                                selectedDetailId === detail.id ? 'bg-blue-50/80' : index % 2 === 1 ? 'bg-gray-50/40' : 'bg-white'
-                              }`}
-                            >
-                              <div className="flex flex-col min-w-0">
-                                <RowTitle
-                                  dot={SOURCE_DOT_BG[dotType]}
-                                  dotTitle={SOURCE_DOT_LABEL[dotType]}
-                                  title={
-                                    record.product_title
-                                    || record.item_number
-                                    || record.sku
-                                    || 'Unknown Product'
-                                  }
-                                />
-                                {/* qty · condition · tester+packer initials — shared primitive, so
-                                    the subrow aligns under the title like the orders queue table. */}
-                                <RowMetaColumns
-                                  qty={
-                                    <span className={(parseInt(String(record.quantity || '1'), 10) || 1) > 1 ? 'text-yellow-600' : 'text-gray-500'}>
-                                      {parseInt(String(record.quantity || '1'), 10) || 1}
-                                    </span>
-                                  }
-                                  condition={
-                                    <span className={String(displayValues.condition || '').trim().toLowerCase() === 'new' ? 'text-yellow-600' : 'text-gray-400'}>
-                                      {displayValues.condition || 'N/A'}
-                                    </span>
-                                  }
-                                  rest={
-                                    <div className="flex items-center gap-2">
-                                      <StaffInitials staffId={techStaffId} name={techDisplay} />
-                                      <StaffInitials staffId={packerStaffId} name={packerDisplay} />
-                                    </div>
-                                  }
-                                />
-                              </div>
-
-                              {(() => {
-                                // Shared chip nodes — laid out as aligned fixed
-                                // columns on desktop and a free-flow wrap row on
-                                // mobile. FBA rows occupy the tracking+serial
-                                // columns (fnsku where tracking would be) so they
-                                // line up under non-FBA rows.
-                                const platformNode = platformLabel && !orderIsFbaMeta ? (
-                                  <PlatformChip
-                                    label={platformLabel}
-                                    underlineClass={getOrderPlatformBorderColor(platformLabel)}
-                                    iconClass={productPageUrl ? platformColor : 'text-gray-500'}
-                                    onClick={() => {
-                                      if (productPageUrl) window.open(productPageUrl, '_blank', 'noopener,noreferrer');
-                                    }}
-                                  />
-                                ) : null;
-                                const orderIdNode = hideOrderIdChip ? (
-                                  <OrderIdChipPlaceholder />
-                                ) : (
-                                  <OrderIdChip value={record.order_id || ''} display={getLast4(record.order_id)} />
-                                );
-                                const serialNode = <SerialChip value={serialValue} width="w-fit max-w-full" />;
-                                const columns: ChipColumn[] = rowIsFba
-                                  ? [
-                                      { key: 'platform', width: CHIP_COL.platform, node: null },
-                                      { key: 'orderid', width: CHIP_COL.id, node: null },
-                                      { key: 'tracking', width: CHIP_COL.tracking, node: <FnskuChip value={fnskuValue} /> },
-                                      { key: 'serial', width: CHIP_COL.serial, node: serialNode },
-                                    ]
-                                  : [
-                                      { key: 'platform', width: CHIP_COL.platform, node: platformNode },
-                                      { key: 'orderid', width: CHIP_COL.id, node: orderIdNode },
-                                      { key: 'tracking', width: CHIP_COL.tracking, node: <TrackingOrSkuScanChip value={record.shipping_tracking_number || ''} /> },
-                                      { key: 'serial', width: CHIP_COL.serial, node: serialNode },
-                                    ];
-                                return isMobile ? (
-                                  <div className={dashboardOrderRowChipsClass(true)}>
-                                    {columns.map((c) => c.node && <span key={c.key} className="contents">{c.node}</span>)}
-                                  </div>
-                                ) : (
-                                  <ChipColumns columns={columns} />
-                                );
-                              })()}
-                            </div>
-                          );
-                        })}
-                      </div>
-                    );
-                  })}
-              </div>
-            )}
           </div>
+        )}
+
+        <div
+          ref={scrollRef}
+          className={cn(
+            "flex-1 min-h-0 overflow-x-auto overflow-y-auto no-scrollbar w-full z-10",
+            !bannerTitle && !normalizedSearch && !anyCarrierFilter && "-mt-[40px] pt-[40px]"
+          )}
+        >
+          {Object.keys(groupedRecords).length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-40 text-center">
+              {search ? (
+                <>
+                  <OrderSearchEmptyState
+                    query={search}
+                    title={searchEmptyTitle}
+                    resultLabel={searchResultLabel}
+                    clearLabel={clearSearchLabel}
+                    onClear={clearSearch}
+                  />
+                  {searchMeta?.outOfScope && searchMeta.outOfScopeSuggestion ? (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const params = new URLSearchParams(searchParams.toString());
+                        params.set('shippedFilter', searchMeta.outOfScopeSuggestion!.filter);
+                        const nextSearch = params.toString();
+                        const nextPath = pathname || '/dashboard';
+                        router.replace(nextSearch ? `${nextPath}?${nextSearch}` : nextPath, { scroll: false });
+                      }}
+                      className="mt-4 rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-800 hover:bg-amber-100"
+                    >
+                      Found {searchMeta.outOfScopeSuggestion.count} match{searchMeta.outOfScopeSuggestion.count === 1 ? '' : 'es'} in the <span className="uppercase">{searchMeta.outOfScopeSuggestion.filter}</span> tab — switch?
+                    </button>
+                  ) : null}
+                </>
+              ) : (
+                <div className="max-w-xs mx-auto animate-in fade-in zoom-in duration-300">
+                  <p className="text-gray-500 font-semibold italic opacity-20">No shipped records for this week</p>
+                </div>
+              )}
+            </div>
+          ) : (
+            <div className="flex flex-col w-full">
+              {sortedGroupedEntries.map(([date, dayRecords]) => {
+                const sortedRecords = [...dayRecords].sort((a, b) => {
+                  const timeA = new Date(a.created_at || 0).getTime();
+                  const timeB = new Date(b.created_at || 0).getTime();
+                  return timeB - timeA;
+                });
+                const hidePinnedDayHeader = date === activeDateKey && isScrolled;
+                return (
+                  <div key={date} className="flex flex-col">
+                    {embedded ? (
+                      <MobileDateGroupHeader date={date} total={dayRecords.length} hidden={hidePinnedDayHeader} />
+                    ) : (
+                      <DateGroupHeader date={date} total={dayRecords.length} hidden={hidePinnedDayHeader} />
+                    )}
+                    {sortedRecords.map((record, index) => {
+                      const detail = toDetailRecord(record);
+                      const displayValues = getOrderDisplayValues({ sku: record.sku, condition: record.condition, trackingNumber: record.shipping_tracking_number });
+                      const dotType = getSourceDotType({ orderId: record.order_id, accountSource: record.account_source, trackingType: record.tracking_type, scanRef: record.scan_ref });
+                      const rowIsFba = isFbaPackerRecord(record);
+                      const techStaffId = (record as any).tested_by ?? (record as any).tester_id ?? null;
+                      const packerStaffId = (record as any).packed_by ?? (record as any).packer_id ?? null;
+                      const techDisplay = normalizePersonName(String((record as any).tested_by_name || (record as any).tester_name || getStaffName(techStaffId)));
+                      const packerDisplay = normalizePersonName(String((record as any).packed_by_name || (record as any).packer_name || getStaffName(packerStaffId)));
+                      const platformLabel = getOrderPlatformLabel(record.order_id || '', record.account_source);
+                      const orderIsFbaMeta = isFbaOrder(record.order_id, record.account_source);
+                      const productPageUrl = getExternalUrlByItemNumber(String(record.item_number || '').trim() || skuScanPrefixBeforeColon(String(record.scan_ref || record.shipping_tracking_number || '').trim()));
+                      const hideOrderIdChip = isSkuSourceRecord({ orderId: record.order_id, accountSource: record.account_source, trackingType: record.tracking_type, scanRef: String(record.scan_ref || record.shipping_tracking_number || '').trim() });
+
+                      return (
+                        <div
+                          key={record.id}
+                          onClick={() => handleRowClick(record)}
+                          onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); handleRowClick(record); } }}
+                          role="button"
+                          tabIndex={0}
+                          aria-pressed={selectedDetailId === detail.id}
+                          className={`${dashboardOrderRowShellClass(isMobile)} border-b border-gray-100 px-3 py-1.5 transition-colors cursor-pointer hover:bg-blue-50/50 ${
+                            selectedDetailId === detail.id ? 'bg-blue-50/80' : index % 2 === 1 ? 'bg-gray-50/40' : 'bg-white'
+                          }`}
+                        >
+                          <div className="flex flex-col min-w-0">
+                            <RowTitle dot={SOURCE_DOT_BG[dotType]} dotTitle={SOURCE_DOT_LABEL[dotType]} title={record.product_title || record.item_number || record.sku || 'Unknown Product'} />
+                            <RowMetaColumns
+                              qty={<span className={(parseInt(String(record.quantity || '1'), 10) || 1) > 1 ? 'text-yellow-600' : 'text-gray-500'}>{parseInt(String(record.quantity || '1'), 10) || 1}</span>}
+                              condition={<span className={String(displayValues.condition || '').trim().toLowerCase() === 'new' ? 'text-yellow-600' : 'text-gray-400'}>{displayValues.condition || 'N/A'}</span>}
+                              rest={<div className="flex items-center gap-2"><StaffInitials staffId={techStaffId} name={techDisplay} /><StaffInitials staffId={packerStaffId} name={packerDisplay} /></div>}
+                            />
+                          </div>
+                          {(() => {
+                            const platformNode = platformLabel && !orderIsFbaMeta ? (
+                              <PlatformChip label={platformLabel} underlineClass={getOrderPlatformBorderColor(platformLabel)} iconClass={productPageUrl ? getOrderPlatformColor(platformLabel) : 'text-gray-500'} onClick={() => { if (productPageUrl) window.open(productPageUrl, '_blank', 'noopener,noreferrer'); }} />
+                            ) : null;
+                            const orderIdNode = hideOrderIdChip ? <OrderIdChipPlaceholder /> : <OrderIdChip value={record.order_id || ''} display={getLast4(record.order_id)} />;
+                            const serialNode = <SerialChip value={String(record.serial_number || '').trim()} width="w-fit max-w-full" />;
+                            const columns = rowIsFba
+                              ? [{ key: 'platform', width: CHIP_COL.platform, node: null }, { key: 'orderid', width: CHIP_COL.id, node: null }, { key: 'tracking', width: CHIP_COL.tracking, node: <FnskuChip value={String(record.scan_ref || '').trim()} /> }, { key: 'serial', width: CHIP_COL.serial, node: serialNode }]
+                              : [{ key: 'platform', width: CHIP_COL.platform, node: platformNode }, { key: 'orderid', width: CHIP_COL.id, node: orderIdNode }, { key: 'tracking', width: CHIP_COL.tracking, node: <TrackingOrSkuScanChip value={record.shipping_tracking_number || ''} /> }, { key: 'serial', width: CHIP_COL.serial, node: serialNode }];
+                            return isMobile ? (
+                              <div className={dashboardOrderRowChipsClass(true)}>{columns.map((c) => c.node && <span key={c.key} className="contents">{c.node}</span>)}</div>
+                            ) : <ChipColumns columns={columns} />;
+                          })()}
+                        </div>
+                      );
+                    })}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      </div>
     </>
   );
 
-  if (embedded) {
-    return (
-      <div className="flex h-full min-h-0 w-full flex-col overflow-hidden bg-white">
-        {shippedTableInner}
-      </div>
-    );
-  }
-
+  if (embedded) return <div className="flex h-full min-h-0 w-full flex-col overflow-hidden bg-white">{shippedTableInner}</div>;
   return (
     <div className="flex-1 min-w-0 h-full overflow-hidden">
       <div className="flex h-full min-w-0 flex-1 bg-white relative">
-        <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-          {shippedTableInner}
-        </div>
+        <div className="flex min-h-0 flex-1 flex-col overflow-hidden">{shippedTableInner}</div>
       </div>
     </div>
   );

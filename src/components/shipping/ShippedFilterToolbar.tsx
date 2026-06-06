@@ -6,13 +6,8 @@ import { useQuery } from '@tanstack/react-query';
 import type { DateRange } from 'react-day-picker';
 import {
   AlertTriangle,
-  Barcode,
   ChevronDown,
-  Cpu,
-  FileText,
   Filter,
-  Hash,
-  Layers,
   Truck,
   X,
 } from '@/components/Icons';
@@ -21,7 +16,6 @@ import { DateRangePickerField } from '@/design-system/components/DateRangePicker
 import type { CarrierCode, ShipmentStatusCategory } from '@/components/shipping/ShipmentStatusBadge';
 import {
   SHIPPED_SEARCH_FIELDS,
-  getShippedSearchHelperText,
   type ShippedSearchField,
 } from '@/lib/shipped-search';
 
@@ -234,23 +228,14 @@ export function useShippedFilterRefinements() {
   };
 }
 
-const SHIPPED_FIELD_ICONS: Record<ShippedSearchField, React.FC<{ className?: string }>> = {
-  all: Layers,
-  order_id: Hash,
-  tracking: Truck,
-  product_title: FileText,
-  sku: Barcode,
-  serial_number: Cpu,
-};
-
 export function ShippedFilterDropdown({
   onClose,
   searchField,
   onSearchFieldChange,
 }: {
   onClose: () => void;
-  /** Optional "Search by" axis — when provided, surfaces a field picker at the
-   *  top of the dropdown (replaces the search bar's focus-reveal pills). */
+  /** Optional "Search by" axis — when provided, surfaces a field dropdown below
+   *  Needs attention (replaces the search bar's focus-reveal pills). */
   searchField?: ShippedSearchField;
   onSearchFieldChange?: (next: ShippedSearchField) => void;
 }) {
@@ -263,38 +248,28 @@ export function ShippedFilterDropdown({
 
   return (
     <div className="space-y-3">
-      {onSearchFieldChange && searchField !== undefined ? (
-        <div>
-          <span className={labelClass}>Search field</span>
-          <div className="flex flex-wrap gap-1.5">
-            {SHIPPED_SEARCH_FIELDS.map((field) => {
-              const Icon = SHIPPED_FIELD_ICONS[field.id];
-              const active = searchField === field.id;
-              return (
-                <button
-                  key={field.id}
-                  type="button"
-                  onClick={() => onSearchFieldChange(field.id)}
-                  aria-pressed={active}
-                  className={`inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-caption font-bold ring-1 ring-inset transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500/40 ${
-                    active
-                      ? 'bg-blue-600 text-white ring-blue-600'
-                      : 'bg-white text-gray-700 ring-gray-200 hover:bg-gray-50'
-                  }`}
-                >
-                  <Icon className="h-3.5 w-3.5 shrink-0" />
-                  {field.label}
-                </button>
-              );
-            })}
-          </div>
-          <p className="mt-1.5 px-0.5 text-[11px] font-medium text-gray-500">
-            {getShippedSearchHelperText(searchField)}
-          </p>
-        </div>
-      ) : null}
-
       <NeedsAttentionButton active={state.exceptionsOnly} onClick={actions.toggleExceptions} />
+
+      {onSearchFieldChange && searchField !== undefined ? (
+        <label className="block">
+          <span className={labelClass}>Search field</span>
+          <div className="relative">
+            <select
+              value={searchField}
+              onChange={(e) => onSearchFieldChange(e.target.value as ShippedSearchField)}
+              className={selectClass}
+              aria-label="Search field"
+            >
+              {SHIPPED_SEARCH_FIELDS.map((field) => (
+                <option key={field.id} value={field.id}>
+                  {field.label}
+                </option>
+              ))}
+            </select>
+            <ChevronDown className="pointer-events-none absolute right-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-gray-400" />
+          </div>
+        </label>
+      ) : null}
 
       <label className="block">
         <span className={labelClass}>Type</span>

@@ -321,8 +321,8 @@ Shipped: ${result.packed_at ? formatDateTimePST(result.packed_at) : 'Not Shipped
                 label: 'Shipment Filters',
                 refinements,
                 onClearAll: clearAll,
-                // The "Search by" field picker now lives at the top of the filter
-                // dropdown (it used to slide down on search-bar focus).
+                // The "Search by" field dropdown lives in the filter popover
+                // below Needs attention (it used to slide down on search-bar focus).
                 renderDropdown: (onClose) => (
                     <ShippedFilterDropdown
                         onClose={onClose}

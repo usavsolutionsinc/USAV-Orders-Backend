@@ -96,7 +96,6 @@ export function UnmatchedItemsSection({
   showSerialScan = true,
 }: UnmatchedItemsSectionProps) {
   const [lines, setLines] = useState<UnfoundLine[]>([]);
-  const [loading, setLoading] = useState(false);
   /** null = closed; 'search' | 'repair_service' = which mode the popover is in. */
   const [popoverMode, setPopoverMode] = useState<EcwidProductPopoverMode | null>(null);
 
@@ -112,9 +111,11 @@ export function UnmatchedItemsSection({
     serial: string;
     matchedOrder: SerialMatchedOrder | null;
   } | null>(null);
+  // Condition for the carton-level serial scan, shown via the same ConditionPills
+  // a regular unbox serial card uses. Applied to the line the scan creates.
+  const [cartonScanCondition, setCartonScanCondition] = useState('USED_A');
 
   const refreshLines = useCallback(async () => {
-    setLoading(true);
     try {
       const res = await fetch(`/api/receiving/${receivingId}`, {
         cache: 'no-store',
@@ -126,8 +127,6 @@ export function UnmatchedItemsSection({
       setLines(body.lines ?? []);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Failed to load lines');
-    } finally {
-      setLoading(false);
     }
   }, [receivingId]);
 
@@ -189,6 +188,7 @@ export function UnmatchedItemsSection({
             receiving_line_id: addBody.line.id,
             serial_number: serial,
             staff_id: Number(staffId) || undefined,
+            condition_grade: cartonScanCondition || undefined,
           }),
         });
         const scanBody = await scanRes.json().catch(() => ({}));
@@ -208,7 +208,7 @@ export function UnmatchedItemsSection({
         setReturnScanBusy(false);
       }
     },
-    [receivingId, refreshLines, returnScanBusy, staffId],
+    [cartonScanCondition, receivingId, refreshLines, returnScanBusy, staffId],
   );
 
   const handleAddLine = useCallback(
@@ -405,10 +405,11 @@ export function UnmatchedItemsSection({
           <button
             type="button"
             onClick={() => setPopoverMode('search')}
-            className="flex items-center gap-1 rounded-md bg-blue-600 px-2.5 py-1 text-caption font-bold uppercase tracking-wider text-white hover:bg-blue-700"
+            aria-label="Add item"
+            title="Add item — search the Zoho catalog and pick a product"
+            className="flex items-center justify-center rounded-xl bg-blue-600 p-1.5 text-white hover:bg-blue-700"
           >
-            <Plus className="h-3 w-3" />
-            Add item
+            <Plus className="h-4 w-4" />
           </button>
         </div>
       }
@@ -416,22 +417,16 @@ export function UnmatchedItemsSection({
       <div className="space-y-2">
         {/* Primary entry for an unfound carton: scan a serial. On a shipped-serial
             match we pull the product details and create + populate the line — no
-            manual Add-item step. Always shown (Add item stays as the fallback for
-            serials with no match). */}
+            manual Add-item step. Rendered as a regular unbox serial card (white
+            card chrome + condition pills), not a themed callout. */}
         {showSerialScan ? (
-        <div className="rounded-xl border border-emerald-200 bg-emerald-50/50 p-3">
-          <p className="mb-1 text-micro font-black uppercase tracking-[0.14em] text-emerald-700">
-            Scan a serial number
-          </p>
-          <p className="mb-2 text-micro font-medium leading-snug text-emerald-700/80">
-            Pulls the product details from the order it shipped on and adds the line for you.
-          </p>
           <SerialCard
-            embedded
             saved={[]}
             expected={null}
             isSubmitting={returnScanBusy}
             showSavedChips={false}
+            condition={cartonScanCondition}
+            onConditionChange={setCartonScanCondition}
             onAdd={(sn) => handleReturnSerialScan(sn)}
             resultSlot={
               returnMatch ? (
@@ -449,15 +444,7 @@ export function UnmatchedItemsSection({
               ) : undefined
             }
           />
-        </div>
         ) : null}
-        {lines.length === 0 && !loading && (
-          <p className="py-6 text-center text-label text-gray-500">
-            No items yet.{showSerialScan ? ' Scan a serial above, or click' : ' Click'}{' '}
-            <span className="font-semibold">Add item</span> to search the Zoho
-            catalog and pick a product.
-          </p>
-        )}
         {lines.map((line) => (
           <UnmatchedLineRow
             key={line.id}

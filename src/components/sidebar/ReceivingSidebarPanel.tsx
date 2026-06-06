@@ -12,7 +12,7 @@ import {
   SIDEBAR_GUTTER,
 } from '@/components/layout/header-shell';
 import { cn } from '@/utils/_cn';
-import { X } from '@/components/Icons';
+import { X, Clock, Layers } from '@/components/Icons';
 import { useUIModeOptional } from '@/design-system/providers/UIModeProvider';
 import { HorizontalButtonSlider } from '@/components/ui/HorizontalButtonSlider';
 import {
@@ -1041,12 +1041,13 @@ export function ReceivingSidebarPanel() {
         <div className="sticky top-0 z-10 bg-white/90 px-3 pb-1.5 pt-1 backdrop-blur">
           <HorizontalButtonSlider
             items={[
-              { id: 'queue', label: 'Queue', tone: 'orange' },
-              { id: 'recent', label: 'Recent', tone: 'emerald' },
+              { id: 'queue', label: 'Queue', icon: Layers },
+              { id: 'recent', label: 'Recent', icon: Clock },
             ]}
             value={unboxView}
             onChange={(id) => updateUnboxView(id as 'recent' | 'queue')}
-            variant="fba"
+            variant="nav"
+            dense
             aria-label="Unbox queue view"
           />
         </div>
