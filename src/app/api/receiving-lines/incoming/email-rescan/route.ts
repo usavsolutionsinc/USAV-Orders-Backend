@@ -23,6 +23,21 @@ export const maxDuration = 60;
 
 const DEFAULT_LIMIT = 50;
 
+// A revoked/expired Google token or a never-connected mailbox isn't a server
+// fault — it's an operator action ("reconnect"). Detect those so the button
+// shows an actionable message instead of a generic 500.
+function isReconnectNeeded(err: unknown): boolean {
+  const msg = (err instanceof Error ? err.message : String(err)).toLowerCase();
+  return (
+    msg.includes('not connected') ||
+    msg.includes('invalid_grant') ||
+    msg.includes('expired or revoked') ||
+    msg.includes('token refresh failed') ||
+    msg.includes('needs_reconnect') ||
+    msg.includes('po_gmail_client') // env not configured
+  );
+}
+
 export const POST = withAuth(async (req: NextRequest) => {
   try {
     const url = new URL(req.url);
@@ -43,6 +58,18 @@ export const POST = withAuth(async (req: NextRequest) => {
       elapsedMs: result.elapsedMs,
     });
   } catch (error) {
+    if (isReconnectNeeded(error)) {
+      return NextResponse.json(
+        {
+          success: false,
+          needsReconnect: true,
+          error:
+            'PO mailbox needs reconnecting — its Google sign-in expired. ' +
+            'An admin can reconnect it under Settings → Integrations → PO Mailbox.',
+        },
+        { status: 409 },
+      );
+    }
     return errorResponse(error, 'POST /api/receiving-lines/incoming/email-rescan');
   }
 }, { permission: 'receiving.view' });

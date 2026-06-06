@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { useDeleteOrderRow } from '@/hooks';
 
 interface DeleteButtonProps {
@@ -16,6 +16,8 @@ interface DeleteButtonProps {
   label?: string;
   /** Label shown while armed (defaults to "Click again to confirm"). */
   armedLabel?: string;
+  /** Optional leading icon (e.g. <Trash2 />) rendered before the label. */
+  icon?: ReactNode;
   className?: string;
   confirmMessage?: string;
   disabled?: boolean;
@@ -28,6 +30,7 @@ export default function DeleteButton({
   onConfirm,
   label = 'Delete',
   armedLabel = 'Click again to confirm',
+  icon,
   className = '',
   confirmMessage: _confirmMessage = 'Delete order(s)? This cannot be undone.',
   disabled = false,
@@ -90,6 +93,7 @@ export default function DeleteButton({
       disabled={isDisabled}
       className={className}
     >
+      {icon}
       {isDeleting ? 'Deleting...' : isDeleteArmed ? armedLabel : label}
     </button>
   );

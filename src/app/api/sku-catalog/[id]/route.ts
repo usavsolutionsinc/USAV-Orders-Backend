@@ -124,6 +124,24 @@ export async function DELETE(
       return NextResponse.json({ success: false, error: 'Not found' }, { status: 404 });
     }
 
+    // Guard: don't hide a SKU that's physically in bins — it would vanish from
+    // active pick/replenish lists while stock still sits on the shelf. Empty or
+    // move it first. (bin_contents.sku is the natural text key, not an FK.)
+    const stock = await pool.query<{ qty: number }>(
+      `SELECT COALESCE(SUM(qty), 0)::int AS qty FROM bin_contents WHERE sku = $1`,
+      [before.sku],
+    );
+    const onHand = stock.rows[0]?.qty ?? 0;
+    if (onHand > 0) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: `SKU still has ${onHand} unit${onHand === 1 ? '' : 's'} in bins — move or remove the stock before deactivating.`,
+        },
+        { status: 409 },
+      );
+    }
+
     const deleted = await softDeleteSkuCatalog(id);
     if (!deleted) {
       return NextResponse.json({ success: false, error: 'Not found' }, { status: 404 });

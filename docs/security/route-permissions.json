@@ -1,9 +1,9 @@
 {
   "version": 1,
-  "generatedAt": "2026-06-06T22:52:06Z",
-  "totalRoutes": 515,
+  "generatedAt": "2026-06-06T23:23:39Z",
+  "totalRoutes": 510,
   "summary": {
-    "permissionGated": 431,
+    "permissionGated": 426,
     "authenticatedNoPermission": 18,
     "anonymousIntentional": 45,
     "serviceToService": 3,
@@ -1093,25 +1093,6 @@
       "exemptReason": null
     },
     {
-      "path": "/api/diagnose-migration/route.ts",
-      "methods": [
-        "GET"
-      ],
-      "gate": "withAuth",
-      "permission": "admin.view_logs",
-      "exemptReason": null
-    },
-    {
-      "path": "/api/drizzle-setup/route.ts",
-      "methods": [
-        "GET",
-        "POST"
-      ],
-      "gate": "withAuth",
-      "permission": "admin.manage_features",
-      "exemptReason": null
-    },
-    {
       "path": "/api/ebay/accounts/route.ts",
       "methods": [
         "GET",
@@ -1919,15 +1900,6 @@
       ],
       "gate": "withAuth",
       "permission": "sku_stock.manage",
-      "exemptReason": null
-    },
-    {
-      "path": "/api/migrate-process/route.ts",
-      "methods": [
-        "POST"
-      ],
-      "gate": "withAuth",
-      "permission": "admin.manage_features",
       "exemptReason": null
     },
     {
@@ -3586,25 +3558,6 @@
       "exemptReason": null
     },
     {
-      "path": "/api/setup-db/route.ts",
-      "methods": [
-        "POST"
-      ],
-      "gate": "withAuth",
-      "permission": "admin.manage_features",
-      "exemptReason": null
-    },
-    {
-      "path": "/api/setup-source-db/route.ts",
-      "methods": [
-        "GET",
-        "POST"
-      ],
-      "gate": "withAuth",
-      "permission": "admin.manage_features",
-      "exemptReason": null
-    },
-    {
       "path": "/api/shifts/[id]/cover/route.ts",
       "methods": [
         "POST"
@@ -4457,6 +4410,7 @@
     {
       "path": "/api/walk-in/sales/route.ts",
       "methods": [
+        "DELETE",
         "GET"
       ],
       "gate": "withAuth",

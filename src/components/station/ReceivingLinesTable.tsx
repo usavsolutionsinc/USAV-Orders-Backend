@@ -418,10 +418,12 @@ function ReceivingPoSummary({
   rows,
   isMobile,
   isIncoming,
+  isHistory = false,
 }: {
   rows: ReceivingLineRow[];
   isMobile: boolean;
   isIncoming: boolean;
+  isHistory?: boolean;
 }) {
   const first = rows[0];
 
@@ -476,6 +478,24 @@ function ReceivingPoSummary({
       <SerialCountChip count={allSerials.length} />
     ) : null;
 
+  // Status dot + status icons mirror the per-line row, so the collapsed summary
+  // carries the same signal its children do instead of a bare gray dot. The
+  // workflow status / delivery state are folded up only when uniform across the
+  // group; mixed groups fall back to no icon (expand to see the per-line state).
+  const workflowStatuses = new Set(
+    rows.map((r) => (r.workflow_status || 'EXPECTED').toUpperCase()),
+  );
+  const uniformWorkflowStatus =
+    workflowStatuses.size === 1 ? [...workflowStatuses][0] : null;
+  const workflowLabel = workflowStatusTableLabel(uniformWorkflowStatus || 'EXPECTED');
+  const { Icon: WorkflowIcon, tone: workflowIconTone } = getWorkflowIconMeta(workflowLabel);
+
+  const deliveryStates = new Set(
+    rows.map((r) => r.delivery_state).filter(Boolean) as string[],
+  );
+  const uniformDeliveryState =
+    deliveryStates.size === 1 ? [...deliveryStates][0] : null;
+
   // Mirror the per-line ChipColumns grid exactly, column-for-column.
   const columns: ChipColumn[] = [
     { key: 'po', width: CHIP_COL.id, node: <OrderIdChip value={poValue} display={getLast4(poValue)} /> },
@@ -494,8 +514,11 @@ function ReceivingPoSummary({
     <div className={dashboardOrderRowShellClass(isMobile)}>
       <div className="flex min-w-0 flex-col">
         <RowTitle
-          dot={getStatusDotBg(null, received, expected)}
-          dotTitle={`${rows.length} lines`}
+          // History reads uniformly "received"; otherwise derive the dot from
+          // the (uniform) workflow status + qty so it matches the child rows
+          // instead of always rendering gray.
+          dot={isHistory ? 'bg-emerald-500' : getStatusDotBg(uniformWorkflowStatus, received, expected)}
+          dotTitle={isHistory ? 'Received' : `${rows.length} lines`}
           dotTrack={META_COL.dotTrackWide}
           title={title}
         />
@@ -508,6 +531,18 @@ function ReceivingPoSummary({
             </span>
           }
           condition={<span className="text-gray-400">{conditionLabel}</span>}
+          rest={
+            <div className="flex items-center gap-2">
+              {shouldShowWorkflowStatusIcon({ isHistory, isIncoming }) ? (
+                <IconWithTooltip
+                  Icon={WorkflowIcon}
+                  label={workflowLabel}
+                  iconClassName={workflowIconTone}
+                />
+              ) : null}
+              <DeliveryStateIcon state={uniformDeliveryState} />
+            </div>
+          }
         />
       </div>
       {isMobile ? (
@@ -1329,7 +1364,7 @@ export default function ReceivingLinesTable({ selectMode = false }: { selectMode
                             index={groupIndex}
                             showChevron={false}
                             defaultExpanded={selectMode || hasSelected}
-                            summary={<ReceivingPoSummary rows={group.rows} isMobile={isMobile} isIncoming={isIncomingMode} />}
+                            summary={<ReceivingPoSummary rows={group.rows} isMobile={isMobile} isIncoming={isIncomingMode} isHistory={isHistoryMode} />}
                           >
                             {group.rows.map((row, lineIndex) => (
                               <ReceivingLineOrderRow

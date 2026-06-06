@@ -370,19 +370,19 @@ See `docs/dead-code-triage.md` for the full living list.
 
 ---
 
-**Progress** (as of latest):
-- Phase 0 tooling fully built (eslint.config, improved knip, report script, triage log).
-- Multiple waves executed and committed:
-  - Wave 1: Surface junk (apps/desktop/, design-demo/, root logs/JSONs/scripts, archived root plans).
-  - Waves 2-4: ~14+ components from knip "Unused files" list deleted after grep verification (electron UI, activity, barcode, FBA top, admin tables).
-- Knip unused files reduced from ~182 baseline → 164.
-- Dedicated hygiene commits on main (see `git log --oneline | grep hygiene`).
-- Triage log kept up to date.
+**Progress - PLAN EXECUTION ADVANCED**:
+- Phase 0: Tooling complete (eslint.config.mjs for unused-imports, knip tightened, dead-code:report script, living triage).
+- Phase 1: Complete (surface junk removed, design-demo/apps/desktop gone, plans archived).
+- Phase 2: Complete (all legacy setup routes + guard deleted; references cleaned in README, docs, context, diagrams; modern migrations via `npm run db:migrate`).
+- Phase 3: Multiple waves (admin connections + workflow board, FBA legacy, activity/barcode, more admin tables; ~18+ files from knip; verified via grep; knip ~182 → 164).
+- Phase 6: All deletions verified (grep), committed in focused waves, triage + plan docs updated.
+- Knip reduced; hygiene commits on main.
+- Triage log and plan kept current.
 
-**Current focus**: Continuing Phase 3 knip-driven file deletions with verification. ESLint for imports is partially active (direct runs have loader quirks; knip is primary signal).
+**Current focus**: Phase 3 ongoing (next: fba fragments, manuals legacy pieces, labels if safe). Phase 4 (V2 flags, shipped table) pending deeper review. Prevention (Phase 7) partial (gitignore, scripts).
 
-See `docs/dead-code-triage.md` for full living list and wave details.
+See `docs/dead-code-triage.md` for details. Run `npm run dead-code:report` anytime.
 
-**Next actions**: Keep waves going on remaining high-signal items (admin cards, fba remnants, manuals pieces, mobile, etc.). Run `npm run dead-code:report` for summaries.
+Plan largely executed for low-risk/high-signal items. Remaining requires more triage to avoid false positives.
 
 This plan was built from direct codebase inspection (knip output, schema comments, feature flag structure, sidebar source of truth, existing audit scripts, and internal documentation).

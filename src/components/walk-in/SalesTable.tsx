@@ -47,7 +47,7 @@ export function SalesTable() {
   };
 
   // ── Data ──
-  const { data: sales = [], isLoading: loading } = useWalkInSales(search, {
+  const { data: sales = [], isLoading: loading, refetch: refetchSales } = useWalkInSales(search, {
     weekStart: weekRange.startStr,
     weekEnd: weekRange.endStr,
   });
@@ -306,6 +306,7 @@ export function SalesTable() {
           <SalesDetailsPanel
             sale={selectedSale}
             onClose={() => setSelectedSale(null)}
+            onDeleted={() => { void refetchSales(); }}
             onMoveUp={() => { if (selectedIndex > 0) setSelectedSale(flatSales[selectedIndex - 1]); }}
             onMoveDown={() => { if (selectedIndex < flatSales.length - 1) setSelectedSale(flatSales[selectedIndex + 1]); }}
             disableMoveUp={selectedIndex <= 0}

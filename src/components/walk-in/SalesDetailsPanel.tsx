@@ -1,16 +1,20 @@
 'use client';
 
+import { useState } from 'react';
 import { motion } from 'framer-motion';
 import { ShoppingCart, ExternalLink } from '../Icons';
 import { PanelActionBar } from '@/components/shipped/details-panel/PanelActionBar';
 import { usePanelActions } from '@/hooks/usePanelActions';
 import { SlideOverBackdrop } from '@/components/ui/SlideOverBackdrop';
+import DeleteButton from '@/components/ui/DeleteButton';
 import { formatCentsToDollars } from '@/lib/square/client';
 import type { SquareTransactionRecord } from '@/lib/neon/square-transaction-queries';
 
 interface SalesDetailsPanelProps {
   sale: SquareTransactionRecord;
   onClose: () => void;
+  /** Called after a successful soft-delete so the parent can refetch. */
+  onDeleted?: () => void;
   onMoveUp?: () => void;
   onMoveDown?: () => void;
   disableMoveUp?: boolean;
@@ -20,6 +24,7 @@ interface SalesDetailsPanelProps {
 export function SalesDetailsPanel({
   sale,
   onClose,
+  onDeleted,
   onMoveUp = () => {},
   onMoveDown = () => {},
   disableMoveUp = false,
@@ -28,6 +33,22 @@ export function SalesDetailsPanel({
   const panelActions = usePanelActions(
     { entityType: 'walk_in_sale', entityId: sale.id },
   );
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+
+  // Soft-delete = hide the local mirror row only (Square stays the record of
+  // truth). Throws on failure so DeleteButton skips its onDeleted (close).
+  const handleDelete = async () => {
+    setDeleteError(null);
+    const res = await fetch(`/api/walk-in/sales?id=${encodeURIComponent(sale.id)}`, {
+      method: 'DELETE',
+    });
+    const body = await res.json().catch(() => null);
+    if (!res.ok || !body?.success) {
+      const msg = body?.error || `Delete failed (${res.status})`;
+      setDeleteError(msg);
+      throw new Error(msg);
+    }
+  };
 
   const lineItems = Array.isArray(sale.line_items) ? sale.line_items : [];
 
@@ -204,6 +225,23 @@ export function SalesDetailsPanel({
             </div>
           </div>
         </section>
+      </div>
+
+      {/* Footer — soft-delete (hide) this sale. Square stays the record of truth. */}
+      <div className="shrink-0 border-t border-gray-200 bg-white px-6 py-3">
+        {deleteError ? (
+          <p className="mb-2 text-xs font-semibold text-rose-600">{deleteError}</p>
+        ) : null}
+        <DeleteButton
+          onConfirm={handleDelete}
+          onDeleted={() => {
+            onDeleted?.();
+            onClose();
+          }}
+          label="Delete sale"
+          armedLabel="Click again to hide this sale"
+          className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-lg border border-rose-200 bg-rose-50 text-rose-700 text-sm font-black uppercase tracking-wider transition-all hover:bg-rose-100 hover:border-rose-300 disabled:opacity-50 disabled:cursor-not-allowed"
+        />
       </div>
       </motion.div>
     </>

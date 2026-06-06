@@ -9,6 +9,7 @@ import {
   X,
   Copy as CopyIcon,
   RefreshCw,
+  Trash2,
 } from '@/components/Icons';
 import { PaneHeaderTabs } from '@/components/ui/pane-header';
 import { SlideOverBackdrop } from '@/components/ui/SlideOverBackdrop';
@@ -169,6 +170,26 @@ function deliveredAgoLabel(deliveredAt: string | null | undefined): string | nul
   const d = new Date(deliveredAt);
   if (Number.isNaN(d.getTime())) return null;
   return `${formatDistanceToNowStrict(d)} ago`;
+}
+
+// Color-code a carrier event's timeline dot by its normalized status so the
+// operator can eyeball the trail — delivery (green), exception (red),
+// out-for-delivery (amber), label created / pre-transit (gray), and the
+// in-transit default (blue).
+function eventDotClass(category: string | null | undefined): string {
+  const c = (category || '').toLowerCase();
+  if (c.includes('deliver') && !c.includes('out')) return 'bg-emerald-500';
+  if (c.includes('exception') || c.includes('fail') || c.includes('return')) return 'bg-rose-500';
+  if (c.includes('out_for_delivery') || c.includes('ofd')) return 'bg-amber-500';
+  if (c.includes('pre_transit') || c.includes('label') || c.includes('created') || c.includes('unknown'))
+    return 'bg-gray-300';
+  return 'bg-blue-500';
+}
+
+// Split a carrier event's date and time so the timeline can lead with a clear,
+// scannable time and tuck the location on its own line.
+function fmtEventTime(value: string | null | undefined): { date: string; time: string } {
+  return { date: fmtDate(value, 'MMM d'), time: fmtDate(value, 'h:mma') };
 }
 
 // ── Panel ──────────────────────────────────────────────────────────────────
@@ -357,16 +378,18 @@ export function IncomingDetailsPanel({ zohoPurchaseOrderId, poNumberHint, onClos
         )}
       </div>
 
-      {/* Footer — destructive action. The shared DeleteButton's two-step
-          armed-confirm removes every receiving_line for this PO (the Incoming
-          row). Zoho is untouched. */}
+      {/* Footer — destructive action. Reuses the shared DeleteButton styled to
+          match the shipped panel's DeleteOrderControl (solid red, Trash2,
+          two-step confirm). Removes every receiving_line for this PO (the
+          Incoming row); Zoho is untouched. */}
       <div className="shrink-0 border-t border-gray-200 bg-white px-4 py-2.5">
         <DeleteButton
           onConfirm={deletePo}
           onDeleted={onClose}
-          label="Delete from Incoming"
-          armedLabel="Click again to remove from Incoming"
-          className="inline-flex h-8 w-full items-center justify-center gap-1.5 rounded-md border border-rose-200 bg-rose-50 text-caption font-bold text-rose-700 transition-colors hover:bg-rose-100 disabled:cursor-not-allowed disabled:opacity-60"
+          icon={<Trash2 className="w-3.5 h-3.5" />}
+          label="Delete"
+          armedLabel="Click Again To Confirm"
+          className="w-full h-10 inline-flex items-center justify-center gap-2 rounded-xl bg-red-600 hover:bg-red-700 text-white text-micro font-black uppercase tracking-wider disabled:opacity-50"
         />
       </div>
       </motion.div>
@@ -500,28 +523,49 @@ function ShipmentTab({ data }: { data: DetailsResponse }) {
         {s.events.length === 0 ? (
           <Empty msg="No carrier events yet." />
         ) : (
-          <ol className="relative space-y-2 border-l border-gray-200 pl-3">
-            {s.events.map((e) => (
-              <li key={e.id} className="relative">
-                <span className="absolute -left-[7px] top-1.5 h-2.5 w-2.5 rounded-full bg-blue-500" />
-                <div className="text-caption font-semibold text-gray-900">
-                  {e.external_status_label || e.normalized_status_category}
-                </div>
-                <div className="text-eyebrow font-semibold text-gray-500">
-                  {fmtDateTime(e.event_occurred_at)}
-                  {e.event_city ? ` · ${e.event_city}${e.event_state ? ', ' + e.event_state : ''}` : ''}
-                </div>
-                {e.external_status_description ? (
-                  <div className="mt-0.5 text-caption text-gray-600">{e.external_status_description}</div>
-                ) : null}
-                {e.signed_by ? (
-                  <div className="mt-0.5 text-eyebrow font-semibold text-emerald-700">Signed by {e.signed_by}</div>
-                ) : null}
-                {e.exception_description ? (
-                  <div className="mt-0.5 text-eyebrow font-semibold text-rose-700">{e.exception_description}</div>
-                ) : null}
-              </li>
-            ))}
+          <ol className="relative ml-1 border-l border-gray-200">
+            {s.events.map((e, i) => {
+              const { date, time } = fmtEventTime(e.event_occurred_at);
+              const location = e.event_city
+                ? `${e.event_city}${e.event_state ? ', ' + e.event_state : ''}`
+                : null;
+              const isLatest = i === 0;
+              return (
+                <li key={e.id} className="relative pb-4 pl-5 last:pb-0">
+                  <span
+                    className={`absolute -left-[5px] top-[5px] h-2.5 w-2.5 rounded-full ring-2 ring-white ${eventDotClass(
+                      e.normalized_status_category,
+                    )} ${isLatest ? 'shadow-[0_0_0_3px_rgba(59,130,246,0.15)]' : ''}`}
+                  />
+                  <div className="flex items-baseline justify-between gap-2">
+                    <span className={`text-caption font-bold ${isLatest ? 'text-gray-900' : 'text-gray-700'}`}>
+                      {e.external_status_label || e.normalized_status_category}
+                    </span>
+                    <span className="shrink-0 whitespace-nowrap text-eyebrow font-semibold tabular-nums text-gray-400">
+                      {date} · {time}
+                    </span>
+                  </div>
+                  {e.external_status_description ? (
+                    <div className="mt-0.5 text-caption text-gray-600">{e.external_status_description}</div>
+                  ) : null}
+                  {location ? (
+                    <div className="mt-0.5 text-eyebrow font-semibold uppercase tracking-wide text-gray-400">
+                      {location}
+                    </div>
+                  ) : null}
+                  {e.signed_by ? (
+                    <div className="mt-1 inline-flex items-center rounded bg-emerald-50 px-1.5 py-0.5 text-eyebrow font-bold text-emerald-700">
+                      Signed by {e.signed_by}
+                    </div>
+                  ) : null}
+                  {e.exception_description ? (
+                    <div className="mt-1 inline-flex items-center rounded bg-rose-50 px-1.5 py-0.5 text-eyebrow font-bold text-rose-700">
+                      {e.exception_description}
+                    </div>
+                  ) : null}
+                </li>
+              );
+            })}
           </ol>
         )}
       </div>

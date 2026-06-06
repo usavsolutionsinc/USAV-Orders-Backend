@@ -27,6 +27,7 @@ import {
 } from '@/design-system/tokens/typography/presets';
 import { AuditTimeline } from '@/components/audit/AuditTimeline';
 import { SlideOverBackdrop } from '@/components/ui/SlideOverBackdrop';
+import DeleteButton from '@/components/ui/DeleteButton';
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -142,6 +143,9 @@ export default function SkuDetailView({ sku, variant = 'page', onClose }: SkuDet
   // Copied feedback
   const [copiedField, setCopiedField] = useState('');
 
+  // Deactivate (soft-delete) — endpoint refuses SKUs with bin stock (409).
+  const [deactivateError, setDeactivateError] = useState<string | null>(null);
+
   const fetchData = useCallback(async () => {
     try {
       const res = await fetch(`/api/sku-stock/${encodeURIComponent(sku)}`);
@@ -227,6 +231,23 @@ export default function SkuDetailView({ sku, variant = 'page', onClose }: SkuDet
   const handleClose = () => {
     if (onClose) onClose();
     else router.push('/inventory');
+  };
+
+  // Deactivate = soft-delete (is_active=false). Non-destructive: inventory /
+  // platform ids / ledger rows are kept; the SKU just drops out of active
+  // lists. Throws on failure so DeleteButton skips its onDeleted (close); a
+  // 409 (still has bin stock) is shown inline.
+  const handleDeactivate = async () => {
+    const catalogId = data?.catalog?.id;
+    if (!catalogId) return;
+    setDeactivateError(null);
+    const res = await fetch(`/api/sku-catalog/${catalogId}`, { method: 'DELETE' });
+    const body = await res.json().catch(() => null);
+    if (!res.ok || !body?.success) {
+      const msg = body?.error || `Deactivate failed (${res.status})`;
+      setDeactivateError(msg);
+      throw new Error(msg);
+    }
   };
 
   const wrapPanel = (content: React.ReactNode) => {
@@ -735,6 +756,22 @@ export default function SkuDetailView({ sku, variant = 'page', onClose }: SkuDet
           <AuditTimeline sku={sku} limit={50} compact noHeader />
         </div>
       </div>
+
+      {/* ── Footer: deactivate (panel only, active catalog SKUs) ── */}
+      {isPanel && data.catalog?.isActive ? (
+        <div className="flex-shrink-0 border-t border-gray-200 bg-white px-4 py-3">
+          {deactivateError ? (
+            <p className="mb-2 text-caption font-semibold text-rose-600">{deactivateError}</p>
+          ) : null}
+          <DeleteButton
+            onConfirm={handleDeactivate}
+            onDeleted={handleClose}
+            label="Deactivate SKU"
+            armedLabel="Click again to deactivate"
+            className="inline-flex h-9 w-full items-center justify-center gap-1.5 rounded-md border border-rose-200 bg-rose-50 text-caption font-bold text-rose-700 transition-colors hover:bg-rose-100 disabled:cursor-not-allowed disabled:opacity-60"
+          />
+        </div>
+      ) : null}
 
       {/* ── Photo Lightbox ── */}
       {lightboxUrl && (
