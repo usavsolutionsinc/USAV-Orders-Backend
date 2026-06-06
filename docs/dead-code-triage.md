@@ -49,6 +49,15 @@
 
 These were top of the current knip unused files list. Activity inbox/feed and barcode stepper appear superseded by newer UI patterns.
 
+**Wave 4**: Deleted 5 more from top of knip list (mostly historical references only, comments in other files, no strong active production imports):
+- src/components/fba/FbaFnskuChecklist.tsx
+- src/components/fba/FbaFnskuDirectoryPanel.tsx
+- src/components/admin/ManualAssignmentTable.tsx
+- src/components/admin/OrdersManagementTab.tsx
+- src/components/admin/StaffTable.tsx
+
+Note: There is a separate active StaffTable in app/settings/staff/. The components/admin one was the old one flagged by knip. FBA ones appear legacy compared to current board/sidebar.
+
 ---
 
 ## Knip "Unused Files" — Initial Baseline Triage (182 reported)
