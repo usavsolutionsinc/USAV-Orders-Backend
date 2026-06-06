@@ -41,6 +41,14 @@
 
 (ElectronDragStrip remains as it is imported in layout.tsx. These were from the initial knip "Unused files" list.)
 
+**Wave 3**: Deleted another verified batch (no external "from" imports in src/, only historical release-notes mentions):
+- src/components/activity-inbox/ActivityInboxButton.tsx
+- src/components/activity/ActivityFeed.tsx
+- src/components/barcode/BarcodeStepper.tsx
+- src/components/barcode/index.ts
+
+These were top of the current knip unused files list. Activity inbox/feed and barcode stepper appear superseded by newer UI patterns.
+
 ---
 
 ## Knip "Unused Files" — Initial Baseline Triage (182 reported)
