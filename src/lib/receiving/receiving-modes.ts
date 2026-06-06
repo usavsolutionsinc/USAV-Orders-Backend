@@ -28,7 +28,7 @@ import {
 import type { ReceivingView } from '@/lib/receiving/receiving-views';
 
 /** Server-side page size for the Incoming list (other modes use a long scroll). */
-export const INCOMING_PAGE_SIZE = 25;
+export const INCOMING_PAGE_SIZE = 50;
 
 /** Long-scroll row cap shared by the non-paginated modes (Receive / History). */
 export const RECEIVING_TABLE_LIMIT = 500;

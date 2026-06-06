@@ -484,6 +484,55 @@ export const SkuSerialChip = ({
   />
 );
 
+/**
+ * Non-interactive "count" variant of an id chip — for grouped/collapsed summary
+ * rows where a column holds N differing values (a PO group spanning several
+ * SKUs / serials). Keeps the column's own icon + the underlined-mono shape so it
+ * lines up with the real chips beneath it, but shows "×N" in yellow so it reads
+ * as a count, not a value. No copy/tooltip — there's no single value to copy.
+ */
+function GroupCountChip({
+  count,
+  icon,
+  iconClass,
+  underlineClass,
+  dense,
+}: {
+  count: number;
+  icon: React.ReactNode;
+  iconClass: string;
+  /** Underline color — matches the column's real copy chip (yellow SKU / emerald serial). */
+  underlineClass: string;
+  dense?: boolean;
+}) {
+  return (
+    <div className="relative flex w-fit max-w-full items-center justify-start px-1.5">
+      <span className="inline-flex w-auto max-w-full items-center gap-0.5">
+        <span className={`inline-flex shrink-0 items-center justify-center ${dense ? '[&_svg]:h-3 [&_svg]:w-3' : ''} ${iconClass}`}>
+          {icon}
+        </span>
+        {/* Reserve the same 4-char footprint the last-4 id chips occupy so the
+            icon lands at the same x and the underline matches the sibling chips'
+            width. Value sits right within that footprint; underline color matches
+            the column's real chip. */}
+        <span className={`${dense ? 'text-[11px]' : 'text-sm'} w-[4ch] border-b-2 ${underlineClass} pb-0.5 text-right font-mono font-bold leading-none tracking-tight text-yellow-600`}>
+          ×{count}
+        </span>
+      </span>
+    </div>
+  );
+}
+
+/** SKU column count for a collapsed group — yellow pencil + "×N", yellow underline. */
+export const SkuCountChip = ({ count, dense }: { count: number; dense?: boolean }) => (
+  <GroupCountChip count={count} icon={<Pencil className="h-4 w-4 shrink-0" />} iconClass="text-yellow-600" underlineClass="border-yellow-500" dense={dense} />
+);
+
+/** Serial column count for a collapsed group — emerald barcode + "×N", emerald underline. */
+export const SerialCountChip = ({ count, dense }: { count: number; dense?: boolean }) => (
+  <GroupCountChip count={count} icon={<Barcode className="h-4 w-4 shrink-0" />} iconClass="text-emerald-500" underlineClass="border-emerald-500" dense={dense} />
+);
+
 export const TicketChip = ({ value, display }: { value: string; display: string }) => (
   <CopyChip
     value={value}

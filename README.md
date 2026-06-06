@@ -66,7 +66,7 @@ The app has many route handlers under `src/app/api`. Core groups include:
 - `receiving-*`: receiving entries, logs, search, and tasks
 - `repair/*` and `repair-service/*`: repair intake, lookup, and print flows
 - `staff`, `staff-goals`, `support/overview`
-- sync + migration helpers: `sync-sheets`, `sync-sheets-to-tech-serials`, `import-orders`, `migrate-process`, `drizzle-setup`, `setup-db`
+- sync + migration helpers: `sync-sheets`, `import-orders`, `migrate-process`, `drizzle-setup`, `setup-db`
 - integrations: `ebay/*`, `ecwid-square/sync`, `google-sheets/*`, `manuals/resolve`, `orders-exceptions/*`
 - realtime/ai: `realtime/token`, `ai/chat`, `ai/search`, `ai/health`
 
@@ -388,6 +388,17 @@ callsites as they pick up an orgId from `withAuth`'s ctx.
 - `src/hooks/*`: UI/data hooks
 - `src/utils/*`: tracking, order, staff, and formatting utilities
 - `src/lib/migrations/*`: SQL migrations
+
+## Hygiene & Dead Code
+
+See [docs/DEAD_CODE_CLEANUP_PLAN.md](docs/DEAD_CODE_CLEANUP_PLAN.md) for the concrete plan and process.
+
+Useful commands:
+- `npm run dead-code:report`
+- `npm run dead-code:knip`
+- `npm run dead-code:depcruise`
+
+Living triage log: [docs/dead-code-triage.md](docs/dead-code-triage.md)
 
 ## Operational Notes
 

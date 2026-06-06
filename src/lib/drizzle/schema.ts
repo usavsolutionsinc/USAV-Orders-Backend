@@ -1506,6 +1506,32 @@ export const skuKitParts = pgTable('sku_kit_parts', {
   sortOrder: integer('sort_order').notNull().default(0),
 });
 
+/**
+ * pending_skus — to-do queue of SKUs seen in operations but not yet in
+ * sku_catalog (need creating in Zoho, the SoT). `sku_catalog_id` stays NULL
+ * while PENDING and is auto-stamped by trg_resolve_pending_sku when the matching
+ * catalog row is created. See migration 2026-06-06b_pending_skus.sql +
+ * src/lib/inventory/pending-skus.ts. status ∈ PENDING|CREATED|IGNORED|DUPLICATE.
+ */
+export const pendingSkus = pgTable('pending_skus', {
+  id: serial('id').primaryKey(),
+  normalizedSku: text('normalized_sku').notNull().unique(),
+  rawSku: text('raw_sku').notNull(),
+  status: text('status').notNull().default('PENDING'),
+  occurrences: integer('occurrences').notNull().default(1),
+  firstSource: text('first_source'),
+  suggestedTitle: text('suggested_title'),
+  skuCatalogId: integer('sku_catalog_id').references(() => skuCatalog.id, { onDelete: 'set null' }),
+  resolvedAt: timestamp('resolved_at', { withTimezone: true }),
+  assignedTo: integer('assigned_to').references(() => staff.id, { onDelete: 'set null' }),
+  notes: text('notes'),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+});
+
+export type PendingSku = typeof pendingSkus.$inferSelect;
+export type NewPendingSku = typeof pendingSkus.$inferInsert;
+
 export const qcCheckTemplates = pgTable('qc_check_templates', {
   id: serial('id').primaryKey(),
   skuCatalogId: integer('sku_catalog_id').references(() => skuCatalog.id, { onDelete: 'cascade' }),

@@ -74,6 +74,12 @@ interface Props {
    * set via the line-level picker in the row body, not on chip hover.
    */
   activeSerialActions?: PoLineSerialActions;
+  /**
+   * Read-only display (triage). Drops the expand chevron, the "Click to switch"
+   * hint, and the row click-to-switch — nothing on a line can change until it's
+   * unboxed, so the accordion is just a flat list of what's on the PO.
+   */
+  readOnly?: boolean;
 }
 
 /**
@@ -91,6 +97,7 @@ export function PoLinesAccordion({
   activeRowSlot,
   activeConditionOverride,
   activeSerialActions,
+  readOnly = false,
 }: Props) {
   const queryClient = useQueryClient();
   const queryKey = useMemo(
@@ -159,7 +166,7 @@ export function PoLinesAccordion({
         <h3 className="text-caption font-bold uppercase tracking-[0.14em] text-gray-500">
           PO items · {rows.length}
         </h3>
-        {rows.length > 1 ? (
+        {rows.length > 1 && !readOnly ? (
           <span className="text-micro font-bold uppercase tracking-widest text-gray-400">
             Click to switch
           </span>
@@ -185,28 +192,30 @@ export function PoLinesAccordion({
                   interactive children (condition pills) can render inside
                   the bubble without producing nested <button> markup. */}
               <div
-                role={isActive ? undefined : 'button'}
-                tabIndex={isActive ? -1 : 0}
+                role={!readOnly && !isActive ? 'button' : undefined}
+                tabIndex={!readOnly && !isActive ? 0 : -1}
                 onClick={() => {
-                  if (!isActive) dispatchSelectLine(line);
+                  if (!readOnly && !isActive) dispatchSelectLine(line);
                 }}
                 onKeyDown={(e) => {
-                  if (isActive) return;
+                  if (readOnly || isActive) return;
                   if (e.key === 'Enter' || e.key === ' ') {
                     e.preventDefault();
                     dispatchSelectLine(line);
                   }
                 }}
                 className={`flex w-full items-center gap-2 px-3 py-2 text-left ${
-                  isActive ? '' : 'cursor-pointer'
+                  !readOnly && !isActive ? 'cursor-pointer' : ''
                 }`}
               >
-                <ChevronDown
-                  className={`h-3.5 w-3.5 shrink-0 text-gray-400 transition-transform ${
-                    isActive ? '' : '-rotate-90'
-                  }`}
-                  aria-hidden
-                />
+                {!readOnly ? (
+                  <ChevronDown
+                    className={`h-3.5 w-3.5 shrink-0 text-gray-400 transition-transform ${
+                      isActive ? '' : '-rotate-90'
+                    }`}
+                    aria-hidden
+                  />
+                ) : null}
                 <div className="min-w-0 flex-1">
                   <p
                     className="truncate text-label font-bold text-gray-900"
@@ -258,7 +267,7 @@ export function PoLinesAccordion({
                           // activates that line first (dispatchSelectLine) so
                           // its scan input mounts; delete is routed to the
                           // chip's own line id by the parent.
-                          if (activeSerialActions?.onEdit || activeSerialActions?.onDelete) {
+                          if (!readOnly && (activeSerialActions?.onEdit || activeSerialActions?.onDelete)) {
                             const { onEdit, onDelete } = activeSerialActions;
                             return (
                               <SerialChipWithMenu

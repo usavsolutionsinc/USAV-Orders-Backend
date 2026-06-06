@@ -34,6 +34,26 @@ export function useZohoLinePrefill({
     const poId = (row.zoho_purchaseorder_id || '').trim();
     if (!poId) return;
 
+    const rid = row.receiving_id;
+    const scratch = readReceivingLineDetailsScratch(rid);
+
+    // LOCAL-FIRST serial: the incoming Zoho sync already copied the line's
+    // description into receiving_lines.notes (= row.notes), so parse the serial
+    // from there instead of pinging Zoho. A local serial_units value still wins.
+    const hasLocalSerial = (row.serials ?? []).some((s) => (s.serial_number || '').trim());
+    if (!hasLocalSerial) {
+      const snLocal = parseSerialFromLineDescription(row.notes ?? null);
+      if (snLocal) setSerialInput(snLocal);
+    }
+
+    // Zendesk + listing come from the PO *header* notes, which the local mirror
+    // (header-only) doesn't carry — so they're the only reason to reach Zoho.
+    // Skip the round-trip entirely when both are already satisfied locally
+    // (DB column or per-browser scratch); only fetch to fill a genuine blank.
+    const zendeskSatisfied = !!(scratch.zendesk.trim() || (row.zendesk_ticket || '').trim());
+    const listingSatisfied = !!((row.receiving_listing_url || '').trim() || scratch.listing.trim());
+    if (zendeskSatisfied && listingSatisfied) return;
+
     let cancelled = false;
     (async () => {
       try {
@@ -43,36 +63,14 @@ export function useZohoLinePrefill({
         const data = await res.json();
         if (cancelled || !data?.success || !data.purchaseorder) return;
 
-        const po = data.purchaseorder as {
-          notes?: string | null;
-          line_items?: Array<{ line_item_id?: string; description?: string | null }>;
-        };
-
-        const rid = row.receiving_id;
-        const scratch = readReceivingLineDetailsScratch(rid);
+        const po = data.purchaseorder as { notes?: string | null };
         const { zendesk: zPo, listing: lPo } = parseZendeskListingFromPoNotes(po.notes ?? '');
-        if (!scratch.zendesk.trim() && zPo) setZendesk(zPo);
+        if (!zendeskSatisfied && zPo) setZendesk(zPo);
         // Listing URL: DB column (`receiving.listing_url`) is the source of
         // truth — never overwrite an existing DB value or a per-browser
-        // scratch override with the Zoho-parsed value. When both are empty
-        // and Zoho has one, set it locally and the debounced PATCH (in
-        // useReceivingPackageSync) will persist it to the DB.
-        const currentListing =
-          (row.receiving_listing_url || '').trim() || scratch.listing.trim();
-        if (!currentListing && lPo) setListingLink(lPo);
-
-        const lineItemId = (row.zoho_line_item_id || '').trim();
-        if (!lineItemId || !Array.isArray(po.line_items)) return;
-        const li = po.line_items.find(
-          (l) => String(l.line_item_id || '').trim() === lineItemId,
-        );
-        // Local serials (from serial_units via receiving-lines `include=serials`)
-        // win over the Zoho PO description. Only fall back to Zoho when the
-        // line has no local serial on file yet.
-        const hasLocalSerial = (row.serials ?? []).some((s) => (s.serial_number || '').trim());
-        if (hasLocalSerial) return;
-        const sn = parseSerialFromLineDescription(li?.description ?? null);
-        if (sn) setSerialInput(sn);
+        // scratch override. When both are empty and Zoho has one, set it
+        // locally; the debounced PATCH (useReceivingPackageSync) persists it.
+        if (!listingSatisfied && lPo) setListingLink(lPo);
       } catch {
         /* Zoho unavailable — fields stay empty */
       }

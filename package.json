@@ -75,7 +75,10 @@
     "diagrams:archi": "depcruise src --include-only ^src --config .dependency-cruiser.cjs --output-type archi --output-to docs/diagrams/06-architecture.dot",
     "diagrams:html": "depcruise src --include-only ^src --config .dependency-cruiser.cjs --output-type err-html --output-to docs/diagrams/dep-report.html",
     "diagrams:check": "depcruise src --include-only ^src --config .dependency-cruiser.cjs",
-    "diagrams": "npm run diagrams:modules"
+    "diagrams": "npm run diagrams:modules",
+    "dead-code:knip": "npx knip --reporter compact",
+    "dead-code:report": "node scripts/generate-dead-code-report.mjs",
+    "dead-code:depcruise": "npx depcruise src --config .dependency-cruiser.cjs --output-type text | head -100"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",

@@ -75,6 +75,8 @@ export interface UnmatchedItemsSectionProps {
    * receiving. When omitted, the section keeps its default receiving behavior.
    */
   renderLineActions?: (line: UnfoundLine, helpers: UnmatchedLineRenderHelpers) => React.ReactNode;
+  /** "Scan a serial number" card. Hidden in triage — serials are an unbox step. */
+  showSerialScan?: boolean;
 }
 
 interface CartonResponse {
@@ -91,6 +93,7 @@ export function UnmatchedItemsSection({
   listingUrlHint,
   onFileReturnClaim,
   renderLineActions,
+  showSerialScan = true,
 }: UnmatchedItemsSectionProps) {
   const [lines, setLines] = useState<UnfoundLine[]>([]);
   const [loading, setLoading] = useState(false);
@@ -415,6 +418,7 @@ export function UnmatchedItemsSection({
             match we pull the product details and create + populate the line — no
             manual Add-item step. Always shown (Add item stays as the fallback for
             serials with no match). */}
+        {showSerialScan ? (
         <div className="rounded-xl border border-emerald-200 bg-emerald-50/50 p-3">
           <p className="mb-1 text-micro font-black uppercase tracking-[0.14em] text-emerald-700">
             Scan a serial number
@@ -446,9 +450,10 @@ export function UnmatchedItemsSection({
             }
           />
         </div>
+        ) : null}
         {lines.length === 0 && !loading && (
           <p className="py-6 text-center text-label text-gray-500">
-            No items yet. Scan a serial above, or click{' '}
+            No items yet.{showSerialScan ? ' Scan a serial above, or click' : ' Click'}{' '}
             <span className="font-semibold">Add item</span> to search the Zoho
             catalog and pick a product.
           </p>

@@ -29,7 +29,7 @@ import {
 } from '@/components/shipping/ShippedFilterToolbar';
 import { formatDateWithOrdinal, getCurrentPSTDateKey, toPSTDateKey } from '@/utils/date';
 import { ShippedOrder } from '@/lib/neon/orders-queries';
-import { fetchDashboardPackedRecords } from '@/lib/dashboard-table-data';
+import { dashboardShippedQuery } from '@/lib/queries/dashboard-queries';
 import { useShippedSearch } from '@/hooks/useShippedSearch';
 import { getWeekRangeForOffset } from '@/lib/dashboard-week-range';
 import { dispatchCloseShippedDetails, dispatchOpenShippedDetails, getOpenShippedDetailsPayload } from '@/utils/events';
@@ -110,6 +110,7 @@ export function DashboardShippedTable({
   const [selectedDetailId, setSelectedDetailId] = useState<number | null>(null);
   const [stickyDate, setStickyDate] = useState('');
   const [currentCount, setCurrentCount] = useState(0);
+  const [activeDateKey, setActiveDateKey] = useState('');
   const scrollRef = useRef<HTMLDivElement>(null);
 
   const shippedSearchField = normalizeShippedSearchField(searchParams.get('shippedSearchField'));
@@ -158,27 +159,21 @@ export function DashboardShippedTable({
   const effectiveWeekStart = hasDateRange ? dateFrom : anyCarrierFilter ? '' : weekRange.startStr;
   const effectiveWeekEnd   = hasDateRange ? dateTo   : anyCarrierFilter ? '' : weekRange.endStr;
 
-  const queryKey = ['dashboard-table', 'shipped', { weekStart: effectiveWeekStart, weekEnd: effectiveWeekEnd, packedBy: effPackedBy, testedBy: effTestedBy, shippedFilter }] as const;
-
   const search = searchParams.get('search') || '';
   const normalizedSearch = search.trim().toLowerCase();
 
   const query = useQuery({
-    queryKey,
-    queryFn: () =>
-      fetchDashboardPackedRecords({
-        packedBy: effPackedBy,
-        testedBy: effTestedBy,
-        weekStart: effectiveWeekStart,
-        weekEnd: effectiveWeekEnd,
-        shippedFilter,
-      }),
+    ...dashboardShippedQuery({
+      weekStart: effectiveWeekStart,
+      weekEnd: effectiveWeekEnd,
+      packedBy: effPackedBy,
+      testedBy: effTestedBy,
+      shippedFilter,
+    }),
     // When a search is active, packer_logs is bypassed and we drive
     // from /api/shipped via the universal `useShippedSearch` hook — same TanStack
     // Query cache key as `ShippedSidebar`, so both views show identical results.
     enabled: !normalizedSearch,
-    staleTime: 5 * 60 * 1000,
-    gcTime: 15 * 60 * 1000,
     placeholderData: (previousData) => previousData,
   });
 
@@ -516,10 +511,13 @@ export function DashboardShippedTable({
       }
 
       if (activeDate) {
+        setActiveDateKey((prev) => (prev === activeDate ? prev : activeDate));
         setStickyDate(formatDate(activeDate));
         setCurrentCount(activeCount);
       } else if (sortedGroupedEntries.length > 0) {
-        setStickyDate(formatDate(sortedGroupedEntries[0][0]));
+        const firstDate = sortedGroupedEntries[0][0];
+        setActiveDateKey((prev) => (prev === firstDate ? prev : firstDate));
+        setStickyDate(formatDate(firstDate));
         setCurrentCount(sortedGroupedEntries[0][1].length);
       }
     });
@@ -529,10 +527,14 @@ export function DashboardShippedTable({
     const container = scrollRef.current;
     if (container) container.scrollTop = 0;
     if (sortedGroupedEntries.length > 0) {
-      setStickyDate(formatDate(sortedGroupedEntries[0][0]));
+      const firstDate = sortedGroupedEntries[0][0];
+      setActiveDateKey(firstDate);
+      setStickyDate(formatDate(firstDate));
       setCurrentCount(sortedGroupedEntries[0][1].length);
       return;
     }
+
+    setActiveDateKey('');
 
     setStickyDate(
       weekOffset > 0
@@ -666,6 +668,7 @@ export function DashboardShippedTable({
                       const timeB = new Date(b.created_at || 0).getTime();
                       return timeB - timeA;
                     });
+                    const hidePinnedDayHeader = date === activeDateKey;
 
                     return (
                       <div key={date} className="flex flex-col">
@@ -673,11 +676,13 @@ export function DashboardShippedTable({
                           <MobileDateGroupHeader
                             date={date}
                             total={dayRecords.length}
+                            hidden={hidePinnedDayHeader}
                           />
                         ) : (
                           <DateGroupHeader
                             date={date}
                             total={dayRecords.length}
+                            hidden={hidePinnedDayHeader}
                           />
                         )}
                         {sortedRecords.map((record, index) => {

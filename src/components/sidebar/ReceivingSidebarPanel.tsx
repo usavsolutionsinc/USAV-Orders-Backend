@@ -12,17 +12,24 @@ import {
   SIDEBAR_GUTTER,
 } from '@/components/layout/header-shell';
 import { cn } from '@/utils/_cn';
-import { Loader2, MapPin, X } from '@/components/Icons';
+import { X } from '@/components/Icons';
 import { useUIModeOptional } from '@/design-system/providers/UIModeProvider';
 import { HorizontalButtonSlider } from '@/components/ui/HorizontalButtonSlider';
 import {
   ReceivingReturnBanner,
   type ReturnEvent,
 } from '@/components/sidebar/ReceivingReturnBanner';
-import { StationScanBar } from '@/components/station/StationScanBar';
+import {
+  ReceivingUnboxScanBar,
+  classifyUnboxScan,
+  type UnboxScanMode,
+} from '@/components/sidebar/receiving/ReceivingUnboxScanBar';
+import { SearchBar } from '@/components/ui/SearchBar';
 import { ReceivingHistorySearchSection } from '@/components/sidebar/receiving/ReceivingHistorySearchSection';
 import { ReceivingLinePicker } from '@/components/sidebar/receiving/ReceivingLinePicker';
 import { ReceivingRecentRail } from '@/components/sidebar/receiving/ReceivingRecentRail';
+import { ReceivingScannedRail } from '@/components/sidebar/receiving/ReceivingScannedRail';
+import { TriageSidebarBody } from '@/components/sidebar/receiving/TriageSidebarBody';
 import { IncomingSidebarPanel } from '@/components/sidebar/receiving/IncomingSidebarPanel';
 import {
   dispatchReceivingWorkspaceOpen,
@@ -121,34 +128,26 @@ export function ReceivingSidebarPanel() {
         ? 'history'
         : rawMode === 'incoming'
           ? 'incoming'
-          : 'receive';
+          : rawMode === 'triage'
+            ? 'triage'
+            : 'receive';
+  // Triage (label "Receiving") shares the scan-bar + recent-rail sidebar body
+  // with the Unbox workspace (`receive`); only the right pane differs. Treat the
+  // two together wherever the sidebar shows the scan surface.
+  const isScanSurface = mode === 'receive' || mode === 'triage';
+  // Unbox-mode sub-view toggle (sticky pills at the top of the rail). `recent` =
+  // the live unboxing rail (default); `queue` = the same priority-sorted Scanned
+  // rail the triage Prioritize tab shows. Lives in the URL per the sidebar-mode
+  // contract so a refresh/deep-link keeps it; absence = recent.
+  const unboxView: 'recent' | 'queue' =
+    searchParams.get('unboxview') === 'queue' ? 'queue' : 'recent';
   // Identity is server-derived. The proxy redirects unauthenticated traffic
   // to /signin, so `user` is non-null whenever this sidebar renders. The
   // optional-chain is a TS-narrowing nicety, not a runtime fallback.
   const { user } = useAuth();
   const staffIdNum = user?.staffId ?? 0;
   const staffId = String(staffIdNum);
-  const { theme: themeColor, inputBorder } = useStationTheme({ staffId: staffIdNum });
-  const focusRingClass: Record<typeof themeColor, string> = {
-    green: 'focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-500',
-    blue: 'focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500',
-    purple: 'focus:ring-4 focus:ring-purple-500/10 focus:border-purple-500',
-    yellow: 'focus:ring-4 focus:ring-amber-500/10 focus:border-amber-500',
-    black: 'focus:ring-4 focus:ring-slate-700/10 focus:border-slate-700',
-    red: 'focus:ring-4 focus:ring-red-500/10 focus:border-red-500',
-    lightblue: 'focus:ring-4 focus:ring-sky-500/10 focus:border-sky-500',
-    pink: 'focus:ring-4 focus:ring-pink-500/10 focus:border-pink-500',
-  };
-  const scanIconColorClass: Record<typeof themeColor, string> = {
-    green: 'text-emerald-600',
-    blue: 'text-blue-600',
-    purple: 'text-purple-600',
-    yellow: 'text-amber-600',
-    black: 'text-slate-700',
-    red: 'text-red-600',
-    lightblue: 'text-sky-600',
-    pink: 'text-pink-600',
-  };
+  const { theme: themeColor } = useStationTheme({ staffId: staffIdNum });
   // Soft centered halo behind the scan input — staff-tint fades in toward
   // the middle of the band and back to white on the edges, instead of a
   // flat-fill block. Keeps the bar feeling light/airy.
@@ -199,16 +198,24 @@ export function ReceivingSidebarPanel() {
     if (mode === 'pickup') {
       window.dispatchEvent(new CustomEvent('receiving-clear-line'));
     }
-    // Returning to the Receive tab from History / Pickup / Unfound — focus
-    // the tracking field (the scan-bar effect above listens for this event).
-    if (mode === 'receive') {
+    // Returning to a scan surface (Unbox / Receiving-triage) from History /
+    // Pickup / Incoming — focus the tracking field (the scan-bar effect above
+    // listens for this event).
+    if (isScanSurface) {
       requestAnimationFrame(() => {
         window.dispatchEvent(new CustomEvent('receiving-focus-scan'));
       });
     }
-  }, [mode]);
+  }, [mode, isScanSurface]);
 
   const [bulkTracking, setBulkTracking] = useState('');
+  // Armed unbox scan route (null = auto-detect: a value with "-" → Order#).
+  // Tracking resolves a carrier #, Order# resolves a Zoho PO / reference #.
+  const [unboxScanMode, setUnboxScanMode] = useState<UnboxScanMode | null>(null);
+  // Desktop triage search — filters the Found/Unfound to-do lists. Triage is a
+  // browse/triage surface (a search), NOT a scan surface, so it uses SearchBar
+  // instead of the StationScanBar the Unbox workspace uses.
+  const [triageQuery, setTriageQuery] = useState('');
   const scanInputRef = useRef<HTMLInputElement>(null);
 
   // External focus trigger — Quick Access chips (`Search Receiving`,
@@ -311,6 +318,24 @@ export function ReceivingSidebarPanel() {
     };
     window.addEventListener('receiving-workspace-close', handler);
     return () => window.removeEventListener('receiving-workspace-close', handler);
+  }, []);
+
+  // `receiving-clear-line` is a full deselect signal — fired on mode switch and
+  // when the triage Found/Unfound sub-view changes. Clear the panel's selection
+  // too (not just the right pane) so the rail highlight resets and the new
+  // list/sub-list auto-selects its own top instead of pinning the prior pick.
+  useEffect(() => {
+    const handler = () => {
+      setSelectedLine(null);
+      setScanDriven(false);
+      setScanMatchedRows([]);
+      clearPoContext();
+    };
+    window.addEventListener('receiving-clear-line', handler);
+    return () => window.removeEventListener('receiving-clear-line', handler);
+    // clearPoContext is a stable useCallback([]) — matches the workspace-close
+    // effect above; referenced in the handler, not synchronously.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Line deleted (e.g. last item removed from a carton) → if it was the active
@@ -501,9 +526,13 @@ export function ReceivingSidebarPanel() {
     return () => window.removeEventListener('receiving-active', handleActive);
   }, [poContext?.receiving_id]);
 
-  const submitTrackingScan = useCallback((rawTracking?: string, opts?: { onResult?: (result: { tracking: string; matched: boolean; po_ids: string[]; receiving_id?: number; exception_id?: number | null; exception_reason?: string | null; error?: string }) => void }) => {
+  const submitTrackingScan = useCallback((rawTracking?: string, opts?: { mode?: UnboxScanMode; onResult?: (result: { tracking: string; matched: boolean; po_ids: string[]; receiving_id?: number; exception_id?: number | null; exception_reason?: string | null; error?: string }) => void }) => {
     const trackingNumber = (rawTracking ?? bulkTracking).trim();
     if (!trackingNumber) return;
+
+    // Resolve the scan route: explicit opts.mode wins, else auto-classify
+    // (a value with a dash is an order/PO reference number).
+    const lookupMode: UnboxScanMode = opts?.mode ?? classifyUnboxScan(trackingNumber);
 
     setBulkTracking('');
     const scanStartedAt = Date.now();
@@ -523,9 +552,10 @@ export function ReceivingSidebarPanel() {
         // Serial / unit / carton-handle / receiving-id scan → jump straight to
         // the PO line it belongs to, bypassing carrier tracking intake. Only
         // short-circuits on a hit; tracking numbers and anything unrecognised
-        // fall through to the normal lookup-po flow below untouched.
+        // fall through to the normal lookup-po flow below untouched. Skipped in
+        // Order# mode — an order/PO reference is never a serial/carton code.
         try {
-          const code = await resolveReceivingCodeToLine(trackingNumber);
+          const code = lookupMode === 'order' ? null : await resolveReceivingCodeToLine(trackingNumber);
           if (code && (code.kind === 'line' || code.kind === 'multi')) {
             const rows = code.kind === 'line' ? [code.row] : code.rows;
             if (rows.length > 0) {
@@ -564,6 +594,7 @@ export function ReceivingSidebarPanel() {
           body: JSON.stringify({
             trackingNumber,
             staffId: Number(staffId),
+            mode: lookupMode,
           }),
         });
         const data = await res.json();
@@ -573,6 +604,16 @@ export function ReceivingSidebarPanel() {
         }
 
         const isMatched = Boolean(data.matched) && Array.isArray(data.lines) && data.lines.length > 0;
+
+        // Order# lookups that resolve to nothing report a clean not-found —
+        // surface a toast instead of falling into the unmatched-carton flow
+        // (a mistyped PO/order number must not create a phantom box).
+        if (!isMatched && (lookupMode === 'order' || data?.not_found)) {
+          opts?.onResult?.({ tracking: trackingNumber, matched: false, po_ids: [] });
+          window.dispatchEvent(new CustomEvent('receiving-scan-resolved'));
+          toast.error(data?.error || `No PO found for “${trackingNumber}”`);
+          return;
+        }
 
         if (isMatched) {
           opts?.onResult?.({
@@ -625,16 +666,17 @@ export function ReceivingSidebarPanel() {
               const openRows = rows.filter(
                 (r) => r.quantity_expected == null || r.quantity_received < (r.quantity_expected ?? 0),
               );
-              const pick = openRows.length === 1 ? openRows[0] : openRows.length === 0 && rows.length === 1 ? rows[0] : null;
-              if (pick) {
-                setLineAccordionBootstrap('default');
-                setSelectedLine(pick);
-                setScanDriven(true);
-              } else {
-                setLineAccordionBootstrap('default');
-                setSelectedLine(null);
-                setScanDriven(true);
-              }
+              // Open LineEditPanel on the first open line (fall back to the first
+              // line when all are received). PoLinesAccordion inside the panel
+              // lists every line on the PO, so a multi-line carton shows in full
+              // — matching the serial-scan path. Previously a multi-open carton
+              // left `pick` null, which opened the right-pane overlay with no
+              // selected line → a BLANK workspace (a single-line PO worked, two
+              // line items did not). Only stays null when the carton has no lines.
+              const pick = openRows[0] ?? rows[0] ?? null;
+              setLineAccordionBootstrap('default');
+              setSelectedLine(pick);
+              setScanDriven(true);
             } catch {
               /* silent — sidebar still has poContext for serial scans */
             }
@@ -860,6 +902,25 @@ export function ReceivingSidebarPanel() {
     setSerialInput('');
   }, []);
 
+  // Selection must NOT carry across modes. On a genuine mode SWITCH (not the
+  // initial mount — that would clobber a deep-linked carton), converge both
+  // panes on empty so the new mode re-renders fresh and its rail auto-selects
+  // the top of its OWN queue. A carton opened in Unbox never lingers selected in
+  // Receiving/Incoming, and clicking a mode shows that mode's most-recent item
+  // instead of a stale background.
+  const prevModeForResetRef = useRef<ReceivingMode | null>(null);
+  useEffect(() => {
+    const prev = prevModeForResetRef.current;
+    prevModeForResetRef.current = mode;
+    if (prev === null || prev === mode) return;
+    setSelectedLine(null);
+    setLineAccordionBootstrap('default');
+    setScanDriven(false);
+    setScanMatchedRows([]);
+    clearPoContext();
+    window.dispatchEvent(new CustomEvent('receiving-clear-line'));
+  }, [mode, clearPoContext]);
+
   const { updateSourcePlatform } = useReceivingSourcePlatform({ poContext, setPoContext });
 
   const dismissReturn = useCallback((id: string) => {
@@ -877,6 +938,17 @@ export function ReceivingSidebarPanel() {
   const updateStaff = (id: number) => {
     const nextParams = new URLSearchParams(searchParams.toString());
     nextParams.set('staffId', String(id));
+    router.replace(`/receiving?${nextParams.toString()}`);
+  };
+
+  const updateUnboxView = (next: 'recent' | 'queue') => {
+    if (next === unboxView) return;
+    // Different list = don't carry the prior pick; let the new list auto-select
+    // its own top (mirrors the triage Found/Unfound toggle).
+    window.dispatchEvent(new CustomEvent('receiving-clear-line'));
+    const nextParams = new URLSearchParams(searchParams.toString());
+    if (next === 'recent') nextParams.delete('unboxview');
+    else nextParams.set('unboxview', next);
     router.replace(`/receiving?${nextParams.toString()}`);
   };
 
@@ -914,11 +986,23 @@ export function ReceivingSidebarPanel() {
       ) : (
         <>
       {/* History: dashboard-style search + scope/field pills + green + to Receive.
-          Receive: tracking scan bar opens the workspace. */}
+          Triage: desktop SearchBar over the Found/Unfound to-do lists (no scan).
+          Receive (Unbox): tracking scan bar opens the workspace. */}
       {mode === 'history' ? (
         <ReceivingHistorySearchSection
           onSwitchToReceiving={() => updateMode('receive')}
         />
+      ) : mode === 'triage' ? (
+        <div className={cn(receivingScanBandClass, SIDEBAR_GUTTER, 'py-1')}>
+          <SearchBar
+            value={triageQuery}
+            onChange={setTriageQuery}
+            onClear={() => setTriageQuery('')}
+            placeholder="Search triage — tracking, PO #, SKU…"
+            variant="orange"
+            debounceMs={120}
+          />
+        </div>
       ) : (
       <motion.div
         // Soft staff-color tint hints at the active operator's theme without
@@ -929,28 +1013,15 @@ export function ReceivingSidebarPanel() {
         transition={{ type: 'spring', damping: 25, stiffness: 120 }}
         className={cn(receivingScanBandClass, bandHaloClass[themeColor], SIDEBAR_GUTTER, 'py-1')}
       >
-        <StationScanBar
+        <ReceivingUnboxScanBar
           value={bulkTracking}
           onChange={setBulkTracking}
-          onSubmit={() => submitTrackingScan()}
+          onSubmit={(mode) => submitTrackingScan(undefined, { mode })}
           inputRef={scanInputRef}
-          placeholder="Tracking, PO #"
-          icon={<MapPin className={`h-[17px] w-[17px] ${scanIconColorClass[themeColor]}`} />}
-          iconClassName=""
-          inputBorderClassName={inputBorder}
-          inputClassName={`pl-[2.2rem] ${focusRingClass[themeColor]}`}
-          autoFocus
-          className="w-full"
-          rightContentClassName="right-1.5 gap-0.5"
-          rightContent={
-            trackingLookupInFlight > 0 ? (
-              <Loader2 className="h-4 w-4 animate-spin text-gray-700" />
-            ) : (
-              <div className="h-6 min-w-6 px-1 bg-white rounded border border-gray-100 shadow-sm flex items-center justify-center">
-                <span className="text-mini font-black text-gray-400">ENTER</span>
-              </div>
-            )
-          }
+          isResolving={trackingLookupInFlight > 0}
+          staffId={staffId}
+          armedMode={unboxScanMode}
+          onToggleMode={(m) => setUnboxScanMode((prev) => (prev === m ? null : m))}
         />
       </motion.div>
       )}
@@ -961,6 +1032,25 @@ export function ReceivingSidebarPanel() {
           closing the workspace clears selectedLine via the
           `receiving-workspace-close` listener above. */}
       <div className="min-h-0 flex-1 overflow-auto">
+
+      {/* Unbox mode: Recent / Queue toggle pinned at the top of the rail (mirrors
+          the triage Found/Unfound pills). Recent = the live unboxing feed; Queue
+          = the priority-sorted Scanned list (unfound/untagged first, then
+          amazon → ebay → goodwill). URL-backed via `unboxview`. */}
+      {mode === 'receive' && (
+        <div className="sticky top-0 z-10 bg-white/90 px-3 pb-1.5 pt-1 backdrop-blur">
+          <HorizontalButtonSlider
+            items={[
+              { id: 'queue', label: 'Queue', tone: 'orange' },
+              { id: 'recent', label: 'Recent', tone: 'emerald' },
+            ]}
+            value={unboxView}
+            onChange={(id) => updateUnboxView(id as 'recent' | 'queue')}
+            variant="fba"
+            aria-label="Unbox queue view"
+          />
+        </div>
+      )}
 
       {/* Multi-match picker — shown when a tracking scan resolves to >1 open
           lines and the user hasn't picked one. Single matches skip this. */}
@@ -981,8 +1071,24 @@ export function ReceivingSidebarPanel() {
 
       {/* Receive tab: live recent rail. History narrows the right-pane
           table via URL params and doesn't need the rail. Incoming has its
-          own dedicated sidebar (IncomingSidebarPanel) above this branch. */}
-      {mode === 'history' ? null : (
+          own dedicated sidebar (IncomingSidebarPanel) above this branch.
+          Triage (label "Receiving") swaps the rail for a Found/Unfound toggle:
+          Found = the same received rail, Unfound = the door-scan triage list. */}
+      {mode === 'history' ? null : mode === 'triage' ? (
+        <TriageSidebarBody
+          selectedLineId={selectedLine?.id ?? null}
+          selectedRow={selectedLine && selectedLine.id > 0 ? selectedLine : null}
+          filterText={triageQuery}
+        />
+      ) : unboxView === 'queue' ? (
+        // Unbox "Queue" toggle — the same priority-sorted Scanned rail the triage
+        // Prioritize tab uses (unfound/untagged first, then amazon → ebay →
+        // goodwill), so the operator can work the queue top-down.
+        <ReceivingScannedRail
+          selectedLineId={selectedLine?.id ?? null}
+          selectedRow={selectedLine && selectedLine.id > 0 ? selectedLine : null}
+        />
+      ) : (
         <ReceivingRecentRail
           // Keep the (possibly negative) id so the rail's auto-select stays
           // suppressed while a line/carton is open — but never hand it the

@@ -48,6 +48,13 @@ certificates
 
 # backfill scripts — local checkpoints and run logs
 .backfill-*.state.json
+
+# Dead code / hygiene reports (large or noisy)
+reports/knip-report-*.json
+reports/dead-code-*.md
+
+# Previous Electron build artifact tree (should never be committed)
+apps/desktop/
 /logs/
 
 # Manuals: source docx and converted PDF artifacts live in Vercel Blob now;

@@ -7,10 +7,11 @@ interface DateGroupHeaderProps {
   date: string;
   total: number;
   actions?: ReactNode;
+  hidden?: boolean;
 }
 
-export function DateGroupHeader({ date, total, actions }: DateGroupHeaderProps) {
+export function DateGroupHeader({ date, total, actions, hidden }: DateGroupHeaderProps) {
   return (
-    <DesktopDateGroupHeader date={date} total={total} actions={actions} />
+    <DesktopDateGroupHeader date={date} total={total} actions={actions} hidden={hidden} />
   );
 }

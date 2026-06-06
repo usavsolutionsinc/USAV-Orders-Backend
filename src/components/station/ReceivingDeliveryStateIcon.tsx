@@ -1,6 +1,6 @@
 'use client';
 
-import { AlertTriangle, Hash, Clock, Inbox, Truck, MapPin } from '@/components/Icons';
+import { AlertTriangle, Hash, Clock, Inbox, Truck, MapPin, Unlink } from '@/components/Icons';
 import { IconWithTooltip } from '@/components/ui/IconWithTooltip';
 
 /**
@@ -22,6 +22,11 @@ const DELIVERY_STATE_ICON = {
     Icon: AlertTriangle,
     tone: 'text-violet-600',
     label: 'Carrier tracking unavailable (access blocked) — delivered status unobtainable',
+  },
+  CARRIER_MISMATCH: {
+    Icon: Unlink,
+    tone: 'text-red-600',
+    label: 'Carrier mismatch — the carrier/number don’t match (no known carrier, or no record at the carrier)',
   },
 } as const;
 

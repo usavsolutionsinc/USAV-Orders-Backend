@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { withAuth } from '@/lib/auth/withAuth';
 import pool from '@/lib/db';
 import { appendInventoryEvent } from '@/lib/repositories/inventory/inventoryEvents';
+import { attachTechSerial } from '@/lib/inventory/tech-serial';
 import { recordAudit, AUDIT_ACTION, AUDIT_ENTITY } from '@/lib/audit-logs';
 
 /**
@@ -158,21 +159,15 @@ export const POST = withAuth(async (request, ctx) => {
     //    timeline still captures the verdict for those cases.
     if (lineId != null) {
       try {
-        await pool.query(
-          `INSERT INTO tech_serial_numbers
-             (serial_number, serial_type, tested_by, station_source,
-              receiving_line_id, scan_ref, notes, serial_unit_id)
-           VALUES ($1, 'SERIAL', $2, 'TECH', $3, $4, $5, $6)
-           ON CONFLICT DO NOTHING`,
-          [
-            (unit.serial_number || '').toUpperCase(),
-            actorStaffId,
-            lineId,
-            verdict,
-            notes,
-            unit.id,
-          ],
-        );
+        await attachTechSerial({
+          serialNumber: unit.serial_number || '',
+          serialUnitId: unit.id,
+          stationSource: 'TECH',
+          testedBy: actorStaffId,
+          receivingLineId: lineId,
+          scanRef: verdict,
+          notes,
+        });
       } catch (err) {
         console.warn('[test] tsn audit insert failed (non-fatal):', err);
       }

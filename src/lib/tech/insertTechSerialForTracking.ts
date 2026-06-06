@@ -7,6 +7,7 @@ import { createStationActivityLog } from '@/lib/station-activity';
 import { mergeSerialsFromTsnRows } from '@/lib/tech/serialFields';
 import { resolveTechSerialInsertContextFromSal } from '@/lib/tech/resolveTechSerialInsertContextFromSal';
 import { isInventoryV2TechLifecycle } from '@/lib/feature-flags';
+import { attachTechSerial } from '@/lib/inventory/tech-serial';
 
 export type TechSerialInsertDb = Pick<Pool, 'query'>;
 
@@ -252,31 +253,29 @@ export async function insertTechSerialForTracking(
     };
   }
 
-  const insertResult = await db.query(
-    `INSERT INTO tech_serial_numbers
-       (organization_id, shipment_id, orders_exception_id, scan_ref, serial_number, serial_type,
-        tested_by, fnsku, fnsku_log_id, fba_shipment_id, fba_shipment_item_id,
-        context_station_activity_log_id)
-       VALUES ($1, $2, $3, NULL, $4, $5, $6, $7, $8, $9, $10, $11)
-       RETURNING id`,
-    [
-      params.organizationId,
-      ctx.shipmentId ?? null,
-      ctx.ordersExceptionId ?? null,
-      upperSerial,
+  // Canonical TSN writer (relational-reuse plan, Phase 2). receiving_line_id is
+  // unset here, so the partial unique index doesn't apply and ON CONFLICT DO
+  // NOTHING behaves like the prior plain INSERT (duplicates are pre-checked
+  // above via allExistingSerials). serial_unit_id is stamped later by
+  // linkTechSerialToInventoryV2.
+  const insertResult = await attachTechSerial(
+    {
+      serialNumber: upperSerial,
+      organizationId: params.organizationId,
+      shipmentId: ctx.shipmentId ?? null,
+      ordersExceptionId: ctx.ordersExceptionId ?? null,
       serialType,
-      staffId,
-      ctx.normalizedFnsku,
-      ctx.matchedFnskuLog?.id ?? null,
-      ctx.matchedFnskuLog?.fba_shipment_id ?? null,
-      ctx.matchedFnskuLog?.fba_shipment_item_id ?? null,
-      ctxAnchor,
-    ],
+      testedBy: staffId,
+      fnsku: ctx.normalizedFnsku,
+      fnskuLogId: ctx.matchedFnskuLog?.id ?? null,
+      fbaShipmentId: ctx.matchedFnskuLog?.fba_shipment_id ?? null,
+      fbaShipmentItemId: ctx.matchedFnskuLog?.fba_shipment_item_id ?? null,
+      contextStationActivityLogId: ctxAnchor,
+    },
+    db,
   );
 
-  const targetTechSerialId: number | null = insertResult.rows[0]?.id
-    ? Number(insertResult.rows[0].id)
-    : null;
+  const targetTechSerialId: number | null = insertResult.id;
 
   // Phase 3 (INVENTORY_V2_TECH_LIFECYCLE): link the just-inserted TSN row
   // to its serial_units master and emit an inventory_events NOTE so the

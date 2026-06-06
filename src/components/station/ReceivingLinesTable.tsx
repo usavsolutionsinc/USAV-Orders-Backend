@@ -1,7 +1,6 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { formatDistanceToNowStrict } from 'date-fns';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useUIModeOptional } from '@/design-system/providers/UIModeProvider';
@@ -10,7 +9,12 @@ import { emitSelection, emitSelectionTotal, onToggleAll } from '@/lib/selection/
 import { SkeletonList } from '@/design-system/components/Skeletons';
 import { conditionGradeTableLabel, workflowStatusTableLabel, getStatusDotBg } from '@/components/station/receiving-constants';
 import { ReceivingIdentityChips } from '@/components/receiving/ReceivingIdentityChips';
+import { OrderIdChip, TrackingChip, SerialChip, SkuCountChip, SerialCountChip, getLast4 } from '@/components/ui/CopyChip';
+import { ChipColumns, CHIP_COL, type ChipColumn } from '@/components/ui/ChipColumns';
+import { SOURCE_PLATFORM_LABELS } from '@/components/sidebar/receiving/receiving-sidebar-shared';
 import { RowTitle, RowMetaColumns, META_COL } from '@/components/ui/RowMetaColumns';
+import { CollapsibleGroupRow } from '@/components/ui/CollapsibleGroupRow';
+import { groupRowsBy } from '@/lib/group-rows';
 import { DeliveryStateIcon } from '@/components/station/ReceivingDeliveryStateIcon';
 import { IconWithTooltip } from '@/components/ui/IconWithTooltip';
 import WeekHeader from '@/components/ui/WeekHeader';
@@ -95,6 +99,7 @@ export interface ReceivingLineRow {
     | 'IN_TRANSIT'
     | 'TRACKING_UNAVAILABLE'
     | 'PENDING_CARRIER'
+    | 'CARRIER_MISMATCH'
     | 'AWAITING_TRACKING'
     | 'RECEIVED'
     | 'UNKNOWN'
@@ -195,21 +200,23 @@ function receivingRowActivityMs(row: {
   return Number.isFinite(t) ? t : 0;
 }
 
-/** Compact carrier label for incoming chips. */
-function shortCarrier(carrier: string | null | undefined): string {
-  const c = (carrier || '').toUpperCase();
-  if (c.includes('FEDEX')) return 'FedEx';
-  if (c.includes('USPS')) return 'USPS';
-  if (c.includes('UPS')) return 'UPS';
-  return carrier ? String(carrier) : '';
+/**
+ * A purchase-order group: every receiving line that shares a PO, collapsed into
+ * a single expandable row. `anchorTs` is the timestamp the group is placed by in
+ * the day-banded feed — the PO's most-recent activity (or its Zoho PO date for
+ * Incoming) — so a PO whose lines were scanned across several days lands in the
+ * band of its latest scan instead of fragmenting. Singleton groups (a one-line
+ * PO, or an unmatched carton with no PO) render as a plain row.
+ */
+interface ReceivingPoGroup {
+  key: string;
+  rows: ReceivingLineRow[];
+  anchorTs: string | null;
 }
 
-/** "4h ago" — relative age of a delivered-not-scanned carton (E2). */
-function deliveredAgoLabel(deliveredAt: string | null | undefined): string | null {
-  if (!deliveredAt) return null;
-  const d = new Date(deliveredAt);
-  if (Number.isNaN(d.getTime())) return null;
-  return `${formatDistanceToNowStrict(d)} ago`;
+function poGroupAnchorMs(group: ReceivingPoGroup): number {
+  const t = group.anchorTs ? new Date(group.anchorTs).getTime() : 0;
+  return Number.isFinite(t) ? t : 0;
 }
 
 /** Short absolute "M/D h:mm" for the history scanned/unboxed timeline. */
@@ -232,6 +239,7 @@ export function ReceivingLineOrderRow({
   index,
   isMobile,
   isIncoming = false,
+  isHistory = false,
   selectMode = false,
 }: {
   row: ReceivingLineRow;
@@ -242,11 +250,20 @@ export function ReceivingLineOrderRow({
   /** Incoming view: serials aren't assigned until unboxing and the carrier /
    *  "EXPECTED" status are redundant, so we drop those chips/labels. */
   isIncoming?: boolean;
+  /** History view: everything shown has already been received (an unfound box
+   *  is received too — it just can't be marked received in Zoho because the PO
+   *  isn't found there). So the workflow status icon (EXPECTED clock / RECEIVED
+   *  check) and the testing verdict (FAILED box) are noise — we drop the icon
+   *  and read the dot as a uniform "received" green. */
+  isHistory?: boolean;
   /** Multi-select mode: render a checkbox and treat `isSelected` as "checked".
    *  Click toggles membership instead of opening the workspace. */
   selectMode?: boolean;
 }) {
-  const productTitle = row.item_name || row.zoho_item_id || 'Unnamed inbound line';
+  // Unfound cartons (no Zoho PO) arrive labelled "Unfound PO" from the server
+  // (buildUnmatchedEmptyReceivingLine / UNMATCHED_EMPTY_LINE_LABEL).
+  const productTitle =
+    row.item_name || row.zoho_item_id || 'Unnamed inbound line';
   const quantityText = `${row.quantity_received}/${row.quantity_expected ?? '?'}`;
   const qtyExpected = row.quantity_expected ?? 0;
   const workflowLabel = workflowStatusTableLabel(row.workflow_status || 'EXPECTED');
@@ -315,8 +332,11 @@ export function ReceivingLineOrderRow({
               </span>
             ) : undefined
           }
-          dot={getStatusDotBg(row.workflow_status, row.quantity_received, row.quantity_expected)}
-          dotTitle={workflowLabel}
+          // History reads as received across the board (unfound boxes included),
+          // so the dot is a uniform "received" green there rather than the
+          // workflow-derived color that paints unfound rows amber/"pending".
+          dot={isHistory ? 'bg-emerald-500' : getStatusDotBg(row.workflow_status, row.quantity_received, row.quantity_expected)}
+          dotTitle={isHistory ? 'Received' : workflowLabel}
           dotTrack={META_COL.dotTrackWide}
           title={productTitle}
         />
@@ -358,18 +378,11 @@ export function ReceivingLineOrderRow({
                   ) : null}
                 </span>
               ) : null}
-              {/* E2: delivered-not-scanned prominence — carrier + how long ago it
-                  was delivered, so the rose facet reads "USPS · 4h ago" at a glance. */}
-              {row.delivery_state === 'DELIVERED_UNOPENED' && deliveredAgoLabel(row.delivered_at) ? (
-                <span
-                  className="inline-flex items-center gap-1 rounded-full bg-rose-50 px-1.5 py-0.5 text-eyebrow font-bold text-rose-700"
-                  title={`${shortCarrier(row.carrier)} delivered ${deliveredAgoLabel(row.delivered_at)} — not scanned in yet`}
-                >
-                  {shortCarrier(row.carrier) ? <span>{shortCarrier(row.carrier)} ·</span> : null}
-                  <span>{deliveredAgoLabel(row.delivered_at)}</span>
-                </span>
-              ) : null}
-              {isIncoming ? null : (
+              {/* Workflow status icon: shown in the active receive workspace,
+                  hidden in History (received is implied; EXPECTED doesn't apply
+                  since unfound is still received) and in Incoming. This also
+                  drops the testing verdict (FAILED box) from the unbox history. */}
+              {isIncoming || isHistory ? null : (
                 <IconWithTooltip
                   Icon={WorkflowIcon}
                   label={workflowLabel}
@@ -396,6 +409,133 @@ export function ReceivingLineOrderRow({
 }
 
 /**
+ * Collapsed-PO summary — the header content for a {@link CollapsibleGroupRow}
+ * wrapping several receiving lines that share a purchase order. Built from the
+ * SAME RowTitle / RowMetaColumns / ChipColumns primitives a single line row uses
+ * so it lines up pixel-for-pixel with its children.
+ *
+ * The title is the shared identity — {platform · PO} — rather than one product
+ * name, since the lines are different products. On the chip side, PO and (when
+ * uniform) tracking sit in their real columns; the SKU and serial columns DIFFER
+ * per line, so each shows its own icon with a yellow "×N" count ({@link SkuCountChip}
+ * / {@link SerialCountChip}) — a "these vary, expand to see them" cue that still
+ * keeps every column aligned with the rows beneath it.
+ */
+function ReceivingPoSummary({
+  rows,
+  isMobile,
+  isIncoming,
+}: {
+  rows: ReceivingLineRow[];
+  isMobile: boolean;
+  isIncoming: boolean;
+}) {
+  const first = rows[0];
+
+  const received = rows.reduce((sum, r) => sum + (r.quantity_received || 0), 0);
+  const expected = rows.reduce((sum, r) => sum + (r.quantity_expected ?? 0), 0);
+  const quantityText = `${received}/${expected || '?'}`;
+  const complete = expected > 0 && received >= expected;
+
+  const grades = new Set(
+    rows.map((r) => (r.condition_grade || '').toUpperCase()).filter(Boolean),
+  );
+  const conditionLabel =
+    grades.size === 1 ? conditionGradeTableLabel([...grades][0]) : 'MIXED';
+
+  const poValue = (
+    first?.zoho_purchaseorder_number ||
+    first?.zoho_purchaseorder_id ||
+    ''
+  ).trim();
+
+  // Title = the group's shared identity: platform + PO. Falls back gracefully
+  // when either is missing (e.g. an un-platformed Zoho carton → just "PO 3715").
+  const platformRaw = (first?.source_platform || '').trim().toLowerCase();
+  const platformLabel = platformRaw
+    ? (SOURCE_PLATFORM_LABELS[platformRaw] ?? (platformRaw === 'zoho' ? 'Zoho' : platformRaw))
+    : '';
+  const title =
+    [platformLabel, poValue ? `PO ${poValue}` : '']
+      .filter(Boolean)
+      .join(' · ') || (first?.item_name ?? 'Grouped lines');
+
+  // Only surface tracking when every line shares one carton; otherwise leave the
+  // column empty so the summary never implies a single tracking# for a split PO.
+  const trackings = new Set(
+    rows.map((r) => (r.tracking_number || '').trim()).filter(Boolean),
+  );
+  const trackingValue = trackings.size === 1 ? [...trackings][0] : '';
+
+  // The differing columns carry a yellow "×N" count instead of a value. SKU is
+  // one-per-line, so its count is the line count.
+  const skuCount = rows.length;
+  // Serials collapse with the standard 0 / 1 / N rule: none → empty column, a
+  // single serial across the whole group → show that real SerialChip, several →
+  // the "×N" count. (Same rule the FBA summary will apply to FNSKUs.)
+  const allSerials = rows.flatMap((r) =>
+    (r.serials ?? []).map((s) => (s.serial_number || '').trim()).filter(Boolean),
+  );
+  const serialNode =
+    allSerials.length === 1 ? (
+      <SerialChip value={allSerials[0]} width="w-fit max-w-full" />
+    ) : allSerials.length > 1 ? (
+      <SerialCountChip count={allSerials.length} />
+    ) : null;
+
+  // Mirror the per-line ChipColumns grid exactly, column-for-column.
+  const columns: ChipColumn[] = [
+    { key: 'po', width: CHIP_COL.id, node: <OrderIdChip value={poValue} display={getLast4(poValue)} /> },
+    { key: 'sku', width: CHIP_COL.id, node: <SkuCountChip count={skuCount} /> },
+    {
+      key: 'tracking',
+      width: CHIP_COL.tracking,
+      node: trackingValue ? <TrackingChip value={trackingValue} display={getLast4(trackingValue)} /> : null,
+    },
+  ];
+  if (!isIncoming) {
+    columns.push({ key: 'serial', width: CHIP_COL.serial, node: serialNode });
+  }
+
+  return (
+    <div className={dashboardOrderRowShellClass(isMobile)}>
+      <div className="flex min-w-0 flex-col">
+        <RowTitle
+          dot={getStatusDotBg(null, received, expected)}
+          dotTitle={`${rows.length} lines`}
+          dotTrack={META_COL.dotTrackWide}
+          title={title}
+        />
+        <RowMetaColumns
+          indent={META_COL.indentWide}
+          qtyCol={META_COL.qtyColWide}
+          qty={
+            <span className={complete ? 'text-emerald-600' : 'text-yellow-600'}>
+              {quantityText}
+            </span>
+          }
+          condition={<span className="text-gray-400">{conditionLabel}</span>}
+        />
+      </div>
+      {isMobile ? (
+        <div className={dashboardOrderRowChipsClass(true)}>
+          <OrderIdChip value={poValue} display={getLast4(poValue)} dense />
+          <SkuCountChip count={skuCount} dense />
+          {trackingValue ? <TrackingChip value={trackingValue} display={getLast4(trackingValue)} dense /> : null}
+          {allSerials.length === 1 ? (
+            <SerialChip value={allSerials[0]} width="w-fit max-w-full" dense />
+          ) : allSerials.length > 1 ? (
+            <SerialCountChip count={allSerials.length} dense />
+          ) : null}
+        </div>
+      ) : (
+        <ChipColumns columns={columns} />
+      )}
+    </div>
+  );
+}
+
+/**
  * Shipment-anchored "delivered, no dock scan yet" box (incoming-only). The
  * endpoint resolves each box's Zoho PO from its tracking#, so PO#, vendor,
  * dates and the product/item name ride along — these render with the same
@@ -414,6 +554,7 @@ interface DeliveredUnscanned {
   expected_delivery_date: string | null;
   po_date: string | null;
   first_item_name: string | null;
+  first_sku: string | null;
   item_count: number | null;
 }
 
@@ -460,7 +601,7 @@ function deliveredUnscannedToRow(item: DeliveredUnscanned): ReceivingLineRow {
     zoho_purchaseorder_id: item.zoho_purchaseorder_id,
     zoho_purchaseorder_number: item.po_number,
     item_name: productTitle,
-    sku: null,
+    sku: item.first_sku,
     quantity_received: 0,
     quantity_expected: itemCount > 0 ? itemCount : null,
     qa_status: 'PENDING',
@@ -503,6 +644,7 @@ export default function ReceivingLinesTable({ selectMode = false }: { selectMode
   // row chips) and the incoming-only effects below.
   const mode = getReceivingModeDescriptor(pageMode);
   const isIncomingMode = mode.id === 'incoming';
+  const isHistoryMode = mode.id === 'history';
 
   const historySearch = searchParams.get(RECEIVING_HISTORY_URL_PARAMS.q)?.trim() ?? '';
   const historySearchField = normalizeReceivingHistorySearchField(
@@ -527,6 +669,7 @@ export default function ReceivingLinesTable({ selectMode = false }: { selectMode
       || incomingStateRaw === 'IN_TRANSIT'
       || incomingStateRaw === 'TRACKING_UNAVAILABLE'
       || incomingStateRaw === 'PENDING_CARRIER'
+      || incomingStateRaw === 'CARRIER_MISMATCH'
       || incomingStateRaw === 'AWAITING_TRACKING'
       ? (incomingStateRaw as IncomingDeliveryState)
       : null;
@@ -537,7 +680,7 @@ export default function ReceivingLinesTable({ selectMode = false }: { selectMode
   const incomingSort = isIncomingMode ? (searchParams.get('sort') || '').trim() : '';
   const incomingPoFrom = isIncomingMode ? (searchParams.get('po_from') || '').trim() : '';
   const incomingPoTo = isIncomingMode ? (searchParams.get('po_to') || '').trim() : '';
-  // Pagination — server-side LIMIT 25 + page offset. Page numbers are
+  // Pagination — server-side LIMIT 50 + page offset. Page numbers are
   // 1-based in the URL ("?page=2" = second page). Anything malformed or
   // missing falls back to 1.
   const incomingPageRaw = isIncomingMode ? Number(searchParams.get('page') || '1') : 1;
@@ -591,6 +734,7 @@ export default function ReceivingLinesTable({ selectMode = false }: { selectMode
   const [weekOffset, setWeekOffset] = useState(0);
   const [stickyDate, setStickyDate] = useState<string>('');
   const [currentCount, setCurrentCount] = useState<number>(0);
+  const [activeDateKey, setActiveDateKey] = useState('');
   const scrollRef = useRef<HTMLDivElement>(null);
 
   const weekRange = computeWeekRange(weekOffset);
@@ -872,26 +1016,52 @@ export default function ReceivingLinesTable({ selectMode = false }: { selectMode
     return out;
   }, [localRows]);
 
+  // Collapse the flat lines into one row per purchase order, GLOBALLY — a PO's
+  // lines merge into a single group even when they were scanned across several
+  // days (the day band the group lands in is decided by `anchorTs`, its latest
+  // activity). Lines with no PO (unmatched cartons, placeholders) get a unique
+  // key so they stay singletons and render as plain rows.
+  const poGroups = useMemo<ReceivingPoGroup[]>(() => {
+    const grouped = groupRowsBy(dedupedRows, (row) => {
+      const po = (
+        row.zoho_purchaseorder_number ||
+        row.zoho_purchaseorder_id ||
+        ''
+      ).trim();
+      return po ? `po:${po}` : `line:${row.id}`;
+    });
+    return grouped.map(({ key, rows }) => {
+      let anchorTs: string | null = null;
+      if (mode.groupAxis === 'po_date') {
+        anchorTs = rows.find((r) => r.po_date)?.po_date ?? rows[0]?.created_at ?? null;
+      } else {
+        let bestMs = -1;
+        for (const r of rows) {
+          const ms = receivingRowActivityMs(r);
+          if (ms > bestMs) {
+            bestMs = ms;
+            anchorTs = receivingRowActivityTs(r);
+          }
+        }
+      }
+      return { key, rows, anchorTs };
+    });
+  }, [dedupedRows, mode.groupAxis]);
+
   const groupedRecords = useMemo(() => {
-    const groups: Record<string, ReceivingLineRow[]> = {};
-    for (const row of dedupedRows) {
-      // History/Receive group by the activity axis (last scan/receive) so the
-      // feed mirrors the Recent rail; Incoming groups by the Zoho PO date.
-      const sourceTs =
-        mode.groupAxis === 'po_date'
-          ? (row.po_date ?? row.created_at)
-          : receivingRowActivityTs(row);
+    const groups: Record<string, ReceivingPoGroup[]> = {};
+    for (const group of poGroups) {
       let date = 'Unknown';
       try {
-        date = toPSTDateKey(sourceTs) || 'Unknown';
+        date = toPSTDateKey(group.anchorTs) || 'Unknown';
       } catch {
         date = 'Unknown';
       }
       if (!groups[date]) groups[date] = [];
-      groups[date].push(row);
+      groups[date].push(group);
     }
     return groups;
-  }, [dedupedRows, mode.groupAxis]);
+  }, [poGroups]);
 
   const filteredGroupedRecords = useMemo(() => {
     if (skipWeekFilter) return groupedRecords;
@@ -902,20 +1072,27 @@ export default function ReceivingLinesTable({ selectMode = false }: { selectMode
     );
   }, [groupedRecords, weekRange.startStr, weekRange.endStr, skipWeekFilter]);
 
-  /** Flat list in render order — newest day → newest row.
-   *  Incoming defers to the API's server-side ORDER BY (driven by the Sort
-   *  control); other modes re-sort by created_at DESC within each day. */
+  const topDateKey = useMemo(() => {
+    const dates = Object.keys(filteredGroupedRecords).sort((a, b) => b.localeCompare(a));
+    return dates[0] ?? '';
+  }, [filteredGroupedRecords]);
+
+  /** Flat list of LINES in render order — newest day → newest group → its lines.
+   *  Drives selection broadcast, arrow-nav and scroll-into-view (those operate on
+   *  individual lines, not PO groups). Incoming defers to the API's server-side
+   *  ORDER BY; other modes re-sort groups by latest activity within each day. */
   const orderedVisibleRows = useMemo(
     () =>
       Object.entries(filteredGroupedRecords)
         .sort((a, b) => b[0].localeCompare(a[0]))
-        .flatMap(([, dateRows]) =>
-          mode.serverSorted
-            ? dateRows
-            : [...dateRows].sort(
-                (a, b) => receivingRowActivityMs(b) - receivingRowActivityMs(a),
-              ),
-        ),
+        .flatMap(([, dayGroups]) => {
+          const sorted = mode.serverSorted
+            ? dayGroups
+            : [...dayGroups].sort(
+                (a, b) => poGroupAnchorMs(b) - poGroupAnchorMs(a),
+              );
+          return sorted.flatMap((group) => group.rows);
+        }),
     [filteredGroupedRecords, mode.serverSorted],
   );
 
@@ -1039,9 +1216,14 @@ export default function ReceivingLinesTable({ selectMode = false }: { selectMode
         break;
       }
     }
-    if (activeDate) setStickyDate(formatDateWithOrdinal(activeDate));
-    if (activeCount) setCurrentCount(activeCount);
-  }, []);
+    if (activeDate) {
+      setActiveDateKey((prev) => (prev === activeDate ? prev : activeDate));
+      setStickyDate(formatDateWithOrdinal(activeDate));
+      if (activeCount) setCurrentCount(activeCount);
+    } else if (topDateKey) {
+      setActiveDateKey((prev) => (prev === topDateKey ? prev : topDateKey));
+    }
+  }, [topDateKey]);
 
   useEffect(() => {
     const container = scrollRef.current;
@@ -1052,7 +1234,11 @@ export default function ReceivingLinesTable({ selectMode = false }: { selectMode
       container.removeEventListener('scroll', handleScroll);
       clearTimeout(t);
     };
-  }, [handleScroll, localRows]);
+  }, [handleScroll, localRows, topDateKey]);
+
+  useEffect(() => {
+    if (topDateKey) setActiveDateKey(topDateKey);
+  }, [topDateKey]);
 
   const getWeekCount = () =>
     Object.values(filteredGroupedRecords).reduce((sum, rows) => sum + rows.length, 0);
@@ -1102,29 +1288,70 @@ export default function ReceivingLinesTable({ selectMode = false }: { selectMode
             <div className="flex w-full flex-col">
               {Object.entries(filteredGroupedRecords)
                 .sort((a, b) => b[0].localeCompare(a[0]))
-                .map(([date, dateRows]) => {
+                .map(([date, dayGroups]) => {
                   // Preserve server ORDER BY for incoming (the Sort control
-                  // already drives it); other modes re-sort by local created_at.
-                  const sortedRows = mode.serverSorted
-                    ? dateRows
-                    : [...dateRows].sort(
-                        (a, b) => receivingRowActivityMs(b) - receivingRowActivityMs(a),
+                  // already drives it); other modes re-sort groups by activity.
+                  const sortedGroups = mode.serverSorted
+                    ? dayGroups
+                    : [...dayGroups].sort(
+                        (a, b) => poGroupAnchorMs(b) - poGroupAnchorMs(a),
                       );
                   return (
                     <div key={date} className="flex flex-col">
-                      <DesktopDateGroupHeader date={date} total={dateRows.length} />
-                      {sortedRows.map((row, index) => (
-                        <ReceivingLineOrderRow
-                          key={row.id}
-                          row={row}
-                          index={index}
-                          isMobile={isMobile}
-                          isIncoming={isIncomingMode}
-                          selectMode={selectMode}
-                          isSelected={selectMode ? selectedIds.has(row.id) : selectedId === row.id}
-                          onSelect={() => handleSelectRow(row)}
-                        />
-                      ))}
+                      <DesktopDateGroupHeader
+                        date={date}
+                        total={sortedGroups.length}
+                        hidden={date === activeDateKey}
+                      />
+                      {sortedGroups.map((group, groupIndex) => {
+                        // Single-line PO → render the row flat, exactly as before;
+                        // no chevron noise when there's nothing to expand.
+                        if (group.rows.length === 1) {
+                          const row = group.rows[0];
+                          return (
+                            <ReceivingLineOrderRow
+                              key={row.id}
+                              row={row}
+                              index={groupIndex}
+                              isMobile={isMobile}
+                              isIncoming={isIncomingMode}
+                              isHistory={isHistoryMode}
+                              selectMode={selectMode}
+                              isSelected={selectMode ? selectedIds.has(row.id) : selectedId === row.id}
+                              onSelect={() => handleSelectRow(row)}
+                            />
+                          );
+                        }
+                        // Multi-line PO → one collapsed summary row; expand to
+                        // reveal the lines. Auto-open in select mode (so the
+                        // lines are reachable) or when a child is the active row.
+                        const hasSelected = group.rows.some((r) =>
+                          selectMode ? selectedIds.has(r.id) : selectedId === r.id,
+                        );
+                        return (
+                          <CollapsibleGroupRow
+                            key={group.key}
+                            index={groupIndex}
+                            showChevron={false}
+                            defaultExpanded={selectMode || hasSelected}
+                            summary={<ReceivingPoSummary rows={group.rows} isMobile={isMobile} isIncoming={isIncomingMode} />}
+                          >
+                            {group.rows.map((row, lineIndex) => (
+                              <ReceivingLineOrderRow
+                                key={row.id}
+                                row={row}
+                                index={lineIndex}
+                                isMobile={isMobile}
+                                isIncoming={isIncomingMode}
+                                isHistory={isHistoryMode}
+                                selectMode={selectMode}
+                                isSelected={selectMode ? selectedIds.has(row.id) : selectedId === row.id}
+                                onSelect={() => handleSelectRow(row)}
+                              />
+                            ))}
+                          </CollapsibleGroupRow>
+                        );
+                      })}
                     </div>
                   );
                 })}

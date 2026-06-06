@@ -318,13 +318,17 @@ export const SIDEBAR_PAGE_NAV: SidebarPageNav[] = [
     },
   },
   // ── Receiving ─────────────────────────────────────────────────────────────
-  // `?mode=incoming|history|pickup`; default `receive` on the bare /receiving
-  // path. The former `unfound` mode was relocated to Admin › PO Mailbox.
+  // `?mode=incoming|triage|history|pickup`; bare /receiving = the Unbox
+  // workspace (id `receive`) — kept as the default for deep-link + realtime
+  // back-compat. `triage` (label "Receiving") is the scan/identify surface that
+  // runs before unboxing; it's the 2nd pill and reachable at ?mode=triage. The
+  // former `unfound` mode was relocated to Admin › PO Mailbox.
   {
     id: 'receiving', label: 'Receiving', href: RECEIVING, icon: ClipboardList, kind: 'station', requires: 'receiving.view',
     modes: [
-      { id: 'receive',  label: 'Receiving',    icon: ClipboardList,  to: () => ({ pathname: RECEIVING, params: { mode: null } }) },
       { id: 'incoming', label: 'Incoming',     icon: Inbox,          to: () => ({ pathname: RECEIVING, params: { mode: 'incoming' } }) },
+      { id: 'triage',   label: 'Receiving',    icon: ClipboardList,  to: () => ({ pathname: RECEIVING, params: { mode: 'triage' } }) },
+      { id: 'receive',  label: 'Unbox',        icon: Box,            to: () => ({ pathname: RECEIVING, params: { mode: null } }) },
       { id: 'history',  label: 'History',      icon: List,           to: () => ({ pathname: RECEIVING, params: { mode: 'history' } }) },
       { id: 'pickup',   label: 'Local Pickup', icon: ShoppingCart,   to: () => ({ pathname: RECEIVING, params: { mode: 'pickup' } }) },
     ],
@@ -333,6 +337,7 @@ export const SIDEBAR_PAGE_NAV: SidebarPageNav[] = [
       if (m === 'pickup') return 'pickup';
       if (m === 'history') return 'history';
       if (m === 'incoming') return 'incoming';
+      if (m === 'triage') return 'triage';
       return 'receive';
     },
   },

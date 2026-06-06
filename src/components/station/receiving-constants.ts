@@ -94,7 +94,12 @@ export const WORKFLOW_BADGE: Record<string, string> = Object.fromEntries(
 export function workflowStatusTableLabel(status: string | null | undefined): string {
   const raw = String(status ?? '').trim().toUpperCase();
   if (!raw) return 'UNKNOWN';
-  if (raw === 'MATCHED') return 'SCANNED';
+  // Both early receiving stages read as "SCANNED" on list rows: ARRIVED is a
+  // carton scanned at the dock but not matched to a PO (an Unfound PO), MATCHED
+  // is a carton scanned and matched to a PO line. The matched/unmatched split is
+  // carried by the row title + PO column, not this chip. ARRIVED's lifecycle
+  // label is "Scanned" (see workflow-stages.ts), so this keeps the two in sync.
+  if (raw === 'ARRIVED' || raw === 'MATCHED') return 'SCANNED';
   if (raw === 'DONE') return 'RECEIVED';
   return raw.replace(/_/g, ' ');
 }

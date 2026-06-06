@@ -9,6 +9,7 @@ import {
   recordInventoryEvent,
   type InventoryEventStation,
 } from '@/lib/inventory/events';
+import { attachTechSerial } from '@/lib/inventory/tech-serial';
 
 /**
  * Serial numbers as a SIDECAR. A `serial_units` row IS the item identity
@@ -167,18 +168,15 @@ export async function attachSerialToLine(
     // Lineage audit row. Idempotent via ON CONFLICT DO NOTHING. Shares the
     // transaction client so it commits/rolls back atomically with the upsert.
     try {
-      await client.query(
-        `INSERT INTO tech_serial_numbers
-           (serial_number, serial_type, tested_by, station_source,
-            receiving_line_id, shipment_id, scan_ref, serial_unit_id)
-         VALUES ($1, 'SERIAL', $2, 'RECEIVING', $3, NULL, NULL, $4)
-         ON CONFLICT DO NOTHING`,
-        [
-          input.serial_number.toUpperCase(),
-          input.staff_id ?? null,
-          line.id,
-          upserted.unit.id,
-        ],
+      await attachTechSerial(
+        {
+          serialNumber: input.serial_number,
+          serialUnitId: upserted.unit.id,
+          stationSource: 'RECEIVING',
+          testedBy: input.staff_id ?? null,
+          receivingLineId: line.id,
+        },
+        client,
       );
     } catch (err) {
       console.warn('attachSerialToLine: tsn audit insert failed (non-fatal)', err);

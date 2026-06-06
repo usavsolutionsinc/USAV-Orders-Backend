@@ -1,5 +1,17 @@
 import pool from '../db';
 
+/**
+ * Minimal structural type satisfied by both the pg `Pool` and a `PoolClient`,
+ * so read helpers can run either standalone (default `pool`) or inside an open
+ * transaction (pass the transaction's client) without duplicating SQL.
+ */
+export interface Queryable {
+  query<T = Record<string, unknown>>(
+    text: string,
+    params?: unknown[],
+  ): Promise<{ rows: T[]; rowCount: number | null }>;
+}
+
 // ─── Types ──────────────────────────────────────────────────────────────────
 
 export type SerialStatus =
@@ -153,11 +165,12 @@ export interface MatchedOrderForSerial {
 
 export async function findShippedOrderForSerialUnit(
   serialUnitId: number,
-  options?: { organizationId?: string | null },
+  options?: { organizationId?: string | null; executor?: Queryable },
 ): Promise<MatchedOrderForSerial | null> {
   if (!Number.isFinite(serialUnitId)) return null;
   const orgId = options?.organizationId ?? null;
-  const result = await pool.query<MatchedOrderForSerial>(
+  const executor = options?.executor ?? pool;
+  const result = await executor.query<MatchedOrderForSerial>(
     `SELECT o.id                    AS order_pk,
             o.order_id              AS order_id,
             o.product_title         AS product_title,
@@ -190,12 +203,13 @@ export async function findShippedOrderForSerialUnit(
  */
 export async function findShippedOrderByTsnSerial(
   serial: string,
-  options?: { organizationId?: string | null },
+  options?: { organizationId?: string | null; executor?: Queryable },
 ): Promise<(MatchedOrderForSerial & { serial_number: string }) | null> {
   const normalized = normalizeSerial(serial);
   if (!normalized) return null;
   const orgId = options?.organizationId ?? null;
-  const result = await pool.query<MatchedOrderForSerial & { serial_number: string }>(
+  const executor = options?.executor ?? pool;
+  const result = await executor.query<MatchedOrderForSerial & { serial_number: string }>(
     `SELECT o.id                    AS order_pk,
             o.order_id              AS order_id,
             o.product_title         AS product_title,
@@ -217,6 +231,57 @@ export async function findShippedOrderByTsnSerial(
     [normalized, orgId],
   );
   return result.rows[0] ?? null;
+}
+
+/**
+ * "Reverse-link on inbound" — given a unit that just re-entered the building
+ * (return, RMA, RTV, warranty, repair check-in), resolve the outbound order it
+ * was last shipped on. Tries the inventory-v2 allocation path first
+ * (order_unit_allocations), then falls back to the legacy tech_serial_numbers
+ * shipment link. Reusable across the returns intake, the RMA receive path, and
+ * repair intake — anywhere we need to pair an inbound serial back to its trip.
+ *
+ * Pass `executor` to run inside an open transaction (so the resolve + the
+ * subsequent allocation flip / link write commit atomically).
+ */
+export interface PriorOutbound {
+  orderPk: number;
+  orderId: string | null;
+  trackingNumber: string | null;
+  via: 'allocation' | 'tsn';
+  allocationState: string;
+}
+
+export async function resolvePriorOutbound(
+  unit: { id: number; normalized_serial: string },
+  options?: { executor?: Queryable; organizationId?: string | null },
+): Promise<PriorOutbound | null> {
+  const executor = options?.executor ?? pool;
+  const organizationId = options?.organizationId ?? null;
+
+  const viaAlloc = await findShippedOrderForSerialUnit(unit.id, { executor, organizationId });
+  if (viaAlloc) {
+    return {
+      orderPk: viaAlloc.order_pk,
+      orderId: viaAlloc.order_id,
+      trackingNumber: viaAlloc.tracking_number,
+      via: 'allocation',
+      allocationState: viaAlloc.allocation_state,
+    };
+  }
+
+  const viaTsn = await findShippedOrderByTsnSerial(unit.normalized_serial, { executor, organizationId });
+  if (viaTsn) {
+    return {
+      orderPk: viaTsn.order_pk,
+      orderId: viaTsn.order_id,
+      trackingNumber: viaTsn.tracking_number,
+      via: 'tsn',
+      allocationState: viaTsn.allocation_state,
+    };
+  }
+
+  return null;
 }
 
 export async function listByReceivingLine(

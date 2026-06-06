@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
 import { LineEditPanel } from './LineEditPanel';
 import { ReceivingProgressStepper } from './ReceivingProgressStepper';
+import type { ReceivingWorkspaceVariant } from './workspace-capabilities';
 import type { ReceivingLineRow } from '@/components/station/ReceivingLinesTable';
 
 const LABEL_PRINTED_KEY = (lineId: number) => `receiving-label-printed:${lineId}`;
@@ -30,6 +31,9 @@ interface Props {
   scanDriven: boolean;
   /** Nav state mirrored from the sidebar via `receiving-workspace-nav-state`. */
   nav: NavState | null;
+  /** Which workspace mode — `triage` hides unbox-only sections (photos, claim,
+   *  label, print·receive, serial scan). Defaults to the full `unbox` editor. */
+  variant?: ReceivingWorkspaceVariant;
   onPrev: () => void;
   onNext: () => void;
   onClose: () => void;
@@ -53,6 +57,7 @@ export function ReceivingLineWorkspace({
   accordionBootstrap,
   scanDriven,
   nav,
+  variant = 'unbox',
   onPrev,
   onNext,
   onClose,
@@ -114,6 +119,7 @@ export function ReceivingLineWorkspace({
           canNext={nav?.canNext ?? false}
           itemIndex={nav?.currentIndex}
           itemTotal={nav?.total}
+          variant={variant}
           onClose={onClose}
         />
       </div>

@@ -32,6 +32,7 @@ import { PoLinesAccordion } from './PoLinesAccordion';
 import { takeSerialEditHandoff } from './serialEditHandoff';
 import { UnmatchedItemsSection } from './UnmatchedItemsSection';
 import { ReceivingClaimModal } from './ReceivingClaimModal';
+import { workspaceCapabilities, type ReceivingWorkspaceVariant } from './workspace-capabilities';
 import { LineNotesCard } from './line-edit/LineNotesCard';
 import { LineLabelPreviewCard } from './line-edit/LineLabelPreviewCard';
 import { LineReceiveActionBar } from './line-edit/LineReceiveActionBar';
@@ -78,6 +79,7 @@ export function LineEditPanel({
   canNext = false,
   itemIndex,
   itemTotal,
+  variant = 'unbox',
 }: {
   row: ReceivingLineRow;
   staffId: string;
@@ -92,8 +94,13 @@ export function LineEditPanel({
   itemIndex?: number;
   /** Total number of items in the PO */
   itemTotal?: number;
+  /** `triage` hides unbox-only sections (photos, claim, label, receive, serial). */
+  variant?: ReceivingWorkspaceVariant;
   onClose: () => void;
 }) {
+  // Mode capabilities — gate unbox-only sections without sprinkling
+  // `variant === 'triage'` through the JSX. See workspace-capabilities.ts.
+  const caps = workspaceCapabilities(variant);
   const [receivingType, setReceivingType] = useState(row.receiving_type || 'PO');
   const [qa, setQa] = useState(
     !row.qa_status || row.qa_status === 'PENDING' ? 'PASSED' : row.qa_status,
@@ -662,7 +669,9 @@ export function LineEditPanel({
             receivingId={row.receiving_id ?? null}
             staffId={staffId}
             isUnmatched={row.receiving_source === 'unmatched'}
-            onMakeClaim={() => setClaimModalOpen(true)}
+            // Photos + Claim are unbox-only — hidden in triage (identify step).
+            showStaffPhotoRow={caps.photos}
+            onMakeClaim={caps.claim ? () => setClaimModalOpen(true) : undefined}
             listingLink={listingLink}
             setListingLink={setListingLink}
             listingEditorOpen={listingEditorOpen}
@@ -723,6 +732,7 @@ export function LineEditPanel({
               <UnmatchedItemsSection
                 receivingId={row.receiving_id}
                 staffId={staffId}
+                showSerialScan={caps.serialScan}
                 sourcePlatformHint={sourcePlatform || undefined}
                 receivingTypeHint={receivingType}
                 listingUrlHint={listingLink || undefined}
@@ -732,6 +742,7 @@ export function LineEditPanel({
               <PoLinesAccordion
                 receivingId={row.receiving_id}
                 activeLineId={row.id}
+                readOnly={!caps.editLines}
                 activeConditionOverride={isMultiQtyLine ? (unitLabelCondition ?? cond) : cond}
                 activeSerialActions={{
                   editingSerialId: headerSerialEdit?.id ?? null,
@@ -746,7 +757,7 @@ export function LineEditPanel({
                     void deleteSerialUnit(s.id, lineId);
                   },
                 }}
-                activeRowSlot={({ serials }) => (
+                activeRowSlot={({ serials }) => !caps.serialScan ? null : (
                   <ActiveLineConditionSerial
                     serials={serials}
                     lineId={row.id}
@@ -789,13 +800,16 @@ export function LineEditPanel({
           {/* Photos + Make a Claim are co-located inside the Staff card
               above — no standalone PhotosCard is needed in the column. */}
 
-          <LineLabelPreviewCard
-            scanValue={scanValue}
-            labelPayload={labelPayload}
-            sku={row.sku}
-            itemName={row.item_name}
-            serialNumber={serialInput.trim()}
-          />
+          {/* Label preview — unbox-only (you print at unbox, not at triage). */}
+          {caps.labelPreview ? (
+            <LineLabelPreviewCard
+              scanValue={scanValue}
+              labelPayload={labelPayload}
+              sku={row.sku}
+              itemName={row.item_name}
+              serialNumber={serialInput.trim()}
+            />
+          ) : null}
 
           {lastReceiveResponse ? (
             <WorkspaceCard label="Last receive" bodyClassName="px-0 py-0">
@@ -813,24 +827,45 @@ export function LineEditPanel({
         </div>
       </div>
 
-      <LineReceiveActionBar
-        assignedTechId={row.assigned_tech_id}
-        primaryLabel={printReceivePrimaryLabel}
-        primaryTitle={printThenReceiveTitle}
-        primaryDisabled={combinedReviewDisabled}
-        splitMenuAriaLabel={splitMenuAriaLabel}
-        splitMenuHoverTitle={splitMenuHoverTitle}
-        canPrint={canPrintReview}
-        canReceive={canReceiveReview}
-        receiveMenuLabel={receiveMenuLabel}
-        receiveMenuTitle={
-          row.receiving_id == null ? 'Line must be linked to a shipment' : undefined
-        }
-        onPrintAndReceive={() => void handlePrintAndReceive()}
-        onPrintOnly={() => runPrintLabel()}
-        onMarkScanned={() => void handleReceive('scan_only')}
-        onReceive={() => void handleReceive('zoho_receive')}
-      />
+      {/* Print·receive sticky bar — unbox-only; triage just identifies. */}
+      {caps.receiveBar ? (
+        <LineReceiveActionBar
+          assignedTechId={row.assigned_tech_id}
+          primaryLabel={printReceivePrimaryLabel}
+          primaryTitle={printThenReceiveTitle}
+          primaryDisabled={combinedReviewDisabled}
+          splitMenuAriaLabel={splitMenuAriaLabel}
+          splitMenuHoverTitle={splitMenuHoverTitle}
+          canPrint={canPrintReview}
+          canReceive={canReceiveReview}
+          receiveMenuLabel={receiveMenuLabel}
+          receiveMenuTitle={
+            row.receiving_id == null ? 'Line must be linked to a shipment' : undefined
+          }
+          onPrintAndReceive={() => void handlePrintAndReceive()}
+          onPrintOnly={() => runPrintLabel()}
+          onMarkScanned={() => void handleReceive('scan_only')}
+          onReceive={() => void handleReceive('zoho_receive')}
+        />
+      ) : null}
+
+      {/* Triage's terminal action. Classification / PO# / items already persist
+          on change, so this confirms the carton is identified and hands it to
+          the unbox queue (clears selection → the rail auto-selects the next). */}
+      {caps.saveBar ? (
+        <div className="border-t border-gray-200 bg-white px-4 py-3">
+          <button
+            type="button"
+            onClick={() => {
+              toast.success('Saved for unbox');
+              onClose();
+            }}
+            className="flex w-full items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 py-3 text-sm font-black uppercase tracking-wider text-white shadow-sm transition-colors hover:bg-blue-700 active:scale-[0.99]"
+          >
+            Save for unbox
+          </button>
+        </div>
+      ) : null}
     </div>
     {row.receiving_id != null ? (
       <ReceivingAuditModal

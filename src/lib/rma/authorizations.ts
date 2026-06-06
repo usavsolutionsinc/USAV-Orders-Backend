@@ -18,6 +18,7 @@
 
 import pool from '@/lib/db';
 import { recordInventoryEvent } from '@/lib/inventory/events';
+import { resolvePriorOutbound } from '@/lib/neon/serial-units-queries';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -190,10 +191,22 @@ export interface RecordDispositionInput {
   dispositionCode: DispositionCode;
   decidedByStaffId: number;
   notes?: string | null;
+  /** Tenant scope for the prior-outbound lookup; null = unscoped. */
+  organizationId?: string | null;
 }
 
 export type RecordDispositionResult =
-  | { ok: true; dispositionId: number; eventId: number | null }
+  | {
+      ok: true;
+      dispositionId: number;
+      eventId: number | null;
+      /** Outbound order this unit was paired back to, if one was resolved. */
+      matchedOrderPk: number | null;
+      /** How the prior order was resolved: 'allocation' | 'tsn' | null. */
+      matchedVia: 'allocation' | 'tsn' | null;
+      /** True when an open SHIPPED allocation was flipped to RETURNED. */
+      allocationReturned: boolean;
+    }
   | { ok: false; status: 400 | 404 | 500; error: string };
 
 export async function recordDisposition(
@@ -207,27 +220,74 @@ export async function recordDisposition(
   try {
     await client.query('BEGIN');
 
-    // Optional verification — if rma id given, confirm it exists.
+    // Optional verification — if rma id given, confirm it exists and capture
+    // its direction + order so we can reverse-link and backfill below.
+    let rmaDirection: RmaDirection | null = null;
+    let rmaOrderId: number | null = null;
     if (input.rmaId != null) {
-      const check = await client.query(
-        `SELECT 1 FROM rma_authorizations WHERE id = $1`,
+      const check = await client.query<{ direction: RmaDirection; order_id: number | null }>(
+        `SELECT direction, order_id FROM rma_authorizations WHERE id = $1`,
         [input.rmaId],
       );
       if (check.rowCount === 0) {
         await client.query('ROLLBACK');
         return { ok: false, status: 404, error: 'rma not found' };
       }
+      rmaDirection = check.rows[0].direction;
+      rmaOrderId = check.rows[0].order_id;
     }
+
+    // Reverse-link applies to customer returns (the unit was out on an order
+    // and physically came back). RTV / vendor returns (OUTBOUND_TO_VENDOR) have
+    // no customer-ship allocation to flip. A standalone unit disposition
+    // (rmaId null) is treated as an inbound return.
+    const isInboundReturn = rmaDirection == null || rmaDirection === 'INBOUND_FROM_CUSTOMER';
+
+    let matchedOrderPk: number | null = null;
+    let matchedVia: 'allocation' | 'tsn' | null = null;
+    let allocationReturned = false;
 
     let eventId: number | null = null;
     if (input.serialUnitId != null) {
-      const unitQ = await client.query<{ sku: string | null; current_status: string }>(
-        `SELECT sku, current_status::text AS current_status
+      const unitQ = await client.query<{
+        sku: string | null;
+        current_status: string;
+        normalized_serial: string;
+      }>(
+        `SELECT sku, current_status::text AS current_status, normalized_serial
            FROM serial_units WHERE id = $1 FOR UPDATE`,
         [input.serialUnitId],
       );
       const unit = unitQ.rows[0];
       if (unit) {
+        if (isInboundReturn) {
+          // Resolve the outbound order this unit shipped on, flip its open
+          // SHIPPED allocation → RETURNED (durable shipped↔returned link;
+          // idempotent if the returns dock already flipped it), and backfill
+          // the RMA's order_id when it was issued without one.
+          const prior = await resolvePriorOutbound(
+            { id: input.serialUnitId, normalized_serial: unit.normalized_serial },
+            { executor: client, organizationId: input.organizationId ?? null },
+          );
+          matchedOrderPk = prior?.orderPk ?? null;
+          matchedVia = prior?.via ?? null;
+
+          const flip = await client.query(
+            `UPDATE order_unit_allocations
+                SET state = 'RETURNED', returned_at = NOW(), returned_reason = $2
+              WHERE serial_unit_id = $1 AND state = 'SHIPPED'`,
+            [input.serialUnitId, `RMA disposition: ${input.dispositionCode}`],
+          );
+          allocationReturned = (flip.rowCount ?? 0) > 0;
+
+          if (input.rmaId != null && rmaOrderId == null && matchedOrderPk != null) {
+            await client.query(
+              `UPDATE rma_authorizations SET order_id = $2 WHERE id = $1 AND order_id IS NULL`,
+              [input.rmaId, matchedOrderPk],
+            );
+          }
+        }
+
         const event = await recordInventoryEvent(
           {
             event_type: 'NOTE',
@@ -242,6 +302,9 @@ export async function recordDisposition(
               source: 'rma.disposition',
               rmaId: input.rmaId,
               dispositionCode: input.dispositionCode,
+              matched_order_pk: matchedOrderPk,
+              matched_via: matchedVia,
+              allocation_returned: allocationReturned,
             },
           },
           client,
@@ -277,7 +340,14 @@ export async function recordDisposition(
     }
 
     await client.query('COMMIT');
-    return { ok: true, dispositionId: dispQ.rows[0].id, eventId };
+    return {
+      ok: true,
+      dispositionId: dispQ.rows[0].id,
+      eventId,
+      matchedOrderPk,
+      matchedVia,
+      allocationReturned,
+    };
   } catch (err) {
     try { await client.query('ROLLBACK'); } catch { /* noop */ }
     const message = err instanceof Error ? err.message : 'disposition failed';

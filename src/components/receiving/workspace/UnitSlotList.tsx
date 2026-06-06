@@ -24,6 +24,13 @@ interface Props {
   isSubmitting?: boolean;
   /** Rendered inside the expanded row, above the serial input (e.g. condition pills). */
   renderExpandedMeta?: (serial: UnitLike | null, index: number) => ReactNode;
+  /**
+   * When true, the selected row's expanded meta (condition/verdict pills) is
+   * shown immediately instead of collapsing to a text badge until hover / serial
+   * focus. Use where picking the grade is the point of the row (Unbox), not an
+   * afterthought to scanning.
+   */
+  alwaysShowExpandedMeta?: boolean;
   /** Compact node on the right of a collapsed row (e.g. condition badge / verdict glyph). */
   renderCollapsedMeta?: (serial: UnitLike | null, index: number) => ReactNode;
   onAddSerial: (index: number, serial: string) => void | Promise<void>;
@@ -54,6 +61,7 @@ export function UnitSlotList({
   disabled = false,
   isSubmitting = false,
   renderExpandedMeta,
+  alwaysShowExpandedMeta = false,
   renderCollapsedMeta,
   onAddSerial,
   onDeleteSerial,
@@ -69,10 +77,13 @@ export function UnitSlotList({
         index === selectedIndex ? (
           <ExpandedRow
             key={`selected-${index}-${serial?.id ?? 'empty'}`}
+            index={index}
+            total={count}
             serial={serial}
             disabled={disabled}
             isSubmitting={isSubmitting}
             meta={renderExpandedMeta?.(serial, index)}
+            alwaysShowMeta={alwaysShowExpandedMeta}
             serialEditTarget={
               serialEditTarget?.id != null && serial?.id === serialEditTarget.id
                 ? serialEditTarget
@@ -166,19 +177,25 @@ function CollapsedRow({
 }
 
 function ExpandedRow({
+  index,
+  total,
   serial,
   disabled,
   isSubmitting,
   meta,
+  alwaysShowMeta = false,
   serialEditTarget,
   onAddSerial,
   onDeleteSerial,
   onReplaceSerial,
 }: {
+  index: number;
+  total: number;
   serial: UnitLike | null;
   disabled: boolean;
   isSubmitting: boolean;
   meta: ReactNode;
+  alwaysShowMeta?: boolean;
   serialEditTarget: UnitLike | null;
   onAddSerial: (serial: string) => void | Promise<void>;
   onDeleteSerial: (serial: UnitLike) => void;
@@ -187,6 +204,9 @@ function ExpandedRow({
   const [scan, setScan] = useState('');
   const [editing, setEditing] = useState(false);
   const [isFocused, setIsFocused] = useState(false);
+  // When the row's whole purpose is grading (Unbox), keep the pills visible
+  // instead of hiding them behind hover/serial-focus.
+  const showMeta = alwaysShowMeta || isFocused || isSubmitting || scan.length > 0;
 
   useEffect(() => {
     if (!serialEditTarget || serial?.id !== serialEditTarget.id) return;
@@ -210,23 +230,28 @@ function ExpandedRow({
   return (
     <div className="px-1 py-2.5 group">
       <div className="flex items-center gap-2">
+        {/* Active unit's n/N — same column as the collapsed rows so the qty +
+            condition read down one vertical line instead of jumping left. */}
+        <span className="shrink-0 font-mono text-micro font-black tabular-nums text-gray-500">
+          {index + 1}/{total}
+        </span>
         {meta ? (
-          <div 
+          <div
             className={`flex items-center gap-2 transition-all duration-700 ease-in-out overflow-hidden ${
-              isFocused || isSubmitting || scan.length > 0
+              showMeta
                 ? 'max-w-[600px] opacity-100 mr-1'
                 : 'max-w-[48px] opacity-100 group-hover:max-w-[600px] group-hover:mr-1'
             }`}
           >
-            <div className={`${isFocused || isSubmitting || scan.length > 0 ? 'hidden' : 'block group-hover:hidden'}`}>
+            <div className={`${showMeta ? 'hidden' : 'block group-hover:hidden'}`}>
               <ConditionBadge grade={serial?.condition_grade} />
             </div>
-            <div className={`${isFocused || isSubmitting || scan.length > 0 ? 'block' : 'hidden group-hover:block'}`}>
+            <div className={`${showMeta ? 'block' : 'hidden group-hover:block'}`}>
               <div className="inline-flex items-center">
                 {meta}
               </div>
             </div>
-            <div className={`h-8 w-px bg-gray-100 shrink-0 ${isFocused || isSubmitting || scan.length > 0 ? 'block' : 'hidden group-hover:block'}`} />
+            <div className={`h-8 w-px bg-gray-100 shrink-0 ${showMeta ? 'block' : 'hidden group-hover:block'}`} />
           </div>
         ) : null}
 

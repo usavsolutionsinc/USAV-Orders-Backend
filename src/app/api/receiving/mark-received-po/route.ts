@@ -278,6 +278,48 @@ export const POST = withAuth(async (request, ctx) => {
         [receivingId],
       );
       if (allLines.rows.length === 0) {
+        // No receiving_lines exist for this carton. For an unfound/unmatched
+        // carton (source='unmatched' with no Zoho PO) "receive" is a purely
+        // local act — there is no PO in Zoho to reconcile against, so we stamp
+        // unboxed_at and report it as received-local-only. This lets the empty
+        // "Unfound PO" placeholder advance from SCANNED → RECEIVED without
+        // forcing the operator to invent a line item. scan_only ("Mark as
+        // scanned") deliberately does NOT receive, so it falls through.
+        const metaRes = await pool.query<{
+          source: string | null;
+          zoho_purchaseorder_id: string | null;
+        }>(
+          `SELECT source, zoho_purchaseorder_id FROM receiving WHERE id = $1 LIMIT 1`,
+          [receivingId],
+        );
+        const recvSource = String(metaRes.rows[0]?.source || '').trim();
+        const recvZohoPo = String(metaRes.rows[0]?.zoho_purchaseorder_id || '').trim();
+        const isUnfoundCarton = recvSource === 'unmatched' && !recvZohoPo;
+
+        if (isUnfoundCarton && !skipZohoReceive) {
+          await pool
+            .query(
+              `UPDATE receiving SET unboxed_at = COALESCE(unboxed_at, $1), updated_at = $1 WHERE id = $2`,
+              [now, receivingId],
+            )
+            .catch(() => {});
+          return respond({
+            success: true,
+            updated_count: 0,
+            receiving_lines: [],
+            received_local_only: true,
+            message: 'Unfound PO received locally — no Zoho PO to reconcile',
+            zoho: {
+              attempted: 0,
+              ok: true,
+              rate_limited: false,
+              results: [],
+              error: null,
+              skip_reason: 'unfound_no_po',
+            },
+          });
+        }
+
         return respond({
           success: true,
           updated_count: 0,

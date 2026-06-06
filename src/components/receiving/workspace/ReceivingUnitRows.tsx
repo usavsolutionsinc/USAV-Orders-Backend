@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { ConditionPills } from './ConditionPills';
 import { UnitSlotList, type UnitLike } from './UnitSlotList';
 import { conditionGradeTableLabel } from '@/components/station/receiving-constants';
@@ -24,6 +24,12 @@ interface Props {
   onReplaceSerial: (original: UnitSerial, next: string) => void;
   /** Persist a per-unit grade for an already-scanned serial. */
   onSetUnitGrade: (serialUnitId: number, grade: string) => void;
+  /**
+   * Set the line-level default grade. Used by the "All units" master picker to
+   * stamp every unit at once (empty slots inherit it; scanned units are also
+   * re-graded via {@link onSetUnitGrade}).
+   */
+  onConditionChange?: (grade: string) => void;
   /**
    * Fires with the effective condition grade of the currently-selected unit
    * (saved grade → pending grade → line default). Lets the parent print/preview
@@ -57,6 +63,7 @@ export function ReceivingUnitRows({
   onDeleteSerial,
   onReplaceSerial,
   onSetUnitGrade,
+  onConditionChange,
   onActiveConditionChange,
   serialEditTarget = null,
 }: Props) {
@@ -101,31 +108,57 @@ export function ReceivingUnitRows({
     if (idx >= 0) setSelectedIndex(idx);
   }, [serialEditTarget?.id, saved]);
 
+  // "All units" master picker: stamp every unit to one grade in a single tap.
+  // The line-level default covers empty/ungraded slots (via gradeFor), and each
+  // already-scanned unit is re-graded explicitly so prior per-unit picks are
+  // overwritten too. Per-unit rows below still override individual exceptions.
+  const setAllUnits = useCallback(
+    (grade: string) => {
+      onConditionChange?.(grade);
+      setPendingGrade({});
+      for (const s of saved) {
+        if (s?.id != null) onSetUnitGrade(s.id, grade);
+      }
+    },
+    [onConditionChange, onSetUnitGrade, saved],
+  );
+
+  // Reflect the shared grade when every unit agrees; show indeterminate (no
+  // active pill) when units are mixed, so the master never misreports state.
+  const effectiveGrades = Array.from({ length: total }, (_, i) => gradeFor(saved[i] ?? null, i));
+  const masterValue = effectiveGrades.every((g) => g === effectiveGrades[0]) ? effectiveGrades[0] : null;
+
   return (
-    <UnitSlotList
-      total={total}
-      saved={saved}
-      selectedIndex={selectedIndex}
-      onSelect={setSelectedIndex}
-      disabled={disabled}
-      isSubmitting={isSubmitting}
-      renderExpandedMeta={(serial, index) => (
-        <ConditionPills
-          value={gradeFor(serial, index)}
-          onChange={(next) => {
-            if (serial) onSetUnitGrade(serial.id, next);
-            else setPendingGrade((m) => ({ ...m, [index]: next }));
-          }}
-        />
-      )}
-      renderCollapsedMeta={(serial, index) => (
-        <ConditionBadge grade={gradeFor(serial, index)} />
-      )}
-      onAddSerial={(index, sn) => onAddSerial(sn, gradeFor(saved[index] ?? null, index))}
-      onDeleteSerial={(s) => onDeleteSerial(s.id)}
-      onReplaceSerial={(original, next) => onReplaceSerial(original, next)}
-      serialEditTarget={serialEditTarget}
-    />
+    <div className="space-y-2">
+      {/* Umbrella control — one tap grades the whole lot; rows below override.
+          Bare pills: the position above the unit list reads as "all" from
+          context, so no chrome/label needed. */}
+      <ConditionPills value={masterValue} onChange={setAllUnits} />
+      <UnitSlotList
+        total={total}
+        saved={saved}
+        selectedIndex={selectedIndex}
+        onSelect={setSelectedIndex}
+        disabled={disabled}
+        isSubmitting={isSubmitting}
+        renderExpandedMeta={(serial, index) => (
+          <ConditionPills
+            value={gradeFor(serial, index)}
+            onChange={(next) => {
+              if (serial) onSetUnitGrade(serial.id, next);
+              else setPendingGrade((m) => ({ ...m, [index]: next }));
+            }}
+          />
+        )}
+        renderCollapsedMeta={(serial, index) => (
+          <ConditionBadge grade={gradeFor(serial, index)} />
+        )}
+        onAddSerial={(index, sn) => onAddSerial(sn, gradeFor(saved[index] ?? null, index))}
+        onDeleteSerial={(s) => onDeleteSerial(s.id)}
+        onReplaceSerial={(original, next) => onReplaceSerial(original, next)}
+        serialEditTarget={serialEditTarget}
+      />
+    </div>
   );
 }
 

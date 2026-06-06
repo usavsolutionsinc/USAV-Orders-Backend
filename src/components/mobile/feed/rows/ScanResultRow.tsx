@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { ChevronRight, Package, AlertCircle, Loader2, Check } from '@/components/Icons';
+import { ChevronRight, Package, AlertCircle, Loader2, Check, Zap, MapPin } from '@/components/Icons';
 import { MobileRowCard } from '@/components/mobile/feed/MobileRowCard';
 
 /**
@@ -14,7 +14,12 @@ export interface ScanFeedItem {
   /** The scanned value, shown mono (tracking / SKU / id). */
   primary: string;
   at: Date;
-  state: 'pending' | 'ok' | 'warn' | 'error';
+  /**
+   * Resolve outcome. `urgent` = matched + needed by a pending order (unbox
+   * first); `warn` = unfound / no PO match (go locate it); `ok` = matched,
+   * not pending (normal unbox).
+   */
+  state: 'pending' | 'ok' | 'warn' | 'error' | 'urgent';
   /** Short status pill text, e.g. "Matched PO 123", "Resolving…", "No match". */
   statusLabel: string;
   /** Optional trailing meta, e.g. "3 lines". */
@@ -28,6 +33,7 @@ const STATE_TILE: Record<ScanFeedItem['state'], string> = {
   ok: 'bg-emerald-50 text-emerald-600',
   warn: 'bg-amber-50 text-amber-600',
   error: 'bg-rose-50 text-rose-600',
+  urgent: 'bg-rose-100 text-rose-600',
 };
 
 const STATE_PILL: Record<ScanFeedItem['state'], string> = {
@@ -35,11 +41,14 @@ const STATE_PILL: Record<ScanFeedItem['state'], string> = {
   ok: 'bg-emerald-50 border-emerald-100 text-emerald-700',
   warn: 'bg-amber-50 border-amber-100 text-amber-700',
   error: 'bg-rose-50 border-rose-100 text-rose-700',
+  urgent: 'bg-rose-50 border-rose-200 text-rose-700',
 };
 
 function StateIcon({ state }: { state: ScanFeedItem['state'] }) {
   if (state === 'pending') return <Loader2 className="h-5 w-5 animate-spin" />;
   if (state === 'ok') return <Package className="h-5 w-5" />;
+  if (state === 'urgent') return <Zap className="h-5 w-5" />;
+  if (state === 'warn') return <MapPin className="h-5 w-5" />;
   return <AlertCircle className="h-5 w-5" />;
 }
 
@@ -61,6 +70,7 @@ export function ScanResultRow({ item, fresh = false }: { item: ScanFeedItem; fre
               className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[9px] font-black uppercase tracking-widest ${STATE_PILL[item.state]}`}
             >
               {item.state === 'ok' ? <Check className="mr-1 h-2.5 w-2.5" /> : null}
+              {item.state === 'urgent' ? <Zap className="mr-1 h-2.5 w-2.5" /> : null}
               {item.statusLabel}
             </span>
             {item.meta && (

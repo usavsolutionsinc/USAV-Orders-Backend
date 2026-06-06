@@ -74,6 +74,8 @@ export interface SidebarRailShellProps<TRow> {
 
   eyebrowTitle: string;
   eyebrowSuffix?: string;
+  /** Right-aligned eyebrow slot (e.g. a refresh button). Takes precedence over `eyebrowSuffix`. */
+  eyebrowAction?: ReactNode;
   emptyText?: string;
   /**
    * When true, selects the first row once data loads if nothing is selected yet.
@@ -106,7 +108,7 @@ export interface SidebarRailShellProps<TRow> {
 export function SidebarRailShell<TRow>({
   queryKey, fetchFn, updateEvent, deleteEvent, deleteGroupEvent, refreshEvents, navigateEvent,
   selectedId, selectedRow = null, limit = 25,
-  eyebrowTitle, eyebrowSuffix, emptyText = 'No recent activity yet.',
+  eyebrowTitle, eyebrowSuffix, eyebrowAction, emptyText = 'No recent activity yet.',
   autoSelectFirstWhenEmpty = false,
   canAutoSelectFirst,
   staggerReveal = false,
@@ -350,9 +352,16 @@ export function SidebarRailShell<TRow>({
             <span className="ml-1 font-bold text-gray-300">/ {allRows.length}</span>
           ) : null}
         </p>
-        {eyebrowSuffix && (
-          <p className="text-[8.5px] font-bold uppercase tracking-widest text-gray-300">{eyebrowSuffix}</p>
-        )}
+        {eyebrowAction
+          ? eyebrowAction
+          : eyebrowSuffix && (
+              // leading-none: without it the 8.5px suffix inherits the base
+              // line-height (1.5 ≈ 12.75px), taller than the 9px/lh-1.2 eyebrow
+              // title — which made the suffixed rail (Unfound) ~2px taller than
+              // the action-button rail (Found). Tight leading lets the title
+              // govern the row height so both eyebrows align.
+              <p className="text-[8.5px] font-bold uppercase leading-none tracking-widest text-gray-300">{eyebrowSuffix}</p>
+            )}
       </div>
       {isLoading && rows.length === 0 ? (
         <div className={`space-y-1 ${SIDEBAR_GUTTER} py-2`}>

@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { motion } from 'framer-motion';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { format, parseISO } from 'date-fns';
+import { format, formatDistanceToNowStrict, parseISO } from 'date-fns';
 import {
   FileText,
   X,
@@ -152,6 +152,21 @@ async function copyValue(value: string | null | undefined, label: string) {
   const ok = await copyToClipboard(value);
   if (ok) toast.success(`${label} copied`);
   else toast.error(`Couldn't copy ${label.toLowerCase()}`);
+}
+
+function shortCarrier(carrier: string | null | undefined): string {
+  const c = (carrier || '').toUpperCase();
+  if (c.includes('FEDEX')) return 'FedEx';
+  if (c.includes('USPS')) return 'USPS';
+  if (c.includes('UPS')) return 'UPS';
+  return carrier ? String(carrier) : '';
+}
+
+function deliveredAgoLabel(deliveredAt: string | null | undefined): string | null {
+  if (!deliveredAt) return null;
+  const d = new Date(deliveredAt);
+  if (Number.isNaN(d.getTime())) return null;
+  return `${formatDistanceToNowStrict(d)} ago`;
 }
 
 // ── Panel ──────────────────────────────────────────────────────────────────
@@ -392,6 +407,15 @@ function ShipmentTab({ data }: { data: DetailsResponse }) {
         <h3 className="mb-2 text-eyebrow font-black uppercase tracking-wider text-gray-500">
           Recent carrier events
         </h3>
+        {s.is_delivered && deliveredAgoLabel(s.delivered_at) ? (
+          <p
+            className="mb-2 inline-flex items-center gap-1 rounded-full bg-rose-50 px-1.5 py-0.5 text-eyebrow font-bold text-rose-700"
+            title={`${shortCarrier(s.carrier)} delivered ${deliveredAgoLabel(s.delivered_at)} — not scanned in yet`}
+          >
+            {shortCarrier(s.carrier) ? <span>{shortCarrier(s.carrier)} ·</span> : null}
+            <span>{deliveredAgoLabel(s.delivered_at)}</span>
+          </p>
+        ) : null}
         {s.events.length === 0 ? (
           <Empty msg="No carrier events yet." />
         ) : (

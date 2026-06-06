@@ -10,9 +10,10 @@
 
 import { COND_LABEL } from '@/components/station/receiving-constants';
 import {
+  Box,
   ClipboardList,
+  Inbox,
   List,
-  Package,
   ShoppingCart,
 } from '@/components/Icons';
 import type { HorizontalSliderItem } from '@/components/ui/HorizontalButtonSlider';
@@ -20,10 +21,16 @@ import type { ReceivingLineRow } from '@/components/station/ReceivingLinesTable'
 
 // ── Sidebar mode switcher ───────────────────────────────────────────────────
 
-export type ReceivingMode = 'receive' | 'incoming' | 'history' | 'pickup';
+export type ReceivingMode = 'incoming' | 'triage' | 'receive' | 'history' | 'pickup';
 
-// Sidebar order: Receiving → Incoming → History → Local Pickup. Each flips the
-// `?mode=` URL param (default `receive` on the bare path).
+// Sidebar order: Incoming → Receiving (triage/scan) → Unbox → History → Local
+// Pickup. Each flips the `?mode=` URL param; the bare path (no `?mode=`) stays
+// the Unbox workspace (id `receive`) for deep-link + realtime back-compat.
+//
+// `triage` (label "Receiving") is the scan/identify surface that runs BEFORE
+// unboxing: scan a tracking, see found/unfound + expedited/normal verdict, and
+// route the carton. `receive` (label "Unbox") is the existing unboxing
+// workspace — relabeled only, id unchanged to avoid a wide string rename.
 //
 // The former `unfound` mode was relocated to Admin › PO Mailbox
 // (?section=po_mailbox) — the email-PO / unmatched triage queue is no longer a
@@ -35,8 +42,9 @@ export type ReceivingMode = 'receive' | 'incoming' | 'history' | 'pickup';
 // off automatically when the operator scans / marks-received (workflow
 // advances past EXPECTED or quantity_received goes positive).
 export const RECEIVING_MODE_ITEMS: HorizontalSliderItem[] = [
-  { id: 'receive',  label: 'Receiving',    icon: ClipboardList },
-  { id: 'incoming', label: 'Incoming',     icon: Package },
+  { id: 'incoming', label: 'Incoming',     icon: Inbox },
+  { id: 'triage',   label: 'Receiving',    icon: ClipboardList },
+  { id: 'receive',  label: 'Unbox',        icon: Box },
   { id: 'history',  label: 'History',      icon: List },
   { id: 'pickup',   label: 'Local Pickup', icon: ShoppingCart },
 ];

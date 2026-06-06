@@ -4,6 +4,7 @@ import { withAuth } from '@/lib/auth/withAuth';
 import { getSkuCatalogBySku } from '@/lib/neon/sku-catalog-queries';
 import { upsertSerialUnit } from '@/lib/neon/serial-units-queries';
 import { recordInventoryEvent } from '@/lib/inventory/events';
+import { attachTechSerial } from '@/lib/inventory/tech-serial';
 
 /**
  * POST /api/post-multi-sn — issue label(s) for a SKU + record the audit trail.
@@ -169,22 +170,15 @@ export const POST = withAuth(
       //    station_source the CHECK constraint accepts for non-receiving/
       //    non-tech/non-pack writes (see 2026-03-31_tsn_add_station_source).
       try {
-        await pool.query(
-          `INSERT INTO tech_serial_numbers
-             (serial_number, serial_type, tested_by, station_source,
-              receiving_line_id, shipment_id, scan_ref,
-              serial_unit_id, source_sku_id, context_station_activity_log_id)
-           VALUES ($1, 'SERIAL', $2, 'ADMIN', NULL, NULL, $3, $4, $5, $6)
-           ON CONFLICT DO NOTHING`,
-          [
-            serial.toUpperCase(),
-            actorId,
-            qrPayload,
-            serialUnitId,
-            catalogId,
-            stationActivityLogId,
-          ],
-        );
+        await attachTechSerial({
+          serialNumber: serial,
+          serialUnitId,
+          stationSource: 'ADMIN',
+          testedBy: actorId,
+          scanRef: qrPayload,
+          sourceSkuId: catalogId,
+          contextStationActivityLogId: stationActivityLogId,
+        });
       } catch (err) {
         console.warn('[post-multi-sn] tech_serial_numbers insert failed (non-fatal)', err);
       }

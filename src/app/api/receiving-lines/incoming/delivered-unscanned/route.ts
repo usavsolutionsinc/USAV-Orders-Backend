@@ -53,6 +53,7 @@ export const GET = withAuth(async (_req: NextRequest) => {
       expected_delivery_date: string | null;
       po_date: string | null;
       first_item_name: string | null;
+      first_sku: string | null;
       item_count: number | null;
     }>(
       // `base` is the canonical delivered-unscanned set (Phase B) — identical to
@@ -93,11 +94,13 @@ export const GET = withAuth(async (_req: NextRequest) => {
               m.expected_delivery_date::text AS expected_delivery_date,
               m.po_date::text                AS po_date,
               agg.first_item_name,
+              agg.first_sku,
               agg.item_count
          FROM enriched
          LEFT JOIN zoho_po_mirror m ON m.zoho_purchaseorder_id = enriched.zoho_purchaseorder_id
          LEFT JOIN LATERAL (
            SELECT (array_agg(rl.item_name ORDER BY rl.id))[1] AS first_item_name,
+                  (array_agg(rl.sku       ORDER BY rl.id))[1] AS first_sku,
                   COUNT(*)::int                                AS item_count
              FROM receiving_lines rl
             WHERE rl.zoho_purchaseorder_id = enriched.zoho_purchaseorder_id

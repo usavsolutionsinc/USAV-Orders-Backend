@@ -41,6 +41,8 @@ export interface RecentActivityRailBaseProps {
 
   eyebrowTitle: string;
   eyebrowSuffix?: string;
+  /** Right-aligned eyebrow slot (e.g. a refresh button); takes precedence over suffix. */
+  eyebrowAction?: ReactNode;
   autoSelectFirstWhenEmpty?: boolean;
 
   getStatusDot: (row: ReceivingLineRow) => string;
@@ -63,7 +65,11 @@ function canAutoSelectReceivingRailFirst(): boolean {
   if (typeof window === 'undefined') return false;
   const params = new URLSearchParams(window.location.search);
   if (params.get('recvId')) return false;
-  return (params.get('mode') ?? 'receive') === 'receive';
+  // Unbox (`receive`, the bare path) and the triage rails (`triage`) auto-select
+  // the top of their queue so a mode shows its most-recent item, not an empty
+  // background. Each rail only renders in its own mode, so allowing both is safe.
+  const m = params.get('mode') ?? 'receive';
+  return m === 'receive' || m === 'triage';
 }
 
 /**
@@ -84,6 +90,7 @@ export function RecentActivityRailBase({
   navigateEvent,
   eyebrowTitle,
   eyebrowSuffix,
+  eyebrowAction,
   autoSelectFirstWhenEmpty = false,
   getStatusDot,
   renderQuantity,
@@ -104,6 +111,7 @@ export function RecentActivityRailBase({
       limit={limit}
       eyebrowTitle={eyebrowTitle}
       eyebrowSuffix={eyebrowSuffix}
+      eyebrowAction={eyebrowAction}
       autoSelectFirstWhenEmpty={autoSelectFirstWhenEmpty}
       canAutoSelectFirst={
         autoSelectFirstWhenEmpty ? canAutoSelectReceivingRailFirst : undefined
@@ -201,6 +209,12 @@ function ReceivingPopoverContent({
         <div className="mt-1.5 flex flex-wrap items-center gap-1">
           <span className={`rounded px-1.5 py-0.5 text-eyebrow font-black uppercase tracking-widest ring-1 ring-inset ${conditionTone}`}>{conditionLabel}</span>
           <span className={`rounded px-1.5 py-0.5 text-eyebrow font-black uppercase tracking-widest ${workflowTone}`}>{workflowLabel}</span>
+          {/* Unfound cartons have no Zoho PO — their RECEIVED state is local-only
+              (no Zoho receive). The "No PO" tag marks that the website↔Zoho gap
+              is intentional, not a failed sync. */}
+          {row.receiving_source === 'unmatched' ? (
+            <span className="rounded bg-slate-100 px-1.5 py-0.5 text-eyebrow font-black uppercase tracking-widest text-slate-500 ring-1 ring-inset ring-slate-200" title="No matching Zoho PO — received locally only">No PO</span>
+          ) : null}
           {row.needs_test ? (
             <span className="rounded bg-orange-100 px-1.5 py-0.5 text-eyebrow font-black uppercase tracking-widest text-orange-700">Test</span>
           ) : null}
@@ -228,11 +242,16 @@ function ReceivingPopoverContent({
         </div>
       </div>
 
-      <div className="flex flex-nowrap items-center justify-end gap-1.5 overflow-x-auto border-t border-gray-100 pt-3 [&>*]:shrink-0 [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
+      <div className="flex flex-nowrap items-center justify-between gap-1.5 overflow-x-auto border-t border-gray-100 pt-3 [&>*]:shrink-0 [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
         <OrderIdChip value={poValue} display={getLast4(poValue)} />
         <SkuScanRefChip value={skuValue} display={getLast4(skuValue)} />
         <TrackingChip value={trackingValue} display={getLast4(trackingValue)} />
-        {serialsCsv ? <SerialChip value={serialsCsv} /> : null}
+        {/* Always render the serial chip — even with no serial it shows the
+            `----` placeholder (resolveSerialDisplay) so the column stays put and
+            lines up across rows. Content-fit width (not the default w-[84px])
+            so the value hugs the right edge of this justify-end row instead of
+            leaving dead space to its right. */}
+        <SerialChip value={serialsCsv} width="w-fit shrink-0" />
       </div>
 
       <div className="flex items-center justify-between border-t border-gray-100 pt-2.5">

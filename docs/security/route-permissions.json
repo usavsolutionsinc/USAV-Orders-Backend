@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "generatedAt": "2026-06-05T21:01:16Z",
+  "generatedAt": "2026-06-06T15:08:12Z",
   "totalRoutes": 512,
   "summary": {
     "permissionGated": 428,
@@ -2993,6 +2993,15 @@
       "exemptReason": null
     },
     {
+      "path": "/api/receiving/pending-check/route.ts",
+      "methods": [
+        "GET"
+      ],
+      "gate": "withAuth",
+      "permission": "receiving.view",
+      "exemptReason": null
+    },
+    {
       "path": "/api/receiving/pending-unboxing/route.ts",
       "methods": [
         "GET"
@@ -4134,15 +4143,6 @@
       ],
       "gate": "NONE",
       "permission": null,
-      "exemptReason": null
-    },
-    {
-      "path": "/api/sync-sheets-to-tech-serials/route.ts",
-      "methods": [
-        "POST"
-      ],
-      "gate": "withAuth",
-      "permission": "admin.manage_features",
       "exemptReason": null
     },
     {

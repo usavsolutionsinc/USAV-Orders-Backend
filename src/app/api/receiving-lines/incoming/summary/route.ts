@@ -31,8 +31,8 @@ import {
   getDeliveredUnscannedCount,
   getDeliveredUnscannedByCarrier,
   getEmailDeliveredUnscannedCount,
-  INBOUND_SHIPMENT_PREDICATE,
   NOT_ZOHO_RECEIVED_PREDICATE,
+  CARRIER_MISMATCH_PREDICATE,
 } from '@/lib/receiving/delivered-unscanned';
 
 export const dynamic = 'force-dynamic';
@@ -46,6 +46,7 @@ export const GET = withAuth(async (_request: NextRequest) => {
       stalled: number;
       in_transit: number;
       pending_carrier: number;
+      carrier_mismatch: number;
       tracking_unavailable: number;
       awaiting_tracking: number;
       expected_today: number;
@@ -78,7 +79,11 @@ export const GET = withAuth(async (_request: NextRequest) => {
            WHERE stn.id IS NOT NULL
              AND stn.tracking_blocked_reason IS NULL
              AND (stn.latest_status_category IS NULL OR stn.latest_status_category = 'UNKNOWN')
+             AND NOT ${CARRIER_MISMATCH_PREDICATE}
          )::int AS pending_carrier,
+         COUNT(DISTINCT rl.zoho_purchaseorder_id) FILTER (
+           WHERE ${CARRIER_MISMATCH_PREDICATE}
+         )::int AS carrier_mismatch,
          COUNT(DISTINCT rl.zoho_purchaseorder_id) FILTER (
            WHERE stn.tracking_blocked_reason IS NOT NULL
              AND COALESCE(stn.is_delivered, false) = false
@@ -113,6 +118,7 @@ export const GET = withAuth(async (_request: NextRequest) => {
       stalled: 0,
       in_transit: 0,
       pending_carrier: 0,
+      carrier_mismatch: 0,
       tracking_unavailable: 0,
       awaiting_tracking: 0,
       expected_today: 0,
@@ -135,34 +141,106 @@ export const GET = withAuth(async (_request: NextRequest) => {
 
     // E4 per-carrier breakdown — "USPS: 12 unavailable, FedEx: 3 delivered-
     // unscanned". delivered_unscanned reuses the deduped canonical base (sums to
-    // the tile); blocked/in_transit are per-STN over the inbound predicate.
+    // the tile); blocked/in_transit are per-shipment but scoped to EXACTLY the
+    // Incoming surface (still-incoming PO lines, reached via the same soft
+    // receiving join the row endpoint + top-level tiles use), so the matrix
+    // reflects the displayed list — NOT every inbound shipment ever registered,
+    // which is what made USPS read 200+ "unavailable" while only a handful were
+    // actually in the Incoming queue.
     const [duByCarrier, carrierAgg] = await Promise.all([
       getDeliveredUnscannedByCarrier(pool),
-      pool.query<{ carrier: string; tracking_unavailable: number; in_transit: number }>(
-        `SELECT stn.carrier,
+      pool.query<{
+        carrier: string;
+        tracking_unavailable: number;
+        in_transit: number;
+        carrier_mismatch: number;
+      }>(
+        // UNKNOWN is included so carrier/number mismatches (a tracking# we
+        // couldn't attribute to any carrier) get a row of their own — they have
+        // no UPS/USPS/FedEx bucket to live in, but still need surfacing.
+        `WITH incoming_shipments AS (
+           SELECT DISTINCT ON (stn.id)
+                  stn.id,
+                  stn.carrier,
+                  stn.tracking_blocked_reason,
+                  stn.is_delivered,
+                  stn.is_terminal,
+                  stn.latest_status_category,
+                  stn.last_error_code
+             FROM receiving_lines rl
+             LEFT JOIN zoho_po_mirror mirror
+               ON mirror.zoho_purchaseorder_id = rl.zoho_purchaseorder_id
+             JOIN LATERAL (
+               SELECT r.* FROM receiving r
+                WHERE r.id = rl.receiving_id
+                   OR (rl.receiving_id IS NULL
+                       AND r.source = 'zoho_po'
+                       AND r.zoho_purchaseorder_id = rl.zoho_purchaseorder_id)
+                ORDER BY (r.id = rl.receiving_id) DESC,
+                         (r.shipment_id IS NOT NULL) DESC,
+                         r.id DESC
+                LIMIT 1
+             ) r ON TRUE
+             JOIN shipping_tracking_numbers stn ON stn.id = r.shipment_id
+            WHERE rl.workflow_status = 'EXPECTED'
+              AND COALESCE(rl.quantity_received, 0) = 0
+              AND rl.zoho_purchaseorder_id IS NOT NULL
+              AND ${NOT_ZOHO_RECEIVED_PREDICATE}
+              AND upper(COALESCE(stn.carrier, '')) IN ('UPS','USPS','FEDEX','UNKNOWN')
+            ORDER BY stn.id
+         )
+         SELECT
+                CASE WHEN upper(COALESCE(carrier, '')) IN ('UPS','USPS','FEDEX')
+                     THEN upper(carrier) ELSE 'UNKNOWN' END AS carrier,
                 COUNT(*) FILTER (
-                  WHERE stn.tracking_blocked_reason IS NOT NULL
-                    AND COALESCE(stn.is_delivered, false) = false
+                  WHERE tracking_blocked_reason IS NOT NULL
+                    AND COALESCE(is_delivered, false) = false
                 )::int AS tracking_unavailable,
                 COUNT(*) FILTER (
-                  WHERE COALESCE(stn.is_terminal, false) = false
-                    AND stn.latest_status_category IN ('IN_TRANSIT','ACCEPTED','LABEL_CREATED')
-                )::int AS in_transit
-           FROM shipping_tracking_numbers stn
-          WHERE stn.carrier IN ('UPS','USPS','FEDEX')
-            AND ${INBOUND_SHIPMENT_PREDICATE}
-          GROUP BY stn.carrier`,
+                  WHERE COALESCE(is_terminal, false) = false
+                    AND latest_status_category IN ('IN_TRANSIT','ACCEPTED','LABEL_CREATED')
+                )::int AS in_transit,
+                COUNT(*) FILTER (
+                  WHERE COALESCE(is_delivered, false) = false
+                    AND COALESCE(is_terminal, false) = false
+                    AND (
+                      upper(COALESCE(carrier, '')) = 'UNKNOWN'
+                      OR last_error_code IN ('NOT_FOUND','UNKNOWN_CARRIER')
+                    )
+                )::int AS carrier_mismatch
+           FROM incoming_shipments
+          GROUP BY 1`,
       ),
     ]);
 
     const carriers: Array<'UPS' | 'USPS' | 'FEDEX'> = ['UPS', 'USPS', 'FEDEX'];
     const aggByCarrier = new Map(carrierAgg.rows.map((r) => [r.carrier, r]));
-    const by_carrier = carriers.map((carrier) => ({
+    const by_carrier: Array<{
+      carrier: string;
+      delivered_unscanned: number;
+      tracking_unavailable: number;
+      in_transit: number;
+      carrier_mismatch: number;
+    }> = carriers.map((carrier) => ({
       carrier,
       delivered_unscanned: duByCarrier[carrier] ?? 0,
       tracking_unavailable: aggByCarrier.get(carrier)?.tracking_unavailable ?? 0,
       in_transit: aggByCarrier.get(carrier)?.in_transit ?? 0,
+      carrier_mismatch: aggByCarrier.get(carrier)?.carrier_mismatch ?? 0,
     }));
+
+    // Append an UNKNOWN row only when there are unattributable mismatches — a
+    // tracking# that matched no carrier has no UPS/USPS/FedEx row to sit in.
+    const unknownAgg = aggByCarrier.get('UNKNOWN');
+    if (unknownAgg && unknownAgg.carrier_mismatch > 0) {
+      by_carrier.push({
+        carrier: 'UNKNOWN',
+        delivered_unscanned: 0,
+        tracking_unavailable: unknownAgg.tracking_unavailable ?? 0,
+        in_transit: unknownAgg.in_transit ?? 0,
+        carrier_mismatch: unknownAgg.carrier_mismatch ?? 0,
+      });
+    }
 
     return NextResponse.json({ success: true, ...row, delivered_email: deliveredEmail, by_carrier });
   } catch (error) {
