@@ -31,8 +31,6 @@ export const SkuRelationshipCreateBody = z
     path: ['childSkuId'],
   });
 
-export type SkuRelationshipCreateInput = z.infer<typeof SkuRelationshipCreateBody>;
-
 // ─── PATCH /api/sku-catalog/graph/relationships/[id] ────────────────────────
 
 /**
@@ -48,5 +46,3 @@ export const SkuRelationshipUpdateBody = z
   .refine((b) => Object.keys(b).length > 0, {
     message: 'At least one field must be provided',
   });
-
-export type SkuRelationshipUpdateInput = z.infer<typeof SkuRelationshipUpdateBody>;

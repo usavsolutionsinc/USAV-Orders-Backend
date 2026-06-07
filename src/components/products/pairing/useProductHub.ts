@@ -18,6 +18,8 @@ interface UseProductHubResult {
   acceptCount: number;
   rejectCount: number;
   unpairCount: number;
+  /** Total number of ranked suggestions across every platform in the snapshot. */
+  suggestionTotal: number;
   saving: boolean;
   saveError: string | null;
   lastSavedAuditIds: number[] | null;
@@ -26,6 +28,12 @@ interface UseProductHubResult {
   toggleUnpair: (confirmed: HubConfirmed) => void;
   clearPending: () => void;
   commit: () => Promise<void>;
+  /**
+   * One-click commit: pair every selected (accepted) suggestion AND reject every
+   * suggestion the operator left unselected, plus any pending unpairs. Lets the
+   * operator clear the whole queue with a single action.
+   */
+  commitDecisive: () => Promise<void>;
   refresh: () => void;
 }
 
@@ -141,12 +149,59 @@ export function useProductHub(skuCatalogId: number | null): UseProductHubResult 
     return { acceptCount: a, rejectCount: r, unpairCount: u };
   }, [pending]);
 
+  const suggestionTotal = useMemo(() => {
+    if (!snapshot) return 0;
+    let n = 0;
+    for (const platform of Object.keys(snapshot.suggestions)) {
+      n += snapshot.suggestions[platform].length;
+    }
+    return n;
+  }, [snapshot]);
+
   // ── Commit ────────────────────────────────────────────────────────────────
+  /** Shared POST → /pair-batch. Resets pending + refreshes on success. */
+  const postBatch = useCallback(
+    async (
+      accept: Array<{ platformIdRowId: number; confidence: number; reason: string }>,
+      reject: Array<{ platformIdRowId: number; reason: string }>,
+      unpair: Array<{ platformIdRowId: number; reason: string }>,
+    ) => {
+      if (!snapshot) return;
+      if (accept.length === 0 && reject.length === 0 && unpair.length === 0) return;
+      setSaving(true);
+      setSaveError(null);
+      setLastSavedAuditIds(null);
+      try {
+        const res = await fetch('/api/sku-catalog/pair-batch', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'same-origin',
+          body: JSON.stringify({
+            skuCatalogId: snapshot.skuCatalogId,
+            accept,
+            reject,
+            unpair,
+          }),
+        });
+        const body = await res.json();
+        if (!res.ok || !body?.success) {
+          throw new Error(body?.error || `HTTP ${res.status}`);
+        }
+        setLastSavedAuditIds(body.auditIds || []);
+        setPending(EMPTY_PENDING);
+        window.dispatchEvent(new CustomEvent('sku-pairing-updated'));
+        refresh();
+      } catch (err) {
+        setSaveError(err instanceof Error ? err.message : 'save failed');
+      } finally {
+        setSaving(false);
+      }
+    },
+    [snapshot, refresh],
+  );
+
   const commit = useCallback(async () => {
     if (!snapshot || pending.size === 0) return;
-    setSaving(true);
-    setSaveError(null);
-    setLastSavedAuditIds(null);
 
     const accept: Array<{ platformIdRowId: number; confidence: number; reason: string }> = [];
     const reject: Array<{ platformIdRowId: number; reason: string }> = [];
@@ -172,32 +227,44 @@ export function useProductHub(skuCatalogId: number | null): UseProductHubResult 
       }
     }
 
-    try {
-      const res = await fetch('/api/sku-catalog/pair-batch', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'same-origin',
-        body: JSON.stringify({
-          skuCatalogId: snapshot.skuCatalogId,
-          accept,
-          reject,
-          unpair,
-        }),
-      });
-      const body = await res.json();
-      if (!res.ok || !body?.success) {
-        throw new Error(body?.error || `HTTP ${res.status}`);
-      }
-      setLastSavedAuditIds(body.auditIds || []);
-      setPending(EMPTY_PENDING);
-      window.dispatchEvent(new CustomEvent('sku-pairing-updated'));
-      refresh();
-    } catch (err) {
-      setSaveError(err instanceof Error ? err.message : 'save failed');
-    } finally {
-      setSaving(false);
+    await postBatch(accept, reject, unpair);
+  }, [snapshot, pending, postBatch]);
+
+  const commitDecisive = useCallback(async () => {
+    if (!snapshot) return;
+
+    // Selected = currently-accepted suggestions; everything else gets rejected.
+    const acceptedIds = new Set<number>();
+    for (const action of pending.values()) {
+      if (action.kind === 'accept') acceptedIds.add(action.candidate.platformIdRowId);
     }
-  }, [snapshot, pending, refresh]);
+
+    const accept: Array<{ platformIdRowId: number; confidence: number; reason: string }> = [];
+    const reject: Array<{ platformIdRowId: number; reason: string }> = [];
+    for (const platform of Object.keys(snapshot.suggestions)) {
+      for (const c of snapshot.suggestions[platform]) {
+        if (acceptedIds.has(c.platformIdRowId)) {
+          accept.push({
+            platformIdRowId: c.platformIdRowId,
+            confidence: c.confidence,
+            reason: c.reason,
+          });
+        } else {
+          reject.push({ platformIdRowId: c.platformIdRowId, reason: 'operator_rejected' });
+        }
+      }
+    }
+
+    // Preserve any pending unpairs of already-confirmed rows.
+    const unpair: Array<{ platformIdRowId: number; reason: string }> = [];
+    for (const action of pending.values()) {
+      if (action.kind === 'unpair') {
+        unpair.push({ platformIdRowId: action.confirmed.platformIdRowId, reason: 'operator_unpair' });
+      }
+    }
+
+    await postBatch(accept, reject, unpair);
+  }, [snapshot, pending, postBatch]);
 
   return {
     snapshot,
@@ -207,6 +274,7 @@ export function useProductHub(skuCatalogId: number | null): UseProductHubResult 
     acceptCount,
     rejectCount,
     unpairCount,
+    suggestionTotal,
     saving,
     saveError,
     lastSavedAuditIds,
@@ -215,6 +283,7 @@ export function useProductHub(skuCatalogId: number | null): UseProductHubResult 
     toggleUnpair,
     clearPending,
     commit,
+    commitDecisive,
     refresh,
   };
 }

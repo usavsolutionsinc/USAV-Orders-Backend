@@ -27,7 +27,7 @@ export const MobileTopBar = ({
   /** Page-specific controls, placed left of the global actions. */
   actions?: ReactNode;
 }) => (
-  <header className="sticky top-0 z-30 flex w-full shrink-0 items-center justify-between gap-2 border-b border-blue-100/50 bg-slate-50/90 px-4 py-2.5 backdrop-blur-xl">
+  <header className="sticky top-0 z-30 flex w-full shrink-0 items-center justify-between gap-2 border-b border-gray-200 bg-white/90 px-4 py-2.5 backdrop-blur-xl supports-[backdrop-filter]:bg-white/80">
     <div className="flex min-w-0 items-center gap-2">
       {onBack && (
         <button

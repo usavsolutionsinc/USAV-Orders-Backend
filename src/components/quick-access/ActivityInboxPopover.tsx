@@ -91,9 +91,19 @@ export function ActivityInboxPopover({ onClose }: ActivityInboxPopoverProps) {
                             <li key={it.id} className="px-3 py-2">
                                 <div className="flex items-start gap-2">
                                     <div className="min-w-0 flex-1">
-                                        <p className="truncate text-caption font-black text-gray-900">
-                                            {it.title}
-                                        </p>
+                                        {it.kind === 'warranty_claim' && it.claimId ? (
+                                            <Link
+                                                href={`/dashboard?warranty=&open=${it.claimId}`}
+                                                onClick={onClose}
+                                                className="block truncate text-caption font-black text-blue-700 hover:text-blue-900 hover:underline"
+                                            >
+                                                {it.title}
+                                            </Link>
+                                        ) : (
+                                            <p className="truncate text-caption font-black text-gray-900">
+                                                {it.title}
+                                            </p>
+                                        )}
                                         <p className="mt-0.5 whitespace-pre-wrap break-words text-mini font-medium leading-snug text-gray-600">
                                             {it.subtitle}
                                         </p>

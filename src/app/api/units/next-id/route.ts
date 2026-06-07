@@ -1,35 +1,23 @@
 import { NextResponse } from 'next/server';
 import { withAuth } from '@/lib/auth/withAuth';
-import { allocateNextUnitId } from '@/lib/inventory/unit-id';
+import { peekNextUnitId } from '@/lib/inventory/unit-id';
 import { resolveSkuCatalogRow } from '@/lib/inventory/resolve-sku-catalog';
 import { getOrCreateInternalGtin } from '@/lib/inventory/internal-gtin';
-import { buildGs1UnitUrl } from '@/lib/scan-resolver';
-import { getAppBaseUrl } from '@/lib/qstash';
-
-/**
- * Public GS1 Digital Link host that the printed unit QR encodes.
- * A normal phone-camera scan opens https://usavshop.com/01/{gtin}/21/{unit},
- * which the shop is responsible for redirecting/landing. Override with
- * LABEL_QR_BASE_URL for staging/dev.
- */
-const PUBLIC_QR_BASE_URL = (
-  process.env.LABEL_QR_BASE_URL ||
-  process.env.NEXT_PUBLIC_LABEL_QR_BASE_URL ||
-  'https://usavshop.com'
-).trim().replace(/\/+$/, '');
 
 export const dynamic = 'force-dynamic';
 
 /**
  * POST /api/units/next-id
  *
- * Issues the next unit identifier for a SKU and returns everything the
- * label printer needs in one round trip:
+ * PREVIEW of the next unit identifier for a SKU — the label printer shows this
+ * before the operator commits to printing. It does NOT advance the sequence
+ * (fn_peek_unit_seq); the authoritative per-serial allocation happens server-
+ * side at print time in /api/post-multi-sn. This makes browsing SKUs free of
+ * sequence burn.
  *
  *   {
- *     unitId:  "IPH13-128-BLU-2026-000142",
- *     gtin:    "02000000001236",         // 14 digits, internal range
- *     qrUrl:   "https://app.../01/02000000001236/21/IPH13-128-BLU-2026-000142",
+ *     unitId:  "IPH13-128-BLU-2026-000142",   // the NEXT id that will be issued
+ *     gtin:    "02000000001236",              // 14 digits, internal range
  *     skuCatalogId: 123,
  *     year:    2026,
  *     seq:     142
@@ -39,12 +27,9 @@ export const dynamic = 'force-dynamic';
  *   1. If body.sku_catalog_id is provided → use it directly.
  *   2. Else look up by `sku` (case-insensitive, trimmed). 404 if missing.
  *
- * Internal GTIN is generated + persisted lazily on first call per SKU.
- * Unit sequence is allocated atomically via fn_next_unit_seq (Phase 0).
- *
- * Replaces the legacy /api/sku-manager?action=current|increment chain on
- * the print path. Authentication: `print.label` permission (any operator
- * able to print labels can mint unit IDs).
+ * Internal GTIN is generated + persisted lazily on first call per SKU. The
+ * printed products label encodes the bare unit id (no GS1 link), so no qrUrl is
+ * returned. Authentication: `print.label` permission.
  */
 export const POST = withAuth(async (request) => {
   const body = await request.json().catch(() => ({}));
@@ -76,35 +61,23 @@ export const POST = withAuth(async (request) => {
       );
     }
 
-    // 2. Ensure GTIN exists.
+    // 2. Ensure GTIN exists (catalog data; not encoded on the products label).
     const gtin = resolved.gtin && resolved.gtin.trim() ? resolved.gtin.trim() : await getOrCreateInternalGtin(resolved.id);
 
-    // 3. Allocate the next unit serial.
-    const allocated = await allocateNextUnitId(resolved.id, resolved.sku);
-
-    // 4. Build the QR payload URL. The printed QR is a GS1 Digital Link
-    //    pointing to usavshop.com so a normal phone-camera scan resolves
-    //    to the public storefront. Falls back to internal app origin (or
-    //    a relative path) only if the public host is unset.
-    let qrUrl: string;
-    try {
-      const origin = PUBLIC_QR_BASE_URL || getAppBaseUrl();
-      qrUrl = buildGs1UnitUrl(origin, gtin, allocated.unitId);
-    } catch {
-      qrUrl = buildGs1UnitUrl('', gtin, allocated.unitId);
-    }
+    // 3. Peek the next unit serial — preview only, does NOT advance the
+    //    sequence. The real per-serial allocation happens at print time.
+    const preview = await peekNextUnitId(resolved.id, resolved.sku);
 
     return NextResponse.json({
       ok: true,
-      unitId: allocated.unitId,
+      unitId: preview.unitId,
       gtin,
-      qrUrl,
       skuCatalogId: resolved.id,
       sku: resolved.sku,
       productTitle: resolved.product_title,
-      year: allocated.year,
-      seq: allocated.seq,
-      skuShort: allocated.skuShort,
+      year: preview.year,
+      seq: preview.seq,
+      skuShort: preview.skuShort,
     });
   } catch (err) {
     const message = err instanceof Error ? err.message : 'next-id failed';

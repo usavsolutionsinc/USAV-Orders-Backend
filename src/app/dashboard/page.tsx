@@ -8,6 +8,7 @@ import PendingOrdersTable from '@/components/PendingOrdersTable';
 import { UnshippedDetailsPanel } from '@/components/unshipped/UnshippedDetailsPanel';
 import { UnshippedTable } from '@/components/unshipped/UnshippedTable';
 import FBAShipmentsTable from '@/components/dashboard/FBAShipmentsTable';
+import { WarrantyWorkspace } from '@/components/warranty/WarrantyWorkspace';
 import { Loader2 } from '@/components/Icons';
 import { BootGate } from '@/components/boot/BootGate';
 import { BootSplash } from '@/components/boot/BootSplash';
@@ -25,7 +26,10 @@ import {
   unshippedOrdersQuery,
   dashboardShippedQuery,
   fbaShipmentsQuery,
+  warrantyClaimsQuery,
 } from '@/lib/queries/dashboard-queries';
+import { WARRANTY_EXPIRING_SOON_DAYS } from '@/hooks/useWarrantyClaims';
+import { isWarrantyClaimStatus } from '@/lib/warranty/types';
 
 /**
  * Warm the active dashboard view's data into the React Query cache. Shared by
@@ -45,6 +49,16 @@ function warmActiveView(queryClient: QueryClient, searchParamsString: string): P
   }
   if (view === 'fba') {
     return queryClient.prefetchQuery(fbaShipmentsQuery());
+  }
+  if (view === 'warranty') {
+    const wstatus = sp.get('wstatus');
+    return queryClient.prefetchQuery(
+      warrantyClaimsQuery({
+        status: isWarrantyClaimStatus(wstatus) ? wstatus : null,
+        search: searchQuery,
+        expiringWithinDays: sp.get('wexp') === '1' ? WARRANTY_EXPIRING_SOON_DAYS : null,
+      }),
+    );
   }
   if (view === 'shipped') {
     const week = getWeekRangeForOffset(0);
@@ -105,6 +119,8 @@ function DashboardPageContent() {
                     <UnshippedTable strictSearchScope />
                 ) : orderView === 'fba' ? (
                     <FBAShipmentsTable />
+                ) : orderView === 'warranty' ? (
+                    <WarrantyWorkspace />
                 ) : (
                     <PendingOrdersTable strictSearchScope />
                 )}

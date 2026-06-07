@@ -1,14 +1,14 @@
 {
   "version": 1,
-  "generatedAt": "2026-06-06T23:23:39Z",
-  "totalRoutes": 510,
+  "generatedAt": "2026-06-07T07:46:54Z",
+  "totalRoutes": 540,
   "summary": {
-    "permissionGated": 426,
+    "permissionGated": 454,
     "authenticatedNoPermission": 18,
-    "anonymousIntentional": 45,
+    "anonymousIntentional": 48,
     "serviceToService": 3,
     "ungatedRead": 17,
-    "ungatedWrite": 1
+    "ungatedWrite": 0
   },
   "routes": [
     {
@@ -880,6 +880,36 @@
       "exemptReason": "webhook (gated by signature)"
     },
     {
+      "path": "/api/bose-models/[id]/route.ts",
+      "methods": [
+        "DELETE",
+        "GET",
+        "PATCH"
+      ],
+      "gate": "requireRoutePerm",
+      "permission": "sourcing.view",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/bose-models/lookup/route.ts",
+      "methods": [
+        "GET"
+      ],
+      "gate": "withAuth",
+      "permission": "sourcing.view",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/bose-models/route.ts",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "gate": "withAuth",
+      "permission": "sourcing.view",
+      "exemptReason": null
+    },
+    {
       "path": "/api/check-tracking/route.ts",
       "methods": [
         "GET"
@@ -973,6 +1003,26 @@
     },
     {
       "path": "/api/cron/sku-catalog/refresh-suggestions/route.ts",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "gate": "isQStashOrigin",
+      "permission": null,
+      "exemptReason": "cron endpoint"
+    },
+    {
+      "path": "/api/cron/sourcing/replenish/route.ts",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "gate": "isQStashOrigin",
+      "permission": null,
+      "exemptReason": "cron endpoint"
+    },
+    {
+      "path": "/api/cron/sourcing/scan/route.ts",
       "methods": [
         "GET",
         "POST"
@@ -1201,6 +1251,26 @@
       ],
       "gate": "withAuth",
       "permission": "orders.import",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/failure-modes/[id]/route.ts",
+      "methods": [
+        "DELETE",
+        "PATCH"
+      ],
+      "gate": "withAuth",
+      "permission": "sku_stock.manage",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/failure-modes/route.ts",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "gate": "withAuth",
+      "permission": "sku_stock.view",
       "exemptReason": null
     },
     {
@@ -1919,7 +1989,7 @@
       ],
       "gate": "NONE",
       "permission": null,
-      "exemptReason": null
+      "exemptReason": "dev/LAN NAS passthrough (disabled in prod; path-traversal + image-only guarded)"
     },
     {
       "path": "/api/need-to-order/[id]/route.ts",
@@ -2279,6 +2349,26 @@
       ],
       "gate": "withAuth",
       "permission": "packing.complete_order",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/part-compatibility/[id]/route.ts",
+      "methods": [
+        "DELETE",
+        "PATCH"
+      ],
+      "gate": "requireRoutePerm",
+      "permission": "sourcing.manage",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/part-compatibility/route.ts",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "gate": "withAuth",
+      "permission": "sourcing.view",
       "exemptReason": null
     },
     {
@@ -3485,6 +3575,15 @@
       "exemptReason": null
     },
     {
+      "path": "/api/serial-units/[id]/checklist/bulk/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "gate": "withAuth",
+      "permission": "tech.qc_pass",
+      "exemptReason": null
+    },
+    {
       "path": "/api/serial-units/[id]/checklist/route.ts",
       "methods": [
         "GET",
@@ -3492,6 +3591,17 @@
       ],
       "gate": "withAuth",
       "permission": "tech.qc_pass",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/serial-units/[id]/failure-tags/route.ts",
+      "methods": [
+        "GET",
+        "PATCH",
+        "POST"
+      ],
+      "gate": "withAuth",
+      "permission": "sku_stock.view",
       "exemptReason": null
     },
     {
@@ -3528,6 +3638,25 @@
       ],
       "gate": "withAuth",
       "permission": "sku_stock.adjust",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/serial-units/[id]/repairs/[repairId]/route.ts",
+      "methods": [
+        "PATCH"
+      ],
+      "gate": "withAuth",
+      "permission": "repair.mark_repaired",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/serial-units/[id]/repairs/route.ts",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "gate": "withAuth",
+      "permission": "repair.view",
       "exemptReason": null
     },
     {
@@ -3698,7 +3827,7 @@
         "POST",
         "PUT"
       ],
-      "gate": "requireRoutePerm",
+      "gate": "withAuth",
       "permission": "sku_stock.view",
       "exemptReason": null
     },
@@ -3708,6 +3837,15 @@
         "DELETE",
         "GET",
         "PATCH"
+      ],
+      "gate": "requireRoutePerm",
+      "permission": "sku_stock.view",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/sku-catalog/[id]/similar/route.ts",
+      "methods": [
+        "GET"
       ],
       "gate": "requireRoutePerm",
       "permission": "sku_stock.view",
@@ -4000,6 +4138,53 @@
       "exemptReason": null
     },
     {
+      "path": "/api/sourcing/alerts/route.ts",
+      "methods": [
+        "GET",
+        "PATCH"
+      ],
+      "gate": "withAuth",
+      "permission": "sourcing.view",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/sourcing/candidates/[id]/import/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "gate": "requireRoutePerm",
+      "permission": "sourcing.import",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/sourcing/candidates/[id]/route.ts",
+      "methods": [
+        "PATCH"
+      ],
+      "gate": "requireRoutePerm",
+      "permission": "sourcing.manage",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/sourcing/candidates/route.ts",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "gate": "withAuth",
+      "permission": "sourcing.view",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/sourcing/search/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "gate": "withAuth",
+      "permission": "sourcing.search",
+      "exemptReason": null
+    },
+    {
       "path": "/api/staff-goals/history/route.ts",
       "methods": [
         "GET"
@@ -4105,6 +4290,27 @@
       ],
       "gate": "withAuth",
       "permission": "sku_stock.view",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/suppliers/[id]/route.ts",
+      "methods": [
+        "DELETE",
+        "GET",
+        "PATCH"
+      ],
+      "gate": "requireRoutePerm",
+      "permission": "supplier.view",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/suppliers/route.ts",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "gate": "withAuth",
+      "permission": "supplier.view",
       "exemptReason": null
     },
     {
@@ -4460,6 +4666,89 @@
       ],
       "gate": "withAuth",
       "permission": "sku_stock.view",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/warranty/claims/[id]/approve/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "gate": "withAuth",
+      "permission": "warranty.manage",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/warranty/claims/[id]/close/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "gate": "withAuth",
+      "permission": "warranty.manage",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/warranty/claims/[id]/deny/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "gate": "withAuth",
+      "permission": "warranty.manage",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/warranty/claims/[id]/repair-handoff/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "gate": "withAuth",
+      "permission": "warranty.manage",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/warranty/claims/[id]/repair/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "gate": "withAuth",
+      "permission": "warranty.repair",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/warranty/claims/[id]/rma/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "gate": "withAuth",
+      "permission": "warranty.manage",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/warranty/claims/[id]/route.ts",
+      "methods": [
+        "GET",
+        "PATCH"
+      ],
+      "gate": "withAuth",
+      "permission": "warranty.view",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/warranty/claims/[id]/submit/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "gate": "withAuth",
+      "permission": "warranty.manage",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/warranty/claims/route.ts",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "gate": "withAuth",
+      "permission": "warranty.view",
       "exemptReason": null
     },
     {

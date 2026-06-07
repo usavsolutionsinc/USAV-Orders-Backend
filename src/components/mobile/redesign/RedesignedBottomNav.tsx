@@ -6,7 +6,7 @@ import {
   History,
   Barcode,
   ShoppingCart,
-  Truck,
+  PackageOpen,
   Box,
   Lock
 } from '@/components/Icons';
@@ -25,7 +25,7 @@ interface TabMeta {
 
 const TAB_META: Record<MobileNavTabId, TabMeta> = {
   home: { label: 'Recent', icon: History, href: '/m/home' },
-  receiving: { label: 'Receiving', icon: Truck, href: '/m/receiving' },
+  receiving: { label: 'Unbox', icon: PackageOpen, href: '/m/receiving' },
   scan: { label: 'Scan', icon: Barcode, href: '/m/scan', isFab: true },
   packing: { label: 'Packing', icon: Box, href: '/m/pack' },
   picks: { label: 'Picks', icon: ShoppingCart, href: '/m/pick' },

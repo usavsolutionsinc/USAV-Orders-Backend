@@ -397,7 +397,7 @@ export function UnmatchedItemsSection({
             type="button"
             onClick={() => setPopoverMode('repair_service')}
             title="Pick a recent Ecwid repair-service order (-RS) to link to this carton"
-            className="flex items-center gap-1 rounded-md border border-sky-200 bg-sky-50 px-2.5 py-1 text-caption font-bold uppercase tracking-wider text-sky-700 hover:bg-sky-100"
+            className="flex h-6 items-center gap-1 rounded-md border border-sky-200 bg-sky-50 px-2.5 text-caption font-bold uppercase tracking-wider text-sky-700 hover:bg-sky-100"
           >
             <Wrench className="h-3 w-3" />
             Link repair service
@@ -407,7 +407,7 @@ export function UnmatchedItemsSection({
             onClick={() => setPopoverMode('search')}
             aria-label="Add item"
             title="Add item — search the Zoho catalog and pick a product"
-            className="flex items-center justify-center rounded-xl bg-blue-600 p-1.5 text-white hover:bg-blue-700"
+            className="flex h-6 w-6 items-center justify-center rounded-xl bg-blue-600 text-white hover:bg-blue-700"
           >
             <Plus className="h-4 w-4" />
           </button>

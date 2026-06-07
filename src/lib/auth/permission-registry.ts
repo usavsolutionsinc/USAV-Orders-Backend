@@ -38,6 +38,7 @@ export const PERMISSION_CATEGORY_DEFS = [
   { id: 'shipping',     label: 'Shipping & Orders' },
   { id: 'fba',          label: 'FBA' },
   { id: 'inventory',    label: 'Inventory' },
+  { id: 'sourcing',     label: 'Sourcing' },
   { id: 'ops',          label: 'Operations & Reports' },
   { id: 'integrations', label: 'Integrations' },
   { id: 'admin',        label: 'Admin' },
@@ -95,6 +96,9 @@ export const PERMISSIONS = [
   { id: 'orders.create',            category: 'shipping', label: 'Create orders' },
   { id: 'orders.import',            category: 'shipping', label: 'Import orders (Google Sheets + Ecwid)' },
   { id: 'orders.void',              category: 'shipping', label: 'Void order', destructive: true, stepUp: true },
+  { id: 'warranty.view',            category: 'shipping', label: 'View warranty claims' },
+  { id: 'warranty.manage',          category: 'shipping', label: 'Manage warranty claims (log / lifecycle / quote)' },
+  { id: 'warranty.repair',          category: 'shipping', label: 'Log warranty repair attempts' },
 
   // ─ FBA ─
   { id: 'fba.view',                 category: 'fba', label: 'View FBA' },
@@ -118,6 +122,14 @@ export const PERMISSIONS = [
   { id: 'replenish.create_po',      category: 'inventory', label: 'Create replenishment PO' },
   { id: 'replenish.approve_po',     category: 'inventory', label: 'Approve replenishment PO', destructive: true, stepUp: true },
   { id: 'stock_alerts.ack',          category: 'inventory', label: 'Acknowledge stock alerts' },
+
+  // ─ Sourcing (Bose parts compatibility + alternative sourcing engine) ─
+  { id: 'sourcing.view',            category: 'sourcing', label: 'View sourcing & compatibility' },
+  { id: 'sourcing.manage',          category: 'sourcing', label: 'Edit compatibility, models & alerts' },
+  { id: 'sourcing.search',          category: 'sourcing', label: 'Run secondary-market searches' },
+  { id: 'sourcing.import',          category: 'sourcing', label: 'Import a sourcing candidate into inventory', destructive: true },
+  { id: 'supplier.view',            category: 'sourcing', label: 'View suppliers' },
+  { id: 'supplier.manage',          category: 'sourcing', label: 'Manage suppliers' },
 
   // ─ Operations & Reports ─
   { id: 'dashboard.view',           category: 'ops', label: 'View dashboard' },

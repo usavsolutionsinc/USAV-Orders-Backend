@@ -1480,6 +1480,15 @@ export const skuCatalog = pgTable('sku_catalog', {
   gtin: text('gtin'),
   imageUrl: text('image_url'),
   isActive: boolean('is_active').notNull().default(true),
+  /** Sourcing lifecycle: active|eol|discontinued|nrnd|unknown. Non-active rows feed runSourcingScanJob. Added 2026-06-06. */
+  lifecycleStatus: text('lifecycle_status').notNull().default('active'),
+  /** Min on-hand before the sourcing scan opens a low_stock alert (NULL = none). */
+  reorderThreshold: integer('reorder_threshold'),
+  /** Rolling acquisition cost stamped from part_acquisitions on import; margin baseline. */
+  lastKnownCostCents: integer('last_known_cost_cents'),
+  sourcingNotes: text('sourcing_notes'),
+  /** Per-SKU replenish price point (cents); the watcher alerts below this. Added 2026-06-06. */
+  replenishTargetCents: integer('replenish_target_cents'),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 });
@@ -1532,6 +1541,141 @@ export const pendingSkus = pgTable('pending_skus', {
 export type PendingSku = typeof pendingSkus.$inferSelect;
 export type NewPendingSku = typeof pendingSkus.$inferInsert;
 
+// ─── Bose Sourcing Engine ────────────────────────────────────────────────────
+// Compatibility DB + alternative-sourcing tables. See migrations
+// 2026-06-06e/f/g and docs/bose-parts-sourcing-engine-plan.md.
+
+/** Bose product model catalog — the root of the compatibility lookup. */
+export const boseModels = pgTable('bose_models', {
+  id: serial('id').primaryKey(),
+  modelNumber: text('model_number').notNull().unique(),
+  modelName: text('model_name').notNull(),
+  family: text('family'),
+  productType: text('product_type'),
+  releaseYear: integer('release_year'),
+  eolDate: date('eol_date'),
+  imageUrl: text('image_url'),
+  notes: text('notes'),
+  isActive: boolean('is_active').notNull().default(true),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+});
+export type BoseModel = typeof boseModels.$inferSelect;
+export type NewBoseModel = typeof boseModels.$inferInsert;
+
+/** Optional serial-prefix -> model decode. Ships empty; lookup degrades to model search. */
+export const boseSerialPrefixes = pgTable('bose_serial_prefixes', {
+  id: serial('id').primaryKey(),
+  prefix: text('prefix').notNull().unique(),
+  boseModelId: integer('bose_model_id').notNull().references(() => boseModels.id, { onDelete: 'cascade' }),
+  notes: text('notes'),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+});
+export type BoseSerialPrefix = typeof boseSerialPrefixes.$inferSelect;
+export type NewBoseSerialPrefix = typeof boseSerialPrefixes.$inferInsert;
+
+/** Many-to-many: which sku_catalog parts fit which bose_models. Distinct from sku_relationships (BOM). */
+export const partCompatibility = pgTable('part_compatibility', {
+  id: serial('id').primaryKey(),
+  boseModelId: integer('bose_model_id').notNull().references(() => boseModels.id, { onDelete: 'cascade' }),
+  skuId: integer('sku_id').notNull().references(() => skuCatalog.id, { onDelete: 'cascade' }),
+  partRole: text('part_role').notNull(),
+  isOem: boolean('is_oem').notNull().default(true),
+  fit: text('fit').notNull().default('exact'),               // exact|equivalent|salvage
+  confidence: text('confidence').notNull().default('confirmed'), // confirmed|likely|unverified
+  source: text('source').notNull().default('manual'),        // manual|csv_import|ebay
+  notes: text('notes'),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+}, (t) => ({
+  uniq: uniqueIndex('part_compatibility_uniq').on(t.boseModelId, t.skuId, t.partRole),
+}));
+export type PartCompatibility = typeof partCompatibility.$inferSelect;
+export type NewPartCompatibility = typeof partCompatibility.$inferInsert;
+
+/** Third-party sourcing vendors (eBay sellers auto-created on import; others manual). */
+export const suppliers = pgTable('suppliers', {
+  id: serial('id').primaryKey(),
+  name: text('name').notNull(),
+  supplierType: text('supplier_type').notNull().default('other'), // ebay_seller|distributor|salvage|oem|marketplace|other
+  email: text('email'),
+  phone: text('phone'),
+  url: text('url'),
+  ebaySellerId: text('ebay_seller_id'),
+  rating: integer('rating'),
+  leadTimeDays: integer('lead_time_days'),
+  notes: text('notes'),
+  isActive: boolean('is_active').notNull().default(true),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+});
+export type Supplier = typeof suppliers.$inferSelect;
+export type NewSupplier = typeof suppliers.$inferInsert;
+
+/** Auto-flag queue for EOL/discontinued/low-stock SKUs. Upserted by runSourcingScanJob. */
+export const sourcingAlerts = pgTable('sourcing_alerts', {
+  id: serial('id').primaryKey(),
+  skuId: integer('sku_id').notNull().references(() => skuCatalog.id, { onDelete: 'cascade' }),
+  boseModelId: integer('bose_model_id').references(() => boseModels.id, { onDelete: 'set null' }),
+  alertType: text('alert_type').notNull(),       // eol|discontinued|low_stock|demand_no_stock
+  severity: text('severity').notNull().default('warn'), // info|warn|critical
+  status: text('status').notNull().default('open'),     // open|sourcing|resolved|dismissed
+  reason: text('reason'),
+  openedAt: timestamp('opened_at', { withTimezone: true }).notNull().defaultNow(),
+  resolvedAt: timestamp('resolved_at', { withTimezone: true }),
+  resolvedBy: integer('resolved_by').references(() => staff.id, { onDelete: 'set null' }),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+});
+export type SourcingAlert = typeof sourcingAlerts.$inferSelect;
+export type NewSourcingAlert = typeof sourcingAlerts.$inferInsert;
+
+/** Normalized secondary-market (eBay Browse) listings; the watchlist + import source. */
+export const sourcingCandidates = pgTable('sourcing_candidates', {
+  id: serial('id').primaryKey(),
+  skuId: integer('sku_id').references(() => skuCatalog.id, { onDelete: 'set null' }),
+  boseModelId: integer('bose_model_id').references(() => boseModels.id, { onDelete: 'set null' }),
+  sourcingAlertId: integer('sourcing_alert_id').references(() => sourcingAlerts.id, { onDelete: 'set null' }),
+  supplierId: integer('supplier_id').references(() => suppliers.id, { onDelete: 'set null' }),
+  source: text('source').notNull().default('ebay'),   // ebay|manual
+  externalId: text('external_id'),
+  title: text('title').notNull(),
+  url: text('url'),
+  imageUrl: text('image_url'),
+  condition: text('condition'),                       // new|refurbished|used|for_parts
+  priceCents: integer('price_cents'),
+  shippingCents: integer('shipping_cents'),
+  currency: text('currency').notNull().default('USD'),
+  sellerName: text('seller_name'),
+  status: text('status').notNull().default('candidate'), // candidate|watching|ordered|imported|rejected
+  raw: jsonb('raw'),
+  capturedAt: timestamp('captured_at', { withTimezone: true }).notNull().defaultNow(),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+});
+export type SourcingCandidate = typeof sourcingCandidates.$inferSelect;
+export type NewSourcingCandidate = typeof sourcingCandidates.$inferInsert;
+
+/** Cost + condition ledger linking a candidate to the receiving/serial_units pipeline on import. */
+export const partAcquisitions = pgTable('part_acquisitions', {
+  id: serial('id').primaryKey(),
+  sourcingCandidateId: integer('sourcing_candidate_id').references(() => sourcingCandidates.id, { onDelete: 'set null' }),
+  supplierId: integer('supplier_id').references(() => suppliers.id, { onDelete: 'set null' }),
+  skuId: integer('sku_id').notNull().references(() => skuCatalog.id, { onDelete: 'cascade' }),
+  receivingId: integer('receiving_id').references(() => receiving.id, { onDelete: 'set null' }),
+  serialUnitId: integer('serial_unit_id').references(() => serialUnits.id, { onDelete: 'set null' }),
+  acquisitionCostCents: integer('acquisition_cost_cents'),
+  shippingCostCents: integer('shipping_cost_cents'),
+  condition: text('condition'),                       // new|refurbished|used|for_parts
+  status: text('status').notNull().default('ordered'), // ordered|received|imported|returned
+  orderedAt: timestamp('ordered_at', { withTimezone: true }).notNull().defaultNow(),
+  receivedAt: timestamp('received_at', { withTimezone: true }),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+});
+export type PartAcquisition = typeof partAcquisitions.$inferSelect;
+export type NewPartAcquisition = typeof partAcquisitions.$inferInsert;
+
 export const qcCheckTemplates = pgTable('qc_check_templates', {
   id: serial('id').primaryKey(),
   skuCatalogId: integer('sku_catalog_id').references(() => skuCatalog.id, { onDelete: 'cascade' }),
@@ -1539,6 +1683,19 @@ export const qcCheckTemplates = pgTable('qc_check_templates', {
   stepLabel: text('step_label').notNull(),
   stepType: text('step_type').notNull().default('PASS_FAIL'),
   sortOrder: integer('sort_order').notNull().default(0),
+  // Lifecycle: 'draft' steps are hidden from execution views (tech checklist /
+  // testing-bundle / bulk settle) until published. Default 'published' keeps
+  // every existing step visible. See 2026-06-06_qc_template_lifecycle.sql.
+  status: text('status').notNull().default('published'),
+  // Structured-value foundation (battery %, BT, measurements). Null = legacy
+  // pass/fail. Server decides pass/fail from value vs pass_min/pass_max.
+  valueKind: text('value_kind'),
+  valueUnit: text('value_unit'),
+  valueEnum: jsonb('value_enum'),
+  passMin: numeric('pass_min'),
+  passMax: numeric('pass_max'),
+  // Failure mode to auto-tag on this unit when this step fails (2026-06-07).
+  failureModeId: integer('failure_mode_id').references(() => failureModes.id, { onDelete: 'set null' }),
 });
 
 export const techVerifications = pgTable('tech_verifications', {
@@ -1552,6 +1709,11 @@ export const techVerifications = pgTable('tech_verifications', {
   verifiedBy: integer('verified_by'),
   verifiedAt: timestamp('verified_at', { withTimezone: true }).notNull().defaultNow(),
   notes: text('notes'),
+  // Structured recorded answer for value_kind steps (battery %, voltage, …).
+  valueNum: numeric('value_num'),
+  valueText: text('value_text'),
+  // Which failure mode a failed result mapped to (2026-06-07).
+  failedModeId: integer('failed_mode_id').references(() => failureModes.id, { onDelete: 'set null' }),
 });
 
 // ──────────────────────────────────────────────
@@ -1633,6 +1795,8 @@ export const serialUnits = pgTable('serial_units', {
   sku: text('sku'),
   skuCatalogId: integer('sku_catalog_id').references(() => skuCatalog.id, { onDelete: 'set null' }),
   zohoItemId: text('zoho_item_id'),
+  /** USAV-minted unit identity {SKU_SHORT}-{YYWW}-{SEQ6}, stamped at first label. Org-unique. Added 2026-06-06. */
+  unitUid: text('unit_uid'),
   currentStatus: serialStatusEnum('current_status').notNull().default('UNKNOWN'),
   currentLocation: text('current_location'),
   conditionGrade: conditionGradeEnum('condition_grade'),
@@ -1651,6 +1815,9 @@ export const serialUnits = pgTable('serial_units', {
   legacyDateTime: timestamp('legacy_date_time'),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  // NOTE: the org-scoped partial unique index ux_serial_units_org_unit_uid
+  // and the organization_id column (added 2026-05-23) live in SQL migrations,
+  // which are the source of truth for this table — not expressed here.
 });
 
 /**
@@ -1830,6 +1997,92 @@ export const serialUnitConditionHistory = pgTable('serial_unit_condition_history
   cosmeticNotes: text('cosmetic_notes'),
   functionalNotes: text('functional_notes'),
   inventoryEventId: bigint('inventory_event_id', { mode: 'number' }).references(() => inventoryEvents.id, { onDelete: 'set null' }),
+});
+
+/**
+ * failure_modes — defect taxonomy (lookup). `code` is the stable key; a mode
+ * may cap the best assignable grade (advisory). See 2026-06-07_failure_modes.sql.
+ */
+export const failureModes = pgTable('failure_modes', {
+  id: serial('id').primaryKey(),
+  code: text('code').notNull().unique(),
+  label: text('label').notNull(),
+  category: text('category').notNull().default('hardware'),
+  severity: text('severity').notNull().default('major'),
+  isRepairable: boolean('is_repairable').notNull().default(true),
+  typicalCostCents: integer('typical_cost_cents'),
+  capsGradeAt: conditionGradeEnum('caps_grade_at'),
+  sortOrder: integer('sort_order').notNull().default(0),
+  active: boolean('active').notNull().default(true),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+});
+
+/**
+ * unit_failure_tags — per-serial defect tags. Opened (open) then resolved.
+ * At most one OPEN tag per (unit, mode) — auto-tag-on-fail stays idempotent.
+ */
+export const unitFailureTags = pgTable('unit_failure_tags', {
+  id: bigserial('id', { mode: 'number' }).primaryKey(),
+  serialUnitId: integer('serial_unit_id').notNull().references(() => serialUnits.id, { onDelete: 'cascade' }),
+  failureModeId: integer('failure_mode_id').notNull().references(() => failureModes.id),
+  detectedAt: timestamp('detected_at', { withTimezone: true }).notNull().defaultNow(),
+  detectedByStaffId: integer('detected_by_staff_id').references(() => staff.id, { onDelete: 'set null' }),
+  source: text('source').notNull().default('manual'),
+  resolutionStatus: text('resolution_status').notNull().default('open'),
+  inventoryEventId: bigint('inventory_event_id', { mode: 'number' }).references(() => inventoryEvents.id, { onDelete: 'set null' }),
+  notes: text('notes'),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  // Set when a completed repair resolved this tag (2026-06-07_unit_repairs.sql).
+  resolvedRepairId: integer('resolved_repair_id').references(() => unitRepairs.id, { onDelete: 'set null' }),
+});
+
+/**
+ * unit_repairs — per-serial repair records (Phase 3). Opened then
+ * completed/failed/scrapped; carries parts/cost/labor and cross-links the
+ * REPAIR_STARTED / REPAIR_COMPLETED events. `repair_service_id` bridges the
+ * legacy intake table. See 2026-06-07_unit_repairs.sql.
+ */
+export const unitRepairs = pgTable('unit_repairs', {
+  id: serial('id').primaryKey(),
+  serialUnitId: integer('serial_unit_id').notNull().references(() => serialUnits.id, { onDelete: 'cascade' }),
+  status: text('status').notNull().default('pending'),
+  summary: text('summary').notNull(),
+  partsUsed: jsonb('parts_used'),
+  laborMinutes: integer('labor_minutes'),
+  costCents: integer('cost_cents'),
+  startedAt: timestamp('started_at', { withTimezone: true }),
+  startedByStaffId: integer('started_by_staff_id').references(() => staff.id, { onDelete: 'set null' }),
+  completedAt: timestamp('completed_at', { withTimezone: true }),
+  completedByStaffId: integer('completed_by_staff_id').references(() => staff.id, { onDelete: 'set null' }),
+  rmaId: integer('rma_id'),
+  repairServiceId: integer('repair_service_id'),
+  startEventId: bigint('start_event_id', { mode: 'number' }).references(() => inventoryEvents.id, { onDelete: 'set null' }),
+  doneEventId: bigint('done_event_id', { mode: 'number' }).references(() => inventoryEvents.id, { onDelete: 'set null' }),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+});
+
+/** repair_failure_resolutions — which failure modes a repair addresses. */
+export const repairFailureResolutions = pgTable('repair_failure_resolutions', {
+  repairId: integer('repair_id').notNull().references(() => unitRepairs.id, { onDelete: 'cascade' }),
+  failureModeId: integer('failure_mode_id').notNull().references(() => failureModes.id),
+}, (t) => ({
+  pk: primaryKey({ columns: [t.repairId, t.failureModeId] }),
+}));
+
+/**
+ * unit_quality_scores — derived per-unit quality projection (Phase 4). A cache
+ * of qualityScore.ts output; rebuildable by the backfill script, never SoT.
+ * See 2026-06-07_unit_quality_scores.sql.
+ */
+export const unitQualityScores = pgTable('unit_quality_scores', {
+  serialUnitId: integer('serial_unit_id').primaryKey().references(() => serialUnits.id, { onDelete: 'cascade' }),
+  qualityScore: integer('quality_score').notNull(),
+  riskLevel: text('risk_level').notNull().default('medium'),
+  riskReasons: jsonb('risk_reasons').notNull().default('[]'),
+  ebayConditionId: text('ebay_condition_id'),
+  gradeAtScore: conditionGradeEnum('grade_at_score'),
+  computedAt: timestamp('computed_at', { withTimezone: true }).notNull().defaultNow(),
 });
 
 /**
@@ -2181,4 +2434,129 @@ export const workflowRuns = pgTable('workflow_runs', {
   unitIdx: index('idx_workflow_runs_serial_unit_id').on(table.serialUnitId),
   orgCreatedIdx: index('idx_workflow_runs_org_created').on(table.organizationId, table.createdAt),
 }));
+
+// ─── Warranty Claim Logger + Repair Outcome Tracker ──────────────────────────
+// 4th mode on the Orders / Shipping page. See 2026-06-06_warranty_claim_logger.sql
+// and docs/warranty-claim-logger-plan.md. Clock logic: src/lib/warranty/clock.ts.
+
+/**
+ * warranty_claims — first-class warranty claim. The customer-facing record
+ * (status, denial reason, warranty clock). Physical returns link out to
+ * rma_authorizations (rma_id); repair handoff to repair_service.
+ */
+export const warrantyClaims = pgTable('warranty_claims', {
+  id: bigserial('id', { mode: 'number' }).primaryKey(),
+  organizationId: orgIdCol(),
+  claimNumber: text('claim_number').notNull().unique(),
+  serialUnitId: integer('serial_unit_id').references(() => serialUnits.id, { onDelete: 'set null' }),
+  serialNumber: text('serial_number'),
+  orderId: integer('order_id').references(() => orders.id, { onDelete: 'set null' }),
+  sku: text('sku'),
+  productTitle: text('product_title'),
+  customerId: integer('customer_id').references(() => customers.id, { onDelete: 'set null' }),
+  sourceSystem: text('source_system'),
+  sourceOrderId: text('source_order_id'),
+  sourceTrackingNumber: text('source_tracking_number'),
+  purchaseProofUrl: text('purchase_proof_url'),
+  purchaseProofAttachmentId: text('purchase_proof_attachment_id'),
+  purchasedAt: timestamp('purchased_at', { withTimezone: true }),
+  /** Carrier DELIVERED date (from shipping_tracking_numbers) when known. */
+  deliveredAt: timestamp('delivered_at', { withTimezone: true }),
+  /** Packed/scanned date — fallback clock anchor (+4d estimate). */
+  packedScannedAt: timestamp('packed_scanned_at', { withTimezone: true }),
+  warrantyStartsAt: timestamp('warranty_starts_at', { withTimezone: true }),
+  warrantyExpiresAt: timestamp('warranty_expires_at', { withTimezone: true }),
+  /** DELIVERED | PACKED_PLUS_ESTIMATE (provisional until a real delivered date lands). */
+  clockBasis: text('clock_basis'),
+  /** Term snapshot (per-org, default 30) at log time. */
+  warrantyDays: integer('warranty_days'),
+  /** LOGGED | SUBMITTED | APPROVED | DENIED | IN_REPAIR | REPAIRED | CLOSED | EXPIRED */
+  status: text('status').notNull().default('LOGGED'),
+  denialReasonCode: text('denial_reason_code').references(() => reasonCodes.code, { onDelete: 'set null' }),
+  denialNotes: text('denial_notes'),
+  rmaId: bigint('rma_id', { mode: 'number' }),
+  repairServiceId: integer('repair_service_id').references(() => repairService.id, { onDelete: 'set null' }),
+  notes: text('notes'),
+  createdByStaffId: integer('created_by_staff_id').references(() => staff.id, { onDelete: 'set null' }),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+}, (table) => ({
+  orgIdx: index('idx_warranty_claims_org').on(table.organizationId),
+  statusIdx: index('idx_warranty_claims_status').on(table.status),
+}));
+
+/**
+ * warranty_claim_events — append-only per-claim timeline (status changes, notes,
+ * attachments, notifications).
+ */
+export const warrantyClaimEvents = pgTable('warranty_claim_events', {
+  id: bigserial('id', { mode: 'number' }).primaryKey(),
+  organizationId: orgIdCol(),
+  claimId: bigint('claim_id', { mode: 'number' }).notNull().references(() => warrantyClaims.id, { onDelete: 'cascade' }),
+  eventType: text('event_type').notNull(),
+  fromStatus: text('from_status'),
+  toStatus: text('to_status'),
+  payload: jsonb('payload').notNull().default(sql`'{}'::jsonb`),
+  actorStaffId: integer('actor_staff_id').references(() => staff.id, { onDelete: 'set null' }),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+}, (table) => ({
+  claimIdx: index('idx_warranty_events_claim').on(table.claimId, table.createdAt),
+}));
+
+/**
+ * warranty_repair_attempts — one row per repair attempt/outcome with parts-used
+ * + photo attachments (NAS refs).
+ */
+export const warrantyRepairAttempts = pgTable('warranty_repair_attempts', {
+  id: bigserial('id', { mode: 'number' }).primaryKey(),
+  organizationId: orgIdCol(),
+  claimId: bigint('claim_id', { mode: 'number' }).notNull().references(() => warrantyClaims.id, { onDelete: 'cascade' }),
+  attemptNo: integer('attempt_no').notNull().default(1),
+  technicianStaffId: integer('technician_staff_id').references(() => staff.id, { onDelete: 'set null' }),
+  diagnosis: text('diagnosis'),
+  partsUsed: jsonb('parts_used').notNull().default(sql`'[]'::jsonb`),
+  /** FIXED | NOT_FIXABLE | PENDING_PARTS | RTV */
+  outcome: text('outcome'),
+  laborMinutes: integer('labor_minutes'),
+  costParts: numeric('cost_parts', { precision: 12, scale: 2 }),
+  costLabor: numeric('cost_labor', { precision: 12, scale: 2 }),
+  photoAttachmentIds: jsonb('photo_attachment_ids').notNull().default(sql`'[]'::jsonb`),
+  notes: text('notes'),
+  startedAt: timestamp('started_at', { withTimezone: true }),
+  completedAt: timestamp('completed_at', { withTimezone: true }),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+}, (table) => ({
+  claimIdx: index('idx_warranty_repair_claim').on(table.claimId, table.attemptNo),
+}));
+
+/**
+ * warranty_quotes — post-warranty paid-repair quote for a denied/expired claim.
+ */
+export const warrantyQuotes = pgTable('warranty_quotes', {
+  id: bigserial('id', { mode: 'number' }).primaryKey(),
+  organizationId: orgIdCol(),
+  claimId: bigint('claim_id', { mode: 'number' }).notNull().references(() => warrantyClaims.id, { onDelete: 'cascade' }),
+  quoteNumber: text('quote_number').notNull().unique(),
+  lineItems: jsonb('line_items').notNull().default(sql`'[]'::jsonb`),
+  subtotal: numeric('subtotal', { precision: 12, scale: 2 }),
+  tax: numeric('tax', { precision: 12, scale: 2 }),
+  total: numeric('total', { precision: 12, scale: 2 }),
+  /** DRAFT | SENT | ACCEPTED | DECLINED | EXPIRED */
+  status: text('status').notNull().default('DRAFT'),
+  sentAt: timestamp('sent_at', { withTimezone: true }),
+  respondedAt: timestamp('responded_at', { withTimezone: true }),
+  validUntil: timestamp('valid_until', { withTimezone: true }),
+  createdByStaffId: integer('created_by_staff_id').references(() => staff.id, { onDelete: 'set null' }),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+}, (table) => ({
+  claimIdx: index('idx_warranty_quotes_claim').on(table.claimId),
+  statusIdx: index('idx_warranty_quotes_status').on(table.status),
+}));
+
+export type WarrantyClaim = typeof warrantyClaims.$inferSelect;
+export type NewWarrantyClaim = typeof warrantyClaims.$inferInsert;
+export type WarrantyClaimEvent = typeof warrantyClaimEvents.$inferSelect;
+export type WarrantyRepairAttempt = typeof warrantyRepairAttempts.$inferSelect;
+export type WarrantyQuote = typeof warrantyQuotes.$inferSelect;
 

@@ -94,10 +94,13 @@ Of the 47 fully-dead types, **14 unambiguously-internal ones were deleted** this
 
 Gates: `tsc --noEmit` clean; build run. Removal was brace-matched (type + attached doc comment), surrounding code untouched (diffs reviewed).
 
-**Held back — 33 fully-dead types in intentional typed-API surfaces** (NOT deleted on tool output alone; tied to active initiatives, awaiting an explicit keep/prune decision):
-- `src/design-system/**` (21): token/theme types — `Spacing`, `Radii`, `Shadows`, `ZIndex`, `FontSizes`, `FontWeights`, `TypographyPresets`, `BaseColors`, `SemanticColors`, `DarkTheme`, `LightTheme`, `Breakpoints`, `MotionDurations`, `HapticPattern`, `TouchTarget`, `SafeArea`, `MobileDensity`, `FontFamilies`, `BorderWidths`, `DesignSystemCssVariables`, `FoundationIcons`. Related to [[design-2026-component-adoption]]. None are barrel-re-exported (occur once) → likely dead, but design-system type API is conventionally kept.
-- `src/lib/schemas/**` (10): Zod `z.infer` contract types — `OrderUpdateInput`, `OrderTrackingPostInput`, `OrderTrackingPatchInput`, `ReasonCodeCreateInput`, `ReasonCodeUpdateInput`, `RmaUpdateInput`, `SkuCatalogCreateInput`, `SkuCatalogUpdateInput`, `SkuRelationshipCreateInput`, `SkuRelationshipUpdateInput`. Related to [[crud-endpoints-initiative]].
+**Then deleted (user decision: "schemas + integrations only") — 12 more fully-dead types:**
+- `src/lib/schemas/**` (10): Zod `z.infer` contract types — `OrderUpdateInput`, `OrderTrackingPostInput`, `OrderTrackingPatchInput`, `ReasonCodeCreateInput`, `ReasonCodeUpdateInput`, `RmaUpdateInput`, `SkuCatalogCreateInput`, `SkuCatalogUpdateInput`, `SkuRelationshipCreateInput`, `SkuRelationshipUpdateInput`. Trivially regenerated from their Zod schemas if a consumer is later wired. Related to [[crud-endpoints-initiative]].
 - `src/lib/integrations/credentials.ts` (2): `EcwidCredentials`, `SquareCredentials`. Related to [[nango-additive-integration]].
+
+Wave 6 total deleted: **26 dead types** (14 internal + 12 schema/integration). Gate: `tsc --noEmit` clean + full build (exit 0).
+
+**Kept by decision — 21 design-system token/theme types** in `src/design-system/**` (`Spacing`, `Radii`, `Shadows`, `ZIndex`, `FontSizes`, `FontWeights`, `TypographyPresets`, `BaseColors`, `SemanticColors`, `DarkTheme`, `LightTheme`, `Breakpoints`, `MotionDurations`, `HapticPattern`, `TouchTarget`, `SafeArea`, `MobileDensity`, `FontFamilies`, `BorderWidths`, `DesignSystemCssVariables`, `FoundationIcons`). Fully dead now (occur once, not barrel-re-exported) but preserved as intentional typed API for [[design-2026-component-adoption]]. Revisit if that initiative stalls.
 
 **Not pursued — 736 locally-used "unused exports"**: only the `export` keyword is redundant (type is used within its own file). Demoting to local removes no actual code (types erase at compile) and carries edge-case risk (declaration merging, barrels). Left as accepted knip baseline noise.
 

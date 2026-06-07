@@ -11,6 +11,12 @@ export interface SkuCatalogRow {
   ean: string | null;
   image_url: string | null;
   is_active: boolean;
+  // ─ Sourcing lifecycle (Bose engine; migration 2026-06-06d) ─
+  lifecycle_status: string;
+  reorder_threshold: number | null;
+  last_known_cost_cents: number | null;
+  sourcing_notes: string | null;
+  replenish_target_cents: number | null;
   created_at: string;
   updated_at: string;
 }
@@ -65,6 +71,15 @@ export interface QcCheckTemplateRow {
   step_label: string;
   step_type: string;
   sort_order: number;
+  // Lifecycle + structured-value foundation (2026-06-06). Older callers that
+  // don't select these still type-check (optional); the columns always exist.
+  status?: string;
+  value_kind?: string | null;
+  value_unit?: string | null;
+  value_enum?: string[] | null;
+  pass_min?: string | null;
+  pass_max?: string | null;
+  failure_mode_id?: number | null;
 }
 
 export interface TechVerificationRow {
@@ -78,6 +93,8 @@ export interface TechVerificationRow {
   verified_by: number | null;
   verified_at: string;
   notes: string | null;
+  value_num?: string | null;
+  value_text?: string | null;
 }
 
 // ─── Normalize (same as product-manuals.ts) ──────────────────────────────────
@@ -132,10 +149,24 @@ export async function upsertSkuCatalog(params: {
   ean?: string | null;
   imageUrl?: string | null;
   isActive?: boolean;
+  // ─ Sourcing lifecycle (all optional; omitted = preserve existing / default) ─
+  lifecycleStatus?: string | null;
+  reorderThreshold?: number | null;
+  lastKnownCostCents?: number | null;
+  sourcingNotes?: string | null;
+  /** Per-SKU replenish target price (cents). Below this, the watcher alerts. */
+  replenishTargetCents?: number | null;
 }): Promise<SkuCatalogRow> {
+  // The lifecycle params are referenced directly ($8–$11) rather than via
+  // EXCLUDED so that omitting them (null) preserves the existing row on update
+  // and falls back to the column default ('active') on insert — callers that
+  // don't opt into lifecycle behave exactly as before.
   const result = await pool.query(
-    `INSERT INTO sku_catalog (sku, product_title, category, upc, ean, image_url, is_active)
-     VALUES ($1, $2, $3, $4, $5, $6, $7)
+    `INSERT INTO sku_catalog
+       (sku, product_title, category, upc, ean, image_url, is_active,
+        lifecycle_status, reorder_threshold, last_known_cost_cents, sourcing_notes,
+        replenish_target_cents)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, COALESCE($8, 'active'), $9, $10, $11, $12)
      ON CONFLICT (sku) DO UPDATE SET
        product_title = EXCLUDED.product_title,
        category = COALESCE(EXCLUDED.category, sku_catalog.category),
@@ -143,6 +174,11 @@ export async function upsertSkuCatalog(params: {
        ean = COALESCE(EXCLUDED.ean, sku_catalog.ean),
        image_url = COALESCE(EXCLUDED.image_url, sku_catalog.image_url),
        is_active = EXCLUDED.is_active,
+       lifecycle_status = COALESCE($8, sku_catalog.lifecycle_status),
+       reorder_threshold = COALESCE($9, sku_catalog.reorder_threshold),
+       last_known_cost_cents = COALESCE($10, sku_catalog.last_known_cost_cents),
+       sourcing_notes = COALESCE($11, sku_catalog.sourcing_notes),
+       replenish_target_cents = COALESCE($12, sku_catalog.replenish_target_cents),
        updated_at = NOW()
      RETURNING *`,
     [
@@ -153,6 +189,11 @@ export async function upsertSkuCatalog(params: {
       params.ean?.trim() || null,
       params.imageUrl?.trim() || null,
       params.isActive ?? true,
+      params.lifecycleStatus ?? null,
+      params.reorderThreshold ?? null,
+      params.lastKnownCostCents ?? null,
+      params.sourcingNotes?.trim() || null,
+      params.replenishTargetCents ?? null,
     ],
   );
   return result.rows[0];
@@ -417,13 +458,18 @@ export async function getKitParts(
 export async function getQcChecks(
   skuCatalogId: number,
   category?: string | null,
+  opts?: { publishedOnly?: boolean },
 ): Promise<QcCheckTemplateRow[]> {
+  // Execution views (testing-bundle, tech checklist) pass publishedOnly so draft
+  // steps under authoring stay hidden. Authoring views omit it to see all.
+  const publishedOnly = opts?.publishedOnly === true;
   const result = await pool.query(
     `SELECT * FROM qc_check_templates
-     WHERE sku_catalog_id = $1
-        OR ($2::text IS NOT NULL AND category = $2 AND sku_catalog_id IS NULL)
+     WHERE (sku_catalog_id = $1
+        OR ($2::text IS NOT NULL AND category = $2 AND sku_catalog_id IS NULL))
+       AND ($3::boolean IS FALSE OR status = 'published')
      ORDER BY sort_order, id`,
-    [skuCatalogId, category?.trim() || null],
+    [skuCatalogId, category?.trim() || null, publishedOnly],
   );
   return result.rows;
 }
@@ -449,16 +495,29 @@ export async function upsertVerification(params: {
   skuCatalogId: number;
   stepType: string;
   stepId: number;
-  passed: boolean;
+  passed: boolean | null;
   verifiedBy: number;
   notes?: string | null;
+  valueNum?: number | null;
+  valueText?: string | null;
+  failedModeId?: number | null;
 }): Promise<TechVerificationRow> {
-  // Upsert: one verification per (source_kind, source_row_id, step_type, step_id)
+  // One verification per (source_kind, source_row_id, step_type, step_id) —
+  // enforced by ux_tech_verifications_step (2026-05-29), so a re-mark UPDATEs
+  // the single row in place.
   const result = await pool.query(
     `INSERT INTO tech_verifications
-       (source_kind, source_row_id, sku_catalog_id, step_type, step_id, passed, verified_by, notes)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-     ON CONFLICT DO NOTHING
+       (source_kind, source_row_id, sku_catalog_id, step_type, step_id,
+        passed, verified_by, notes, value_num, value_text, failed_mode_id)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+     ON CONFLICT (source_kind, source_row_id, step_type, step_id) DO UPDATE
+       SET passed     = EXCLUDED.passed,
+           verified_by = EXCLUDED.verified_by,
+           verified_at = NOW(),
+           notes      = EXCLUDED.notes,
+           value_num  = EXCLUDED.value_num,
+           value_text = EXCLUDED.value_text,
+           failed_mode_id = EXCLUDED.failed_mode_id
      RETURNING *`,
     [
       params.sourceKind,
@@ -469,30 +528,35 @@ export async function upsertVerification(params: {
       params.passed,
       params.verifiedBy,
       params.notes?.trim() || null,
+      params.valueNum ?? null,
+      params.valueText?.trim() || null,
+      params.failedModeId ?? null,
     ],
   );
-  if (result.rows.length > 0) return result.rows[0];
+  return result.rows[0];
+}
 
-  // Already exists — update it. Own param list (no skuCatalogId): the row's
-  // identity is fixed, and Postgres rejects a supplied parameter the SQL never
-  // references ("could not determine data type of parameter $3").
-  const updated = await pool.query(
-    `UPDATE tech_verifications
-     SET passed = $5, verified_by = $6, verified_at = NOW(), notes = $7
-     WHERE source_kind = $1 AND source_row_id = $2
-       AND step_type = $3 AND step_id = $4
-     RETURNING *`,
-    [
-      params.sourceKind,
-      params.sourceRowId,
-      params.stepType,
-      params.stepId,
-      params.passed,
-      params.verifiedBy,
-      params.notes?.trim() || null,
-    ],
-  );
-  return updated.rows[0];
+/**
+ * Derive a step's pass/fail. When the step has a numeric pass band
+ * (pass_min/pass_max), the recorded number decides it (inclusive bounds);
+ * otherwise fall back to the explicit boolean the tester sent. Returns null
+ * when nothing can be determined (no band + no explicit value).
+ */
+export function deriveStepPassed(
+  step: { pass_min?: string | number | null; pass_max?: string | number | null },
+  recorded: { passed?: boolean; valueNum?: number | null },
+): boolean | null {
+  const min = step.pass_min == null ? null : Number(step.pass_min);
+  const max = step.pass_max == null ? null : Number(step.pass_max);
+  const hasBand = (min != null && !Number.isNaN(min)) || (max != null && !Number.isNaN(max));
+
+  if (hasBand && recorded.valueNum != null) {
+    if (min != null && !Number.isNaN(min) && recorded.valueNum < min) return false;
+    if (max != null && !Number.isNaN(max) && recorded.valueNum > max) return false;
+    return true;
+  }
+  if (recorded.passed !== undefined) return recorded.passed;
+  return null;
 }
 
 // ─── Cache-first resolve-or-fetch from Zoho ─────────────────────────────────
@@ -707,6 +771,9 @@ export interface SkuCatalogListRow {
   category: string | null;
   image_url: string | null;
   is_active: boolean;
+  lifecycle_status: string;
+  reorder_threshold: number | null;
+  last_known_cost_cents: number | null;
   platform_count: number;
   manual_count: number;
   qc_step_count: number;
@@ -751,6 +818,7 @@ export async function getSkuCatalogList(params: {
   const result = await pool.query(
     `SELECT
        sc.id, sc.sku, sc.product_title, sc.category, sc.image_url, sc.is_active,
+       sc.lifecycle_status, sc.reorder_threshold, sc.last_known_cost_cents,
        COUNT(DISTINCT sp.id)::int AS platform_count,
        COUNT(DISTINCT pm.id)::int AS manual_count,
        COUNT(DISTINCT qc.id)::int AS qc_step_count,
@@ -924,21 +992,43 @@ export async function deleteManual(id: number): Promise<boolean> {
 
 // ─── QC Check Template CRUD (per catalog) ──────────────────────────────────
 
+export interface QcCheckValueConfig {
+  valueKind?: string | null;
+  valueUnit?: string | null;
+  valueEnum?: string[] | null;
+  passMin?: number | null;
+  passMax?: number | null;
+  failureModeId?: number | null;
+}
+
 export async function createQcCheck(params: {
   skuCatalogId: number;
   stepLabel: string;
   stepType?: string;
   sortOrder?: number;
-}): Promise<QcCheckTemplateRow> {
+  status?: string;
+} & QcCheckValueConfig): Promise<QcCheckTemplateRow> {
+  const status = params.status === 'draft' ? 'draft' : 'published';
+  const valueEnumJson =
+    params.valueEnum != null ? JSON.stringify(params.valueEnum) : null;
   const result = await pool.query(
-    `INSERT INTO qc_check_templates (sku_catalog_id, step_label, step_type, sort_order)
-     VALUES ($1, $2, $3, $4)
+    `INSERT INTO qc_check_templates
+       (sku_catalog_id, step_label, step_type, sort_order, status,
+        value_kind, value_unit, value_enum, pass_min, pass_max, failure_mode_id)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8::jsonb, $9, $10, $11)
      RETURNING *`,
     [
       params.skuCatalogId,
       params.stepLabel.trim(),
       params.stepType?.trim() || 'PASS_FAIL',
       params.sortOrder ?? 0,
+      status,
+      params.valueKind ?? null,
+      params.valueUnit?.trim() || null,
+      valueEnumJson,
+      params.passMin ?? null,
+      params.passMax ?? null,
+      params.failureModeId ?? null,
     ],
   );
 
@@ -956,7 +1046,12 @@ export async function createQcCheck(params: {
 
 export async function updateQcCheck(
   id: number,
-  updates: { stepLabel?: string; stepType?: string; sortOrder?: number },
+  updates: {
+    stepLabel?: string;
+    stepType?: string;
+    sortOrder?: number;
+    status?: string;
+  } & QcCheckValueConfig,
 ): Promise<QcCheckTemplateRow | null> {
   const sets: string[] = [];
   const values: unknown[] = [];
@@ -973,6 +1068,35 @@ export async function updateQcCheck(
   if (updates.sortOrder !== undefined) {
     sets.push(`sort_order = $${idx++}`);
     values.push(updates.sortOrder);
+  }
+  if (updates.status !== undefined) {
+    sets.push(`status = $${idx++}`);
+    values.push(updates.status === 'draft' ? 'draft' : 'published');
+  }
+  // Structured-value config — each is independently settable (null clears).
+  if (updates.valueKind !== undefined) {
+    sets.push(`value_kind = $${idx++}`);
+    values.push(updates.valueKind ?? null);
+  }
+  if (updates.valueUnit !== undefined) {
+    sets.push(`value_unit = $${idx++}`);
+    values.push(updates.valueUnit?.trim() || null);
+  }
+  if (updates.valueEnum !== undefined) {
+    sets.push(`value_enum = $${idx++}::jsonb`);
+    values.push(updates.valueEnum != null ? JSON.stringify(updates.valueEnum) : null);
+  }
+  if (updates.passMin !== undefined) {
+    sets.push(`pass_min = $${idx++}`);
+    values.push(updates.passMin ?? null);
+  }
+  if (updates.passMax !== undefined) {
+    sets.push(`pass_max = $${idx++}`);
+    values.push(updates.passMax ?? null);
+  }
+  if (updates.failureModeId !== undefined) {
+    sets.push(`failure_mode_id = $${idx++}`);
+    values.push(updates.failureModeId ?? null);
   }
 
   if (sets.length === 0) return null;

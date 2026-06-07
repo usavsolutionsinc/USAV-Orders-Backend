@@ -10,7 +10,7 @@
 
 import { COND_LABEL } from '@/components/station/receiving-constants';
 import {
-  Cms,
+  PackageOpen,
   ClipboardList,
   Inbox,
   List,
@@ -44,7 +44,7 @@ export type ReceivingMode = 'incoming' | 'triage' | 'receive' | 'history' | 'pic
 export const RECEIVING_MODE_ITEMS: HorizontalSliderItem[] = [
   { id: 'incoming', label: 'Incoming',     icon: Inbox },
   { id: 'triage',   label: 'Receiving',    icon: ClipboardList },
-  { id: 'receive',  label: 'Unbox',        icon: Cms },
+  { id: 'receive',  label: 'Unbox',        icon: PackageOpen },
   { id: 'history',  label: 'History',      icon: List },
   { id: 'pickup',   label: 'Local Pickup', icon: ShoppingCart },
 ];

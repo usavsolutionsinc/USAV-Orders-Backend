@@ -26,6 +26,7 @@ import {
   fetchUnshippedOrdersData,
   fetchDashboardPackedRecords,
 } from '@/lib/dashboard-table-data';
+import { fetchWarrantyClaims, type FetchWarrantyClaimsParams } from '@/lib/warranty/client';
 
 export interface OrderQueryParams {
   searchQuery?: string;
@@ -140,6 +141,23 @@ export function fbaShipmentsQuery() {
     queryKey: ['dashboard-fba-shipments'],
     queryFn: fetchFbaShipments,
     staleTime: 60_000,
+    gcTime: 5 * 60 * 1000,
+  });
+}
+
+/**
+ * Warranty Logger claim list. Shared by the warranty sidebar AND the right-pane
+ * table so both hit one cache key (same factory rule as the order tables above).
+ */
+export function warrantyClaimsQuery(params: FetchWarrantyClaimsParams = {}) {
+  const status = params.status ?? null;
+  const search = params.search?.trim() || '';
+  const expiringWithinDays = params.expiringWithinDays ?? null;
+  const provisionalOnly = Boolean(params.provisionalOnly);
+  return queryOptions({
+    queryKey: ['warranty-claims', { status, search, expiringWithinDays, provisionalOnly }],
+    queryFn: () => fetchWarrantyClaims({ status, search, expiringWithinDays, provisionalOnly }),
+    staleTime: 30_000,
     gcTime: 5 * 60 * 1000,
   });
 }

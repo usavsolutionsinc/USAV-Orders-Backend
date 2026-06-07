@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState, type ReactNode } from 'react';
-import { X } from '@/components/Icons';
+import { X, Pencil } from '@/components/Icons';
 import { SerialChip } from '@/components/ui/CopyChip';
 import { TextField } from '@/design-system/primitives';
 import { ConditionPills } from './ConditionPills';
@@ -94,6 +94,9 @@ export function SerialCard({
   const showNotes = typeof notes === 'string' && typeof onNotesChange === 'function';
   const [scan, setScan] = useState('');
   const [editing, setEditing] = useState<SavedSerial | null>(null);
+  // Condition picker expand/collapse — starts expanded for selection, collapses
+  // to the chosen pill once a grade is picked or while a serial is being edited.
+  const [condExpanded, setCondExpanded] = useState(true);
   /** Avoid flashing “Saving…” on fast round-trips; only shown if submit hangs ~400ms+ */
   const [showSavingLabel, setShowSavingLabel] = useState(false);
   const inputRef = useRef<HTMLInputElement | null>(null);
@@ -131,6 +134,8 @@ export function SerialCard({
     }
     setEditing(editingSerial);
     setScan(editingSerial.serial_number);
+    // Collapse the condition picker so the focus is on editing the serial text.
+    setCondExpanded(false);
     const t = window.setTimeout(() => {
       const el = inputRef.current;
       if (!el) return;
@@ -153,6 +158,8 @@ export function SerialCard({
     setEditing(s);
     onEditingSerialChange?.(s);
     setScan(s.serial_number);
+    // Collapse the condition picker so the focus is on editing the serial text.
+    setCondExpanded(false);
     // Defer focus until the input is enabled in the new render pass.
     setTimeout(() => {
       const el = inputRef.current;
@@ -208,12 +215,17 @@ export function SerialCard({
     <Shell className={shellClass}>
       <div className="flex items-center gap-2">
         {onConditionChange ? (
-          // Condition picker: full pills until a grade is picked, then it
-          // collapses (collapsible) to just the selected pill — hover it to
-          // re-expand. Picking a grade auto-focuses the serial input via
-          // handleConditionPick; min-w-0 keeps the row from crowding the input.
+          // Condition picker: full pill row when the line opens (for selection),
+          // collapsing to the chosen pill + an edit pencil once a grade is
+          // picked. Picking a grade auto-focuses the serial input below.
           <div className="flex min-w-0 items-center gap-2">
-            <ConditionPills value={condition} onChange={handleConditionPick} collapsible />
+            <ConditionPills
+              value={condition}
+              onChange={handleConditionPick}
+              collapsible
+              expanded={condExpanded}
+              onExpandedChange={setCondExpanded}
+            />
             <div className="h-8 w-px shrink-0 bg-gray-100" />
           </div>
         ) : condition ? (
@@ -228,7 +240,7 @@ export function SerialCard({
             label="Serial"
             value={scan}
             onChange={setScan}
-            tone={editing ? 'amber' : 'blue'}
+            tone={editing ? 'emerald' : 'blue'}
             mono
             disabled={disabled || isSubmitting}
             autoComplete="off"
@@ -263,11 +275,7 @@ export function SerialCard({
           type="button"
           onClick={submit}
           disabled={!scan.trim() || isSubmitting || disabled}
-          className={`inline-flex h-11 shrink-0 items-center justify-center rounded-xl px-4 text-label font-black uppercase tracking-wider text-white shadow-sm transition-colors disabled:cursor-not-allowed disabled:bg-gray-300 ${
-            editing
-              ? 'bg-amber-500 hover:bg-amber-600'
-              : 'bg-emerald-600 hover:bg-emerald-700'
-          }`}
+          className="inline-flex h-11 shrink-0 items-center justify-center rounded-xl bg-emerald-600 px-4 text-label font-black uppercase tracking-wider text-white shadow-sm transition-colors hover:bg-emerald-700 disabled:cursor-not-allowed disabled:bg-gray-300"
         >
           {showSavingLabel && isSubmitting ? (
             'Saving…'
@@ -366,7 +374,7 @@ export function SerialChipWithMenu({
     >
       <div
         className={`inline-flex items-center gap-1 rounded-md transition-colors ${
-          isEditing ? 'ring-2 ring-amber-400 ring-offset-1' : ''
+          isEditing ? 'ring-2 ring-emerald-400 ring-offset-1' : ''
         }`}
       >
         <SerialChip value={sn} width="w-fit max-w-full" />
@@ -398,10 +406,7 @@ export function SerialChipWithMenu({
                 onClick={() => onEdit(serial)}
                 className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-caption font-bold uppercase tracking-widest text-gray-700 hover:bg-gray-50"
               >
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-3.5 w-3.5 shrink-0 text-gray-500">
-                  <path d="M12 20h9" strokeLinecap="round" />
-                  <path d="M16.5 3.5a2.121 2.121 0 1 1 3 3L7 19l-4 1 1-4 12.5-12.5z" strokeLinejoin="round" />
-                </svg>
+                <Pencil className="h-3.5 w-3.5 shrink-0 text-gray-500" />
                 Edit
               </button>
             ) : null}

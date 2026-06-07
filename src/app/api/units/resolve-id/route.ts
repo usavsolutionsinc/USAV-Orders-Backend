@@ -3,19 +3,7 @@ import { withAuth } from '@/lib/auth/withAuth';
 import { parseUnitId } from '@/lib/inventory/unit-id';
 import { resolveSkuCatalogRow } from '@/lib/inventory/resolve-sku-catalog';
 import { getOrCreateInternalGtin } from '@/lib/inventory/internal-gtin';
-import { buildGs1UnitUrl } from '@/lib/scan-resolver';
-import { getAppBaseUrl } from '@/lib/qstash';
-
-/**
- * Public GS1 Digital Link host that the printed unit QR encodes. MUST match
- * the value used by /api/units/next-id so a reprint produces a byte-identical
- * DataMatrix to the original label.
- */
-const PUBLIC_QR_BASE_URL = (
-  process.env.LABEL_QR_BASE_URL ||
-  process.env.NEXT_PUBLIC_LABEL_QR_BASE_URL ||
-  'https://usavshop.com'
-).trim().replace(/\/+$/, '');
+import { findByUnitUid, findByNormalizedSerial } from '@/lib/neon/serial-units-queries';
 
 export const dynamic = 'force-dynamic';
 
@@ -23,17 +11,23 @@ export const dynamic = 'force-dynamic';
  * POST /api/units/resolve-id
  *
  * Reprint resolver — the read-only twin of /api/units/next-id. Given an
- * *existing* unit id (scanned off a previously-printed label, e.g.
- * `00098-2621-000142`), it returns the gtin + GS1 Digital Link qrUrl needed to
- * reproduce the **exact same** DataMatrix, WITHOUT allocating a new sequence.
+ * *existing* unit id OR a manufacturer serial (scanned off a label, or read off
+ * the device when the label is trashed), it returns the **canonical unit_uid**
+ * to reproduce — never minting a new one. That uid is what the reprinted QR
+ * encodes, so a reprint is identical to the original.
  *
- *   { unitId: "00098-2621-000142" }
- *     → { ok, unitId, gtin, qrUrl, skuCatalogId, sku, productTitle }
+ *   { unitId: "00098-2621-000142" }  // or a serial like "SN12345"
+ *     → { ok, unitId, unitUid, gtin, skuCatalogId, sku, productTitle }
  *
- * The base SKU is parsed off the unit id (the trailing `-{YYWW}-{SEQ6}` is
- * stripped) and resolved against sku_catalog with the same matching strategy
- * the allocator uses. Callers may pass an explicit `sku` to override parsing
- * (legacy ids, or reprint-by-sku).
+ * Resolution order:
+ *   1. serial_units.unit_uid = input (scanned the printed QR / typed the uid).
+ *   2. serial_units.normalized_serial = input → return that unit's stored
+ *      unit_uid (reprint from just the device serial).
+ *   3. Legacy / not-found: parse the base SKU off the input and echo the input
+ *      itself as the uid (pre-unit_uid labels still reprint their own string).
+ *
+ * The products label encodes the bare unit id (no GS1 link), so no qrUrl is
+ * returned. Authentication: `print.label` permission.
  */
 export const POST = withAuth(async (request) => {
   const body = await request.json().catch(() => ({}));
@@ -42,11 +36,20 @@ export const POST = withAuth(async (request) => {
     return NextResponse.json({ ok: false, error: 'unitId is required' }, { status: 400 });
   }
 
-  // Base SKU: explicit override → parsed from the unit id → the raw input
-  // (covers reprint-by-base-sku where there's no YYWW/SEQ suffix).
-  const baseSku = String(body?.sku || '').trim() || parseUnitId(unitId)?.baseSku || unitId;
-
   try {
+    // 1+2. Direct unit lookup — by minted uid, then by manufacturer serial.
+    //      Either resolves the canonical stored uid (the reprint guarantee).
+    const unitRow = (await findByUnitUid(unitId)) ?? (await findByNormalizedSerial(unitId));
+    const canonicalUid = unitRow?.unit_uid ?? null;
+
+    // 3. Resolve the catalog for title + gtin. Prefer the unit's own sku; else
+    //    an explicit override; else the base SKU parsed off the id; else raw.
+    const baseSku =
+      unitRow?.sku?.trim() ||
+      String(body?.sku || '').trim() ||
+      parseUnitId(unitId)?.baseSku ||
+      unitId;
+
     const resolved = await resolveSkuCatalogRow(baseSku);
     if (!resolved) {
       return NextResponse.json(
@@ -60,20 +63,13 @@ export const POST = withAuth(async (request) => {
         ? resolved.gtin.trim()
         : await getOrCreateInternalGtin(resolved.id);
 
-    // Rebuild the QR for the SCANNED unit id — no allocation, no sequence bump.
-    let qrUrl: string;
-    try {
-      const origin = PUBLIC_QR_BASE_URL || getAppBaseUrl();
-      qrUrl = buildGs1UnitUrl(origin, gtin, unitId);
-    } catch {
-      qrUrl = buildGs1UnitUrl('', gtin, unitId);
-    }
-
     return NextResponse.json({
       ok: true,
       unitId,
+      // The id the reprint should encode: the stored uid when we have one, else
+      // the input itself (legacy labels / pre-unit_uid rows).
+      unitUid: canonicalUid ?? unitId,
       gtin,
-      qrUrl,
       skuCatalogId: resolved.id,
       sku: resolved.sku,
       productTitle: resolved.product_title,

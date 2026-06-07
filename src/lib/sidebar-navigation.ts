@@ -6,7 +6,6 @@ import {
   Check,
   ClipboardList,
   Clock,
-  Cms,
   DollarSign,
   FileText,
   History,
@@ -20,10 +19,13 @@ import {
   Monitor,
   Package,
   PackageCheck,
+  PackageOpen,
   Printer,
+  Search,
   Settings,
   ShieldCheck,
   ShoppingCart,
+  Star,
   TrendingUp,
   Truck,
   User,
@@ -43,6 +45,7 @@ export type SidebarRouteKey =
   | 'inventory'
   | 'products'
   | 'warehouse'
+  | 'sourcing'
   | 'tech'
   | 'packer'
   | 'support'
@@ -105,6 +108,7 @@ export const APP_SIDEBAR_NAV: SidebarNavItem[] = [
   { id: 'products',          label: 'Products',    href: '/products',           icon: Box,             kind: 'main',    requires: 'sku_stock.view' },
   { id: 'inventory',         label: 'Inventory',   href: '/inventory',          icon: Package,         kind: 'main',    requires: 'sku_stock.view' },
   { id: 'warehouse',         label: 'Warehouse',   href: '/warehouse',          icon: MapPin,          kind: 'main',    requires: 'sku_stock.view' },
+  { id: 'sourcing',          label: 'Sourcing',    href: '/sourcing',           icon: Search,          kind: 'main',    requires: 'sourcing.view' },
   { id: 'receiving',         label: 'Receiving',   href: '/receiving',          icon: ClipboardList,   kind: 'station', requires: 'receiving.view' },
   { id: 'tech',              label: 'Testing',     href: '/tech',               icon: Wrench,          kind: 'station', requires: 'tech.view' },
   { id: 'fba',               label: 'Amazon FBA',  href: '/fba',                icon: Package,         kind: 'station', requires: 'fba.view' },
@@ -161,6 +165,7 @@ export function getSidebarRouteKey(pathname: string | null): SidebarRouteKey {
   if (pathname === '/replenish' || pathname.startsWith('/replenish/')) return 'replenish';
   if (pathname === '/products' || pathname.startsWith('/products/')) return 'products';
   if (pathname === '/warehouse' || pathname.startsWith('/warehouse/')) return 'warehouse';
+  if (pathname === '/sourcing' || pathname.startsWith('/sourcing/')) return 'sourcing';
   if (pathname === '/inventory' || pathname.startsWith('/inventory/')) return 'inventory';
   if (pathname === '/support' || pathname.startsWith('/support/')) return 'support';
   if (pathname === '/ai-chat' || pathname.startsWith('/ai-chat/')) return 'ai-chat';
@@ -217,6 +222,7 @@ export const ROUTE_PERMISSIONS: ReadonlyArray<{ prefix: string; permission: stri
   { prefix: '/packers',            permission: 'packing.view' },
   { prefix: '/products',           permission: 'sku_stock.view' },
   { prefix: '/warehouse',          permission: 'sku_stock.view' },
+  { prefix: '/sourcing',           permission: 'sourcing.view' },
   { prefix: '/inventory',          permission: 'sku_stock.view' },
   { prefix: '/previous-quarters',  permission: 'reports.view' },
   // /support is the native Zendesk ticket console — gated by the same
@@ -302,6 +308,7 @@ const RECEIVING = '/receiving';
 const FBA = '/fba';
 const INVENTORY = '/inventory';
 const WAREHOUSE = '/warehouse';
+const SOURCING = '/sourcing';
 const PRODUCTS = '/products';
 const TECH = '/tech';
 const WALK_IN = '/walk-in';
@@ -309,18 +316,21 @@ const ADMIN = '/admin';
 
 export const SIDEBAR_PAGE_NAV: SidebarPageNav[] = [
   // ── Orders / Shipping ─────────────────────────────────────────────────────
-  // Bare presence params (`?pending` / `?shipped` / `?unshipped`); first match
-  // wins in the reader, default `pending`. (FBA order-view is its own page.)
+  // Bare presence params (`?unshipped` / `?pending` / `?shipped` / `?warranty`);
+  // first match wins in the reader, default `pending`. (FBA order-view is its
+  // own page.) Rail order: Awaiting · Pending · Shipped · Warranty Logger.
   {
     id: 'dashboard', label: 'Orders / Shipping', href: DASHBOARD, icon: LayoutDashboard, kind: 'main', requires: 'dashboard.view',
     modes: [
-      { id: 'pending',   label: 'Pending',  icon: Clock,        to: () => ({ pathname: DASHBOARD, params: { pending: '', shipped: null, unshipped: null, fba: null } }) },
-      { id: 'shipped',   label: 'Shipped',  icon: PackageCheck, to: () => ({ pathname: DASHBOARD, params: { shipped: '', pending: null, unshipped: null, fba: null } }) },
-      { id: 'unshipped', label: 'Awaiting', icon: AlertCircle,  to: () => ({ pathname: DASHBOARD, params: { unshipped: '', pending: null, shipped: null, fba: null } }) },
+      { id: 'unshipped', label: 'Awaiting',         icon: AlertCircle,  to: () => ({ pathname: DASHBOARD, params: { unshipped: '', pending: null, shipped: null, fba: null, warranty: null } }) },
+      { id: 'pending',   label: 'Pending',          icon: Clock,        to: () => ({ pathname: DASHBOARD, params: { pending: '', shipped: null, unshipped: null, fba: null, warranty: null } }) },
+      { id: 'shipped',   label: 'Shipped',          icon: PackageCheck, to: () => ({ pathname: DASHBOARD, params: { shipped: '', pending: null, unshipped: null, fba: null, warranty: null } }) },
+      { id: 'warranty',  label: 'Warranty Logger',  icon: ShieldCheck,  to: () => ({ pathname: DASHBOARD, params: { warranty: '', pending: null, shipped: null, unshipped: null, fba: null } }) },
     ],
     resolveMode: ({ params }) => {
       if (params.has('shipped')) return 'shipped';
       if (params.has('unshipped')) return 'unshipped';
+      if (params.has('warranty')) return 'warranty';
       return 'pending';
     },
   },
@@ -335,7 +345,7 @@ export const SIDEBAR_PAGE_NAV: SidebarPageNav[] = [
     modes: [
       { id: 'incoming', label: 'Incoming',     icon: Inbox,          to: () => ({ pathname: RECEIVING, params: { mode: 'incoming' } }) },
       { id: 'triage',   label: 'Receiving',    icon: ClipboardList,  to: () => ({ pathname: RECEIVING, params: { mode: 'triage' } }) },
-      { id: 'receive',  label: 'Unbox',        icon: Cms,            to: () => ({ pathname: RECEIVING, params: { mode: null } }) },
+      { id: 'receive',  label: 'Unbox',        icon: PackageOpen,    to: () => ({ pathname: RECEIVING, params: { mode: null } }) },
       { id: 'history',  label: 'History',      icon: List,           to: () => ({ pathname: RECEIVING, params: { mode: 'history' } }) },
       { id: 'pickup',   label: 'Local Pickup', icon: ShoppingCart,   to: () => ({ pathname: RECEIVING, params: { mode: 'pickup' } }) },
     ],
@@ -346,6 +356,22 @@ export const SIDEBAR_PAGE_NAV: SidebarPageNav[] = [
       if (m === 'incoming') return 'incoming';
       if (m === 'triage') return 'triage';
       return 'receive';
+    },
+  },
+  // ── Sourcing ──────────────────────────────────────────────────────────────
+  // `?mode=alerts|watchlist`; bare /sourcing = the Lookup surface (default).
+  {
+    id: 'sourcing', label: 'Sourcing', href: SOURCING, icon: Search, kind: 'main', requires: 'sourcing.view',
+    modes: [
+      { id: 'lookup',    label: 'Lookup',    icon: Search,      to: () => ({ pathname: SOURCING, params: { mode: null, q: null, status: null } }) },
+      { id: 'alerts',    label: 'Alerts',    icon: AlertCircle, to: () => ({ pathname: SOURCING, params: { mode: 'alerts', q: null, status: null } }) },
+      { id: 'watchlist', label: 'Watchlist', icon: Star,        to: () => ({ pathname: SOURCING, params: { mode: 'watchlist', q: null, status: null } }) },
+    ],
+    resolveMode: ({ params }) => {
+      const m = params.get('mode');
+      if (m === 'alerts') return 'alerts';
+      if (m === 'watchlist') return 'watchlist';
+      return 'lookup';
     },
   },
   // ── Amazon FBA ────────────────────────────────────────────────────────────

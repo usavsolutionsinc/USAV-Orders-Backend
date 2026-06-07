@@ -364,6 +364,51 @@ export async function publishPriorityUnbox(payload: PriorityUnboxPayload) {
   });
 }
 
+export type WarrantyClaimNotificationPayload = {
+  /** Recipient staff inbox channels to push to. */
+  staffIds: number[];
+  claimId: number;
+  claimNumber: string;
+  /** New status after the transition. */
+  status: string;
+  /** Lifecycle event key: submitted | approved | denied | repaired | in_repair | closed | expired | repair_logged. */
+  event: string;
+  /** Display label (product / serial / claim #). */
+  title?: string | null;
+  actorStaffId?: number | null;
+  source: string;
+};
+
+/**
+ * Push a warranty-claim status change to each recipient's inbox channel. Fired
+ * when a claim a staff member logged moves through its lifecycle (approved,
+ * denied, repaired, closed, expired…). No-op when there are no recipients.
+ */
+export async function publishWarrantyClaimNotification(payload: WarrantyClaimNotificationPayload) {
+  const recipients = Array.from(
+    new Set((payload.staffIds || []).map((id) => Number(id)).filter((id) => Number.isFinite(id) && id > 0)),
+  );
+  if (recipients.length === 0) return;
+
+  const data = {
+    type: 'warranty_claim' as const,
+    claimId: payload.claimId,
+    claimNumber: payload.claimNumber,
+    status: payload.status,
+    event: payload.event,
+    title: payload.title ?? null,
+    actorStaffId: payload.actorStaffId ?? null,
+    source: payload.source,
+    timestamp: formatPSTTimestamp(),
+  };
+
+  await Promise.all(
+    recipients.map((staffId) =>
+      publishEvent(getInboxChannelName(staffId), 'warranty_claim', { ...data, staffId }),
+    ),
+  );
+}
+
 export async function publishAiAssistantMessage(payload: AiAssistantPayload) {
   const channel = payload.channel || getAiAssistSessionChannelName(payload.sessionId);
   await publishEvent(channel, 'ai.assistant.reply', {

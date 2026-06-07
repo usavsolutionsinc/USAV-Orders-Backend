@@ -122,7 +122,7 @@ export function MasterNav({
       activePage={activePage}
       activeModeId={modeId}
       open={open}
-      onToggleOpen={() => setOpen((v) => !v)}
+      onOpen={() => setOpen(true)}
       recentPages={recentPages}
       otherPages={otherPages}
       expandedKey={expandedKey}

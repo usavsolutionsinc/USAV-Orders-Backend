@@ -78,6 +78,11 @@ export async function PATCH(
       ean: parsed.ean !== undefined ? parsed.ean : before.ean,
       imageUrl: parsed.imageUrl !== undefined ? parsed.imageUrl : before.image_url,
       isActive: parsed.isActive !== undefined ? parsed.isActive : before.is_active,
+      lifecycleStatus: parsed.lifecycleStatus !== undefined ? parsed.lifecycleStatus : before.lifecycle_status,
+      reorderThreshold: parsed.reorderThreshold !== undefined ? parsed.reorderThreshold : before.reorder_threshold,
+      lastKnownCostCents: parsed.lastKnownCostCents !== undefined ? parsed.lastKnownCostCents : before.last_known_cost_cents,
+      sourcingNotes: parsed.sourcingNotes !== undefined ? parsed.sourcingNotes : before.sourcing_notes,
+      replenishTargetCents: parsed.replenishTargetCents !== undefined ? parsed.replenishTargetCents : before.replenish_target_cents,
     });
 
     await recordAudit(pool, gate.ctx, req, {

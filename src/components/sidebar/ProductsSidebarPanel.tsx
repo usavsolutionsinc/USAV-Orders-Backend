@@ -10,21 +10,22 @@ import { BARCODE_MODES, type BarcodeMode } from '@/components/barcode/ModeSelect
 import { useBarcodeMode } from '@/hooks/useBarcodeMode';
 import { useLabelRecents } from '@/hooks/useLabelRecents';
 import { useSkuCatalogSearch, type SkuCatalogItem } from '@/hooks/useSkuCatalogSearch';
-import { ChevronDown, Printer, FileText, Link2, Check, Clock, History, Package } from '@/components/Icons';
+import { ChevronDown, Printer, FileText, Link2, Check, Clock, History, Package, ShoppingCart, Star, Sparkles, List } from '@/components/Icons';
 import { successFeedback } from '@/lib/feedback/confirm';
 import { PairingQueueList } from '@/components/products/pairing/PairingQueueList';
 import { PairingUnmatchedSection } from '@/components/products/pairing/PairingUnmatchedSection';
 import { AddOrPairSkuModal } from '@/components/products/pairing/AddOrPairSkuModal';
 import type { PairingQueueItem, PairingSort, UnmappedPlatformId } from '@/components/products/pairing/types';
 import { LibraryBrowser } from '@/components/manuals/LibraryBrowser';
-import { RecentlyPrintedList } from '@/components/labels/RecentlyPrintedList';
+import { RecentlyPrintedList, recentLookupKey } from '@/components/labels/RecentlyPrintedList';
+import type { LabelPrintFeedItem } from '@/hooks/useLabelPrintFeed';
 import { UnitHistoryFinder } from '@/components/labels/UnitHistoryFinder';
 
 const PAIRING_SORT_ITEMS: HorizontalSliderItem[] = [
-  { id: 'volume',     label: 'Most ordered' },
-  { id: 'confidence', label: 'Top confidence' },
-  { id: 'count',      label: 'Most suggestions' },
-  { id: 'title',      label: 'Alphabetical' },
+  { id: 'volume',     label: 'Ordered',      icon: ShoppingCart },
+  { id: 'confidence', label: 'Confidence',   icon: Star },
+  { id: 'count',      label: 'Suggestions',  icon: Sparkles },
+  { id: 'title',      label: 'A-Z', icon: List },
 ];
 
 function parsePairingSort(raw: string | null): PairingSort {
@@ -152,13 +153,25 @@ export function ProductsSidebarPanel() {
 
   const handleLabelsSubViewChange = useCallback(
     // 'print' is the default — drop the param when selected so the URL stays clean.
-    (id: string) => updateParams({ labelsView: id === 'print' ? null : id }),
+    // Clear any selected unit (`historyId`) so each sub-tab starts at its own
+    // prompt/empty state instead of carrying over a stale detail selection.
+    (id: string) => updateParams({ labelsView: id === 'print' ? null : id, historyId: null }),
     [updateParams],
   );
 
   const handleProductPick = useCallback((sku: string) => {
     window.dispatchEvent(new CustomEvent('sku:fill', { detail: { sku } }));
   }, []);
+
+  // Recent row → select the printed unit; the main pane (UnitHistoryWorkspace)
+  // reads `?historyId=` and loads its full detail. No printing happens here.
+  const handleRecentSelect = useCallback(
+    (item: LabelPrintFeedItem) => {
+      const key = recentLookupKey(item);
+      if (key) updateParams({ historyId: key });
+    },
+    [updateParams],
+  );
 
   const isManuals = view === 'manuals';
   const isLabels = view === 'labels';
@@ -254,7 +267,10 @@ export function ProductsSidebarPanel() {
     >
       {isLabels ? (
         labelsView === 'recent' ? (
-          <RecentlyPrintedList onPick={handleProductPick} />
+          <RecentlyPrintedList
+            onSelect={handleRecentSelect}
+            selectedKey={searchParams.get('historyId')}
+          />
         ) : labelsView === 'history' ? (
           <UnitHistoryFinder />
         ) : (
@@ -488,30 +504,21 @@ function ModeDropdown({ mode, onChange }: ModeDropdownProps) {
           role="listbox"
           className="absolute left-0 right-0 top-full z-20 overflow-hidden rounded-b-xl rounded-t-none border border-gray-200 border-t-0 bg-white shadow-lg -mt-px"
         >
-          {BARCODE_MODES.map(({ id, label, description, Icon }) => {
-            const isActive = id === mode;
+          {BARCODE_MODES.filter(({ id }) => id !== mode).map(({ id, label, description, Icon }) => {
             return (
               <li key={id}>
                 <button
                   type="button"
                   role="option"
-                  aria-selected={isActive}
+                  aria-selected={false}
                   onClick={() => {
-                    if (id !== mode) {
-                      successFeedback();
-                      onChange(id);
-                    }
+                    successFeedback();
+                    onChange(id);
                     setOpen(false);
                   }}
-                  className={`flex w-full items-center gap-3 px-3 py-2.5 text-left transition-colors ${
-                    isActive ? 'bg-blue-50' : 'hover:bg-gray-50'
-                  }`}
+                  className="flex w-full items-center gap-3 px-3 py-2.5 text-left transition-colors hover:bg-gray-50"
                 >
-                  <span
-                    className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${
-                      isActive ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-500'
-                    }`}
-                  >
+                  <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-gray-100 text-gray-500">
                     <Icon className="h-4 w-4" />
                   </span>
                   <span className="flex min-w-0 flex-col">

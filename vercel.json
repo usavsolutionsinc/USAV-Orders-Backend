@@ -42,6 +42,14 @@
       "schedule": "0 14 * * *"
     },
     {
+      "path": "/api/cron/sourcing/scan",
+      "schedule": "0 6 * * *"
+    },
+    {
+      "path": "/api/cron/sourcing/replenish",
+      "schedule": "0 7 * * *"
+    },
+    {
       "path": "/api/cron/refresh-reports",
       "schedule": "30 10 * * *"
     },

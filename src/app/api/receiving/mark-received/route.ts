@@ -16,6 +16,7 @@ import {
 } from '@/lib/zoho';
 import { withAuth } from '@/lib/auth/withAuth';
 import { recordAudit, AUDIT_ACTION, AUDIT_ENTITY } from '@/lib/audit-logs';
+import { upsertSerialUnit } from '@/lib/neon/serial-units-queries';
 import { isInventoryV2ReceivingPutaway } from '@/lib/feature-flags';
 import { registerShipmentPermissive } from '@/lib/shipping/sync-shipment';
 
@@ -397,13 +398,20 @@ export const POST = withAuth(async (request, ctx) => {
         console.warn('mark-received: applyInventoryV2Effects failed', err);
       }
     } else if (serialNumber) {
-      await pool.query(
-        `INSERT INTO serial_units (serial_number, normalized_serial, sku, zoho_item_id, current_status, origin_source, origin_receiving_line_id, received_at, received_by, condition_grade)
-         VALUES ($1, UPPER(TRIM($1)), $2, $3, 'RECEIVED', 'receiving', $4, $5, $6, $7)
-         ON CONFLICT (normalized_serial)
-         DO UPDATE SET current_status = 'RECEIVED', received_at = $5, received_by = $6, condition_grade = $7`,
-        [serialNumber, line.sku, zohoItemId || null, receivingLineId, now, staffId != null && staffId > 0 ? staffId : null, conditionGrade],
-      );
+      // OFF-flag legacy path — route through the canonical writer (was a raw
+      // INSERT bypass) so it gets status-transition/return detection, metadata,
+      // and a minted unit_uid at birth (when the SKU is cataloged), exactly like
+      // every other serial_units creation. upsertSerialUnit owns its own txn.
+      await upsertSerialUnit({
+        serial_number: serialNumber,
+        sku: line.sku ?? null,
+        zoho_item_id: zohoItemId || null,
+        origin_source: 'receiving',
+        origin_receiving_line_id: receivingLineId,
+        actor_id: staffId != null && staffId > 0 ? staffId : null,
+        condition_grade: conditionGrade,
+        target_status: 'RECEIVED',
+      });
     }
 
     // 3. Update receiving row unboxed_at if set

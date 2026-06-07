@@ -1,7 +1,11 @@
 import { NextResponse } from 'next/server';
 import { withAuth } from '@/lib/auth/withAuth';
 import pool from '@/lib/db';
-import { upsertVerification } from '@/lib/neon/sku-catalog-queries';
+import { upsertVerification, deriveStepPassed } from '@/lib/neon/sku-catalog-queries';
+import { tagUnitFailure } from '@/lib/neon/failure-modes-queries';
+import { parseBody } from '@/lib/schemas/parse';
+import { QcResultBody } from '@/lib/schemas/qc-checks';
+import { recordAudit, AUDIT_ACTION, AUDIT_ENTITY } from '@/lib/audit-logs';
 
 /**
  * Per-unit testing checklist (execution layer).
@@ -58,7 +62,14 @@ export const GET = withAuth(async (request) => {
               qc.step_label,
               qc.step_type,
               qc.sort_order,
+              qc.value_kind,
+              qc.value_unit,
+              qc.value_enum,
+              qc.pass_min,
+              qc.pass_max,
               tv.passed,
+              tv.value_num,
+              tv.value_text,
               tv.verified_by,
               s.name           AS verified_by_name,
               tv.verified_at,
@@ -70,8 +81,9 @@ export const GET = withAuth(async (request) => {
           AND tv.source_kind   = $3
           AND tv.source_row_id = $1
     LEFT JOIN staff s ON s.id = tv.verified_by
-        WHERE qc.sku_catalog_id = $4
-           OR ($5::text IS NOT NULL AND qc.category = $5 AND qc.sku_catalog_id IS NULL)
+        WHERE (qc.sku_catalog_id = $4
+           OR ($5::text IS NOT NULL AND qc.category = $5 AND qc.sku_catalog_id IS NULL))
+          AND qc.status = 'published'
      ORDER BY qc.sort_order, qc.id`,
       [serialUnitId, STEP_TYPE, SOURCE_KIND, sku_catalog_id, category],
     );
@@ -91,7 +103,11 @@ export const GET = withAuth(async (request) => {
 
 /**
  * POST — record (or re-mark) one step result for this unit.
- * Body: { stepId: number, passed?: boolean, notes?: string }
+ * Body: { stepId, passed?, valueNum?, valueText?, notes? }
+ *
+ * When the step has a numeric pass band (pass_min/pass_max), the recorded
+ * `valueNum` decides pass/fail server-side; otherwise the explicit `passed`
+ * boolean is used (defaulting to true to preserve the legacy tap-to-pass UX).
  */
 export const POST = withAuth(async (request, ctx) => {
   const serialUnitId = unitIdFromPath(request.nextUrl.pathname);
@@ -99,19 +115,10 @@ export const POST = withAuth(async (request, ctx) => {
     return NextResponse.json({ ok: false, error: 'invalid serial_unit id' }, { status: 400 });
   }
 
-  let body: Record<string, unknown> = {};
-  try {
-    body = await request.json();
-  } catch {
-    /* empty body handled below */
-  }
+  const raw = await request.json().catch(() => ({}));
+  const parsed = parseBody(QcResultBody, raw);
+  if (parsed instanceof NextResponse) return parsed;
 
-  const stepId = Number(body.stepId);
-  if (!Number.isFinite(stepId) || stepId <= 0) {
-    return NextResponse.json({ ok: false, error: 'stepId is required' }, { status: 400 });
-  }
-  const passed = body.passed === undefined ? true : Boolean(body.passed);
-  const notes = typeof body.notes === 'string' ? body.notes.trim().slice(0, 2000) || null : null;
   const verifiedBy = Number(ctx.staffId);
   if (!Number.isFinite(verifiedBy) || verifiedBy <= 0) {
     return NextResponse.json({ ok: false, error: 'no staff identity on request' }, { status: 401 });
@@ -134,18 +141,73 @@ export const POST = withAuth(async (request, ctx) => {
       );
     }
 
+    // Load the step's pass band + linked failure mode so the server (not the
+    // client) decides pass/fail for value-kind steps and knows what to auto-tag.
+    const stepRow = await pool.query<{
+      pass_min: string | null;
+      pass_max: string | null;
+      failure_mode_id: number | null;
+    }>(
+      `SELECT pass_min, pass_max, failure_mode_id FROM qc_check_templates WHERE id = $1`,
+      [parsed.stepId],
+    );
+    if (stepRow.rows.length === 0) {
+      return NextResponse.json({ ok: false, error: 'step not found' }, { status: 404 });
+    }
+    const failureModeId = stepRow.rows[0].failure_mode_id;
+
+    const passed = deriveStepPassed(stepRow.rows[0], {
+      passed: parsed.passed ?? (parsed.valueNum == null && parsed.valueText == null ? true : undefined),
+      valueNum: parsed.valueNum ?? null,
+    });
+
     const verification = await upsertVerification({
       sourceKind: SOURCE_KIND,
       sourceRowId: serialUnitId,
       skuCatalogId,
       stepType: STEP_TYPE,
-      stepId,
+      stepId: parsed.stepId,
       passed,
       verifiedBy,
-      notes,
+      notes: parsed.notes ?? null,
+      valueNum: parsed.valueNum ?? null,
+      valueText: parsed.valueText ?? null,
+      failedModeId: passed === false ? failureModeId : null,
     });
 
-    return NextResponse.json({ ok: true, verification });
+    // Auto-tag-on-fail: a failed step that names a failure mode opens a tag on
+    // the unit (idempotent per open mode). Best-effort — never fails the record.
+    let autoTag: Awaited<ReturnType<typeof tagUnitFailure>> | null = null;
+    if (passed === false && failureModeId != null) {
+      try {
+        autoTag = await tagUnitFailure({
+          serialUnitId,
+          failureModeId,
+          detectedByStaffId: verifiedBy,
+          source: 'qc',
+          notes: `auto-tagged from failed QC step #${parsed.stepId}`,
+        });
+      } catch (tagErr) {
+        console.warn('[checklist] auto-tag-on-fail failed (non-fatal)', tagErr);
+      }
+    }
+
+    await recordAudit(pool, ctx, request, {
+      source: 'serial-unit-checklist',
+      action: AUDIT_ACTION.QC_RESULT_RECORD,
+      entityType: AUDIT_ENTITY.SERIAL_UNIT,
+      entityId: serialUnitId,
+      method: 'manual',
+      extra: {
+        step_id: parsed.stepId,
+        passed,
+        value_num: parsed.valueNum ?? null,
+        value_text: parsed.valueText ?? null,
+        auto_failure_tag_id: autoTag?.id ?? null,
+      },
+    });
+
+    return NextResponse.json({ ok: true, verification, failure_tag: autoTag });
   } catch (err) {
     const message = err instanceof Error ? err.message : 'failed to record step';
     console.error('[POST /api/serial-units/[id]/checklist] error:', err);

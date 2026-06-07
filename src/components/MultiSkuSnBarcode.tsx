@@ -9,8 +9,7 @@ import { SkuInput } from './barcode/SkuInput';
 import { SerialNumberInput } from './barcode/SerialNumberInput';
 import { BarcodePreview } from './barcode/BarcodePreview';
 import { LabelPreviewCard } from '@/components/labels/LabelPreviewCard';
-import { RecentsStrip } from './barcode/RecentsStrip';
-import { InlineSerialAdder } from '@/components/receiving/workspace/InlineSerialAdder';
+import { SerialCard } from '@/components/receiving/workspace/SerialCard';
 
 // Import utilities
 import { normalizeSku, getSerialLast6 } from '@/utils/sku';
@@ -18,7 +17,6 @@ import { printProductLabel, printProductLabels, buildUnitPayload } from '@/lib/p
 import { useLabelRecents } from '@/hooks/useLabelRecents';
 import { useBarcodeMode } from '@/hooks/useBarcodeMode';
 import { CONDITION_OPTIONS } from '@/components/receiving/zoho-po-types';
-import { ConditionPills } from '@/components/receiving/workspace/ConditionPills';
 import { Search, Clipboard, Check, Printer } from './Icons';
 import { StickyActionBar } from '@/design-system/components/StickyActionBar';
 
@@ -47,8 +45,6 @@ export default function MultiSkuSnBarcode({ layout = 'vertical' }: MultiSkuSnBar
     const [uniqueSku, setUniqueSku] = useState<string>("");
     /** Internal pseudo-GTIN-14 for the current SKU. Populated by /api/units/next-id. */
     const [gtin, setGtin] = useState<string>("");
-    /** GS1 Digital Link URL encoded in the printed QR. From /api/units/next-id. */
-    const [qrUrl, setQrUrl] = useState<string>("");
     const [title, setTitle] = useState<string>("");
     const [stock, setStock] = useState<string>("");
     const [error, setError] = useState<string>("");
@@ -68,7 +64,10 @@ export default function MultiSkuSnBarcode({ layout = 'vertical' }: MultiSkuSnBar
     const snInputRef = useRef<HTMLInputElement>(null);
     const bottomAnchorRef = useRef<HTMLDivElement>(null);
 
-    const { recents, push: pushRecent, clear: clearRecents } = useLabelRecents();
+    // localStorage recents still feed the Products picker's pinned chips
+    // (ProductsSidebarPanel); the desktop "Recent" bottom strip was removed in
+    // favour of the server-backed Recent sub-tab (RecentlyPrintedList).
+    const { push: pushRecent } = useLabelRecents();
 
     // Surface validation/fetch errors via the global toast system instead of
     // the fixed-position pill. State stays as a one-shot trigger.
@@ -80,15 +79,18 @@ export default function MultiSkuSnBarcode({ layout = 'vertical' }: MultiSkuSnBar
 
     // DataMatrix payload for the live preview — reuses the same builder the
     // printed label uses so what you see matches what gets printed exactly.
+    // Products labels encode ONLY the bare unit id ({SKU}-{YYWW}-{SEQ6}); no
+    // GS1 Digital Link, no GTIN/serial AIs. Passing it as `qrPayload` (a
+    // non-AI string) yields a plain `datamatrix` symbology.
     const previewPayload = useMemo(
         () =>
             buildUnitPayload({
                 sku: uniqueSku || sku,
-                serialNumber: serialNumbers[0] ?? null,
-                qrPayload: qrUrl || null,
-                gtin: gtin || null,
+                serialNumber: null,
+                qrPayload: uniqueSku || sku || null,
+                gtin: null,
             }),
-        [uniqueSku, sku, serialNumbers, qrUrl, gtin],
+        [uniqueSku, sku],
     );
 
     // Scroll the parent scroll container to reveal the newly added step.
@@ -108,16 +110,17 @@ export default function MultiSkuSnBarcode({ layout = 'vertical' }: MultiSkuSnBar
         setSku(value);
         setUniqueSku("");
         setGtin("");
-        setQrUrl("");
         setError("");
     };
 
     /**
      * Allocate the next unit-id for a SKU via /api/units/next-id and
-     * stash {uniqueSku, gtin, qrUrl} in component state. Each call
-     * atomically increments the per-SKU-per-year sequence — there is no
-     * pre-flight "peek". Replaces the legacy
-     * /api/sku-manager?action=current then ?action=increment dance.
+     * stash {uniqueSku, gtin} in component state. Each call atomically
+     * increments the per-SKU-per-year sequence — there is no pre-flight
+     * "peek". Replaces the legacy /api/sku-manager?action=current then
+     * ?action=increment dance. The qrUrl in the response (a GS1 Digital
+     * Link) is intentionally ignored — products labels encode the bare unit
+     * id only.
      */
     const fetchNextUnitId = useCallback(async (skuValue: string, catalogIdHint?: number | null) => {
         const body: Record<string, unknown> = { sku: normalizeSku(skuValue) };
@@ -135,17 +138,16 @@ export default function MultiSkuSnBarcode({ layout = 'vertical' }: MultiSkuSnBar
         }
         setUniqueSku(data.unitId);
         setGtin(data.gtin ?? "");
-        setQrUrl(data.qrUrl ?? "");
-        return data as { unitId: string; gtin: string; qrUrl: string };
+        return data as { unitId: string; gtin: string };
     }, []);
 
     /**
      * Reprint path — the SKU field holds an existing full unit id (scanned off
-     * a previously-printed label, e.g. `00098-2621-000142`). Resolve its gtin +
-     * GS1 qrUrl server-side via /api/units/resolve-id (no sequence allocation)
-     * so the reprinted DataMatrix is byte-identical to the original /
-     * tech-testing label. Falls back to a plain SKU lookup for legacy ids that
-     * don't resolve — those print with the bare unit id encoded.
+     * a previously-printed label, e.g. `00098-2621-000142`). Resolve its
+     * catalog row via /api/units/resolve-id (no sequence allocation) to enrich
+     * the title/stock/image. The reprinted DataMatrix encodes only the bare
+     * unit id, so resolution is just for the readable metadata. Falls back to a
+     * plain SKU lookup for legacy ids that don't resolve.
      */
     const resolveReprintUnit = useCallback(async (unitIdInput: string) => {
         const trimmed = unitIdInput.trim();
@@ -159,9 +161,12 @@ export default function MultiSkuSnBarcode({ layout = 'vertical' }: MultiSkuSnBar
             });
             const data = await res.json();
             if (res.ok && data?.ok) {
-                setUniqueSku(trimmed);
+                // Reprint the CANONICAL stored unit id, not the raw input — so
+                // scanning a manufacturer serial (or a trashed unit's id) still
+                // reproduces the exact original unit id. Falls back to the input
+                // for legacy/pre-unit_uid labels.
+                setUniqueSku(data.unitUid || trimmed);
                 setGtin(data.gtin ?? "");
-                setQrUrl(data.qrUrl ?? "");
                 // Enrich with stock/location/image from the canonical SKU;
                 // fall back to the catalog title resolve-id already returned.
                 try {
@@ -187,7 +192,7 @@ export default function MultiSkuSnBarcode({ layout = 'vertical' }: MultiSkuSnBar
             throw new Error(data?.error || 'resolve-id failed');
         } catch {
             // Legacy / unresolved id — look up by the raw input and print the
-            // bare unit id (no gtin/qrUrl available).
+            // bare unit id (no gtin available).
             const baseSku = trimmed.includes(':') ? trimmed.split(':')[0] : trimmed;
             try {
                 const res = await fetch(`/api/get-title-by-sku?sku=${encodeURIComponent(normalizeSku(baseSku))}`);
@@ -203,7 +208,6 @@ export default function MultiSkuSnBarcode({ layout = 'vertical' }: MultiSkuSnBar
             }
             setUniqueSku(trimmed);
             setGtin("");
-            setQrUrl("");
         } finally {
             setIsLoadingTitle(false);
         }
@@ -230,7 +234,8 @@ export default function MultiSkuSnBarcode({ layout = 'vertical' }: MultiSkuSnBar
 
         if (mode === 'reprint') {
             // Reprint doesn't allocate a new unit id; it resolves the scanned
-            // unit id's gtin + qrUrl so the DataMatrix matches the original.
+            // unit id's catalog metadata. The DataMatrix re-encodes the bare
+            // unit id, matching the original products label.
             await resolveReprintUnit(trimmed);
             setStep(3);
             return;
@@ -321,8 +326,8 @@ export default function MultiSkuSnBarcode({ layout = 'vertical' }: MultiSkuSnBar
         }
 
         if (mode === 'reprint') {
-            // Reprint: the field holds an existing unit id — resolve its gtin +
-            // qrUrl so the reprinted DataMatrix is identical to the original.
+            // Reprint: the field holds an existing unit id — resolve its catalog
+            // metadata. The reprinted DataMatrix re-encodes the bare unit id.
             await resolveReprintUnit(sku.trim());
             setStep(3);
             return;
@@ -390,7 +395,6 @@ export default function MultiSkuSnBarcode({ layout = 'vertical' }: MultiSkuSnBar
         setSku("");
         setUniqueSku("");
         setGtin("");
-        setQrUrl("");
         setTitle("");
         setStock("");
         setSnInput("");
@@ -421,9 +425,9 @@ export default function MultiSkuSnBarcode({ layout = 'vertical' }: MultiSkuSnBar
     // Issues the labels to the canonical pipeline. Writes serial_units +
     // station_activity_logs + tech_serial_numbers + a LABELED inventory_event
     // per unit, which is what powers the Recently Printed + Unit History
-    // views. `sku` is sent as the minted unit id for back-compat; the route
-    // resolves the actual product SKU from `productSku`.
-    const issueLabels = async () => {
+    // views. The route mints one unit_uid per serial server-side and returns
+    // them in `units` — those are the authoritative ids each label encodes.
+    const issueLabels = async (): Promise<{ success: boolean; units: Array<{ serial: string; unitUid: string | null }> }> => {
         setIsPosting(true);
         try {
             const res = await fetch('/api/post-multi-sn', {
@@ -444,9 +448,9 @@ export default function MultiSkuSnBarcode({ layout = 'vertical' }: MultiSkuSnBar
                 }),
             });
             const data = await res.json();
-            return data.success;
+            return { success: !!data.success, units: Array.isArray(data.units) ? data.units : [] };
         } catch (e) {
-            return false;
+            return { success: false, units: [] };
         } finally {
             setIsPosting(false);
         }
@@ -455,55 +459,55 @@ export default function MultiSkuSnBarcode({ layout = 'vertical' }: MultiSkuSnBar
     const handleFinalAction = async () => {
         if (mode === 'reprint') {
             // Just print, no DB/Sheet updates. Reproduces one existing unit
-            // label: the DataMatrix encodes the GS1 Digital Link rebuilt from
-            // the scanned unit id (qrUrl), byte-identical to the original /
-            // tech-testing label. When resolve failed (legacy id) qrUrl is
-            // empty and buildUnitPayload falls back to the bare unit id.
-            printProductLabel({ sku: uniqueSku, title, qrPayload: qrUrl || undefined });
+            // label: the DataMatrix encodes ONLY the bare unit id
+            // ({SKU}-{YYWW}-{SEQ6}) — never a GS1 Digital Link — so a reprint
+            // matches the format new products labels print.
+            printProductLabel({ sku: uniqueSku, title, qrPayload: uniqueSku });
             pushRecent({ sku: uniqueSku || sku, sn: serialNumbers[0], title });
             setStep(1);
             setSku("");
             setUniqueSku("");
             setGtin("");
-            setQrUrl("");
             setSerialNumbers([]);
             setSnInput("");
             return;
         }
 
-        const success = await issueLabels();
+        const { success, units } = await issueLabels();
         if (success) {
             if (mode === 'print') {
-                // Print the current label. GTIN + qrUrl come from the
-                // /api/units/next-id response that produced this unit id;
-                // the print template encodes the GS1 Digital Link QR.
+                // Print one label per serial. Each label's DataMatrix encodes
+                // that unit's OWN minted unit id (returned by the route) — no
+                // GS1 Digital Link, no GTIN/serial AIs. The condition grade +
+                // each human serial print as readable text under the title.
+                const uidBySerial = new Map(units.map((u) => [u.serial, u.unitUid]));
                 printProductLabels({
                     sku: uniqueSku,
                     title,
                     serialNumbers,
-                    gtin: gtin || undefined,
-                    qrPayloads: qrUrl ? Array(serialNumbers.length).fill(qrUrl) : undefined,
+                    condition,
+                    qrPayloads: serialNumbers.map((s) => uidBySerial.get(s) ?? uniqueSku),
                 });
             }
 
-            // Push to the session recents strip so the user can one-tap re-fill
-            // this SKU. We persist both print + sn-to-sku flows since both
-            // produce a labeled artifact worth recalling.
+            // Push to the localStorage recents that pin this SKU at the top of
+            // the Products picker for a one-tap re-fill. We persist both print +
+            // sn-to-sku flows since both produce a labeled artifact worth recalling.
             pushRecent({ sku: uniqueSku || sku, sn: serialNumbers[0], title });
 
             setSnInput("");
             setSerialNumbers([]);
 
             if (mode === 'print') {
-                // Allocate the NEXT unit id atomically so the operator can
-                // print again immediately. fn_next_unit_seq increments
-                // per-(sku, year), so each call returns a fresh value.
+                // Refresh the preview to the NEXT unit id. This is a peek now
+                // (server mints the authoritative id per serial at print time),
+                // so it just re-reads the advanced sequence — no double-burn.
                 try {
                     await fetchNextUnitId(sku, skuCatalogId);
                 } catch (err) {
-                    console.error("Failed to allocate next unit id:", err);
-                    const msg = err instanceof Error ? err.message : 'Failed to allocate next unit id';
-                    toast.error(`Couldn't queue next label: ${msg}`);
+                    console.error("Failed to refresh next unit id:", err);
+                    const msg = err instanceof Error ? err.message : 'Failed to refresh next unit id';
+                    toast.error(`Couldn't preview next label: ${msg}`);
                 }
             }
 
@@ -684,26 +688,24 @@ export default function MultiSkuSnBarcode({ layout = 'vertical' }: MultiSkuSnBar
                             />
                         )}
 
+                        {/* Condition + serial share one row — the same scan card
+                            the receiving workspace uses: collapsible condition
+                            pill pinned left, serial input + add button to its
+                            right, saved serials as chips below. */}
                         {showSnCard && (
-                            <SerialScanCard
-                                snInputRef={snInputRef}
-                                serialNumbers={serialNumbers}
-                                accent={accent}
+                            <SerialCard
+                                saved={serialNumbers.map((sn, idx) => ({ id: idx, serial_number: sn }))}
+                                expected={null}
+                                isSubmitting={false}
                                 onAdd={handleSnAdd}
-                                onRemove={removeSerial}
-                                onPasteList={(list) => {
-                                    list.forEach((s) => handleSnAdd(s));
+                                onDeleteSerial={(s) => removeSerial(s.serial_number)}
+                                onReplaceSerial={(original, next) => {
+                                    removeSerial(original.serial_number);
+                                    handleSnAdd(next);
                                 }}
+                                condition={condition}
+                                onConditionChange={(next) => setCondition(next as ConditionGrade)}
                             />
-                        )}
-
-                        {showSnCard && (
-                            <section className="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-gray-200/60">
-                                <ConditionPills
-                                    value={condition}
-                                    onChange={(next) => setCondition(next as ConditionGrade)}
-                                />
-                            </section>
                         )}
 
                         {!!sku.trim() && (
@@ -722,6 +724,7 @@ export default function MultiSkuSnBarcode({ layout = 'vertical' }: MultiSkuSnBar
                                 uniqueSku={uniqueSku || sku}
                                 title={title}
                                 serialNumbers={serialNumbers}
+                                condition={condition}
                                 location={location}
                                 accent={accent}
                                 dataMatrixValue={previewPayload.value}
@@ -747,12 +750,6 @@ export default function MultiSkuSnBarcode({ layout = 'vertical' }: MultiSkuSnBar
                         toneClasses: { bg: accent.ctaBg, hover: accent.ctaHover },
                         tone: accent.tone,
                     }}
-                />
-
-                <RecentsStrip
-                    recents={recents}
-                    onPick={(s) => window.dispatchEvent(new CustomEvent('sku:fill', { detail: { sku: s } }))}
-                    onClear={clearRecents}
                 />
             </div>
         );
@@ -1005,61 +1002,6 @@ function ProductContextCard({
     );
 }
 
-interface SerialScanCardProps {
-    snInputRef: React.RefObject<HTMLInputElement>;
-    serialNumbers: string[];
-    accent: ModeAccent;
-    onAdd: (sn: string) => void;
-    onRemove: (sn: string) => void;
-    /** Kept for source-compat with the caller; comma-paste is handled inside InlineSerialAdder. */
-    onPasteList?: (list: string[]) => void;
-}
-
-/**
- * Serial-number scan section for the products workspace. Delegates the
- * input + chip rendering to {@link InlineSerialAdder} so this surface shares
- * the same UX (last-4 chip + hover Edit/Delete menu, "Scan Serial #"
- * placeholder, barcode icon) used by receiving + tech testing. Local-only
- * `string[]` state is adapted to InlineSerialAdder's `SavedSerial` shape via
- * a stable synthetic id (array index) — the products page never persists
- * these serials by row id; identity is the SN string.
- */
-function SerialScanCard({
-    snInputRef: _snInputRef,
-    serialNumbers,
-    accent,
-    onAdd,
-    onRemove,
-}: SerialScanCardProps) {
-    const saved = serialNumbers.map((sn, idx) => ({ id: idx, serial_number: sn }));
-
-    return (
-        <section className="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-gray-200/60">
-            {serialNumbers.length > 0 ? (
-                <div className="mb-3 flex justify-end">
-                    <span className={`rounded-md px-2 py-0.5 text-caption font-bold tabular-nums ${accent.chip}`}>
-                        {serialNumbers.length} added
-                    </span>
-                </div>
-            ) : null}
-
-            <InlineSerialAdder
-                lineId={0}
-                saved={saved}
-                expected={null}
-                isSubmitting={false}
-                autoFocus
-                onAdd={(_lineId, sn) => onAdd(sn)}
-                onDelete={(_lineId, s) => onRemove(s.serial_number)}
-                onReplaceSerial={(_lineId, original, nextSerial) => {
-                    onRemove(original.serial_number);
-                    onAdd(nextSerial);
-                }}
-            />
-        </section>
-    );
-}
-
 interface NotesCardProps {
     notes: string;
     showNotes: boolean;
@@ -1097,6 +1039,7 @@ interface PreviewCardModernProps {
     uniqueSku: string;
     title: string;
     serialNumbers: string[];
+    condition?: string | null;
     location: string;
     accent: ModeAccent;
     /** DataMatrix payload — same value/symbology the printed label will encode. */
@@ -1109,6 +1052,7 @@ function PreviewCardModern({
     uniqueSku,
     title,
     serialNumbers,
+    condition,
     location,
     accent,
     dataMatrixValue,
@@ -1121,6 +1065,8 @@ function PreviewCardModern({
             <LabelPreviewCard
                 sku={uniqueSku}
                 title={title}
+                condition={mode === 'print' ? condition : null}
+                serialNumber={mode === 'print' ? serialNumbers[0] : null}
                 dataMatrixValue={dataMatrixValue}
                 dataMatrixSymbology={dataMatrixSymbology}
                 showReady={mode === 'print'}

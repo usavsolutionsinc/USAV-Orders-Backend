@@ -2,7 +2,9 @@ import type { ComponentType } from 'react';
 import {
   BarChart3,
   Camera,
+  Cpu,
   FileText,
+  Layers,
   LayoutDashboard,
   Link2,
   Lock,
@@ -21,6 +23,7 @@ export type AdminSection =
   | 'overview'
   | 'goals' | 'staff' | 'access' | 'roles' | 'connections' | 'integrations' | 'fba'
   | 'reason_codes' | 'locations' | 'repair_issues' | 'favorites'
+  | 'bose_models' | 'compatibility' | 'suppliers'
   | 'station_photos' | 'po_mailbox'
   | 'logs' | 'architecture'
   | 'billing';
@@ -53,6 +56,9 @@ export const ADMIN_SECTION_OPTIONS: AdminSectionOption[] = [
   { value: 'locations',    label: 'Locations',    description: 'Edit bin name, barcode, type, and capacity',                   group: 'Data sources', icon: MapPin,       requires: 'sku_stock.manage' },
   { value: 'repair_issues',label: 'Repair Issues',description: 'Global repair issue checklist templates',                       group: 'Data sources', icon: Wrench,       requires: 'repair.intake' },
   { value: 'favorites',    label: 'Favorites',    description: 'Quick-pick SKU shortcuts per workspace',                       group: 'Data sources', icon: Star,         requires: 'sku_stock.manage' },
+  { value: 'bose_models',  label: 'Bose Models',  description: 'Model catalog + the parts compatible with each model',          group: 'Data sources', icon: Cpu,         requires: 'sourcing.view' },
+  { value: 'compatibility',label: 'Compatibility',description: 'Audit the model ↔ part compatibility edge table',               group: 'Data sources', icon: Layers,      requires: 'sourcing.view' },
+  { value: 'suppliers',    label: 'Suppliers',    description: 'Third-party sourcing vendors (eBay sellers, distributors, salvage)', group: 'Data sources', icon: Link2,    requires: 'supplier.view' },
   { value: 'station_photos',label: 'Receiving Photos', description: 'Per-station NAS folder the photo picker opens to',          group: 'Data sources', icon: Camera },
   { value: 'po_mailbox',   label: 'PO Mailbox',   description: 'Triage emailed POs not in Zoho, unmatched cartons, and exceptions', group: 'Data sources', icon: Mail, requires: 'receiving.view' },
 

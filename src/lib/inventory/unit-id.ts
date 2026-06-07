@@ -83,3 +83,48 @@ export async function allocateNextUnitId(
     skuShort: skuShortValue,
   };
 }
+
+/**
+ * Non-committing preview of the next unit id for (sku_catalog_id, calendar
+ * year) via fn_peek_unit_seq — does NOT advance the sequence. Used by the label
+ * printer to show the operator what the next label will be before they commit
+ * to printing (the authoritative allocation happens server-side at print time
+ * via {@link allocateNextUnitId}). Returns the same shape as allocateNextUnitId.
+ */
+export async function peekNextUnitId(
+  skuCatalogId: number,
+  skuText: string,
+  yearOverride?: number,
+): Promise<{
+  unitId: string;
+  seq: number;
+  year: number;
+  isoYear: number;
+  isoWeek: number;
+  skuShort: string;
+}> {
+  const now = new Date();
+  const year = yearOverride ?? now.getUTCFullYear();
+  const { isoYear, isoWeek } = isoWeekParts(now);
+  const skuShortValue = shortSku(skuText);
+  if (!skuShortValue) {
+    throw new Error(`peekNextUnitId: SKU "${skuText}" produced empty short form`);
+  }
+
+  const row = await queryOne<{ seq: number }>`
+    SELECT fn_peek_unit_seq(${skuCatalogId}, ${year}) AS seq
+  `;
+  const seq = Number(row?.seq);
+  if (!Number.isFinite(seq) || seq < 1) {
+    throw new Error(`peekNextUnitId: fn_peek_unit_seq returned ${row?.seq}`);
+  }
+
+  return {
+    unitId: formatUnitId(skuShortValue, isoYear, isoWeek, seq),
+    seq,
+    year,
+    isoYear,
+    isoWeek,
+    skuShort: skuShortValue,
+  };
+}

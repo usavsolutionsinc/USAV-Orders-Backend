@@ -7,6 +7,8 @@ import { Check } from '@/components/Icons';
 export interface ViewDropdownOption<T extends string> {
   value: T;
   label: string;
+  /** Optional leading icon, rendered in blue beside the label (opt-in). */
+  icon?: (props: { className?: string }) => JSX.Element;
 }
 
 interface ViewDropdownProps<T extends string> {
@@ -17,6 +19,10 @@ interface ViewDropdownProps<T extends string> {
   buttonClassName?: string;
   optionClassName?: string;
   variant?: 'default' | 'boxy';
+  /** Control height/text density. `sm` is a compact pill; defaults to `md`. */
+  size?: 'sm' | 'md';
+  /** Text casing for the button + menu. Defaults to `uppercase` (legacy). */
+  textTransform?: 'uppercase' | 'lowercase' | 'capitalize' | 'none';
   borderRadius?: string;
   backgroundColor?: string;
   fontSize?: string;
@@ -30,6 +36,8 @@ export function ViewDropdown<T extends string>({
   buttonClassName = '',
   optionClassName = '',
   variant = 'default',
+  size = 'md',
+  textTransform = 'uppercase',
   borderRadius,
   backgroundColor,
   fontSize,
@@ -38,11 +46,21 @@ export function ViewDropdown<T extends string>({
   const rootRef = React.useRef<HTMLDivElement>(null);
   const buttonRef = React.useRef<HTMLButtonElement>(null);
   const isBoxy = variant === 'boxy';
+  const isSm = size === 'sm';
+  const caseClass =
+    textTransform === 'lowercase'
+      ? 'lowercase'
+      : textTransform === 'capitalize'
+        ? 'capitalize'
+        : textTransform === 'none'
+          ? 'normal-case'
+          : 'uppercase';
   const selectedIndex = Math.max(
     0,
     options.findIndex((option) => option.value === value),
   );
   const selectedOption = options[selectedIndex] ?? options[0];
+  const SelectedIcon = selectedOption?.icon;
   const otherOptions = options.filter((option) => option.value !== value);
 
   React.useEffect(() => {
@@ -123,10 +141,11 @@ export function ViewDropdown<T extends string>({
           }}
           className={
             buttonClassName ||
-            `h-14 w-full border-b border-gray-400 bg-white px-4 pr-12 text-left text-sm uppercase tracking-wide text-gray-900 outline-none transition-colors hover:bg-gray-50 ${dmSans.className} font-bold`
+            `flex items-center ${isSm ? 'h-10 text-xs' : 'h-14 text-sm'} w-full border-b border-gray-400 bg-white px-4 pr-12 text-left ${caseClass} tracking-wide text-gray-900 outline-none transition-colors hover:bg-gray-50 ${dmSans.className} font-bold`
           }
         >
-          <span className="truncate">{selectedOption?.label || ''}</span>
+          {SelectedIcon ? <SelectedIcon className="mr-2 h-4 w-4 shrink-0 text-blue-600" /> : null}
+          <span className="min-w-0 truncate">{selectedOption?.label || ''}</span>
         </button>
         <svg
           className={`pointer-events-none absolute right-4 h-4 w-4 text-gray-500 transition-transform ${
@@ -152,6 +171,7 @@ export function ViewDropdown<T extends string>({
           >
             <ul role="listbox" aria-label="Select view" className="w-full pb-1 pt-0">
               {otherOptions.map((option, index) => {
+                const OptionIcon = option.icon;
                 return (
                   <li key={option.value}>
                     <button
@@ -165,12 +185,13 @@ export function ViewDropdown<T extends string>({
                         ...(backgroundColor ? { backgroundColor } : {}),
                         ...(fontSize ? { fontSize } : {}),
                       }}
-                      className={`flex h-11 w-full items-center ${
+                      className={`flex ${isSm ? 'h-9' : 'h-11'} w-full items-center gap-2 ${
                         isBoxy ? 'px-3' : 'px-4'
                       } text-left ${
-                        optionClassName || 'text-sm font-bold tracking-wide'
-                      } uppercase transition-colors ${dmSans.className} text-gray-800 hover:bg-gray-50`}
+                        optionClassName || (isSm ? 'text-xs font-bold tracking-wide' : 'text-sm font-bold tracking-wide')
+                      } ${caseClass} transition-colors ${dmSans.className} text-gray-800 hover:bg-gray-50`}
                     >
+                      {OptionIcon ? <OptionIcon className="h-4 w-4 shrink-0 text-blue-600" /> : null}
                       <span className="truncate">{option.label}</span>
                     </button>
                   </li>

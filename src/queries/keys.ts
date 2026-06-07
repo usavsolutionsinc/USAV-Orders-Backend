@@ -74,6 +74,34 @@ export const qk = {
       ['sku-catalog', 'list', search, sort, dir, page] as const,
     detail: (id: number) => ['sku-catalog', 'detail', id] as const,
   },
+  boseModels: {
+    /** Broad invalidation prefix — matches every Bose model query. */
+    all: ['bose-models'] as const,
+    list: (search: string, family: string) =>
+      ['bose-models', 'list', search, family] as const,
+    detail: (id: number) => ['bose-models', 'detail', id] as const,
+    lookup: (key: string) => ['bose-models', 'lookup', key] as const,
+  },
+  partCompatibility: {
+    /** Broad invalidation prefix — matches every compatibility-edge query. */
+    all: ['part-compatibility'] as const,
+    forModel: (boseModelId: number) =>
+      ['part-compatibility', 'model', boseModelId] as const,
+    forSku: (skuId: number) => ['part-compatibility', 'sku', skuId] as const,
+  },
+  suppliers: {
+    /** Broad invalidation prefix — matches every supplier query. */
+    all: ['suppliers'] as const,
+    list: (search: string, type: string) => ['suppliers', 'list', search, type] as const,
+    detail: (id: number) => ['suppliers', 'detail', id] as const,
+  },
+  sourcing: {
+    /** Broad invalidation prefix — matches every sourcing query. */
+    all: ['sourcing'] as const,
+    alerts: (status: string) => ['sourcing', 'alerts', status] as const,
+    candidates: (skuId: number) => ['sourcing', 'candidates', skuId] as const,
+    search: (q: string) => ['sourcing', 'search', q] as const,
+  },
   repairIssues: {
     /** Broad invalidation prefix — matches every repair-issue-templates query. */
     all: ['repair-issues'] as const,

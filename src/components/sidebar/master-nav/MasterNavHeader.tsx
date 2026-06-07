@@ -8,30 +8,26 @@ import { cn } from '@/utils/_cn';
 const spring = { type: 'spring', stiffness: 520, damping: 36 } as const;
 
 /**
- * Closed master-nav trigger (plan §3.4). The icon carries the PAGE context; the
- * text is spent on the active MODE name (so the live rail doesn't say the page
- * name twice). Pure — the caller owns open/toggle state.
+ * Closed master-nav trigger (plan §3.4). The icon carries the active mode; the
+ * label is the active mode name (or page name when modeless). Opens on hover via
+ * the parent {@link MasterNavView} hover zone — no click handler here.
  */
 export function MasterNavHeader({
   icon: Icon,
   label,
   open,
-  onToggle,
   className,
 }: {
   icon: SidebarIconComponent;
   /** Active mode name, or the page name for single-surface pages. */
   label: string;
   open: boolean;
-  onToggle: () => void;
   className?: string;
 }) {
   return (
-    <button
-      type="button"
-      onClick={onToggle}
+    <div
       aria-expanded={open}
-      title="Switch page or mode"
+      title="Hover to switch page or mode"
       className={cn(
         // Exactly 40px — same grid as every other sidebar band (no bulky chip,
         // so the header reads as a lean 40px bar, not a taller block).
@@ -46,6 +42,6 @@ export function MasterNavHeader({
       <motion.span animate={{ rotate: open ? 180 : 0 }} transition={spring} className="shrink-0 text-text-muted">
         <ChevronDown className="h-4 w-4" />
       </motion.span>
-    </button>
+    </div>
   );
 }

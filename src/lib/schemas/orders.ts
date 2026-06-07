@@ -27,8 +27,6 @@ export const OrderUpdateBody = z
     message: 'At least one field must be provided',
   });
 
-export type OrderUpdateInput = z.infer<typeof OrderUpdateBody>;
-
 // ─── Tracking sub-resource: /api/orders/[id]/tracking ───────────────────────
 //
 // Order tracking is NOT an `orders` column — it lives in
@@ -72,6 +70,3 @@ export const OrderTrackingPatchBody = z
       b.setPrimaryShipmentId !== undefined,
     { message: 'At least one tracking operation required' },
   );
-
-export type OrderTrackingPostInput = z.infer<typeof OrderTrackingPostBody>;
-export type OrderTrackingPatchInput = z.infer<typeof OrderTrackingPatchBody>;

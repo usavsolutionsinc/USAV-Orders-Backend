@@ -31,6 +31,12 @@ interface ChecklistStep {
   step_label: string;
   step_type: string;
   sort_order: number;
+  // ─ Structured-value config (Phase 1; docs/qc-crud-endpoints-plan.md) ─
+  value_kind?: string | null;
+  value_unit?: string | null;
+  value_enum?: string[] | null;
+  pass_min?: string | number | null;
+  pass_max?: string | number | null;
 }
 
 interface ManualRow {
@@ -46,6 +52,17 @@ interface UnitResult {
   step_id: number;
   passed: boolean | null;
   verified_by_name: string | null;
+  /** Recorded structured values for value-kind steps. */
+  value_num?: string | number | null;
+  value_text?: string | null;
+}
+
+/** Numeric value kinds capture a number (and may have a pass band). */
+const NUMERIC_VALUE_KINDS = new Set(['PERCENT', 'NUMBER']);
+
+/** Steps whose answer is a structured value rather than a pass/fail tap. */
+function needsValueInput(kind?: string | null): boolean {
+  return kind === 'PERCENT' || kind === 'NUMBER' || kind === 'ENUM' || kind === 'TEXT';
 }
 
 interface Bundle {
@@ -105,26 +122,31 @@ export function SkuTestingPanel({ receivingLineId, sku, title, serialUnitId }: P
   }, [loadBundle]);
 
   // Per-unit recorded results, loaded when a serial is on the active slot.
-  useEffect(() => {
+  // Extracted so the bulk "check all / clear" action can refresh after a write.
+  const loadResults = useCallback(async () => {
     if (serialUnitId == null) {
       setResults({});
       return;
     }
-    let cancelled = false;
-    void (async () => {
-      const res = await fetch(`/api/serial-units/${serialUnitId}/checklist`, { cache: 'no-store' });
-      const data = await res.json().catch(() => null);
-      if (cancelled || !res.ok || !data?.ok) return;
-      const map: Record<number, UnitResult> = {};
-      for (const s of data.steps as Array<UnitResult & { step_id: number }>) {
-        map[s.step_id] = { step_id: s.step_id, passed: s.passed, verified_by_name: s.verified_by_name };
-      }
-      setResults(map);
-    })();
-    return () => {
-      cancelled = true;
-    };
+    const res = await fetch(`/api/serial-units/${serialUnitId}/checklist`, { cache: 'no-store' });
+    const data = await res.json().catch(() => null);
+    if (!res.ok || !data?.ok) return;
+    const map: Record<number, UnitResult> = {};
+    for (const s of data.steps as Array<UnitResult & { step_id: number }>) {
+      map[s.step_id] = {
+        step_id: s.step_id,
+        passed: s.passed,
+        verified_by_name: s.verified_by_name,
+        value_num: s.value_num ?? null,
+        value_text: s.value_text ?? null,
+      };
+    }
+    setResults(map);
   }, [serialUnitId]);
+
+  useEffect(() => {
+    void loadResults();
+  }, [loadResults]);
 
   if (loading) {
     return (
@@ -146,6 +168,7 @@ export function SkuTestingPanel({ receivingLineId, sku, title, serialUnitId }: P
         canRecord={canRecord}
         serialUnitId={serialUnitId ?? null}
         onChanged={loadBundle}
+        onReloadResults={loadResults}
         onResultChange={(stepId, next) =>
           setResults((m) => ({ ...m, [stepId]: { ...(m[stepId] ?? { step_id: stepId, verified_by_name: null }), ...next } }))
         }
@@ -168,6 +191,7 @@ function ChecklistSection({
   canRecord,
   serialUnitId,
   onChanged,
+  onReloadResults,
   onResultChange,
 }: {
   receivingLineId: number;
@@ -176,6 +200,7 @@ function ChecklistSection({
   canRecord: boolean;
   serialUnitId: number | null;
   onChanged: () => Promise<void>;
+  onReloadResults: () => Promise<void>;
   onResultChange: (stepId: number, next: Partial<UnitResult>) => void;
 }) {
   const [adding, setAdding] = useState(false);
@@ -183,10 +208,36 @@ function ChecklistSection({
   const [editingId, setEditingId] = useState<number | null>(null);
   const [editLabel, setEditLabel] = useState('');
   const [busy, setBusy] = useState(false);
+  const [bulkBusy, setBulkBusy] = useState(false);
   const [recordingStep, setRecordingStep] = useState<number | null>(null);
 
   const steps = bundle.checklist;
   const done = steps.filter((s) => results[s.step_id]?.passed === true).length;
+  const allDone = steps.length > 0 && done === steps.length;
+
+  // Bulk settle: pass (or clear) every step for this unit in one call, then
+  // refresh from the server so attribution (who/when) reflects the write.
+  const bulkSet = useCallback(
+    async (action: 'pass' | 'clear') => {
+      if (serialUnitId == null) return;
+      setBulkBusy(true);
+      try {
+        const res = await fetch(`/api/serial-units/${serialUnitId}/checklist/bulk`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action }),
+        });
+        const data = await res.json().catch(() => null);
+        if (!res.ok || !data?.ok) throw new Error(data?.error || `Failed (${res.status})`);
+        await onReloadResults();
+      } catch (err) {
+        toast.error(err instanceof Error ? err.message : 'Could not update checklist');
+      } finally {
+        setBulkBusy(false);
+      }
+    },
+    [serialUnitId, onReloadResults],
+  );
 
   const addStep = useCallback(async () => {
     const label = draft.trim();
@@ -278,6 +329,45 @@ function ChecklistSection({
     [serialUnitId, results, onResultChange],
   );
 
+  // Record a structured value (number/enum/text). The server derives pass/fail
+  // for numeric pass-band steps, so we reload results afterward to reflect it.
+  const recordValue = useCallback(
+    async (step: ChecklistStep, raw: string) => {
+      if (serialUnitId == null) return;
+      const isNumeric = NUMERIC_VALUE_KINDS.has(step.value_kind ?? '');
+      const body: { stepId: number; valueNum?: number; valueText?: string | null } = {
+        stepId: step.step_id,
+      };
+      if (isNumeric) {
+        if (raw.trim() === '') return;
+        const n = Number(raw);
+        if (!Number.isFinite(n)) {
+          toast.error('Enter a valid number');
+          return;
+        }
+        body.valueNum = n;
+      } else {
+        body.valueText = raw.trim() || null;
+      }
+      setRecordingStep(step.step_id);
+      try {
+        const res = await fetch(`/api/serial-units/${serialUnitId}/checklist`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body),
+        });
+        const data = await res.json().catch(() => null);
+        if (!res.ok || !data?.ok) throw new Error(data?.error || `Save failed (${res.status})`);
+        await onReloadResults();
+      } catch (err) {
+        toast.error(err instanceof Error ? err.message : 'Could not record value');
+      } finally {
+        setRecordingStep(null);
+      }
+    },
+    [serialUnitId, onReloadResults],
+  );
+
   return (
     <section className={SECTION}>
       <div className="mb-3 flex items-center justify-between">
@@ -293,6 +383,21 @@ function ChecklistSection({
             >
               {done}/{steps.length} done
             </span>
+          ) : null}
+          {canRecord && steps.length > 0 ? (
+            <>
+              <button
+                type="button"
+                onClick={() => void bulkSet(allDone ? 'clear' : 'pass')}
+                disabled={bulkBusy}
+                className="flex items-center gap-1 rounded-md px-2 py-1 text-micro font-bold uppercase tracking-wider text-emerald-600 transition-colors duration-150 hover:bg-emerald-50 disabled:opacity-50"
+                title={allDone ? 'Clear all recorded results for this unit' : 'Mark every step passed for this unit'}
+              >
+                {bulkBusy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}
+                {allDone ? 'Clear all' : 'Check all'}
+              </button>
+              <span className="h-3.5 w-px bg-gray-200" aria-hidden />
+            </>
           ) : null}
           <button
             type="button"
@@ -316,6 +421,7 @@ function ChecklistSection({
           const checked = results[step.step_id]?.passed === true;
           const recording = recordingStep === step.step_id;
           const isEditing = editingId === step.step_id;
+          const isValueStep = needsValueInput(step.value_kind);
           return (
             <li
               key={step.step_id}
@@ -326,9 +432,15 @@ function ChecklistSection({
               <button
                 type="button"
                 onClick={() => void toggleRecord(step)}
-                disabled={!canRecord || recording || isEditing}
+                disabled={!canRecord || recording || isEditing || isValueStep}
                 aria-pressed={checked}
-                title={canRecord ? 'Mark for this unit' : 'Scan a serial to record results'}
+                title={
+                  isValueStep
+                    ? 'Pass/fail is set by the recorded value'
+                    : canRecord
+                      ? 'Mark for this unit'
+                      : 'Scan a serial to record results'
+                }
                 className={`mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-md border text-xs font-black transition-all duration-150 active:scale-95 ${
                   checked ? 'border-emerald-600 bg-emerald-600 text-white' : 'border-gray-300 bg-white text-transparent'
                 } ${!canRecord ? 'cursor-default opacity-90' : ''}`}
@@ -361,7 +473,16 @@ function ChecklistSection({
                     <span className="block text-caption font-semibold leading-snug text-gray-900">
                       {step.step_label}
                     </span>
-                    {checked && results[step.step_id]?.verified_by_name ? (
+                    {isValueStep && canRecord ? (
+                      <StepValueControl
+                        step={step}
+                        result={results[step.step_id]}
+                        busy={recording}
+                        onSubmit={(raw) => void recordValue(step, raw)}
+                      />
+                    ) : null}
+                    {results[step.step_id]?.verified_by_name &&
+                    (checked || isValueStep) ? (
                       <span className="mt-0.5 block text-micro font-medium uppercase tracking-wide text-emerald-700">
                         {results[step.step_id]?.verified_by_name}
                       </span>
@@ -432,6 +553,98 @@ function ChecklistSection({
         </p>
       ) : null}
     </section>
+  );
+}
+
+/* ──────────────────────── Per-step value input ──────────────────────── */
+
+/**
+ * Captures a structured value for one execution step (number / percent / enum /
+ * text). Numeric kinds submit `valueNum` (the server derives pass/fail from the
+ * step's pass band); enum/text submit `valueText`. Shows the pass band as a hint.
+ */
+function StepValueControl({
+  step,
+  result,
+  busy,
+  onSubmit,
+}: {
+  step: ChecklistStep;
+  result?: UnitResult;
+  busy: boolean;
+  onSubmit: (raw: string) => void;
+}) {
+  const kind = step.value_kind ?? '';
+  const isNumeric = NUMERIC_VALUE_KINDS.has(kind);
+  const recorded =
+    result?.value_num != null
+      ? String(result.value_num)
+      : result?.value_text != null
+        ? result.value_text
+        : '';
+  const [val, setVal] = useState<string>(recorded);
+  // Re-sync when the recorded value changes (reload, unit switch).
+  useEffect(() => {
+    setVal(recorded);
+  }, [recorded]);
+
+  const unitSuffix = step.value_unit ? ` ${step.value_unit}` : kind === 'PERCENT' ? ' %' : '';
+  const min = step.pass_min == null ? null : Number(step.pass_min);
+  const max = step.pass_max == null ? null : Number(step.pass_max);
+  const band =
+    min != null && max != null
+      ? `${min}–${max}${unitSuffix}`
+      : min != null
+        ? `≥ ${min}${unitSuffix}`
+        : max != null
+          ? `≤ ${max}${unitSuffix}`
+          : null;
+
+  return (
+    <div className="mt-1 flex flex-wrap items-center gap-1.5">
+      {kind === 'ENUM' ? (
+        <select
+          value={val}
+          onChange={(e) => {
+            setVal(e.target.value);
+            onSubmit(e.target.value);
+          }}
+          disabled={busy}
+          className="rounded-md border border-gray-200 px-2 py-1 text-caption font-medium text-gray-900 focus:border-blue-300 focus:outline-none focus:ring-2 focus:ring-blue-500/10"
+        >
+          <option value="">—</option>
+          {(step.value_enum ?? []).map((o) => (
+            <option key={o} value={o}>
+              {o}
+            </option>
+          ))}
+        </select>
+      ) : (
+        <>
+          <input
+            type={isNumeric ? 'number' : 'text'}
+            value={val}
+            onChange={(e) => setVal(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') onSubmit(val);
+            }}
+            onBlur={() => {
+              if (val !== recorded) onSubmit(val);
+            }}
+            placeholder={isNumeric ? step.value_unit || (kind === 'PERCENT' ? '%' : 'value') : 'value'}
+            disabled={busy}
+            className="w-24 rounded-md border border-gray-200 px-2 py-1 text-caption font-medium text-gray-900 placeholder:text-gray-400 focus:border-blue-300 focus:outline-none focus:ring-2 focus:ring-blue-500/10"
+          />
+          {step.value_unit ? (
+            <span className="text-micro font-semibold text-gray-400">{step.value_unit}</span>
+          ) : null}
+        </>
+      )}
+      {band ? (
+        <span className="text-micro font-medium uppercase tracking-wide text-gray-400">pass {band}</span>
+      ) : null}
+      {busy ? <Loader2 className="h-3 w-3 animate-spin text-gray-400" /> : null}
+    </div>
   );
 }
 

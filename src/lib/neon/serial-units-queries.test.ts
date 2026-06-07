@@ -119,3 +119,41 @@ test('migration admits RETURNED and treats it as a closed allocation state', () 
     'the one-open-allocation index must exclude RETURNED so a refurbed unit can re-allocate',
   );
 });
+
+test('unit_uid migration adds the column + an org-scoped PARTIAL unique index', () => {
+  const sql = read('../migrations/2026-06-06h_serial_units_unit_uid.sql');
+  ok(/ADD COLUMN IF NOT EXISTS unit_uid/.test(sql), 'must add the unit_uid column');
+  ok(
+    /CREATE UNIQUE INDEX[\s\S]*ux_serial_units_org_unit_uid[\s\S]*\(organization_id, unit_uid\)[\s\S]*WHERE unit_uid IS NOT NULL/.test(sql),
+    'unique index must be org-scoped AND partial (NULLs allowed for un-labeled rows)',
+  );
+});
+
+test('upsertSerialUnit persists unit_uid on insert and COALESCEs it on update', () => {
+  const src = read('./serial-units-queries.ts');
+  // INSERT lists unit_uid as a column…
+  ok(/INSERT INTO serial_units[\s\S]*unit_uid/.test(src), 'INSERT must include unit_uid');
+  // …and UPDATE never clobbers an already-stamped id (the reprint guarantee).
+  ok(/unit_uid = COALESCE\(unit_uid,/.test(src), 'UPDATE must COALESCE unit_uid, never overwrite');
+  ok(/export async function findByUnitUid/.test(src), 'findByUnitUid reader must exist');
+});
+
+test('upsertSerialUnit mints unit_uid at birth (Phase 2) safely on the txn client', () => {
+  const src = read('./serial-units-queries.ts');
+  // Allocates the sequence on the same client (no second pooled connection).
+  ok(/client\.query<\{ seq: number \}>\(\s*`SELECT fn_next_unit_seq/.test(src), 'mint must run fn_next_unit_seq on the txn client');
+  // Guards: explicit uid wins, never overwrite an existing one, skip legacy origin.
+  ok(/!resolvedUnitUid &&\s*!existingRow\?\.unit_uid/.test(src), 'mint only when no uid is provided AND the row has none');
+  ok(/input\.origin_source !== 'legacy'/.test(src), 'legacy-origin rows must not auto-mint');
+  // Best-effort: a mint failure must never break the core upsert.
+  ok(/mint unit_uid failed \(non-fatal\)/.test(src), 'minting must be wrapped non-fatally');
+});
+
+test('mark-received off-flag path routes through upsertSerialUnit (bypass removed)', () => {
+  const src = read('../../app/api/receiving/mark-received/route.ts');
+  ok(/upsertSerialUnit\(/.test(src), 'off-flag path must create serials via the canonical writer');
+  // Only the deliberate ON-flag v2 transaction (applyInventoryV2Effects) may
+  // keep a raw INSERT; the off-flag `else if (serialNumber)` bypass is gone.
+  const rawInserts = (src.match(/INSERT INTO serial_units/g) || []).length;
+  equal(rawInserts, 1, 'exactly one raw serial_units INSERT (the v2-effects txn) may remain');
+});

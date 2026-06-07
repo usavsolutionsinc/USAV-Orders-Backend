@@ -2,15 +2,18 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Search, Camera } from '@/components/Icons';
-import { GlassButton } from '@/components/mobile/redesign/DesignSystem';
+import { Camera } from '@/components/Icons';
+import { StationScanBar } from '@/components/station/StationScanBar';
 import { useBarcodeScanner } from '@/hooks/useBarcodeScanner';
+import { useAuth } from '@/contexts/AuthContext';
+import { useStationTheme } from '@/hooks/useStationTheme';
 
 /**
- * Reusable scan surface = manual input bar + ZXing camera viewfinder + a camera
- * toggle, all wrapping {@link useBarcodeScanner}. Lifted out of UniversalScan so
- * the exact same component drives both the `/m/scan` page scanner AND the
- * "scan a location" step inside the Prepacked Products sheet.
+ * Mobile scan surface. The input bar IS the canonical desktop {@link StationScanBar}
+ * (compact `py-1.5 text-xs` chrome) — we do NOT hand-roll a separate mobile input
+ * anymore. The only mobile-specific addition is a small camera toggle tucked into
+ * the bar's `rightContent`, which drives the ZXing viewfinder below via
+ * {@link useBarcodeScanner}.
  *
  * Self-manages its own camera + manual-input state and emits decoded values via
  * `onDecode`. Each mounted instance owns its own camera stream, so only mount /
@@ -21,8 +24,9 @@ interface ScanInputProps {
   onDecode: (value: string) => void;
   placeholder?: string;
   autoFocus?: boolean;
-  /** Smaller viewfinder + tighter chrome for embedding inside a bottom sheet. */
+  /** Smaller viewfinder for embedding inside a bottom sheet. */
   compact?: boolean;
+  /** Unused now the camera is a compact in-bar toggle; kept for call-site compat. */
   cameraButtonLabel?: string;
   /** Force-stop the camera even if the user toggled it on (e.g. a sheet is open). */
   cameraSuspended?: boolean;
@@ -30,15 +34,19 @@ interface ScanInputProps {
 
 export function ScanInput({
   onDecode,
-  placeholder = 'Scan or type…',
+  placeholder = 'Scan or type',
   autoFocus = false,
   compact = false,
-  cameraButtonLabel,
   cameraSuspended = false,
 }: ScanInputProps) {
   const [cameraActive, setCameraActive] = useState(false);
   const [input, setInput] = useState('');
   const scanner = useBarcodeScanner({ dedupMs: 2000 });
+
+  // Same staff-color border as the desktop stations — the StationScanBar's
+  // outer stroke is themed to the logged-in operator via useStationTheme.
+  const { user } = useAuth();
+  const { inputBorder } = useStationTheme({ staffId: user?.staffId ?? null });
 
   // Keep the latest onDecode without re-running the decode effect (which is
   // keyed strictly off lastScannedValue — see UniversalScan's race note).
@@ -72,33 +80,36 @@ export function ScanInput({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [scanner.lastScannedValue]);
 
-  const viewfinderHeight = compact ? '26vh' : '36vh';
-  const boxSize = compact ? 'h-40 w-40' : 'h-56 w-56';
+  const viewfinderHeight = compact ? '20vh' : '26vh';
+  const boxSize = compact ? 'h-28 w-28' : 'h-40 w-40';
 
   return (
-    <div className="flex flex-col gap-3">
-      <div className="relative">
-        <div className="pointer-events-none absolute inset-y-0 left-4 flex items-center">
-          <Search className="h-4 w-4 text-blue-400" />
-        </div>
-        <input
-          autoFocus={autoFocus}
-          type="text"
-          value={input}
-          onChange={(e) => setInput(e.target.value)}
-          onKeyDown={(e) => e.key === 'Enter' && submit(input)}
-          placeholder={placeholder}
-          autoComplete="off"
-          className={`w-full rounded-[24px] border border-blue-100 bg-white pl-11 pr-24 ${compact ? 'py-4 text-sm' : 'py-5 text-base'} font-bold text-blue-950 shadow-sm transition-all placeholder:text-blue-300 focus:border-blue-500 focus:outline-none focus:ring-4 focus:ring-blue-500/10`}
-        />
-        <button
-          type="button"
-          onClick={() => submit(input)}
-          className="absolute right-2 top-2 bottom-2 flex items-center gap-2 rounded-[18px] bg-blue-600 px-5 text-white shadow-lg shadow-blue-600/10 transition-all active:scale-95"
-        >
-          <span className="text-[10px] font-black uppercase tracking-wider">Find</span>
-        </button>
-      </div>
+    <div className="flex flex-col gap-2">
+      <StationScanBar
+        value={input}
+        onChange={setInput}
+        onSubmit={() => submit(input)}
+        placeholder={placeholder}
+        autoFocus={autoFocus}
+        inputBorderClassName={inputBorder}
+        inputClassName="!pr-11"
+        rightContent={
+          <button
+            type="button"
+            onClick={() => setCameraActive((v) => !v)}
+            aria-pressed={cameraActive}
+            aria-label={cameraActive ? 'Close camera scanner' : 'Open camera scanner'}
+            title={cameraActive ? 'Close camera' : 'Scan with camera'}
+            className={`flex h-6 w-6 items-center justify-center rounded-md transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400/60 ${
+              cameraActive
+                ? 'bg-blue-50 text-blue-700 hover:bg-blue-100'
+                : 'text-gray-500 hover:bg-gray-100 hover:text-gray-700'
+            }`}
+          >
+            <Camera className="h-3.5 w-3.5" />
+          </button>
+        }
+      />
 
       <AnimatePresence>
         {live && (
@@ -106,7 +117,7 @@ export function ScanInput({
             initial={{ height: 0, opacity: 0 }}
             animate={{ height: viewfinderHeight, opacity: 1 }}
             exit={{ height: 0, opacity: 0 }}
-            className="relative w-full overflow-hidden rounded-[24px] bg-blue-950"
+            className="relative w-full overflow-hidden rounded-2xl bg-blue-950"
           >
             <video
               ref={scanner.videoRef as React.RefObject<HTMLVideoElement>}
@@ -116,7 +127,7 @@ export function ScanInput({
               muted
             />
             <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
-              <div className={`relative ${boxSize} rounded-[40px] border-2 border-white/40 bg-white/5 backdrop-blur-[1px]`}>
+              <div className={`relative ${boxSize} rounded-[32px] border-2 border-white/40 bg-white/5 backdrop-blur-[1px]`}>
                 <motion.div
                   animate={{ top: ['5%', '95%', '5%'] }}
                   transition={{ duration: 2, repeat: Infinity, ease: 'easeInOut' }}
@@ -127,15 +138,6 @@ export function ScanInput({
           </motion.div>
         )}
       </AnimatePresence>
-
-      <GlassButton
-        variant={cameraActive ? 'primary' : 'secondary'}
-        className={`w-full !rounded-[24px] ${compact ? '!h-12' : ''} ${cameraActive ? 'border-blue-500 bg-blue-600 shadow-blue-600/20' : 'shadow-blue-950/10'}`}
-        onClick={() => setCameraActive((v) => !v)}
-        icon={Camera}
-      >
-        {cameraActive ? 'Close Camera' : cameraButtonLabel ?? 'Open Camera Scanner'}
-      </GlassButton>
     </div>
   );
 }

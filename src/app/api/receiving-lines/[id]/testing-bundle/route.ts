@@ -52,7 +52,8 @@ export const GET = withAuth(async (request) => {
     const category = cat.rows[0]?.category ?? null;
 
     const [checklist, manuals] = await Promise.all([
-      getQcChecks(resolved.skuCatalogId, category),
+      // Execution view — only published steps reach the tech.
+      getQcChecks(resolved.skuCatalogId, category, { publishedOnly: true }),
       pool.query(
         `SELECT id, display_name, type, source_url, thumbnail_url, file_name
            FROM product_manuals
@@ -72,6 +73,11 @@ export const GET = withAuth(async (request) => {
         step_label: c.step_label,
         step_type: c.step_type,
         sort_order: c.sort_order,
+        value_kind: c.value_kind ?? null,
+        value_unit: c.value_unit ?? null,
+        value_enum: c.value_enum ?? null,
+        pass_min: c.pass_min ?? null,
+        pass_max: c.pass_max ?? null,
       })),
       manuals: manuals.rows,
     });

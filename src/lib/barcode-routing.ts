@@ -182,6 +182,16 @@ export function routeScan(raw: string): ScanRoute | null {
     return { type: 'receiving', value, redirect: `/m/r/${rcv[1]}` };
   }
 
+  // 3b. Bare minted unit id ({SKU_SHORT}-{YYWW}-{SEQ6}) — what the products
+  //     label QR now encodes (no GS1). The short SKU may itself contain
+  //     hyphens (e.g. IPH13-128-BLU), so anchor on the -{4 digits}-{6 digits}
+  //     tail. Routes to the unit page, which resolves it via serial_units.unit_uid.
+  //     Ordered before the location/bin fallbacks; those require a letter prefix
+  //     and never carry a 6-digit tail, so there's no clash.
+  if (/^[A-Z0-9][A-Z0-9-]*-\d{4}-\d{6}$/i.test(value)) {
+    return { type: 'serial-unit', value, redirect: `/m/u/${encodeURIComponent(value)}` };
+  }
+
   // 4. Static SKU: digit prefix + contains ":".
   if (/^\d/.test(value) && value.includes(':')) return { type: 'sku', value };
 

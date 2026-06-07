@@ -10,6 +10,7 @@ export * from './DetailCell';
 export * from './DetailGrid';
 export * from './ExpandableSection';
 export * from './ExternalLinkButton';
+export * from './FloatingButton';
 export * from './IconButton';
 export * from './PanelRow';
 export * from './PrimaryButton';

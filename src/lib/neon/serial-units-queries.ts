@@ -1,4 +1,5 @@
 import pool from '../db';
+import { shortSku, isoWeekParts, formatUnitId } from '@/lib/inventory/unit-id-format';
 
 /**
  * Minimal structural type satisfied by both the pg `Pool` and a `PoolClient`,
@@ -39,6 +40,8 @@ export interface SerialUnitRow {
   normalized_serial: string;
   sku: string | null;
   sku_catalog_id: number | null;
+  /** USAV-minted unit identity {SKU_SHORT}-{YYWW}-{SEQ6}, stamped at first label. */
+  unit_uid: string | null;
   zoho_item_id: string | null;
   current_status: SerialStatus;
   current_location: string | null;
@@ -59,6 +62,12 @@ export interface UpsertSerialUnitInput {
   serial_number: string;
   sku?: string | null;
   sku_catalog_id?: number | null;
+  /**
+   * USAV-minted unit identity. Set on INSERT; on UPDATE it is COALESCE'd so an
+   * already-stamped unit keeps its original id (the reprint guarantee). Pass
+   * null when no catalog row is available to mint one.
+   */
+  unit_uid?: string | null;
   zoho_item_id?: string | null;
   origin_source: SerialOriginSource;
   origin_receiving_line_id?: number | null;
@@ -134,6 +143,25 @@ export async function findByNormalizedSerial(
   const result = await pool.query<SerialUnitRow>(
     `SELECT * FROM serial_units WHERE normalized_serial = $1 LIMIT 1`,
     [normalized],
+  );
+  return result.rows[0] ?? null;
+}
+
+/**
+ * Resolve a unit by its minted unit_uid ({SKU_SHORT}-{YYWW}-{SEQ6}). This is
+ * the indexed lookup behind scanning a printed label's QR and behind reprint
+ * (so a trashed label re-prints the exact same id). Org scoping is enforced by
+ * the RLS GUC on the connection. Trims/uppercases to match how the id is stored.
+ */
+export async function findByUnitUid(
+  unitUid: string,
+): Promise<SerialUnitRow | null> {
+  const trimmed = String(unitUid || '').trim();
+  if (!trimmed) return null;
+
+  const result = await pool.query<SerialUnitRow>(
+    `SELECT * FROM serial_units WHERE unit_uid = $1 LIMIT 1`,
+    [trimmed],
   );
   return result.rows[0] ?? null;
 }
@@ -342,6 +370,7 @@ export async function upsertSerialUnit(
 
   const trimmedSerial = input.serial_number.trim();
   const trimmedSku = input.sku?.trim() || null;
+  const trimmedUnitUid = input.unit_uid?.trim() || null;
   const trimmedZohoItem = input.zoho_item_id?.trim() || null;
   const trimmedLocation = input.location?.trim() || null;
   const trimmedGrade = input.condition_grade?.trim() || null;
@@ -362,6 +391,41 @@ export async function upsertSerialUnit(
        FOR UPDATE`,
       [normalized],
     );
+    const existingRow = existing.rows[0] ?? null;
+
+    // Mint a unit_uid at birth (Phase 2) when the caller didn't supply one and
+    // the row doesn't already have one — given a catalog id + a non-legacy
+    // origin. Explicit input.unit_uid always wins (e.g. the label path). The
+    // allocation runs on THIS txn's client (not a second pooled connection,
+    // which would risk self-blocking under the FOR UPDATE lock), so a rolled-
+    // back upsert also rolls back the sequence — no gaps. Best-effort: a mint
+    // failure must never break the core upsert.
+    let resolvedUnitUid = trimmedUnitUid;
+    if (
+      !resolvedUnitUid &&
+      !existingRow?.unit_uid &&
+      input.sku_catalog_id &&
+      input.origin_source !== 'legacy' &&
+      trimmedSku
+    ) {
+      const short = shortSku(trimmedSku);
+      if (short) {
+        try {
+          const now = new Date();
+          const { isoYear, isoWeek } = isoWeekParts(now);
+          const seqRes = await client.query<{ seq: number }>(
+            `SELECT fn_next_unit_seq($1, $2) AS seq`,
+            [input.sku_catalog_id, now.getUTCFullYear()],
+          );
+          const seq = Number(seqRes.rows[0]?.seq);
+          if (Number.isFinite(seq) && seq >= 1) {
+            resolvedUnitUid = formatUnitId(short, isoYear, isoWeek, seq);
+          }
+        } catch (err) {
+          console.warn('[upsertSerialUnit] mint unit_uid failed (non-fatal)', err);
+        }
+      }
+    }
 
     if (existing.rows.length === 0) {
       const insertMetadata = {
@@ -374,12 +438,12 @@ export async function upsertSerialUnit(
            serial_number, normalized_serial, sku, sku_catalog_id, zoho_item_id,
            current_status, current_location, condition_grade,
            origin_source, origin_receiving_line_id, origin_tsn_id, origin_sku_id,
-           received_at, received_by, metadata
+           received_at, received_by, metadata, unit_uid
          ) VALUES (
            $1, $2, $3, $4, $5,
            $6, $7, $8::condition_grade_enum,
            $9, $10, $11, $12,
-           $13, $14, $15::jsonb
+           $13, $14, $15::jsonb, $16
          )
          RETURNING *`,
         [
@@ -398,6 +462,7 @@ export async function upsertSerialUnit(
           isReceivingTouch ? nowIso : null,
           isReceivingTouch ? input.actor_id ?? null : null,
           JSON.stringify(insertMetadata),
+          resolvedUnitUid,
         ],
       );
 
@@ -446,6 +511,7 @@ export async function upsertSerialUnit(
          received_at = COALESCE(received_at, $12),
          received_by = COALESCE(received_by, $13),
          metadata = metadata || $14::jsonb,
+         unit_uid = COALESCE(unit_uid, $15),
          updated_at = NOW()
        WHERE id = $1
        RETURNING *`,
@@ -464,6 +530,7 @@ export async function upsertSerialUnit(
         isReceivingTouch && !prior.received_at ? nowIso : null,
         isReceivingTouch && !prior.received_by ? input.actor_id ?? null : null,
         JSON.stringify(metadataPatch),
+        resolvedUnitUid,
       ],
     );
 

@@ -2,7 +2,7 @@
 
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import React, { useEffect, useRef, useState } from 'react';
-import { AlertCircle, Clock, Menu, PackageCheck, X } from '@/components/Icons';
+import { AlertCircle, Clock, Menu, PackageCheck, ShieldCheck, X } from '@/components/Icons';
 import { HorizontalButtonSlider, type HorizontalSliderItem } from '@/components/ui/HorizontalButtonSlider';
 import { SidebarSection } from '@/components/layout/SidebarSection';
 import { sectionLabel } from '@/design-system/tokens/typography/presets';
@@ -15,12 +15,14 @@ import { RepairSidebarPanel } from '@/components/sidebar/RepairSidebarPanel';
 import { WalkInSidebarPanel } from '@/components/sidebar/WalkInSidebarPanel';
 import ShippedSidebar from '@/components/ShippedSidebar';
 import UnshippedSidebar from '@/components/unshipped/UnshippedSidebar';
+import { WarrantyLoggerSidebar } from '@/components/warranty/WarrantyLoggerSidebar';
 import { ManualsLibrarySidebar } from '@/components/manuals/ManualsLibrarySidebar';
 import { ProductsSidebarPanel } from '@/components/sidebar/ProductsSidebarPanel';
 import { TechSidebarPanel } from '@/components/sidebar/TechSidebarPanel';
 import { PackerSidebarPanel } from '@/components/sidebar/PackerSidebarPanel';
 import { ReceivingSidebarPanel } from '@/components/sidebar/ReceivingSidebarPanel';
 import { InventorySidebarPanel } from '@/components/sidebar/InventorySidebarPanel';
+import { SourcingSidebarPanel } from '@/components/sidebar/SourcingSidebarPanel';
 import { FbaSidebarPanel } from '@/components/fba/sidebar';
 import { SupportSidebarPanel } from '@/components/sidebar/SupportSidebarPanel';
 import { AiChatSidebarPanel } from '@/components/sidebar/AiChatSidebarPanel';
@@ -47,13 +49,16 @@ const MASTER_NAV_RAIL_PAGES: ReadonlySet<string> = new Set([
   'products',
   'walk-in',
   'tech',
+  'sourcing',
 ]);
 
-// Sub-views shown above the search bar.
+// Sub-views shown above the search bar. Rail order matches SIDEBAR_PAGE_NAV:
+// Awaiting · Pending · Shipped · Warranty Logger.
 const DASHBOARD_ORDERS_SUBVIEW_ITEMS: HorizontalSliderItem[] = [
-  { id: 'pending',   label: 'Pending',  icon: Clock },
-  { id: 'shipped',   label: 'Shipped',  icon: PackageCheck },
-  { id: 'unshipped', label: 'Awaiting', icon: AlertCircle },
+  { id: 'unshipped', label: 'Awaiting',         icon: AlertCircle },
+  { id: 'pending',   label: 'Pending',          icon: Clock },
+  { id: 'shipped',   label: 'Shipped',          icon: PackageCheck },
+  { id: 'warranty',  label: 'Warranty Logger',  icon: ShieldCheck },
 ];
 
 function getSidebarTitle(pathname: string | null) {
@@ -70,6 +75,7 @@ function getSidebarTitle(pathname: string | null) {
     inventory: 'Inventory',
     products: 'Products',
     warehouse: 'Warehouse',
+    sourcing: 'Sourcing',
     tech: 'Testing',
     packer: 'Packing',
     support: 'Support',
@@ -191,6 +197,16 @@ function SidebarContextPanel({ onBackToAppNav }: { onBackToAppNav?: () => void }
       );
     }
 
+    if (dashboardSearch.orderView === 'warranty') {
+      return (
+        <WarrantyLoggerSidebar
+          filterControl={filterControl}
+          searchValue={dashboardSearch.searchQuery}
+          onSearchChange={dashboardSearch.setSearch}
+        />
+      );
+    }
+
     return (
       <DashboardManagementPanel
         showIntakeForm={dashboardSearch.showIntakeForm}
@@ -235,6 +251,7 @@ function SidebarContextPanel({ onBackToAppNav }: { onBackToAppNav?: () => void }
   // panel here carries the section toggle (Inventory ↔ Replenish) plus the
   // tabbed inventory / replenish sidebars.
   if (routeKey === 'inventory') return <InventorySidebarPanel />;
+  if (routeKey === 'sourcing') return <SourcingSidebarPanel />;
   if (routeKey === 'products') return <ProductsSidebarPanel />;
   if (routeKey === 'warehouse') return <WarehouseSidebarPanel />;
   if (routeKey === 'walk-in') return <WalkInSidebarPanel embedded hideSectionHeader />;

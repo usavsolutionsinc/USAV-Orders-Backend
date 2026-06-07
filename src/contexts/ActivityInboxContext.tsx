@@ -25,7 +25,7 @@ const MAX_ITEMS = 20;
 /** Time window during which Undo is offered for reversible items */
 export const ACTIVITY_INBOX_UNDO_MS = 60_000;
 
-export type ActivityInboxItemKind = 'repair_status' | 'priority_unbox';
+export type ActivityInboxItemKind = 'repair_status' | 'priority_unbox' | 'warranty_claim';
 
 export interface ActivityInboxItem {
   id: string;
@@ -43,7 +43,22 @@ export interface ActivityInboxItem {
   sku?: string;
   trackingNumber?: string;
   receivingId?: number;
+  // warranty_claim
+  claimId?: number;
+  claimNumber?: string;
+  claimStatus?: string;
 }
+
+const WARRANTY_EVENT_LABEL: Record<string, string> = {
+  submitted: 'Submitted',
+  approved: 'Approved',
+  denied: 'Denied',
+  in_repair: 'In repair',
+  repair_logged: 'Repair logged',
+  repaired: 'Repaired',
+  closed: 'Closed',
+  expired: 'Expired',
+};
 
 type PushRepairStatusArgs = {
   repairId: number;
@@ -58,12 +73,21 @@ type PushPriorityUnboxArgs = {
   receivingId?: number | null;
 };
 
+type PushWarrantyClaimArgs = {
+  claimId: number;
+  claimNumber: string;
+  status: string;
+  event: string;
+  title?: string | null;
+};
+
 interface ActivityInboxContextValue {
   items: ActivityInboxItem[];
   /** Id of inbox row currently executing undo (if any). */
   pendingUndoId: string | null;
   pushRepairStatusChange: (args: PushRepairStatusArgs) => void;
   pushPriorityUnbox: (args: PushPriorityUnboxArgs) => void;
+  pushWarrantyClaim: (args: PushWarrantyClaimArgs) => void;
   undoItem: (id: string) => Promise<void>;
   dismissItem: (id: string) => void;
   clear: () => void;
@@ -154,6 +178,30 @@ export function ActivityInboxProvider({
     [user],
   );
 
+  const pushWarrantyClaim = useCallback(
+    ({ claimId, claimNumber, status, event, title }: PushWarrantyClaimArgs) => {
+      if (!user) return;
+      if (!claimId || !claimNumber) return;
+      const now = Date.now();
+      const eventLabel = WARRANTY_EVENT_LABEL[event] ?? truncateLabel(event, 24);
+      const item: ActivityInboxItem = {
+        id: newId(),
+        kind: 'warranty_claim',
+        title: `Warranty · ${truncateLabel(claimNumber, 40)}`,
+        subtitle: title
+          ? `${eventLabel} · ${truncateLabel(title, 40)}`
+          : eventLabel,
+        createdAt: now,
+        undoUntil: now, // not reversible from the inbox
+        claimId,
+        claimNumber,
+        claimStatus: status,
+      };
+      setItems((prevItems) => [item, ...prevItems].slice(0, MAX_ITEMS));
+    },
+    [user],
+  );
+
   // Receiving-door scans that hit a pending order are pushed to inbox:{staffId}
   // server-side; mirror them into the inbox wherever this staff is signed in.
   const inboxChannel = getInboxChannelName(user?.staffId ?? 'none');
@@ -166,6 +214,25 @@ export function ActivityInboxProvider({
         skus: Array.isArray(d.skus) ? (d.skus as string[]) : [],
         trackingNumber: typeof d.trackingNumber === 'string' ? d.trackingNumber : null,
         receivingId: typeof d.receivingId === 'number' ? d.receivingId : null,
+      });
+    },
+    Boolean(user?.staffId),
+  );
+
+  // Warranty claim status changes for claims this staff logged.
+  useAblyChannel(
+    inboxChannel,
+    'warranty_claim',
+    (msg: { data?: { claimId?: unknown; claimNumber?: unknown; status?: unknown; event?: unknown; title?: unknown } }) => {
+      const d = msg?.data ?? {};
+      const claimId = typeof d.claimId === 'number' ? d.claimId : Number(d.claimId);
+      if (!Number.isFinite(claimId) || claimId <= 0) return;
+      pushWarrantyClaim({
+        claimId,
+        claimNumber: typeof d.claimNumber === 'string' ? d.claimNumber : String(d.claimNumber ?? ''),
+        status: typeof d.status === 'string' ? d.status : '',
+        event: typeof d.event === 'string' ? d.event : '',
+        title: typeof d.title === 'string' ? d.title : null,
       });
     },
     Boolean(user?.staffId),
@@ -239,6 +306,7 @@ export function ActivityInboxProvider({
       pendingUndoId,
       pushRepairStatusChange,
       pushPriorityUnbox,
+      pushWarrantyClaim,
       undoItem,
       dismissItem,
       clear,
@@ -248,6 +316,7 @@ export function ActivityInboxProvider({
       pendingUndoId,
       pushRepairStatusChange,
       pushPriorityUnbox,
+      pushWarrantyClaim,
       undoItem,
       dismissItem,
       clear,

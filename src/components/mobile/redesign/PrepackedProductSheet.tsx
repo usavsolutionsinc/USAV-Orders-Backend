@@ -8,7 +8,6 @@ import {
   MapPin,
   Loader2,
   History,
-  QrCode,
   Box,
 } from '@/components/Icons';
 import {
@@ -16,6 +15,7 @@ import {
   SectionHeader,
   GlassButton,
 } from '@/components/mobile/redesign/DesignSystem';
+import { SerialChip, SkuSerialChip } from '@/components/ui/CopyChip';
 import { BottomSheet } from '@/components/ui/BottomSheet';
 import { ScanInput } from '@/components/mobile/redesign/ScanInput';
 import { describeUnitId } from '@/lib/inventory/unit-id-format';
@@ -68,8 +68,11 @@ async function resolvePrepacked(scanned: string): Promise<PrepackResult> {
   const { serial, gtin } = extractUnitFromScan(scanned);
 
   // 1+2. Live serial_units row (route accepts numeric id OR a serial string).
+  // `orPrint=1` adds the desktop's print-record fallback: a printed label with
+  // no serial_units row still resolves — to the REAL device serial linked via
+  // the LABELED inventory_event — so untracked units show a serial, not blank.
   try {
-    const r = await fetch(`/api/serial-units/${encodeURIComponent(serial)}`, {
+    const r = await fetch(`/api/serial-units/${encodeURIComponent(serial)}?orPrint=1`, {
       credentials: 'include',
       cache: 'no-store',
     });
@@ -146,6 +149,9 @@ export function PrepackedProductSheet({ scanned, onClose }: { scanned: string | 
   }, [scanned]);
 
   const tracked = data?.source === 'tracked' ? data : null;
+  // Put-away needs a real serial_units row (numeric id). The print fallback can
+  // resolve a serial for display while returning id 0 (no live row) — guard it.
+  const liveUnitId = tracked && tracked.unit.id > 0 ? tracked.unit.id : null;
   const parsed = shown ? describeUnitId(extractUnitFromScan(shown).serial) : null;
 
   const title =
@@ -157,19 +163,19 @@ export function PrepackedProductSheet({ scanned, onClose }: { scanned: string | 
   const serialText = tracked?.unit.serial_number ?? data?.serial ?? shown ?? '';
 
   async function handleLocationDecode(value: string) {
-    if (!tracked) return;
+    if (!liveUnitId) return;
     const bin = value.trim();
     if (!bin || moving) return;
     setMoving(true);
     try {
-      const res = await fetch(`/api/serial-units/${tracked.unit.id}/move`, {
+      const res = await fetch(`/api/serial-units/${liveUnitId}/move`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
         body: JSON.stringify({
           bin_barcode: bin,
           bin_name: bin,
-          client_event_id: `m-prepack-move-${tracked.unit.id}-${++moveCounter.current}-${bin}`,
+          client_event_id: `m-prepack-move-${liveUnitId}-${++moveCounter.current}-${bin}`,
         }),
       });
       const d = await res.json().catch(() => null);
@@ -205,27 +211,30 @@ export function PrepackedProductSheet({ scanned, onClose }: { scanned: string | 
                 <Package className="h-6 w-6" />
               </div>
               <div className="min-w-0 flex-1">
+                {/* PRIMARY — product title; SKU + serial below as copy chips
+                    (same primitives as the desktop identity card). */}
                 <p className="text-lg font-black leading-snug tracking-tight text-blue-950">{title}</p>
-                {sku && (
-                  <p className="mt-0.5 truncate text-xs font-black uppercase tracking-wider text-blue-400">
-                    SKU {sku}
-                  </p>
-                )}
+                <div className="mt-1.5 space-y-1">
+                  {sku && (
+                    <ChipRow label="SKU">
+                      <SkuSerialChip value={sku} display={sku} width="w-fit" />
+                    </ChipRow>
+                  )}
+                  {serialText && (
+                    <ChipRow label="Serial">
+                      <SerialChip value={serialText} width="w-fit" />
+                    </ChipRow>
+                  )}
+                </div>
               </div>
             </div>
 
-            {/* Parsed label + identifiers */}
+            {/* Raw label identifiers — the scanned QR/unit id + GTIN. */}
             <div className="flex flex-wrap items-center gap-2">
               {parsed && (
                 <span className="inline-flex items-center gap-1.5 rounded-full bg-blue-950 px-3 py-1 text-[11px] font-black uppercase tracking-wider text-white">
                   <Box className="h-3.5 w-3.5" />
                   {parsed.display}
-                </span>
-              )}
-              {serialText && (
-                <span className="inline-flex items-center gap-1.5 rounded-full bg-blue-50 px-3 py-1 text-[11px] font-bold tracking-wide text-blue-700">
-                  <QrCode className="h-3.5 w-3.5" />
-                  {serialText}
                 </span>
               )}
               {gtin && (
@@ -246,8 +255,8 @@ export function PrepackedProductSheet({ scanned, onClose }: { scanned: string | 
               />
             </div>
 
-            {/* Put-away action — needs a tracked unit (numeric id) to write. */}
-            {tracked ? (
+            {/* Put-away action — needs a real serial_units row (numeric id). */}
+            {liveUnitId ? (
               <GlassButton
                 variant="primary"
                 className="w-full !rounded-[24px]"
@@ -259,9 +268,9 @@ export function PrepackedProductSheet({ scanned, onClose }: { scanned: string | 
             ) : (
               <div className="rounded-2xl border border-amber-100 bg-amber-50/60 px-4 py-3">
                 <p className="text-xs font-bold leading-relaxed text-amber-700">
-                  {data.source === 'untracked'
-                    ? 'Unit not individually tracked yet — receive/test it first to assign a location.'
-                    : 'Could not resolve this label to a product.'}
+                  {data.source === 'unknown'
+                    ? 'Could not resolve this label to a product.'
+                    : 'Unit not individually tracked yet — receive/test it first to assign a location.'}
                 </p>
               </div>
             )}
@@ -285,10 +294,17 @@ export function PrepackedProductSheet({ scanned, onClose }: { scanned: string | 
                   ))}
                 </div>
               ) : (
-                <div className="rounded-2xl bg-slate-50 px-4 py-6 text-center">
+                <div className="flex flex-col items-center gap-2 rounded-2xl bg-slate-50 px-4 py-6 text-center">
                   <p className="text-xs font-black uppercase tracking-widest text-blue-300">
                     {tracked ? 'No history yet' : 'No history for untracked units'}
                   </p>
+                  {/* Show the serial even with no events — mirrors the desktop
+                      detail page (which always surfaces the serial). */}
+                  {serialText && (
+                    <ChipRow label="Serial">
+                      <SerialChip value={serialText} width="w-fit" />
+                    </ChipRow>
+                  )}
                 </div>
               )}
             </div>
@@ -312,7 +328,7 @@ export function PrepackedProductSheet({ scanned, onClose }: { scanned: string | 
         <ScanInput
           compact
           autoFocus
-          placeholder="Scan a bin / location QR…"
+          placeholder="Scan a bin / location QR"
           cameraButtonLabel="Open Camera"
           onDecode={handleLocationDecode}
         />
@@ -324,6 +340,18 @@ export function PrepackedProductSheet({ scanned, onClose }: { scanned: string | 
         )}
       </BottomSheet>
     </>
+  );
+}
+
+/** Tiny label + copy chip, mirroring the desktop identity card's ChipRow. */
+function ChipRow({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div className="flex items-center gap-2">
+      <span className="w-12 shrink-0 text-[10px] font-black uppercase tracking-[0.14em] text-blue-300">
+        {label}
+      </span>
+      {children}
+    </div>
   );
 }
 

@@ -15,6 +15,7 @@ import {
 } from '@/components/sidebar/receiving/receiving-sidebar-shared';
 import { SourcePlatformPills } from './SourcePlatformPills';
 import { ReceivingTypePills } from './ReceivingTypePills';
+import { receivingPriorityRank } from './receiving-priority';
 
 /**
  * Carton-level context card: staff dropdown + photo strip, the listing /
@@ -118,6 +119,7 @@ export function CartonContextCard({
         <ReceivingCartonStaffDropdown
           receivingId={receivingId}
           staffId={staffId}
+          priorityRank={receivingPriorityRank(isUnmatched, platformValue)}
           onMakeClaim={onMakeClaim}
         />
       ) : null}

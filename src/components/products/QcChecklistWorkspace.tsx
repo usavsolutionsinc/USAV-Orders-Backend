@@ -63,7 +63,7 @@ export function QcChecklistWorkspace() {
   return (
     <div className="flex flex-1 flex-col overflow-y-auto">
       {/* Product header */}
-      <div className="flex items-center gap-4 border-b border-gray-100 bg-white px-6 py-5">
+      <div className="flex h-20 shrink-0 items-center gap-4 border-b border-gray-100 bg-white px-6">
         <span className="flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-gray-50 ring-1 ring-gray-200">
           {catalog.image_url ? (
             // eslint-disable-next-line @next/next/no-img-element
