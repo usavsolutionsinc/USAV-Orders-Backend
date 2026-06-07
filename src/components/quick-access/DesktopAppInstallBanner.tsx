@@ -85,5 +85,3 @@ export function DesktopAppInstallBanner({ onAction }: DesktopAppInstallBannerPro
     </div>
   );
 }
-
-export default DesktopAppInstallBanner;

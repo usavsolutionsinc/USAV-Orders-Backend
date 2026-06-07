@@ -45,7 +45,7 @@ export function LineReceiveActionBar({
     assignedTechId != null ? stationThemeColors[getStaffThemeById(assignedTechId)] : null;
   return (
     <StickyActionBar
-      primaryFullWidth
+      floating
       primary={{
         label: primaryLabel,
         onClick: onPrintAndReceive,

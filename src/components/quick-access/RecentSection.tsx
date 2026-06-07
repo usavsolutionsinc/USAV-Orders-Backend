@@ -65,5 +65,3 @@ export function RecentSection({ onNavigate }: RecentSectionProps) {
     </div>
   );
 }
-
-export default RecentSection;

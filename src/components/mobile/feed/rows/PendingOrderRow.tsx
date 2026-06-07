@@ -94,5 +94,3 @@ export function PendingOrderRow({
     </MobileRowCard>
   );
 }
-
-export default PendingOrderRow;

@@ -39,14 +39,6 @@ export interface SkuPlatformIdRow {
 
 // ─── Pairing hub interfaces (2026-05-25) ────────────────────────────────────
 
-export interface SkuPairingSuggestionRow {
-  sku_catalog_id: number;
-  platform_id_row_id: number;
-  confidence: number;
-  reason: string;
-  refreshed_at: string;
-}
-
 export type PairingAuditAction =
   | 'accept'
   | 'reject'
@@ -54,20 +46,6 @@ export type PairingAuditAction =
   | 'create_platform_row';
 
 export type PairingAuditActorKind = 'user' | 'system';
-
-export interface SkuPairingAuditRow {
-  id: number;
-  sku_catalog_id: number;
-  platform_id_row_id: number | null;
-  action: PairingAuditAction;
-  confidence: number | null;
-  reason: string | null;
-  actor_id: number | null;
-  actor_kind: PairingAuditActorKind;
-  before_state: unknown;
-  after_state: unknown;
-  created_at: string;
-}
 
 export interface SkuKitPartRow {
   id: number;

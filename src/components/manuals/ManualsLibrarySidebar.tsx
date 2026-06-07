@@ -655,5 +655,3 @@ function FileButton({
     </button>
   );
 }
-
-export default ManualsLibrarySidebar;

@@ -287,5 +287,3 @@ export function PhoneHistoryPopover({ onClose }: PhoneHistoryPopoverProps) {
     </div>
   );
 }
-
-export default PhoneHistoryPopover;

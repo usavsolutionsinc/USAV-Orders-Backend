@@ -12,5 +12,3 @@ export function AppearanceApplier() {
   useEffect(() => { applyAppearance(); }, []);
   return null;
 }
-
-export default AppearanceApplier;

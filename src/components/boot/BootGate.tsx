@@ -151,5 +151,3 @@ export function BootGate({
     </>
   );
 }
-
-export default BootGate;

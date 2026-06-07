@@ -113,5 +113,3 @@ export function CollapsibleGroupRow({
     </div>
   );
 }
-
-export default CollapsibleGroupRow;

@@ -64,5 +64,3 @@ export function ActionsSection({
     </div>
   );
 }
-
-export default ActionsSection;

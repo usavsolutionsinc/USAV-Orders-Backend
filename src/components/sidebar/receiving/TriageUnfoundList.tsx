@@ -137,5 +137,3 @@ export function TriageUnfoundList({
     />
   );
 }
-
-export default TriageUnfoundList;

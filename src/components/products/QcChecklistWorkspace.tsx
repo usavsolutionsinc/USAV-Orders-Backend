@@ -108,5 +108,3 @@ export function QcChecklistWorkspace() {
     </div>
   );
 }
-
-export default QcChecklistWorkspace;

@@ -412,5 +412,3 @@ function FolderPickerModal({
     </div>
   );
 }
-
-export default StationNasFoldersTab;

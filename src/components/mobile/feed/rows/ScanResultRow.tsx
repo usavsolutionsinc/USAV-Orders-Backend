@@ -98,5 +98,3 @@ export function ScanResultRow({ item, fresh = false }: { item: ScanFeedItem; fre
     </MobileRowCard>
   );
 }
-
-export default ScanResultRow;

@@ -134,5 +134,3 @@ export function SidebarShell({
     </Container>
   );
 }
-
-export default SidebarShell;

@@ -139,5 +139,3 @@ export function ScanInput({
     </div>
   );
 }
-
-export default ScanInput;

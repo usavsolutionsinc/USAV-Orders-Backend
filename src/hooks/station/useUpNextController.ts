@@ -264,5 +264,3 @@ export function useUpNextController({
     showNoCurrentOrdersBanner,
   };
 }
-
-export type UseUpNextControllerReturn = ReturnType<typeof useUpNextController>;

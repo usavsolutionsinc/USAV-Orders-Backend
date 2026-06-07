@@ -183,5 +183,3 @@ export function PrintPreferences({ onClose }: PrintPreferencesProps) {
     </div>
   );
 }
-
-export default PrintPreferences;

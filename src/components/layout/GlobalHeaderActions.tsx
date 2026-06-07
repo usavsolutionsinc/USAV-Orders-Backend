@@ -193,5 +193,3 @@ export function GlobalHeaderActions({ variant = 'desktop' }: { variant?: 'deskto
     </div>
   );
 }
-
-export default GlobalHeaderActions;

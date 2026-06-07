@@ -33,5 +33,3 @@ export function ScanAgainBar({ className = '' }: { className?: string }) {
     </div>
   );
 }
-
-export default ScanAgainBar;

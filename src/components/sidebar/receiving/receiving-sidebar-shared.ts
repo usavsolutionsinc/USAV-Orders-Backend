@@ -303,20 +303,6 @@ export function conditionShort(code: string | null | undefined): string {
 
 // ── Scan / exception types ──────────────────────────────────────────────────
 
-/**
- * Persistent row surfaced from the `tracking_exceptions` DB table. Mirrors
- * the subset of columns the sidebar cares about; full shape lives on the
- * triage page.
- */
-export type OpenException = {
-  id: number;
-  tracking_number: string;
-  exception_reason: string;
-  created_at: string;
-  last_zoho_check_at: string | null;
-  zoho_check_count: number;
-};
-
 export function randomId(): string {
   if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
     return crypto.randomUUID();

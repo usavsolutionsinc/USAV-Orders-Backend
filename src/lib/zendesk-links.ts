@@ -8,9 +8,6 @@
 import pool from '@/lib/db';
 import { getTicket } from './zendesk';
 
-/** Entity kinds we link tickets to. Matches `photos.entity_type` for photo-bearing kinds. */
-export type TicketEntityType = 'RECEIVING' | 'RECEIVING_LINE' | 'REPAIR' | 'ORDER';
-
 export interface TicketEntityRef {
   type: string;
   id: number;

@@ -171,5 +171,3 @@ export function SettingsSidebarPanel(): ReactNode {
     />
   );
 }
-
-export default SettingsSidebarPanel;

@@ -162,5 +162,3 @@ export function ActivityInboxPopover({ onClose }: ActivityInboxPopoverProps) {
         </div>
     );
 }
-
-export default ActivityInboxPopover;

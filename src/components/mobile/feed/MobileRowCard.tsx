@@ -67,5 +67,3 @@ export function MobileRowCard({
     </div>
   );
 }
-
-export default MobileRowCard;

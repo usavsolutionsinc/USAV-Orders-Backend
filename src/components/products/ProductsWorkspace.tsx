@@ -61,5 +61,3 @@ export function ProductsWorkspace() {
   // comes from the sidebar's LibraryBrowser (`?id=`).
   return <ManualLibrary />;
 }
-
-export default ProductsWorkspace;

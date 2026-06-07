@@ -49,5 +49,3 @@ export function Row({ icon, iconBg = 'bg-gray-900', label, subLabel, trailing, o
     </div>
   );
 }
-
-export default Row;

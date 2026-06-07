@@ -826,29 +826,33 @@ export function LineEditPanel({
             </WorkspaceCard>
           ) : null}
         </div>
-      </div>
 
-      {/* Print·receive sticky bar — unbox-only; triage just identifies. */}
-      {caps.receiveBar ? (
-        <LineReceiveActionBar
-          assignedTechId={row.assigned_tech_id}
-          primaryLabel={printReceivePrimaryLabel}
-          primaryTitle={printThenReceiveTitle}
-          primaryDisabled={combinedReviewDisabled}
-          splitMenuAriaLabel={splitMenuAriaLabel}
-          splitMenuHoverTitle={splitMenuHoverTitle}
-          canPrint={canPrintReview}
-          canReceive={canReceiveReview}
-          receiveMenuLabel={receiveMenuLabel}
-          receiveMenuTitle={
-            row.receiving_id == null ? 'Line must be linked to a shipment' : undefined
-          }
-          onPrintAndReceive={() => void handlePrintAndReceive()}
-          onPrintOnly={() => runPrintLabel()}
-          onMarkScanned={() => void handleReceive('scan_only')}
-          onReceive={() => void handleReceive('zoho_receive')}
-        />
-      ) : null}
+        {/* Print·receive sticky bar — unbox-only; triage just identifies.
+            Lives INSIDE the scroll surface so the floating variant pins over
+            the content (the inner column reserves room with pb-32) and the
+            click-through wrapper shows the scrolling content beneath it — a
+            true floating button with no backing band. */}
+        {caps.receiveBar ? (
+          <LineReceiveActionBar
+            assignedTechId={row.assigned_tech_id}
+            primaryLabel={printReceivePrimaryLabel}
+            primaryTitle={printThenReceiveTitle}
+            primaryDisabled={combinedReviewDisabled}
+            splitMenuAriaLabel={splitMenuAriaLabel}
+            splitMenuHoverTitle={splitMenuHoverTitle}
+            canPrint={canPrintReview}
+            canReceive={canReceiveReview}
+            receiveMenuLabel={receiveMenuLabel}
+            receiveMenuTitle={
+              row.receiving_id == null ? 'Line must be linked to a shipment' : undefined
+            }
+            onPrintAndReceive={() => void handlePrintAndReceive()}
+            onPrintOnly={() => runPrintLabel()}
+            onMarkScanned={() => void handleReceive('scan_only')}
+            onReceive={() => void handleReceive('zoho_receive')}
+          />
+        ) : null}
+      </div>
 
       {/* Triage's terminal action. Classification / PO# / items already persist
           on change, so this confirms the carton is identified and hands it to

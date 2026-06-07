@@ -88,11 +88,6 @@ export interface StationAssignment {
   secondary: StationKey[];
 }
 
-/** Theme colour bundle threaded into each card for the section border. */
-export interface CardTheme {
-  border: string;
-}
-
 export function initials(name: string): string {
   return name
     .split(/\s+/)

@@ -106,5 +106,3 @@ export function InventoryGraphSidebar() {
         </SidebarShell>
     );
 }
-
-export default InventoryGraphSidebar;

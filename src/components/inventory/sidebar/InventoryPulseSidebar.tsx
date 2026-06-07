@@ -155,5 +155,3 @@ export function InventoryPulseSidebar() {
         </SidebarShell>
     );
 }
-
-export default InventoryPulseSidebar;

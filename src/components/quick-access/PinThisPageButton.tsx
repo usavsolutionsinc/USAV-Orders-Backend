@@ -59,5 +59,3 @@ export function PinThisPageButton({ onPinned }: PinThisPageButtonProps) {
     </button>
   );
 }
-
-export default PinThisPageButton;

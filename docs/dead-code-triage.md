@@ -58,6 +58,49 @@ These were top of the current knip unused files list. Activity inbox/feed and ba
 
 Note: There is a separate active StaffTable in app/settings/staff/. The components/admin one was the old one flagged by knip. FBA ones appear legacy compared to current board/sidebar.
 
+**Wave 5 (export-level, zero-risk)**: Removed 46 redundant `export default <Ident>;` lines. These files follow the `export function X` + `export default X` pattern, but every consumer imports the **named** export — the `default` export had **0 importers anywhere in `src/`**.
+
+- Detection: knip "Unused exports" section (303 entries), filtered to the 47 whose only unused export was bare `default`.
+- Safety verification before edit:
+  - 0 default-importers (`import X from '...'`) across all 47 (grep-verified).
+  - None reached via `next/dynamic` or `React.lazy` (which resolve `.default`).
+  - None are `src/app/**` route/page/layout files (where `default` is structurally required).
+- Result: `npx tsc --noEmit` clean (exit 0); knip unused exports 303 → 257 (−46, exact).
+- **Correction to prior turn's analysis**: knip is NOT producing false positives on these components. They are correctly recognized as used via their named exports; the earlier "active components flagged as dead" read was a mis-attribution of the *Duplicate exports* / redundant-`default` rows. Detection (incl. `@/` alias resolution) is working correctly — no knip config repair needed.
+
+| Path | Category | Confidence | Detection | Status | Notes / Evidence |
+|------|----------|------------|-----------|--------|------------------|
+| `src/utils/orders.ts` | Schema | Medium | knip | new | **Whole-file candidate** (not a redundant-default case). Legacy `defineSchema('orders', [...])` definition with `export default`; **0 importers anywhere in `src/`**. Superseded by the drizzle schema. Excluded from Wave 5 (file deletion needs Phase-C protocol: confirm no schema-generation/SQL-emit consumer first). |
+
+**Wave 6 (dead exported types, zero-runtime-risk)**: knip reported 394 unused-exported-type entries (785 type symbols). A single-pass scanner (`/tmp/scan.mjs`) counted each identifier's occurrences across **all** of `src/` *including test/spec files* (knip ignores tests — a known blind spot). Results: 736 symbols are used locally (only the `export` keyword is redundant — left untouched, churn-only), 1 is test-imported (`ReceivingView` — kept exported), and **47 are fully dead** (identifier occurs exactly once = its own declaration).
+
+Of the 47 fully-dead types, **14 unambiguously-internal ones were deleted** this wave (hook return types, query-row types, internal unions/responses):
+
+| Path | Type(s) deleted |
+|------|-----------------|
+| `src/components/admin/access/useStaffAccessDetail.ts` | `StaffAccessMutations` |
+| `src/hooks/station/useUpNextController.ts` | `UseUpNextControllerReturn` |
+| `src/hooks/useFeedback.ts` | `FeedbackFn` |
+| `src/hooks/useInventorySearch.ts` | `InventoryResultKind` |
+| `src/lib/neon/pairing-queries.ts` | `SupportedPlatform` |
+| `src/lib/neon/repair-service-queries.ts` | `RepairStatus` |
+| `src/lib/zendesk-links.ts` | `TicketEntityType` |
+| `src/components/admin/access/staff-access-shared.ts` | `CardTheme` |
+| `src/components/po-triage/types.ts` | `TriageResponse` |
+| `src/components/sidebar/receiving/receiving-sidebar-shared.ts` | `OpenException` |
+| `src/lib/neon/sku-catalog-queries.ts` | `SkuPairingSuggestionRow`, `SkuPairingAuditRow` |
+| `src/lib/staff-availability.ts` | `StaffScheduleMatrixResponse` |
+| `src/lib/sync-cursors.ts` | `SyncCursorRow` |
+
+Gates: `tsc --noEmit` clean; build run. Removal was brace-matched (type + attached doc comment), surrounding code untouched (diffs reviewed).
+
+**Held back — 33 fully-dead types in intentional typed-API surfaces** (NOT deleted on tool output alone; tied to active initiatives, awaiting an explicit keep/prune decision):
+- `src/design-system/**` (21): token/theme types — `Spacing`, `Radii`, `Shadows`, `ZIndex`, `FontSizes`, `FontWeights`, `TypographyPresets`, `BaseColors`, `SemanticColors`, `DarkTheme`, `LightTheme`, `Breakpoints`, `MotionDurations`, `HapticPattern`, `TouchTarget`, `SafeArea`, `MobileDensity`, `FontFamilies`, `BorderWidths`, `DesignSystemCssVariables`, `FoundationIcons`. Related to [[design-2026-component-adoption]]. None are barrel-re-exported (occur once) → likely dead, but design-system type API is conventionally kept.
+- `src/lib/schemas/**` (10): Zod `z.infer` contract types — `OrderUpdateInput`, `OrderTrackingPostInput`, `OrderTrackingPatchInput`, `ReasonCodeCreateInput`, `ReasonCodeUpdateInput`, `RmaUpdateInput`, `SkuCatalogCreateInput`, `SkuCatalogUpdateInput`, `SkuRelationshipCreateInput`, `SkuRelationshipUpdateInput`. Related to [[crud-endpoints-initiative]].
+- `src/lib/integrations/credentials.ts` (2): `EcwidCredentials`, `SquareCredentials`. Related to [[nango-additive-integration]].
+
+**Not pursued — 736 locally-used "unused exports"**: only the `export` keyword is redundant (type is used within its own file). Demoting to local removes no actual code (types erase at compile) and carries edge-case risk (declaration merging, barrels). Left as accepted knip baseline noise.
+
 ---
 
 ## Knip "Unused Files" — Initial Baseline Triage (182 reported)

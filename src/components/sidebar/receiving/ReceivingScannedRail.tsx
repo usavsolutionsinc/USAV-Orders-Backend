@@ -145,5 +145,3 @@ export function ReceivingScannedRail({
     />
   );
 }
-
-export default ReceivingScannedRail;

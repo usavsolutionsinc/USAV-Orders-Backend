@@ -145,5 +145,4 @@ export function useStaffAccessDetail(staffId: number) {
   return { detail, mutations, actionError, anyBusy, detailKey, queryClient };
 }
 
-export type StaffAccessMutations = ReturnType<typeof useStaffAccessDetail>['mutations'];
 export type { StationKey };

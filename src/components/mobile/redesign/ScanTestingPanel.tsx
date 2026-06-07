@@ -282,5 +282,3 @@ export function ScanTestingPanel({ query }: { query: string }) {
     </div>
   );
 }
-
-export default ScanTestingPanel;

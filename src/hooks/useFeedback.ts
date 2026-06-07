@@ -92,5 +92,3 @@ export function useFeedback() {
 
   return Object.assign(fire, { prefs, setPref: setFeedbackPref });
 }
-
-export type FeedbackFn = ReturnType<typeof useFeedback>;

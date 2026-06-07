@@ -156,7 +156,6 @@ export function QuickAccessPopover({ onClose, onOpenHistoryPopover, onOpenInboxP
   );
 }
 
-export default QuickAccessPopover;
 
 /**
  * Avatar circle that doubles as a color-wheel trigger for the signed-in

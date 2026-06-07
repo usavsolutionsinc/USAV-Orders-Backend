@@ -91,5 +91,3 @@ export function ReceivingIdentityChips({
     </div>
   );
 }
-
-export default ReceivingIdentityChips;

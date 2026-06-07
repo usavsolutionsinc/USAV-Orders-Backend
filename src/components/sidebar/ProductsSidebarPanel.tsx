@@ -275,7 +275,6 @@ export function ProductsSidebarPanel() {
   );
 }
 
-export default ProductsSidebarPanel;
 
 // ─── Pairing sidebar queue ─────────────────────────────────────────────────
 

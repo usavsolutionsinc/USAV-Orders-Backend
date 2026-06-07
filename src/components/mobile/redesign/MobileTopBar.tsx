@@ -48,5 +48,3 @@ export const MobileTopBar = ({
     </div>
   </header>
 );
-
-export default MobileTopBar;

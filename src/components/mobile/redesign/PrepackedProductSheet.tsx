@@ -338,5 +338,3 @@ function StatField({ label, value, icon }: { label: string; value: string; icon?
     </div>
   );
 }
-
-export default PrepackedProductSheet;

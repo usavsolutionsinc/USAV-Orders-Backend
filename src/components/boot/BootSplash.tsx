@@ -68,5 +68,3 @@ export function BootSplash({ label = 'Loading your workspace' }: { label?: strin
     </div>
   );
 }
-
-export default BootSplash;
