@@ -6,12 +6,19 @@
  * lives in one place.
  *
  * Per resolved unit, in one transaction:
+ *   - Reverse-link on inbound: resolve the outbound order this unit last
+ *     shipped on (resolvePriorOutbound) and flip its open SHIPPED
+ *     order_unit_allocations row → RETURNED, so "returns for order X" is a
+ *     plain JOIN. (Relational-reuse plan Phase 1.)
  *   - sku_stock_ledger row +1 reason='RETURN_CUSTOMER' (the trigger
  *     projects the qty back onto sku_stock.stock automatically).
  *   - serial_units.current_status → RETURNED.
- *   - inventory_events RETURNED with prev_status = actual prior state.
+ *   - inventory_events RETURNED with prev_status = actual prior state and the
+ *     resolved order on payload.
  *
- * Idempotent via per-unit suffixed clientEventId. Rejects with 404
+ * The operator-supplied orderId still wins when provided; otherwise the
+ * resolved prior order is used. Idempotent via per-unit suffixed
+ * clientEventId. Rejects with 404
  * (with the missing serials/ids) if any input cannot be resolved —
  * zero mutations committed in that case so the operator can fix the
  * input and retry.
@@ -22,6 +29,7 @@
  */
 
 import { transaction } from '@/lib/neon-client';
+import { resolvePriorOutbound } from '@/lib/neon/serial-units-queries';
 
 export interface ReturnsIntakeInput {
   /** Normalized serial strings (already upper-cased, GS1 URLs extracted). */
@@ -37,6 +45,8 @@ export interface ReturnsIntakeInput {
   /** UUID; per-unit suffixed for retry-safe inventory_events inserts. */
   clientEventId?: string | null;
   actorStaffId: number | null;
+  /** Tenant scope for the prior-outbound lookup; null = unscoped. */
+  organizationId?: string | null;
 }
 
 export interface ReturnsIntakeSuccess {
@@ -49,6 +59,12 @@ export interface ReturnsIntakeSuccess {
     prevStatus: string;
     eventId: number | null;
     ledgerId: number | null;
+    /** Outbound order this unit was paired back to, if one was resolved. */
+    matchedOrderPk: number | null;
+    /** How the prior order was resolved: 'allocation' | 'tsn' | null. */
+    matchedVia: 'allocation' | 'tsn' | null;
+    /** True when an open SHIPPED allocation was flipped to RETURNED. */
+    allocationReturned: boolean;
   }>;
 }
 
@@ -105,6 +121,27 @@ export async function processReturnsIntake(input: ReturnsIntakeInput): Promise<R
     for (let i = 0; i < units.length; i++) {
       const u = units[i];
 
+      // Reverse-link on inbound: find the outbound order this unit last
+      // shipped on. Operator-supplied orderId wins; otherwise use the resolved
+      // prior order. Runs on the txn client so it sees committed allocations.
+      const prior = await resolvePriorOutbound(
+        { id: u.id, normalized_serial: u.normalized_serial },
+        { executor: client, organizationId: input.organizationId ?? null },
+      );
+      const resolvedOrderId = input.orderId ?? prior?.orderPk ?? null;
+
+      // Flip the unit's open SHIPPED allocation → RETURNED. This is the durable,
+      // queryable shipped↔returned link and frees the unit for re-allocation.
+      // Legacy tech-serial ships have no allocation row, so this is a no-op for
+      // them (the link survives on the event payload below).
+      const flipQ = await client.query(
+        `UPDATE order_unit_allocations
+            SET state = 'RETURNED', returned_at = NOW(), returned_reason = $2
+          WHERE serial_unit_id = $1 AND state = 'SHIPPED'`,
+        [u.id, reason],
+      );
+      const allocationReturned = (flipQ.rowCount ?? 0) > 0;
+
       let ledgerId: number | null = null;
       if (u.sku) {
         const ledgerQ = await client.query<{ id: number }>(
@@ -114,7 +151,7 @@ export async function processReturnsIntake(input: ReturnsIntakeInput): Promise<R
            )
            VALUES ($1, 1, 'RETURN_CUSTOMER', 'WAREHOUSE', $2, $3, $4, $5)
            RETURNING id`,
-          [u.sku, input.actorStaffId, u.id, input.orderId ?? null, reason],
+          [u.sku, input.actorStaffId, u.id, resolvedOrderId, reason],
         );
         ledgerId = ledgerQ.rows[0]?.id ?? null;
       }
@@ -146,7 +183,10 @@ export async function processReturnsIntake(input: ReturnsIntakeInput): Promise<R
           trackingNumber, perUnitKey, reason,
           JSON.stringify({
             source: 'returns.intake',
-            order_id: input.orderId ?? null,
+            order_id: resolvedOrderId,
+            order_id_operator: input.orderId ?? null,
+            matched_via: prior?.via ?? null,
+            allocation_returned: allocationReturned,
             tracking_number: trackingNumber,
             ordinal: i + 1,
           }),
@@ -158,13 +198,16 @@ export async function processReturnsIntake(input: ReturnsIntakeInput): Promise<R
         prevStatus: u.current_status,
         eventId: evQ.rows[0]?.id ?? null,
         ledgerId,
+        matchedOrderPk: prior?.orderPk ?? null,
+        matchedVia: prior?.via ?? null,
+        allocationReturned,
       });
     }
 
     return {
       ok: true,
       returnedUnitCount: perUnit.length,
-      orderId: input.orderId ?? null,
+      orderId: input.orderId ?? perUnit.find((p) => p.matchedOrderPk != null)?.matchedOrderPk ?? null,
       trackingNumber,
       units: perUnit,
     };

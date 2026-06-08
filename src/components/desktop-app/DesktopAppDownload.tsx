@@ -340,5 +340,3 @@ function WindowsIcon() {
     </svg>
   );
 }
-
-export default DesktopAppDownload;

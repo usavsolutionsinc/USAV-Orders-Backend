@@ -81,5 +81,3 @@ export function GlobalHeader({
     </header>
   );
 }
-
-export default GlobalHeader;

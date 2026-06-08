@@ -92,6 +92,15 @@ export function ResponsiveLayout({ children }: ResponsiveLayoutProps) {
   // stays focused on the warehouse-floor jobs it was issued for.
   const mobileRouteRestricted = isMobile && !isMobileAllowedPath(pathname);
 
+  // `/m/*` routes are inherently mobile — the edge proxy only ever serves them
+  // to phones. Device detection (useDeviceMode) is client-only, so on a fresh
+  // load/refresh it reports `desktop` for the first render(s); without this the
+  // page would flash the desktop layout (top header, no bottom nav) and then
+  // snap to mobile once detection resolves — a refresh-only layout jump. Treat
+  // `/m` paths as mobile deterministically so SSR + first paint match the final
+  // layout (no blank gate, no desktop→mobile flip).
+  const onMobileRoute = !!pathname && pathname.startsWith('/m');
+
   const openDrawer = useCallback(() => setDrawerOpen(true), []);
   const closeDrawer = useCallback(() => setDrawerOpen(false), []);
 
@@ -145,7 +154,10 @@ export function ResponsiveLayout({ children }: ResponsiveLayoutProps) {
   // Lock body scroll when drawer is open (restores prior overflow on close).
   useBodyScrollLock(drawerOpen);
 
-  if (!mounted) {
+  // Skip the pre-mount blank for `/m` routes — they render the mobile shell
+  // deterministically (see `onMobileRoute`), so there's nothing to wait for and
+  // the blank would just be an extra refresh flash.
+  if (!mounted && !onMobileRoute) {
     return <div className="flex h-full w-full bg-white" aria-hidden="true" />;
   }
 
@@ -198,7 +210,9 @@ export function ResponsiveLayout({ children }: ResponsiveLayoutProps) {
   );
 
   // ── Desktop layout ──
-  if (!isMobile) {
+  // `/m` routes always use the mobile shell, even before client detection
+  // resolves, so a refresh never flashes the desktop frame.
+  if (!isMobile && !onMobileRoute) {
     return (
       <div className="flex h-full w-full overflow-hidden">
         <GlobalWedgeScannerMount />

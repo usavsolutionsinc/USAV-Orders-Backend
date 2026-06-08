@@ -15,6 +15,7 @@ import {
 } from '@/components/sidebar/receiving/receiving-sidebar-shared';
 import { SourcePlatformPills } from './SourcePlatformPills';
 import { ReceivingTypePills } from './ReceivingTypePills';
+import { receivingPriorityRank } from './receiving-priority';
 
 /**
  * Carton-level context card: staff dropdown + photo strip, the listing /
@@ -35,6 +36,7 @@ export function CartonContextCard({
   staffId,
   isUnmatched,
   onMakeClaim,
+  showStaffPhotoRow = true,
   listingLink,
   setListingLink,
   listingEditorOpen,
@@ -67,7 +69,10 @@ export function CartonContextCard({
   receivingId: number | null;
   staffId: string;
   isUnmatched: boolean;
-  onMakeClaim: () => void;
+  /** Opens the claim modal. Omit (undefined) to hide the Claim button. */
+  onMakeClaim?: () => void;
+  /** Photos + Claim row. Hidden in triage (unbox-only). */
+  showStaffPhotoRow?: boolean;
   listingLink: string;
   setListingLink: (v: string) => void;
   listingEditorOpen: boolean;
@@ -110,11 +115,14 @@ export function CartonContextCard({
 
   return (
     <WorkspaceCard bodyClassName="px-0 py-0">
-      <ReceivingCartonStaffDropdown
-        receivingId={receivingId}
-        staffId={staffId}
-        onMakeClaim={onMakeClaim}
-      />
+      {showStaffPhotoRow ? (
+        <ReceivingCartonStaffDropdown
+          receivingId={receivingId}
+          staffId={staffId}
+          priorityRank={receivingPriorityRank(isUnmatched, platformValue)}
+          onMakeClaim={onMakeClaim}
+        />
+      ) : null}
       {/* Padding + top rule separate the photo strip from chips; keeps pill
           focus rings from clipping vs a tight body. */}
       <div className="space-y-2 border-t border-gray-100 px-4 pt-2 pb-3">

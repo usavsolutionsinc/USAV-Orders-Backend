@@ -88,6 +88,17 @@ export const AUDIT_ENTITY = {
   REASON_CODE: 'reason_code',
   RMA: 'rma',
   REPAIR_SERVICE: 'repair_service',
+  QC_CHECK_TEMPLATE: 'qc_check_template',
+  FAILURE_MODE: 'failure_mode',
+  UNIT_FAILURE_TAG: 'unit_failure_tag',
+  UNIT_REPAIR: 'unit_repair',
+  // Bose Sourcing Engine
+  BOSE_MODEL: 'bose_model',
+  PART_COMPATIBILITY: 'part_compatibility',
+  SUPPLIER: 'supplier',
+  SOURCING_ALERT: 'sourcing_alert',
+  SOURCING_CANDIDATE: 'sourcing_candidate',
+  PART_ACQUISITION: 'part_acquisition',
 } as const;
 
 export const AUDIT_ACTION = {
@@ -113,6 +124,22 @@ export const AUDIT_ACTION = {
   TECH_QC_PASS:   'tech.qc.pass',
   TECH_QC_RETEST: 'tech.qc.retest',
   TECH_QC_FAIL:   'tech.qc.fail',
+  // QC checklist templates (authoring CRUD) + per-unit results (execution)
+  QC_CHECK_CREATE:  'qc_check.create',
+  QC_CHECK_UPDATE:  'qc_check.update',
+  QC_CHECK_DELETE:  'qc_check.delete',
+  QC_CHECK_PUBLISH: 'qc_check.publish',
+  QC_RESULT_RECORD: 'qc_result.record',
+  // Failure-mode taxonomy (CRUD) + per-unit failure tags
+  FAILURE_MODE_CREATE: 'failure_mode.create',
+  FAILURE_MODE_UPDATE: 'failure_mode.update',
+  FAILURE_MODE_DELETE: 'failure_mode.delete',
+  FAILURE_TAG_ADD:     'failure_tag.add',
+  FAILURE_TAG_RESOLVE: 'failure_tag.resolve',
+  // Per-unit repair records
+  REPAIR_OPEN:     'unit_repair.open',
+  REPAIR_UPDATE:   'unit_repair.update',
+  REPAIR_COMPLETE: 'unit_repair.complete',
   // Receiving (scanner-driven matching)
   PO_LOOKUP:        'po.lookup',
   RECEIVING_MATCH:  'receiving.match',
@@ -144,6 +171,21 @@ export const AUDIT_ACTION = {
   REPAIR_CANCEL: 'repair_service.cancel',
   // Pack / order (existing callers — keep their literals stable)
   PACK_COMPLETED: 'PACK_COMPLETED',
+  // Bose Sourcing Engine — compatibility DB + alternative sourcing
+  BOSE_MODEL_CREATE: 'bose_model.create',
+  BOSE_MODEL_UPDATE: 'bose_model.update',
+  BOSE_MODEL_DELETE: 'bose_model.delete',
+  PART_COMPATIBILITY_CREATE: 'part_compatibility.create',
+  PART_COMPATIBILITY_UPDATE: 'part_compatibility.update',
+  PART_COMPATIBILITY_DELETE: 'part_compatibility.delete',
+  SUPPLIER_CREATE: 'supplier.create',
+  SUPPLIER_UPDATE: 'supplier.update',
+  SUPPLIER_DELETE: 'supplier.delete',
+  SOURCING_ALERT_RESOLVE: 'sourcing.alert.resolve',
+  SOURCING_SEARCH: 'sourcing.search',
+  SOURCING_CANDIDATE_SAVE: 'sourcing.candidate.save',
+  SOURCING_CANDIDATE_UPDATE: 'sourcing.candidate.update',
+  SOURCING_CANDIDATE_IMPORT: 'sourcing.candidate.import',
 } as const;
 
 export type AuditEntity = (typeof AUDIT_ENTITY)[keyof typeof AUDIT_ENTITY];
@@ -157,6 +199,9 @@ export const AUDIT_REASON_REQUIRED: ReadonlySet<string> = new Set([
   AUDIT_ACTION.SKU_STOCK_ADJUST,
   AUDIT_ACTION.PO_RECEIVE_REVERSE,
   AUDIT_ACTION.BIN_DELETE,
+  // Sourcing: resolving an alert and importing a candidate both need a "why".
+  AUDIT_ACTION.SOURCING_ALERT_RESOLVE,
+  AUDIT_ACTION.SOURCING_CANDIDATE_IMPORT,
 ]);
 
 // ── Server-trusted wrapper ─────────────────────────────────────────────────

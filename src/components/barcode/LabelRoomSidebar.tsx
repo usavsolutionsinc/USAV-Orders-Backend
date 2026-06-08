@@ -53,7 +53,7 @@ export function LabelRoomSidebar({
         </h2>
         <p className="mt-0.5 text-caption text-gray-500">
           {selectedRoom
-            ? `Zone ${zoneLetter ?? '?'} · ${selectedRoom}`
+            ? (zoneLetter ?? '?')
             : emptySubtitle}
         </p>
       </div>

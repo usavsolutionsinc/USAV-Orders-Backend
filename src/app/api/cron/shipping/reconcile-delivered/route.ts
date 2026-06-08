@@ -18,9 +18,11 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { isVercelCronOrigin } from '@/lib/qstash';
+import { isVercelCronOrigin } from '@/lib/cron/auth';
+import { withCronRun } from '@/lib/cron/run-log';
 import { runReconcileDeliveredJob } from '@/lib/jobs/reconcile-delivered';
 import { runTrackingMatchReconcileJob } from '@/lib/jobs/tracking-match-reconcile';
+import { runWarrantyClockMaintenance } from '@/lib/warranty/clock-sweep';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 120;
@@ -31,17 +33,31 @@ export async function GET(req: NextRequest) {
   }
 
   try {
-    // Two pure-SQL reconcile passes: delivered-from-log (F2) and tracking↔
-    // receiving match reliability (Phase D). Independent — run both, fold the
-    // results. A match failure must not mask a delivered reconcile, so guard it.
-    const delivered = await runReconcileDeliveredJob();
+    const { delivered, match, warranty } = await withCronRun('shipping.reconcile_delivered', async () => {
+      // Two pure-SQL reconcile passes: delivered-from-log (F2) and tracking↔
+      // receiving match reliability (Phase D). Independent — run both, fold the
+      // results. A match failure must not mask a delivered reconcile, so guard it.
+      const delivered = await runReconcileDeliveredJob();
 
-    let match: Awaited<ReturnType<typeof runTrackingMatchReconcileJob>> | { ok: false; error: string };
-    try {
-      match = await runTrackingMatchReconcileJob();
-    } catch (err) {
-      match = { ok: false, error: err instanceof Error ? err.message : 'match reconcile threw' };
-    }
+      let match: Awaited<ReturnType<typeof runTrackingMatchReconcileJob>> | { ok: false; error: string };
+      try {
+        match = await runTrackingMatchReconcileJob();
+      } catch (err) {
+        match = { ok: false, error: err instanceof Error ? err.message : 'match reconcile threw' };
+      }
+
+      // Warranty clock maintenance piggybacks here: now that delivered-state is
+      // fresh, re-derive provisional warranty windows onto real delivered dates and
+      // expire lapsed claims. Guarded + flag-gated — never breaks the shipping pass.
+      let warranty: Awaited<ReturnType<typeof runWarrantyClockMaintenance>> | { skipped: false; error: string };
+      try {
+        warranty = await runWarrantyClockMaintenance();
+      } catch (err) {
+        warranty = { skipped: false, error: err instanceof Error ? err.message : 'warranty maintenance threw' };
+      }
+
+      return { delivered, match, warranty };
+    });
 
     console.log('[cron.shipping.reconcile-delivered]', {
       delivered: {
@@ -51,8 +67,9 @@ export async function GET(req: NextRequest) {
         durationMs: delivered.durationMs,
       },
       match,
+      warranty,
     });
-    return NextResponse.json({ ok: true, delivered, match });
+    return NextResponse.json({ ok: true, delivered, match, warranty });
   } catch (error) {
     const message = error instanceof Error ? error.message : 'reconcile threw';
     console.error('[cron.shipping.reconcile-delivered] fatal', { message });

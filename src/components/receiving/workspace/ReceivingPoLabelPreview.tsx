@@ -1,7 +1,10 @@
 'use client';
 
 import { Gs1DataMatrix } from '@/components/barcode/Gs1DataMatrix';
-import { receivingLabelPoCornerDisplay } from '@/lib/print/printReceivingLabel';
+import {
+  receivingLabelPlatformDisplay,
+  receivingLabelPoCornerDisplay,
+} from '@/lib/print/printReceivingLabel';
 import {
   ConditionHeaderDisplay,
   resolveReceivingLabelQrValue,
@@ -21,6 +24,7 @@ export function ReceivingPoLabelPreview({
   zendeskTicket,
   trackingNumber,
   conditionCode,
+  receivingType,
   date,
   embedded,
 }: ReceivingLabelPayload & { embedded?: boolean }) {
@@ -49,7 +53,9 @@ export function ReceivingPoLabelPreview({
       <div className="flex min-h-[6rem] flex-nowrap items-stretch gap-4">
         <div className="min-w-0 flex flex-1 flex-col justify-between">
           <div className="flex items-baseline justify-between gap-2 text-sm leading-none">
-            <span className="truncate font-bold text-gray-700">{platform}</span>
+            <span className="truncate font-bold text-gray-700">
+              {receivingLabelPlatformDisplay({ platform, receivingType })}
+            </span>
             <span className="shrink-0 tabular-nums font-semibold text-gray-600">{date}</span>
           </div>
           <div className="flex min-h-0 flex-1 min-w-0 items-center justify-center px-0.5">

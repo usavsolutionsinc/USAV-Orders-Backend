@@ -14,7 +14,7 @@ import {
   type ReceivingHistorySearchScope,
 } from '@/lib/receiving-history-search';
 import { parseReceivingView } from '@/lib/receiving/receiving-views';
-import { NOT_ZOHO_RECEIVED_PREDICATE } from '@/lib/receiving/delivered-unscanned';
+import { NOT_ZOHO_RECEIVED_PREDICATE, CARRIER_MISMATCH_PREDICATE } from '@/lib/receiving/delivered-unscanned';
 
 type LineSerial = {
   id: number;
@@ -64,6 +64,22 @@ const WORKFLOW_STATUSES = new Set([
   'IN_TEST', 'PASSED', 'FAILED', 'RTV', 'SCRAP', 'DONE',
 ]);
 const CONDITIONS   = new Set(['BRAND_NEW', 'LIKE_NEW', 'REFURBISHED', 'USED_A', 'USED_B', 'USED_C', 'PARTS']);
+
+// Priority rank for the receiving "Prioritize" views (?sort=priority). Lower
+// rank sorts to the top. An unfound/untagged carton is the most urgent thing to
+// triage (you can't act until it's identified), so it leads; once a platform is
+// tagged the order is amazon → ebay → goodwill; everything else trails. Derived
+// at read time from receiving.source_platform — no stored priority column — so
+// re-tagging a carton's platform immediately re-prioritizes it. References the
+// `r` alias (the LATERAL receiving join in every list query below).
+const RECEIVING_PRIORITY_RANK_SQL = `
+  CASE
+    WHEN r.source = 'unmatched' OR r.source_platform IS NULL THEN 1
+    WHEN lower(r.source_platform) = 'amazon'   THEN 2
+    WHEN lower(r.source_platform) = 'ebay'     THEN 3
+    WHEN lower(r.source_platform) = 'goodwill' THEN 4
+    ELSE 9
+  END`;
 
 function parsePositiveTechId(value: unknown): number | null {
   const parsed = Number(value);
@@ -127,6 +143,9 @@ export const GET = withAuth(async (request: NextRequest) => {
         : sortRaw === 'unboxed_newest'
           ? 'unboxed_newest'
           : 'scanned_newest';
+    // Prioritize views (triage Prioritize tab + unbox Prioritize toggle) request
+    // ?sort=priority — order by source-platform rank first, recency second.
+    const wantsPrioritySort = sortRaw === 'priority';
     // Shared contract with the client (src/lib/receiving/receiving-views.ts) so
     // the supported view set can't drift between the two ends. `null` = no/
     // unknown view → fall back to week-range scoping below.
@@ -430,6 +449,24 @@ export const GET = withAuth(async (request: NextRequest) => {
            OR r.unboxed_at IS NOT NULL
          )`,
       );
+    } else if (view === 'scanned') {
+      // "Scanned" = door-scanned and physically in, but NOT yet unboxed — the
+      // triage to-do between the door scan and the unbox step. The inverse of
+      // `activity`: the carton has a received_at stamp (someone scanned it in)
+      // but no unbox stamp and nothing received on the line yet. A line drops
+      // off the instant it's unboxed (unboxed_at set, qty>0, or workflow
+      // advances), where it surfaces in the unbox/activity rail instead.
+      conditions.push(
+        `r.received_at IS NOT NULL
+         AND r.unboxed_at IS NULL
+         AND COALESCE(rl.quantity_received, 0) = 0
+         AND (rl.workflow_status IS NULL
+              OR rl.workflow_status IN ('EXPECTED','ARRIVED','MATCHED'))
+         -- Drop POs Zoho now reports received/closed/billed/cancelled (mirror
+         -- status); the eyebrow "Sync Zoho" refreshes the mirror so this guard
+         -- takes effect on the next read. NULL mirror (no PO / no row) stays.
+         AND ${NOT_ZOHO_RECEIVED_PREDICATE}`,
+      );
     } else if (view === 'testing') {
       // "Testing" = the recently-tested feed, backed by the testing_results
       // log. A line qualifies once it has at least one recorded verdict; when
@@ -528,8 +565,13 @@ export const GET = withAuth(async (request: NextRequest) => {
         // because the tracking chip on the row is real and clickable.
         conditions.push(
           `stn.id IS NOT NULL
-            AND (stn.latest_status_category IS NULL OR stn.latest_status_category = 'UNKNOWN')`,
+            AND (stn.latest_status_category IS NULL OR stn.latest_status_category = 'UNKNOWN')
+            AND NOT ${CARRIER_MISMATCH_PREDICATE}`,
         );
+      } else if (deliveryStateFilter === 'CARRIER_MISMATCH') {
+        // Carrier/number don't match: no known carrier for the tracking#, or the
+        // carrier API has no record of it. Same predicate the CASE above uses.
+        conditions.push(CARRIER_MISMATCH_PREDICATE);
       }
 
       // PO purchase-date range filter. Joins zoho_po_mirror (already joined
@@ -574,7 +616,7 @@ export const GET = withAuth(async (request: NextRequest) => {
           : incomingSort === 'recently_added'
             ? `ORDER BY rl.created_at DESC, rl.id DESC`
             : `ORDER BY mirror.po_date DESC NULLS LAST, rl.id DESC`;
-    const orderBy =
+    let orderBy =
       view === 'incoming'
         ? incomingOrderBy
         : view === 'recent' || view === 'all' || view === 'activity'
@@ -583,6 +625,9 @@ export const GET = withAuth(async (request: NextRequest) => {
               : historySort === 'scanned_oldest'
                 ? `ORDER BY COALESCE(rs_agg.last_scan::text, r.received_at::text, rl.created_at::text) ASC, rl.id ASC`
                 : `ORDER BY COALESCE(rs_agg.last_scan::text, r.received_at::text, rl.created_at::text) DESC, rl.id DESC`)
+          : view === 'scanned'
+            // Newest door-scan first — the triage to-do reads like an inbox.
+            ? `ORDER BY r.received_at::text DESC NULLS LAST, rl.id DESC`
           : view === 'testing'
             // Sort the "tested" feed by the SAME verdict time the rail renders
             // (tr_agg.tested_at) so the timeline reads monotonically. Ordering by
@@ -592,6 +637,16 @@ export const GET = withAuth(async (request: NextRequest) => {
             : view === 'received'
               ? `ORDER BY COALESCE(rl.updated_at::text, rl.created_at::text) DESC, rl.id DESC`
               : `ORDER BY COALESCE(rl.zoho_last_modified_time, rl.created_at::text) DESC, rl.id DESC`;
+    // ?sort=priority: source-platform rank first, recency second. Scoped to
+    // view=scanned — the feed behind both Prioritize surfaces (triage Prioritize
+    // tab + unbox Prioritize toggle). Deliberately NOT applied to activity/all:
+    // those append unmatched-carton placeholders and re-sort in JS by recent
+    // activity (below), which would silently override the priority order. scanned
+    // skips both, so the SQL order is the final order. rs_agg isn't joined for
+    // scanned, so the recency tiebreak uses received_at.
+    if (wantsPrioritySort && view === 'scanned') {
+      orderBy = `ORDER BY ${RECEIVING_PRIORITY_RANK_SQL} ASC, r.received_at::text DESC NULLS LAST, rl.id DESC`;
+    }
     // The lateral aggregate is needed for view=recent and view=all so the
     // most recently paired cartons bubble up. Cheap at this scale.
     const recentScansJoin = view === 'recent' || view === 'all' || view === 'activity'
@@ -665,6 +720,11 @@ export const GET = withAuth(async (request: NextRequest) => {
                     THEN 'IN_TRANSIT'
                   WHEN stn.id IS NULL
                     THEN 'AWAITING_TRACKING'
+                  -- Carrier/number don't match: no known carrier for the number,
+                  -- or the carrier API has no record of it. Peeled out of
+                  -- PENDING_CARRIER (below) because these never self-resolve.
+                  WHEN ${CARRIER_MISMATCH_PREDICATE}
+                    THEN 'CARRIER_MISMATCH'
                   WHEN stn.latest_status_category IS NULL OR stn.latest_status_category = 'UNKNOWN'
                     THEN 'PENDING_CARRIER'
                   ELSE 'UNKNOWN'
@@ -678,7 +738,7 @@ export const GET = withAuth(async (request: NextRequest) => {
                 mirror.vendor_name::text             AS vendor_name`
         : '';
     const incomingExtrasJoin =
-      view === 'incoming'
+      view === 'incoming' || view === 'scanned'
         ? `LEFT JOIN zoho_po_mirror mirror ON mirror.zoho_purchaseorder_id = rl.zoho_purchaseorder_id`
         : '';
 
@@ -828,6 +888,7 @@ export const GET = withAuth(async (request: NextRequest) => {
                   r.receiving_tracking_number,
                   r.carrier,
                   r.received_at::text          AS receiving_received_at,
+                  r.unboxed_at::text           AS receiving_unboxed_at,
                   r.created_at::text           AS created_at,
                   r.support_notes              AS receiving_support_notes,
                   r.listing_url                AS receiving_listing_url,
@@ -1233,9 +1294,31 @@ export const PATCH = withAuth(async (request: NextRequest, ctx) => {
 export const DELETE = withAuth(async (request: NextRequest) => {
   try {
     const { searchParams } = new URL(request.url);
-    const id = Number(searchParams.get('id'));
+    const idParam = searchParams.get('id');
+    // `po_id` (zoho_purchaseorder_id) deletes EVERY receiving_line for that PO
+    // — that's one Incoming-table row, which dedupes lines to 1 per PO. The
+    // single-`id` path stays for callers that target one specific line.
+    const poId = (searchParams.get('po_id') || '').trim();
+
+    if (poId) {
+      const result = await pool.query(
+        `DELETE FROM receiving_lines WHERE zoho_purchaseorder_id = $1 RETURNING id`,
+        [poId],
+      );
+      if (result.rows.length === 0) {
+        return NextResponse.json(
+          { success: false, error: 'No receiving lines found for that PO' },
+          { status: 404 },
+        );
+      }
+      await invalidateCacheTags(['receiving-logs', 'receiving-lines']);
+      await publishReceivingLogChanged({ action: 'delete', rowId: poId, source: 'receiving-lines.delete' });
+      return NextResponse.json({ success: true, po_id: poId, deleted: result.rows.length });
+    }
+
+    const id = Number(idParam);
     if (!Number.isFinite(id) || id <= 0) {
-      return NextResponse.json({ success: false, error: 'Valid id is required' }, { status: 400 });
+      return NextResponse.json({ success: false, error: 'Valid id or po_id is required' }, { status: 400 });
     }
 
     const result = await pool.query(`DELETE FROM receiving_lines WHERE id = $1 RETURNING id`, [id]);
@@ -1255,7 +1338,7 @@ export const DELETE = withAuth(async (request: NextRequest) => {
 }, { permission: 'receiving.mark_received' });
 
 /** Label for unmatched cartons that have no `receiving_lines` yet (Recent + History). */
-const UNMATCHED_EMPTY_LINE_LABEL = 'Unfound receiving';
+const UNMATCHED_EMPTY_LINE_LABEL = 'Unfound PO';
 
 /**
  * `normalizeRow` input: synthetic line id `-receiving_id`, real `receiving_id`
@@ -1269,12 +1352,19 @@ function buildUnmatchedEmptyReceivingLine(pkg: Record<string, unknown>): Record<
   // row reads sensibly and the details overlay can branch to the pickup panel.
   const source = String(pkg.receiving_source || 'unmatched');
   const isPickup = source === 'local_pickup';
+  // An unfound carton is RECEIVED once it has been unboxed at the dock — for a
+  // lineless placeholder the only signal is receiving.unboxed_at (set by the
+  // local-receive path in mark-received-po, which is purely local for unfound
+  // POs since there is no Zoho PO to reconcile). unboxed → DONE ("RECEIVED"),
+  // otherwise ARRIVED ("SCANNED"). See workflow-stages.ts / workflowStatusTableLabel.
+  const unboxedAt = pkg.receiving_unboxed_at ?? null;
   return {
     id: -rid,
     receiving_id: rid,
     receiving_tracking_number: pkg.receiving_tracking_number,
     carrier: pkg.carrier,
     receiving_received_at: pkg.receiving_received_at,
+    receiving_unboxed_at: unboxedAt,
     receiving_support_notes: pkg.receiving_support_notes ?? null,
     receiving_listing_url: pkg.receiving_listing_url ?? null,
     receiving_source: source,
@@ -1297,7 +1387,14 @@ function buildUnmatchedEmptyReceivingLine(pkg: Record<string, unknown>): Record<
     quantity_received: 0,
     quantity_expected: null,
     qa_status: 'PENDING',
-    workflow_status: 'EXPECTED',
+    // An unfound carton was physically scanned at the dock — it just couldn't be
+    // matched to a known PO. That is exactly the ARRIVED stage ("scanned in at
+    // the receiving station, not yet matched to a PO"), NOT EXPECTED ("on a PO,
+    // not yet scanned"). ARRIVED surfaces as the "SCANNED" chip; EXPECTED read as
+    // "incoming/not here yet", which was wrong for a box already on the floor.
+    // Once unboxed at the dock it advances to DONE ("RECEIVED").
+    // Local-pickup placeholders are likewise a scanned, in-hand carton.
+    workflow_status: unboxedAt ? 'DONE' : 'ARRIVED',
     disposition_code: 'HOLD',
     condition_grade: 'BRAND_NEW',
     disposition_audit: [],

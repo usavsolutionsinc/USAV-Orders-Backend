@@ -15,6 +15,11 @@ import { RecentActivityRailBase, type ApiResponse } from './RecentActivityRailBa
 export function getReceivingStatusDot(row: ReceivingLineRow): string {
   const { workflow_status: status, quantity_received: qtyReceived, quantity_expected: qtyExpected } = row;
 
+  // Unfound cartons (no PO match) only reach this UNBOXING rail once they've been
+  // unboxed — by definition they're physically in and received, so they read
+  // green regardless of their EXPECTED placeholder workflow_status.
+  if (row.receiving_source === 'unmatched') return 'bg-emerald-500';
+
   const stage = workflowStage(status);
   const qtyComplete =
     qtyExpected != null && qtyExpected > 0 && qtyReceived != null && qtyReceived >= qtyExpected;

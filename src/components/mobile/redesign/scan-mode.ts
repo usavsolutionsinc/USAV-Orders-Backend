@@ -27,6 +27,11 @@ export function detectScanMode(raw: string): ScanMode | null {
   const v = (raw ?? '').trim();
   if (!v) return null;
 
+  // TEST / demo shortcut → receiving. Mirrors the API's isTestTracking
+  // (lookup-po) so a typed `TEST…` value reaches the instant-match test carton
+  // instead of being mistaken for a partial serial and routed to CMS.
+  if (/^TEST/i.test(v)) return 'receiving';
+
   // PO / carton handles → testing.
   if (looksLikeReceivingRef(v) || looksLikePoNumber(v)) return 'testing';
 

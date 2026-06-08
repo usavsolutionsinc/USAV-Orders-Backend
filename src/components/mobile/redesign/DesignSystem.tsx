@@ -48,6 +48,21 @@ export const TOKENS = {
 };
 
 /**
+ * Canonical mobile gutter — the single horizontal inset shared by every mobile
+ * feed/table row. The mobile analog of the desktop `SIDEBAR_GUTTER` (px-1.5):
+ * one value, applied in exactly ONE place (MobileRowCard), so all tables align.
+ *
+ * Value is the tightest gutter we had (the Picks tab). Feeds must NOT add their
+ * own outer `px-*` — the row card supplies the gutter, and doubling it up is the
+ * inconsistency this token exists to prevent.
+ *
+ * `MOBILE_GUTTER` is the padding form (collapsed rows); `MOBILE_GUTTER_X` is the
+ * margin form for the floating expanded card. Keep the two on the same step.
+ */
+export const MOBILE_GUTTER = 'px-1.5';
+export const MOBILE_GUTTER_X = 'mx-1.5';
+
+/**
  * Ambient Card - Elevated with blue-tinted shadows and refined borders
  */
 export const MobileCard = ({ 

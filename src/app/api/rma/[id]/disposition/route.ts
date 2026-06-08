@@ -66,6 +66,7 @@ export const POST = withAuth(async (request, ctx) => {
       dispositionCode,
       decidedByStaffId: actorStaffId,
       notes,
+      organizationId: ctx.organizationId ?? null,
     });
     if (!result.ok) return NextResponse.json(result, { status: result.status });
     return NextResponse.json(result, { status: 201 });

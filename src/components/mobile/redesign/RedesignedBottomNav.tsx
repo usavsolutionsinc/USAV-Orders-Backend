@@ -6,8 +6,8 @@ import {
   History,
   Barcode,
   ShoppingCart,
-  Truck,
-  Box,
+  PackageOpen,
+  Cms,
   Lock
 } from '@/components/Icons';
 import { TOKENS } from './DesignSystem';
@@ -25,9 +25,9 @@ interface TabMeta {
 
 const TAB_META: Record<MobileNavTabId, TabMeta> = {
   home: { label: 'Recent', icon: History, href: '/m/home' },
-  receiving: { label: 'Receiving', icon: Truck, href: '/m/receiving' },
+  receiving: { label: 'Unbox', icon: PackageOpen, href: '/m/receiving' },
   scan: { label: 'Scan', icon: Barcode, href: '/m/scan', isFab: true },
-  packing: { label: 'Packing', icon: Box, href: '/m/pack' },
+  packing: { label: 'Packing', icon: Cms, href: '/m/pack' },
   picks: { label: 'Picks', icon: ShoppingCart, href: '/m/pick' },
   signout: { label: 'Sign out', icon: Lock, href: '/signin' },
 };
@@ -70,7 +70,6 @@ export const RedesignedBottomNav = () => {
         ${TOKENS.colors.surface}
         flex items-center justify-around px-2
         border-t border-slate-200/70 backdrop-blur-3xl
-        shadow-[0_-8px_24px_rgba(0,0,0,0.06)]
         pointer-events-auto
       `}>
         {tabs.map((tab) => {
@@ -105,10 +104,11 @@ export const RedesignedBottomNav = () => {
             <button
               key={tab.id}
               onClick={() => handleTabClick(tab.id, tab.href)}
+              aria-label={tab.label}
               className="flex flex-col items-center justify-center gap-1.5 flex-1 min-w-0 transition-all relative py-2"
             >
               <motion.div
-                animate={{ 
+                animate={{
                   scale: isActive ? 1.15 : 1,
                   y: isActive ? -2 : 0
                 }}

@@ -112,5 +112,3 @@ export function MobileFeed<T>({
     </div>
   );
 }
-
-export default MobileFeed;

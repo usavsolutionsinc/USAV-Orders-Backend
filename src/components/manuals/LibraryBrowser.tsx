@@ -1129,5 +1129,3 @@ function BulkMoveSheet({
     document.body,
   );
 }
-
-export default LibraryBrowser;

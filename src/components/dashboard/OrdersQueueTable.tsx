@@ -5,6 +5,7 @@ import { motion } from 'framer-motion';
 import { framerPresence, framerTransition } from '@/design-system/foundations/motion-framer';
 import { sectionLabel, fieldLabel, SkeletonList } from '@/design-system';
 import { Loader2 } from '@/components/Icons';
+import { cn } from '@/utils/_cn';
 import { mainStickyHeaderClass, mainStickyHeaderRowClass } from '@/components/layout/header-shell';
 import { OrderIdChip, OrderIdChipPlaceholder, TrackingOrSkuScanChip, PlatformChip, getLast4 } from '@/components/ui/CopyChip';
 import { ChipColumns, CHIP_COL, type ChipColumn } from '@/components/ui/ChipColumns';
@@ -28,15 +29,12 @@ import {
   dashboardOrderRowShellClass,
 } from '@/lib/dashboard-order-row-layout';
 
-
 function normalizePersonName(value: unknown): string {
   const text = String(value ?? '')
     .replace(/^tech:\s*/i, '')
     .replace(/^packer:\s*/i, '')
     .trim();
-  if (!text) return '---';
-  if (/^(not specified|n\/a|null|undefined)$/i.test(text)) return '---';
-  if (/^staff\s*#\d+$/i.test(text)) return '---';
+  if (!text || /^(not specified|n\/a|null|undefined|staff\s*#\d+)$/i.test(text)) return '---';
   return text;
 }
 
@@ -78,7 +76,6 @@ const OrdersQueueTableRow = memo(function OrdersQueueTableRow({
   onRowClick: (record: ShippedOrder) => void;
 }) {
   const qty = parseInt(String(record.quantity || '1'), 10) || 1;
-  const qtyClass = qty > 1 ? 'text-yellow-600' : 'text-gray-500';
   const trackingRaw =
     (record.tracking_number as string | undefined) ||
     record.shipping_tracking_number ||
@@ -127,8 +124,6 @@ const OrdersQueueTableRow = memo(function OrdersQueueTableRow({
           dotTitle={hasTechScan ? 'Scanned by tech' : hasOutOfStock ? 'Out of stock' : 'Pending order'}
           title={record.product_title || 'Unknown Product'}
         />
-        {/* qty · condition · (days-late / out-of-stock) — shared primitive so the
-            subrow aligns under the title across every dashboard table. */}
         <RowMetaColumns
           qty={<span className={qty > 1 ? 'text-yellow-600' : 'text-gray-500'}>{qty}</span>}
           condition={
@@ -150,18 +145,15 @@ const OrdersQueueTableRow = memo(function OrdersQueueTableRow({
       </div>
 
       {(() => {
-        // Fixed-column chip grid (platform / order-id / tracking) so the orders
-        // queue lines up the same way as the shipped + tech tables. No serial
-        // column here — these rows never carry one.
         const columns: ChipColumn[] = [
           {
             key: 'platform',
             width: CHIP_COL.platform,
-            node: platformLabel && !isFba ? (
+            node: !isFba ? (
               <PlatformChip
                 label={platformLabel}
-                underlineClass={platformLabel ? getOrderPlatformBorderColor(platformLabel) : ''}
-                iconClass={productPageUrl ? platformColor : 'text-gray-500'}
+                underlineClass={getOrderPlatformBorderColor(platformLabel)}
+                iconClass={platformLabel && productPageUrl ? platformColor : 'text-gray-500'}
                 onClick={() => {
                   if (productPageUrl) window.open(productPageUrl, '_blank', 'noopener,noreferrer');
                 }}
@@ -210,25 +202,14 @@ const OrdersQueueTableRow = memo(function OrdersQueueTableRow({
   if (prev.hasOutOfStock !== next.hasOutOfStock) return false;
   if (prev.outOfStockValue !== next.outOfStockValue) return false;
   if (prev.daysLate !== next.daysLate) return false;
-  if (prev.record.deadline_at !== next.record.deadline_at) return false;
   if (prev.record.product_title !== next.record.product_title) return false;
   if (prev.record.condition !== next.record.condition) return false;
   if (prev.record.order_id !== next.record.order_id) return false;
   if (prev.record.quantity !== next.record.quantity) return false;
-  if (prev.record.account_source !== next.record.account_source) return false;
-  if (prev.record.tracking_type !== next.record.tracking_type) return false;
-  if (prev.record.item_number !== next.record.item_number) return false;
-  if (prev.record.sku !== next.record.sku) return false;
-  const prevTr =
-    (prev.record.tracking_number as string | undefined) || prev.record.shipping_tracking_number || '';
-  const nextTr =
-    (next.record.tracking_number as string | undefined) || next.record.shipping_tracking_number || '';
-  if (prevTr !== nextTr) return false;
-  if (prev.onRowClick !== next.onRowClick) return false;
   return true;
 });
 
-interface OrdersQueueTableProps {
+export interface OrdersQueueTableProps {
   records: ShippedOrder[];
   loading: boolean;
   isRefreshing: boolean;
@@ -280,6 +261,7 @@ export function OrdersQueueTable({
   const [stickyDate, setStickyDate] = useState('');
   const [currentCount, setCurrentCount] = useState(0);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const scrollRafRef = useRef(0);
 
   const formatDate = (dateStr: string) => formatDateWithOrdinal(dateStr);
   const isShippedByLatestStatus = (record: ShippedOrder): boolean => {
@@ -346,8 +328,10 @@ export function OrdersQueueTable({
     groupedRecords[date].push(record);
   });
 
-  const displayedRecords = Object.entries(groupedRecords)
-    .sort((a, b) => a[0].localeCompare(b[0]))
+  const sortedGroupedEntries = Object.entries(groupedRecords)
+    .sort((a, b) => a[0].localeCompare(b[0]));
+
+  const displayedRecords = sortedGroupedEntries
     .flatMap(([_, dayRecords]) => {
       const sortedRecords = [...dayRecords].sort((a, b) => {
         const timeA = new Date(a.deadline_at || a.created_at || 0).getTime();
@@ -379,24 +363,30 @@ export function OrdersQueueTable({
   }, [displayedRecords, onOpenRecord, selectedRecord]);
 
   const handleScroll = useCallback(() => {
-    if (!scrollRef.current) return;
-    const { scrollTop } = scrollRef.current;
-    const headers = scrollRef.current.querySelectorAll('[data-day-header]');
-    let activeDate = '';
-    let activeCount = 0;
+    if (scrollRafRef.current) return;
+    scrollRafRef.current = requestAnimationFrame(() => {
+      scrollRafRef.current = 0;
+      if (!scrollRef.current) return;
+      const { scrollTop } = scrollRef.current;
+      const headers = scrollRef.current.querySelectorAll('[data-day-header]');
+      let activeDate = '';
+      let activeCount = 0;
 
-    for (let i = 0; i < headers.length; i += 1) {
-      const header = headers[i] as HTMLElement;
-      if (header.offsetTop - scrollRef.current.offsetTop <= scrollTop + 5) {
-        activeDate = header.getAttribute('data-date') || '';
-        activeCount = parseInt(header.getAttribute('data-count') || '0', 10);
-      } else {
-        break;
+      for (let i = 0; i < headers.length; i += 1) {
+        const header = headers[i] as HTMLElement;
+        // Promote the next day as its band reaches the 40px sticky header edge,
+        // keeping the WeekHeader date in step with the band hiding under it.
+        if (header.offsetTop - scrollRef.current.offsetTop <= scrollTop + 40) {
+          activeDate = header.getAttribute('data-date') || '';
+          activeCount = parseInt(header.getAttribute('data-count') || '0', 10);
+        } else {
+          break;
+        }
       }
-    }
 
-    if (activeDate) setStickyDate(formatDate(activeDate));
-    if (activeCount) setCurrentCount(activeCount);
+      if (activeDate) setStickyDate(activeDate);
+      if (activeCount) setCurrentCount(activeCount);
+    });
   }, []);
 
   useEffect(() => {
@@ -408,18 +398,16 @@ export function OrdersQueueTable({
     return () => container?.removeEventListener('scroll', handleScroll);
   }, [handleScroll, visibleRecords]);
 
+  useEffect(() => {
+    if (sortedGroupedEntries.length > 0) {
+      const firstDate = sortedGroupedEntries[0][0];
+      setStickyDate(firstDate);
+      setCurrentCount(sortedGroupedEntries[0][1].length);
+    }
+  }, [sortedGroupedEntries.length]);
+
   const totalCount = Object.values(groupedRecords).reduce((sum, dayRecords) => sum + dayRecords.length, 0);
   const fallbackDate = formatDate(getCurrentPSTDateKey());
-  const normalizePersonName = (value: unknown): string => {
-    const text = String(value ?? '')
-      .replace(/^tech:\s*/i, '')
-      .replace(/^packer:\s*/i, '')
-      .trim();
-    if (!text) return '---';
-    if (/^(not specified|n\/a|null|undefined)$/i.test(text)) return '---';
-    if (/^staff\s*#\d+$/i.test(text)) return '---';
-    return text;
-  };
 
   if (loading) {
     return (
@@ -465,23 +453,25 @@ export function OrdersQueueTable({
             </div>
           </div>
         ) : (
-          <WeekHeader
-            stickyDate={stickyDate}
-            fallbackDate={fallbackDate}
-            count={currentCount || totalCount}
-            weekRange={weekRange}
-            weekOffset={weekOffset}
-            onPrevWeek={onPrevWeek}
-            onNextWeek={onNextWeek}
-            rightSlot={
-              !showWeekControls
-                ? <div className="min-w-[18px] flex items-center justify-end">{isRefreshing ? <Loader2 className="h-3.5 w-3.5 animate-spin text-blue-500" /> : null}</div>
-                : undefined
-            }
-          />
+          <div className="relative z-20">
+            <WeekHeader
+              stickyDate={stickyDate}
+              fallbackDate={fallbackDate}
+              count={currentCount || totalCount}
+              weekRange={weekRange}
+              weekOffset={weekOffset}
+              onPrevWeek={onPrevWeek}
+              onNextWeek={onNextWeek}
+              rightSlot={
+                !showWeekControls
+                  ? <div className="min-w-[18px] flex items-center justify-end">{isRefreshing ? <Loader2 className="h-3.5 w-3.5 animate-spin text-blue-500" /> : null}</div>
+                  : undefined
+              }
+            />
+          </div>
         )}
 
-        <div ref={scrollRef} className="flex-1 overflow-x-auto overflow-y-auto no-scrollbar w-full">
+        <div ref={scrollRef} className={cn("flex-1 overflow-x-auto overflow-y-auto no-scrollbar w-full z-10", !bannerTitle && "-mt-[40px] pt-[40px]")}>
           {Object.keys(groupedRecords).length === 0 ? (
             <div className="flex flex-col items-center justify-center py-40 text-center">
               {searchValue ? (
@@ -509,9 +499,7 @@ export function OrdersQueueTable({
             </div>
           ) : (
             <div className="flex flex-col w-full">
-              {Object.entries(groupedRecords)
-                .sort((a, b) => a[0].localeCompare(b[0]))
-                .map(([date, dayRecords]) => {
+              {sortedGroupedEntries.map(([date, dayRecords]) => {
                   const sortedRecords = [...dayRecords].sort((a, b) => {
                     const timeA = new Date(a.deadline_at || a.created_at || 0).getTime();
                     const timeB = new Date(b.deadline_at || b.created_at || 0).getTime();
@@ -520,7 +508,7 @@ export function OrdersQueueTable({
 
                   return (
                     <div key={date} className="flex flex-col">
-                      <DateGroupHeader date={date} total={dayRecords.length} />
+                      <DateGroupHeader date={date} total={dayRecords.length} hidden={date === stickyDate} />
                       {sortedRecords.map((record, index) => {
                         const r = record as QueueRowRecord;
                         const testerName = useWaForDisplay

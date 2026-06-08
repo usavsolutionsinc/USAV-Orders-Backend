@@ -36,6 +36,13 @@ export type UploadState = 'queued' | 'uploading' | 'done' | 'failed';
 export interface PhotoScope {
   receivingId: number;
   receivingLineId?: number | null;
+  /**
+   * Human PO reference (Zoho PO number / id) used ONLY to name the file on the
+   * NAS — e.g. `4421__photo_….jpg` instead of `PO_1987__photo_….jpg`. Not sent
+   * to the attach endpoint (that still keys off receivingId/receivingLineId).
+   * Falls back to `PO_{receivingId}` when absent.
+   */
+  poRef?: string | null;
 }
 
 export interface UploadEntry {

@@ -1,11 +1,5 @@
 import pool from '@/lib/db';
 
-export type SyncCursorRow = {
-  resource: string;
-  last_synced_at: string | null;
-  updated_at: string | null;
-};
-
 export async function getSyncCursor(resource: string): Promise<Date | null> {
   const res = await pool.query<{ last_synced_at: string | null }>(
     `SELECT last_synced_at

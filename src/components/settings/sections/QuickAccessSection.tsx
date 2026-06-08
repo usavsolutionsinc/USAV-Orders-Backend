@@ -260,5 +260,3 @@ export function QuickAccessSection() {
     </div>
   );
 }
-
-export default QuickAccessSection;

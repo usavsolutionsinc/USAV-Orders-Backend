@@ -20,6 +20,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { getSyncCursor, updateSyncCursor } from '@/lib/sync-cursors';
+import { withCronRun } from '@/lib/cron/run-log';
 import { syncShippedOrdersToZoho } from '@/lib/zoho/fulfillment-sync';
 import { getFulfillmentSyncConfig } from '@/lib/zoho/fulfillment-config';
 
@@ -63,7 +64,9 @@ export async function GET(req: NextRequest) {
       since = cursor ?? new Date(Date.now() - config.bootstrapLookbackDays * 24 * 60 * 60 * 1000);
     }
 
-    const report = await syncShippedOrdersToZoho({ since, dryRun: dryRunOverride, limit });
+    const report = await withCronRun('zoho.fulfillment_sync', () =>
+      syncShippedOrdersToZoho({ since, dryRun: dryRunOverride, limit }),
+    );
 
     // Advance the cursor only after an error-free LIVE run. Dry runs never move it.
     if (!report.dryRun && report.errored === 0) {

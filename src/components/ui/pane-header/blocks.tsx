@@ -458,3 +458,72 @@ export function PaneHeaderWeekNav({
     </div>
   );
 }
+
+// ─── PaneHeaderPagination ─────────────────────────────────────────────────────
+// Range label + prev/next page controls — pairs with {@link PaneHeader} the
+// same way {@link PaneHeaderWeekNav} does for week-based tables.
+
+interface PaneHeaderPaginationProps {
+  /** Current 1-based page index. */
+  page: number;
+  pageSize: number;
+  total: number;
+  onPrev: () => void;
+  onNext: () => void;
+}
+
+export function PaneHeaderPagination({
+  page,
+  pageSize,
+  total,
+  onPrev,
+  onNext,
+}: PaneHeaderPaginationProps) {
+  const totalPages = Math.max(1, Math.ceil(total / pageSize));
+  const safePage = Math.min(Math.max(1, page), totalPages);
+  const rangeStart = total === 0 ? 0 : (safePage - 1) * pageSize + 1;
+  const rangeEnd = Math.min(safePage * pageSize, total);
+  const canPrev = safePage > 1;
+  const canNext = safePage < totalPages;
+
+  return (
+    <div className="flex items-center gap-3">
+      <span className="tabular-nums text-eyebrow font-black uppercase tracking-wider text-gray-500">
+        {total > 0 ? (
+          <>
+            {rangeStart}–{rangeEnd} <span className="text-gray-400">/</span>{' '}
+            <span className="text-gray-700">{total.toLocaleString()}</span>
+          </>
+        ) : (
+          '—'
+        )}
+      </span>
+      <div className="flex items-center gap-0.5 rounded-md border border-gray-200 bg-white p-0.5">
+        <button
+          type="button"
+          onClick={() => canPrev && onPrev()}
+          disabled={!canPrev}
+          aria-label="Previous page"
+          title="Previous page"
+          className="inline-flex h-6 w-6 items-center justify-center rounded text-gray-600 hover:bg-gray-100 hover:text-gray-900 disabled:cursor-not-allowed disabled:opacity-30 disabled:hover:bg-transparent"
+        >
+          <ChevronLeft className="h-3.5 w-3.5" />
+        </button>
+        <span className="px-1 tabular-nums text-eyebrow font-black uppercase tracking-wider text-gray-700">
+          {safePage}
+          <span className="text-gray-400"> / {totalPages}</span>
+        </span>
+        <button
+          type="button"
+          onClick={() => canNext && onNext()}
+          disabled={!canNext}
+          aria-label="Next page"
+          title="Next page"
+          className="inline-flex h-6 w-6 items-center justify-center rounded text-gray-600 hover:bg-gray-100 hover:text-gray-900 disabled:cursor-not-allowed disabled:opacity-30 disabled:hover:bg-transparent"
+        >
+          <ChevronRight className="h-3.5 w-3.5" />
+        </button>
+      </div>
+    </div>
+  );
+}

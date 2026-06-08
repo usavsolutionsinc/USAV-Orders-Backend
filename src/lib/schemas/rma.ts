@@ -18,5 +18,3 @@ export const RmaUpdateBody = z
   .refine((b) => Object.keys(b).length > 0, {
     message: 'At least one field must be provided',
   });
-
-export type RmaUpdateInput = z.infer<typeof RmaUpdateBody>;

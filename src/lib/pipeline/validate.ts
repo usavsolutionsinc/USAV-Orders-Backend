@@ -10,7 +10,8 @@
  * typecheck also fail everything else).
  */
 
-import { execSync } from 'child_process';
+import { exec } from 'node:child_process';
+import { promisify } from 'node:util';
 import {
   TYPECHECK_TIMEOUT_MS,
   LINT_TIMEOUT_MS,
@@ -20,6 +21,8 @@ import {
 } from './config';
 import type { ValidationResult } from './types';
 
+const execAsync = promisify(exec);
+
 // ─── Helpers ─────────────────────────────────────────────────
 
 interface ExecResult {
@@ -27,14 +30,13 @@ interface ExecResult {
   output: string;
 }
 
-function runCommand(cmd: string, cwd: string, timeoutMs: number): ExecResult {
+async function runCommand(cmd: string, cwd: string, timeoutMs: number): Promise<ExecResult> {
   try {
-    const output = execSync(cmd, {
+    const { stdout } = await execAsync(cmd, {
       cwd,
       encoding: 'utf-8',
       timeout: timeoutMs,
       maxBuffer: 10 * 1024 * 1024,
-      stdio: ['pipe', 'pipe', 'pipe'],
       env: {
         ...process.env,
         NODE_OPTIONS: '--max-old-space-size=4096',
@@ -43,7 +45,7 @@ function runCommand(cmd: string, cwd: string, timeoutMs: number): ExecResult {
         NO_COLOR: '1',
       },
     });
-    return { success: true, output: output.slice(-2000) };
+    return { success: true, output: stdout.slice(-2000) };
   } catch (e: unknown) {
     const err = e as { stdout?: string; stderr?: string; message?: string };
     const output = (err.stdout || '') + '\n' + (err.stderr || '');
@@ -53,23 +55,23 @@ function runCommand(cmd: string, cwd: string, timeoutMs: number): ExecResult {
 
 // ─── Validators ──────────────────────────────────────────────
 
-function checkTypeScript(repoPath: string): Pick<ValidationResult, 'typecheckPass' | 'typecheckErrors'> {
-  const result = runCommand('npx tsc --noEmit --pretty false 2>&1', repoPath, TYPECHECK_TIMEOUT_MS);
+async function checkTypeScript(repoPath: string): Promise<Pick<ValidationResult, 'typecheckPass' | 'typecheckErrors'>> {
+  const result = await runCommand('npx tsc --noEmit --pretty false 2>&1', repoPath, TYPECHECK_TIMEOUT_MS);
   return {
     typecheckPass: result.success,
     typecheckErrors: result.success ? '' : result.output,
   };
 }
 
-function checkLint(repoPath: string): Pick<ValidationResult, 'lintPass' | 'lintErrors'> {
-  const result = runCommand('npx next lint --no-cache 2>&1', repoPath, LINT_TIMEOUT_MS);
+async function checkLint(repoPath: string): Promise<Pick<ValidationResult, 'lintPass' | 'lintErrors'>> {
+  const result = await runCommand('npx next lint --no-cache 2>&1', repoPath, LINT_TIMEOUT_MS);
   return {
     lintPass: result.success,
     lintErrors: result.success ? '' : result.output,
   };
 }
 
-function checkTests(repoPath: string): Pick<ValidationResult, 'testsPass' | 'testOutput'> {
+async function checkTests(repoPath: string): Promise<Pick<ValidationResult, 'testsPass' | 'testOutput'>> {
   // Run all known test scripts. All must pass.
   const testCommands = [
     'npx tsx --test src/utils/dashboard-search-state.test.ts 2>&1',
@@ -79,7 +81,7 @@ function checkTests(repoPath: string): Pick<ValidationResult, 'testsPass' | 'tes
   let allPass = true;
 
   for (const cmd of testCommands) {
-    const result = runCommand(cmd, repoPath, TEST_TIMEOUT_MS);
+    const result = await runCommand(cmd, repoPath, TEST_TIMEOUT_MS);
     outputs.push(result.output);
     if (!result.success) allPass = false;
   }
@@ -90,12 +92,12 @@ function checkTests(repoPath: string): Pick<ValidationResult, 'testsPass' | 'tes
   };
 }
 
-function checkBuild(repoPath: string): Pick<ValidationResult, 'buildPass' | 'buildErrors'> {
+async function checkBuild(repoPath: string): Promise<Pick<ValidationResult, 'buildPass' | 'buildErrors'>> {
   if (!RUN_BUILD_CHECK) {
     return { buildPass: false, buildErrors: '(build check disabled)' };
   }
 
-  const result = runCommand('npx next build 2>&1', repoPath, BUILD_TIMEOUT_MS);
+  const result = await runCommand('npx next build 2>&1', repoPath, BUILD_TIMEOUT_MS);
   return {
     buildPass: result.success,
     buildErrors: result.success ? '' : result.output,
@@ -114,7 +116,7 @@ function checkBuild(repoPath: string): Pick<ValidationResult, 'buildPass' | 'bui
  */
 export async function validateChanges(repoPath: string): Promise<ValidationResult> {
   // Phase 1: TypeScript (fastest, catches most issues)
-  const tsc = checkTypeScript(repoPath);
+  const tsc = await checkTypeScript(repoPath);
 
   // Bail early — no point running lint/tests if types are broken
   if (!tsc.typecheckPass) {
@@ -130,14 +132,13 @@ export async function validateChanges(repoPath: string): Promise<ValidationResul
     };
   }
 
-  // Phase 2: ESLint
-  const lint = checkLint(repoPath);
-
-  // Phase 3: Tests
-  const tests = checkTests(repoPath);
-
-  // Phase 4: Build (optional, expensive)
-  const build = checkBuild(repoPath);
+  // Phases 2-4 are independent of one another, so run them concurrently:
+  //   ESLint, tests, and the optional (expensive) build.
+  const [lint, tests, build] = await Promise.all([
+    checkLint(repoPath),
+    checkTests(repoPath),
+    checkBuild(repoPath),
+  ]);
 
   const allPassed = tsc.typecheckPass && lint.lintPass && tests.testsPass;
 

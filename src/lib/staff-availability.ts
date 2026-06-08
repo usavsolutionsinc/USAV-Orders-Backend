@@ -67,13 +67,6 @@ export interface StaffScheduleMatrixRow {
   isScheduled: boolean;
 }
 
-export interface StaffScheduleMatrixResponse {
-  timezone: string;
-  days: StaffScheduleMatrixDay[];
-  members: StaffScheduleMatrixMember[];
-  rows: StaffScheduleMatrixRow[];
-}
-
 export interface RawStaffScheduleRow {
   id: number;
   name: string;

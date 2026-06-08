@@ -78,6 +78,11 @@ export async function PATCH(
       ean: parsed.ean !== undefined ? parsed.ean : before.ean,
       imageUrl: parsed.imageUrl !== undefined ? parsed.imageUrl : before.image_url,
       isActive: parsed.isActive !== undefined ? parsed.isActive : before.is_active,
+      lifecycleStatus: parsed.lifecycleStatus !== undefined ? parsed.lifecycleStatus : before.lifecycle_status,
+      reorderThreshold: parsed.reorderThreshold !== undefined ? parsed.reorderThreshold : before.reorder_threshold,
+      lastKnownCostCents: parsed.lastKnownCostCents !== undefined ? parsed.lastKnownCostCents : before.last_known_cost_cents,
+      sourcingNotes: parsed.sourcingNotes !== undefined ? parsed.sourcingNotes : before.sourcing_notes,
+      replenishTargetCents: parsed.replenishTargetCents !== undefined ? parsed.replenishTargetCents : before.replenish_target_cents,
     });
 
     await recordAudit(pool, gate.ctx, req, {
@@ -122,6 +127,24 @@ export async function DELETE(
     const before = await getSkuCatalogById(id);
     if (!before || !before.is_active) {
       return NextResponse.json({ success: false, error: 'Not found' }, { status: 404 });
+    }
+
+    // Guard: don't hide a SKU that's physically in bins — it would vanish from
+    // active pick/replenish lists while stock still sits on the shelf. Empty or
+    // move it first. (bin_contents.sku is the natural text key, not an FK.)
+    const stock = await pool.query<{ qty: number }>(
+      `SELECT COALESCE(SUM(qty), 0)::int AS qty FROM bin_contents WHERE sku = $1`,
+      [before.sku],
+    );
+    const onHand = stock.rows[0]?.qty ?? 0;
+    if (onHand > 0) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: `SKU still has ${onHand} unit${onHand === 1 ? '' : 's'} in bins — move or remove the stock before deactivating.`,
+        },
+        { status: 409 },
+      );
     }
 
     const deleted = await softDeleteSkuCatalog(id);

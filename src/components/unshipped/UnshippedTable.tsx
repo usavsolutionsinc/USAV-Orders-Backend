@@ -7,7 +7,7 @@ import { getOrdersChannelName } from '@/lib/realtime/channels';
 import type { DashboardSearchSectionProps } from '@/components/dashboard/DashboardSearchSectionProps';
 import { OrdersQueueTable } from '@/components/dashboard/OrdersQueueTable';
 import { dispatchCloseShippedDetails, dispatchOpenShippedDetails } from '@/utils/events';
-import { fetchUnshippedOrdersData } from '@/lib/dashboard-table-data';
+import { unshippedOrdersQuery } from '@/lib/queries/dashboard-queries';
 import { useAblyChannel } from '@/hooks/useAblyChannel';
 
 export interface UnshippedTableProps extends DashboardSearchSectionProps {
@@ -64,12 +64,8 @@ export function UnshippedTable({
   const searchParams = useSearchParams();
   const queryClient = useQueryClient();
   const searchQuery = String(searchParams.get('search') || '').trim();
-  const queryKey = ['dashboard-table', 'unshipped', { searchQuery, packedBy, testedBy, strictSearchScope }] as const;
   const query = useQuery({
-    queryKey,
-    queryFn: () => fetchUnshippedOrdersData({ searchQuery, packedBy, testedBy, strictSearchScope }),
-    staleTime: 5 * 60 * 1000,
-    gcTime: 15 * 60 * 1000,
+    ...unshippedOrdersQuery({ searchQuery, packedBy, testedBy, strictSearchScope }),
     placeholderData: (previousData) => previousData,
   });
 

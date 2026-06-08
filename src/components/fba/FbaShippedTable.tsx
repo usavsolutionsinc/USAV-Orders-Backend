@@ -382,5 +382,3 @@ export function FbaShippedTable({ stationTheme = 'green', searchQuery = '', embe
     </div>
   );
 }
-
-export default FbaShippedTable;

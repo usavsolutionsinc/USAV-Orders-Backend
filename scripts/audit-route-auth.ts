@@ -79,6 +79,11 @@ function classifyExemption(path: string): string | null {
   if (path.includes('/api/health')) return 'health probe';
   if (path.includes('/api/ready')) return 'readiness probe';
   if (path.includes('/api/cron/')) return 'cron endpoint';
+  // Dev/LAN NAS file passthrough: returns 404 in production unless NAS_DEV_ROOT
+  // is explicitly set, is session-gated by middleware, and is hardened with a
+  // path-traversal guard + image-only write restriction. Not permission-gated
+  // by design (it serves a single mounted folder to the local picker).
+  if (path.includes('/api/nas-dev/')) return 'dev/LAN NAS passthrough (disabled in prod; path-traversal + image-only guarded)';
   return null;
 }
 

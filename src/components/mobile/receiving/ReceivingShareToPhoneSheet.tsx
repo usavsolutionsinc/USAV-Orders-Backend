@@ -27,13 +27,15 @@ export function ReceivingShareToPhoneSheet() {
   const router = useRouter();
   const { user } = useAuth();
   const staffId = user?.staffId ?? 0;
-  const [shared, setShared] = useState<{ receivingId: number; label: string } | null>(null);
+  const [shared, setShared] = useState<{ receivingId: number; label: string; poLabel: string } | null>(null);
 
   const handleShare = useCallback((msg: { data?: SharePayload }) => {
     const id = Number(msg?.data?.receiving_id);
     if (!Number.isFinite(id) || id <= 0) return;
-    const label = (msg?.data?.po_label || '').trim() || `Package #${id}`;
-    setShared({ receivingId: id, label });
+    // `poLabel` is the real PO title (empty when the desktop didn't send one);
+    // `label` adds a friendly fallback purely for the sheet's heading.
+    const poLabel = (msg?.data?.po_label || '').trim();
+    setShared({ receivingId: id, label: poLabel || `Package #${id}`, poLabel });
   }, []);
 
   useAblyChannel(
@@ -47,8 +49,14 @@ export function ReceivingShareToPhoneSheet() {
   const takePhotos = useCallback(() => {
     if (!shared) return;
     const id = shared.receivingId;
+    const poLabel = shared.poLabel;
     setShared(null);
-    router.push(`/m/r/${id}/photos`);
+    // Carry the PO label through so the camera header shows it (not "RCV-<id>")
+    // and the saved NAS file is named by PO#. Skipped when no real PO was sent.
+    const qs = poLabel
+      ? `?title=${encodeURIComponent(poLabel)}&poRef=${encodeURIComponent(poLabel)}`
+      : '';
+    router.push(`/m/r/${id}/photos${qs}`);
   }, [router, shared]);
 
   return (

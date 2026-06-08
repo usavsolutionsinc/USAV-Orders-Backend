@@ -4,6 +4,7 @@ import { OrderIdChip, TrackingChip, getLast4 } from '@/components/ui/CopyChip';
 import { getDaysLateNullable, getDaysLateTone } from '@/utils/date';
 import type { ShippedOrder } from '@/lib/neon/orders-queries';
 import { MobileRowCard } from '@/components/mobile/feed/MobileRowCard';
+import { RowTitle, RowMetaColumns, META_COL } from '@/components/ui/RowMetaColumns';
 
 /**
  * Pending-order row for the mobile Picks feed — the phone view of the
@@ -55,15 +56,15 @@ export function PendingOrderRow({
         : 'text-gray-500';
 
   const daysLate = getDaysLateNullable(deadlineOf(row));
-  const isExpanded = variant === 'expanded';
 
   return (
     <MobileRowCard variant={variant} fresh={fresh} onTap={onTap} dataAttr={{ name: 'order-row-id', value: row.id }}>
-      <div className="flex items-center gap-3">
-        <span className={`${isExpanded ? 'h-2.5 w-2.5' : 'h-2 w-2'} shrink-0 rounded-full ${dotTone(daysLate)}`} />
-        <span className={`min-w-0 flex-1 truncate font-bold text-gray-900 ${isExpanded ? 'text-base tracking-tight' : 'text-sm'}`}>
-          {productTitle}
-        </span>
+      {/* Title — same primitive + wide dot-track as receiving/packing so the dot
+          and title start at the identical x across every mobile feed. */}
+      <div className="flex items-center gap-2">
+        <div className="min-w-0 flex-1">
+          <RowTitle dot={dotTone(daysLate)} dotTrack={META_COL.dotTrackWide} title={productTitle} />
+        </div>
         {row.account_source && (
           <span className="shrink-0 rounded-full border border-blue-100/60 bg-blue-50 px-2 py-0.5 text-[8.5px] font-black uppercase tracking-[0.1em] text-blue-500">
             {row.account_source}
@@ -71,18 +72,19 @@ export function PendingOrderRow({
         )}
       </div>
 
-      <div className="mt-3 flex items-center gap-2">
-        <span className={`flex shrink-0 items-center gap-1 whitespace-nowrap font-black uppercase tracking-widest ${isExpanded ? 'text-caption' : 'text-micro'}`}>
-          <span className={quantity > 1 ? 'text-yellow-600' : 'text-gray-900'}>{quantity}</span>
-          <span className="text-gray-400">•</span>
-          <span className={condColor}>{conditionLabel}</span>
-          {daysLate !== null && (
-            <>
-              <span className="text-gray-400">•</span>
+      <div className="pointer-events-auto mt-0.5 flex items-center gap-2">
+        <RowMetaColumns
+          className="!mt-0 shrink-0"
+          indent={META_COL.indentWide}
+          qtyCol={META_COL.qtyColWide}
+          qty={<span className={quantity > 1 ? 'text-yellow-600' : 'text-gray-900'}>{quantity}</span>}
+          condition={<span className={condColor}>{conditionLabel}</span>}
+          rest={
+            daysLate !== null ? (
               <span className={`tabular-nums ${getDaysLateTone(daysLate)}`}>{daysLate}</span>
-            </>
-          )}
-        </span>
+            ) : undefined
+          }
+        />
 
         <div className="ml-auto flex min-w-0 items-center gap-2 pointer-events-auto">
           {orderId && <OrderIdChip value={orderId} display={getLast4(orderId)} />}
@@ -92,5 +94,3 @@ export function PendingOrderRow({
     </MobileRowCard>
   );
 }
-
-export default PendingOrderRow;

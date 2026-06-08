@@ -105,6 +105,7 @@ function FinalizeReview({ onClose }: { onClose: () => void }) {
       platform: labelName,
       notes: notes.trim(),
       conditionCode: ' ',
+      receivingType: 'PICKUP',
       date: labelDateToday(),
     });
   };

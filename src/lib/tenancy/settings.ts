@@ -30,6 +30,10 @@ export const OrgSettingsSchema = z.object({
   requirePasskeyForNewStaff: z.boolean().default(false),
   // Hard cap on simultaneous active sessions per staff. 0 = unlimited.
   maxConcurrentSessions: z.number().int().min(0).default(0),
+  // Warranty term (days) used by the Warranty Claim Logger clock. Per-org,
+  // default 30. Resolved via src/lib/warranty/term.ts and snapshotted onto
+  // warranty_claims.warranty_days at log time.
+  warrantyDays: z.number().int().min(1).max(3650).default(30),
   // Per-station default folder for the receiving NAS photo picker. Keys are
   // station codes (TECH/PACK/UNBOX/SALES/FBA); values are a relative folder
   // path the picker auto-opens for an operator on that station (e.g.

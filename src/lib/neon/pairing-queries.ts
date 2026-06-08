@@ -48,8 +48,6 @@ export const SUPPORTED_PLATFORMS = [
   'shopify',
 ] as const;
 
-export type SupportedPlatform = (typeof SUPPORTED_PLATFORMS)[number];
-
 // ─── Types ──────────────────────────────────────────────────────────────────
 
 export interface PairingCandidate {

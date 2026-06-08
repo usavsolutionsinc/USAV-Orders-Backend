@@ -265,16 +265,16 @@ export function PackerTable({ packedBy }: PackerTableProps) {
                                 {
                                   key: 'platform',
                                   width: CHIP_COL.platform,
-                                  node: plat ? (
+                                  node: (
                                     <PlatformChip
                                       label={plat}
                                       underlineClass={getOrderPlatformBorderColor(plat)}
-                                      iconClass={productUrl ? getOrderPlatformColor(plat) : 'text-gray-500'}
+                                      iconClass={plat && productUrl ? getOrderPlatformColor(plat) : 'text-gray-500'}
                                       onClick={() => {
                                         if (productUrl) window.open(productUrl, '_blank', 'noopener,noreferrer');
                                       }}
                                     />
-                                  ) : null,
+                                  ),
                                 },
                                 {
                                   key: 'orderid',

@@ -1,6 +1,6 @@
 'use client';
 
-import { Bell, Smartphone } from '@/components/Icons';
+import { Activity, Bell, Smartphone } from '@/components/Icons';
 import { Row } from './Row';
 import { PhoneSignInQrButton } from './PhoneSignInQrButton';
 import { useActivityInbox } from '@/contexts/ActivityInboxContext';
@@ -11,6 +11,9 @@ interface ActionsSectionProps {
   onAction: () => void;
   onOpenHistoryPopover: () => void;
   onOpenInboxPopover: () => void;
+  /** Admin-only: opens the system/cron sync-status popover. Omitted for
+   *  non-admins, in which case the Sync status row is hidden. */
+  onOpenSyncPopover?: () => void;
 }
 
 /**
@@ -22,13 +25,15 @@ export function ActionsSection({
   actions,
   onOpenHistoryPopover,
   onOpenInboxPopover,
+  onOpenSyncPopover,
 }: ActionsSectionProps) {
   const { items } = useActivityInbox();
   const unreadCount = items.filter((it) => !it.undone || it.undoFailed).length;
   const showInbox = items.length > 0;
   const showPhoneHistory = !!actions.phoneHistory;
+  const showSync = !!onOpenSyncPopover;
 
-  if (!showInbox && !showPhoneHistory) return null;
+  if (!showInbox && !showPhoneHistory && !showSync) return null;
 
   return (
     <div className="px-2 pb-2 pt-1">
@@ -60,9 +65,16 @@ export function ActionsSection({
             onClick={onOpenHistoryPopover}
           />
         ) : null}
+        {showSync ? (
+          <Row
+            icon={<Activity className="h-4 w-4" />}
+            iconBg="bg-gray-900"
+            label="Sync status"
+            subLabel="System & cron health"
+            onClick={onOpenSyncPopover}
+          />
+        ) : null}
       </div>
     </div>
   );
 }
-
-export default ActionsSection;

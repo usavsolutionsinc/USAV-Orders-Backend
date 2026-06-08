@@ -1,5 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getSquareTransactions } from '@/lib/neon/square-transaction-queries';
+import {
+  getSquareTransactions,
+  softDeleteSquareTransaction,
+} from '@/lib/neon/square-transaction-queries';
 import { isAllowedAdminOrigin } from '@/lib/security/allowed-origin';
 import { withAuth } from '@/lib/auth/withAuth';
 
@@ -35,3 +38,38 @@ export const GET = withAuth(async (req: NextRequest) => {
     );
   }
 }, { permission: 'walk_in.view' });
+
+/**
+ * DELETE /api/walk-in/sales?id=<uuid> — soft-delete (hide) a walk-in sale.
+ *
+ * Square is the system of record, so this only hides the local mirror row
+ * (sets deleted_at); the sale is NOT removed from Square and re-syncs keep it
+ * hidden. Refund/void in Square if you need to reverse the actual sale.
+ */
+export const DELETE = withAuth(async (req: NextRequest) => {
+  try {
+    if (!isAllowedAdminOrigin(req)) {
+      return NextResponse.json({ error: 'Origin not allowed' }, { status: 403 });
+    }
+    const id = new URL(req.url).searchParams.get('id')?.trim();
+    if (!id) {
+      return NextResponse.json({ success: false, error: 'id is required' }, { status: 400 });
+    }
+
+    const hidden = await softDeleteSquareTransaction(id);
+    if (!hidden) {
+      return NextResponse.json(
+        { success: false, error: 'Sale not found or already removed' },
+        { status: 404 },
+      );
+    }
+
+    return NextResponse.json({ success: true, id });
+  } catch (error: unknown) {
+    console.error('DELETE /api/walk-in/sales error:', error);
+    return NextResponse.json(
+      { success: false, error: error instanceof Error ? error.message : 'Unknown error' },
+      { status: 500 },
+    );
+  }
+}, { permission: 'walk_in.intake' });

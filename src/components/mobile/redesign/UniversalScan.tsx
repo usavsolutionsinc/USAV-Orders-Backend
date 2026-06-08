@@ -1,53 +1,101 @@
 'use client';
 
-import { useState, useCallback, useEffect, useRef } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { useState, useCallback, useRef, useMemo } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
+import { motion, AnimatePresence, type PanInfo } from 'framer-motion';
+import { framerTransition, tabPagerVariants } from '@/design-system/foundations/motion-framer';
 import {
   History,
-  Camera,
-  Search,
   ClipboardList,
   ShieldCheck,
-  Database,
+  Box,
 } from '@/components/Icons';
 import {
   TOKENS,
   SectionHeader,
-  GlassButton,
 } from '@/components/mobile/redesign/DesignSystem';
 import { HorizontalButtonSlider } from '@/components/ui/HorizontalButtonSlider';
 import { MobileFeed } from '@/components/mobile/feed/MobileFeed';
 import { useFeedWindow } from '@/components/mobile/feed/useMobileFeed';
 import { ScanResultRow, type ScanFeedItem } from '@/components/mobile/feed/rows/ScanResultRow';
 import { ScanTestingPanel } from '@/components/mobile/redesign/ScanTestingPanel';
+import { ScanInput } from '@/components/mobile/redesign/ScanInput';
+import { PrepackedProductSheet } from '@/components/mobile/redesign/PrepackedProductSheet';
+import { ReceivingTriagePanel, TestingRecentPanel } from '@/components/mobile/redesign/ScanModeFeeds';
 import { detectScanMode, type ScanMode } from '@/components/mobile/redesign/scan-mode';
-import { useBarcodeScanner } from '@/hooks/useBarcodeScanner';
 import { useFeedback } from '@/hooks/useFeedback';
-import { useRouter } from 'next/navigation';
+import { useLabelPrintFeed, type LabelPrintFeedItem } from '@/hooks/useLabelPrintFeed';
 
 const MODES: Array<{ id: ScanMode; label: string; icon: (p: { className?: string }) => JSX.Element; placeholder: string }> = [
-  { id: 'receiving', label: 'Receiving Scans', icon: ClipboardList, placeholder: 'Scan a tracking number…' },
-  { id: 'testing', label: 'Testing Orders', icon: ShieldCheck, placeholder: 'Scan a PO label (R-####)…' },
-  { id: 'cms', label: 'Prepacked Products', icon: Database, placeholder: 'Scan a product / unit label…' },
+  { id: 'receiving', label: 'Receiving Scans', icon: ClipboardList, placeholder: 'Scan a tracking number' },
+  { id: 'testing', label: 'Testing Orders', icon: ShieldCheck, placeholder: 'Scan a PO label (R-####)' },
+  { id: 'cms', label: 'Prepacked Products', icon: Box, placeholder: 'Scan a product / unit label' },
 ];
 
 export default function RedesignedMobileUniversalScan() {
-  const router = useRouter();
   const [mode, setMode] = useState<ScanMode>('receiving');
-  const [cameraActive, setCameraActive] = useState(false);
-  const [input, setInput] = useState('');
-  const [scans, setScans] = useState<ScanFeedItem[]>([]);
+  // Pager slide direction (+1 → next mode, -1 → prev) for both tap and swipe.
+  const [direction, setDirection] = useState(0);
   const [testingQuery, setTestingQuery] = useState('');
-  const scanner = useBarcodeScanner({ dedupMs: 2000 });
+  // The scanned unit label whose Prepacked Products sheet is open (null = closed).
+  const [prepackScan, setPrepackScan] = useState<string | null>(null);
   const feedback = useFeedback();
+  const queryClient = useQueryClient();
   const inFlight = useRef(false);
+
+  // Prepacked "Recent Scans" is the persistent label-print history — the same
+  // feed as Products → Labels → History (station_activity_logs LABEL_PRINTED),
+  // so it survives reloads instead of living in volatile React state.
+  const { data: labelFeed = [], refetch: refetchLabels } = useLabelPrintFeed(12);
+  const prepackScans = useMemo<ScanFeedItem[]>(
+    () => labelFeed.map(mapLabelToScanItem),
+    [labelFeed],
+  );
 
   const active = MODES.find((m) => m.id === mode) ?? MODES[0];
   const ActiveIcon = active.icon;
 
-  // ── per-mode handlers ──────────────────────────────────────────────────────
+  // Switch modes with the slide direction derived from MODES order, so the
+  // result pager animates left/right consistently whether tapped or swiped.
+  const changeMode = useCallback((next: ScanMode) => {
+    setMode((cur) => {
+      if (next === cur) return cur;
+      const from = MODES.findIndex((m) => m.id === cur);
+      const to = MODES.findIndex((m) => m.id === next);
+      setDirection(to > from ? 1 : -1);
+      return next;
+    });
+  }, []);
+
+  // Commit a horizontal swipe to the adjacent mode past a distance/velocity
+  // threshold. `dragDirectionLock` on the panel keeps vertical scroll intact.
+  const handleSwipe = useCallback(
+    (_: unknown, info: PanInfo) => {
+      const current = MODES.findIndex((m) => m.id === mode);
+      const dir =
+        info.offset.x < -60 || info.velocity.x < -400
+          ? 1
+          : info.offset.x > 60 || info.velocity.x > 400
+            ? -1
+            : 0;
+      const target = MODES[current + dir];
+      if (dir && target) changeMode(target.id);
+    },
+    [mode, changeMode],
+  );
+
+  // Refetch the desktop-shared triage rails so a freshly door-scanned carton
+  // shows up in Unfound / Prioritize (same keys the desktop sidebar uses).
+  const refreshReceivingTriage = useCallback(() => {
+    void queryClient.invalidateQueries({ queryKey: ['receiving-lines-table', 'rail', 'scanned'] });
+    void queryClient.invalidateQueries({ queryKey: ['receiving', 'triage', 'unfound-list'] });
+  }, [queryClient]);
+
+  // ── receiving handler (door scan-in → lookup-po) ───────────────────────────
+  // Fire the door-scan lookup for feedback, then let the triage rails refetch —
+  // the new carton lands in Prioritize (matched) or Unfound (unmatched).
   const runReceiving = useCallback(
-    async (raw: string, patch: (p: Partial<ScanFeedItem>) => void) => {
+    async (raw: string) => {
       try {
         const res = await fetch('/api/receiving/lookup-po', {
           method: 'POST',
@@ -57,65 +105,18 @@ export default function RedesignedMobileUniversalScan() {
         });
         const data = await res.json().catch(() => null);
         if (!res.ok || !data) {
-          patch({ state: 'error', statusLabel: 'Lookup failed' });
           feedback('error');
           return;
         }
         const matched = Boolean(data.po_matched ?? data.matched);
-        const poLabel = Array.isArray(data.po_ids) && data.po_ids.length > 0 ? `PO ${data.po_ids[0]}` : null;
-        const receivingId = typeof data.receiving_id === 'number' ? data.receiving_id : null;
-        const lineCount = Array.isArray(data.lines) ? data.lines.length : 0;
-        patch({
-          state: matched ? 'ok' : 'warn',
-          statusLabel: matched ? poLabel ?? 'Matched' : 'No PO match',
-          meta: matched && lineCount > 0 ? `${lineCount} line${lineCount === 1 ? '' : 's'}` : null,
-          href: receivingId ? `/m/r/${receivingId}` : null,
-        });
         feedback(matched ? 'scanAccepted' : 'confirm');
       } catch {
-        patch({ state: 'error', statusLabel: 'Lookup failed' });
         feedback('error');
+      } finally {
+        refreshReceivingTriage();
       }
     },
-    [feedback],
-  );
-
-  const runCms = useCallback(
-    async (raw: string, patch: (p: Partial<ScanFeedItem>) => void) => {
-      try {
-        const res = await fetch(`/api/scan/resolve?input=${encodeURIComponent(raw)}`, {
-          credentials: 'include',
-          cache: 'no-store',
-        });
-        const data = await res.json().catch(() => null);
-        if (!res.ok || !data) {
-          patch({ state: 'error', statusLabel: 'No match' });
-          feedback('scanRejected');
-          return;
-        }
-        const outcome: string = data.matchOutcome ?? 'none';
-        const route: string | null = data.mobileRoute ?? null;
-        const label: string | null = data.kind ? String(data.kind).replace(/_/g, ' ') : null;
-        if (route && outcome === 'single') {
-          patch({ state: 'ok', statusLabel: label ? `Matched ${label}` : 'Matched', href: route });
-          feedback('scanAccepted');
-          // Found + opening the record → close the camera scanner so it isn't
-          // left running over the destination page.
-          setCameraActive(false);
-          router.push(route);
-        } else if (outcome === 'multi') {
-          patch({ state: 'warn', statusLabel: 'Multiple matches' });
-          feedback('confirm');
-        } else {
-          patch({ state: 'error', statusLabel: 'No match' });
-          feedback('scanRejected');
-        }
-      } catch {
-        patch({ state: 'error', statusLabel: 'No match' });
-        feedback('scanRejected');
-      }
-    },
-    [feedback, router],
+    [feedback, refreshReceivingTriage],
   );
 
   // ── dispatch: detect mode → animate slider → run the mode's handler ────────
@@ -124,12 +125,11 @@ export default function RedesignedMobileUniversalScan() {
       const raw = value.trim();
       if (!raw || inFlight.current) return;
       inFlight.current = true;
-      setInput('');
 
       const detected = detectScanMode(raw);
       const target: ScanMode = detected ?? mode;
       if (target !== mode) {
-        setMode(target);
+        changeMode(target);
         feedback('selection'); // slider animates to the detected mode
       } else {
         feedback('confirm');
@@ -137,157 +137,155 @@ export default function RedesignedMobileUniversalScan() {
 
       try {
         if (target === 'testing') {
+          // Resolve the scanned PO/serial into the inline testing panel; the
+          // "Recently Tested" rail below is desktop-wired and refetches itself.
           setTestingQuery(raw);
           return;
         }
-        const id = `${Date.now()}-${raw}`;
-        setScans((prev) =>
-          [{ id, primary: raw, at: new Date(), state: 'pending', statusLabel: 'Resolving…', href: null } as ScanFeedItem, ...prev].slice(0, 12),
-        );
-        const patch = (p: Partial<ScanFeedItem>) =>
-          setScans((prev) => prev.map((s) => (s.id === id ? { ...s, ...p } : s)));
-        if (target === 'receiving') await runReceiving(raw, patch);
-        else await runCms(raw, patch);
+
+        if (target === 'cms') {
+          // Prepacked: open the detail/verify sheet. The sheet owns resolution
+          // (live unit → product metadata → unknown) so there's no dead-end.
+          // The recent list is the persistent label-print history, not an
+          // in-memory row, so just open the sheet here.
+          setPrepackScan(raw);
+          return;
+        }
+
+        // Receiving: door-scan lookup → triage rails refetch (Unfound/Prioritize).
+        await runReceiving(raw);
       } finally {
         inFlight.current = false;
       }
     },
-    [mode, feedback, runReceiving, runCms],
+    [mode, feedback, runReceiving, changeMode],
   );
 
-  useEffect(() => {
-    if (cameraActive) scanner.startScanning();
-    else scanner.stopScanning();
-    return () => { scanner.stopScanning(); };
-  }, [cameraActive, scanner]);
-
-  useEffect(() => {
-    if (scanner.lastScannedValue) void dispatch(scanner.lastScannedValue);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [scanner.lastScannedValue]);
-
-  const { rows: feedRows, scrollRef } = useFeedWindow(scans, { limit: 12, anchor: 'top', freshPulse: false });
+  // Prepacked "Recent Scans" is the only in-component feed left (label history).
+  const { rows: feedRows, scrollRef } = useFeedWindow(prepackScans, { limit: 12, anchor: 'top', freshPulse: false });
 
   return (
     <div className={`h-full ${TOKENS.colors.background} flex flex-col`}>
       {/* Mode slider (icons) + title */}
-      <div className="px-4 pt-3 pb-2">
+      <div className="px-4 pt-2 pb-1.5">
+        <div className="mb-1.5 flex items-center gap-1.5 px-1">
+          <ActiveIcon className="h-4 w-4 text-blue-600" />
+          <h1 className="text-base font-black tracking-tight text-blue-950">{active.label}</h1>
+        </div>
         <HorizontalButtonSlider
           variant="segmented"
           aria-label="Scan mode"
           value={mode}
-          onChange={(id) => setMode(id as ScanMode)}
+          onChange={(id) => changeMode(id as ScanMode)}
           items={MODES.map((m) => ({ id: m.id, label: m.label, icon: m.icon }))}
         />
-        <div className="mt-2 flex items-center gap-2 px-1">
-          <ActiveIcon className="h-5 w-5 text-blue-600" />
-          <h1 className="text-xl font-black tracking-tight text-blue-950">{active.label}</h1>
-        </div>
       </div>
 
-      {/* Input bar (camera toggle is pinned above the nav — see bottom of file) */}
-      <div className="px-6 pb-4">
-        <div className="relative group">
-          <div className="absolute inset-y-0 left-4 flex items-center pointer-events-none">
-            <Search className="h-4 w-4 text-blue-400" />
-          </div>
-          <input
-            autoFocus
-            type="text"
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            onKeyDown={(e) => e.key === 'Enter' && dispatch(input)}
-            placeholder={active.placeholder}
-            className="w-full bg-white border border-blue-100 rounded-[24px] pl-11 pr-28 py-5 text-base font-bold text-blue-950 focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 transition-all shadow-sm placeholder:text-blue-300"
-          />
-          <button
-            onClick={() => dispatch(input)}
-            className="absolute right-2 top-2 bottom-2 px-5 bg-blue-600 text-white rounded-[18px] flex items-center gap-2 active:scale-95 transition-all shadow-lg shadow-blue-600/10"
-          >
-            <span className="text-[10px] font-black uppercase tracking-wider">Find</span>
-          </button>
-        </div>
+      {/* Scan surface — compact StationScanBar + optional camera viewfinder. */}
+      <div className="px-4 pb-2">
+        <ScanInput
+          onDecode={dispatch}
+          placeholder={active.placeholder}
+          autoFocus
+          cameraSuspended={prepackScan != null}
+        />
       </div>
 
-      {/* Camera Viewfinder (Only when active) */}
-      <AnimatePresence>
-        {cameraActive && (
-          <motion.div
-            initial={{ height: 0, opacity: 0 }}
-            animate={{ height: '36vh', opacity: 1 }}
-            exit={{ height: 0, opacity: 0 }}
-            className="relative w-full bg-blue-950 overflow-hidden"
-          >
-            <video
-              ref={scanner.videoRef as any}
-              className="absolute inset-0 h-full w-full object-cover opacity-70 contrast-125"
-              autoPlay
-              playsInline
-              muted
-            />
-            <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-              <div className="w-56 h-56 rounded-[40px] border-2 border-white/40 bg-white/5 backdrop-blur-[1px] relative">
-                <motion.div
-                  animate={{ top: ['5%', '95%', '5%'] }}
-                  transition={{ duration: 2, repeat: Infinity, ease: 'easeInOut' }}
-                  className="absolute left-6 right-6 h-[2px] bg-blue-400 shadow-[0_0_15px_rgba(96,165,250,1)]"
-                />
-              </div>
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
-      {/* Result area — swaps per mode with a brief fade so the surface change reads. */}
-      <AnimatePresence mode="wait">
+      {/* Result area — a swipeable pager across the three scan modes. Drag
+          left/right to move between Receiving Scans, Testing Orders and
+          Prepacked Products; both panels share one grid cell so heights don't
+          jump, and `dragDirectionLock` keeps each list's vertical scroll. */}
+      <div className="grid min-h-0 flex-1 grid-cols-1 grid-rows-1 overflow-hidden bg-slate-50">
+        <AnimatePresence mode="sync" custom={direction} initial={false}>
         <motion.div
           key={mode}
-          initial={{ opacity: 0, y: 6 }}
-          animate={{ opacity: 1, y: 0 }}
-          exit={{ opacity: 0, y: -6 }}
-          transition={{ duration: 0.18 }}
-          className="flex min-h-0 flex-1 flex-col bg-slate-50"
+          custom={direction}
+          variants={tabPagerVariants}
+          initial="enter"
+          animate="center"
+          exit="exit"
+          transition={framerTransition.sliderIndicator}
+          drag="x"
+          dragDirectionLock
+          dragConstraints={{ left: 0, right: 0 }}
+          dragElastic={0.18}
+          onDragEnd={handleSwipe}
+          className="col-start-1 row-start-1 flex min-h-0 touch-pan-y flex-col bg-slate-50"
         >
           {mode === 'testing' ? (
-            <div className="min-h-0 flex-1 overflow-y-auto pt-3">
+            // Testing — desktop-wired "Recently Tested" rail above the inline
+            // PO-items testing panel (which the active scan resolves into).
+            <div className="min-h-0 flex-1 overflow-y-auto pt-2">
+              <TestingRecentPanel />
               <ScanTestingPanel query={testingQuery} />
             </div>
+          ) : mode === 'receiving' ? (
+            // Receiving — desktop triage: Unfound / Prioritize dropdown picker
+            // (same endpoints + query keys as the desktop sidebar rails).
+            <div className="flex min-h-0 flex-1 flex-col pt-2">
+              <ReceivingTriagePanel />
+            </div>
           ) : (
-            <div className="flex min-h-0 flex-1 flex-col pt-6">
+            // Prepacked — persistent label-print history; tap a row to re-open.
+            <div className="flex min-h-0 flex-1 flex-col pt-2">
               <div className="px-6">
-                <SectionHeader title={mode === 'receiving' ? 'Recent Receipts' : 'Recent Scans'} />
+                <SectionHeader title="Recent Scans" />
               </div>
               <MobileFeed<ScanFeedItem>
                 rows={feedRows}
                 expandLast={false}
                 scrollRef={scrollRef}
-                className="px-3 pb-32"
+                className="pb-32"
                 empty={
                   <div className="py-12 text-center opacity-40">
                     <History className="mx-auto mb-3 h-10 w-10 text-blue-200" />
                     <p className="text-xs font-black uppercase tracking-widest text-blue-300">
-                      {mode === 'receiving' ? 'Scan tracking to begin…' : 'Waiting for first scan…'}
+                      No recently printed products…
                     </p>
                   </div>
                 }
-                renderRow={(item) => <ScanResultRow item={item} />}
+                renderRow={(item) => (
+                  <ScanResultRow item={item} onClick={() => setPrepackScan(item.primary)} />
+                )}
               />
             </div>
           )}
         </motion.div>
-      </AnimatePresence>
-
-      {/* Camera toggle pinned just above the bottom nav. */}
-      <div className="pointer-events-none fixed inset-x-0 bottom-[calc(4rem+env(safe-area-inset-bottom))] z-40 px-6">
-        <GlassButton
-          variant={cameraActive ? 'primary' : 'secondary'}
-          className={`pointer-events-auto w-full !rounded-[24px] shadow-xl ${cameraActive ? 'bg-blue-600 border-blue-500 shadow-blue-600/20' : 'shadow-blue-950/10'}`}
-          onClick={() => setCameraActive(!cameraActive)}
-          icon={Camera}
-        >
-          {cameraActive ? 'Close Camera' : 'Open Camera Scanner'}
-        </GlassButton>
+        </AnimatePresence>
       </div>
+
+      {/* Prepacked Products: scan-to-verify detail + scan-to-locate put-away. */}
+      <PrepackedProductSheet
+        scanned={prepackScan}
+        onClose={() => {
+          setPrepackScan(null);
+          // A put-away/print during the sheet may have changed the label feed.
+          if (mode === 'cms') void refetchLabels();
+        }}
+      />
     </div>
   );
+}
+
+/**
+ * Map a persistent label-print row → the shared scan-feed row shape so the
+ * Prepacked "Recent Scans" list reuses {@link ScanResultRow}. Tapping a row
+ * re-opens the detail sheet for that unit (handled in renderRow).
+ */
+function mapLabelToScanItem(row: LabelPrintFeedItem): ScanFeedItem {
+  // primary = the scannable identity (drives tap → re-open the detail sheet);
+  // title/subtitle = the user-friendly product title over its SKU.
+  const primary = row.unit_id ?? row.serial_number ?? row.sku ?? String(row.id);
+  return {
+    id: `label-${row.id}`,
+    primary,
+    title: row.product_title ?? 'Prepacked Product',
+    serial: row.serial_number ?? row.unit_id ?? null,
+    subtitle: row.sku ?? null,
+    at: new Date(row.printed_at),
+    state: 'ok',
+    statusLabel: row.current_status ?? 'Printed',
+    meta: null,
+    href: null,
+  };
 }

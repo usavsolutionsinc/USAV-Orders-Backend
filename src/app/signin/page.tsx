@@ -18,6 +18,7 @@ import { StaffPickerList, type StaffPickerRow } from '@/components/auth/StaffPic
 import { StaffPinPad } from '@/components/auth/StaffPinPad';
 import { SetPinPad } from '@/components/auth/SetPinPad';
 import { useAuth } from '@/contexts/AuthContext';
+import { armBootSplash } from '@/lib/boot-flag';
 
 const RECENT_KEY = 'usav.recentSignins';
 const MAX_RECENT = 3;
@@ -151,6 +152,12 @@ export default function SignInPage() {
     const fallback = onMobile ? '/m/home' : '/dashboard';
     const override = onMobile ? defaultHomePathMobile : defaultHomePath;
     const target = next || override || roleHome || fallback;
+    // Arm the one-shot loading splash when we're landing on a route that has a
+    // BootGate (currently the dashboard). The gate reads-and-clears the flag to
+    // hold a single animation while it warms the page's data, so the user sees
+    // a finished page instead of each table streaming in. Hard navigation only
+    // — sessionStorage survives the document load but not a later refresh.
+    if (target.startsWith('/dashboard')) armBootSplash();
     if (typeof window !== 'undefined') {
       window.location.assign(target);
     } else {

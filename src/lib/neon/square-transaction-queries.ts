@@ -39,7 +39,8 @@ export async function getSquareTransactions(params: {
   const { search, status, weekStart, weekEnd, orderSource, limit = 200 } = params;
   const safeLimit = Math.max(1, Math.min(500, limit));
 
-  const conditions: string[] = [];
+  // Hide soft-deleted (operator-removed) sales. Always applied.
+  const conditions: string[] = ['deleted_at IS NULL'];
   const values: unknown[] = [];
   let paramIndex = 1;
 
@@ -91,6 +92,25 @@ export async function getSquareTransactionById(
 ): Promise<SquareTransactionRecord | null> {
   const result = await pool.query(
     'SELECT * FROM square_transactions WHERE id = $1 LIMIT 1',
+    [id],
+  );
+  return result.rows[0] || null;
+}
+
+/**
+ * Soft-delete a walk-in sale (set deleted_at). Square stays the system of
+ * record — the row is only hidden locally; re-syncs preserve the flag because
+ * the upsert's ON CONFLICT never touches deleted_at. Returns the hidden row,
+ * or null if it didn't exist / was already hidden.
+ */
+export async function softDeleteSquareTransaction(
+  id: string,
+): Promise<SquareTransactionRecord | null> {
+  const result = await pool.query(
+    `UPDATE square_transactions
+        SET deleted_at = NOW()
+      WHERE id = $1 AND deleted_at IS NULL
+      RETURNING *`,
     [id],
   );
   return result.rows[0] || null;

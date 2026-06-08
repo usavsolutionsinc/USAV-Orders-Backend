@@ -10,9 +10,10 @@ import { useActivityInboxOptional } from '@/contexts/ActivityInboxContext';
 import { QuickAccessPopover } from '@/components/quick-access/QuickAccessPopover';
 import { PhoneHistoryPopover } from '@/components/quick-access/PhoneHistoryPopover';
 import { ActivityInboxPopover } from '@/components/quick-access/ActivityInboxPopover';
+import { SyncStatusPopover } from '@/components/quick-access/SyncStatusPopover';
 import { getStaffThemeById, stationThemeColors } from '@/utils/staff-colors';
 
-type OpenPopover = 'none' | 'history' | 'inbox' | 'account';
+type OpenPopover = 'none' | 'history' | 'inbox' | 'account' | 'sync';
 
 function initials(name: string): string {
   return name
@@ -90,6 +91,7 @@ export function GlobalHeaderActions({ variant = 'desktop' }: { variant?: 'deskto
 
   const inboxOpen = popover === 'inbox';
   const accountOpen = popover === 'account';
+  const isAdmin = !!user.permissions?.includes('admin.view');
   const popoverPos = 'absolute right-0 top-full mt-1 z-50';
 
   const sc = stationThemeColors[getStaffThemeById(user.staffId)];
@@ -180,6 +182,7 @@ export function GlobalHeaderActions({ variant = 'desktop' }: { variant?: 'deskto
               onClose={() => setPopover('none')}
               onOpenHistoryPopover={() => setPopover('history')}
               onOpenInboxPopover={() => setPopover('inbox')}
+              onOpenSyncPopover={isAdmin && !isMobile ? () => setPopover('sync') : undefined}
               compact={isMobile}
             />
           </div>
@@ -189,9 +192,12 @@ export function GlobalHeaderActions({ variant = 'desktop' }: { variant?: 'deskto
             <PhoneHistoryPopover onClose={() => setPopover('none')} />
           </div>
         )}
+        {popover === 'sync' && (
+          <div className={popoverPos}>
+            <SyncStatusPopover onClose={() => setPopover('none')} />
+          </div>
+        )}
       </div>
     </div>
   );
 }
-
-export default GlobalHeaderActions;

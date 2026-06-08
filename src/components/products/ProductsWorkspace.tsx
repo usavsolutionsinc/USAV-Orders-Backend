@@ -23,12 +23,15 @@ const ProductsPairingShell = dynamic(
   },
 );
 
-// Lazy-load the unit history viewer — only mounts when labelsView=history.
-const UnitHistoryWorkspace = dynamic(
-  () => import('@/components/labels/UnitHistoryWorkspace').then((m) => m.UnitHistoryWorkspace),
+// Lazy-load the unit detail viewer — mounts for both Recent and History
+// sub-views (read-only unit detail: linkage header, identity, location,
+// timeline). Pulls in the SKU-graph + popover bundle, none of which the
+// default Manuals view needs.
+const UnitDetailWorkspace = dynamic(
+  () => import('@/components/labels/unit-detail/UnitDetailWorkspace').then((m) => m.UnitDetailWorkspace),
   {
     ssr: false,
-    loading: () => <div className="p-6 text-sm text-gray-400">Loading unit history…</div>,
+    loading: () => <div className="p-6 text-sm text-gray-400">Loading unit detail…</div>,
   },
 );
 
@@ -47,11 +50,12 @@ export function ProductsWorkspace() {
   const labelsView = parseLabelsView(searchParams.get('labelsView'));
 
   if (view === 'labels') {
-    // History sub-view has its own workspace fed by `?historyId=` (written
-    // by the sidebar's UnitHistoryFinder). Print and Recent share the
-    // labels workspace — Recent's row click prefills it via `sku:fill`.
-    if (labelsView === 'history') return <UnitHistoryWorkspace />;
-    return <MultiSkuSnBarcode layout="horizontal" />;
+    // Printing only happens on the Products (`print`) sub-view. Recent and
+    // History both render the read-only unit detail workspace, fed by
+    // `?historyId=` — Recent's row click selects a printed unit, History's
+    // scan/paste resolves one. Neither shows the label-printing component.
+    if (labelsView === 'print') return <MultiSkuSnBarcode layout="horizontal" />;
+    return <UnitDetailWorkspace />;
   }
   if (view === 'pairing') return <ProductsPairingShell />;
   // QC view: right pane shows the selected SKU's QC checklist (selection comes
@@ -61,5 +65,3 @@ export function ProductsWorkspace() {
   // comes from the sidebar's LibraryBrowser (`?id=`).
   return <ManualLibrary />;
 }
-
-export default ProductsWorkspace;

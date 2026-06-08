@@ -47,18 +47,18 @@ const DEFAULT_CENTER_TAB: MobileNavTabId = 'scan';
 
 /**
  * The single, canonical bottom-nav layout rendered for every signed-in staffer:
- * Recent · Receiving · [Scan centre] · Packing · Picks. The bar must look the
- * same regardless of which roles a staffer holds, so {@link RedesignedBottomNav}
+ * Recent · Picks · [Scan centre] · Unbox · Packing. The bar must look the same
+ * regardless of which roles a staffer holds, so {@link RedesignedBottomNav}
  * renders this fixed list rather than the per-row `tabs` blob (which could drift
  * between roles / stale rows). 'signout' is intentionally absent — sign-out
  * lives in the account FAB.
  */
 export const CANONICAL_MOBILE_NAV_TABS: ReadonlyArray<MobileNavTabId> = [
   'home',
-  'receiving',
-  'scan',
-  'packing',
   'picks',
+  'scan',
+  'receiving',
+  'packing',
 ];
 
 export interface MobileBottomNavConfig {
@@ -80,8 +80,8 @@ export type MobileDisplayConfigInput = Partial<{
 export const DEFAULT_MOBILE_DISPLAY_CONFIG: MobileDisplayConfig = {
   bottomNav: {
     enabled: false,
-    // Layout: Recent · Incoming · [Scan centre] · Packing · Picks.
-    tabs: ['home', 'receiving', 'scan', 'packing', 'picks'],
+    // Layout: Recent · Picks · [Scan centre] · Unbox · Packing.
+    tabs: ['home', 'picks', 'scan', 'receiving', 'packing'],
   },
 };
 

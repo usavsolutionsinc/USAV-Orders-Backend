@@ -52,8 +52,6 @@ export const REPAIR_STATUS_OPTIONS = [
   'Picked Up',
 ] as const;
 
-export type RepairStatus = typeof REPAIR_STATUS_OPTIONS[number];
-
 export type RepairTab = 'incoming' | 'active' | 'done';
 
 /** Statuses shown on the Done tab — also used by station “next repair” exclusions. */

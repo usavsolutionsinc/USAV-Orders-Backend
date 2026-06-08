@@ -6,9 +6,22 @@ import { useLabelPrintFeed, type LabelPrintFeedItem } from '@/hooks/useLabelPrin
 import { unitStatusBadgeClass } from '@/lib/unit-status';
 import { SIDEBAR_GUTTER } from '@/components/layout/header-shell';
 
+/**
+ * Lookup key for a feed row, resolvable by GET /api/serial-units/[id] (which
+ * accepts a numeric id, a serial_number, OR a minted unit_uid). Prefer the
+ * numeric id, then serial, then the minted `unit_id` — the last is what's
+ * always present for label prints whose tech_serial_numbers cross-ref is null.
+ */
+export function recentLookupKey(item: LabelPrintFeedItem): string {
+  if (item.serial_unit_id != null) return String(item.serial_unit_id);
+  return item.serial_number || item.unit_id || '';
+}
+
 interface RecentlyPrintedListProps {
-  /** Clicking a row fires this with the product SKU so the print workspace pre-fills. */
-  onPick: (sku: string) => void;
+  /** Clicking a row selects that printed unit so the main pane shows its detail. */
+  onSelect: (item: LabelPrintFeedItem) => void;
+  /** Lookup key of the currently-selected unit (from `?historyId=`), for highlight. */
+  selectedKey?: string | null;
 }
 
 /**
@@ -18,11 +31,11 @@ interface RecentlyPrintedListProps {
  * carries product title, image, current status, and location without
  * the consumer needing a second lookup.
  *
- * Clicking a row fires the same `sku:fill` event the Products picker uses,
- * so the print workspace pre-fills the SKU and the operator can reprint or
- * issue a new unit without leaving the sub-view.
+ * Clicking a row selects that printed unit; the main pane (UnitHistoryWorkspace)
+ * loads its full detail — SKU, condition grade, status, location, and lifecycle
+ * timeline. Reprinting lives on the Products sub-view, not here.
  */
-export function RecentlyPrintedList({ onPick }: RecentlyPrintedListProps) {
+export function RecentlyPrintedList({ onSelect, selectedKey }: RecentlyPrintedListProps) {
   const { data, isLoading, isError } = useLabelPrintFeed(50);
   const items = data ?? [];
 
@@ -60,22 +73,38 @@ export function RecentlyPrintedList({ onPick }: RecentlyPrintedListProps) {
     <div className="flex-1 overflow-y-auto">
       <ul className="divide-y divide-gray-100">
         {items.map((item) => (
-          <RecentRow key={item.id} item={item} onPick={onPick} />
+          <RecentRow
+            key={item.id}
+            item={item}
+            onSelect={onSelect}
+            isSelected={!!selectedKey && recentLookupKey(item) === selectedKey}
+          />
         ))}
       </ul>
     </div>
   );
 }
 
-function RecentRow({ item, onPick }: { item: LabelPrintFeedItem; onPick: (sku: string) => void }) {
-  const skuForPick = item.sku || item.unit_id || '';
+function RecentRow({
+  item,
+  onSelect,
+  isSelected,
+}: {
+  item: LabelPrintFeedItem;
+  onSelect: (item: LabelPrintFeedItem) => void;
+  isSelected: boolean;
+}) {
+  const hasDetail = recentLookupKey(item).length > 0;
   return (
     <li>
       <button
         type="button"
-        onClick={() => skuForPick && onPick(skuForPick)}
-        disabled={!skuForPick}
-        className={`flex w-full items-start gap-3 ${SIDEBAR_GUTTER} py-2.5 text-left transition-colors hover:bg-blue-50 disabled:cursor-not-allowed disabled:opacity-60`}
+        onClick={() => hasDetail && onSelect(item)}
+        disabled={!hasDetail}
+        aria-current={isSelected}
+        className={`flex w-full items-start gap-3 ${SIDEBAR_GUTTER} py-2.5 text-left transition-colors disabled:cursor-not-allowed disabled:opacity-60 ${
+          isSelected ? 'bg-blue-50' : 'hover:bg-blue-50'
+        }`}
       >
         <span className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-md bg-gray-50 ring-1 ring-gray-200">
           {item.image_url ? (

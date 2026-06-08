@@ -2,11 +2,11 @@
 
 import { receivingHandle } from '@/lib/barcode-routing';
 import { renderDataMatrixSvg } from '@/lib/barcode/dataMatrixSvg';
-import { receivingLabelPoCornerDisplay } from '@/lib/print/printReceivingLabel';
 import {
-  conditionShort,
-} from '@/components/sidebar/receiving/receiving-sidebar-shared';
-import { COND_LABEL } from '@/components/station/receiving-constants';
+  receivingLabelPlatformDisplay,
+  receivingLabelPoCornerDisplay,
+} from '@/lib/print/printReceivingLabel';
+import { CONDITION_GRADES, conditionLabel } from '@/lib/conditions';
 
 export type ReceivingLabelPayload = {
   /** Numeric receiving id — used to build the phone-scannable QR URL. */
@@ -23,6 +23,8 @@ export type ReceivingLabelPayload = {
   /** Support / carton notes printed in the label center — any free text. */
   notes: string;
   conditionCode: string;
+  /** Receiving type (PO / RETURN / TRADE_IN / PICKUP) — shown after the platform as "Platform - Type". */
+  receivingType?: string | null;
   date: string;
 };
 
@@ -58,7 +60,7 @@ export function printReceivingLabel(payload: ReceivingLabelPayload) {
   // Bare handle (R-{id}) — `routeScan()` routes to /m/r/{id}. No URL.
   const qrSvg = renderDataMatrixSvg({ value: qrPayload, symbology: 'datamatrix', scale: 4 });
 
-  const condShort = conditionShort(payload.conditionCode);
+  const condShort = conditionLabel(payload.conditionCode, 'label');
   const condHtml = escapeHtml(condShort);
 
   const html = `<!doctype html><html><head><meta charset="utf-8"/><title>Label</title>
@@ -80,7 +82,7 @@ export function printReceivingLabel(payload: ReceivingLabelPayload) {
 <div class="wrap">
   <div class="info">
     <div class="row">
-      <span class="platform">${escapeHtml(payload.platform)}</span>
+      <span class="platform">${escapeHtml(receivingLabelPlatformDisplay(payload))}</span>
       <span class="date">${escapeHtml(payload.date)}</span>
     </div>
     <div class="notes">${escapeHtml((payload.notes || '').trim())}</div>
@@ -116,19 +118,13 @@ window.onafterprint=function(){setTimeout(function(){window.close();},80);};
  */
 export function ConditionHeaderDisplay({ code }: { code: string }) {
   const c = String(code || 'BRAND_NEW').trim().toUpperCase();
-  if (c === 'BRAND_NEW') {
-    return <span className="font-black text-gray-900">New</span>;
-  }
-  if (c === 'PARTS') {
-    return <span className="font-black text-gray-900">Parts</span>;
-  }
-  if (c.startsWith('USED_')) {
-    const letter = COND_LABEL[c] || c.replace('USED_', '');
-    return (
-      <span className="font-black tracking-tight text-gray-900">
-        USED-{letter}
-      </span>
-    );
-  }
-  return <span className="font-semibold text-gray-800">{c.replace(/_/g, ' ')}</span>;
+  // Label face text comes from the shared `label` variant so the preview and
+  // the printed label (printReceivingLabel above) read identically.
+  const isKnown = (CONDITION_GRADES as readonly string[]).includes(c);
+  const className = !isKnown
+    ? 'font-semibold text-gray-800'
+    : c.startsWith('USED_')
+      ? 'font-black tracking-tight text-gray-900'
+      : 'font-black text-gray-900';
+  return <span className={className}>{conditionLabel(c, 'label')}</span>;
 }

@@ -60,8 +60,6 @@ export type InventoryResultRow =
     | { kind: 'count'; row: CountRow; key: string }
     | { kind: 'triage'; row: any; key: string };
 
-export type InventoryResultKind = InventoryResultRow['kind'];
-
 export interface UseInventorySearchParams {
     tab: InventoryTab;
     query: string;

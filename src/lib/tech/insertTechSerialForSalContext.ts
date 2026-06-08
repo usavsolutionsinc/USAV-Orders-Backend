@@ -2,6 +2,7 @@ import type { Pool } from 'pg';
 import { formatPSTTimestamp } from '@/utils/date';
 import { createStationActivityLog } from '@/lib/station-activity';
 import { mergeSerialsFromTsnRows } from '@/lib/tech/serialFields';
+import { attachTechSerial } from '@/lib/inventory/tech-serial';
 
 type Queryable = Pick<Pool, 'query'>;
 
@@ -157,30 +158,29 @@ export async function insertTechSerialForSalContext(
     }
   }
 
-  const insertResult = await db.query(
-    `INSERT INTO tech_serial_numbers
-       (organization_id, shipment_id, source_sku_id, orders_exception_id, scan_ref, serial_number, serial_type,
-        tested_by, fnsku, fnsku_log_id, fba_shipment_id, fba_shipment_item_id,
-        context_station_activity_log_id)
-     VALUES ($1, $2, $3, $4, NULL, $5, $6, $7, $8, $9, $10, $11, $12)
-     RETURNING id`,
-    [
-      params.organizationId,
-      params.salContext.shipmentId,
-      params.sourceSkuId ?? null,
-      params.salContext.ordersExceptionId,
-      serial,
+  // Canonical TSN writer (relational-reuse plan, Phase 2). Mirrors the tracking
+  // sibling: receiving_line_id is unset, so ON CONFLICT DO NOTHING is a no-op
+  // here (duplicates are pre-checked above). serial_unit_id is stamped by the
+  // inventory-v2 linker downstream.
+  const insertResult = await attachTechSerial(
+    {
+      serialNumber: serial,
+      organizationId: params.organizationId,
+      shipmentId: params.salContext.shipmentId,
+      sourceSkuId: params.sourceSkuId ?? null,
+      ordersExceptionId: params.salContext.ordersExceptionId,
       serialType,
-      params.staffId,
-      params.salContext.fnsku,
-      params.salContext.fnskuLogId,
-      params.salContext.fbaShipmentId,
-      params.salContext.fbaShipmentItemId,
-      params.salContext.salId,
-    ],
+      testedBy: params.staffId,
+      fnsku: params.salContext.fnsku,
+      fnskuLogId: params.salContext.fnskuLogId,
+      fbaShipmentId: params.salContext.fbaShipmentId,
+      fbaShipmentItemId: params.salContext.fbaShipmentItemId,
+      contextStationActivityLogId: params.salContext.salId,
+    },
+    db,
   );
 
-  const techSerialId = Number(insertResult.rows[0]?.id);
+  const techSerialId = Number(insertResult.id);
   if (!Number.isFinite(techSerialId) || techSerialId <= 0) {
     return { ok: false, error: 'Failed to insert tech serial', status: 500 };
   }

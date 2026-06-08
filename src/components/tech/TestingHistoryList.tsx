@@ -142,5 +142,3 @@ export function TestingHistoryList({ staffId, selectMode = false, onOpenLine }: 
     </div>
   );
 }
-
-export default TestingHistoryList;

@@ -28,5 +28,6 @@ export {
   PaneHeaderTabs,
   PaneHeaderActionBar,
   PaneHeaderWeekNav,
+  PaneHeaderPagination,
 } from './blocks';
 export type { PaneHeaderActionBarAction } from './blocks';

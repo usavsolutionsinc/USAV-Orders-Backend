@@ -67,6 +67,7 @@ export default function MobileItemPhotoCapturePage(
       receivingId={item.receiving_id}
       receivingLineId={itemId}
       headerLabel={headerLabel}
+      poRef={data?.header.po_number || data?.header.po_id || null}
       returnHref={returnHref}
     />
   );

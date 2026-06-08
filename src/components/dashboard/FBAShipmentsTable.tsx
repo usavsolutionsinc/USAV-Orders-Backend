@@ -7,51 +7,11 @@ import { Loader2, Minus } from '@/components/Icons';
 import { sectionLabel } from '@/design-system/tokens/typography/presets';
 import { formatDateTimePST } from '@/utils/date';
 import { FbaStatusBadge } from '@/components/fba/shared/FbaStatusBadge';
-
-// Lifecycle row shape (post-migration)
-interface FBAShipmentLifecycleRow {
-  id: number;
-  shipment_ref: string;
-  destination_fc: string | null;
-  due_date: string | null;
-  status: 'PLANNED' | 'TESTED' | 'PACKED' | 'LABEL_ASSIGNED' | 'SHIPPED';
-  notes: string | null;
-  shipped_at: string | null;
-  created_at: string;
-  created_by_name: string | null;
-  assigned_tech_name: string | null;
-  assigned_packer_name: string | null;
-  total_items: number;
-  ready_items: number;
-  labeled_items: number;
-  shipped_items: number;
-  total_expected_qty: number;
-  total_actual_qty: number;
-  source: 'lifecycle';
-}
-
-// Legacy row shape (pre-migration fallback from receiving table)
-interface FBAShipmentLegacyRow {
-  id: number;
-  shipment_ref: string;
-  carrier: string | null;
-  qa_status: string | null;
-  disposition_code: string | null;
-  condition_grade: string | null;
-  needs_test: boolean;
-  assigned_tech_name: string | null;
-  received_at: string | null;
-  source: 'LEGACY';
-}
-
-type FBAShipmentRow = FBAShipmentLifecycleRow | FBAShipmentLegacyRow;
-
-async function fetchFbaShipments(): Promise<{ rows: FBAShipmentRow[]; source: string }> {
-  const res = await fetch('/api/dashboard/fba-shipments?limit=500');
-  if (!res.ok) throw new Error('Failed to fetch FBA shipments');
-  const data = await res.json();
-  return { rows: Array.isArray(data?.rows) ? data.rows : [], source: data?.source || 'unknown' };
-}
+import {
+  fbaShipmentsQuery,
+  type FBAShipmentLifecycleRow,
+  type FBAShipmentLegacyRow,
+} from '@/lib/queries/dashboard-queries';
 
 function StatusBadge({ status }: { status: string }) {
   return <FbaStatusBadge status={status} size="xs" />;
@@ -137,9 +97,7 @@ function enumLabel(value: string | null | undefined) {
 
 export default function FBAShipmentsTable() {
   const { data, isLoading, isError } = useQuery({
-    queryKey: ['dashboard-fba-shipments'],
-    queryFn: fetchFbaShipments,
-    staleTime: 60_000,
+    ...fbaShipmentsQuery(),
     refetchInterval: 60_000,
   });
 

@@ -15,6 +15,9 @@ export const REASON_CODE_CATEGORIES = [
   'return',
   'movement',
   'initial',
+  // Warranty Claim Logger denial reasons (2026-06-06). Widened in tandem with
+  // the reason_codes_category_chk CHECK in 2026-06-06_warranty_claim_logger.sql.
+  'warranty_denial',
 ] as const;
 const category = z.enum(REASON_CODE_CATEGORIES);
 
@@ -33,8 +36,6 @@ export const ReasonCodeCreateBody = z
   })
   .strict();
 
-export type ReasonCodeCreateInput = z.infer<typeof ReasonCodeCreateBody>;
-
 // ─── PATCH /api/reason-codes/[id] ───────────────────────────────────────────
 
 /** `code` is the natural key and is not editable here. */
@@ -52,5 +53,3 @@ export const ReasonCodeUpdateBody = z
   .refine((b) => Object.keys(b).length > 0, {
     message: 'At least one field must be provided',
   });
-
-export type ReasonCodeUpdateInput = z.infer<typeof ReasonCodeUpdateBody>;

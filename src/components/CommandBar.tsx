@@ -489,5 +489,3 @@ function CmdRow({ value, icon, label, subLabel, badge, onSelect }: CmdRowProps) 
     </Command.Item>
   );
 }
-
-export default CommandBar;

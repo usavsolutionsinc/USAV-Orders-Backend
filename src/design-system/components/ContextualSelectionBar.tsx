@@ -69,5 +69,3 @@ export function ContextualSelectionBar<T>({
     />
   );
 }
-
-export default ContextualSelectionBar;

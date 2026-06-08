@@ -4,84 +4,37 @@
  * Generator for the per-unit identifier printed under the DataMatrix
  * on every product box label.
  *
+ * The PURE parse/format helpers (shortSku, isoWeekParts, parseUnitId,
+ * describeUnitId, formatUnitId) live in `./unit-id-format` so they can be
+ * imported by client components without dragging the server-only
+ * `neon-client` (`pg`) into the browser bundle. They are re-exported here so
+ * existing server-side import sites (`@/lib/inventory/unit-id`) keep working.
+ *
  * Format:  {SKU_SHORT}-{YYWW}-{SEQ6}
  * Example: 00098-2621-000142   (week 21 of 2026, the 142nd unit)
  *
- * SKU_SHORT — uppercase the SKU text, drop non-alphanumeric except dashes,
- *             trim to 20 characters max. So "iPhone 13/128 Blue" becomes
- *             "IPHONE13128BLUE".
- * YYWW      — 2-digit ISO year + 2-digit ISO week (1-53). Electronics
- *             industry convention: Apple, Intel, Dell, and most contract
- *             manufacturers stamp YYWW on box labels and serial plates so
- *             an operator can eyeball when a unit was packed without a
- *             database lookup. ISO 8601 weeks start Monday; week 1 is the
- *             week containing the year's first Thursday.
- * SEQ6      — zero-padded sequence number, allocated atomically per
- *             (sku_catalog_id, calendar_year) via the Phase 0
- *             fn_next_unit_seq SQL function. The seq partition is by
- *             calendar year (not ISO year) so the DB-side allocator stays
- *             unchanged — the YYWW in the printed string is human-readable
- *             metadata and never used to partition rows.
+ * The seq partition is by calendar year (not ISO year) so the DB-side
+ * allocator stays unchanged — the YYWW in the printed string is
+ * human-readable metadata and never used to partition rows.
  *
  * The DataMatrix encoding is independent of this string. When a GTIN is
- * available the bwip-js render uses GS1 AIs `(01)<gtin>(21)<serial>` —
- * the YYWW serial in the printed text is just the (21) value's
- * human-readable form.
+ * available the bwip-js render uses GS1 AIs `(01)<gtin>(21)<serial>` — the
+ * YYWW serial in the printed text is just the (21) value's human-readable form.
  *
  * Legacy units (`{base_sku}:A01`-style from before 2026-05-18) keep their
  * old IDs in the DB; the scan resolver supports both formats.
  */
 
 import { queryOne } from '@/lib/neon-client';
+import {
+  shortSku,
+  isoWeekParts,
+  parseUnitId,
+  describeUnitId,
+  formatUnitId,
+} from '@/lib/inventory/unit-id-format';
 
-/**
- * Strip a SKU down to the printable short form used in the unit ID.
- * No DB call.
- */
-export function shortSku(sku: string): string {
-  return String(sku ?? '')
-    .toUpperCase()
-    .replace(/[^A-Z0-9-]+/g, '') // keep dashes for readability
-    .slice(0, 20)
-    .replace(/^-+|-+$/g, ''); // trim leading/trailing dashes
-}
-
-/**
- * ISO 8601 week-year + week number for a UTC date. The Thursday in the
- * given week determines the ISO year — so Dec 29 2025 (Monday) is in ISO
- * week 1 of 2026, and Jan 1 2023 (Sunday) is in ISO week 52 of 2022.
- */
-export function isoWeekParts(date: Date): { isoYear: number; isoWeek: number } {
-  const d = new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()));
-  // Shift to the Thursday in the same ISO week. (getUTCDay returns 0=Sun,
-  // 1=Mon, ..., 6=Sat; map 0 → 7 so Monday-based math works.)
-  d.setUTCDate(d.getUTCDate() + 4 - (d.getUTCDay() || 7));
-  const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
-  const dayMs = 86400000;
-  const isoWeek = Math.ceil(((d.getTime() - yearStart.getTime()) / dayMs + 1) / 7);
-  return { isoYear: d.getUTCFullYear(), isoWeek };
-}
-
-export function formatUnitId(
-  skuShort: string,
-  isoYear: number,
-  isoWeek: number,
-  seq: number,
-): string {
-  if (!skuShort) throw new Error('formatUnitId: skuShort is empty after normalization');
-  if (!Number.isInteger(isoYear) || isoYear < 2000 || isoYear > 2999) {
-    throw new Error(`formatUnitId: invalid isoYear ${isoYear}`);
-  }
-  if (!Number.isInteger(isoWeek) || isoWeek < 1 || isoWeek > 53) {
-    throw new Error(`formatUnitId: invalid isoWeek ${isoWeek}`);
-  }
-  if (!Number.isInteger(seq) || seq < 1) {
-    throw new Error(`formatUnitId: invalid seq ${seq}`);
-  }
-  const yy = String(isoYear % 100).padStart(2, '0');
-  const ww = String(isoWeek).padStart(2, '0');
-  return `${skuShort}-${yy}${ww}-${String(seq).padStart(6, '0')}`;
-}
+export { shortSku, isoWeekParts, parseUnitId, describeUnitId, formatUnitId };
 
 /**
  * Allocate the next unit sequence for (sku_catalog_id, calendar_year) via
@@ -108,8 +61,8 @@ export async function allocateNextUnitId(
   const now = new Date();
   const year = yearOverride ?? now.getUTCFullYear();
   const { isoYear, isoWeek } = isoWeekParts(now);
-  const skuShort = shortSku(skuText);
-  if (!skuShort) {
+  const skuShortValue = shortSku(skuText);
+  if (!skuShortValue) {
     throw new Error(`allocateNextUnitId: SKU "${skuText}" produced empty short form`);
   }
 
@@ -122,11 +75,56 @@ export async function allocateNextUnitId(
   }
 
   return {
-    unitId: formatUnitId(skuShort, isoYear, isoWeek, seq),
+    unitId: formatUnitId(skuShortValue, isoYear, isoWeek, seq),
     seq,
     year,
     isoYear,
     isoWeek,
-    skuShort,
+    skuShort: skuShortValue,
+  };
+}
+
+/**
+ * Non-committing preview of the next unit id for (sku_catalog_id, calendar
+ * year) via fn_peek_unit_seq — does NOT advance the sequence. Used by the label
+ * printer to show the operator what the next label will be before they commit
+ * to printing (the authoritative allocation happens server-side at print time
+ * via {@link allocateNextUnitId}). Returns the same shape as allocateNextUnitId.
+ */
+export async function peekNextUnitId(
+  skuCatalogId: number,
+  skuText: string,
+  yearOverride?: number,
+): Promise<{
+  unitId: string;
+  seq: number;
+  year: number;
+  isoYear: number;
+  isoWeek: number;
+  skuShort: string;
+}> {
+  const now = new Date();
+  const year = yearOverride ?? now.getUTCFullYear();
+  const { isoYear, isoWeek } = isoWeekParts(now);
+  const skuShortValue = shortSku(skuText);
+  if (!skuShortValue) {
+    throw new Error(`peekNextUnitId: SKU "${skuText}" produced empty short form`);
+  }
+
+  const row = await queryOne<{ seq: number }>`
+    SELECT fn_peek_unit_seq(${skuCatalogId}, ${year}) AS seq
+  `;
+  const seq = Number(row?.seq);
+  if (!Number.isFinite(seq) || seq < 1) {
+    throw new Error(`peekNextUnitId: fn_peek_unit_seq returned ${row?.seq}`);
+  }
+
+  return {
+    unitId: formatUnitId(skuShortValue, isoYear, isoWeek, seq),
+    seq,
+    year,
+    isoYear,
+    isoWeek,
+    skuShort: skuShortValue,
   };
 }

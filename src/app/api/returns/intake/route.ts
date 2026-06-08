@@ -68,6 +68,7 @@ export const POST = withAuth(async (request, ctx) => {
       reason: String(body?.reason || '').trim() || null,
       clientEventId: String(body?.client_event_id || '').trim() || null,
       actorStaffId,
+      organizationId: ctx.organizationId ?? null,
     });
 
     if (!result.ok) {

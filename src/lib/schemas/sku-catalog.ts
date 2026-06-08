@@ -6,6 +6,10 @@ const trimmed = z.string().trim();
 /** Optional text that may be explicitly cleared with null. */
 const optNullableText = trimmed.min(1).nullable().optional();
 
+/** Sourcing lifecycle signal shared by create + update bodies (Bose engine). */
+const lifecycleStatusEnum = z.enum(['active', 'eol', 'discontinued', 'nrnd', 'unknown']);
+const optNonNegInt = z.number().int().nonnegative().nullable().optional();
+
 // ─── POST /api/sku-catalog ──────────────────────────────────────────────────
 
 /**
@@ -22,11 +26,15 @@ export const SkuCatalogCreateBody = z
     ean: optNullableText,
     imageUrl: optNullableText,
     isActive: z.boolean().optional(),
+    // ─ Sourcing lifecycle (Bose engine opt-in; additive, all optional) ─
+    lifecycleStatus: lifecycleStatusEnum.optional(),
+    reorderThreshold: optNonNegInt,
+    lastKnownCostCents: optNonNegInt,
+    sourcingNotes: optNullableText,
+    replenishTargetCents: optNonNegInt,
     idempotencyKey: z.string().trim().min(1).optional(),
   })
   .strict();
-
-export type SkuCatalogCreateInput = z.infer<typeof SkuCatalogCreateBody>;
 
 // ─── PATCH /api/sku-catalog/[id] ────────────────────────────────────────────
 
@@ -42,10 +50,14 @@ export const SkuCatalogUpdateBody = z
     ean: optNullableText,
     imageUrl: optNullableText,
     isActive: z.boolean().optional(),
+    // ─ Sourcing lifecycle (Bose engine opt-in; additive, all optional) ─
+    lifecycleStatus: lifecycleStatusEnum.optional(),
+    reorderThreshold: optNonNegInt,
+    lastKnownCostCents: optNonNegInt,
+    sourcingNotes: optNullableText,
+    replenishTargetCents: optNonNegInt,
   })
   .strict()
   .refine((b) => Object.keys(b).length > 0, {
     message: 'At least one field must be provided',
   });
-
-export type SkuCatalogUpdateInput = z.infer<typeof SkuCatalogUpdateBody>;

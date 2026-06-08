@@ -40,7 +40,8 @@ const DASHBOARD_VIEW_OPTIONS: MobileContextOption[] = [
 ];
 
 const RECEIVING_MODE_OPTIONS: MobileContextOption[] = [
-  { id: 'receive', label: 'Receiving' },
+  { id: 'triage', label: 'Receiving' },
+  { id: 'receive', label: 'Unbox' },
   { id: 'history', label: 'History' },
   { id: 'pickup', label: 'Local Pick Up' },
 ];
@@ -120,7 +121,9 @@ export function getMobileContextRowConfig(
           ? 'pickup'
           : qsMode === 'history'
             ? 'history'
-            : 'receive';
+            : qsMode === 'triage'
+              ? 'triage'
+              : 'receive';
       const active = RECEIVING_MODE_OPTIONS.find((o) => o.id === activeId);
       return {
         activeLabel: active?.label ?? 'Receiving',

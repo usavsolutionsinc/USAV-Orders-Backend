@@ -482,20 +482,10 @@ export function BinLabelPrinter({ variant = 'main' }: BinLabelPrinterProps) {
   const desktopBuilder = (
     <div className="flex flex-col gap-4">
       <header className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          <p className="text-micro font-bold uppercase tracking-[0.16em] text-blue-600">
-            Location Label Printer
-          </p>
-          <h1 className="mt-0.5 truncate text-2xl font-bold tracking-tight text-gray-900">
-            {selectedRoom ?? 'Pick a room to start'}
-          </h1>
-          <p className="mt-1 max-w-[60ch] text-[12.5px] leading-snug text-gray-500">
-            {selectedRoom
-              ? 'Drill down to a specific bin. Prints a QR-only GS1 Digital Link label.'
-              : 'Choose a room in the sidebar — the remaining steps unlock here.'}
-          </p>
-        </div>
-        <div className="flex items-center gap-2">
+        <h1 className="min-w-0 truncate text-2xl font-bold tracking-tight text-gray-900">
+          {selectedRoom ?? 'Pick a room to start'}
+        </h1>
+        <div className="flex shrink-0 items-center gap-2">
           {(selectedRoom || aisle != null) && (
             <button
               type="button"
@@ -606,7 +596,6 @@ export function BinLabelPrinter({ variant = 'main' }: BinLabelPrinterProps) {
 
       <GiantPreviewPanel
         zoneLetter={zoneLetter}
-        roomName={selectedRoom}
         aisle={aisle}
         bay={bay}
         level={level}

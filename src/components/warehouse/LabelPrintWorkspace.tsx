@@ -14,7 +14,6 @@
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
 import { BinLabelPrinter } from '@/components/barcode/BinLabelPrinter';
-import { PageHeader } from '@/components/ui/pane-header';
 
 export function LabelPrintWorkspace() {
   const [queuedBins, setQueuedBins] = useState<number[]>([]);
@@ -34,7 +33,6 @@ export function LabelPrintWorkspace() {
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      <PageHeader title="Label printer" />
       <div className="flex min-h-0 flex-1 flex-col gap-4 p-4">
         {queuedBins.length > 0 && (
         <div className="flex items-start justify-between gap-3 rounded-2xl border border-blue-200 bg-blue-50/50 p-4">

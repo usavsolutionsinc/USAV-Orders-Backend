@@ -32,16 +32,6 @@ import {
   type ReceivingLineRow,
 } from './station/ReceivingLinesTable';
 
-/**
- * Remembers the last line the operator had open so a hard refresh lands
- * them back in the same workspace instead of an empty pane. localStorage
- * (vs sessionStorage / URL / server pref) keeps the read synchronous so
- * the restore can fire from a single mount effect, survives crashes and
- * closed tabs, and stays per-device — operators sharing a login on
- * different stations don't pull each other's last view.
- */
-const LAST_RECEIVING_LINE_KEY = 'usav:receiving:last-line-id';
-
 interface WorkspaceState {
   row: ReceivingLineRow;
   accordionBootstrap: 'default' | 'all';
@@ -73,6 +63,7 @@ export default function ReceivingDashboard() {
   const searchParams = useSearchParams();
   const mode = searchParams.get('mode') ?? 'receive';
   const isPickupMode = mode === 'pickup';
+  const isTriageMode = mode === 'triage';
   // History + Incoming both force the table view (hide the workspace
   // overlay) regardless of whether a workspace happens to be open in
   // component state — switching back to Receiving restores the
@@ -234,14 +225,6 @@ export default function ReceivingDashboard() {
       const detail = (e as CustomEvent<WorkspaceState | null>).detail;
       if (!detail || !detail.row) return;
       setWorkspace(detail);
-      try {
-        window.localStorage.setItem(
-          LAST_RECEIVING_LINE_KEY,
-          String(detail.row.id),
-        );
-      } catch {
-        /* private mode / quota — non-fatal */
-      }
     };
     const handleClose = () => {
       setWorkspace(null);
@@ -337,85 +320,60 @@ export default function ReceivingDashboard() {
     if (!isIncomingMode) setIncomingDetails(null);
   }, [isIncomingMode]);
 
-  // Restore the last opened line on mount. Two-tier fallback so the right
-  // pane is never blank on a fresh visit:
-  //   1. localStorage `LAST_RECEIVING_LINE_KEY` — the line the operator was
-  //      last on (preferred so a refresh feels like nothing happened).
-  //   2. Most-recent line from the same `view=activity` query the Recent rail
-  //      uses — first-ever visit, cleared storage, or a deleted line.
-  // Uses `dispatchSelectLine` (not a bare workspace-open) so sidebar
-  // `selectedLine` and the rail highlight stay in sync with the right pane.
+  // Keep the right pane from ever sitting BLANK in Unbox/Receive mode: open the
+  // MOST RECENT unboxing line — the same row the Recent rail (ReceivingRecentRail)
+  // auto-selects from its `view=activity` query — whenever nothing is open. The
+  // effect re-runs on `workspace` so it covers first mount, a workspace close,
+  // and a client-side mode switch back to Unbox (not just the initial mount),
+  // which is where the pane was previously left empty.
+  //
+  // It used to prefer a localStorage `last opened` line, which RACED the rail's
+  // most-recent auto-select (both dispatch `dispatchSelectLine`, last write won)
+  // and reopened a stale carton. Targeting the most-recent row means BOTH
+  // mechanisms resolve to the SAME line, so the outcome is deterministic no
+  // matter which fires first. Uses `dispatchSelectLine` (not a bare
+  // workspace-open) so the sidebar `selectedLine` + rail highlight stay in sync.
   const workspaceRef = useRef<WorkspaceState | null>(null);
   workspaceRef.current = workspace;
+  // Guards the "never blank" effect while a delete-recovery (recoverRightPane)
+  // is choosing the next line, so the two don't race and momentarily reopen the
+  // just-deleted line.
+  const recoveringRef = useRef(false);
   useEffect(() => {
     const liveMode = searchParams.get('mode') ?? 'receive';
     if (liveMode !== 'receive') return;
+    // Already showing a line, or a delete-recovery owns the next pick — skip.
+    if (workspace || recoveringRef.current) return;
 
     let cancelled = false;
 
-    const openRow = (row: ReceivingLineRow) => {
-      if (workspaceRef.current) return;
-      dispatchSelectLine(row);
-    };
-
-    const fetchMostRecent = async (): Promise<ReceivingLineRow | null> => {
+    void (async () => {
       try {
         const res = await fetch(
           `/api/receiving-lines?limit=1&offset=0&view=activity&include=serials`,
           { cache: 'no-store' },
         );
         const data = await res.json().catch(() => null);
+        // Re-check after the await: the rail's auto-select (or an operator click)
+        // may have already opened a workspace — never clobber it.
+        if (cancelled || workspaceRef.current || recoveringRef.current) return;
         const rows = Array.isArray(data?.receiving_lines)
           ? (data.receiving_lines as ReceivingLineRow[])
           : [];
-        return rows[0] ?? null;
+        const recent = rows[0] ?? null;
+        if (recent) dispatchSelectLine(recent);
       } catch {
-        return null;
+        /* network blip — the rail's auto-select still covers the common case */
       }
-    };
-
-    void (async () => {
-      let stored: string | null = null;
-      try {
-        stored = window.localStorage.getItem(LAST_RECEIVING_LINE_KEY);
-      } catch {
-        /* private mode — fall through to recent */
-      }
-      const storedId = Number(stored);
-      if (Number.isFinite(storedId) && storedId > 0) {
-        try {
-          const res = await fetch(
-            `/api/receiving-lines?id=${storedId}&include=serials`,
-            { cache: 'no-store' },
-          );
-          const data = await res.json().catch(() => null);
-          if (cancelled) return;
-          if (data?.success && data.receiving_line) {
-            openRow(data.receiving_line as ReceivingLineRow);
-            return;
-          }
-          // Line was deleted or no longer accessible — drop the stale key
-          // and fall through to the most-recent fallback.
-          try {
-            window.localStorage.removeItem(LAST_RECEIVING_LINE_KEY);
-          } catch {
-            /* non-fatal */
-          }
-        } catch {
-          /* network blip — try the recent fallback before giving up */
-        }
-      }
-
-      if (cancelled || workspaceRef.current) return;
-      const recent = await fetchMostRecent();
-      if (cancelled || !recent || workspaceRef.current) return;
-      openRow(recent);
     })();
 
     return () => {
       cancelled = true;
     };
-  }, [searchParams]);
+    // `workspace` in deps: re-run whenever the right pane goes empty (mount,
+    // workspace close, or a mode switch back to Unbox) so it is never left blank
+    // when there is a most-recent line to show.
+  }, [searchParams, workspace]);
 
   // Recover the right pane after the line it's showing is removed — either the
   // single line itself, or the whole carton (receiving log) it belongs to. The
@@ -426,10 +384,14 @@ export default function ReceivingDashboard() {
   // skipping anything just deleted; otherwise fall back to an empty pane.
   const recoverRightPane = useCallback(
     (isDeleted: (row: ReceivingLineRow) => boolean) => {
+      // Own the next pick so the "never blank" effect doesn't race us and
+      // reopen the just-deleted line while we look up its replacement.
+      recoveringRef.current = true;
       // Clear immediately so the dead line can't linger during the lookup.
       setWorkspace(null);
       setNav(null);
       if ((searchParams.get('mode') ?? 'receive') !== 'receive') {
+        recoveringRef.current = false;
         dispatchReceivingWorkspaceClose();
         return;
       }
@@ -451,6 +413,8 @@ export default function ReceivingDashboard() {
           else dispatchReceivingWorkspaceClose();
         } catch {
           dispatchReceivingWorkspaceClose();
+        } finally {
+          recoveringRef.current = false;
         }
       })();
     },
@@ -555,6 +519,12 @@ export default function ReceivingDashboard() {
     );
   }
 
+  // Triage (label "Receiving") deliberately shares the SAME right pane as Unbox:
+  // the selected Found/Unfound carton opens in the full ReceivingLineWorkspace /
+  // LineEditPanel (matched → PoLinesAccordion, unmatched → UnmatchedItemsSection),
+  // so identifying a carton before unboxing uses the exact same editor. It is
+  // NOT table-only, so it falls through to the workspace-overlay path below.
+
   // Surface routing (table stays mounted so its data + scroll survive a
   // tab flip; visibility is toggled via display:none):
   //   - Receiving + workspace → workspace overlay (over the hidden table)
@@ -631,6 +601,7 @@ export default function ReceivingDashboard() {
                 accordionBootstrap={workspace!.accordionBootstrap}
                 scanDriven={workspace!.scanDriven}
                 nav={nav}
+                variant={isTriageMode ? 'triage' : 'unbox'}
                 onPrev={() => {
                   window.dispatchEvent(
                     new CustomEvent('receiving-navigate-table', { detail: 'prev' }),
@@ -646,11 +617,13 @@ export default function ReceivingDashboard() {
                   setNav(null);
                   dispatchReceivingWorkspaceClose();
                   window.dispatchEvent(new CustomEvent('receiving-clear-line'));
-                  // Close goes back to the History tab — gives the operator
-                  // a clear "return to the list" landing.
-                  const params = new URLSearchParams(searchParams.toString());
-                  params.set('mode', 'history');
-                  router.replace(`/receiving?${params.toString()}`);
+                  // Triage stays in triage (its rail auto-selects the next top);
+                  // Unbox close returns to the History tab as a "back to list".
+                  if (!isTriageMode) {
+                    const params = new URLSearchParams(searchParams.toString());
+                    params.set('mode', 'history');
+                    router.replace(`/receiving?${params.toString()}`);
+                  }
                 }}
               />
             </motion.div>

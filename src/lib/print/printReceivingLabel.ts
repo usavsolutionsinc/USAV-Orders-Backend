@@ -1,6 +1,7 @@
 import { getLast4 } from '@/components/ui/CopyChip';
 import { receivingHandle } from '@/lib/barcode-routing';
 import { escapeLabelHtml, printLabel } from '@/lib/print/printLabel';
+import { conditionLabel } from '@/lib/conditions';
 
 // Carton metadata laid out top/middle/bottom in the shared label's info column.
 const RECEIVING_INFO_CSS = `
@@ -29,7 +30,44 @@ export interface ReceivingLabelPayload {
   /** Support / line notes shown in the center of the label (any free text). */
   notes: string;
   conditionCode: string;
+  /** Receiving type (PO / RETURN / TRADE_IN / PICKUP) — shown after the platform as "Platform - Type". */
+  receivingType?: string | null;
   date: string;
+}
+
+/**
+ * Human label for the receiving type shown after the platform in the
+ * label's top-left. Mirrors `RECEIVING_TYPE_OPTS`' labels. Returns '' for
+ * an empty/unknown type so the top-left collapses back to just the platform.
+ */
+export function receivingLabelTypeDisplay(code: string | null | undefined): string {
+  const c = String(code ?? '').trim().toUpperCase();
+  switch (c) {
+    case 'PO':
+      return 'PO';
+    case 'RETURN':
+      return 'Return';
+    case 'TRADE_IN':
+      return 'Trade In';
+    case 'PICKUP':
+      return 'Pick Up';
+    case '':
+      return '';
+    default:
+      return c.replace(/_/g, ' ');
+  }
+}
+
+/**
+ * Top-left label face — "Platform - Type" (e.g. "eBay - Return"), or just
+ * the platform when no receiving type is set.
+ */
+export function receivingLabelPlatformDisplay(
+  payload: Pick<ReceivingLabelPayload, 'platform' | 'receivingType'>,
+): string {
+  const platform = String(payload.platform ?? '').trim();
+  const type = receivingLabelTypeDisplay(payload.receivingType);
+  return type ? `${platform} - ${type}` : platform;
 }
 
 /**
@@ -70,16 +108,7 @@ export function receivingLabelPoCornerDisplay(payload: ReceivingLabelPayload): s
 }
 
 function conditionShort(code: string | null | undefined): string {
-  const c = String(code || 'BRAND_NEW').trim().toUpperCase();
-  if (c === 'BRAND_NEW') return 'New';
-  if (c === 'LIKE_NEW') return 'Like New';
-  if (c === 'REFURBISHED') return 'Refurb';
-  if (c === 'PARTS') return 'Parts';
-  if (c.startsWith('USED_')) {
-    const letter = c.replace('USED_', '');
-    return `USED-${letter}`;
-  }
-  return c.replace(/_/g, ' ');
+  return conditionLabel(code, 'label');
 }
 
 /**
@@ -112,7 +141,7 @@ export function printReceivingLabel(payload: ReceivingLabelPayload): void {
 
   const infoHtml = `
     <div class="row">
-      <span class="platform">${escapeLabelHtml(payload.platform)}</span>
+      <span class="platform">${escapeLabelHtml(receivingLabelPlatformDisplay(payload))}</span>
       <span class="date">${escapeLabelHtml(payload.date)}</span>
     </div>
     <div class="notes">${escapeLabelHtml((payload.notes || '').trim())}</div>

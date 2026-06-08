@@ -7,7 +7,8 @@ import { getOrdersChannelName } from '@/lib/realtime/channels';
 import { OrdersQueueTable } from '@/components/dashboard/OrdersQueueTable';
 import type { DashboardSearchSectionProps } from '@/components/dashboard/DashboardSearchSectionProps';
 import { dispatchCloseShippedDetails, dispatchOpenShippedDetails } from '@/utils/events';
-import { fetchPendingOrderRowById, fetchPendingOrdersData } from '@/lib/dashboard-table-data';
+import { fetchPendingOrderRowById } from '@/lib/dashboard-table-data';
+import { pendingOrdersQuery } from '@/lib/queries/dashboard-queries';
 import { useAblyChannel } from '@/hooks/useAblyChannel';
 
 export interface PendingOrdersTableProps extends DashboardSearchSectionProps {
@@ -63,19 +64,9 @@ export default function PendingOrdersTable({
   const searchParams = useSearchParams();
   const queryClient = useQueryClient();
   const searchQuery = String(searchParams.get('search') || '').trim();
-  const queryKey = ['dashboard-table', 'pending', { searchQuery, packedBy, testedBy, strictSearchScope }] as const;
 
   const query = useQuery({
-    queryKey,
-    queryFn: () =>
-      fetchPendingOrdersData({
-        searchQuery,
-        packedBy,
-        testedBy,
-        strictSearchScope,
-      }),
-    staleTime: 60000,
-    gcTime: 10 * 60 * 1000,
+    ...pendingOrdersQuery({ searchQuery, packedBy, testedBy, strictSearchScope }),
     placeholderData: (previousData) => previousData,
   });
 

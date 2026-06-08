@@ -21,6 +21,10 @@
  * - `incoming` — Zoho POs issued but not yet touched (EXPECTED, 0 received).
  * - `activity` — `all` minus untouched-incoming. The "what was actually
  *                scanned/unpacked" feed backing the History tab + recent rail.
+ * - `scanned`  — door-scanned and physically in, but NOT yet unboxed
+ *                (received_at set, unboxed_at null, nothing received on the
+ *                line). The triage "to-do" between the door scan and the unbox
+ *                step. Disjoint from `activity` (which requires qty>0 / unboxed).
  * - `testing`  — lines with at least one recorded testing verdict.
  */
 export const RECEIVING_VIEWS = [
@@ -29,6 +33,7 @@ export const RECEIVING_VIEWS = [
   'received',
   'incoming',
   'activity',
+  'scanned',
   'testing',
 ] as const;
 

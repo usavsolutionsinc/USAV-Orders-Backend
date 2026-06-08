@@ -100,6 +100,7 @@ export function ActiveLineConditionSerial({
             }}
             onReplaceSerial={(original, next) => onReplaceSerialUnit(original, next)}
             onSetUnitGrade={(id, grade) => onSetUnitGrade(id, grade)}
+            onConditionChange={onConditionChange}
             onActiveConditionChange={onActiveConditionChange}
           />
           {/* RETURN-only: serial-match result under the unit rows. */}

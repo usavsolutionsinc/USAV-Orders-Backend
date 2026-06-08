@@ -2,6 +2,7 @@
 
 import type { ReactNode } from 'react';
 import { motion, useReducedMotion } from 'framer-motion';
+import { MOBILE_GUTTER, MOBILE_GUTTER_X } from '@/components/mobile/redesign/DesignSystem';
 
 /**
  * Shared chrome for a mobile feed row — the collapsed pill vs. bottom-pinned
@@ -35,8 +36,8 @@ export function MobileRowCard({
       {...dataProps}
       className={`relative transition-all ${
         isExpanded
-          ? 'mx-3 mb-3 mt-2 rounded-2xl border border-blue-100 bg-white p-4 shadow-[0_8px_24px_-12px_rgba(15,23,42,0.18)]'
-          : 'flex w-full flex-col border-b border-gray-100 bg-white px-3 py-3 transition-colors active:bg-blue-50'
+          ? `${MOBILE_GUTTER_X} mb-3 mt-2 rounded-2xl border border-blue-100 bg-white p-4 shadow-[0_8px_24px_-12px_rgba(15,23,42,0.18)]`
+          : `flex w-full flex-col border-b border-gray-100 bg-white ${MOBILE_GUTTER} py-3 transition-colors active:bg-blue-50`
       }`}
     >
       {/* Tap target for the row sheet / action. */}
@@ -66,5 +67,3 @@ export function MobileRowCard({
     </div>
   );
 }
-
-export default MobileRowCard;

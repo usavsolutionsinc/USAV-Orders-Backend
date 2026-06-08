@@ -1,10 +1,12 @@
 /**
  * POST /api/receiving-lines/incoming/refresh/stream
  *
- * Streaming twin of /api/receiving-lines/incoming/refresh. Re-polls the same
- * active-tracking surface (every non-terminal UPS/USPS/FedEx shipment we can
- * still poll) but emits NDJSON events as each carrier starts and each shipment
- * resolves, so the "Sync carriers" popover can show live per-carrier detail.
+ * Streaming twin of /api/receiving-lines/incoming/refresh. Re-polls only the
+ * shipments backing the Incoming table (UPS/USPS/FedEx tracking#s attached to
+ * still-incoming PO lines — the set the operator actually sees), not every
+ * active shipment in the system, and emits NDJSON events as each carrier starts
+ * and each shipment resolves so the "Sync carriers" popover can show live
+ * per-carrier detail.
  *
  * Shares the non-streaming route's rate limit + cross-operator cooldown so the
  * popover can't be used to bypass carrier rate-limit protection: a click inside
@@ -16,6 +18,7 @@ import pool from '@/lib/db';
 import { withAuth } from '@/lib/auth/withAuth';
 import { checkRateLimit } from '@/lib/api-guard';
 import { syncShipmentsByIdsStreaming } from '@/lib/shipping/scheduler';
+import { NOT_ZOHO_RECEIVED_PREDICATE } from '@/lib/receiving/delivered-unscanned';
 import { getCachedJson, setCachedJson, invalidateCacheTags } from '@/lib/cache/upstash-cache';
 import { createNdjsonStream, ndjsonResponseHeaders } from '@/lib/orders-sync/streaming';
 import type { CarrierSyncResult, CarrierSyncStreamEvent } from '@/lib/carrier-sync/types';
@@ -27,7 +30,6 @@ export const maxDuration = 120;
 
 const BATCH_CAP = 250;        // hard ceiling on shipments polled per refresh
 const COOLDOWN_SECONDS = 25;  // collapse rapid re-clicks across operators
-const ACTIVE_WINDOW_DAYS = 45; // skip ancient non-terminal rows (dead labels)
 
 export const POST = withAuth(async (req: NextRequest) => {
   const rate = checkRateLimit({
@@ -59,22 +61,57 @@ export const POST = withAuth(async (req: NextRequest) => {
         return;
       }
 
-      // The active tracking surface: every non-terminal shipment we can still
-      // poll. NOT limited to PO-joined rows — registered-but-never-polled
-      // numbers (latest_status_category IS NULL) are exactly what makes the
-      // counts wrong, so prioritize those + about-to-arrive ones.
+      // Scope to EXACTLY the shipments backing the Incoming table — the
+      // tracking#s an operator actually sees in the list — not every active
+      // shipment in the system. A shipment is in-scope when it's attached to a
+      // still-incoming PO line (EXPECTED, nothing received yet, PO not
+      // Zoho-received/closed), which is the same surface the row endpoint and
+      // tile counts draw from. We reach the shipment via the identical soft
+      // receiving join the table uses (direct FK, else PO#-based fallback), so
+      // the synced set matches the displayed set. Polling priority is
+      // unchanged: out-for-delivery first, then never-polled, then in transit.
       const { rows } = await pool.query<{
         id: number;
         carrier: string;
         tracking_number_normalized: string | null;
         latest_status_category: NormalizedShipmentStatus | null;
       }>(
-        `SELECT id, carrier, tracking_number_normalized, latest_status_category
-           FROM shipping_tracking_numbers
-          WHERE carrier IN ('UPS','USPS','FEDEX')
-            AND COALESCE(is_terminal, false) = false
-            AND COALESCE(consecutive_error_count, 0) < 5
-            AND COALESCE(latest_event_at, created_at) > NOW() - ($1 || ' days')::interval
+        `WITH incoming_shipments AS (
+           SELECT DISTINCT ON (stn.id)
+                  stn.id,
+                  stn.carrier,
+                  stn.tracking_number_normalized,
+                  stn.latest_status_category,
+                  stn.is_out_for_delivery,
+                  stn.is_in_transit,
+                  stn.is_carrier_accepted,
+                  stn.next_check_at
+             FROM receiving_lines rl
+             LEFT JOIN zoho_po_mirror mirror
+               ON mirror.zoho_purchaseorder_id = rl.zoho_purchaseorder_id
+             JOIN LATERAL (
+               SELECT r.* FROM receiving r
+                WHERE r.id = rl.receiving_id
+                   OR (rl.receiving_id IS NULL
+                       AND r.source = 'zoho_po'
+                       AND r.zoho_purchaseorder_id = rl.zoho_purchaseorder_id)
+                ORDER BY (r.id = rl.receiving_id) DESC,
+                         (r.shipment_id IS NOT NULL) DESC,
+                         r.id DESC
+                LIMIT 1
+             ) r ON TRUE
+             JOIN shipping_tracking_numbers stn ON stn.id = r.shipment_id
+            WHERE rl.workflow_status = 'EXPECTED'
+              AND COALESCE(rl.quantity_received, 0) = 0
+              AND rl.zoho_purchaseorder_id IS NOT NULL
+              AND ${NOT_ZOHO_RECEIVED_PREDICATE}
+              AND stn.carrier IN ('UPS','USPS','FEDEX')
+              AND COALESCE(stn.is_terminal, false) = false
+              AND COALESCE(stn.consecutive_error_count, 0) < 5
+            ORDER BY stn.id
+         )
+         SELECT id, carrier, tracking_number_normalized, latest_status_category
+           FROM incoming_shipments
           ORDER BY CASE WHEN is_out_for_delivery THEN 0
                         WHEN latest_status_category IS NULL THEN 1
                         WHEN is_in_transit THEN 2
@@ -82,7 +119,6 @@ export const POST = withAuth(async (req: NextRequest) => {
                         ELSE 4 END,
                    next_check_at ASC NULLS FIRST
           LIMIT ${BATCH_CAP + 1}`,
-        [String(ACTIVE_WINDOW_DAYS)],
       );
 
       const capped = rows.length > BATCH_CAP;

@@ -8,7 +8,7 @@ import {
   type TextareaHTMLAttributes,
 } from 'react';
 
-export type TextFieldTone = 'blue' | 'amber';
+export type TextFieldTone = 'blue' | 'amber' | 'emerald';
 
 const toneClass: Record<
   TextFieldTone,
@@ -23,6 +23,11 @@ const toneClass: Record<
     input: 'border-amber-400 focus:border-amber-500 focus:ring-amber-500/25',
     floatLabel: 'text-amber-600',
     focusLabel: 'peer-focus:text-amber-600',
+  },
+  emerald: {
+    input: 'border-emerald-500 focus:border-emerald-600 focus:ring-emerald-500/25',
+    floatLabel: 'text-emerald-600',
+    focusLabel: 'peer-focus:text-emerald-600',
   },
 };
 

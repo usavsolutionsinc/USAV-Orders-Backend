@@ -23,6 +23,9 @@ interface QuickAccessPopoverProps {
   onClose: () => void;
   onOpenHistoryPopover: () => void;
   onOpenInboxPopover: () => void;
+  /** Admin-only: opens the system/cron sync-status popover. Omitted for
+   *  non-admins, hiding the Sync status action row. */
+  onOpenSyncPopover?: () => void;
   /**
    * Mobile: collapse the popover to just the staff identity row (avatar, name,
    * settings, sign-out). The actions / pinned / recent / install-app sections
@@ -36,7 +39,7 @@ interface QuickAccessPopoverProps {
  * The signed-in staff card lives at the very bottom, just above the
  * "Manage in Settings" footer, with sign-out only (no staff switch).
  */
-export function QuickAccessPopover({ onClose, onOpenHistoryPopover, onOpenInboxPopover, compact = false }: QuickAccessPopoverProps) {
+export function QuickAccessPopover({ onClose, onOpenHistoryPopover, onOpenInboxPopover, onOpenSyncPopover, compact = false }: QuickAccessPopoverProps) {
   const { settings } = useQuickAccess();
   const router = useRouter();
   const { user, signOut } = useAuth();
@@ -97,6 +100,7 @@ export function QuickAccessPopover({ onClose, onOpenHistoryPopover, onOpenInboxP
               onAction={onClose}
               onOpenHistoryPopover={onOpenHistoryPopover}
               onOpenInboxPopover={onOpenInboxPopover}
+              onOpenSyncPopover={onOpenSyncPopover}
             />
             <PinnedSection onNavigate={onClose} />
             {settings.showRecent && <RecentSection onNavigate={onClose} />}
@@ -156,7 +160,6 @@ export function QuickAccessPopover({ onClose, onOpenHistoryPopover, onOpenInboxP
   );
 }
 
-export default QuickAccessPopover;
 
 /**
  * Avatar circle that doubles as a color-wheel trigger for the signed-in

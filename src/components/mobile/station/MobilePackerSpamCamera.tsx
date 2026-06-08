@@ -2,12 +2,12 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion, AnimatePresence, type PanInfo } from 'framer-motion';
 import {
   framerPresenceMobile,
   framerTransitionMobile,
 } from '@/design-system/foundations/motion-framer';
-import { Camera, X, Check, Trash2 } from '@/components/Icons';
+import { Camera, X, Check, Trash2, ChevronLeft, ChevronRight } from '@/components/Icons';
 import { useCamera } from '@/hooks/useCamera';
 import { compressPhotoForUpload } from '@/lib/image/compress-for-upload';
 
@@ -32,6 +32,11 @@ export interface MobilePackerSpamCameraProps {
   header?: React.ReactNode;
 }
 
+// Horizontal drag distance (px) past which a swipe pages to the next/prev shot.
+// The image itself does NOT animate between frames (no slide/cross-fade) — the
+// swipe just snaps back and the index changes, so paging feels instant.
+const SWIPE_THRESHOLD = 70;
+
 // ─── Component ──────────────────────────────────────────────────────────────
 
 /**
@@ -39,16 +44,17 @@ export interface MobilePackerSpamCameraProps {
  *
  * Behaviour:
  *  • Reuses `useCamera()` (which owns getUserMedia + stop lifecycle).
- *  • Capture constraint: 1280×720 → any. Higher resolutions are wasted because
- *    every shot is downscaled to 720p (longest edge 1280px) before upload.
- *  • Each shutter tap canvases the current video frame, `toBlob`s it as JPEG,
- *    then routes through `compressPhotoForUpload` so the stored blob matches
- *    what the server will receive.
- *  • Photos accumulate locally in a thumbnail strip — NO network calls.
+ *  • Full-bleed viewfinder; controls float over a scrim so framing is WYSIWYG.
+ *  • Capture is cropped to the on-screen viewfinder aspect ratio, so the stored
+ *    blob and the gallery preview match exactly what was framed (no
+ *    object-cover-vs-object-contain size mismatch between capture and review).
+ *  • Each shot is canvased, `toBlob`d as JPEG, then routed through
+ *    `compressPhotoForUpload` so the stored blob matches the server's input.
+ *  • Photos accumulate locally — NO network calls. The last shot surfaces as a
+ *    circular gallery button (bottom-left); tapping opens a swipeable review
+ *    overlay with per-photo delete.
  *  • On Done, ownership of the blobs transfers to the parent (object URLs are
- *    NOT revoked, parent is responsible for cleanup once they're rendered in
- *    the review grid).
- *  • On unmount without Done, all object URLs are revoked.
+ *    NOT revoked here). On unmount without Done, all object URLs are revoked.
  */
 export function MobilePackerSpamCamera({
   onDone,
@@ -58,6 +64,7 @@ export function MobilePackerSpamCamera({
   header,
 }: MobilePackerSpamCameraProps) {
   const { videoRef, startCamera, stopCamera, cameraError } = useCamera();
+  const viewfinderRef = useRef<HTMLDivElement>(null);
   const [shots, setShots] = useState<CapturedShot[]>([]);
   const [flash, setFlash] = useState(false);
   const [previewIndex, setPreviewIndex] = useState<number | null>(null);
@@ -65,7 +72,7 @@ export function MobilePackerSpamCamera({
 
   // Track whether the parent took ownership — if so, skip revoke-on-unmount.
   const handedOffRef = useRef(false);
-  // Always-current shots reference for unmount cleanup.
+  // Always-current shots reference for unmount cleanup + paging bounds.
   const shotsRef = useRef<CapturedShot[]>([]);
   shotsRef.current = shots;
 
@@ -106,12 +113,36 @@ export function MobilePackerSpamCamera({
     const video = videoRef.current;
     if (!video || !video.videoWidth) return;
 
+    // Crop the source frame to the on-screen viewfinder aspect ratio so the
+    // saved photo equals exactly what the operator framed (the live view is
+    // object-cover, so without this crop the gallery would reveal the
+    // letterboxed edges the viewfinder hid).
+    const vw = video.videoWidth;
+    const vh = video.videoHeight;
+    const box = viewfinderRef.current?.getBoundingClientRect();
+    const displayAspect = box && box.height > 0 ? box.width / box.height : vw / vh;
+    const videoAspect = vw / vh;
+
+    let sx = 0;
+    let sy = 0;
+    let sWidth = vw;
+    let sHeight = vh;
+    if (videoAspect > displayAspect) {
+      // Source is wider than the viewfinder → crop the left/right.
+      sWidth = Math.round(vh * displayAspect);
+      sx = Math.round((vw - sWidth) / 2);
+    } else {
+      // Source is taller than the viewfinder → crop the top/bottom.
+      sHeight = Math.round(vw / displayAspect);
+      sy = Math.round((vh - sHeight) / 2);
+    }
+
     const canvas = document.createElement('canvas');
-    canvas.width = video.videoWidth;
-    canvas.height = video.videoHeight;
+    canvas.width = sWidth;
+    canvas.height = sHeight;
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
-    ctx.drawImage(video, 0, 0);
+    ctx.drawImage(video, sx, sy, sWidth, sHeight, 0, 0, sWidth, sHeight);
 
     const rawBlob = await new Promise<Blob | null>((res) =>
       canvas.toBlob((b) => res(b), 'image/jpeg', jpegQuality),
@@ -128,17 +159,44 @@ export function MobilePackerSpamCamera({
 
     setShots((prev) => [...prev, { id, blob, previewUrl }]);
     setFlash(true);
-    setTimeout(() => setFlash(false), 120);
+    setTimeout(() => setFlash(false), 160);
   }, [shots.length, maxPhotos, jpegQuality, videoRef]);
 
-  // ── Remove a shot ───────────────────────────────────────────────────────
+  // ── Gallery paging ────────────────────────────────────────────────────────
+  const openGallery = useCallback(() => {
+    if (shotsRef.current.length === 0) return;
+    setPreviewIndex(shotsRef.current.length - 1);
+  }, []);
+
+  const paginate = useCallback((step: number) => {
+    setPreviewIndex((idx) => {
+      if (idx === null) return idx;
+      const next = idx + step;
+      if (next < 0 || next >= shotsRef.current.length) return idx;
+      return next;
+    });
+  }, []);
+
+  const handleDragEnd = useCallback(
+    (_e: unknown, info: PanInfo) => {
+      if (info.offset.x < -SWIPE_THRESHOLD) paginate(1);
+      else if (info.offset.x > SWIPE_THRESHOLD) paginate(-1);
+    },
+    [paginate],
+  );
+
+  // ── Remove a shot (from the gallery) ──────────────────────────────────────
   const removeShot = useCallback((id: string) => {
     setShots((prev) => {
       const target = prev.find((s) => s.id === id);
       if (target) URL.revokeObjectURL(target.previewUrl);
-      return prev.filter((s) => s.id !== id);
+      const next = prev.filter((s) => s.id !== id);
+      setPreviewIndex((idx) => {
+        if (idx === null || next.length === 0) return null;
+        return Math.min(idx, next.length - 1);
+      });
+      return next;
     });
-    setPreviewIndex(null);
   }, []);
 
   // ── Done ─────────────────────────────────────────────────────────────────
@@ -194,6 +252,8 @@ export function MobilePackerSpamCamera({
 
   const remaining = maxPhotos - shots.length;
   const atCap = remaining <= 0;
+  const lastShot = shots[shots.length - 1];
+  const cameraLive = !startError && !cameraError;
 
   // Portal to <body> so the fullscreen camera escapes the mobile shell's
   // animated (transformed) page wrapper. A transformed ancestor becomes the
@@ -202,72 +262,33 @@ export function MobilePackerSpamCamera({
   const [mounted, setMounted] = useState(false);
   useEffect(() => setMounted(true), []);
 
+  const activeShot = previewIndex !== null ? shots[previewIndex] : undefined;
+
   const cameraUi = (
     <motion.div
       initial={framerPresenceMobile.camera.initial}
       animate={framerPresenceMobile.camera.animate}
       exit={framerPresenceMobile.camera.exit}
       transition={framerTransitionMobile.cameraEnter}
-      className="fixed inset-0 z-[200] flex flex-col bg-black"
+      className="fixed inset-0 z-[200] overflow-hidden bg-black select-none"
     >
-      {/* ── Top bar ── */}
-      <div className="flex-shrink-0 flex items-center justify-between px-4 pt-[max(0.75rem,env(safe-area-inset-top))] pb-2">
-        <div className="flex-1 min-w-0">
-          {header ?? (
-            <p className="text-xs font-black uppercase tracking-[0.2em] text-white/60">
-              Packer Photos · {shots.length}/{maxPhotos}
-            </p>
-          )}
-        </div>
-        <button
-          type="button"
-          onClick={handleCancel}
-          aria-label="Close camera"
-          className="h-11 w-11 flex items-center justify-center rounded-full bg-red-600 text-white shadow-lg shadow-red-600/40 active:bg-red-700 transition-colors"
-        >
-          <X className="h-5 w-5" />
-        </button>
-      </div>
-
-      {/* ── Viewfinder ── */}
-      <div className="flex-1 relative overflow-hidden">
-        {!startError && !cameraError ? (
-          <>
-            <video
-              ref={videoRef}
-              autoPlay
-              playsInline
-              muted
-              className="absolute inset-0 w-full h-full object-cover"
-            />
-
-            {/* Shutter flash overlay */}
-            <AnimatePresence>
-              {flash && (
-                <motion.div
-                  initial={{ opacity: 0.85 }}
-                  animate={{ opacity: 0 }}
-                  exit={{ opacity: 0 }}
-                  transition={{ duration: 0.12 }}
-                  className="absolute inset-0 bg-white pointer-events-none"
-                />
-              )}
-            </AnimatePresence>
-
-            {/* Cap reached banner */}
-            {atCap && (
-              <div className="absolute top-4 left-1/2 -translate-x-1/2 px-3 py-1.5 rounded-full bg-amber-500/95 text-xs font-black uppercase tracking-wider text-white">
-                Max {maxPhotos} photos
-              </div>
-            )}
-          </>
+      {/* ── Full-bleed viewfinder ── */}
+      <div ref={viewfinderRef} className="absolute inset-0">
+        {cameraLive ? (
+          <video
+            ref={videoRef}
+            autoPlay
+            playsInline
+            muted
+            className="absolute inset-0 w-full h-full object-cover"
+          />
         ) : (
-          <div className="flex-1 h-full flex flex-col items-center justify-center px-6 text-center">
-            <div className="h-16 w-16 rounded-full bg-gray-800 flex items-center justify-center mb-4">
-              <Camera className="h-8 w-8 text-gray-500" />
+          <div className="absolute inset-0 flex flex-col items-center justify-center px-6 text-center">
+            <div className="h-16 w-16 rounded-full bg-white/10 flex items-center justify-center mb-4">
+              <Camera className="h-8 w-8 text-white/50" />
             </div>
             <p className="text-sm font-bold text-white mb-1">Camera unavailable</p>
-            <p className="text-xs text-gray-400 mb-4 max-w-xs">
+            <p className="text-xs text-white/50 mb-4 max-w-xs">
               {cameraError === 'permission-denied'
                 ? 'Enable camera access in your browser settings, then tap Try Again.'
                 : 'No camera detected, or the browser blocked access.'}
@@ -293,108 +314,193 @@ export function MobilePackerSpamCamera({
         )}
       </div>
 
-      {/* ── Thumbnail strip + actions ── */}
-      <div className="flex-shrink-0 bg-black/85 backdrop-blur-sm px-3 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
-        {shots.length > 0 && (
-          <div className="flex gap-2 overflow-x-auto no-scrollbar pb-2 mb-2">
-            <AnimatePresence initial={false}>
-              {shots.map((s, i) => (
-                <motion.button
-                  key={s.id}
-                  type="button"
-                  onClick={() => setPreviewIndex(i)}
-                  initial={framerPresenceMobile.photoThumb.initial}
-                  animate={framerPresenceMobile.photoThumb.animate}
-                  exit={framerPresenceMobile.photoThumb.exit}
-                  transition={framerTransitionMobile.photoThumb}
-                  className="relative flex-shrink-0 w-16 h-16 rounded-xl overflow-hidden border-2 border-white/30"
-                >
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img
-                    src={s.previewUrl}
-                    alt={`Shot ${i + 1}`}
-                    className="w-full h-full object-cover"
-                  />
-                  <span className="absolute bottom-0.5 left-0.5 bg-black/60 text-white text-xs font-black px-1 py-0.5 rounded">
-                    {i + 1}
-                  </span>
-                </motion.button>
-              ))}
-            </AnimatePresence>
-          </div>
+      {/* ── Black shutter snap ── */}
+      <AnimatePresence>
+        {flash && (
+          <motion.div
+            initial={{ opacity: 1 }}
+            animate={{ opacity: 0 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.16, ease: 'easeOut' }}
+            className="absolute inset-0 z-20 bg-black pointer-events-none"
+          />
         )}
+      </AnimatePresence>
 
-        <div className="flex items-center justify-between gap-3">
-          {/* Cancel */}
+      {/* ── Top scrim: header (left) + close (right) ── */}
+      <div className="absolute inset-x-0 top-0 z-10 bg-gradient-to-b from-black/70 to-transparent">
+        <div className="flex items-start justify-between gap-3 px-4 pt-[max(0.75rem,env(safe-area-inset-top))] pb-6">
+          <div className="flex-1 min-w-0">
+            {header ?? (
+              <>
+                <p className="text-micro font-black uppercase tracking-[0.22em] text-white/60">
+                  Add photos
+                </p>
+                <p className="text-sm font-black text-white">
+                  {shots.length}/{maxPhotos}
+                </p>
+              </>
+            )}
+          </div>
           <button
             type="button"
             onClick={handleCancel}
-            className="h-12 px-4 rounded-2xl bg-white/10 text-white text-caption font-bold active:bg-white/20 transition-colors"
+            aria-label="Close camera"
+            className="h-11 w-11 flex-shrink-0 flex items-center justify-center rounded-full bg-black/40 text-white backdrop-blur-sm active:bg-black/60 transition-colors"
           >
-            Cancel
-          </button>
-
-          {/* Shutter */}
-          <button
-            type="button"
-            onClick={shutter}
-            disabled={atCap || !!cameraError || startError}
-            aria-label="Capture photo"
-            className="h-16 w-16 rounded-full border-4 border-white/80 bg-white/20 active:bg-white/40 transition-colors disabled:opacity-40 disabled:active:bg-white/20 flex items-center justify-center"
-          >
-            <span className="block h-12 w-12 rounded-full bg-white" />
-          </button>
-
-          {/* Done */}
-          <button
-            type="button"
-            onClick={handleDone}
-            disabled={shots.length === 0}
-            className="h-12 px-4 rounded-2xl bg-emerald-500 text-white text-caption font-black uppercase tracking-wider active:bg-emerald-600 transition-colors disabled:opacity-40 disabled:active:bg-emerald-500 flex items-center gap-1.5"
-          >
-            <Check className="h-4 w-4" />
-            Done
+            <X className="h-5 w-5" />
           </button>
         </div>
       </div>
 
-      {/* ── Fullscreen preview overlay ── */}
+      {/* ── Cap reached banner ── */}
+      {atCap && cameraLive && (
+        <div className="absolute top-[max(4.5rem,calc(env(safe-area-inset-top)+3.5rem))] left-1/2 z-10 -translate-x-1/2 px-3 py-1.5 rounded-full bg-amber-500/95 text-xs font-black uppercase tracking-wider text-white shadow-lg">
+          Max {maxPhotos} photos
+        </div>
+      )}
+
+      {/* ── Bottom bar: solid control bar housing gallery · shutter · done ──
+          Shares the exact height (`min-h-[72px]` + identical padding) with the
+          preview's Dismiss bar so the two never jump as you open/close it. */}
+      <div className="absolute inset-x-0 bottom-0 z-10 border-t border-white/10 bg-black/90 backdrop-blur-sm">
+        <div className="grid grid-cols-3 items-center min-h-[72px] px-6 pt-4 pb-[max(1.25rem,env(safe-area-inset-bottom))]">
+          {/* Gallery — small circular last-shot bubble. Filled with the photo
+              (no white ring) and smaller than the shutter, so it reads as a
+              thumbnail rather than a second shutter. Hidden until the first shot. */}
+          <div className="flex justify-start">
+            <button
+              type="button"
+              onClick={openGallery}
+              disabled={shots.length === 0}
+              aria-label="View captured photos"
+              className="relative h-12 w-12 rounded-full overflow-hidden ring-2 ring-white/40 bg-black/40 shadow-lg active:scale-95 transition-transform disabled:opacity-0 disabled:pointer-events-none"
+            >
+              {lastShot && (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={lastShot.previewUrl}
+                  alt="Last photo"
+                  className="w-full h-full object-cover"
+                />
+              )}
+              <span className="absolute -top-1.5 -right-1.5 min-w-[20px] h-5 px-1 flex items-center justify-center rounded-full bg-emerald-500 text-white text-[11px] font-black ring-2 ring-black">
+                {shots.length}
+              </span>
+            </button>
+          </div>
+
+          {/* Shutter */}
+          <div className="flex justify-center">
+            <button
+              type="button"
+              onClick={shutter}
+              disabled={atCap || !cameraLive}
+              aria-label="Capture photo"
+              className="h-[72px] w-[72px] rounded-full border-4 border-white bg-transparent active:scale-95 transition-transform disabled:opacity-40 disabled:active:scale-100 flex items-center justify-center"
+            >
+              <span className="block h-14 w-14 rounded-full bg-white active:bg-white/80 transition-colors" />
+            </button>
+          </div>
+
+          {/* Done — checkmark only */}
+          <div className="flex justify-end">
+            <button
+              type="button"
+              onClick={handleDone}
+              disabled={shots.length === 0}
+              aria-label="Done"
+              className="h-14 w-14 rounded-full bg-emerald-500 text-white flex items-center justify-center shadow-lg active:bg-emerald-600 active:scale-95 transition-all disabled:opacity-40 disabled:active:scale-100 disabled:active:bg-emerald-500"
+            >
+              <Check className="h-7 w-7" />
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* ── Swipeable gallery overlay — full-bleed so the preview frames the shot
+          at the EXACT dimensions the viewfinder did (object-cover, same crop).
+          The 1/1 counter + delete float over the photo; there's no X — the
+          Dismiss button in the bottom bar (identical height to the capture bar)
+          is the single close affordance. ── */}
       <AnimatePresence>
-        {previewIndex !== null && shots[previewIndex] && (
+        {activeShot && previewIndex !== null && (
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            transition={{ duration: 0.15 }}
-            className="absolute inset-0 z-10 bg-black/95 flex items-center justify-center p-4"
-            onClick={() => setPreviewIndex(null)}
+            transition={{ duration: 0.18 }}
+            className="absolute inset-0 z-30 bg-black"
           >
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src={shots[previewIndex].previewUrl}
-              alt={`Preview ${previewIndex + 1}`}
-              className="max-w-full max-h-[80vh] rounded-xl object-contain"
-            />
-            <div className="absolute top-[max(1rem,env(safe-area-inset-top))] right-4 flex gap-3">
+            {/* Full-bleed photo. Swipe pages between shots with NO frame
+                transition (the drag snaps back, the image swaps instantly). */}
+            <motion.div
+              drag="x"
+              dragConstraints={{ left: 0, right: 0 }}
+              dragSnapToOrigin
+              dragElastic={0.35}
+              onDragEnd={handleDragEnd}
+              className="absolute inset-0"
+            >
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={activeShot.previewUrl}
+                alt={`Photo ${previewIndex + 1}`}
+                draggable={false}
+                className="w-full h-full object-cover pointer-events-none"
+              />
+            </motion.div>
+
+            {/* Prev / next affordances */}
+            {previewIndex > 0 && (
               <button
                 type="button"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  removeShot(shots[previewIndex].id);
-                }}
-                className="w-11 h-11 rounded-full bg-red-600 text-white flex items-center justify-center"
-                aria-label="Delete photo"
+                onClick={() => paginate(-1)}
+                aria-label="Previous photo"
+                className="absolute left-2 top-1/2 -translate-y-1/2 z-10 w-10 h-10 rounded-full bg-black/40 text-white flex items-center justify-center backdrop-blur-sm active:bg-black/60 transition-colors"
               >
-                <Trash2 className="w-5 h-5" />
+                <ChevronLeft className="w-6 h-6" />
               </button>
+            )}
+            {previewIndex < shots.length - 1 && (
               <button
                 type="button"
-                onClick={() => setPreviewIndex(null)}
-                className="w-11 h-11 rounded-full bg-white/20 text-white flex items-center justify-center"
-                aria-label="Close preview"
+                onClick={() => paginate(1)}
+                aria-label="Next photo"
+                className="absolute right-2 top-1/2 -translate-y-1/2 z-10 w-10 h-10 rounded-full bg-black/40 text-white flex items-center justify-center backdrop-blur-sm active:bg-black/60 transition-colors"
               >
-                <X className="w-5 h-5" />
+                <ChevronRight className="w-6 h-6" />
               </button>
+            )}
+
+            {/* Top scrim: 1/1 counter (left) + delete (right), over the photo. */}
+            <div className="absolute inset-x-0 top-0 z-10 bg-gradient-to-b from-black/70 to-transparent">
+              <div className="flex items-center justify-between px-4 pt-[max(0.75rem,env(safe-area-inset-top))] pb-6">
+                <span className="text-sm font-black tracking-wider text-white/90 tabular-nums">
+                  {previewIndex + 1} / {shots.length}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => removeShot(activeShot.id)}
+                  aria-label="Delete photo"
+                  className="w-11 h-11 rounded-full bg-red-600 text-white flex items-center justify-center active:bg-red-700 transition-colors"
+                >
+                  <Trash2 className="w-5 h-5" />
+                </button>
+              </div>
+            </div>
+
+            {/* Bottom bar — identical height to the capture bar; houses Dismiss. */}
+            <div className="absolute inset-x-0 bottom-0 z-10 border-t border-white/10 bg-black/90 backdrop-blur-sm">
+              <div className="flex items-center min-h-[72px] px-6 pt-4 pb-[max(1.25rem,env(safe-area-inset-bottom))]">
+                <button
+                  type="button"
+                  onClick={() => setPreviewIndex(null)}
+                  className="h-14 w-full rounded-2xl bg-white/15 text-white text-caption font-black uppercase tracking-[0.18em] active:bg-white/25 transition-colors"
+                >
+                  Dismiss
+                </button>
+              </div>
             </div>
           </motion.div>
         )}

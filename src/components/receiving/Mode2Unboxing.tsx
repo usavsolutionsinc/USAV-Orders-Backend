@@ -13,6 +13,7 @@ import { sectionLabel, fieldLabel, cardTitle, chipText, monoValue, microBadge } 
 import { framerTransition, framerPresence } from '@/design-system/foundations/motion-framer';
 import { PrintLabelButton } from '@/components/labels/PrintLabelButton';
 import { ConditionPills } from '@/components/receiving/workspace/ConditionPills';
+import { conditionOptions } from '@/lib/conditions';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -51,13 +52,8 @@ interface StaffOption {
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
-const CONDITION_OPTIONS = [
-    { value: 'BRAND_NEW', label: 'Brand New' },
-    { value: 'USED_A', label: 'Used — A' },
-    { value: 'USED_B', label: 'Used — B' },
-    { value: 'USED_C', label: 'Used — C' },
-    { value: 'PARTS', label: 'Parts Only' },
-];
+// All 7 grades from the shared source of truth (was a 5-grade subset).
+const CONDITION_OPTIONS = conditionOptions('full');
 
 const QA_STATUS_OPTIONS = [
     { value: 'PASSED', label: 'Passed', color: 'emerald' },

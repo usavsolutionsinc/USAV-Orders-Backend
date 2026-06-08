@@ -779,5 +779,3 @@ export function HeaderGoalChip() {
     </div>
   );
 }
-
-export default HeaderGoalChip;

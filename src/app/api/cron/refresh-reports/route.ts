@@ -1,18 +1,30 @@
 import { NextRequest, NextResponse } from 'next/server';
 import pool from '@/lib/db';
-import { isAuthorizedCronRequest, isQStashOrigin } from '@/lib/qstash';
+import { isAuthorizedCronRequest } from '@/lib/cron/auth';
+import { withCronRun } from '@/lib/cron/run-log';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 120;
 
 /**
- * POST /api/cron/refresh-reports
+ * GET /api/cron/refresh-reports  (Vercel cron, daily)
  * Nightly REFRESH MATERIALIZED VIEW pass. Each view has a unique pkey index
  * so CONCURRENTLY refreshes don't block reads.
- *
- * Triggered by QStash on a daily schedule (see src/config/qstash-schedules.json).
- * Previously a Vercel cron — migrated 2026-05-18 to avoid Vercel cron billing.
  */
+export async function GET(request: NextRequest) {
+  if (!isAuthorizedCronRequest(request.headers)) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+  try {
+    const summary = await withCronRun('refresh_reports', execute);
+    return NextResponse.json({ success: summary.failed.length === 0, ...summary });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'refresh failed';
+    console.error('[cron/refresh-reports] error:', err);
+    return NextResponse.json({ success: false, error: message }, { status: 500 });
+  }
+}
+
 async function execute() {
   const startedAt = Date.now();
   const refreshed: string[] = [];
@@ -27,24 +39,5 @@ async function execute() {
     }
   }
 
-  return NextResponse.json({
-    success: failed.length === 0,
-    refreshed,
-    failed,
-    elapsed_ms: Date.now() - startedAt,
-  });
-}
-
-export async function POST(request: NextRequest) {
-  if (!isQStashOrigin(request.headers)) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
-  return execute();
-}
-
-export async function GET(request: NextRequest) {
-  if (!isAuthorizedCronRequest(request.headers)) {
-    return NextResponse.json({ ok: true, queue: 'vercel-cron', job: 'refresh-reports' });
-  }
-  return execute();
+  return { refreshed, failed, elapsed_ms: Date.now() - startedAt };
 }

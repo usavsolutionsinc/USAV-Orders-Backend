@@ -76,6 +76,15 @@ export interface AppendEventInput {
  *
  * Returns `{ event, created }` where `created` distinguishes new inserts
  * from idempotent hits so callers can branch on first-time-vs-replay.
+ *
+ * TRANSPORT WARNING (relational-reuse plan, Phase 2): this runs on the Drizzle
+ * `neon-http` connection, which is stateless and SEPARATE from the pg `pool`.
+ * It therefore CANNOT participate in a `pool.connect()` BEGIN/COMMIT
+ * transaction — an event written here will commit independently of the
+ * caller's pg transaction. Use it only for standalone, single-row event writes
+ * (e.g. the test/grade/allocate routes). For any path that must record the
+ * event atomically alongside `serial_units` / `sku_stock_ledger` writes, use
+ * the pg-client `recordInventoryEvent(input, client)` in `@/lib/inventory/events`.
  */
 export async function appendInventoryEvent(
   input: AppendEventInput,

@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useState } from 'react';
+import { useCallback, useId, useRef, useState, type MouseEvent } from 'react';
 import {
   Check,
   X,
@@ -17,9 +17,9 @@ import { TextField } from '@/design-system/primitives/TextField';
 import { PRODUCT_HUB_PLATFORMS, platformStyle } from './platform-style';
 import { useProductHub } from './useProductHub';
 import type { HubCandidate, HubConfirmed } from './types';
-import { StickyActionBar } from '@/design-system/components/StickyActionBar';
 import { ListingResizePanel } from '@/components/listing/ListingResizePanel';
 import { isElectron } from '@/utils/isElectron';
+import { useSiteTooltipOptional } from '@/components/providers/SiteTooltipProvider';
 
 interface ProductHubPanelProps {
   skuCatalogId: number;
@@ -81,12 +81,7 @@ export function ProductHubPanel({ skuCatalogId, allowManualPair = false }: Produ
 
   return (
     <div className="flex h-full min-h-0 flex-col">
-      <HubHeader
-        sku={snapshot.canonicalSku}
-        title={snapshot.canonicalTitle}
-        confirmedTotal={Object.values(snapshot.confirmed).flat().length}
-        suggestionTotal={Object.values(snapshot.suggestions).flat().length}
-      />
+      <HubHeader sku={snapshot.canonicalSku} title={snapshot.canonicalTitle} />
 
       <div className="flex-1 overflow-y-auto px-4 py-3">
         {allowManualPair ? (
@@ -114,12 +109,12 @@ export function ProductHubPanel({ skuCatalogId, allowManualPair = false }: Produ
       </div>
 
       <PendingFooter
-        acceptCount={hub.acceptCount}
-        rejectCount={hub.rejectCount}
+        selectedCount={hub.acceptCount}
+        unselectedCount={Math.max(0, hub.suggestionTotal - hub.acceptCount)}
         unpairCount={hub.unpairCount}
         saving={hub.saving}
         saveError={hub.saveError}
-        onSave={hub.commit}
+        onCommit={hub.commitDecisive}
         onDiscard={hub.clearPending}
       />
 
@@ -138,28 +133,19 @@ export function ProductHubPanel({ skuCatalogId, allowManualPair = false }: Produ
 
 // ─── Header ─────────────────────────────────────────────────────────────────
 
-function HubHeader({
-  sku,
-  title,
-  confirmedTotal,
-  suggestionTotal,
-}: {
-  sku: string;
-  title: string | null;
-  confirmedTotal: number;
-  suggestionTotal: number;
-}) {
+function HubHeader({ sku, title }: { sku: string; title: string | null }) {
   return (
     <header className="flex h-10 shrink-0 items-center gap-2 border-b border-gray-200 bg-white px-4">
-      <span className="shrink-0 font-mono text-sm font-black tracking-tight text-gray-900">{sku}</span>
+      <h1 className="min-w-0 flex-1 truncate text-sm font-black tracking-tight text-gray-900">
+        {title || '—'}
+      </h1>
       <span className="inline-flex shrink-0 items-center rounded-md border border-red-200 bg-red-50 px-1.5 py-0.5 text-eyebrow font-semibold uppercase tracking-wider text-red-700">
         Zoho
       </span>
-      <p className="min-w-0 flex-1 truncate text-caption font-bold text-gray-900">{title || '—'}</p>
-      <div className="flex shrink-0 items-center gap-2.5 text-micro font-semibold uppercase tracking-wider text-gray-500">
-        <span className="text-emerald-600">✓ {confirmedTotal}</span>
-        <span className="text-amber-600">⌛ {suggestionTotal}</span>
-      </div>
+      <CopyableId
+        value={sku}
+        className="shrink-0 font-mono text-caption font-bold tracking-tight text-gray-500"
+      />
     </header>
   );
 }
@@ -269,6 +255,52 @@ function ChannelSection({
 // ─── Rows ───────────────────────────────────────────────────────────────────
 
 /**
+ * A hover-to-copy identifier. Shows the full SKU/item value (no last-4 trim) in
+ * the row's mono style, surfaces the site copy tooltip on hover/focus, and writes
+ * the raw value to the clipboard on click. Reuses the shared SiteTooltipProvider
+ * so the "click to copy → Copied" bubble matches the rest of the app.
+ */
+function CopyableId({ value, className = '' }: { value: string; className?: string }) {
+  const anchorId = useId();
+  const ref = useRef<HTMLButtonElement | null>(null);
+  const tooltip = useSiteTooltipOptional();
+  const getRect = useCallback(() => ref.current?.getBoundingClientRect() ?? null, []);
+  const trimmed = value.trim();
+
+  const open = useCallback(() => {
+    if (tooltip && trimmed) tooltip.activate({ anchorId, value: trimmed, getRect });
+  }, [tooltip, trimmed, anchorId, getRect]);
+  const close = useCallback(() => tooltip?.scheduleClose(anchorId), [tooltip, anchorId]);
+
+  const copy = useCallback(
+    (e: MouseEvent<HTMLButtonElement>) => {
+      e.stopPropagation();
+      if (!trimmed) return;
+      void navigator.clipboard?.writeText(trimmed);
+      if (tooltip?.isActiveAnchor(anchorId)) tooltip.notifyCopied(anchorId);
+    },
+    [trimmed, tooltip, anchorId],
+  );
+
+  return (
+    <button
+      ref={ref}
+      type="button"
+      onClick={copy}
+      onMouseEnter={open}
+      onMouseLeave={close}
+      onFocus={open}
+      onBlur={close}
+      disabled={!trimmed}
+      title={!tooltip && trimmed ? trimmed : undefined}
+      className={`min-w-0 truncate text-left transition-colors hover:text-blue-600 hover:underline disabled:no-underline disabled:hover:text-current ${className}`}
+    >
+      {value}
+    </button>
+  );
+}
+
+/**
  * A platform mapping can carry two identifiers — a merchant SKU (platform_sku)
  * and a marketplace item id (platform_item_id, e.g. an Amazon ASIN). Show BOTH
  * when present, joined by a dot: the SKU as the primary token, the raw item id
@@ -327,12 +359,16 @@ function ConfirmedRow({
     >
       <Check className={`h-3.5 w-3.5 shrink-0 ${willUnpair ? 'text-orange-500' : 'text-emerald-600'}`} />
       <div className="min-w-0 flex-1">
-        <div className="flex items-center gap-1.5">
-          <span className="truncate font-mono text-xs font-bold text-gray-900">
-            {value}{secondary ? <span className="text-gray-400"> · </span> : null}{secondary}
-          </span>
+        <div className="flex min-w-0 items-center gap-1.5 font-mono text-xs font-bold text-gray-900">
+          <CopyableId value={value} />
+          {secondary ? (
+            <>
+              <span className="shrink-0 text-gray-400">·</span>
+              <CopyableId value={secondary} />
+            </>
+          ) : null}
           {confirmed.accountName && (
-            <span className="truncate text-micro font-medium uppercase tracking-wider text-gray-500">
+            <span className="shrink-0 truncate text-micro font-medium uppercase tracking-wider text-gray-500">
               {confirmed.accountName}
             </span>
           )}
@@ -419,12 +455,16 @@ function SuggestionRow({
           title={candidate.reason}
         />
         <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-1.5">
-            <span className="truncate font-mono text-xs font-bold text-gray-900">
-              {value}{secondary ? <span className="text-gray-400"> · </span> : null}{secondary}
-            </span>
+          <div className="flex min-w-0 items-center gap-1.5 font-mono text-xs font-bold text-gray-900">
+            <CopyableId value={value} />
+            {secondary ? (
+              <>
+                <span className="shrink-0 text-gray-400">·</span>
+                <CopyableId value={secondary} />
+              </>
+            ) : null}
             {candidate.accountName && (
-              <span className="truncate text-micro font-medium uppercase tracking-wider text-gray-500">
+              <span className="shrink-0 truncate text-micro font-medium uppercase tracking-wider text-gray-500">
                 {candidate.accountName}
               </span>
             )}
@@ -805,49 +845,61 @@ function ManualPairForm({
 // ─── Pending action bar ─────────────────────────────────────────────────────
 
 function PendingFooter({
-  acceptCount,
-  rejectCount,
+  selectedCount,
+  unselectedCount,
   unpairCount,
   saving,
   saveError,
-  onSave,
+  onCommit,
   onDiscard,
 }: {
-  acceptCount: number;
-  rejectCount: number;
+  /** Suggestions currently selected (will be paired). */
+  selectedCount: number;
+  /** Suggestions left unselected (will be rejected). */
+  unselectedCount: number;
+  /** Confirmed rows marked to unpair. */
   unpairCount: number;
   saving: boolean;
   saveError: string | null;
-  onSave: () => void;
+  /** Pair all selected + reject all unselected in one commit. */
+  onCommit: () => void;
   onDiscard: () => void;
 }) {
-  const total = acceptCount + rejectCount + unpairCount;
-  if (total === 0 && !saveError) return null;
+  const actionable = selectedCount + unselectedCount + unpairCount;
+  if (actionable === 0 && !saveError) return null;
 
   return (
-    <StickyActionBar
-      density="compact"
-      error={saveError ?? undefined}
-      leading={
-        <div className="flex flex-wrap gap-3 text-caption font-bold uppercase tracking-wider text-gray-600">
-          {acceptCount > 0 && <span className="text-blue-700">{acceptCount} accept</span>}
-          {rejectCount > 0 && <span className="text-gray-700">{rejectCount} reject</span>}
-          {unpairCount > 0 && <span className="text-orange-700">{unpairCount} unpair</span>}
+    <div className="sticky bottom-0 z-10 border-t border-gray-200 bg-white/90 py-3 backdrop-blur">
+      <div className="mx-auto flex w-full max-w-3xl flex-col items-center gap-2 px-4 sm:px-6">
+        {saveError ? (
+          <div className="flex items-center gap-1.5 rounded-md border border-red-200 bg-red-50 px-2 py-1.5 text-caption font-semibold text-red-700">
+            <AlertCircle className="h-3.5 w-3.5" />
+            {saveError}
+          </div>
+        ) : null}
+
+        <div className="flex items-center justify-center gap-2">
+          <button
+            type="button"
+            onClick={onDiscard}
+            disabled={saving || actionable === 0}
+            className="inline-flex h-9 items-center justify-center rounded-md border border-gray-200 bg-white px-3 text-caption font-bold text-gray-700 shadow-sm transition-colors hover:bg-gray-50 disabled:opacity-40"
+          >
+            Discard
+          </button>
+          <button
+            type="button"
+            onClick={onCommit}
+            disabled={saving || actionable === 0}
+            className="inline-flex h-9 items-center justify-center gap-2 rounded-md bg-gray-900 px-4 text-caption font-black uppercase tracking-wider text-white shadow-sm transition-colors hover:bg-gray-800 disabled:cursor-not-allowed disabled:bg-gray-300"
+          >
+            {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Link2 className="h-3.5 w-3.5" />}
+            <span>
+              Pair {selectedCount} · Reject {unselectedCount}
+            </span>
+          </button>
         </div>
-      }
-      secondary={{
-        label: 'Discard',
-        onClick: onDiscard,
-        disabled: saving || total === 0,
-      }}
-      primary={{
-        label: `Save ${total}`,
-        onClick: onSave,
-        disabled: saving || total === 0,
-        isLoading: saving,
-        tone: 'gray',
-        icon: <Link2 className="h-3.5 w-3.5" />,
-      }}
-    />
+      </div>
+    </div>
   );
 }

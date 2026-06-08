@@ -3,11 +3,14 @@
 import { useState, useRef, useEffect, type ReactNode } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Filter, X, ChevronDown } from '@/components/Icons';
+import { cn } from '@/utils/_cn';
 
 export interface FilterRefinement {
   id: string;
   label: string;
   onRemove: () => void;
+  /** Optional tone-specific pill chrome (e.g. incoming status facet colors). */
+  pillClassName?: string;
 }
 
 export interface FilterRefinementBarProps {
@@ -63,7 +66,11 @@ export function FilterRefinementBar({
   useEffect(() => {
     if (!isOpen) return;
     const handleClick = (e: MouseEvent) => {
-      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+      const target = e.target as HTMLElement;
+      // Portaled Radix poppers (e.g. the date-range calendar) sit outside the
+      // bar's DOM tree — don't treat clicks inside them as "outside".
+      if (target.closest?.('[data-radix-popper-content-wrapper]')) return;
+      if (containerRef.current && !containerRef.current.contains(target)) {
         setIsOpen(false);
       }
     };
@@ -183,11 +190,24 @@ export function FilterRefinementBar({
                 exit={{ scale: 0.9, opacity: 0 }}
                 whileHover={{ scale: 1.03 }}
                 whileTap={{ scale: 0.97 }}
-                className="group inline-flex items-center gap-2 rounded-xl bg-white px-3.5 py-1.5 text-[12px] font-bold text-gray-900 shadow-sm ring-1 ring-gray-200 transition-all hover:ring-blue-300"
+                className={cn(
+                  'group inline-flex items-center gap-2 rounded-xl px-3.5 py-1.5 text-[12px] font-bold shadow-sm ring-1 ring-inset transition-all',
+                  ref.pillClassName ??
+                    'bg-white text-gray-900 ring-gray-200 hover:ring-blue-300',
+                )}
               >
-                <span className="text-blue-600/60 transition-colors group-hover:text-blue-600">#</span>
+                {ref.pillClassName ? null : (
+                  <span className="text-blue-600/60 transition-colors group-hover:text-blue-600">#</span>
+                )}
                 {ref.label}
-                <X className="h-3 w-3 text-gray-300 transition-colors group-hover:text-gray-900" />
+                <X
+                  className={cn(
+                    'h-3 w-3 transition-colors',
+                    ref.pillClassName
+                      ? 'text-current opacity-50 group-hover:opacity-80'
+                      : 'text-gray-300 group-hover:text-gray-900',
+                  )}
+                />
               </motion.button>
             ))}
 

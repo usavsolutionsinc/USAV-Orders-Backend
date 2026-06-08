@@ -9,6 +9,7 @@ import {
   recordInventoryEvent,
   type InventoryEventStation,
 } from '@/lib/inventory/events';
+import { attachTechSerial } from '@/lib/inventory/tech-serial';
 import { workflowStageLabel } from '@/lib/receiving/workflow-stages';
 import { publishStockLedgerEvent } from '@/lib/realtime/publish';
 
@@ -314,18 +315,15 @@ export async function receiveLineUnits(
     // (poolMax=3 in prod — pool.query here under concurrent load was the source
     // of "Query read timeout" errors on mark-received-po).
     try {
-      await client.query(
-        `INSERT INTO tech_serial_numbers
-           (serial_number, serial_type, tested_by, station_source,
-            receiving_line_id, shipment_id, scan_ref, serial_unit_id)
-         VALUES ($1, 'SERIAL', $2, 'RECEIVING', $3, NULL, NULL, $4)
-         ON CONFLICT DO NOTHING`,
-        [
-          serial.toUpperCase(),
-          input.staff_id ?? null,
-          line.id,
-          upserted.unit.id,
-        ],
+      await attachTechSerial(
+        {
+          serialNumber: serial,
+          serialUnitId: upserted.unit.id,
+          stationSource: 'RECEIVING',
+          testedBy: input.staff_id ?? null,
+          receivingLineId: line.id,
+        },
+        client,
       );
     } catch (err) {
       console.warn('receiveLineUnits: tsn audit insert failed (non-fatal)', err);

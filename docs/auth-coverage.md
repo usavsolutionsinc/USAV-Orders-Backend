@@ -56,7 +56,7 @@ Legend: ✅ wired · ⚠️ partial · ❌ missing · ⛔ trust-client identity
 | **Integrations (`/api/zoho/**`, `/api/ebay/**`, `/api/ecwid/**`, `/api/ecwid-square/**`)** | ~18 | ❌ | ❌ | ❌ | n/a | Server-to-server — needs `allowAnonymous:true` + API-key or HMAC gate, neither present today. |
 | **Qstash schedulers / Webhooks (`/api/qstash/**`, `/api/webhooks/**`, `/api/cron/**`)** | ~14 | ❌ | n/a | ❌ | n/a | Webhook signature verification is the right model here; check each one has it. |
 | **Dashboards / Reports / Stats** | ~10 | ❌ | ❌ | n/a (read) | n/a | Currently anyone signed-in can view — should be gated by `dashboard.view` / `reports.view`. |
-| **Diagnostics / Setup (`/api/db/ping`, `/api/setup-db`, `/api/drizzle-setup`, `/api/diagnose-migration`, `/api/migrate-process`, `/api/setup-source-db`)** | ~7 | ❌ | ❌ | n/a | n/a | **🚨 destructive endpoints accessible to any signed-in user.** `setup-db` recreates tables. Must be admin-only or removed. |
+| **Diagnostics / Setup (`/api/db/ping` and legacy setup routes)** | ~1 | ✅ | ✅ | — | — | Legacy setup routes (setup-db etc.) removed in dead code cleanup. Modern path: `npm run db:migrate`. |
 | **Misc readers (`/api/sku/`, `/api/manuals/`, `/api/product-manuals/`, `/api/manual-server/`, `/api/inventory/`, `/api/inventory-events`, `/api/inventory-photos`, `/api/check-tracking`, `/api/debug-tracking`, `/api/activity/feed`, `/api/architecture`, `/api/ai/**`, `/api/repair-service/**`)** | ~30 | ❌ | ❌ | varies | varies | Mostly fine as authenticated-only reads, but should still declare an explicit permission for defense in depth. |
 
 ---
@@ -387,7 +387,7 @@ ORDER BY grants DESC;
 
 Ordered by risk × ease:
 
-1. **🚨 P0 — Lock down `/api/setup-db`, `/api/setup-source-db`, `/api/drizzle-setup`, `/api/migrate-process`, `/api/diagnose-migration`** behind `admin.manage_features` + `stepUp:true`, or delete them if they're dev-only. Today any signed-in staff can recreate the schema.
+1. (Resolved) Legacy setup routes removed in hygiene cleanup. Modern DB migrations use the pending-migrations runner and `npm run db:migrate`.
 2. **P0 — Wire `permission:` on the 3 non-admin routes already using `withAuth`** (`receiving/mark-received`, `receiving/mark-received-po`, `sku-stock/[sku]`). One-line change each, immediate enforcement.
 3. **P0 — `/admin/page.tsx` `requirePermission('admin.view')`** — defense in depth for the admin UI.
 4. **P1 — Receiving feature area** (Phase 3 area #1 per MIGRATION_GUIDE): wrap all 12 receiving routes, drop body.staffId reads. Largest single-area mutation surface after FBA.

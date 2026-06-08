@@ -10,6 +10,9 @@ import {
   resolveLineCatalog,
   resolveOrCreateLineCatalog,
 } from '@/lib/receiving/line-catalog';
+import { parseBody } from '@/lib/schemas/parse';
+import { QcCheckCreateBody, QcCheckUpdateBody, QcCheckDeleteBody } from '@/lib/schemas/qc-checks';
+import { AUDIT_ACTION, AUDIT_ENTITY } from '@/lib/audit-logs';
 
 /**
  * Tech-facing checklist step editing, scoped to a receiving line.
@@ -50,13 +53,9 @@ export const POST = withAuth(async (request) => {
   if (!Number.isFinite(lineId) || lineId <= 0) {
     return NextResponse.json({ ok: false, error: 'invalid line id' }, { status: 400 });
   }
-  const body = await readBody(request);
-  const stepLabel = typeof body.stepLabel === 'string' ? body.stepLabel.trim() : '';
-  if (!stepLabel) {
-    return NextResponse.json({ ok: false, error: 'stepLabel is required' }, { status: 400 });
-  }
-  const stepType = typeof body.stepType === 'string' ? body.stepType : undefined;
-  const sortOrder = Number.isFinite(Number(body.sortOrder)) ? Number(body.sortOrder) : undefined;
+  const raw = await readBody(request);
+  const parsed = parseBody(QcCheckCreateBody, raw);
+  if (parsed instanceof NextResponse) return parsed;
 
   try {
     const resolved = await resolveOrCreateLineCatalog(lineId);
@@ -71,9 +70,16 @@ export const POST = withAuth(async (request) => {
     }
     const check = await createQcCheck({
       skuCatalogId: resolved.skuCatalogId,
-      stepLabel,
-      stepType,
-      sortOrder,
+      stepLabel: parsed.stepLabel,
+      stepType: parsed.stepType,
+      sortOrder: parsed.sortOrder,
+      status: parsed.status,
+      valueKind: parsed.valueKind ?? null,
+      valueUnit: parsed.valueUnit ?? null,
+      valueEnum: parsed.valueEnum ?? null,
+      passMin: parsed.passMin ?? null,
+      passMax: parsed.passMax ?? null,
+      failureModeId: parsed.failureModeId ?? null,
     });
     return NextResponse.json({ ok: true, skuCatalogId: resolved.skuCatalogId, check });
   } catch (err) {
@@ -85,8 +91,8 @@ export const POST = withAuth(async (request) => {
   permission: 'tech.qc_pass',
   audit: {
     source: 'tech',
-    action: 'qc_check.create',
-    entityType: 'qc_check_template',
+    action: AUDIT_ACTION.QC_CHECK_CREATE,
+    entityType: AUDIT_ENTITY.QC_CHECK_TEMPLATE,
     entityId: ({ response }) => (response as { check?: { id?: number } })?.check?.id ?? null,
   },
 });
@@ -96,15 +102,10 @@ export const PUT = withAuth(async (request) => {
   if (!Number.isFinite(lineId) || lineId <= 0) {
     return NextResponse.json({ ok: false, error: 'invalid line id' }, { status: 400 });
   }
-  const body = await readBody(request);
-  const checkId = Number(body.checkId);
-  if (!Number.isFinite(checkId) || checkId <= 0) {
-    return NextResponse.json({ ok: false, error: 'checkId is required' }, { status: 400 });
-  }
-  const updates: { stepLabel?: string; stepType?: string; sortOrder?: number } = {};
-  if (typeof body.stepLabel === 'string') updates.stepLabel = body.stepLabel.trim();
-  if (typeof body.stepType === 'string') updates.stepType = body.stepType;
-  if (Number.isFinite(Number(body.sortOrder))) updates.sortOrder = Number(body.sortOrder);
+  const raw = await readBody(request);
+  const parsed = parseBody(QcCheckUpdateBody, raw);
+  if (parsed instanceof NextResponse) return parsed;
+  const checkId = parsed.checkId;
 
   try {
     const resolved = await resolveLineCatalog(lineId);
@@ -114,7 +115,18 @@ export const PUT = withAuth(async (request) => {
     if (!(await stepBelongsToCatalog(checkId, resolved.skuCatalogId))) {
       return NextResponse.json({ ok: false, error: 'step not on this SKU' }, { status: 403 });
     }
-    const updated = await updateQcCheck(checkId, updates);
+    const updated = await updateQcCheck(checkId, {
+      stepLabel: parsed.stepLabel,
+      stepType: parsed.stepType,
+      sortOrder: parsed.sortOrder,
+      status: parsed.status,
+      valueKind: parsed.valueKind,
+      valueUnit: parsed.valueUnit,
+      valueEnum: parsed.valueEnum,
+      passMin: parsed.passMin,
+      passMax: parsed.passMax,
+      failureModeId: parsed.failureModeId,
+    });
     if (!updated) {
       return NextResponse.json({ ok: false, error: 'no changes or not found' }, { status: 404 });
     }
@@ -128,8 +140,8 @@ export const PUT = withAuth(async (request) => {
   permission: 'tech.qc_pass',
   audit: {
     source: 'tech',
-    action: 'qc_check.update',
-    entityType: 'qc_check_template',
+    action: AUDIT_ACTION.QC_CHECK_UPDATE,
+    entityType: AUDIT_ENTITY.QC_CHECK_TEMPLATE,
     entityId: ({ body }) => (body as { checkId?: number })?.checkId ?? null,
   },
 });
@@ -139,11 +151,10 @@ export const DELETE = withAuth(async (request) => {
   if (!Number.isFinite(lineId) || lineId <= 0) {
     return NextResponse.json({ ok: false, error: 'invalid line id' }, { status: 400 });
   }
-  const body = await readBody(request);
-  const checkId = Number(body.checkId);
-  if (!Number.isFinite(checkId) || checkId <= 0) {
-    return NextResponse.json({ ok: false, error: 'checkId is required' }, { status: 400 });
-  }
+  const raw = await readBody(request);
+  const parsed = parseBody(QcCheckDeleteBody, raw);
+  if (parsed instanceof NextResponse) return parsed;
+  const checkId = parsed.checkId;
 
   try {
     const resolved = await resolveLineCatalog(lineId);
@@ -164,8 +175,8 @@ export const DELETE = withAuth(async (request) => {
   permission: 'tech.qc_pass',
   audit: {
     source: 'tech',
-    action: 'qc_check.delete',
-    entityType: 'qc_check_template',
+    action: AUDIT_ACTION.QC_CHECK_DELETE,
+    entityType: AUDIT_ENTITY.QC_CHECK_TEMPLATE,
     entityId: ({ body }) => (body as { checkId?: number })?.checkId ?? null,
   },
 });

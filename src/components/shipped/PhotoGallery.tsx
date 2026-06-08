@@ -18,6 +18,7 @@ import {
   Check,
   Trash2,
   Link2 as LinkIcon,
+  Plus,
 } from '../Icons';
 
 /**
@@ -47,6 +48,13 @@ interface PhotoGalleryProps {
    * server truth.
    */
   onPhotoDeleted?: (photoId: number) => void;
+  /**
+   * When provided, an "Add photos" button appears both in the toolbar pill and
+   * in the fullscreen viewer's top bar. The parent owns the picker UI (so it can
+   * layer above the viewer) and is responsible for refreshing `photos` after an
+   * attach. Omit to keep the gallery view-only.
+   */
+  onAddPhotos?: () => void;
 }
 
 interface PhotoItem {
@@ -64,6 +72,7 @@ export function PhotoGallery({
   launcherTitle = 'View Packing Photos',
   launcherLayout = 'default',
   onPhotoDeleted,
+  onAddPhotos,
 }: PhotoGalleryProps) {
   const [photoItems, setPhotoItems] = useState<PhotoItem[]>([]);
   const [viewerOpen, setViewerOpen] = useState(false);
@@ -383,6 +392,23 @@ export function PhotoGallery({
         </div>
 
         <div className="flex items-center gap-2">
+          {/* Add Photos Button — closes the viewer first so the parent's picker
+              (lower z-index) is not hidden behind this fullscreen overlay. */}
+          {onAddPhotos && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                closeViewer();
+                onAddPhotos();
+              }}
+              className="p-3 bg-white/10 hover:bg-white/20 rounded-full transition-all text-white backdrop-blur-md border border-white/20 hover:border-white/30 hover:scale-110"
+              aria-label="Add photos"
+              title="Add photos"
+            >
+              <Plus className="h-5 w-5" />
+            </button>
+          )}
+
           {/* Download All Button — replaces the per-photo download. */}
           <button
             onClick={(e) => {
@@ -684,6 +710,20 @@ export function PhotoGallery({
             <ChevronRight className="h-4 w-4 shrink-0 text-blue-600" aria-hidden />
           </button>
           <div className="flex shrink-0 items-center gap-0.5 self-center">
+            {onAddPhotos && (
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onAddPhotos();
+                }}
+                className={toolbarIconBtn}
+                aria-label="Add photos"
+                title="Add photos"
+              >
+                <Plus className="h-4 w-4" />
+              </button>
+            )}
             <button
               type="button"
               onClick={(e) => {

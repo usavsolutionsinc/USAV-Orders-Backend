@@ -8,11 +8,11 @@
  * surface lives next to its consumer.
  */
 
-import { COND_LABEL } from '@/components/station/receiving-constants';
 import {
+  PackageOpen,
   ClipboardList,
+  Inbox,
   List,
-  Package,
   ShoppingCart,
 } from '@/components/Icons';
 import type { HorizontalSliderItem } from '@/components/ui/HorizontalButtonSlider';
@@ -20,10 +20,16 @@ import type { ReceivingLineRow } from '@/components/station/ReceivingLinesTable'
 
 // ── Sidebar mode switcher ───────────────────────────────────────────────────
 
-export type ReceivingMode = 'receive' | 'incoming' | 'history' | 'pickup';
+export type ReceivingMode = 'incoming' | 'triage' | 'receive' | 'history' | 'pickup';
 
-// Sidebar order: Receiving → Incoming → History → Local Pickup. Each flips the
-// `?mode=` URL param (default `receive` on the bare path).
+// Sidebar order: Incoming → Receiving (triage/scan) → Unbox → History → Local
+// Pickup. Each flips the `?mode=` URL param; the bare path (no `?mode=`) stays
+// the Unbox workspace (id `receive`) for deep-link + realtime back-compat.
+//
+// `triage` (label "Receiving") is the scan/identify surface that runs BEFORE
+// unboxing: scan a tracking, see found/unfound + expedited/normal verdict, and
+// route the carton. `receive` (label "Unbox") is the existing unboxing
+// workspace — relabeled only, id unchanged to avoid a wide string rename.
 //
 // The former `unfound` mode was relocated to Admin › PO Mailbox
 // (?section=po_mailbox) — the email-PO / unmatched triage queue is no longer a
@@ -35,10 +41,11 @@ export type ReceivingMode = 'receive' | 'incoming' | 'history' | 'pickup';
 // off automatically when the operator scans / marks-received (workflow
 // advances past EXPECTED or quantity_received goes positive).
 export const RECEIVING_MODE_ITEMS: HorizontalSliderItem[] = [
-  { id: 'receive',  label: 'Receiving',    icon: ClipboardList },
-  { id: 'incoming', label: 'Incoming',     icon: Package },
-  { id: 'history',  label: 'History',      icon: List },
+  { id: 'incoming', label: 'Incoming',     icon: Inbox },
+  { id: 'triage',   label: 'Receiving',    icon: ClipboardList },
+  { id: 'receive',  label: 'Unbox',        icon: PackageOpen },
   { id: 'pickup',   label: 'Local Pickup', icon: ShoppingCart },
+  { id: 'history',  label: 'History',      icon: List },
 ];
 
 // ── Carton scratch (localStorage) ───────────────────────────────────────────
@@ -280,34 +287,7 @@ export function resolvePoScanValue(
   return '';
 }
 
-export function conditionShort(code: string | null | undefined): string {
-  const c = String(code || 'BRAND_NEW').trim().toUpperCase();
-  if (c === 'BRAND_NEW') return 'New';
-  if (c === 'LIKE_NEW') return 'Like New';
-  if (c === 'REFURBISHED') return 'Refurb';
-  if (c === 'PARTS') return 'Parts';
-  if (c.startsWith('USED_')) {
-    const letter = COND_LABEL[c] || c.replace('USED_', '');
-    return `USED-${letter}`;
-  }
-  return c.replace(/_/g, ' ');
-}
-
 // ── Scan / exception types ──────────────────────────────────────────────────
-
-/**
- * Persistent row surfaced from the `tracking_exceptions` DB table. Mirrors
- * the subset of columns the sidebar cares about; full shape lives on the
- * triage page.
- */
-export type OpenException = {
-  id: number;
-  tracking_number: string;
-  exception_reason: string;
-  created_at: string;
-  last_zoho_check_at: string | null;
-  zoho_check_count: number;
-};
 
 export function randomId(): string {
   if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {

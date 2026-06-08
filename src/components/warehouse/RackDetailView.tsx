@@ -48,7 +48,7 @@ export function RackDetailView({ code }: RackDetailViewProps) {
   const [flyoutRow, setFlyoutRow] = useState<BinsOverviewRow | null>(null);
 
   const { rooms } = useLocations();
-  const { rows, loading } = useBinsOverview({ pollMs: 30_000 });
+  const { rows, loading, refetch } = useBinsOverview({ pollMs: 30_000 });
 
   // Resolve the room name from the zone letter (server-of-record map).
   const roomName = useMemo(() => {
@@ -233,7 +233,7 @@ export function RackDetailView({ code }: RackDetailViewProps) {
         </div>
       )}
 
-      <BinDetailFlyout row={flyoutRow} onClose={() => setFlyoutRow(null)} />
+      <BinDetailFlyout row={flyoutRow} onClose={() => setFlyoutRow(null)} onDeleted={refetch} />
     </div>
   );
 }

@@ -1,3 +1,9 @@
+import {
+  CONDITION_GRADES,
+  conditionLabel as conditionGradeLabel,
+  conditionOptions,
+} from '@/lib/conditions';
+
 export interface ZohoPOLine {
   line_item_id: string;
   item_id: string;
@@ -39,36 +45,22 @@ export const STATUS_OPTIONS: Array<{ value: POStatus; label: string }> = [
   { value: 'all',                label: 'All' },
 ];
 
-export const CONDITION_OPTIONS = [
-  { value: 'BRAND_NEW', label: 'Brand New' },
-  { value: 'USED_A',    label: 'Used — A' },
-  { value: 'USED_B',    label: 'Used — B' },
-  { value: 'USED_C',    label: 'Used — C' },
-  { value: 'PARTS',     label: 'Parts' },
-] as const;
+// All 7 grades from the shared source of truth (was a 5-grade subset).
+export const CONDITION_OPTIONS = conditionOptions('full');
 
-// Friendly labels for every condition grade (CONDITION_GRADE_VALUES), used
-// anywhere a raw enum like `BRAND_NEW` would otherwise leak to a human —
-// ticket bodies, exports, etc. Pure + dependency-free so it's safe to import
-// from server code (e.g. Zendesk ticket templates).
-const CONDITION_GRADE_LABEL: Record<string, string> = {
-  BRAND_NEW:   'Brand New',
-  LIKE_NEW:    'Like New',
-  REFURBISHED: 'Refurbished',
-  USED_A:      'Used — A',
-  USED_B:      'Used — B',
-  USED_C:      'Used — C',
-  PARTS:       'For Parts',
-};
-
+// Friendly labels for every condition grade, used anywhere a raw enum like
+// `BRAND_NEW` would otherwise leak to a human — ticket bodies, exports, etc.
+// Delegates to the shared `full` variant (src/lib/conditions.ts), which is
+// pure + dependency-free so this stays safe to import from server code (e.g.
+// Zendesk ticket templates). Empty → '' and unknown → Title Case are kept.
 export function conditionLabel(code: string | null | undefined): string {
   const c = String(code ?? '').trim().toUpperCase();
   if (!c) return '';
-  return (
-    CONDITION_GRADE_LABEL[c] ??
-    // Unknown grade: title-case the raw value so it still reads cleanly.
-    c.replace(/_/g, ' ').toLowerCase().replace(/\b\w/g, (m) => m.toUpperCase())
-  );
+  if ((CONDITION_GRADES as readonly string[]).includes(c)) {
+    return conditionGradeLabel(c, 'full');
+  }
+  // Unknown grade: title-case the raw value so it still reads cleanly.
+  return c.replace(/_/g, ' ').toLowerCase().replace(/\b\w/g, (m) => m.toUpperCase());
 }
 
 export const CHANNEL_OPTIONS = [

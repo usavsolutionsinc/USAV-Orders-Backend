@@ -84,6 +84,11 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
       ean: parsed.ean ?? null,
       imageUrl: parsed.imageUrl ?? null,
       isActive: parsed.isActive ?? true,
+      lifecycleStatus: parsed.lifecycleStatus ?? null,
+      reorderThreshold: parsed.reorderThreshold ?? null,
+      lastKnownCostCents: parsed.lastKnownCostCents ?? null,
+      sourcingNotes: parsed.sourcingNotes ?? null,
+      replenishTargetCents: parsed.replenishTargetCents ?? null,
     });
 
     await recordAudit(pool, ctx, req, {

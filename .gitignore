@@ -48,6 +48,19 @@ certificates
 
 # backfill scripts — local checkpoints and run logs
 .backfill-*.state.json
+
+# Dead code / hygiene reports (large or noisy)
+reports/knip-report-*.json
+reports/dead-code-*.md
+
+# Previous Electron build artifact tree (should never be committed)
+apps/desktop/
+
+# PWA / service worker build outputs (generated)
+public/sw.js
+public/workbox-*.js
+public/fallback-*.js
+public/swe-worker-*.js
 /logs/
 
 # Manuals: source docx and converted PDF artifacts live in Vercel Blob now;
@@ -61,3 +74,4 @@ docker-compose.db.yml
 /playwright-report/
 /test-results/
 /tests/.auth/
+.env*

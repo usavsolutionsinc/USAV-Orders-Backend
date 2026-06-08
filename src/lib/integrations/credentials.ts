@@ -63,8 +63,6 @@ export interface GoogleSheetsCredentials { clientEmail: string; privateKey: stri
 export interface AblyCredentials { apiKey: string }
 export interface OllamaCredentials { baseUrl: string; tunnelUrl?: string; model: string }
 export interface StripeCredentials { secretKey: string; publishableKey: string; webhookSecret: string }
-export interface EcwidCredentials { storeId: string; token: string }
-export interface SquareCredentials { accessToken: string; environment: 'production' | 'sandbox' }
 
 // ─── Cache ─────────────────────────────────────────────────────────────────
 

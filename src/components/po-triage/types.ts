@@ -29,11 +29,6 @@ export interface TriagePileBucket {
 
 export type TriagePiles = Record<TriagePile, TriagePileBucket>;
 
-export interface TriageResponse {
-  piles: TriagePiles;
-  maxPerPile: number;
-}
-
 export interface TriagePileMeta {
   id: TriagePile;
   label: string;

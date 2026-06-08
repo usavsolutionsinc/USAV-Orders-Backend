@@ -11,11 +11,14 @@
  *   4. TODO/FIXME/HACK comments    (priority 3)
  */
 
-import { execSync } from 'child_process';
-import { readFileSync } from 'fs';
+import { exec as childExec } from 'node:child_process';
+import { promisify } from 'node:util';
+import { readFile } from 'node:fs/promises';
 import { join } from 'path';
 import { MAX_TASKS_PER_CYCLE, TYPECHECK_TIMEOUT_MS, LINT_TIMEOUT_MS, TEST_TIMEOUT_MS } from './config';
 import type { DiscoveredTask, TaskSource } from './types';
+
+const execAsync = promisify(childExec);
 
 // ─── Helpers ─────────────────────────────────────────────────
 
@@ -32,9 +35,9 @@ function hashString(s: string): string {
  * Read ±15 lines around a target line in a file.
  * Returns empty string if the file can't be read (e.g. deleted/binary).
  */
-function readContext(repoPath: string, relPath: string, lineNum: number): string {
+async function readContext(repoPath: string, relPath: string, lineNum: number): Promise<string> {
   try {
-    const content = readFileSync(join(repoPath, relPath), 'utf-8');
+    const content = await readFile(join(repoPath, relPath), 'utf-8');
     const lines = content.split('\n');
     const start = Math.max(0, lineNum - 16);
     const end = Math.min(lines.length, lineNum + 15);
@@ -48,15 +51,15 @@ function readContext(repoPath: string, relPath: string, lineNum: number): string
 }
 
 /** Run a shell command, returning stdout or null on failure. */
-function exec(cmd: string, cwd: string, timeoutMs: number): string | null {
+async function exec(cmd: string, cwd: string, timeoutMs: number): Promise<string | null> {
   try {
-    return execSync(cmd, {
+    const { stdout } = await execAsync(cmd, {
       cwd,
       encoding: 'utf-8',
       timeout: timeoutMs,
       maxBuffer: 10 * 1024 * 1024,
-      stdio: ['pipe', 'pipe', 'pipe'],
     });
+    return stdout;
   } catch (e: unknown) {
     const err = e as { stdout?: string; stderr?: string };
     return err.stdout || err.stderr || null;
@@ -86,8 +89,8 @@ function parseTscOutput(raw: string): TscError[] {
   return errors;
 }
 
-function discoverTypeErrors(repoPath: string): DiscoveredTask[] {
-  const output = exec('npx tsc --noEmit --pretty false 2>&1', repoPath, TYPECHECK_TIMEOUT_MS);
+async function discoverTypeErrors(repoPath: string): Promise<DiscoveredTask[]> {
+  const output = await exec('npx tsc --noEmit --pretty false 2>&1', repoPath, TYPECHECK_TIMEOUT_MS);
   if (!output) return [];
 
   const errors = parseTscOutput(output);
@@ -112,7 +115,7 @@ function discoverTypeErrors(repoPath: string): DiscoveredTask[] {
       source: 'typecheck',
       description,
       filePaths: [file],
-      context: readContext(repoPath, file, first.line),
+      context: await readContext(repoPath, file, first.line),
       priority: 1,
     });
   }
@@ -136,16 +139,16 @@ const TEST_SCRIPTS: TestScript[] = [
   },
 ];
 
-function discoverTestFailures(repoPath: string): DiscoveredTask[] {
+async function discoverTestFailures(repoPath: string): Promise<DiscoveredTask[]> {
   const tasks: DiscoveredTask[] = [];
 
   for (const script of TEST_SCRIPTS) {
     try {
-      execSync(script.command, {
+      await execAsync(script.command, {
         cwd: repoPath,
         encoding: 'utf-8',
         timeout: TEST_TIMEOUT_MS,
-        stdio: ['pipe', 'pipe', 'pipe'],
+        maxBuffer: 10 * 1024 * 1024,
       });
       // Test passed — no task needed
     } catch (e: unknown) {
@@ -157,7 +160,7 @@ function discoverTestFailures(repoPath: string): DiscoveredTask[] {
         source: 'test_failure',
         description: `Test "${script.name}" is failing.\n\nOutput:\n${output}`,
         filePaths: [script.testFile],
-        context: readContext(repoPath, script.testFile, 1),
+        context: await readContext(repoPath, script.testFile, 1),
         priority: 1,
       });
     }
@@ -199,8 +202,8 @@ function parseLintOutput(raw: string): LintIssue[] {
   return issues;
 }
 
-function discoverLintIssues(repoPath: string): DiscoveredTask[] {
-  const output = exec('npx next lint --no-cache 2>&1', repoPath, LINT_TIMEOUT_MS);
+async function discoverLintIssues(repoPath: string): Promise<DiscoveredTask[]> {
+  const output = await exec('npx next lint --no-cache 2>&1', repoPath, LINT_TIMEOUT_MS);
   if (!output) return [];
 
   const issues = parseLintOutput(output);
@@ -227,7 +230,7 @@ function discoverLintIssues(repoPath: string): DiscoveredTask[] {
       source: 'lint',
       description,
       filePaths: [file],
-      context: readContext(repoPath, file, first.line),
+      context: await readContext(repoPath, file, first.line),
       priority: 2,
     });
   }
@@ -236,8 +239,8 @@ function discoverLintIssues(repoPath: string): DiscoveredTask[] {
 
 // ─── TODO / FIXME / HACK Comments ───────────────────────────
 
-function discoverTodoComments(repoPath: string): DiscoveredTask[] {
-  const output = exec(
+async function discoverTodoComments(repoPath: string): Promise<DiscoveredTask[]> {
+  const output = await exec(
     'grep -rn "TODO\\|FIXME\\|HACK\\|XXX" src/ --include="*.ts" --include="*.tsx" 2>/dev/null || true',
     repoPath,
     10_000,
@@ -260,7 +263,7 @@ function discoverTodoComments(repoPath: string): DiscoveredTask[] {
       source: 'todo_comment',
       description: `${file}:${lineNum}\n\n${comment}`,
       filePaths: [file],
-      context: readContext(repoPath, file, lineNum),
+      context: await readContext(repoPath, file, lineNum),
       priority: 3,
     });
   }
@@ -274,13 +277,22 @@ function discoverTodoComments(repoPath: string): DiscoveredTask[] {
  * Capped at MAX_TASKS_PER_CYCLE to prevent runaway cycles.
  */
 export async function discoverTasks(repoPath: string): Promise<DiscoveredTask[]> {
-  const allTasks: DiscoveredTask[] = [];
+  // Each source is a full, independent tool run (tsc / tests / lint / grep),
+  // so run them concurrently. Results are merged in priority order below to
+  // keep dedup deterministic regardless of which finishes first.
+  const [typeErrors, testFailures, lintIssues, todos] = await Promise.all([
+    discoverTypeErrors(repoPath),
+    discoverTestFailures(repoPath),
+    discoverLintIssues(repoPath),
+    discoverTodoComments(repoPath),
+  ]);
 
-  // Run in priority order so higher-priority tasks get slots first
-  allTasks.push(...discoverTypeErrors(repoPath));
-  allTasks.push(...discoverTestFailures(repoPath));
-  allTasks.push(...discoverLintIssues(repoPath));
-  allTasks.push(...discoverTodoComments(repoPath));
+  const allTasks: DiscoveredTask[] = [
+    ...typeErrors,
+    ...testFailures,
+    ...lintIssues,
+    ...todos,
+  ];
 
   // Deduplicate by hash
   const seen = new Set<string>();

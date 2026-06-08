@@ -4,6 +4,7 @@ import { withAuth } from '@/lib/auth/withAuth';
 import { getSkuCatalogBySku } from '@/lib/neon/sku-catalog-queries';
 import { upsertSerialUnit } from '@/lib/neon/serial-units-queries';
 import { recordInventoryEvent } from '@/lib/inventory/events';
+import { attachTechSerial } from '@/lib/inventory/tech-serial';
 
 /**
  * POST /api/post-multi-sn — issue label(s) for a SKU + record the audit trail.
@@ -139,11 +140,17 @@ export const POST = withAuth(
     }
 
     const serialUnitIds: number[] = [];
+    // Per-serial minted unit identities, index-aligned to the labels the client
+    // will print. Each physical unit owns exactly one {SKU}-{YYWW}-{SEQ6}.
+    const units: Array<{ serial: string; unitUid: string | null }> = [];
     for (const serial of serialNumbers) {
       // 2. Canonical upsert — handles status transitions, return detection,
-      //    metadata patching. Origin is 'manual' (operator-triggered print);
-      //    status lands at UNKNOWN by default, then the LABELED event below
-      //    documents the lifecycle marker without claiming physical custody.
+      //    metadata patching, AND mints this serial's own unit_uid at birth
+      //    (upsertSerialUnit, Phase 2) when the row doesn't already have one and
+      //    a catalog row is known. An already-labeled unit keeps its original id
+      //    (the reprint guarantee). Uncataloged (e.g. Ecwid-only) SKUs get a
+      //    null id and the label falls back to encoding the bare serial. Origin
+      //    is 'manual' (operator-triggered print); status lands at LABELED.
       let upserted;
       try {
         upserted = await upsertSerialUnit({
@@ -164,34 +171,33 @@ export const POST = withAuth(
 
       const serialUnitId = upserted.unit.id;
       serialUnitIds.push(serialUnitId);
+      // The authoritative id is whatever landed on the row (minted at birth, or
+      // the pre-existing id for a relabel). This is what the label prints and
+      // what scan tokens point at.
+      const effectiveUid = upserted.unit.unit_uid ?? null;
+      units.push({ serial, unitUid: effectiveUid });
 
       // 3. Canonical SKU↔serial acknowledgment row. ADMIN is the only
       //    station_source the CHECK constraint accepts for non-receiving/
       //    non-tech/non-pack writes (see 2026-03-31_tsn_add_station_source).
       try {
-        await pool.query(
-          `INSERT INTO tech_serial_numbers
-             (serial_number, serial_type, tested_by, station_source,
-              receiving_line_id, shipment_id, scan_ref,
-              serial_unit_id, source_sku_id, context_station_activity_log_id)
-           VALUES ($1, 'SERIAL', $2, 'ADMIN', NULL, NULL, $3, $4, $5, $6)
-           ON CONFLICT DO NOTHING`,
-          [
-            serial.toUpperCase(),
-            actorId,
-            qrPayload,
-            serialUnitId,
-            catalogId,
-            stationActivityLogId,
-          ],
-        );
+        await attachTechSerial({
+          serialNumber: serial,
+          serialUnitId,
+          stationSource: 'ADMIN',
+          testedBy: actorId,
+          scanRef: effectiveUid ?? qrPayload,
+          sourceSkuId: catalogId,
+          contextStationActivityLogId: stationActivityLogId,
+        });
       } catch (err) {
         console.warn('[post-multi-sn] tech_serial_numbers insert failed (non-fatal)', err);
       }
 
       // 4. Lifecycle event — what the Unit History view reads. station=
       //    SYSTEM because the print is operator-triggered but not tied to
-      //    a physical station scan.
+      //    a physical station scan. scan_token is this unit's own uid so the
+      //    timeline resolves back to the right physical unit.
       try {
         await recordInventoryEvent({
           event_type: 'LABELED',
@@ -201,10 +207,10 @@ export const POST = withAuth(
           sku: skuForStorage,
           prev_status: upserted.prior_status,
           next_status: 'LABELED',
-          scan_token: qrPayload ?? unitId,
+          scan_token: effectiveUid ?? qrPayload ?? unitId,
           notes,
           payload: {
-            unit_id: unitId,
+            unit_id: effectiveUid ?? unitId,
             gtin,
             symbology,
             print_class: printClass,
@@ -219,6 +225,7 @@ export const POST = withAuth(
     return NextResponse.json({
       success: true,
       serialUnitIds,
+      units,
       id: serialUnitIds[0] ?? null,
       stationActivityLogId,
     });

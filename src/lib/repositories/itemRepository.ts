@@ -36,6 +36,7 @@ export interface InsertItem {
   taxName?: string | null;
   taxPercentage?: string | null;
   imageUrl?: string | null;
+  imageDocumentId?: string | null;
   quantityAvailable?: string | null;
   quantityOnHand?: string | null;
   customFields?: Record<string, unknown>;
@@ -111,6 +112,7 @@ export class DrizzleItemRepository implements ItemRepository {
         taxName: sql`excluded.tax_name`,
         taxPercentage: sql`excluded.tax_percentage`,
         imageUrl: sql`excluded.image_url`,
+        imageDocumentId: sql`excluded.image_document_id`,
         quantityAvailable: sql`excluded.quantity_available`,
         quantityOnHand: sql`excluded.quantity_on_hand`,
         customFields: sql`excluded.custom_fields`,

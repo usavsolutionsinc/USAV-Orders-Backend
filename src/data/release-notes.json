@@ -1,7 +1,157 @@
 {
-  "generatedAt": "2026-06-05T20:50:08.652Z",
+  "generatedAt": "2026-06-08T04:16:08.112Z",
   "count": 199,
   "commits": [
+    {
+      "sha": "f9d176f17bbba18a38d44378e0df2123e78af0ec",
+      "shortSha": "f9d176f1",
+      "date": "2026-06-07T20:25:32-07:00",
+      "author": "DENSENSE8",
+      "subject": "chore(cron): schedule Zoho PO-mirror sync (po-sync) so received POs auto-clear from Incoming",
+      "body": "The Incoming \"Sync Zoho\" button runs two steps: issued-PO sync AND the\nzoho_po_mirror status sync (syncZohoPoMirror) that drops received POs from\nthe Incoming queue. Only the first was on a cron (incoming-po-sync); the\nmirror step was never scheduled, so the clearing only happened on a manual\nbutton press. Schedule the existing /api/cron/zoho/po-sync route:\n  - mode=delta every 15 min (offset :07/:22/:37/:52 to not collide with\n    incoming-po-sync at :00/:15/:30/:45)\n  - mode=full nightly as a drift safety net\n\nTogether with incoming-po-sync this reproduces the button's behavior on a\ncron. Requires a production deploy to register.\n\nCo-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>",
+      "type": "chore",
+      "title": "schedule Zoho PO-mirror sync (po-sync) so received POs auto-clear from Incoming"
+    },
+    {
+      "sha": "62139378b0d4ec256b8ed9f5078e7b491b2f4680",
+      "shortSha": "62139378",
+      "date": "2026-06-07T00:55:24-07:00",
+      "author": "DENSENSE8",
+      "subject": "added a full scouting system for all the different systems including ebay and goodwill and added a warranty mode in the orders and shipping page",
+      "body": "",
+      "type": "other",
+      "title": "added a full scouting system for all the different systems including ebay and goodwill and added a warranty mode in the orders and shipping page"
+    },
+    {
+      "sha": "e8afdccdadd590479984a2e18b5875426ff31ab7",
+      "shortSha": "e8afdccd",
+      "date": "2026-06-06T19:40:20-07:00",
+      "author": "DENSENSE8",
+      "subject": "pruning out dead code, and updating the work process on mobile",
+      "body": "",
+      "type": "other",
+      "title": "pruning out dead code, and updating the work process on mobile"
+    },
+    {
+      "sha": "fe7abee6541f6312680525640469c9358d8b84ea",
+      "shortSha": "fe7abee6",
+      "date": "2026-06-06T16:32:43-07:00",
+      "author": "DENSENSE8",
+      "subject": "chore(cleanup): actual dead code removal waves",
+      "body": "- Deleted unused labels: ProductLabelPreview, ReceivingCartonLabel\n- Deleted layout/UserMenu, MobileAppHeader\n- Deleted large batch of dead mobile components (station, overlays, shared, orders, upnext, indexes - ~20 files, no references from active m/ flows)\n- Deleted ManualUpdateDetailsStack (tied to previously removed dead admin table)\n- Cleaned .next generated types stale refs\n- tsc clean, no src refs left to legacy routes\n- Knip reduced further (real code base cleanup, minimal doc changes)\n\nPart of executing dead code plan with focus on actual source deletions.",
+      "type": "chore",
+      "title": "actual dead code removal waves"
+    },
+    {
+      "sha": "65e0c5b559c9f2b0731218695d8f453c8a8afecd",
+      "shortSha": "65e0c5b5",
+      "date": "2026-06-06T16:10:32-07:00",
+      "author": "DENSENSE8",
+      "subject": "chore(hygiene): Phase 2 legacy routes removal + admin dead code wave + doc cleanup",
+      "body": "- Deleted legacy setup routes: setup-db, drizzle-setup, migrate-process, diagnose-migration, setup-source-db + setup-guard (no active callers; modern migrations via npm run db:migrate)\n- Deleted 4 admin components: BackfillCard, EcwidSquareSyncCard, OrdersIntegrityCard, OperationsFlowBoard (historical only)\n- Cleaned references in README, auth-coverage, API-ROUTES, diagrams, plan, triage\n- Updated triage and plan docs\n- Knip now at 164 (more waves in progress)\n\nPart of full plan execution.",
+      "type": "chore",
+      "title": "Phase 2 legacy routes removal + admin dead code wave + doc cleanup"
+    },
+    {
+      "sha": "e0cc680cb0cc8931aa81bb9c3aa31146acc9c9bc",
+      "shortSha": "e0cc680c",
+      "date": "2026-06-06T16:06:26-07:00",
+      "author": "DENSENSE8",
+      "subject": "chore(hygiene): delete 5 more from knip top (Wave 4)",
+      "body": "- 2 FBA: FbaFnskuChecklist, FbaFnskuDirectoryPanel (mostly comments + release notes)\n- 3 admin: ManualAssignmentTable, OrdersManagementTab, StaffTable (components/admin version; separate active one exists in settings)\n\nLow active usage signals. Knip progressing downward.\n\nUpdated triage.",
+      "type": "chore",
+      "title": "delete 5 more from knip top (Wave 4)"
+    },
+    {
+      "sha": "21712e2d3737a1ce73a874d9f313ad4fb82df670",
+      "shortSha": "21712e2d",
+      "date": "2026-06-06T16:06:02-07:00",
+      "author": "DENSENSE8",
+      "subject": "chore(hygiene): delete another 4 high-confidence unused components (Wave 3)",
+      "body": "- activity-inbox/ActivityInboxButton + activity/ActivityFeed (no active imports)\n- barcode/BarcodeStepper + barcode/index.ts (no active imports)\n\nConfirmed via grep. Part of ongoing knip-driven cleanup waves.\nKnip count now 173 -> lower.\n\nUpdated triage log.",
+      "type": "chore",
+      "title": "delete another 4 high-confidence unused components (Wave 3)"
+    },
+    {
+      "sha": "93c39cc34dfd3dd01f2f9a6cc93ce939df6acf64",
+      "shortSha": "93c39cc3",
+      "date": "2026-06-06T15:59:09-07:00",
+      "author": "DENSENSE8",
+      "subject": "updates to the mobile flow and the UX and UI as well as adding updating details to the inventory panel",
+      "body": "",
+      "type": "other",
+      "title": "updates to the mobile flow and the UX and UI as well as adding updating details to the inventory panel"
+    },
+    {
+      "sha": "b9a7d503c6aefd2cf448d2136ea5a786699d92b9",
+      "shortSha": "b9a7d503",
+      "date": "2026-06-06T12:41:01-07:00",
+      "author": "DENSENSE8",
+      "subject": "chore: ignore PWA service worker build artifacts in public/",
+      "body": "",
+      "type": "chore",
+      "title": "ignore PWA service worker build artifacts in public/"
+    },
+    {
+      "sha": "d1d8feff75a42cf8f317f1ddbd9f3a2b96a93d30",
+      "shortSha": "d1d8feff",
+      "date": "2026-06-06T12:40:55-07:00",
+      "author": "DENSENSE8",
+      "subject": "chore(hygiene): simplify eslint.config.mjs to avoid circular validation error",
+      "body": "- Minimal flat config focused purely on unused-imports rule (primary hygiene goal)\n- Added more build artifact ignores for public/ sw files\n- Re-tested; now runnable via npx eslint directly for import cleanup waves\n\nContinued after Wave 1+2 commits.",
+      "type": "chore",
+      "title": "simplify eslint.config.mjs to avoid circular validation error"
+    },
+    {
+      "sha": "4ea456c6e8bdc7b272d164e9eee5965546eec5e9",
+      "shortSha": "4ea456c6",
+      "date": "2026-06-06T12:40:40-07:00",
+      "author": "DENSENSE8",
+      "subject": "chore(hygiene): delete 5 more high-confidence unused components (Wave 2)",
+      "body": "Confirmed via grep: no remaining imports for:\n- DocxUploader.tsx\n- StaffSelector.tsx\n- TechSearchPanel.tsx\n- electron/ElectronTitleBar.tsx\n- electron/UpdaterButton.tsx\n\nKnip count dropped. Triage log updated. Part of Phase 3 systematic cleanup after main plan commit.",
+      "type": "chore",
+      "title": "delete 5 more high-confidence unused components (Wave 2)"
+    },
+    {
+      "sha": "8ccd326bcee4539eb4f50626f1593006b6685e2b",
+      "shortSha": "8ccd326b",
+      "date": "2026-06-06T12:39:57-07:00",
+      "author": "DENSENSE8",
+      "subject": "chore(hygiene): introduce dead code cleanup plan + tooling + first surface wave",
+      "body": "[amended to include latest verification]\n\n- Full plan + tooling committed\n- Phase 1 executed and documented\n- Next: triage remaining 176 knip files + fix lint config issues for unused-imports",
+      "type": "chore",
+      "title": "introduce dead code cleanup plan + tooling + first surface wave"
+    },
+    {
+      "sha": "2808cfb7ffd2c52b8a1aa6c3dc59b6b40f47998e",
+      "shortSha": "2808cfb7",
+      "date": "2026-06-06T11:57:57-07:00",
+      "author": "DENSENSE8",
+      "subject": "updating the receiving flow and the making it more priority based",
+      "body": "",
+      "type": "other",
+      "title": "updating the receiving flow and the making it more priority based"
+    },
+    {
+      "sha": "cacdbddc8a6a9a8f2d7eb361a218c32e78c9312f",
+      "shortSha": "cacdbddc",
+      "date": "2026-06-05T15:06:01-07:00",
+      "author": "usavsolutionsinc",
+      "subject": "updated and simplfied the recieving pipeline and the incoming display",
+      "body": "",
+      "type": "other",
+      "title": "updated and simplfied the recieving pipeline and the incoming display"
+    },
+    {
+      "sha": "973b207df5c80dcafc59ef2758c68cc157fc66bf",
+      "shortSha": "973b207d",
+      "date": "2026-06-05T14:14:15-07:00",
+      "author": "usavsolutionsinc",
+      "subject": "fix: sync pnpm-lock.yaml with package.json to unblock prod deploys",
+      "body": "package.json added 6 deps (cytoscape, cytoscape-dagre, @types/cytoscape,\n@nangohq/frontend, @nangohq/node, server-only) without regenerating the\nlockfile. Vercel CI installs with --frozen-lockfile, so every production\nbuild was failing at the install step (ERR_PNPM_OUTDATED_LOCKFILE) before\ncompiling. Regenerated the lockfile; frozen install now passes.\n\nCo-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>",
+      "type": "fix",
+      "title": "sync pnpm-lock.yaml with package.json to unblock prod deploys"
+    },
     {
       "sha": "565f85f9cbce93a1e577ef1bfbeb1adff755e3a3",
       "shortSha": "565f85f9",
@@ -1841,156 +1991,6 @@
       "body": "",
       "type": "other",
       "title": "cleaned up most of the code base via NEON and added more to the FBA page made it cleaner and user friendly, cleaned"
-    },
-    {
-      "sha": "b02dffe47b960cf86a532d977381c26ba5f7dce9",
-      "shortSha": "b02dffe4",
-      "date": "2026-03-26T09:02:26-07:00",
-      "author": "usavsolutionsinc",
-      "subject": "FBA aand tech scan improved endpoints",
-      "body": "",
-      "type": "other",
-      "title": "FBA aand tech scan improved endpoints"
-    },
-    {
-      "sha": "4a4ccbaa6704c532327e3215636bbd0b61a64307",
-      "shortSha": "4a4ccbaa",
-      "date": "2026-03-25T12:24:05-07:00",
-      "author": "usavsolutionsinc",
-      "subject": "updating the station trakcing number for fba fnskus",
-      "body": "",
-      "type": "other",
-      "title": "updating the station trakcing number for fba fnskus"
-    },
-    {
-      "sha": "d829ae84ec43e85f70f54cc70e6a99c33c7e5280",
-      "shortSha": "d829ae84",
-      "date": "2026-03-25T11:53:00-07:00",
-      "author": "usavsolutionsinc",
-      "subject": "fba update and testing station update",
-      "body": "",
-      "type": "other",
-      "title": "fba update and testing station update"
-    },
-    {
-      "sha": "333e580ba3f9516445f099f67498d812f2f51a40",
-      "shortSha": "333e580b",
-      "date": "2026-03-24T17:02:10-07:00",
-      "author": "usavsolutionsinc",
-      "subject": "fba",
-      "body": "",
-      "type": "other",
-      "title": "fba"
-    },
-    {
-      "sha": "4cf8377ab529cdb9ed60957b4beacfcac9b1ad98",
-      "shortSha": "4cf8377a",
-      "date": "2026-03-24T13:37:54-07:00",
-      "author": "usavsolutionsinc",
-      "subject": "updated the FBA and other pages including the fba logic for stationtesting",
-      "body": "",
-      "type": "other",
-      "title": "updated the FBA and other pages including the fba logic for stationtesting"
-    },
-    {
-      "sha": "9d2a9584cf004ad09ffd0c234b28966ce0db6654",
-      "shortSha": "9d2a9584",
-      "date": "2026-03-23T11:50:15-07:00",
-      "author": "usavsolutionsinc",
-      "subject": "updated the use proper tracking number regex and serial number identifier and better formatting for upnextorders",
-      "body": "",
-      "type": "other",
-      "title": "updated the use proper tracking number regex and serial number identifier and better formatting for upnextorders"
-    },
-    {
-      "sha": "fdd7fd36ec12df962bef80b8438c4d5de0c6050e",
-      "shortSha": "fdd7fd36",
-      "date": "2026-03-23T09:48:28-07:00",
-      "author": "usavsolutionsinc",
-      "subject": "updated the work order and the techstation",
-      "body": "",
-      "type": "other",
-      "title": "updated the work order and the techstation"
-    },
-    {
-      "sha": "fe16ebcbaa7bd49ff6cdf2116b7ff051c23990c5",
-      "shortSha": "fe16ebcb",
-      "date": "2026-03-23T09:29:43-07:00",
-      "author": "usavsolutionsinc",
-      "subject": "updated the FBA page work orders and repair to square",
-      "body": "",
-      "type": "other",
-      "title": "updated the FBA page work orders and repair to square"
-    },
-    {
-      "sha": "116e09ca531bf4cd3b8a27e97dcbd8fce08594c4",
-      "shortSha": "116e09ca",
-      "date": "2026-03-20T09:45:04-07:00",
-      "author": "usavsolutionsinc",
-      "subject": "updated the FBA page and the tech station",
-      "body": "",
-      "type": "other",
-      "title": "updated the FBA page and the tech station"
-    },
-    {
-      "sha": "afbdf888332856af70178b443e5656291bc173fa",
-      "shortSha": "afbdf888",
-      "date": "2026-03-19T09:39:58-07:00",
-      "author": "usavsolutionsinc",
-      "subject": "updated ecwid to include incoming repair service orders",
-      "body": "",
-      "type": "other",
-      "title": "updated ecwid to include incoming repair service orders"
-    },
-    {
-      "sha": "fea729bd70bfb13d882936f4347d97fb009e45c5",
-      "shortSha": "fea729bd",
-      "date": "2026-03-18T16:59:16-07:00",
-      "author": "usavsolutionsinc",
-      "subject": "improved the overall code base to be leaner",
-      "body": "",
-      "type": "other",
-      "title": "improved the overall code base to be leaner"
-    },
-    {
-      "sha": "231127046a959864ae0676b198644da3e7b91131",
-      "shortSha": "23112704",
-      "date": "2026-03-18T13:16:48-07:00",
-      "author": "usavsolutionsinc",
-      "subject": "removed cron jobs",
-      "body": "",
-      "type": "other",
-      "title": "removed cron jobs"
-    },
-    {
-      "sha": "3112d5e6040419bda3c1d854974fd2725be2f0e9",
-      "shortSha": "3112d5e6",
-      "date": "2026-03-18T13:12:04-07:00",
-      "author": "usavsolutionsinc",
-      "subject": "updated Zoho and station testing",
-      "body": "",
-      "type": "other",
-      "title": "updated Zoho and station testing"
-    },
-    {
-      "sha": "094f66cd355790d9eaacafd4f295296607a37ab4",
-      "shortSha": "094f66cd",
-      "date": "2026-03-17T13:44:11-07:00",
-      "author": "usavsolutionsinc",
-      "subject": "changed cron jobs to qstash jobs and updated the ECWID to RS Table",
-      "body": "",
-      "type": "other",
-      "title": "changed cron jobs to qstash jobs and updated the ECWID to RS Table"
-    },
-    {
-      "sha": "a31697ec698e03e5239e57d9787dc632c66c6fcb",
-      "shortSha": "a31697ec",
-      "date": "2026-03-17T11:47:35-07:00",
-      "author": "usavsolutionsinc",
-      "subject": "added cron jobs fixed bugs",
-      "body": "",
-      "type": "other",
-      "title": "added cron jobs fixed bugs"
     }
   ]
 }

@@ -13,6 +13,7 @@ import { printRepairLabel } from '@/lib/print/printRepairLabel';
 import { RepairPickupFlow } from '@/components/repair/RepairPickupFlow';
 import { useActivityInboxOptional } from '@/contexts/ActivityInboxContext';
 import { SlideOverBackdrop } from '@/components/ui/SlideOverBackdrop';
+import DeleteButton from '@/components/ui/DeleteButton';
 
 interface RepairDetailsPanelProps {
   repair: RSRecord;
@@ -60,6 +61,19 @@ export function RepairDetailsPanel({
   useEffect(() => {
     setIsMounted(true);
   }, []);
+
+  // Delete = soft-cancel (status → 'Cancelled'); the row stays for audit but
+  // drops out of every queue tab. Repairs link to documents/history, so a hard
+  // delete is intentionally not offered. Throws on failure so the shared
+  // DeleteButton skips its onDeleted (close).
+  const handleDelete = async () => {
+    const res = await fetch(`/api/repair-service/${repair.id}`, { method: 'DELETE' });
+    const body = await res.json().catch(() => null);
+    if (!res.ok || !body?.success) {
+      throw new Error(body?.error || `Delete failed (${res.status})`);
+    }
+    onUpdate();
+  };
 
   const PICKUP_STATUSES = useMemo(
     () => new Set(['Repaired, Contact Customer', 'Awaiting Pickup', 'Awaiting Payment', 'Done']),
@@ -430,6 +444,17 @@ export function RepairDetailsPanel({
           {isSaving && (
             <p className="text-xs text-gray-500 mt-2">Saving...</p>
           )}
+        </section>
+
+        {/* Danger zone — soft-cancel (delete) this repair via shared DeleteButton. */}
+        <section className="border-t border-gray-200 pt-4">
+          <DeleteButton
+            onConfirm={handleDelete}
+            onDeleted={onClose}
+            label="Delete Repair"
+            armedLabel="Click again to confirm"
+            className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-lg border border-rose-200 bg-rose-50 text-rose-700 text-sm font-black uppercase tracking-wider transition-all hover:bg-rose-100 hover:border-rose-300 disabled:opacity-50 disabled:cursor-not-allowed"
+          />
         </section>
       </div>
 

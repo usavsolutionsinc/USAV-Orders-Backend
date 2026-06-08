@@ -1,7 +1,20 @@
 // Shared constants for all receiving-related components.
 // Import from here instead of defining inline in each component.
 
+import type { ComponentType } from 'react';
 import { WORKFLOW_STAGES } from '@/lib/receiving/workflow-stages';
+import { PackageCheck, Clock, Truck, Package } from '@/components/Icons';
+import {
+  CONDITION_GRADES,
+  CONDITION_LABELS,
+  conditionLabel,
+  conditionGradeTableLabel,
+} from '@/lib/conditions';
+
+// Condition-grade labels live in one place now — see src/lib/conditions.ts.
+// Re-exported here so existing `from '@/components/station/receiving-constants'`
+// import sites keep working.
+export { conditionLabel, conditionGradeTableLabel };
 
 // ─── Dropdown option arrays ───────────────────────────────────────────────────
 
@@ -39,9 +52,9 @@ export const RECEIVING_CARRIERS = [
   { value: 'ALIEXPRESS', label: 'AliEx' },
 ];
 
-export const CONDITION_OPTS = ['BRAND_NEW', 'LIKE_NEW', 'REFURBISHED', 'USED_A', 'USED_B', 'USED_C', 'PARTS'].map((v) => ({
+export const CONDITION_OPTS = CONDITION_GRADES.map((v) => ({
   value: v,
-  label: v.replace(/_/g, ' '),
+  label: conditionLabel(v, 'option'),
 }));
 
 // ─── Pill-button option arrays (active/inactive Tailwind classes) ─────────────
@@ -94,34 +107,18 @@ export const WORKFLOW_BADGE: Record<string, string> = Object.fromEntries(
 export function workflowStatusTableLabel(status: string | null | undefined): string {
   const raw = String(status ?? '').trim().toUpperCase();
   if (!raw) return 'UNKNOWN';
-  if (raw === 'MATCHED') return 'SCANNED';
+  // Both early receiving stages read as "SCANNED" on list rows: ARRIVED is a
+  // carton scanned at the dock but not matched to a PO (an Unfound PO), MATCHED
+  // is a carton scanned and matched to a PO line. The matched/unmatched split is
+  // carried by the row title + PO column, not this chip. ARRIVED's lifecycle
+  // label is "Scanned" (see workflow-stages.ts), so this keeps the two in sync.
+  if (raw === 'ARRIVED' || raw === 'MATCHED') return 'SCANNED';
   if (raw === 'DONE') return 'RECEIVED';
   return raw.replace(/_/g, ' ');
 }
 
-export const COND_LABEL: Record<string, string> = {
-  BRAND_NEW:   'New',
-  LIKE_NEW:    'Like New',
-  REFURBISHED: 'Refurb',
-  USED_A:      'A',
-  USED_B:      'B',
-  USED_C:      'C',
-  PARTS:       'Parts',
-};
-
-/** Compact label for list rows — matches sidebar / label copy (USED-A, NEW, …). */
-export function conditionGradeTableLabel(code: string | null | undefined): string {
-  const c = String(code || '').trim().toUpperCase();
-  if (!c) return 'N/A';
-  if (c === 'BRAND_NEW') return 'NEW';
-  if (c === 'LIKE_NEW') return 'L-NEW';
-  if (c === 'REFURBISHED') return 'REF';
-  if (c === 'PARTS') return 'PARTS';
-  if (c === 'USED_A') return 'A';
-  if (c === 'USED_B') return 'B';
-  if (c === 'USED_C') return 'C';
-  return c.replace(/_/g, ' ');
-}
+/** Compact grade→label map (New · Like New · Refurb · A · B · C · Parts). */
+export const COND_LABEL: Record<string, string> = CONDITION_LABELS.compact;
 
 /** Soft pill tone per condition grade. Shared by table rows and the scanned
  *  line/receipt detail headers so condition reads the same color everywhere. */
@@ -189,4 +186,43 @@ export function getStatusDotBg(
   if (value === 'PASSED' || value === 'DONE') return 'bg-emerald-500';
   if (value.startsWith('FAILED') || value === 'SCRAP' || value === 'RTV') return 'bg-rose-500';
   return 'bg-gray-400';
+}
+
+// ─── Shared row-display contract (desktop ⇄ mobile) ──────────────────────────
+// One source of truth for the receiving ROW display decisions that both the
+// desktop table (ReceivingLinesTable) and the mobile feed (MobileReceivingRow)
+// make, so they can't drift. Pass the same `ReceivingRowDisplay` to both.
+
+/** Per-surface display flags for a receiving row. */
+export interface ReceivingRowDisplay {
+  /** History/recent surface: "received" is implied, so the workflow status
+   *  icon is suppressed (desktop history mode + the mobile recent/receiving feed). */
+  isHistory?: boolean;
+  /** Incoming/expected surface: workflow status doesn't apply yet → also hidden. */
+  isIncoming?: boolean;
+}
+
+/**
+ * Workflow status → its compact glyph + tone. Single source for the icon
+ * mapping that desktop (ReceivingLinesTable) and mobile (MobileReceivingRow)
+ * previously copy-pasted. `label` is the value from {@link workflowStatusTableLabel}.
+ */
+export function getWorkflowIconMeta(label: string): {
+  Icon: ComponentType<{ className?: string }>;
+  tone: string;
+} {
+  if (label === 'RECEIVED') return { Icon: PackageCheck, tone: 'text-emerald-600' };
+  if (label === 'EXPECTED') return { Icon: Clock, tone: 'text-amber-500' };
+  if (label === 'SCANNED') return { Icon: Truck, tone: 'text-blue-600' };
+  return { Icon: Package, tone: 'text-gray-400' };
+}
+
+/**
+ * Whether the workflow status icon should render for this row. History and
+ * incoming surfaces suppress it (received is implied / status N/A). The mobile
+ * receiving feed is a history surface, so it passes `{ isHistory: true }` and
+ * gets the same suppression the desktop history table does — for free.
+ */
+export function shouldShowWorkflowStatusIcon(display: ReceivingRowDisplay = {}): boolean {
+  return !(display.isHistory || display.isIncoming);
 }

@@ -168,6 +168,15 @@ export function isMobileReceivingPipelineV2(): boolean {
   return readBoolEnv('MOBILE_RECEIVING_PIPELINE_V2');
 }
 
+/**
+ * Warranty Claim Logger + Repair Outcome Tracker — 4th mode on the Orders /
+ * Shipping page. When OFF, the read/write routes return 503 and the mode is
+ * hidden. See docs/warranty-claim-logger-plan.md.
+ */
+export function isWarrantyLogger(): boolean {
+  return readBoolEnv('WARRANTY_LOGGER');
+}
+
 /** Snapshot of all inventory v2 flags. Useful for debug / admin pages. */
 export function inventoryV2FlagSnapshot(): Record<string, boolean> {
   return {
@@ -182,6 +191,7 @@ export function inventoryV2FlagSnapshot(): Record<string, boolean> {
     INVENTORY_V2_REPLENISHMENT: isInventoryV2Replenishment(),
     INVENTORY_V2_RMA: isInventoryV2Rma(),
     INVENTORY_V2_LEGACY_PACK_MIRROR: isInventoryV2LegacyPackMirror(),
+    WARRANTY_LOGGER: isWarrantyLogger(),
     MOBILE_RECEIVING_PIPELINE_V2: isMobileReceivingPipelineV2(),
   };
 }

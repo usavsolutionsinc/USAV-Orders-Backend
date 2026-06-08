@@ -11,7 +11,6 @@ import { humanReadable, partialCode } from './utils';
 
 interface GiantPreviewPanelProps {
   zoneLetter?: string;
-  roomName?: string;
   aisle?: number;
   bay?: number;
   level?: number;
@@ -25,7 +24,6 @@ interface GiantPreviewPanelProps {
  */
 export function GiantPreviewPanel({
   zoneLetter,
-  roomName,
   aisle,
   bay,
   level,
@@ -59,7 +57,6 @@ export function GiantPreviewPanel({
               <p className="mt-2 whitespace-nowrap font-mono text-3xl font-black leading-none tracking-tight text-gray-900">
                 {code}
               </p>
-              {roomName && <p className="mt-3 text-base font-bold text-gray-800">{roomName}</p>}
               <p className="mt-2 text-label font-semibold leading-snug text-gray-600">
                 {humanReadable({ zone: zoneLetter, aisle, bay, level, position })}
               </p>

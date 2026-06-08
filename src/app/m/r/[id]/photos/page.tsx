@@ -45,6 +45,17 @@ function PhotoPageInner() {
   const { user } = useAuth();
   const staffId = user?.staffId ?? 0;
   const requestId = searchParams.get('requestId');
+  // Title to show in the camera header — the PO title / "Unfound PO". When the
+  // entry point (carton sheet, share-to-phone) passes ?title= we use it
+  // verbatim; otherwise (desktop QR `requestId` flow, deep links) we resolve it
+  // from the receiving id so the camera never leaks the internal "RCV-<id>".
+  const titleParam = (searchParams.get('title') || '').trim();
+  // Human PO# used to name the saved NAS file (falls back to the package id).
+  const poRefParam = (searchParams.get('poRef') || '').trim() || null;
+  // Title/PO# resolved from the receiving id when not supplied via the URL.
+  const [resolved, setResolved] = useState<{ title: string; poRef: string | null } | null>(null);
+  const cameraTitle = titleParam || resolved?.title || `RCV-${receivingId}`;
+  const poRef = poRefParam || resolved?.poRef || null;
   const { getClient } = useAblyClient();
   // Active NAS (test/prod) + this operator's folder — captured photos write
   // straight to the NAS share, no Vercel Blob.
@@ -54,6 +65,44 @@ function PhotoPageInner() {
   const [entries, setEntries] = useState<UploadEntry[]>([]);
 
   const validReceivingId = Number.isFinite(receivingId) && receivingId > 0;
+
+  // ── Resolve the PO title from the receiving id when the URL didn't carry one.
+  // Mirrors the receiving rail's precedence (item_name → catalog title → sku →
+  // zoho_item_id), and "Unfound PO" arrives as item_name for unmatched cartons.
+  useEffect(() => {
+    if (titleParam || !validReceivingId) return;
+    let alive = true;
+    (async () => {
+      try {
+        const res = await fetch(`/api/receiving-lines?receiving_id=${receivingId}&limit=1`, {
+          cache: 'no-store',
+        });
+        if (!res.ok) return;
+        const body = await res.json();
+        if (!alive) return;
+        const line = body?.receiving_lines?.[0];
+        if (line) {
+          const title = String(
+            line.item_name || line.catalog_product_title || line.sku || line.zoho_item_id || '',
+          ).trim();
+          const po =
+            line.zoho_purchaseorder_number || line.receiving_zoho_purchaseorder_number || null;
+          if (title) setResolved({ title, poRef: po });
+        } else if (body?.receiving_package) {
+          // Carton exists but has no matched PO lines → an unmatched/unfound
+          // carton. The `?receiving_id=` endpoint doesn't synthesise the
+          // "Unfound PO" placeholder (only the list views do), so label it here
+          // to match exactly what the receiving rail shows for these cartons.
+          setResolved({ title: 'Unfound PO', poRef: null });
+        }
+      } catch {
+        /* best-effort — fall back to RCV-<id> */
+      }
+    })();
+    return () => {
+      alive = false;
+    };
+  }, [titleParam, receivingId, validReceivingId]);
 
   // ── Publish helper ──
   const publishUpload = useCallback(
@@ -95,7 +144,7 @@ function PhotoPageInner() {
         // compressed, but if this page is ever entered with a raw blob the
         // helper short-circuits via its passthrough for already-small files.
         const compressed = await compressPhotoForUpload(entry.blob, { source: 'm-receiving' });
-        const scope = { receivingId };
+        const scope = { receivingId, poRef };
         const targetUrl = buildNasPhotoUrl({
           baseUrl,
           folder: nas?.folder ?? '',
@@ -125,7 +174,7 @@ function PhotoPageInner() {
         );
       }
     },
-    [publishUpload, receivingId, staffId, nas],
+    [publishUpload, receivingId, staffId, nas, poRef],
   );
 
   // ── Camera "Done" → upload sequentially so we can publish in order ──
@@ -196,7 +245,8 @@ function PhotoPageInner() {
     return (
       <PhotoCaptureSurface
         receivingId={receivingId}
-        headerLabel={`RCV-${receivingId}`}
+        headerLabel={cameraTitle}
+        poRef={poRef}
         returnHref="/m/receiving"
         maxPhotos={10}
       />
@@ -212,10 +262,10 @@ function PhotoPageInner() {
         maxPhotos={10}
         header={
           <div className="min-w-0">
-            <p className="text-xs font-black uppercase tracking-[0.2em] text-white/60">
-              Receiving photos
+            <p className="text-micro font-black uppercase tracking-[0.22em] text-white/60">
+              Add unboxing photos
             </p>
-            <p className="truncate text-sm font-black text-white">RCV-{receivingId}</p>
+            <p className="truncate text-sm font-black text-white">{cameraTitle}</p>
           </div>
         }
       />

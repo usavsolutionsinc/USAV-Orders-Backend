@@ -1,12 +1,29 @@
 import { gs1UnitAi, serialUnitHandle } from '@/lib/barcode-routing';
 import { escapeLabelHtml, printLabel } from '@/lib/print/printLabel';
+import { CONDITION_GRADES, conditionLabel } from '@/lib/conditions';
 
 // Product/testing labels print the product title (the unit id lives in the
 // DataMatrix). The title is small and top-aligned next to the code so longer
 // names get room to wrap. `.sku` is the monospace fallback when no title.
+// `.meta` carries the condition grade chip + the human serial under the title.
 const PRODUCT_INFO_CSS =
-  '.title{font-weight:700;font-size:11px;line-height:1.15;color:#111;text-align:left;overflow:hidden;display:-webkit-box;-webkit-line-clamp:4;-webkit-box-orient:vertical}' +
-  '.sku{font-family:monospace;font-weight:700;font-size:12px;line-height:1.15;color:#111;word-break:break-all;text-align:left}';
+  '.title{font-weight:700;font-size:11px;line-height:1.15;color:#111;text-align:left;overflow:hidden;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical}' +
+  '.sku{font-family:monospace;font-weight:700;font-size:12px;line-height:1.15;color:#111;word-break:break-all;text-align:left}' +
+  '.meta{display:flex;align-items:center;gap:4px;flex-wrap:wrap;margin-top:3px}' +
+  '.cond{font-weight:800;font-size:8px;line-height:1.3;letter-spacing:.04em;text-transform:uppercase;color:#fff;background:#111;border-radius:3px;padding:1px 5px}' +
+  '.sn{font-family:monospace;font-weight:700;font-size:9px;line-height:1.2;color:#111;word-break:break-all}';
+
+/**
+ * Condition label for the tiny 2×1" sticker, from the shared `label` variant
+ * (New · Like New · Refurbished · Used-A · … · Parts) — same wording the
+ * receiving label prints. The `.cond` CSS up-cases it on the sticker. Returns
+ * '' for an empty/unknown grade so the meta chip is simply omitted.
+ */
+function conditionChipLabel(grade: string | null | undefined): string {
+  const c = String(grade ?? '').trim().toUpperCase();
+  if (!(CONDITION_GRADES as readonly string[]).includes(c)) return '';
+  return conditionLabel(c, 'label');
+}
 
 /**
  * Build the DataMatrix payload embedded in a printed unit label.
@@ -59,6 +76,8 @@ export type PrintProductLabelInput = {
   qrPayload?: string;
   /** SKU's internal GTIN. When present alongside serialNumber, the QR encodes a GS1 Digital Link URL. */
   gtin?: string;
+  /** Condition grade (BRAND_NEW / USED_A… / PARTS). Rendered as a chip under the title. */
+  condition?: string | null;
 };
 
 /**
@@ -86,9 +105,20 @@ export function printProductLabel(input: PrintProductLabelInput): void {
   // Fall back to the unit id when no title is available so the label is never
   // blank.
   const title = input.title?.trim();
-  const infoHtml = title
+  const headHtml = title
     ? `<div class="title">${escapeLabelHtml(title)}</div>`
     : `<div class="sku">${escapeLabelHtml(sku)}</div>`;
+
+  // Condition chip + human serial sit on a meta row under the title. Each
+  // piece is independent — omit whichever isn't provided.
+  const condChip = conditionChipLabel(input.condition);
+  const serialText = input.serialNumber?.trim();
+  const metaParts: string[] = [];
+  if (condChip) metaParts.push(`<span class="cond">${escapeLabelHtml(condChip)}</span>`);
+  if (serialText) metaParts.push(`<span class="sn">${escapeLabelHtml(serialText)}</span>`);
+  const metaHtml = metaParts.length ? `<div class="meta">${metaParts.join('')}</div>` : '';
+
+  const infoHtml = `${headHtml}${metaHtml}`;
 
   printLabel({
     name: `Label ${sku}`,
@@ -108,6 +138,8 @@ export type PrintProductLabelsInput = {
   gtin?: string;
   /** Optional per-serial QR payload override (rare; allows mixed sources). Index-aligned with serialNumbers. */
   qrPayloads?: Array<string | null | undefined>;
+  /** Condition grade shared by every label in the batch. Rendered as a chip under the title. */
+  condition?: string | null;
   staggerMs?: number;
 };
 
@@ -133,6 +165,7 @@ export function printProductLabels(input: PrintProductLabelsInput): void {
         serialNumber,
         gtin: input.gtin,
         qrPayload: payloads[i] ?? undefined,
+        condition: input.condition,
       });
     }, i * stagger);
   });

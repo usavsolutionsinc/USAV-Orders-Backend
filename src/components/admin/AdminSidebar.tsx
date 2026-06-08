@@ -15,6 +15,9 @@ import { StaffAdminSidebarPanel } from '@/components/sidebar/StaffAdminSidebarPa
 import { FbaCatalogSidebarPanel } from './FbaCatalogSidebarPanel';
 import { OperationsSidebarPanel } from './workflow/OperationsSidebarPanel';
 import { LogsSidebarPanel } from './LogsSidebarPanel';
+import { BoseModelsSidebarPanel } from './sourcing/BoseModelsSidebarPanel';
+import { CompatibilitySidebarPanel } from './sourcing/CompatibilitySidebarPanel';
+import { SuppliersSidebarPanel } from './sourcing/SuppliersSidebarPanel';
 
 interface AdminSidebarProps {
   activeSection: AdminSection;
@@ -30,6 +33,9 @@ function panelFor(section: AdminSection): JSX.Element | null {
     case 'access':       return <AccessSidebarPanel />;
     case 'roles':        return <RolesSidebarPanel />;
     case 'fba':          return <FbaCatalogSidebarPanel />;
+    case 'bose_models':  return <BoseModelsSidebarPanel />;
+    case 'compatibility': return <CompatibilitySidebarPanel />;
+    case 'suppliers':    return <SuppliersSidebarPanel />;
     case 'connections':  return <ConnectionsSidebarPanel />;
     case 'architecture': return <OperationsSidebarPanel />;
     case 'logs':         return <LogsSidebarPanel />;

@@ -33,6 +33,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { syncZohoPurchaseOrdersToReceiving } from '@/lib/zoho-receiving-sync';
 import { invalidateCacheTags } from '@/lib/cache/upstash-cache';
+import { withCronRun } from '@/lib/cron/run-log';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 300;
@@ -71,16 +72,18 @@ export async function GET(req: NextRequest) {
           ? poDateFloorParam
           : '2026-05-08';
 
-    const summary = await syncZohoPurchaseOrdersToReceiving({
-      // 'issued' = vendor has sent the PO; warehouse is expected to receive.
-      // Use ?status=open or ?status= (empty) for backfills.
-      status: statusOverride || 'issued',
-      days_back: daysBack,
-      per_page: 200,
-      max_pages: Number.isFinite(maxPagesRaw) && maxPagesRaw > 0 ? maxPagesRaw : 25,
-      max_items: Number.isFinite(maxItemsRaw) && maxItemsRaw > 0 ? maxItemsRaw : 2000,
-      po_date_floor: poDateFloor,
-    });
+    const summary = await withCronRun('zoho.incoming_po_sync', () =>
+      syncZohoPurchaseOrdersToReceiving({
+        // 'issued' = vendor has sent the PO; warehouse is expected to receive.
+        // Use ?status=open or ?status= (empty) for backfills.
+        status: statusOverride || 'issued',
+        days_back: daysBack,
+        per_page: 200,
+        max_pages: Number.isFinite(maxPagesRaw) && maxPagesRaw > 0 ? maxPagesRaw : 25,
+        max_items: Number.isFinite(maxItemsRaw) && maxItemsRaw > 0 ? maxItemsRaw : 2000,
+        po_date_floor: poDateFloor,
+      }),
+    );
 
     // The sync writes rows operators see in the rail; invalidate the same
     // cache tags `scan-serial` uses so the Incoming pill reflects fresh

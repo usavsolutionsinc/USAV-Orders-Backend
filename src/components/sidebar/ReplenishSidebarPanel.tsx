@@ -125,7 +125,7 @@ export function ReplenishSidebarPanel() {
   const triggerSync = async () => {
     setSyncing(true);
     try {
-      await fetch('/api/qstash/replenishment/sync', { method: 'POST' });
+      await fetch('/api/replenishment/sync', { method: 'POST' });
       window.setTimeout(() => {
         fetchCounts();
         window.dispatchEvent(new CustomEvent('dashboard-refresh'));

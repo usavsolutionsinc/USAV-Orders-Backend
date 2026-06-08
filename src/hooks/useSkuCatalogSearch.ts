@@ -26,17 +26,26 @@ export interface UseSkuCatalogSearchOptions {
   hasQc?: boolean;
   /** Exclude SKUs whose sku ends with this suffix (e.g. '-RS' for repairs). */
   excludeSkuSuffix?: string;
-  /** Which field to search: ecwid_sku (default), zoho_sku, or title (display_name). */
-  searchField?: SearchField;
+  /**
+   * Which field to search: ecwid_sku (default), zoho_sku, or title (display_name).
+   * `zoho_catalog` sources rows purely from the Zoho `items` mirror (Zoho SKU +
+   * Zoho name, no Ecwid fallback) and matches on SKU OR name in one query.
+   */
+  searchField?: SearchField | 'zoho_catalog';
 }
 
 export function useSkuCatalogSearch(
   query: string | null | undefined,
   limitOrOptions: number | UseSkuCatalogSearchOptions = 20,
 ) {
-  const options: Required<
-    Pick<UseSkuCatalogSearchOptions, 'limit' | 'allowEmpty' | 'ecwidOnly' | 'hasQc' | 'excludeSkuSuffix' | 'searchField'>
-  > =
+  const options: {
+    limit: number;
+    allowEmpty: boolean;
+    ecwidOnly: boolean;
+    hasQc: boolean;
+    excludeSkuSuffix: string;
+    searchField: SearchField | 'zoho_catalog';
+  } =
     typeof limitOrOptions === 'number'
       ? { limit: limitOrOptions, allowEmpty: false, ecwidOnly: false, hasQc: false, excludeSkuSuffix: '', searchField: 'ecwid_sku' }
       : {

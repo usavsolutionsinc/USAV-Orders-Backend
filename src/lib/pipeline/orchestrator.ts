@@ -23,7 +23,8 @@
  *   9. Sleeps and repeats
  */
 
-import { execSync } from 'child_process';
+import { exec } from 'node:child_process';
+import { promisify } from 'node:util';
 import { eq, and, lt, sql } from 'drizzle-orm';
 import { db } from '@/lib/drizzle/db';
 import { pipelineTasks, pipelineCycles } from '@/lib/drizzle/schema';
@@ -52,39 +53,41 @@ const log = {
 
 // ─── Git Helpers ─────────────────────────────────────────────
 
-function git(cmd: string): string {
-  return execSync(`git ${cmd}`, {
+const execAsync = promisify(exec);
+
+async function git(cmd: string): Promise<string> {
+  const { stdout } = await execAsync(`git ${cmd}`, {
     cwd: REPO_PATH,
     encoding: 'utf-8',
     timeout: 15_000,
-    stdio: ['pipe', 'pipe', 'pipe'],
-  }).trim();
+  });
+  return stdout.trim();
 }
 
-function gitSafe(cmd: string): string | null {
+async function gitSafe(cmd: string): Promise<string | null> {
   try {
-    return git(cmd);
+    return await git(cmd);
   } catch {
     return null;
   }
 }
 
-function currentBranch(): string {
+function currentBranch(): Promise<string> {
   return git('rev-parse --abbrev-ref HEAD');
 }
 
-function ensureCleanWorkingTree(): boolean {
-  const status = git('status --porcelain');
+async function ensureCleanWorkingTree(): Promise<boolean> {
+  const status = await git('status --porcelain');
   if (status) {
     log.warn('Working tree is dirty, stashing changes');
-    gitSafe('stash push -m "pipeline-autostash"');
+    await gitSafe('stash push -m "pipeline-autostash"');
     return true;
   }
   return false;
 }
 
-function checkoutMain(): void {
-  git('checkout main');
+async function checkoutMain(): Promise<void> {
+  await git('checkout main');
 }
 
 // ─── Task Persistence ────────────────────────────────────────
@@ -176,12 +179,12 @@ async function executeTask(task: DiscoveredTask): Promise<{
 
   try {
     // Ensure we start from a clean main
-    stashed = ensureCleanWorkingTree();
-    checkoutMain();
+    stashed = await ensureCleanWorkingTree();
+    await checkoutMain();
 
     // Create or reset the feature branch
-    gitSafe(`branch -D ${branchName}`);
-    git(`checkout -b ${branchName}`);
+    await gitSafe(`branch -D ${branchName}`);
+    await git(`checkout -b ${branchName}`);
 
     await markAttempted(task.hash);
     log.info(`  implementing: ${task.title}`);
@@ -192,8 +195,8 @@ async function executeTask(task: DiscoveredTask): Promise<{
     if (!implementation.parsed || implementation.filesChanged.length === 0) {
       log.info(`  no changes produced — skipping`);
       await markFailed(task.hash, MAX_TASK_ATTEMPTS); // don't retry no-op
-      checkoutMain();
-      gitSafe(`branch -D ${branchName}`);
+      await checkoutMain();
+      await gitSafe(`branch -D ${branchName}`);
       return { passed: false, sampleCollected: false };
     }
 
@@ -210,16 +213,16 @@ async function executeTask(task: DiscoveredTask): Promise<{
 
     if (validation.allPassed) {
       // Commit the passing changes
-      git('add -A');
+      await git('add -A');
       const commitMsg = `pipeline(${task.source}): ${task.title}`;
-      git(`commit -m "${commitMsg.replace(/"/g, '\\"')}"`);
-      commitSha = git('rev-parse --short HEAD');
+      await git(`commit -m "${commitMsg.replace(/"/g, '\\"')}"`);
+      commitSha = await git('rev-parse --short HEAD');
       log.info(`  PASS — committed ${commitSha} on ${branchName}`);
       await markResolved(task.hash, branchName, scoring.rating);
     } else {
       // Discard failed changes
-      gitSafe('checkout -- .');
-      gitSafe('clean -fd');
+      await gitSafe('checkout -- .');
+      await gitSafe('clean -fd');
       log.info(`  FAIL — changes discarded, training pair stored`);
 
       // Look up current attempt count
@@ -248,14 +251,14 @@ async function executeTask(task: DiscoveredTask): Promise<{
 
   } finally {
     // Always return to main
-    const branch = currentBranch();
+    const branch = await currentBranch();
     if (branch !== 'main') {
-      gitSafe('checkout -- .');
-      checkoutMain();
+      await gitSafe('checkout -- .');
+      await checkoutMain();
     }
     // Clean up failed branches (keep passing ones)
     if (stashed) {
-      gitSafe('stash pop');
+      await gitSafe('stash pop');
     }
   }
 }
@@ -335,10 +338,10 @@ async function main(): Promise<void> {
 
   // Verify we're on main and the repo is accessible
   try {
-    const branch = currentBranch();
+    const branch = await currentBranch();
     if (branch !== 'main') {
       log.warn(`On branch "${branch}", switching to main`);
-      checkoutMain();
+      await checkoutMain();
     }
   } catch (err) {
     log.error(`Cannot access repo at ${REPO_PATH}: ${err}`);

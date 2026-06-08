@@ -16,7 +16,7 @@
  * prior inventory rather than the row we're about to write).
  */
 
-import { useCallback, useEffect, useState, type RefObject } from 'react';
+import { useCallback, useEffect, useRef, useState, type RefObject } from 'react';
 import { toast } from '@/lib/toast';
 import {
   dispatchLineUpdated,
@@ -66,6 +66,11 @@ export function useLineSerials({
   serialInputRef,
 }: UseLineSerialsArgs) {
   const [serialSubmitting, setSerialSubmitting] = useState(false);
+  // Synchronous in-flight guard. The queue drainer fires submitSerial calls
+  // back-to-back across React render boundaries, so a state-based guard can read
+  // a stale `true` and silently drop a queued scan. A ref is updated/read
+  // synchronously, so the guard is always accurate while still serializing.
+  const submittingRef = useRef(false);
 
   const refreshLineWithSerials = useCallback(async (lineId: number = row.id) => {
     try {
@@ -91,7 +96,8 @@ export function useLineSerials({
 
   const submitSerial = useCallback(async (raw?: string, conditionGrade?: string | null) => {
     const serial = (raw ?? serialInput).trim();
-    if (!serial || !row.receiving_id || serialSubmitting) return;
+    if (!serial || !row.receiving_id || submittingRef.current) return;
+    submittingRef.current = true;
     setSerialSubmitting(true);
     try {
       // Serials are sidecar metadata: scanning attaches a serial_unit (the item
@@ -157,6 +163,7 @@ export function useLineSerials({
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Network error scanning serial');
     } finally {
+      submittingRef.current = false;
       setSerialSubmitting(false);
     }
   }, [
@@ -164,7 +171,6 @@ export function useLineSerials({
     row.receiving_id,
     row.id,
     staffId,
-    serialSubmitting,
     refreshLineWithSerials,
     row.serials,
     receivingType,
@@ -172,6 +178,41 @@ export function useLineSerials({
     setSerialInput,
     serialInputRef,
   ]);
+
+  // Keep a live ref to the latest submitSerial so the queue drainer always
+  // calls the current closure (fresh row.serials etc.) rather than a stale one.
+  const submitSerialRef = useRef(submitSerial);
+  submitSerialRef.current = submitSerial;
+
+  // Serial scan queue. enqueueSerial() returns instantly so the multi-qty scan
+  // UI can advance focus to the next unit's input without waiting on the
+  // network — the operator scans a whole lot in one fast pass. The drainer
+  // processes the queue one at a time because /api/receiving/scan-serial takes
+  // a row-level FOR UPDATE lock; concurrent writes used to over-receive (2/1).
+  const serialQueueRef = useRef<Array<{ raw: string; grade: string | null }>>([]);
+  const drainingRef = useRef(false);
+  const drainSerialQueue = useCallback(async () => {
+    if (drainingRef.current) return;
+    drainingRef.current = true;
+    try {
+      while (serialQueueRef.current.length > 0) {
+        const next = serialQueueRef.current.shift();
+        if (!next) break;
+        await submitSerialRef.current(next.raw, next.grade);
+      }
+    } finally {
+      drainingRef.current = false;
+    }
+  }, []);
+  const enqueueSerial = useCallback(
+    (raw?: string, grade?: string | null) => {
+      const v = (raw ?? '').trim();
+      if (!v) return;
+      serialQueueRef.current.push({ raw: v, grade: grade ?? null });
+      void drainSerialQueue();
+    },
+    [drainSerialQueue],
+  );
 
   // Remove a single serial_unit from the line (X / Delete on a chip or unit
   // row). Shared by the single-block adder and the multi-qty unit rows.
@@ -255,6 +296,7 @@ export function useLineSerials({
     serialSubmitting,
     refreshLineWithSerials,
     submitSerial,
+    enqueueSerial,
     deleteSerialUnit,
     replaceSerialUnit,
     setUnitGrade,

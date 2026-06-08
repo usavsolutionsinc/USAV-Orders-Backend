@@ -93,5 +93,3 @@ export function PhoneSignInQrButton({ className }: { className?: string }) {
     </>
   );
 }
-
-export default PhoneSignInQrButton;

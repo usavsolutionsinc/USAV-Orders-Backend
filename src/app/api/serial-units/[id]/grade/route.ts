@@ -6,6 +6,9 @@ import { appendInventoryEvent } from '@/lib/repositories/inventory/inventoryEven
 import { recordChange } from '@/lib/repositories/inventory/conditionHistory';
 import { CONDITION_GRADE_VALUES } from '@/components/inventory/types';
 import { sortSerialUnitToParts } from '@/lib/inventory/parts-sort';
+import { gatherQualityInputs, recomputeUnitQualitySafe } from '@/lib/neon/quality-queries';
+import { evaluateGradeAdvice } from '@/lib/quality/gradeAdvice';
+import type { ConditionGrade } from '@/lib/quality/qualityScore';
 
 /**
  * POST /api/serial-units/[id]/grade
@@ -125,12 +128,28 @@ export const POST = withAuth(async (request, ctx) => {
             }
         }
 
+        // Advisory grade signals (non-blocking) + quality recompute.
+        let warnings: ReturnType<typeof evaluateGradeAdvice>['warnings'] = [];
+        try {
+            const gathered = await gatherQualityInputs(serialUnitId);
+            if (gathered) {
+                warnings = evaluateGradeAdvice({
+                    grade: newGrade as ConditionGrade,
+                    openFailures: gathered.openFailures,
+                }).warnings;
+            }
+        } catch (adviceErr) {
+            console.warn('[grade] advice failed (non-fatal)', adviceErr);
+        }
+        await recomputeUnitQualitySafe(serialUnitId);
+
         return NextResponse.json({
             ok: true,
             unit: updated.rows[0],
             event_id: event.id,
             parts_sorted: partsSort?.sorted === true,
             parts_bin: partsSort?.sorted === true ? partsSort.bin : null,
+            warnings,
         });
     } catch (err) {
         const message = err instanceof Error ? err.message : 'grade failed';

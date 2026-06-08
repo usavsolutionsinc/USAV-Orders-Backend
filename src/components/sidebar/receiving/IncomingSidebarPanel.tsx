@@ -6,7 +6,8 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import type { DateRange } from 'react-day-picker';
 import { SidebarShell } from '@/components/layout/SidebarShell';
 import { DateRangePickerField } from '@/design-system/components/DateRangePickerField';
-import { Package, Truck, AlertTriangle, Clock, ChevronDown, RefreshCw, Filter, Mail } from '@/components/Icons';
+import { Package, Truck, AlertTriangle, Clock, ChevronDown, RefreshCw, Mail, Unlink } from '@/components/Icons';
+import type { FilterRefinement } from '@/design-system/components/FilterRefinementBar';
 import { toast } from '@/lib/toast';
 import { RECEIVING_HISTORY_URL_PARAMS } from '@/lib/receiving-history-search';
 import {
@@ -18,6 +19,11 @@ import {
   EMPTY_CARRIER_TABS,
   type CarrierTabsState,
 } from '@/components/sidebar/receiving/CarrierSyncDialog';
+import {
+  IncomingSyncDialog,
+  type IncomingSyncKind,
+  type IncomingSyncResult,
+} from '@/components/sidebar/receiving/IncomingSyncDialog';
 import { streamNdjson } from '@/lib/orders-sync/client';
 import type { CarrierSyncResult, CarrierSyncStreamEvent } from '@/lib/carrier-sync/types';
 
@@ -30,13 +36,15 @@ export type IncomingDeliveryState =
   | 'IN_TRANSIT'
   | 'TRACKING_UNAVAILABLE'
   | 'PENDING_CARRIER'
+  | 'CARRIER_MISMATCH'
   | 'AWAITING_TRACKING';
 
 export interface IncomingCarrierBreakdown {
-  carrier: 'UPS' | 'USPS' | 'FEDEX' | string;
+  carrier: 'UPS' | 'USPS' | 'FEDEX' | 'UNKNOWN' | string;
   delivered_unscanned: number;
   tracking_unavailable: number;
   in_transit: number;
+  carrier_mismatch: number;
 }
 
 export interface IncomingSummary {
@@ -47,6 +55,7 @@ export interface IncomingSummary {
   stalled: number;
   in_transit: number;
   pending_carrier: number;
+  carrier_mismatch: number;
   tracking_unavailable: number;
   awaiting_tracking: number;
   expected_today: number;
@@ -57,7 +66,7 @@ interface TileSpec {
   state: IncomingDeliveryState | null; // null = "All"
   label: string;
   key: keyof IncomingSummary;
-  tone: 'rose' | 'amber' | 'blue' | 'gray' | 'slate' | 'orange' | 'violet';
+  tone: 'rose' | 'amber' | 'blue' | 'gray' | 'slate' | 'orange' | 'violet' | 'red';
   icon: React.FC<{ className?: string }>;
   /** Tooltip / `aria-description` — the *why* this bucket exists. */
   title: string;
@@ -134,6 +143,15 @@ const TILES: TileSpec[] = [
       'The carrier is refusing tracking requests for these (e.g. USPS access-control 403 while the IP Agreement is pending). Delivered status is unobtainable until access clears — not "not delivered".',
   },
   {
+    state: 'CARRIER_MISMATCH',
+    label: 'Carrier mismatch',
+    key: 'carrier_mismatch',
+    tone: 'red',
+    icon: Unlink,
+    title:
+      'The carrier and tracking# don’t match: the number matched no known carrier, or the carrier API has no record of it (not-found / invalid). These never resolve on their own — fix the tracking# or reassign the carrier.',
+  },
+  {
     state: 'AWAITING_TRACKING',
     label: 'Awaiting tracking #',
     key: 'awaiting_tracking',
@@ -144,13 +162,17 @@ const TILES: TileSpec[] = [
   },
 ];
 
-/**
- * Per-tone token sets. Literal strings keep Tailwind's static extractor happy
- * (composing the class via `bg-${tone}-50` would be tree-shaken away in prod).
- */
+/** Per-tone tokens for status rows + matching active-filter pills. */
 const TONE: Record<
   TileSpec['tone'],
-  { active: string; inactive: string; ring: string; iconActive: string; iconInactive: string }
+  {
+    active: string;
+    inactive: string;
+    ring: string;
+    iconActive: string;
+    iconInactive: string;
+    pill: string;
+  }
 > = {
   rose: {
     active: 'bg-rose-600 text-white ring-rose-600',
@@ -158,6 +180,7 @@ const TONE: Record<
     ring: 'focus:ring-rose-500/40',
     iconActive: 'text-white',
     iconInactive: 'text-rose-500',
+    pill: 'bg-rose-50 text-rose-700 ring-rose-200 hover:bg-rose-100',
   },
   amber: {
     active: 'bg-amber-600 text-white ring-amber-600',
@@ -165,6 +188,7 @@ const TONE: Record<
     ring: 'focus:ring-amber-500/40',
     iconActive: 'text-white',
     iconInactive: 'text-amber-500',
+    pill: 'bg-amber-50 text-amber-800 ring-amber-200 hover:bg-amber-100',
   },
   orange: {
     active: 'bg-orange-600 text-white ring-orange-600',
@@ -172,6 +196,7 @@ const TONE: Record<
     ring: 'focus:ring-orange-500/40',
     iconActive: 'text-white',
     iconInactive: 'text-orange-500',
+    pill: 'bg-orange-50 text-orange-800 ring-orange-200 hover:bg-orange-100',
   },
   blue: {
     active: 'bg-blue-600 text-white ring-blue-600',
@@ -179,6 +204,7 @@ const TONE: Record<
     ring: 'focus:ring-blue-500/40',
     iconActive: 'text-white',
     iconInactive: 'text-blue-500',
+    pill: 'bg-blue-50 text-blue-700 ring-blue-200 hover:bg-blue-100',
   },
   gray: {
     active: 'bg-gray-700 text-white ring-gray-700',
@@ -186,6 +212,7 @@ const TONE: Record<
     ring: 'focus:ring-gray-500/40',
     iconActive: 'text-white',
     iconInactive: 'text-gray-500',
+    pill: 'bg-gray-50 text-gray-700 ring-gray-200 hover:bg-gray-100',
   },
   slate: {
     active: 'bg-slate-900 text-white ring-slate-900',
@@ -193,6 +220,7 @@ const TONE: Record<
     ring: 'focus:ring-slate-500/40',
     iconActive: 'text-white',
     iconInactive: 'text-slate-500',
+    pill: 'bg-slate-50 text-slate-700 ring-slate-200 hover:bg-slate-100',
   },
   violet: {
     active: 'bg-violet-600 text-white ring-violet-600',
@@ -200,6 +228,15 @@ const TONE: Record<
     ring: 'focus:ring-violet-500/40',
     iconActive: 'text-white',
     iconInactive: 'text-violet-500',
+    pill: 'bg-violet-50 text-violet-700 ring-violet-200 hover:bg-violet-100',
+  },
+  red: {
+    active: 'bg-red-600 text-white ring-red-600',
+    inactive: 'bg-white text-red-700 ring-red-200 hover:bg-red-50',
+    ring: 'focus:ring-red-500/40',
+    iconActive: 'text-white',
+    iconInactive: 'text-red-500',
+    pill: 'bg-red-50 text-red-700 ring-red-200 hover:bg-red-100',
   },
 };
 
@@ -243,6 +280,42 @@ export function IncomingSidebarPanel() {
   const syncTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const syncAbortRef = useRef<AbortController | null>(null);
 
+  // Zoho / Email sync dialog — the single-shot sibling of the carrier dialog.
+  // Same rich layout (stat tiles + breakdown), but driven by one POST result
+  // rather than a stream.
+  const [incSyncOpen, setIncSyncOpen] = useState(false);
+  const [incSyncKind, setIncSyncKind] = useState<IncomingSyncKind>('zoho');
+  const [incSyncRunning, setIncSyncRunning] = useState(false);
+  const [incSyncResult, setIncSyncResult] = useState<IncomingSyncResult | null>(null);
+  const [incSyncElapsedMs, setIncSyncElapsedMs] = useState(0);
+  const incSyncTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  // Open the dialog in a running state + start its elapsed timer.
+  const beginIncSync = useCallback((kind: IncomingSyncKind) => {
+    setIncSyncKind(kind);
+    setIncSyncResult(null);
+    setIncSyncRunning(true);
+    setIncSyncElapsedMs(0);
+    setIncSyncOpen(true);
+    const t0 = Date.now();
+    if (incSyncTimerRef.current) clearInterval(incSyncTimerRef.current);
+    incSyncTimerRef.current = setInterval(() => setIncSyncElapsedMs(Date.now() - t0), 100);
+  }, []);
+
+  // Settle the dialog with its result + stop the timer.
+  const finishIncSync = useCallback((result: IncomingSyncResult) => {
+    if (incSyncTimerRef.current) {
+      clearInterval(incSyncTimerRef.current);
+      incSyncTimerRef.current = null;
+    }
+    setIncSyncRunning(false);
+    setIncSyncResult(result);
+  }, []);
+
+  useEffect(() => () => {
+    if (incSyncTimerRef.current) clearInterval(incSyncTimerRef.current);
+  }, []);
+
   useEffect(() => () => {
     if (syncTimerRef.current) clearInterval(syncTimerRef.current);
     syncAbortRef.current?.abort();
@@ -264,31 +337,67 @@ export function IncomingSidebarPanel() {
   const refreshZoho = useCallback(async () => {
     if (zohoRefreshing) return;
     setZohoRefreshing(true);
+    beginIncSync('zoho');
     try {
       const res = await fetch('/api/receiving-lines/incoming/zoho-refresh', { method: 'POST' });
-      if (!res.ok) throw new Error('zoho refresh failed');
-      const data = await res.json();
+      const data = await res.json().catch(() => null);
+      if (!res.ok || !data) throw new Error(data?.error || `Zoho refresh failed (${res.status})`);
       await invalidateIncoming();
       const created = data?.issued?.created ?? 0;
       const updated = data?.issued?.updated ?? 0;
+      const linked = data?.issued?.linked ?? 0;
+      const processed = data?.issued?.processed ?? 0;
+      const failed = data?.issued?.failed ?? 0;
       const statusUpdates = data?.mirror?.upserted ?? 0;
-      setSyncReport({
-        title: 'Zoho refreshed',
+      const fetched = data?.mirror?.fetched ?? 0;
+      const mirrorMode = data?.mirror?.mode ?? '—';
+      const mirrorErrors: string[] = Array.isArray(data?.mirror?.errors) ? data.mirror.errors : [];
+      const nothingChanged = created + updated + linked + statusUpdates === 0;
+      finishIncSync({
         ok: true,
-        lines: [
-          `${created} new PO${created === 1 ? '' : 's'} added`,
-          `${updated} PO${updated === 1 ? '' : 's'} refreshed`,
-          `${statusUpdates} Zoho status update${statusUpdates === 1 ? '' : 's'} — received POs cleared`,
+        tiles: [
+          { label: 'New', value: created, tone: 'emerald' },
+          { label: 'Refreshed', value: updated, tone: 'blue' },
+          { label: 'Cleared', value: statusUpdates, tone: 'gray' },
+          { label: 'Errors', value: failed + mirrorErrors.length, tone: 'red' },
         ],
+        updated: [
+          created > 0 ? `${created} new PO${created === 1 ? '' : 's'} added` : null,
+          updated > 0 ? `${updated} PO${updated === 1 ? '' : 's'} refreshed` : null,
+          linked > 0 ? `${linked} PO${linked === 1 ? '' : 's'} linked to a shipment` : null,
+          statusUpdates > 0 ? `${statusUpdates} received PO${statusUpdates === 1 ? '' : 's'} cleared from Incoming` : null,
+        ].filter(Boolean) as string[],
+        sections: [
+          { label: 'Issued sync', rows: [
+            { k: 'Checked', v: processed },
+            { k: 'Created', v: created },
+            { k: 'Updated', v: updated },
+            { k: 'Linked', v: linked },
+            { k: 'Failed', v: failed },
+          ] },
+          { label: 'Mirror sync', rows: [
+            { k: 'Mode', v: mirrorMode },
+            { k: 'Fetched', v: fetched },
+            { k: 'Updated', v: statusUpdates },
+            { k: 'Errors', v: mirrorErrors.length },
+          ] },
+        ],
+        errors: mirrorErrors,
+        note: nothingChanged ? 'Already up to date — no Zoho changes since last sync.' : null,
       });
-      setSyncReportOpen(true);
-    } catch {
-      setSyncReport({ title: 'Zoho refresh failed', ok: false, lines: ['Could not reach Zoho. Try again.'] });
-      setSyncReportOpen(true);
+    } catch (err) {
+      finishIncSync({
+        ok: false,
+        tiles: [],
+        updated: [],
+        sections: [],
+        errors: [],
+        note: err instanceof Error ? err.message : 'Could not reach Zoho. Try again.',
+      });
     } finally {
       setZohoRefreshing(false);
     }
-  }, [zohoRefreshing, invalidateIncoming]);
+  }, [zohoRefreshing, invalidateIncoming, beginIncSync, finishIncSync]);
 
   // "Rescan PO email" — re-run the mailbox reconcile, which now also logs
   // "ORDER DELIVERED" emails as delivery signals feeding the email-driven
@@ -296,86 +405,73 @@ export function IncomingSidebarPanel() {
   const rescanEmail = useCallback(async () => {
     if (rescanning) return;
     setRescanning(true);
+    beginIncSync('email');
     try {
-      const res = await fetch('/api/admin/po-gmail/reconcile?limit=50', { cache: 'no-store' });
-      if (!res.ok) throw new Error('rescan failed');
-      const data = await res.json();
+      // Receiving-scoped endpoint (gated `receiving.view`, same as the Zoho /
+      // Tracking siblings). The old admin reconcile route was `admin.view`, so
+      // floor staff got a silent 403 — this returns counts only, no PII.
+      const res = await fetch('/api/receiving-lines/incoming/email-rescan?limit=50', {
+        method: 'POST',
+        cache: 'no-store',
+      });
+      const data = await res.json().catch(() => null);
+      if (!res.ok || !data?.success) {
+        throw new Error(data?.error || `Rescan failed (${res.status})`);
+      }
       await invalidateIncoming();
+      const scanned = data?.scanned ?? 0;
       const sig = data?.persisted?.delivery_signals ?? 0;
       const upserted = data?.persisted?.upserted ?? 0;
       const resolved = data?.persisted?.resolved ?? 0;
       const trackingLinked = data?.persisted?.tracking_linked ?? 0;
-      setSyncReport({
-        title: 'PO mailbox rescanned',
+      const trackingAlready = data?.persisted?.tracking_already_linked ?? 0;
+      const trackingRejected = data?.persisted?.tracking_rejected ?? 0;
+      const counts = data?.counts ?? {};
+      const nothingChanged = sig + upserted + resolved + trackingLinked === 0;
+      finishIncSync({
         ok: true,
-        lines: [
-          `${sig} "Order delivered" signal${sig === 1 ? '' : 's'} logged`,
-          `${upserted} missing PO${upserted === 1 ? '' : 's'} added`,
-          `${resolved} resolved`,
-          `${trackingLinked} tracking #${trackingLinked === 1 ? '' : 's'} linked`,
+        tiles: [
+          { label: 'Delivered', value: sig, tone: 'emerald' },
+          { label: 'Added', value: upserted, tone: 'blue' },
+          { label: 'Resolved', value: resolved, tone: 'gray' },
+          { label: 'Tracking', value: trackingLinked, tone: 'emerald' },
         ],
+        updated: [
+          sig > 0 ? `${sig} “Order delivered” signal${sig === 1 ? '' : 's'} logged` : null,
+          upserted > 0 ? `${upserted} missing PO${upserted === 1 ? '' : 's'} added to worklist` : null,
+          resolved > 0 ? `${resolved} worklist row${resolved === 1 ? '' : 's'} resolved` : null,
+          trackingLinked > 0 ? `${trackingLinked} tracking #${trackingLinked === 1 ? '' : 's'} linked` : null,
+        ].filter(Boolean) as string[],
+        sections: [
+          { label: 'Mailbox scan', rows: [
+            { k: 'Scanned', v: scanned },
+            { k: 'Missing', v: counts?.missing ?? 0 },
+            { k: 'In Zoho', v: counts?.in_zoho ?? 0 },
+            { k: 'Received', v: counts?.received ?? 0 },
+            { k: 'No match', v: counts?.no_match ?? 0 },
+          ] },
+          { label: 'Tracking', rows: [
+            { k: 'Linked', v: trackingLinked },
+            { k: 'Already linked', v: trackingAlready },
+            { k: 'Rejected', v: trackingRejected },
+          ] },
+        ],
+        errors: [],
+        note: nothingChanged ? 'Already up to date — nothing new in the mailbox.' : null,
       });
-      setSyncReportOpen(true);
-    } catch {
-      setSyncReport({ title: 'PO email rescan failed', ok: false, lines: ['Could not reach the PO mailbox. Try again.'] });
-      setSyncReportOpen(true);
+    } catch (err) {
+      finishIncSync({
+        ok: false,
+        tiles: [],
+        updated: [],
+        sections: [],
+        errors: [],
+        note: err instanceof Error ? err.message : 'Could not reach the PO mailbox. Try again.',
+      });
     } finally {
       setRescanning(false);
     }
-  }, [rescanning, invalidateIncoming]);
-
-  // Single-filter popover (mirrors the dashboard's ShippedCarrierFilters):
-  // every refinement — the delivery-state facet, the PO date range, and the
-  // sort axis — lives behind one button below the search bar.
-  const [filtersOpen, setFiltersOpen] = useState(false);
-  const popoverRef = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    if (!filtersOpen) return;
-    const onClick = (e: MouseEvent) => {
-      const target = e.target as HTMLElement;
-      if (popoverRef.current && !popoverRef.current.contains(target)) {
-        // Clicks inside a portaled Radix popper (the date calendar) aren't "outside".
-        if (target.closest?.('[data-radix-popper-content-wrapper]')) return;
-        setFiltersOpen(false);
-      }
-    };
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') setFiltersOpen(false);
-    };
-    document.addEventListener('mousedown', onClick);
-    document.addEventListener('keydown', onKey);
-    return () => {
-      document.removeEventListener('mousedown', onClick);
-      document.removeEventListener('keydown', onKey);
-    };
-  }, [filtersOpen]);
-
-  // Sync-result popover: after a Zoho / Email sync, summarize what landed in the
-  // system (new POs, status updates, delivery signals) in a popover below the
-  // sync buttons. Tracking keeps its own richer streaming dialog.
-  const [syncReport, setSyncReport] = useState<
-    { title: string; ok: boolean; lines: string[] } | null
-  >(null);
-  const [syncReportOpen, setSyncReportOpen] = useState(false);
-  const syncReportRef = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    if (!syncReportOpen) return;
-    const onClick = (e: MouseEvent) => {
-      const target = e.target as HTMLElement;
-      if (syncReportRef.current && !syncReportRef.current.contains(target)) {
-        setSyncReportOpen(false);
-      }
-    };
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') setSyncReportOpen(false);
-    };
-    document.addEventListener('mousedown', onClick);
-    document.addEventListener('keydown', onKey);
-    return () => {
-      document.removeEventListener('mousedown', onClick);
-      document.removeEventListener('keydown', onKey);
-    };
-  }, [syncReportOpen]);
+  }, [rescanning, invalidateIncoming, beginIncSync, finishIncSync]);
 
   const handleCancelSync = useCallback(() => {
     syncAbortRef.current?.abort();
@@ -481,6 +577,7 @@ export function IncomingSidebarPanel() {
       || stateRaw === 'IN_TRANSIT'
       || stateRaw === 'TRACKING_UNAVAILABLE'
       || stateRaw === 'PENDING_CARRIER'
+      || stateRaw === 'CARRIER_MISMATCH'
       || stateRaw === 'AWAITING_TRACKING'
       ? (stateRaw as IncomingDeliveryState)
       : null;
@@ -567,6 +664,16 @@ export function IncomingSidebarPanel() {
     [router, searchParams],
   );
 
+  const clearFilters = useCallback(() => {
+    const params = new URLSearchParams(searchParams.toString());
+    params.delete('state');
+    params.delete('po_from');
+    params.delete('po_to');
+    params.delete('page');
+    const search = params.toString();
+    router.replace(search ? `/receiving?${search}` : '/receiving');
+  }, [router, searchParams]);
+
   // Polled aggregate. 30s cadence is the sweet spot: fresh enough that a
   // newly-delivered package surfaces between operator glances, cheap enough
   // that 100 concurrent operators each open a single query connection.
@@ -592,6 +699,7 @@ export function IncomingSidebarPanel() {
         stalled: summaryData.stalled ?? 0,
         in_transit: summaryData.in_transit,
         pending_carrier: summaryData.pending_carrier ?? 0,
+        carrier_mismatch: summaryData.carrier_mismatch ?? 0,
         tracking_unavailable: summaryData.tracking_unavailable ?? 0,
         awaiting_tracking: summaryData.awaiting_tracking,
         expected_today: summaryData.expected_today,
@@ -599,39 +707,40 @@ export function IncomingSidebarPanel() {
       }
     : null;
 
-  const tiles = useMemo(
-    () =>
-      TILES.map((t) => {
-        const active = state === t.state;
-        const tone = TONE[t.tone];
-        const count = summary ? (summary[t.key] as number) : null;
-        const Icon = t.icon;
-        return (
-          <button
-            key={t.label}
-            type="button"
-            onClick={() => setState(active ? null : t.state)}
-            title={t.title}
-            aria-pressed={active}
-            className={`flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-label font-bold ring-1 ring-inset transition-colors focus:outline-none focus:ring-2 ${
-              active ? tone.active : tone.inactive
-            } ${tone.ring}`}
-          >
-            <Icon className={`h-4 w-4 shrink-0 ${active ? tone.iconActive : tone.iconInactive}`} />
-            <span className="flex-1 truncate">{t.label}</span>
-            <span className="ml-1 tabular-nums text-caption font-black">
-              {count == null ? '—' : count.toLocaleString()}
-            </span>
-          </button>
-        );
-      }),
-    [summary, state, setState],
-  );
+  const toISODate = (d: Date) =>
+    `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 
-  // Filter button summary: the selected delivery-state facet + an active PO
-  // date range each count as one refinement (sort is an ordering, not a filter).
+  const dropdownLabelClass = 'mb-1.5 block text-eyebrow font-black uppercase tracking-wider text-gray-500';
+  const selectClass =
+    'h-9 w-full cursor-pointer appearance-none rounded-md border border-gray-200 bg-white pl-2.5 pr-7 text-caption font-semibold text-gray-900 hover:border-blue-300 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20';
+
   const activeTile = state ? TILES.find((t) => t.state === state) ?? null : null;
-  const activeFilterCount = (state ? 1 : 0) + (poFrom ? 1 : 0);
+
+  const refinements = useMemo((): FilterRefinement[] => {
+    const out: FilterRefinement[] = [];
+    if (activeTile) {
+      out.push({
+        id: 'state',
+        label: activeTile.label,
+        onRemove: () => setState(null),
+        pillClassName: TONE[activeTile.tone].pill,
+      });
+    }
+    if (poFrom || poTo) {
+      const from = poFrom ? toISODate(poFrom) : null;
+      const to = poTo ? toISODate(poTo) : null;
+      const range =
+        from && to && to !== from ? `${from} → ${to}` : from ?? to ?? '';
+      out.push({
+        id: 'date',
+        label: `PO ${range}`,
+        onRemove: () => setDateRange(undefined),
+      });
+    }
+    return out;
+  }, [activeTile, poFrom, poTo, setState, setDateRange]);
+
+  const activeFilterCount = refinements.length;
 
   const isSyncing = refreshing;
 
@@ -640,152 +749,124 @@ export function IncomingSidebarPanel() {
     {/* overflow-visible so the filter popover (absolute) isn't clipped — this
         panel has no scroll body, only the search + filter/refresh controls. */}
     <SidebarShell
-      className="overflow-visible"
+      className="h-auto shrink-0 overflow-visible bg-white"
       search={{ value: search, onChange: setSearch, placeholder: 'Search PO #, tracking, SKU…' }}
+      filter={{
+        label: 'Filters',
+        refinements,
+        activeCount: activeFilterCount,
+        onClearAll: activeFilterCount > 0 ? clearFilters : undefined,
+        renderDropdown: () => (
+          <div className="space-y-3">
+            <div>
+              <span className={dropdownLabelClass}>PO purchased between</span>
+              <DateRangePickerField
+                value={dateRange}
+                onChange={setDateRange}
+                placeholder="Any date"
+              />
+              <p className="mt-1 text-eyebrow font-medium text-gray-400">
+                Date in header is when Zoho PO was created
+              </p>
+            </div>
+
+            <label className="block">
+              <span className={dropdownLabelClass}>Sort</span>
+              <div className="relative">
+                <select
+                  value={sort}
+                  onChange={(e) => setSort(e.target.value as IncomingSort)}
+                  className={selectClass}
+                  aria-label="Sort incoming POs by"
+                >
+                  {(Object.keys(INCOMING_SORT_LABELS) as IncomingSort[]).map((k) => (
+                    <option key={k} value={k}>
+                      {INCOMING_SORT_LABELS[k]}
+                    </option>
+                  ))}
+                </select>
+                <ChevronDown className="pointer-events-none absolute right-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-gray-400" />
+              </div>
+            </label>
+
+            <div>
+              <span className={dropdownLabelClass}>Status</span>
+              <div className="space-y-1.5">
+                {TILES.map((t) => {
+                  const active = state === t.state;
+                  const tone = TONE[t.tone];
+                  const count = summary ? (summary[t.key] as number) : null;
+                  const Icon = t.icon;
+                  return (
+                    <button
+                      key={t.label}
+                      type="button"
+                      onClick={() => setState(active ? null : t.state)}
+                      title={t.title}
+                      aria-pressed={active}
+                      className={`flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-label font-bold ring-1 ring-inset transition-colors focus:outline-none focus:ring-2 ${
+                        active ? tone.active : tone.inactive
+                      } ${tone.ring}`}
+                    >
+                      <Icon className={`h-4 w-4 shrink-0 ${active ? tone.iconActive : tone.iconInactive}`} />
+                      <span className="flex-1 truncate">{t.label}</span>
+                      <span className="ml-1 tabular-nums text-caption font-black">
+                        {count == null ? '—' : count.toLocaleString()}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {summary?.by_carrier?.some(
+              (c) => c.delivered_unscanned || c.tracking_unavailable || c.in_transit || c.carrier_mismatch,
+            ) ? (
+              <div>
+                <span className={dropdownLabelClass}>By carrier</span>
+                <div className="overflow-hidden rounded-lg ring-1 ring-inset ring-gray-200">
+                  <div className="grid grid-cols-[minmax(0,1fr)_2.25rem_2.75rem_2.25rem_2.25rem] items-center gap-x-1 bg-gray-50 px-2 py-1 text-mini font-black uppercase tracking-wide text-gray-400">
+                    <span>Carrier</span>
+                    <span className="text-right tabular-nums" title="In transit">Trans</span>
+                    <span className="text-right tabular-nums" title="Tracking unavailable">Unav</span>
+                    <span className="text-right tabular-nums" title="Delivered · not scanned">Deliv</span>
+                    <span className="text-right tabular-nums" title="Carrier mismatch — carrier/number don’t match">Miss</span>
+                  </div>
+                  {summary.by_carrier!.map((c) => (
+                    <div
+                      key={c.carrier}
+                      className="grid grid-cols-[minmax(0,1fr)_2.25rem_2.75rem_2.25rem_2.25rem] items-center gap-x-1 border-t border-gray-100 px-2 py-1 text-caption"
+                    >
+                      <span className="truncate font-bold text-gray-700">{c.carrier === 'UNKNOWN' ? 'Other' : c.carrier}</span>
+                      <span className={`text-right font-bold tabular-nums ${c.in_transit ? 'text-blue-600' : 'text-gray-300'}`}>
+                        {c.in_transit}
+                      </span>
+                      <span className={`text-right font-bold tabular-nums ${c.tracking_unavailable ? 'text-violet-600' : 'text-gray-300'}`}>
+                        {c.tracking_unavailable}
+                      </span>
+                      <span className={`text-right font-bold tabular-nums ${c.delivered_unscanned ? 'text-emerald-600' : 'text-gray-300'}`}>
+                        {c.delivered_unscanned}
+                      </span>
+                      <span className={`text-right font-bold tabular-nums ${c.carrier_mismatch ? 'text-red-600' : 'text-gray-300'}`}>
+                        {c.carrier_mismatch}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ) : null}
+          </div>
+        ),
+      }}
       headerBelow={
         <div className="space-y-2 border-b border-gray-200 bg-white pb-2">
-        {/* Single filter entry point — the delivery-state facet, PO purchase
-            date range, and sort axis all condense into one popover below the
-            search bar (mirrors the dashboard's ShippedCarrierFilters). Sits
-            ABOVE the sync buttons per the layout: filter first, sync below. */}
-        <div className="relative px-1.5" ref={popoverRef}>
-          <button
-            type="button"
-            onClick={() => setFiltersOpen((o) => !o)}
-            aria-expanded={filtersOpen}
-            aria-haspopup="dialog"
-            className={`flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-label font-bold ring-1 ring-inset transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500/40 ${
-              activeFilterCount > 0
-                ? 'bg-blue-50 text-blue-700 ring-blue-200 hover:bg-blue-100'
-                : 'bg-white text-gray-700 ring-gray-200 hover:bg-gray-50'
-            }`}
-          >
-            <Filter className="h-4 w-4 shrink-0" />
-            <span className="flex-1 truncate text-left">
-              {activeTile ? activeTile.label : 'Filters'}
-            </span>
-            {activeFilterCount > 0 ? (
-              <span className="inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-blue-600 px-1.5 text-mini font-black text-white">
-                {activeFilterCount}
-              </span>
-            ) : null}
-            <ChevronDown className={`h-3.5 w-3.5 shrink-0 transition-transform ${filtersOpen ? 'rotate-180' : ''}`} />
-          </button>
-
-          {filtersOpen ? (
-            <div
-              role="dialog"
-              aria-label="Incoming filters"
-              className="absolute left-0 right-0 top-full z-[60] mt-1 max-h-[70vh] space-y-3 overflow-y-auto rounded-xl border border-gray-200 bg-white p-3 shadow-xl ring-1 ring-black/5"
-            >
-              {/* Delivery-state facet — the old vertical tile stack, now grouped. */}
-              <div>
-                <span className="mb-1 block text-eyebrow font-black uppercase tracking-wider text-gray-500">
-                  Status
-                </span>
-                <div className="space-y-1.5">{tiles}</div>
-              </div>
-
-              {/* E4 per-carrier breakdown — at-a-glance "USPS: 12 unavailable,
-                  FedEx: 3 delivered-unscanned" so the team can see which carrier
-                  is driving the actionable buckets. Only the non-zero columns. */}
-              {summary?.by_carrier?.some(
-                (c) => c.delivered_unscanned || c.tracking_unavailable || c.in_transit,
-              ) ? (
-                <div>
-                  <span className="mb-1 block text-eyebrow font-black uppercase tracking-wider text-gray-500">
-                    By carrier
-                  </span>
-                  <div className="overflow-hidden rounded-lg ring-1 ring-inset ring-gray-200">
-                    <div className="grid grid-cols-[1fr_auto_auto_auto] items-center gap-x-2 bg-gray-50 px-2 py-1 text-mini font-black uppercase tracking-wide text-gray-400">
-                      <span>Carrier</span>
-                      <span className="text-right" title="Delivered · not scanned">Deliv</span>
-                      <span className="text-right" title="Tracking unavailable">Unav</span>
-                      <span className="text-right" title="In transit">Trans</span>
-                    </div>
-                    {summary.by_carrier!.map((c) => (
-                      <div
-                        key={c.carrier}
-                        className="grid grid-cols-[1fr_auto_auto_auto] items-center gap-x-2 border-t border-gray-100 px-2 py-1 text-caption"
-                      >
-                        <span className="font-bold text-gray-700">{c.carrier}</span>
-                        <span className={`text-right font-bold tabular-nums ${c.delivered_unscanned ? 'text-rose-600' : 'text-gray-300'}`}>
-                          {c.delivered_unscanned}
-                        </span>
-                        <span className={`text-right font-bold tabular-nums ${c.tracking_unavailable ? 'text-violet-600' : 'text-gray-300'}`}>
-                          {c.tracking_unavailable}
-                        </span>
-                        <span className={`text-right font-bold tabular-nums ${c.in_transit ? 'text-blue-600' : 'text-gray-300'}`}>
-                          {c.in_transit}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              ) : null}
-
-              {/* PO purchase-date range — maps to `zoho_po_mirror.po_date` via
-                  `?po_from=` / `?po_to=`; the list endpoint narrows server-side. */}
-              <div>
-                <span className="mb-1 block text-eyebrow font-black uppercase tracking-wider text-gray-500">
-                  PO purchased between
-                </span>
-                <DateRangePickerField
-                  value={dateRange}
-                  onChange={setDateRange}
-                  placeholder="Any date"
-                />
-                <p className="mt-1 text-eyebrow font-medium text-gray-400">
-                  Date in header = when Zoho PO was created
-                </p>
-              </div>
-
-              {/* Sort axis — same `?sort=` URL contract the API + header read. */}
-              <label className="block">
-                <span className="mb-1 block text-eyebrow font-black uppercase tracking-wider text-gray-500">
-                  Sort
-                </span>
-                <div className="relative">
-                  <select
-                    value={sort}
-                    onChange={(e) => setSort(e.target.value as IncomingSort)}
-                    className="h-9 w-full cursor-pointer appearance-none rounded-md border border-gray-200 bg-white pl-2.5 pr-7 text-caption font-semibold text-gray-900 hover:border-blue-300 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
-                    aria-label="Sort incoming POs by"
-                  >
-                    {(Object.keys(INCOMING_SORT_LABELS) as IncomingSort[]).map((k) => (
-                      <option key={k} value={k}>
-                        {INCOMING_SORT_LABELS[k]}
-                      </option>
-                    ))}
-                  </select>
-                  <ChevronDown className="pointer-events-none absolute right-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-gray-400" />
-                </div>
-              </label>
-
-              {activeFilterCount > 0 ? (
-                <button
-                  type="button"
-                  onClick={() => {
-                    setState(null);
-                    setDateRange(undefined);
-                  }}
-                  className="w-full text-center text-xs font-bold text-gray-500 underline-offset-2 hover:text-gray-900 hover:underline"
-                >
-                  Clear filters
-                </button>
-              ) : null}
-            </div>
-          ) : null}
-        </div>
-
-        {/* Three sync actions, BELOW the filter button. Each refreshes a
-            distinct upstream and re-reads the tiles + rows; Zoho/Email then
-            reveal a popover summarizing what landed in the system:
-              • Zoho — re-pull issued POs + refresh mirror status. New POs
-                appear; received/closed ones drop off the Incoming display.
-              • Tracking — re-poll UPS/USPS/FedEx (streams into its own dialog).
-              • Email — rescan the PO mailbox for "ORDER DELIVERED" emails. */}
-        <div className="relative px-1.5" ref={syncReportRef}>
+        {/* Three sync actions, BELOW the filter bar. Each refreshes a distinct
+            upstream and re-reads the tiles + rows, then opens its own result
+            dialog summarizing what landed in the system:
+              • Zoho — re-pull issued POs + refresh mirror status (IncomingSyncDialog).
+              • Tracking — re-poll UPS/USPS/FedEx (streams into CarrierSyncDialog).
+              • Email — rescan the PO mailbox for "ORDER DELIVERED" emails (IncomingSyncDialog). */}
+        <div className="relative px-1.5">
           <div className="flex items-stretch gap-1.5">
             <button
               type="button"
@@ -801,7 +882,7 @@ export function IncomingSidebarPanel() {
               type="button"
               onClick={() => void refreshTracking()}
               disabled={refreshing}
-              title="Re-poll UPS / USPS / FedEx for all active tracking numbers, then refresh"
+              title="Re-poll UPS / USPS / FedEx for the tracking numbers in the Incoming list, then refresh"
               className="flex flex-1 items-center justify-center gap-1.5 rounded-md border border-blue-200 bg-blue-50 px-2 py-1.5 text-caption font-bold text-blue-700 transition-colors hover:bg-blue-100 disabled:cursor-not-allowed disabled:opacity-60"
             >
               <Truck className={`h-3.5 w-3.5 ${refreshing ? 'animate-pulse' : ''}`} />
@@ -818,45 +899,6 @@ export function IncomingSidebarPanel() {
               {rescanning ? 'Email…' : 'Email'}
             </button>
           </div>
-
-          {/* What-was-updated popover — opens after a Zoho / Email sync. */}
-          {syncReportOpen && syncReport ? (
-            <div
-              role="status"
-              aria-live="polite"
-              className="absolute left-1.5 right-1.5 top-full z-[60] mt-1 rounded-xl border border-gray-200 bg-white p-3 shadow-xl ring-1 ring-black/5"
-            >
-              <div className="flex items-center gap-2">
-                <span
-                  className={`inline-flex h-5 w-5 items-center justify-center rounded-full ${
-                    syncReport.ok ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700'
-                  }`}
-                >
-                  {syncReport.ok ? (
-                    <RefreshCw className="h-3 w-3" />
-                  ) : (
-                    <AlertTriangle className="h-3 w-3" />
-                  )}
-                </span>
-                <span className="flex-1 text-label font-black text-gray-900">{syncReport.title}</span>
-                <button
-                  type="button"
-                  onClick={() => setSyncReportOpen(false)}
-                  className="text-eyebrow font-bold text-gray-400 hover:text-gray-700"
-                >
-                  Close
-                </button>
-              </div>
-              <ul className="mt-2 space-y-1">
-                {syncReport.lines.map((line, i) => (
-                  <li key={i} className="flex items-start gap-1.5 text-caption font-semibold text-gray-600">
-                    <span className="mt-1 h-1 w-1 shrink-0 rounded-full bg-gray-300" />
-                    <span className="tabular-nums">{line}</span>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          ) : null}
         </div>
 
         </div>
@@ -870,6 +912,14 @@ export function IncomingSidebarPanel() {
       onCancel={handleCancelSync}
       carriers={carrierTabs}
       result={syncResult}
+    />
+    <IncomingSyncDialog
+      open={incSyncOpen}
+      kind={incSyncKind}
+      isRunning={incSyncRunning}
+      elapsedMs={incSyncElapsedMs}
+      result={incSyncResult}
+      onClose={() => setIncSyncOpen(false)}
     />
     </>
   );

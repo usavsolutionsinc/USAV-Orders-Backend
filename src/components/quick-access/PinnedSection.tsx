@@ -65,5 +65,3 @@ export function PinnedSection({ onNavigate }: PinnedSectionProps) {
     </div>
   );
 }
-
-export default PinnedSection;

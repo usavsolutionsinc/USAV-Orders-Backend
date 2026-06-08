@@ -3,7 +3,7 @@
 import type { ShippedOrder } from '@/lib/neon/orders-queries';
 import type { ShippedDetailsContext } from '@/utils/events';
 
-export type DashboardOrderView = 'pending' | 'unshipped' | 'shipped' | 'fba';
+export type DashboardOrderView = 'pending' | 'unshipped' | 'shipped' | 'fba' | 'warranty';
 /**
  * UI grouping for the dashboard view pills. Pending / Shipped / Awaiting are all
  * the same underlying orders data, so they collapse under a single "Shipping"
@@ -37,6 +37,7 @@ export function getDashboardOrderViewFromSearch(
   if (searchParams.has('unshipped')) return 'unshipped';
   if (searchParams.has('pending')) return 'pending';
   if (searchParams.has('fba')) return 'fba';
+  if (searchParams.has('warranty')) return 'warranty';
   return 'pending';
 }
 
@@ -53,6 +54,11 @@ export function normalizeDashboardOrderViewParams(
   params.delete('pending');
   params.delete('shipped');
   params.delete('fba');
+  params.delete('warranty');
+  // Clear warranty mode-scoped params (selection + filters) so they don't leak across modes.
+  params.delete('open');
+  params.delete('wstatus');
+  params.delete('wexp');
   params.set(nextView, '');
   return nextView;
 }

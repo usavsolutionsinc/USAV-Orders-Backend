@@ -58,6 +58,7 @@ export default function MobilePoPhotoCapturePage(
     <PhotoCaptureSurface
       receivingId={receivingId}
       headerLabel={`PO ${data?.header.po_number || data?.header.po_id}`}
+      poRef={data?.header.po_number || data?.header.po_id || null}
       returnHref={returnHref}
     />
   );

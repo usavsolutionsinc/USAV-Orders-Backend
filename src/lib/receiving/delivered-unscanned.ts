@@ -75,6 +75,12 @@ export function deliveredUnscannedBaseSql(windowParam: string): string {
          JOIN receiving_scans rs ON rs.receiving_id = r2.id
          WHERE r2.shipment_id = stn.id
        )
+       -- A delivered box whose Zoho PO already reads received/closed/cancelled
+       -- is no longer "needs receiving" — drop it so the carrier surface matches
+       -- the email path's NOT_ZOHO_RECEIVED guard. The PO is resolved the same
+       -- two ways the list endpoint uses (linked receiving row, else tracking#
+       -- → reference#), keeping count === list.length.
+       AND ${NOT_ZOHO_RECEIVED_SHIPMENT_PREDICATE}
      ORDER BY stn.tracking_number_normalized, stn.delivered_at DESC
   `;
 }
@@ -96,6 +102,55 @@ const ZOHO_TERMINAL_STATUSES_SQL = ZOHO_TERMINAL_STATUSES.map((s) => `'${s}'`).j
  * the `workflow_status='EXPECTED'` / `quantity_received=0` filters.
  */
 export const NOT_ZOHO_RECEIVED_PREDICATE = `COALESCE(mirror.status, '') NOT IN (${ZOHO_TERMINAL_STATUSES_SQL})`;
+
+/**
+ * Shipment-anchored counterpart to {@link NOT_ZOHO_RECEIVED_PREDICATE} for the
+ * delivered-unscanned base (alias `stn`), which has no `zoho_po_mirror` join.
+ * True when the shipment's resolved PO is NOT in a Zoho-terminal status. The PO
+ * is resolved exactly as the list endpoint does — the linked `receiving` row's
+ * PO id, else the normalized tracking# matched back to
+ * `zoho_po_mirror.reference_number` — so the base and the rendered list agree.
+ * A shipment with no resolvable PO is kept (treated as still-incoming).
+ */
+export const NOT_ZOHO_RECEIVED_SHIPMENT_PREDICATE = `NOT EXISTS (
+  SELECT 1 FROM zoho_po_mirror mm
+   WHERE COALESCE(mm.status, '') IN (${ZOHO_TERMINAL_STATUSES_SQL})
+     AND (
+       mm.zoho_purchaseorder_id = (
+         SELECT r.zoho_purchaseorder_id FROM receiving r
+          WHERE r.shipment_id = stn.id AND r.zoho_purchaseorder_id IS NOT NULL
+          ORDER BY r.id LIMIT 1
+       )
+       OR (
+         COALESCE(mm.reference_number, '') <> ''
+         AND regexp_replace(upper(mm.reference_number), '[^A-Z0-9]', '', 'g')
+             = stn.tracking_number_normalized
+       )
+     )
+)`;
+
+/**
+ * SQL predicate (references alias `stn`) for a shipment the carrier API can't
+ * resolve against its records — the carrier/number don't match:
+ *   - the tracking# matched no known carrier at registration (carrier='UNKNOWN',
+ *     so there's no provider to poll it), OR
+ *   - a carrier we DO poll has no record of the number (last_error_code is
+ *     NOT_FOUND or UNKNOWN_CARRIER).
+ * These never resolve on their own — a human must fix the number or reassign the
+ * carrier. Guarded to alive shipments (not delivered, not terminal) so a
+ * delivered/closed box never lands here. Distinct from PENDING_CARRIER (a real
+ * carrier we simply haven't gotten a first status from yet) and from
+ * TRACKING_UNAVAILABLE (carrier is reachable but access-blocked, e.g. USPS 403).
+ */
+export const CARRIER_MISMATCH_PREDICATE = `(
+  stn.id IS NOT NULL
+  AND COALESCE(stn.is_delivered, false) = false
+  AND COALESCE(stn.is_terminal, false) = false
+  AND (
+    upper(COALESCE(stn.carrier, '')) = 'UNKNOWN'
+    OR stn.last_error_code IN ('NOT_FOUND', 'UNKNOWN_CARRIER')
+  )
+)`;
 
 /**
  * The email-driven "delivered but not scanned" base query — the eBay-mailbox
