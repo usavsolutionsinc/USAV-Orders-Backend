@@ -70,6 +70,14 @@
       "schedule": "*/15 * * * *"
     },
     {
+      "path": "/api/cron/zoho/po-sync?mode=delta",
+      "schedule": "7,22,37,52 * * * *"
+    },
+    {
+      "path": "/api/cron/zoho/po-sync?mode=full",
+      "schedule": "30 3 * * *"
+    },
+    {
       "path": "/api/cron/zoho/fulfillment-sync?mode=delta",
       "schedule": "15 */4 * * *"
     },
