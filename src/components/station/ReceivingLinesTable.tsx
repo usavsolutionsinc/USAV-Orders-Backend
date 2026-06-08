@@ -1124,6 +1124,43 @@ export default function ReceivingLinesTable({ selectMode = false }: { selectMode
     [filteredGroupedRecords, mode.serverSorted],
   );
 
+  // History lands on the current PST week by default, but a fresh week (a
+  // Sunday morning, or any day before that week's first scan) has zero activity
+  // while last week is full — so the History tab rendered its empty state even
+  // though the `activity` feed was returning plenty of rows (they just sat one
+  // week back). When the current week is empty but earlier weeks have data, jump
+  // the window back to the most recent week that actually has activity so
+  // History always opens on rows. One-shot per mount, so manually paging forward
+  // to an empty current week isn't bounced back.
+  const autoWeekAppliedRef = useRef(false);
+  useEffect(() => {
+    if (!isHistoryMode || skipWeekFilter) return;
+    if (autoWeekAppliedRef.current || weekOffset !== 0) return;
+    // Current week already has rows → nothing to do; lock the one-shot.
+    if (Object.keys(filteredGroupedRecords).length > 0) {
+      autoWeekAppliedRef.current = true;
+      return;
+    }
+    const latest = Object.keys(groupedRecords)
+      .filter((d) => d !== 'Unknown')
+      .sort((a, b) => b.localeCompare(a))[0];
+    if (!latest) return; // still loading or genuinely empty — keep waiting.
+    autoWeekAppliedRef.current = true;
+    const curSunday = new Date(`${weekRange.startStr}T00:00:00`);
+    const latestDate = new Date(`${latest}T00:00:00`);
+    const diffDays = Math.round(
+      (curSunday.getTime() - latestDate.getTime()) / 86_400_000,
+    );
+    if (diffDays > 0) setWeekOffset(Math.ceil(diffDays / 7));
+  }, [
+    isHistoryMode,
+    skipWeekFilter,
+    weekOffset,
+    filteredGroupedRecords,
+    groupedRecords,
+    weekRange.startStr,
+  ]);
+
   // ── Bulk selection wiring ───────────────────────────────────────────────────
   // Broadcast the resolved selected rows whenever the id set or the underlying
   // rows change, so the SelectionActionBar count + payload stay in sync.

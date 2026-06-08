@@ -9,7 +9,6 @@ import {
 import {
   photoUploadQueue,
   useClearDoneOnUnmount,
-  useUploadQueue,
   type PhotoScope,
 } from '@/components/mobile/receiving/PhotoUploadQueue';
 import { useNasConfig } from '@/hooks/useNasConfig';
@@ -21,6 +20,11 @@ interface PhotoCaptureSurfaceProps {
   receivingLineId?: number | null;
   /** Subtitle line for the camera header ("PO 4421" or "PO 4421 · Item SG350-10"). */
   headerLabel: string;
+  /**
+   * Human PO reference (Zoho PO number / id) used to name the saved NAS file —
+   * the photo lands as `{poRef}__….jpg`. Falls back to the package id when unset.
+   */
+  poRef?: string | null;
   /** Where to send the user after they tap Done — typically the previous detail screen. */
   returnHref: string;
   /** Hard cap on a single capture batch. Defaults to 12. */
@@ -44,6 +48,7 @@ export function PhotoCaptureSurface({
   receivingId,
   receivingLineId = null,
   headerLabel,
+  poRef = null,
   returnHref,
   maxPhotos = 12,
 }: PhotoCaptureSurfaceProps) {
@@ -58,10 +63,9 @@ export function PhotoCaptureSurface({
   }, [nas]);
 
   const scope = useMemo<PhotoScope>(
-    () => ({ receivingId, receivingLineId }),
-    [receivingId, receivingLineId],
+    () => ({ receivingId, receivingLineId, poRef }),
+    [receivingId, receivingLineId, poRef],
   );
-  const entries = useUploadQueue(scope);
 
   const handleDone = useCallback(
     (shots: CapturedShot[]) => {
@@ -87,15 +91,9 @@ export function PhotoCaptureSurface({
       header={
         <div className="min-w-0">
           <p className="text-micro font-black uppercase tracking-[0.22em] text-white/60">
-            Add receiving photos
+            Add unboxing photos
           </p>
           <p className="truncate text-sm font-black text-white">{headerLabel}</p>
-          {entries.length > 0 ? (
-            <p className="mt-0.5 text-micro font-bold uppercase tracking-widest text-white/50">
-              {entries.filter((e) => e.state === 'done').length}/{entries.length} uploaded
-              {entries.some((e) => e.state === 'failed') ? ' · retry available in gallery' : ''}
-            </p>
-          ) : null}
         </div>
       }
     />

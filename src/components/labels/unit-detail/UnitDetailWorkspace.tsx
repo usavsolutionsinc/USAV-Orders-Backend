@@ -3,6 +3,7 @@
 import { useSearchParams } from 'next/navigation';
 import { useSerialUnitDetail } from './types';
 import { UnitDetailHeader } from './UnitDetailHeader';
+import { UnitQualityPanel } from './UnitQualityPanel';
 import {
   IdentityCard,
   LocationCard,
@@ -59,6 +60,8 @@ export function UnitDetailWorkspace() {
             <LocationCard location={unit.current_location} detail={data.location_detail} />
             <OrderCard allocation={activeAllocation} />
           </div>
+
+          <UnitQualityPanel serialUnitId={unit.id} />
 
           <TimelineCard events={data.events_full ?? data.events ?? []} />
           {allocations.length > 0 && <AllocationsCard rows={allocations} />}

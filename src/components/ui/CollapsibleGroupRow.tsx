@@ -71,12 +71,24 @@ export function CollapsibleGroupRow({
     // When expanded, a darker bottom hairline closes off the revealed child rows
     // as one visually-bounded unit; collapsed, it matches the gray-100 row dividers.
     <div className={cn('border-b', isOpen ? 'border-gray-300' : 'border-gray-100', className)}>
-      <button
-        type="button"
+      {/* role="button" instead of a real <button>: the `summary` is built from
+          the same identity chips the child rows use (OrderIdChip / SerialChip …),
+          and those are themselves <button>s for copy-to-clipboard. A real
+          <button> here would nest buttons → invalid HTML + a hydration error.
+          The single-line ReceivingLineOrderRow uses this same div-role pattern. */}
+      <div
+        role="button"
+        tabIndex={0}
         onClick={toggle}
+        onKeyDown={(event) => {
+          if (event.key === 'Enter' || event.key === ' ') {
+            event.preventDefault();
+            toggle();
+          }
+        }}
         aria-expanded={isOpen}
         className={cn(
-          'flex w-full items-center gap-2 px-3 py-1.5 text-left transition-colors hover:bg-blue-50/50',
+          'flex w-full cursor-pointer items-center gap-2 px-3 py-1.5 text-left transition-colors hover:bg-blue-50/50',
           isOpen ? 'bg-blue-50/40' : index != null && index % 2 === 1 ? 'bg-gray-50/40' : 'bg-white',
         )}
       >
@@ -94,7 +106,7 @@ export function CollapsibleGroupRow({
             {count} {countLabel}
           </span>
         ) : null}
-      </button>
+      </div>
       <AnimatePresence initial={false}>
         {isOpen ? (
           <motion.div

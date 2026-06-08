@@ -220,6 +220,10 @@ function TestingUnitRows({
       onSelect={select}
       disabled={disabled}
       isSubmitting={isSubmitting}
+      // Match the receiving display: every unit is an always-open row (verdict
+      // pills + serial input, no n/N counter), and a committed scan advances
+      // focus to the next unit so a lot is scanned in one fast pass.
+      singleRowExpanded
       renderExpandedMeta={(serial) => (
         <TestingStatusPills
           value={unitStatusToVerdict(serial?.current_status)}

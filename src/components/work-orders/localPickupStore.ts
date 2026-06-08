@@ -22,16 +22,12 @@
 import { useSyncExternalStore } from 'react';
 import { invalidateReceivingCache } from '@/lib/receivingCache';
 import { buildLocalPickupPoNumber } from '@/lib/local-pickup/po-number';
+import { conditionOptions, type ConditionGrade } from '@/lib/conditions';
 
-export const CONDITION_OPTIONS = [
-  { value: 'BRAND_NEW', label: 'Brand New' },
-  { value: 'USED_A', label: 'Used — A' },
-  { value: 'USED_B', label: 'Used — B' },
-  { value: 'USED_C', label: 'Used — C' },
-  { value: 'PARTS', label: 'Parts Only' },
-] as const;
+// All 7 grades from the shared source of truth (was a 5-grade subset).
+export const CONDITION_OPTIONS = conditionOptions('full');
 
-export type ConditionGrade = (typeof CONDITION_OPTIONS)[number]['value'];
+export type { ConditionGrade };
 export type PartsStatus = 'COMPLETE' | 'MISSING_PARTS';
 
 export interface CartLine {

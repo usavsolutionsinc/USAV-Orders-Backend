@@ -183,7 +183,9 @@ export async function attachNasPhoto(scope: PhotoScope, photoUrl: string): Promi
  * parent collection doesn't exist (it won't auto-create `PO_123/`), so a flat
  * name keeps writes working against a plain WebDAV server and the dev proxy
  * alike, while still grouping by PO when a human sorts the folder by name:
- *   {baseUrl}/{folder}/PO_{receivingId}[_L{lineId}]__{filename}
+ *   {baseUrl}/{folder}/{poPart}[_L{lineId}]__{filename}
+ * `poPart` is the human PO number (`scope.poRef`, e.g. "4421") when known, else
+ * the internal `PO_{receivingId}` — so the saved filename leads with the PO#.
  * `filename` is derived from a stable per-capture id, so a Retry overwrites the
  * same path (idempotent) instead of littering duplicates.
  */
@@ -194,10 +196,17 @@ export function buildNasPhotoUrl(opts: {
   filename: string;
 }): string {
   const { baseUrl, folder, scope, filename } = opts;
+  // Prefer the human PO# for the filename; sanitise to filename-safe chars and
+  // fall back to the internal package id if it's missing or sanitises to empty.
+  const sanitizedPo = (scope.poRef ?? '')
+    .trim()
+    .replace(/[^A-Za-z0-9._-]+/g, '_')
+    .replace(/^_+|_+$/g, '');
+  const poPart = sanitizedPo || `PO_${scope.receivingId}`;
   const prefix =
     scope.receivingLineId != null
-      ? `PO_${scope.receivingId}_L${scope.receivingLineId}__`
-      : `PO_${scope.receivingId}__`;
+      ? `${poPart}_L${scope.receivingLineId}__`
+      : `${poPart}__`;
   const segments: string[] = [];
   const cleanFolder = (folder || '').replace(/^\/+|\/+$/g, '');
   if (cleanFolder) segments.push(...cleanFolder.split('/'));

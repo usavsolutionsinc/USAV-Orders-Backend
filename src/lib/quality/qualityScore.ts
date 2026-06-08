@@ -6,8 +6,9 @@
  * Compute-and-display only in v1: ebayConditionId is a mapping, not a live push.
  */
 
-export type ConditionGrade =
-  | 'BRAND_NEW' | 'LIKE_NEW' | 'REFURBISHED' | 'USED_A' | 'USED_B' | 'USED_C' | 'PARTS';
+// Grade union from the single source of truth (src/lib/conditions.ts).
+export type { ConditionGrade } from '@/lib/conditions';
+import type { ConditionGrade } from '@/lib/conditions';
 
 export type RiskLevel = 'low' | 'medium' | 'high';
 export type FailureSeverity = 'critical' | 'major' | 'minor';

@@ -1,0 +1,31 @@
+import { NextRequest, NextResponse } from 'next/server';
+import { isAuthorizedCronRequest } from '@/lib/cron/auth';
+import { withCronRun } from '@/lib/cron/run-log';
+import {
+  GoogleSheetsTransferOrdersJobError,
+  runGoogleSheetsTransferOrders,
+} from '@/lib/jobs/google-sheets-transfer-orders';
+
+export const dynamic = 'force-dynamic';
+export const runtime = 'nodejs';
+export const maxDuration = 300;
+
+/** GET /api/cron/google-sheets/transfer-orders  (Vercel cron, weekday schedule) */
+export async function GET(request: NextRequest) {
+  if (!isAuthorizedCronRequest(request.headers)) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+  try {
+    const result = await withCronRun('google_sheets.transfer_orders', () =>
+      runGoogleSheetsTransferOrders(undefined, 'sheets'),
+    );
+    return NextResponse.json({ success: true, ...(result as unknown as Record<string, unknown>) });
+  } catch (error) {
+    if (error instanceof GoogleSheetsTransferOrdersJobError) {
+      return NextResponse.json(error.body as Record<string, unknown>, { status: 200 });
+    }
+    const message = error instanceof Error ? error.message : 'Internal Server Error';
+    console.error('[cron/google-sheets/transfer-orders]', error);
+    return NextResponse.json({ success: false, error: message }, { status: 500 });
+  }
+}

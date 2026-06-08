@@ -1,12 +1,13 @@
 'use client';
 
 import { ShippedOrder } from '@/lib/neon/orders-queries';
-import { getAccountSourceLabel, getOrderIdUrl, getTrackingUrl } from '@/utils/order-links';
+import { getAccountSourceLabel, getOrderIdUrl } from '@/utils/order-links';
 import { ShipmentStatusBadge } from '@/components/shipping/ShipmentStatusBadge';
 import { formatDateTimePST, getDaysLateNumber } from '@/utils/date';
 import { getStaffName } from '@/utils/staff';
 import { Pencil } from '@/components/Icons';
 import { DetailsPanelRow } from '@/design-system/components/DetailsPanelRow';
+import { TrackingNumberRow } from '@/components/ui/TrackingNumberRow';
 
 import { buildAllTrackingRows, serialNumberRowsFromShipped } from './shipping-information/helpers';
 import { ShippingEditableRow } from './shipping-information/ShippingEditableRow';
@@ -196,24 +197,11 @@ export function ShippingInformationSection({
             const draftKey = `${row.shipmentId ?? 'none'}:${index}`;
             const draftValue = linkedTrackingDrafts[draftKey] ?? row.tracking;
             return (
-              <ShippingEditableRow
+              <TrackingNumberRow
                 key={`tracking-${index}-${row.shipmentId ?? 'none'}`}
                 label={`Tracking Number${allTrackingRows.length > 1 ? ` ${index + 1}` : ''}`}
                 value={draftValue}
                 placeholder="Enter tracking number"
-                onChange={(value) => {
-                  setLinkedTrackingDrafts((prev) => ({ ...prev, [draftKey]: value }));
-                  if (index === 0) ef.onTrackingNumberChange(value);
-                }}
-                onBlur={() => {
-                  if (index === 0) {
-                    void internalFieldSave.saveInlineFields(ef.orderNumber, ef.itemNumber, draftValue);
-                  } else {
-                    void saveLinkedTracking(row.shipmentId, draftValue);
-                  }
-                }}
-                externalUrl={getTrackingUrl(draftValue)}
-                allowEdit={false}
                 onPasteReplace={async () => {
                   try {
                     const text = await navigator.clipboard.readText();
@@ -231,14 +219,7 @@ export function ShippingInformationSection({
               />
             );
           }) : (
-            <ShippingEditableRow
-              label="Tracking Number"
-              value=""
-              placeholder="No tracking number"
-              onChange={() => {}}
-              onBlur={() => {}}
-              allowEdit={false}
-            />
+            <TrackingNumberRow label="Tracking Number" value="" placeholder="No tracking number" />
           )}
           <ShippingEditableRow
             label="Order ID"

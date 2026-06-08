@@ -6,6 +6,7 @@ import { useAblyChannel } from '@/hooks/useAblyChannel';
 import { PhotoGallery } from '@/components/shipped/PhotoGallery';
 import { NasReceivingAttach, NasPickerDialog } from '@/components/sidebar/NasReceivingAttach';
 import { nasConfigured } from '@/lib/nas-photos';
+import { useNasConfig } from '@/hooks/useNasConfig';
 import { SkeletonBase } from '@/design-system/components/Skeletons';
 
 interface PhotoRow {
@@ -39,6 +40,12 @@ export const ReceivingPhotoStrip = memo(function ReceivingPhotoStrip({
   staffId,
 }: ReceivingPhotoStripProps) {
   const queryClient = useQueryClient();
+  // Seed the runtime NAS base URL (admin test/prod setting) and re-render once it
+  // resolves. Without this, nasConfigured() reads an empty base on first render
+  // and the empty state falls back to "No photos yet." instead of the
+  // "Click to add photos" NAS dropzone — NasReceivingAttach loads the config too,
+  // but it's gated out below before it can mount (chicken-and-egg).
+  useNasConfig();
   const queryKey = ['receiving-photos', receivingId];
   // NAS picker for adding more photos once some already exist. Owned here (not
   // inside PhotoGallery) so it portals above the fullscreen viewer.

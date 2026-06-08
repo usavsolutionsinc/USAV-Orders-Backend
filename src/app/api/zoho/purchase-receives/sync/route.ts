@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { syncZohoPurchaseOrdersToReceiving } from '@/lib/zoho-receiving-sync';
-import { enqueueQStashJson, getQStashResultIdentifier } from '@/lib/qstash';
 import { withAuth } from '@/lib/auth/withAuth';
 
 export const dynamic = 'force-dynamic';
@@ -34,20 +33,6 @@ async function runZohoPurchaseReceivesSync(body: Record<string, unknown> = {}) {
 export const POST = withAuth(async (request: NextRequest) => {
   try {
     const body = (await request.json().catch(() => ({}))) as Record<string, unknown>;
-    if (body?.enqueue === true) {
-      const result = await enqueueQStashJson({
-        path: '/api/zoho/purchase-receives/sync',
-        body: { ...body, enqueue: false },
-        retries: 3,
-        timeout: 300,
-        label: 'zoho-purchase-receives-sync',
-      });
-      return NextResponse.json({
-        success: true,
-        queued: true,
-        messageId: getQStashResultIdentifier(result),
-      });
-    }
     return NextResponse.json(await runZohoPurchaseReceivesSync(body));
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : 'Failed to sync Zoho purchase orders';

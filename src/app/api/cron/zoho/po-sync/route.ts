@@ -21,6 +21,7 @@ import pool from '@/lib/db';
 import { syncZohoPoMirror } from '@/lib/zoho/po-mirror-sync';
 import { getSyncCursor, updateSyncCursor } from '@/lib/sync-cursors';
 import { formatApiOffsetTimestamp } from '@/utils/date';
+import { withCronRun } from '@/lib/cron/run-log';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 300;
@@ -51,12 +52,14 @@ export async function GET(req: NextRequest) {
     lastModified = formatApiOffsetTimestamp(start);
   }
 
-  const report = await syncZohoPoMirror({
-    mode,
-    lastModifiedTime: lastModified,
-    maxPages: 200,
-    maxItems: 20000,
-  });
+  const report = await withCronRun(`zoho.po_sync`, () =>
+    syncZohoPoMirror({
+      mode,
+      lastModifiedTime: lastModified,
+      maxPages: 200,
+      maxItems: 20000,
+    }),
+  );
 
   // Advance cursor on a successful run, even if zero changes.
   if (report.errors.length === 0) {

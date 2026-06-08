@@ -1,5 +1,6 @@
 import type { ComponentType } from 'react';
 import {
+  Activity,
   BarChart3,
   Camera,
   Cpu,
@@ -23,9 +24,10 @@ export type AdminSection =
   | 'overview'
   | 'goals' | 'staff' | 'access' | 'roles' | 'connections' | 'integrations' | 'fba'
   | 'reason_codes' | 'locations' | 'repair_issues' | 'favorites'
+  | 'quality'
   | 'bose_models' | 'compatibility' | 'suppliers'
   | 'station_photos' | 'po_mailbox'
-  | 'logs' | 'architecture'
+  | 'logs' | 'architecture' | 'system_sync'
   | 'billing';
 
 export type AdminGroup = 'Performance' | 'People' | 'Data sources' | 'System' | 'Account';
@@ -45,6 +47,7 @@ export const ADMIN_SECTION_OPTIONS: AdminSectionOption[] = [
   { value: 'overview',     label: 'Overview',     description: 'System health & quick links',                                                       icon: LayoutDashboard },
 
   { value: 'goals',        label: 'Goals',        description: 'Daily output targets and progress',                            group: 'Performance', icon: BarChart3 },
+  { value: 'quality',      label: 'Quality',      description: 'Condition grades, open failures, repair throughput & risk',    group: 'Performance', icon: ShieldCheck, requires: 'sku_stock.view' },
 
   { value: 'staff',        label: 'Staff',        description: 'Team roles, status, and weekly schedule',                      group: 'People',      icon: User,         requires: 'admin.manage_staff' },
   { value: 'access',       label: 'Access',       description: 'Per-staff role + page-access matrix',                          group: 'People',      icon: Lock },
@@ -64,6 +67,7 @@ export const ADMIN_SECTION_OPTIONS: AdminSectionOption[] = [
 
   { value: 'logs',         label: 'Logs',         description: 'Unified audit + station activity logs',                        group: 'System',      icon: FileText,     requires: 'admin.view_logs' },
   { value: 'architecture', label: 'Operations',   description: 'Visual flow of how items move through the system — live audit board', group: 'System',  icon: Share2 },
+  { value: 'system_sync',  label: 'Sync Activity', description: 'Cron job health, last runs, and history across every scheduled sync', group: 'System', icon: Activity },
 
   { value: 'billing',      label: 'Billing',      description: 'Plan, entitlements, and Stripe billing portal',                group: 'Account',     icon: ShieldCheck },
 ];

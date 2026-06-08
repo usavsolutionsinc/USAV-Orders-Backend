@@ -3,6 +3,7 @@ import { withAuth } from '@/lib/auth/withAuth';
 import pool from '@/lib/db';
 import { upsertVerification, deriveStepPassed } from '@/lib/neon/sku-catalog-queries';
 import { tagUnitFailure } from '@/lib/neon/failure-modes-queries';
+import { recomputeUnitQualitySafe } from '@/lib/neon/quality-queries';
 import { parseBody } from '@/lib/schemas/parse';
 import { QcResultBody } from '@/lib/schemas/qc-checks';
 import { recordAudit, AUDIT_ACTION, AUDIT_ENTITY } from '@/lib/audit-logs';
@@ -190,6 +191,7 @@ export const POST = withAuth(async (request, ctx) => {
       } catch (tagErr) {
         console.warn('[checklist] auto-tag-on-fail failed (non-fatal)', tagErr);
       }
+      if (autoTag) await recomputeUnitQualitySafe(serialUnitId);
     }
 
     await recordAudit(pool, ctx, request, {

@@ -346,8 +346,8 @@ export const SIDEBAR_PAGE_NAV: SidebarPageNav[] = [
       { id: 'incoming', label: 'Incoming',     icon: Inbox,          to: () => ({ pathname: RECEIVING, params: { mode: 'incoming' } }) },
       { id: 'triage',   label: 'Receiving',    icon: ClipboardList,  to: () => ({ pathname: RECEIVING, params: { mode: 'triage' } }) },
       { id: 'receive',  label: 'Unbox',        icon: PackageOpen,    to: () => ({ pathname: RECEIVING, params: { mode: null } }) },
-      { id: 'history',  label: 'History',      icon: List,           to: () => ({ pathname: RECEIVING, params: { mode: 'history' } }) },
       { id: 'pickup',   label: 'Local Pickup', icon: ShoppingCart,   to: () => ({ pathname: RECEIVING, params: { mode: 'pickup' } }) },
+      { id: 'history',  label: 'History',      icon: List,           to: () => ({ pathname: RECEIVING, params: { mode: 'history' } }) },
     ],
     resolveMode: ({ params }) => {
       const m = params.get('mode');

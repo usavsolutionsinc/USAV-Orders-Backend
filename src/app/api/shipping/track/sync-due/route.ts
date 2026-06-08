@@ -6,8 +6,8 @@ import { withAuth } from '@/lib/auth/withAuth';
 export const dynamic = 'force-dynamic';
 export const maxDuration = 120;
 
-// Manual trigger of the sync-due job. The QStash-scheduled version lives
-// at /api/qstash/shipping/sync-due and uses isQStashOrigin for HMAC.
+// Manual trigger of the sync-due job. The scheduled version runs via Vercel
+// cron at /api/cron/shipping/sync-due.
 // This entry point is admin-only so a wandering user can't pin the queue.
 export const POST = withAuth(async (req: NextRequest) => {
   const startedAt = Date.now();

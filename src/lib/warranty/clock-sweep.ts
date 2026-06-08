@@ -152,7 +152,7 @@ export async function recomputeProvisionalClocks(limit = RECOMPUTE_LIMIT): Promi
               warranty_days       = v.days,
               updated_at          = NOW()
          FROM unnest($1::bigint[], $2::timestamptz[], $3::timestamptz[],
-                     $4::warranty_clock_basis_enum[], $5::int[])
+                     $4::text[], $5::int[])
                 AS v(id, starts_at, expires_at, basis, days)
         WHERE wc.id = v.id`,
       [ids, startsAt, expiresAt, bases, days],
@@ -222,7 +222,7 @@ export async function expireLapsedClaims(limit = EXPIRE_LIMIT): Promise<ExpireRe
     );
     await client.query(
       `INSERT INTO warranty_claim_events (claim_id, event_type, from_status, to_status, payload, actor_staff_id)
-       SELECT id, 'STATUS_CHANGE', from_status::warranty_claim_status_enum, 'EXPIRED', '{"via":"cron"}'::jsonb, NULL
+       SELECT id, 'STATUS_CHANGE', from_status, 'EXPIRED', '{"via":"cron"}'::jsonb, NULL
          FROM unnest($1::bigint[], $2::text[]) AS t(id, from_status)`,
       [ids, statuses],
     );

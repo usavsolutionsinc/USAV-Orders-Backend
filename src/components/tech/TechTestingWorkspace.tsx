@@ -119,6 +119,11 @@ interface AllocatedUnit {
 export function TechTestingWorkspace({ staffId, selectedLineId, onSelectedLineChange }: Props) {
   const [row, setRow] = useState<ReceivingLineRow | null>(null);
   const [serialSubmitting, setSerialSubmitting] = useState(false);
+  // Synchronous in-flight guard for the scan queue. The drainer fires
+  // submitSerial calls back-to-back across React render boundaries, so a
+  // state-based guard can read a stale `true` and silently drop a queued scan;
+  // a ref is read/written synchronously, so it serializes without dropping.
+  const serialSubmittingRef = useRef(false);
   const [printQty, setPrintQty] = useState<number>(1);
   const [notes, setNotes] = useState<string>('');
   const [saving, setSaving] = useState(false);
@@ -458,7 +463,8 @@ export function TechTestingWorkspace({ staffId, selectedLineId, onSelectedLineCh
     async (lineId: number, raw: string) => {
       if (!row?.receiving_id) return;
       const serial = (raw ?? '').trim();
-      if (!serial || serialSubmitting) return;
+      if (!serial || serialSubmittingRef.current) return;
+      serialSubmittingRef.current = true;
       setSerialSubmitting(true);
       try {
         const res = await fetch('/api/receiving/scan-serial', {
@@ -486,10 +492,42 @@ export function TechTestingWorkspace({ staffId, selectedLineId, onSelectedLineCh
       } catch (err) {
         toast.error(err instanceof Error ? err.message : 'Network error scanning serial');
       } finally {
+        serialSubmittingRef.current = false;
         setSerialSubmitting(false);
       }
     },
-    [row, staffId, serialSubmitting, refreshLineWithSerials],
+    [row, staffId, refreshLineWithSerials],
+  );
+
+  // Fire-and-forget scan queue: enqueueSerial() returns instantly so the
+  // multi-qty testing rows can advance focus to the next unit's input without
+  // waiting on the network. Writes still land in scan order, one at a time —
+  // /api/receiving/scan-serial takes a row-level FOR UPDATE lock.
+  const submitSerialRef = useRef(submitSerial);
+  submitSerialRef.current = submitSerial;
+  const serialQueueRef = useRef<Array<{ lineId: number; raw: string }>>([]);
+  const drainingSerialsRef = useRef(false);
+  const drainSerialQueue = useCallback(async () => {
+    if (drainingSerialsRef.current) return;
+    drainingSerialsRef.current = true;
+    try {
+      while (serialQueueRef.current.length > 0) {
+        const next = serialQueueRef.current.shift();
+        if (!next) break;
+        await submitSerialRef.current(next.lineId, next.raw);
+      }
+    } finally {
+      drainingSerialsRef.current = false;
+    }
+  }, []);
+  const enqueueSerial = useCallback(
+    (lineId: number, raw: string) => {
+      const v = (raw ?? '').trim();
+      if (!v) return;
+      serialQueueRef.current.push({ lineId, raw: v });
+      void drainSerialQueue();
+    },
+    [drainSerialQueue],
   );
 
   const deleteSerial = useCallback(
@@ -1106,7 +1144,7 @@ export function TechTestingWorkspace({ staffId, selectedLineId, onSelectedLineCh
                         onSetUnitVerdict={(serial, next) =>
                           void handleSlotVerdict(line.id, serial, next)
                         }
-                        onAddSerial={(sn) => submitSerial(line.id, sn)}
+                        onAddSerial={(sn) => enqueueSerial(line.id, sn)}
                         onDeleteSerial={(s) => {
                           if (s.id == null) return;
                           if (!window.confirm(`Remove serial ${s.serial_number}?`)) return;
@@ -1159,7 +1197,7 @@ export function TechTestingWorkspace({ staffId, selectedLineId, onSelectedLineCh
                         onSetUnitVerdict={(serial, next) =>
                           void handleSlotVerdict(row.id, serial, next)
                         }
-                        onAddSerial={(sn) => submitSerial(row.id, sn)}
+                        onAddSerial={(sn) => enqueueSerial(row.id, sn)}
                         onDeleteSerial={(s) => {
                           if (s.id == null) return;
                           if (!window.confirm(`Remove serial ${s.serial_number}?`)) return;

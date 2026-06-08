@@ -12,7 +12,8 @@ import {
   SIDEBAR_GUTTER,
 } from '@/components/layout/header-shell';
 import { cn } from '@/utils/_cn';
-import { X, Clock, Layers } from '@/components/Icons';
+import { X, Clock, Layers, Loader2 } from '@/components/Icons';
+import { StationScanBar } from '@/components/station/StationScanBar';
 import { useUIModeOptional } from '@/design-system/providers/UIModeProvider';
 import { HorizontalButtonSlider } from '@/components/ui/HorizontalButtonSlider';
 import {
@@ -24,7 +25,6 @@ import {
   classifyUnboxScan,
   type UnboxScanMode,
 } from '@/components/sidebar/receiving/ReceivingUnboxScanBar';
-import { SearchBar } from '@/components/ui/SearchBar';
 import { ReceivingHistorySearchSection } from '@/components/sidebar/receiving/ReceivingHistorySearchSection';
 import { ReceivingLinePicker } from '@/components/sidebar/receiving/ReceivingLinePicker';
 import { ReceivingRecentRail } from '@/components/sidebar/receiving/ReceivingRecentRail';
@@ -147,7 +147,7 @@ export function ReceivingSidebarPanel() {
   const { user } = useAuth();
   const staffIdNum = user?.staffId ?? 0;
   const staffId = String(staffIdNum);
-  const { theme: themeColor } = useStationTheme({ staffId: staffIdNum });
+  const { theme: themeColor, inputBorder } = useStationTheme({ staffId: staffIdNum });
   // Soft centered halo behind the scan input — staff-tint fades in toward
   // the middle of the band and back to white on the edges, instead of a
   // flat-fill block. Keeps the bar feeling light/airy.
@@ -212,9 +212,10 @@ export function ReceivingSidebarPanel() {
   // Armed unbox scan route (null = auto-detect: a value with "-" → Order#).
   // Tracking resolves a carrier #, Order# resolves a Zoho PO / reference #.
   const [unboxScanMode, setUnboxScanMode] = useState<UnboxScanMode | null>(null);
-  // Desktop triage search — filters the Found/Unfound to-do lists. Triage is a
-  // browse/triage surface (a search), NOT a scan surface, so it uses SearchBar
-  // instead of the StationScanBar the Unbox workspace uses.
+  // Desktop triage scan/filter — doubles as the live filter for the Found/Unfound
+  // to-do lists AND the scan entry: it now drives the same ReceivingUnboxScanBar +
+  // submitTrackingScan → lookup-po flow the Unbox workspace uses, so a scan
+  // selects the matched line (or creates + selects a new unmatched carton).
   const [triageQuery, setTriageQuery] = useState('');
   const scanInputRef = useRef<HTMLInputElement>(null);
 
@@ -986,23 +987,52 @@ export function ReceivingSidebarPanel() {
       ) : (
         <>
       {/* History: dashboard-style search + scope/field pills + green + to Receive.
-          Triage: desktop SearchBar over the Found/Unfound to-do lists (no scan).
+          Triage: tracking-only scan bar over the Found/Unfound lists — looks up +
+          selects (or creates) the carton, and filters the lists live.
           Receive (Unbox): tracking scan bar opens the workspace. */}
       {mode === 'history' ? (
         <ReceivingHistorySearchSection
           onSwitchToReceiving={() => updateMode('receive')}
         />
       ) : mode === 'triage' ? (
-        <div className={cn(receivingScanBandClass, SIDEBAR_GUTTER, 'py-1')}>
-          <SearchBar
+        // Triage is now a scan surface too — a tracking-only scan entry (no
+        // mode toggle) wired to the same submitTrackingScan → lookup-po flow the
+        // Unbox workspace uses. A scan either selects the matched line (and opens
+        // the workspace, like Unbox) or creates + selects a new unmatched carton.
+        // The input doubles as the live filter for the Found/Unfound rails
+        // (TriageSidebarBody reads it as filterText); submitting runs the lookup
+        // and clears the filter so the resolved line is visible instead of filtered out.
+        <motion.div
+          initial={{ opacity: 0, x: -20 }}
+          animate={{ opacity: 1, x: 0 }}
+          transition={{ type: 'spring', damping: 25, stiffness: 120 }}
+          className={cn(receivingScanBandClass, bandHaloClass[themeColor], SIDEBAR_GUTTER, 'py-1')}
+        >
+          {/* Tracking-only scan entry — no Tracking#/PO# mode toggle. Triage is
+              always a carrier-tracking scan, so we use the raw StationScanBar
+              pinned to mode:'tracking' instead of ReceivingUnboxScanBar (whose
+              purpose is the mode selector). The input still doubles as the live
+              rail filter; submit runs the same lookup-po flow. */}
+          <StationScanBar
             value={triageQuery}
             onChange={setTriageQuery}
-            onClear={() => setTriageQuery('')}
-            placeholder="Search triage — tracking, PO #, SKU…"
-            variant="orange"
-            debounceMs={120}
+            onSubmit={() => {
+              submitTrackingScan(triageQuery, { mode: 'tracking' });
+              setTriageQuery('');
+            }}
+            inputRef={scanInputRef}
+            placeholder="Scan tracking #"
+            autoFocus
+            className="w-full"
+            inputBorderClassName={inputBorder}
+            hasRightContent={trackingLookupInFlight > 0}
+            rightContent={
+              trackingLookupInFlight > 0 ? (
+                <Loader2 className="h-4 w-4 animate-spin text-gray-700" />
+              ) : null
+            }
           />
-        </div>
+        </motion.div>
       ) : (
       <motion.div
         // Soft staff-color tint hints at the active operator's theme without

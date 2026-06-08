@@ -1,15 +1,15 @@
 'use client';
 
-import { type ReactNode, useMemo, useState } from 'react';
+import { type ReactNode, useState } from 'react';
 import { SidebarShell } from '@/components/layout/SidebarShell';
+import { FilterBar } from '@/design-system/components/FilterBar';
 import { HorizontalButtonSlider, type HorizontalSliderItem } from '@/components/ui/HorizontalButtonSlider';
 import { Plus } from '@/components/Icons';
 import { cn } from '@/utils/_cn';
-import { useWarrantyClaims, useWarrantyUrlState } from '@/hooks/useWarrantyClaims';
+import { useWarrantyClaims, useWarrantyUrlState, WARRANTY_EXPIRING_SOON_DAYS } from '@/hooks/useWarrantyClaims';
 import { WARRANTY_CLAIM_STATUSES, WARRANTY_STATUS_LABEL, type WarrantyClaimStatus } from '@/lib/warranty/types';
 import { WarrantyClockChip, WarrantyStatusBadge } from '@/components/warranty/chips';
 import { WarrantyLogClaimDialog } from '@/components/warranty/WarrantyLogClaimDialog';
-import { sectionLabel } from '@/design-system/tokens/typography/presets';
 
 interface WarrantyLoggerSidebarProps {
   /** Legacy in-panel mode rail (rendered only when master nav is off). */
@@ -18,10 +18,15 @@ interface WarrantyLoggerSidebarProps {
   onSearchChange?: (value: string) => void;
 }
 
-const STATUS_FILTER_ITEMS: HorizontalSliderItem[] = [
+/** Top-of-popover sort bar: full warranty window vs. the 30-day expiry horizon. */
+const EXPIRY_SORT_ITEMS: HorizontalSliderItem[] = [
   { id: 'all', label: 'All' },
-  ...WARRANTY_CLAIM_STATUSES.map((s) => ({ id: s, label: WARRANTY_STATUS_LABEL[s] })),
+  { id: 'soon', label: `${WARRANTY_EXPIRING_SOON_DAYS} days out` },
 ];
+
+const statusChip = 'rounded-full px-2.5 py-1 text-[11px] font-medium ring-1 ring-inset transition';
+const statusChipActive = 'bg-blue-600 text-white ring-blue-600';
+const statusChipIdle = 'bg-white text-gray-600 ring-gray-200 hover:bg-gray-50';
 
 export function WarrantyLoggerSidebar({
   filterControl,
@@ -37,55 +42,62 @@ export function WarrantyLoggerSidebar({
     expiringSoon,
   });
 
-  const statusRow = (
-    <HorizontalButtonSlider
-      items={STATUS_FILTER_ITEMS}
-      value={status ?? 'all'}
-      onChange={(id) => setStatus(id === 'all' ? null : (id as WarrantyClaimStatus))}
-      variant="segmented"
-      dense
-      aria-label="Warranty status filter"
-      className="w-full"
-    />
-  );
+  const activeFilterCount = (status ? 1 : 0) + (expiringSoon ? 1 : 0);
 
-  const expiringRow = (
-    <button
-      type="button"
-      onClick={() => setExpiringSoon(!expiringSoon)}
-      className={cn(
-        'inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-medium ring-1 ring-inset transition',
-        expiringSoon
-          ? 'bg-rose-100 text-rose-700 ring-rose-200'
-          : 'bg-white text-gray-500 ring-gray-200 hover:bg-gray-50',
-      )}
-      aria-pressed={expiringSoon}
-    >
-      Expiring soon
-    </button>
+  // Popover body: the "30 days out" sort bar pinned on top, status filter below.
+  const renderFilters = () => (
+    <div className="space-y-3">
+      <div>
+        <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-gray-400">Expiry</p>
+        <HorizontalButtonSlider
+          items={EXPIRY_SORT_ITEMS}
+          value={expiringSoon ? 'soon' : 'all'}
+          onChange={(id) => setExpiringSoon(id === 'soon')}
+          variant="segmented"
+          dense
+          aria-label="Warranty expiry filter"
+          className="w-full"
+        />
+      </div>
+      <div>
+        <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-gray-400">Status</p>
+        <div className="flex flex-wrap gap-1.5">
+          <button
+            type="button"
+            onClick={() => setStatus(null)}
+            className={cn(statusChip, status === null ? statusChipActive : statusChipIdle)}
+          >
+            All
+          </button>
+          {WARRANTY_CLAIM_STATUSES.map((s) => (
+            <button
+              key={s}
+              type="button"
+              onClick={() => setStatus(s as WarrantyClaimStatus)}
+              className={cn(statusChip, status === s ? statusChipActive : statusChipIdle)}
+            >
+              {WARRANTY_STATUS_LABEL[s]}
+            </button>
+          ))}
+        </div>
+      </div>
+    </div>
   );
-
-  const summary = useMemo(() => {
-    if (isLoading) return 'Loading…';
-    if (error) return 'Failed to load claims';
-    const n = claims.length;
-    return `${n} claim${n === 1 ? '' : 's'}`;
-  }, [isLoading, error, claims.length]);
 
   const exportHref = `/api/warranty/reports/export${status ? `?status=${status}` : ''}`;
 
-  const logClaimButton = (
-    <div className="flex items-center justify-end gap-2 px-1 pb-1">
+  const actionButtons = (
+    <div className="flex items-stretch gap-2 px-1.5 pt-1.5">
       <a
         href={exportHref}
-        className="inline-flex items-center rounded-md border border-gray-200 px-2.5 py-1 text-xs font-semibold text-gray-600 transition hover:bg-gray-50"
+        className="inline-flex flex-1 items-center justify-center rounded-md border border-gray-200 px-2.5 py-1.5 text-xs font-semibold text-gray-600 transition hover:bg-gray-50"
       >
         Export
       </a>
       <button
         type="button"
         onClick={() => setLogOpen(true)}
-        className="inline-flex items-center gap-1 rounded-md bg-blue-600 px-2.5 py-1 text-xs font-semibold text-white transition hover:bg-blue-700"
+        className="inline-flex flex-1 items-center justify-center gap-1 rounded-md bg-blue-600 px-2.5 py-1.5 text-xs font-semibold text-white transition hover:bg-blue-700"
       >
         <Plus className="h-3.5 w-3.5" />
         Log Claim
@@ -96,25 +108,29 @@ export function WarrantyLoggerSidebar({
   return (
     <>
     <SidebarShell
-      headerAbove={
-        <>
-          {filterControl}
-          {logClaimButton}
-        </>
-      }
+      headerAbove={filterControl}
       search={{
         value: searchValue,
         onChange: (v) => onSearchChange?.(v),
         placeholder: 'Search claim #, serial, SKU, order, customer…',
         isSearching: isFetching && !isLoading,
       }}
-      headerRows={[
-        statusRow,
-        <div key="exp" className="flex items-center justify-between">
-          {expiringRow}
-          <span className={cn(sectionLabel, 'text-gray-400')}>{summary}</span>
-        </div>,
-      ]}
+      headerBelow={
+        <>
+          <div className="px-1.5 pt-1.5">
+            <FilterBar
+              className="w-full"
+              advanced={{
+                fullWidth: true,
+                label: 'Filters',
+                activeCount: activeFilterCount,
+                render: renderFilters,
+              }}
+            />
+          </div>
+          {actionButtons}
+        </>
+      }
     >
       {error ? (
         <div className="px-1 py-6 text-sm text-rose-600">

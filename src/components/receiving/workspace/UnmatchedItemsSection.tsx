@@ -68,6 +68,14 @@ export interface UnmatchedItemsSectionProps {
    */
   onFileReturnClaim?: (matchedOrder: SerialMatchedOrder | null, serial: string) => void;
   /**
+   * Fired whenever a condition grade is picked on this carton (per-line pill or
+   * the carton-level serial-scan card). LineEditPanel mirrors it into the panel
+   * `cond` state so the printed/previewed label reflects the operator's last
+   * grade — matched cartons report this up via ActiveLineConditionSerial, so
+   * without it the label would never update for an unfound carton.
+   */
+  onActiveConditionChange?: (condition: string) => void;
+  /**
    * Optional render override for the per-line action area (replaces the
    * default `ConditionPills` + serial card). Use this from the testing
    * workspace to drop in `TestingStatusPills` + `InlineSerialAdder` per line so
@@ -92,6 +100,7 @@ export function UnmatchedItemsSection({
   receivingTypeHint = 'PO',
   listingUrlHint,
   onFileReturnClaim,
+  onActiveConditionChange,
   renderLineActions,
   showSerialScan = true,
 }: UnmatchedItemsSectionProps) {
@@ -132,7 +141,7 @@ export function UnmatchedItemsSection({
 
   useEffect(() => {
     void refreshLines();
-  }, [refreshLines]);
+  }, [onActiveConditionChange, refreshLines]);
 
   // Scan a returned serial against the whole carton. Looks the serial up; on a
   // shipped match it creates a return line populated from the matched order and
@@ -374,6 +383,9 @@ export function UnmatchedItemsSection({
           l.id === lineId ? { ...l, condition_grade: conditionGrade } : l,
         ),
       );
+      // Surface the grade so the panel's label preview/print tracks it — the
+      // matched-carton flow does this through ActiveLineConditionSerial.
+      onActiveConditionChange?.(conditionGrade);
       const res = await fetch(`/api/receiving/lines/${lineId}/condition`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
@@ -426,7 +438,10 @@ export function UnmatchedItemsSection({
             isSubmitting={returnScanBusy}
             showSavedChips={false}
             condition={cartonScanCondition}
-            onConditionChange={setCartonScanCondition}
+            onConditionChange={(next) => {
+              setCartonScanCondition(next);
+              onActiveConditionChange?.(next);
+            }}
             onAdd={(sn) => handleReturnSerialScan(sn)}
             resultSlot={
               returnMatch ? (

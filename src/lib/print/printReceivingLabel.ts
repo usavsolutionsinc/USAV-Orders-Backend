@@ -1,6 +1,7 @@
 import { getLast4 } from '@/components/ui/CopyChip';
 import { receivingHandle } from '@/lib/barcode-routing';
 import { escapeLabelHtml, printLabel } from '@/lib/print/printLabel';
+import { conditionLabel } from '@/lib/conditions';
 
 // Carton metadata laid out top/middle/bottom in the shared label's info column.
 const RECEIVING_INFO_CSS = `
@@ -107,16 +108,7 @@ export function receivingLabelPoCornerDisplay(payload: ReceivingLabelPayload): s
 }
 
 function conditionShort(code: string | null | undefined): string {
-  const c = String(code || 'BRAND_NEW').trim().toUpperCase();
-  if (c === 'BRAND_NEW') return 'New';
-  if (c === 'LIKE_NEW') return 'Like New';
-  if (c === 'REFURBISHED') return 'Refurb';
-  if (c === 'PARTS') return 'Parts';
-  if (c.startsWith('USED_')) {
-    const letter = c.replace('USED_', '');
-    return `USED-${letter}`;
-  }
-  return c.replace(/_/g, ' ');
+  return conditionLabel(code, 'label');
 }
 
 /**

@@ -7,8 +7,8 @@ import { warrantyClaimsQuery } from '@/lib/queries/dashboard-queries';
 import { fetchWarrantyClaim } from '@/lib/warranty/client';
 import { isWarrantyClaimStatus, type WarrantyClaimStatus } from '@/lib/warranty/types';
 
-/** Default look-ahead window (days) for the "Expiring soon" filter. */
-export const WARRANTY_EXPIRING_SOON_DAYS = 7;
+/** Look-ahead window (days) for the "30 days out" expiry filter (matches the 30-day term). */
+export const WARRANTY_EXPIRING_SOON_DAYS = 30;
 
 export interface WarrantyUrlState {
   status: WarrantyClaimStatus | null;

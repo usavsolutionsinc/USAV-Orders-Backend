@@ -108,7 +108,13 @@ export function LineEditPanel({
   const [disp, setDisp] = useState(
     !row.disposition_code || row.disposition_code === 'HOLD' ? 'ACCEPT' : row.disposition_code,
   );
-  const [cond, setCond] = useState(row.condition_grade || 'USED_A');
+  // Unfound cartons carry a meaningless carton-level placeholder grade
+  // (`BRAND_NEW`); the real grade lives on each line and defaults to USED_A.
+  // Seed the label condition from USED_A for unmatched cartons so the preview/
+  // print matches the line pills instead of defaulting to "New".
+  const initialCond =
+    row.receiving_source === 'unmatched' ? 'USED_A' : row.condition_grade || 'USED_A';
+  const [cond, setCond] = useState(initialCond);
   // Effective condition of the currently-selected unit on a multi-qty line.
   // Reported up from ReceivingUnitRows so the label preview/print reflects the
   // selected item rather than the line-level grade. Null on single-qty lines.
@@ -185,12 +191,12 @@ export function LineEditPanel({
     setReceivingType(row.receiving_type || 'PO');
     setQa(!row.qa_status || row.qa_status === 'PENDING' ? 'PASSED' : row.qa_status);
     setDisp(!row.disposition_code || row.disposition_code === 'HOLD' ? 'ACCEPT' : row.disposition_code);
-    setCond(row.condition_grade || 'USED_A');
+    setCond(row.receiving_source === 'unmatched' ? 'USED_A' : row.condition_grade || 'USED_A');
     // Clear the per-unit label override on line switch — the new line's
     // ReceivingUnitRows (if multi-qty) re-reports its selection on mount.
     setUnitLabelCondition(null);
     setTrackingEdit(row.tracking_number || '');
-  }, [row.id, row.qa_status, row.disposition_code, row.condition_grade, row.tracking_number, row.receiving_type]);
+  }, [row.id, row.qa_status, row.disposition_code, row.condition_grade, row.tracking_number, row.receiving_type, row.receiving_source]);
 
   // When the carton changes, flush scratch for the previous receiving_id
   // so localStorage is not lost before loading the next carton’s scratch.
@@ -349,6 +355,7 @@ export function LineEditPanel({
   const {
     serialSubmitting,
     submitSerial,
+    enqueueSerial,
     deleteSerialUnit,
     replaceSerialUnit,
     setUnitGrade,
@@ -738,6 +745,15 @@ export function LineEditPanel({
                 receivingTypeHint={receivingType}
                 listingUrlHint={listingLink || undefined}
                 onFileReturnClaim={handleFileReturnClaim}
+                // Mirror the picked grade into `cond` so the label preview/print
+                // tracks it. The matched-carton flow does this through
+                // ActiveLineConditionSerial.onConditionChange; an unfound carton
+                // owns its condition internally, so without this the label
+                // would never reflect the operator's grade.
+                onActiveConditionChange={(next) => {
+                  setCond(next);
+                  setUnitLabelCondition(next);
+                }}
               />
             ) : (
               <PoLinesAccordion
@@ -770,7 +786,7 @@ export function LineEditPanel({
                     editingSerial={headerSerialEdit}
                     serialLookup={serialLookup}
                     onFileReturnClaim={handleFileReturnClaim}
-                    onSubmitSerial={(sn, grade) => void submitSerial(sn, grade)}
+                    onSubmitSerial={(sn, grade) => enqueueSerial(sn, grade)}
                     onDeleteSerialUnit={(id, lineId) => void deleteSerialUnit(id, lineId)}
                     onReplaceSerialUnit={(original, next) => void replaceSerialUnit(original, next)}
                     onSetUnitGrade={(id, grade) => void setUnitGrade(id, grade)}

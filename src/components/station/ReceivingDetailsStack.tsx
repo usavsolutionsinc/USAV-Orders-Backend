@@ -3,17 +3,23 @@
 import { useState } from 'react';
 import { motion } from 'framer-motion';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { Barcode, Copy, Edit, Loader2, Package, RefreshCw, Sparkles, Trash2, X } from '@/components/Icons';
+import { Copy, Edit, Loader2, Package, RefreshCw, Trash2, X } from '@/components/Icons';
 import { copyToClipboard } from '@/utils/_dom';
 import { formatDateTimePST } from '@/utils/date';
 import { ViewDropdown } from '@/components/ui/ViewDropdown';
 import { HorizontalButtonSlider, type HorizontalSliderItem } from '@/components/ui/HorizontalButtonSlider';
 import { CopyableValueFieldBlock } from '@/components/shipped/details-panel/blocks/CopyableValueFieldBlock';
-import { SearchBar } from '@/components/ui/SearchBar';
+import { TrackingNumberRow } from '@/components/ui/TrackingNumberRow';
 import { listingUrlForOpen } from '@/components/sidebar/receiving/receiving-sidebar-shared';
 import { getStaffThemeById, stationThemeColors } from '@/utils/staff-colors';
 import { toast } from '@/lib/toast';
 import { type ReceivingLineRow } from '@/components/station/ReceivingLinesTable';
+import {
+  CARRIER_OPTS,
+  QA_OPTS,
+  DISPOSITION_OPTS,
+  CONDITION_OPTS,
+} from '@/components/station/receiving-constants';
 import { dispatchReceivingWorkspaceOpen } from '@/utils/events';
 import { PoLinesSection } from './receiving/PoLinesSection';
 import { ReceivingOverviewCard } from './receiving/ReceivingOverviewCard';
@@ -61,27 +67,10 @@ export interface ReceivingDetailsLog {
   listing_url?: string | null;
 }
 
-const CARRIER_OPTS = ['Unknown', 'UPS', 'FedEx', 'USPS', 'AMAZON', 'DHL', 'AliExpress', 'GoFo', 'UniUni', 'LOCAL'].map(
-  (v) => ({ value: v, label: v }),
-);
-const QA_OPTS = [
-  { value: 'PENDING',           label: 'Pending' },
-  { value: 'PASSED',            label: 'Passed' },
-  { value: 'FAILED_DAMAGED',    label: 'Failed Damaged' },
-  { value: 'FAILED_INCOMPLETE', label: 'Failed Incomplete' },
-  { value: 'FAILED_FUNCTIONAL', label: 'Failed Functional' },
-];
-const DISPOSITION_OPTS = [
-  { value: 'ACCEPT', label: 'Accept' },
-  { value: 'HOLD',   label: 'Hold' },
-  { value: 'RTV',    label: 'Return to Seller' },
-  { value: 'SCRAP',  label: 'Claim' },
-  { value: 'REWORK', label: 'Repair' },
-];
-const CONDITION_OPTS = ['BRAND_NEW', 'USED_A', 'USED_B', 'USED_C', 'PARTS'].map((v) => ({
-  value: v,
-  label: v.replaceAll('_', ' '),
-}));
+// CARRIER_OPTS, QA_OPTS, DISPOSITION_OPTS, CONDITION_OPTS now come from the
+// shared receiving-constants source of truth (imported above). The previous
+// local copies had drifted — QA was missing HOLD and CONDITION was missing
+// LIKE_NEW + REFURBISHED.
 const RETURN_PLATFORM_OPTS = [
   { value: '', label: 'Select Platform' },
   { value: 'AMZ', label: 'AMZ' },
@@ -113,36 +102,6 @@ export function ReceivingDetailsStack({ log, onClose, onUpdated, onDeleted }: Re
   const [activeTab, setActiveTab] = useState<ReceivingTab>('overview');
   const [isCopying, setIsCopying] = useState(false);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
-  const [suggestingDisp, setSuggestingDisp] = useState(false);
-
-  // B3: suggest a disposition from the QA status + condition + return reason.
-  // Pre-fills the picker; the operator still confirms or overrides before save.
-  const suggestDisposition = async () => {
-    if (suggestingDisp) return;
-    setSuggestingDisp(true);
-    try {
-      const res = await fetch('/api/receiving/disposition-suggest', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          qaStatus: form.qaStatus,
-          conditionGrade: form.conditionGrade,
-          notes: form.returnReason,
-        }),
-      });
-      const data = await res.json().catch(() => null);
-      if (!res.ok || !data?.success) {
-        toast.error(data?.error || 'Could not suggest a disposition');
-        return;
-      }
-      form.setDispositionCode(data.dispositionCode);
-      toast.success(`AI: ${data.dispositionCode} (${data.confidence} confidence)`);
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Network error');
-    } finally {
-      setSuggestingDisp(false);
-    }
-  };
 
   const handleRefresh = () => {
     onUpdated();
@@ -325,7 +284,7 @@ export function ReceivingDetailsStack({ log, onClose, onUpdated, onDeleted }: Re
             <PaneHeaderTabs<ReceivingTab>
               tabs={[
                 { value: 'overview', label: 'Overview' },
-                { value: 'lines', label: 'Lines', count: typeof log.count === 'number' ? log.count : undefined },
+                { value: 'lines', label: 'Items', count: typeof log.count === 'number' ? log.count : undefined },
                 { value: 'details', label: 'Details' },
               ]}
               value={activeTab}
@@ -358,23 +317,15 @@ export function ReceivingDetailsStack({ log, onClose, onUpdated, onDeleted }: Re
             const receiveId = String(log.zoho_purchase_receive_id || '').trim();
             const warehouseId = String(log.zoho_warehouse_id || '').trim();
             return (
-              <section className="overflow-hidden rounded-2xl border border-gray-100 bg-white">
-                <div className="group min-w-0 border-b border-gray-100 px-4 py-3">
-                  <p className="text-eyebrow font-black uppercase tracking-widest text-gray-500 mb-2">
-                    Tracking
-                  </p>
-                  <SearchBar
-                    value={form.tracking}
-                    onChange={form.setTracking}
-                    placeholder="Tracking number"
-                    variant="blue"
-                    size="compact"
-                    hideUnderline
-                    leadingIcon={<Barcode className="h-[14px] w-[14px]" />}
-                    className="w-full min-w-0"
-                    aria-label="Edit tracking number"
-                  />
-                </div>
+              <div className="space-y-0">
+                <TrackingNumberRow
+                  label="Tracking"
+                  value={form.tracking}
+                  placeholder="Tracking number"
+                  allowEdit
+                  onChange={form.setTracking}
+                  keepBottomDivider={Boolean(listingRaw || poValue || receiveId || warehouseId)}
+                />
                 {listingRaw ? (
                   <CopyableValueFieldBlock
                     label="Listing"
@@ -410,7 +361,7 @@ export function ReceivingDetailsStack({ log, onClose, onUpdated, onDeleted }: Re
                     variant="flat"
                   />
                 ) : null}
-              </section>
+              </div>
             );
           })()}
 
@@ -504,23 +455,7 @@ export function ReceivingDetailsStack({ log, onClose, onUpdated, onDeleted }: Re
           {/* Disposition + QA Status */}
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5">
-              <div className="flex items-center justify-between gap-2">
-                <label className="text-eyebrow font-black uppercase tracking-widest text-gray-500">Disposition</label>
-                <button
-                  type="button"
-                  onClick={suggestDisposition}
-                  disabled={suggestingDisp}
-                  title="Suggest a disposition from QA status, condition, and notes (local AI). You can still change it."
-                  className="inline-flex items-center gap-1 rounded-md border border-purple-200 bg-purple-50 px-1.5 py-0.5 text-eyebrow font-bold uppercase tracking-wider text-purple-700 transition-colors hover:bg-purple-100 disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                  {suggestingDisp ? (
-                    <Loader2 className="h-2.5 w-2.5 animate-spin" />
-                  ) : (
-                    <Sparkles className="h-2.5 w-2.5" />
-                  )}
-                  Suggest
-                </button>
-              </div>
+              <label className="text-eyebrow font-black uppercase tracking-widest text-gray-500">Disposition</label>
               <ViewDropdown options={DISPOSITION_OPTS} value={form.dispositionCode} onChange={form.setDispositionCode} borderRadius="12px" backgroundColor="#f9fafb" fontSize="11px" />
             </div>
             <div className="space-y-1.5">

@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { isAllowedAdminOrigin } from '@/lib/security/allowed-origin';
-import { enqueueQStashJson, getQStashResultIdentifier } from '@/lib/qstash';
 import { InventorySyncService } from '@/services/InventorySyncService';
 import { withAuth } from '@/lib/auth/withAuth';
 
@@ -32,24 +31,6 @@ export const POST = withAuth(async (request: NextRequest, ctx) => {
   try {
     const body = (await request.json().catch(() => ({}))) as Record<string, unknown>;
     const mode = getRequestedMode(request, body);
-    const shouldEnqueue = body.enqueue === true || request.nextUrl.searchParams.get('enqueue') === 'true';
-
-    if (shouldEnqueue) {
-      const result = await enqueueQStashJson({
-        path: '/api/qstash/zoho/items/sync',
-        body: { type: mode },
-        retries: 3,
-        timeout: 300,
-        label: mode === 'full' ? 'zoho-items-full-sync' : 'zoho-items-incremental-sync',
-      });
-      return NextResponse.json({
-        success: true,
-        queued: true,
-        mode,
-        messageId: getQStashResultIdentifier(result),
-      });
-    }
-
     return NextResponse.json(await runItemSync(ctx.organizationId, mode));
   } catch (error: any) {
     console.error('[zoho/items/sync]', error);

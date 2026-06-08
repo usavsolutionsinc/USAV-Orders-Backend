@@ -30,9 +30,10 @@ export const GET = withAuth(async (req: NextRequest) => {
       );
     }
 
-    // `zoho_catalog`: title + SKU search sourced purely from the Zoho
-    // `sku_catalog` (no Ecwid display_name fallback). Used by Local Pickup,
-    // which must show canonical Zoho product titles.
+    // `zoho_catalog`: title + SKU sourced from the Zoho `items` mirror (Zoho SKU
+    // + Zoho name + zoho_item_id) — the Zoho product display is the source of
+    // truth. Used by the labels product picker and by Local Pickup (which must
+    // reference real Zoho items when creating a Zoho PO).
     if (searchField === 'zoho_catalog') {
       return NextResponse.json(
         await searchFromZohoCatalog(q, excludeSkuSuffix, limit),
@@ -185,7 +186,16 @@ async function searchFromZohoCatalog(
        MAX(i.zoho_item_id)    AS zoho_item_id,
        MAX(sc.category)       AS category,
        MAX(i.upc)             AS upc,
-       COALESCE(MAX(i.image_url), MAX(sc.image_url)) AS image_url,
+       -- Zoho item photo only, served through our proxy when the Zoho item has an
+       -- image_document_id. Do NOT fall back to sc.image_url: sku_catalog uses an
+       -- independent SKU numbering, so its image belongs to a DIFFERENT product
+       -- that merely shares the SKU string (and is usually the Ecwid image). A
+       -- missing Zoho photo shows the placeholder, never the wrong product's.
+       CASE
+         WHEN NULLIF(MAX(i.image_document_id), '') IS NOT NULL
+           THEN '/api/zoho/items/' || MAX(i.zoho_item_id) || '/image'
+         ELSE NULLIF(MAX(i.image_url), '')
+       END AS image_url,
        bool_or(sc.is_active)  AS is_active
      FROM items i
      JOIN sku_catalog sc ON sc.sku = BTRIM(i.sku)
@@ -234,6 +244,11 @@ async function searchSkusWithQcChecks(q: string, limit: number) {
   // manageable from the QC view, even if it's been retired from sale. The
   // EXISTS clause already keeps this to the small, deliberately-curated set of
   // SKUs that have QC steps linked.
+  //
+  // Draft steps count too (no status='published' filter): this is an *authoring*
+  // discovery filter — a SKU with only draft steps is still "being built" and
+  // must surface here. Add `AND qc.status='published'` behind a flag only if a
+  // "has published QC" filter is ever needed for the execution side. (plan §6)
   const filterClauses: string[] = [
     'EXISTS (SELECT 1 FROM qc_check_templates qc WHERE qc.sku_catalog_id = sc.id)',
   ];

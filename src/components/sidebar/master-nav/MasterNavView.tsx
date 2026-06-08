@@ -106,7 +106,7 @@ export function MasterNavView({
     <div
       onMouseEnter={handleHoverOpen}
       onMouseLeave={handleHoverLeave}
-      className="absolute inset-x-1 top-[40px] z-50 max-h-[calc(100%-44px)]"
+      className="absolute inset-x-1 top-[40px] bottom-1 z-50"
     >
       <MasterNavDropdown
         ref={menuRef}
@@ -135,17 +135,20 @@ export function MasterNavView({
         <div
           onMouseEnter={handleHoverOpen}
           onMouseLeave={handleHoverLeave}
-          className={cn('relative shrink-0', !open && receivingHeaderHairlineClass)}
+          className={cn('relative z-20 shrink-0', !open && receivingHeaderHairlineClass)}
         >
           <MasterNavHeader
             icon={activeMode?.icon ?? activePage.icon}
             label={headerLabel}
             open={open}
           />
-          <AnimatePresence>{open && dropdown}</AnimatePresence>
         </div>
         {rail}
         <div className="relative z-0 min-h-0 flex-1 overflow-hidden">{renderContext()}</div>
+        {/* Dropdown floats over the whole panel — anchored to the root (not the
+            ~40px header band) so its definite top/bottom give the inner menu a
+            height to scroll within. */}
+        <AnimatePresence>{open && dropdown}</AnimatePresence>
       </div>
     );
   }

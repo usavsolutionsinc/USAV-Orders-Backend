@@ -1,7 +1,27 @@
 {
-  "generatedAt": "2026-06-07T05:31:41.778Z",
+  "generatedAt": "2026-06-08T04:16:08.112Z",
   "count": 199,
   "commits": [
+    {
+      "sha": "f9d176f17bbba18a38d44378e0df2123e78af0ec",
+      "shortSha": "f9d176f1",
+      "date": "2026-06-07T20:25:32-07:00",
+      "author": "DENSENSE8",
+      "subject": "chore(cron): schedule Zoho PO-mirror sync (po-sync) so received POs auto-clear from Incoming",
+      "body": "The Incoming \"Sync Zoho\" button runs two steps: issued-PO sync AND the\nzoho_po_mirror status sync (syncZohoPoMirror) that drops received POs from\nthe Incoming queue. Only the first was on a cron (incoming-po-sync); the\nmirror step was never scheduled, so the clearing only happened on a manual\nbutton press. Schedule the existing /api/cron/zoho/po-sync route:\n  - mode=delta every 15 min (offset :07/:22/:37/:52 to not collide with\n    incoming-po-sync at :00/:15/:30/:45)\n  - mode=full nightly as a drift safety net\n\nTogether with incoming-po-sync this reproduces the button's behavior on a\ncron. Requires a production deploy to register.\n\nCo-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>",
+      "type": "chore",
+      "title": "schedule Zoho PO-mirror sync (po-sync) so received POs auto-clear from Incoming"
+    },
+    {
+      "sha": "62139378b0d4ec256b8ed9f5078e7b491b2f4680",
+      "shortSha": "62139378",
+      "date": "2026-06-07T00:55:24-07:00",
+      "author": "DENSENSE8",
+      "subject": "added a full scouting system for all the different systems including ebay and goodwill and added a warranty mode in the orders and shipping page",
+      "body": "",
+      "type": "other",
+      "title": "added a full scouting system for all the different systems including ebay and goodwill and added a warranty mode in the orders and shipping page"
+    },
     {
       "sha": "e8afdccdadd590479984a2e18b5875426ff31ab7",
       "shortSha": "e8afdccd",
@@ -1971,26 +1991,6 @@
       "body": "",
       "type": "other",
       "title": "cleaned up most of the code base via NEON and added more to the FBA page made it cleaner and user friendly, cleaned"
-    },
-    {
-      "sha": "b02dffe47b960cf86a532d977381c26ba5f7dce9",
-      "shortSha": "b02dffe4",
-      "date": "2026-03-26T09:02:26-07:00",
-      "author": "usavsolutionsinc",
-      "subject": "FBA aand tech scan improved endpoints",
-      "body": "",
-      "type": "other",
-      "title": "FBA aand tech scan improved endpoints"
-    },
-    {
-      "sha": "4a4ccbaa6704c532327e3215636bbd0b61a64307",
-      "shortSha": "4a4ccbaa",
-      "date": "2026-03-25T12:24:05-07:00",
-      "author": "usavsolutionsinc",
-      "subject": "updating the station trakcing number for fba fnskus",
-      "body": "",
-      "type": "other",
-      "title": "updating the station trakcing number for fba fnskus"
     }
   ]
 }

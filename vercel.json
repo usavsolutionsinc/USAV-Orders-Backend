@@ -1,25 +1,12 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
+  "git": {
+    "deploymentEnabled": false
+  },
   "crons": [
     {
       "path": "/api/cron/shipping/sync-due?limit=150&concurrency=8",
       "schedule": "*/15 * * * *"
-    },
-    {
-      "path": "/api/qstash/google-sheets/transfer-orders",
-      "schedule": "30 15 * * 1-5"
-    },
-    {
-      "path": "/api/qstash/google-sheets/transfer-orders",
-      "schedule": "0 18 * * 1-5"
-    },
-    {
-      "path": "/api/qstash/google-sheets/transfer-orders",
-      "schedule": "0 22 * * 1-5"
-    },
-    {
-      "path": "/api/qstash/staff-goals/history",
-      "schedule": "30 0 * * *"
     },
     {
       "path": "/api/cron/shipping/sync-due?limit=200&concurrency=8&carriers=UPS,USPS,FEDEX",
@@ -34,36 +21,8 @@
       "schedule": "*/30 * * * *"
     },
     {
-      "path": "/api/qstash/replenishment/sync",
-      "schedule": "0 13 * * *"
-    },
-    {
-      "path": "/api/cron/stock-alerts",
-      "schedule": "0 14 * * *"
-    },
-    {
-      "path": "/api/cron/sourcing/scan",
-      "schedule": "0 6 * * *"
-    },
-    {
-      "path": "/api/cron/sourcing/replenish",
-      "schedule": "0 7 * * *"
-    },
-    {
-      "path": "/api/cron/refresh-reports",
-      "schedule": "30 10 * * *"
-    },
-    {
-      "path": "/api/qstash/inventory/drift-check",
-      "schedule": "0 11 * * *"
-    },
-    {
-      "path": "/api/cron/replenishment-detect",
-      "schedule": "0 */4 * * *"
-    },
-    {
-      "path": "/api/qstash/ebay/refresh-tokens",
-      "schedule": "0 * * * *"
+      "path": "/api/cron/receiving/incoming-tracking-sync",
+      "schedule": "10,25,40,55 * * * *"
     },
     {
       "path": "/api/cron/zoho/incoming-po-sync",
@@ -84,6 +43,66 @@
     {
       "path": "/api/cron/zoho/fulfillment-sync?mode=full",
       "schedule": "45 3 * * *"
+    },
+    {
+      "path": "/api/cron/zoho/orders-ingest-drain",
+      "schedule": "* * * * *"
+    },
+    {
+      "path": "/api/cron/google-sheets/transfer-orders",
+      "schedule": "30 15 * * 1-5"
+    },
+    {
+      "path": "/api/cron/google-sheets/transfer-orders",
+      "schedule": "0 18 * * 1-5"
+    },
+    {
+      "path": "/api/cron/google-sheets/transfer-orders",
+      "schedule": "0 22 * * 1-5"
+    },
+    {
+      "path": "/api/cron/staff-goals/history",
+      "schedule": "30 0 * * *"
+    },
+    {
+      "path": "/api/cron/replenishment/sync",
+      "schedule": "0 13 * * *"
+    },
+    {
+      "path": "/api/cron/replenishment-detect",
+      "schedule": "0 */4 * * *"
+    },
+    {
+      "path": "/api/cron/inventory/drift-check",
+      "schedule": "0 11 * * *"
+    },
+    {
+      "path": "/api/cron/stock-alerts",
+      "schedule": "0 14 * * *"
+    },
+    {
+      "path": "/api/cron/sourcing/scan",
+      "schedule": "0 6 * * *"
+    },
+    {
+      "path": "/api/cron/sourcing/replenish",
+      "schedule": "0 7 * * *"
+    },
+    {
+      "path": "/api/cron/sku-catalog/refresh-suggestions",
+      "schedule": "0 9 * * *"
+    },
+    {
+      "path": "/api/cron/refresh-reports",
+      "schedule": "30 10 * * *"
+    },
+    {
+      "path": "/api/cron/ebay/refresh-tokens",
+      "schedule": "0 * * * *"
+    },
+    {
+      "path": "/api/cron/cleanup",
+      "schedule": "0 5 * * *"
     }
   ]
 }

@@ -206,7 +206,7 @@ export async function setQuoteStatus(
            FROM warranty_claims WHERE id = $1 FOR UPDATE`,
         [claimId],
       );
-      if (claim.rowCount > 0 && claim.rows[0].repair_service_id == null) {
+      if ((claim.rowCount ?? 0) > 0 && claim.rows[0].repair_service_id == null) {
         const c = claim.rows[0];
         const ins = await client.query<{ id: number }>(
           `INSERT INTO repair_service (

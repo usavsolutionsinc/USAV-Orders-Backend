@@ -8,7 +8,6 @@
  * surface lives next to its consumer.
  */
 
-import { COND_LABEL } from '@/components/station/receiving-constants';
 import {
   PackageOpen,
   ClipboardList,
@@ -45,8 +44,8 @@ export const RECEIVING_MODE_ITEMS: HorizontalSliderItem[] = [
   { id: 'incoming', label: 'Incoming',     icon: Inbox },
   { id: 'triage',   label: 'Receiving',    icon: ClipboardList },
   { id: 'receive',  label: 'Unbox',        icon: PackageOpen },
-  { id: 'history',  label: 'History',      icon: List },
   { id: 'pickup',   label: 'Local Pickup', icon: ShoppingCart },
+  { id: 'history',  label: 'History',      icon: List },
 ];
 
 // ── Carton scratch (localStorage) ───────────────────────────────────────────
@@ -286,19 +285,6 @@ export function resolvePoScanValue(
   if (fromLineId) return fromLineId;
   if (receivingId != null) return `RCV-${receivingId}`;
   return '';
-}
-
-export function conditionShort(code: string | null | undefined): string {
-  const c = String(code || 'BRAND_NEW').trim().toUpperCase();
-  if (c === 'BRAND_NEW') return 'New';
-  if (c === 'LIKE_NEW') return 'Like New';
-  if (c === 'REFURBISHED') return 'Refurb';
-  if (c === 'PARTS') return 'Parts';
-  if (c.startsWith('USED_')) {
-    const letter = COND_LABEL[c] || c.replace('USED_', '');
-    return `USED-${letter}`;
-  }
-  return c.replace(/_/g, ' ');
 }
 
 // ── Scan / exception types ──────────────────────────────────────────────────

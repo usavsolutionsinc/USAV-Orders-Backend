@@ -132,8 +132,11 @@ export function ReceivingUnitRows({
     <div className="space-y-2">
       {/* Umbrella control — one tap grades the whole lot; rows below override.
           Bare pills: the position above the unit list reads as "all" from
-          context, so no chrome/label needed. */}
-      <ConditionPills value={masterValue} onChange={setAllUnits} />
+          context, so no chrome/label needed. `px-1` matches the unit rows'
+          horizontal inset so the master + per-row pills share a left edge. */}
+      <div className="px-1">
+        <ConditionPills value={masterValue} onChange={setAllUnits} />
+      </div>
       <UnitSlotList
         total={total}
         saved={saved}
@@ -141,10 +144,16 @@ export function ReceivingUnitRows({
         onSelect={setSelectedIndex}
         disabled={disabled}
         isSubmitting={isSubmitting}
+        // Render the active unit exactly like a single-qty SerialCard row:
+        // inline condition pills, no n/N counter, no pending badge.
+        singleRowExpanded
         renderExpandedMeta={(serial, index) => (
           <ConditionPills
             value={gradeFor(serial, index)}
             onChange={(next) => {
+              // Picking a grade on any row also makes it the active unit, so the
+              // single bottom print button labels with the condition just chosen.
+              setSelectedIndex(index);
               if (serial) onSetUnitGrade(serial.id, next);
               else setPendingGrade((m) => ({ ...m, [index]: next }));
             }}

@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { isQStashOrigin } from '@/lib/qstash';
 import { invalidateAllOrdersApiCaches } from '@/lib/orders/invalidation';
 import { syncOrderExceptionsToOrders } from '@/lib/orders-exceptions';
 import { formatPSTTimestamp } from '@/utils/date';
@@ -27,7 +26,7 @@ function isTrustedAppOrigin(request: NextRequest): boolean {
 }
 
 export async function POST(request: NextRequest) {
-  if (!isQStashOrigin(request.headers) && !isTrustedAppOrigin(request)) {
+  if (!isTrustedAppOrigin(request)) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 

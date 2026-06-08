@@ -3,6 +3,7 @@ import { withAuth } from '@/lib/auth/withAuth';
 import { parseBody } from '@/lib/schemas/parse';
 import { RepairUpdateBody } from '@/lib/schemas/repairs';
 import { updateRepair } from '@/lib/neon/repairs-queries';
+import { recomputeUnitQualitySafe } from '@/lib/neon/quality-queries';
 import { recordAudit, AUDIT_ACTION, AUDIT_ENTITY } from '@/lib/audit-logs';
 import pool from '@/lib/db';
 
@@ -50,6 +51,7 @@ export const PATCH = withAuth(async (request, ctx) => {
       extra: { serial_unit_id: repair.serial_unit_id, status: repair.status },
     });
 
+    await recomputeUnitQualitySafe(repair.serial_unit_id);
     return NextResponse.json({ ok: true, repair });
   } catch (err) {
     const message = err instanceof Error ? err.message : 'failed to update repair';

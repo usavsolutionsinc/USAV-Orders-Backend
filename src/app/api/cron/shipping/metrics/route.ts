@@ -12,7 +12,8 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { isVercelCronOrigin } from '@/lib/qstash';
+import { isVercelCronOrigin } from '@/lib/cron/auth';
+import { withCronRun } from '@/lib/cron/run-log';
 import {
   collectShippingTrackingMetrics,
   detectMetricAlerts,
@@ -27,8 +28,11 @@ export async function GET(req: NextRequest) {
   }
 
   try {
-    const metrics = await collectShippingTrackingMetrics();
-    const alerts = detectMetricAlerts(metrics);
+    const { metrics, alerts } = await withCronRun('shipping.metrics', async () => {
+      const metrics = await collectShippingTrackingMetrics();
+      const alerts = detectMetricAlerts(metrics);
+      return { metrics, alerts };
+    });
 
     console.log('[metrics.shipping.tracking]', {
       deliveredUnscanned: metrics.deliveredUnscanned,

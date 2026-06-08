@@ -74,3 +74,4 @@ docker-compose.db.yml
 /playwright-report/
 /test-results/
 /tests/.auth/
+.env*

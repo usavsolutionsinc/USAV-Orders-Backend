@@ -4,7 +4,7 @@ import React, { useEffect, useRef, useState, useCallback, useMemo } from "react"
 import { toast } from 'sonner';
 
 // Import refactored sub-components
-import { ModeSelector, BarcodeMode } from './barcode/ModeSelector';
+import { ModeSelector, BARCODE_MODES, BarcodeMode } from './barcode/ModeSelector';
 import { SkuInput } from './barcode/SkuInput';
 import { SerialNumberInput } from './barcode/SerialNumberInput';
 import { BarcodePreview } from './barcode/BarcodePreview';
@@ -17,8 +17,9 @@ import { printProductLabel, printProductLabels, buildUnitPayload } from '@/lib/p
 import { useLabelRecents } from '@/hooks/useLabelRecents';
 import { useBarcodeMode } from '@/hooks/useBarcodeMode';
 import { CONDITION_OPTIONS } from '@/components/receiving/zoho-po-types';
-import { Search, Clipboard, Check, Printer } from './Icons';
+import { Search, Clipboard, Check, Printer, ChevronDown } from './Icons';
 import { StickyActionBar } from '@/design-system/components/StickyActionBar';
+import { successFeedback } from '@/lib/feedback/confirm';
 
 
 type ConditionGrade = (typeof CONDITION_OPTIONS)[number]['value'];
@@ -664,9 +665,17 @@ export default function MultiSkuSnBarcode({ layout = 'vertical' }: MultiSkuSnBar
 
         return (
             <div className="flex h-full min-h-0 min-w-0 flex-col bg-gray-50 text-gray-900">
+                {/* Mode switcher — moved out of the products sidebar so the
+                 * print / log SN / reprint switch sits at the top of the
+                 * workspace itself. Writes the same `?mode=` URL state. */}
+                <div className="shrink-0 border-b border-gray-200 bg-white">
+                    <div className="mx-auto w-full max-w-[720px] px-6 py-3">
+                        <ModeDropdown mode={mode} onChange={handleModeChange} />
+                    </div>
+                </div>
                 {/* Scrollable hero column */}
                 <div className="min-h-0 flex-1 overflow-y-auto">
-                    <div className="mx-auto w-full max-w-3xl px-6 py-8 space-y-4 pb-32">
+                    <div className="mx-auto w-full max-w-[720px] px-6 py-8 space-y-4 pb-32">
                         <WorkspaceCard label="SKU" tone={accent.tone}>
                             <ModernSkuField
                                 value={sku}
@@ -741,6 +750,7 @@ export default function MultiSkuSnBarcode({ layout = 'vertical' }: MultiSkuSnBar
                  * surface with no bar chrome (no background/border/backdrop). */}
                 <StickyActionBar
                     floating
+                    maxWidth="max-w-[720px]"
                     primary={{
                         label: primaryLabel,
                         onClick: primaryAction,
@@ -771,6 +781,101 @@ export default function MultiSkuSnBarcode({ layout = 'vertical' }: MultiSkuSnBar
                 {previewPanelEl}
                 <div ref={bottomAnchorRef} aria-hidden />
             </div>
+        </div>
+    );
+}
+
+// ─── Mode dropdown ──────────────────────────────────────────────────────────
+
+interface ModeDropdownProps {
+    mode: BarcodeMode;
+    onChange: (next: BarcodeMode) => void;
+}
+
+/**
+ * Compact print/log/reprint switcher pinned to the top of the horizontal
+ * workspace. Relocated from the products sidebar (ProductsSidebarPanel) so the
+ * mode control lives with the display it drives. `onChange` is the workspace's
+ * handleModeChange, which writes `?mode=` and resets the step progression.
+ */
+function ModeDropdown({ mode, onChange }: ModeDropdownProps) {
+    const [open, setOpen] = useState(false);
+    const rootRef = useRef<HTMLDivElement>(null);
+    const current = BARCODE_MODES.find((m) => m.id === mode) ?? BARCODE_MODES[0];
+
+    // Click-away closes the menu.
+    useEffect(() => {
+        if (!open) return;
+        const onDocClick = (e: MouseEvent) => {
+            if (!rootRef.current?.contains(e.target as Node)) setOpen(false);
+        };
+        document.addEventListener('mousedown', onDocClick);
+        return () => document.removeEventListener('mousedown', onDocClick);
+    }, [open]);
+
+    const CurrentIcon = current.Icon;
+
+    return (
+        <div ref={rootRef} className="relative">
+            <button
+                type="button"
+                onClick={() => setOpen((o) => !o)}
+                aria-haspopup="listbox"
+                aria-expanded={open}
+                className={`flex w-full items-center gap-3 rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-left transition-colors hover:border-gray-300 ${
+                    open ? 'rounded-b-none border-b-0' : ''
+                }`}
+            >
+                <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-blue-600 text-white">
+                    <CurrentIcon className="h-4 w-4" />
+                </span>
+                <span className="flex min-w-0 flex-1 flex-col">
+                    <span className="text-caption font-black uppercase tracking-[0.14em] text-gray-900">
+                        {current.label}
+                    </span>
+                    <span className="truncate text-micro font-medium text-gray-500">
+                        {current.description}
+                    </span>
+                </span>
+                <ChevronDown
+                    className={`h-4 w-4 shrink-0 text-gray-400 transition-transform ${open ? 'rotate-180' : ''}`}
+                />
+            </button>
+
+            {open && (
+                <ul
+                    role="listbox"
+                    className="absolute left-0 right-0 top-full z-20 overflow-hidden rounded-b-xl rounded-t-none border border-gray-200 border-t-0 bg-white shadow-lg -mt-px"
+                >
+                    {BARCODE_MODES.filter(({ id }) => id !== mode).map(({ id, label, description, Icon }) => (
+                        <li key={id}>
+                            <button
+                                type="button"
+                                role="option"
+                                aria-selected={false}
+                                onClick={() => {
+                                    successFeedback();
+                                    onChange(id);
+                                    setOpen(false);
+                                }}
+                                className="flex w-full items-center gap-3 px-3 py-2.5 text-left transition-colors hover:bg-gray-50"
+                            >
+                                <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-gray-100 text-gray-500">
+                                    <Icon className="h-4 w-4" />
+                                </span>
+                                <span className="flex min-w-0 flex-col">
+                                    <span className="text-caption font-black uppercase tracking-[0.14em] text-gray-900">
+                                        {label}
+                                    </span>
+                                    <span className="truncate text-micro font-medium text-gray-500">
+                                        {description}
+                                    </span>
+                                </span>
+                            </button>
+                        </li>
+                    ))}
+                </ul>
+            )}
         </div>
     );
 }

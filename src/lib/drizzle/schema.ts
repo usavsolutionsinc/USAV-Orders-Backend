@@ -520,6 +520,7 @@ export const items = pgTable('items', {
   taxName: text('tax_name'),
   taxPercentage: numeric('tax_percentage', { precision: 6, scale: 3 }),
   imageUrl: text('image_url'),
+  imageDocumentId: text('image_document_id'),
   quantityAvailable: numeric('quantity_available', { precision: 12, scale: 4 }),
   quantityOnHand: numeric('quantity_on_hand', { precision: 12, scale: 4 }),
   customFields: jsonb('custom_fields').notNull().default({}),

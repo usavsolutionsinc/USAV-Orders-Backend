@@ -230,7 +230,7 @@ Follow the **sidebar-mode** skill — new surfaces become sidebar MODES, not ad-
 - **Phase 1b — Failure-mode taxonomy + auto-tag (✅ shipped + applied).** `failure_modes` (15-row Bose seed) + `unit_failure_tags`; `failure_mode_id` on `qc_check_templates`, `failed_mode_id` on `tech_verifications`. Taxonomy CRUD API, per-unit tag API, and **auto-tag-on-fail** in the checklist record path. See §14.
 - **Phase 2 — Advisory grade signals.** `quality/gradeAdvice.ts`; attach warnings to `/grade` response (non-blocking); tech panel soft-warning banner.
 - **Phase 3 — Repair history (✅ shipped + applied).** `unit_repairs` + `repair_failure_resolutions` + `unit_failure_tags.resolved_repair_id`; open/update(complete) routes; `IN_REPAIR`/`REPAIR_DONE` transitions + `REPAIR_STARTED`/`REPAIR_COMPLETED` events; completing a repair auto-resolves the unit's open failure tags it addresses; `repair_service_id` bridge column. See §15. (Detail-pane repair card still pending.)
-- **Phase 4 — Quality score + risk.** `unit_quality_scores`; `quality/qualityScore.ts`; recompute hooks; backfill script; quality + failure cards in detail pane.
+- **Phase 4 — Quality score + risk (✅ shipped + applied).** `unit_quality_scores`; pure `quality/qualityScore.ts` + `quality/gradeAdvice.ts` (8 unit tests); `quality-queries.ts` recompute; best-effort recompute hooks on grade/failure-tag/repair/auto-tag; `GET …/quality` aggregate; backfill script; `caps_grade_at` → advisory grade warnings on the grade route. See §16. (Detail-pane cards + dashboard still pending.)
 - **Phase 5 — Analytics + eBay map.** Quality dashboard; `GRADE_TO_EBAY_CONDITION`; display score/condition on listing prep. (Live reverse push to eBay deferred — out of v1 scope.)
 
 Each phase is independently shippable and gated by `tsc` + build (per the dead-code-wave protocol). Every API change runs through api-route-reviewer; every permission/schema change through permission-registry-guard and neon-cost-reviewer.
@@ -332,4 +332,57 @@ Gates: `tsc` 0 errors · `audit-route-auth:check` ✓ (540 routes) · manifest t
 
 **Design note:** serial-status transitions (`IN_REPAIR`/`REPAIR_DONE`) are written by direct UPDATE inside the repair txn (mirrors the grade route's direct `condition_grade` write) rather than routing through `upsertSerialUnit` — these are non-allocation states set by a deliberate tech action. Revisit if allocation invariants ever need to gate repair entry.
 
-**Not yet wired:** repair card + failure-tag list in the unit detail pane; linking a repair to an RMA from the returns flow; `unit_quality_scores` (Phase 4) consuming repair history.
+**Not yet wired:** repair card + failure-tag list in the unit detail pane; linking a repair to an RMA from the returns flow; ~~`unit_quality_scores` consuming repair history~~ (shipped, §16).
+
+---
+
+## 16. Phase 4 — shipped (quality score + risk + grade advice)
+
+**Migration** `2026-06-07_unit_quality_scores.sql` (**applied**; warranty migration still pending):
+- `unit_quality_scores` — per-unit projection (PK serial_unit_id): `quality_score` (0–100), `risk_level` (CHECK low|medium|high), `risk_reasons` jsonb, `ebay_condition_id`, `grade_at_score`, `computed_at`; index `(risk_level, quality_score)` for worklists.
+
+**Drizzle** — `unitQualityScores`.
+
+**Pure logic** (`src/lib/quality/`, 8 unit tests in `quality.test.ts`):
+- `qualityScore.ts` — `computeQualityScore({ grade, openFailures, repairs, acquisition })` → `{ score, riskLevel, riskReasons, ebayConditionId }`. Base by grade; penalties by failure severity / failed repairs / for-parts source; small boost for completed repairs; `riskReasons` include `third_party_source` (supplier ∈ ebay_seller|salvage|marketplace), `open_critical_failure`, `for_parts_source`, etc. `GRADE_TO_EBAY_CONDITION` (BRAND_NEW→1000 … USED_*→3000, PARTS→7000), cross-checked vs `browse-client.ts` CONDITION_FILTER. **Compute + display only — no live eBay push.**
+- `gradeAdvice.ts` — `evaluateGradeAdvice({ grade, openFailures })` → `{ warnings }`; **advisory, never blocking** — warns when the chosen grade beats an open failure's `caps_grade_at`.
+
+**Recompute layer** — `src/lib/neon/quality-queries.ts`: `gatherQualityInputs` (grade + open tags + repairs + latest `part_acquisitions`→supplier provenance), `recomputeUnitQuality` (upsert), `recomputeUnitQualitySafe` (never throws), `getUnitQuality`. Recompute is a few indexed reads — called per mutation, no polling (Neon-safe).
+
+**Wiring** — best-effort recompute after: grade write, failure-tag add/resolve, repair open/complete, and checklist auto-tag-on-fail. The grade route also attaches `warnings` (grade advice) to its response.
+
+**API** — `GET /api/serial-units/[id]/quality` (`sku_stock.view`): self-healing recompute + `{ grade, current_status, quality, failure_tags, repairs }` — the one-call detail-pane aggregate.
+
+**Backfill** — `scripts/backfill-unit-quality.ts` (`tsx … [--dry]`), batched/sequential; not auto-run (GET self-heals per unit).
+
+Gates: `tsc` 0 · quality tests 8/8 · live recompute smoke (unit 1383 PARTS → 10/high/eBay 7000) · `audit-route-auth:check` ✓ (545 routes) · manifest test ✓. No new permissions.
+
+**Not yet wired:** ~~detail-pane quality/failure/repair cards + actions~~ (shipped, §17); a risk dashboard (the `(risk_level, quality_score)` index is ready); live reverse push of condition/score to eBay (explicitly out of v1).
+
+---
+
+## 17. Unit detail pane — shipped (UI)
+
+**`src/components/labels/unit-detail/UnitQualityPanel.tsx`** — one component, three cards, fed by a single `GET .../quality` (self-healing recompute). Wired into `UnitDetailWorkspace` between the location/order grid and the timeline.
+- **Quality card** — score (0–100) + colored bar, risk chip (low/med/high tone), risk-reason pills, grade + mapped eBay condition id, "updated …".
+- **Failure tags card** — open (rose) then resolved (struck-through); severity chips; **"+ Tag"** reveals a failure-mode `<select>` (lazy `GET /api/failure-modes?activeOnly=1`) + note → POST; per-open-tag **Resolve** → PATCH.
+- **Repair history card** — status-toned rows with cost/staff/linked modes; **"+ Log repair"** reveals a summary input + togglable chips of the unit's open failure modes to link → POST (opens `in_progress`); non-terminal rows get an inline cost-$ field + **Complete** → PATCH (`completed`), which (server-side) resolves the linked failure tags and recomputes the score.
+
+React Query: writes invalidate `['unit.quality', id]` + `['serial-unit.detail']` so the score/grade/status refresh in place. Permissions enforced server-side (UI surfaces actions; 403s toast). No new routes/permissions/migration. `tsc` 0.
+
+**Remaining (optional):** ~~risk/failure dashboard~~ (shipped, §18); ~~`failure_mode_id` picker~~ (shipped, §18); live eBay push (out of v1).
+
+---
+
+## 18. Optional UI — shipped (failure-mode picker + risk dashboard)
+
+**Failure-mode picker** — `QcChecklistSection.tsx` add/edit form gains an "Auto-tag on fail" `<select>` (lazy `GET /api/failure-modes?activeOnly=1`), wired through `valuePayload.failureModeId` to the qc-checks POST/PUT (backend already persisted it). Authors can now link a step to the failure mode it auto-tags when it fails — no API/DB change.
+
+**Risk dashboard** — admin **Quality** tab (Performance group, `requires: sku_stock.view`):
+- `GET /api/quality/dashboard` (`sku_stock.view`) — one endpoint, four parallel aggregates: risk distribution + weighted avg score, top-12 open failure modes, repair rollup (counts by status + total cost), and the top-25 highest-risk units (rides the `(risk_level, quality_score)` index).
+- `QualityDashboardTab.tsx` — risk tiles (avg / low / medium / high), top-open-failures list, repair rollup (open / completed / total cost), and a highest-risk worklist (score · unit · reasons · grade).
+- Registered via `admin-sections.ts` (type + option) + a render case in `admin/page.tsx`; no `AdminSidebar` change needed (`panelFor` default = no panel).
+
+Gates: `tsc` 0 · `audit-route-auth:check` ✓ (546 routes) · manifest test ✓ · live dashboard-SQL smoke (medium 2 / high 1). No new permissions.
+
+**The QC system is now complete end-to-end** (backend + tech detail-pane + admin analytics). Only live eBay reverse-push remains, explicitly deferred out of v1.

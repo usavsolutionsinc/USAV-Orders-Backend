@@ -458,8 +458,30 @@ sidebar-search-bar guard 3/3. (`npm run lint` is broken repo-wide — Next 16 re
 - **Verify**: tsc 0 · test:warranty 24/24 · audit exit 0, 0 ungated writes (538 routes, both new
   routes gated).
 
-### Next (Phase 6)
-Supplier report export (CSV), eBay refurb-listing draft (draft-only), post-warranty paid-repair
-quoting (`warranty_quotes`).
+### Phase 6 complete (2026-06-07) — outputs layer (feature complete)
+- **Supplier CSV export**: `src/lib/warranty/reports.ts` (`buildWarrantyReportRows` — claims +
+  denial reason + repair outcome/cost rollup via LATERAL + RMA/repair links; pure `toCsv`).
+  `GET /api/warranty/reports/export?status&sku&from&to&outcome&format` (warranty.view) → CSV /
+  JSON. Sidebar **Export** button (carries the active status filter).
+- **eBay refurb draft (draft-only)**: pure `buildEbayRefurbDraft` (`src/lib/warranty/ebay-draft.ts`)
+  — refurbished title (≤80), conditionId 2500, repair-summary description, aggregated photo refs.
+  `POST /api/warranty/claims/[id]/ebay-draft` (warranty.manage) returns the draft; never publishes.
+  Detail-panel **eBay refurb draft** action shows it read-only for the seller to copy.
+- **Paid-repair quoting**: `src/lib/warranty/quotes.ts` — `createQuote` (WQ-number + pure
+  `computeQuoteTotals`), `listQuotes` (folded into `getClaim`), `setQuoteStatus`
+  (DRAFT→SENT→ACCEPTED|DECLINED; **ACCEPTED creates + links a paid `repair_service` ticket**).
+  Routes `POST /claims/[id]/quote` + `PATCH /quotes/[id]` (warranty.manage). Detail-panel
+  **Paid-repair quotes** section (Send/Accepted/Declined) + **Quote paid repair** action
+  (DENIED/EXPIRED).
+- **Verify**: tsc 0 · `npm run test:warranty` 33/33 (clock + transitions + outputs:
+  toCsv/quote-totals/ebay-draft) · auth 37/37 · audit exit 0, 0 ungated writes (545 routes;
+  4 new routes gated).
+
+---
+
+## ✅ Feature complete (P0–P6)
+data + clock → read mode → write path → clock automation → staff notifications → RMA/repair
+linkage → outputs. All behind `WARRANTY_LOGGER`. Customer email remains deferred by decision.
+Deferred niceties: RMA admin visibility needs `INVENTORY_V2_RMA` on; eBay is draft-only by design.
 </content>
 </invoke>

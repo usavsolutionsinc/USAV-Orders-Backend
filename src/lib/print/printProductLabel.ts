@@ -1,5 +1,6 @@
 import { gs1UnitAi, serialUnitHandle } from '@/lib/barcode-routing';
 import { escapeLabelHtml, printLabel } from '@/lib/print/printLabel';
+import { CONDITION_GRADES, conditionLabel } from '@/lib/conditions';
 
 // Product/testing labels print the product title (the unit id lives in the
 // DataMatrix). The title is small and top-aligned next to the code so longer
@@ -13,22 +14,15 @@ const PRODUCT_INFO_CSS =
   '.sn{font-family:monospace;font-weight:700;font-size:9px;line-height:1.2;color:#111;word-break:break-all}';
 
 /**
- * Compact condition label for the tiny 2×1" sticker — mirrors the NEW / USED /
- * PARTS pill family rather than the verbose `conditionLabel()` ("Brand New",
- * "For Parts") used in ticket bodies. Returns '' for an empty/unknown grade so
- * the meta chip is simply omitted.
+ * Condition label for the tiny 2×1" sticker, from the shared `label` variant
+ * (New · Like New · Refurbished · Used-A · … · Parts) — same wording the
+ * receiving label prints. The `.cond` CSS up-cases it on the sticker. Returns
+ * '' for an empty/unknown grade so the meta chip is simply omitted.
  */
 function conditionChipLabel(grade: string | null | undefined): string {
-  switch (String(grade ?? '').trim().toUpperCase()) {
-    case 'BRAND_NEW':   return 'New';
-    case 'LIKE_NEW':    return 'Like New';
-    case 'REFURBISHED': return 'Refurb';
-    case 'USED_A':      return 'Used A';
-    case 'USED_B':      return 'Used B';
-    case 'USED_C':      return 'Used C';
-    case 'PARTS':       return 'Parts';
-    default:            return '';
-  }
+  const c = String(grade ?? '').trim().toUpperCase();
+  if (!(CONDITION_GRADES as readonly string[]).includes(c)) return '';
+  return conditionLabel(c, 'label');
 }
 
 /**

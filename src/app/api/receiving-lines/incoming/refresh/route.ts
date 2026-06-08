@@ -15,11 +15,10 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import pool from '@/lib/db';
 import { withAuth } from '@/lib/auth/withAuth';
 import { checkRateLimit } from '@/lib/api-guard';
 import { syncShipmentsByIds } from '@/lib/shipping/scheduler';
-import { NOT_ZOHO_RECEIVED_PREDICATE } from '@/lib/receiving/delivered-unscanned';
+import { selectIncomingShipmentIds } from '@/lib/receiving/incoming-shipments';
 import { getCachedJson, setCachedJson, invalidateCacheTags } from '@/lib/cache/upstash-cache';
 
 export const dynamic = 'force-dynamic';
@@ -67,50 +66,7 @@ export const POST = withAuth(async (req: NextRequest) => {
     // row endpoint uses (direct FK, else PO#-based fallback), so the synced set
     // matches the displayed set. Prioritize out-for-delivery + never-polled so a
     // freshly-delivered box flips first.
-    const { rows } = await pool.query<{ id: number; carrier: string }>(
-      `WITH incoming_shipments AS (
-         SELECT DISTINCT ON (stn.id)
-                stn.id,
-                stn.carrier,
-                stn.latest_status_category,
-                stn.is_out_for_delivery,
-                stn.is_in_transit,
-                stn.is_carrier_accepted,
-                stn.next_check_at
-           FROM receiving_lines rl
-           LEFT JOIN zoho_po_mirror mirror
-             ON mirror.zoho_purchaseorder_id = rl.zoho_purchaseorder_id
-           JOIN LATERAL (
-             SELECT r.* FROM receiving r
-              WHERE r.id = rl.receiving_id
-                 OR (rl.receiving_id IS NULL
-                     AND r.source = 'zoho_po'
-                     AND r.zoho_purchaseorder_id = rl.zoho_purchaseorder_id)
-              ORDER BY (r.id = rl.receiving_id) DESC,
-                       (r.shipment_id IS NOT NULL) DESC,
-                       r.id DESC
-              LIMIT 1
-           ) r ON TRUE
-           JOIN shipping_tracking_numbers stn ON stn.id = r.shipment_id
-          WHERE rl.workflow_status = 'EXPECTED'
-            AND COALESCE(rl.quantity_received, 0) = 0
-            AND rl.zoho_purchaseorder_id IS NOT NULL
-            AND ${NOT_ZOHO_RECEIVED_PREDICATE}
-            AND stn.carrier IN ('UPS','USPS','FEDEX')
-            AND COALESCE(stn.is_terminal, false) = false
-            AND COALESCE(stn.consecutive_error_count, 0) < 5
-          ORDER BY stn.id
-       )
-       SELECT id, carrier
-         FROM incoming_shipments
-        ORDER BY CASE WHEN is_out_for_delivery THEN 0
-                      WHEN latest_status_category IS NULL THEN 1
-                      WHEN is_in_transit THEN 2
-                      WHEN is_carrier_accepted THEN 3
-                      ELSE 4 END,
-                 next_check_at ASC NULLS FIRST
-        LIMIT ${BATCH_CAP + 1}`,
-    );
+    const rows = await selectIncomingShipmentIds(BATCH_CAP);
 
     const capped = rows.length > BATCH_CAP;
     const batch = rows.slice(0, BATCH_CAP);

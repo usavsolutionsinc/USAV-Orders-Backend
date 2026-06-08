@@ -24,7 +24,8 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { isVercelCronOrigin } from '@/lib/qstash';
+import { isVercelCronOrigin } from '@/lib/cron/auth';
+import { withCronRun } from '@/lib/cron/run-log';
 import {
   runShippingSyncDueJob,
   normalizeShippingSyncDuePayload,
@@ -56,7 +57,7 @@ export async function GET(req: NextRequest) {
 
   const startedAt = Date.now();
   try {
-    const result = await runShippingSyncDueJob(payload);
+    const result = await withCronRun('shipping.sync_due', () => runShippingSyncDueJob(payload));
 
     // One structured log line — Vercel/Datadog scrapers key off the prefix
     // to plot run cadence + failure rate. Keep field names stable.

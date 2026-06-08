@@ -15,7 +15,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { isVercelCronOrigin } from '@/lib/qstash';
+import { isVercelCronOrigin } from '@/lib/cron/auth';
 import {
   runUspsSubscribeJob,
   normalizeUspsSubscribePayload,

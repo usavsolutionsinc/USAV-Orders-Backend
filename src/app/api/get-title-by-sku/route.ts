@@ -6,13 +6,19 @@ import { withAuth } from '@/lib/auth/withAuth';
  * GET /api/get-title-by-sku?sku=<value>
  *
  * Resolves a SKU to {title, stock, location, imageUrl, skuCatalogId, gtin}
- * by probing three tables and merging in priority order:
+ * by probing four tables and merging in priority order:
  *
- *   sku_platform_ids   — Ecwid platform mappings (often the source of truth
- *                        for display_name + image_url). May be unlinked
- *                        (sku_catalog_id NULL), so we never skip this even
- *                        when sku_catalog also matches.
- *   sku_catalog        — canonical SKU + GTIN + sometimes image_url.
+ *   items              — the Zoho items mirror. The Zoho product display is the
+ *                        SOURCE OF TRUTH for the title, so it wins over every
+ *                        other table. `items` uses an independent SKU numbering
+ *                        that collides with sku_catalog/sku_stock on the same
+ *                        string (e.g. SKU 00016 is a different product in each),
+ *                        so the title MUST come from here to match the Zoho
+ *                        product picker.
+ *   sku_platform_ids   — Ecwid platform mappings (display_name + image_url).
+ *                        May be unlinked (sku_catalog_id NULL), so we never skip
+ *                        this even when sku_catalog also matches.
+ *   sku_catalog        — canonical SKU id + GTIN + sometimes image_url.
  *   sku_stock          — stock & location.
  *
  * All matches are case-insensitive, whitespace-trimmed, and leading-zero
@@ -32,9 +38,23 @@ export const GET = withAuth(async (request: NextRequest) => {
             return NextResponse.json({ error: 'Empty sku' }, { status: 400 });
         }
 
-        // Three independent lookups, all tolerant of case/whitespace/leading
+        // Four independent lookups, all tolerant of case/whitespace/leading
         // zeros. Run in parallel for one round-trip.
-        const [ecwid, catalogDirect, stock] = await Promise.all([
+        const [zohoItem, ecwid, catalogDirect, stock] = await Promise.all([
+            pool.query(
+                `SELECT name, image_url, image_document_id, zoho_item_id
+                   FROM items
+                  WHERE status = 'active'
+                    AND (
+                      UPPER(TRIM(sku)) = UPPER(TRIM($1))
+                      OR regexp_replace(UPPER(TRIM(COALESCE(sku,''))), '^0+', '')
+                         = regexp_replace(UPPER(TRIM($1)), '^0+', '')
+                    )
+                  ORDER BY (UPPER(TRIM(sku)) = UPPER(TRIM($1))) DESC,
+                           (name IS NOT NULL AND name <> '') DESC
+                  LIMIT 1`,
+                [trimmedSku],
+            ),
             pool.query(
                 `SELECT id, sku_catalog_id, platform_sku, display_name, image_url
                    FROM sku_platform_ids
@@ -74,6 +94,7 @@ export const GET = withAuth(async (request: NextRequest) => {
             ),
         ]);
 
+        const zohoRow = zohoItem.rows[0] ?? null;
         const ecwidRow = ecwid.rows[0] ?? null;
         let catalogRow = catalogDirect.rows[0] ?? null;
         const stockRow = stock.rows[0] ?? null;
@@ -89,7 +110,7 @@ export const GET = withAuth(async (request: NextRequest) => {
             catalogRow = linked.rows[0] ?? null;
         }
 
-        if (!ecwidRow && !catalogRow && !stockRow) {
+        if (!zohoRow && !ecwidRow && !catalogRow && !stockRow) {
             return NextResponse.json({
                 sku: trimmedSku, title: '', stock: '0', location: '',
                 imageUrl: '', skuCatalogId: null, gtin: null,
@@ -98,17 +119,32 @@ export const GET = withAuth(async (request: NextRequest) => {
 
         return NextResponse.json({
             sku: trimmedSku,
+            // Zoho `items` name wins — the Zoho product display is the SoT and is
+            // what the product picker shows. Fall back only when this SKU has no
+            // active Zoho item.
             title:
+                (zohoRow?.name && String(zohoRow.name).trim()) ||
                 (ecwidRow?.display_name && String(ecwidRow.display_name).trim()) ||
                 catalogRow?.product_title ||
                 stockRow?.product_title ||
                 '',
             stock: stockRow?.stock != null ? String(stockRow.stock) : '0',
             location: stockRow?.location || '',
+            // If this SKU is a Zoho item, only its own photo is valid — the
+            // Ecwid/sku_catalog images belong to a DIFFERENT product that shares
+            // the SKU string (collision). Prefer the Zoho photo (served via our
+            // proxy when the item has an image_document_id); otherwise stay empty.
+            // Fall back to Ecwid/catalog images only for non-Zoho SKUs.
             imageUrl:
-                (ecwidRow?.image_url && String(ecwidRow.image_url).trim()) ||
-                catalogRow?.image_url ||
-                '',
+                (zohoRow?.image_document_id && String(zohoRow.image_document_id).trim()
+                    ? `/api/zoho/items/${encodeURIComponent(String(zohoRow.zoho_item_id))}/image`
+                    : '') ||
+                (zohoRow?.image_url && String(zohoRow.image_url).trim()) ||
+                (zohoRow
+                    ? ''
+                    : (ecwidRow?.image_url && String(ecwidRow.image_url).trim()) ||
+                      catalogRow?.image_url ||
+                      ''),
             skuCatalogId: catalogRow?.id ?? ecwidRow?.sku_catalog_id ?? null,
             gtin: catalogRow?.gtin || null,
         });

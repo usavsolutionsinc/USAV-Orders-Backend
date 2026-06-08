@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { Pencil } from '@/components/Icons';
+import { CONDITION_GRADES, conditionLabel } from '@/lib/conditions';
 
 interface Props {
   value: string | null | undefined;
@@ -56,15 +57,12 @@ const TONE: Record<string, { active: string; inactive: string }> = {
 
 // Single flat row of grades, in display order. Used grades (A / B / C) are
 // shown bare; retail-ready grades + parts follow — no "USED"/"NEW+" parents.
-const GRADES = [
-  { value: 'BRAND_NEW', label: 'NEW' },
-  { value: 'LIKE_NEW', label: 'L-New' },
-  { value: 'REFURBISHED', label: 'REFURB' },
-  { value: 'USED_A', label: 'A' },
-  { value: 'USED_B', label: 'B' },
-  { value: 'USED_C', label: 'C' },
-  { value: 'PARTS', label: 'PARTS' },
-];
+// Labels come from the shared `pill` variant (src/lib/conditions.ts) so the
+// picker copy stays in lockstep with every other grade display.
+const GRADES = CONDITION_GRADES.map((value) => ({
+  value,
+  label: conditionLabel(value, 'pill'),
+}));
 
 const pillClass = (gradeValue: string, isActive: boolean) => {
   const tone = TONE[gradeValue] ?? TONE.USED_C;

@@ -4,6 +4,17 @@
 import type { ComponentType } from 'react';
 import { WORKFLOW_STAGES } from '@/lib/receiving/workflow-stages';
 import { PackageCheck, Clock, Truck, Package } from '@/components/Icons';
+import {
+  CONDITION_GRADES,
+  CONDITION_LABELS,
+  conditionLabel,
+  conditionGradeTableLabel,
+} from '@/lib/conditions';
+
+// Condition-grade labels live in one place now — see src/lib/conditions.ts.
+// Re-exported here so existing `from '@/components/station/receiving-constants'`
+// import sites keep working.
+export { conditionLabel, conditionGradeTableLabel };
 
 // ─── Dropdown option arrays ───────────────────────────────────────────────────
 
@@ -41,9 +52,9 @@ export const RECEIVING_CARRIERS = [
   { value: 'ALIEXPRESS', label: 'AliEx' },
 ];
 
-export const CONDITION_OPTS = ['BRAND_NEW', 'LIKE_NEW', 'REFURBISHED', 'USED_A', 'USED_B', 'USED_C', 'PARTS'].map((v) => ({
+export const CONDITION_OPTS = CONDITION_GRADES.map((v) => ({
   value: v,
-  label: v.replace(/_/g, ' '),
+  label: conditionLabel(v, 'option'),
 }));
 
 // ─── Pill-button option arrays (active/inactive Tailwind classes) ─────────────
@@ -106,29 +117,8 @@ export function workflowStatusTableLabel(status: string | null | undefined): str
   return raw.replace(/_/g, ' ');
 }
 
-export const COND_LABEL: Record<string, string> = {
-  BRAND_NEW:   'New',
-  LIKE_NEW:    'Like New',
-  REFURBISHED: 'Refurb',
-  USED_A:      'A',
-  USED_B:      'B',
-  USED_C:      'C',
-  PARTS:       'Parts',
-};
-
-/** Compact label for list rows — matches sidebar / label copy (USED-A, NEW, …). */
-export function conditionGradeTableLabel(code: string | null | undefined): string {
-  const c = String(code || '').trim().toUpperCase();
-  if (!c) return 'N/A';
-  if (c === 'BRAND_NEW') return 'NEW';
-  if (c === 'LIKE_NEW') return 'L-NEW';
-  if (c === 'REFURBISHED') return 'REF';
-  if (c === 'PARTS') return 'PARTS';
-  if (c === 'USED_A') return 'A';
-  if (c === 'USED_B') return 'B';
-  if (c === 'USED_C') return 'C';
-  return c.replace(/_/g, ' ');
-}
+/** Compact grade→label map (New · Like New · Refurb · A · B · C · Parts). */
+export const COND_LABEL: Record<string, string> = CONDITION_LABELS.compact;
 
 /** Soft pill tone per condition grade. Shared by table rows and the scanned
  *  line/receipt detail headers so condition reads the same color everywhere. */

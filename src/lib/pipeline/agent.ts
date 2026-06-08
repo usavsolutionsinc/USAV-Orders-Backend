@@ -11,11 +11,14 @@
  *   - It operates on a dedicated git branch (managed by orchestrator)
  */
 
-import { readFileSync, writeFileSync } from 'fs';
-import { execSync } from 'child_process';
+import { readFile, writeFile } from 'node:fs/promises';
+import { exec } from 'node:child_process';
+import { promisify } from 'node:util';
 import { join } from 'path';
 import { MLX_BASE_URL, MLX_MODEL, AGENT_MAX_TOKENS, AGENT_TEMPERATURE } from './config';
 import type { DiscoveredTask, Implementation, AgentResponse } from './types';
+
+const execAsync = promisify(exec);
 
 // ─── System Prompt ───────────────────────────────────────────
 
@@ -140,15 +143,17 @@ export async function implementTask(
     parsed: false,
   };
 
-  // 1. Read current file contents
+  // 1. Read current file contents (in parallel)
   const fileContents: Record<string, string> = {};
-  for (const relPath of task.filePaths) {
-    try {
-      fileContents[relPath] = readFileSync(join(repoPath, relPath), 'utf-8');
-    } catch {
-      // File might have been deleted or moved since discovery
-    }
-  }
+  await Promise.all(
+    task.filePaths.map(async (relPath) => {
+      try {
+        fileContents[relPath] = await readFile(join(repoPath, relPath), 'utf-8');
+      } catch {
+        // File might have been deleted or moved since discovery
+      }
+    }),
+  );
 
   if (Object.keys(fileContents).length === 0) {
     return { ...noChanges, reasoning: 'No readable source files found' };
@@ -184,7 +189,7 @@ export async function implementTask(
     }
     const fullPath = join(repoPath, normalized);
     try {
-      writeFileSync(fullPath, file.content, 'utf-8');
+      await writeFile(fullPath, file.content, 'utf-8');
       filesChanged.push(normalized);
     } catch {
       // Skip files we can't write (permissions, invalid path, etc.)
@@ -203,11 +208,12 @@ export async function implementTask(
   // 5. Capture git diff
   let diff = '';
   try {
-    diff = execSync('git diff', {
+    const { stdout } = await execAsync('git diff', {
       cwd: repoPath,
       encoding: 'utf-8',
       maxBuffer: 5 * 1024 * 1024,
     });
+    diff = stdout;
   } catch {
     diff = '(unable to capture diff)';
   }

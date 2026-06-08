@@ -1,14 +1,14 @@
 {
   "version": 1,
-  "generatedAt": "2026-06-07T07:46:54Z",
-  "totalRoutes": 540,
+  "generatedAt": "2026-06-08T06:15:27Z",
+  "totalRoutes": 546,
   "summary": {
-    "permissionGated": 454,
+    "permissionGated": 461,
     "authenticatedNoPermission": 18,
-    "anonymousIntentional": 48,
+    "anonymousIntentional": 46,
     "serviceToService": 3,
     "ungatedRead": 17,
-    "ungatedWrite": 0
+    "ungatedWrite": 1
   },
   "routes": [
     {
@@ -264,15 +264,6 @@
     },
     {
       "path": "/api/admin/po-mirror/health/route.ts",
-      "methods": [
-        "GET"
-      ],
-      "gate": "withAuth",
-      "permission": "admin.view",
-      "exemptReason": null
-    },
-    {
-      "path": "/api/admin/qstash-status/route.ts",
       "methods": [
         "GET"
       ],
@@ -919,6 +910,69 @@
       "exemptReason": null
     },
     {
+      "path": "/api/cron-runs/route.ts",
+      "methods": [
+        "GET"
+      ],
+      "gate": "withAuth",
+      "permission": "admin.view",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/cron-runs/run/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "gate": "withAuth",
+      "permission": "admin.view",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/cron/cleanup/route.ts",
+      "methods": [
+        "GET"
+      ],
+      "gate": "NONE",
+      "permission": null,
+      "exemptReason": "cron endpoint"
+    },
+    {
+      "path": "/api/cron/ebay/refresh-tokens/route.ts",
+      "methods": [
+        "GET"
+      ],
+      "gate": "NONE",
+      "permission": null,
+      "exemptReason": "cron endpoint"
+    },
+    {
+      "path": "/api/cron/google-sheets/transfer-orders/route.ts",
+      "methods": [
+        "GET"
+      ],
+      "gate": "NONE",
+      "permission": null,
+      "exemptReason": "cron endpoint"
+    },
+    {
+      "path": "/api/cron/inventory/drift-check/route.ts",
+      "methods": [
+        "GET"
+      ],
+      "gate": "NONE",
+      "permission": null,
+      "exemptReason": "cron endpoint"
+    },
+    {
+      "path": "/api/cron/receiving/incoming-tracking-sync/route.ts",
+      "methods": [
+        "GET"
+      ],
+      "gate": "NONE",
+      "permission": null,
+      "exemptReason": "cron endpoint"
+    },
+    {
       "path": "/api/cron/reconcile-unmatched/route.ts",
       "methods": [
         "GET"
@@ -930,20 +984,27 @@
     {
       "path": "/api/cron/refresh-reports/route.ts",
       "methods": [
-        "GET",
-        "POST"
+        "GET"
       ],
-      "gate": "isQStashOrigin",
+      "gate": "NONE",
       "permission": null,
       "exemptReason": "cron endpoint"
     },
     {
       "path": "/api/cron/replenishment-detect/route.ts",
       "methods": [
-        "GET",
-        "POST"
+        "GET"
       ],
-      "gate": "isQStashOrigin",
+      "gate": "NONE",
+      "permission": null,
+      "exemptReason": "cron endpoint"
+    },
+    {
+      "path": "/api/cron/replenishment/sync/route.ts",
+      "methods": [
+        "GET"
+      ],
+      "gate": "NONE",
       "permission": null,
       "exemptReason": "cron endpoint"
     },
@@ -1004,40 +1065,45 @@
     {
       "path": "/api/cron/sku-catalog/refresh-suggestions/route.ts",
       "methods": [
-        "GET",
-        "POST"
+        "GET"
       ],
-      "gate": "isQStashOrigin",
+      "gate": "NONE",
       "permission": null,
       "exemptReason": "cron endpoint"
     },
     {
       "path": "/api/cron/sourcing/replenish/route.ts",
       "methods": [
-        "GET",
-        "POST"
+        "GET"
       ],
-      "gate": "isQStashOrigin",
+      "gate": "NONE",
       "permission": null,
       "exemptReason": "cron endpoint"
     },
     {
       "path": "/api/cron/sourcing/scan/route.ts",
       "methods": [
-        "GET",
-        "POST"
+        "GET"
       ],
-      "gate": "isQStashOrigin",
+      "gate": "NONE",
+      "permission": null,
+      "exemptReason": "cron endpoint"
+    },
+    {
+      "path": "/api/cron/staff-goals/history/route.ts",
+      "methods": [
+        "GET"
+      ],
+      "gate": "NONE",
       "permission": null,
       "exemptReason": "cron endpoint"
     },
     {
       "path": "/api/cron/stock-alerts/route.ts",
       "methods": [
-        "GET",
-        "POST"
+        "GET"
       ],
-      "gate": "isQStashOrigin",
+      "gate": "NONE",
       "permission": null,
       "exemptReason": "cron endpoint"
     },
@@ -1052,6 +1118,15 @@
     },
     {
       "path": "/api/cron/zoho/incoming-po-sync/route.ts",
+      "methods": [
+        "GET"
+      ],
+      "gate": "NONE",
+      "permission": null,
+      "exemptReason": "cron endpoint"
+    },
+    {
+      "path": "/api/cron/zoho/orders-ingest-drain/route.ts",
       "methods": [
         "GET"
       ],
@@ -2051,7 +2126,7 @@
       "methods": [
         "POST"
       ],
-      "gate": "isQStashOrigin",
+      "gate": "NONE",
       "permission": null,
       "exemptReason": null
     },
@@ -2610,114 +2685,13 @@
       "exemptReason": null
     },
     {
-      "path": "/api/qstash/cleanup/idempotency/route.ts",
+      "path": "/api/quality/dashboard/route.ts",
       "methods": [
-        "GET",
-        "POST"
-      ],
-      "gate": "isQStashOrigin",
-      "permission": null,
-      "exemptReason": "qstash (gated by isQStashOrigin)"
-    },
-    {
-      "path": "/api/qstash/ebay/refresh-tokens/route.ts",
-      "methods": [
-        "GET",
-        "POST"
-      ],
-      "gate": "isQStashOrigin",
-      "permission": null,
-      "exemptReason": "qstash (gated by isQStashOrigin)"
-    },
-    {
-      "path": "/api/qstash/ebay/sync/route.ts",
-      "methods": [
-        "GET",
-        "POST"
-      ],
-      "gate": "NONE",
-      "permission": null,
-      "exemptReason": "qstash (gated by isQStashOrigin)"
-    },
-    {
-      "path": "/api/qstash/google-sheets/transfer-orders/route.ts",
-      "methods": [
-        "GET",
-        "POST"
-      ],
-      "gate": "isQStashOrigin",
-      "permission": null,
-      "exemptReason": "qstash (gated by isQStashOrigin)"
-    },
-    {
-      "path": "/api/qstash/inventory/drift-check/route.ts",
-      "methods": [
-        "GET",
-        "POST"
-      ],
-      "gate": "isQStashOrigin",
-      "permission": null,
-      "exemptReason": "qstash (gated by isQStashOrigin)"
-    },
-    {
-      "path": "/api/qstash/replenishment/sync/route.ts",
-      "methods": [
-        "GET",
-        "POST"
-      ],
-      "gate": "isQStashOrigin",
-      "permission": null,
-      "exemptReason": "qstash (gated by isQStashOrigin)"
-    },
-    {
-      "path": "/api/qstash/schedules/bootstrap/route.ts",
-      "methods": [
-        "GET",
-        "POST"
+        "GET"
       ],
       "gate": "withAuth",
-      "permission": "admin.manage_features",
-      "exemptReason": "qstash (gated by isQStashOrigin)"
-    },
-    {
-      "path": "/api/qstash/shipping/sync-due/route.ts",
-      "methods": [
-        "GET",
-        "POST"
-      ],
-      "gate": "isQStashOrigin",
-      "permission": null,
-      "exemptReason": "qstash (gated by isQStashOrigin)"
-    },
-    {
-      "path": "/api/qstash/staff-goals/history/route.ts",
-      "methods": [
-        "GET",
-        "POST"
-      ],
-      "gate": "isQStashOrigin",
-      "permission": null,
-      "exemptReason": "qstash (gated by isQStashOrigin)"
-    },
-    {
-      "path": "/api/qstash/zoho/items/sync/route.ts",
-      "methods": [
-        "GET",
-        "POST"
-      ],
-      "gate": "NONE",
-      "permission": null,
-      "exemptReason": "qstash (gated by isQStashOrigin)"
-    },
-    {
-      "path": "/api/qstash/zoho/orders/ingest/route.ts",
-      "methods": [
-        "GET",
-        "POST"
-      ],
-      "gate": "isQStashOrigin",
-      "permission": null,
-      "exemptReason": "qstash (gated by isQStashOrigin)"
+      "permission": "sku_stock.view",
+      "exemptReason": null
     },
     {
       "path": "/api/rag/documents/route.ts",
@@ -3380,6 +3354,15 @@
       "exemptReason": null
     },
     {
+      "path": "/api/replenishment/sync/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "gate": "withAuth",
+      "permission": "replenish.create_po",
+      "exemptReason": null
+    },
+    {
       "path": "/api/replenishment/tasks/[id]/cancel/route.ts",
       "methods": [
         "POST"
@@ -3629,6 +3612,15 @@
       ],
       "gate": "withAuth",
       "permission": "tech.scan_serial",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/serial-units/[id]/quality/route.ts",
+      "methods": [
+        "GET"
+      ],
+      "gate": "withAuth",
+      "permission": "sku_stock.view",
       "exemptReason": null
     },
     {
@@ -4696,6 +4688,24 @@
       "exemptReason": null
     },
     {
+      "path": "/api/warranty/claims/[id]/ebay-draft/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "gate": "withAuth",
+      "permission": "warranty.manage",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/warranty/claims/[id]/quote/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "gate": "withAuth",
+      "permission": "warranty.manage",
+      "exemptReason": null
+    },
+    {
       "path": "/api/warranty/claims/[id]/repair-handoff/route.ts",
       "methods": [
         "POST"
@@ -4746,6 +4756,24 @@
       "methods": [
         "GET",
         "POST"
+      ],
+      "gate": "withAuth",
+      "permission": "warranty.view",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/warranty/quotes/[id]/route.ts",
+      "methods": [
+        "PATCH"
+      ],
+      "gate": "withAuth",
+      "permission": "warranty.manage",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/warranty/reports/export/route.ts",
+      "methods": [
+        "GET"
       ],
       "gate": "withAuth",
       "permission": "warranty.view",
@@ -4931,6 +4959,15 @@
       ],
       "gate": "withAuth",
       "permission": "integrations.zoho",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/zoho/items/[id]/image/route.ts",
+      "methods": [
+        "GET"
+      ],
+      "gate": "requireRoutePerm",
+      "permission": "sku_stock.view",
       "exemptReason": null
     },
     {

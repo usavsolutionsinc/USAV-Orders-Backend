@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { enqueueQStashJson, getQStashResultIdentifier } from '@/lib/qstash';
 import { isAllowedAdminOrigin } from '@/lib/security/allowed-origin';
 import {
     GoogleSheetsTransferOrdersJobError,
@@ -15,27 +14,11 @@ export const runtime = 'nodejs';
 export const POST = withAuth(async (req: NextRequest) => {
     const startedAt = Date.now();
     let ok = false;
-    let queued = false;
     const body = await req.json().catch(() => ({}));
     const manualSheetName = body?.manualSheetName;
-    if (body?.enqueue === true) {
-        const result = await enqueueQStashJson({
-            path: '/api/qstash/google-sheets/transfer-orders',
-            body: { manualSheetName },
-            retries: 3,
-            timeout: 300,
-            label: 'google-sheets-transfer-orders',
-        });
-        ok = true;
-        queued = true;
-        return NextResponse.json({
-            success: true,
-            queued: true,
-            messageId: getQStashResultIdentifier(result),
-        });
-    }
 
-    // Streaming NDJSON response — UI consumes events row-by-row.
+    // Streaming NDJSON response — UI consumes events row-by-row. (Scheduled
+    // runs go through the Vercel cron at /api/cron/google-sheets/transfer-orders.)
     const stream = createNdjsonStream();
     (async () => {
         try {
@@ -55,7 +38,7 @@ export const POST = withAuth(async (req: NextRequest) => {
                 method: 'POST',
                 startedAt,
                 ok,
-                details: { queued, manualSheet: Boolean(manualSheetName) },
+                details: { manualSheet: Boolean(manualSheetName) },
             });
         }
     })();
@@ -71,28 +54,31 @@ export const GET = withAuth(async (req: NextRequest) => {
             method: 'GET',
             startedAt,
             ok: false,
-            details: { queued: false },
+            details: {},
         });
         return NextResponse.json({ success: false, error: 'Origin not allowed' }, { status: 403 });
     }
-    const result = await enqueueQStashJson({
-        path: '/api/qstash/google-sheets/transfer-orders',
-        body: {},
-        retries: 3,
-        timeout: 300,
-        label: 'google-sheets-transfer-orders',
-    });
-    const response = NextResponse.json({
-        success: true,
-        queued: true,
-        messageId: getQStashResultIdentifier(result),
-    });
-    logRouteMetric({
-        route: '/api/google-sheets/transfer-orders',
-        method: 'GET',
-        startedAt,
-        ok: true,
-        details: { queued: true },
-    });
-    return response;
+    try {
+        const result = await runGoogleSheetsTransferOrders(undefined, 'sheets');
+        logRouteMetric({
+            route: '/api/google-sheets/transfer-orders',
+            method: 'GET',
+            startedAt,
+            ok: true,
+            details: {},
+        });
+        return NextResponse.json({ success: true, ...(result as unknown as Record<string, unknown>) });
+    } catch (error: any) {
+        if (error instanceof GoogleSheetsTransferOrdersJobError) {
+            return NextResponse.json(error.body as Record<string, unknown>, { status: 200 });
+        }
+        logRouteMetric({
+            route: '/api/google-sheets/transfer-orders',
+            method: 'GET',
+            startedAt,
+            ok: false,
+            details: {},
+        });
+        return NextResponse.json({ success: false, error: error?.message || 'Internal Server Error' }, { status: 500 });
+    }
 }, { permission: 'orders.import' });

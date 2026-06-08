@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { Plus, Loader2, Trash2, Pencil } from '@/components/Icons';
 import { microBadge } from '@/design-system/tokens/typography/presets';
@@ -18,6 +18,14 @@ interface QcCheckRow {
   value_enum?: string[] | null;
   pass_min?: string | number | null;
   pass_max?: string | number | null;
+  /** Failure mode auto-tagged on the unit when this step fails. */
+  failure_mode_id?: number | null;
+}
+
+interface FailureModeOption {
+  id: number;
+  label: string;
+  severity: string;
 }
 
 interface QcChecklistSectionProps {
@@ -84,9 +92,30 @@ export function QcChecklistSection({ catalogId, qcChecks, onRefresh }: QcCheckli
   const [valueEnumText, setValueEnumText] = useState('');
   const [passMin, setPassMin] = useState('');
   const [passMax, setPassMax] = useState('');
+  const [failureModeId, setFailureModeId] = useState('');
+  const [failureModes, setFailureModes] = useState<FailureModeOption[]>([]);
   const [saving, setSaving] = useState(false);
   const [removing, setRemoving] = useState<number | null>(null);
   const [publishing, setPublishing] = useState<number | null>(null);
+
+  // Failure-mode taxonomy for the "auto-tag on fail" picker (active only).
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      try {
+        const res = await fetch('/api/failure-modes?activeOnly=1', { cache: 'no-store' });
+        const json = await res.json();
+        if (!cancelled && res.ok && json?.success) {
+          setFailureModes(
+            (json.modes as { id: number; label: string; severity: string }[]).map((m) => ({
+              id: m.id, label: m.label, severity: m.severity,
+            })),
+          );
+        }
+      } catch { /* picker just stays empty */ }
+    })();
+    return () => { cancelled = true; };
+  }, []);
 
   const resetForm = () => {
     setStepLabel('');
@@ -96,6 +125,7 @@ export function QcChecklistSection({ catalogId, qcChecks, onRefresh }: QcCheckli
     setValueEnumText('');
     setPassMin('');
     setPassMax('');
+    setFailureModeId('');
     setShowAdd(false);
     setEditingId(null);
   };
@@ -109,6 +139,7 @@ export function QcChecklistSection({ catalogId, qcChecks, onRefresh }: QcCheckli
     setValueEnumText((check.value_enum ?? []).join(', '));
     setPassMin(check.pass_min == null ? '' : String(check.pass_min));
     setPassMax(check.pass_max == null ? '' : String(check.pass_max));
+    setFailureModeId(check.failure_mode_id == null ? '' : String(check.failure_mode_id));
     setShowAdd(true);
   };
 
@@ -130,8 +161,9 @@ export function QcChecklistSection({ catalogId, qcChecks, onRefresh }: QcCheckli
       valueEnum: kind === 'ENUM' && enumList.length ? enumList : null,
       passMin: numeric && passMin.trim() !== '' ? Number(passMin) : null,
       passMax: numeric && passMax.trim() !== '' ? Number(passMax) : null,
+      failureModeId: failureModeId ? Number(failureModeId) : null,
     };
-  }, [valueKind, valueUnit, valueEnumText, passMin, passMax]);
+  }, [valueKind, valueUnit, valueEnumText, passMin, passMax, failureModeId]);
 
   const handleSave = useCallback(async () => {
     if (!stepLabel.trim()) return;
@@ -332,6 +364,18 @@ export function QcChecklistSection({ catalogId, qcChecks, onRefresh }: QcCheckli
                   className="w-full rounded-lg border border-gray-200 bg-gray-50 px-2.5 py-1.5 text-caption font-bold text-gray-900 placeholder:text-gray-400"
                 />
               )}
+
+              <select
+                value={failureModeId}
+                onChange={(e) => setFailureModeId(e.target.value)}
+                className="w-full rounded-lg border border-gray-200 bg-gray-50 px-2.5 py-1.5 text-caption font-bold text-gray-900"
+                title="Auto-tag this failure mode on the unit when this step fails"
+              >
+                <option value="">Auto-tag on fail: none</option>
+                {failureModes.map((m) => (
+                  <option key={m.id} value={m.id}>{`⚠ ${m.label} (${m.severity})`}</option>
+                ))}
+              </select>
 
               <div className="flex items-center gap-2">
                 <button

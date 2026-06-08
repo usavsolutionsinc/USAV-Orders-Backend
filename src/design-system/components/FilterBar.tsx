@@ -36,6 +36,8 @@ export interface FilterBarProps {
     activeCount?: number;
     /** Label for the advanced filter button */
     label?: string;
+    /** Stretch the trigger button to fill the row (sidebar full-width layout). */
+    fullWidth?: boolean;
   };
 
   /** Callback to clear all filters */
@@ -87,13 +89,17 @@ export function FilterBar({
         type="button"
         onClick={() => setIsAdvancedOpen(!isAdvancedOpen)}
         className={`flex items-center gap-2 rounded-lg border px-3 py-1.5 text-label font-bold transition-all active:scale-95 ${
+          advanced.fullWidth ? 'w-full justify-between' : ''
+        } ${
           active
             ? 'border-blue-200 bg-blue-50 text-blue-700'
             : 'border-gray-200 bg-white text-gray-600 hover:border-gray-300 hover:text-gray-900'
         }`}
       >
-        <Filter className="h-4 w-4" />
-        {advanced.label || 'Filters'}
+        <span className="flex items-center gap-2">
+          <Filter className="h-4 w-4" />
+          {advanced.label || 'Filters'}
+        </span>
         {active && (
           <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-blue-600 px-1 text-mini font-black text-white">
             {advanced.activeCount}
@@ -104,7 +110,7 @@ export function FilterBar({
   };
 
   return (
-    <div className={`flex items-center gap-2 min-h-[40px] ${className}`}>
+    <div className={`relative flex items-center gap-2 min-h-[40px] ${className}`}>
       {/* 1. Search (Collapsible/Expandable) */}
       {search && search.expandable ? (
         <div className="flex-1 min-w-0">
@@ -169,7 +175,7 @@ export function FilterBar({
       </AnimatePresence>
 
       {/* 3. Advanced Filters & Clear */}
-      <div className="flex items-center gap-2 shrink-0">
+      <div className={`flex items-center gap-2 ${advanced?.fullWidth ? 'flex-1' : 'shrink-0'}`}>
         {renderAdvancedTrigger()}
         
         {showClear && hasActiveFilters && onClear && (
@@ -198,7 +204,9 @@ export function FilterBar({
               initial={{ opacity: 0, y: 10, scale: 0.95 }}
               animate={{ opacity: 1, y: 0, scale: 1 }}
               exit={{ opacity: 0, y: 10, scale: 0.95 }}
-              className="absolute right-0 top-full z-50 mt-2 w-72 rounded-xl border border-gray-200 bg-white p-4 shadow-xl ring-1 ring-black/5"
+              className={`absolute top-full z-50 mt-2 max-h-[60vh] overflow-y-auto rounded-xl border border-gray-200 bg-white p-4 shadow-xl ring-1 ring-black/5 ${
+                advanced.fullWidth ? 'left-0 right-0' : 'right-0 w-72'
+              }`}
             >
               {advanced.render(() => setIsAdvancedOpen(false))}
             </motion.div>

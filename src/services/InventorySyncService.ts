@@ -46,6 +46,9 @@ function mapZohoItemToLocal(item: ZohoItem) {
     taxName: item.tax_name ?? null,
     taxPercentage: toDecimal(item.tax_percentage),
     imageUrl: item.image_url ?? null,
+    // Zoho returns image_document_id (not a URL) for items with a photo; '' when
+    // none. We serve the actual bytes lazily via /api/zoho/items/[id]/image.
+    imageDocumentId: (item.image_document_id && String(item.image_document_id).trim()) || null,
     quantityAvailable: toDecimal(item.available_stock),
     quantityOnHand: toDecimal(item.stock_on_hand),
     customFields: Array.isArray(item.custom_fields) ? { values: item.custom_fields } : {},

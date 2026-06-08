@@ -4,6 +4,7 @@ import { RolesAdminTab } from '@/components/admin/RolesAdminTab';
 import { ConnectionsManagementTab } from '@/components/admin/ConnectionsManagementTab';
 import { IntegrationsTab } from '@/components/admin/IntegrationsTab';
 import { GoalsAnalyticsTab } from '@/components/admin/GoalsAnalyticsTab';
+import { QualityDashboardTab } from '@/components/admin/QualityDashboardTab';
 import { FBAManagementTab } from '@/components/admin/FBAManagementTab';
 import { RepairIssuesManagementTab } from '@/components/admin/RepairIssuesManagementTab';
 import { FavoritesManagementTab } from '@/components/admin/FavoritesManagementTab';
@@ -16,6 +17,7 @@ import { BoseModelsManagementTab } from '@/components/admin/sourcing/BoseModelsM
 import { CompatibilityManagementTab } from '@/components/admin/sourcing/CompatibilityManagementTab';
 import { SuppliersManagementTab } from '@/components/admin/sourcing/SuppliersManagementTab';
 import { BillingTab } from '@/components/admin/BillingTab';
+import { SystemSyncActivityTab } from '@/components/admin/SystemSyncActivityTab';
 import { AdminOverviewTab } from '@/components/admin/AdminOverviewTab';
 import { getAdminSection, type AdminSection } from '@/components/admin/admin-sections';
 import { requirePermission } from '@/lib/auth/page-guard';
@@ -36,6 +38,7 @@ function renderTab(
   switch (activeTab) {
     case 'overview':     return <AdminOverviewTab />;
     case 'goals':        return <GoalsAnalyticsTab />;
+    case 'quality':      return <QualityDashboardTab />;
     case 'staff':        return <StaffManagementTab />;
     case 'access':       return <StaffAccessMatrixTab />;
     case 'roles':        return <RolesAdminTab />;
@@ -47,6 +50,7 @@ function renderTab(
     case 'suppliers':    return <SuppliersManagementTab />;
     case 'logs':         return <AdminLogsTab initialSearch={args.searchValue} />;
     case 'architecture': return <OperationsSection mode={args.mode} canManageStock={args.canManageStock} />;
+    case 'system_sync':  return <SystemSyncActivityTab />;
     case 'station_photos': return <StationNasFoldersTab />;
     case 'po_mailbox':   return <PoMailboxAdminSection />;
     case 'billing':      return <BillingTab />;

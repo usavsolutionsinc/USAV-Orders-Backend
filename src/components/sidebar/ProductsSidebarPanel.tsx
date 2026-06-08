@@ -1,17 +1,14 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { sidebarHeaderPillRowClass, SIDEBAR_GUTTER } from '@/components/layout/header-shell';
 import { SidebarShell } from '@/components/layout/SidebarShell';
 import { HorizontalButtonSlider, type HorizontalSliderItem } from '@/components/ui/HorizontalButtonSlider';
 import { useMasterNavEnabled } from '@/components/sidebar/master-nav';
-import { BARCODE_MODES, type BarcodeMode } from '@/components/barcode/ModeSelector';
-import { useBarcodeMode } from '@/hooks/useBarcodeMode';
 import { useLabelRecents } from '@/hooks/useLabelRecents';
 import { useSkuCatalogSearch, type SkuCatalogItem } from '@/hooks/useSkuCatalogSearch';
-import { ChevronDown, Printer, FileText, Link2, Check, Clock, History, Package, ShoppingCart, Star, Sparkles, List } from '@/components/Icons';
-import { successFeedback } from '@/lib/feedback/confirm';
+import { Printer, FileText, Link2, Check, Clock, History, Package, ShoppingCart, Star, Sparkles, List } from '@/components/Icons';
 import { PairingQueueList } from '@/components/products/pairing/PairingQueueList';
 import { PairingUnmatchedSection } from '@/components/products/pairing/PairingUnmatchedSection';
 import { AddOrPairSkuModal } from '@/components/products/pairing/AddOrPairSkuModal';
@@ -80,10 +77,11 @@ function LabelsSubViewPlaceholder({ title, body }: { title: string; body: string
  *   - Manuals view (default): renders <SkuCatalogSidebar> which owns its own
  *     search + sort + mode pills + selected-product accordion sections.
  *   - Labels view: second pill row (Print · Recent · History) writes
- *     `?labelsView=`. Print is the default sub-view and shows the mode
- *     dropdown + SearchBar + Zoho product picker list; picking a row
- *     dispatches `sku:fill` for the MultiSkuSnBarcode workspace. Recent
- *     and History sub-views host their own bodies (no shared search bar).
+ *     `?labelsView=`. Print is the default sub-view and shows the SearchBar
+ *     + Zoho product picker list; picking a row dispatches `sku:fill` for
+ *     the MultiSkuSnBarcode workspace (which now owns the print/log/reprint
+ *     mode switcher at the top of its display). Recent and History
+ *     sub-views host their own bodies (no shared search bar).
  *   - Pairing view: PairingQueueList; selection writes ?sku=.
  *
  * Mounted by DashboardSidebar when routeKey === 'products'. The right-pane
@@ -99,7 +97,6 @@ export function ProductsSidebarPanel() {
   const currentQuery = searchParams.get('q') || '';
   const pairingSort = parsePairingSort(searchParams.get('sort'));
 
-  const { mode, setMode } = useBarcodeMode();
   const { recents } = useLabelRecents();
 
   const viewItems = useMemo<HorizontalSliderItem[]>(
@@ -255,14 +252,6 @@ export function ProductsSidebarPanel() {
           />
         ) : null,
       ]}
-      headerBelow={
-        // Label-printer mode dropdown — only shown on the Print sub-view.
-        isLabels && labelsView === 'print' ? (
-          <div className={`shrink-0 border-b border-gray-100 bg-white ${SIDEBAR_GUTTER} py-2`}>
-            <ModeDropdown mode={mode} onChange={setMode} />
-          </div>
-        ) : null
-      }
       bodyClassName="flex flex-col overflow-hidden p-0"
     >
       {isLabels ? (
@@ -448,97 +437,6 @@ function QcSidebarPicker({ query }: { query: string }) {
   );
 }
 
-// ─── Mode dropdown ──────────────────────────────────────────────────────────
-
-interface ModeDropdownProps {
-  mode: BarcodeMode;
-  onChange: (next: BarcodeMode) => void;
-}
-
-function ModeDropdown({ mode, onChange }: ModeDropdownProps) {
-  const [open, setOpen] = useState(false);
-  const rootRef = useRef<HTMLDivElement>(null);
-  const current = BARCODE_MODES.find((m) => m.id === mode) ?? BARCODE_MODES[0];
-
-  // Click-away closes the menu.
-  useEffect(() => {
-    if (!open) return;
-    const onDocClick = (e: MouseEvent) => {
-      if (!rootRef.current?.contains(e.target as Node)) setOpen(false);
-    };
-    document.addEventListener('mousedown', onDocClick);
-    return () => document.removeEventListener('mousedown', onDocClick);
-  }, [open]);
-
-  const CurrentIcon = current.Icon;
-
-  return (
-    <div ref={rootRef} className="relative">
-      <button
-        type="button"
-        onClick={() => setOpen((o) => !o)}
-        aria-haspopup="listbox"
-        aria-expanded={open}
-        className={`flex w-full items-center gap-3 rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-left transition-colors hover:border-gray-300 ${
-          open ? 'rounded-b-none border-b-0' : ''
-        }`}
-      >
-        <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-blue-600 text-white">
-          <CurrentIcon className="h-4 w-4" />
-        </span>
-        <span className="flex min-w-0 flex-1 flex-col">
-          <span className="text-caption font-black uppercase tracking-[0.14em] text-gray-900">
-            {current.label}
-          </span>
-          <span className="truncate text-micro font-medium text-gray-500">
-            {current.description}
-          </span>
-        </span>
-        <ChevronDown
-          className={`h-4 w-4 shrink-0 text-gray-400 transition-transform ${open ? 'rotate-180' : ''}`}
-        />
-      </button>
-
-      {open && (
-        <ul
-          role="listbox"
-          className="absolute left-0 right-0 top-full z-20 overflow-hidden rounded-b-xl rounded-t-none border border-gray-200 border-t-0 bg-white shadow-lg -mt-px"
-        >
-          {BARCODE_MODES.filter(({ id }) => id !== mode).map(({ id, label, description, Icon }) => {
-            return (
-              <li key={id}>
-                <button
-                  type="button"
-                  role="option"
-                  aria-selected={false}
-                  onClick={() => {
-                    successFeedback();
-                    onChange(id);
-                    setOpen(false);
-                  }}
-                  className="flex w-full items-center gap-3 px-3 py-2.5 text-left transition-colors hover:bg-gray-50"
-                >
-                  <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-gray-100 text-gray-500">
-                    <Icon className="h-4 w-4" />
-                  </span>
-                  <span className="flex min-w-0 flex-col">
-                    <span className="text-caption font-black uppercase tracking-[0.14em] text-gray-900">
-                      {label}
-                    </span>
-                    <span className="truncate text-micro font-medium text-gray-500">
-                      {description}
-                    </span>
-                  </span>
-                </button>
-              </li>
-            );
-          })}
-        </ul>
-      )}
-    </div>
-  );
-}
-
 // ─── Product picker list ────────────────────────────────────────────────────
 
 interface ProductPickerListProps {
@@ -550,10 +448,13 @@ interface ProductPickerListProps {
 
 function ProductPickerList({ query, recents, onPick }: ProductPickerListProps) {
   // Sources from the Zoho `items` mirror (canonical Zoho SKU + Zoho name) via
-  // the catalog search API's `zoho_catalog` field — NOT the Ecwid platform
-  // table. That single query matches on Zoho SKU OR name, so no per-shape field
-  // detection is needed. allowEmpty fetches the top page when the user hasn't
-  // typed yet so there's always something to click.
+  // the catalog search API's `zoho_catalog` field — the Zoho product display is
+  // the source of truth. NOT `sku_catalog`/`sku_stock`, which use an independent
+  // SKU numbering that collides with Zoho SKUs on the same string (e.g. SKU
+  // 00016 is a different product in each table). That single query matches on
+  // Zoho SKU OR name, so no per-shape field detection is needed. allowEmpty
+  // fetches the top page when the user hasn't typed yet so there's always
+  // something to click.
   const { data, isLoading, isError } = useSkuCatalogSearch(query, {
     limit: 50,
     allowEmpty: true,
