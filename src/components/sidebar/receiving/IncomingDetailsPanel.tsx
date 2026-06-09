@@ -610,6 +610,17 @@ function ShipmentTab({ data }: { data: DetailsResponse }) {
               const location = e.event_city
                 ? `${e.event_city}${e.event_state ? ', ' + e.event_state : ''}`
                 : null;
+              // Lead with the human-readable phrase. `external_status_label` is
+              // often a cryptic raw carrier code (UPS sends single letters —
+              // D=delivered, I=in-transit, X=exception, M=manifest), so prefer
+              // the carrier's description, fall back to a readable label (>2
+              // chars), and finally the prettified normalized category. The
+              // single-letter codes are never shown.
+              const rawLabel = (e.external_status_label || '').trim();
+              const eventTitle =
+                e.external_status_description?.trim() ||
+                (rawLabel.length > 2 ? rawLabel : '') ||
+                prettyStatus(e.normalized_status_category);
               const isLatest = i === 0;
               const dayKey = eventDayKey(e.event_occurred_at);
               const showDay = i === 0 || dayKey !== eventDayKey(s.events[i - 1]?.event_occurred_at);
@@ -627,16 +638,13 @@ function ShipmentTab({ data }: { data: DetailsResponse }) {
                       )} ${isLatest ? 'shadow-[0_0_0_3px_rgba(59,130,246,0.15)]' : ''}`}
                     />
                     <div className="flex items-baseline justify-between gap-2">
-                      <span className={`text-caption font-bold ${isLatest ? 'text-gray-900' : 'text-gray-700'}`}>
-                        {e.external_status_label || e.normalized_status_category}
+                      <span className={`text-caption font-black ${isLatest ? 'text-gray-900' : 'text-gray-700'}`}>
+                        {eventTitle}
                       </span>
                       <span className="shrink-0 whitespace-nowrap text-eyebrow font-semibold tabular-nums text-gray-400">
                         {time}
                       </span>
                     </div>
-                    {e.external_status_description ? (
-                      <div className="mt-0.5 text-caption text-gray-600">{e.external_status_description}</div>
-                    ) : null}
                     {location ? (
                       <div className="mt-0.5 text-eyebrow font-semibold uppercase tracking-wide text-gray-400">
                         {location}

@@ -68,6 +68,8 @@ export const PERMISSIONS = [
   { id: 'receiving.mark_received',  category: 'receiving', label: 'Mark received' },
   { id: 'receiving.upload_photo',   category: 'receiving', label: 'Upload receiving photo' },
   { id: 'receiving.bin_assign',     category: 'receiving', label: 'Assign bin from receiving' },
+  { id: 'handling_unit.view',       category: 'receiving', label: 'View handling units (boxes / LPN)' },
+  { id: 'handling_unit.manage',     category: 'receiving', label: 'Manage handling units (mint, assign, move)' },
 
   // ─ Packing ─
   { id: 'packing.view',             category: 'packing', label: 'View packing' },
