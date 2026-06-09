@@ -24,6 +24,20 @@ export const PO_GMAIL_SCOPE = [
 
 const PROVIDER = 'po_gmail';
 
+/**
+ * Thrown when the PO mailbox can't be reached because it's not connected or its
+ * Google refresh token was revoked/expired (invalid_grant — Google rotates
+ * test-mode refresh tokens ~weekly). Callers map this to a 409 with a reconnect
+ * prompt instead of an opaque 500, so the operator knows the fix is "reconnect
+ * at Admin → PO Mailbox", not "retry".
+ */
+export class PoGmailNotConnectedError extends Error {
+  constructor(message: string, public readonly needsReconnect: boolean) {
+    super(message);
+    this.name = 'PoGmailNotConnectedError';
+  }
+}
+
 interface TokenRow {
   id: number;
   refresh_token: string;
@@ -41,7 +55,10 @@ async function loadActiveToken(): Promise<TokenRow> {
     [PROVIDER],
   );
   if (!rows[0]) {
-    throw new Error('PO mailbox is not connected. Visit Admin → PO Mailbox to connect.');
+    throw new PoGmailNotConnectedError(
+      'PO mailbox is not connected. Connect it at Admin → PO Mailbox.',
+      false,
+    );
   }
   return rows[0];
 }
@@ -92,6 +109,10 @@ async function refreshAccessToken(refreshToken: string): Promise<{ accessToken: 
     // the admin UI can surface a reconnect prompt.
     if (res.status === 400 || res.status === 401) {
       await markNeedsReconnect(`Token refresh rejected (${res.status}): ${text.slice(0, 200)}`);
+      throw new PoGmailNotConnectedError(
+        'PO mailbox needs reconnect — its Google token expired or was revoked. Reconnect at Admin → PO Mailbox.',
+        true,
+      );
     }
     throw new Error(`PO Gmail token refresh failed (${res.status}): ${text}`);
   }

@@ -193,8 +193,10 @@ export async function archiveClaimViaAgent(opts: {
 /**
  * Canonical "view the PO receiving" link, built from the request origin so it
  * points at whatever host the operator is actually on (LAN URL on the LAN, the
- * public URL otherwise). Routes to the single-carton view (/m/r/:id).
+ * public URL otherwise). Routes to the desktop receiving workspace, which
+ * focuses the carton via `?recvId=` (ReceivingLinesTable deep-link) — claims
+ * are worked from the desktop station, not the mobile carton page.
  */
 export function poReceivingLink(req: NextRequest, receivingId: number): string {
-  return `${req.nextUrl.origin}/m/r/${receivingId}`;
+  return `${req.nextUrl.origin}/receiving?recvId=${receivingId}`;
 }
